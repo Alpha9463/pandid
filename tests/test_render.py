@@ -26,10 +26,10 @@ def test_render_svg_with_manual_placements(tmp_path):
     assert '<use href="#sym_feed" x="10" y="10" />' in content
     assert '<use href="#sym_hex" x="100" y="10" />' in content
     
-    # Check stream polylines (waypoints should be present in string)
+    # Check stream paths (waypoints should be present in string)
     assert '150,20' in content
     assert '150,150' in content
-    assert '<polyline points="' in content
+    assert '<path d="' in content
 
 
 def test_render_svg_escapes_xml(tmp_path):

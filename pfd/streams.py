@@ -26,6 +26,8 @@ class Stream:
     is_recycle: bool = False
     tear_hint: bool = False
     route: Route | None = None
+    color: str | None = None
+    dasharray: str | None = None
 
     def via(self, waypoints: list[tuple[float, float]]) -> "Stream":
         """Force the stream to route through these exact pixel waypoints."""
