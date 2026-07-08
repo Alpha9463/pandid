@@ -117,6 +117,18 @@ class Flowsheet:
             ],
         }
 
+    def render(self, path: str, *, backend: str = "svg", **opts) -> None:
+        """Render the flowsheet geometry to a file.
+        
+        Currently, only the 'svg' backend is supported.
+        """
+        if backend == "svg":
+            from pfd.render.svg import SvgRenderer
+            renderer = SvgRenderer()
+        else:
+            raise NotImplementedError(f"Backend '{backend}' not supported.")
+        renderer.render(self, path, **opts)
+
     def __repr__(self) -> str:
         return (
             f"Flowsheet({self.name!r}, "

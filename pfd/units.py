@@ -10,6 +10,7 @@ This module is also the public ``units`` namespace: ``from pfd import units``.
 
 from __future__ import annotations
 
+from pfd.geometry import Placement
 from pfd.ports import Port
 
 
@@ -22,8 +23,32 @@ class Unit:
         self.flowsheet = None
         self.ports: dict[str, Port] = {}
         self.params: dict = {}
+        self.placement: Placement | None = None
         for spec in self._PORTS:
             self._add_port(*spec)
+
+    def pin(
+        self,
+        *,
+        col: int | None = None,
+        row: int | None = None,
+        x: float | None = None,
+        y: float | None = None,
+        orientation: float = 0.0,
+    ) -> "Unit":
+        """Pin the unit to a specific layout grid cell or exact pixel coordinate."""
+        if self.placement is None:
+            self.placement = Placement()
+        if col is not None:
+            self.placement.col = col
+        if row is not None:
+            self.placement.row = row
+        if x is not None:
+            self.placement.x = x
+        if y is not None:
+            self.placement.y = y
+        self.placement.orientation = orientation
+        return self
 
     def _add_port(self, name: str, direction: str, role: str,
                   side: str | None = None) -> Port:

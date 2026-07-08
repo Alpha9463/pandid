@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from pfd.geometry import Route
+
 if TYPE_CHECKING:
     from pfd.ports import Port
 
@@ -23,3 +25,12 @@ class Stream:
     kind: str = "material"
     is_recycle: bool = False
     tear_hint: bool = False
+    route: Route | None = None
+
+    def via(self, waypoints: list[tuple[float, float]]) -> "Stream":
+        """Force the stream to route through these exact pixel waypoints."""
+        if self.route is None:
+            self.route = Route()
+        self.route.waypoints = waypoints
+        self.route.manual = True
+        return self
