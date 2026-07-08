@@ -30,6 +30,7 @@ class DefaultRouter:
         from pfd.render.symbols import default_registry
         
         graph = VisibilityGraph(fs, margin=15.0)
+        edge_penalties = {}
         
         for stream in fs.streams:
             if stream.route and stream.route.manual:
@@ -56,9 +57,16 @@ class DefaultRouter:
             start_dir = get_outward_dir(spx, spy, src_sym.width, src_sym.height)
             goal_dir = get_outward_dir(dpx, dpy, dst_sym.width, dst_sym.height)
             
-            path = find_path(graph, start, goal, start_dir, goal_dir)
+            path = find_path(graph, start, goal, start_dir, goal_dir, edge_penalties)
             
-            if not path:
+            if path:
+                # Add heavy penalties to all segments used so subsequent streams avoid them
+                for i in range(len(path) - 1):
+                    u_node = path[i]
+                    v_node = path[i+1]
+                    edge_penalties[(u_node, v_node)] = edge_penalties.get((u_node, v_node), 0.0) + 2000.0
+                    edge_penalties[(v_node, u_node)] = edge_penalties.get((v_node, u_node), 0.0) + 2000.0
+            else:
                 # Fallback to straight line
                 path = [start, goal]
                 

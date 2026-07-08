@@ -25,14 +25,17 @@ def find_path(
     start: Tuple[float, float], 
     goal: Tuple[float, float], 
     start_dir: Optional[str] = None, 
-    goal_dir: Optional[str] = None
+    goal_dir: Optional[str] = None,
+    edge_penalties: Optional[Dict[Tuple[Tuple[float, float], Tuple[float, float]], float]] = None
 ) -> List[Tuple[float, float]]:
     """
     Finds the shortest orthogonal path on the visibility graph using A*.
     start_dir: Forced direction for the first step from start.
     goal_dir: The OUTWARD normal direction of the destination port. The path must arrive heading the opposite direction.
     """
-    
+    if edge_penalties is None:
+        edge_penalties = {}
+        
     # Priority queue: (f_score, g_score, current_node, current_dir, path)
     # The tiebreaker is intrinsically handled if we use an id, but since we store path, 
     # we'll just push path length as tiebreaker to avoid comparing node tuples if f and g match.
@@ -70,7 +73,8 @@ def find_path(
                     continue
                     
             dist = abs(neighbor[0] - current[0]) + abs(neighbor[1] - current[1])
-            cost = g + dist
+            cost = g + dist + edge_penalties.get((current, neighbor), 0.0)
+            
             if cur_dir and ndir != cur_dir:
                 cost += BEND_PENALTY
                 
