@@ -83,6 +83,40 @@ class Flowsheet:
         self.streams.append(stream)
         return stream
 
+    def to_dict(self) -> dict:
+        """Serialize the flowsheet topology to a plain ``dict``.
+
+        The returned structure is JSON-safe and suitable for passing to the
+        (future) geometry and render layers, or for displaying a pre-calculated
+        stream table in a PFD viewer.
+        """
+        return {
+            "name": self.name,
+            "direction": self.direction,
+            "components": [c.name for c in self.components],
+            "units": [
+                {
+                    "name": u.name,
+                    "kind": u.kind,
+                    "ports": [
+                        {"name": p.name, "direction": p.direction, "role": p.role}
+                        for p in u.ports.values()
+                    ],
+                }
+                for u in self.units
+            ],
+            "streams": [
+                {
+                    "name": s.name,
+                    "source": [s.source.owner.name, s.source.name],
+                    "dest": [s.dest.owner.name, s.dest.name],
+                    "kind": s.kind,
+                    "is_recycle": s.is_recycle,
+                }
+                for s in self.streams
+            ],
+        }
+
     def __repr__(self) -> str:
         return (
             f"Flowsheet({self.name!r}, "
