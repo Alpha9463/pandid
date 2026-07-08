@@ -41,3 +41,47 @@ def test_router_integration():
     # Ensure it's not a straight line (i.e. length > 0)
     # It has to step orthogonally around things!
     assert len(s.route.waypoints) >= 1
+
+def test_no_obstacle_intersection():
+    from pfd.units import Separator, Compressor
+    fs = Flowsheet("intersect_test")
+    v = fs.add(Separator("V1"))
+    c = fs.add(Compressor("C1"))
+    
+    # Place them such that a straight line intersects
+    v.pin(x=0, y=0)
+    c.pin(x=200, y=0)
+    
+    s = fs.connect(v.vapor, c.suction)
+    fs.route()
+    
+    graph = VisibilityGraph(fs)
+    
+    from pfd.render.symbols import default_registry
+    src_sym = default_registry.get(v.kind)
+    dst_sym = default_registry.get(c.kind)
+    
+    spx, spy = src_sym.ports.get("vapor", (src_sym.width/2, src_sym.height/2))
+    dpx, dpy = dst_sym.ports.get("suction", (dst_sym.width/2, dst_sym.height/2))
+    
+    sx, sy = v.placement.x + spx, v.placement.y + spy
+    dx, dy = c.placement.x + dpx, c.placement.y + dpy
+    
+    if s.route.waypoints:
+        pts = [(sx, sy)] + s.route.waypoints + [(dx, dy)]
+    else:
+        pts = [(sx, sy), (dx, dy)]
+        
+    for i in range(len(pts) - 1):
+        x1, y1 = pts[i]
+        x2, y2 = pts[i+1]
+        for obs in graph.obstacles:
+            # The first segment is allowed to intersect the source unit's bounding box
+            if i == 0 and obs.x_min == v.placement.x and obs.y_min == v.placement.y:
+                continue
+            # The last segment is allowed to intersect the dest unit's bounding box
+            if i == len(pts) - 2 and obs.x_min == c.placement.x and obs.y_min == c.placement.y:
+                continue
+                
+            assert not obs.intersects_segment(x1, y1, x2, y2), f"Segment {pts[i]}->{pts[i+1]} intersects obstacle {obs}"
+

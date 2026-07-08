@@ -74,8 +74,4 @@ class DefaultRouter:
             if len(path) > 1:
                 simplified.append(path[-1])
                 
-            # Route waypoints represent intermediate corners, not the source/dest terminals
-            if len(simplified) > 2:
-                stream.route = Route(waypoints=simplified[1:-1])
-            else:
-                stream.route = Route(waypoints=[])
+            stream.route = Route(waypoints=simplified)

@@ -50,7 +50,22 @@ class VisibilityGraph:
             # Port locations themselves form grid lines
             for name, port in u.ports.items():
                 px, py = sym.ports.get(name, (p.width / 2, p.height / 2))
+                
+                from pfd.routing import get_outward_dir
+                outward_dir = get_outward_dir(px, py, p.width, p.height)
+                
                 ax, ay = p.x + px, p.y + py
+                
+                # Project the port to the bounding box if it's strictly inside
+                if outward_dir == "N":
+                    ay = p.y
+                elif outward_dir == "S":
+                    ay = p.y + p.height
+                elif outward_dir == "W":
+                    ax = p.x
+                elif outward_dir == "E":
+                    ax = p.x + p.width
+                    
                 self.port_anchors[(u.name, name)] = (ax, ay)
                 x_set.add(ax)
                 y_set.add(ay)
