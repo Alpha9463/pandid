@@ -47,3 +47,156 @@ class Unit:
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.name!r})"
+
+
+# ---------------------------------------------------------------------------
+# Fixed-port unit types
+# ---------------------------------------------------------------------------
+
+
+class Feed(Unit):
+    """Boundary condition: a stream source entering the flowsheet."""
+
+    kind = "feed"
+    _PORTS = [("outlet", "outlet", "feed")]
+
+
+class Product(Unit):
+    """Boundary condition: a stream sink leaving the flowsheet."""
+
+    kind = "product"
+    _PORTS = [("inlet", "inlet", "product")]
+
+
+class Pump(Unit):
+    """Centrifugal or positive-displacement pump."""
+
+    kind = "pump"
+    _PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
+
+
+class Compressor(Unit):
+    """Gas compressor."""
+
+    kind = "compressor"
+    _PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
+
+
+class Valve(Unit):
+    """Control or let-down valve."""
+
+    kind = "valve"
+    _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+
+
+class Vessel(Unit):
+    """Generic pressure vessel or storage tank."""
+
+    kind = "vessel"
+    _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+
+
+Tank = Vessel
+"""Alias for :class:`Vessel`."""
+
+
+class HeatExchanger(Unit):
+    """Shell-and-tube or plate heat exchanger (two process sides)."""
+
+    kind = "hex"
+    _PORTS = [
+        ("hot_in", "inlet", "process"),
+        ("hot_out", "outlet", "process"),
+        ("cold_in", "inlet", "process"),
+        ("cold_out", "outlet", "process"),
+    ]
+
+
+class Heater(Unit):
+    """Single-stream heater (utility heating)."""
+
+    kind = "heater"
+    _PORTS = [
+        ("inlet", "inlet", "process"),
+        ("outlet", "outlet", "process"),
+        ("duty", "inlet", "energy"),
+    ]
+
+
+class Cooler(Unit):
+    """Single-stream cooler (utility cooling)."""
+
+    kind = "cooler"
+    _PORTS = [
+        ("inlet", "inlet", "process"),
+        ("outlet", "outlet", "process"),
+        ("duty", "outlet", "energy"),
+    ]
+
+
+class Reactor(Unit):
+    """Generic reactor (CSTR, PFR, etc.)."""
+
+    kind = "reactor"
+    _PORTS = [
+        ("feed", "inlet", "feed"),
+        ("outlet", "outlet", "process"),
+        ("duty", "inlet", "energy"),
+    ]
+
+
+class Separator(Unit):
+    """Flash drum or phase separator."""
+
+    kind = "separator"
+    _PORTS = [
+        ("feed", "inlet", "feed"),
+        ("vapor", "outlet", "vapor"),
+        ("liquid", "outlet", "liquid"),
+    ]
+
+
+class Column(Unit):
+    """Distillation or absorption column."""
+
+    kind = "column"
+    _PORTS = [
+        ("feed", "inlet", "feed"),
+        ("distillate", "outlet", "vapor"),
+        ("bottoms", "outlet", "liquid"),
+        ("reboiler_duty", "inlet", "energy"),
+        ("condenser_duty", "outlet", "energy"),
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Variable-port unit types
+# ---------------------------------------------------------------------------
+
+
+class Mixer(Unit):
+    """Combines multiple inlet streams into one outlet."""
+
+    kind = "mixer"
+
+    def __init__(self, name: str, n_inlets: int = 2):
+        if n_inlets < 1:
+            raise ValueError(f"Mixer requires at least 1 inlet, got {n_inlets}")
+        super().__init__(name)
+        for i in range(1, n_inlets + 1):
+            self._add_port(f"in_{i}", "inlet", "process")
+        self._add_port("outlet", "outlet", "process")
+
+
+class Splitter(Unit):
+    """Divides one inlet stream into multiple outlets."""
+
+    kind = "splitter"
+
+    def __init__(self, name: str, n_outlets: int = 2):
+        if n_outlets < 1:
+            raise ValueError(f"Splitter requires at least 1 outlet, got {n_outlets}")
+        super().__init__(name)
+        self._add_port("inlet", "inlet", "process")
+        for i in range(1, n_outlets + 1):
+            self._add_port(f"out_{i}", "outlet", "process")

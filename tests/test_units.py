@@ -41,3 +41,53 @@ def test_duplicate_port_name_raises():
 
     with pytest.raises(ValueError, match="already has a port named 'x'"):
         _Bad("B-1")
+
+
+# --- Task 5: Built-in unit types ---
+
+from pfd import units as U  # noqa: E402
+
+
+def test_fixed_port_units_have_expected_ports():
+    assert set(U.Feed("F").ports) == {"outlet"}
+    assert set(U.Product("P").ports) == {"inlet"}
+    assert set(U.Pump("K").ports) == {"suction", "discharge"}
+    assert set(U.HeatExchanger("E").ports) == {"hot_in", "hot_out", "cold_in", "cold_out"}
+    assert set(U.Separator("V").ports) == {"feed", "vapor", "liquid"}
+    assert set(U.Column("T").ports) == {
+        "feed", "distillate", "bottoms", "reboiler_duty", "condenser_duty"
+    }
+
+
+def test_reactor_duty_is_energy_role():
+    r = U.Reactor("R")
+    assert r.duty.role == "energy"
+    assert r.feed.direction == "inlet"
+    assert r.outlet.direction == "outlet"
+
+
+def test_mixer_variable_inlets():
+    m = U.Mixer("M", n_inlets=3)
+    assert set(m.ports) == {"in_1", "in_2", "in_3", "outlet"}
+    assert m.in_2.direction == "inlet"
+    assert m.outlet.direction == "outlet"
+
+
+def test_splitter_variable_outlets():
+    s = U.Splitter("S", n_outlets=3)
+    assert set(s.ports) == {"inlet", "out_1", "out_2", "out_3"}
+    assert s.out_3.direction == "outlet"
+
+
+def test_tank_is_vessel_alias():
+    assert U.Tank is U.Vessel
+
+
+def test_mixer_rejects_zero_inlets():
+    with pytest.raises(ValueError, match="at least 1 inlet"):
+        U.Mixer("M", n_inlets=0)
+
+
+def test_splitter_rejects_zero_outlets():
+    with pytest.raises(ValueError, match="at least 1 outlet"):
+        U.Splitter("S", n_outlets=0)
