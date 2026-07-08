@@ -117,11 +117,22 @@ class Flowsheet:
             ],
         }
 
+    def layout(self, engine=None) -> None:
+        """Run the automatic layout engine to generate unit coordinates."""
+        if engine is None:
+            from pfd.layout import default_layout_engine
+            engine = default_layout_engine
+        engine.layout(self)
+
     def render(self, path: str, *, backend: str = "svg", **opts) -> None:
         """Render the flowsheet geometry to a file.
         
         Currently, only the 'svg' backend is supported.
         """
+        # Ensure all units have a placement before rendering.
+        if any(u.placement is None for u in self.units):
+            self.layout()
+            
         if backend == "svg":
             from pfd.render.svg import SvgRenderer
             renderer = SvgRenderer()

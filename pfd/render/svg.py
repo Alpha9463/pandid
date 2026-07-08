@@ -39,7 +39,7 @@ class SvgRenderer:
         for u in fs.units:
             if u.placement is None:
                 raise ValueError(
-                    f"Unit '{u.name}' lacks a placement (auto-layout not available in M2)."
+                    f"Unit '{u.name}' lacks a placement even after layout was run."
                 )
             x, y = u.placement.x, u.placement.y
             lines.append(f'    <use href="#sym_{u.kind}" x="{x}" y="{y}" />')

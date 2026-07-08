@@ -11,8 +11,8 @@ from dataclasses import dataclass, field
 @dataclass
 class Placement:
     """Represents the position and orientation of a Unit."""
-    x: float = 0.0
-    y: float = 0.0
+    x: float | None = None
+    y: float | None = None
     width: float = 50.0
     height: float = 50.0
     orientation: float = 0.0
