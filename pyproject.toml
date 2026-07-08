@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pfd"
+version = "0.0.1"
+description = "Generate chemical-engineering Process Flow Diagrams with automatic layout and orthogonal stream routing."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [{ name = "Alex Anderson" }]
+keywords = ["chemical-engineering", "process-flow-diagram", "pfd", "flowsheet"]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["pfd"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
