@@ -1,0 +1,63 @@
+"""Component — an entry in a flowsheet's chemical-species registry.
+
+Carries no thermophysical data yet; a future mass/energy balance backend
+attaches property calculations here.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass
+class Component:
+    name: str
+    formula: str | None = None
+"""Port — a named nozzle on a unit; the attachment point for a stream.
+
+A port belongs to exactly one unit, has a direction ("inlet"/"outlet") and a
+role (e.g. "feed", "vapor", "energy"), and holds at most one stream. Named
+port anchors are what the (future) router targets; roles/sides are hints the
+(future) renderer and layout engine consume.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pfd.streams import Stream
+    from pfd.units import Unit
+
+
+@dataclass
+class Port:
+    name: str
+    owner: Unit | None = field(repr=False)
+    direction: str  # "inlet" | "outlet"
+    role: str
+    side: str | None = None
+    stream: Stream | None = field(default=None, repr=False)
+# tests/test_model.py
+from pfd.components import Component
+from pfd.ports import Port
+
+
+def test_component_holds_name_and_formula():
+    c = Component("Water", formula="H2O")
+    assert c.name == "Water"
+    assert c.formula == "H2O"
+
+
+def test_component_formula_optional():
+    assert Component("Nitrogen").formula is None
+
+
+def test_port_fields_and_default_stream():
+    p = Port(name="outlet", owner=None, direction="outlet", role="feed")
+    assert p.name == "outlet"
+    assert p.direction == "outlet"
+    assert p.role == "feed"
+    assert p.side is None
+    assert p.stream is None

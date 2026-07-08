@@ -1,6 +1,7 @@
 """SVG rendering backend."""
 
 from typing import TYPE_CHECKING
+import html
 
 if TYPE_CHECKING:
     from pfd.flowsheet import Flowsheet
@@ -26,7 +27,11 @@ class SvgRenderer:
         for kind in used_kinds:
             sym = self.registry.get(kind)
             # Ensure the embedded SVG doesn't break XML structure
-            lines.append(f'    {sym.svg}')
+            # and override the ID if a generic symbol is returned for a missing kind
+            svg_str = sym.svg
+            if kind not in self.registry._symbols:
+                svg_str = svg_str.replace('id="sym_generic"', f'id="sym_{kind}"')
+            lines.append(f'    {svg_str}')
         lines.append('  </defs>')
 
         # 2. Draw units using <use> tags
@@ -38,9 +43,10 @@ class SvgRenderer:
                 )
             x, y = u.placement.x, u.placement.y
             lines.append(f'    <use href="#sym_{u.kind}" x="{x}" y="{y}" />')
-            # Text label
+            # Text label, safely escaping XML
+            safe_name = html.escape(u.name)
             lines.append(f'    <text x="{x}" y="{y - 5}" font-family="sans-serif" '
-                         f'font-size="12">{u.name}</text>')
+                         f'font-size="12">{safe_name}</text>')
         lines.append('  </g>')
 
         # 3. Draw streams

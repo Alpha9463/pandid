@@ -30,3 +30,34 @@ def test_render_svg_with_manual_placements(tmp_path):
     assert '150,20' in content
     assert '150,150' in content
     assert '<polyline points="' in content
+
+
+def test_render_svg_escapes_xml(tmp_path):
+    fs = Flowsheet("Render Test")
+    fs.add(U.Feed("<Malicious>&")).pin(x=10, y=10)
+    
+    out_path = tmp_path / "test_escape.svg"
+    fs.render(str(out_path))
+    
+    content = out_path.read_text(encoding="utf-8")
+    assert "&lt;Malicious&gt;&amp;" in content
+    assert "<Malicious>" not in content
+
+
+def test_render_svg_generic_symbol_duplicate_ids(tmp_path):
+    fs = Flowsheet("Render Test Generic")
+    class UnknownUnit1(U.Unit):
+        kind = "unknown1"
+    class UnknownUnit2(U.Unit):
+        kind = "unknown2"
+        
+    fs.add(UnknownUnit1("U1")).pin(x=10, y=10)
+    fs.add(UnknownUnit2("U2")).pin(x=20, y=20)
+    
+    out_path = tmp_path / "test_generic.svg"
+    fs.render(str(out_path))
+    
+    content = out_path.read_text(encoding="utf-8")
+    assert 'id="sym_unknown1"' in content
+    assert 'id="sym_unknown2"' in content
+    assert 'id="sym_generic"' not in content
