@@ -71,7 +71,7 @@ class SvgRenderer:
             dx = dst_u.placement.x + dst_px
             dy = dst_u.placement.y + dst_py
             
-            if s.route and s.route.manual and s.route.waypoints:
+            if s.route and s.route.waypoints:
                 points = [(sx, sy)] + s.route.waypoints + [(dx, dy)]
             else:
                 points = [(sx, sy), (dx, dy)]

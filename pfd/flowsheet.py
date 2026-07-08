@@ -124,6 +124,13 @@ class Flowsheet:
             engine = default_layout_engine
         engine.layout(self)
 
+    def route(self, router=None) -> None:
+        """Run the automatic routing engine to generate orthogonal stream paths."""
+        if router is None:
+            from pfd.routing import DefaultRouter
+            router = DefaultRouter()
+        router.route(self)
+
     def render(self, path: str, *, backend: str = "svg", **opts) -> None:
         """Render the flowsheet geometry to a file.
         
@@ -132,6 +139,10 @@ class Flowsheet:
         # Ensure all units have a placement before rendering.
         if any(u.placement is None for u in self.units):
             self.layout()
+            
+        # Ensure all streams have a route.
+        if any(s.route is None for s in self.streams):
+            self.route()
             
         if backend == "svg":
             from pfd.render.svg import SvgRenderer
