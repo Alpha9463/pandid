@@ -20,3 +20,16 @@ def test_port_fields_and_default_stream():
     assert p.role == "feed"
     assert p.side is None
     assert p.stream is None
+
+
+def test_stream_defaults():
+    from pfd.streams import Stream
+    src = Port(name="outlet", owner=None, direction="outlet", role="feed")
+    dst = Port(name="inlet", owner=None, direction="inlet", role="feed")
+    s = Stream(name="S1", source=src, dest=dst)
+    assert s.name == "S1"
+    assert s.source is src
+    assert s.dest is dst
+    assert s.kind == "material"
+    assert s.is_recycle is False
+    assert s.tear_hint is False
