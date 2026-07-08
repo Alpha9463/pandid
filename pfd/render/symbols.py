@@ -9,6 +9,7 @@ class Symbol:
     width: float
     height: float
     ports: dict[str, tuple[float, float]] = field(default_factory=dict)
+    label_pos: tuple[float, float] | None = None
 
 class SymbolRegistry:
     def __init__(self):
@@ -32,17 +33,19 @@ class SymbolRegistry:
         return Symbol(svg=svg, width=50, height=50)
 
     def _register_defaults(self):
-        # Generic Feed
+        # Generic Feed (Chevron pointing right)
         self.register("feed", Symbol(
-            svg='<g id="sym_feed"><polygon points="0,25 30,25 50,0 50,50" fill="#e0f7fa" stroke="black"/></g>',
-            width=50, height=50,
-            ports={"outlet": (50.0, 25.0)}
+            svg='<g id="sym_feed"><polygon points="0,0 60,0 80,15 60,30 0,30" fill="#e0f7fa" stroke="black"/></g>',
+            width=80.0, height=30.0,
+            ports={"outlet": (80.0, 15.0)},
+            label_pos=(35.0, 15.0)
         ))
-        # Generic Product
+        # Generic Product (Chevron pointing right with inverted tail)
         self.register("product", Symbol(
-            svg='<g id="sym_product"><polygon points="0,0 20,25 0,50 50,50 50,0" fill="#fbe9e7" stroke="black"/></g>',
-            width=50, height=50,
-            ports={"inlet": (0.0, 25.0)}
+            svg='<g id="sym_product"><polygon points="0,0 80,0 80,30 0,30 20,15" fill="#fbe9e7" stroke="black"/></g>',
+            width=80.0, height=30.0,
+            ports={"inlet": (0.0, 15.0)},
+            label_pos=(45.0, 15.0)
         ))
         # Equinor Symbol: PP001A.svg
         self.register("pump", Symbol(

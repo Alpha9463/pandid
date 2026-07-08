@@ -5,6 +5,7 @@ rule.
 """
 
 from __future__ import annotations
+from typing import Callable
 
 from pfd.streams import Stream
 
@@ -14,9 +15,10 @@ _ENERGY_ROLES = {"energy", "utility"}
 class Flowsheet:
     """A process flow diagram's topology: units, streams, and components."""
 
-    def __init__(self, name: str, direction: str = "LR"):
+    def __init__(self, name: str, direction: str = "LR", stream_naming_scheme: str | Callable[[int], str] = "S{n}"):
         self.name = name
         self.direction = direction
+        self.stream_naming_scheme = stream_naming_scheme
         self.units: list = []
         self.streams: list[Stream] = []
         self.components: list = []
@@ -71,8 +73,14 @@ class Flowsheet:
         if kind == "material" and src.role in _ENERGY_ROLES and dst.role in _ENERGY_ROLES:
             kind = "energy"
 
+        if not name:
+            if callable(self.stream_naming_scheme):
+                name = self.stream_naming_scheme(len(self.streams) + 1)
+            else:
+                name = self.stream_naming_scheme.format(n=len(self.streams) + 1)
+
         stream = Stream(
-            name=name or f"S{len(self.streams) + 1}",
+            name=name,
             source=src,
             dest=dst,
             kind=kind,

@@ -56,8 +56,16 @@ class SvgRenderer:
             x, y = u.placement.x, u.placement.y
             lines.append(f'    <use href="#sym_{u.kind}" x="{x}" y="{y}" />')
             safe_name = html.escape(u.name)
-            lines.append(f'    <text x="{x}" y="{y - 5}" font-family="sans-serif" '
-                         f'font-size="12">{safe_name}</text>')
+            sym = self.registry.get(u.kind)
+            if sym.label_pos:
+                lx = x + sym.label_pos[0]
+                ly = y + sym.label_pos[1]
+                # Center vertically and horizontally if label_pos is provided (usually inside shapes)
+                lines.append(f'    <text x="{lx}" y="{ly}" font-family="sans-serif" '
+                             f'font-size="12" text-anchor="middle" dominant-baseline="middle">{safe_name}</text>')
+            else:
+                lines.append(f'    <text x="{x}" y="{y - 5}" font-family="sans-serif" '
+                             f'font-size="12">{safe_name}</text>')
         lines.append('  </g>')
 
         # Pre-compute stream point geometries for crossings and labels

@@ -39,20 +39,29 @@ class VisibilityGraph:
             sym = default_registry.get(u.kind)
             
             # The exact boundary of the unit is an obstacle
-            self.obstacles.append(Rect(p.x, p.x + p.width, p.y, p.y + p.height))
+            self.obstacles.append(Rect(p.x, p.x + sym.width, p.y, p.y + sym.height))
+            
+            label_h = 0.0
+            if not sym.label_pos:
+                # Add obstacle for external label
+                label_w = min(150.0, max(40.0, len(u.name) * 7.5))
+                label_h = 15.0
+                self.obstacles.append(Rect(p.x, p.x + label_w, p.y - label_h - 5.0, p.y - 5.0))
             
             # Routing lanes around the unit
             x_set.add(p.x - margin)
-            x_set.add(p.x + p.width + margin)
+            x_set.add(p.x + sym.width + margin)
             y_set.add(p.y - margin)
-            y_set.add(p.y + p.height + margin)
+            if label_h > 0:
+                y_set.add(p.y - label_h - 5.0 - margin)
+            y_set.add(p.y + sym.height + margin)
             
             # Port locations themselves form grid lines
             for name, port in u.ports.items():
-                px, py = sym.ports.get(name, (p.width / 2, p.height / 2))
+                px, py = sym.ports.get(name, (sym.width / 2, sym.height / 2))
                 
                 from pfd.routing import get_outward_dir
-                outward_dir = get_outward_dir(px, py, p.width, p.height)
+                outward_dir = get_outward_dir(px, py, sym.width, sym.height)
                 
                 ax, ay = p.x + px, p.y + py
                 
@@ -60,11 +69,11 @@ class VisibilityGraph:
                 if outward_dir == "N":
                     ay = p.y
                 elif outward_dir == "S":
-                    ay = p.y + p.height
+                    ay = p.y + sym.height
                 elif outward_dir == "W":
                     ax = p.x
                 elif outward_dir == "E":
-                    ax = p.x + p.width
+                    ax = p.x + sym.width
                     
                 self.port_anchors[(u.name, name)] = (ax, ay)
                 x_set.add(ax)
