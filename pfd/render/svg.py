@@ -165,12 +165,8 @@ class SvgRenderer:
                     d_parts.append(f"L {x2},{y2}")
                     
             d_str = " ".join(d_parts)
-            lines.append(
-                f'    <path d="{d_str}" fill="none" '
-                f'stroke="{color}" stroke-width="2"{dash} marker-end="url(#{marker_id})" />'
-            )
-            
-            # Stream Label
+            # Stream Label & Mask
+            mask_id = f"mask_stream_{i}"
             if longest_seg:
                 lx1, ly1 = longest_seg[0]
                 lx2, ly2 = longest_seg[1]
@@ -180,17 +176,28 @@ class SvgRenderer:
                 ty = mid_y
                 anchor = "middle"
                 
-                # Draw a solid white rectangle to cleanly wipe the line underneath (CAD style)
                 text_len = len(s.name) * 7.5
                 rect_width = text_len + 8
-                rect_height = 14
+                rect_height = 16
                 rx = mid_x - rect_width / 2
                 ry = mid_y - rect_height / 2
                 
-                lines.append(
-                    f'    <rect x="{rx}" y="{ry}" width="{rect_width}" height="{rect_height}" fill="white" />'
-                )
+                lines.append(f'    <mask id="{mask_id}" maskUnits="userSpaceOnUse" x="0" y="0" width="2000" height="2000">')
+                lines.append(f'      <rect x="0" y="0" width="2000" height="2000" fill="white" />')
+                lines.append(f'      <rect x="{rx}" y="{ry}" width="{rect_width}" height="{rect_height}" fill="black" />')
+                lines.append(f'    </mask>')
+            else:
+                # If no longest seg, just an empty mask that shows everything
+                lines.append(f'    <mask id="{mask_id}" maskUnits="userSpaceOnUse" x="0" y="0" width="2000" height="2000">')
+                lines.append(f'      <rect x="0" y="0" width="2000" height="2000" fill="white" />')
+                lines.append(f'    </mask>')
                 
+            lines.append(
+                f'    <path d="{d_str}" fill="none" '
+                f'stroke="{color}" stroke-width="2"{dash} marker-end="url(#{marker_id})" mask="url(#{mask_id})" />'
+            )
+            
+            if longest_seg:
                 # Draw the actual text label
                 lines.append(
                     f'    <text x="{tx}" y="{ty}" font-family="sans-serif" font-size="10" '
