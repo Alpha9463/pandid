@@ -43,19 +43,19 @@ class VisibilityGraph:
             
             label_h = 0.0
             if not sym.label_pos:
-                # Add obstacle for external label
+                # Add obstacle for external label, pushed up to ensure straight routing segments for arrows
                 label_w = min(150.0, max(40.0, len(u.name) * 7.5))
                 label_h = 15.0
-                self.obstacles.append(Rect(p.x, p.x + label_w, p.y - label_h - 5.0, p.y - 5.0))
+                self.obstacles.append(Rect(p.x, p.x + label_w, p.y - label_h - 20.0, p.y - 20.0))
             
             # Routing lanes around the unit
             x_set.add(p.x - margin)
             x_set.add(p.x + sym.width + margin)
             y_set.add(p.y - margin)
             if label_h > 0:
-                y_set.add(p.y - label_h - 5.0 - margin)
+                y_set.add(p.y - label_h - 20.0 - margin)
                 # Escape lane under the label for top ports!
-                y_set.add(p.y - 2.5)
+                y_set.add(p.y - 10.0)
             y_set.add(p.y + sym.height + margin)
             
             # Port locations themselves form grid lines

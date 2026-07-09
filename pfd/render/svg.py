@@ -32,7 +32,7 @@ class SvgRenderer:
             marker_id = f'arrow_{c.replace("#", "").replace(" ", "_")}'
             lines.append(
                 f'    <marker id="{marker_id}" viewBox="0 0 10 10" refX="10" refY="5" '
-                f'markerWidth="8" markerHeight="8" orient="auto-start-reverse">'
+                f'markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse">'
             )
             lines.append(f'      <path d="M 0 0 L 10 5 L 0 10 z" fill="{c}" />')
             lines.append('    </marker>')
