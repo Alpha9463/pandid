@@ -6,9 +6,14 @@ rule.
 
 from __future__ import annotations
 from pathlib import Path
-from typing import Callable
+from typing import Callable, TYPE_CHECKING
 
 from pfd.streams import Stream
+
+if TYPE_CHECKING:
+    from pfd.components import Component
+    from pfd.ports import Port
+    from pfd.units import Unit
 
 _ENERGY_ROLES = {"energy", "utility"}
 
@@ -24,7 +29,7 @@ class Flowsheet:
         self.streams: list[Stream] = []
         self.components: list = []
 
-    def add(self, unit):
+    def add(self, unit: "Unit") -> "Unit":
         """Register a unit on this flowsheet. Returns the unit for chaining."""
         if unit in self.units:
             raise ValueError(
@@ -42,12 +47,12 @@ class Flowsheet:
         self.units.append(unit)
         return unit
 
-    def add_component(self, component):
+    def add_component(self, component: "Component") -> "Component":
         """Register a chemical component. Returns the component for chaining."""
         self.components.append(component)
         return component
 
-    def connect(self, src, dst, *, kind: str = "material",
+    def connect(self, src: "Port", dst: "Port", *, kind: str = "material",
                 name: str | None = None, tear_hint: bool = False) -> Stream:
         """Create a stream connecting *src* (outlet port) to *dst* (inlet port).
 

@@ -13,8 +13,14 @@ from __future__ import annotations
 from pfd.geometry import Placement
 from pfd.ports import Port
 
+__all__ = [
+    "Unit",
+    "Feed", "Product", "Pump", "Compressor", "Valve", "Vessel", "Tank",
+    "HeatExchanger", "Heater", "Cooler", "Reactor", "Separator", "Column",
+    "Mixer", "Splitter",
+]
 
-_VALID_ROLES = {"process", "feed", "energy", "utility", "vapor", "liquid"}
+_VALID_ROLES = {"process", "feed", "product", "energy", "utility", "vapor", "liquid"}
 
 class Unit:
     kind: str = "unit"
@@ -87,6 +93,18 @@ class Unit:
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.name!r})"
 
+    def __getattr__(self, name: str):
+        # Only invoked when normal lookup fails. Attribute access (reactor.feed)
+        # is the primary way to reach ports, so give typos a helpful message
+        # listing the real ports instead of a bare AttributeError.
+        ports = self.__dict__.get("ports")
+        if ports is not None and not name.startswith("_"):
+            raise AttributeError(
+                f"{type(self).__name__} {self.__dict__.get('name', '?')!r} has no "
+                f"attribute or port {name!r}; available ports: {sorted(ports)}"
+            )
+        raise AttributeError(name)
+
 
 # ---------------------------------------------------------------------------
 # Fixed-port unit types
@@ -104,7 +122,7 @@ class Product(Unit):
     """Boundary condition: a stream sink leaving the flowsheet."""
 
     kind = "product"
-    _PORTS = [("inlet", "inlet", "process")]
+    _PORTS = [("inlet", "inlet", "product")]
 
 
 class Pump(Unit):
