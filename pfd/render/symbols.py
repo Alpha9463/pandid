@@ -35,14 +35,14 @@ class SymbolRegistry:
     def _register_defaults(self):
         # Generic Feed (Chevron pointing right)
         self.register("feed", Symbol(
-            svg='<g id="sym_feed"><polygon points="0,0 60,0 80,15 60,30 0,30" fill="#e0f7fa" stroke="black"/></g>',
+            svg='<g id="sym_feed"><polygon points="0,0 60,0 80,15 60,30 0,30" fill="transparent" stroke="black"/></g>',
             width=80.0, height=30.0,
             ports={"outlet": (80.0, 15.0)},
             label_pos=(35.0, 15.0)
         ))
         # Generic Product (Chevron pointing right with inverted tail)
         self.register("product", Symbol(
-            svg='<g id="sym_product"><polygon points="0,0 80,0 80,30 0,30 20,15" fill="#fbe9e7" stroke="black"/></g>',
+            svg='<g id="sym_product"><polygon points="0,0 80,0 80,30 0,30 20,15" fill="transparent" stroke="black"/></g>',
             width=80.0, height=30.0,
             ports={"inlet": (20.0, 15.0)},
             label_pos=(45.0, 15.0)
