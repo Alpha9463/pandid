@@ -10,8 +10,13 @@ class Router(Protocol):
         """Route all streams in the flowsheet."""
 
 
-def get_outward_dir(px: float, py: float, w: float, h: float) -> str:
+def get_outward_dir(px: float, py: float, w: float, h: float, unit_kind: str = "", port_name: str = "") -> str:
     """Determine the outward normal direction for a port anchor relative to its unit bounding box."""
+    if unit_kind == "product" and port_name == "inlet":
+        return "W"
+    if unit_kind == "feed" and port_name == "outlet":
+        return "E"
+        
     dist_N = py
     dist_S = h - py
     dist_W = px
@@ -54,8 +59,8 @@ class DefaultRouter:
             spx, spy = src_sym.ports.get(stream.source.name, (src_sym.width / 2, src_sym.height / 2))
             dpx, dpy = dst_sym.ports.get(stream.dest.name, (dst_sym.width / 2, dst_sym.height / 2))
             
-            start_dir = get_outward_dir(spx, spy, src_sym.width, src_sym.height)
-            goal_dir = get_outward_dir(dpx, dpy, dst_sym.width, dst_sym.height)
+            start_dir = get_outward_dir(spx, spy, src_sym.width, src_sym.height, src_u.kind, stream.source.name)
+            goal_dir = get_outward_dir(dpx, dpy, dst_sym.width, dst_sym.height, dst_u.kind, stream.dest.name)
             
             path = find_path(graph, start, goal, start_dir, goal_dir, edge_penalties)
             

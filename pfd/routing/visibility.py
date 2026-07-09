@@ -63,7 +63,7 @@ class VisibilityGraph:
                 px, py = sym.ports.get(name, (sym.width / 2, sym.height / 2))
                 
                 from pfd.routing import get_outward_dir
-                outward_dir = get_outward_dir(px, py, sym.width, sym.height)
+                outward_dir = get_outward_dir(px, py, sym.width, sym.height, u.kind, name)
                 
                 ax, ay = p.x + px, p.y + py
                 

@@ -44,7 +44,7 @@ class SymbolRegistry:
         self.register("product", Symbol(
             svg='<g id="sym_product"><polygon points="0,0 80,0 80,30 0,30 20,15" fill="#fbe9e7" stroke="black"/></g>',
             width=80.0, height=30.0,
-            ports={"inlet": (0.0, 15.0)},
+            ports={"inlet": (20.0, 15.0)},
             label_pos=(45.0, 15.0)
         ))
         # Equinor Symbol: PP001A.svg
