@@ -176,13 +176,20 @@ class SvgRenderer:
                 lx2, ly2 = longest_seg[1]
                 mid_x = (lx1 + lx2) / 2
                 mid_y = (ly1 + ly2) / 2
-                # Offset text: if horizontal line, place text slightly above. If vertical, place right.
-                tx = mid_x + 5 if lx1 == lx2 else mid_x
-                ty = mid_y - 5 if ly1 == ly2 else mid_y + 3
-                anchor = "start" if lx1 == lx2 else "middle"
+                tx = mid_x
+                ty = mid_y
+                anchor = "middle"
+                # Draw white outline to cut through the line (inline label effect)
                 lines.append(
                     f'    <text x="{tx}" y="{ty}" font-family="sans-serif" font-size="10" '
-                    f'text-anchor="{anchor}" fill="{color}">{html.escape(s.name)}</text>'
+                    f'text-anchor="{anchor}" dominant-baseline="middle" '
+                    f'stroke="white" stroke-width="4" stroke-linejoin="round">{html.escape(s.name)}</text>'
+                )
+                # Draw the actual text label
+                lines.append(
+                    f'    <text x="{tx}" y="{ty}" font-family="sans-serif" font-size="10" '
+                    f'text-anchor="{anchor}" dominant-baseline="middle" '
+                    f'fill="{color}">{html.escape(s.name)}</text>'
                 )
 
         lines.append('  </g>')
