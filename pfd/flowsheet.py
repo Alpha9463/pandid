@@ -5,6 +5,7 @@ rule.
 """
 
 from __future__ import annotations
+from pathlib import Path
 from typing import Callable
 
 from pfd.streams import Stream
@@ -183,9 +184,11 @@ class Flowsheet:
 
     def _repr_svg_(self) -> str:
         """IPython/Jupyter integration. Automatically displays SVG in notebooks."""
+        if any(u.placement is None for u in self.units):
+            self.layout()
         if any(s.route is None for s in self.streams):
             self.route()
-            
+
         from pfd.render.svg import SvgRenderer
         return SvgRenderer().render(self, "")
 

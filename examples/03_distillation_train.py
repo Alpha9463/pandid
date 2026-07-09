@@ -16,27 +16,27 @@ def main():
     # Feed system
     feed = fs.add(U.Feed("Raw Feed"))
     mixer = fs.add(U.Mixer("M-100", n_inlets=2))
-    feed_valve = fs.add(U.ControlValve("FV-100"))
-    preheater = fs.add(U.ShellAndTube("E-100"))
+    feed_valve = fs.add(U.Valve("FV-100"))
+    preheater = fs.add(U.HeatExchanger("E-100"))
     
     # Column 1
-    col1 = fs.add(U.TrayColumn("T-100"))
-    c1_ovhd = fs.add(U.ShellAndTube("E-101"))
+    col1 = fs.add(U.Column("T-100"))
+    c1_ovhd = fs.add(U.HeatExchanger("E-101"))
     c1_prod = fs.add(U.Product("Light Product"))
     
     # Bottoms transfer
-    pump1 = fs.add(U.CentrifugalPump("P-100A/B"))
+    pump1 = fs.add(U.Pump("P-100A/B"))
     
     # Column 2
-    col2 = fs.add(U.TrayColumn("T-200"))
-    c2_ovhd = fs.add(U.ShellAndTube("E-201"))
+    col2 = fs.add(U.Column("T-200"))
+    c2_ovhd = fs.add(U.HeatExchanger("E-201"))
     c2_prod = fs.add(U.Product("Med Product"))
     
     # Bottoms split and recycle
-    pump2 = fs.add(U.CentrifugalPump("P-200A/B"))
+    pump2 = fs.add(U.Pump("P-200A/B"))
     splitter = fs.add(U.Splitter("SP-200", n_outlets=2))
     c2_bot = fs.add(U.Product("Heavy Product"))
-    recycle_valve = fs.add(U.ControlValve("FV-200"))
+    recycle_valve = fs.add(U.Valve("FV-200"))
     
     # --- Placements (Manual Grid) ---
     col_y = 420

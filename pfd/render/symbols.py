@@ -5,7 +5,6 @@ All custom geometric SVG primitives — no proprietary icons.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 @dataclass
 class Symbol:
@@ -14,7 +13,7 @@ class Symbol:
     width: float
     height: float
     ports: dict[str, tuple[float, float]] = field(default_factory=dict)
-    label_pos: Optional[str] = None
+    label_pos: str | None = None
 
 class SymbolRegistry:
     def __init__(self):
@@ -247,168 +246,5 @@ class SymbolRegistry:
             ports={'out_1': (50.0, 15.0), 'out_2': (50.0, 35.0), 'inlet': (0.0, 25.0)}
         ))
 
-        # ====================================================================
-        # NEW VARIANTS
-        # ====================================================================
-        self.register("column", Symbol(
-            svg=(
-                '<g id="sym_column_tray">'
-                '<rect x="15" y="25" width="50" height="160" fill="none" stroke="black" stroke-width="2"/>'
-                '<ellipse cx="40" cy="25" rx="25" ry="15" fill="none" stroke="black" stroke-width="2"/>'
-                '<ellipse cx="40" cy="185" rx="25" ry="15" fill="none" stroke="black" stroke-width="2"/>'
-                '<line x1="15" y1="70" x2="65" y2="60" stroke="black" stroke-width="1.5"/>'
-                '<line x1="15" y1="110" x2="65" y2="100" stroke="black" stroke-width="1.5"/>'
-                '<line x1="15" y1="150" x2="65" y2="140" stroke="black" stroke-width="1.5"/>'
-                '</g>'
-            ),
-            width=80.0, height=205.0,
-            ports={
-                'reboiler_duty': (65.0, 105.0),
-                'bottoms': (40.0, 200.0),
-                'feed': (15.0, 105.0),
-                'distillate': (40.0, 10.0),
-                'vapor_in': (40.0, 200.0),
-                'liquid_in': (40.0, 10.0),
-                'vapor_out': (40.0, 10.0),
-                'liquid_out': (40.0, 200.0),
-            }
-        ), variant="tray")
-
-        self.register("column", Symbol(
-            svg=(
-                '<g id="sym_column_packed">'
-                '<rect x="15" y="25" width="50" height="160" fill="none" stroke="black" stroke-width="2"/>'
-                '<ellipse cx="40" cy="25" rx="25" ry="15" fill="none" stroke="black" stroke-width="2"/>'
-                '<ellipse cx="40" cy="185" rx="25" ry="15" fill="none" stroke="black" stroke-width="2"/>'
-                '<path d="M 15 60 L 65 100 M 15 100 L 65 60" stroke="black" stroke-width="1.5"/>'
-                '<path d="M 15 120 L 65 160 M 15 160 L 65 120" stroke="black" stroke-width="1.5"/>'
-                '</g>'
-            ),
-            width=80.0, height=205.0,
-            ports={
-                'reboiler_duty': (65.0, 105.0),
-                'bottoms': (40.0, 200.0),
-                'feed': (15.0, 105.0),
-                'distillate': (40.0, 10.0),
-                'vapor_in': (40.0, 200.0),
-                'liquid_in': (40.0, 10.0),
-                'vapor_out': (40.0, 10.0),
-                'liquid_out': (40.0, 200.0),
-            }
-        ), variant="packed")
-
-        self.register("vessel", Symbol(
-            svg=(
-                '<g id="sym_vessel_tank">'
-                '<rect x="10" y="20" width="60" height="80" fill="none" stroke="black" stroke-width="2"/>'
-                '<path d="M10,20 Q40,0 70,20" fill="none" stroke="black" stroke-width="2"/>'
-                '<line x1="10" y1="100" x2="70" y2="100" stroke="black" stroke-width="2"/>'
-                '</g>'
-            ),
-            width=80.0, height=115.0,
-            ports={'inlet': (10.0, 55.0), 'outlet': (70.0, 100.0)}
-        ), variant="tank")
-
-        self.register("pump", Symbol(
-            svg=(
-                '<g id="sym_pump_centrifugal">'
-                '<circle cx="30" cy="30" r="22" fill="none" stroke="black" stroke-width="2"/>'
-                '<line x1="8" y1="52" x2="52" y2="52" stroke="black" stroke-width="2"/>'
-                '<line x1="30" y1="8" x2="30" y2="0" stroke="black" stroke-width="2"/>'
-                '<line x1="0" y1="30" x2="8" y2="30" stroke="black" stroke-width="2"/>'
-                '</g>'
-            ),
-            width=60.0, height=55.0,
-            ports={'suction': (0.0, 30.0), 'discharge': (30.0, 0.0)},
-            label_pos="bottom"
-        ), variant="centrifugal")
-
-        self.register("pump", Symbol(
-            svg=(
-                '<g id="sym_pump_vacuum">'
-                '<circle cx="30" cy="30" r="22" fill="none" stroke="black" stroke-width="2"/>'
-                '<circle cx="30" cy="30" r="10" fill="none" stroke="black" stroke-width="2"/>'
-                '<line x1="8" y1="52" x2="52" y2="52" stroke="black" stroke-width="2"/>'
-                '<line x1="30" y1="8" x2="30" y2="0" stroke="black" stroke-width="2"/>'
-                '<line x1="0" y1="30" x2="8" y2="30" stroke="black" stroke-width="2"/>'
-                '</g>'
-            ),
-            width=60.0, height=55.0,
-            ports={'suction': (0.0, 30.0), 'discharge': (30.0, 0.0)}
-        ), variant="vacuum")
-
-        self.register("pump", Symbol(
-            svg=(
-                '<g id="sym_pump_pd">'
-                '<circle cx="30" cy="20" r="15" fill="none" stroke="black" stroke-width="2"/>'
-                '<circle cx="30" cy="40" r="15" fill="none" stroke="black" stroke-width="2"/>'
-                '<line x1="8" y1="52" x2="52" y2="52" stroke="black" stroke-width="2"/>'
-                '<line x1="30" y1="5" x2="30" y2="0" stroke="black" stroke-width="2"/>'
-                '<line x1="0" y1="30" x2="15" y2="30" stroke="black" stroke-width="2"/>'
-                '</g>'
-            ),
-            width=60.0, height=55.0,
-            ports={'suction': (0.0, 30.0), 'discharge': (30.0, 0.0)}
-        ), variant="pd")
-
-        self.register("hex", Symbol(
-            svg=(
-                '<g id="sym_hex_shell_tube">'
-                '<circle cx="30" cy="30" r="25" fill="none" stroke="black" stroke-width="2"/>'
-                '<path d="M5,30 Q15,5 30,30 T55,30" fill="none" stroke="black" stroke-width="2"/>'
-                '</g>'
-            ),
-            width=60.0, height=60.0,
-            ports={
-                'cold_in': (5.0, 30.0),
-                'cold_out': (55.0, 30.0),
-                'hot_in': (30.0, 5.0),
-                'hot_out': (30.0, 55.0),
-            }
-        ), variant="shell_tube")
-
-        self.register("hex", Symbol(
-            svg=(
-                '<g id="sym_hex_air_cooler">'
-                '<rect x="10" y="20" width="40" height="20" fill="none" stroke="black" stroke-width="2"/>'
-                '<polygon points="30,40 25,50 35,50" fill="none" stroke="black" stroke-width="2"/>'
-                '</g>'
-            ),
-            width=60.0, height=60.0,
-            ports={
-                'cold_in': (10.0, 30.0),
-                'cold_out': (50.0, 30.0),
-                'hot_in': (30.0, 20.0),
-                'hot_out': (30.0, 40.0),
-            }
-        ), variant="air_cooler")
-
-        self.register("valve", Symbol(
-            svg=(
-                '<g id="sym_valve_control">'
-                '<polygon points="0,15 20,25 0,35" fill="none" stroke="black" stroke-width="2"/>'
-                '<polygon points="40,15 20,25 40,35" fill="none" stroke="black" stroke-width="2"/>'
-                '<line x1="20" y1="25" x2="20" y2="5" stroke="black" stroke-width="2"/>'
-                '<path d="M10,5 Q20,0 30,5" fill="none" stroke="black" stroke-width="2"/>'
-                '</g>'
-            ),
-            width=40.0, height=40.0,
-            ports={'inlet': (0.0, 25.0), 'outlet': (40.0, 25.0)}
-        ), variant="control")
-
-        self.register("valve", Symbol(
-            svg=(
-                '<g id="sym_valve_relief">'
-                '<polygon points="5,5 20,20 35,5" fill="none" stroke="black" stroke-width="2"/>'
-                '<polygon points="5,35 20,20 35,35" fill="none" stroke="black" stroke-width="2"/>'
-                '<line x1="20" y1="5" x2="20" y2="0" stroke="black" stroke-width="2"/>'
-                '<line x1="20" y1="35" x2="20" y2="40" stroke="black" stroke-width="2"/>'
-                '<rect x="15" y="15" width="10" height="10" fill="none" stroke="black" stroke-width="2"/>'
-                '</g>'
-            ),
-            width=40.0, height=40.0,
-            ports={'inlet': (20.0, 40.0), 'outlet': (35.0, 20.0)}
-        ), variant="relief")
 
 default_registry = SymbolRegistry()
-

@@ -15,7 +15,7 @@ def get_dir(p1: Tuple[float, float], p2: Tuple[float, float]) -> Optional[str]:
         return "N"
     return None
 
-def heuristic(a: Tuple[float, float], b: Tuple[float, float], current_dir: Optional[str]) -> float:
+def heuristic(a: Tuple[float, float], b: Tuple[float, float]) -> float:
     dx = abs(a[0] - b[0])
     dy = abs(a[1] - b[1])
     h = dx + dy
@@ -104,7 +104,7 @@ def find_path(
             if cur_dir and ndir != cur_dir:
                 cost += bend_cost
                 
-            h = heuristic(neighbor, goal, ndir)
+            h = heuristic(neighbor, goal)
             if is_recycle:
                 h = h / 2.0  # reduce heuristic slightly so it explores the longer recycle lanes
             

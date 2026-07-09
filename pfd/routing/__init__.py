@@ -127,7 +127,6 @@ class DefaultRouter:
                     edge_penalties[(u_node, v_node)] = edge_penalties.get((u_node, v_node), 0.0) + 2000.0
                     edge_penalties[(v_node, u_node)] = edge_penalties.get((v_node, u_node), 0.0) + 2000.0
             else:
-                print(f"Fallback for {stream.name}: {start_proj} to {goal_proj}")
                 # Fallback to an orthogonal L-shape ensuring we pass through projection points
                 mid_point = (goal_proj[0], start_proj[1])
                 path = [start, start_proj, mid_point, goal_proj, goal]

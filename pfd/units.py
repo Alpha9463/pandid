@@ -20,7 +20,7 @@ class Unit:
     kind: str = "unit"
     _PORTS: list[tuple[str, str, str]] = []
 
-    def __init__(self, name: str, variant: str = "default", width: Optional[float] = None, height: Optional[float] = None, label_pos: Optional[str] = None):
+    def __init__(self, name: str, variant: str = "default", width: float | None = None, height: float | None = None, label_pos: str | None = None):
         if not name:
             raise ValueError("Unit name cannot be empty")
         self.name = name
@@ -239,95 +239,3 @@ class Splitter(Unit):
         self._add_port("inlet", "inlet", "process")
         for i in range(1, n_outlets + 1):
             self._add_port(f"out_{i}", "outlet", "process")
-
-
-# ---------------------------------------------------------------------------
-# Specific Equipment Subclasses
-# ---------------------------------------------------------------------------
-
-class TrayColumn(Column):
-    """Distillation column with trays."""
-    def __init__(self, name: str, variant: str = "tray", width: float | None = None, height: float | None = None):
-        super().__init__(name, variant=variant, width=width, height=height)
-
-
-class PackedColumn(Column):
-    """Distillation column with packing."""
-    def __init__(self, name: str, variant: str = "packed", width: float | None = None, height: float | None = None):
-        super().__init__(name, variant=variant, width=width, height=height)
-
-
-class Absorber(Unit):
-    """Absorption column."""
-    kind = "column"
-    _PORTS = [
-        ("vapor_in", "inlet", "vapor"),
-        ("liquid_in", "inlet", "liquid"),
-        ("vapor_out", "outlet", "vapor"),
-        ("liquid_out", "outlet", "liquid"),
-    ]
-
-
-class Stripper(Unit):
-    """Stripping column."""
-    kind = "column"
-    _PORTS = [
-        ("feed", "inlet", "liquid"),
-        ("vapor_in", "inlet", "vapor"),
-        ("vapor_out", "outlet", "vapor"),
-        ("liquid_out", "outlet", "liquid"),
-    ]
-
-
-class StorageTank(Vessel):
-    """Atmospheric storage tank."""
-    def __init__(self, name: str, variant: str = "tank", width: float | None = None, height: float | None = None):
-        super().__init__(name, variant=variant, width=width, height=height)
-
-
-class FlashDrum(Separator):
-    """Flash separation vessel."""
-    def __init__(self, name: str, variant: str = "default", width: float | None = None, height: float | None = None):
-        super().__init__(name, variant=variant, width=width, height=height)
-
-
-class CentrifugalPump(Pump):
-    """Centrifugal pump."""
-    def __init__(self, name: str, variant: str = "centrifugal", width: float | None = None, height: float | None = None):
-        super().__init__(name, variant=variant, width=width, height=height)
-
-
-class VacuumPump(Pump):
-    """Vacuum pump."""
-    def __init__(self, name: str, variant: str = "vacuum", width: float | None = None, height: float | None = None):
-        super().__init__(name, variant=variant, width=width, height=height)
-
-
-class PositiveDisplacementPump(Pump):
-    """Positive displacement pump."""
-    def __init__(self, name: str, variant: str = "pd", width: float | None = None, height: float | None = None):
-        super().__init__(name, variant=variant, width=width, height=height)
-
-
-class ShellAndTube(HeatExchanger):
-    """Shell and tube heat exchanger."""
-    def __init__(self, name: str, variant: str = "shell_tube", width: float | None = None, height: float | None = None):
-        super().__init__(name, variant=variant, width=width, height=height)
-
-
-class AirCooler(HeatExchanger):
-    """Air-cooled heat exchanger."""
-    def __init__(self, name: str, variant: str = "air_cooler", width: float | None = None, height: float | None = None):
-        super().__init__(name, variant=variant, width=width, height=height)
-
-
-class ControlValve(Valve):
-    """Control valve."""
-    def __init__(self, name: str, variant: str = "control", width: float | None = None, height: float | None = None):
-        super().__init__(name, variant=variant, width=width, height=height)
-
-
-class ReliefValve(Valve):
-    """Pressure relief valve."""
-    def __init__(self, name: str, variant: str = "relief", width: float | None = None, height: float | None = None):
-        super().__init__(name, variant=variant, width=width, height=height)
