@@ -71,10 +71,15 @@ def find_path(
             if len(path) == 1 and start_dir and ndir != start_dir:
                 continue
                 
-            # 2. Enforce goal direction strictly
+            # 2. Goal approach. The router appends a perpendicular goal_proj->port
+            #    segment, so the port is always entered squarely regardless of how
+            #    we reach goal_proj. Allow reaching it head-on OR from either side;
+            #    only forbid arriving from *behind* (heading along the outward
+            #    normal = coming through the unit body). Requiring a strictly
+            #    head-on arrival forced tall detours up to the sheet edge to line
+            #    up above a top/bottom port.
             if neighbor == goal and goal_dir:
-                required_arrival_dir = {"N": "S", "S": "N", "E": "W", "W": "E"}.get(goal_dir)
-                if ndir != required_arrival_dir:
+                if ndir == goal_dir:
                     continue
                     
             dist = abs(neighbor[0] - current[0]) + abs(neighbor[1] - current[1])
@@ -100,6 +105,12 @@ def find_path(
                 if current[1] == neighbor[1] and current[1] not in graph.recycle_y:
                     # Penalize horizontal travel that is not on the recycle lane
                     cost += dist * 10.0
+            else:
+                # Recycle lanes are reserved for recycle streams. Forbid forward
+                # streams from travelling along them so up-and-over routes hug the
+                # equipment instead of spiking to the sheet edge (looks "cut off").
+                if current[1] == neighbor[1] and current[1] in graph.recycle_y:
+                    cost += 100000.0
             
             if cur_dir and ndir != cur_dir:
                 cost += bend_cost
