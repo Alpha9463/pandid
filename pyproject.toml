@@ -14,6 +14,7 @@ keywords = ["chemical-engineering", "process-flow-diagram", "pfd", "flowsheet"]
 dependencies = []
 
 [project.optional-dependencies]
+pdf = ["cairosvg>=2.5"]   # enables PDF/PNG export via fs.render("x.pdf")
 dev = ["pytest>=7"]
 
 [tool.hatch.build.targets.wheel]

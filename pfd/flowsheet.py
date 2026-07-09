@@ -152,50 +152,63 @@ class Flowsheet:
             router = DefaultRouter()
         router.route(self)
 
-    def render(self, 
-               out_path: str | Path | None = None, 
-               show_stream_table: bool = False,
-               styling: str = "default",
-               page_size: str = "A3") -> str:
+    def to_svg(self, *, show_stream_table: bool = False,
+               styling: str = "default", page_size: str = "A3") -> str:
+        """Render the flowsheet to an SVG string, running ``layout()`` and
+        ``route()`` first if they have not been run yet.
         """
-        Render the flowsheet to an SVG string and optionally write it to out_path.
-        
-        Args:
-            out_path: Optional file path to write the SVG to.
-            show_stream_table: If True, draws a property table of all streams at the bottom.
-            styling: The styling mode to use, e.g., "default" or "pid" (which adds a title block and border).
-            page_size: Physical dimensions to scale the SVG to (e.g., "A3", "A4"). Defaults to "A3".
-            
-        Returns:
-            The raw SVG string.
-        """
-        # Ensure all units have a placement before rendering.
         if any(u.placement is None for u in self.units):
             self.layout()
-            
-        # Ensure all streams have a route.
         if any(s.route is None for s in self.streams):
             self.route()
-            
         from pfd.render.svg import SvgRenderer
-        renderer = SvgRenderer()
-        svg_str = renderer.render(self, show_stream_table=show_stream_table, styling=styling, page_size=page_size)
-        
-        if out_path:
-            with open(out_path, 'w') as f:
-                f.write(svg_str)
-                
-        return svg_str
+        return SvgRenderer().render(
+            self, show_stream_table=show_stream_table, styling=styling, page_size=page_size
+        )
+
+    def render(self, path: str | Path, *, show_stream_table: bool = False,
+               styling: str = "default", page_size: str = "A3") -> None:
+        """Render the flowsheet and write it to *path*.
+
+        The output format is inferred from the file extension:
+
+        - ``.svg`` — pure-Python, always available.
+        - ``.pdf`` / ``.png`` — require the optional ``cairosvg`` backend
+          (``pip install 'pfd[pdf]'``).
+
+        Args:
+            path: Output file path; its extension selects the format.
+            show_stream_table: Draw a property table of all streams at the bottom.
+            styling: ``"default"`` or ``"pid"`` (adds a title block and border).
+            page_size: Sheet size, e.g. ``"A3"`` (default) or ``"A4"``.
+        """
+        svg = self.to_svg(
+            show_stream_table=show_stream_table, styling=styling, page_size=page_size
+        )
+        ext = Path(path).suffix.lower()
+        if ext in ("", ".svg"):
+            Path(path).write_text(svg, encoding="utf-8")
+        elif ext in (".pdf", ".png"):
+            try:
+                import cairosvg
+            except ImportError as e:
+                raise ImportError(
+                    f"Exporting {ext} requires the optional cairosvg backend. "
+                    "Install it with: pip install 'pfd[pdf]'"
+                ) from e
+            data = svg.encode("utf-8")
+            if ext == ".pdf":
+                cairosvg.svg2pdf(bytestring=data, write_to=str(path))
+            else:
+                cairosvg.svg2png(bytestring=data, write_to=str(path))
+        else:
+            raise ValueError(
+                f"Unsupported output format {ext!r}; use .svg, .pdf, or .png"
+            )
 
     def _repr_svg_(self) -> str:
-        """IPython/Jupyter integration. Automatically displays SVG in notebooks."""
-        if any(u.placement is None for u in self.units):
-            self.layout()
-        if any(s.route is None for s in self.streams):
-            self.route()
-
-        from pfd.render.svg import SvgRenderer
-        return SvgRenderer().render(self, "")
+        """IPython/Jupyter integration: display the diagram inline in notebooks."""
+        return self.to_svg()
 
     def show(self) -> None:
         """Render the flowsheet and open it in the default web browser."""

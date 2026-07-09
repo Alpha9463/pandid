@@ -15,15 +15,13 @@ class SvgRenderer:
         from pfd.render.symbols import default_registry
         self.registry = registry or default_registry
 
-    def render(self, fs: "Flowsheet", path: str = "", jump_direction: str = "vertical", show_stream_table: bool = False, styling: str = "default", page_size: str = "A3", **opts) -> str:
+    def render(self, fs: "Flowsheet", *, jump_direction: str = "vertical", show_stream_table: bool = False, styling: str = "default", page_size: str = "A3", **opts) -> str:
         """Render the flowsheet to SVG.
 
         Parameters
         ----------
         fs : Flowsheet
             The flowsheet to render.
-        path : str
-            File path to write the SVG to. If empty, only returns the string.
         jump_direction : str
             Which crossing lines get a semicircle bump: ``"vertical"`` or ``"horizontal"``.
         show_stream_table : bool
@@ -442,8 +440,4 @@ class SvgRenderer:
             lines.extend(table_lines)
             
         lines.append('</svg>')
-        svg_str = "\n".join(lines)
-        if path:
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(svg_str)
-        return svg_str
+        return "\n".join(lines)
