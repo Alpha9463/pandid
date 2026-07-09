@@ -15,9 +15,9 @@ def break_cycles(fs: "Flowsheet") -> None:
     Streams marked as is_recycle=True will be drawn backward, while all others
     flow forward through the ranks.
     """
-    # 1. Reset all recycles
+    # 1. Reset all recycles (private field; is_recycle is read-only to callers)
     for s in fs.streams:
-        s.is_recycle = False
+        s._is_recycle = False
         
     if not fs.units:
         return
@@ -50,7 +50,7 @@ def break_cycles(fs: "Flowsheet") -> None:
             v = s.dest.owner
             assert v is not None
             if v in stack:
-                s.is_recycle = True
+                s._is_recycle = True
             elif v not in visited:
                 dfs(v)
         stack.remove(u)
