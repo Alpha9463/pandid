@@ -179,12 +179,18 @@ class SvgRenderer:
                 tx = mid_x
                 ty = mid_y
                 anchor = "middle"
-                # Draw white outline to cut through the line (inline label effect)
+                
+                # Draw a solid white rectangle to cleanly wipe the line underneath (CAD style)
+                text_len = len(s.name) * 7.5
+                rect_width = text_len + 8
+                rect_height = 14
+                rx = mid_x - rect_width / 2
+                ry = mid_y - rect_height / 2
+                
                 lines.append(
-                    f'    <text x="{tx}" y="{ty}" font-family="sans-serif" font-size="10" '
-                    f'text-anchor="{anchor}" dominant-baseline="middle" '
-                    f'stroke="white" stroke-width="4" stroke-linejoin="round">{html.escape(s.name)}</text>'
+                    f'    <rect x="{rx}" y="{ry}" width="{rect_width}" height="{rect_height}" fill="white" />'
                 )
+                
                 # Draw the actual text label
                 lines.append(
                     f'    <text x="{tx}" y="{ty}" font-family="sans-serif" font-size="10" '
