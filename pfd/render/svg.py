@@ -40,147 +40,125 @@ class SvgRenderer:
             "A0": (4489.1, 3174.8),  # 1189 x 841 mm
         }
 
-        # 1. Determine bounding box of units and routes
-        max_x, max_y = 0.0, 0.0
+        # 1. Content bounding box — union of every unit's (dynamic) symbol box
+        #    and every route waypoint. The canvas is framed to exactly this, so
+        #    there is no wasted margin and the output aspect always matches the
+        #    drawing (no letterboxing).
+        min_x = min_y = float("inf")
+        max_x = max_y = float("-inf")
         for u in fs.units:
             if u.placement is None:
                 raise ValueError(f"Unit '{u.name}' lacks a placement even after layout was run.")
             sym = self.registry.get(u.kind, getattr(u, 'variant', 'default'))
-            max_x = max(max_x, u.placement.x + sym.width)
-            max_y = max(max_y, u.placement.y + sym.height)
-            
+            w = u.width if u.width is not None else sym.width
+            h = u.height if u.height is not None else sym.height
+            if u.kind in ("feed", "product"):
+                w = max(80.0, len(u.name) * 8.0 + 30.0)
+            min_x = min(min_x, u.placement.x)
+            min_y = min(min_y, u.placement.y)
+            max_x = max(max_x, u.placement.x + w)
+            max_y = max(max_y, u.placement.y + h)
         for s in fs.streams:
             if s.route and s.route.waypoints:
                 for px, py in s.route.waypoints:
+                    min_x = min(min_x, px)
+                    min_y = min(min_y, py)
                     max_x = max(max_x, px)
                     max_y = max(max_y, py)
-                    
-        # Add padding — use page size as minimum canvas
-        page_w, page_h = _PAGE_SIZES.get(page_size.upper(), _PAGE_SIZES["A3"])
-        canvas_width = max(page_w, max_x + 100)
-        canvas_height = max(page_h, max_y + 100)
-        
-        # 2. Collect Stream Table Properties
+
+        if not fs.units:  # empty flowsheet: fall back to the nominal page size
+            page_w, page_h = _PAGE_SIZES.get(page_size.upper(), _PAGE_SIZES["A3"])
+            min_x = min_y = 0.0
+            max_x, max_y = page_w, page_h
+
+        # Margin absorbs unit labels (drawn just outside the symbol box) and arrowheads.
+        margin = 55.0
+        frame_x = min_x - margin
+        frame_y = min_y - margin
+        canvas_width = (max_x - min_x) + 2 * margin
+        canvas_height = (max_y - min_y) + 2 * margin
+
+        # 2. Optional stream-property table, placed directly below the diagram.
         table_lines = []
-        if show_stream_table:
-            table_y_start = canvas_height + 50
-            
-            # Find all unique keys
+        if show_stream_table and fs.streams:
+            table_left = frame_x + 25
+            table_y_start = frame_y + canvas_height + 10
+
             keys = set()
             for s in fs.streams:
                 keys.update(s.properties.keys())
-            sorted_keys = sorted(list(keys))
-            
-            # Columns: Property, S1, S2, S3...
+            sorted_keys = sorted(keys)
+
             headers = ["Stream"] + [s.name for s in fs.streams]
-            
-            # Auto-scale: if more than ~20 streams, shrink columns to fit
             n_streams = len(fs.streams)
             if n_streams > 20:
                 stream_col_w = max(35, int(canvas_width / (n_streams + 2)))
                 font_size = max(8, min(12, int(stream_col_w / 5)))
                 row_height = max(20, font_size + 12)
             else:
-                stream_col_w = max(60, max(len(s.name) * 8 for s in fs.streams) if fs.streams else 60)
+                stream_col_w = max(60, max((len(s.name) * 8 for s in fs.streams), default=60))
                 font_size = 12
                 row_height = 30
-                
+
             col_widths = [100] + [stream_col_w] * n_streams
             table_width = sum(col_widths)
-            
-            if table_width > canvas_width:
-                import warnings
-                warnings.warn(
-                    f"Stream table width ({table_width}px) exceeds canvas width "
-                    f"({canvas_width:.0f}px). Consider using a larger page_size or "
-                    f"reducing the number of stream properties.",
-                    stacklevel=3,
-                )
-            
-            # Update canvas dimensions
-            canvas_width = max(canvas_width, table_width + 100)
-            
+
             table_lines.append('  <g id="stream_table">')
-            
-            # Draw header row (Stream names)
-            cx = 50
+            cx = table_left
             for i, h in enumerate(headers):
                 table_lines.append(f'    <rect x="{cx}" y="{table_y_start}" width="{col_widths[i]}" height="{row_height}" fill="#eee" stroke="black" />')
                 table_lines.append(f'    <text x="{cx + col_widths[i]/2}" y="{table_y_start + row_height/2}" font-family="sans-serif" font-size="{font_size}" font-weight="bold" text-anchor="middle" dominant-baseline="middle">{html.escape(h)}</text>')
                 cx += col_widths[i]
-                
-            # Draw property rows
+
             current_y = table_y_start + row_height
             for k in sorted_keys:
-                cx = 50
-                # Property name cell
+                cx = table_left
                 table_lines.append(f'    <rect x="{cx}" y="{current_y}" width="{col_widths[0]}" height="{row_height}" fill="#f9f9f9" stroke="black" />')
                 table_lines.append(f'    <text x="{cx + col_widths[0]/2}" y="{current_y + row_height/2}" font-family="sans-serif" font-size="{font_size}" font-weight="bold" text-anchor="middle" dominant-baseline="middle">{html.escape(k)}</text>')
                 cx += col_widths[0]
-                
-                # Stream values
                 for i, s in enumerate(fs.streams):
                     val = str(s.properties.get(k, "-"))
                     cw = col_widths[i + 1]
                     table_lines.append(f'    <rect x="{cx}" y="{current_y}" width="{cw}" height="{row_height}" fill="white" stroke="black" />')
                     table_lines.append(f'    <text x="{cx + cw/2}" y="{current_y + row_height/2}" font-family="sans-serif" font-size="{font_size}" text-anchor="middle" dominant-baseline="middle">{html.escape(val)}</text>')
                     cx += cw
-                    
                 current_y += row_height
-                
+
             table_lines.append('  </g>')
-            canvas_height = current_y + 50
-            
+            # Grow the canvas to include the table (both width and height).
+            canvas_width = max(canvas_width, (table_left - frame_x) + table_width + margin)
+            canvas_height = (current_y - frame_y) + 30
+
+        # 3. Optional P&ID sheet border + title block, framed to the canvas.
         pid_lines = []
         if styling == "pid":
-            # 50px border
             border_margin = 25
-            border_w = canvas_width - 2 * border_margin
-            border_h = canvas_height - 2 * border_margin
-            
             pid_lines.append('  <g id="pid_styling">')
-            pid_lines.append(f'    <rect x="{border_margin}" y="{border_margin}" width="{border_w}" height="{border_h}" fill="none" stroke="black" stroke-width="4" />')
-            
-            # Title block in bottom right
+            pid_lines.append(f'    <rect x="{frame_x + border_margin}" y="{frame_y + border_margin}" width="{canvas_width - 2 * border_margin}" height="{canvas_height - 2 * border_margin}" fill="none" stroke="black" stroke-width="4" />')
             tb_w = 300
             tb_h = 100
-            tb_x = canvas_width - border_margin - tb_w
-            tb_y = canvas_height - border_margin - tb_h
-            
+            tb_x = frame_x + canvas_width - border_margin - tb_w
+            tb_y = frame_y + canvas_height - border_margin - tb_h
             pid_lines.append(f'    <rect x="{tb_x}" y="{tb_y}" width="{tb_w}" height="{tb_h}" fill="white" stroke="black" stroke-width="2" />')
-            
-            # Lines inside title block
             pid_lines.append(f'    <line x1="{tb_x}" y1="{tb_y + 33}" x2="{tb_x + tb_w}" y2="{tb_y + 33}" stroke="black" stroke-width="1" />')
             pid_lines.append(f'    <line x1="{tb_x}" y1="{tb_y + 66}" x2="{tb_x + tb_w}" y2="{tb_y + 66}" stroke="black" stroke-width="1" />')
-            
-            # Text
             date_str = datetime.datetime.now().strftime("%Y-%m-%d")
             pid_lines.append(f'    <text x="{tb_x + 10}" y="{tb_y + 20}" font-family="sans-serif" font-size="14" font-weight="bold">Project: {html.escape(fs.name)}</text>')
             pid_lines.append(f'    <text x="{tb_x + 10}" y="{tb_y + 53}" font-family="sans-serif" font-size="12">Generated by: py-chemengg</text>')
             pid_lines.append(f'    <text x="{tb_x + 10}" y="{tb_y + 86}" font-family="sans-serif" font-size="12">Date: {date_str}</text>')
-            
             pid_lines.append('  </g>')
 
+        # 4. SVG document. width/height in px equal the viewBox, so it never
+        #    letterboxes regardless of the diagram's aspect ratio.
         lines = []
         lines.append('<?xml version="1.0" encoding="UTF-8"?>')
-        
-        # Physical dimensions for the SVG element (landscape orientation)
-        _PHYS_DIMS = {
-            "A4": ("297mm", "210mm"),
-            "A3": ("420mm", "297mm"),
-            "A2": ("594mm", "420mm"),
-            "A1": ("841mm", "594mm"),
-            "A0": ("1189mm", "841mm"),
-        }
-        phys_w, phys_h = _PHYS_DIMS.get(page_size.upper(), ("420mm", "297mm"))
-        
-        lines.append(f'<svg xmlns="http://www.w3.org/2000/svg" '
-                     f'xmlns:xlink="http://www.w3.org/1999/xlink" '
-                     f'width="{phys_w}" height="{phys_h}" viewBox="0 0 {canvas_width} {canvas_height}">')
-        
+        lines.append(
+            f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" '
+            f'width="{canvas_width:.0f}" height="{canvas_height:.0f}" '
+            f'viewBox="{frame_x:.1f} {frame_y:.1f} {canvas_width:.1f} {canvas_height:.1f}">'
+        )
         lines.append('  <!-- Background -->')
-        lines.append(f'  <rect x="0" y="0" width="{canvas_width}" height="{canvas_height}" fill="white" />')
-        
+        lines.append(f'  <rect x="{frame_x:.1f}" y="{frame_y:.1f}" width="{canvas_width:.1f}" height="{canvas_height:.1f}" fill="white" />')
         if pid_lines:
             lines.extend(pid_lines)
 

@@ -43,3 +43,16 @@ def test_render_pdf_without_cairosvg_raises_helpful_error(tmp_path):
 def test_render_unknown_extension_raises_valueerror(tmp_path):
     with pytest.raises(ValueError):
         _fs().render(str(tmp_path / "d.bmp"))
+
+
+def test_canvas_fits_content_and_is_not_padded_to_page_size():
+    # A two-box diagram must frame tightly, not float in a full A3 sheet
+    # (1587x1122). Regression guard for the canvas-fit fix.
+    import re
+    svg = _fs().to_svg()
+    m = re.search(r'viewBox="([-\d.]+) ([-\d.]+) ([\d.]+) ([\d.]+)"', svg)
+    w, h = float(m.group(3)), float(m.group(4))
+    assert w < 800 and h < 500
+    # width/height in px must equal the viewBox (aspect-matched → no letterbox).
+    dims = re.search(r'width="(\d+)" height="(\d+)" viewBox', svg)
+    assert (float(dims.group(1)), float(dims.group(2))) == (round(w), round(h))
