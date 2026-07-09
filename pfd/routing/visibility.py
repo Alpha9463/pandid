@@ -54,6 +54,8 @@ class VisibilityGraph:
             y_set.add(p.y - margin)
             if label_h > 0:
                 y_set.add(p.y - label_h - 5.0 - margin)
+                # Escape lane under the label for top ports!
+                y_set.add(p.y - 2.5)
             y_set.add(p.y + sym.height + margin)
             
             # Port locations themselves form grid lines

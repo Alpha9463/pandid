@@ -12,6 +12,9 @@ MARGIN_Y = 50
 
 def assign_coordinates(fs: "Flowsheet") -> None:
     """Map (col, row) ranks to absolute (x, y) pixel coordinates."""
+    from pfd.render.symbols import default_registry
+    
+    unpinned_y = set()
     for u in fs.units:
         # If user explicitly pinned x, y coordinates, keep them.
         if u.placement.x is None:
@@ -19,3 +22,33 @@ def assign_coordinates(fs: "Flowsheet") -> None:
             
         if u.placement.y is None:
             u.placement.y = MARGIN_Y + (u.placement.row or 0) * Y_GAP
+            unpinned_y.add(u)
+            
+    # Post-pass: Align terminal units vertically with their target
+    for u in unpinned_y:
+        connected_streams = [s for s in fs.streams if s.source.owner == u or s.dest.owner == u]
+        
+        # If this unit is a terminal (like Feed or Product) with exactly 1 stream
+        if len(connected_streams) == 1:
+            s = connected_streams[0]
+            
+            if s.source.owner == u:
+                my_port = s.source
+                other_port = s.dest
+            else:
+                my_port = s.dest
+                other_port = s.source
+                
+            other_u = other_port.owner
+            
+            sym_u = default_registry.get(u.kind)
+            sym_other = default_registry.get(other_u.kind)
+            
+            my_py = sym_u.ports.get(my_port.name, (0, 0))[1]
+            other_py = sym_other.ports.get(other_port.name, (0, 0))[1]
+            
+            # Target absolute Y of the other port
+            target_abs_y = other_u.placement.y + other_py
+            
+            # Align our port's absolute Y to match target_abs_y
+            u.placement.y = target_abs_y - my_py

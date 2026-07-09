@@ -75,6 +75,20 @@ def find_path(
             dist = abs(neighbor[0] - current[0]) + abs(neighbor[1] - current[1])
             cost = g + dist + edge_penalties.get((current, neighbor), 0.0)
             
+            # Boundary penalty: penalize edges that lie exactly on an obstacle boundary
+            if current[0] == neighbor[0]: # vertical
+                for o in graph.obstacles:
+                    if current[0] == o.x_min or current[0] == o.x_max:
+                        if max(current[1], neighbor[1]) > o.y_min and min(current[1], neighbor[1]) < o.y_max:
+                            cost += 2000
+                            break
+            elif current[1] == neighbor[1]: # horizontal
+                for o in graph.obstacles:
+                    if current[1] == o.y_min or current[1] == o.y_max:
+                        if max(current[0], neighbor[0]) > o.x_min and min(current[0], neighbor[0]) < o.x_max:
+                            cost += 2000
+                            break
+            
             if cur_dir and ndir != cur_dir:
                 cost += BEND_PENALTY
                 

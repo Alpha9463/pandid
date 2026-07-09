@@ -88,6 +88,22 @@ class SvgRenderer:
             dy = dst_u.placement.y + dst_py
             
             points = [(sx, sy)] + (s.route.waypoints if s.route and s.route.waypoints else []) + [(dx, dy)]
+            
+            # Simplify collinear points to prevent "hanging" arrowheads on tiny final segments
+            simplified = [points[0]]
+            for i in range(1, len(points) - 1):
+                p_prev = simplified[-1]
+                p_curr = points[i]
+                p_next = points[i+1]
+                # If they form a continuous horizontal or vertical line, skip the middle point
+                if (p_prev[0] == p_curr[0] == p_next[0]) or (p_prev[1] == p_curr[1] == p_next[1]):
+                    pass
+                else:
+                    simplified.append(p_curr)
+            if len(points) > 1:
+                simplified.append(points[-1])
+            points = simplified
+            
             stream_geoms.append((s, points))
             
             for i in range(len(points)-1):
