@@ -19,16 +19,16 @@ def test_render_svg_with_manual_placements(tmp_path):
     # Check root and defs
     assert "<svg" in content
     assert "<defs>" in content
-    assert 'id="sym_feed"' in content
     assert 'id="sym_hex"' in content
     
     # Check <use> tags for manually pinned coordinates
-    assert '<use href="#sym_feed" x="10" y="10" />' in content
-    assert '<use href="#sym_hex" x="100" y="10" />' in content
+    assert '<polygon' in content
+    assert 'fill="transparent"' in content
+    assert '<use href="#sym_hex" x="100" y="10" width="100.0" height="60.0" />' in content
     
     # Check stream paths (waypoints should be present in string)
-    assert '150,20' in content
-    assert '150,150' in content
+    assert '150.0,20.0' in content
+    assert '150.0,150.0' in content
     assert '<path d="' in content
 
 

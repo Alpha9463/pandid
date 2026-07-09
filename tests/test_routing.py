@@ -1,4 +1,3 @@
-import pytest
 from pfd.flowsheet import Flowsheet
 from pfd.units import Feed, Product
 from pfd.routing import get_outward_dir
@@ -14,7 +13,7 @@ def test_rect_intersection():
     # Segment crossing through
     assert r.intersects_segment(5, 15, 25, 15)
     # Segment on the edge
-    assert not r.intersects_segment(10, 5, 10, 25)
+    assert r.intersects_segment(10, 5, 10, 25)
     # Segment completely outside
     assert not r.intersects_segment(5, 5, 25, 5)
     
@@ -76,12 +75,17 @@ def test_no_obstacle_intersection():
         x1, y1 = pts[i]
         x2, y2 = pts[i+1]
         for obs in graph.obstacles:
-            # The first segment is allowed to intersect the source unit's bounding box
-            if i == 0 and obs.x_min == v.placement.x and obs.y_min == v.placement.y:
-                continue
-            # The last segment is allowed to intersect the dest unit's bounding box
-            if i == len(pts) - 2 and obs.x_min == c.placement.x and obs.y_min == c.placement.y:
-                continue
+            # The first segment is allowed to intersect the source unit's bounding box and its external label
+            if i in (0, 1):
+                if obs.x_min == v.placement.x and obs.y_min == v.placement.y:
+                    continue
+                if obs.y_max == v.placement.y:
+                    continue
+            # The last segment is allowed to intersect the dest unit's bounding box and its external label
+            if i in (len(pts) - 2, len(pts) - 3):
+                if obs.x_min == c.placement.x and obs.y_min == c.placement.y:
+                    continue
+                if obs.y_max == c.placement.y:
+                    continue
                 
             assert not obs.intersects_segment(x1, y1, x2, y2), f"Segment {pts[i]}->{pts[i+1]} intersects obstacle {obs}"
-

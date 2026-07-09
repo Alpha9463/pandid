@@ -72,6 +72,19 @@ def test_add_rejects_duplicate_unit():
         fs.add(pump)
 
 
+def test_add_rejects_duplicate_unit_name():
+    fs = Flowsheet("Test")
+    fs.add(U.Pump("K-1"))
+    with pytest.raises(ValueError, match="already exists on this flowsheet"):
+        fs.add(U.Pump("K-1"))
+
+
+def test_connect_rejects_invalid_stream_kind():
+    fs, feed, pump, prod = _fs()
+    with pytest.raises(ValueError, match="Stream kind must be"):
+        fs.connect(feed.outlet, pump.suction, kind="magic")
+
+
 def test_add_rejects_unit_from_another_flowsheet():
     fs1 = Flowsheet("FS1")
     fs2 = Flowsheet("FS2")

@@ -5,7 +5,6 @@ from collections import defaultdict, deque
 
 if TYPE_CHECKING:
     from pfd.flowsheet import Flowsheet
-    from pfd.units import Unit
 
 
 class VirtualNode:
@@ -33,6 +32,7 @@ def assign_layers(fs: "Flowsheet") -> None:
         
     for s in fs.streams:
         if not s.is_recycle:
+            assert s.source.owner is not None and s.dest.owner is not None
             adj[s.source.owner].append(s.dest.owner)
             in_degree[s.dest.owner] += 1
             
@@ -41,6 +41,7 @@ def assign_layers(fs: "Flowsheet") -> None:
     ranks = {}
     
     for u in fs.units:
+        assert u.placement is not None
         if u.placement.col is not None:
             ranks[u] = u.placement.col
         else:
@@ -52,6 +53,7 @@ def assign_layers(fs: "Flowsheet") -> None:
         visited_count += 1
         
         for v in adj[u]:
+            assert v.placement is not None
             # The rank of v must be at least rank(u) + 1
             if v.placement.col is None:
                 ranks[v] = max(ranks[v], ranks[u] + 1)
@@ -65,6 +67,7 @@ def assign_layers(fs: "Flowsheet") -> None:
         
     # Write ranks back to placement
     for u in fs.units:
+        assert u.placement is not None
         if u.placement.col is None:
             u.placement.col = ranks[u]
 

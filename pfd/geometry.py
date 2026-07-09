@@ -18,6 +18,7 @@ class Placement:
     orientation: float = 0.0
     col: int | None = None
     row: int | None = None
+    mirrored: bool = False
 
 
 @dataclass

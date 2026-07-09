@@ -1,4 +1,3 @@
-import pytest
 from pfd import Flowsheet, units as U
 from pfd.layout.cycles import break_cycles
 from pfd.layout.layering import assign_layers
@@ -77,7 +76,8 @@ def test_coordinates():
     
     assign_coordinates(fs)
     
-    assert u1.placement.x == 50 + 1 * 150
+    # Only one column (col 1) exists, so it starts at MARGIN_X
+    assert u1.placement.x == 50
     assert u1.placement.y == 50 + 2 * 120
 
 def test_full_layout_via_render(tmp_path):

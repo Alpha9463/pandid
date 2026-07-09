@@ -29,6 +29,8 @@ def break_cycles(fs: "Flowsheet") -> None:
     
     for s in fs.streams:
         if s.kind == "material":
+            assert s.source.owner is not None
+            assert s.dest.owner is not None
             adj[s.source.owner].append(s)
             in_degree[s.dest.owner] += 1
             
@@ -46,6 +48,7 @@ def break_cycles(fs: "Flowsheet") -> None:
         stack.add(u)
         for s in adj[u]:
             v = s.dest.owner
+            assert v is not None
             if v in stack:
                 s.is_recycle = True
             elif v not in visited:

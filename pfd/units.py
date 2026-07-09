@@ -14,12 +14,20 @@ from pfd.geometry import Placement
 from pfd.ports import Port
 
 
+_VALID_ROLES = {"process", "feed", "energy", "utility", "vapor", "liquid"}
+
 class Unit:
     kind: str = "unit"
     _PORTS: list[tuple[str, str, str]] = []
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, variant: str = "default", width: Optional[float] = None, height: Optional[float] = None, label_pos: Optional[str] = None):
+        if not name:
+            raise ValueError("Unit name cannot be empty")
         self.name = name
+        self.variant = variant
+        self.width = width
+        self.height = height
+        self.label_pos = label_pos
         self.flowsheet = None
         self.ports: dict[str, Port] = {}
         self.params: dict = {}
@@ -35,6 +43,7 @@ class Unit:
         x: float | None = None,
         y: float | None = None,
         orientation: float = 0.0,
+        mirrored: bool = False,
     ) -> "Unit":
         """Pin the unit to a specific layout grid cell or exact pixel coordinate."""
         if self.placement is None:
@@ -48,6 +57,7 @@ class Unit:
         if y is not None:
             self.placement.y = y
         self.placement.orientation = orientation
+        self.placement.mirrored = mirrored
         return self
 
     def _add_port(self, name: str, direction: str, role: str,
@@ -55,6 +65,10 @@ class Unit:
         if name in self.ports:
             raise ValueError(
                 f"{type(self).__name__!r} already has a port named {name!r}"
+            )
+        if role not in _VALID_ROLES:
+            raise ValueError(
+                f"Invalid role {role!r} for port {name!r}. Allowed roles are: {_VALID_ROLES}"
             )
         port = Port(name=name, owner=self, direction=direction, role=role, side=side)
         self.ports[name] = port
@@ -90,7 +104,7 @@ class Product(Unit):
     """Boundary condition: a stream sink leaving the flowsheet."""
 
     kind = "product"
-    _PORTS = [("inlet", "inlet", "product")]
+    _PORTS = [("inlet", "inlet", "process")]
 
 
 class Pump(Unit):
@@ -204,10 +218,10 @@ class Mixer(Unit):
 
     kind = "mixer"
 
-    def __init__(self, name: str, n_inlets: int = 2):
+    def __init__(self, name: str, n_inlets: int = 2, variant: str = "default", width: float | None = None, height: float | None = None):
         if n_inlets < 1:
             raise ValueError(f"Mixer requires at least 1 inlet, got {n_inlets}")
-        super().__init__(name)
+        super().__init__(name, variant=variant, width=width, height=height)
         for i in range(1, n_inlets + 1):
             self._add_port(f"in_{i}", "inlet", "process")
         self._add_port("outlet", "outlet", "process")
@@ -218,10 +232,102 @@ class Splitter(Unit):
 
     kind = "splitter"
 
-    def __init__(self, name: str, n_outlets: int = 2):
+    def __init__(self, name: str, n_outlets: int = 2, variant: str = "default", width: float | None = None, height: float | None = None):
         if n_outlets < 1:
             raise ValueError(f"Splitter requires at least 1 outlet, got {n_outlets}")
-        super().__init__(name)
+        super().__init__(name, variant=variant, width=width, height=height)
         self._add_port("inlet", "inlet", "process")
         for i in range(1, n_outlets + 1):
             self._add_port(f"out_{i}", "outlet", "process")
+
+
+# ---------------------------------------------------------------------------
+# Specific Equipment Subclasses
+# ---------------------------------------------------------------------------
+
+class TrayColumn(Column):
+    """Distillation column with trays."""
+    def __init__(self, name: str, variant: str = "tray", width: float | None = None, height: float | None = None):
+        super().__init__(name, variant=variant, width=width, height=height)
+
+
+class PackedColumn(Column):
+    """Distillation column with packing."""
+    def __init__(self, name: str, variant: str = "packed", width: float | None = None, height: float | None = None):
+        super().__init__(name, variant=variant, width=width, height=height)
+
+
+class Absorber(Unit):
+    """Absorption column."""
+    kind = "column"
+    _PORTS = [
+        ("vapor_in", "inlet", "vapor"),
+        ("liquid_in", "inlet", "liquid"),
+        ("vapor_out", "outlet", "vapor"),
+        ("liquid_out", "outlet", "liquid"),
+    ]
+
+
+class Stripper(Unit):
+    """Stripping column."""
+    kind = "column"
+    _PORTS = [
+        ("feed", "inlet", "liquid"),
+        ("vapor_in", "inlet", "vapor"),
+        ("vapor_out", "outlet", "vapor"),
+        ("liquid_out", "outlet", "liquid"),
+    ]
+
+
+class StorageTank(Vessel):
+    """Atmospheric storage tank."""
+    def __init__(self, name: str, variant: str = "tank", width: float | None = None, height: float | None = None):
+        super().__init__(name, variant=variant, width=width, height=height)
+
+
+class FlashDrum(Separator):
+    """Flash separation vessel."""
+    def __init__(self, name: str, variant: str = "default", width: float | None = None, height: float | None = None):
+        super().__init__(name, variant=variant, width=width, height=height)
+
+
+class CentrifugalPump(Pump):
+    """Centrifugal pump."""
+    def __init__(self, name: str, variant: str = "centrifugal", width: float | None = None, height: float | None = None):
+        super().__init__(name, variant=variant, width=width, height=height)
+
+
+class VacuumPump(Pump):
+    """Vacuum pump."""
+    def __init__(self, name: str, variant: str = "vacuum", width: float | None = None, height: float | None = None):
+        super().__init__(name, variant=variant, width=width, height=height)
+
+
+class PositiveDisplacementPump(Pump):
+    """Positive displacement pump."""
+    def __init__(self, name: str, variant: str = "pd", width: float | None = None, height: float | None = None):
+        super().__init__(name, variant=variant, width=width, height=height)
+
+
+class ShellAndTube(HeatExchanger):
+    """Shell and tube heat exchanger."""
+    def __init__(self, name: str, variant: str = "shell_tube", width: float | None = None, height: float | None = None):
+        super().__init__(name, variant=variant, width=width, height=height)
+
+
+class AirCooler(HeatExchanger):
+    """Air-cooled heat exchanger."""
+    def __init__(self, name: str, variant: str = "air_cooler", width: float | None = None, height: float | None = None):
+        super().__init__(name, variant=variant, width=width, height=height)
+
+
+class ControlValve(Valve):
+    """Control valve."""
+    def __init__(self, name: str, variant: str = "control", width: float | None = None, height: float | None = None):
+        super().__init__(name, variant=variant, width=width, height=height)
+
+
+class ReliefValve(Valve):
+    """Pressure relief valve."""
+    def __init__(self, name: str, variant: str = "relief", width: float | None = None, height: float | None = None):
+        super().__init__(name, variant=variant, width=width, height=height)

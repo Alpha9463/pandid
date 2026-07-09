@@ -29,6 +29,10 @@ class Flowsheet:
             raise ValueError(
                 f"{unit!r} is already on this flowsheet"
             )
+        if any(u.name == unit.name for u in self.units):
+            raise ValueError(
+                f"A unit with the name {unit.name!r} already exists on this flowsheet."
+            )
         if unit.flowsheet is not None:
             raise ValueError(
                 f"{unit!r} is already on flowsheet {unit.flowsheet.name!r}"
@@ -48,6 +52,9 @@ class Flowsheet:
 
         Raises :class:`ValueError` if any validation rule is violated.
         """
+        if kind not in {"material", "energy"}:
+            raise ValueError(f"Stream kind must be 'material' or 'energy', got {kind!r}")
+            
         if src.direction != "outlet":
             raise ValueError(
                 f"source port {src.owner.name}.{src.name} must be an outlet, "
@@ -116,8 +123,8 @@ class Flowsheet:
             "streams": [
                 {
                     "name": s.name,
-                    "source": [s.source.owner.name, s.source.name],
-                    "dest": [s.dest.owner.name, s.dest.name],
+                    "source": [s.source.owner.name if s.source.owner else "", s.source.name],
+                    "dest": [s.dest.owner.name if s.dest.owner else "", s.dest.name],
                     "kind": s.kind,
                     "is_recycle": s.is_recycle,
                 }
@@ -139,10 +146,22 @@ class Flowsheet:
             router = DefaultRouter()
         router.route(self)
 
-    def render(self, path: str, *, backend: str = "svg", **opts) -> None:
-        """Render the flowsheet geometry to a file.
+    def render(self, 
+               out_path: str | Path | None = None, 
+               show_stream_table: bool = False,
+               styling: str = "default",
+               page_size: str = "A3") -> str:
+        """
+        Render the flowsheet to an SVG string and optionally write it to out_path.
         
-        Currently, only the 'svg' backend is supported.
+        Args:
+            out_path: Optional file path to write the SVG to.
+            show_stream_table: If True, draws a property table of all streams at the bottom.
+            styling: The styling mode to use, e.g., "default" or "pid" (which adds a title block and border).
+            page_size: Physical dimensions to scale the SVG to (e.g., "A3", "A4"). Defaults to "A3".
+            
+        Returns:
+            The raw SVG string.
         """
         # Ensure all units have a placement before rendering.
         if any(u.placement is None for u in self.units):
@@ -152,12 +171,35 @@ class Flowsheet:
         if any(s.route is None for s in self.streams):
             self.route()
             
-        if backend == "svg":
-            from pfd.render.svg import SvgRenderer
-            renderer = SvgRenderer()
-        else:
-            raise NotImplementedError(f"Backend '{backend}' not supported.")
-        renderer.render(self, path, **opts)
+        from pfd.render.svg import SvgRenderer
+        renderer = SvgRenderer()
+        svg_str = renderer.render(self, show_stream_table=show_stream_table, styling=styling, page_size=page_size)
+        
+        if out_path:
+            with open(out_path, 'w') as f:
+                f.write(svg_str)
+                
+        return svg_str
+
+    def _repr_svg_(self) -> str:
+        """IPython/Jupyter integration. Automatically displays SVG in notebooks."""
+        if any(s.route is None for s in self.streams):
+            self.route()
+            
+        from pfd.render.svg import SvgRenderer
+        return SvgRenderer().render(self, "")
+
+    def show(self) -> None:
+        """Render the flowsheet and open it in the default web browser."""
+        import tempfile
+        import webbrowser
+        import os
+        
+        fd, temp_path = tempfile.mkstemp(suffix=".svg")
+        os.close(fd)
+        
+        self.render(temp_path)
+        webbrowser.open(f"file://{temp_path}")
 
     def __repr__(self) -> str:
         return (

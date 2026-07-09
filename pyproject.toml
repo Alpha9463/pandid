@@ -21,3 +21,6 @@ packages = ["pfd"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.mypy]
+ignore_missing_imports = true

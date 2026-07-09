@@ -37,10 +37,19 @@ def test_port_lookup_raises_helpful_error():
 def test_duplicate_port_name_raises():
     class _Bad(Unit):
         kind = "bad"
-        _PORTS = [("x", "inlet", "a"), ("x", "outlet", "b")]
+        _PORTS = [("x", "inlet", "process"), ("x", "outlet", "process")]
 
     with pytest.raises(ValueError, match="already has a port named 'x'"):
         _Bad("B-1")
+
+
+def test_invalid_port_role_raises():
+    class _BadRole(Unit):
+        kind = "badrole"
+        _PORTS = [("in", "inlet", "magic")]
+
+    with pytest.raises(ValueError, match="Invalid role 'magic'"):
+        _BadRole("B-2")
 
 
 # --- Task 5: Built-in unit types ---

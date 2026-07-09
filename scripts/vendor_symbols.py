@@ -15,6 +15,14 @@ MAPPING = {
     "hex": ("PT002A.svg", {"3": "cold_in", "1": "cold_out", "4": "hot_in", "2": "hot_out"}),
     # Mixer is a circle. Port 3 (left), Port 4 (top) -> inlets, Port 1 (right) -> outlet
     "mixer": ("ND0023.svg", {"3": "in_1", "4": "in_2", "1": "outlet"}),
+    
+    # New Mappings for M6 / P&ID
+    "valve": ("PV022A.svg", {"2": "inlet", "1": "outlet"}),
+    "vessel": ("PT005A.svg", {"2": "inlet", "1": "outlet"}),
+    "heater": ("PT002A.svg", {"3": "inlet", "1": "outlet", "2": "duty"}),
+    "cooler": ("PT002A.svg", {"3": "inlet", "1": "outlet", "4": "duty"}),
+    "column": ("PT002A.svg", {"3": "feed", "4": "distillate", "2": "bottoms", "1": "reboiler_duty"}),
+    "splitter": ("ND0024.svg", {"3": "inlet", "1": "out_1", "4": "out_2", "2": "out_3"}),
 }
 
 OUTPUT_FILE = "pfd/render/symbols.py"
@@ -32,6 +40,7 @@ def generate_registry():
         '    width: float',
         '    height: float',
         '    ports: dict[str, tuple[float, float]] = field(default_factory=dict)',
+        '    label_pos: tuple[float, float] | None = None',
         '',
         'class SymbolRegistry:',
         '    def __init__(self):',

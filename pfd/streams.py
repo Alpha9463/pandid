@@ -8,7 +8,7 @@ cycles; it is advisory only.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from pfd.geometry import Route
@@ -28,6 +28,7 @@ class Stream:
     route: Route | None = None
     color: str | None = None
     dasharray: str | None = None
+    properties: dict[str, str | float] = field(default_factory=dict)
 
     def via(self, waypoints: list[tuple[float, float]]) -> "Stream":
         """Force the stream to route through these exact pixel waypoints."""

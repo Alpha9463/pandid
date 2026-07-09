@@ -1,6 +1,11 @@
-"""SVG symbol registry for the topology primitives."""
+"""SVG symbol registry for the topology primitives.
+
+Symbols follow ISO 10628-2 and ISA 5.1 conventions where applicable.
+All custom geometric SVG primitives — no proprietary icons.
+"""
 
 from dataclasses import dataclass, field
+from typing import Optional
 
 @dataclass
 class Symbol:
@@ -9,85 +14,401 @@ class Symbol:
     width: float
     height: float
     ports: dict[str, tuple[float, float]] = field(default_factory=dict)
-    label_pos: tuple[float, float] | None = None
+    label_pos: Optional[str] = None
 
 class SymbolRegistry:
     def __init__(self):
-        self._symbols: dict[str, Symbol] = {}
+        self._symbols: dict[tuple[str, str], Symbol] = {}
         self._register_defaults()
 
-    def register(self, kind: str, template: Symbol) -> None:
-        self._symbols[kind] = template
+    def register(self, kind: str, template: Symbol, variant: str = "default") -> None:
+        self._symbols[(kind, variant)] = template
 
-    def get(self, kind: str) -> Symbol:
-        if kind not in self._symbols:
-            return self._generic_symbol()
-        return self._symbols[kind]
+    def get(self, kind: str, variant: str = "default") -> Symbol:
+        if (kind, variant) in self._symbols:
+            return self._symbols[(kind, variant)]
+        if (kind, "default") in self._symbols:
+            return self._symbols[(kind, "default")]
+        return self._generic_symbol()
 
     def _generic_symbol(self) -> Symbol:
         svg = (
             '<g id="sym_generic">'
-            '<rect x="0" y="0" width="50" height="50" fill="white" stroke="black" />'
+            '<rect x="0" y="0" width="60" height="60" fill="none" stroke="black" stroke-width="2" />'
             '</g>'
         )
-        return Symbol(svg=svg, width=50, height=50)
+        return Symbol(svg=svg, width=60, height=60)
 
     def _register_defaults(self):
-        # Generic Feed (Chevron pointing right)
+        # ====================================================================
+        # Feed / Product — rendered dynamically in svg.py, these are fallbacks
+        # ====================================================================
         self.register("feed", Symbol(
-            svg='<g id="sym_feed"><polygon points="0,0 60,0 80,15 60,30 0,30" fill="transparent" stroke="black"/></g>',
-            width=80.0, height=30.0,
-            ports={"outlet": (80.0, 15.0)},
-            label_pos=(35.0, 15.0)
+            svg='<g id="sym_feed"><polygon points="0,10 35,10 50,25 35,40 0,40" fill="none" stroke="black" stroke-width="2"/></g>',
+            width=50.0, height=50.0,
+            ports={"outlet": (50.0, 25.0)}
         ))
-        # Generic Product (Chevron pointing right with inverted tail)
         self.register("product", Symbol(
-            svg='<g id="sym_product"><polygon points="0,0 80,0 80,30 0,30 20,15" fill="transparent" stroke="black"/></g>',
-            width=80.0, height=30.0,
-            ports={"inlet": (20.0, 15.0)},
-            label_pos=(45.0, 15.0)
-        ))
-        # Equinor Symbol: PP001A.svg
-        self.register("pump", Symbol(
-            svg='<g id="sym_pump"><path d="M52 40.5C52 38.2909 50.2091 36.5 48 36.5C45.7909 36.5 44 38.2909 44 40.5C44 42.7091 45.7909 44.5 48 44.5C50.2091 44.5 52 42.7091 52 40.5ZM51 40.5C51 42.1569 49.6569 43.5 48 43.5C46.3431 43.5 45 42.1569 45 40.5C45 38.8431 46.3431 37.5 48 37.5C49.6569 37.5 51 38.8431 51 40.5Z" stroke="black" fill="transparent"/><path d="M83 40.5C83 21.17 67.33 5.5 48 5.5C28.67 5.5 13 21.17 13 40.5C13 50.9622 17.5904 60.3522 24.8671 66.7659L13 90.5H83L71.1329 66.7659C78.4096 60.3522 83 50.9622 83 40.5ZM48 74.5C29.2223 74.5 14 59.2777 14 40.5C14 21.7223 29.2223 6.5 48 6.5C66.7777 6.5 82 21.7223 82 40.5C82 59.2777 66.7777 74.5 48 74.5ZM48 75.5C56.4973 75.5 64.2874 72.4719 70.3499 67.4359L81.382 89.5H14.618L25.6501 67.4359C31.7126 72.4719 39.5027 75.5 48 75.5Z" stroke="black" fill="transparent"/></g>',
-            width=96.0, height=96.0,
-            ports={'suction': (48.0, 40.5), 'discharge': (48.0, 6.0)},
-            label_pos=(48.0, 115.0)
-        ))
-        # Equinor Symbol: PP003A.svg
-        self.register("compressor", Symbol(
-            svg='<g id="sym_compressor"><path d="M71.1329 66.7659C78.4096 60.3522 83 50.9622 83 40.5C83 21.17 67.33 5.5 48 5.5C28.67 5.5 13 21.17 13 40.5C13 50.9622 17.5904 60.3522 24.8671 66.7659L13 90.5H83L71.1329 66.7659ZM48 74.5C38.8873 74.5 31.5 67.1127 31.5 58C31.5 48.8873 38.8873 41.5 48 41.5C57.1127 41.5 64.5 48.8873 64.5 58C64.5 67.1127 57.1127 74.5 48 74.5ZM82 40.5C82 56.5026 70.9445 69.923 56.0546 73.5403C61.6665 70.6257 65.5 64.7605 65.5 58C65.5 49.3454 59.2175 42.1581 50.9642 40.75C59.2175 39.3419 65.5 32.1546 65.5 23.5C65.5 15.886 60.6374 9.40767 53.8483 7.00107C69.8392 9.77331 82 23.7165 82 40.5ZM45.0358 40.75C36.7825 42.1581 30.5 49.3454 30.5 58C30.5 64.7605 34.3335 70.6257 39.9454 73.5403C25.0555 69.923 14 56.5026 14 40.5C14 23.7165 26.1608 9.77331 42.1517 7.00107C35.3626 9.40767 30.5 15.886 30.5 23.5C30.5 32.1546 36.7825 39.3419 45.0358 40.75ZM48 75.5C56.4973 75.5 64.2874 72.4719 70.3499 67.4359L81.382 89.5H14.618L25.6501 67.4359C31.7126 72.4719 39.5027 75.5 48 75.5ZM48 40C38.8873 40 31.5 32.6127 31.5 23.5C31.5 14.3873 38.8873 7 48 7C57.1127 7 64.5 14.3873 64.5 23.5C64.5 32.6127 57.1127 40 48 40Z" stroke="black" fill="transparent"/></g>',
-            width=96.0, height=96.0,
-            ports={'suction': (13.5, 40.5), 'discharge': (48.0, 6.0)},
-            label_pos=(48.0, 115.0)
-        ))
-        # Equinor Symbol: PT002A.svg
-        self.register("separator", Symbol(
-            svg='<g id="sym_separator"><path d="M87.9782 37C87.9927 37.332 88 37.6654 88 38V178C88 178.335 87.9927 178.668 87.9782 179C87.6338 186.887 83.2306 194.003 76.2843 199.213C69.0457 204.642 59.0457 208 48 208C36.9543 208 26.9543 204.642 19.7157 199.213C12.7694 194.003 8.36621 186.887 8.0218 179C8.00731 178.668 8 178.335 8 178L8 38C8 37.6654 8.00731 37.332 8.02181 37C8.36621 29.1134 12.7694 21.9966 19.7157 16.7868C26.9543 11.3579 36.9543 8 48 8C59.0457 8 69.0457 11.3579 76.2843 16.7868C83.2306 21.9966 87.6338 29.1134 87.9782 37ZM9 38H87C87 30.1011 82.7334 22.8737 75.6843 17.5868C68.6348 12.2997 58.8503 9 48 9C37.1498 9 27.3652 12.2997 20.3157 17.5868C13.2666 22.8737 9 30.1011 9 38ZM9 178C9 185.899 13.2666 193.126 20.3157 198.413C27.3652 203.7 37.1498 207 48 207C58.8503 207 68.6348 203.7 75.6843 198.413C82.7334 193.126 87 185.899 87 178H9ZM9 177H87V39H9V177Z" stroke="black" fill="transparent"/></g>',
-            width=96.0, height=216.0,
-            ports={'liquid': (48.0, 207.5), 'feed': (8.5, 108.0), 'vapor': (48.0, 8.5)},
-            label_pos=(48.0, 108.0)
-        ))
-        # Equinor Symbol: PT002A.svg
-        self.register("reactor", Symbol(
-            svg='<g id="sym_reactor"><path d="M87.9782 37C87.9927 37.332 88 37.6654 88 38V178C88 178.335 87.9927 178.668 87.9782 179C87.6338 186.887 83.2306 194.003 76.2843 199.213C69.0457 204.642 59.0457 208 48 208C36.9543 208 26.9543 204.642 19.7157 199.213C12.7694 194.003 8.36621 186.887 8.0218 179C8.00731 178.668 8 178.335 8 178L8 38C8 37.6654 8.00731 37.332 8.02181 37C8.36621 29.1134 12.7694 21.9966 19.7157 16.7868C26.9543 11.3579 36.9543 8 48 8C59.0457 8 69.0457 11.3579 76.2843 16.7868C83.2306 21.9966 87.6338 29.1134 87.9782 37ZM9 38H87C87 30.1011 82.7334 22.8737 75.6843 17.5868C68.6348 12.2997 58.8503 9 48 9C37.1498 9 27.3652 12.2997 20.3157 17.5868C13.2666 22.8737 9 30.1011 9 38ZM9 178C9 185.899 13.2666 193.126 20.3157 198.413C27.3652 203.7 37.1498 207 48 207C58.8503 207 68.6348 203.7 75.6843 198.413C82.7334 193.126 87 185.899 87 178H9ZM9 177H87V39H9V177Z" stroke="black" fill="transparent"/></g>',
-            width=96.0, height=216.0,
-            ports={'duty': (87.5, 108.0), 'outlet': (48.0, 207.5), 'feed': (48.0, 8.5)},
-            label_pos=(48.0, 108.0)
-        ))
-        # Equinor Symbol: PT002A.svg
-        self.register("hex", Symbol(
-            svg='<g id="sym_hex"><path d="M87.9782 37C87.9927 37.332 88 37.6654 88 38V178C88 178.335 87.9927 178.668 87.9782 179C87.6338 186.887 83.2306 194.003 76.2843 199.213C69.0457 204.642 59.0457 208 48 208C36.9543 208 26.9543 204.642 19.7157 199.213C12.7694 194.003 8.36621 186.887 8.0218 179C8.00731 178.668 8 178.335 8 178L8 38C8 37.6654 8.00731 37.332 8.02181 37C8.36621 29.1134 12.7694 21.9966 19.7157 16.7868C26.9543 11.3579 36.9543 8 48 8C59.0457 8 69.0457 11.3579 76.2843 16.7868C83.2306 21.9966 87.6338 29.1134 87.9782 37ZM9 38H87C87 30.1011 82.7334 22.8737 75.6843 17.5868C68.6348 12.2997 58.8503 9 48 9C37.1498 9 27.3652 12.2997 20.3157 17.5868C13.2666 22.8737 9 30.1011 9 38ZM9 178C9 185.899 13.2666 193.126 20.3157 198.413C27.3652 203.7 37.1498 207 48 207C58.8503 207 68.6348 203.7 75.6843 198.413C82.7334 193.126 87 185.899 87 178H9ZM9 177H87V39H9V177Z" stroke="black" fill="transparent"/></g>',
-            width=96.0, height=216.0,
-            ports={'cold_out': (87.5, 108.0), 'hot_out': (48.0, 207.5), 'cold_in': (8.5, 108.0), 'hot_in': (48.0, 8.5)},
-            label_pos=(48.0, 108.0)
-        ))
-        # Equinor Symbol: ND0023.svg
-        self.register("mixer", Symbol(
-            svg='<g id="sym_mixer"><path d="M43.9939 23.5H44V24.5H43.9939C43.7285 35.3147 34.8785 44 24 44C13.1215 44 4.27149 35.3147 4.00613 24.5H4V23.5H4.00613C4.27149 12.6853 13.1215 4 24 4C34.8785 4 43.7285 12.6853 43.9939 23.5ZM42.9935 24.5H5.00645C5.27156 34.7623 13.6738 43 24 43C34.3262 43 42.7284 34.7623 42.9935 24.5ZM42.9935 23.5C42.7284 13.2377 34.3262 5 24 5C13.6738 5 5.27156 13.2377 5.00645 23.5H42.9935Z" stroke="black" fill="transparent"/></g>',
-            width=48.0, height=48.0,
-            ports={'outlet': (43.5, 24.0), 'in_1': (4.5, 24.0), 'in_2': (24.0, 4.5)},
-            label_pos=(24.0, 65.0)
+            svg='<g id="sym_product"><polygon points="0,10 35,10 50,25 35,40 0,40 10,25" fill="none" stroke="black" stroke-width="2"/></g>',
+            width=50, height=50,
+            ports={"inlet": (0.0, 25.0)}
         ))
 
+        # ====================================================================
+        # Centrifugal Pump — ISO 10628-2 standard symbol
+        # Circle with discharge nozzle at top, suction on left, baseplate line
+        # ====================================================================
+        self.register("pump", Symbol(
+            svg=(
+                '<g id="sym_pump">'
+                '<circle cx="30" cy="30" r="22" fill="none" stroke="black" stroke-width="2"/>'
+                '<line x1="8" y1="52" x2="52" y2="52" stroke="black" stroke-width="2"/>'
+                '<line x1="30" y1="8" x2="30" y2="0" stroke="black" stroke-width="2"/>'
+                '<line x1="0" y1="30" x2="8" y2="30" stroke="black" stroke-width="2"/>'
+                '</g>'
+            ),
+            width=60.0, height=55.0,
+            ports={'suction': (0.0, 30.0), 'discharge': (30.0, 0.0)}
+        ))
+
+        # ====================================================================
+        # Compressor — circle with triangle indicator
+        # ====================================================================
+        self.register("compressor", Symbol(
+            svg=(
+                '<g id="sym_compressor">'
+                '<circle cx="40" cy="40" r="30" fill="none" stroke="black" stroke-width="2"/>'
+                '<polygon points="25,55 55,55 40,25" fill="none" stroke="black" stroke-width="2"/>'
+                '</g>'
+            ),
+            width=80.0, height=80.0,
+            ports={'suction': (10.0, 40.0), 'discharge': (40.0, 10.0)}
+        ))
+
+        # ====================================================================
+        # Separator — vertical vessel with elliptical heads (ISO 10628-2)
+        # ====================================================================
+        self.register("separator", Symbol(
+            svg=(
+                '<g id="sym_separator">'
+                '<rect x="10" y="25" width="60" height="130" fill="none" stroke="black" stroke-width="2"/>'
+                '<ellipse cx="40" cy="25" rx="30" ry="12" fill="none" stroke="black" stroke-width="2"/>'
+                '<ellipse cx="40" cy="155" rx="30" ry="12" fill="none" stroke="black" stroke-width="2"/>'
+                '</g>'
+            ),
+            width=80.0, height=170.0,
+            ports={'liquid': (40.0, 167.0), 'feed': (10.0, 90.0), 'vapor': (40.0, 13.0)}
+        ))
+
+        # ====================================================================
+        # Reactor — vertical vessel with internal coil indicator
+        # ====================================================================
+        self.register("reactor", Symbol(
+            svg=(
+                '<g id="sym_reactor">'
+                '<rect x="10" y="25" width="60" height="130" fill="none" stroke="black" stroke-width="2"/>'
+                '<ellipse cx="40" cy="25" rx="30" ry="12" fill="none" stroke="black" stroke-width="2"/>'
+                '<ellipse cx="40" cy="155" rx="30" ry="12" fill="none" stroke="black" stroke-width="2"/>'
+                '<path d="M25,70 Q40,55 55,70 Q40,85 25,70" fill="none" stroke="black" stroke-width="1.5"/>'
+                '</g>'
+            ),
+            width=80.0, height=170.0,
+            ports={'duty': (70.0, 90.0), 'outlet': (40.0, 167.0), 'feed': (40.0, 13.0)}
+        ))
+
+        # ====================================================================
+        # Shell & Tube Heat Exchanger — ISO 10628-2 standard
+        # Horizontal cylinder with two tube-side nozzles on ends
+        # and two shell-side nozzles on top/bottom
+        # ====================================================================
+        self.register("hex", Symbol(
+            svg=(
+                '<g id="sym_hex">'
+                '<rect x="15" y="10" width="70" height="40" fill="none" stroke="black" stroke-width="2"/>'
+                '<ellipse cx="15" cy="30" rx="8" ry="20" fill="none" stroke="black" stroke-width="2"/>'
+                '<ellipse cx="85" cy="30" rx="8" ry="20" fill="none" stroke="black" stroke-width="2"/>'
+                '<line x1="15" y1="30" x2="85" y2="30" stroke="black" stroke-width="1" stroke-dasharray="4,3"/>'
+                '</g>'
+            ),
+            width=100.0, height=60.0,
+            ports={
+                'cold_in': (0.0, 30.0),
+                'cold_out': (100.0, 30.0),
+                'hot_in': (50.0, 10.0),
+                'hot_out': (50.0, 50.0),
+            }
+        ))
+        
+
+        # ====================================================================
+        # Mixer — Standard triangle pointing right
+        # All inputs on the left flat face, output at right vertex
+        # ====================================================================
+        self.register("mixer", Symbol(
+            svg='<g id="sym_mixer"><polygon points="0,0 50,25 0,50" fill="none" stroke="black" stroke-width="2"/></g>',
+            width=50.0, height=50.0,
+            ports={'outlet': (50.0, 25.0), 'in_1': (0.0, 15.0), 'in_2': (0.0, 35.0)}
+        ))
+
+        # ====================================================================
+        # Valve — ISO 10628-2 butterfly / gate valve (bowtie)
+        # Two opposing triangles forming a bowtie shape
+        # ====================================================================
+        self.register("valve", Symbol(
+            svg=(
+                '<g id="sym_valve">'
+                '<polygon points="0,0 20,15 0,30" fill="none" stroke="black" stroke-width="2"/>'
+                '<polygon points="40,0 20,15 40,30" fill="none" stroke="black" stroke-width="2"/>'
+                '<line x1="20" y1="0" x2="20" y2="15" stroke="black" stroke-width="2"/>'
+                '</g>'
+            ),
+            width=40.0, height=30.0,
+            ports={'inlet': (0.0, 15.0), 'outlet': (40.0, 15.0)}
+        ))
+
+        # ====================================================================
+        # Vessel — vertical drum with dished heads
+        # ====================================================================
+        self.register("vessel", Symbol(
+            svg=(
+                '<g id="sym_vessel">'
+                '<rect x="10" y="20" width="60" height="80" fill="none" stroke="black" stroke-width="2"/>'
+                '<ellipse cx="40" cy="20" rx="30" ry="10" fill="none" stroke="black" stroke-width="2"/>'
+                '<ellipse cx="40" cy="100" rx="30" ry="10" fill="none" stroke="black" stroke-width="2"/>'
+                '</g>'
+            ),
+            width=80.0, height=115.0,
+            ports={'inlet': (10.0, 55.0), 'outlet': (70.0, 55.0)}
+        ))
+
+        # ====================================================================
+        # Heater — circle with an internal zigzag (electric heater symbol)
+        # ====================================================================
+        self.register("heater", Symbol(
+            svg=(
+                '<g id="sym_heater">'
+                '<circle cx="30" cy="30" r="25" fill="none" stroke="black" stroke-width="2"/>'
+                '<path d="M15,30 L20,20 L25,40 L30,20 L35,40 L40,20 L45,30" fill="none" stroke="black" stroke-width="1.5"/>'
+                '</g>'
+            ),
+            width=60.0, height=60.0,
+            ports={'outlet': (55.0, 30.0), 'duty': (30.0, 55.0), 'inlet': (5.0, 30.0)}
+        ))
+
+        # ====================================================================
+        # Cooler — circle with internal zigzag plus cooling arrow
+        # ====================================================================
+        self.register("cooler", Symbol(
+            svg=(
+                '<g id="sym_cooler">'
+                '<circle cx="30" cy="30" r="25" fill="none" stroke="black" stroke-width="2"/>'
+                '<path d="M15,30 L20,20 L25,40 L30,20 L35,40 L40,20 L45,30" fill="none" stroke="black" stroke-width="1.5"/>'
+                '<path d="M48,12 L55,5" stroke="black" stroke-width="1.5"/>'
+                '<path d="M52,8 L55,5 L51,5" fill="none" stroke="black" stroke-width="1.5"/>'
+                '</g>'
+            ),
+            width=60.0, height=60.0,
+            ports={'outlet': (55.0, 30.0), 'inlet': (5.0, 30.0), 'duty': (30.0, 5.0)}
+        ))
+
+        # ====================================================================
+        # Distillation Column — tall vertical vessel with internal trays
+        # ====================================================================
+        self.register("column", Symbol(
+            svg=(
+                '<g id="sym_column">'
+                '<rect x="10" y="20" width="60" height="170" fill="none" stroke="black" stroke-width="2"/>'
+                '<ellipse cx="40" cy="20" rx="30" ry="12" fill="none" stroke="black" stroke-width="2"/>'
+                '<ellipse cx="40" cy="190" rx="30" ry="12" fill="none" stroke="black" stroke-width="2"/>'
+                # Internal tray lines
+                '<line x1="15" y1="65" x2="65" y2="65" stroke="black" stroke-width="1"/>'
+                '<line x1="15" y1="100" x2="65" y2="100" stroke="black" stroke-width="1"/>'
+                '<line x1="15" y1="135" x2="65" y2="135" stroke="black" stroke-width="1"/>'
+                '<line x1="15" y1="170" x2="65" y2="170" stroke="black" stroke-width="1"/>'
+                '</g>'
+            ),
+            width=80.0, height=205.0,
+            ports={
+                'reboiler_duty': (70.0, 105.0),
+                'bottoms': (40.0, 202.0),
+                'feed': (10.0, 105.0),
+                'distillate': (40.0, 8.0),
+            }
+        ))
+        
+
+        # ====================================================================
+        # Splitter — Standard triangle with point on left, flat on right
+        # All outputs on the right flat face, input at left vertex
+        # ====================================================================
+        self.register("splitter", Symbol(
+            svg='<g id="sym_splitter"><polygon points="0,25 50,0 50,50" fill="none" stroke="black" stroke-width="2"/></g>',
+            width=50.0, height=50.0,
+            ports={'out_1': (50.0, 15.0), 'out_2': (50.0, 35.0), 'inlet': (0.0, 25.0)}
+        ))
+
+        # ====================================================================
+        # NEW VARIANTS
+        # ====================================================================
+        self.register("column", Symbol(
+            svg=(
+                '<g id="sym_column_tray">'
+                '<rect x="15" y="25" width="50" height="160" fill="none" stroke="black" stroke-width="2"/>'
+                '<ellipse cx="40" cy="25" rx="25" ry="15" fill="none" stroke="black" stroke-width="2"/>'
+                '<ellipse cx="40" cy="185" rx="25" ry="15" fill="none" stroke="black" stroke-width="2"/>'
+                '<line x1="15" y1="70" x2="65" y2="60" stroke="black" stroke-width="1.5"/>'
+                '<line x1="15" y1="110" x2="65" y2="100" stroke="black" stroke-width="1.5"/>'
+                '<line x1="15" y1="150" x2="65" y2="140" stroke="black" stroke-width="1.5"/>'
+                '</g>'
+            ),
+            width=80.0, height=205.0,
+            ports={
+                'reboiler_duty': (65.0, 105.0),
+                'bottoms': (40.0, 200.0),
+                'feed': (15.0, 105.0),
+                'distillate': (40.0, 10.0),
+                'vapor_in': (40.0, 200.0),
+                'liquid_in': (40.0, 10.0),
+                'vapor_out': (40.0, 10.0),
+                'liquid_out': (40.0, 200.0),
+            }
+        ), variant="tray")
+
+        self.register("column", Symbol(
+            svg=(
+                '<g id="sym_column_packed">'
+                '<rect x="15" y="25" width="50" height="160" fill="none" stroke="black" stroke-width="2"/>'
+                '<ellipse cx="40" cy="25" rx="25" ry="15" fill="none" stroke="black" stroke-width="2"/>'
+                '<ellipse cx="40" cy="185" rx="25" ry="15" fill="none" stroke="black" stroke-width="2"/>'
+                '<path d="M 15 60 L 65 100 M 15 100 L 65 60" stroke="black" stroke-width="1.5"/>'
+                '<path d="M 15 120 L 65 160 M 15 160 L 65 120" stroke="black" stroke-width="1.5"/>'
+                '</g>'
+            ),
+            width=80.0, height=205.0,
+            ports={
+                'reboiler_duty': (65.0, 105.0),
+                'bottoms': (40.0, 200.0),
+                'feed': (15.0, 105.0),
+                'distillate': (40.0, 10.0),
+                'vapor_in': (40.0, 200.0),
+                'liquid_in': (40.0, 10.0),
+                'vapor_out': (40.0, 10.0),
+                'liquid_out': (40.0, 200.0),
+            }
+        ), variant="packed")
+
+        self.register("vessel", Symbol(
+            svg=(
+                '<g id="sym_vessel_tank">'
+                '<rect x="10" y="20" width="60" height="80" fill="none" stroke="black" stroke-width="2"/>'
+                '<path d="M10,20 Q40,0 70,20" fill="none" stroke="black" stroke-width="2"/>'
+                '<line x1="10" y1="100" x2="70" y2="100" stroke="black" stroke-width="2"/>'
+                '</g>'
+            ),
+            width=80.0, height=115.0,
+            ports={'inlet': (10.0, 55.0), 'outlet': (70.0, 100.0)}
+        ), variant="tank")
+
+        self.register("pump", Symbol(
+            svg=(
+                '<g id="sym_pump_centrifugal">'
+                '<circle cx="30" cy="30" r="22" fill="none" stroke="black" stroke-width="2"/>'
+                '<line x1="8" y1="52" x2="52" y2="52" stroke="black" stroke-width="2"/>'
+                '<line x1="30" y1="8" x2="30" y2="0" stroke="black" stroke-width="2"/>'
+                '<line x1="0" y1="30" x2="8" y2="30" stroke="black" stroke-width="2"/>'
+                '</g>'
+            ),
+            width=60.0, height=55.0,
+            ports={'suction': (0.0, 30.0), 'discharge': (30.0, 0.0)},
+            label_pos="bottom"
+        ), variant="centrifugal")
+
+        self.register("pump", Symbol(
+            svg=(
+                '<g id="sym_pump_vacuum">'
+                '<circle cx="30" cy="30" r="22" fill="none" stroke="black" stroke-width="2"/>'
+                '<circle cx="30" cy="30" r="10" fill="none" stroke="black" stroke-width="2"/>'
+                '<line x1="8" y1="52" x2="52" y2="52" stroke="black" stroke-width="2"/>'
+                '<line x1="30" y1="8" x2="30" y2="0" stroke="black" stroke-width="2"/>'
+                '<line x1="0" y1="30" x2="8" y2="30" stroke="black" stroke-width="2"/>'
+                '</g>'
+            ),
+            width=60.0, height=55.0,
+            ports={'suction': (0.0, 30.0), 'discharge': (30.0, 0.0)}
+        ), variant="vacuum")
+
+        self.register("pump", Symbol(
+            svg=(
+                '<g id="sym_pump_pd">'
+                '<circle cx="30" cy="20" r="15" fill="none" stroke="black" stroke-width="2"/>'
+                '<circle cx="30" cy="40" r="15" fill="none" stroke="black" stroke-width="2"/>'
+                '<line x1="8" y1="52" x2="52" y2="52" stroke="black" stroke-width="2"/>'
+                '<line x1="30" y1="5" x2="30" y2="0" stroke="black" stroke-width="2"/>'
+                '<line x1="0" y1="30" x2="15" y2="30" stroke="black" stroke-width="2"/>'
+                '</g>'
+            ),
+            width=60.0, height=55.0,
+            ports={'suction': (0.0, 30.0), 'discharge': (30.0, 0.0)}
+        ), variant="pd")
+
+        self.register("hex", Symbol(
+            svg=(
+                '<g id="sym_hex_shell_tube">'
+                '<circle cx="30" cy="30" r="25" fill="none" stroke="black" stroke-width="2"/>'
+                '<path d="M5,30 Q15,5 30,30 T55,30" fill="none" stroke="black" stroke-width="2"/>'
+                '</g>'
+            ),
+            width=60.0, height=60.0,
+            ports={
+                'cold_in': (5.0, 30.0),
+                'cold_out': (55.0, 30.0),
+                'hot_in': (30.0, 5.0),
+                'hot_out': (30.0, 55.0),
+            }
+        ), variant="shell_tube")
+
+        self.register("hex", Symbol(
+            svg=(
+                '<g id="sym_hex_air_cooler">'
+                '<rect x="10" y="20" width="40" height="20" fill="none" stroke="black" stroke-width="2"/>'
+                '<polygon points="30,40 25,50 35,50" fill="none" stroke="black" stroke-width="2"/>'
+                '</g>'
+            ),
+            width=60.0, height=60.0,
+            ports={
+                'cold_in': (10.0, 30.0),
+                'cold_out': (50.0, 30.0),
+                'hot_in': (30.0, 20.0),
+                'hot_out': (30.0, 40.0),
+            }
+        ), variant="air_cooler")
+
+        self.register("valve", Symbol(
+            svg=(
+                '<g id="sym_valve_control">'
+                '<polygon points="0,15 20,25 0,35" fill="none" stroke="black" stroke-width="2"/>'
+                '<polygon points="40,15 20,25 40,35" fill="none" stroke="black" stroke-width="2"/>'
+                '<line x1="20" y1="25" x2="20" y2="5" stroke="black" stroke-width="2"/>'
+                '<path d="M10,5 Q20,0 30,5" fill="none" stroke="black" stroke-width="2"/>'
+                '</g>'
+            ),
+            width=40.0, height=40.0,
+            ports={'inlet': (0.0, 25.0), 'outlet': (40.0, 25.0)}
+        ), variant="control")
+
+        self.register("valve", Symbol(
+            svg=(
+                '<g id="sym_valve_relief">'
+                '<polygon points="5,5 20,20 35,5" fill="none" stroke="black" stroke-width="2"/>'
+                '<polygon points="5,35 20,20 35,35" fill="none" stroke="black" stroke-width="2"/>'
+                '<line x1="20" y1="5" x2="20" y2="0" stroke="black" stroke-width="2"/>'
+                '<line x1="20" y1="35" x2="20" y2="40" stroke="black" stroke-width="2"/>'
+                '<rect x="15" y="15" width="10" height="10" fill="none" stroke="black" stroke-width="2"/>'
+                '</g>'
+            ),
+            width=40.0, height=40.0,
+            ports={'inlet': (20.0, 40.0), 'outlet': (35.0, 20.0)}
+        ), variant="relief")
+
 default_registry = SymbolRegistry()
+
