@@ -26,3 +26,6 @@ uv.lock
 .agents/
 .superpowers/
 skills-lock.json
+
+# local render artifacts
+renders/

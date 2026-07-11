@@ -105,3 +105,43 @@ def assign_coordinates(fs: "Flowsheet") -> None:
             col=s.col, row=s.row,
             orientation=s.orientation, mirrored=s.mirrored,
         )
+
+    _assign_labels(fs)
+
+
+_DIR_OF_SIDE = {"top": "N", "bottom": "S", "left": "W", "right": "E"}
+
+
+def _assign_labels(fs: "Flowsheet") -> None:
+    """Resolve each unit's label side, avoiding faces a connected port occupies.
+
+    Explicit user ``label_pos`` or a symbol default wins; otherwise the label
+    goes to the first free face in top → bottom → right → left order, so a stream
+    leaving (say) a pump's top nozzle no longer runs through its label.
+    """
+    from pfd.render.symbols import default_registry
+    from pfd.portgeom import port_anchor
+
+    for u in fs.units:
+        if u.kind in ("feed", "product"):
+            continue  # labels are drawn inline on the arrow
+        explicit = getattr(u, "label_pos", None)
+        if explicit:
+            u.frame.label_pos = explicit
+            continue
+        sym = default_registry.get(u.kind, getattr(u, "variant", "default"))
+        if sym.label_pos:
+            u.frame.label_pos = sym.label_pos
+            continue
+        occupied = set()
+        for name, port in u.ports.items():
+            if port.stream is None:
+                continue
+            _, _, d = port_anchor(u, u.frame, name)
+            occupied.add(d)
+        for side in ("top", "bottom", "right", "left"):
+            if _DIR_OF_SIDE[side] not in occupied:
+                u.frame.label_pos = side
+                break
+        else:
+            u.frame.label_pos = "top"

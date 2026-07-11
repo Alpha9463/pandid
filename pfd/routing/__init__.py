@@ -16,9 +16,7 @@ class Router(Protocol):
 
 
 def _label_pos(u: "Unit") -> str:
-    from pfd.render.symbols import default_registry
-    sym = default_registry.get(u.kind, getattr(u, "variant", "default"))
-    return getattr(u, "label_pos", None) or sym.label_pos or "top"
+    return (u.frame.label_pos if u.frame else None) or "top"
 
 
 def _project(anchor: tuple[float, float], d: str | None, lpos: str | None) -> tuple[float, float]:

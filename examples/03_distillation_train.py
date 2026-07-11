@@ -41,7 +41,7 @@ def main():
     col_y = 420
     mixer_y = col_y + 105 - 25  # align mixer outlet (y+25) with col feed (col_y+105)
     feed_y = mixer_y - 10       # align feed outlet (y+25) with mixer in_1 (y+15)
-    valve_y = col_y + 105 - 25  # align valve ports (y+25) with col feed
+    valve_y = col_y + 105 - 15  # align valve ports (y+15) with col feed line
     hx_y = col_y + 105 - 30     # align HX cold_in (y+30) with col feed line
 
     # Row positions left-to-right

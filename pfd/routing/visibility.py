@@ -26,7 +26,6 @@ class Rect:
 
 class VisibilityGraph:
     def __init__(self, fs: "Flowsheet", margin: float = 15.0):
-        from pfd.render.symbols import default_registry
         from pfd.portgeom import port_anchor
 
         self.obstacles: List[Rect] = []
@@ -55,7 +54,7 @@ class VisibilityGraph:
             else:
                 self.obstacles.append(Rect(f.x, f.x + u_width, f.y, f.y + u_height))
 
-            lpos = getattr(u, 'label_pos', None) or default_registry.get(u.kind, getattr(u, 'variant', 'default')).label_pos or "top"
+            lpos = f.label_pos or "top"
             if u.kind not in ("feed", "product") and lpos != "center":
                 label_w = min(150.0, max(40.0, len(u.name) * 7.5))
                 if lpos == "top":

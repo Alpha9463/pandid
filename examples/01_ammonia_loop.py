@@ -10,12 +10,12 @@ comp = fs.add(U.Compressor("K-101"))
 prod = fs.add(U.Product("Ammonia"))
 
 # Connect
-fs.connect(feed.outlet, mix.in_1)
+fs.connect(feed.outlet, mix.in_2)
 fs.connect(mix.outlet, reformer.feed)
 fs.connect(reformer.outlet, hx.hot_in)
 fs.connect(hx.hot_out, sep.feed)
 fs.connect(sep.vapor, comp.suction)
-fs.connect(comp.discharge, mix.in_2)
+fs.connect(comp.discharge, mix.in_1)
 fs.connect(sep.liquid, prod.inlet)
 
 fs.render("ammonia_auto.svg")

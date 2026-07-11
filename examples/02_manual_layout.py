@@ -1,49 +1,54 @@
 """
 Example 2: Manual Layout and Routing
 
-This example demonstrates how to use `pin()` and `.via()` to manually
-control the placement of units and the routing of streams, overriding
-the automatic layout engine.
+Demonstrates pixel-level control with two overrides:
+
+- ``pin(x=, y=)`` places a unit at exact SVG coordinates. Align the port
+  heights and the connecting streams run dead straight.
+- ``via([...])`` forces a stream along explicit orthogonal waypoints, overriding
+  the auto-router for that one stream.
+
+Port height cheat-sheet (local y within the symbol): Feed outlet and Product
+inlet sit at y+25; the heat-exchanger cold side sits at y+30. So a Feed/Product
+pinned 5px *above* an exchanger lines the stream up perfectly.
 """
 
 from pfd.flowsheet import Flowsheet
 import pfd.units as U
 
+
 def main():
-    # 1. Create a flowsheet
     fs = Flowsheet("Manual Override Example")
-    
-    # 2. Add units and PIN their (x, y) coordinates
-    # The pin() method accepts absolute SVG coordinates (top-left of the unit)
-    feed1 = fs.add(U.Feed("F-1")).pin(x=50, y=50)
-    feed2 = fs.add(U.Feed("F-2")).pin(x=50, y=250)
-    hx1 = fs.add(U.HeatExchanger("E-1")).pin(x=150, y=100)
-    hx2 = fs.add(U.HeatExchanger("E-2")).pin(x=150, y=250)
-    prod1 = fs.add(U.Product("P-1")).pin(x=350, y=100)
-    prod2 = fs.add(U.Product("P-2")).pin(x=350, y=250)
-    
-    # 3. Connect streams and use .via() to specify custom routing waypoints
-    # The via() method accepts a list of (x, y) coordinates for the orthogonal path
-    # If a path isn't perfectly orthogonal, it will still draw straight lines between points.
-    
-    fs.connect(feed1.outlet, hx1.cold_in).via([
-        (130, 65),     # Move horizontally out of feed
-        (130, 110),    # Move vertically down
-        (150, 110)     # Connect to E-1
+
+    # Top train — pinned so every port is on the same line: straight runs.
+    f1 = fs.add(U.Feed("F-1")).pin(x=60, y=105)
+    e1 = fs.add(U.HeatExchanger("E-1")).pin(x=210, y=100)
+    p1 = fs.add(U.Product("P-1")).pin(x=430, y=105)
+
+    # Bottom train — same idea, 200px lower.
+    f2 = fs.add(U.Feed("F-2")).pin(x=60, y=305)
+    e2 = fs.add(U.HeatExchanger("E-2")).pin(x=210, y=300)
+    p2 = fs.add(U.Product("P-2")).pin(x=430, y=305)
+
+    # These auto-route into clean straight lines because the pins are aligned.
+    fs.connect(f1.outlet, e1.cold_in)
+    fs.connect(e1.cold_out, p1.inlet)
+    fs.connect(f2.outlet, e2.cold_in)
+
+    # via() override: deliberately dip this run down and bring it back up to
+    # enter P-2 horizontally (e.g. to clear a walkway). The waypoints are
+    # absolute pixels; the router uses them verbatim.
+    fs.connect(e2.cold_out, p2.inlet).via([
+        (360, 330),
+        (360, 380),
+        (410, 380),
+        (410, 330),
     ])
-    
-    # Let the engine automatically route this one!
-    fs.connect(feed2.outlet, hx2.cold_in)
-    
-    fs.connect(hx1.cold_out, prod1.inlet)
-    fs.connect(hx2.cold_out, prod2.inlet)
-    
-    # 4. Render!
-    # Because we used pin() and via(), the engine will respect our coordinates
-    # and only auto-route the streams we didn't specify.
+
     out_file = "manual_layout.svg"
     fs.render(out_file)
     print(f"Flowsheet rendered successfully to {out_file}")
+
 
 if __name__ == "__main__":
     main()

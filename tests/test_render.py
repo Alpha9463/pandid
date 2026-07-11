@@ -52,7 +52,7 @@ def test_render_svg_generic_symbol_duplicate_ids(tmp_path):
         kind = "unknown2"
         
     fs.add(UnknownUnit1("U1")).pin(x=10, y=10)
-    fs.add(UnknownUnit2("U2")).pin(x=20, y=20)
+    fs.add(UnknownUnit2("U2")).pin(x=200, y=20)
     
     out_path = tmp_path / "test_generic.svg"
     fs.render(str(out_path))

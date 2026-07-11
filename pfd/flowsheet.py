@@ -28,6 +28,7 @@ class Flowsheet:
         self.units: list = []
         self.streams: list[Stream] = []
         self.components: list = []
+        self.warnings: list = []  # soft validation findings from the last render
 
     def add(self, unit: "Unit") -> "Unit":
         """Register a unit on this flowsheet. Returns the unit for chaining."""
@@ -158,22 +159,46 @@ class Flowsheet:
             router = DefaultRouter()
         router.route(self)
 
+    def validate(self) -> list:
+        """Return validation issues for the flowsheet (errors first, then warnings).
+
+        See :mod:`pfd.validate`. Errors are contradictions the engine cannot
+        honor (overlapping pins, off-sheet coords); warnings are imperfections
+        (a route crossing a unit body, a large detour).
+        """
+        from pfd.validate import validate as _validate
+        return _validate(self)
+
     def to_svg(self, *, show_stream_table: bool = False,
-               styling: str = "default", page_size: str = "A3") -> str:
+               styling: str = "default", page_size: str = "A3",
+               check: bool = True) -> str:
         """Render the flowsheet to an SVG string, running ``layout()`` and
         ``route()`` first if they have not been run yet.
+
+        When ``check`` is true, validation runs first: any *error* raises
+        :class:`ValueError`, and *warnings* are collected on ``self.warnings``.
         """
         if any(u.frame is None for u in self.units):
             self.layout()
         if any(s.route is None for s in self.streams):
             self.route()
+        if check:
+            issues = self.validate()
+            self.warnings = [i for i in issues if i.severity == "warning"]
+            errors = [i for i in issues if i.severity == "error"]
+            if errors:
+                raise ValueError(
+                    "Flowsheet validation failed:\n"
+                    + "\n".join(f"  {e}" for e in errors)
+                )
         from pfd.render.svg import SvgRenderer
         return SvgRenderer().render(
             self, show_stream_table=show_stream_table, styling=styling, page_size=page_size
         )
 
     def render(self, path: str | Path, *, show_stream_table: bool = False,
-               styling: str = "default", page_size: str = "A3") -> None:
+               styling: str = "default", page_size: str = "A3",
+               check: bool = True) -> None:
         """Render the flowsheet and write it to *path*.
 
         The output format is inferred from the file extension:
@@ -187,9 +212,11 @@ class Flowsheet:
             show_stream_table: Draw a property table of all streams at the bottom.
             styling: ``"default"`` or ``"pid"`` (adds a title block and border).
             page_size: Sheet size, e.g. ``"A3"`` (default) or ``"A4"``.
+            check: Validate first; errors raise, warnings collect on ``warnings``.
         """
         svg = self.to_svg(
-            show_stream_table=show_stream_table, styling=styling, page_size=page_size
+            show_stream_table=show_stream_table, styling=styling, page_size=page_size,
+            check=check,
         )
         ext = Path(path).suffix.lower()
         if ext in ("", ".svg"):

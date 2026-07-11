@@ -57,6 +57,7 @@ class Frame:
     row: int | None = None
     orientation: float = 0.0
     mirrored: bool = False
+    label_pos: str | None = None  # resolved label side: top/bottom/left/right
 
     @property
     def x_max(self) -> float:

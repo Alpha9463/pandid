@@ -44,16 +44,17 @@ class SvgRenderer:
         #    and every route waypoint. The canvas is framed to exactly this, so
         #    there is no wasted margin and the output aspect always matches the
         #    drawing (no letterboxing).
+        from pfd.portgeom import unit_box
         min_x = min_y = float("inf")
         max_x = max_y = float("-inf")
         for u in fs.units:
             if u.frame is None:
                 raise ValueError(f"Unit '{u.name}' lacks a frame even after layout was run.")
-            f = u.frame
-            min_x = min(min_x, f.x)
-            min_y = min(min_y, f.y)
-            max_x = max(max_x, f.x + f.w)
-            max_y = max(max_y, f.y + f.h)
+            bx0, by0, bx1, by1 = unit_box(u, u.frame)
+            min_x = min(min_x, bx0)
+            min_y = min(min_y, by0)
+            max_x = max(max_x, bx1)
+            max_y = max(max_y, by1)
         for s in fs.streams:
             if s.route and s.route.waypoints:
                 for px, py in s.route.waypoints:
@@ -121,9 +122,11 @@ class SvgRenderer:
                 current_y += row_height
 
             table_lines.append('  </g>')
-            # Grow the canvas to include the table (both width and height).
-            canvas_width = max(canvas_width, (table_left - frame_x) + table_width + margin)
-            canvas_height = (current_y - frame_y) + 30
+            # Grow the canvas to include the table. The bottom inset matches the
+            # P&ID border inset (25) so the table sits flush in the sheet corner
+            # instead of floating a few px above the border.
+            canvas_width = max(canvas_width, (table_left - frame_x) + table_width + 25)
+            canvas_height = (current_y - frame_y) + 25
 
         # 3. Optional P&ID sheet border + title block, framed to the canvas.
         pid_lines = []
@@ -248,7 +251,7 @@ class SvgRenderer:
                     transform = f' transform="translate({2 * x + u_width}, 0) scale(-1, 1)"'
                     
                 lines.append(f'    <use href="#{sym_id}" x="{x}" y="{y}" width="{u_width}" height="{u_height}"{transform} />')
-                lpos = getattr(u, 'label_pos', None) or sym.label_pos or "top"
+                lpos = f.label_pos or "top"
                 if lpos == "bottom":
                     lx, ly = x + u_width / 2, y + u_height + 15
                     anchor, baseline = "middle", "middle"
@@ -317,8 +320,6 @@ class SvgRenderer:
             dash = ""
             if s.dasharray:
                 dash = f' stroke-dasharray="{s.dasharray}"'
-            elif s.is_recycle:
-                dash = ' stroke-dasharray="5,5"'
                 
             longest_seg = None
             max_len = -1

@@ -23,6 +23,17 @@ def _sym(unit: "Unit"):
     return default_registry.get(unit.kind, getattr(unit, "variant", "default"))
 
 
+def unit_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
+    """True drawn bounding box (x_min, y_min, x_max, y_max) of a unit.
+
+    A non-mirrored Feed keeps its port at ``frame.x + 50`` with the box extending
+    left from there; everything else spans ``frame.x .. frame.x + w``.
+    """
+    if unit.kind == "feed" and not frame.mirrored:
+        return (frame.x + 50.0 - frame.w, frame.y, frame.x + 50.0, frame.y + frame.h)
+    return (frame.x, frame.y, frame.x + frame.w, frame.y + frame.h)
+
+
 def resolve_size(unit: "Unit") -> tuple[float, float]:
     """Intrinsic (w, h) of a unit.
 
