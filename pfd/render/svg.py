@@ -47,17 +47,13 @@ class SvgRenderer:
         min_x = min_y = float("inf")
         max_x = max_y = float("-inf")
         for u in fs.units:
-            if u.placement is None:
-                raise ValueError(f"Unit '{u.name}' lacks a placement even after layout was run.")
-            sym = self.registry.get(u.kind, getattr(u, 'variant', 'default'))
-            w = u.width if u.width is not None else sym.width
-            h = u.height if u.height is not None else sym.height
-            if u.kind in ("feed", "product"):
-                w = max(80.0, len(u.name) * 8.0 + 30.0)
-            min_x = min(min_x, u.placement.x)
-            min_y = min(min_y, u.placement.y)
-            max_x = max(max_x, u.placement.x + w)
-            max_y = max(max_y, u.placement.y + h)
+            if u.frame is None:
+                raise ValueError(f"Unit '{u.name}' lacks a frame even after layout was run.")
+            f = u.frame
+            min_x = min(min_x, f.x)
+            min_y = min(min_y, f.y)
+            max_x = max(max_x, f.x + f.w)
+            max_y = max(max_y, f.y + f.h)
         for s in fs.streams:
             if s.route and s.route.waypoints:
                 for px, py in s.route.waypoints:
@@ -195,19 +191,16 @@ class SvgRenderer:
         # 2. Draw units using <use> tags or dynamic shapes
         lines.append('  <g id="units">')
         for u in fs.units:
-            x, y = u.placement.x, u.placement.y
+            f = u.frame
+            x, y = f.x, f.y
             safe_name = html.escape(u.name)
             sym = self.registry.get(u.kind, getattr(u, 'variant', 'default'))
-            
+
             if u.kind in ("feed", "product"):
-                # Dynamic width based on text with more padding
-                if u.width is not None:
-                    label_w = u.width
-                else:
-                    label_w = max(80.0, len(u.name) * 8.0 + 30.0)
-                
+                label_w = f.w
+
                 if u.kind == "feed":
-                    if getattr(u.placement, 'mirrored', False):
+                    if f.mirrored:
                         px0 = x + label_w
                         px1 = x + 15
                         px2 = x
@@ -224,7 +217,7 @@ class SvgRenderer:
                     lines.append(f'    <polygon points="{points}" fill="transparent" stroke="black" stroke-width="2" />')
                     lines.append(f'    <text x="{tx}" y="{y+25}" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">{safe_name}</text>')
                 else: # product
-                    if getattr(u.placement, 'mirrored', False):
+                    if f.mirrored:
                         # Arrow pointing left, starting at x + label_w (where the port is)
                         px0 = x + label_w
                         px1 = x + 15
@@ -247,11 +240,11 @@ class SvgRenderer:
             else:
                 variant = getattr(u, 'variant', 'default')
                 sym_id = f"sym_{u.kind}" if variant == "default" else f"sym_{u.kind}_{variant}"
-                u_width = u.width if u.width is not None else sym.width
-                u_height = u.height if u.height is not None else sym.height
-                
+                u_width = f.w
+                u_height = f.h
+
                 transform = ""
-                if getattr(u.placement, 'mirrored', False):
+                if f.mirrored:
                     transform = f' transform="translate({2 * x + u_width}, 0) scale(-1, 1)"'
                     
                 lines.append(f'    <use href="#{sym_id}" x="{x}" y="{y}" width="{u_width}" height="{u_height}"{transform} />')
@@ -281,21 +274,16 @@ class SvgRenderer:
         horizontals = []
         verticals = []
 
+        from pfd.portgeom import port_point
         for s in fs.streams:
             src_u = s.source.owner
             dst_u = s.dest.owner
-            
-            src_sym = self.registry.get(src_u.kind, getattr(src_u, 'variant', 'default'))
-            dst_sym = self.registry.get(dst_u.kind, getattr(dst_u, 'variant', 'default'))
-            
-            src_px, src_py = src_sym.ports.get(s.source.name, (src_sym.width / 2, src_sym.height / 2))
-            dst_px, dst_py = dst_sym.ports.get(s.dest.name, (dst_sym.width / 2, dst_sym.height / 2))
-            
-            sx = src_u.placement.x + src_px
-            sy = src_u.placement.y + src_py
-            dx = dst_u.placement.x + dst_px
-            dy = dst_u.placement.y + dst_py
-            
+
+            # Endpoints via the shared resolver so the drawn line lands on the
+            # same port face the router used (mirror flip applied consistently).
+            sx, sy = port_point(src_u, src_u.frame, s.source.name)
+            dx, dy = port_point(dst_u, dst_u.frame, s.dest.name)
+
             points = [(sx, sy)] + (s.route.waypoints if s.route and s.route.waypoints else []) + [(dx, dy)]
             
             simplified = [points[0]]

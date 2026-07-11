@@ -8,7 +8,6 @@ outlets, and recycled loops.  Uses ISO 10628-2 compliant symbols.
 
 from pfd.flowsheet import Flowsheet
 import pfd.units as U
-from pfd.geometry import Placement
 
 def main():
     fs = Flowsheet("Distillation Train")
@@ -38,7 +37,7 @@ def main():
     c2_bot = fs.add(U.Product("Heavy Product"))
     recycle_valve = fs.add(U.Valve("FV-200"))
     
-    # --- Placements (Manual Grid) ---
+    # --- Pinned coordinates (Manual Grid) ---
     col_y = 420
     mixer_y = col_y + 105 - 25  # align mixer outlet (y+25) with col feed (col_y+105)
     feed_y = mixer_y - 10       # align feed outlet (y+25) with mixer in_1 (y+15)
@@ -46,40 +45,40 @@ def main():
     hx_y = col_y + 105 - 30     # align HX cold_in (y+30) with col feed line
 
     # Row positions left-to-right
-    feed.placement = Placement(160, feed_y)
-    mixer.placement = Placement(290, mixer_y)
-    feed_valve.placement = Placement(410, valve_y)
-    preheater.placement = Placement(520, hx_y)
+    feed.pin(x=160, y=feed_y)
+    mixer.pin(x=290, y=mixer_y)
+    feed_valve.pin(x=410, y=valve_y)
+    preheater.pin(x=520, y=hx_y)
 
     # Column 1
-    col1.placement = Placement(690, col_y)
+    col1.pin(x=690, y=col_y)
 
     # Overhead: HX above column, product to the right
     ovhd_y = col_y - 80         # overhead HX row
-    c1_ovhd.placement = Placement(820, ovhd_y)
+    c1_ovhd.pin(x=820, y=ovhd_y)
     # HX cold_out is at ovhd_y + 30. Product inlet is at y + 25.
-    c1_prod.placement = Placement(980, ovhd_y + 5)
+    c1_prod.pin(x=980, y=ovhd_y + 5)
 
     # Bottoms: pump below column
     bot_y = col_y + 205 + 30    # below column bottom
-    pump1.placement = Placement(820, bot_y)
+    pump1.pin(x=820, y=bot_y)
 
     # Column 2
-    col2.placement = Placement(1100, col_y)
+    col2.pin(x=1100, y=col_y)
 
     # Column 2 overhead
-    c2_ovhd.placement = Placement(1230, ovhd_y)
-    c2_prod.placement = Placement(1390, ovhd_y + 5)
+    c2_ovhd.pin(x=1230, y=ovhd_y)
+    c2_prod.pin(x=1390, y=ovhd_y + 5)
 
     # Column 2 bottoms
-    pump2.placement = Placement(1230, bot_y)
+    pump2.pin(x=1230, y=bot_y)
     # Move splitter up to align with pump2 discharge routing
-    splitter.placement = Placement(1360, bot_y - 100)
+    splitter.pin(x=1360, y=bot_y - 100)
     # Splitter out_1 is at bot_y - 85. Product inlet is at y + 25.
-    c2_bot.placement = Placement(1480, bot_y - 110)
+    c2_bot.pin(x=1480, y=bot_y - 110)
 
     # Recycle valve below the pump row (receives flow from the right)
-    recycle_valve.placement = Placement(590, bot_y + 100, mirrored=True)
+    recycle_valve.pin(x=590, y=bot_y + 100, mirrored=True)
     
     # --- Connections ---
     fs.connect(feed.outlet, mixer.in_1)

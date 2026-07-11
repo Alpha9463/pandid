@@ -15,15 +15,11 @@ class VirtualNode:
 
 
 def assign_layers(fs: "Flowsheet") -> None:
-    """Assign a column rank to each unit using longest-path algorithm."""
-    from pfd.geometry import Placement
-    
-    # 1. Initialize Placements if they don't exist
-    for u in fs.units:
-        if u.placement is None:
-            u.placement = Placement()
-            
-    # 2. Build DAG of forward streams only
+    """Assign a column rank to each unit using longest-path algorithm.
+
+    Operates on the pre-seeded ``_slot`` scratch state (see ``_seed_slots``).
+    """
+    # Build DAG of forward streams only
     adj = defaultdict(list)
     in_degree = defaultdict(int)
     
@@ -41,9 +37,8 @@ def assign_layers(fs: "Flowsheet") -> None:
     ranks = {}
     
     for u in fs.units:
-        assert u.placement is not None
-        if u.placement.col is not None:
-            ranks[u] = u.placement.col
+        if u._slot.col is not None:
+            ranks[u] = u._slot.col
         else:
             ranks[u] = 0
             
@@ -53,9 +48,8 @@ def assign_layers(fs: "Flowsheet") -> None:
         visited_count += 1
         
         for v in adj[u]:
-            assert v.placement is not None
             # The rank of v must be at least rank(u) + 1
-            if v.placement.col is None:
+            if v._slot.col is None:
                 ranks[v] = max(ranks[v], ranks[u] + 1)
                 
             in_degree[v] -= 1
@@ -65,11 +59,10 @@ def assign_layers(fs: "Flowsheet") -> None:
     if visited_count < len(fs.units):
         raise ValueError("Cycle detected in forward streams. Phase 0 failed.")
         
-    # Write ranks back to placement
+    # Write ranks back to the solver slot
     for u in fs.units:
-        assert u.placement is not None
-        if u.placement.col is None:
-            u.placement.col = ranks[u]
+        if u._slot.col is None:
+            u._slot.col = ranks[u]
 
     # Note: Virtual Node insertion for long edges (spanning > 1 rank) 
     # would go here if we were doing full Sugiyama crossing reduction.

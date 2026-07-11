@@ -40,16 +40,13 @@ def test_forward_streams_do_not_route_on_the_recycle_lane():
 
 def test_routes_remain_orthogonal_and_clear_of_equipment():
     # Guard against the fix introducing diagonal segments or obstacle crossings.
-    from pfd.render.symbols import default_registry
     fs = _ammonia_loop()
     fs.layout()
     fs.route()
     boxes = []
     for u in fs.units:
-        sym = default_registry.get(u.kind, getattr(u, "variant", "default"))
-        w = u.width or sym.width
-        h = u.height or sym.height
-        boxes.append((u, u.placement.x, u.placement.y, u.placement.x + w, u.placement.y + h))
+        f = u.frame
+        boxes.append((u, f.x, f.y, f.x + f.w, f.y + f.h))
     for s in fs.streams:
         wp = s.route.waypoints
         for i in range(len(wp) - 1):

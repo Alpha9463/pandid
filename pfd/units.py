@@ -10,7 +10,7 @@ This module is also the public ``units`` namespace: ``from pfd import units``.
 
 from __future__ import annotations
 
-from pfd.geometry import Placement
+from pfd.geometry import Frame, Pin
 from pfd.ports import Port
 
 __all__ = [
@@ -37,7 +37,8 @@ class Unit:
         self.flowsheet = None
         self.ports: dict[str, Port] = {}
         self.params: dict = {}
-        self.placement: Placement | None = None
+        self.pin_: Pin | None = None      # user intent (set only via pin())
+        self.frame: Frame | None = None   # resolved geometry (set only by layout)
         for spec in self._PORTS:
             self._add_port(*spec)
 
@@ -51,19 +52,23 @@ class Unit:
         orientation: float = 0.0,
         mirrored: bool = False,
     ) -> "Unit":
-        """Pin the unit to a specific layout grid cell or exact pixel coordinate."""
-        if self.placement is None:
-            self.placement = Placement()
+        """Pin the unit to a specific layout grid cell or exact pixel coordinate.
+
+        Records *intent* only. The layout engine reads it and resolves the final
+        :class:`~pfd.geometry.Frame`; pinned axes are honored exactly.
+        """
+        if self.pin_ is None:
+            self.pin_ = Pin()
         if col is not None:
-            self.placement.col = col
+            self.pin_.col = col
         if row is not None:
-            self.placement.row = row
+            self.pin_.row = row
         if x is not None:
-            self.placement.x = x
+            self.pin_.x = x
         if y is not None:
-            self.placement.y = y
-        self.placement.orientation = orientation
-        self.placement.mirrored = mirrored
+            self.pin_.y = y
+        self.pin_.orientation = orientation
+        self.pin_.mirrored = mirrored
         return self
 
     def _add_port(self, name: str, direction: str, role: str,

@@ -146,7 +146,13 @@ class Flowsheet:
         engine.layout(self)
 
     def route(self, router=None) -> None:
-        """Run the automatic routing engine to generate orthogonal stream paths."""
+        """Run the automatic routing engine to generate orthogonal stream paths.
+
+        Runs :meth:`layout` first if any unit still lacks a resolved frame, since
+        routing needs geometry to work against.
+        """
+        if any(u.frame is None for u in self.units):
+            self.layout()
         if router is None:
             from pfd.routing import DefaultRouter
             router = DefaultRouter()
@@ -157,7 +163,7 @@ class Flowsheet:
         """Render the flowsheet to an SVG string, running ``layout()`` and
         ``route()`` first if they have not been run yet.
         """
-        if any(u.placement is None for u in self.units):
+        if any(u.frame is None for u in self.units):
             self.layout()
         if any(s.route is None for s in self.streams):
             self.route()

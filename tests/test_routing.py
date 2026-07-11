@@ -63,8 +63,8 @@ def test_no_obstacle_intersection():
     spx, spy = src_sym.ports.get("vapor", (src_sym.width/2, src_sym.height/2))
     dpx, dpy = dst_sym.ports.get("suction", (dst_sym.width/2, dst_sym.height/2))
     
-    sx, sy = v.placement.x + spx, v.placement.y + spy
-    dx, dy = c.placement.x + dpx, c.placement.y + dpy
+    sx, sy = v.frame.x + spx, v.frame.y + spy
+    dx, dy = c.frame.x + dpx, c.frame.y + dpy
     
     if s.route.waypoints:
         pts = [(sx, sy)] + s.route.waypoints + [(dx, dy)]
@@ -77,15 +77,15 @@ def test_no_obstacle_intersection():
         for obs in graph.obstacles:
             # The first segment is allowed to intersect the source unit's bounding box and its external label
             if i in (0, 1):
-                if obs.x_min == v.placement.x and obs.y_min == v.placement.y:
+                if obs.x_min == v.frame.x and obs.y_min == v.frame.y:
                     continue
-                if obs.y_max == v.placement.y:
+                if obs.y_max == v.frame.y:
                     continue
             # The last segment is allowed to intersect the dest unit's bounding box and its external label
             if i in (len(pts) - 2, len(pts) - 3):
-                if obs.x_min == c.placement.x and obs.y_min == c.placement.y:
+                if obs.x_min == c.frame.x and obs.y_min == c.frame.y:
                     continue
-                if obs.y_max == c.placement.y:
+                if obs.y_max == c.frame.y:
                     continue
                 
             assert not obs.intersects_segment(x1, y1, x2, y2), f"Segment {pts[i]}->{pts[i+1]} intersects obstacle {obs}"
