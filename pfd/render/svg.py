@@ -379,8 +379,8 @@ class SvgRenderer:
                 rx = mid_x - rect_width / 2
                 ry = mid_y - rect_height / 2
                 
-                lines.append(f'    <mask id="{mask_id}" maskUnits="userSpaceOnUse" x="0" y="0" width="{canvas_width}" height="{canvas_height}">')
-                lines.append(f'      <rect x="0" y="0" width="{canvas_width}" height="{canvas_height}" fill="white" />')
+                lines.append(f'    <mask id="{mask_id}" maskUnits="userSpaceOnUse" x="{frame_x}" y="{frame_y}" width="{canvas_width}" height="{canvas_height}">')
+                lines.append(f'      <rect x="{frame_x}" y="{frame_y}" width="{canvas_width}" height="{canvas_height}" fill="white" />')
                 lines.append(f'      <rect x="{rx}" y="{ry}" width="{rect_width}" height="{rect_height}" fill="black" />')
                 lines.append('    </mask>')
             else:
