@@ -32,26 +32,26 @@ def separate_streams(fs: "Flowsheet", spacing: float = 6.0) -> None:
             if abs(p1[1] - p2[1]) < 0.1: # Horizontal
                 x_min, x_max = min(p1[0], p2[0]), max(p1[0], p2[0])
                 h_segs.append({
-                    "stream": s.name,
+                    "stream": id(s),
                     "seg_idx": i,
                     "track": round(p1[1]),
                     "min_val": x_min,
                     "max_val": x_max,
                     "is_fixed": is_fixed
                 })
-                h_offsets[(s.name, i)] = 0.0
+                h_offsets[(id(s), i)] = 0.0
                 
             elif abs(p1[0] - p2[0]) < 0.1: # Vertical
                 y_min, y_max = min(p1[1], p2[1]), max(p1[1], p2[1])
                 v_segs.append({
-                    "stream": s.name,
+                    "stream": id(s),
                     "seg_idx": i,
                     "track": round(p1[0]),
                     "min_val": y_min,
                     "max_val": y_max,
                     "is_fixed": is_fixed
                 })
-                v_offsets[(s.name, i)] = 0.0
+                v_offsets[(id(s), i)] = 0.0
 
     def resolve_track(segments, offsets_dict):
         segments.sort(key=lambda s: s["min_val"])
@@ -137,18 +137,18 @@ def separate_streams(fs: "Flowsheet", spacing: float = 6.0) -> None:
             # Look at segment before (if any)
             if i > 0:
                 seg_idx = i - 1
-                if (s.name, seg_idx) in h_offsets:
-                    dy = h_offsets[(s.name, seg_idx)]
-                if (s.name, seg_idx) in v_offsets:
-                    dx = v_offsets[(s.name, seg_idx)]
+                if (id(s), seg_idx) in h_offsets:
+                    dy = h_offsets[(id(s), seg_idx)]
+                if (id(s), seg_idx) in v_offsets:
+                    dx = v_offsets[(id(s), seg_idx)]
                     
             # Look at segment after (if any)
             if i < n_segs:
                 seg_idx = i
-                if (s.name, seg_idx) in h_offsets:
-                    dy = h_offsets[(s.name, seg_idx)]
-                if (s.name, seg_idx) in v_offsets:
-                    dx = v_offsets[(s.name, seg_idx)]
+                if (id(s), seg_idx) in h_offsets:
+                    dy = h_offsets[(id(s), seg_idx)]
+                if (id(s), seg_idx) in v_offsets:
+                    dx = v_offsets[(id(s), seg_idx)]
                     
             new_pts.append((pt[0] + dx, pt[1] + dy))
             

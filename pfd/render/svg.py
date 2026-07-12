@@ -144,6 +144,14 @@ class SvgRenderer:
         pid_lines = []
         if styling == "pid":
             border_margin = 25
+            # The title block is a fixed 380px wide box in the bottom-right.
+            # Widen the sheet so it fits inside the border and clears the stream
+            # table (bottom-left) rather than being clipped on narrow diagrams.
+            tb_w = 380
+            need = tb_w + 2 * border_margin
+            if table_lines:
+                need = max(need, (table_left - frame_x) + table_width + 20 + tb_w + border_margin)
+            canvas_width = max(canvas_width, need)
             pid_lines.append('  <g id="pid_styling">')
             pid_lines.append(f'    <rect x="{frame_x + border_margin}" y="{frame_y + border_margin}" width="{canvas_width - 2 * border_margin}" height="{canvas_height - 2 * border_margin}" fill="none" stroke="black" stroke-width="4" />')
             pid_lines.extend(self._title_block(fs, frame_x, frame_y, canvas_width,
@@ -260,10 +268,10 @@ class SvgRenderer:
                     if "-" in name:
                         top, bot = name.split("-", 1)
                     else:
-                        i = len(name)
-                        while i > 0 and name[i-1].isdigit():
-                            i -= 1
-                        top, bot = name[:i], name[i:]
+                        i = 0
+                        while i < len(name) and not name[i].isdigit():
+                            i += 1
+                        top, bot = name[:i], name[i:]  # letters, then from first digit
                     cx, cy = x + u_width / 2, y + u_height / 2
                     lines.append(f'    <text x="{cx}" y="{cy - 4}" font-family="sans-serif" '
                                  f'font-size="12" font-weight="bold" text-anchor="middle" '

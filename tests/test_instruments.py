@@ -26,3 +26,11 @@ def test_signal_feedback_loop_lays_out():
     fs.connect(a.sig_out, b.sig_in, kind="electric")
     fs.connect(b.sig_out, a.pv, kind="pneumatic")  # feedback
     fs.layout()  # must not raise "Cycle detected"
+
+
+def test_instrument_tag_split_alphanumeric():
+    fs = Flowsheet("i")
+    a = fs.add(U.Instrument("PT101A")); b = fs.add(U.Instrument("X"))
+    fs.connect(a.sig_out, b.sig_in, kind="electric")
+    svg = fs.to_svg()
+    assert ">PT<" in svg and ">101A<" in svg   # letters over full loop suffix

@@ -23,3 +23,19 @@ def test_no_title_block_still_renders_pid():
     fs.connect(fs.units[0].outlet, fs.units[1].inlet)
     svg = fs.to_svg(styling="pid")   # falls back to defaults, must not raise
     assert "Bare" in svg
+
+
+def test_title_block_fits_narrow_sheet():
+    import re
+    fs = Flowsheet("Tiny")
+    a = fs.add(U.Feed("F")); b = fs.add(U.Product("P"))
+    fs.connect(a.outlet, b.inlet)
+    fs.title_block = TitleBlock(drawing_number="PFD-1")
+    svg = fs.to_svg(styling="pid")
+    vb = re.search(r'viewBox="([-\d.]+) [-\d.]+ ([\d.]+)', svg)
+    minx, width = float(vb.group(1)), float(vb.group(2))
+    m = re.search(r'<rect x="([-\d.]+)" y="[-\d.]+" width="380', svg)
+    assert m, "title block rect not found"
+    tbx = float(m.group(1))
+    assert tbx >= minx - 0.5                 # not clipped on the left
+    assert tbx + 380 <= minx + width + 0.5    # nor the right
