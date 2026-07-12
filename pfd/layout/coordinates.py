@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 X_GAP = 150
 Y_GAP = 120
+ROW_GAP = 70   # vertical gap between row bands (added to the taller row's height)
 MARGIN_X = 50
 MARGIN_Y = 50
 
@@ -35,6 +36,22 @@ def assign_coordinates(fs: "Flowsheet") -> None:
         x_pos[col] = curr_x
         curr_x += col_widths[col] + 100.0  # 100px routing gap minimum
 
+    # Center each row's units on a common horizontal flow axis (rather than
+    # top-aligning), so equipment of different heights lines up on one spine —
+    # a short mixer and a tall column share a centerline, minimizing the
+    # vertical jog between their connecting ports.
+    max_row = max((u._slot.row or 0 for u in fs.units if u._slot.y is None), default=-1)
+    row_height: dict[int, float] = {r: 50.0 for r in range(max_row + 1)}  # empty rows keep a default band
+    for u in fs.units:
+        if u._slot.y is None:
+            r = u._slot.row or 0
+            row_height[r] = max(row_height[r], u._slot.h)
+    row_axis: dict[int, float] = {}
+    cursor = MARGIN_Y
+    for r in range(max_row + 1):
+        row_axis[r] = cursor + row_height[r] / 2.0
+        cursor += row_height[r] + ROW_GAP
+
     unpinned_y = set()
     for u in fs.units:
         s = u._slot
@@ -42,7 +59,7 @@ def assign_coordinates(fs: "Flowsheet") -> None:
         if s.x is None:
             s.x = x_pos.get(s.col or 0, MARGIN_X)
         if s.y is None:
-            s.y = MARGIN_Y + (s.row or 0) * Y_GAP
+            s.y = row_axis[s.row or 0] - s.h / 2.0
             unpinned_y.add(u)
 
     # Post-pass: align single-stream terminals (Feed/Product) with their target

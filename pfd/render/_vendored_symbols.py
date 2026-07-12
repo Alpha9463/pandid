@@ -165,7 +165,7 @@ def register_vendored(registry):
     registry.register('reactor', Symbol(
         svg='<g id="sym_reactor"><path d="M 31.0 2.4 L 31.0 27.4 A 5.0 2.0 0.0 0 1 19.0 27.4 L 19.0 2.4 A 5.0 2.0 0.0 0 1 31.0 2.4 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 26.0 32.4 L 50.0 32.4 L 50.0 77.4 L 25.0 96.4 L 0.0 77.4 L 0.0 32.4 L 24.0 32.4 M 19.0 2.4 L 31.0 2.4 M 19.0 27.4 L 31.0 27.4 M 24.0 29.4 L 24.0 56.9 M 26.0 29.4 L 26.0 56.9 M 0.0 77.4 L 50.0 77.4" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="30.0" cy="57.4" rx="5.0" ry="1.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="20.0" cy="57.4" rx="5.0" ry="1.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=50.0, height=96.4,
-        ports={'feed': (25.0, 0.0), 'outlet': (25.0, 96.4), 'duty': (50.0, 48.2)},
+        ports={'feed': (0.0, 48.2), 'outlet': (25.0, 96.4), 'duty': (50.0, 48.2)},
     ), 'default')
 
     # draw.io vessels:Knock-out Drum -> separator/default

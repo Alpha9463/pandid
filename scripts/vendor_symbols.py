@@ -54,7 +54,7 @@ KIND_MAP = {
                             {"feed": ("W", 130), "distillate": ("N", 50), "bottoms": ("S", 50),
                              "reboiler_duty": ("E", 170), "condenser_duty": ("E", 40)}),
     ("reactor", "default"): ("vessels", "Mixing Reactor",
-                             {"feed": "N", "outlet": "S", "duty": "E"}),
+                             {"feed": "W", "outlet": "S", "duty": "E"}),
     ("separator", "default"): ("vessels", "Knock-out Drum",
                                {"feed": ("W", 55), "vapor": ("N", 25), "liquid": ("S", 25)}),
     ("tank", "default"):  ("vessels", "Tank (Dished Roof)",
