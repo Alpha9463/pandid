@@ -50,8 +50,14 @@ def _path_d(path_el) -> str:
     return " ".join(parts)
 
 
-def convert_shape(shape_el):
-    """Convert one <shape> element to (inner_svg, w, h, constraints)."""
+def convert_shape(shape_el, stroke_width=2.0):
+    """Convert one <shape> element to (inner_svg, w, h, constraints).
+
+    ``stroke_width`` is emitted verbatim on every stroked element (in the
+    shape's own units). At a symbol's native scale this equals the sheet's line
+    weight; for a symbol later scaled by ``s``, pass ``stroke_width = 2 / s`` so
+    the rendered line still lands at 2px.
+    """
     w = _num(shape_el, "w", 100)
     h = _num(shape_el, "h", 100)
 
@@ -64,14 +70,13 @@ def convert_shape(shape_el):
 
     out = []
     pending = []   # geometry accumulated since the last paint op
-    stroke_w = 1.0
 
     def flush(op):
         nonlocal pending
         if not pending:
             return
         fill, stroke = _PAINT.get(op, ("none", "#111"))
-        sw = f' stroke-width="{stroke_w}"' if stroke != "none" else ""
+        sw = f' stroke-width="{stroke_width}"' if stroke != "none" else ""
         for kind, data in pending:
             if kind == "path":
                 out.append(f'<path d="{data}" fill="{fill}" stroke="{stroke}"{sw}/>')
@@ -115,8 +120,6 @@ def convert_shape(shape_el):
                                          _num(el, "x2"), _num(el, "y2"))))
             elif t in _PAINT:
                 flush(t)
-            elif t == "strokewidth":
-                stroke_w = _num(el, "width", 1)
     flush("stroke")  # paint anything left
 
     return "".join(out), w, h, constraints

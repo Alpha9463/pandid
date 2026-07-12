@@ -9,189 +9,189 @@ def register_vendored(registry):
 
     # draw.io valves:Gate Valve -> valve/default
     registry.register('valve', Symbol(
-        svg='<g id="sym_valve"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="none" stroke="#111" stroke-width="1.0"/></g>',
-        width=98.0, height=60.0,
-        ports={'inlet': (0.0, 30.0), 'outlet': (98.0, 30.0)},
+        svg='<g id="sym_valve"><g transform="scale(0.5)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=49.0, height=30.0,
+        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0)},
     ), 'default')
 
     # draw.io valves:Gate Valve -> valve/gate
     registry.register('valve', Symbol(
-        svg='<g id="sym_valve_gate"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="none" stroke="#111" stroke-width="1.0"/></g>',
-        width=98.0, height=60.0,
-        ports={'inlet': (0.0, 30.0), 'outlet': (98.0, 30.0)},
+        svg='<g id="sym_valve_gate"><g transform="scale(0.5)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=49.0, height=30.0,
+        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0)},
     ), 'gate')
 
     # draw.io valves:Globe Valve -> valve/globe
     registry.register('valve', Symbol(
-        svg='<g id="sym_valve_globe"><path d="M 0.0 0.0 L 31.9 19.7 A 20.0 20.0 0.0 0 1 66.2 19.7 L 98.0 0.0 L 98.0 60.0 L 66.2 40.5 A 20.0 20.0 0.0 0 1 31.9 40.5 L 0.0 60.0 Z" fill="none" stroke="#111" stroke-width="1.0"/><path d="M 31.9 40.5 A 20.0 20.0 0.0 0 1 31.9 19.7 M 66.2 19.7 A 20.0 20.0 0.0 0 1 66.2 40.5" fill="none" stroke="#111" stroke-width="1.0"/></g>',
-        width=98.0, height=60.0,
-        ports={'inlet': (0.0, 30.0), 'outlet': (98.0, 30.0)},
+        svg='<g id="sym_valve_globe"><g transform="scale(0.5)"><path d="M 0.0 0.0 L 31.9 19.7 A 20.0 20.0 0.0 0 1 66.2 19.7 L 98.0 0.0 L 98.0 60.0 L 66.2 40.5 A 20.0 20.0 0.0 0 1 31.9 40.5 L 0.0 60.0 Z" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 31.9 40.5 A 20.0 20.0 0.0 0 1 31.9 19.7 M 66.2 19.7 A 20.0 20.0 0.0 0 1 66.2 40.5" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=49.0, height=30.0,
+        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0)},
     ), 'globe')
 
     # draw.io valves:Ball Valve -> valve/ball
     registry.register('valve', Symbol(
-        svg='<g id="sym_valve_ball"><path d="M 0.0 0.0 L 31.9 19.7 A 20.0 20.0 0.0 0 1 66.2 19.7 L 98.0 0.0 L 98.0 60.0 L 66.2 40.5 A 20.0 20.0 0.0 0 1 31.9 40.5 L 0.0 60.0 Z" fill="none" stroke="#111" stroke-width="1.0"/><path d="M 31.9 40.5 A 20.0 20.0 0.0 0 1 31.9 19.7 M 66.2 19.7 A 20.0 20.0 0.0 0 1 66.2 40.5" fill="none" stroke="#111" stroke-width="1.0"/></g>',
-        width=98.0, height=60.0,
-        ports={'inlet': (0.0, 30.0), 'outlet': (98.0, 30.0)},
+        svg='<g id="sym_valve_ball"><g transform="scale(0.5)"><path d="M 0.0 0.0 L 31.9 19.7 A 20.0 20.0 0.0 0 1 66.2 19.7 L 98.0 0.0 L 98.0 60.0 L 66.2 40.5 A 20.0 20.0 0.0 0 1 31.9 40.5 L 0.0 60.0 Z" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 31.9 40.5 A 20.0 20.0 0.0 0 1 31.9 19.7 M 66.2 19.7 A 20.0 20.0 0.0 0 1 66.2 40.5" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=49.0, height=30.0,
+        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0)},
     ), 'ball')
 
     # draw.io valves:Butterfly Valve 1 -> valve/butterfly
     registry.register('valve', Symbol(
-        svg='<g id="sym_valve_butterfly"><ellipse cx="49.0" cy="30.0" rx="5.0" ry="5.0" fill="none" stroke="#111" stroke-width="1.0"/><path d="M 0.0 60.0 L 0.0 0.0 L 45.0 27.5 M 53.0 32.5 L 98.0 60.0 L 98.0 0.0" fill="none" stroke="#111" stroke-width="1.0"/></g>',
-        width=98.0, height=60.0,
-        ports={'inlet': (0.0, 30.0), 'outlet': (98.0, 30.0)},
+        svg='<g id="sym_valve_butterfly"><g transform="scale(0.5)"><ellipse cx="49.0" cy="30.0" rx="5.0" ry="5.0" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 0.0 60.0 L 0.0 0.0 L 45.0 27.5 M 53.0 32.5 L 98.0 60.0 L 98.0 0.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=49.0, height=30.0,
+        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0)},
     ), 'butterfly')
 
     # draw.io valves:Check Valve 1 -> valve/check
     registry.register('valve', Symbol(
-        svg='<g id="sym_valve_check"><path d="M 3.0 62.0 L 3.0 2.0 L 98.5 62.0 L 98.5 2.0" fill="none" stroke="#111" stroke-width="1.0"/><ellipse cx="3.0" cy="3.0" rx="3.0" ry="3.0" fill="none" stroke="#111" stroke-width="1.0"/><path d="M 89.5 50.0 L 98.5 62.0 L 84.0 59.5 L 89.5 56.5 Z" fill="none" stroke="#111" stroke-width="1.0"/></g>',
-        width=98.5, height=62.0,
-        ports={'inlet': (3.0, 31.0), 'outlet': (98.5, 31.0)},
+        svg='<g id="sym_valve_check"><g transform="scale(0.5)"><path d="M 3.0 62.0 L 3.0 2.0 L 98.5 62.0 L 98.5 2.0" fill="none" stroke="#111" stroke-width="4.0"/><ellipse cx="3.0" cy="3.0" rx="3.0" ry="3.0" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 89.5 50.0 L 98.5 62.0 L 84.0 59.5 L 89.5 56.5 Z" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=49.2, height=31.0,
+        ports={'inlet': (1.5, 15.5), 'outlet': (49.2, 15.5)},
     ), 'check')
 
     # draw.io valves:Diaphragm -> valve/control
     registry.register('valve', Symbol(
-        svg='<g id="sym_valve_control"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="none" stroke="#111" stroke-width="1.0"/><path d="M 29.0 18.0 A 25.0 25.0 0.0 0 1 69.0 18.0" fill="none" stroke="#111" stroke-width="1.0"/></g>',
-        width=98.0, height=60.0,
-        ports={'inlet': (0.0, 30.0), 'outlet': (98.0, 30.0)},
+        svg='<g id="sym_valve_control"><g transform="scale(0.5)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 29.0 18.0 A 25.0 25.0 0.0 0 1 69.0 18.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=49.0, height=30.0,
+        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0)},
     ), 'control')
 
     # draw.io valves:Needle -> valve/needle
     registry.register('valve', Symbol(
-        svg='<g id="sym_valve_needle"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z M 49.0 5.0 L 49.0 55.0" fill="none" stroke="#111" stroke-width="1.0"/></g>',
-        width=98.0, height=60.0,
-        ports={'inlet': (0.0, 30.0), 'outlet': (98.0, 30.0)},
+        svg='<g id="sym_valve_needle"><g transform="scale(0.5)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z M 49.0 5.0 L 49.0 55.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=49.0, height=30.0,
+        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0)},
     ), 'needle')
 
     # draw.io valves:Three-Way Valve -> valve/three_way
     registry.register('valve', Symbol(
-        svg='<g id="sym_valve_three_way"><path d="M 19.0 79.0 L 49.0 30.0 L 98.0 0.0 L 98.0 60.0 L 0.0 0.0 L 0.0 60.0 L 49.0 30.0 L 79.0 79.0 Z" fill="none" stroke="#111" stroke-width="1.0"/></g>',
-        width=98.0, height=79.0,
-        ports={'inlet': (0.0, 30.4), 'outlet': (98.0, 30.4)},
+        svg='<g id="sym_valve_three_way"><g transform="scale(0.5)"><path d="M 19.0 79.0 L 49.0 30.0 L 98.0 0.0 L 98.0 60.0 L 0.0 0.0 L 0.0 60.0 L 49.0 30.0 L 79.0 79.0 Z" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=49.0, height=39.5,
+        ports={'inlet': (0.0, 15.2), 'outlet': (49.0, 15.2)},
     ), 'three_way')
 
     # draw.io valves:Relief PRV -> valve/relief
     registry.register('valve', Symbol(
-        svg='<g id="sym_valve_relief"><path d="M 0.0 20.0 A 20.0 20.0 0.0 0 1 40.0 20.0 Z M 20.0 20.0 L 20.0 59.0" fill="none" stroke="#111" stroke-width="1.0"/><rect x="20.0" y="20.0" width="20.0" height="8.0" fill="none" stroke="#111" stroke-width="1.0"/></g>',
-        width=40.0, height=59.0,
-        ports={'inlet': (20.0, 59.0), 'outlet': (20.0, 0.0)},
+        svg='<g id="sym_valve_relief"><g transform="scale(0.5)"><path d="M 0.0 20.0 A 20.0 20.0 0.0 0 1 40.0 20.0 Z M 20.0 20.0 L 20.0 59.0" fill="none" stroke="#111" stroke-width="4.0"/><rect x="20.0" y="20.0" width="20.0" height="8.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=20.0, height=29.5,
+        ports={'inlet': (10.0, 29.5), 'outlet': (10.0, 0.0)},
     ), 'relief')
 
     # draw.io pumps:Centrifugal Pump 1 -> pump/default
     registry.register('pump', Symbol(
-        svg='<g id="sym_pump"><path d="M 12.0 54.0 L 0.0 67.0 L 60.0 67.0 L 48.0 54.0" fill="none" stroke="#111" stroke-width="1.0"/><path d="M 0.6 25.0 A 30.0 30.0 0.0 0 1 30.0 0.0 L 70.0 0.0 L 70.0 20.0 L 58.45 20.0 A 30.0 30.0 0.0 1 1 0.6 35.0" fill="none" stroke="#111" stroke-width="1.0"/><path d="M 21.4 25.0 A 10.0 10.0 0.0 1 1 21.4 35.0" fill="none" stroke="#111" stroke-width="1.0"/></g>',
+        svg='<g id="sym_pump"><path d="M 12.0 54.0 L 0.0 67.0 L 60.0 67.0 L 48.0 54.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.6 25.0 A 30.0 30.0 0.0 0 1 30.0 0.0 L 70.0 0.0 L 70.0 20.0 L 58.45 20.0 A 30.0 30.0 0.0 1 1 0.6 35.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 21.4 25.0 A 10.0 10.0 0.0 1 1 21.4 35.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=70.0, height=67.0,
         ports={'suction': (0.7, 33.5), 'discharge': (30.1, 0.0)},
     ), 'default')
 
     # draw.io pumps:Gear Pump -> pump/gear
     registry.register('pump', Symbol(
-        svg='<g id="sym_pump_gear"><path d="M 15.0 82.0 L 7.5 91.0 L 49.5 91.0 L 41.9 82.0" fill="none" stroke="#111" stroke-width="1.0"/><path d="M 48.5 10.0 L 48.5 75.0 A 20.0 10.0 0.0 0 1 8.5 75.0 L 8.5 10.0 A 20.0 10.0 0.0 0 1 48.5 10.0 Z" fill="none" stroke="#111" stroke-width="1.0"/><ellipse cx="28.5" cy="23.0" rx="16.0" ry="16.0" fill="none" stroke="#111" stroke-width="1.0"/><ellipse cx="28.5" cy="60.0" rx="16.0" ry="16.0" fill="none" stroke="#111" stroke-width="1.0"/><path d="M 57.0 31.5 L 57.0 51.5 M 48.5 41.5 L 57.0 41.5 M 0.0 32.0 L 0.0 52.0 M 0.0 41.5 L 8.5 41.5" fill="none" stroke="#111" stroke-width="1.0"/></g>',
+        svg='<g id="sym_pump_gear"><path d="M 15.0 82.0 L 7.5 91.0 L 49.5 91.0 L 41.9 82.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 48.5 10.0 L 48.5 75.0 A 20.0 10.0 0.0 0 1 8.5 75.0 L 8.5 10.0 A 20.0 10.0 0.0 0 1 48.5 10.0 Z" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="28.5" cy="23.0" rx="16.0" ry="16.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="28.5" cy="60.0" rx="16.0" ry="16.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 57.0 31.5 L 57.0 51.5 M 48.5 41.5 L 57.0 41.5 M 0.0 32.0 L 0.0 52.0 M 0.0 41.5 L 8.5 41.5" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=57.0, height=91.0,
         ports={'suction': (0.0, 45.5), 'discharge': (57.0, 45.5)},
     ), 'gear')
 
     # draw.io pumps:Screw Pump -> pump/screw
     registry.register('pump', Symbol(
-        svg='<g id="sym_pump_screw"><path d="M 12.0 53.97 L 0.0 66.97 L 60.0 66.97 L 48.0 53.97" fill="none" stroke="#111" stroke-width="1.0"/><path d="M 0.6 24.97 A 30.0 30.0 0.0 0 1 59.75 24.97 L 70.0 24.97 L 70.0 34.97 L 59.75 34.97 A 30.0 30.0 0.0 0 1 0.6 34.97" fill="none" stroke="#111" stroke-width="1.0"/><path d="M 7.7 40.77 A 13.0 13.0 0.0 0 0 30.0 29.97 A 13.0 13.0 0.0 0 1 52.4 18.97" fill="none" stroke="#111" stroke-width="1.0"/></g>',
-        width=70.0, height=66.97,
+        svg='<g id="sym_pump_screw"><path d="M 12.0 53.97 L 0.0 66.97 L 60.0 66.97 L 48.0 53.97" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.6 24.97 A 30.0 30.0 0.0 0 1 59.75 24.97 L 70.0 24.97 L 70.0 34.97 L 59.75 34.97 A 30.0 30.0 0.0 0 1 0.6 34.97" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 7.7 40.77 A 13.0 13.0 0.0 0 0 30.0 29.97 A 13.0 13.0 0.0 0 1 52.4 18.97" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=70.0, height=67.0,
         ports={'suction': (0.7, 30.1), 'discharge': (70.0, 30.1)},
     ), 'screw')
 
     # draw.io compressors:Centrifugal Compressor -> compressor/default
     registry.register('compressor', Symbol(
-        svg='<g id="sym_compressor"><path d="M 12.0 54.0 L 0.0 67.0 L 60.0 67.0 L 48.0 54.0" fill="none" stroke="#111" stroke-width="1.0"/><path d="M 0.6 25.0 A 30.0 30.0 0.0 0 1 30.0 0.0 L 70.0 0.0 L 70.0 20.0 L 58.45 20.0 A 30.0 30.0 0.0 1 1 0.6 35.0" fill="none" stroke="#111" stroke-width="1.0"/></g>',
+        svg='<g id="sym_compressor"><path d="M 12.0 54.0 L 0.0 67.0 L 60.0 67.0 L 48.0 54.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.6 25.0 A 30.0 30.0 0.0 0 1 30.0 0.0 L 70.0 0.0 L 70.0 20.0 L 58.45 20.0 A 30.0 30.0 0.0 1 1 0.6 35.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=70.0, height=67.0,
         ports={'suction': (0.7, 33.5), 'discharge': (30.1, 0.0)},
     ), 'default')
 
     # draw.io compressors:Reciprocating Compressor -> compressor/reciprocating
     registry.register('compressor', Symbol(
-        svg='<g id="sym_compressor_reciprocating"><path d="M 14.5 40.0 L 14.5 0.0 L 34.5 0.0 L 34.5 13.0 L 74.5 13.0 L 74.5 40.0 Z" fill="none" stroke="#111" stroke-width="1.0"/><rect x="0.0" y="23.0" width="14.0" height="4.0" fill="none" stroke="#111" stroke-width="1.0"/><path d="M 74.5 23.0 L 87.5 23.0 L 87.5 21.5 L 98.0 25.0 L 87.5 28.5 L 87.5 27.0 L 74.5 27.0 Z" fill="none" stroke="#111" stroke-width="1.0"/></g>',
+        svg='<g id="sym_compressor_reciprocating"><path d="M 14.5 40.0 L 14.5 0.0 L 34.5 0.0 L 34.5 13.0 L 74.5 13.0 L 74.5 40.0 Z" fill="none" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="23.0" width="14.0" height="4.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 74.5 23.0 L 87.5 23.0 L 87.5 21.5 L 98.0 25.0 L 87.5 28.5 L 87.5 27.0 L 74.5 27.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=98.0, height=40.0,
         ports={'suction': (0.0, 25.0), 'discharge': (49.0, 12.8)},
     ), 'reciprocating')
 
     # draw.io compressors:Compressor -> blower/default
     registry.register('blower', Symbol(
-        svg='<g id="sym_blower"><ellipse cx="50.0" cy="50.0" rx="50.0" ry="50.0" fill="none" stroke="#111" stroke-width="1.0"/><path d="M 0.0 0.0 L 14.5 14.5 M 100.0 0.0 L 85.5 14.5" fill="none" stroke="#111" stroke-width="1.0"/></g>',
+        svg='<g id="sym_blower"><ellipse cx="50.0" cy="50.0" rx="50.0" ry="50.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 0.0 L 14.5 14.5 M 100.0 0.0 L 85.5 14.5" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=100.0,
         ports={'suction': (0.0, 50.0), 'discharge': (50.0, 0.0)},
     ), 'default')
 
     # draw.io heat_exchangers:Shell and Tube Heat Exchanger 1 -> hex/default
     registry.register('hex', Symbol(
-        svg='<g id="sym_hex"><ellipse cx="30.0" cy="30.0" rx="30.0" ry="30.0" fill="none" stroke="#111" stroke-width="1.0"/><path d="M 0.0 30.0 L 10.0 30.0 L 20.0 15.0 L 40.0 45.0 L 50.0 30.0 L 60.0 30.0" fill="none" stroke="#111" stroke-width="1.0"/></g>',
+        svg='<g id="sym_hex"><ellipse cx="30.0" cy="30.0" rx="30.0" ry="30.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 30.0 L 10.0 30.0 L 20.0 15.0 L 40.0 45.0 L 50.0 30.0 L 60.0 30.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=60.0, height=60.0,
         ports={'cold_in': (0.0, 30.0), 'cold_out': (60.0, 30.0), 'hot_in': (30.0, 0.0), 'hot_out': (30.0, 60.0)},
     ), 'default')
 
     # draw.io heat_exchangers:Reboiler -> hex/kettle
     registry.register('hex', Symbol(
-        svg='<g id="sym_hex_kettle"><path d="M 4.5 15.0 L 16.5 15.0 L 16.5 30.0 L 4.5 30.0 A 3.0 5.0 0.0 0 1 4.5 15.0 M 19.5 15.0 L 26.5 15.0 L 41.5 0.0 L 86.5 0.0 A 5.0 15.0 0.0 0 1 86.5 30.0 L 19.5 30.0 Z M 4.5 15.0 L 4.5 30.0 M 41.5 0.0 L 41.5 30.0 M 86.5 0.0 L 86.5 30.0" fill="none" stroke="#111" stroke-width="1.0"/><rect x="16.5" y="12.0" width="3.0" height="21.0" fill="none" stroke="#111" stroke-width="1.0"/></g>',
+        svg='<g id="sym_hex_kettle"><path d="M 4.5 15.0 L 16.5 15.0 L 16.5 30.0 L 4.5 30.0 A 3.0 5.0 0.0 0 1 4.5 15.0 M 19.5 15.0 L 26.5 15.0 L 41.5 0.0 L 86.5 0.0 A 5.0 15.0 0.0 0 1 86.5 30.0 L 19.5 30.0 Z M 4.5 15.0 L 4.5 30.0 M 41.5 0.0 L 41.5 30.0 M 86.5 0.0 L 86.5 30.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="16.5" y="12.0" width="3.0" height="21.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=91.5, height=33.0,
         ports={'cold_in': (0.0, 22.5), 'cold_out': (91.5, 15.0), 'hot_in': (41.2, 0.0), 'hot_out': (45.8, 30.0)},
     ), 'kettle')
 
     # draw.io heat_exchangers:Heater -> heater/default
     registry.register('heater', Symbol(
-        svg='<g id="sym_heater"><ellipse cx="40.0" cy="40.0" rx="30.0" ry="30.0" fill="none" stroke="#111" stroke-width="1.0"/><path d="M 10.0 40.0 L 20.0 40.0 L 30.0 25.0 L 50.0 55.0 L 60.0 40.0 L 70.0 40.0 M 80.0 0.0 L 0.0 80.0" fill="none" stroke="#111" stroke-width="1.0"/><path d="M 4.5 70.0 L 0.0 80.0 L 10.0 75.5 L 5.0 75.0 Z" fill="none" stroke="#111" stroke-width="1.0"/></g>',
+        svg='<g id="sym_heater"><ellipse cx="40.0" cy="40.0" rx="30.0" ry="30.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 10.0 40.0 L 20.0 40.0 L 30.0 25.0 L 50.0 55.0 L 60.0 40.0 L 70.0 40.0 M 80.0 0.0 L 0.0 80.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 4.5 70.0 L 0.0 80.0 L 10.0 75.5 L 5.0 75.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=80.0,
         ports={'inlet': (9.9, 40.0), 'outlet': (70.1, 40.0), 'duty': (40.0, 70.1)},
     ), 'default')
 
     # draw.io heat_exchangers:Heat Exchanger (Spiral) -> cooler/default
     registry.register('cooler', Symbol(
-        svg='<g id="sym_cooler"><rect x="0.0" y="0.0" width="100.0" height="100.0" fill="none" stroke="#111" stroke-width="1.0"/><ellipse cx="50.0" cy="50.0" rx="15.0" ry="15.0" fill="none" stroke="#111" stroke-width="1.0"/><ellipse cx="50.0" cy="50.0" rx="27.5" ry="27.5" fill="none" stroke="#111" stroke-width="1.0"/><ellipse cx="50.0" cy="50.0" rx="40.0" ry="40.0" fill="none" stroke="#111" stroke-width="1.0"/><path d="M 0.0 50.0 L 10.0 50.0 M 90.0 50.0 L 100.0 50.0" fill="none" stroke="#111" stroke-width="1.0"/></g>',
+        svg='<g id="sym_cooler"><rect x="0.0" y="0.0" width="100.0" height="100.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="50.0" cy="50.0" rx="15.0" ry="15.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="50.0" cy="50.0" rx="27.5" ry="27.5" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="50.0" cy="50.0" rx="40.0" ry="40.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 50.0 L 10.0 50.0 M 90.0 50.0 L 100.0 50.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=100.0,
         ports={'inlet': (0.0, 50.0), 'outlet': (100.0, 50.0), 'duty': (50.0, 0.0)},
     ), 'default')
 
     # draw.io vessels:Barrel, Drum -> vessel/default
     registry.register('vessel', Symbol(
-        svg='<g id="sym_vessel"><rect x="1.0" y="0.0" width="60.0" height="100.0" fill="none" stroke="#111" stroke-width="1.0"/><rect x="0.0" y="0.0" width="62.0" height="2.0" fill="none" stroke="#111" stroke-width="1.0"/><rect x="0.0" y="32.0" width="62.0" height="2.0" fill="none" stroke="#111" stroke-width="1.0"/><rect x="0.0" y="66.0" width="62.0" height="2.0" fill="none" stroke="#111" stroke-width="1.0"/><rect x="0.0" y="98.0" width="62.0" height="2.0" fill="none" stroke="#111" stroke-width="1.0"/></g>',
+        svg='<g id="sym_vessel"><rect x="1.0" y="0.0" width="60.0" height="100.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="0.0" width="62.0" height="2.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="32.0" width="62.0" height="2.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="66.0" width="62.0" height="2.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="98.0" width="62.0" height="2.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=62.0, height=100.0,
         ports={'inlet': (0.0, 50.0), 'outlet': (62.0, 50.0)},
     ), 'default')
 
     # draw.io vessels:Pressurized Vessel -> column/default
     registry.register('column', Symbol(
-        svg='<g id="sym_column"><path d="M 0.0 15.0 A 50.0 15.0 0.0 1 1 100.0 15.0 L 100.0 185.0 A 50.0 15.0 0.0 1 1 0.0 185.0 Z" fill="none" stroke="#111" stroke-width="1.0"/></g>',
+        svg='<g id="sym_column"><path d="M 0.0 15.0 A 50.0 15.0 0.0 1 1 100.0 15.0 L 100.0 185.0 A 50.0 15.0 0.0 1 1 0.0 185.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=200.0,
         ports={'feed': (0.0, 130.0), 'distillate': (50.0, 0.0), 'bottoms': (50.0, 200.0), 'reboiler_duty': (100.0, 170.0), 'condenser_duty': (100.0, 40.0)},
     ), 'default')
 
     # draw.io vessels:Mixing Reactor -> reactor/default
     registry.register('reactor', Symbol(
-        svg='<g id="sym_reactor"><path d="M 31.0 2.4 L 31.0 27.4 A 5.0 2.0 0.0 0 1 19.0 27.4 L 19.0 2.4 A 5.0 2.0 0.0 0 1 31.0 2.4 Z" fill="none" stroke="#111" stroke-width="1.0"/><path d="M 26.0 32.4 L 50.0 32.4 L 50.0 77.4 L 25.0 96.4 L 0.0 77.4 L 0.0 32.4 L 24.0 32.4 M 19.0 2.4 L 31.0 2.4 M 19.0 27.4 L 31.0 27.4 M 24.0 29.4 L 24.0 56.9 M 26.0 29.4 L 26.0 56.9 M 0.0 77.4 L 50.0 77.4" fill="none" stroke="#111" stroke-width="1.0"/><ellipse cx="30.0" cy="57.4" rx="5.0" ry="1.0" fill="none" stroke="#111" stroke-width="1.0"/><ellipse cx="20.0" cy="57.4" rx="5.0" ry="1.0" fill="none" stroke="#111" stroke-width="1.0"/></g>',
+        svg='<g id="sym_reactor"><path d="M 31.0 2.4 L 31.0 27.4 A 5.0 2.0 0.0 0 1 19.0 27.4 L 19.0 2.4 A 5.0 2.0 0.0 0 1 31.0 2.4 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 26.0 32.4 L 50.0 32.4 L 50.0 77.4 L 25.0 96.4 L 0.0 77.4 L 0.0 32.4 L 24.0 32.4 M 19.0 2.4 L 31.0 2.4 M 19.0 27.4 L 31.0 27.4 M 24.0 29.4 L 24.0 56.9 M 26.0 29.4 L 26.0 56.9 M 0.0 77.4 L 50.0 77.4" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="30.0" cy="57.4" rx="5.0" ry="1.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="20.0" cy="57.4" rx="5.0" ry="1.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=50.0, height=96.4,
         ports={'feed': (25.0, 0.0), 'outlet': (25.0, 96.4), 'duty': (50.0, 48.2)},
     ), 'default')
 
     # draw.io vessels:Knock-out Drum -> separator/default
     registry.register('separator', Symbol(
-        svg='<g id="sym_separator"><path d="M 40.0 7.69 L 40.0 87.69 A 13.0 5.0 0.0 0 1 0.0 87.69 L 0.0 7.69 A 13.0 5.0 0.0 0 1 40.0 7.69 Z" fill="none" stroke="#111" stroke-width="1.0"/><path d="M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69 M 0.0 17.69 L 40.0 17.69 M 0.0 27.69 L 40.0 27.69 M 0.0 17.69 L 10.0 27.69 L 20.0 17.69 L 30.0 27.69 L 40.0 17.69 M 48.0 34.69 L 48.0 52.69 M 51.0 34.69 L 51.0 52.69 M 0.0 27.69 L 10.0 17.69 L 20.0 27.69 L 30.0 17.69 L 40.0 27.69" fill="none" stroke="#111" stroke-width="1.0"/><rect x="40.0" y="37.5" width="8.0" height="12.0" fill="none" stroke="#111" stroke-width="1.0"/></g>',
-        width=51.0, height=95.38,
+        svg='<g id="sym_separator"><path d="M 40.0 7.69 L 40.0 87.69 A 13.0 5.0 0.0 0 1 0.0 87.69 L 0.0 7.69 A 13.0 5.0 0.0 0 1 40.0 7.69 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69 M 0.0 17.69 L 40.0 17.69 M 0.0 27.69 L 40.0 27.69 M 0.0 17.69 L 10.0 27.69 L 20.0 17.69 L 30.0 27.69 L 40.0 17.69 M 48.0 34.69 L 48.0 52.69 M 51.0 34.69 L 51.0 52.69 M 0.0 27.69 L 10.0 17.69 L 20.0 27.69 L 30.0 17.69 L 40.0 27.69" fill="none" stroke="#111" stroke-width="2.0"/><rect x="40.0" y="37.5" width="8.0" height="12.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=51.0, height=95.4,
         ports={'feed': (0.0, 55.0), 'vapor': (25.0, 0.0), 'liquid': (25.0, 95.4)},
     ), 'default')
 
     # draw.io vessels:Tank (Dished Roof) -> tank/default
     registry.register('tank', Symbol(
-        svg='<g id="sym_tank"><rect x="0.0" y="25.46" width="100.0" height="70.0" fill="none" stroke="#111" stroke-width="1.0"/><path d="M 0.0 25.46 A 75.0 75.0 0.0 0 1 100.0 25.46 Z" fill="none" stroke="#111" stroke-width="1.0"/></g>',
-        width=100.0, height=95.46,
+        svg='<g id="sym_tank"><rect x="0.0" y="25.46" width="100.0" height="70.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 25.46 A 75.0 75.0 0.0 0 1 100.0 25.46 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=100.0, height=95.5,
         ports={'inlet': (30.0, 0.0), 'outlet': (50.0, 95.5)},
     ), 'default')
 
     # draw.io vessels:Tank (Conical Roof) -> tank/conical
     registry.register('tank', Symbol(
-        svg='<g id="sym_tank_conical"><path d="M 0.0 20.0 L 0.0 90.0 L 100.0 90.0 L 100.0 20.0 L 50.0 0.0 Z M 0.0 20.0 L 100.0 20.0" fill="none" stroke="#111" stroke-width="1.0"/></g>',
+        svg='<g id="sym_tank_conical"><path d="M 0.0 20.0 L 0.0 90.0 L 100.0 90.0 L 100.0 20.0 L 50.0 0.0 Z M 0.0 20.0 L 100.0 20.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=90.0,
         ports={'inlet': (30.0, 0.0), 'outlet': (50.0, 90.0)},
     ), 'conical')
 
     # draw.io fittings:Reducer -> reducer/default
     registry.register('reducer', Symbol(
-        svg='<g id="sym_reducer"><path d="M 0.0 0.0 L 70.0 25.0 L 0.0 50.0 Z" fill="none" stroke="#111" stroke-width="1.0"/></g>',
+        svg='<g id="sym_reducer"><path d="M 0.0 0.0 L 70.0 25.0 L 0.0 50.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=70.0, height=50.0,
         ports={'inlet': (0.0, 25.0), 'outlet': (70.0, 25.0)},
     ), 'default')

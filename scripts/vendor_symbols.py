@@ -66,6 +66,11 @@ KIND_MAP = {
 }
 
 
+# draw.io draws inline valves oversized; scale them to read as small devices
+# (lines stay 2px thanks to non-scaling-stroke).
+SCALE = {"valve": 0.5}
+
+
 def resolve_port(spec, constraints, w, h):
     if isinstance(spec, str):
         if spec not in constraints:
@@ -98,9 +103,17 @@ def build():
         el = index.get((stencil, shape))
         if el is None:
             raise SystemExit(f"shape {shape!r} not in {stencil}.xml")
-        inner, w, h, constraints = convert_shape(el)
-        ports = {p: tuple(round(v, 1) for v in resolve_port(spec, constraints, w, h))
-                 for p, spec in port_map.items()}
+        s = SCALE.get(kind, 1.0)
+        # Emit a heavier stroke on scaled symbols so it renders at 2px after the
+        # scale transform (2px matches streams + hand-drawn symbols exactly).
+        inner, w, h, constraints = convert_shape(el, stroke_width=round(2.0 / s, 3))
+        ports = {p: resolve_port(spec, constraints, w, h) for p, spec in port_map.items()}
+        if s != 1.0:
+            inner = f'<g transform="scale({s})">{inner}</g>'
+            w, h = w * s, h * s
+            ports = {p: (x * s, y * s) for p, (x, y) in ports.items()}
+        w, h = round(w, 1), round(h, 1)
+        ports = {p: tuple(round(v, 1) for v in xy) for p, xy in ports.items()}
         sid = kind if variant == "default" else f"{kind}_{variant}"
         svg = f'<g id="sym_{sid}">{inner}</g>'
         lines += [
