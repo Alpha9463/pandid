@@ -1,35 +1,52 @@
-# pfd (Process Flow Diagram) Engine
+# pfd — Process Flow Diagram engine
 
-`pfd` is a zero-dependency, pure-Python visualization engine for Chemical Engineering Process Flow Diagrams (PFDs). It transforms abstract topological flowsheet definitions into publication-quality orthogonal SVG diagrams.
+`pfd` is a zero-dependency, pure-Python engine that turns a topological
+flowsheet definition into a publication-quality, orthogonal **PFD / P&ID** as
+SVG. You describe *what connects to what*; the engine lays out the equipment,
+routes every stream, and draws industry-standard symbols.
 
 ## Features
 
-- **Topology-First API**: Define your process using intuitive, typed units (Reactors, Columns, Heat Exchangers) and streams.
-- **Smart Orthogonal Routing**: Built-in A* router with jump-gaps for stream crossings and automatic parallel segment separation.
-- **Cycle Breaking**: Automatically detects recycle streams and routes them in designated outer lanes.
-- **Zero Runtime Dependencies**: The core engine relies only on the Python standard library.
-- **SVG Rendering**: Generates clean, scalable vector graphics suitable for web dashboards and reports.
+- **Topology-first API** — declare typed units (pumps, columns, reactors,
+  heat exchangers, …) and connect their named ports; streams are created for you.
+- **Industry-standard symbol library** — 49+ ISO 10628-2 / ISA-5.1 symbols with
+  style **variants** (e.g. a heat exchanger can be shell-&-tube, plate, kettle,
+  U-tube…), derived from the Apache-2.0 draw.io P&ID stencils (see `NOTICE`).
+- **Automatic layout** — Sugiyama-style layering, crossing reduction, and a
+  center-aligned flow spine; recycles are detected and routed around the sheet.
+- **Orthogonal A\* routing** — clean right-angle streams with crossing jump-gaps
+  and parallel-segment separation. Never emits a disconnected stream.
+- **Pixel-perfect overrides** — `pin()` equipment to exact coordinates and
+  `.via()` a stream through explicit waypoints; the engine honors them and
+  auto-routes the rest.
+- **Instrumentation (ISA-5.1)** — instrument balloons with tags drawn inside,
+  location variants, and typed signal lines (electric / pneumatic / data).
+- **P&ID sheet framing** — title block with a revision-history table, plus an
+  optional stream-property table.
+- **Validation** — `fs.validate()` flags overlapping pins, off-sheet
+  coordinates (errors) and routes crossing equipment or big detours (warnings).
+- **Zero runtime dependencies** — the package uses only the Python standard
+  library. (SVG symbols are pre-converted and inlined; `cairosvg` is optional,
+  only for PDF/PNG export.)
 
 ## Installation
 
-This package requires Python 3.10+.
+Requires Python 3.10+.
 
 ```bash
 pip install .
+# optional PDF/PNG export backend:
+pip install '.[pdf]'
 ```
-*(Note: tests require `pytest`)*
+Tests run with `pytest`.
 
-## Quick Start
-
-Create an auto-layout process flow diagram in just a few lines of code:
+## Quick start
 
 ```python
 from pfd import Flowsheet, units as U
 
-# 1. Initialize the flowsheet
 fs = Flowsheet("Ammonia Loop")
 
-# 2. Add equipment
 feed     = fs.add(U.Feed("Natural Gas"))
 mixer    = fs.add(U.Mixer("M-101"))
 reformer = fs.add(U.Reactor("R-101"))
@@ -38,48 +55,116 @@ sep      = fs.add(U.Separator("V-101"))
 comp     = fs.add(U.Compressor("K-101"))
 prod     = fs.add(U.Product("Ammonia"))
 
-# 3. Connect ports — streams are created port -> port
 fs.connect(feed.outlet,     mixer.in_1)
 fs.connect(mixer.outlet,    reformer.feed)
 fs.connect(reformer.outlet, hx.hot_in)
 fs.connect(hx.hot_out,      sep.feed)
 fs.connect(sep.vapor,       comp.suction)
-fs.connect(comp.discharge,  mixer.in_2)   # engine detects this as the recycle
+fs.connect(comp.discharge,  mixer.in_2)   # detected as the recycle
 fs.connect(sep.liquid,      prod.inlet)
 
-# 4. Render (layout + routing run automatically)
-fs.render("ammonia_loop.svg")
+fs.render("ammonia_loop.svg")             # layout + routing run automatically
 ```
 
-The engine automatically layers the units, detects the compressor → mixer stream as a recycle (routing it back around the outside), and routes every stream orthogonally.
+`render()` infers the format from the extension (`.svg`, or `.pdf`/`.png` with
+the optional backend). `fs.to_svg()` returns the SVG string; `fs.show()` opens
+it in a browser; a flowsheet also renders inline in Jupyter.
 
-## Manual Overrides
+## Equipment & variants
 
-If you need pixel-perfect control, `pfd` allows you to override the automatic layout engine:
+A **class** is a functional equipment type (defined by its ports); a **variant**
+is a visual style within it. Pick a variant with the `variant=` argument:
 
 ```python
-# Pin equipment to exact (x, y) coordinates
-hx = fs.add(U.HeatExchanger("E-1")).pin(x=100, y=50)
+fs.add(U.HeatExchanger("E-1", variant="plate"))   # or shell_tube, kettle, u_tube, condenser
+fs.add(U.Valve("FV-1", variant="control"))         # gate, globe, ball, butterfly, check, needle, three_way, relief
+fs.add(U.Pump("P-1", variant="gear"))              # centrifugal, gear, screw, vacuum
+fs.add(U.Tank("TK-1", variant="floating_roof"))    # dished, conical, floating_roof, sphere
+fs.add(U.Separator("V-2", variant="cyclone"))      # knock-out, cyclone, gravity
+```
 
-# Manually specify orthogonal routing waypoints for a stream
+Classes include: `Feed`, `Product`, `Pump`, `Compressor`, `Blower`, `Valve`,
+`Vessel`, `Tank`, `HeatExchanger`, `Heater`, `Cooler`, `Reactor`, `Separator`,
+`Column`, `Mixer`, `Splitter`, `Reducer`, `Furnace`, `Turbine`, `Filter`,
+`Dryer`, and `Instrument`.
+
+## Manual layout
+
+```python
+# Pin equipment to exact SVG coordinates (top-left corner):
+hx = fs.add(U.HeatExchanger("E-1")).pin(x=100, y=50)
+# ...or to a grid cell, mirrored:
+fv = fs.add(U.Valve("FV-1")).pin(col=2, row=1, mirrored=True)
+
+# Force a stream through explicit orthogonal waypoints:
 fs.connect(feed.outlet, hx.cold_in).via([(130, 65), (130, 110)])
+```
+
+Pinned and auto-placed units mix freely — the engine resolves each unit's frame
+from your intent and auto-routes anything you didn't pin.
+
+## Instrumentation & signals
+
+```python
+ft  = fs.add(U.Instrument("FT-101"))                       # field flow transmitter
+fic = fs.add(U.Instrument("FIC-101", variant="panel"))     # panel-mounted controller
+fy  = fs.add(U.Instrument("FY-101", variant="computer"))   # computing relay
+# variants: field (default), panel, aux, shared (DCS square), computer (hexagon)
+
+fs.connect(ft.sig_out, fic.sig_in, kind="electric")        # dashed
+fs.connect(fic.sig_out, fy.sig_in, kind="pneumatic")       # slash-ticks
+```
+
+The instrument's `name` is its tag, drawn inside the balloon (functional letters
+over loop number). Signal `kind`s: `electric`, `pneumatic`, `data`/`software`,
+`capillary` — rendered with the right line style, no arrowheads, and no stream
+numbers.
+
+Inline fittings (valves, reducers) carry the stream number **through** them; set
+`unit.significant = True` to break the number at an important valve.
+
+## P&ID title block
+
+```python
+from pfd.document import TitleBlock, Revision
+
+fs.title_block = TitleBlock(
+    title="Distillation Train", drawing_number="PFD-1001",
+    project="Aromatics Recovery Unit", sheet="1", of_sheets="3",
+    drawn_by="A. Anderson", checked_by="J. Smith", approved_by="R. Lee",
+    revisions=[Revision("0", "2026-07-01", "Issued for design", "AA")],
+)
+fs.render("sheet.svg", styling="pid", show_stream_table=True)
 ```
 
 ## Examples
 
-Check out the `examples/` directory for full, runnable scripts:
+Runnable scripts in `examples/`:
 
-- `examples/01_ammonia_loop.py`: Demonstrates the fully automated layout, layering, and recycle detection.
-- `examples/02_manual_layout.py`: Demonstrates `pin()` and `.via()` manual overrides.
-- `examples/03_distillation_train.py`: A larger two-column train with a recycle, a stream property table, and P&ID-style framing.
+- `01_ammonia_loop.py` — fully automatic layout, layering, recycle detection.
+- `02_manual_layout.py` — `pin()` + `.via()` overrides.
+- `03_distillation_train.py` — two-column train, recycle, stream table, P&ID
+  title block with revision history.
+- `04_control_loop.py` — ISA instrument balloons and signal-line types.
 
 ## Architecture
 
-`pfd` follows a strict 3-layer architecture:
-1. **Topology (`pfd/flowsheet.py`, `pfd/units.py`)**: Defines units, ports, and stream connectivity.
-2. **Geometry (`pfd/layout/`, `pfd/routing/`)**: Solves Sugiyama-style layered layout, assigns absolute coordinates, and runs orthogonal A* routing.
-3. **Render (`pfd/render/svg.py`)**: Draws the final SVG, resolving crossings into visual jump-gaps.
+1. **Topology** (`pfd/flowsheet.py`, `pfd/units.py`, `pfd/ports.py`,
+   `pfd/streams.py`) — units, ports, and stream connectivity.
+2. **Geometry** — `pfd/layout/` (Sugiyama layering → ordering → coordinates,
+   emitting each unit's resolved `Frame`), `pfd/portgeom.py` (single source of
+   truth for port geometry), `pfd/routing/` (visibility graph + A\*).
+3. **Render** (`pfd/render/`) — SVG output, the symbol registry, and
+   `pfd/validate.py` / `pfd/document.py`.
 
-## License
+Geometry separates *intent* (`Pin`, from `pin()`) from *result* (`Frame`,
+computed by the layout engine), so layout is idempotent.
 
-Apache 2.0
+The symbol library is generated by `scripts/vendor_symbols.py`
+(mxGraph stencil XML → SVG via `scripts/mxgraph_to_svg.py`) into
+`pfd/render/_vendored_symbols.py`; `scripts/symbol_sheet.py` renders a catalogue.
+
+## License & attribution
+
+Apache-2.0. Equipment symbols derive from the draw.io / diagrams.net P&ID
+stencils (Apache-2.0) — see `NOTICE`.
