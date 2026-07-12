@@ -1,0 +1,17 @@
+py-chemengg (pfd) — third-party notices
+========================================
+
+Equipment symbols in pfd/render/symbols.py are derived from the draw.io /
+diagrams.net P&ID stencil library:
+
+    https://github.com/jgraph/drawio  (src/main/webapp/stencils/pid)
+    Copyright (c) JGraph Ltd, draw.io / diagrams.net
+    Licensed under the Apache License, Version 2.0.
+
+The source stencils are vendored under scripts/vendor_data/drawio/ and converted
+from mxGraph stencil XML to SVG by scripts/mxgraph_to_svg.py. Port anchor
+positions are taken from each stencil's named <constraint> connections (or
+re-derived on the bounding-box edge) for this project's routing model.
+
+Feed/Product boundary markers and the (variable-port) Mixer and Splitter symbols
+are original hand-drawn geometric primitives.

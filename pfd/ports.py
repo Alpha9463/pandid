@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from pfd.state import State
     from pfd.streams import Stream
     from pfd.units import Unit
 
@@ -24,3 +25,4 @@ class Port:
     role: str
     side: str | None = None
     stream: Stream | None = field(default=None, repr=False)
+    state: State | None = field(default=None, repr=False)  # <- balance engine writes here later

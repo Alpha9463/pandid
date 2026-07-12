@@ -8,11 +8,14 @@ cycles; it is advisory only.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
+
+from pfd.geometry import Route
 
 if TYPE_CHECKING:
     from pfd.ports import Port
+    from pfd.state import State
 
 
 @dataclass
@@ -21,5 +24,27 @@ class Stream:
     source: Port
     dest: Port
     kind: str = "material"
-    is_recycle: bool = False
     tear_hint: bool = False
+    route: Route | None = None
+    color: str | None = None
+    dasharray: str | None = None
+    auto_named: bool = True  # False if the caller passed an explicit name
+    properties: dict[str, str | float] = field(default_factory=dict)
+    state: State | None = None  # <- balance engine writes here later
+    _is_recycle: bool = field(default=False, init=False, repr=False)
+
+    @property
+    def is_recycle(self) -> bool:
+        """True when layout()'s cycle-detection marked this stream a recycle
+        (feedback / back-edge). Read-only: computed by the engine, never set by
+        API callers.
+        """
+        return self._is_recycle
+
+    def via(self, waypoints: list[tuple[float, float]]) -> "Stream":
+        """Force the stream to route through these exact pixel waypoints."""
+        if self.route is None:
+            self.route = Route()
+        self.route.waypoints = waypoints
+        self.route.manual = True
+        return self

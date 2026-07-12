@@ -37,10 +37,19 @@ def test_port_lookup_raises_helpful_error():
 def test_duplicate_port_name_raises():
     class _Bad(Unit):
         kind = "bad"
-        _PORTS = [("x", "inlet", "a"), ("x", "outlet", "b")]
+        _PORTS = [("x", "inlet", "process"), ("x", "outlet", "process")]
 
     with pytest.raises(ValueError, match="already has a port named 'x'"):
         _Bad("B-1")
+
+
+def test_invalid_port_role_raises():
+    class _BadRole(Unit):
+        kind = "badrole"
+        _PORTS = [("in", "inlet", "magic")]
+
+    with pytest.raises(ValueError, match="Invalid role 'magic'"):
+        _BadRole("B-2")
 
 
 # --- Task 5: Built-in unit types ---
@@ -79,8 +88,11 @@ def test_splitter_variable_outlets():
     assert s.out_3.direction == "outlet"
 
 
-def test_tank_is_vessel_alias():
-    assert U.Tank is U.Vessel
+def test_tank_is_its_own_kind():
+    # Tank is now a distinct storage-tank symbol, not a Vessel alias.
+    assert U.Tank is not U.Vessel
+    assert U.Tank("T-1").kind == "tank"
+    assert U.Vessel("V-1").kind == "vessel"
 
 
 def test_mixer_rejects_zero_inlets():
