@@ -63,6 +63,37 @@ KIND_MAP = {
                            {"inlet": ("N", 30), "outlet": ("S", 50)}),
     # Fittings.
     ("reducer", "default"): ("fittings", "Reducer", {"inlet": "W", "outlet": "E"}),
+
+    # --- Variants (style choices within a class; same ports) ---
+    # Heat exchanger styles.
+    ("hex", "shell_tube"): ("heat_exchangers", "Shell and Tube Heat Exchanger 1",
+                            {"cold_in": "W", "cold_out": "E", "hot_in": "N", "hot_out": "S"}),
+    ("hex", "u_tube"):     ("heat_exchangers", "U-Tube Heat Exchanger",
+                            {"cold_in": "W", "cold_out": "E", "hot_in": "N", "hot_out": "S"}),
+    ("hex", "condenser"):  ("heat_exchangers", "Condenser",
+                            {"cold_in": "W", "cold_out": "E", "hot_in": "N", "hot_out": "S"}),
+    ("hex", "plate"):      ("heat_exchangers", "Heat Exchanger (Plate)",
+                            {"cold_in": "SW", "cold_out": "SE", "hot_in": "NW", "hot_out": "NE"}),
+    # Pump / compressor styles.
+    ("pump", "vacuum"):           ("pumps", "Vacuum Pump", {"suction": "W", "discharge": "N"}),
+    ("compressor", "rotary"):      ("compressors", "Rotary Compressor", {"suction": "W", "discharge": "N"}),
+    ("compressor", "liquid_ring"): ("compressors", "Liquid Ring Compressor", {"suction": "W", "discharge": "N"}),
+    # Vessel / tank styles.
+    ("vessel", "dished"): ("vessels", "Vessel (Dished Ends, Brackets)", {"inlet": ("W", 47), "outlet": ("E", 47)}),
+    ("vessel", "dome"):   ("vessels", "Vessel (Dome)", {"inlet": ("W", 27), "outlet": ("E", 27)}),
+    ("tank", "floating_roof"): ("vessels", "Tank (Floating Roof)", {"inlet": ("N", 30), "outlet": ("S", 50)}),
+    ("tank", "sphere"):        ("vessels", "Storage Sphere", {"inlet": ("N", 40), "outlet": ("S", 40)}),
+    # Reactor / separator styles.
+    ("reactor", "plain"):     ("vessels", "Reactor", {"feed": ("W", 30), "outlet": ("S", 20), "duty": ("E", 47)}),
+    ("separator", "cyclone"): ("separators", "Separator (Cyclone)", {"feed": "W", "vapor": "N", "liquid": "S"}),
+    ("separator", "gravity"): ("separators", "Gravity Separator, Settling Chamber",
+                               {"feed": "W", "vapor": "E", "liquid": "S"}),
+
+    # --- New classes (genuinely different port signature / function) ---
+    ("furnace", "default"): ("vessels", "Furnace", {"inlet": "W", "outlet": "E", "fuel": "S"}),
+    ("turbine", "default"): ("pumps", "Turbine", {"inlet": "W", "outlet": "E"}),
+    ("filter", "default"):  ("filters", "Liquid Filter (Bag, Candle, Cartridge)", {"inlet": "W", "outlet": "E"}),
+    ("dryer", "default"):   ("driers", "Rotary Drum Drier, Tumbling Drier", {"feed": "W", "product": "E"}),
 }
 
 

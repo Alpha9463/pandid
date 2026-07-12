@@ -17,7 +17,7 @@ __all__ = [
     "Unit",
     "Feed", "Product", "Pump", "Compressor", "Blower", "Valve", "Vessel", "Tank",
     "HeatExchanger", "Heater", "Cooler", "Reactor", "Separator", "Column",
-    "Mixer", "Splitter", "Reducer",
+    "Mixer", "Splitter", "Reducer", "Furnace", "Turbine", "Filter", "Dryer",
 ]
 
 _VALID_ROLES = {"process", "feed", "product", "energy", "utility", "vapor", "liquid"}
@@ -177,6 +177,35 @@ class Reducer(Unit):
 
     kind = "reducer"
     _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+
+
+class Furnace(Unit):
+    """Fired heater / furnace (process stream heated by burning fuel)."""
+
+    kind = "furnace"
+    _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process"),
+              ("fuel", "inlet", "feed")]
+
+
+class Turbine(Unit):
+    """Steam/gas turbine or expander."""
+
+    kind = "turbine"
+    _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+
+
+class Filter(Unit):
+    """Filter (liquid or gas)."""
+
+    kind = "filter"
+    _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+
+
+class Dryer(Unit):
+    """Dryer (removes moisture from a feed solid/slurry)."""
+
+    kind = "dryer"
+    _PORTS = [("feed", "inlet", "feed"), ("product", "outlet", "process")]
 
 
 class HeatExchanger(Unit):
