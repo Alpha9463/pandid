@@ -261,9 +261,32 @@ class SymbolRegistry:
             ports={'out_1': (50.0, 15.0), 'out_2': (50.0, 35.0), 'inlet': (0.0, 25.0)}
         ))
 
-        # Vendored Equinor symbols (MIT) — registered last so they override the
-        # hand-drawn defaults for shared kinds (pump/compressor/valve/vessel)
-        # and add the valve variants + new kinds.
+        # ====================================================================
+        # ISA-5.1 instrument bubbles. The tag text is drawn dynamically from the
+        # unit name by the renderer, so the symbol is just the balloon + its
+        # location bar. Ports: pv (process connection, bottom), in/out (signals).
+        # Variants: field (bare balloon), panel (single bar), aux (double bar),
+        # shared (balloon-in-square = DCS/shared display), computer (hexagon).
+        # ====================================================================
+        _inst_ports = {'pv': (22.0, 44.0), 'sig_in': (0.0, 22.0), 'sig_out': (44.0, 22.0)}
+        self.register("instrument", Symbol(
+            svg='<g id="sym_instrument"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/></g>',
+            width=44.0, height=44.0, ports=_inst_ports, label_pos="center"))
+        self.register("instrument", Symbol(
+            svg='<g id="sym_instrument_panel"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="22" x2="43" y2="22" stroke="black" stroke-width="1.5"/></g>',
+            width=44.0, height=44.0, ports=_inst_ports, label_pos="center"), "panel")
+        self.register("instrument", Symbol(
+            svg='<g id="sym_instrument_aux"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="19" x2="43" y2="19" stroke="black" stroke-width="1.5"/><line x1="1" y1="25" x2="43" y2="25" stroke="black" stroke-width="1.5"/></g>',
+            width=44.0, height=44.0, ports=_inst_ports, label_pos="center"), "aux")
+        self.register("instrument", Symbol(
+            svg='<g id="sym_instrument_shared"><rect x="1" y="1" width="42" height="42" fill="white" stroke="black" stroke-width="2"/><circle cx="22" cy="22" r="20" fill="none" stroke="black" stroke-width="2"/></g>',
+            width=44.0, height=44.0, ports=_inst_ports, label_pos="center"), "shared")
+        self.register("instrument", Symbol(
+            svg='<g id="sym_instrument_computer"><polygon points="11,3 33,3 43,22 33,41 11,41 1,22" fill="white" stroke="black" stroke-width="2"/></g>',
+            width=44.0, height=44.0, ports=_inst_ports, label_pos="center"), "computer")
+
+        # Vendored draw.io symbols (Apache-2.0) — registered last so they
+        # override the hand-drawn defaults for shared kinds and add variants.
         from pfd.render._vendored_symbols import register_vendored
         register_vendored(self)
 

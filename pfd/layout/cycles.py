@@ -22,17 +22,17 @@ def break_cycles(fs: "Flowsheet") -> None:
     if not fs.units:
         return
         
-    # 2. Build adjacency for material streams
-    # Maps unit -> list of outgoing material streams
+    # 2. Build adjacency across ALL streams (material, energy, and signal). Any
+    # of them can form a cycle the layering DAG must be free of — e.g. a control
+    # loop's transmitter -> controller -> valve -> ... signal feedback.
     adj: dict["Unit", list["Stream"]] = {u: [] for u in fs.units}
     in_degree: dict["Unit", int] = {u: 0 for u in fs.units}
-    
+
     for s in fs.streams:
-        if s.kind == "material":
-            assert s.source.owner is not None
-            assert s.dest.owner is not None
-            adj[s.source.owner].append(s)
-            in_degree[s.dest.owner] += 1
+        assert s.source.owner is not None
+        assert s.dest.owner is not None
+        adj[s.source.owner].append(s)
+        in_degree[s.dest.owner] += 1
             
     # Sort outgoing streams so tear_hint=True are traversed LAST.
     # In DFS, a stream traversed later is more likely to hit a node

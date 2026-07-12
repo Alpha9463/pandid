@@ -59,8 +59,9 @@ class Flowsheet:
 
         Raises :class:`ValueError` if any validation rule is violated.
         """
-        if kind not in {"material", "energy"}:
-            raise ValueError(f"Stream kind must be 'material' or 'energy', got {kind!r}")
+        _KINDS = {"material", "energy", "electric", "pneumatic", "data", "capillary", "software"}
+        if kind not in _KINDS:
+            raise ValueError(f"Stream kind must be one of {sorted(_KINDS)}, got {kind!r}")
             
         if src.direction != "outlet":
             raise ValueError(

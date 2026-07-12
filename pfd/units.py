@@ -18,6 +18,7 @@ __all__ = [
     "Feed", "Product", "Pump", "Compressor", "Blower", "Valve", "Vessel", "Tank",
     "HeatExchanger", "Heater", "Cooler", "Reactor", "Separator", "Column",
     "Mixer", "Splitter", "Reducer", "Furnace", "Turbine", "Filter", "Dryer",
+    "Instrument",
 ]
 
 _VALID_ROLES = {"process", "feed", "product", "energy", "utility", "vapor", "liquid"}
@@ -206,6 +207,18 @@ class Dryer(Unit):
 
     kind = "dryer"
     _PORTS = [("feed", "inlet", "feed"), ("product", "outlet", "process")]
+
+
+class Instrument(Unit):
+    """ISA-5.1 instrument balloon. The ``name`` is the tag (e.g. ``"FIC-101"``),
+    drawn inside the balloon. ``pv`` taps the process; ``in``/``out`` carry
+    signals. Variants: ``"field"`` (default), ``"panel"``, ``"aux"``,
+    ``"shared"`` (DCS), ``"computer"``.
+    """
+
+    kind = "instrument"
+    _PORTS = [("pv", "inlet", "process"), ("sig_in", "inlet", "process"),
+              ("sig_out", "outlet", "process")]
 
 
 class HeatExchanger(Unit):

@@ -251,25 +251,44 @@ class SvgRenderer:
                     transform = f' transform="translate({2 * x + u_width}, 0) scale(-1, 1)"'
                     
                 lines.append(f'    <use href="#{sym_id}" x="{x}" y="{y}" width="{u_width}" height="{u_height}"{transform} />')
-                lpos = f.label_pos or "top"
-                if lpos == "bottom":
-                    lx, ly = x + u_width / 2, y + u_height + 15
-                    anchor, baseline = "middle", "middle"
-                elif lpos == "left":
-                    lx, ly = x - 10, y + u_height / 2
-                    anchor, baseline = "end", "middle"
-                elif lpos == "right":
-                    lx, ly = x + u_width + 10, y + u_height / 2
-                    anchor, baseline = "start", "middle"
-                elif lpos == "center":
-                    lx, ly = x + u_width / 2, y + u_height / 2
-                    anchor, baseline = "middle", "middle"
-                else: # top
-                    lx, ly = x + u_width / 2, y - 10
-                    anchor, baseline = "middle", "baseline"
-                
-                lines.append(f'    <text x="{lx}" y="{ly}" font-family="sans-serif" '
-                             f'font-size="12" text-anchor="{anchor}" dominant-baseline="{baseline}">{safe_name}</text>')
+                if u.kind == "instrument":
+                    # ISA tag inside the balloon: functional letters over loop no.
+                    name = u.name
+                    if "-" in name:
+                        top, bot = name.split("-", 1)
+                    else:
+                        i = len(name)
+                        while i > 0 and name[i-1].isdigit():
+                            i -= 1
+                        top, bot = name[:i], name[i:]
+                    cx, cy = x + u_width / 2, y + u_height / 2
+                    lines.append(f'    <text x="{cx}" y="{cy - 4}" font-family="sans-serif" '
+                                 f'font-size="12" font-weight="bold" text-anchor="middle" '
+                                 f'dominant-baseline="middle">{html.escape(top.upper())}</text>')
+                    if bot:
+                        lines.append(f'    <text x="{cx}" y="{cy + 10}" font-family="sans-serif" '
+                                     f'font-size="11" text-anchor="middle" '
+                                     f'dominant-baseline="middle">{html.escape(bot)}</text>')
+                else:
+                    lpos = f.label_pos or "top"
+                    if lpos == "bottom":
+                        lx, ly = x + u_width / 2, y + u_height + 15
+                        anchor, baseline = "middle", "middle"
+                    elif lpos == "left":
+                        lx, ly = x - 10, y + u_height / 2
+                        anchor, baseline = "end", "middle"
+                    elif lpos == "right":
+                        lx, ly = x + u_width + 10, y + u_height / 2
+                        anchor, baseline = "start", "middle"
+                    elif lpos == "center":
+                        lx, ly = x + u_width / 2, y + u_height / 2
+                        anchor, baseline = "middle", "middle"
+                    else: # top
+                        lx, ly = x + u_width / 2, y - 10
+                        anchor, baseline = "middle", "baseline"
+
+                    lines.append(f'    <text x="{lx}" y="{ly}" font-family="sans-serif" '
+                                 f'font-size="12" text-anchor="{anchor}" dominant-baseline="{baseline}">{safe_name}</text>')
         lines.append('  </g>')
 
         # Pre-compute stream point geometries for crossings and labels
@@ -317,10 +336,17 @@ class SvgRenderer:
             color = s.color or "black"
             marker_id = f'arrow_{color.replace("#", "").replace(" ", "_")}'
             
+            # ISA-5.1 signal line styles: electrical dashed, software/data long
+            # dash-dot, capillary evenly dashed. Pneumatic (double-slash ticks)
+            # is drawn separately below.
+            _SIGNAL_DASH = {"electric": "7,4", "data": "9,3,2,3", "software": "9,3,2,3",
+                            "capillary": "3,3"}
             dash = ""
             if s.dasharray:
                 dash = f' stroke-dasharray="{s.dasharray}"'
-                
+            elif s.kind in _SIGNAL_DASH:
+                dash = f' stroke-dasharray="{_SIGNAL_DASH[s.kind]}"'
+
             longest_seg = None
             max_len = -1
             
@@ -393,7 +419,25 @@ class SvgRenderer:
                 f'    <path d="{d_str}" fill="none" '
                 f'stroke="{color}" stroke-width="2"{dash} marker-end="url(#{marker_id})" mask="url(#{mask_id})" />'
             )
-            
+
+            # Pneumatic signal: double-slash ticks along each segment (ISA-5.1).
+            if s.kind == "pneumatic":
+                for i in range(len(points) - 1):
+                    (px1, py1), (px2, py2) = points[i], points[i+1]
+                    seglen = abs(px2 - px1) + abs(py2 - py1)
+                    n = int(seglen // 45)
+                    horiz = abs(py1 - py2) < 0.1
+                    for k in range(1, n + 1):
+                        t = k / (n + 1)
+                        mx, my = px1 + (px2 - px1) * t, py1 + (py2 - py1) * t
+                        for off in (-2.5, 1.5):
+                            if horiz:
+                                lines.append(f'    <line x1="{mx+off-3:.1f}" y1="{my+5:.1f}" '
+                                             f'x2="{mx+off+3:.1f}" y2="{my-5:.1f}" stroke="{color}" stroke-width="1.5" />')
+                            else:
+                                lines.append(f'    <line x1="{mx-5:.1f}" y1="{my+off-3:.1f}" '
+                                             f'x2="{mx+5:.1f}" y2="{my+off+3:.1f}" stroke="{color}" stroke-width="1.5" />')
+
             if longest_seg:
                 lines.append(
                     f'    <text x="{tx}" y="{ty}" font-family="sans-serif" font-size="10" '
