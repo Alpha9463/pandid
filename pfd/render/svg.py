@@ -395,36 +395,31 @@ class SvgRenderer:
                     
             d_str = " ".join(d_parts)
             
-            mask_id = f"mask_stream_{s_idx}"
-            if longest_seg:
-                lx1, ly1 = longest_seg[0]
-                lx2, ly2 = longest_seg[1]
-                mid_x = (lx1 + lx2) / 2
-                mid_y = (ly1 + ly2) / 2
-                tx = mid_x
-                ty = mid_y
+            # A stream number is drawn once per stream (not per segment) and
+            # never on a signal line. The line is only "wiped" for the label
+            # where a label is actually drawn — otherwise it stays unbroken.
+            draw_label = bool(longest_seg) and not is_signal and s.name not in labeled_names
+            mask_attr = ""
+            if draw_label:
+                labeled_names.add(s.name)
+                (lx1, ly1), (lx2, ly2) = longest_seg
+                tx, ty = (lx1 + lx2) / 2, (ly1 + ly2) / 2
                 anchor = "middle"
-                
-                text_len = len(s.name) * 7.5
-                rect_width = text_len + 8
+                rect_width = len(s.name) * 7.5 + 8
                 rect_height = 16
-                rx = mid_x - rect_width / 2
-                ry = mid_y - rect_height / 2
-                
+                rx, ry = tx - rect_width / 2, ty - rect_height / 2
+                mask_id = f"mask_stream_{s_idx}"
                 lines.append(f'    <mask id="{mask_id}" maskUnits="userSpaceOnUse" x="{frame_x}" y="{frame_y}" width="{canvas_width}" height="{canvas_height}">')
                 lines.append(f'      <rect x="{frame_x}" y="{frame_y}" width="{canvas_width}" height="{canvas_height}" fill="white" />')
                 lines.append(f'      <rect x="{rx}" y="{ry}" width="{rect_width}" height="{rect_height}" fill="black" />')
                 lines.append('    </mask>')
-            else:
-                lines.append(f'    <mask id="{mask_id}" maskUnits="userSpaceOnUse" x="0" y="0" width="{canvas_width}" height="{canvas_height}">')
-                lines.append(f'      <rect x="0" y="0" width="{canvas_width}" height="{canvas_height}" fill="white" />')
-                lines.append('    </mask>')
-                
+                mask_attr = f' mask="url(#{mask_id})"'
+
             # Signal lines carry no flow-direction arrowhead by default.
             marker = "" if is_signal else f' marker-end="url(#{marker_id})"'
             lines.append(
                 f'    <path d="{d_str}" fill="none" '
-                f'stroke="{color}" stroke-width="2"{dash}{marker} mask="url(#{mask_id})" />'
+                f'stroke="{color}" stroke-width="2"{dash}{marker}{mask_attr} />'
             )
 
             # Pneumatic signal: double-slash ticks along each segment (ISA-5.1).
@@ -445,10 +440,7 @@ class SvgRenderer:
                                 lines.append(f'    <line x1="{mx-5:.1f}" y1="{my+off-3:.1f}" '
                                              f'x2="{mx+5:.1f}" y2="{my+off+3:.1f}" stroke="{color}" stroke-width="1.5" />')
 
-            # Signal lines are not stream-numbered; number each stream once even
-            # when it spans several segments (e.g. through an inline valve).
-            if longest_seg and not is_signal and s.name not in labeled_names:
-                labeled_names.add(s.name)
+            if draw_label:
                 lines.append(
                     f'    <text x="{tx}" y="{ty}" font-family="sans-serif" font-size="10" '
                     f'text-anchor="{anchor}" dominant-baseline="middle" '
