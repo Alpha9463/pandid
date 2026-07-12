@@ -1,90 +1,110 @@
 #!/usr/bin/env python3
-"""Generate pfd/render/_vendored_symbols.py from the Equinor engineering-symbols
-manifest (MIT). See NOTICE for attribution.
+"""Generate pfd/render/_vendored_symbols.py from draw.io (jgraph/drawio) P&ID
+stencils (Apache-2.0). See NOTICE for attribution.
 
-Each mapped symbol becomes a `registry.register(kind, Symbol(...), variant)` call.
-Port anchors are placed on the symbol's bounding-box edge at each Equinor
-connector's cross-coordinate, keyed by the connector's outward direction:
-
-    Equinor direction  0 -> N (top),  90 -> E (right),
-                     180 -> S (bottom), 270 -> W (left)
-
-Geometry comes from each entry's `geometryString` (a single merged fill path),
-which avoids the id collisions of embedding whole <svg> documents.
+Each mapped symbol is converted from mxGraph stencil XML to plain SVG by
+scripts/mxgraph_to_svg.py, and its ports are resolved either from the stencil's
+named <constraint> anchors ("W"/"E"/"N"/"S"/...) or placed explicitly on a
+bounding-box edge as ``(edge, along)`` for shapes that lack a needed anchor.
 
 Run:  python scripts/vendor_symbols.py
 """
-import json
 import pathlib
 
+import sys
 HERE = pathlib.Path(__file__).resolve().parent
-MANIFEST = HERE / "vendor_data" / "equinor-engineering-symbols.json"
+sys.path.insert(0, str(HERE))
+from mxgraph_to_svg import shapes_in, convert_shape  # noqa: E402
+
+STENCILS = HERE / "vendor_data" / "drawio"
 OUT = HERE.parent / "pfd" / "render" / "_vendored_symbols.py"
 
-# (kind, variant) -> (equinor_code, {port_name: (edge, along)})
-# `edge` in N/S/E/W; `along` is the coordinate along that edge (symbol units),
-# chosen to line up with the drawn nozzle. Only clean fits are vendored;
-# multi-port units (hex/column/reactor/separator) and the boundary/utility
-# symbols stay hand-drawn in symbols.py.
+# (kind, variant) -> (stencil, shape_name, {port_name: "constraint" | (edge, along)})
 KIND_MAP = {
-    # Valves — the headline family, all inline (inlet W / outlet E).
-    ("valve", "default"):   ("PV005A", {"inlet": ("W", 12), "outlet": ("E", 12)}),   # gate
-    ("valve", "gate"):      ("PV005A", {"inlet": ("W", 12), "outlet": ("E", 12)}),
-    ("valve", "globe"):     ("PV007B", {"inlet": ("W", 12), "outlet": ("E", 12)}),
-    ("valve", "ball"):      ("PV018A", {"inlet": ("W", 12), "outlet": ("E", 12)}),
-    ("valve", "control"):   ("PV016A", {"inlet": ("W", 21.5), "outlet": ("E", 21.5)}),
-    ("valve", "check"):     ("PV022A", {"inlet": ("W", 24), "outlet": ("E", 24)}),
-    ("valve", "butterfly"): ("PV023A", {"inlet": ("W", 29), "outlet": ("E", 29)}),
-    ("valve", "relief"):    ("ND0020", {"inlet": ("W", 47.5), "outlet": ("E", 47.5)}),
-    # Rotating equipment (suction left, discharge top/side).
-    ("pump", "default"):        ("PP001A", {"suction": ("W", 40.5), "discharge": ("N", 48)}),
-    ("compressor", "default"):  ("PP003A", {"suction": ("W", 40.5), "discharge": ("N", 48)}),
-    ("blower", "default"):      ("PP007A", {"suction": ("W", 40.5), "discharge": ("E", 13)}),
-    # Vessels / tanks.
-    ("vessel", "default"):  ("PT002A", {"inlet": ("W", 108), "outlet": ("E", 108)}),
-    ("tank", "default"):    ("PT005A", {"inlet": ("N", 30), "outlet": ("S", 48)}),
-    ("tank", "dished"):     ("PT006A", {"inlet": ("N", 30), "outlet": ("S", 48)}),
-    # Fittings. (Instrument bubbles come with the instrumentation batch, which
-    # also adds tag text + signal line types.)
-    ("reducer", "default"):    ("STPL008", {"inlet": ("W", 12), "outlet": ("E", 12)}),
-    ("nozzle", "default"):     ("PA007A", {"inlet": ("N", 12)}),
+    # Valves — inline family (inlet W / outlet E).
+    ("valve", "default"):   ("valves", "Gate Valve",        {"inlet": "W", "outlet": "E"}),
+    ("valve", "gate"):      ("valves", "Gate Valve",        {"inlet": "W", "outlet": "E"}),
+    ("valve", "globe"):     ("valves", "Globe Valve",       {"inlet": "W", "outlet": "E"}),
+    ("valve", "ball"):      ("valves", "Ball Valve",        {"inlet": "W", "outlet": "E"}),
+    ("valve", "butterfly"): ("valves", "Butterfly Valve 1", {"inlet": "W", "outlet": "E"}),
+    ("valve", "check"):     ("valves", "Check Valve 1",     {"inlet": "W", "outlet": "E"}),
+    ("valve", "control"):   ("valves", "Diaphragm",         {"inlet": "W", "outlet": "E"}),
+    ("valve", "needle"):    ("valves", "Needle",            {"inlet": "W", "outlet": "E"}),
+    ("valve", "three_way"): ("valves", "Three-Way Valve",   {"inlet": "W", "outlet": "E"}),
+    ("valve", "relief"):    ("valves", "Relief PRV",        {"inlet": "S", "outlet": "N"}),
+    # Rotating equipment.
+    ("pump", "default"):       ("pumps", "Centrifugal Pump 1", {"suction": "W", "discharge": "N"}),
+    ("pump", "gear"):          ("pumps", "Gear Pump",          {"suction": "W", "discharge": "E"}),
+    ("pump", "screw"):         ("pumps", "Screw Pump",         {"suction": "W", "discharge": "E"}),
+    ("compressor", "default"): ("compressors", "Centrifugal Compressor", {"suction": "W", "discharge": "N"}),
+    ("compressor", "reciprocating"): ("compressors", "Reciprocating Compressor", {"suction": "W", "discharge": "N"}),
+    ("blower", "default"):     ("compressors", "Compressor", {"suction": "W", "discharge": "N"}),
+    # Heat exchangers (horizontal shell & tube: cold through tubes W->E, hot shell N/S).
+    ("hex", "default"): ("heat_exchangers", "Shell and Tube Heat Exchanger 1",
+                         {"cold_in": "W", "cold_out": "E", "hot_in": "N", "hot_out": "S"}),
+    ("hex", "kettle"):  ("heat_exchangers", "Reboiler",
+                         {"cold_in": "W", "cold_out": "E", "hot_in": "N", "hot_out": "S"}),
+    ("heater", "default"): ("heat_exchangers", "Heater",
+                            {"inlet": "W", "outlet": "E", "duty": "S"}),
+    ("cooler", "default"): ("heat_exchangers", "Heat Exchanger (Spiral)",
+                            {"inlet": "W", "outlet": "E", "duty": "N"}),
+    # Vessels / columns / reactors / separators / tanks.
+    ("vessel", "default"): ("vessels", "Barrel, Drum", {"inlet": "W", "outlet": "E"}),
+    ("column", "default"): ("vessels", "Pressurized Vessel",
+                            {"feed": ("W", 130), "distillate": ("N", 50), "bottoms": ("S", 50),
+                             "reboiler_duty": ("E", 170), "condenser_duty": ("E", 40)}),
+    ("reactor", "default"): ("vessels", "Mixing Reactor",
+                             {"feed": "N", "outlet": "S", "duty": "E"}),
+    ("separator", "default"): ("vessels", "Knock-out Drum",
+                               {"feed": ("W", 55), "vapor": ("N", 25), "liquid": ("S", 25)}),
+    ("tank", "default"):  ("vessels", "Tank (Dished Roof)",
+                           {"inlet": ("N", 30), "outlet": ("S", 50)}),
+    ("tank", "conical"):  ("vessels", "Tank (Conical Roof)",
+                           {"inlet": ("N", 30), "outlet": ("S", 50)}),
+    # Fittings.
+    ("reducer", "default"): ("fittings", "Reducer", {"inlet": "W", "outlet": "E"}),
 }
 
 
-def edge_port(edge, along, w, h):
-    """Place a port on the given bounding-box edge at `along` (symbol units)."""
-    if edge == "N":
-        return (float(along), 0.0)
-    if edge == "S":
-        return (float(along), float(h))
-    if edge == "E":
-        return (float(w), float(along))
-    return (0.0, float(along))  # W
+def resolve_port(spec, constraints, w, h):
+    if isinstance(spec, str):
+        if spec not in constraints:
+            raise SystemExit(f"missing constraint {spec!r}; have {list(constraints)}")
+        return constraints[spec]
+    edge, along = spec
+    return {"N": (float(along), 0.0), "S": (float(along), float(h)),
+            "E": (float(w), float(along)), "W": (0.0, float(along))}[edge]
 
 
 def build():
-    data = json.loads(MANIFEST.read_text())
+    # Index every shape once.
+    index = {}
+    for stencil in {m[0] for m in KIND_MAP.values()}:
+        for name, el in shapes_in(STENCILS / f"{stencil}.xml"):
+            index[(stencil, name)] = el
+
     lines = [
-        '"""Equinor-derived equipment symbols (MIT). GENERATED by',
+        '"""draw.io-derived equipment symbols (Apache-2.0). GENERATED by',
         'scripts/vendor_symbols.py — do not edit by hand. See NOTICE for attribution."""',
         "",
         "",
         "def register_vendored(registry):",
-        "    \"\"\"Register the vendored Equinor symbols, overriding any hand-drawn",
-        "    defaults of the same (kind, variant).\"\"\"",
+        '    """Register the vendored draw.io symbols, overriding hand-drawn',
+        '    defaults of the same (kind, variant)."""',
         "    from pfd.render.symbols import Symbol",
         "",
     ]
-    for (kind, variant), (code, port_map) in KIND_MAP.items():
-        e = data[code]
-        w, h = e["width"], e["height"]
-        ports = {pname: edge_port(edge, along, w, h)
-                 for pname, (edge, along) in port_map.items()}
+    for (kind, variant), (stencil, shape, port_map) in KIND_MAP.items():
+        el = index.get((stencil, shape))
+        if el is None:
+            raise SystemExit(f"shape {shape!r} not in {stencil}.xml")
+        inner, w, h, constraints = convert_shape(el)
+        ports = {p: tuple(round(v, 1) for v in resolve_port(spec, constraints, w, h))
+                 for p, spec in port_map.items()}
         sid = kind if variant == "default" else f"{kind}_{variant}"
-        geom = e["geometryString"]
-        svg = f'<g id="sym_{sid}"><path d="{geom}" fill="#111111"/></g>'
+        svg = f'<g id="sym_{sid}">{inner}</g>'
         lines += [
-            f"    # Equinor {code} -> {kind}/{variant}",
+            f"    # draw.io {stencil}:{shape} -> {kind}/{variant}",
             f"    registry.register({kind!r}, Symbol(",
             f"        svg={svg!r},",
             f"        width={w}, height={h},",

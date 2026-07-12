@@ -17,7 +17,7 @@ __all__ = [
     "Unit",
     "Feed", "Product", "Pump", "Compressor", "Blower", "Valve", "Vessel", "Tank",
     "HeatExchanger", "Heater", "Cooler", "Reactor", "Separator", "Column",
-    "Mixer", "Splitter", "Reducer", "Nozzle",
+    "Mixer", "Splitter", "Reducer",
 ]
 
 _VALID_ROLES = {"process", "feed", "product", "energy", "utility", "vapor", "liquid"}
@@ -177,13 +177,6 @@ class Reducer(Unit):
 
     kind = "reducer"
     _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
-
-
-class Nozzle(Unit):
-    """Spray nozzle (single inlet; disperses to the environment)."""
-
-    kind = "nozzle"
-    _PORTS = [("inlet", "inlet", "process")]
 
 
 class HeatExchanger(Unit):

@@ -24,7 +24,8 @@ def test_render_svg_with_manual_placements(tmp_path):
     # Check <use> tags for manually pinned coordinates
     assert '<polygon' in content
     assert 'fill="transparent"' in content
-    assert '<use href="#sym_hex" x="100" y="10" width="100.0" height="60.0" />' in content
+    # Pinned position is honored; dimensions come from the symbol (don't hard-code).
+    assert '<use href="#sym_hex" x="100" y="10"' in content
     
     # Check stream paths (waypoints should be present in string)
     assert '150.0,20.0' in content
