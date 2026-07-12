@@ -90,6 +90,7 @@ class Flowsheet:
         if kind == "material" and src.role in _ENERGY_ROLES and dst.role in _ENERGY_ROLES:
             kind = "energy"
 
+        explicit = bool(name)
         if not name:
             if callable(self.stream_naming_scheme):
                 name = self.stream_naming_scheme(len(self.streams) + 1)
@@ -102,6 +103,7 @@ class Flowsheet:
             dest=dst,
             kind=kind,
             tear_hint=tear_hint,
+            auto_named=not explicit,
         )
         src.stream = stream
         dst.stream = stream
@@ -162,6 +164,58 @@ class Flowsheet:
             router = DefaultRouter()
         router.route(self)
 
+    def renumber_streams(self) -> None:
+        """Assign stream numbers, carrying one number through inline fittings.
+
+        Valves and reducers are inline: a stream keeps its number as it passes
+        through them (set ``unit.significant = True`` to break the number at an
+        important valve). Only auto-named material streams are renumbered;
+        explicitly-named streams and signal lines are left untouched.
+        """
+        _INLINE = {"valve", "reducer"}
+        material = [s for s in self.streams if s.kind == "material"]
+        pos = {id(s): i for i, s in enumerate(material)}  # Stream is unhashable
+        parent = list(range(len(material)))
+
+        def find(i):
+            while parent[i] != i:
+                parent[i] = parent[parent[i]]
+                i = parent[i]
+            return i
+
+        for u in self.units:
+            if u.kind in _INLINE and not getattr(u, "significant", False):
+                ins = [pos[id(p.stream)] for p in u.ports.values()
+                       if p.direction == "inlet" and p.stream is not None and id(p.stream) in pos]
+                outs = [pos[id(p.stream)] for p in u.ports.values()
+                        if p.direction == "outlet" and p.stream is not None and id(p.stream) in pos]
+                if len(ins) == 1 and len(outs) == 1:
+                    parent[find(ins[0])] = find(outs[0])
+
+        # An explicit name on any segment names its whole group.
+        explicit: dict = {}
+        for i, s in enumerate(material):
+            if not s.auto_named:
+                explicit.setdefault(find(i), s.name)
+
+        group_name: dict = {}
+        n = 0
+        for i in range(len(material)):  # first-appearance order
+            r = find(i)
+            if r in group_name:
+                continue
+            if r in explicit:
+                group_name[r] = explicit[r]
+            else:
+                n += 1
+                group_name[r] = (self.stream_naming_scheme(n)
+                                 if callable(self.stream_naming_scheme)
+                                 else self.stream_naming_scheme.format(n=n))
+
+        for i, s in enumerate(material):
+            if s.auto_named:
+                s.name = group_name[find(i)]
+
     def validate(self) -> list:
         """Return validation issues for the flowsheet (errors first, then warnings).
 
@@ -185,6 +239,7 @@ class Flowsheet:
             self.layout()
         if any(s.route is None for s in self.streams):
             self.route()
+        self.renumber_streams()
         if check:
             issues = self.validate()
             self.warnings = [i for i in issues if i.severity == "warning"]

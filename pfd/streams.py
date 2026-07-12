@@ -28,6 +28,7 @@ class Stream:
     route: Route | None = None
     color: str | None = None
     dasharray: str | None = None
+    auto_named: bool = True  # False if the caller passed an explicit name
     properties: dict[str, str | float] = field(default_factory=dict)
     state: State | None = None  # <- balance engine writes here later
     _is_recycle: bool = field(default=False, init=False, repr=False)

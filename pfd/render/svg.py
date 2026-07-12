@@ -76,24 +76,36 @@ class SvgRenderer:
         canvas_height = (max_y - min_y) + 2 * margin
 
         # 2. Optional stream-property table, placed directly below the diagram.
+        #    One column per unique material stream number (segments that share a
+        #    number through an inline valve collapse to one column); signals are
+        #    not tabled.
+        _sig = {"electric", "pneumatic", "data", "capillary", "software"}
+        table_streams = []
+        _seen_names = set()
+        for s in fs.streams:
+            if s.kind in _sig or s.name in _seen_names:
+                continue
+            _seen_names.add(s.name)
+            table_streams.append(s)
+
         table_lines = []
-        if show_stream_table and fs.streams:
+        if show_stream_table and table_streams:
             table_left = frame_x + 25
             table_y_start = frame_y + canvas_height + 10
 
             keys = set()
-            for s in fs.streams:
+            for s in table_streams:
                 keys.update(s.properties.keys())
             sorted_keys = sorted(keys)
 
-            headers = ["Stream"] + [s.name for s in fs.streams]
-            n_streams = len(fs.streams)
+            headers = ["Stream"] + [s.name for s in table_streams]
+            n_streams = len(table_streams)
             if n_streams > 20:
                 stream_col_w = max(35, int(canvas_width / (n_streams + 2)))
                 font_size = max(8, min(12, int(stream_col_w / 5)))
                 row_height = max(20, font_size + 12)
             else:
-                stream_col_w = max(60, max((len(s.name) * 8 for s in fs.streams), default=60))
+                stream_col_w = max(60, max((len(s.name) * 8 for s in table_streams), default=60))
                 font_size = 12
                 row_height = 30
 
@@ -113,7 +125,7 @@ class SvgRenderer:
                 table_lines.append(f'    <rect x="{cx}" y="{current_y}" width="{col_widths[0]}" height="{row_height}" fill="#f9f9f9" stroke="black" />')
                 table_lines.append(f'    <text x="{cx + col_widths[0]/2}" y="{current_y + row_height/2}" font-family="sans-serif" font-size="{font_size}" font-weight="bold" text-anchor="middle" dominant-baseline="middle">{html.escape(k)}</text>')
                 cx += col_widths[0]
-                for i, s in enumerate(fs.streams):
+                for i, s in enumerate(table_streams):
                     val = str(s.properties.get(k, "-"))
                     cw = col_widths[i + 1]
                     table_lines.append(f'    <rect x="{cx}" y="{current_y}" width="{cw}" height="{row_height}" fill="white" stroke="black" />')
@@ -323,6 +335,7 @@ class SvgRenderer:
                     verticals.append((x1, min(y1, y2), max(y1, y2)))
 
         lines.append('  <g id="streams">')
+        labeled_names: set = set()   # label each stream number once (not per segment)
         for s_idx, (s, points) in enumerate(stream_geoms):
             color = s.color or "black"
             marker_id = f'arrow_{color.replace("#", "").replace(" ", "_")}'
@@ -332,6 +345,7 @@ class SvgRenderer:
             # is drawn separately below.
             _SIGNAL_DASH = {"electric": "7,4", "data": "9,3,2,3", "software": "9,3,2,3",
                             "capillary": "3,3"}
+            is_signal = s.kind in {"electric", "pneumatic", "data", "capillary", "software"}
             dash = ""
             if s.dasharray:
                 dash = f' stroke-dasharray="{s.dasharray}"'
@@ -406,9 +420,11 @@ class SvgRenderer:
                 lines.append(f'      <rect x="0" y="0" width="{canvas_width}" height="{canvas_height}" fill="white" />')
                 lines.append('    </mask>')
                 
+            # Signal lines carry no flow-direction arrowhead by default.
+            marker = "" if is_signal else f' marker-end="url(#{marker_id})"'
             lines.append(
                 f'    <path d="{d_str}" fill="none" '
-                f'stroke="{color}" stroke-width="2"{dash} marker-end="url(#{marker_id})" mask="url(#{mask_id})" />'
+                f'stroke="{color}" stroke-width="2"{dash}{marker} mask="url(#{mask_id})" />'
             )
 
             # Pneumatic signal: double-slash ticks along each segment (ISA-5.1).
@@ -429,7 +445,10 @@ class SvgRenderer:
                                 lines.append(f'    <line x1="{mx-5:.1f}" y1="{my+off-3:.1f}" '
                                              f'x2="{mx+5:.1f}" y2="{my+off+3:.1f}" stroke="{color}" stroke-width="1.5" />')
 
-            if longest_seg:
+            # Signal lines are not stream-numbered; number each stream once even
+            # when it spans several segments (e.g. through an inline valve).
+            if longest_seg and not is_signal and s.name not in labeled_names:
+                labeled_names.add(s.name)
                 lines.append(
                     f'    <text x="{tx}" y="{ty}" font-family="sans-serif" font-size="10" '
                     f'text-anchor="{anchor}" dominant-baseline="middle" '

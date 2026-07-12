@@ -38,6 +38,9 @@ class Unit:
         self.flowsheet = None
         self.ports: dict[str, Port] = {}
         self.params: dict = {}
+        # For inline fittings (valve/reducer): if True, the stream number breaks
+        # across this unit instead of carrying through it. See Flowsheet naming.
+        self.significant = False
         self.pin_: Pin | None = None      # user intent (set only via pin())
         self.frame: Frame | None = None   # resolved geometry (set only by layout)
         for spec in self._PORTS:
