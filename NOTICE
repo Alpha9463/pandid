@@ -1,0 +1,18 @@
+py-chemengg (pfd) — third-party notices
+========================================
+
+Equipment symbols in pfd/render/symbols.py are derived from the
+Equinor "engineering-symbols" library:
+
+    https://github.com/equinor/engineering-symbols
+    Copyright (c) Equinor ASA
+    Licensed under the MIT License.
+
+The source symbol manifest is vendored at
+scripts/vendor_data/equinor-engineering-symbols.json. Port anchor positions
+were re-derived for this project's routing model. Symbol geometry is used
+under the MIT License (compatible with this project's Apache-2.0 license).
+
+Feed/Product boundary markers and the shell-and-tube exchanger, distillation
+column, reactor, separator, heater, cooler, mixer, and splitter symbols are
+original hand-drawn geometric primitives.

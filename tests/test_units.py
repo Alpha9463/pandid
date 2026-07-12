@@ -88,8 +88,11 @@ def test_splitter_variable_outlets():
     assert s.out_3.direction == "outlet"
 
 
-def test_tank_is_vessel_alias():
-    assert U.Tank is U.Vessel
+def test_tank_is_its_own_kind():
+    # Tank is now a distinct storage-tank symbol, not a Vessel alias.
+    assert U.Tank is not U.Vessel
+    assert U.Tank("T-1").kind == "tank"
+    assert U.Vessel("V-1").kind == "vessel"
 
 
 def test_mixer_rejects_zero_inlets():

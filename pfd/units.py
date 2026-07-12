@@ -15,9 +15,9 @@ from pfd.ports import Port
 
 __all__ = [
     "Unit",
-    "Feed", "Product", "Pump", "Compressor", "Valve", "Vessel", "Tank",
+    "Feed", "Product", "Pump", "Compressor", "Blower", "Valve", "Vessel", "Tank",
     "HeatExchanger", "Heater", "Cooler", "Reactor", "Separator", "Column",
-    "Mixer", "Splitter",
+    "Mixer", "Splitter", "Reducer", "Nozzle",
 ]
 
 _VALID_ROLES = {"process", "feed", "product", "energy", "utility", "vapor", "liquid"}
@@ -158,8 +158,32 @@ class Vessel(Unit):
     _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
 
-Tank = Vessel
-"""Alias for :class:`Vessel`."""
+class Tank(Unit):
+    """Storage tank (cone/dished bottom). Variants: ``"default"``, ``"dished"``."""
+
+    kind = "tank"
+    _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+
+
+class Blower(Unit):
+    """Fan or blower."""
+
+    kind = "blower"
+    _PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
+
+
+class Reducer(Unit):
+    """Concentric pipe reducer/expander."""
+
+    kind = "reducer"
+    _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+
+
+class Nozzle(Unit):
+    """Spray nozzle (single inlet; disperses to the environment)."""
+
+    kind = "nozzle"
+    _PORTS = [("inlet", "inlet", "process")]
 
 
 class HeatExchanger(Unit):
