@@ -12,6 +12,7 @@ from pfd.streams import Stream
 
 if TYPE_CHECKING:
     from pfd.components import Component
+    from pfd.document import TitleBlock
     from pfd.ports import Port
     from pfd.units import Unit
 
@@ -29,6 +30,7 @@ class Flowsheet:
         self.streams: list[Stream] = []
         self.components: list = []
         self.warnings: list = []  # soft validation findings from the last render
+        self.title_block: "TitleBlock | None" = None  # for pid styling
 
     def add(self, unit: "Unit") -> "Unit":
         """Register a unit on this flowsheet. Returns the unit for chaining."""

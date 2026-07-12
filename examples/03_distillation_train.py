@@ -112,6 +112,21 @@ def main():
             "Flow (kg/h)": f"{1000 - i * 10}",
         }
         
+    # --- Title block + revision history (drawn when styling="pid") ---
+    from pfd.document import TitleBlock, Revision
+    fs.title_block = TitleBlock(
+        title="Distillation Train",
+        drawing_number="PFD-1001",
+        project="Aromatics Recovery Unit",
+        sheet="1", of_sheets="3", scale="NTS",
+        drawn_by="A. Anderson", checked_by="J. Smith", approved_by="R. Lee",
+        revisions=[
+            Revision("A", "2026-06-01", "Issued for internal review", "AA"),
+            Revision("0", "2026-07-01", "Issued for design", "AA"),
+            Revision("1", "2026-07-12", "Added FV-200 recycle loop", "AA"),
+        ],
+    )
+
     # --- Render ---
     fs.render("distillation_train.svg", show_stream_table=True, styling="pid")
     print("Generated distillation_train.svg")
