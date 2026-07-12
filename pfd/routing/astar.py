@@ -102,8 +102,11 @@ def find_path(
             bend_cost = BEND_PENALTY
             if is_recycle:
                 bend_cost = BEND_PENALTY / 2.0
-                if current[1] == neighbor[1] and current[1] not in graph.recycle_y:
-                    # Penalize horizontal travel that is not on the recycle lane
+                if (current[1] == neighbor[1] and current[1] not in graph.recycle_y
+                        and current[1] not in (start[1], goal[1])):
+                    # Penalize off-lane horizontal travel, EXCEPT at the stream's own
+                    # port elevations — lets a short recycle run straight at its port
+                    # height instead of dipping down to the lane and back.
                     cost += dist * 10.0
             else:
                 # Recycle lanes are reserved for recycle streams. Forbid forward
