@@ -31,6 +31,16 @@ class Flowsheet:
         self.components: list = []
         self.warnings: list = []  # soft validation findings from the last render
         self.title_block: "TitleBlock | None" = None  # for pid styling
+        # Generic titled boxes (equipment list, notes, legend, tables) docked to
+        # the sheet corners; drawn under pid styling. See pfd.document.
+        self.annotations: list = []
+        # Section headers to inject into the stream table: (before_key, label).
+        self.stream_table_sections: list[tuple[str, str]] = []
+
+    def add_annotation(self, annotation):
+        """Register a sheet-furniture box (Annotation / TableBox). Chainable."""
+        self.annotations.append(annotation)
+        return annotation
 
     def add(self, unit: "Unit") -> "Unit":
         """Register a unit on this flowsheet. Returns the unit for chaining."""

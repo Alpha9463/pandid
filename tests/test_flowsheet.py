@@ -31,7 +31,7 @@ def test_auto_stream_names_increment():
 def test_connect_rejects_wrong_directions():
     fs, feed, pump, prod = _fs()
     with pytest.raises(ValueError, match="must be an outlet"):
-        fs.connect(pump.suction, prod.inlet)   # suction is an inlet
+        fs.connect(pump.suction, prod.inlet)  # suction is an inlet
     with pytest.raises(ValueError, match="must be an inlet"):
         fs.connect(feed.outlet, pump.discharge)  # discharge is an outlet
 
@@ -52,9 +52,9 @@ def test_connect_rejects_unit_not_added():
 
 def test_energy_streams_auto_detected():
     fs = Flowsheet("Test")
-    heater = fs.add(U.Heater("E-1"))   # heater.duty is an inlet energy port
-    cooler = fs.add(U.Cooler("C-1"))   # cooler.duty is an outlet energy port
-    s = fs.connect(cooler.duty, heater.duty)   # both roles == "energy"
+    heater = fs.add(U.Heater("E-1"))  # heater.duty is an inlet energy port
+    cooler = fs.add(U.Cooler("C-1"))  # cooler.duty is an outlet energy port
+    s = fs.connect(cooler.duty, heater.duty)  # both roles == "energy"
     assert s.kind == "energy"
 
 

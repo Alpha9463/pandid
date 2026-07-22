@@ -23,14 +23,14 @@ def test_stream_via_sets_route_waypoints():
     fs = Flowsheet("Test")
     feed = fs.add(U.Feed("F"))
     prod = fs.add(U.Product("P"))
-    
+
     s = fs.connect(feed.outlet, prod.inlet)
     assert s.route is None
-    
+
     # Fluent API check
     returned = s.via([(100, 100), (200, 100)])
     assert returned is s
-    
+
     assert s.route is not None
     assert s.route.manual is True
     assert s.route.waypoints == [(100, 100), (200, 100)]

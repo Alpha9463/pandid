@@ -31,6 +31,7 @@ def test_render_svg_writes_file_and_returns_none(tmp_path):
 def test_render_pdf_without_cairosvg_raises_helpful_error(tmp_path):
     try:
         import cairosvg  # noqa: F401
+
         pytest.skip("cairosvg installed; the ImportError path isn't exercised")
     except ImportError:
         pass
@@ -49,6 +50,7 @@ def test_canvas_fits_content_and_is_not_padded_to_page_size():
     # A two-box diagram must frame tightly, not float in a full A3 sheet
     # (1587x1122). Regression guard for the canvas-fit fix.
     import re
+
     svg = _fs().to_svg()
     m = re.search(r'viewBox="([-\d.]+) ([-\d.]+) ([\d.]+) ([\d.]+)"', svg)
     w, h = float(m.group(3)), float(m.group(4))

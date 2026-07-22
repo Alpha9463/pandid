@@ -20,11 +20,15 @@ def test_layout_idempotent():
     from the previous run's coordinates)."""
     fs = _small_auto()
     fs.layout()
-    first = {u.name: (u.frame.x, u.frame.y, u.frame.w, u.frame.h, u.frame.col, u.frame.row)
-             for u in fs.units}
+    first = {
+        u.name: (u.frame.x, u.frame.y, u.frame.w, u.frame.h, u.frame.col, u.frame.row)
+        for u in fs.units
+    }
     fs.layout()
-    second = {u.name: (u.frame.x, u.frame.y, u.frame.w, u.frame.h, u.frame.col, u.frame.row)
-              for u in fs.units}
+    second = {
+        u.name: (u.frame.x, u.frame.y, u.frame.w, u.frame.h, u.frame.col, u.frame.row)
+        for u in fs.units
+    }
     assert first == second
 
 
@@ -43,6 +47,7 @@ def test_mirror_consistent_and_rendered():
     """The renderer and the router must resolve a mirrored unit's ports to the
     same side, and the drawn stream must start at the mirror-correct port."""
     from pfd.portgeom import port_point, port_anchor
+
     fs = Flowsheet("mirror")
     feed = fs.add(U.Feed("F")).pin(x=0, y=0)
     valve = fs.add(U.Valve("V")).pin(x=200, y=0, mirrored=True)

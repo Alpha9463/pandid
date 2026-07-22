@@ -43,7 +43,10 @@ def resolve_size(unit: "Unit") -> tuple[float, float]:
     sym = _sym(unit)
     h = unit.height if unit.height is not None else sym.height
     if unit.kind in ("feed", "product"):
-        w = unit.width if unit.width is not None else max(80.0, len(unit.name) * 8.0 + 30.0)
+        # Boundary flag: size to the wider of the name or the off-page reference
+        # (drawn as the connector's second line), so neither overflows the flag.
+        text_len = max(len(unit.name), len(getattr(unit, "reference", "") or ""))
+        w = unit.width if unit.width is not None else max(80.0, text_len * 8.0 + 30.0)
     else:
         w = unit.width if unit.width is not None else sym.width
     return w, h
