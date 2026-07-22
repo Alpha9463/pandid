@@ -114,8 +114,7 @@ class SvgRenderer:
 
         lines.extend(self._defs(fs))
         lines.extend(self._draw_units(fs))
-        lines.extend(self._draw_streams(fs, jump_direction, frame_x, frame_y,
-                                        canvas_width, canvas_height))
+        lines.extend(self._draw_streams(fs, jump_direction))
         lines.append('</svg>')
         return "\n".join(lines)
 
@@ -385,7 +384,7 @@ class SvgRenderer:
 
     # ------------------------------------------------------------------ streams
 
-    def _draw_streams(self, fs, jump_direction, frame_x, frame_y, canvas_width, canvas_height):
+    def _draw_streams(self, fs, jump_direction):
         from pfd.portgeom import port_point
 
         stream_geoms, horizontals, verticals = [], [], []
@@ -414,9 +413,10 @@ class SvgRenderer:
 
         lines = ['  <g id="streams">']
         labeled_names: set = set()
+        label_items: list = []   # (tx, ty, name, color) — drawn last, over every line
         _SIGNAL_DASH = {"electric": "7,4", "data": "9,3,2,3", "software": "9,3,2,3",
                         "capillary": "3,3"}
-        for s_idx, (s, points) in enumerate(stream_geoms):
+        for s, points in stream_geoms:
             color = s.color or "black"
             marker_id = f'arrow_{color.replace("#", "").replace(" ", "_")}'
             is_signal = s.kind in _SIGNAL_KINDS
@@ -460,26 +460,17 @@ class SvgRenderer:
                     d_parts.append(f"L {x2},{y2}")
             d_str = " ".join(d_parts)
 
-            draw_label = bool(longest_seg) and not is_signal and s.name not in labeled_names
-            mask_attr = ""
-            if draw_label:
+            # A stream number is labelled once (on its longest segment); a
+            # white halo drawn in a final pass knocks the line out beneath it.
+            if bool(longest_seg) and not is_signal and s.name not in labeled_names:
                 labeled_names.add(s.name)
                 (lx1, ly1), (lx2, ly2) = longest_seg
-                tx, ty = (lx1 + lx2) / 2, (ly1 + ly2) / 2
-                rect_width = len(s.name) * 7.5 + 8
-                rect_height = 16
-                rx, ry = tx - rect_width / 2, ty - rect_height / 2
-                mask_id = f"mask_stream_{s_idx}"
-                lines.append(f'    <mask id="{mask_id}" maskUnits="userSpaceOnUse" x="{frame_x}" y="{frame_y}" width="{canvas_width}" height="{canvas_height}">')
-                lines.append(f'      <rect x="{frame_x}" y="{frame_y}" width="{canvas_width}" height="{canvas_height}" fill="white" />')
-                lines.append(f'      <rect x="{rx}" y="{ry}" width="{rect_width}" height="{rect_height}" fill="black" />')
-                lines.append('    </mask>')
-                mask_attr = f' mask="url(#{mask_id})"'
+                label_items.append(((lx1 + lx2) / 2, (ly1 + ly2) / 2, s.name, color))
 
             marker = "" if is_signal else f' marker-end="url(#{marker_id})"'
             lines.append(
                 f'    <path d="{d_str}" fill="none" '
-                f'stroke="{color}" stroke-width="2"{dash}{marker}{mask_attr} />'
+                f'stroke="{color}" stroke-width="2"{dash}{marker} />'
             )
 
             if s.kind == "pneumatic":
@@ -499,11 +490,16 @@ class SvgRenderer:
                                 lines.append(f'    <line x1="{mx-5:.1f}" y1="{my+off-3:.1f}" '
                                              f'x2="{mx+5:.1f}" y2="{my+off+3:.1f}" stroke="{color}" stroke-width="1.5" />')
 
-            if draw_label:
-                lines.append(
-                    f'    <text x="{tx}" y="{ty}" font-family="sans-serif" font-size="10" '
-                    f'text-anchor="middle" dominant-baseline="middle" '
-                    f'fill="{color}">{html.escape(s.name)}</text>'
-                )
+        # Final pass: stream-number labels, each on a white halo so it reads
+        # cleanly over its own line and any line that crosses beneath it.
+        for tx, ty, name, color in label_items:
+            hw, hh = len(name) * 6.2 + 6, 13.0
+            lines.append(f'    <rect x="{tx - hw / 2:.1f}" y="{ty - hh / 2:.1f}" '
+                         f'width="{hw:.1f}" height="{hh:.1f}" fill="white" />')
+            lines.append(
+                f'    <text x="{tx}" y="{ty}" font-family="sans-serif" font-size="10" '
+                f'text-anchor="middle" dominant-baseline="middle" '
+                f'fill="{color}">{html.escape(name)}</text>'
+            )
         lines.append('  </g>')
         return lines
