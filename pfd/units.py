@@ -10,8 +10,13 @@ This module is also the public ``units`` namespace: ``from pfd import units``.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pfd.geometry import Frame, Pin
 from pfd.ports import Port
+
+if TYPE_CHECKING:
+    from pfd.flowsheet import Flowsheet
 
 __all__ = [
     "Unit",
@@ -40,7 +45,7 @@ class Unit:
         # Off-page reference for boundary flags (Feed/Product): the drawing this
         # stream comes from / goes to, drawn as the connector's second line.
         self.reference = reference
-        self.flowsheet = None
+        self.flowsheet: Flowsheet | None = None
         self.ports: dict[str, Port] = {}
         self.params: dict = {}
         # For inline fittings (valve/reducer): if True, the stream number breaks

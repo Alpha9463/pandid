@@ -31,7 +31,7 @@ def assign_coordinates(fs: "Flowsheet") -> None:
 
     # Compute X start coordinates for each column.
     x_pos: dict[int, float] = {}
-    curr_x = MARGIN_X
+    curr_x: float = MARGIN_X
     for col in sorted(col_widths.keys()):
         x_pos[col] = curr_x
         curr_x += col_widths[col] + 100.0  # 100px routing gap minimum
@@ -47,7 +47,7 @@ def assign_coordinates(fs: "Flowsheet") -> None:
             r = u._slot.row or 0
             row_height[r] = max(row_height[r], u._slot.h)
     row_axis: dict[int, float] = {}
-    cursor = MARGIN_Y
+    cursor: float = MARGIN_Y
     for r in range(max_row + 1):
         row_axis[r] = cursor + row_height[r] / 2.0
         cursor += row_height[r] + ROW_GAP

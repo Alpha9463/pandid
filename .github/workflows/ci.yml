@@ -32,11 +32,8 @@ jobs:
         run: ruff format --check tests
 
   typecheck:
-    # Advisory: the engine has pre-existing type debt in the geometry code, so a
-    # failure here reports without blocking the merge. New modules are kept clean.
-    name: Type check (mypy, advisory)
+    name: Type check (mypy)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
