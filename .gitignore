@@ -29,3 +29,6 @@ skills-lock.json
 
 # local render artifacts
 renders/
+
+# Reference drawings (third-party coursework; kept local, not redistributed)
+professional_examples/

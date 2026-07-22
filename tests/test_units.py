@@ -64,7 +64,11 @@ def test_fixed_port_units_have_expected_ports():
     assert set(U.HeatExchanger("E").ports) == {"hot_in", "hot_out", "cold_in", "cold_out"}
     assert set(U.Separator("V").ports) == {"feed", "vapor", "liquid"}
     assert set(U.Column("T").ports) == {
-        "feed", "distillate", "bottoms", "reboiler_duty", "condenser_duty"
+        "feed",
+        "distillate",
+        "bottoms",
+        "reboiler_duty",
+        "condenser_duty",
     }
 
 

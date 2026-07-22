@@ -24,6 +24,7 @@ def test_port_fields_and_default_stream():
 
 def test_stream_defaults():
     from pfd.streams import Stream
+
     src = Port(name="outlet", owner=None, direction="outlet", role="feed")
     dst = Port(name="inlet", owner=None, direction="inlet", role="feed")
     s = Stream(name="S1", source=src, dest=dst)

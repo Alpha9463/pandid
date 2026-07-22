@@ -15,13 +15,17 @@ dependencies = []
 
 [project.optional-dependencies]
 pdf = ["cairosvg>=2.5"]   # enables PDF/PNG export via fs.render("x.pdf")
-dev = ["pytest>=7"]
+dev = ["pytest>=7", "ruff==0.15.14", "mypy>=1.8"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["pfd"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
 
 [tool.mypy]
 ignore_missing_imports = true

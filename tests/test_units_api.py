@@ -15,8 +15,8 @@ def test_unknown_port_attribute_gives_helpful_error():
     with pytest.raises(AttributeError) as excinfo:
         _ = rx.effluent  # wrong name; the real port is "outlet"
     msg = str(excinfo.value)
-    assert "effluent" in msg          # names what you asked for
-    assert "outlet" in msg            # lists the ports that DO exist
+    assert "effluent" in msg  # names what you asked for
+    assert "outlet" in msg  # lists the ports that DO exist
 
 
 def test_units_namespace_hides_internal_helpers():

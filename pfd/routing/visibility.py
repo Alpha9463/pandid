@@ -99,10 +99,14 @@ class VisibilityGraph:
                 px_proj, py_proj = ax, ay
                 proj_dist = 25.0
                 if u.kind not in ("feed", "product"):
-                    if o_dir == "N" and lpos == "top": proj_dist = 45.0
-                    elif o_dir == "S" and lpos == "bottom": proj_dist = 45.0
-                    elif o_dir == "W" and lpos == "left": proj_dist = 50.0
-                    elif o_dir == "E" and lpos == "right": proj_dist = 50.0
+                    if o_dir == "N" and lpos == "top":
+                        proj_dist = 45.0
+                    elif o_dir == "S" and lpos == "bottom":
+                        proj_dist = 45.0
+                    elif o_dir == "W" and lpos == "left":
+                        proj_dist = 50.0
+                    elif o_dir == "E" and lpos == "right":
+                        proj_dist = 50.0
                 if o_dir == "N":
                     py_proj -= proj_dist
                 elif o_dir == "S":

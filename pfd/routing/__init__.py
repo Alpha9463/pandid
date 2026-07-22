@@ -62,8 +62,8 @@ class DefaultRouter:
 
             # Label-aware projection out of each port (feed/product have no
             # external unit label, so they never widen the escape distance).
-            s_lpos = _label_pos(src_u)
-            d_lpos = _label_pos(dst_u)
+            s_lpos: str | None = _label_pos(src_u)
+            d_lpos: str | None = _label_pos(dst_u)
             if src_u.kind in ("feed", "product") or s_lpos == "center":
                 s_lpos = None
             if dst_u.kind in ("feed", "product") or d_lpos == "center":

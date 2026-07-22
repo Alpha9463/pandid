@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 @dataclass
 class Port:
     name: str
-    owner: Unit | None = field(repr=False)
+    owner: Unit = field(repr=False)  # always set by Unit._add_port(owner=self)
     direction: str  # "inlet" | "outlet"
     role: str
     side: str | None = None

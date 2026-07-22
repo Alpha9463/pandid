@@ -10,8 +10,13 @@ This module is also the public ``units`` namespace: ``from pfd import units``.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pfd.geometry import Frame, Pin
 from pfd.ports import Port
+
+if TYPE_CHECKING:
+    from pfd.flowsheet import Flowsheet
 
 __all__ = [
     "Unit",
@@ -27,7 +32,7 @@ class Unit:
     kind: str = "unit"
     _PORTS: list[tuple[str, str, str]] = []
 
-    def __init__(self, name: str, variant: str = "default", width: float | None = None, height: float | None = None, label_pos: str | None = None):
+    def __init__(self, name: str, variant: str = "default", width: float | None = None, height: float | None = None, label_pos: str | None = None, description: str = "", reference: str = ""):
         if not name:
             raise ValueError("Unit name cannot be empty")
         self.name = name
@@ -35,7 +40,12 @@ class Unit:
         self.width = width
         self.height = height
         self.label_pos = label_pos
-        self.flowsheet = None
+        # Free-text equipment description (used by the auto equipment list).
+        self.description = description
+        # Off-page reference for boundary flags (Feed/Product): the drawing this
+        # stream comes from / goes to, drawn as the connector's second line.
+        self.reference = reference
+        self.flowsheet: Flowsheet | None = None
         self.ports: dict[str, Port] = {}
         self.params: dict = {}
         # For inline fittings (valve/reducer): if True, the stream number breaks
@@ -303,10 +313,10 @@ class Mixer(Unit):
 
     kind = "mixer"
 
-    def __init__(self, name: str, n_inlets: int = 2, variant: str = "default", width: float | None = None, height: float | None = None):
+    def __init__(self, name: str, n_inlets: int = 2, variant: str = "default", width: float | None = None, height: float | None = None, description: str = "", reference: str = ""):
         if n_inlets < 1:
             raise ValueError(f"Mixer requires at least 1 inlet, got {n_inlets}")
-        super().__init__(name, variant=variant, width=width, height=height)
+        super().__init__(name, variant=variant, width=width, height=height, description=description, reference=reference)
         for i in range(1, n_inlets + 1):
             self._add_port(f"in_{i}", "inlet", "process")
         self._add_port("outlet", "outlet", "process")
@@ -317,10 +327,10 @@ class Splitter(Unit):
 
     kind = "splitter"
 
-    def __init__(self, name: str, n_outlets: int = 2, variant: str = "default", width: float | None = None, height: float | None = None):
+    def __init__(self, name: str, n_outlets: int = 2, variant: str = "default", width: float | None = None, height: float | None = None, description: str = "", reference: str = ""):
         if n_outlets < 1:
             raise ValueError(f"Splitter requires at least 1 outlet, got {n_outlets}")
-        super().__init__(name, variant=variant, width=width, height=height)
+        super().__init__(name, variant=variant, width=width, height=height, description=description, reference=reference)
         self._add_port("inlet", "inlet", "process")
         for i in range(1, n_outlets + 1):
             self._add_port(f"out_{i}", "outlet", "process")

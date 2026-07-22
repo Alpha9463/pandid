@@ -21,8 +21,12 @@ routes every stream, and draws industry-standard symbols.
   auto-routes the rest.
 - **Instrumentation (ISA-5.1)** — instrument balloons with tags drawn inside,
   location variants, and typed signal lines (electric / pneumatic / data).
-- **P&ID sheet framing** — title block with a revision-history table, plus an
-  optional stream-property table.
+- **Engineering sheet framing** — a zone-ruled drawing border (ASME-style
+  letter/number grid), a full-width title strip (integrated revision history,
+  company/logo cell, status / drawing-number / two-line title / date / rev),
+  and generic titled boxes docked to the corners (auto **equipment list**,
+  **notes**, **legend**, or any `Annotation` / `TableBox`), plus a sectioned
+  stream-property table. Off-page connectors carry a drawing reference.
 - **Validation** — `fs.validate()` flags overlapping pins, off-sheet
   coordinates (errors) and routes crossing equipment or big detours (warnings).
 - **Zero runtime dependencies** — the package uses only the Python standard
@@ -123,17 +127,55 @@ numbers.
 Inline fittings (valves, reducers) carry the stream number **through** them; set
 `unit.significant = True` to break the number at an important valve.
 
-## P&ID title block
+## Engineering title block & sheet furniture
+
+Under `styling="pid"` the sheet gets a zone-ruled border and a full-width
+engineering title strip. `title`/`subtitle` are the two title lines; `company`
+fills the logo cell and `status` the issue-status cell. Each `Revision` carries
+its own `by`/`checked`/`approved` initials (the block-level
+`drawn_by`/`checked_by`/`approved_by` backfill the newest row).
 
 ```python
 from pfd.document import TitleBlock, Revision
 
 fs.title_block = TitleBlock(
-    title="Distillation Train", drawing_number="PFD-1001",
-    project="Aromatics Recovery Unit", sheet="1", of_sheets="3",
-    drawn_by="A. Anderson", checked_by="J. Smith", approved_by="R. Lee",
-    revisions=[Revision("0", "2026-07-01", "Issued for design", "AA")],
+    title="Aromatics Recovery A100", subtitle="Process Flow Diagram 1",
+    drawing_number="PFD-1001", company="THE UNIVERSITY OF QUEENSLAND",
+    status="ISSUED FOR REVIEW", sheet="1", of_sheets="3",
+    revisions=[
+        Revision("B", "2026-07-01", "Issued for design", "AA", "JS", "RL"),
+        Revision("C", "2026-07-12", "Added recycle loop", "AA", "JS", "RL"),
+    ],
 )
+```
+
+**Generic titled boxes** dock to any sheet corner (`anchor=` one of
+`top-right`/`top-left`/`bottom-right`/`bottom-left`). Equipment lists, notes,
+and legends are all thin wrappers over `Annotation`; `TableBox` is a bordered
+grid for anything else. Add them with `fs.add_annotation(...)`.
+
+```python
+from pfd.document import equipment_list, notes, legend, Annotation, TableBox
+
+fs.add(U.Column("T-101", description="Beer Column"))   # feeds the equipment list
+fs.add_annotation(equipment_list(fs, anchor="top-right"))
+fs.add_annotation(notes(["Sampling point on every product line."]))
+fs.add_annotation(legend({"SS": "Stainless Steel 316L"}, anchor="top-left"))
+fs.add_annotation(Annotation(title="HOLD", rows=["Awaiting vendor data"]))
+```
+
+**Off-page connectors** — a boundary flag's `reference` is drawn as its second
+line (the drawing the stream comes from / goes to):
+
+```python
+fs.add(U.Feed("Fermentation Broth", reference="PFD-201"))
+```
+
+**Stream table** — property rows render in first-seen key order (values carry
+their own units); inject section headers with `stream_table_sections`:
+
+```python
+fs.stream_table_sections = [("Ethanol", "Mass Fraction")]   # header before "Ethanol"
 fs.render("sheet.svg", styling="pid", show_stream_table=True)
 ```
 

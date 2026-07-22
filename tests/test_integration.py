@@ -6,6 +6,7 @@ and verifies the topology layer's contract: units connect through typed ports,
 streams auto-name, energy detection works, and the whole thing serializes to
 a JSON-safe dict.
 """
+
 from pfd import Flowsheet, units as U
 
 
@@ -23,7 +24,7 @@ def build_ammonia_loop():
     fs.connect(reformer.outlet, hx.hot_in)
     fs.connect(hx.hot_out, sep.feed)
     fs.connect(sep.vapor, comp.suction)
-    fs.connect(comp.discharge, hx.cold_in)   # a recycle back-edge
+    fs.connect(comp.discharge, hx.cold_in)  # a recycle back-edge
     fs.connect(sep.liquid, prod.inlet)
     return fs
 
@@ -51,6 +52,7 @@ def test_ammonia_loop_serializes_roundtrip_shape():
 def test_ammonia_loop_json_roundtrip():
     """Adversarial: full e2e JSON serialization of a complex flowsheet."""
     import json
+
     d = build_ammonia_loop().to_dict()
     roundtrip = json.loads(json.dumps(d))
     assert roundtrip == d

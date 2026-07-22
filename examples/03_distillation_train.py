@@ -12,29 +12,30 @@ import pfd.units as U
 def main():
     fs = Flowsheet("Distillation Train")
 
-    # Feed system
-    feed = fs.add(U.Feed("Raw Feed"))
-    mixer = fs.add(U.Mixer("M-100", n_inlets=2))
+    # Feed system. Boundary flags carry an off-page reference (the drawing the
+    # stream comes from / goes to), drawn as the connector's second line.
+    feed = fs.add(U.Feed("Raw Feed", reference="PFD-1000"))
+    mixer = fs.add(U.Mixer("M-100", n_inlets=2, description="Feed Mixer Drum"))
     feed_valve = fs.add(U.Valve("FV-100"))
-    preheater = fs.add(U.HeatExchanger("E-100"))
-    
+    preheater = fs.add(U.HeatExchanger("E-100", description="Feed Preheater"))
+
     # Column 1
-    col1 = fs.add(U.Column("T-100"))
-    c1_ovhd = fs.add(U.HeatExchanger("E-101"))
-    c1_prod = fs.add(U.Product("Light Product"))
-    
+    col1 = fs.add(U.Column("T-100", description="Light Ends Column"))
+    c1_ovhd = fs.add(U.HeatExchanger("E-101", description="T-100 Overhead Condenser"))
+    c1_prod = fs.add(U.Product("Light Product", reference="PFD-1002"))
+
     # Bottoms transfer
-    pump1 = fs.add(U.Pump("P-100A/B"))
-    
+    pump1 = fs.add(U.Pump("P-100A/B", description="T-100 Bottoms Pump"))
+
     # Column 2
-    col2 = fs.add(U.Column("T-200"))
-    c2_ovhd = fs.add(U.HeatExchanger("E-201"))
-    c2_prod = fs.add(U.Product("Med Product"))
-    
+    col2 = fs.add(U.Column("T-200", description="Product Column"))
+    c2_ovhd = fs.add(U.HeatExchanger("E-201", description="T-200 Overhead Condenser"))
+    c2_prod = fs.add(U.Product("Med Product", reference="PFD-1002"))
+
     # Bottoms split and recycle
-    pump2 = fs.add(U.Pump("P-200A/B"))
-    splitter = fs.add(U.Splitter("SP-200", n_outlets=2))
-    c2_bot = fs.add(U.Product("Heavy Product"))
+    pump2 = fs.add(U.Pump("P-200A/B", description="T-200 Bottoms Pump"))
+    splitter = fs.add(U.Splitter("SP-200", n_outlets=2, description="Bottoms Splitter"))
+    c2_bot = fs.add(U.Product("Heavy Product", reference="PFD-1003"))
     recycle_valve = fs.add(U.Valve("FV-200"))
     
     # --- Pinned coordinates (Manual Grid) ---
@@ -104,28 +105,48 @@ def main():
     fs.connect(splitter.out_2, recycle_valve.inlet)
     fs.connect(recycle_valve.outlet, mixer.in_2, tear_hint=True)
     
-    # Add some mock properties to streams to test the stream table
+    # Stream properties. Rows render in first-seen key order; values carry their
+    # own units. A "Mass Fraction" section header is injected before benzene.
     for i, s in enumerate(fs.streams):
         s.properties = {
-            "T (°C)": f"{25 + i * 5}",
-            "P (bar)": f"{1.0 + i * 0.1:.1f}",
-            "Flow (kg/h)": f"{1000 - i * 10}",
+            "Temperature (°C)": f"{25 + i * 5} C",
+            "Pressure (bar)": f"{1.0 + i * 0.1:.1f} bar",
+            "Total Flow (kg/h)": f"{1000 - i * 10}",
+            "Benzene": f"{0.90 - i * 0.02:.2f}",
+            "Toluene": f"{0.10 + i * 0.02:.2f}",
         }
-        
+    fs.stream_table_sections = [("Benzene", "Mass Fraction")]
+
     # --- Title block + revision history (drawn when styling="pid") ---
-    from pfd.document import TitleBlock, Revision
+    from pfd.document import (TitleBlock, Revision, equipment_list, notes, legend)
     fs.title_block = TitleBlock(
-        title="Distillation Train",
+        title="Aromatics Recovery A100",
+        subtitle="Process Flow Diagram 1",
         drawing_number="PFD-1001",
         project="Aromatics Recovery Unit",
+        company="THE UNIVERSITY OF QUEENSLAND",
+        status="ISSUED FOR REVIEW",
         sheet="1", of_sheets="3", scale="NTS",
         drawn_by="A. Anderson", checked_by="J. Smith", approved_by="R. Lee",
         revisions=[
             Revision("A", "2026-06-01", "Issued for internal review", "AA"),
-            Revision("0", "2026-07-01", "Issued for design", "AA"),
-            Revision("1", "2026-07-12", "Added FV-200 recycle loop", "AA"),
+            Revision("B", "2026-07-01", "Issued for design", "AA", "JS", "RL"),
+            Revision("C", "2026-07-12", "Added FV-200 recycle loop", "AA", "JS", "RL"),
         ],
     )
+
+    # --- Sheet furniture: generic titled boxes docked to the corners ---
+    fs.add_annotation(equipment_list(fs, anchor="top-right"))
+    fs.add_annotation(notes([
+        "Sampling point on every product line.",
+        "All instruments field-mounted unless noted.",
+        "Recycle valve FV-200 fails open.",
+    ], anchor="top-right"))
+    fs.add_annotation(legend({
+        "PFD": "Process Flow Diagram",
+        "FV": "Flow Control Valve",
+        "NTS": "Not To Scale",
+    }, anchor="top-left"))
 
     # --- Render ---
     fs.render("distillation_train.svg", show_stream_table=True, styling="pid")

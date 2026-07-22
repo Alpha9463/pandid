@@ -33,6 +33,7 @@ def test_to_dict_captures_topology():
 def test_to_dict_is_json_serializable():
     """Adversarial check: ensure no hidden non-serializable types leak."""
     import json
+
     fs = Flowsheet("JSON-safe")
     feed = fs.add(U.Feed("F"))
     prod = fs.add(U.Product("P"))
