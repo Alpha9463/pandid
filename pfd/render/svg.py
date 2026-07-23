@@ -283,7 +283,13 @@ class SvgRenderer:
             sym_id = f"sym_{kind}" if variant == "default" else f"sym_{kind}_{variant}"
             if svg_str.startswith('<g'):
                 inner = svg_str[svg_str.find('>') + 1:svg_str.rfind('</g>')]
-                svg_str = f'<symbol id="{sym_id}" viewBox="0 0 {sym.width} {sym.height}">{inner}</symbol>'
+                # overflow="visible": a <symbol> viewport defaults to overflow:hidden,
+                # which clips the outer half of any stroke whose geometry sits on the
+                # viewBox edge (e.g. an ellipse with rx == w/2). That makes a circle
+                # render thin at its four cardinal points while the diagonals stay full
+                # weight. Letting the symbol overflow keeps every stroke at uniform width.
+                svg_str = (f'<symbol id="{sym_id}" viewBox="0 0 {sym.width} {sym.height}" '
+                           f'overflow="visible">{inner}</symbol>')
             else:
                 svg_str = re.sub(r'id="[^"]+"', f'id="{sym_id}"', svg_str, count=1)
             lines.append(f'    {svg_str}')
