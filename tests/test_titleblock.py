@@ -85,6 +85,60 @@ def test_furniture_boxes_rendered():
         assert token in svg, token
 
 
+def test_align_nine_point_and_anchor_alias():
+    import pytest
+    from pfd.document import Annotation
+
+    assert Annotation(align="top").align == "top"
+    assert Annotation(align="center").align == "center"
+    # `anchor=` is the deprecated alias for `align=`
+    assert Annotation(anchor="bottom-left").align == "bottom-left"
+    with pytest.raises(ValueError):
+        Annotation(align="middle-ish")
+
+
+def test_annotation_docks_flush_to_frame():
+    import re
+    from pfd.document import Annotation
+
+    fs = Flowsheet("Flush")
+    a = fs.add(U.Feed("F"))
+    b = fs.add(U.Product("P"))
+    fs.connect(a.outlet, b.inlet)
+    fs.add_annotation(Annotation(title="BOX", rows=["row"], align="top-right"))
+    svg = fs.to_svg(styling="pid")
+    # the annotation box (stroke-width 1.5, white fill) ...
+    box = re.search(
+        r'<rect x="([-\d.]+)" y="[-\d.]+" width="([\d.]+)" '
+        r'height="[-\d.]+" fill="white" stroke="black" stroke-width="1.5"/>',
+        svg,
+    )
+    # ... and the inner drawing frame (stroke-width 2, no fill)
+    frame = re.search(
+        r'<rect x="([-\d.]+)" y="[-\d.]+" width="([\d.]+)" '
+        r'height="[-\d.]+" fill="none" stroke="black" stroke-width="2"/>',
+        svg,
+    )
+    assert box and frame, "box and frame rects must both render"
+    box_right = float(box.group(1)) + float(box.group(2))
+    frame_right = float(frame.group(1)) + float(frame.group(2))
+    assert abs(box_right - frame_right) < 0.6  # right edges coincide (flush)
+
+
+def test_annotation_absolute_position():
+    import re
+    from pfd.document import Annotation
+
+    fs = Flowsheet("Placed")
+    a = fs.add(U.Feed("F"))
+    b = fs.add(U.Product("P"))
+    fs.connect(a.outlet, b.inlet)
+    fs.add_annotation(Annotation(title="HOLD", rows=["x"], position=(500, 120)))
+    svg = fs.to_svg(styling="pid")
+    # top-left corner drawn exactly at the requested absolute coordinates
+    assert re.search(r'<rect x="500.0" y="120.0" [^>]*stroke-width="1.5"/>', svg)
+
+
 def test_stream_table_section_header():
     fs = Flowsheet("Tabled")
     feed = fs.add(U.Feed("F"))

@@ -59,51 +59,86 @@ class TitleBlock:
     revisions: list[Revision] = field(default_factory=list)
 
 
-# Corners a box can dock to. Top boxes grow the top band; bottom boxes grow the
-# bottom band; the drawing body sits between them.
-_ANCHORS = {"top-left", "top-right", "bottom-left", "bottom-right"}
+# The nine positions a box can dock to on the sheet *frame* (not the drawing).
+# Corners and edge-centres behave like a 3x3 grid: the box is placed flush
+# against the frame edge(s) its ``align`` names — e.g. ``"top-right"`` puts the
+# box's top-right corner in the frame's top-right corner, ``"top"`` centres it
+# on the top edge. This mirrors how professional sheets pin their furniture.
+_ALIGN = {
+    "top-left", "top", "top-right",
+    "left", "center", "right",
+    "bottom-left", "bottom", "bottom-right",
+}
+_ANCHORS = _ALIGN  # backward-compat alias (older code/tests said "anchor")
+
+
+def _resolve_align(align, anchor, default):
+    """Resolve the effective alignment, honouring the deprecated ``anchor=``."""
+    value = anchor if anchor is not None else align
+    if value is None:
+        value = default
+    if value not in _ALIGN:
+        raise ValueError(f"align must be one of {sorted(_ALIGN)}, got {value!r}")
+    return value
 
 
 @dataclass
 class Annotation:
-    """A generic titled box docked to a sheet corner.
+    """A generic titled box placed on the sheet.
+
+    Placement (see :data:`_ALIGN`):
+
+    * ``align`` docks the box flush to the sheet frame at one of nine positions
+      (corners, edge-centres, or dead centre). This is the usual way.
+    * ``position=(x, y)`` instead pins the box's **top-left corner** at absolute
+      sheet coordinates, ignoring ``align`` — the escape hatch for hand-placed
+      furniture.
+    * ``margin`` insets a docked box from the frame edge (default ``0`` = flush).
 
     ``rows`` entries are either a plain ``str`` (one left-aligned line) or a
     tuple/list of cell strings that align into columns (first column left, the
     rest following at shared column stops) — enough to lay out an equipment
     schedule (``("T-301", "Beer Column")``) or a legend (``("SS", "316L")``)
     without a full table.
+
+    ``anchor`` is a deprecated alias for ``align``.
     """
     title: str = ""
     rows: list = field(default_factory=list)
-    anchor: str = "top-right"
+    align: str = "top-right"
+    position: tuple[float, float] | None = None
+    margin: float = 0.0
     width: float | None = None
     font_size: float = 11.0
+    anchor: str | None = None  # deprecated alias for ``align``
 
     def __post_init__(self):
-        if self.anchor not in _ANCHORS:
-            raise ValueError(
-                f"anchor must be one of {sorted(_ANCHORS)}, got {self.anchor!r}"
-            )
+        self.align = _resolve_align(self.align, self.anchor, "top-right")
+        self.anchor = self.align
 
 
 @dataclass
 class TableBox:
-    """A generic bordered table (title + header row + body rows) docked to a
-    corner. Cells are stringified as-is; ``col_align`` is per-column
-    ``"l"``/``"c"``/``"r"`` (defaults to centered)."""
+    """A generic bordered table (title + header row + body rows) placed on the
+    sheet. Cells are stringified as-is; ``col_align`` is per-column
+    ``"l"``/``"c"``/``"r"`` (defaults to centered).
+
+    Placement (``align`` / ``position`` / ``margin``) works exactly as for
+    :class:`Annotation`; ``anchor`` is a deprecated alias for ``align``.
+    """
     title: str = ""
     headers: list[str] = field(default_factory=list)
     rows: list[list] = field(default_factory=list)
-    anchor: str = "bottom-right"
+    align: str = "bottom-right"
+    position: tuple[float, float] | None = None
+    margin: float = 0.0
     font_size: float = 11.0
     col_align: list[str] | None = None
+    anchor: str | None = None  # deprecated alias for ``align``
 
     def __post_init__(self):
-        if self.anchor not in _ANCHORS:
-            raise ValueError(
-                f"anchor must be one of {sorted(_ANCHORS)}, got {self.anchor!r}"
-            )
+        self.align = _resolve_align(self.align, self.anchor, "bottom-right")
+        self.anchor = self.align
 
 
 # ---------------------------------------------------------------------------
@@ -114,13 +149,15 @@ class TableBox:
 _NON_EQUIPMENT = {"feed", "product", "instrument"}
 
 
-def equipment_list(fs, *, title="EQUIPMENT LIST", anchor="top-right",
-                   include=None, width=None):
+def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right", anchor=None,
+                   position=None, margin=0.0, include=None, width=None):
     """Build an :class:`Annotation` scheduling every real equipment item.
 
     Each row is ``(tag, description)``; the description comes from the unit's
     ``description`` (falling back to a humanized kind). ``include`` optionally
-    restricts to an explicit ordered list of tags.
+    restricts to an explicit ordered list of tags. ``align`` / ``position`` /
+    ``margin`` place the box (see :class:`Annotation`); ``anchor`` is a
+    deprecated alias for ``align``.
     """
     rows = []
     for u in fs.units:
@@ -133,21 +170,26 @@ def equipment_list(fs, *, title="EQUIPMENT LIST", anchor="top-right",
     if include is not None:
         order = {t: i for i, t in enumerate(include)}
         rows.sort(key=lambda r: order.get(r[0], len(order)))
-    return Annotation(title=title, rows=rows, anchor=anchor, width=width)
+    return Annotation(title=title, rows=rows, align=align, anchor=anchor,
+                      position=position, margin=margin, width=width)
 
 
-def notes(items, *, title="NOTES", anchor="top-right", numbered=True, width=None):
+def notes(items, *, title="NOTES", align="top-right", anchor=None, position=None,
+          margin=0.0, numbered=True, width=None):
     """Build a numbered (or bullet) notes :class:`Annotation`."""
     rows = []
     for i, text in enumerate(items, start=1):
         rows.append((f"{i}.", text) if numbered else text)
-    return Annotation(title=title, rows=rows, anchor=anchor, width=width)
+    return Annotation(title=title, rows=rows, align=align, anchor=anchor,
+                      position=position, margin=margin, width=width)
 
 
-def legend(entries, *, title="LEGEND", anchor="top-left", width=None):
+def legend(entries, *, title="LEGEND", align="top-left", anchor=None,
+           position=None, margin=0.0, width=None):
     """Build an abbreviations/legend :class:`Annotation` from ``(abbr, meaning)``
     pairs (a dict is accepted and keeps insertion order)."""
     if isinstance(entries, dict):
         entries = list(entries.items())
     return Annotation(title=title, rows=[tuple(e) for e in entries],
-                      anchor=anchor, width=width)
+                      align=align, anchor=anchor, position=position,
+                      margin=margin, width=width)

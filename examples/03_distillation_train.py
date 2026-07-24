@@ -135,18 +135,18 @@ def main():
         ],
     )
 
-    # --- Sheet furniture: generic titled boxes docked to the corners ---
-    fs.add_annotation(equipment_list(fs, anchor="top-right"))
+    # --- Sheet furniture: generic titled boxes docked flush to the frame ---
+    fs.add_annotation(equipment_list(fs, align="top-right"))
     fs.add_annotation(notes([
         "Sampling point on every product line.",
         "All instruments field-mounted unless noted.",
         "Recycle valve FV-200 fails open.",
-    ], anchor="top-right"))
+    ], align="top-right"))
     fs.add_annotation(legend({
         "PFD": "Process Flow Diagram",
         "FV": "Flow Control Valve",
         "NTS": "Not To Scale",
-    }, anchor="top-left"))
+    }, align="top-left"))
 
     # --- Render ---
     fs.render("distillation_train.svg", show_stream_table=True, styling="pid")

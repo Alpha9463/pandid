@@ -87,7 +87,7 @@ class SvgRenderer:
 
         if pid:
             frame_x, frame_y, canvas_width, canvas_height = self._place_pid(
-                fs, st_layout, dx0, dy0, dx1, dy1, furniture, U, grow)
+                fs, st_layout, dx0, dy0, dx1, dy1, furniture)
         else:
             # Plain sheet: optional stream table docked below the diagram, left.
             if st_layout:
@@ -120,64 +120,143 @@ class SvgRenderer:
 
     # ------------------------------------------------------------------ furniture
 
-    def _place_pid(self, fs, st_layout, dx0, dy0, dx1, dy1, furniture, U, grow):
-        """Dock the title strip, stream table, and annotation boxes to the sheet
-        corners; draw the zone border. Returns the final canvas rect."""
-        from pfd.document import TitleBlock, TableBox
+    def _place_pid(self, fs, st_layout, dx0, dy0, dx1, dy1, furniture):
+        """Dock furniture flush to the sheet *frame* (not the drawing) and draw
+        the zone border.
 
-        GAP, PAD, OUT = 16.0, 14.0, 8.0
+        Boxes are grouped into edge *bands* by ``align``; the frame grows
+        outward from the diagram bounds just enough to hold them, and each box
+        is placed flush against the frame edge its ``align`` names (inset by its
+        ``margin``). A box with an explicit ``position`` is hand-placed instead.
+        Returns the outer canvas rect ``(x, y, w, h)``.
+        """
+        from pfd.document import TitleBlock, TableBox, _ALIGN
 
-        anns = list(getattr(fs, "annotations", []) or [])
-        by_anchor: dict[str, list] = {}
-        for a in anns:
-            size = F.measure_table(a) if isinstance(a, TableBox) else F.measure_annotation(a)
-            by_anchor.setdefault(a.anchor, []).append((a, size[0], size[1]))
+        INNER, GAP, SEP, OUT = 26.0, 14.0, 18.0, 8.0
+
+        def measure(a):
+            return F.measure_table(a) if isinstance(a, TableBox) else F.measure_annotation(a)
 
         def draw_box(a, x, y):
-            if isinstance(a, TableBox):
-                furniture.extend(F.draw_table(a, x, y))
-            else:
-                furniture.extend(F.draw_annotation(a, x, y))
+            furniture.extend(F.draw_table(a, x, y) if isinstance(a, TableBox)
+                             else F.draw_annotation(a, x, y))
 
-        # --- top band: stacks grow upward from just above the diagram ---
-        for anchor, right in (("top-right", dx1), ("top-left", None)):
-            y = dy0 - GAP
-            for a, w, h in by_anchor.get(anchor, []):
-                x = (right - w) if right is not None else dx0
-                draw_box(a, x, y - h)
-                grow(x, y - h, x + w, y)
-                y -= h + GAP
-
-        # --- bottom band: annotations, then title strip (right) / table (left) ---
+        # Title strip + stream table are mandatory bottom furniture. Represent
+        # them as sentinel "boxes" at the foot of the bottom-right / bottom-left
+        # columns so the band maths sizes the frame around them too.
         tb = fs.title_block or TitleBlock()
         ts_w, ts_h = F.measure_title_strip(tb)
         date = tb.date or datetime.now().strftime("%Y-%m-%d")
         name = tb.title or fs.name
+        TITLE, STREAM = "\x00title", "\x00stream"
 
-        # right column top→bottom: bottom-right boxes, then title strip
-        y = dy1 + GAP
-        for a, w, h in by_anchor.get("bottom-right", []):
-            x = dx1 - w
-            draw_box(a, x, y)
-            grow(x, y, x + w, y + h)
-            y += h + GAP
-        furniture.extend(F.draw_title_strip(tb, name, date, dx1, y + ts_h))
-        grow(dx1 - ts_w, y, dx1, y + ts_h)
-
-        # left column top→bottom: bottom-left boxes, then stream table
-        y = dy1 + GAP
-        for a, w, h in by_anchor.get("bottom-left", []):
-            draw_box(a, dx0, y)
-            grow(dx0, y, dx0 + w, y + h)
-            y += h + GAP
+        cols: dict[str, list] = {k: [] for k in _ALIGN}
+        positioned: list = []
+        for a in getattr(fs, "annotations", []) or []:
+            w, h = measure(a)
+            if a.position is not None:
+                positioned.append((a, a.position[0], a.position[1], w, h))
+            else:
+                cols[a.align].append((a, w, h))
+        cols["bottom-right"].append((TITLE, ts_w, ts_h))
         if st_layout:
-            furniture.extend(self._draw_stream_table(st_layout, dx0, y))
-            grow(dx0, y, dx0 + st_layout["w"], y + st_layout["h"])
+            cols["bottom-left"].append((STREAM, st_layout["w"], st_layout["h"]))
 
-        # --- zone-ruled border around the grown union, then the sheet edge ---
-        inner_x, inner_y = U[0] - PAD, U[1] - PAD
-        inner_w, inner_h = (U[2] - U[0]) + 2 * PAD, (U[3] - U[1]) + 2 * PAD
-        frame_lines, (ox, oy, ow, oh) = F.zone_frame(inner_x, inner_y, inner_w, inner_h)
+        def stack_h(items):
+            return sum(h for _, _, h in items) + GAP * max(0, len(items) - 1)
+
+        def stack_w(items):
+            return max((w for _, w, _ in items), default=0.0)
+
+        # --- band thicknesses -------------------------------------------------
+        top_h = max(stack_h(cols["top-left"]), stack_h(cols["top"]),
+                    stack_h(cols["top-right"]))
+        bottom_h = max(stack_h(cols["bottom-left"]), stack_h(cols["bottom"]),
+                       stack_h(cols["bottom-right"]))
+        left_w, right_w = stack_w(cols["left"]), stack_w(cols["right"])
+
+        # --- frame rectangle, grown outward from the diagram bounds -----------
+        ix = dx0 - INNER - left_w
+        iy = dy0 - INNER - top_h
+        ixr = dx1 + INNER + right_w
+        iyb = dy1 + INNER + bottom_h
+
+        def row_w(lk, ck, rk):
+            lw, cw, rw = stack_w(cols[lk]), stack_w(cols[ck]), stack_w(cols[rk])
+            side = (lw + SEP + rw) if (lw and rw) else max(lw, rw)
+            return max(side, cw)
+
+        extra = max(row_w("top-left", "top", "top-right"),
+                    row_w("bottom-left", "bottom", "bottom-right")) - (ixr - ix)
+        if extra > 0:  # a wide band forces the frame wider than the drawing
+            ix -= extra / 2      # widen symmetrically → drawing stays centred
+            ixr += extra / 2
+        extra = max(stack_h(cols["left"]), stack_h(cols["right"])) - (iyb - iy)
+        if extra > 0:
+            iy -= extra / 2
+            iyb += extra / 2
+        iw, ih = ixr - ix, iyb - iy
+
+        # --- place each column flush to the frame -----------------------------
+        def x_for(mode, w, m):
+            if mode == "l":
+                return ix + m
+            if mode == "r":
+                return ixr - m - w
+            return ix + (iw - w) / 2  # centred on the frame
+
+        def place(obj, x, y, w, h):
+            if obj is TITLE:
+                furniture.extend(F.draw_title_strip(tb, name, date, x + w, y + h))
+            elif obj is STREAM:
+                furniture.extend(self._draw_stream_table(st_layout, x, y))
+            else:
+                draw_box(obj, x, y)
+
+        def draw_top(items, mode):     # flush to the top edge, grow downward
+            y = iy
+            for obj, w, h in items:
+                m = getattr(obj, "margin", 0.0)
+                place(obj, x_for(mode, w, m), y + m, w, h)
+                y += m + h + GAP
+
+        def draw_bottom(items, mode):  # flush to the bottom edge, grow upward
+            y = iyb
+            for obj, w, h in reversed(items):
+                m = getattr(obj, "margin", 0.0)
+                top = y - m - h
+                place(obj, x_for(mode, w, m), top, w, h)
+                y = top - GAP
+
+        def draw_side(items, mode):    # flush to a side edge, vertically centred
+            y = (iy + iyb) / 2 - stack_h(items) / 2
+            for obj, w, h in items:
+                m = getattr(obj, "margin", 0.0)
+                place(obj, x_for(mode, w, m), y, w, h)
+                y += h + GAP
+
+        draw_top(cols["top-left"], "l")
+        draw_top(cols["top"], "c")
+        draw_top(cols["top-right"], "r")
+        draw_bottom(cols["bottom-left"], "l")
+        draw_bottom(cols["bottom"], "c")
+        draw_bottom(cols["bottom-right"], "r")
+        draw_side(cols["left"], "l")
+        draw_side(cols["right"], "r")
+        cy = (iy + iyb) / 2 - stack_h(cols["center"]) / 2  # dead-centre overlay
+        for obj, w, h in cols["center"]:
+            place(obj, ix + (iw - w) / 2, cy, w, h)
+            cy += h + GAP
+
+        # --- hand-placed boxes; expand the frame to keep them inside ----------
+        for a, px, py, w, h in positioned:
+            draw_box(a, px, py)
+            ix, iy = min(ix, px - INNER), min(iy, py - INNER)
+            ixr, iyb = max(ixr, px + w + INNER), max(iyb, py + h + INNER)
+        iw, ih = ixr - ix, iyb - iy
+
+        # --- zone-ruled border around the frame, then the sheet edge ----------
+        frame_lines, (ox, oy, ow, oh) = F.zone_frame(ix, iy, iw, ih)
         furniture[:0] = frame_lines  # border sits behind the boxes
         return ox - OUT, oy - OUT, ow + 2 * OUT, oh + 2 * OUT
 
