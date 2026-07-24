@@ -149,20 +149,27 @@ fs.title_block = TitleBlock(
 )
 ```
 
-**Generic titled boxes** dock to any sheet corner (`anchor=` one of
-`top-right`/`top-left`/`bottom-right`/`bottom-left`). Equipment lists, notes,
-and legends are all thin wrappers over `Annotation`; `TableBox` is a bordered
-grid for anything else. Add them with `fs.add_annotation(...)`.
+**Generic titled boxes** dock **flush to the sheet frame** — like a real
+drawing, not floating in the whitespace. `align=` is a nine-point grid
+(`top-left`/`top`/`top-right`/`left`/`center`/`right`/`bottom-left`/`bottom`/
+`bottom-right`); the box's matching corner/edge is pinned to the frame's, inset
+by an optional `margin=`. For hand-placed furniture, `position=(x, y)` pins the
+box's **top-left corner** at absolute sheet coordinates instead. Equipment
+lists, notes, and legends are thin wrappers over `Annotation`; `TableBox` is a
+bordered grid for anything else. Add them with `fs.add_annotation(...)`.
 
 ```python
 from pfd.document import equipment_list, notes, legend, Annotation, TableBox
 
 fs.add(U.Column("T-101", description="Beer Column"))   # feeds the equipment list
-fs.add_annotation(equipment_list(fs, anchor="top-right"))
-fs.add_annotation(notes(["Sampling point on every product line."]))
-fs.add_annotation(legend({"SS": "Stainless Steel 316L"}, anchor="top-left"))
-fs.add_annotation(Annotation(title="HOLD", rows=["Awaiting vendor data"]))
+fs.add_annotation(equipment_list(fs, align="top-right"))
+fs.add_annotation(notes(["Sampling point on every product line."], align="top"))
+fs.add_annotation(legend({"SS": "Stainless Steel 316L"}, align="top-left"))
+fs.add_annotation(Annotation(title="HOLD", rows=["Awaiting vendor data"],
+                             position=(1200, 90)))          # absolute placement
 ```
+
+(`anchor=` is still accepted as a deprecated alias for `align=`.)
 
 **Off-page connectors** — a boundary flag's `reference` is drawn as its second
 line (the drawing the stream comes from / goes to):
