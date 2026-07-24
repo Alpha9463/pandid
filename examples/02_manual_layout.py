@@ -13,22 +13,21 @@ inlet sit at y+25; the heat-exchanger cold side sits at y+30. So a Feed/Product
 pinned 5px *above* an exchanger lines the stream up perfectly.
 """
 
-from pfd.flowsheet import Flowsheet
-import pfd.units as U
+from pfd import Flowsheet, units
 
 
 def main():
     fs = Flowsheet("Manual Override Example")
 
     # Top train — pinned so every port is on the same line: straight runs.
-    f1 = fs.add(U.Feed("F-1")).pin(x=60, y=105)
-    e1 = fs.add(U.HeatExchanger("E-1")).pin(x=210, y=100)
-    p1 = fs.add(U.Product("P-1")).pin(x=430, y=105)
+    f1 = fs.add(units.Feed("F-1")).pin(x=60, y=105)
+    e1 = fs.add(units.HeatExchanger("E-1")).pin(x=210, y=100)
+    p1 = fs.add(units.Product("P-1")).pin(x=430, y=105)
 
     # Bottom train — same idea, 200px lower.
-    f2 = fs.add(U.Feed("F-2")).pin(x=60, y=305)
-    e2 = fs.add(U.HeatExchanger("E-2")).pin(x=210, y=300)
-    p2 = fs.add(U.Product("P-2")).pin(x=430, y=305)
+    f2 = fs.add(units.Feed("F-2")).pin(x=60, y=305)
+    e2 = fs.add(units.HeatExchanger("E-2")).pin(x=210, y=300)
+    p2 = fs.add(units.Product("P-2")).pin(x=430, y=305)
 
     # These auto-route into clean straight lines because the pins are aligned.
     fs.connect(f1.outlet, e1.cold_in)
