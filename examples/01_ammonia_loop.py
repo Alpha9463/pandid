@@ -1,13 +1,13 @@
-from pfd import Flowsheet, units as U
+from pfd import Flowsheet, units
 
 fs = Flowsheet("Ammonia Loop Auto")
-feed = fs.add(U.Feed("Natural Gas"))
-mix = fs.add(U.Mixer("M-101"))
-reformer = fs.add(U.Reactor("R-101"))
-hx = fs.add(U.HeatExchanger("E-101"))
-sep = fs.add(U.Separator("V-101"))
-comp = fs.add(U.Compressor("K-101"))
-prod = fs.add(U.Product("Ammonia"))
+feed = fs.add(units.Feed("Natural Gas"))
+mix = fs.add(units.Mixer("M-101"))
+reformer = fs.add(units.Reactor("R-101"))
+hx = fs.add(units.HeatExchanger("E-101"))
+sep = fs.add(units.Separator("V-101"))
+comp = fs.add(units.Compressor("K-101"))
+prod = fs.add(units.Product("Ammonia"))
 
 # Connect
 fs.connect(feed.outlet, mix.in_2)

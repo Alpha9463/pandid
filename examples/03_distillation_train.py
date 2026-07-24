@@ -6,37 +6,36 @@ across a complex flowsheet with tall equipment (columns), multiple
 outlets, and recycled loops.  Uses ISO 10628-2 compliant symbols.
 """
 
-from pfd.flowsheet import Flowsheet
-import pfd.units as U
+from pfd import Flowsheet, units
 
 def main():
     fs = Flowsheet("Distillation Train")
 
     # Feed system. Boundary flags carry an off-page reference (the drawing the
     # stream comes from / goes to), drawn as the connector's second line.
-    feed = fs.add(U.Feed("Raw Feed", reference="PFD-1000"))
-    mixer = fs.add(U.Mixer("M-100", n_inlets=2, description="Feed Mixer Drum"))
-    feed_valve = fs.add(U.Valve("FV-100"))
-    preheater = fs.add(U.HeatExchanger("E-100", description="Feed Preheater"))
+    feed = fs.add(units.Feed("Raw Feed", reference="PFD-1000"))
+    mixer = fs.add(units.Mixer("M-100", n_inlets=2, description="Feed Mixer Drum"))
+    feed_valve = fs.add(units.Valve("FV-100"))
+    preheater = fs.add(units.HeatExchanger("E-100", description="Feed Preheater"))
 
     # Column 1
-    col1 = fs.add(U.Column("T-100", description="Light Ends Column"))
-    c1_ovhd = fs.add(U.HeatExchanger("E-101", description="T-100 Overhead Condenser"))
-    c1_prod = fs.add(U.Product("Light Product", reference="PFD-1002"))
+    col1 = fs.add(units.Column("T-100", description="Light Ends Column"))
+    c1_ovhd = fs.add(units.HeatExchanger("E-101", description="T-100 Overhead Condenser"))
+    c1_prod = fs.add(units.Product("Light Product", reference="PFD-1002"))
 
     # Bottoms transfer
-    pump1 = fs.add(U.Pump("P-100A/B", description="T-100 Bottoms Pump"))
+    pump1 = fs.add(units.Pump("P-100A/B", description="T-100 Bottoms Pump"))
 
     # Column 2
-    col2 = fs.add(U.Column("T-200", description="Product Column"))
-    c2_ovhd = fs.add(U.HeatExchanger("E-201", description="T-200 Overhead Condenser"))
-    c2_prod = fs.add(U.Product("Med Product", reference="PFD-1002"))
+    col2 = fs.add(units.Column("T-200", description="Product Column"))
+    c2_ovhd = fs.add(units.HeatExchanger("E-201", description="T-200 Overhead Condenser"))
+    c2_prod = fs.add(units.Product("Med Product", reference="PFD-1002"))
 
     # Bottoms split and recycle
-    pump2 = fs.add(U.Pump("P-200A/B", description="T-200 Bottoms Pump"))
-    splitter = fs.add(U.Splitter("SP-200", n_outlets=2, description="Bottoms Splitter"))
-    c2_bot = fs.add(U.Product("Heavy Product", reference="PFD-1003"))
-    recycle_valve = fs.add(U.Valve("FV-200"))
+    pump2 = fs.add(units.Pump("P-200A/B", description="T-200 Bottoms Pump"))
+    splitter = fs.add(units.Splitter("SP-200", n_outlets=2, description="Bottoms Splitter"))
+    c2_bot = fs.add(units.Product("Heavy Product", reference="PFD-1003"))
+    recycle_valve = fs.add(units.Valve("FV-200"))
     
     # --- Pinned coordinates (Manual Grid) ---
     col_y = 420

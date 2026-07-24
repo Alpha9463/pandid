@@ -47,17 +47,17 @@ Tests run with `pytest`.
 ## Quick start
 
 ```python
-from pfd import Flowsheet, units as U
+from pfd import Flowsheet, units
 
 fs = Flowsheet("Ammonia Loop")
 
-feed     = fs.add(U.Feed("Natural Gas"))
-mixer    = fs.add(U.Mixer("M-101"))
-reformer = fs.add(U.Reactor("R-101"))
-hx       = fs.add(U.HeatExchanger("E-101"))
-sep      = fs.add(U.Separator("V-101"))
-comp     = fs.add(U.Compressor("K-101"))
-prod     = fs.add(U.Product("Ammonia"))
+feed     = fs.add(units.Feed("Natural Gas"))
+mixer    = fs.add(units.Mixer("M-101"))
+reformer = fs.add(units.Reactor("R-101"))
+hx       = fs.add(units.HeatExchanger("E-101"))
+sep      = fs.add(units.Separator("V-101"))
+comp     = fs.add(units.Compressor("K-101"))
+prod     = fs.add(units.Product("Ammonia"))
 
 fs.connect(feed.outlet,     mixer.in_1)
 fs.connect(mixer.outlet,    reformer.feed)
@@ -80,11 +80,11 @@ A **class** is a functional equipment type (defined by its ports); a **variant**
 is a visual style within it. Pick a variant with the `variant=` argument:
 
 ```python
-fs.add(U.HeatExchanger("E-1", variant="plate"))   # or shell_tube, kettle, u_tube, condenser
-fs.add(U.Valve("FV-1", variant="control"))         # gate, globe, ball, butterfly, check, needle, three_way, relief
-fs.add(U.Pump("P-1", variant="gear"))              # centrifugal, gear, screw, vacuum
-fs.add(U.Tank("TK-1", variant="floating_roof"))    # dished, conical, floating_roof, sphere
-fs.add(U.Separator("V-2", variant="cyclone"))      # knock-out, cyclone, gravity
+fs.add(units.HeatExchanger("E-1", variant="plate"))   # or shell_tube, kettle, u_tube, condenser
+fs.add(units.Valve("FV-1", variant="control"))         # gate, globe, ball, butterfly, check, needle, three_way, relief
+fs.add(units.Pump("P-1", variant="gear"))              # centrifugal, gear, screw, vacuum
+fs.add(units.Tank("TK-1", variant="floating_roof"))    # dished, conical, floating_roof, sphere
+fs.add(units.Separator("V-2", variant="cyclone"))      # knock-out, cyclone, gravity
 ```
 
 Classes include: `Feed`, `Product`, `Pump`, `Compressor`, `Blower`, `Valve`,
@@ -96,9 +96,9 @@ Classes include: `Feed`, `Product`, `Pump`, `Compressor`, `Blower`, `Valve`,
 
 ```python
 # Pin equipment to exact SVG coordinates (top-left corner):
-hx = fs.add(U.HeatExchanger("E-1")).pin(x=100, y=50)
+hx = fs.add(units.HeatExchanger("E-1")).pin(x=100, y=50)
 # ...or to a grid cell, mirrored:
-fv = fs.add(U.Valve("FV-1")).pin(col=2, row=1, mirrored=True)
+fv = fs.add(units.Valve("FV-1")).pin(col=2, row=1, mirrored=True)
 
 # Force a stream through explicit orthogonal waypoints:
 fs.connect(feed.outlet, hx.cold_in).via([(130, 65), (130, 110)])
@@ -110,9 +110,9 @@ from your intent and auto-routes anything you didn't pin.
 ## Instrumentation & signals
 
 ```python
-ft  = fs.add(U.Instrument("FT-101"))                       # field flow transmitter
-fic = fs.add(U.Instrument("FIC-101", variant="panel"))     # panel-mounted controller
-fy  = fs.add(U.Instrument("FY-101", variant="computer"))   # computing relay
+ft  = fs.add(units.Instrument("FT-101"))                       # field flow transmitter
+fic = fs.add(units.Instrument("FIC-101", variant="panel"))     # panel-mounted controller
+fy  = fs.add(units.Instrument("FY-101", variant="computer"))   # computing relay
 # variants: field (default), panel, aux, shared (DCS square), computer (hexagon)
 
 fs.connect(ft.sig_out, fic.sig_in, kind="electric")        # dashed
@@ -161,7 +161,7 @@ bordered grid for anything else. Add them with `fs.add_annotation(...)`.
 ```python
 from pfd.document import equipment_list, notes, legend, Annotation, TableBox
 
-fs.add(U.Column("T-101", description="Beer Column"))   # feeds the equipment list
+fs.add(units.Column("T-101", description="Beer Column"))   # feeds the equipment list
 fs.add_annotation(equipment_list(fs, align="top-right"))
 fs.add_annotation(notes(["Sampling point on every product line."], align="top"))
 fs.add_annotation(legend({"SS": "Stainless Steel 316L"}, align="top-left"))
@@ -175,7 +175,7 @@ fs.add_annotation(Annotation(title="HOLD", rows=["Awaiting vendor data"],
 line (the drawing the stream comes from / goes to):
 
 ```python
-fs.add(U.Feed("Fermentation Broth", reference="PFD-201"))
+fs.add(units.Feed("Fermentation Broth", reference="PFD-201"))
 ```
 
 **Stream table** — property rows render in first-seen key order (values carry

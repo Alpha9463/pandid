@@ -13,25 +13,24 @@ Demonstrates the instrumentation subsystem:
 - A control valve (``Valve`` variant ``"control"``) on the process line.
 """
 
-from pfd.flowsheet import Flowsheet
-import pfd.units as U
+from pfd import Flowsheet, units
 
 
 def main():
     fs = Flowsheet("Flow Control Loop")
 
     # Process line with a control valve.
-    feed = fs.add(U.Feed("Feed"))
-    fv = fs.add(U.Valve("FV-101", variant="control"))
-    prod = fs.add(U.Product("Product"))
+    feed = fs.add(units.Feed("Feed"))
+    fv = fs.add(units.Valve("FV-101", variant="control"))
+    prod = fs.add(units.Product("Product"))
     fs.connect(feed.outlet, fv.inlet)
     fs.connect(fv.outlet, prod.inlet)
 
     # Instrument loop: transmitter -> controller -> computing relay -> recorder.
-    ft = fs.add(U.Instrument("FT-101"))                    # field flow transmitter
-    fic = fs.add(U.Instrument("FIC-101", variant="panel")) # panel-mounted controller
-    fy = fs.add(U.Instrument("FY-101", variant="computer")) # computing relay
-    fr = fs.add(U.Instrument("FR-101", variant="shared"))   # shared/DCS recorder
+    ft = fs.add(units.Instrument("FT-101"))                    # field flow transmitter
+    fic = fs.add(units.Instrument("FIC-101", variant="panel")) # panel-mounted controller
+    fy = fs.add(units.Instrument("FY-101", variant="computer")) # computing relay
+    fr = fs.add(units.Instrument("FR-101", variant="shared"))   # shared/DCS recorder
 
     fs.connect(ft.sig_out, fic.sig_in, kind="electric")    # 4-20 mA, dashed
     fs.connect(fic.sig_out, fy.sig_in, kind="pneumatic")   # 3-15 psi, slash ticks
