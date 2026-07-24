@@ -62,56 +62,66 @@ def assign_coordinates(fs: "Flowsheet") -> None:
             s.y = row_axis[s.row or 0] - s.h / 2.0
             unpinned_y.add(u)
 
-    # Post-pass: align single-stream terminals (Feed/Product) with their target
-    # so the connecting stream is a clean L rather than a Z.
-    for u in unpinned_y:
+    # Post-pass: straighten the process spine. Walk units left-to-right and,
+    # where a unit has a single horizontal process connection to a neighbour in
+    # another column, shift it vertically so the two ports share an absolute
+    # height — turning staircase jogs into straight runs (and clean L's for
+    # single-stream Feed/Product terminals). Anything that would overlap a
+    # neighbour in the same column is left on the row axis.
+    def _sym_of(unit):
+        return default_registry.get(unit.kind, getattr(unit, "variant", "default"))
+
+    def _target_y(other_u, other_port):
+        """Absolute Y to aim a straight run at, honouring N/S escape lanes."""
+        sym = _sym_of(other_u)
+        opx, opy = sym.ports.get(other_port.name, (sym.width / 2, sym.height / 2))
+        d = outward_dir(opx, opy, sym.width, sym.height, other_u.kind, other_port.name)
+        if d == "N":
+            return other_u._slot.y - 15.0
+        if d == "S":
+            return other_u._slot.y + sym.height + 15.0
+        return other_u._slot.y + opy
+
+    def _overlaps(u, s, new_y):
+        for other in fs.units:
+            if other is u or other._slot is None or other._slot.col != s.col:
+                continue
+            oy, oh = other._slot.y, other._slot.h
+            if oy is not None and not (new_y + s.h <= oy or new_y >= oy + oh):
+                return True
+        return False
+
+    for u in sorted(unpinned_y, key=lambda v: (v._slot.col or 0, v._slot.y)):
         s = u._slot
-        connected = [st for st in fs.streams if st.source.owner is u or st.dest.owner is u]
-        if len(connected) != 1:
+        ups: list = []
+        downs: list = []
+        for st in fs.streams:
+            if st.is_recycle or st.kind != "material":
+                continue
+            if st.dest.owner is u and st.source.owner is not None:
+                pair = (st.dest, st.source.owner, st.source)
+            elif st.source.owner is u and st.dest.owner is not None:
+                pair = (st.source, st.dest.owner, st.dest)
+            else:
+                continue
+            bucket = ups if (pair[1]._slot.col or 0) < (s.col or 0) else downs
+            bucket.append(pair)
+        # A single upstream anchor chains the spine; fall back to a single
+        # downstream one so terminals (Feed) still align.
+        anchor = ups[0] if len(ups) == 1 else (downs[0] if not ups and len(downs) == 1 else None)
+        if anchor is None:
             continue
-
-        st = connected[0]
-        if st.source.owner is u:
-            my_port, other_port = st.source, st.dest
-        else:
-            my_port, other_port = st.dest, st.source
-
-        other_u = other_port.owner
-        assert other_u is not None and other_u._slot is not None
-
-        sym_u = default_registry.get(u.kind)
-        sym_other = default_registry.get(other_u.kind)
-
-        my_py = sym_u.ports.get(my_port.name, (0, 0))[1]
-        other_px, other_py = sym_other.ports.get(other_port.name, (0, 0))
-        out_dir = outward_dir(other_px, other_py, sym_other.width, sym_other.height,
-                              other_u.kind, other_port.name)
-
-        # Target absolute Y of the other port; if it faces N/S the stream escapes
-        # via the margin lane, so align to that lane instead of the raw port.
-        target_abs_y = other_u._slot.y + other_py
-        if out_dir == "N":
-            target_abs_y = other_u._slot.y - 15.0
-        elif out_dir == "S":
-            target_abs_y = other_u._slot.y + sym_other.height + 15.0
-
-        new_y = target_abs_y - my_py
-
-        # Don't overlap another unit in the same column.
-        overlap = False
-        for other_unit in fs.units:
-            if other_unit is u or other_unit._slot is None:
-                continue
-            if other_unit._slot.col != s.col:
-                continue
-            oy, oh = other_unit._slot.y, other_unit._slot.h
-            if oy is None:
-                continue
-            if not (new_y + s.h <= oy or new_y >= oy + oh):
-                overlap = True
-                break
-
-        if not overlap:
+        my_port, other_u, other_port = anchor
+        if other_u._slot is None or other_u._slot.y is None:
+            continue
+        # Only straighten horizontal runs: our port must face the neighbour
+        # sideways (E/W); vertical ports keep the row axis.
+        msym = _sym_of(u)
+        mpx, mpy = msym.ports.get(my_port.name, (msym.width / 2, msym.height / 2))
+        if outward_dir(mpx, mpy, msym.width, msym.height, u.kind, my_port.name) not in ("E", "W"):
+            continue
+        new_y = _target_y(other_u, other_port) - mpy
+        if not _overlaps(u, s, new_y):
             s.y = new_y
 
     # Emit the resolved frame for every unit.
