@@ -1,7 +1,6 @@
 """Post-processing pass to separate overlapping parallel segments."""
 
 from typing import TYPE_CHECKING
-from collections import defaultdict
 
 if TYPE_CHECKING:
     from pfd.flowsheet import Flowsheet
@@ -77,49 +76,84 @@ def separate_streams(fs: "Flowsheet", spacing: float = 6.0) -> None:
         for comp in components:
             if len(comp) <= 1:
                 continue
-                
+
             streams_in_comp = []
             for seg in comp:
                 if seg["stream"] not in streams_in_comp:
                     streams_in_comp.append(seg["stream"])
-                    
-            fixed_streams = set()
-            for seg in comp:
-                if seg["is_fixed"]:
-                    fixed_streams.add(seg["stream"])
-                    
-            non_fixed_streams = [s for s in streams_in_comp if s not in fixed_streams]
-            assigned_offsets = {fs_name: 0.0 for fs_name in fixed_streams}
-                
-            current_offset_idx = 1
-            if not fixed_streams:
-                if non_fixed_streams:
-                    assigned_offsets[non_fixed_streams[0]] = 0.0
-                    non_fixed_streams = non_fixed_streams[1:]
-            
-            for s_name in non_fixed_streams:
-                if current_offset_idx > 0:
-                    assigned_offsets[s_name] = current_offset_idx * spacing
-                    current_offset_idx = -current_offset_idx
-                else:
-                    assigned_offsets[s_name] = current_offset_idx * spacing
-                    current_offset_idx = -current_offset_idx + 1
-                    
-            for seg in comp:
-                offsets_dict[(seg["stream"], seg["seg_idx"])] = assigned_offsets[seg["stream"]]
+            if len(streams_in_comp) <= 1:
+                continue  # one stream's own segments — nothing to separate
 
-    # 2. Group by track and resolve
-    h_by_track = defaultdict(list)
-    for seg in h_segs:
-        h_by_track[seg["track"]].append(seg)
-    for track, segs in h_by_track.items():
-        resolve_track(segs, h_offsets)
-        
-    v_by_track = defaultdict(list)
-    for seg in v_segs:
-        v_by_track[seg["track"]].append(seg)
-    for track, segs in v_by_track.items():
-        resolve_track(segs, v_offsets)
+            # Resolve to absolute *target tracks*, not per-segment deltas: the
+            # segments in a component start on slightly different tracks, so
+            # nudging each by its own delta can land two of them closer together
+            # than they began. Segments attached to a port ("fixed") must stay
+            # put — they hold the line on its nozzle — so they claim their track
+            # and everyone else takes the nearest free slot on a spacing grid.
+            fixed_track: dict = {}
+            for seg in comp:
+                if seg["is_fixed"] and seg["stream"] not in fixed_track:
+                    fixed_track[seg["stream"]] = seg["track"]
+
+            if fixed_track:
+                base = sum(fixed_track.values()) / len(fixed_track)
+            else:
+                base = sum(s["track"] for s in comp) / len(comp)
+
+            targets = dict(fixed_track)
+            occupied = list(fixed_track.values())
+            for st in streams_in_comp:
+                if st in targets:
+                    continue
+                k = 0
+                while True:
+                    for cand in ((base,) if k == 0 else (base + k * spacing, base - k * spacing)):
+                        if all(abs(cand - o) >= spacing - 0.5 for o in occupied):
+                            targets[st] = cand
+                            occupied.append(cand)
+                            break
+                    if st in targets:
+                        break
+                    k += 1
+
+            for seg in comp:
+                offsets_dict[(seg["stream"], seg["seg_idx"])] = (
+                    targets[seg["stream"]] - seg["track"])
+
+    # 2. Group by track and resolve.
+    #
+    # Tracks are clustered by proximity, not exact equality: two parallel runs a
+    # couple of pixels apart are visually one doubled line (2px strokes), but an
+    # exact-match bucket would file them separately and never separate them.
+    # Single-linkage on the sorted tracks (compare against the previous segment,
+    # not the cluster's first member) keeps a run of near-coincident tracks in
+    # one cluster; ``resolve_track`` then only separates those that also overlap
+    # along their length, so genuinely distinct runs are left alone.
+    def group_by_track(segs, tolerance):
+        groups: list[list] = []
+        current: list = []
+        prev_track = None
+        for seg in sorted(segs, key=lambda s: s["track"]):
+            if current and seg["track"] - prev_track <= tolerance:
+                current.append(seg)
+            else:
+                if current:
+                    groups.append(current)
+                current = [seg]
+            prev_track = seg["track"]
+        if current:
+            groups.append(current)
+        return groups
+
+    # The window is wider than ``spacing`` so that runs which are merely *close*
+    # are resolved in the same pass. Resolving only already-coincident runs can
+    # otherwise nudge one of them into a neighbour it was previously clear of.
+    window = 2.0 * spacing
+    for group in group_by_track(h_segs, window):
+        resolve_track(group, h_offsets)
+
+    for group in group_by_track(v_segs, window):
+        resolve_track(group, v_offsets)
         
     # 3. Apply offsets to waypoints
     for s in fs.streams:

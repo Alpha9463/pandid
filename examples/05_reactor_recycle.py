@@ -27,15 +27,15 @@ def main():
     prod = fs.add(units.Product("Liquid Product"))
     purge = fs.add(units.Product("Purge Gas"))
 
-    fs.connect(feed.outlet, mix.in_1)
+    fs.connect(feed.outlet, mix.in_2)
     fs.connect(mix.outlet, comp.suction)
     fs.connect(comp.discharge, rx.feed)
     fs.connect(rx.outlet, cool.inlet)
     fs.connect(cool.outlet, sep.feed)
     fs.connect(sep.liquid, prod.inlet)
     fs.connect(sep.vapor, split.inlet)
-    fs.connect(split.out_1, purge.inlet)
-    fs.connect(split.out_2, mix.in_2, tear_hint=True)   # recycle back to the mixer
+    fs.connect(split.out_2, purge.inlet)
+    fs.connect(split.out_1, mix.in_1, tear_hint=True)   # recycle back to the mixer
 
     fs.render("reactor_recycle.svg")
     print("Generated reactor_recycle.svg")

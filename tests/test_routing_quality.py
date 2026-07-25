@@ -38,6 +38,54 @@ def test_forward_streams_do_not_route_on_the_recycle_lane():
         assert not on_lane, f"forward stream {s.name} travels on recycle lane(s) {on_lane}"
 
 
+def _crossing_network():
+    """Two feeds, each splitting to both mixers — forces two streams to share
+    the vertical corridor between the splitter and mixer columns."""
+    fs = Flowsheet("Crossing Network")
+    f1, f2 = fs.add(U.Feed("Feed A")), fs.add(U.Feed("Feed B"))
+    s1 = fs.add(U.Splitter("SP-501", n_outlets=2))
+    s2 = fs.add(U.Splitter("SP-502", n_outlets=2))
+    m1 = fs.add(U.Mixer("M-501", n_inlets=2))
+    m2 = fs.add(U.Mixer("M-502", n_inlets=2))
+    p1, p2 = fs.add(U.Product("Product A")), fs.add(U.Product("Product B"))
+    fs.connect(f1.outlet, s1.inlet)
+    fs.connect(f2.outlet, s2.inlet)
+    fs.connect(s1.out_1, m1.in_1)
+    fs.connect(s1.out_2, m2.in_1)  # crosses down
+    fs.connect(s2.out_1, m1.in_2)  # crosses up
+    fs.connect(s2.out_2, m2.in_2)
+    fs.connect(m1.outlet, p1.inlet)
+    fs.connect(m2.outlet, p2.inlet)
+    return fs
+
+
+def test_parallel_runs_sharing_a_corridor_are_separated():
+    # Two streams routed up/down the same corridor must not land on top of each
+    # other — at 2px stroke widths a few px apart reads as one doubled line.
+    fs = _crossing_network()
+    fs.layout()
+    fs.route()
+
+    runs = []  # (stream name, x, y_min, y_max)
+    for s in fs.streams:
+        wp = s.route.waypoints
+        for i in range(len(wp) - 1):
+            (x1, y1), (x2, y2) = wp[i], wp[i + 1]
+            if abs(x1 - x2) < 0.5 and abs(y1 - y2) > 20:
+                runs.append((s.name, x1, min(y1, y2), max(y1, y2)))
+
+    for i in range(len(runs)):
+        for j in range(i + 1, len(runs)):
+            n1, x1, a1, b1 = runs[i]
+            n2, x2, a2, b2 = runs[j]
+            if n1 == n2:
+                continue
+            if min(b1, b2) - max(a1, a2) > 10:  # genuinely share the corridor
+                assert abs(x1 - x2) >= 5, (
+                    f"{n1} and {n2} run the same corridor only {abs(x1 - x2):.1f}px apart"
+                )
+
+
 def test_routes_remain_orthogonal_and_clear_of_equipment():
     # Guard against the fix introducing diagonal segments or obstacle crossings.
     fs = _ammonia_loop()

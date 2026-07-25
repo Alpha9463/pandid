@@ -113,8 +113,11 @@ class SvgRenderer:
             lines.append("    " + item)
 
         lines.extend(self._defs(fs))
-        lines.extend(self._draw_units(fs))
+        unit_labels: list = []
+        lines.extend(self._draw_units(fs, unit_labels))
         lines.extend(self._draw_streams(fs, jump_direction))
+        # Equipment tags go on last, haloed, so no stream line strikes through them.
+        lines.extend(self._draw_unit_labels(unit_labels))
         lines.append('</svg>')
         return "\n".join(lines)
 
@@ -377,7 +380,7 @@ class SvgRenderer:
 
     # ------------------------------------------------------------------ units
 
-    def _draw_units(self, fs):
+    def _draw_units(self, fs, label_items):
         lines = ['  <g id="units">']
         for u in fs.units:
             f = u.frame
@@ -399,7 +402,8 @@ class SvgRenderer:
             if u.kind == "instrument":
                 lines.extend(self._draw_instrument_tag(u, x, y, u_width, u_height))
             else:
-                lines.append(self._draw_unit_label(u, f, x, y, u_width, u_height, safe_name))
+                label_items.append(
+                    self._unit_label_item(u, f, x, y, u_width, u_height, safe_name))
         lines.append('  </g>')
         return lines
 
@@ -452,7 +456,9 @@ class SvgRenderer:
                        f'dominant-baseline="middle">{html.escape(bot)}</text>')
         return out
 
-    def _draw_unit_label(self, u, f, x, y, u_width, u_height, safe_name):
+    def _unit_label_item(self, u, f, x, y, u_width, u_height, safe_name):
+        """Resolve a unit label's placement. Drawn in a final pass (see
+        :meth:`_draw_unit_labels`) so stream lines never strike through it."""
         lpos = f.label_pos or "top"
         if lpos == "bottom":
             lx, ly, anchor, baseline = x + u_width / 2, y + u_height + 15, "middle", "middle"
@@ -464,8 +470,29 @@ class SvgRenderer:
             lx, ly, anchor, baseline = x + u_width / 2, y + u_height / 2, "middle", "middle"
         else:  # top
             lx, ly, anchor, baseline = x + u_width / 2, y - 10, "middle", "baseline"
-        return (f'    <text x="{lx}" y="{ly}" font-family="sans-serif" '
-                f'font-size="12" text-anchor="{anchor}" dominant-baseline="{baseline}">{safe_name}</text>')
+        return (lx, ly, anchor, baseline, lpos, safe_name)
+
+    def _draw_unit_labels(self, items):
+        """Final pass: equipment tags on white halos, over every stream line.
+
+        Labels are placed on a free face where one exists, but a passing stream
+        (or a unit whose every face carries a nozzle) can still run behind the
+        text — the halo keeps the tag legible either way. A ``center`` label
+        sits inside its symbol, so it gets no halo that would erase detail.
+        """
+        out = ['  <g id="unit_labels">']
+        for lx, ly, anchor, baseline, lpos, text in items:
+            if lpos != "center":
+                hw, hh = len(text) * 6.6 + 8, 15.0
+                rx = lx - hw / 2 if anchor == "middle" else (lx - hw if anchor == "end" else lx)
+                ry = ly - hh / 2 if baseline == "middle" else ly - hh + 3
+                out.append(f'    <rect x="{rx:.1f}" y="{ry:.1f}" width="{hw:.1f}" '
+                           f'height="{hh:.1f}" fill="white" />')
+            out.append(f'    <text x="{lx}" y="{ly}" font-family="sans-serif" '
+                       f'font-size="12" text-anchor="{anchor}" '
+                       f'dominant-baseline="{baseline}">{text}</text>')
+        out.append('  </g>')
+        return out
 
     # ------------------------------------------------------------------ streams
 
@@ -549,8 +576,7 @@ class SvgRenderer:
             # white halo drawn in a final pass knocks the line out beneath it.
             if bool(longest_seg) and not is_signal and s.name not in labeled_names:
                 labeled_names.add(s.name)
-                (lx1, ly1), (lx2, ly2) = longest_seg
-                label_items.append(((lx1 + lx2) / 2, (ly1 + ly2) / 2, s.name, color))
+                label_items.append((longest_seg, s.name, color))
 
             marker = "" if is_signal else f' marker-end="url(#{marker_id})"'
             lines.append(
@@ -577,12 +603,41 @@ class SvgRenderer:
 
         # Final pass: stream-number labels, each on a white halo so it reads
         # cleanly over its own line and any line that crosses beneath it.
-        for tx, ty, name, color in label_items:
+        #
+        # Two streams running the same corridor sit only a few px apart, so their
+        # labels would overprint at the segment midpoints. Slide each label along
+        # its own line to the nearest clear spot instead — what a draftsman does.
+        placed: list[tuple[float, float, float, float]] = []
+
+        def _clear(box):
+            return all(box[2] <= p[0] or box[0] >= p[2] or box[3] <= p[1] or box[1] >= p[3]
+                       for p in placed)
+
+        for seg, name, color in label_items:
+            (sx1, sy1), (sx2, sy2) = seg
             hw, hh = len(name) * 6.2 + 6, 13.0
+            cx, cy = (sx1 + sx2) / 2, (sy1 + sy2) / 2
+            vertical = abs(sx2 - sx1) < abs(sy2 - sy1)
+            span = abs(sy2 - sy1) if vertical else abs(sx2 - sx1)
+            step = (hh + 3) if vertical else (hw + 6)
+            room = max(0.0, (span - (hh if vertical else hw)) / 2)
+            tx, ty = cx, cy
+            for k in range(int(room // step) + 1):
+                for d in (0,) if k == 0 else (k, -k):
+                    ux = cx if vertical else cx + d * step
+                    uy = cy + d * step if vertical else cy
+                    box = (ux - hw / 2, uy - hh / 2, ux + hw / 2, uy + hh / 2)
+                    if _clear(box):
+                        tx, ty = ux, uy
+                        break
+                else:
+                    continue
+                break
+            placed.append((tx - hw / 2, ty - hh / 2, tx + hw / 2, ty + hh / 2))
             lines.append(f'    <rect x="{tx - hw / 2:.1f}" y="{ty - hh / 2:.1f}" '
                          f'width="{hw:.1f}" height="{hh:.1f}" fill="white" />')
             lines.append(
-                f'    <text x="{tx}" y="{ty}" font-family="sans-serif" font-size="10" '
+                f'    <text x="{tx:.1f}" y="{ty:.1f}" font-family="sans-serif" font-size="10" '
                 f'text-anchor="middle" dominant-baseline="middle" '
                 f'fill="{color}">{html.escape(name)}</text>'
             )
