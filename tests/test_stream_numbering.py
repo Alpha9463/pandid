@@ -37,6 +37,17 @@ def test_reactor_breaks_number():
     assert s1.name != s2.name
 
 
+def test_fitting_carries_stream_number():
+    fs = Flowsheet("f")
+    f = fs.add(U.Feed("F"))
+    st = fs.add(U.Fitting("ST-1", variant="strainer"))
+    p = fs.add(U.Product("P"))
+    s1 = fs.connect(f.outlet, st.inlet)
+    s2 = fs.connect(st.outlet, p.inlet)
+    fs.renumber_streams()
+    assert s1.name == s2.name == "S1"  # a strainer is inline, like a valve
+
+
 def test_signals_unnumbered_and_no_arrow():
     fs = Flowsheet("s")
     a = fs.add(U.Instrument("FT-1"))

@@ -50,6 +50,51 @@ KIND_MAP = {
     # connection goes on the side of the spring bonnet instead.
     ("valve", "relief"):    ("valves", "Relief PRV",        {"inlet": "S", "outlet": "N",
                              "actuator": ("AT", 40.0, 24.0)}),
+    # Angle body: the seat turns the flow a quarter, so this one is piped from
+    # below and out to the side. No operator is drawn, so the actuator takes the
+    # hub the stem would rise from — the vertex the two halves meet at.
+    ("valve", "angle"):     ("valves", "Angle",             {"inlet": "S", "outlet": "E",
+                             "actuator": ("AT", 30.0, 30.0)}),
+    # Spring-loaded angle safety valve — the PSV a real sheet draws, with the
+    # spring bonnet on top of the inlet leg. The stem runs to y = 0.
+    ("valve", "psv"):       ("valves", "Safety PSV 1",      {"inlet": "S", "outlet": "E",
+                             "actuator": ("AT", 21.0, 0.0)}),
+    ("valve", "plug"):      ("valves", "Plug",              {"inlet": "W", "outlet": "E",
+                             "actuator": "N"}),
+    ("valve", "pinch"):     ("valves", "Pinch Valve",       {"inlet": "W", "outlet": "E",
+                             "actuator": "N"}),
+
+    # --- Valves that draw their operator ---
+    #
+    # Unlike the bare bodies above, these stencils draw the operator on top of
+    # the valve, so ``actuator`` lands on its crown — the top of the motor/
+    # solenoid/hydraulic box, or the apex of a diaphragm dome — which is where a
+    # controller output or interlock signal physically terminates.
+    #
+    # The three letter-box operators share one body and differ only in the
+    # letter, so they must stay three separate variants.
+    ("valve", "motor"):     ("valves", "Motor Operated Valve",
+                             {"inlet": "W", "outlet": "E", "actuator": ("AT", 49.0, 0.0)}),
+    ("valve", "solenoid"):  ("valves", "Solenoid Valve Closed",
+                             {"inlet": "W", "outlet": "E", "actuator": ("AT", 49.0, 0.0)}),
+    ("valve", "hydraulic"): ("valves", "Hydraulic Valve",
+                             {"inlet": "W", "outlet": "E", "actuator": ("AT", 49.0, 0.0)}),
+    # Diaphragm actuator drawn as a dome *above* the body (the "control" variant
+    # above uses the Diaphragm stencil, which draws a diaphragm inside the body
+    # instead — a Saunders body, not an operator).
+    ("valve", "pneumatic"): ("valves", "Pneumatic Operated",
+                             {"inlet": "W", "outlet": "E", "actuator": ("AT", 49.0, 0.0)}),
+    ("valve", "manual"):    ("valves", "Manual Operated Valve",
+                             {"inlet": "W", "outlet": "E", "actuator": ("AT", 49.0, 0.0)}),
+    # Knife gate: rising stem through a handwheel bar spanning x 30..70 at y = 0.
+    ("valve", "knife"):     ("valves", "Knife Valve",
+                             {"inlet": "W", "outlet": "E", "actuator": "N"}),
+    ("valve", "butterfly_pneumatic"): ("valves", "Pneumatic Operated Butterfly Valve",
+                                       {"inlet": "W", "outlet": "E", "actuator": "N"}),
+    # Self-acting pressure regulator: the dome is its own diaphragm, so the
+    # "actuator" is the external pilot connection rather than a signal terminus.
+    ("valve", "regulator"): ("valves", "Back Pressure Regulator 1",
+                             {"inlet": "W", "outlet": "E", "actuator": ("AT", 49.0, 15.0)}),
     # Rotating equipment.
     #
     # draw.io's <constraint> anchors are generic compass points on the bounding
@@ -112,6 +157,53 @@ KIND_MAP = {
                            {"inlet": ("N", 50), "outlet": ("S", 50)}),
     # Fittings.
     ("reducer", "default"): ("fittings", "Reducer", {"inlet": "W", "outlet": "E"}),
+    # In-line devices: one class, because a strainer, a sight glass and a
+    # rupture disc are the same thing to the flowsheet (a pair of faces on a
+    # line) and differ only in what is drawn between them. The default is the
+    # plain flanged joint, which is what an unqualified "fitting" draws.
+    #
+    # Every port here sits on a bounding-box edge that the stencil actually
+    # strokes, so they take the shapes' own W/E anchors.
+    ("fitting", "default"):        ("fittings", "Flanged Connection",
+                                    {"inlet": "W", "outlet": "E"}),
+    ("fitting", "flange"):         ("fittings", "Flanged Connection",
+                                    {"inlet": "W", "outlet": "E"}),
+    ("fitting", "strainer"):       ("fittings", "Strainer", {"inlet": "W", "outlet": "E"}),
+    ("fitting", "strainer_cone"):  ("fittings", "Strainer (Cone)",
+                                    {"inlet": "W", "outlet": "E"}),
+    ("fitting", "rupture_disc"):   ("fittings", "Rupture Disc", {"inlet": "W", "outlet": "E"}),
+    ("fitting", "sight_glass"):    ("fittings", "Viewing Glass", {"inlet": "W", "outlet": "E"}),
+    ("fitting", "sight_glass_lit"): ("fittings", "Viewing Glass (Lighting)",
+                                     {"inlet": "W", "outlet": "E"}),
+    ("fitting", "silencer"):       ("fittings", "Silencer", {"inlet": "W", "outlet": "E"}),
+    # Expansion joint: the lens is widest at mid-height, which is exactly where
+    # the two anchors sit — one on each arc's extremum.
+    ("fitting", "expansion_joint"): ("fittings", "Compensator",
+                                     {"inlet": "W", "outlet": "E"}),
+    # The four arrestor bodies encode different certifications (plain, explosion-
+    # proof, detonation-proof, fire-resistant) and are drawn differently, so each
+    # is its own variant rather than an alias.
+    ("fitting", "flame_arrestor"): ("fittings", "Flame Arrestor",
+                                    {"inlet": "W", "outlet": "E"}),
+    ("fitting", "flame_arrestor_explosion_proof"): (
+        "fittings", "Flame Arrestor (Explosion-Proof)", {"inlet": "W", "outlet": "E"}),
+    ("fitting", "flame_arrestor_detonation_proof"): (
+        "fittings", "Flame Arrestor (Detonation-Proof)", {"inlet": "W", "outlet": "E"}),
+    ("fitting", "flame_arrestor_fire_resistant"): (
+        "fittings", "Flame Arrestor (Fire-Resistant)", {"inlet": "W", "outlet": "E"}),
+    ("fitting", "coupling"):       ("fittings", "Coupling", {"inlet": "W", "outlet": "E"}),
+    # The clamp brackets stand proud of the pipe, so this shape's anchors are
+    # inboard of the box (x = 10 and 40) — on the pipe ends the clamp grips.
+    ("fitting", "clamped_coupling"): ("fittings", "Clamped Flange Coupling",
+                                      {"inlet": "W", "outlet": "E"}),
+    ("fitting", "hose"):           ("fittings", "Hose", {"inlet": "W", "outlet": "E"}),
+    # Restriction orifice. fittings.xml's "Orifice Plate" is NOT this: it is a
+    # paddle-on-a-handle overlay meant to be dropped on top of a line, with no
+    # flow path and no connections. valves.xml draws the in-line plate.
+    ("fitting", "orifice"):        ("valves", "Orifice", {"inlet": "W", "outlet": "E"}),
+    ("fitting", "rotameter"):      ("valves", "Rotameter", {"inlet": "W", "outlet": "E"}),
+    ("fitting", "static_mixer"):   ("mixers", "In-Line Static Mixer",
+                                    {"inlet": "W", "outlet": "E"}),
 
     # --- Variants (style choices within a class; same ports) ---
     # Heat exchanger styles.
@@ -180,6 +272,28 @@ KIND_MAP = {
     ("separator", "cyclone"): ("separators", "Separator (Cyclone)", {"feed": "W", "vapor": "N", "liquid": "S"}),
     ("separator", "gravity"): ("separators", "Gravity Separator, Settling Chamber",
                                {"feed": "W", "vapor": "E", "liquid": "S"}),
+    # Gas-cleaning vessels: hopper-bottomed box, gas across the top and the
+    # collected phase out of the apex at (40, 120). The scrubber's wash-liquid
+    # header is drawn on the centreline, so the clean gas leaves sideways rather
+    # than through the top face.
+    ("separator", "scrubber"): ("separators", "Separator (Wet Scrubber)",
+                                {"feed": "W", "vapor": "E", "liquid": "S"}),
+    ("separator", "electrostatic"): ("separators", "Separator (Electrostatic Precipitator)",
+                                     {"feed": "W", "vapor": "E", "liquid": "S"}),
+    # Filter styles. Press Filter's own W/E anchors sit on opposite *corners* of
+    # the box, so both faces are placed on the plate pack's mid-height instead.
+    ("filter", "gas"):    ("filters", "Gas Filter (Bag, Candle, Cartridge)",
+                           {"inlet": "W", "outlet": "E"}),
+    ("filter", "press"):  ("filters", "Press Filter",
+                           {"inlet": ("W", 25.0), "outlet": ("E", 25.0)}),
+    ("filter", "rotary"): ("filters", "Liquid Filter (Rotary, Drum or Disc)",
+                           {"inlet": ("W", 50.0), "outlet": "E"}),
+    # Drier styles. A spray drier is fed through the atomiser in its roof and
+    # drops powder out of the floor, so it is piped top-to-bottom, not across.
+    ("dryer", "fluidized_bed"): ("driers", "Drier (Fluidized Bed)",
+                                 {"feed": "W", "product": "E"}),
+    ("dryer", "spray"): ("driers", "Spray Drier",
+                         {"feed": ("N", 50.0), "product": ("S", 50.0)}),
 
     # --- New classes (genuinely different port signature / function) ---
     # The process coil is drawn entering at (0, 54.5) and leaving at (80, 79.5);
@@ -190,12 +304,22 @@ KIND_MAP = {
     ("turbine", "default"): ("pumps", "Turbine", {"inlet": "W", "outlet": "E"}),
     ("filter", "default"):  ("filters", "Liquid Filter (Bag, Candle, Cartridge)", {"inlet": "W", "outlet": "E"}),
     ("dryer", "default"):   ("driers", "Rotary Drum Drier, Tumbling Drier", {"feed": "W", "product": "E"}),
+    # Steam/gas ejector: motive fluid into the steam chest, entrained fluid up
+    # through its floor, mixture out of the diffuser cone. The stencil's own "S"
+    # anchor lands on the chest's bottom-*right* corner, where the cone starts,
+    # so the suction nozzle is placed mid-face instead.
+    ("ejector", "default"): ("fittings", "Injector",
+                             {"motive": "W", "suction": ("S", 20.0), "discharge": "E"}),
+    # Open ends. Each is a stem with something on top of it, so the single pipe
+    # connection is the free end of that stem, at the bottom of the box.
+    ("vent", "default"):   ("fittings", "Vent", {"inlet": ("S", 40.0)}),
+    ("funnel", "default"): ("fittings", "Funnel", {"outlet": ("S", 40.0)}),
 }
 
 
-# draw.io draws inline valves oversized; scale them to read as small devices
+# draw.io draws inline devices oversized; scale them to read as small devices
 # (lines stay 2px thanks to non-scaling-stroke).
-SCALE = {"valve": 0.5}
+SCALE = {"valve": 0.5, "fitting": 0.5, "vent": 0.5, "funnel": 0.5}
 
 
 def resolve_port(spec, constraints, w, h):

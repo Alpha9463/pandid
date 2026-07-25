@@ -210,12 +210,12 @@ class Flowsheet:
     def renumber_streams(self) -> None:
         """Assign stream numbers, carrying one number through inline fittings.
 
-        Valves and reducers are inline: a stream keeps its number as it passes
-        through them (set ``unit.significant = True`` to break the number at an
-        important valve). Only auto-named material streams are renumbered;
-        explicitly-named streams and signal lines are left untouched.
+        Valves, reducers and fittings are inline: a stream keeps its number as
+        it passes through them (set ``unit.significant = True`` to break the
+        number at an important valve). Only auto-named material streams are
+        renumbered; explicitly-named streams and signal lines are left untouched.
         """
-        _INLINE = {"valve", "reducer"}
+        _INLINE = {"valve", "reducer", "fitting"}
         material = [s for s in self.streams if s.kind == "material"]
         pos = {id(s): i for i, s in enumerate(material)}  # Stream is unhashable
         parent = list(range(len(material)))

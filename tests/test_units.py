@@ -120,3 +120,26 @@ def test_mixer_rejects_zero_inlets():
 def test_splitter_rejects_zero_outlets():
     with pytest.raises(ValueError, match="at least 1 outlet"):
         U.Splitter("S", n_outlets=0)
+
+
+def test_fitting_is_one_class_with_device_variants():
+    # A strainer and a sight glass are the same thing to the flowsheet: two
+    # faces on a line. The variant only chooses what is drawn between them.
+    st = U.Fitting("ST-1", variant="strainer")
+    assert st.kind == "fitting"
+    assert set(st.ports) == {"inlet", "outlet"}
+    assert U.Fitting("SG-1", variant="sight_glass").kind == st.kind
+
+
+def test_ejector_has_three_connections():
+    e = U.Ejector("EJ-1")
+    assert set(e.ports) == {"motive", "suction", "discharge"}
+    assert e.motive.role == "utility"
+    assert e.discharge.direction == "outlet"
+
+
+def test_open_ends_have_a_single_port_each_way():
+    assert set(U.Vent("V-1").ports) == {"inlet"}
+    assert U.Vent("V-1").inlet.direction == "inlet"
+    assert set(U.Funnel("FN-1").ports) == {"outlet"}
+    assert U.Funnel("FN-1").outlet.direction == "outlet"
