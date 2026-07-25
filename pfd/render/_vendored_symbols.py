@@ -158,7 +158,7 @@ def register_vendored(registry):
     registry.register('column', Symbol(
         svg='<g id="sym_column"><path d="M 0.0 15.0 A 50.0 15.0 0.0 0 1 50.0 0.0 A 50.0 15.0 0.0 0 1 100.0 15.0 L 100.0 185.0 A 50.0 15.0 0.0 0 1 50.0 200.0 A 50.0 15.0 0.0 0 1 0.0 185.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=200.0,
-        ports={'feed': (0.0, 130.0), 'distillate': (50.0, 0.0), 'bottoms': (50.0, 200.0), 'reflux_in': (0.0, 40.0), 'boilup_in': (0.0, 175.0), 'reboiler_duty': (100.0, 170.0), 'condenser_duty': (100.0, 40.0)},
+        ports={'feed': (0.0, 130.0), 'distillate': (50.0, 0.0), 'bottoms': (50.0, 200.0), 'reflux_in': (100.0, 35.0), 'boilup_in': (100.0, 175.0), 'condenser_duty': (100.0, 65.0), 'reboiler_duty': (100.0, 145.0)},
     ), 'default')
 
     # draw.io vessels:Mixing Reactor -> reactor/default
@@ -279,6 +279,13 @@ def register_vendored(registry):
         width=40.0, height=95.4,
         ports={'feed': (0.0, 30.0), 'outlet': (20.0, 95.4), 'duty': (40.0, 47.0), 'vent': (30.0, 7.7)},
     ), 'plain')
+
+    # draw.io vessels:Drum or Condenser -> separator/horizontal
+    registry.register('separator', Symbol(
+        svg='<g id="sym_separator_horizontal"><path d="M 5.77 30.0 L 85.77 30.0 A 5.0 13.0 0.0 0 0 91.5392 15.0 A 5.0 13.0 0.0 0 0 85.77 0.0 L 5.77 0.0 A 5.0 13.0 0.0 0 0 0.0008 15.0 A 5.0 13.0 0.0 0 0 5.77 30.0 Z M 5.77 0.0 L 5.77 30.0 M 85.77 0.0 L 85.77 30.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=91.5, height=30.0,
+        ports={'feed': (0.0, 15.0), 'vapor': (30.0, 0.0), 'liquid': (68.0, 30.0)},
+    ), 'horizontal')
 
     # draw.io separators:Separator (Cyclone) -> separator/cyclone
     registry.register('separator', Symbol(

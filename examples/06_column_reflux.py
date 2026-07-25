@@ -1,8 +1,9 @@
 """
 Example 6: Distillation column with a real reflux and boilup loop
 
-Uses the column's return nozzles, ``reflux_in`` and ``boilup_in``, so the two
-internal loops close on the tower itself:
+Uses the column's return nozzles, ``reflux_in`` and ``boilup_in`` — both on the
+tower's right-hand side, the side the overhead and reboiler systems sit on — so
+the two internal loops close on the tower itself:
 
 - overhead: distillate -> condenser -> reflux drum -> pump -> split, one leg
   back to ``col.reflux_in``,
@@ -23,7 +24,11 @@ def main():
 
     # Overhead system
     cond = fs.add(units.HeatExchanger("E-701", description="Overhead Condenser"))
-    drum = fs.add(units.Separator("V-701", description="Reflux Drum"))
+    # A reflux drum is a horizontal vessel — a lying cylinder with dished ends.
+    # Sized up a little so it reads at the same scale as the tower.
+    drum = fs.add(units.Separator("V-701", variant="horizontal",
+                                  width=125, height=45,
+                                  description="Reflux Drum"))
     vent = fs.add(units.Product("Vent Gas", reference="PFD-900"))
     rpump = fs.add(units.Pump("P-701", description="Reflux Pump"))
     rsplit = fs.add(units.Splitter("SP-701", n_outlets=2, description="Reflux Split"))

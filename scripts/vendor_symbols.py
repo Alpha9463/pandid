@@ -63,13 +63,14 @@ KIND_MAP = {
                             {"inlet": "W", "outlet": "E", "duty": "N"}),
     # Vessels / columns / reactors / separators / tanks.
     ("vessel", "default"): ("vessels", "Barrel, Drum", {"inlet": "W", "outlet": "E"}),
-    # reflux_in / boilup_in ride the same straight shell wall as the feed (the
-    # shell spans y 15..185), reflux high and boilup low, matching where those
-    # streams physically re-enter the tower.
+    # Feed enters on the left; the returns come back on the RIGHT, which is the
+    # side the overhead and reboiler systems are drawn on. reflux_in sits high
+    # and boilup_in low on the straight shell wall (which spans y 15..185), with
+    # the two duty arrows spaced between them.
     ("column", "default"): ("vessels", "Pressurized Vessel",
                             {"feed": ("W", 130), "distillate": ("N", 50), "bottoms": ("S", 50),
-                             "reflux_in": ("W", 40), "boilup_in": ("W", 175),
-                             "reboiler_duty": ("E", 170), "condenser_duty": ("E", 40)}),
+                             "reflux_in": ("E", 35), "boilup_in": ("E", 175),
+                             "condenser_duty": ("E", 65), "reboiler_duty": ("E", 145)}),
     # vent sits on the vessel's top edge, clear of the agitator shaft at x 24..26.
     ("reactor", "default"): ("vessels", "Mixing Reactor",
                              {"feed": "W", "outlet": "S", "duty": "E",
@@ -113,6 +114,12 @@ KIND_MAP = {
     ("reactor", "plain"):     ("vessels", "Reactor",
                                {"feed": ("W", 30), "outlet": ("S", 20), "duty": ("E", 47),
                                 "vent": ("AT", 30.0, 7.69)}),
+    # Horizontal drum (reflux drum / accumulator / KO drum): a lying cylinder
+    # with dished ends. Feed enters the left head, vapour leaves the top face
+    # and liquid draws off the bottom face (both span x 5.77..85.77).
+    ("separator", "horizontal"): ("vessels", "Drum or Condenser",
+                                  {"feed": ("W", 15), "vapor": ("N", 30.0),
+                                   "liquid": ("S", 68.0)}),
     ("separator", "cyclone"): ("separators", "Separator (Cyclone)", {"feed": "W", "vapor": "N", "liquid": "S"}),
     ("separator", "gravity"): ("separators", "Gravity Separator, Settling Chamber",
                                {"feed": "W", "vapor": "E", "liquid": "S"}),
