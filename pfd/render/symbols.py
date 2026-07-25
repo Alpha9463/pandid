@@ -77,12 +77,47 @@ class Symbol:
             )
             for name, faces in port_alts.items():
                 declared.setdefault(name, {}).update(faces)
+        # Everything below rejects rather than repairs. A declaration the engine
+        # cannot honour used to be dropped where it was read -- the menu is
+        # re-keyed by coordinate at resolve time, so a placement filed under the
+        # wrong face simply ceased to exist -- and a placement that vanishes is
+        # indistinguishable from one that was never authored. The invariant
+        # suite catches these for the shipped registry; a third-party symbol
+        # only ever meets this constructor.
+        stray = sorted(set(declared) - set(self.ports))
+        if stray:
+            raise ValueError(
+                f"{self.symbol_id()}: port_faces declares a menu for {stray}, which "
+                f"ports does not anchor; nothing reads a menu for a port that has "
+                f"no nozzle"
+            )
+        stray = sorted(frozenset(self.faceless_ports) - set(self.ports))
+        if stray:
+            raise ValueError(
+                f"{self.symbol_id()}: faceless_ports names {stray}, which ports does "
+                f"not anchor"
+            )
         menu: dict[str, dict[str, tuple[float, float]]] = {}
         for name, xy in self.ports.items():
             home = outward_dir(xy[0], xy[1], self.width, self.height)
             faces = {home: xy}
-            faces.update(declared.get(name, {}))
-            faces[home] = xy   # ``ports`` stays the authority on the home nozzle
+            for face, coord in declared.get(name, {}).items():
+                lands = outward_dir(coord[0], coord[1], self.width, self.height)
+                if lands != face:
+                    raise ValueError(
+                        f"{self.symbol_id()}: port_faces[{name!r}][{face!r}] at "
+                        f"{coord} is nearest the {lands} edge of the "
+                        f"{self.width}x{self.height} box, so that is the face it "
+                        f"would come out of"
+                    )
+                if face == home and coord != xy:
+                    # ``ports`` is the authority on the home nozzle, so this
+                    # placement could only ever be discarded.
+                    raise ValueError(
+                        f"{self.symbol_id()}: port_faces[{name!r}][{face!r}] is "
+                        f"{coord} but ports[{name!r}] puts the same face at {xy}"
+                    )
+                faces[face] = coord
             menu[name] = faces
         self.port_faces = menu
         for a, b, xy in self.coincident_ports():

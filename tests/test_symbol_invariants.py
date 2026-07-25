@@ -489,3 +489,72 @@ def test_faceless_connections_may_share_a_placement():
         ("sig_in", "tap"),
         ("sig_out", "tap"),
     ]
+
+
+# --- what a symbol may declare -----------------------------------------------
+#
+# The checks above hold the shipped registry to these rules; Symbol's own
+# constructor holds every symbol to them, including the third-party ones this
+# suite never sees. Each of these used to be discarded in silence.
+
+
+def test_a_placement_keyed_to_a_face_it_does_not_land_on_is_rejected():
+    """The menu is re-keyed by coordinate at resolve time, so a mis-keyed
+    alternate never existed: it was filed under the face it actually lands on,
+    where it either clobbered the real entry or was clobbered by it."""
+    with pytest.raises(ValueError, match=r"nearest the W edge"):
+        Symbol(
+            svg='<g id="sym_x"/>',
+            width=91.5,
+            height=30.0,
+            ports={"feed": (30.0, 0.0)},
+            port_faces={"feed": {"N": (0.0, 15.0)}},  # that point is on the west
+        )
+
+
+def test_an_alternate_on_a_ports_own_home_face_is_rejected():
+    """``ports`` is the authority on the home nozzle, so an alternate keyed to
+    the same face could only ever be overwritten by it."""
+    with pytest.raises(ValueError, match=r"but ports\['feed'\] puts the same face at"):
+        Symbol(
+            svg='<g id="sym_x"/>',
+            width=91.5,
+            height=30.0,
+            ports={"feed": (0.0, 15.0)},
+            port_faces={"feed": {"W": (0.0, 12.0)}},  # the west head is already taken
+        )
+
+
+def test_a_menu_for_a_port_the_symbol_does_not_anchor_is_rejected():
+    with pytest.raises(ValueError, match=r"declares a menu for \['nope'\]"):
+        Symbol(
+            svg='<g id="sym_x"/>',
+            width=40.0,
+            height=40.0,
+            ports={"inlet": (0.0, 20.0)},
+            port_faces={"nope": {"E": (40.0, 20.0)}},
+        )
+
+
+def test_a_faceless_port_the_symbol_does_not_anchor_is_rejected():
+    with pytest.raises(ValueError, match=r"faceless_ports names \['typo'\]"):
+        Symbol(
+            svg='<g id="sym_x"/>',
+            width=40.0,
+            height=40.0,
+            ports={"inlet": (0.0, 20.0)},
+            faceless_ports=frozenset({"typo"}),
+        )
+
+
+def test_a_home_placement_restated_in_the_menu_is_accepted():
+    """The vendored symbols emit the whole menu, home included, so restating it
+    with the same coordinate has to stay legal."""
+    sym = Symbol(
+        svg='<g id="sym_x"/>',
+        width=91.5,
+        height=30.0,
+        ports={"feed": (0.0, 15.0)},
+        port_faces={"feed": {"W": (0.0, 15.0), "N": (20.0, 0.0)}},
+    )
+    assert list(sym.port_faces["feed"]) == ["W", "N"]  # home stays most preferred
