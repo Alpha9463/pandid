@@ -33,17 +33,30 @@ KIND_MAP = {
     ("valve", "three_way"): ("valves", "Three-Way Valve",   {"inlet": "W", "outlet": "E"}),
     ("valve", "relief"):    ("valves", "Relief PRV",        {"inlet": "S", "outlet": "N"}),
     # Rotating equipment.
-    ("pump", "default"):       ("pumps", "Centrifugal Pump 1", {"suction": "W", "discharge": "N"}),
-    ("pump", "gear"):          ("pumps", "Gear Pump",          {"suction": "W", "discharge": "E"}),
+    #
+    # draw.io's <constraint> anchors are generic compass points on the bounding
+    # box, not process nozzles: on a centrifugal pump "N" lands on the *corner*
+    # of the discharge stub and "E" in the middle of the volute. Where the
+    # stencil draws a real nozzle, place the port on its mouth explicitly so
+    # the line leaves the flange rather than the casing.
+    ("pump", "default"):       ("pumps", "Centrifugal Pump 1",
+                                {"suction": ("W", 30.0), "discharge": ("E", 10.0)}),
+    ("pump", "gear"):          ("pumps", "Gear Pump",
+                                {"suction": ("W", 41.5), "discharge": ("E", 41.5)}),
     ("pump", "screw"):         ("pumps", "Screw Pump",         {"suction": "W", "discharge": "E"}),
-    ("compressor", "default"): ("compressors", "Centrifugal Compressor", {"suction": "W", "discharge": "N"}),
-    ("compressor", "reciprocating"): ("compressors", "Reciprocating Compressor", {"suction": "W", "discharge": "N"}),
+    ("compressor", "default"): ("compressors", "Centrifugal Compressor",
+                                {"suction": ("W", 30.0), "discharge": ("E", 10.0)}),
+    ("compressor", "reciprocating"): ("compressors", "Reciprocating Compressor",
+                                      {"suction": "W", "discharge": ("E", 25.0)}),
     ("blower", "default"):     ("compressors", "Compressor", {"suction": "W", "discharge": "N"}),
     # Heat exchangers (horizontal shell & tube: cold through tubes W->E, hot shell N/S).
     ("hex", "default"): ("heat_exchangers", "Shell and Tube Heat Exchanger 1",
                          {"cold_in": "W", "cold_out": "E", "hot_in": "N", "hot_out": "S"}),
+    # hot_in: the raw "N" anchor lands on the cone vertex where three segments
+    # meet; put it mid-span of the flat shell top over the vapour space.
     ("hex", "kettle"):  ("heat_exchangers", "Reboiler",
-                         {"cold_in": "W", "cold_out": "E", "hot_in": "N", "hot_out": "S"}),
+                         {"cold_in": "W", "cold_out": "E",
+                          "hot_in": ("N", 64.0), "hot_out": "S"}),
     ("heater", "default"): ("heat_exchangers", "Heater",
                             {"inlet": "W", "outlet": "E", "duty": "S"}),
     ("cooler", "default"): ("heat_exchangers", "Heat Exchanger (Spiral)",
@@ -57,10 +70,13 @@ KIND_MAP = {
                              {"feed": "W", "outlet": "S", "duty": "E"}),
     ("separator", "default"): ("vessels", "Knock-out Drum",
                                {"feed": ("W", 55), "vapor": ("N", 25), "liquid": ("S", 25)}),
+    # Both roofs rise inside the bounding box, so an inlet on the box's top edge
+    # floats above the drawn ink. Put it on the roof itself: the dome crown, and
+    # the cone apex.
     ("tank", "default"):  ("vessels", "Tank (Dished Roof)",
-                           {"inlet": ("N", 30), "outlet": ("S", 50)}),
+                           {"inlet": ("AT", 50.0, 6.4), "outlet": ("S", 50)}),
     ("tank", "conical"):  ("vessels", "Tank (Conical Roof)",
-                           {"inlet": ("N", 30), "outlet": ("S", 50)}),
+                           {"inlet": ("N", 50), "outlet": ("S", 50)}),
     # Fittings.
     ("reducer", "default"): ("fittings", "Reducer", {"inlet": "W", "outlet": "E"}),
 
@@ -75,11 +91,15 @@ KIND_MAP = {
     ("hex", "plate"):      ("heat_exchangers", "Heat Exchanger (Plate)",
                             {"cold_in": "SW", "cold_out": "SE", "hot_in": "NW", "hot_out": "NE"}),
     # Pump / compressor styles.
-    ("pump", "vacuum"):           ("pumps", "Vacuum Pump", {"suction": "W", "discharge": "N"}),
+    ("pump", "vacuum"):           ("pumps", "Vacuum Pump",
+                                   {"suction": ("W", 25.0), "discharge": ("E", 25.0)}),
     ("compressor", "rotary"):      ("compressors", "Rotary Compressor", {"suction": "W", "discharge": "N"}),
     ("compressor", "liquid_ring"): ("compressors", "Liquid Ring Compressor", {"suction": "W", "discharge": "N"}),
     # Vessel / tank styles.
-    ("vessel", "dished"): ("vessels", "Vessel (Dished Ends, Brackets)", {"inlet": ("W", 47), "outlet": ("E", 47)}),
+    # Brackets widen the bounding box past the shell, so box-edge ports float
+    # outside the vessel; pin them to the shell walls at x = 10 and x = 50.
+    ("vessel", "dished"): ("vessels", "Vessel (Dished Ends, Brackets)",
+                           {"inlet": ("AT", 10.0, 47.0), "outlet": ("AT", 50.0, 47.0)}),
     ("vessel", "dome"):   ("vessels", "Vessel (Dome)", {"inlet": ("W", 27), "outlet": ("E", 27)}),
     ("tank", "floating_roof"): ("vessels", "Tank (Floating Roof)", {"inlet": ("N", 30), "outlet": ("S", 50)}),
     ("tank", "sphere"):        ("vessels", "Storage Sphere", {"inlet": ("N", 40), "outlet": ("S", 40)}),
@@ -90,7 +110,11 @@ KIND_MAP = {
                                {"feed": "W", "vapor": "E", "liquid": "S"}),
 
     # --- New classes (genuinely different port signature / function) ---
-    ("furnace", "default"): ("vessels", "Furnace", {"inlet": "W", "outlet": "E", "fuel": "S"}),
+    # The process coil is drawn entering at (0, 54.5) and leaving at (80, 79.5);
+    # the W/E anchors sit on blank casing wall at mid-height instead, which also
+    # destroys the high-in / low-out reading of the coil.
+    ("furnace", "default"): ("vessels", "Furnace",
+                             {"inlet": ("W", 54.5), "outlet": ("E", 79.5), "fuel": "S"}),
     ("turbine", "default"): ("pumps", "Turbine", {"inlet": "W", "outlet": "E"}),
     ("filter", "default"):  ("filters", "Liquid Filter (Bag, Candle, Cartridge)", {"inlet": "W", "outlet": "E"}),
     ("dryer", "default"):   ("driers", "Rotary Drum Drier, Tumbling Drier", {"feed": "W", "product": "E"}),
@@ -103,10 +127,21 @@ SCALE = {"valve": 0.5}
 
 
 def resolve_port(spec, constraints, w, h):
+    """Resolve a port spec to (x, y) in the shape's own units.
+
+    ``"W"``            - a named draw.io <constraint> anchor (compass point).
+    ``("E", 10.0)``    - a point on a bounding-box edge, at the given offset.
+    ``("AT", x, y)``   - an absolute point, for nozzles that sit inboard of the
+                         bounding box (e.g. a dome crown, or a shell wall drawn
+                         inside the box because brackets widen the extent).
+    """
     if isinstance(spec, str):
         if spec not in constraints:
             raise SystemExit(f"missing constraint {spec!r}; have {list(constraints)}")
         return constraints[spec]
+    if spec[0] == "AT":
+        _, x, y = spec
+        return (float(x), float(y))
     edge, along = spec
     return {"N": (float(along), 0.0), "S": (float(along), float(h)),
             "E": (float(w), float(along)), "W": (0.0, float(along))}[edge]
