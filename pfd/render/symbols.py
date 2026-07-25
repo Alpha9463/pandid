@@ -287,7 +287,11 @@ class SymbolRegistry:
             width=44.0, height=44.0, ports=_inst_ports, label_pos="center"), "shared")
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_computer"><polygon points="11,3 33,3 43,22 33,41 11,41 1,22" fill="white" stroke="black" stroke-width="2"/></g>',
-            width=44.0, height=44.0, ports=_inst_ports, label_pos="center"), "computer")
+            # The hexagon's flat bottom is at y=41, not y=43 like the circular
+            # variants, so pv needs its own coordinate to keep the same 1-unit
+            # nozzle stub instead of floating 3 units clear of the outline.
+            width=44.0, height=44.0, label_pos="center",
+            ports={**_inst_ports, "pv": (22.0, 42.0)}), "computer")
 
         # Vendored draw.io symbols (Apache-2.0) — registered last so they
         # override the hand-drawn defaults for shared kinds and add variants.

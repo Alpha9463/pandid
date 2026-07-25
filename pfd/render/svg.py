@@ -351,7 +351,10 @@ class SvgRenderer:
 
     def _defs(self, fs):
         lines = []
-        used_colors = {s.color or "black" for s in fs.streams}
+        # Sorted, not raw set order: set iteration depends on the process hash
+        # seed, so an identical flowsheet would otherwise emit byte-different
+        # SVG from run to run — breaking diffs, caching and golden tests.
+        used_colors = sorted({s.color or "black" for s in fs.streams})
         lines.append('  <defs>')
         for c in used_colors:
             marker_id = f'arrow_{c.replace("#", "").replace(" ", "_")}'
@@ -362,8 +365,8 @@ class SvgRenderer:
             lines.append(f'      <path d="M 0 0 L 10 5 L 0 10 z" fill="{c}" />')
             lines.append('    </marker>')
 
-        used_symbols = {(u.kind, getattr(u, 'variant', 'default'))
-                        for u in fs.units if u.kind not in ("feed", "product")}
+        used_symbols = sorted({(u.kind, getattr(u, 'variant', 'default'))
+                               for u in fs.units if u.kind not in ("feed", "product")})
         for kind, variant in used_symbols:
             sym = self.registry.get(kind, variant)
             svg_str = sym.svg
