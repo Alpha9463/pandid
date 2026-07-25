@@ -389,6 +389,12 @@ def test_no_two_ports_coincide(entry):
     # routed to one lands exactly on top of a stream routed to the other. (An
     # alt coinciding with its *own* port's default is not a conflict -- only
     # one of a single port's placements is ever active at a time.)
+    #
+    # Free ports are exempt from *each other*, not from the rule: a balloon's
+    # signal connections have no face of their own, so every one of them offers
+    # every face and the overlap is a menu, not a collision. They are still
+    # checked against fixed ports, which do own their face.
+    free = sym.free_ports or frozenset()
     placements: list[tuple[str, tuple[float, float]]] = list(sym.ports.items())
     for name, faces in (sym.port_alts or {}).items():
         placements.extend((name, xy) for xy in faces.values())
@@ -397,7 +403,7 @@ def test_no_two_ports_coincide(entry):
         n1, p1 = placements[i]
         for j in range(i + 1, len(placements)):
             n2, p2 = placements[j]
-            if n1 == n2:
+            if n1 == n2 or (n1 in free and n2 in free):
                 continue
             if math.hypot(p1[0] - p2[0], p1[1] - p2[1]) < 0.5:
                 pytest.fail(f"{kind}/{variant}: ports {n1!r} and {n2!r} both resolve to {p1}")

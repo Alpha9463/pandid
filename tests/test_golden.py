@@ -334,7 +334,7 @@ def _metering_skid() -> Flowsheet:
     fs.connect(psv.outlet, flare.inlet)
 
     lic = fs.add_instrument("LIC", 101, on=surge, at="S", offset=115, variant="panel")
-    lic.pin(mirrored="x")
+    lic.port_face("sig_out", "W")
     fs.connect(lic.sig_out, fv.actuator, kind="electric")
     return fs
 

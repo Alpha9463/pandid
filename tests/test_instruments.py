@@ -270,3 +270,29 @@ def test_interlock_hangs_off_its_controller_on_a_dashed_line():
     taps = [ln for ln in fs.to_svg().split("\n") if "<line" in ln and 'stroke-width="1"' in ln]
     assert any("stroke-dasharray" in ln for ln in taps)  # instrument host -> dashed
     assert any("stroke-dasharray" not in ln for ln in taps)  # process tap -> solid
+
+
+def test_balloon_signal_ports_reach_every_face():
+    """A balloon is a circle: a signal can meet it anywhere, so its connections
+    have no face of their own and every one of them offers all four."""
+    from pfd.portgeom import port_anchor
+
+    seen = {}
+    for face in ("N", "S", "E", "W"):
+        fs = Flowsheet("faces")
+        inst = fs.add_instrument("LIC", 101, variant="panel")
+        inst.pin(x=200, y=250)
+        inst.port_face("sig_out", face)
+        fs.layout()
+        seen[face] = port_anchor(inst, inst.frame, "sig_out")[2]
+    assert seen == {"N": "N", "S": "S", "E": "E", "W": "W"}
+
+
+def test_balloon_free_ports_may_share_a_face_but_equipment_may_not():
+    # The exemption is specific to ports with no fixed face; a vessel's nozzles
+    # still own theirs, so overlapping options there stay a defect.
+    from pfd.render.symbols import default_registry
+
+    balloon = default_registry.get("instrument", "panel")
+    assert {"pv", "sig_in", "sig_out"} <= balloon.free_ports
+    assert not default_registry.get("vessel", "horizontal").free_ports

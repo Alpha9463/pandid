@@ -76,10 +76,9 @@ def main():
     # instrument placed into equipment is a hard validation error, not a nudge.
     lic = fs.add_instrument("LIC", 101, on=surge, at="S", offset=115,
                             variant="panel")
-    # Mirrored so the balloon's signal port faces west, towards the valve it
-    # drives. The circle is symmetric, so this moves the port without changing
-    # how the balloon looks.
-    lic.pin(mirrored="x")
+    # A balloon has no fixed sides — put the signal connection on the face the
+    # valve is actually on, rather than letting the run double back to reach it.
+    lic.port_face("sig_out", "W")
     fs.connect(lic.sig_out, fv.actuator, kind="electric")
 
     fs.render(out("metering_skid.svg"))
