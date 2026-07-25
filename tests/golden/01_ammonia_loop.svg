@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1108" height="365" viewBox="-73.0 -71.8 1108.0 365.4">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1102" height="350" viewBox="-73.0 -71.8 1102.0 350.4">
   <!-- Background -->
-  <rect x="-73.0" y="-71.8" width="1108.0" height="365.4" fill="white" />
+  <rect x="-73.0" y="-71.8" width="1102.0" height="350.4" fill="white" />
   <defs>
     <marker id="arrow_black" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="black" />
@@ -26,25 +26,25 @@
   <g id="streams">
     <path d="M 100.0,108.2 L 268.0,108.2" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 318.0,98.2 L 418.0,98.2" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 443.0,146.4 L 443.0,198.6 L 553.0,198.6 L 553.0,43.2 L 598.0,43.2 L 598.0,68.2" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 443.0,146.4 L 443.0,171.4 L 553.0,171.4 L 553.0,43.2 L 598.0,43.2 L 598.0,68.2" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 598.0,128.2 L 598.0,143.2 L 728.0,143.2" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 753.0,88.19999999999999 L 753.0,73.19999999999999 L 879.0,73.19999999999999" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 949.0,53.19999999999999 L 980.0,53.19999999999999 L 980.0,-16.80000000000001 L 243.0,-16.80000000000001 L 243.0,88.2 L 268.0,88.2" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 753.0,183.6 L 753.0,238.6 L 854.0,238.6 L 854.0,198.6 L 879.0,198.6" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 949.0,53.19999999999999 L 974.0,53.19999999999999 L 974.0,-16.80000000000001 L 243.0,-16.80000000000001 L 243.0,88.2 L 268.0,88.2" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 753.0,183.6 L 753.0,198.6 L 879.0,198.6" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <rect x="174.8" y="101.7" width="18.4" height="13.0" fill="white" />
     <text x="184.0" y="108.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S1</text>
     <rect x="358.8" y="91.7" width="18.4" height="13.0" fill="white" />
     <text x="368.0" y="98.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S2</text>
-    <rect x="543.8" y="114.4" width="18.4" height="13.0" fill="white" />
-    <text x="553.0" y="120.9" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S3</text>
+    <rect x="543.8" y="100.8" width="18.4" height="13.0" fill="white" />
+    <text x="553.0" y="107.3" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S3</text>
     <rect x="653.8" y="136.7" width="18.4" height="13.0" fill="white" />
     <text x="663.0" y="143.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S4</text>
     <rect x="806.8" y="66.7" width="18.4" height="13.0" fill="white" />
     <text x="816.0" y="73.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S5</text>
-    <rect x="602.3" y="-23.3" width="18.4" height="13.0" fill="white" />
-    <text x="611.5" y="-16.8" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S6</text>
-    <rect x="794.3" y="232.1" width="18.4" height="13.0" fill="white" />
-    <text x="803.5" y="238.6" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S7</text>
+    <rect x="599.3" y="-23.3" width="18.4" height="13.0" fill="white" />
+    <text x="608.5" y="-16.8" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S6</text>
+    <rect x="806.8" y="192.1" width="18.4" height="13.0" fill="white" />
+    <text x="816.0" y="198.6" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S7</text>
   </g>
   <g id="unit_labels">
     <rect x="272.5" y="51.2" width="41.0" height="15.0" fill="white" />

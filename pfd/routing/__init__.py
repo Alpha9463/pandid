@@ -33,6 +33,40 @@ def _project(anchor: tuple[float, float], d: str | None, lpos: str | None) -> tu
     return (x, y)
 
 
+def _clamp_projection(
+    anchor: tuple[float, float],
+    proj: tuple[float, float],
+    d: str | None,
+    target: tuple[float, float],
+    nodes: set[tuple[float, float]],
+) -> tuple[float, float]:
+    """Pull an escape projection back onto a lane the stub would otherwise overshoot.
+
+    The escape distance is a *maximum* stand-off, not a fixed one. When the far
+    end of the run already sits on the outward ray — a nozzle 15px above the
+    lane its stream has to join, say, projected 25px out — insisting on the full
+    projection makes the path overshoot and come back, which is two bends and
+    part of the stub drawn twice. Turning onto that lane on the way out is one.
+
+    Going further out stays available: the continuation is the same direction,
+    so it costs no bend, which makes this purely a relaxation of where the path
+    is *allowed* to turn.
+    """
+    ax, ay = anchor
+    px, py = proj
+    tx, ty = target
+    if d in ("N", "S"):
+        lo, hi = (py, ay) if d == "N" else (ay, py)
+        cand = (ax, ty) if lo < ty < hi else proj
+    elif d in ("E", "W"):
+        lo, hi = (px, ax) if d == "W" else (ax, px)
+        cand = (tx, ay) if lo < tx < hi else proj
+    else:
+        return proj
+    # A lane the visibility grid does not carry is no lane at all.
+    return cand if cand in nodes else proj
+
+
 class DefaultRouter:
     def route(self, fs: "Flowsheet") -> None:
         from pfd.routing.visibility import VisibilityGraph
@@ -71,6 +105,7 @@ class DefaultRouter:
 
             start_proj = _project(start, start_dir, s_lpos)
             goal_proj = _project(goal, goal_dir, d_lpos)
+            start_proj = _clamp_projection(start, start_proj, start_dir, goal_proj, graph.nodes)
 
             is_recycle = getattr(stream, "is_recycle", False)
             path = find_path(graph, start_proj, goal_proj, start_dir, goal_dir, edge_penalties, is_recycle)

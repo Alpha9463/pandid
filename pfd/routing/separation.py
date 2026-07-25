@@ -145,10 +145,15 @@ def separate_streams(fs: "Flowsheet", spacing: float = 6.0) -> None:
             groups.append(current)
         return groups
 
-    # The window is wider than ``spacing`` so that runs which are merely *close*
-    # are resolved in the same pass. Resolving only already-coincident runs can
-    # otherwise nudge one of them into a neighbour it was previously clear of.
-    window = 2.0 * spacing
+    # The window is exactly ``spacing``. A neighbour closer than that is one the
+    # resolver could nudge a run into, so it still has to be in the same cluster
+    # and resolved in the same pass; a run further away than that is already
+    # legible and has nothing to gain. Chaining at twice the spacing swept up
+    # runs a comfortable 10–12px apart and then packed them onto the grid at the
+    # 6px minimum — strictly worse than where they started — and, where one
+    # stream contributed two tracks to the cluster, it flattened that stream's
+    # own jog onto a neighbour's track.
+    window = spacing
     for group in group_by_track(h_segs, window):
         resolve_track(group, h_offsets)
 
