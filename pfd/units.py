@@ -53,6 +53,7 @@ class Unit:
         self.significant = False
         self.pin_: Pin | None = None      # user intent (set only via pin())
         self.frame: Frame | None = None   # resolved geometry (set only by layout)
+        self._port_faces: dict[str, str] = {}   # port name -> chosen face
         for spec in self._PORTS:
             self._add_port(*spec)
 
@@ -64,13 +65,20 @@ class Unit:
         x: float | None = None,
         y: float | None = None,
         orientation: float = 0.0,
-        mirrored: bool = False,
+        mirrored: bool | str = False,
     ) -> "Unit":
         """Pin the unit to a specific layout grid cell or exact pixel coordinate.
 
         Records *intent* only. The layout engine reads it and resolves the final
         :class:`~pfd.geometry.Frame`; pinned axes are honored exactly.
+
+        ``orientation`` is a clockwise quarter turn in degrees (0/90/180/270); a
+        quarter turn swaps the unit's width and height. ``mirrored`` flips the
+        symbol: ``True`` or ``"x"`` left↔right (swapping its E and W faces),
+        ``"y"`` top↔bottom (swapping N and S), ``"xy"`` both.
         """
+        from pfd.geometry import normalize_mirror, normalize_orientation
+
         if self.pin_ is None:
             self.pin_ = Pin()
         if col is not None:
@@ -81,8 +89,37 @@ class Unit:
             self.pin_.x = x
         if y is not None:
             self.pin_.y = y
-        self.pin_.orientation = orientation
-        self.pin_.mirrored = mirrored
+        self.pin_.orientation = normalize_orientation(orientation)
+        self.pin_.mirrored, self.pin_.mirror_y = normalize_mirror(mirrored)
+        return self
+
+    def port_face(self, port_name: str, face: str) -> "Unit":
+        """Move a port to a different face of the symbol.
+
+        Many vessels can be piped from more than one side; where a symbol
+        declares alternates for a port, this picks one. ``face`` is ``"N"``,
+        ``"S"``, ``"E"`` or ``"W"`` *in the symbol's own frame* — mirroring and
+        rotation are applied on top, so the drawn face follows the placement.
+
+        Raises :class:`KeyError` for an unknown port and :class:`ValueError` when
+        the symbol offers no alternate on that face (a column's bottoms nozzle,
+        for instance, is fixed by physics and has none).
+        """
+        from pfd.portgeom import _sym
+
+        if port_name not in self.ports:
+            raise KeyError(
+                f"{type(self).__name__} {self.name!r} has no port {port_name!r}; "
+                f"available ports: {sorted(self.ports)}"
+            )
+        face = face.upper()
+        alts = (getattr(_sym(self), "port_alts", None) or {}).get(port_name) or {}
+        if face not in alts:
+            raise ValueError(
+                f"port {self.name}.{port_name} cannot move to face {face!r}; "
+                f"available: {sorted(alts) or 'none — this nozzle is fixed'}"
+            )
+        self._port_faces[port_name] = face
         return self
 
     def _add_port(self, name: str, direction: str, role: str,

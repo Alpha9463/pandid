@@ -117,8 +117,13 @@ KIND_MAP = {
     # Horizontal drum (reflux drum / accumulator / KO drum): a lying cylinder
     # with dished ends. Feed enters the left head, vapour leaves the top face
     # and liquid draws off the bottom face (both span x 5.77..85.77).
+    #
+    # A drum can legitimately be piped from more than one side, so feed and
+    # vapour list alternate faces (see Unit.port_face). Liquid has none — it
+    # draws off the bottom by gravity.
     ("separator", "horizontal"): ("vessels", "Drum or Condenser",
-                                  {"feed": ("W", 15), "vapor": ("N", 30.0),
+                                  {"feed": [("W", 15), ("N", 20.0), ("E", 15)],
+                                   "vapor": [("N", 30.0), ("E", 15), ("W", 15)],
                                    "liquid": ("S", 68.0)}),
     ("separator", "cyclone"): ("separators", "Separator (Cyclone)", {"feed": "W", "vapor": "N", "liquid": "S"}),
     ("separator", "gravity"): ("separators", "Gravity Separator, Settling Chamber",
@@ -188,13 +193,29 @@ def build():
         # Emit a heavier stroke on scaled symbols so it renders at 2px after the
         # scale transform (2px matches streams + hand-drawn symbols exactly).
         inner, w, h, constraints = convert_shape(el, stroke_width=round(2.0 / s, 3))
-        ports = {p: resolve_port(spec, constraints, w, h) for p, spec in port_map.items()}
+        # A port spec may be a LIST: the first entry is the default placement and
+        # the rest are alternate faces the user can move that port to, keyed by
+        # the edge each one names.
+        ports, alts = {}, {}
+        for p, spec in port_map.items():
+            choices = spec if isinstance(spec, list) else [spec]
+            ports[p] = resolve_port(choices[0], constraints, w, h)
+            for extra in choices[1:]:
+                if not isinstance(extra, tuple) or extra[0] not in ("N", "S", "E", "W"):
+                    raise SystemExit(
+                        f"{kind}/{variant} port {p!r}: an alternate face must be an "
+                        f'edge spec like ("N", 30.0), got {extra!r}')
+                alts.setdefault(p, {})[extra[0]] = resolve_port(extra, constraints, w, h)
+
         if s != 1.0:
             inner = f'<g transform="scale({s})">{inner}</g>'
             w, h = w * s, h * s
             ports = {p: (x * s, y * s) for p, (x, y) in ports.items()}
+            alts = {p: {f: (x * s, y * s) for f, (x, y) in d.items()} for p, d in alts.items()}
         w, h = round(w, 1), round(h, 1)
         ports = {p: tuple(round(v, 1) for v in xy) for p, xy in ports.items()}
+        alts = {p: {f: tuple(round(v, 1) for v in xy) for f, xy in d.items()}
+                for p, d in alts.items()}
         sid = kind if variant == "default" else f"{kind}_{variant}"
         svg = f'<g id="sym_{sid}">{inner}</g>'
         lines += [
@@ -203,6 +224,10 @@ def build():
             f"        svg={svg!r},",
             f"        width={w}, height={h},",
             f"        ports={ports!r},",
+        ]
+        if alts:
+            lines.append(f"        port_alts={alts!r},")
+        lines += [
             f"    ), {variant!r})",
             "",
         ]

@@ -104,6 +104,26 @@ fv = fs.add(units.Valve("FV-1")).pin(col=2, row=1, mirrored=True)
 fs.connect(feed.outlet, hx.cold_in).via([(130, 65), (130, 110)])
 ```
 
+**Orientation and mirroring.** `orientation` is a clockwise quarter turn in
+degrees (`0`/`90`/`180`/`270`) and swaps the unit's width and height; `mirrored`
+flips it — `True` or `"x"` left↔right (swapping the E and W faces), `"y"`
+top↔bottom (swapping N and S), `"xy"` both. Ports follow the placement, so a
+stream never detaches from its nozzle:
+
+```python
+fs.add(units.Pump("P-1")).pin(x=200, y=100, orientation=90)      # discharge now faces S
+fs.add(units.Pump("P-2")).pin(x=400, y=100, mirrored="y")        # flipped top-to-bottom
+```
+
+**Choosing a port's face.** Many vessels can be piped from more than one side.
+Where a symbol declares alternates, `port_face()` picks one; nozzles fixed by
+physics (a column's bottoms, a drum's liquid draw-off) declare none and raise:
+
+```python
+drum = fs.add(units.Separator("V-1", variant="horizontal"))
+drum.port_face("feed", "N")     # feed the drum from above instead of the left head
+```
+
 Pinned and auto-placed units mix freely — the engine resolves each unit's frame
 from your intent and auto-routes anything you didn't pin.
 

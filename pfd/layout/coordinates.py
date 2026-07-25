@@ -130,7 +130,7 @@ def assign_coordinates(fs: "Flowsheet") -> None:
         u.frame = Frame(
             x=s.x, y=s.y, w=s.w, h=s.h,
             col=s.col, row=s.row,
-            orientation=s.orientation, mirrored=s.mirrored,
+            orientation=s.orientation, mirrored=s.mirrored, mirror_y=s.mirror_y,
         )
 
     _assign_labels(fs)

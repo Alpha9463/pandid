@@ -39,6 +39,7 @@ def _seed_slots(fs: "Flowsheet") -> None:
             y=pin.y if pin else None,
             orientation=pin.orientation if pin else 0.0,
             mirrored=pin.mirrored if pin else False,
+            mirror_y=pin.mirror_y if pin else False,
         )
 
 
