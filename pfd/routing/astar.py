@@ -4,6 +4,8 @@ from pfd.routing.visibility import VisibilityGraph
 
 BEND_PENALTY = 500.0
 
+OPPOSITE = {"N": "S", "S": "N", "E": "W", "W": "E"}
+
 def get_dir(p1: Tuple[float, float], p2: Tuple[float, float]) -> Optional[str]:
     if p1[0] < p2[0]:
         return "E"
@@ -35,7 +37,9 @@ def find_path(
 ) -> List[Tuple[float, float]]:
     """
     Finds the shortest orthogonal path on the visibility graph using A*.
-    start_dir: Forced direction for the first step from start.
+    start_dir: The OUTWARD normal direction of the source port. ``start`` is already
+        the port's projected escape node, so this only seeds the travel direction —
+        it is not re-imposed on the first step.
     goal_dir: The OUTWARD normal direction of the destination port. The path must arrive heading the opposite direction.
     """
     if edge_penalties is None:
@@ -67,10 +71,22 @@ def find_path(
         for neighbor in graph.edges.get(current, []):
             ndir = get_dir(current, neighbor)
             
-            # 1. Enforce start direction strictly
-            if len(path) == 1 and start_dir and ndir != start_dir:
+            # 1. Never reverse along the axis just travelled. A reversal
+            #    retraces the segment it just drew, and the cost model charges
+            #    it a single bend — cheaper than the honest two-bend detour
+            #    around the obstacle that provoked it, so the search preferred
+            #    lines drawn over themselves.
+            #
+            #    ``start`` is the port's *projected* escape node and the caller
+            #    draws the anchor->projection stub itself, so the square exit is
+            #    already guaranteed. Seeding ``cur_dir`` with ``start_dir`` and
+            #    banning the reverse is therefore the whole port constraint:
+            #    the path may turn immediately, but never back over the stub.
+            #    (Re-imposing ``start_dir`` on the first step instead bought an
+            #    arbitrary extra hop outward before any turn was allowed.)
+            if cur_dir and ndir == OPPOSITE[cur_dir]:
                 continue
-                
+
             # 2. Goal approach. The router appends a perpendicular goal_proj->port
             #    segment, so the port is always entered squarely regardless of how
             #    we reach goal_proj. Allow reaching it head-on OR from either side;
