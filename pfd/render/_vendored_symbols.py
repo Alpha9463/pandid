@@ -81,14 +81,14 @@ def register_vendored(registry):
     registry.register('pump', Symbol(
         svg='<g id="sym_pump"><path d="M 12.0 54.0 L 0.0 67.0 L 60.0 67.0 L 48.0 54.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.6 25.0 A 30.0 30.0 0.0 0 1 30.0 0.0 L 70.0 0.0 L 70.0 20.0 L 58.45 20.0 A 30.0 30.0 0.0 0 1 51.8587 50.8297 A 30.0 30.0 0.0 0 1 21.3414 58.7425 A 30.0 30.0 0.0 0 1 0.6 35.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 21.4 25.0 A 10.0 10.0 0.0 1 1 21.4 35.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=70.0, height=67.0,
-        ports={'suction': (0.7, 33.5), 'discharge': (30.1, 0.0)},
+        ports={'suction': (0.0, 30.0), 'discharge': (70.0, 10.0)},
     ), 'default')
 
     # draw.io pumps:Gear Pump -> pump/gear
     registry.register('pump', Symbol(
         svg='<g id="sym_pump_gear"><path d="M 15.0 82.0 L 7.5 91.0 L 49.5 91.0 L 41.9 82.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 48.5 10.0 L 48.5 75.0 A 20.0 10.0 0.0 0 1 28.5 85.0 A 20.0 10.0 0.0 0 1 8.5 75.0 L 8.5 10.0 A 20.0 10.0 0.0 0 1 28.5 0.0 A 20.0 10.0 0.0 0 1 48.5 10.0 Z" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="28.5" cy="23.0" rx="16.0" ry="16.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="28.5" cy="60.0" rx="16.0" ry="16.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 57.0 31.5 L 57.0 51.5 M 48.5 41.5 L 57.0 41.5 M 0.0 32.0 L 0.0 52.0 M 0.0 41.5 L 8.5 41.5" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=57.0, height=91.0,
-        ports={'suction': (0.0, 45.5), 'discharge': (57.0, 45.5)},
+        ports={'suction': (0.0, 41.5), 'discharge': (57.0, 41.5)},
     ), 'gear')
 
     # draw.io pumps:Screw Pump -> pump/screw
@@ -102,14 +102,14 @@ def register_vendored(registry):
     registry.register('compressor', Symbol(
         svg='<g id="sym_compressor"><path d="M 12.0 54.0 L 0.0 67.0 L 60.0 67.0 L 48.0 54.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.6 25.0 A 30.0 30.0 0.0 0 1 30.0 0.0 L 70.0 0.0 L 70.0 20.0 L 58.45 20.0 A 30.0 30.0 0.0 0 1 51.8587 50.8297 A 30.0 30.0 0.0 0 1 21.3414 58.7425 A 30.0 30.0 0.0 0 1 0.6 35.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=70.0, height=67.0,
-        ports={'suction': (0.7, 33.5), 'discharge': (30.1, 0.0)},
+        ports={'suction': (0.0, 30.0), 'discharge': (70.0, 10.0)},
     ), 'default')
 
     # draw.io compressors:Reciprocating Compressor -> compressor/reciprocating
     registry.register('compressor', Symbol(
         svg='<g id="sym_compressor_reciprocating"><path d="M 14.5 40.0 L 14.5 0.0 L 34.5 0.0 L 34.5 13.0 L 74.5 13.0 L 74.5 40.0 Z" fill="none" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="23.0" width="14.0" height="4.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 74.5 23.0 L 87.5 23.0 L 87.5 21.5 L 98.0 25.0 L 87.5 28.5 L 87.5 27.0 L 74.5 27.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=98.0, height=40.0,
-        ports={'suction': (0.0, 25.0), 'discharge': (49.0, 12.8)},
+        ports={'suction': (0.0, 25.0), 'discharge': (98.0, 25.0)},
     ), 'reciprocating')
 
     # draw.io compressors:Compressor -> blower/default
@@ -130,7 +130,7 @@ def register_vendored(registry):
     registry.register('hex', Symbol(
         svg='<g id="sym_hex_kettle"><path d="M 4.5 15.0 L 16.5 15.0 L 16.5 30.0 L 4.5 30.0 A 3.0 5.0 0.0 0 1 0.0 22.5 A 3.0 5.0 0.0 0 1 4.5 15.0 M 19.5 15.0 L 26.5 15.0 L 41.5 0.0 L 86.5 0.0 A 5.0 15.0 0.0 0 1 91.5 15.0 A 5.0 15.0 0.0 0 1 86.5 30.0 L 19.5 30.0 Z M 4.5 15.0 L 4.5 30.0 M 41.5 0.0 L 41.5 30.0 M 86.5 0.0 L 86.5 30.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="16.5" y="12.0" width="3.0" height="21.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=91.5, height=33.0,
-        ports={'cold_in': (0.0, 22.5), 'cold_out': (91.5, 15.0), 'hot_in': (41.2, 0.0), 'hot_out': (45.8, 30.0)},
+        ports={'cold_in': (0.0, 22.5), 'cold_out': (91.5, 15.0), 'hot_in': (64.0, 0.0), 'hot_out': (45.8, 30.0)},
     ), 'kettle')
 
     # draw.io heat_exchangers:Heater -> heater/default
@@ -179,14 +179,14 @@ def register_vendored(registry):
     registry.register('tank', Symbol(
         svg='<g id="sym_tank"><rect x="0.0" y="25.46" width="100.0" height="70.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 25.46 A 75.0 75.0 0.0 0 1 100.0 25.46 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=95.5,
-        ports={'inlet': (30.0, 0.0), 'outlet': (50.0, 95.5)},
+        ports={'inlet': (50.0, 6.4), 'outlet': (50.0, 95.5)},
     ), 'default')
 
     # draw.io vessels:Tank (Conical Roof) -> tank/conical
     registry.register('tank', Symbol(
         svg='<g id="sym_tank_conical"><path d="M 0.0 20.0 L 0.0 90.0 L 100.0 90.0 L 100.0 20.0 L 50.0 0.0 Z M 0.0 20.0 L 100.0 20.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=90.0,
-        ports={'inlet': (30.0, 0.0), 'outlet': (50.0, 90.0)},
+        ports={'inlet': (50.0, 0.0), 'outlet': (50.0, 90.0)},
     ), 'conical')
 
     # draw.io fittings:Reducer -> reducer/default
@@ -228,7 +228,7 @@ def register_vendored(registry):
     registry.register('pump', Symbol(
         svg='<g id="sym_pump_vacuum"><path d="M 0.0 22.97 L 14.5 22.97 L 14.5 14.97 L 26.6 14.97 A 25.0 25.0 0.0 0 1 72.4 14.97 L 84.5 14.97 L 84.5 22.97 L 99.0 22.97 L 99.0 26.97 L 84.5 26.97 L 84.5 34.97 L 72.4 34.97 A 25.0 25.0 0.0 0 1 26.6 34.97 L 14.5 34.97 L 14.5 26.97 L 0.0 26.97 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 14.5 22.97 L 14.5 26.97 M 84.5 22.97 L 84.5 26.97 M 26.6 34.97 A 25.0 25.0 0.0 0 1 26.6 14.97 M 72.4 14.97 A 25.0 25.0 0.0 0 1 72.4 34.97" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=99.0, height=49.9,
-        ports={'suction': (0.0, 25.0), 'discharge': (49.5, 0.0)},
+        ports={'suction': (0.0, 25.0), 'discharge': (99.0, 25.0)},
     ), 'vacuum')
 
     # draw.io compressors:Rotary Compressor -> compressor/rotary
@@ -249,7 +249,7 @@ def register_vendored(registry):
     registry.register('vessel', Symbol(
         svg='<g id="sym_vessel_dished"><path d="M 50.0 7.69 L 50.0 87.69 A 13.0 5.0 0.0 0 1 30.0 95.3823 A 13.0 5.0 0.0 0 1 10.0 87.69 L 10.0 7.69 A 13.0 5.0 0.0 0 1 30.0 -0.0023 A 13.0 5.0 0.0 0 1 50.0 7.69 Z M 10.0 7.69 L 50.0 7.69 M 10.0 87.69 L 50.0 87.69 M 50.0 62.69 L 60.0 72.69 L 50.0 72.69 Z M 10.0 62.69 L 0.0 72.69 L 10.0 72.69 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=60.0, height=95.4,
-        ports={'inlet': (0.0, 47.0), 'outlet': (60.0, 47.0)},
+        ports={'inlet': (10.0, 47.0), 'outlet': (50.0, 47.0)},
     ), 'dished')
 
     # draw.io vessels:Vessel (Dome) -> vessel/dome
@@ -298,7 +298,7 @@ def register_vendored(registry):
     registry.register('furnace', Symbol(
         svg='<g id="sym_furnace"><path d="M 25.0 0.0 L 55.0 0.0 L 55.0 34.5 L 70.0 44.5 L 70.0 99.0 L 60.0 99.0 L 60.0 89.5 L 20.0 89.5 L 20.0 99.0 L 10.0 99.0 L 10.0 44.5 L 25.0 34.5 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 25.0 34.5 L 55.0 34.5 M 10.0 44.5 L 70.0 44.5 M 10.0 89.5 L 70.0 89.5 M 0.0 54.5 L 55.0 54.5 L 25.0 79.5 L 80.0 79.5" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=99.0,
-        ports={'inlet': (9.6, 49.5), 'outlet': (70.4, 49.5), 'fuel': (40.0, 89.6)},
+        ports={'inlet': (0.0, 54.5), 'outlet': (80.0, 79.5), 'fuel': (40.0, 89.6)},
     ), 'default')
 
     # draw.io pumps:Turbine -> turbine/default
