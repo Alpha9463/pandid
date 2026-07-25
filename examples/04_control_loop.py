@@ -13,6 +13,8 @@ Demonstrates the instrumentation subsystem:
 - A control valve (``Valve`` variant ``"control"``) on the process line.
 """
 
+from _bootstrap import out  # runs from the repo root or from examples/
+
 from pfd import Flowsheet, units
 
 
@@ -36,7 +38,7 @@ def main():
     fs.connect(fic.sig_out, fy.sig_in, kind="pneumatic")   # 3-15 psi, slash ticks
     fs.connect(fy.sig_out, fr.sig_in, kind="data")         # fieldbus, dash-dot
 
-    fs.render("control_loop.svg")
+    fs.render(out("control_loop.svg"))
     print("Generated control_loop.svg")
 
 

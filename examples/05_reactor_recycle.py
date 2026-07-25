@@ -11,6 +11,8 @@ topology alone. It exercises:
   cooler -> separator -> splitter) is aligned onto one straight horizontal axis.
 """
 
+from _bootstrap import out  # runs from the repo root or from examples/
+
 from pfd import Flowsheet, units
 
 
@@ -37,7 +39,7 @@ def main():
     fs.connect(split.out_2, purge.inlet)
     fs.connect(split.out_1, mix.in_1, tear_hint=True)   # recycle back to the mixer
 
-    fs.render("reactor_recycle.svg")
+    fs.render(out("reactor_recycle.svg"))
     print("Generated reactor_recycle.svg")
 
 

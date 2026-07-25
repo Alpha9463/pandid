@@ -1,3 +1,5 @@
+from _bootstrap import out  # runs from the repo root or from examples/
+
 from pfd import Flowsheet, units
 
 fs = Flowsheet("Ammonia Loop Auto")
@@ -18,5 +20,5 @@ fs.connect(sep.vapor, comp.suction)
 fs.connect(comp.discharge, mix.in_1)
 fs.connect(sep.liquid, prod.inlet)
 
-fs.render("ammonia_auto.svg")
+fs.render(out("ammonia_auto.svg"))
 print("ammonia_auto.svg generated successfully.")
