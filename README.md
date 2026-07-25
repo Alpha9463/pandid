@@ -1,21 +1,68 @@
-# pfd — Process Flow Diagram engine
+# chem-pfd — Process Flow Diagram engine
 
 `pfd` is a zero-dependency, pure-Python engine that turns a topological
 flowsheet definition into a publication-quality, orthogonal **PFD / P&ID** as
 SVG. You describe *what connects to what*; the engine lays out the equipment,
 routes every stream, and draws industry-standard symbols.
 
-## Features
+The distribution is **`chem-pfd`**; it imports as **`pfd`**.
+
+[![Distillation train](docs/gallery/03_distillation_train.png)](docs/gallery/README.md)
+
+<sub>[`examples/03_distillation_train.py`](examples/03_distillation_train.py) — see the [gallery](docs/gallery/README.md) for all seven.</sub>
+
+## Install
+
+Requires Python 3.10+.
+
+```bash
+pip install chem-pfd
+pip install 'chem-pfd[pdf]'   # optional PDF/PNG export backend (cairosvg)
+```
+
+From a checkout:
+
+```bash
+pip install -e .
+pip install -e '.[dev]'       # pytest, ruff, mypy
+```
+
+## Quick start
+
+```python
+from pfd import Flowsheet, units
+
+fs = Flowsheet("Flash Separation")
+feed   = fs.add(units.Feed("Crude"))
+heater = fs.add(units.Heater("E-101"))
+drum   = fs.add(units.Separator("V-101"))
+gas    = fs.add(units.Product("Off-Gas"))
+liquid = fs.add(units.Product("Condensate"))
+
+fs.connect(feed.outlet,   heater.inlet)
+fs.connect(heater.outlet, drum.feed)
+fs.connect(drum.vapor,    gas.inlet)
+fs.connect(drum.liquid,   liquid.inlet)
+
+fs.render("flash.svg")        # layout + routing run automatically
+```
+
+No coordinates anywhere: `render()` runs layout and routing for you. It infers
+the format from the extension (`.svg`, or `.pdf`/`.png` with the optional
+backend). `fs.to_svg()` returns the SVG string, `fs.show()` opens it in a
+browser, and a flowsheet renders inline in Jupyter.
+
+## What it does
 
 - **Topology-first API** — declare typed units (pumps, columns, reactors,
   heat exchangers, …) and connect their named ports; streams are created for you.
-- **Industry-standard symbol library** — 95+ ISO 10628-2 / ISA-5.1 symbols with
-  style **variants** (e.g. a heat exchanger can be shell-&-tube, plate, kettle,
-  U-tube…), derived from the Apache-2.0 draw.io P&ID stencils (see `NOTICE`).
 - **Automatic layout** — Sugiyama-style layering, crossing reduction, and a
   center-aligned flow spine; recycles are detected and routed around the sheet.
 - **Orthogonal A\* routing** — clean right-angle streams with crossing jump-gaps
   and parallel-segment separation. Never emits a disconnected stream.
+- **Industry-standard symbol library** — 95+ ISO 10628-2 / ISA-5.1 symbols with
+  style **variants** (a heat exchanger can be shell-&-tube, plate, kettle,
+  U-tube…), derived from the Apache-2.0 draw.io P&ID stencils (see `NOTICE`).
 - **Pixel-perfect overrides** — `pin()` equipment to exact coordinates and
   `.via()` a stream through explicit waypoints; the engine honors them and
   auto-routes the rest.
@@ -35,77 +82,41 @@ routes every stream, and draws industry-standard symbols.
   library. (SVG symbols are pre-converted and inlined; `cairosvg` is optional,
   only for PDF/PNG export.)
 
-## Installation
+**It does not do mass or energy balances.** Stream properties are strings you
+supply; nothing is calculated from them. This is a drawing engine.
 
-Requires Python 3.10+. The distribution is **`chem-pfd`**; it imports as `pfd`.
+## Documentation
 
-```bash
-pip install chem-pfd
-# optional PDF/PNG export backend:
-pip install 'chem-pfd[pdf]'
-```
+| Where | What |
+|---|---|
+| [Example gallery](docs/gallery/README.md) | all seven examples rendered, with what each one demonstrates |
+| [API reference](docs/api.md) | every public class, port and option, verified against the source |
+| [Contributing](CONTRIBUTING.md) | setup, the four gates, and the conventions that are easy to get wrong |
+| [Changelog](CHANGELOG.md) | what is in this release |
 
-From a checkout:
-
-```bash
-pip install -e .
-pip install -e '.[dev]'   # pytest, ruff, mypy
-```
-
-```python
-from pfd import Flowsheet, units
-```
-
-Tests run with `pytest`.
-
-## Quick start
-
-```python
-from pfd import Flowsheet, units
-
-fs = Flowsheet("Ammonia Loop")
-
-feed     = fs.add(units.Feed("Natural Gas"))
-mixer    = fs.add(units.Mixer("M-101"))
-reformer = fs.add(units.Reactor("R-101"))
-hx       = fs.add(units.HeatExchanger("E-101"))
-sep      = fs.add(units.Separator("V-101"))
-comp     = fs.add(units.Compressor("K-101"))
-prod     = fs.add(units.Product("Ammonia"))
-
-fs.connect(feed.outlet,     mixer.in_1)
-fs.connect(mixer.outlet,    reformer.feed)
-fs.connect(reformer.outlet, hx.hot_in)
-fs.connect(hx.hot_out,      sep.feed)
-fs.connect(sep.vapor,       comp.suction)
-fs.connect(comp.discharge,  mixer.in_2)   # detected as the recycle
-fs.connect(sep.liquid,      prod.inlet)
-
-fs.render("ammonia_loop.svg")             # layout + routing run automatically
-```
-
-`render()` infers the format from the extension (`.svg`, or `.pdf`/`.png` with
-the optional backend). `fs.to_svg()` returns the SVG string; `fs.show()` opens
-it in a browser; a flowsheet also renders inline in Jupyter.
+---
 
 ## Equipment & variants
 
 A **class** is a functional equipment type (defined by its ports); a **variant**
-is a visual style within it. Pick a variant with the `variant=` argument:
+is a visual style within it. Pick a variant with the `variant=` argument; the
+`"default"` variant is listed first with the shape it draws.
 
 ```python
-fs.add(units.HeatExchanger("E-1", variant="plate"))   # or shell_tube, kettle, u_tube, condenser
-fs.add(units.Valve("FV-1", variant="control"))         # gate, globe, ball, butterfly, check, needle, three_way, relief
-fs.add(units.Pump("P-1", variant="gear"))              # centrifugal, gear, screw, vacuum
-fs.add(units.Tank("TK-1", variant="floating_roof"))    # dished, conical, floating_roof, sphere
-fs.add(units.Separator("V-2", variant="cyclone"))      # knock-out, cyclone, gravity, scrubber, electrostatic
+fs.add(units.HeatExchanger("E-1", variant="plate"))    # default, shell_tube, straight_tubes, plate, kettle, u_tube, condenser
+fs.add(units.Valve("FV-1", variant="control"))         # default (gate), gate, globe, ball, butterfly, check, needle, three_way, control, relief
+fs.add(units.Pump("P-1", variant="gear"))              # default (centrifugal), gear, screw, vacuum
+fs.add(units.Tank("TK-1", variant="floating_roof"))    # default (dished roof), conical, floating_roof, sphere
+fs.add(units.Separator("V-2", variant="cyclone"))      # default (knock-out drum), horizontal, cyclone, gravity, scrubber, electrostatic
 fs.add(units.Fitting("ST-1", variant="strainer"))      # see "In-line fittings" below
 ```
 
 Classes include: `Feed`, `Product`, `Pump`, `Compressor`, `Blower`, `Valve`,
 `Vessel`, `Tank`, `HeatExchanger`, `Heater`, `Cooler`, `Reactor`, `Separator`,
 `Column`, `Mixer`, `Splitter`, `Reducer`, `Fitting`, `Ejector`, `Vent`,
-`Funnel`, `Furnace`, `Turbine`, `Filter`, `Dryer`, and `Instrument`.
+`Funnel`, `Furnace`, `Turbine`, `Filter`, `Dryer`, and `Instrument`. The
+[API reference](docs/api.md#units-and-ports) lists every class's ports and every
+registered variant.
 
 **Valve operators.** Most valve variants draw the body only; these draw the
 operator too, and their `actuator` port sits on its crown rather than on the
@@ -134,6 +145,36 @@ only in what is drawn between them. The variant picks the device: `strainer`,
 `discharge`), and `Vent` / `Funnel` because each has only one: `Vent` is a stack
 open to atmosphere that a PSV tailpipe or a tank breather terminates on, and
 `Funnel` is a manual charging point feeding the line.
+
+## Automatic layout and recycles
+
+Given only the topology, the engine layers the units, orders them to reduce
+crossings, aligns the main process line onto one axis, and detects feedback
+loops itself — you never declare a stream to be a recycle:
+
+```python
+from pfd import Flowsheet, units
+
+fs = Flowsheet("Ammonia Loop")
+
+feed     = fs.add(units.Feed("Natural Gas"))
+mixer    = fs.add(units.Mixer("M-101"))
+reformer = fs.add(units.Reactor("R-101"))
+hx       = fs.add(units.HeatExchanger("E-101"))
+sep      = fs.add(units.Separator("V-101"))
+comp     = fs.add(units.Compressor("K-101"))
+prod     = fs.add(units.Product("Ammonia"))
+
+fs.connect(feed.outlet,     mixer.in_1)
+fs.connect(mixer.outlet,    reformer.feed)
+fs.connect(reformer.outlet, hx.hot_in)
+fs.connect(hx.hot_out,      sep.feed)
+fs.connect(sep.vapor,       comp.suction)
+fs.connect(comp.discharge,  mixer.in_2)   # detected as the recycle
+fs.connect(sep.liquid,      prod.inlet)
+
+fs.render("ammonia_loop.svg")
+```
 
 ## Manual layout
 
@@ -168,7 +209,9 @@ drum.port_face("feed", "N")     # feed the drum from above instead of the left h
 ```
 
 Pinned and auto-placed units mix freely — the engine resolves each unit's frame
-from your intent and auto-routes anything you didn't pin.
+from your intent and auto-routes anything you didn't pin. A port sits at a fixed
+*fraction* of its symbol's box, so lining two items up means matching those
+fractions rather than their corners; see [example 06](docs/gallery/README.md#06--column-reflux-and-reboiler).
 
 ## Instrumentation & signals
 
@@ -176,8 +219,8 @@ from your intent and auto-routes anything you didn't pin.
 ft  = fs.add_instrument("FT", 101)                             # field flow transmitter
 fic = fs.add_instrument("FIC", 101, variant="panel")           # panel-mounted controller
 fy  = fs.add_instrument("FY", 101, variant="computer")         # computing relay
-# variants: field (default), panel, aux, shared (DCS square), computer (hexagon),
-#           logic (interlock square)
+# variants: default (field balloon), panel, aux, shared (DCS square),
+#           computer (hexagon), logic (interlock square)
 
 fs.connect(ft.sig_out, fic.sig_in, kind="electric")        # dashed
 fs.connect(fic.sig_out, fy.sig_in, kind="pneumatic")       # slash-ticks
@@ -281,8 +324,9 @@ line (the drawing the stream comes from / goes to):
 fs.add(units.Feed("Fermentation Broth", reference="PFD-201"))
 ```
 
-**Stream table** — property rows render in first-seen key order (values carry
-their own units); inject section headers with `stream_table_sections`:
+**Stream table** — property rows render in first-seen key order (values are the
+strings you supply and carry their own units); inject section headers with
+`stream_table_sections`:
 
 ```python
 fs.stream_table_sections = [("Ethanol", "Mass Fraction")]   # header before "Ethanol"
@@ -291,14 +335,19 @@ fs.render("sheet.svg", styling="pid", show_stream_table=True)
 
 ## Examples
 
-Runnable scripts in `examples/`:
+Runnable scripts in `examples/`, each usable from the repo root or from
+`examples/` itself. All seven are rendered in the
+[gallery](docs/gallery/README.md).
 
-- `01_ammonia_loop.py` — fully automatic layout, layering, recycle detection.
-- `02_manual_layout.py` — `pin()` + `.via()` overrides.
-- `03_distillation_train.py` — two-column train, recycle, stream table, P&ID
-  title block with revision history.
-- `04_control_loop.py` — ISA balloons attached to the line and to equipment,
-  alarms, an interlock, a PSV, and both loops closing on a valve actuator.
+| Script | Demonstrates |
+|---|---|
+| `01_ammonia_loop.py` | fully automatic layout, layering, recycle detection |
+| `02_manual_layout.py` | `pin()` + `.via()` overrides |
+| `03_distillation_train.py` | two-column train, recycle, stream table, P&ID title block with revision history, equipment list / notes / legend |
+| `04_control_loop.py` | ISA balloons attached to the line and to equipment, alarms, an interlock, a PSV, and both loops closing on a valve actuator |
+| `05_reactor_recycle.py` | automatic recycle + purge split, straightened process spine |
+| `06_column_reflux.py` | fractionation sheet: overhead condenser, reflux drum, kettle reboiler, both loops closing on the column's return nozzles |
+| `07_metering_skid.py` | in-line fittings and actuated valves on one spine, PSV to flare, level controller on the valve operator |
 
 ## Architecture
 
@@ -316,6 +365,11 @@ computed by the layout engine), so layout is idempotent.
 The symbol library is generated by `scripts/vendor_symbols.py`
 (mxGraph stencil XML → SVG via `scripts/mxgraph_to_svg.py`) into
 `pfd/render/_vendored_symbols.py`; `scripts/symbol_sheet.py` renders a catalogue.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). The gates are `pytest`, `ruff check .`,
+`ruff format --check tests` and `mypy pfd`.
 
 ## License & attribution
 
