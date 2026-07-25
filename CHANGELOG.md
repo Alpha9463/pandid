@@ -57,8 +57,13 @@ and is kept working.
 - `Unit.pin()` to a grid cell (`col`/`row`) or exact coordinates (`x`/`y`), with
   `orientation` (0/90/180/270 clockwise quarter turns) and `mirrored`
   (`True`/`"x"`, `"y"`, `"xy"`). Pinned and auto-placed units mix freely.
-- `Unit.port_face()` — move a port to another declared face of its symbol; a
-  nozzle fixed by physics declares no alternates and raises.
+- `Unit.nozzle()` — pipe a port from a named face of the unit *as drawn*,
+  accepting `top`/`bottom`/`left`/`right` as well as the compass points. A port
+  can only take a face its symbol authored a coordinate for, so the moved nozzle
+  still lands on drawn ink; a nozzle fixed by physics has one placement and
+  raises. The choice is re-checked against any later `pin()`, and the resolver
+  raises rather than falling back to the home nozzle if a face becomes
+  unreachable.
 - Automatic label placement: an equipment tag goes to a face no connected
   nozzle occupies, so a stream no longer runs through its own label.
 
@@ -83,6 +88,13 @@ and is kept working.
   generated from the draw.io / diagrams.net P&ID stencils (Apache-2.0) by
   `scripts/vendor_symbols.py`; Feed/Product flags, Mixer, Splitter and the
   instrument balloons are hand-drawn originals.
+- `Symbol` validates its own declaration, so a third-party symbol gets the same
+  protection the invariant suite gives the shipped ones: a placement keyed to a
+  face its coordinate does not land on, or restating a port's home face at a
+  different point, raises instead of being silently dropped, and
+  `Symbol.coincident_ports()` warns about two ports on one coordinate. Only the
+  connections named in `Symbol.faceless_ports` — an instrument balloon is a
+  circle, so a signal may meet it anywhere — may share a placement.
 - `styling="pid"` — a zone-ruled ASME-style drawing border and a full-width
   engineering title strip. `TitleBlock` plus `Revision` rows carry the metadata,
   with per-row `by`/`checked`/`approved` initials.
@@ -118,6 +130,12 @@ and is kept working.
   overlapping pinned units, negative or non-finite coordinates — raise from
   `render()` rather than emit a silently wrong drawing. Warnings — a route
   crossing a unit body, a grossly indirect route — collect on `fs.warnings`.
+- `coincident-ports` — two connected ports on one unit that resolve to the same
+  point, so one stream terminates exactly on top of the other. An error where
+  both are nozzles the symbol anchors; a warning where either is a port the
+  symbol never anchored (a `Mixer`'s inlets past the two its symbol draws all
+  fall back to the centre of the box), which is a gap in the symbol rather than
+  a contradiction on the sheet.
 
 #### Tooling, tests and packaging
 
@@ -140,3 +158,17 @@ and is kept working.
 - `anchor=` on `Annotation`, `TableBox`, `equipment_list()`, `notes()` and
   `legend()` — use `align=`. The alias still works and wins over `align` when
   both are given.
+- `Unit.port_face()` — use `Unit.nozzle()`. **This alias is not
+  behaviour-preserving on a rotated or mirrored unit**, and the
+  `DeprecationWarning` announcing it is invisible by default outside
+  `__main__`, so it is called out here rather than left to be discovered.
+  `port_face()` read its face in the *symbol's own* frame, with the placement
+  transform applied afterwards; `nozzle()` reads it as the face on the finished
+  sheet. On an untransformed unit the two agree. On one pinned `mirrored="x"`
+  they are opposites — `port_face("inlet", "E")` put the nozzle on the drawn
+  west (#26) — and where the symbol authors no placement on the drawn face, the
+  call that used to succeed now raises instead of silently piping from the
+  wrong side. Rewrite each call site with the face the reader sees.
+- `Symbol.port_alts` — declare the whole menu, home placement included, in
+  `Symbol.port_faces`. `Symbol.free_ports` is now `Symbol.faceless_ports`. Both
+  old spellings still register.

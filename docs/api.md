@@ -313,15 +313,20 @@ point on the finished sheet — `"N"`, `"S"`, `"E"`, `"W"`, or the
 `top`/`bottom`/`left`/`right` spelling `label_pos` uses — so a mirrored or
 rotated unit takes the face the reader sees, not the one the stencil was drawn
 with. Raises `KeyError` for an unknown port and `ValueError` when the symbol
-offers no placement on that face. A later `pin()` that changes the rotation or
-mirroring re-checks the choice and raises if it no longer reaches that face, so
-call `nozzle()` after `pin()`.
+offers no placement on that face.
+
+The face has to be reachable under the placement the unit ends up with, and
+either call order enforces that: a `pin()` that rotates or mirrors the unit
+re-checks any face already chosen and raises without changing the placement, and
+a `nozzle()` after a `pin()` is checked against that pin rather than against
+whatever a previous `layout()` resolved.
 
 A port can only take a face the symbol has authored a coordinate for, so that
 the moved nozzle still lands on drawn ink. Everything else has one placement and
 is fixed by physics — a column's bottoms, a drum's liquid draw-off. The ports
-that offer a choice (faces given in the symbol's own frame; mirroring and
-rotation move them):
+that offer a choice (faces of the **untransformed** symbol, which is what you
+name on a unit that is neither rotated nor mirrored; rotation and mirroring move
+them, and `nozzle()` always takes the moved face):
 
 | Symbol | Port | Faces |
 |---|---|---|
@@ -339,8 +344,9 @@ lic = fs.add_instrument("LIC", 101, on=vessel, at="S", variant="panel")
 lic.nozzle("sig_out", "W")    # take the output on the side the valve is on
 ```
 
-`port_face()` is the deprecated spelling of the same call; it read its `face` in
-the symbol's own frame, which inverts under mirroring.
+`port_face()` is the deprecated spelling of the same call. It read its `face` in
+the symbol's own frame, so on a mirrored or rotated unit it names a different
+face than `nozzle()` does — see the CHANGELOG.
 
 ---
 
@@ -574,6 +580,8 @@ and `message`.
 | `pin-not-finite` | error | a pinned `x`/`y` is not a finite number |
 | `pin-out-of-bounds` | error | a pinned `x`/`y` is negative (off-sheet) |
 | `unit-overlap` | error | two units' drawn boxes overlap |
+| `coincident-ports` | error | two connected ports on one unit resolve to the same point |
+| `coincident-ports` | warning | …and one of them is a port the symbol never anchored, so it fell back to the centre of the box (a `Mixer`'s inlets past the two its symbol draws) |
 | `route-crosses-unit` | warning | a stream passes through a unit body it does not connect to |
 | `route-detour` | warning | a route is more than 3× its direct span |
 
