@@ -17,7 +17,8 @@ Requires Python 3.10+.
 
 ```bash
 pip install chem-pfd
-pip install 'chem-pfd[pdf]'   # optional PDF/PNG export backend (cairosvg)
+pip install 'chem-pfd[pdf]'    # optional PDF/PNG export backend (cairosvg)
+pip install 'chem-pfd[yaml]'   # optional YAML spec reader (Flowsheet.from_yaml)
 ```
 
 From a checkout:
@@ -76,11 +77,15 @@ browser, and a flowsheet renders inline in Jupyter.
   and generic titled boxes docked to the corners (auto **equipment list**,
   **notes**, **legend**, or any `Annotation` / `TableBox`), plus a sectioned
   stream-property table. Off-page connectors carry a drawing reference.
+- **Declare it as data** — a round-trippable spec format (`dict`, JSON, or
+  YAML) covering everything above, so an equipment list and a stream table go
+  straight to a drawing without anyone writing Python. Validated, not
+  interpreted: a typo names the entry and lists what would have worked.
 - **Validation** — `fs.validate()` flags overlapping pins, off-sheet
   coordinates (errors) and routes crossing equipment or big detours (warnings).
 - **Zero runtime dependencies** — the package uses only the Python standard
   library. (SVG symbols are pre-converted and inlined; `cairosvg` is optional,
-  only for PDF/PNG export.)
+  only for PDF/PNG export, and `PyYAML` only for reading a YAML spec.)
 
 **It does not do mass or energy balances.** Stream properties are strings you
 supply; nothing is calculated from them. This is a drawing engine.
@@ -333,6 +338,133 @@ fs.stream_table_sections = [("Ethanol", "Mass Fraction")]   # header before "Eth
 fs.render("sheet.svg", styling="pid", show_stream_table=True)
 ```
 
+## Building a flowsheet from data
+
+An equipment list and a stream table are data, and they usually already exist —
+in a spreadsheet, a YAML file, or a simulator export. The same flowsheet can be
+declared as a plain mapping and handed to the engine, so nobody has to retype a
+schedule as Python:
+
+```python
+from pfd import Flowsheet
+
+fs   = Flowsheet.from_dict(spec)         # a plain dict, from anywhere
+fs   = Flowsheet.from_json("bfw.json")   # standard library only
+fs   = Flowsheet.from_yaml("bfw.yaml")   # pip install 'chem-pfd[yaml]'
+spec = fs.to_dict()                      # writes the same spec back out
+
+fs.render("bfw.svg", styling="pid", show_stream_table=True)
+```
+
+`to_dict()` **round-trips**: `Flowsheet.from_dict(fs.to_dict())` rebuilds an
+equivalent flowsheet — same equipment, same nozzles, same placement, same
+drawing. Only intent is written, never the engine's results (resolved frames,
+routed paths, computed stream numbers), so the file stays short and re-lays out
+cleanly. YAML is the one optional extra; `from_dict` and `from_json` need
+nothing, and asking for YAML without PyYAML installed says exactly that.
+
+A complete sheet:
+
+```yaml
+name: Feed Metering Skid          # the only required field
+direction: LR                     # default "LR"
+stream_naming_scheme: "S{n}"
+components: [Water, {name: Ethanol, formula: C2H6O}]
+
+units:
+  - {kind: Feed, name: Raw Feed, reference: PFD-100, pin: {x: 60, y: 275}}
+  - {kind: Fitting, name: ST-101, variant: strainer, description: Suction Strainer}
+  - {kind: Mixer, name: M-101, n_inlets: 3, description: Suction Header}
+  - {kind: Pump, name: P-101, description: Feed Pump}
+  - {kind: Splitter, name: SP-101, n_outlets: 2, description: Minimum-Flow Tee}
+  - {kind: Valve, name: FV-101, variant: control, significant: true,
+     description: Spillback Valve}
+  - {kind: Vessel, name: V-101, variant: horizontal, width: 130, height: 42,
+     description: Surge Drum, port_faces: {inlet: N}}
+  - {kind: Product, name: To Unit 200, reference: PFD-200}
+
+instruments:
+  - {type: LIC, number: 101, variant: panel, on: V-101, at: S, offset: 110,
+     port_faces: {sig_out: W}}
+
+streams:
+  - {from: [Raw Feed, outlet], to: [ST-101, inlet]}
+  - {from: [ST-101, outlet], to: [M-101, in_1]}
+  - {from: [M-101, outlet], to: [P-101, suction]}
+  - from: [P-101, discharge]
+    to:   [SP-101, inlet]
+    properties: {Temperature: 25 C, Pressure: 4.0 barg, Ethanol: "0.92"}
+  - {from: [SP-101, out_1], to: [V-101, inlet]}
+  - {from: [SP-101, out_2], to: [FV-101, inlet]}
+  - {from: [FV-101, outlet], to: [M-101, in_3], tear_hint: true}
+  - {from: [V-101, outlet], to: [To Unit 200, inlet]}
+  - {from: [LIC-101, sig_out], to: [FV-101, actuator], kind: electric}
+
+stream_table_sections: [[Ethanol, Mass Fraction]]
+
+title_block:
+  title: Utilities U200
+  subtitle: Process Flow Diagram 1
+  drawing_number: PFD-2001
+  company: THE UNIVERSITY OF QUEENSLAND
+  status: ISSUED FOR REVIEW
+  sheet: "1"
+  of_sheets: "2"
+  revisions:
+    - {rev: A, date: 2026-05-18, description: Issued for review, by: AA}
+    - {rev: B, date: 2026-07-02, description: Added spillback, by: AA,
+       checked: JS, approved: RL}
+
+annotations:
+  - {type: equipment_list, align: top-right}
+  - {type: notes, align: top, items: [Sampling point on every product line.]}
+  - {type: legend, align: top-left, margin: 6, entries: {SS: Stainless Steel 316L}}
+  - {type: annotation, title: HOLD, rows: [Awaiting vendor data], position: [1200, 90]}
+  - {type: table, title: TIE-INS, headers: [Tag, Line], rows: [[TI-1, 6-P-101]]}
+```
+
+**`units`** — `kind` (required) is the equipment class from the list above, in
+any spelling you would reasonably write: `HeatExchanger`, `heat_exchanger` or
+`hex`. `name` (required) is the tag. Then `variant`, `description` (feeds the
+equipment list), `reference` (a boundary flag's off-page drawing), explicit
+`width`/`height`, `label_pos`, `significant` (break the stream number at this
+inline item), and `n_inlets` / `n_outlets` for `Mixer` / `Splitter`.
+
+**`pin` / `port_faces`** — `pin` mirrors `pin()`: `x`/`y` (absolute), `col`/`row`
+(grid), `orientation` (`0`/`90`/`180`/`270`) and `mirrored` (`x`/`y`/`xy`).
+`port_faces` maps a port to the face it leaves from, as `port_face()` does.
+
+**`instruments`** — `type` (required) and `number` make the tag, so `{type: LIC,
+number: 101}` is referred to elsewhere as `LIC-101`. `on` names the host: a unit,
+a named stream, or `[unit, port]` for the line leaving that nozzle — which is how
+`to_dict()` writes it, since auto-numbered stream names are rewritten at render
+time. `at` / `offset` / `angle` / `variant` / `port_faces` behave as in
+`add_instrument()`. An instrument with no `on` is laid out like any other unit.
+
+**`streams`** — `from` and `to` are `[unit, port]` pairs (or
+`{unit: ..., port: ...}`). `kind` makes a signal line (`electric`, `pneumatic`,
+`data`, …), `name` overrides the auto number, `tear_hint` nominates the recycle
+to cut, `via` forces waypoints, and `properties` is that line's stream-table
+column.
+
+**Sheet furniture** — `title_block` takes the `TitleBlock` fields plus
+`revisions`; each `annotations` entry is one box, typed `equipment_list`,
+`notes`, `legend`, `annotation` or `table`, and placed with `align` /
+`position` / `margin` exactly as above.
+
+**Errors name the entry and what would have worked** — the format is validated,
+not interpreted, so a typo cannot silently drop a nozzle off the drawing:
+
+```
+units[3] 'P-101': unknown key 'varient' (did you mean 'variant'?); allowed keys:
+['description', 'height', 'kind', 'label_pos', 'name', 'pin', 'port_faces', ...]
+
+streams[6].from: Pump 'P-101' has no port 'dischrge' (did you mean 'discharge'?);
+available ports: ['discharge', 'suction']
+```
+
+Every failure raises `pfd.SpecError`, a `ValueError`.
+
 ## Examples
 
 Runnable scripts in `examples/`, each usable from the repo root or from
@@ -348,6 +480,7 @@ Runnable scripts in `examples/`, each usable from the repo root or from
 | `05_reactor_recycle.py` | automatic recycle + purge split, straightened process spine |
 | `06_column_reflux.py` | fractionation sheet: overhead condenser, reflux drum, kettle reboiler, both loops closing on the column's return nozzles |
 | `07_metering_skid.py` | in-line fittings and actuated valves on one spine, PSV to flare, level controller on the valve operator |
+| `08_from_data.py` | the whole flowsheet declared as data and built with `Flowsheet.from_dict()` |
 
 ## Architecture
 

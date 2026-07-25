@@ -1,13 +1,14 @@
-"""Golden-file SVG regression over a fixed corpus: the six examples' flowsheets,
-one of which (03) also exercises ``styling="pid"`` with the stream table and
-sheet furniture (title block, equipment list, notes, legend).
+"""Golden-file SVG regression over a fixed corpus: the eight examples'
+flowsheets, two of which (03 and 08) also exercise ``styling="pid"`` with the
+stream table and sheet furniture (title block, equipment list, notes, legend).
 
 The flowsheets are rebuilt here rather than by importing examples/*.py: those
 scripts render straight to a file under examples/ (a side effect a test suite
-shouldn't have), and 03's TitleBlock leaves ``date`` empty, which SvgRenderer
-fills in with ``datetime.now()`` -- fine for a real render, but it would make
-the golden change every day. Every other input is copied verbatim from the
-matching example script. See tests/golden/README.md for how to regenerate.
+shouldn't have), and 03's and 08's TitleBlocks leave ``date`` empty, which
+SvgRenderer fills in with ``datetime.now()`` -- fine for a real render, but it
+would make the golden change every day. Every other input is copied verbatim
+from the matching example script; for 08, whose example *is* data, the copied
+input is its spec mapping. See tests/golden/README.md for how to regenerate.
 """
 
 import os
@@ -339,6 +340,234 @@ def _metering_skid() -> Flowsheet:
     return fs
 
 
+def _from_data() -> Flowsheet:
+    """Example 08 -- the whole flowsheet declared as data, not as code."""
+    spec = {
+        "name": "Boiler Feedwater Package",
+        "units": [
+            {"kind": "Feed", "name": "Makeup Water", "reference": "PFD-100"},
+            {
+                "kind": "Fitting",
+                "name": "ST-201",
+                "variant": "strainer",
+                "description": "Makeup Water Strainer",
+            },
+            {"kind": "Feed", "name": "Condensate Return", "reference": "PFD-400"},
+            {"kind": "Mixer", "name": "M-201", "n_inlets": 3, "description": "BFW Suction Header"},
+            {"kind": "Pump", "name": "P-201A/B", "description": "Boiler Feedwater Pump"},
+            {
+                "kind": "Splitter",
+                "name": "SP-201",
+                "n_outlets": 2,
+                "description": "Minimum-Flow Tee",
+            },
+            {
+                "kind": "Valve",
+                "name": "FV-201",
+                "variant": "control",
+                "description": "Minimum-Flow Spillback Valve",
+            },
+            {
+                "kind": "Vessel",
+                "name": "V-201",
+                "variant": "horizontal",
+                "width": 150,
+                "height": 48,
+                "description": "Deaerator Drum",
+                "port_faces": {"inlet": "N"},
+            },
+            {"kind": "Vent", "name": "VT-201", "description": "Deaerator Vent Stack"},
+            {
+                "kind": "Valve",
+                "name": "LV-201",
+                "variant": "control",
+                "description": "Deaerator Level Control Valve",
+            },
+            {"kind": "Product", "name": "To Boiler", "reference": "PFD-500"},
+        ],
+        "instruments": [
+            {
+                "type": "LIC",
+                "number": 201,
+                "variant": "panel",
+                "description": "Deaerator Level Control",
+                "on": "V-201",
+                "at": "S",
+                "offset": 110,
+            },
+        ],
+        "streams": [
+            {
+                "from": ["Makeup Water", "outlet"],
+                "to": ["ST-201", "inlet"],
+                "properties": {
+                    "Temperature": "25 C",
+                    "Pressure": "4.0 barg",
+                    "Mass Flow": "12.0 t/h",
+                    "Dissolved O2": "8000 ppb",
+                },
+            },
+            {
+                "from": ["ST-201", "outlet"],
+                "to": ["M-201", "in_1"],
+                "properties": {
+                    "Temperature": "25 C",
+                    "Pressure": "3.8 barg",
+                    "Mass Flow": "12.0 t/h",
+                    "Dissolved O2": "8000 ppb",
+                },
+            },
+            {
+                "from": ["Condensate Return", "outlet"],
+                "to": ["M-201", "in_2"],
+                "properties": {
+                    "Temperature": "88 C",
+                    "Pressure": "3.5 barg",
+                    "Mass Flow": "48.0 t/h",
+                    "Dissolved O2": "150 ppb",
+                },
+            },
+            {
+                "from": ["M-201", "outlet"],
+                "to": ["P-201A/B", "suction"],
+                "properties": {
+                    "Temperature": "76 C",
+                    "Pressure": "3.4 barg",
+                    "Mass Flow": "66.0 t/h",
+                    "Dissolved O2": "1600 ppb",
+                },
+            },
+            {
+                "from": ["P-201A/B", "discharge"],
+                "to": ["SP-201", "inlet"],
+                "properties": {
+                    "Temperature": "77 C",
+                    "Pressure": "12.0 barg",
+                    "Mass Flow": "66.0 t/h",
+                    "Dissolved O2": "1600 ppb",
+                },
+            },
+            {
+                "from": ["SP-201", "out_1"],
+                "to": ["V-201", "inlet"],
+                "properties": {
+                    "Temperature": "77 C",
+                    "Pressure": "11.6 barg",
+                    "Mass Flow": "60.0 t/h",
+                    "Dissolved O2": "1600 ppb",
+                },
+            },
+            {
+                "from": ["SP-201", "out_2"],
+                "to": ["FV-201", "inlet"],
+                "properties": {
+                    "Temperature": "77 C",
+                    "Pressure": "11.6 barg",
+                    "Mass Flow": "6.0 t/h",
+                    "Dissolved O2": "1600 ppb",
+                },
+            },
+            {
+                "from": ["FV-201", "outlet"],
+                "to": ["M-201", "in_3"],
+                "tear_hint": True,
+                "properties": {
+                    "Temperature": "77 C",
+                    "Pressure": "3.4 barg",
+                    "Mass Flow": "6.0 t/h",
+                    "Dissolved O2": "1600 ppb",
+                },
+            },
+            {
+                "from": ["V-201", "vent"],
+                "to": ["VT-201", "inlet"],
+                "properties": {
+                    "Temperature": "105 C",
+                    "Pressure": "0.2 barg",
+                    "Mass Flow": "0.3 t/h",
+                    "Dissolved O2": "-",
+                },
+            },
+            {
+                "from": ["V-201", "outlet"],
+                "to": ["LV-201", "inlet"],
+                "properties": {
+                    "Temperature": "105 C",
+                    "Pressure": "0.2 barg",
+                    "Mass Flow": "59.7 t/h",
+                    "Dissolved O2": "7 ppb",
+                },
+            },
+            {
+                "from": ["LV-201", "outlet"],
+                "to": ["To Boiler", "inlet"],
+                "properties": {
+                    "Temperature": "105 C",
+                    "Pressure": "0.1 barg",
+                    "Mass Flow": "59.7 t/h",
+                    "Dissolved O2": "7 ppb",
+                },
+            },
+            {"from": ["LIC-201", "sig_out"], "to": ["LV-201", "actuator"], "kind": "electric"},
+        ],
+        "stream_table_sections": [["Dissolved O2", "Water Quality"]],
+        # date is fixed (not left blank) so the golden never drifts with today's date.
+        "title_block": {
+            "title": "Utilities U200",
+            "subtitle": "Boiler Feedwater Package",
+            "drawing_number": "PFD-2001",
+            "project": "Steam System Upgrade",
+            "company": "THE UNIVERSITY OF QUEENSLAND",
+            "status": "ISSUED FOR REVIEW",
+            "sheet": "1",
+            "of_sheets": "2",
+            "drawn_by": "A. Anderson",
+            "checked_by": "J. Smith",
+            "approved_by": "R. Lee",
+            "date": "2026-01-01",
+            "revisions": [
+                {
+                    "rev": "A",
+                    "date": "2026-05-18",
+                    "description": "Issued for internal review",
+                    "by": "AA",
+                },
+                {
+                    "rev": "B",
+                    "date": "2026-07-02",
+                    "description": "Added minimum-flow spillback",
+                    "by": "AA",
+                    "checked": "JS",
+                    "approved": "RL",
+                },
+            ],
+        },
+        "annotations": [
+            {"type": "equipment_list", "align": "top-right"},
+            {
+                "type": "notes",
+                "align": "top-right",
+                "items": [
+                    "Deaerator vent to atmosphere; no isolation permitted.",
+                    "FV-201 maintains P-201A/B above 10% of rated flow.",
+                    "Dissolved oxygen sampled downstream of LV-201.",
+                ],
+            },
+            {
+                "type": "legend",
+                "align": "top-left",
+                "margin": 6,
+                "entries": {
+                    "BFW": "Boiler Feedwater",
+                    "DA": "Deaerator",
+                    "NTS": "Not To Scale",
+                },
+            },
+        ],
+    }
+    return Flowsheet.from_dict(spec)
+
+
 SCENARIOS = {
     "01_ammonia_loop": (_ammonia_loop, {}),
     "02_manual_layout": (_manual_layout, {}),
@@ -347,6 +576,7 @@ SCENARIOS = {
     "05_reactor_recycle": (_reactor_recycle, {}),
     "06_column_reflux": (_column_reflux, {}),
     "07_metering_skid": (_metering_skid, {}),
+    "08_from_data": (_from_data, {"show_stream_table": True, "styling": "pid"}),
 }
 
 

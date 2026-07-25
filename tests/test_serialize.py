@@ -1,9 +1,9 @@
 # tests/test_serialize.py
-from pfd import Flowsheet, Component, units as U
+from pfd import Component, Flowsheet, units as U
 
 
 def test_to_dict_captures_topology():
-    fs = Flowsheet("Demo", direction="LR")
+    fs = Flowsheet("Demo", direction="RL")
     fs.add_component(Component("Water", "H2O"))
     feed = fs.add(U.Feed("Feed"))
     pump = fs.add(U.Pump("K-101"))
@@ -11,23 +11,31 @@ def test_to_dict_captures_topology():
 
     d = fs.to_dict()
     assert d["name"] == "Demo"
-    assert d["direction"] == "LR"
-    assert d["components"] == ["Water"]
+    assert d["direction"] == "RL"
+    assert d["components"] == [{"name": "Water", "formula": "H2O"}]
 
-    unit_names = [u["name"] for u in d["units"]]
-    assert unit_names == ["Feed", "K-101"]
-    pump_entry = next(u for u in d["units"] if u["name"] == "K-101")
-    assert {p["name"] for p in pump_entry["ports"]} == {"suction", "discharge"}
-
-    assert d["streams"] == [
-        {
-            "name": "s-feed",
-            "source": ["Feed", "outlet"],
-            "dest": ["K-101", "suction"],
-            "kind": "material",
-            "is_recycle": False,
-        }
+    assert d["units"] == [
+        {"kind": "Feed", "name": "Feed"},
+        {"kind": "Pump", "name": "K-101"},
     ]
+    assert d["streams"] == [
+        {"from": ["Feed", "outlet"], "to": ["K-101", "suction"], "name": "s-feed"}
+    ]
+
+
+def test_to_dict_omits_defaults():
+    """The spec is meant to be read and edited, so it carries intent only."""
+    fs = Flowsheet("Plain")
+    feed = fs.add(U.Feed("F"))
+    prod = fs.add(U.Product("P"))
+    fs.connect(feed.outlet, prod.inlet)
+
+    d = fs.to_dict()
+    assert "direction" not in d  # LR is the default
+    assert "stream_naming_scheme" not in d
+    assert "variant" not in d["units"][0]  # "default"
+    assert "kind" not in d["streams"][0]  # "material"
+    assert "name" not in d["streams"][0]  # auto-numbered, not the author's
 
 
 def test_to_dict_is_json_serializable():

@@ -45,8 +45,8 @@ def test_ammonia_loop_serializes_roundtrip_shape():
     # Every stream references real units by name.
     unit_names = {u["name"] for u in d["units"]}
     for s in d["streams"]:
-        assert s["source"][0] in unit_names
-        assert s["dest"][0] in unit_names
+        assert s["from"][0] in unit_names
+        assert s["to"][0] in unit_names
 
 
 def test_ammonia_loop_json_roundtrip():
