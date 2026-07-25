@@ -28,6 +28,10 @@ class Symbol:
     width: float
     height: float
     ports: dict[str, tuple[float, float]] = field(default_factory=dict)
+    # Alternate faces a port may be moved to, each with its own exact coordinate
+    # so the moved port still lands on drawn ink:
+    #   {"feed": {"N": (30.0, 0.0), "E": (91.5, 15.0)}}
+    port_alts: dict[str, dict[str, tuple[float, float]]] = field(default_factory=dict)
     label_pos: str | None = None
 
 class SymbolRegistry:

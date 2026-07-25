@@ -12,6 +12,11 @@ if TYPE_CHECKING:
 
 _SIGNAL_KINDS = {"electric", "pneumatic", "data", "capillary", "software"}
 
+
+def _num(v: float) -> str:
+    """Format a coordinate without trailing zeros (100.0 -> '100')."""
+    return f"{v:.2f}".rstrip("0").rstrip(".") or "0"
+
 # Standard page sizes in landscape orientation (mm → px at 96 dpi).
 _PAGE_SIZES = {
     "A4": (1122.0, 793.7),
@@ -394,10 +399,31 @@ class SvgRenderer:
             variant = getattr(u, 'variant', 'default')
             sym_id = f"sym_{u.kind}" if variant == "default" else f"sym_{u.kind}_{variant}"
             u_width, u_height = f.w, f.h
-            transform = ""
-            if f.mirrored:
-                transform = f' transform="translate({2 * x + u_width}, 0) scale(-1, 1)"'
-            lines.append(f'    <use href="#{sym_id}" x="{x}" y="{y}" width="{u_width}" height="{u_height}"{transform} />')
+            rot = int(getattr(f, "orientation", 0) or 0)
+            mirror_x, mirror_y = bool(f.mirrored), bool(getattr(f, "mirror_y", False))
+            cx, cy = x + u_width / 2, y + u_height / 2
+
+            # A quarter turn swaps the box the artwork is drawn into; place that
+            # box centred on the frame so rotating it about the centre lands it
+            # back on the frame exactly.
+            if rot in (90, 270):
+                bw, bh = u_height, u_width
+            else:
+                bw, bh = u_width, u_height
+            ux, uy = cx - bw / 2, cy - bh / 2
+
+            # Composed right-to-left by SVG, so this reads "mirror, then rotate"
+            # — the same order portgeom.symbol_to_box uses for the ports.
+            ops = []
+            if rot:
+                ops.append(f"rotate({rot}, {_num(cx)}, {_num(cy)})")
+            if mirror_x:
+                ops.append(f"translate({_num(2 * cx)}, 0) scale(-1, 1)")
+            if mirror_y:
+                ops.append(f"translate(0, {_num(2 * cy)}) scale(1, -1)")
+            transform = f' transform="{" ".join(ops)}"' if ops else ""
+            lines.append(f'    <use href="#{sym_id}" x="{_num(ux)}" y="{_num(uy)}" '
+                         f'width="{bw}" height="{bh}"{transform} />')
 
             if u.kind == "instrument":
                 lines.extend(self._draw_instrument_tag(u, x, y, u_width, u_height))

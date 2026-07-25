@@ -23,6 +23,70 @@ def _sym(unit: "Unit"):
     return default_registry.get(unit.kind, getattr(unit, "variant", "default"))
 
 
+def _xform(frame) -> tuple[int, bool, bool]:
+    """Read (orientation, mirror_x, mirror_y) off a Frame or _Slot."""
+    return (int(getattr(frame, "orientation", 0) or 0),
+            bool(getattr(frame, "mirrored", False)),
+            bool(getattr(frame, "mirror_y", False)))
+
+
+def symbol_to_box(px: float, py: float, sw: float, sh: float,
+                  rot: int = 0, mirror_x: bool = False, mirror_y: bool = False
+                  ) -> tuple[float, float, float, float]:
+    """Map a point from a symbol's own coordinates into its *placed* box.
+
+    Mirroring is applied first (in the symbol's frame), then the clockwise
+    quarter turn — the same order the renderer's SVG transform composes in, so
+    ports and artwork can never drift apart. Returns ``(x, y, box_w, box_h)``;
+    a quarter turn swaps the box's width and height.
+    """
+    if mirror_x:
+        px = sw - px
+    if mirror_y:
+        py = sh - py
+    if rot == 90:
+        return sh - py, px, sh, sw
+    if rot == 180:
+        return sw - px, sh - py, sw, sh
+    if rot == 270:
+        return py, sw - px, sh, sw
+    return px, py, sw, sh
+
+
+def port_faces(unit: "Unit", port_name: str) -> list[str]:
+    """Faces this port may be moved to, most-preferred first.
+
+    The first entry is the symbol's own default. Extra faces come from the
+    symbol's ``port_alts``, which give an exact coordinate per face so an
+    alternate placement still lands on drawn ink.
+    """
+    sym = _sym(unit)
+    if port_name not in sym.ports:
+        return []
+    rot, mx, my = _xform(unit.frame) if unit.frame is not None else (0, False, False)
+    faces = []
+    for face, (px, py) in _face_options(unit, port_name).items():
+        bx, by, bw, bh = symbol_to_box(px, py, sym.width, sym.height, rot, mx, my)
+        faces.append((face, outward_dir(bx, by, bw, bh, unit.kind, port_name)))
+    # de-duplicate while keeping order (two alts can land on one face once rotated)
+    seen, out = set(), []
+    for _, d in faces:
+        if d not in seen:
+            seen.add(d)
+            out.append(d)
+    return out
+
+
+def _face_options(unit: "Unit", port_name: str) -> dict:
+    """``{face_key: (x, y)}`` for a port: its default plus any declared alts."""
+    sym = _sym(unit)
+    opts = {"_default": sym.ports[port_name]}
+    alts = getattr(sym, "port_alts", None) or {}
+    for face, xy in (alts.get(port_name) or {}).items():
+        opts[face] = xy
+    return opts
+
+
 def unit_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
     """True drawn bounding box (x_min, y_min, x_max, y_max) of a unit.
 
@@ -35,20 +99,27 @@ def unit_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
 
 
 def resolve_size(unit: "Unit") -> tuple[float, float]:
-    """Intrinsic (w, h) of a unit.
+    """Intrinsic (w, h) of a unit's placed box.
 
-    Explicit ``width``/``height`` win; otherwise the symbol default is used.
-    Feed/Product get a dynamic width sized to their label text.
+    Explicit ``width``/``height`` win and are taken as the *final* box, so a
+    caller who sizes a rotated unit gets exactly what they asked for. Symbol
+    defaults are swapped by a quarter turn. Feed/Product get a dynamic width
+    sized to their label text.
     """
     sym = _sym(unit)
-    h = unit.height if unit.height is not None else sym.height
     if unit.kind in ("feed", "product"):
         # Boundary flag: size to the wider of the name or the off-page reference
         # (drawn as the connector's second line), so neither overflows the flag.
         text_len = max(len(unit.name), len(getattr(unit, "reference", "") or ""))
         w = unit.width if unit.width is not None else max(80.0, text_len * 8.0 + 30.0)
-    else:
-        w = unit.width if unit.width is not None else sym.width
+        return w, unit.height if unit.height is not None else sym.height
+
+    sym_w, sym_h = sym.width, sym.height
+    pin = getattr(unit, "pin_", None)
+    if pin is not None and int(getattr(pin, "orientation", 0) or 0) in (90, 270):
+        sym_w, sym_h = sym_h, sym_w
+    w = unit.width if unit.width is not None else sym_w
+    h = unit.height if unit.height is not None else sym_h
     return w, h
 
 
@@ -70,20 +141,32 @@ def outward_dir(px: float, py: float, w: float, h: float,
     return "E"
 
 
-def _local_port(unit: "Unit", port_name: str, w: float, h: float,
-                mirrored: bool) -> tuple[float, float]:
-    """Port position in the symbol's own coordinates, mirror + scale applied.
+def _symbol_port(unit: "Unit", port_name: str) -> tuple[float, float]:
+    """The port's coordinate in symbol space, honouring any face override."""
+    sym = _sym(unit)
+    face = (getattr(unit, "_port_faces", None) or {}).get(port_name)
+    if face is not None:
+        alt = (getattr(sym, "port_alts", None) or {}).get(port_name) or {}
+        if face in alt:
+            return alt[face]
+    return sym.ports.get(port_name, (sym.width / 2, sym.height / 2))
 
-    Returns coordinates relative to the unit's top-left, in resolved pixels.
+
+def _local_port(unit: "Unit", port_name: str, w: float, h: float,
+                mirrored: bool, mirror_y: bool = False, rot: int = 0
+                ) -> tuple[float, float]:
+    """Port position relative to the unit's top-left, in resolved pixels.
+
+    Applies the face override, then the symbol→box transform (mirror, then
+    quarter turn), then scales into the resolved box.
     """
     sym = _sym(unit)
-    px, py = sym.ports.get(port_name, (sym.width / 2, sym.height / 2))
-    if mirrored:
-        px = sym.width - px
-    if unit.kind not in ("feed", "product"):
-        px *= w / sym.width
-        py *= h / sym.height
-    return px, py
+    px, py = _symbol_port(unit, port_name)
+    if unit.kind in ("feed", "product"):
+        # Boundary flags are drawn directly, not from the symbol box.
+        return (sym.width - px if mirrored else px), py
+    bx, by, bw, bh = symbol_to_box(px, py, sym.width, sym.height, rot, mirrored, mirror_y)
+    return bx * w / bw, by * h / bh
 
 
 def port_point(unit: "Unit", frame, port_name: str) -> tuple[float, float]:
@@ -92,15 +175,16 @@ def port_point(unit: "Unit", frame, port_name: str) -> tuple[float, float]:
     This is the endpoint the renderer draws to. Feed/Product use their special
     arrow-tip convention (the port sits at the tip, whichever way it points).
     """
-    w, h, mirrored = frame.w, frame.h, frame.mirrored
-    _, py = _local_port(unit, port_name, w, h, mirrored)
+    w, h = frame.w, frame.h
+    rot, mirrored, mirror_y = _xform(frame)
+    _, py = _local_port(unit, port_name, w, h, mirrored, mirror_y, rot)
     if unit.kind == "feed":
         ax = frame.x if mirrored else frame.x + 50.0
         return ax, frame.y + py
     if unit.kind == "product":
         ax = frame.x + w if mirrored else frame.x
         return ax, frame.y + py
-    px, _ = _local_port(unit, port_name, w, h, mirrored)
+    px, _ = _local_port(unit, port_name, w, h, mirrored, mirror_y, rot)
     return frame.x + px, frame.y + py
 
 
@@ -111,8 +195,9 @@ def port_anchor(unit: "Unit", frame, port_name: str) -> tuple[float, float, str]
     port faces, so the visibility grid and the router agree on where a path
     leaves/enters a unit. Feed/Product anchor at their arrow tip.
     """
-    w, h, mirrored = frame.w, frame.h, frame.mirrored
-    px, py = _local_port(unit, port_name, w, h, mirrored)
+    w, h = frame.w, frame.h
+    rot, mirrored, mirror_y = _xform(frame)
+    px, py = _local_port(unit, port_name, w, h, mirrored, mirror_y, rot)
     d = outward_dir(px, py, w, h, unit.kind, port_name, mirrored)
 
     if unit.kind == "feed":
