@@ -3,7 +3,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pfd"
+# Distribution name is chem-pfd; the import name stays `pfd` (as scikit-learn
+# installs but imports as sklearn). Plain "pfd" is taken on PyPI by an unrelated
+# project (Parallel Fast Downloader).
+name = "chem-pfd"
 version = "0.0.1"
 description = "Generate chemical-engineering Process Flow Diagrams with automatic layout and orthogonal stream routing."
 readme = "README.md"

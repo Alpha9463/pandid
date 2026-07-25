@@ -35,13 +35,25 @@ routes every stream, and draws industry-standard symbols.
 
 ## Installation
 
-Requires Python 3.10+.
+Requires Python 3.10+. The distribution is **`chem-pfd`**; it imports as `pfd`.
 
 ```bash
-pip install .
+pip install chem-pfd
 # optional PDF/PNG export backend:
-pip install '.[pdf]'
+pip install 'chem-pfd[pdf]'
 ```
+
+From a checkout:
+
+```bash
+pip install -e .
+pip install -e '.[dev]'   # pytest, ruff, mypy
+```
+
+```python
+from pfd import Flowsheet, units
+```
+
 Tests run with `pytest`.
 
 ## Quick start
