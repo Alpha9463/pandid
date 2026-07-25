@@ -144,39 +144,39 @@ class Flowsheet:
         self.streams.append(stream)
         return stream
 
-    def to_dict(self) -> dict:
-        """Serialize the flowsheet topology to a plain ``dict``.
+    @classmethod
+    def from_dict(cls, spec: dict) -> "Flowsheet":
+        """Build a flowsheet from a declarative spec ``dict``.
 
-        The returned structure is JSON-safe and suitable for passing to the
-        (future) geometry and render layers, or for displaying a pre-calculated
-        stream table in a PFD viewer.
+        See :mod:`pfd.spec` for the format. Raises :class:`pfd.spec.SpecError`
+        (a :class:`ValueError`) naming the offending entry.
         """
-        return {
-            "name": self.name,
-            "direction": self.direction,
-            "components": [c.name for c in self.components],
-            "units": [
-                {
-                    "name": u.name,
-                    "kind": u.kind,
-                    "ports": [
-                        {"name": p.name, "direction": p.direction, "role": p.role}
-                        for p in u.ports.values()
-                    ],
-                }
-                for u in self.units
-            ],
-            "streams": [
-                {
-                    "name": s.name,
-                    "source": [s.source.owner.name if s.source.owner else "", s.source.name],
-                    "dest": [s.dest.owner.name if s.dest.owner else "", s.dest.name],
-                    "kind": s.kind,
-                    "is_recycle": s.is_recycle,
-                }
-                for s in self.streams
-            ],
-        }
+        from pfd.spec import from_dict as _from_dict
+        return _from_dict(spec)
+
+    @classmethod
+    def from_json(cls, path: str | Path) -> "Flowsheet":
+        """Build a flowsheet from a JSON spec file. See :mod:`pfd.spec`."""
+        from pfd.spec import from_json as _from_json
+        return _from_json(path)
+
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> "Flowsheet":
+        """Build a flowsheet from a YAML spec file (needs the ``yaml`` extra).
+
+        See :mod:`pfd.spec`.
+        """
+        from pfd.spec import from_yaml as _from_yaml
+        return _from_yaml(path)
+
+    def to_dict(self) -> dict:
+        """Serialize the flowsheet to a JSON-safe declarative spec ``dict``.
+
+        Round-trips: ``Flowsheet.from_dict(fs.to_dict())`` rebuilds an
+        equivalent flowsheet. See :mod:`pfd.spec` for the format.
+        """
+        from pfd.spec import to_dict as _to_dict
+        return _to_dict(self)
 
     def layout(self, engine=None) -> None:
         """Run the automatic layout engine to generate unit coordinates."""

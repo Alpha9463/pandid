@@ -10,5 +10,6 @@ __version__ = "0.0.1"
 from pfd.components import Component
 from pfd.flowsheet import Flowsheet
 from pfd import units
+from pfd.spec import SpecError
 
-__all__ = ["Flowsheet", "Component", "units", "__version__"]
+__all__ = ["Flowsheet", "Component", "units", "SpecError", "__version__"]

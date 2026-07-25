@@ -18,7 +18,8 @@ dependencies = []
 
 [project.optional-dependencies]
 pdf = ["cairosvg>=2.5"]   # enables PDF/PNG export via fs.render("x.pdf")
-dev = ["pytest>=7", "ruff==0.15.14", "mypy>=1.8"]
+yaml = ["PyYAML>=6"]      # enables Flowsheet.from_yaml(); from_dict/from_json need nothing
+dev = ["pytest>=7", "ruff==0.15.14", "mypy>=1.8", "PyYAML>=6"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["pfd"]
