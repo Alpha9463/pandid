@@ -52,11 +52,18 @@ KIND_MAP = {
     # Heat exchangers (horizontal shell & tube: cold through tubes W->E, hot shell N/S).
     ("hex", "default"): ("heat_exchangers", "Shell and Tube Heat Exchanger 1",
                          {"cold_in": "W", "cold_out": "E", "hot_in": "N", "hot_out": "S"}),
-    # hot_in: the raw "N" anchor lands on the cone vertex where three segments
-    # meet; put it mid-span of the flat shell top over the vapour space.
+    # Kettle reboiler. The stencil draws a channel head at x 0..16.5 separated
+    # from the shell by a tubesheet (the rect at x 16.5..19.5), so the left stub
+    # is the TUBE side — the heating medium — not a process connection. The
+    # process boils in the shell: liquid in at the bottom, vapour off the top.
+    # Mapping cold_in to that left stub, as the plain W anchor does, pipes the
+    # column bottoms straight into the steam side.
+    #
+    # Only one tube-side opening is drawn, so hot_out has to take the shell's
+    # far dished head; treat it as the heating-medium return.
     ("hex", "kettle"):  ("heat_exchangers", "Reboiler",
-                         {"cold_in": "W", "cold_out": "E",
-                          "hot_in": ("N", 64.0), "hot_out": "S"}),
+                         {"cold_in": ("AT", 45.8, 30.0), "cold_out": ("N", 64.0),
+                          "hot_in": ("W", 22.5), "hot_out": ("E", 15.0)}),
     ("heater", "default"): ("heat_exchangers", "Heater",
                             {"inlet": "W", "outlet": "E", "duty": "S"}),
     ("cooler", "default"): ("heat_exchangers", "Heat Exchanger (Spiral)",
