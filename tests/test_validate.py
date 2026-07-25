@@ -86,10 +86,27 @@ def test_distinct_placements_on_the_same_balloon_are_fine():
     assert [i for i in fs.validate() if i.code == "coincident-ports"] == []
 
 
-def test_ports_the_symbol_never_anchored_warn_rather_than_raise():
-    """A Mixer past its symbol's two drawn inlets: the extra ports fall back to
-    the centre of the box, so they coincide by construction. That is a gap in
-    the symbol, not a contradiction on the sheet, and must not stop rendering."""
+def test_ports_the_symbol_never_anchored_warn_rather_than_raise(gapped_kind):
+    """Ports a symbol does not anchor fall back to the centre of the box, so
+    they coincide by construction. That is a gap in the symbol, not a
+    contradiction on the sheet, and must not stop rendering."""
+    fs = Flowsheet("gapped")
+    unit = fs.add(gapped_kind("G-1"))
+    prod = fs.add(U.Product("P"))
+    for port in ("inlet", "spare_a", "spare_b"):
+        feed = fs.add(U.Feed(f"F-{port}"))
+        fs.connect(feed.outlet, unit.ports[port])
+    fs.connect(unit.outlet, prod.inlet)
+    fs.layout()
+    issues = [i for i in fs.validate() if i.code == "coincident-ports"]
+    assert [i.severity for i in issues] == ["warning"]
+    assert "anchors no nozzle" in issues[0].message
+    fs.to_svg()  # must not raise
+
+
+def test_a_mixers_extra_inlets_get_nozzles_of_their_own():
+    """The regression the fallback used to hide: a third inlet is a real nozzle
+    on the flat face, not a third stream landing in the middle of the symbol."""
     fs = Flowsheet("wide-mixer")
     mix = fs.add(U.Mixer("M-1", n_inlets=4))
     prod = fs.add(U.Product("P"))
@@ -98,7 +115,4 @@ def test_ports_the_symbol_never_anchored_warn_rather_than_raise():
         fs.connect(feed.outlet, mix.ports[f"in_{i}"])
     fs.connect(mix.outlet, prod.inlet)
     fs.layout()
-    issues = [i for i in fs.validate() if i.code == "coincident-ports"]
-    assert [i.severity for i in issues] == ["warning"]
-    assert "anchors no nozzle" in issues[0].message
-    fs.to_svg()  # must not raise
+    assert [i for i in fs.validate() if i.code == "coincident-ports"] == []

@@ -302,3 +302,57 @@ def test_balloon_ports_have_no_face_of_their_own_but_equipment_nozzles_do():
     assert set(drum.port_faces["inlet"]) == {"W", "N", "E"}  # either head, or above
     assert set(drum.port_faces["outlet"]) == {"S"}
     assert not drum.faceless_ports
+
+
+def test_a_barred_balloons_tag_clears_its_location_bar():
+    """The panel and aux variants draw a location bar across the middle of the
+    circle, and the tag letters used to be drawn straight through it. ISA-5.1
+    puts the letters wholly above the bar and the number wholly below."""
+    import re
+
+    from pfd.render.symbols import default_registry
+
+    for variant, bars in (("panel", (22.0,)), ("aux", (19.0, 25.0))):
+        fs = Flowsheet(f"bar-{variant}")
+        inst = fs.add_instrument("LIC", 101, variant=variant).pin(x=200, y=200)
+        fs.layout()
+        svg = fs.to_svg(check=False)
+        sym = default_registry.get("instrument", variant)
+        # Balloon centre in sheet coordinates, and the bars relative to it.
+        cy = inst.frame.y + inst.frame.h / 2
+        band = [cy + b - sym.height / 2 for b in bars]
+
+        ys = {
+            t: float(y)
+            for y, t in re.findall(r'<text x="[\d.]+" y="([\d.]+)"[^>]*>(LIC|101)</text>', svg)
+        }
+        assert len(ys) == 2, f"{variant}: expected both tag lines, got {ys}"
+        # 12pt letters and an 11pt number, centred on their baselines.
+        assert ys["LIC"] + 6 <= min(band), f"{variant}: letters run into the bar"
+        assert ys["101"] - 5.5 >= max(band), f"{variant}: number runs into the bar"
+
+
+def test_a_short_pneumatic_run_still_gets_its_cross_hatch():
+    """ISA draws a pneumatic signal as a *solid* line marked with double
+    cross-hatches, so the hatch is the only thing distinguishing it from process
+    piping. One mark per 45px left a short run — a transducer to the actuator
+    right beneath it — with none at all, rendering it as plain pipe."""
+    fs = Flowsheet("short-pneumatic")
+    valve = fs.add(U.Valve("LV-101", variant="control")).pin(x=300, y=300)
+    ly = fs.add_instrument("LY", 101, on=valve, at="N", offset=58)
+    ly.nozzle("sig_out", "S")
+    fs.connect(ly.sig_out, valve.actuator, kind="pneumatic")
+    fs.layout()
+
+    from pfd.portgeom import port_point
+
+    run = next(s for s in fs.streams if s.kind == "pneumatic")
+    points = (
+        [port_point(ly, ly.frame, "sig_out")]
+        + (run.route.waypoints if run.route and run.route.waypoints else [])
+        + [port_point(valve, valve.frame, "actuator")]
+    )
+    length = sum(abs(b[0] - a[0]) + abs(b[1] - a[1]) for a, b in zip(points, points[1:]))
+    assert 16 <= length < 45, f"specimen must be a *short* run, got {length}"
+    # Two strokes per mark, drawn at 1.5 width; nothing else on the sheet is.
+    assert fs.to_svg(check=False).count('stroke-width="1.5"') >= 2

@@ -9,7 +9,7 @@ The distribution is **`chem-pfd`**; it imports as **`pfd`**.
 
 [![Distillation train](docs/gallery/03_distillation_train.png)](docs/gallery/README.md)
 
-<sub>[`examples/03_distillation_train.py`](examples/03_distillation_train.py) — see the [gallery](docs/gallery/README.md) for all seven.</sub>
+<sub>[`examples/03_distillation_train.py`](examples/03_distillation_train.py) — see the [gallery](docs/gallery/README.md) for all eight.</sub>
 
 ## Install
 
@@ -94,7 +94,7 @@ supply; nothing is calculated from them. This is a drawing engine.
 
 | Where | What |
 |---|---|
-| [Example gallery](docs/gallery/README.md) | all seven examples rendered, with what each one demonstrates |
+| [Example gallery](docs/gallery/README.md) | all eight examples rendered, with what each one demonstrates |
 | [API reference](docs/api.md) | every public class, port and option, verified against the source |
 | [Contributing](CONTRIBUTING.md) | setup, the four gates, and the conventions that are easy to get wrong |
 | [Changelog](CHANGELOG.md) | what is in this release |
@@ -469,7 +469,7 @@ Every failure raises `pfd.SpecError`, a `ValueError`.
 ## Examples
 
 Runnable scripts in `examples/`, each usable from the repo root or from
-`examples/` itself. All seven are rendered in the
+`examples/` itself. All eight are rendered in the
 [gallery](docs/gallery/README.md).
 
 | Script | Demonstrates |

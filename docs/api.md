@@ -210,6 +210,11 @@ units.Splitter(name, n_outlets=2, variant="default", width=None, height=None,
 
 (Neither accepts `label_pos`, unlike the fixed-port classes.)
 
+Every port gets a nozzle of its own on the triangle's flat face, whatever the
+count: they sit 20 px apart, or are squeezed into the middle 70 % of the face
+once there are too many for that. Two ports land where they always have, so
+raising a count on one unit never moves any other.
+
 `Valve.actuator` is the signal connection on the valve, not a process nozzle —
 it is where a controller output or an interlock terminates.
 
@@ -581,7 +586,7 @@ and `message`.
 | `pin-out-of-bounds` | error | a pinned `x`/`y` is negative (off-sheet) |
 | `unit-overlap` | error | two units' drawn boxes overlap |
 | `coincident-ports` | error | two connected ports on one unit resolve to the same point |
-| `coincident-ports` | warning | …and one of them is a port the symbol never anchored, so it fell back to the centre of the box (a `Mixer`'s inlets past the two its symbol draws) |
+| `coincident-ports` | warning | …and one of them is a port the symbol never anchored, so it fell back to the centre of the box. No shipped symbol has such a gap; this covers symbols registered from outside the package |
 | `route-crosses-unit` | warning | a stream passes through a unit body it does not connect to |
 | `route-detour` | warning | a route is more than 3× its direct span |
 

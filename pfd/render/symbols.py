@@ -31,6 +31,47 @@ from pfd.portgeom import outward_dir
 # (and a stream endpoint) is concerned.
 _COINCIDENT = 0.5
 
+
+@dataclass(frozen=True)
+class PortSeries:
+    """A family of like ports spread evenly along one face of a symbol.
+
+    A :class:`~pfd.units.Mixer` does not have a fixed set of inlets — the unit
+    decides how many there are — so the symbol cannot author a coordinate per
+    port the way a pump authors its suction. It declares the *rule* instead, and
+    the coordinates are resolved once the unit is in hand and the count is known.
+
+    Members are ``prefix`` followed by a 1-based index (``in_1``, ``in_2``, ...),
+    matching the names :class:`~pfd.units.Mixer` and
+    :class:`~pfd.units.Splitter` generate.
+
+    Ports sit ``pitch`` apart, centred on the face; past the point where that
+    would run them off the ends, the whole run is squeezed into the middle
+    ``extent`` of the face instead. Two ports therefore land exactly where the
+    hand-drawn symbols used to put them, and a third does not have to shove the
+    first two aside to find room.
+    """
+
+    prefix: str
+    face: str
+    pitch: float = 20.0
+    extent: float = 0.7
+
+    def matches(self, port_name: str) -> bool:
+        """True when ``port_name`` is a member of this series."""
+        return (port_name.startswith(self.prefix)
+                and port_name[len(self.prefix):].isdigit())
+
+    def placement(self, index: int, count: int,
+                  width: float, height: float) -> tuple[float, float]:
+        """Symbol-space coordinate of member ``index`` of ``count`` (0-based)."""
+        along = height if self.face in ("W", "E") else width
+        span = min(self.pitch * (count - 1), self.extent * along)
+        t = along / 2 if count < 2 else (along - span) / 2 + span * index / (count - 1)
+        return {"W": (0.0, t), "E": (width, t),
+                "N": (t, 0.0), "S": (t, height)}[self.face]
+
+
 @dataclass
 class Symbol:
     """An SVG template for a unit, with named connection port anchors."""
@@ -55,6 +96,13 @@ class Symbol:
     # inlet may be moved to the right head, but that is still the inlet's
     # nozzle and nothing else may sit on it.
     faceless_ports: frozenset[str] = frozenset()
+    # Port families whose membership the *unit* decides — a Mixer's inlets. The
+    # symbol cannot list them in ``ports`` because it does not know how many
+    # there are, so it declares the rule and :mod:`pfd.portgeom` resolves the
+    # coordinates against the unit. A series is the sole authority for its own
+    # members; naming one in ``ports`` as well would be two answers to one
+    # question, and is rejected below.
+    port_series: tuple[PortSeries, ...] = ()
     label_pos: str | None = None
     # Deprecated spelling, accepted so a symbol authored against the old
     # interface still registers. ``port_alts`` listed only the *extra* faces.
@@ -97,6 +145,19 @@ class Symbol:
                 f"{self.symbol_id()}: faceless_ports names {stray}, which ports does "
                 f"not anchor"
             )
+        for series in self.port_series:
+            clash = sorted(n for n in self.ports if series.matches(n))
+            if clash:
+                raise ValueError(
+                    f"{self.symbol_id()}: ports anchors {clash}, which the "
+                    f"{series.prefix!r} series also places; a series is the only "
+                    f"authority on where its members go"
+                )
+            if series.face not in ("N", "S", "E", "W"):
+                raise ValueError(
+                    f"{self.symbol_id()}: the {series.prefix!r} series names face "
+                    f"{series.face!r}; expected one of N, S, E, W"
+                )
         menu: dict[str, dict[str, tuple[float, float]]] = {}
         for name, xy in self.ports.items():
             home = outward_dir(xy[0], xy[1], self.width, self.height)
@@ -128,6 +189,13 @@ class Symbol:
                 f"share a placement.",
                 stacklevel=2,
             )
+
+    def series_for(self, port_name: str) -> PortSeries | None:
+        """The series that places ``port_name``, or None if it is a fixed nozzle."""
+        for series in self.port_series:
+            if series.matches(port_name):
+                return series
+        return None
 
     def symbol_id(self) -> str:
         """The svg id, for messages — a Symbol carries no name of its own."""
@@ -294,7 +362,8 @@ class SymbolRegistry:
         self.register("mixer", Symbol(
             svg='<g id="sym_mixer"><polygon points="0,0 50,25 0,50" fill="none" stroke="black" stroke-width="2"/></g>',
             width=50.0, height=50.0,
-            ports={'outlet': (50.0, 25.0), 'in_1': (0.0, 15.0), 'in_2': (0.0, 35.0)}
+            ports={'outlet': (50.0, 25.0)},
+            port_series=(PortSeries("in_", "W"),),
         ))
 
         # ====================================================================
@@ -391,7 +460,8 @@ class SymbolRegistry:
         self.register("splitter", Symbol(
             svg='<g id="sym_splitter"><polygon points="0,25 50,0 50,50" fill="none" stroke="black" stroke-width="2"/></g>',
             width=50.0, height=50.0,
-            ports={'out_1': (50.0, 15.0), 'out_2': (50.0, 35.0), 'inlet': (0.0, 25.0)}
+            ports={'inlet': (0.0, 25.0)},
+            port_series=(PortSeries("out_", "E"),),
         ))
 
         # ====================================================================

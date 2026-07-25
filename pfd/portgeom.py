@@ -115,9 +115,13 @@ def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
     """
     sym = _sym(unit)
     menu = (getattr(sym, "port_faces", None) or {}).get(port_name)
-    # A port the symbol does not anchor falls back to the centre of the box.
-    coords = list(menu.values()) if menu else [
-        sym.ports.get(port_name, (sym.width / 2, sym.height / 2))]
+    if menu:
+        coords = list(menu.values())
+    elif (placed := _series_point(unit, sym, port_name)) is not None:
+        coords = [placed]
+    else:
+        # A port the symbol does not anchor falls back to the centre of the box.
+        coords = [sym.ports.get(port_name, (sym.width / 2, sym.height / 2))]
     out: dict[str, tuple[float, float]] = {}
     for px, py in coords:
         if unit.kind in ("feed", "product"):
@@ -131,15 +135,35 @@ def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
     return out
 
 
-def is_anchored(unit: "Unit", port_name: str) -> bool:
-    """True when the symbol authors a coordinate for this port.
+def _series_point(unit: "Unit", sym, port_name: str
+                  ) -> tuple[float, float] | None:
+    """Symbol-space coordinate of a port placed by one of the symbol's series.
 
-    An unanchored port — a ``Mixer``'s third inlet, past the two its symbol
-    draws — falls back to the centre of the box, so any two of them land on the
+    The count is the unit's, not the symbol's — that is the whole point of a
+    series — so this is where the two meet. Members are ordered by the unit's
+    port order rather than by the number in the name, so the drawn top-to-bottom
+    order is the order they were declared in.
+    """
+    series = sym.series_for(port_name) if hasattr(sym, "series_for") else None
+    if series is None:
+        return None
+    members = [n for n in unit.ports if series.matches(n)]
+    if port_name not in members:
+        return None
+    return series.placement(members.index(port_name), len(members),
+                            sym.width, sym.height)
+
+
+def is_anchored(unit: "Unit", port_name: str) -> bool:
+    """True when the symbol places this port, rather than falling back.
+
+    A port that is neither anchored nor a member of one of the symbol's port
+    series falls back to the centre of the box, so any two of them land on the
     same point by construction. That is a gap in the symbol rather than a
     placement, and callers that police collisions have to tell the two apart.
     """
-    return port_name in _sym(unit).ports
+    sym = _sym(unit)
+    return port_name in sym.ports or _series_point(unit, sym, port_name) is not None
 
 
 def unit_box(unit: "Unit", frame) -> tuple[float, float, float, float]:

@@ -558,3 +558,73 @@ def test_a_home_placement_restated_in_the_menu_is_accepted():
         port_faces={"feed": {"W": (0.0, 15.0), "N": (20.0, 0.0)}},
     )
     assert list(sym.port_faces["feed"]) == ["W", "N"]  # home stays most preferred
+
+
+# ---------------------------------------------------------------------------
+# Port series: the families whose membership the unit decides, not the symbol.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "kind,prefix,ctor_arg,face",
+    [
+        ("mixer", "in_", "n_inlets", "W"),
+        ("splitter", "out_", "n_outlets", "E"),
+    ],
+)
+def test_every_member_of_a_port_series_gets_a_nozzle_of_its_own(kind, prefix, ctor_arg, face):
+    """A Mixer's third inlet used to fall through to the centre of the box,
+    where it landed on top of every other unplaced port -- three streams into
+    one point in the middle of the triangle. Each member gets its own spot on
+    the flat face, however many there are."""
+    from pfd import units as U
+    from pfd.portgeom import _drawn_placements, is_anchored, resolve_size
+
+    cls = {"mixer": U.Mixer, "splitter": U.Splitter}[kind]
+    for count in range(1, 9):
+        unit = cls("X", **{ctor_arg: count})
+        w, h = resolve_size(unit)
+        seen = []
+        for i in range(1, count + 1):
+            name = f"{prefix}{i}"
+            assert is_anchored(unit, name), f"{kind} n={count}: {name} unplaced"
+            placements = _drawn_placements(unit, name, w, h, 0, False, False)
+            assert list(placements) == [face], f"{kind} n={count}: {name} off-face"
+            ((x, y),) = placements.values()
+            assert 0.0 <= y <= h, f"{kind} n={count}: {name} outside the box"
+            seen.append(y)
+        assert len(set(seen)) == count, f"{kind} n={count}: ports share a point"
+        assert seen == sorted(seen), f"{kind} n={count}: ports out of order"
+
+
+def test_two_series_ports_land_where_the_symbol_used_to_draw_them():
+    """The two-port case is the one every existing sheet draws, so the spacing
+    rule has to reproduce it exactly rather than merely closely -- otherwise
+    every mixer and splitter on every drawing shifts to fix a three-port bug."""
+    from pfd import units as U
+    from pfd.portgeom import _drawn_placements
+
+    mixer = U.Mixer("M", n_inlets=2)
+    assert [_drawn_placements(mixer, f"in_{i}", 50, 50, 0, False, False)["W"] for i in (1, 2)] == [
+        (0.0, 15.0),
+        (0.0, 35.0),
+    ]
+    splitter = U.Splitter("S", n_outlets=2)
+    assert [
+        _drawn_placements(splitter, f"out_{i}", 50, 50, 0, False, False)["E"] for i in (1, 2)
+    ] == [(50.0, 15.0), (50.0, 35.0)]
+
+
+def test_a_series_may_not_restate_a_port_the_symbol_already_anchors():
+    """Two authorities on one port's position is the bug the series exists to
+    remove, so declaring both is rejected rather than silently resolved."""
+    from pfd.render.symbols import PortSeries
+
+    with pytest.raises(ValueError, match=r"only authority"):
+        Symbol(
+            svg='<g id="sym_x"/>',
+            width=50.0,
+            height=50.0,
+            ports={"in_1": (0.0, 15.0), "outlet": (50.0, 25.0)},
+            port_series=(PortSeries("in_", "W"),),
+        )
