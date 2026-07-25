@@ -103,24 +103,67 @@ def test_rotation_moves_the_face_a_port_leaves_from():
 # --- moving a port to another face ------------------------------------------
 
 
-def test_port_face_moves_the_connection():
-    drum = units.Separator("V-1", variant="horizontal")
+def _drum_sheet(drum, **pin_kwargs):
     fs = Flowsheet("D")
-    fs.add(drum).pin(x=200, y=100)
+    fs.add(drum).pin(x=200, y=100, **pin_kwargs)
     fs.add(units.Feed("f")).pin(x=20, y=100)
     fs.connect(fs.units[1].outlet, drum.feed)
     fs.layout()
+    return fs
+
+
+def test_nozzle_moves_the_connection():
+    drum = units.Separator("V-1", variant="horizontal")
+    fs = _drum_sheet(drum)
     assert port_anchor(drum, drum.frame, "feed")[2] == "W"
 
-    drum.port_face("feed", "N")
+    drum.nozzle("feed", "N")
     fs.layout()
     assert port_anchor(drum, drum.frame, "feed")[2] == "N"
 
 
-def test_port_face_rejects_unknown_port_and_fixed_nozzle():
+def test_nozzle_accepts_the_label_pos_side_names():
+    drum = units.Separator("V-1", variant="horizontal")
+    fs = _drum_sheet(drum)
+    drum.nozzle("feed", "top")
+    fs.layout()
+    assert port_anchor(drum, drum.frame, "feed")[2] == "N"
+
+
+def test_nozzle_names_the_face_as_drawn_not_as_authored():
+    """#26: the drum's alternate is authored on the symbol's north head, so on a
+    top-to-bottom mirrored unit that placement is drawn on the SOUTH. Naming the
+    face in drawn space is what stops "N" quietly putting the nozzle below."""
+    drum = units.Separator("V-1", variant="horizontal")
+    fs = _drum_sheet(drum, mirrored="y")
+    with pytest.raises(ValueError, match="you asked for 'N'"):
+        drum.nozzle("feed", "N")
+
+    drum.nozzle("feed", "S")
+    fs.layout()
+    assert port_anchor(drum, drum.frame, "feed") == (220.0, 130.0, "S")
+
+
+def test_nozzle_rejects_unknown_port_and_fixed_nozzle():
     drum = units.Separator("V-1", variant="horizontal")
     with pytest.raises(KeyError):
-        drum.port_face("nope", "N")
-    # liquid draws off the bottom by gravity — the symbol declares no alternates
-    with pytest.raises(ValueError, match="cannot move to face"):
-        drum.port_face("liquid", "N")
+        drum.nozzle("nope", "N")
+    # liquid draws off the bottom by gravity — the symbol authors one placement
+    with pytest.raises(ValueError, match=r"V-1\.liquid can be piped from S as drawn"):
+        drum.nozzle("liquid", "N")
+
+
+def test_pin_rechecks_a_face_the_new_transform_can_no_longer_reach():
+    # A quarter turn takes the drum's three drawn faces from W/N/E to N/E/S, so
+    # a west nozzle chosen beforehand has nowhere to land and must say so.
+    drum = units.Separator("V-1", variant="horizontal")
+    drum.nozzle("feed", "W")
+    with pytest.raises(ValueError, match="you asked for 'W'"):
+        drum.pin(x=200, y=100, orientation=90)
+
+
+def test_port_face_still_works_and_warns():
+    drum = units.Separator("V-1", variant="horizontal")
+    with pytest.deprecated_call():
+        drum.port_face("feed", "N")
+    assert drum._port_faces == {"feed": "N"}

@@ -282,17 +282,21 @@ def test_balloon_signal_ports_reach_every_face():
         fs = Flowsheet("faces")
         inst = fs.add_instrument("LIC", 101, variant="panel")
         inst.pin(x=200, y=250)
-        inst.port_face("sig_out", face)
+        inst.nozzle("sig_out", face)
         fs.layout()
         seen[face] = port_anchor(inst, inst.frame, "sig_out")[2]
     assert seen == {"N": "N", "S": "S", "E": "E", "W": "W"}
 
 
-def test_balloon_free_ports_may_share_a_face_but_equipment_may_not():
-    # The exemption is specific to ports with no fixed face; a vessel's nozzles
-    # still own theirs, so overlapping options there stay a defect.
+def test_balloon_ports_have_no_face_of_their_own_but_equipment_nozzles_do():
+    # "No face of its own" is not a flag any more, it is the shape of the menu:
+    # a balloon connection offers all four, a drum's draw-off offers the one
+    # gravity picked.
     from pfd.render.symbols import default_registry
 
     balloon = default_registry.get("instrument", "panel")
-    assert {"pv", "sig_in", "sig_out"} <= balloon.free_ports
-    assert not default_registry.get("vessel", "horizontal").free_ports
+    for name in ("pv", "sig_in", "sig_out"):
+        assert set(balloon.port_faces[name]) == {"N", "S", "E", "W"}
+    drum = default_registry.get("vessel", "horizontal")
+    assert set(drum.port_faces["inlet"]) == {"W", "N", "E"}  # either head, or above
+    assert set(drum.port_faces["outlet"]) == {"S"}

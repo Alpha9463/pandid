@@ -25,6 +25,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
+from pfd.portgeom import outward_dir
 from pfd.render.symbols import default_registry
 
 BOX_EPS = 1.0  # bounding-box slack, in symbol-space units
@@ -334,16 +335,44 @@ def test_ports_within_bounding_box(entry):
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_port_alts_within_bounding_box(entry):
+def test_port_faces_within_bounding_box(entry):
     (kind, variant), sym = entry
-    for name, faces in (sym.port_alts or {}).items():
+    for name, faces in sym.port_faces.items():
         for face, (x, y) in faces.items():
             assert -BOX_EPS <= x <= sym.width + BOX_EPS, (
-                f"{kind}/{variant} port_alts[{name!r}][{face!r}] x={x} outside [0, {sym.width}]"
+                f"{kind}/{variant} port_faces[{name!r}][{face!r}] x={x} outside [0, {sym.width}]"
             )
             assert -BOX_EPS <= y <= sym.height + BOX_EPS, (
-                f"{kind}/{variant} port_alts[{name!r}][{face!r}] y={y} outside [0, {sym.height}]"
+                f"{kind}/{variant} port_faces[{name!r}][{face!r}] y={y} outside [0, {sym.height}]"
             )
+
+
+@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
+def test_every_menu_entry_resolves_to_the_face_it_claims(entry):
+    """A placement filed under "N" whose coordinate is nearest the west edge is
+    a lie the engine cannot catch: ``port_anchor`` derives the face from the
+    coordinate, so the nozzle silently comes out somewhere else. The home entry
+    is keyed from the coordinate and so cannot fail; an authored alternate can."""
+    (kind, variant), sym = entry
+    for name, faces in sym.port_faces.items():
+        for face, (x, y) in faces.items():
+            got = outward_dir(x, y, sym.width, sym.height)
+            assert got == face, (
+                f"{kind}/{variant} port_faces[{name!r}][{face!r}] at ({x}, {y}) is "
+                f"nearest the {got} edge of the {sym.width}x{sym.height} box"
+            )
+
+
+@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
+def test_the_menu_carries_the_symbols_own_nozzle(entry):
+    """The home placement is folded into the menu, so nothing downstream has a
+    privileged default to merge back in."""
+    (kind, variant), sym = entry
+    assert set(sym.port_faces) == set(sym.ports), f"{kind}/{variant} menu misses a port"
+    for name, xy in sym.ports.items():
+        assert xy in sym.port_faces[name].values(), (
+            f"{kind}/{variant} port {name!r} home {xy} is not in its own menu"
+        )
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
@@ -363,47 +392,78 @@ def test_ports_lie_on_drawn_geometry(entry):
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_port_alts_lie_on_drawn_geometry(entry):
+def test_port_faces_lie_on_drawn_geometry(entry):
     (kind, variant), sym = entry
     if kind in _DYNAMIC_KINDS:
         pytest.skip("feed/product are drawn dynamically, not from Symbol.svg")
     segments = _collect_segments(sym.svg)
-    for name, faces in (sym.port_alts or {}).items():
+    for name, faces in sym.port_faces.items():
         if (kind, variant, name) in _KNOWN_GEOMETRY_GAPS:
             continue
         for face, (x, y) in faces.items():
             d = _nearest_distance((x, y), segments)
             assert d <= GEOM_TOL, (
-                f"{kind}/{variant} port_alts[{name!r}][{face!r}] at ({x}, {y}) is "
+                f"{kind}/{variant} port_faces[{name!r}][{face!r}] at ({x}, {y}) is "
                 f"{d:.1f}u from the nearest drawn stroke (tolerance {GEOM_TOL})"
             )
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_no_two_ports_coincide(entry):
+def test_no_two_fixed_ports_coincide(entry):
     (kind, variant), sym = entry
     if (kind, variant) in _KNOWN_DUPLICATE_PORTS:
         pytest.skip(f"{kind}/{variant}: known duplicate, see _KNOWN_DUPLICATE_PORTS")
-    # Every position a port could occupy: its default, plus each alt face.
     # Two DIFFERENT ports must never resolve to the same point, or a stream
-    # routed to one lands exactly on top of a stream routed to the other. (An
-    # alt coinciding with its *own* port's default is not a conflict -- only
-    # one of a single port's placements is ever active at a time.)
+    # routed to one lands exactly on top of a stream routed to the other. (Two
+    # placements of a SINGLE port may coincide -- only one of them is ever live.)
     #
-    # Free ports are exempt from *each other*, not from the rule: a balloon's
-    # signal connections have no face of their own, so every one of them offers
-    # every face and the overlap is a menu, not a collision. They are still
-    # checked against fixed ports, which do own their face.
-    free = sym.free_ports or frozenset()
-    placements: list[tuple[str, tuple[float, float]]] = list(sym.ports.items())
-    for name, faces in (sym.port_alts or {}).items():
-        placements.extend((name, xy) for xy in faces.values())
+    # A port whose menu has more than one entry has no face of its own: a
+    # balloon is a circle, so a signal may meet it anywhere and every one of its
+    # connections offers every face. Those are exempt from *each other*, since
+    # the overlap is a menu rather than a collision -- but not from the rule,
+    # and they are still checked against ports that do own their face. Whether
+    # the *chosen* placements collide is a property of a laid-out sheet, checked
+    # by test_connected_ports_never_share_a_point.
+    movable = {name for name, faces in sym.port_faces.items() if len(faces) > 1}
+    placements: list[tuple[str, tuple[float, float]]] = [
+        (name, xy) for name, faces in sym.port_faces.items() for xy in faces.values()
+    ]
 
     for i in range(len(placements)):
         n1, p1 = placements[i]
         for j in range(i + 1, len(placements)):
             n2, p2 = placements[j]
-            if n1 == n2 or (n1 in free and n2 in free):
+            if n1 == n2 or (n1 in movable and n2 in movable):
                 continue
             if math.hypot(p1[0] - p2[0], p1[1] - p2[1]) < 0.5:
                 pytest.fail(f"{kind}/{variant}: ports {n1!r} and {n2!r} both resolve to {p1}")
+
+
+def test_connected_ports_never_share_a_point():
+    """The dynamic half of the rule above, on real sheets.
+
+    A symbol may legitimately offer one face to two movable ports; what must
+    never happen is two *live* connections resolving to the same coordinate,
+    which the static check cannot see because it does not know which placement
+    each port took, nor what mirroring did to it.
+    """
+    from test_golden import SCENARIOS  # the example corpus, already built there
+
+    from pfd.portgeom import port_point
+
+    for name, (build, kwargs) in SCENARIOS.items():
+        fs = build()
+        fs.to_svg(**kwargs)  # lays out and routes
+        for unit in fs.units:
+            if unit.frame is None:
+                continue
+            seen: dict[tuple[float, float], str] = {}
+            for port_name, port in unit.ports.items():
+                if port.stream is None:
+                    continue
+                p = tuple(round(v, 3) for v in port_point(unit, unit.frame, port_name))
+                assert p not in seen, (
+                    f"{name}: {unit.name}.{port_name} and {unit.name}.{seen[p]} are "
+                    f"both connected and both resolve to {p}"
+                )
+                seen[p] = port_name

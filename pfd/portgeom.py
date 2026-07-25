@@ -12,7 +12,7 @@ and afterwards (on a ``Frame``).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
     from pfd.units import Unit
@@ -54,37 +54,51 @@ def symbol_to_box(px: float, py: float, sw: float, sh: float,
 
 
 def port_faces(unit: "Unit", port_name: str) -> list[str]:
-    """Faces this port may be moved to, most-preferred first.
+    """Faces this port may be piped from *as drawn*, most-preferred first.
 
-    The first entry is the symbol's own default. Extra faces come from the
-    symbol's ``port_alts``, which give an exact coordinate per face so an
-    alternate placement still lands on drawn ink.
+    The symbol authors an exact coordinate per face, so an alternate placement
+    still lands on drawn ink. Answers in the same frame of reference as
+    :meth:`pfd.units.Unit.nozzle` takes its argument, reading the resolved frame
+    once layout has run and the pin intent before that — which is why it has to
+    apply the mirror the way :func:`port_anchor` does rather than report the
+    symbol's own faces.
+    """
+    if port_name not in _sym(unit).ports:
+        return []
+    frame = unit.frame
+    placed = frame if frame is not None else unit.pin_
+    rot, mx, my = _xform(placed) if placed is not None else (0, False, False)
+    w, h = (frame.w, frame.h) if frame is not None else resolve_size(unit)
+    return list(_drawn_placements(unit, port_name, w, h, rot, mx, my))
+
+
+def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
+                      rot: int, mirrored: bool, mirror_y: bool
+                      ) -> dict[str, tuple[float, float]]:
+    """Every declared placement of a port, keyed by the face it lands on as drawn.
+
+    The menu is authored in the symbol's own frame; mapping it through the
+    placement transform *here* is what lets a caller name a face on the finished
+    sheet without redoing the mirror arithmetic. Coordinates come back relative
+    to the unit's top-left, in resolved pixels. Two placements can collapse onto
+    one face after a quarter turn, in which case the more-preferred one wins.
     """
     sym = _sym(unit)
-    if port_name not in sym.ports:
-        return []
-    rot, mx, my = _xform(unit.frame) if unit.frame is not None else (0, False, False)
-    faces = []
-    for face, (px, py) in _face_options(unit, port_name).items():
-        bx, by, bw, bh = symbol_to_box(px, py, sym.width, sym.height, rot, mx, my)
-        faces.append((face, outward_dir(bx, by, bw, bh, unit.kind, port_name)))
-    # de-duplicate while keeping order (two alts can land on one face once rotated)
-    seen, out = set(), []
-    for _, d in faces:
-        if d not in seen:
-            seen.add(d)
-            out.append(d)
+    menu = (getattr(sym, "port_faces", None) or {}).get(port_name)
+    # A port the symbol does not anchor falls back to the centre of the box.
+    coords = list(menu.values()) if menu else [
+        sym.ports.get(port_name, (sym.width / 2, sym.height / 2))]
+    out: dict[str, tuple[float, float]] = {}
+    for px, py in coords:
+        if unit.kind in ("feed", "product"):
+            # Boundary flags are drawn directly, not from the symbol box.
+            lx, ly = (sym.width - px if mirrored else px), py
+        else:
+            bx, by, bw, bh = symbol_to_box(px, py, sym.width, sym.height,
+                                           rot, mirrored, mirror_y)
+            lx, ly = bx * w / bw, by * h / bh
+        out.setdefault(outward_dir(lx, ly, w, h, unit.kind, port_name, mirrored), (lx, ly))
     return out
-
-
-def _face_options(unit: "Unit", port_name: str) -> dict:
-    """``{face_key: (x, y)}`` for a port: its default plus any declared alts."""
-    sym = _sym(unit)
-    opts = {"_default": sym.ports[port_name]}
-    alts = getattr(sym, "port_alts", None) or {}
-    for face, xy in (alts.get(port_name) or {}).items():
-        opts[face] = xy
-    return opts
 
 
 def unit_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
@@ -158,73 +172,55 @@ def outward_dir(px: float, py: float, w: float, h: float,
     return "E"
 
 
-def _symbol_port(unit: "Unit", port_name: str) -> tuple[float, float]:
-    """The port's coordinate in symbol space, honouring any face override."""
-    sym = _sym(unit)
-    face = (getattr(unit, "_port_faces", None) or {}).get(port_name)
-    if face is not None:
-        alt = (getattr(sym, "port_alts", None) or {}).get(port_name) or {}
-        if face in alt:
-            return alt[face]
-    return sym.ports.get(port_name, (sym.width / 2, sym.height / 2))
-
-
 def _local_port(unit: "Unit", port_name: str, w: float, h: float,
                 mirrored: bool, mirror_y: bool = False, rot: int = 0
                 ) -> tuple[float, float]:
     """Port position relative to the unit's top-left, in resolved pixels.
 
-    Applies the face override, then the symbol→box transform (mirror, then
-    quarter turn), then scales into the resolved box.
+    Takes the placement whose drawn face the caller asked for through
+    :meth:`pfd.units.Unit.nozzle`, else the symbol's own nozzle — which is the
+    menu's first entry, since the whole point of folding the home in is that
+    there is no second place to look.
     """
-    sym = _sym(unit)
-    px, py = _symbol_port(unit, port_name)
-    if unit.kind in ("feed", "product"):
-        # Boundary flags are drawn directly, not from the symbol box.
-        return (sym.width - px if mirrored else px), py
-    bx, by, bw, bh = symbol_to_box(px, py, sym.width, sym.height, rot, mirrored, mirror_y)
-    return bx * w / bw, by * h / bh
+    placements = _drawn_placements(unit, port_name, w, h, rot, mirrored, mirror_y)
+    want = (getattr(unit, "_port_faces", None) or {}).get(port_name)
+    if want in placements:
+        return placements[want]
+    return next(iter(placements.values()))
 
 
-def port_point(unit: "Unit", frame, port_name: str) -> tuple[float, float]:
-    """Absolute (x, y) where a stream visually attaches to the port nozzle.
-
-    This is the endpoint the renderer draws to. Feed/Product use their special
-    arrow-tip convention (the port sits at the tip, whichever way it points).
-    """
-    w, h = frame.w, frame.h
-    rot, mirrored, mirror_y = _xform(frame)
-    _, py = _local_port(unit, port_name, w, h, mirrored, mirror_y, rot)
-    if unit.kind == "feed":
-        ax = frame.x if mirrored else frame.x + 50.0
-        return ax, frame.y + py
-    if unit.kind == "product":
-        ax = frame.x + w if mirrored else frame.x
-        return ax, frame.y + py
-    px, _ = _local_port(unit, port_name, w, h, mirrored, mirror_y, rot)
-    return frame.x + px, frame.y + py
+class ResolvedPort(NamedTuple):
+    """Where a port is drawn, where a path meets it, and which way it faces."""
+    point: tuple[float, float]
+    anchor: tuple[float, float]
+    face: str
 
 
-def port_anchor(unit: "Unit", frame, port_name: str) -> tuple[float, float, str]:
-    """Absolute routing anchor for a port: (x, y, outward_dir).
+def resolve_port(unit: "Unit", frame, port_name: str) -> ResolvedPort:
+    """Resolve a port's drawn geometry: nozzle point, routing anchor and face.
 
-    For process units the anchor is projected onto the bounding-box edge the
-    port faces, so the visibility grid and the router agree on where a path
-    leaves/enters a unit. Feed/Product anchor at their arrow tip.
+    All three together, because deriving one of them somewhere else is how the
+    renderer and the router came to disagree in the first place. The anchor is
+    the point projected onto the bounding-box edge the port faces, so the
+    visibility grid and the router leave a unit where the ink does; Feed/Product
+    use their arrow-tip convention for both (the port sits at the tip, whichever
+    way it points).
     """
     w, h = frame.w, frame.h
     rot, mirrored, mirror_y = _xform(frame)
     px, py = _local_port(unit, port_name, w, h, mirrored, mirror_y, rot)
     d = outward_dir(px, py, w, h, unit.kind, port_name, mirrored)
 
-    if unit.kind == "feed":
-        ax = frame.x if mirrored else frame.x + 50.0
-        return ax, frame.y + py, d
-    if unit.kind == "product":
-        ax = frame.x + w if mirrored else frame.x
-        return ax, frame.y + py, d
+    if unit.kind in ("feed", "product"):
+        if unit.kind == "feed":
+            ax = frame.x if mirrored else frame.x + 50.0
+        else:
+            ax = frame.x + w if mirrored else frame.x
+        tip = (ax, frame.y + py)
+        return ResolvedPort(tip, tip, d)
 
-    ax, ay = frame.x + px, frame.y + py
+    point = (frame.x + px, frame.y + py)
+    ax, ay = point
     if d == "N":
         ay = frame.y
     elif d == "S":
@@ -233,4 +229,18 @@ def port_anchor(unit: "Unit", frame, port_name: str) -> tuple[float, float, str]
         ax = frame.x
     elif d == "E":
         ax = frame.x + w
+    return ResolvedPort(point, (ax, ay), d)
+
+
+def port_point(unit: "Unit", frame, port_name: str) -> tuple[float, float]:
+    """Absolute (x, y) where a stream visually attaches to the port nozzle.
+
+    This is the endpoint the renderer draws to.
+    """
+    return resolve_port(unit, frame, port_name).point
+
+
+def port_anchor(unit: "Unit", frame, port_name: str) -> tuple[float, float, str]:
+    """Absolute routing anchor for a port: (x, y, outward_dir)."""
+    _, (ax, ay), d = resolve_port(unit, frame, port_name)
     return ax, ay, d

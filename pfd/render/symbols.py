@@ -20,7 +20,10 @@ Authoring conventions (hand-drawn symbols)
 - Variants share a ``kind`` and register under a ``variant`` name.
 """
 
-from dataclasses import dataclass, field
+import warnings
+from dataclasses import InitVar, dataclass, field
+
+from pfd.portgeom import outward_dir
 
 @dataclass
 class Symbol:
@@ -29,19 +32,46 @@ class Symbol:
     width: float
     height: float
     ports: dict[str, tuple[float, float]] = field(default_factory=dict)
-    # Alternate faces a port may be moved to, each with its own exact coordinate
-    # so the moved port still lands on drawn ink:
-    #   {"feed": {"N": (30.0, 0.0), "E": (91.5, 15.0)}}
-    port_alts: dict[str, dict[str, tuple[float, float]]] = field(default_factory=dict)
-    # Ports with no fixed face of their own — an instrument balloon is a circle,
-    # so a signal may meet it anywhere on the circumference and "in on the west,
-    # out on the east" is an artefact rather than physics. These are allowed to
-    # offer the same face as each other: only one placement per port is ever
-    # live, so overlapping *options* are a choice for the caller, not a defect.
-    # Equipment nozzles are never free — a drum's liquid draw is on the bottom
-    # because gravity put it there.
-    free_ports: frozenset[str] = frozenset()
+    # Every placement a port may take, keyed by the face it lands on, each with
+    # its own exact coordinate so a moved port still lands on drawn ink:
+    #   {"feed": {"W": (0.0, 15.0), "N": (30.0, 0.0), "E": (91.5, 15.0)}}
+    # ``__post_init__`` folds the symbol's own nozzle in as the first entry, so
+    # this is the *whole* menu — nothing downstream has to merge a privileged
+    # default back in, and a nozzle fixed by physics (a drum's liquid draw is on
+    # the bottom because gravity put it there) is simply one with a single entry.
+    port_faces: dict[str, dict[str, tuple[float, float]]] = field(default_factory=dict)
     label_pos: str | None = None
+    # Deprecated spellings, accepted so a symbol authored against the old
+    # interface still registers. ``port_alts`` listed only the *extra* faces;
+    # ``free_ports`` named the ports with no face of their own, which is now
+    # simply "the menu has more than one entry".
+    port_alts: InitVar[dict[str, dict[str, tuple[float, float]]] | None] = None
+    free_ports: InitVar[frozenset[str] | None] = None
+
+    def __post_init__(self, port_alts, free_ports) -> None:
+        if free_ports is not None:
+            warnings.warn(
+                "Symbol.free_ports is gone: a port with no face of its own is one "
+                "whose port_faces menu has more than one entry.",
+                DeprecationWarning, stacklevel=2,
+            )
+        declared = {name: dict(faces) for name, faces in self.port_faces.items()}
+        if port_alts is not None:
+            warnings.warn(
+                "Symbol.port_alts is deprecated; declare the whole menu in "
+                "Symbol.port_faces (the symbol's own nozzle is folded in for you).",
+                DeprecationWarning, stacklevel=2,
+            )
+            for name, faces in port_alts.items():
+                declared.setdefault(name, {}).update(faces)
+        menu: dict[str, dict[str, tuple[float, float]]] = {}
+        for name, xy in self.ports.items():
+            home = outward_dir(xy[0], xy[1], self.width, self.height)
+            faces = {home: xy}
+            faces.update(declared.get(name, {}))
+            faces[home] = xy   # ``ports`` stays the authority on the home nozzle
+            menu[name] = faces
+        self.port_faces = menu
 
 class SymbolRegistry:
     def __init__(self):
@@ -288,35 +318,36 @@ class SymbolRegistry:
         _inst_faces = {"N": (22.0, 0.0), "S": (22.0, 44.0),
                        "W": (0.0, 22.0), "E": (44.0, 22.0)}
         _inst_ports = {'pv': (22.0, 44.0), 'sig_in': (0.0, 22.0), 'sig_out': (44.0, 22.0)}
-        _inst_alts = {name: dict(_inst_faces) for name in _inst_ports}
-        _inst_free = frozenset(_inst_ports)
+        # Every connection offers every face, so none of them owns one: the
+        # menus overlap on purpose, and only one placement per port is ever live.
+        _inst_menu = {name: dict(_inst_faces) for name in _inst_ports}
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/></g>',
-            width=44.0, height=44.0, ports=_inst_ports, port_alts=_inst_alts,
-            free_ports=_inst_free, label_pos="center"))
+            width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
+            label_pos="center"))
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_panel"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="22" x2="43" y2="22" stroke="black" stroke-width="1.5"/></g>',
-            width=44.0, height=44.0, ports=_inst_ports, port_alts=_inst_alts,
-            free_ports=_inst_free, label_pos="center"), "panel")
+            width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
+            label_pos="center"), "panel")
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_aux"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="19" x2="43" y2="19" stroke="black" stroke-width="1.5"/><line x1="1" y1="25" x2="43" y2="25" stroke="black" stroke-width="1.5"/></g>',
-            width=44.0, height=44.0, ports=_inst_ports, port_alts=_inst_alts,
-            free_ports=_inst_free, label_pos="center"), "aux")
+            width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
+            label_pos="center"), "aux")
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_shared"><rect x="1" y="1" width="42" height="42" fill="white" stroke="black" stroke-width="2"/><circle cx="22" cy="22" r="20" fill="none" stroke="black" stroke-width="2"/></g>',
-            width=44.0, height=44.0, ports=_inst_ports, port_alts=_inst_alts,
-            free_ports=_inst_free, label_pos="center"), "shared")
+            width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
+            label_pos="center"), "shared")
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_computer"><polygon points="11,3 33,3 43,22 33,41 11,41 1,22" fill="white" stroke="black" stroke-width="2"/></g>',
             # The hexagon's flat bottom is at y=41, not y=43 like the circular
             # variants, so pv needs its own coordinate to keep the same 1-unit
             # nozzle stub instead of floating 3 units clear of the outline.
-            width=44.0, height=44.0, label_pos="center", free_ports=_inst_free,
+            width=44.0, height=44.0, label_pos="center",
             ports={**_inst_ports, "pv": (22.0, 42.0)},
             # the hexagon is flat-topped at y=3 and flat-bottomed at y=41, so N and S
             # need their own stubs; the side vertices sit where the circles do.
-            port_alts={n: {**_inst_faces, "N": (22.0, 2.0), "S": (22.0, 42.0)}
-                       for n in _inst_ports}), "computer")
+            port_faces={n: {**_inst_faces, "N": (22.0, 2.0), "S": (22.0, 42.0)}
+                        for n in _inst_ports}), "computer")
         # Interlock / shared logic: a small bare square carrying only the
         # interlock number, hung under the instrument it trips (ISA-5.1).
         self.register("instrument", Symbol(

@@ -205,12 +205,13 @@ fs.add(units.Pump("P-2")).pin(x=400, y=100, mirrored="y")        # flipped top-t
 ```
 
 **Choosing a port's face.** Many vessels can be piped from more than one side.
-Where a symbol declares alternates, `port_face()` picks one; nozzles fixed by
-physics (a column's bottoms, a drum's liquid draw-off) declare none and raise:
+Where a symbol authors a coordinate per face, `nozzle()` picks one — naming the
+compass point **as drawn**, so mirroring cannot invert it. Nozzles fixed by
+physics (a column's bottoms, a drum's liquid draw-off) offer one face and raise:
 
 ```python
 drum = fs.add(units.Separator("V-1", variant="horizontal"))
-drum.port_face("feed", "N")     # feed the drum from above instead of the left head
+drum.nozzle("feed", "N")        # feed the drum from above instead of the left head
 ```
 
 Pinned and auto-placed units mix freely — the engine resolves each unit's frame

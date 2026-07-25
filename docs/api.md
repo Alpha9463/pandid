@@ -302,38 +302,45 @@ fs.add(units.Pump("P-1")).pin(x=200, y=100, orientation=90)   # discharge now fa
 fs.add(units.Pump("P-2")).pin(x=400, y=100, mirrored="y")     # flipped top-to-bottom
 ```
 
-### `port_face`
+### `nozzle`
 
 ```text
-unit.port_face(port_name: str, face: str) -> Unit
+unit.nozzle(port_name: str, face: str) -> Unit
 ```
 
-Moves a port to another face of its symbol. `face` is `"N"`, `"S"`, `"E"` or
-`"W"` **in the symbol's own frame** — mirroring and rotation apply on top, so the
-drawn face follows the placement. Raises `KeyError` for an unknown port and
-`ValueError` when the symbol declares no alternate on that face.
+Pipes a port from a named face of the unit **as drawn**. `face` is the compass
+point on the finished sheet — `"N"`, `"S"`, `"E"`, `"W"`, or the
+`top`/`bottom`/`left`/`right` spelling `label_pos` uses — so a mirrored or
+rotated unit takes the face the reader sees, not the one the stencil was drawn
+with. Raises `KeyError` for an unknown port and `ValueError` when the symbol
+offers no placement on that face. A later `pin()` that changes the rotation or
+mirroring re-checks the choice and raises if it no longer reaches that face, so
+call `nozzle()` after `pin()`.
 
-A port can only move where the symbol has authored a coordinate for it, so that
-the moved nozzle still lands on drawn ink. The symbols that currently declare
-alternates:
+A port can only take a face the symbol has authored a coordinate for, so that
+the moved nozzle still lands on drawn ink. Everything else has one placement and
+is fixed by physics — a column's bottoms, a drum's liquid draw-off. The ports
+that offer a choice (faces given in the symbol's own frame; mirroring and
+rotation move them):
 
 | Symbol | Port | Faces |
 |---|---|---|
-| `Vessel(variant="horizontal")` | `inlet` | `N`, `E` |
-| `Separator(variant="horizontal")` | `feed` | `N`, `E` |
+| `Vessel(variant="horizontal")` | `inlet` | `W` (default), `N`, `E` |
+| `Separator(variant="horizontal")` | `feed` | `W` (default), `N`, `E` |
 | `Instrument` — `default`, `panel`, `aux`, `shared`, `computer` | `pv`, `sig_in`, `sig_out` | `N`, `S`, `E`, `W` |
 
-Every other nozzle is fixed by physics — a column's bottoms, a drum's liquid
-draw-off — and raises. (`Instrument(variant="logic")`, the interlock square,
-declares none either.)
+(`Instrument(variant="logic")`, the interlock square, offers no choice either.)
 
 ```python
 drum = fs.add(units.Separator("V-1", variant="horizontal"))
-drum.port_face("feed", "N")      # feed from above instead of the left head
+drum.nozzle("feed", "N")      # feed from above instead of the left head
 
 lic = fs.add_instrument("LIC", 101, on=vessel, at="S", variant="panel")
-lic.port_face("sig_out", "W")    # take the output on the side the valve is on
+lic.nozzle("sig_out", "W")    # take the output on the side the valve is on
 ```
+
+`port_face()` is the deprecated spelling of the same call; it read its `face` in
+the symbol's own frame, which inverts under mirroring.
 
 ---
 
