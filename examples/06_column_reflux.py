@@ -27,7 +27,8 @@ def main():
     # Overhead: a horizontal shell-and-tube condenser over a horizontal drum.
     cond = fs.add(units.HeatExchanger("E-701", variant="shell_tube", width=110,
                                       height=110, description="Overhead Condenser"))
-    drum = fs.add(units.Drum("V-701", width=130, height=44, description="Reflux Drum"))
+    drum = fs.add(units.Vessel("V-701", variant="horizontal", width=130, height=44,
+                               description="Reflux Drum"))
     # The condenser drains straight down into the drum, so take the inlet on the
     # drum's top face instead of its left head — otherwise the line has to hook
     # back on itself to reach the head.

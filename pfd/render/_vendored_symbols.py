@@ -151,7 +151,7 @@ def register_vendored(registry):
     registry.register('vessel', Symbol(
         svg='<g id="sym_vessel"><rect x="1.0" y="0.0" width="60.0" height="100.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="0.0" width="62.0" height="2.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="32.0" width="62.0" height="2.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="66.0" width="62.0" height="2.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="98.0" width="62.0" height="2.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=62.0, height=100.0,
-        ports={'inlet': (0.0, 50.0), 'outlet': (62.0, 50.0)},
+        ports={'inlet': (0.0, 50.0), 'outlet': (62.0, 50.0), 'vent': (31.0, 0.0)},
     ), 'default')
 
     # draw.io vessels:Pressurized Vessel -> column/default
@@ -249,14 +249,14 @@ def register_vendored(registry):
     registry.register('vessel', Symbol(
         svg='<g id="sym_vessel_dished"><path d="M 50.0 7.69 L 50.0 87.69 A 13.0 5.0 0.0 0 1 30.0 95.3823 A 13.0 5.0 0.0 0 1 10.0 87.69 L 10.0 7.69 A 13.0 5.0 0.0 0 1 30.0 -0.0023 A 13.0 5.0 0.0 0 1 50.0 7.69 Z M 10.0 7.69 L 50.0 7.69 M 10.0 87.69 L 50.0 87.69 M 50.0 62.69 L 60.0 72.69 L 50.0 72.69 Z M 10.0 62.69 L 0.0 72.69 L 10.0 72.69 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=60.0, height=95.4,
-        ports={'inlet': (10.0, 47.0), 'outlet': (50.0, 47.0)},
+        ports={'inlet': (10.0, 47.0), 'outlet': (50.0, 47.0), 'vent': (30.0, 0.0)},
     ), 'dished')
 
     # draw.io vessels:Vessel (Dome) -> vessel/dome
     registry.register('vessel', Symbol(
         svg='<g id="sym_vessel_dome"><path d="M 87.69 14.93 A 5.0 13.0 179.97 0 1 95.3923 34.9272 A 5.0 13.0 179.97 0 1 87.71 54.93 L 7.71 54.97 A 5.0 13.0 179.97 0 1 0.0077 34.9728 A 5.0 13.0 179.97 0 1 7.69 14.97 L 52.69 14.94 L 52.68 4.94 A 10.0 5.0 179.97 0 1 62.6779 -0.065 A 10.0 5.0 179.97 0 1 72.68 4.93 L 72.69 14.93 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=95.4, height=55.0,
-        ports={'inlet': (0.0, 27.0), 'outlet': (95.4, 27.0)},
+        ports={'inlet': (0.0, 27.0), 'outlet': (95.4, 27.0), 'vent': (62.7, 0.0)},
     ), 'dome')
 
     # draw.io vessels:Tank (Floating Roof) -> tank/floating_roof
@@ -280,13 +280,13 @@ def register_vendored(registry):
         ports={'feed': (0.0, 30.0), 'outlet': (20.0, 95.4), 'duty': (40.0, 47.0), 'vent': (30.0, 7.7)},
     ), 'plain')
 
-    # draw.io vessels:Drum or Condenser -> drum/default
-    registry.register('drum', Symbol(
-        svg='<g id="sym_drum"><path d="M 5.77 30.0 L 85.77 30.0 A 5.0 13.0 0.0 0 0 91.5392 15.0 A 5.0 13.0 0.0 0 0 85.77 0.0 L 5.77 0.0 A 5.0 13.0 0.0 0 0 0.0008 15.0 A 5.0 13.0 0.0 0 0 5.77 30.0 Z M 5.77 0.0 L 5.77 30.0 M 85.77 0.0 L 85.77 30.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+    # draw.io vessels:Drum or Condenser -> vessel/horizontal
+    registry.register('vessel', Symbol(
+        svg='<g id="sym_vessel_horizontal"><path d="M 5.77 30.0 L 85.77 30.0 A 5.0 13.0 0.0 0 0 91.5392 15.0 A 5.0 13.0 0.0 0 0 85.77 0.0 L 5.77 0.0 A 5.0 13.0 0.0 0 0 0.0008 15.0 A 5.0 13.0 0.0 0 0 5.77 30.0 Z M 5.77 0.0 L 5.77 30.0 M 85.77 0.0 L 85.77 30.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=91.5, height=30.0,
         ports={'inlet': (0.0, 15.0), 'outlet': (68.0, 30.0), 'vent': (55.0, 0.0)},
         port_alts={'inlet': {'N': (20.0, 0.0), 'E': (91.5, 15.0)}},
-    ), 'default')
+    ), 'horizontal')
 
     # draw.io vessels:Drum or Condenser -> separator/horizontal
     registry.register('separator', Symbol(

@@ -62,7 +62,8 @@ KIND_MAP = {
     ("cooler", "default"): ("heat_exchangers", "Heat Exchanger (Spiral)",
                             {"inlet": "W", "outlet": "E", "duty": "N"}),
     # Vessels / columns / reactors / separators / tanks.
-    ("vessel", "default"): ("vessels", "Barrel, Drum", {"inlet": "W", "outlet": "E"}),
+    ("vessel", "default"): ("vessels", "Barrel, Drum",
+                            {"inlet": "W", "outlet": "E", "vent": ("N", 31.0)}),
     # Feed enters on the left; the returns come back on the RIGHT, which is the
     # side the overhead and reboiler systems are drawn on. reflux_in sits high
     # and boilup_in low on the straight shell wall (which spans y 15..185), with
@@ -106,8 +107,11 @@ KIND_MAP = {
     # Brackets widen the bounding box past the shell, so box-edge ports float
     # outside the vessel; pin them to the shell walls at x = 10 and x = 50.
     ("vessel", "dished"): ("vessels", "Vessel (Dished Ends, Brackets)",
-                           {"inlet": ("AT", 10.0, 47.0), "outlet": ("AT", 50.0, 47.0)}),
-    ("vessel", "dome"):   ("vessels", "Vessel (Dome)", {"inlet": ("W", 27), "outlet": ("E", 27)}),
+                           {"inlet": ("AT", 10.0, 47.0), "outlet": ("AT", 50.0, 47.0),
+                            "vent": ("N", 30.0)}),
+    # the vent rides the raised manway dome on top, apex near x = 62.7
+    ("vessel", "dome"):   ("vessels", "Vessel (Dome)",
+                           {"inlet": ("W", 27), "outlet": ("E", 27), "vent": ("N", 62.7)}),
     ("tank", "floating_roof"): ("vessels", "Tank (Floating Roof)", {"inlet": ("N", 30), "outlet": ("S", 50)}),
     ("tank", "sphere"):        ("vessels", "Storage Sphere", {"inlet": ("N", 40), "outlet": ("S", 40)}),
     # Reactor / separator styles.
@@ -121,13 +125,18 @@ KIND_MAP = {
     # Horizontal drum: reflux drum, accumulator, knock-out pot. A lying cylinder
     # with dished ends — inlet on either head or from above, liquid out of the
     # bottom, vent off the top. The top and bottom faces span x 5.77..85.77.
+    # Horizontal vessel: reflux drum, accumulator, knock-out pot. A lying
+    # cylinder with dished ends — the shape a vertical vessel does NOT become
+    # when rotated, since its saddles and shell bands would turn with it. The
+    # top and bottom faces span x 5.77..85.77.
+    #
     # The outlet takes no alternate: liquid draws off the bottom, and the right
-    # head is already the inlet's alternate — giving both an "E" option lands
-    # two nozzles on the same point.
-    ("drum", "default"): ("vessels", "Drum or Condenser",
-                          {"inlet": [("W", 15), ("N", 20.0), ("E", 15)],
-                           "outlet": ("S", 68.0),
-                           "vent": ("N", 55.0)}),
+    # head is already the inlet's alternate — giving both an "E" option would
+    # land two nozzles on the same point.
+    ("vessel", "horizontal"): ("vessels", "Drum or Condenser",
+                               {"inlet": [("W", 15), ("N", 20.0), ("E", 15)],
+                                "outlet": ("S", 68.0),
+                                "vent": ("N", 55.0)}),
     # The same shape as a horizontal phase separator, where naming the vapour
     # and liquid products is the point. Neither product takes an alternate face:
     # vapour always disengages off the top, liquid draws off the bottom.

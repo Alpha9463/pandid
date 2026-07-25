@@ -7,11 +7,11 @@
       <path d="M 0 0 L 10 5 L 0 10 z" fill="black" />
     </marker>
     <symbol id="sym_column" viewBox="0 0 100.0 200.0" overflow="visible"><path d="M 0.0 15.0 A 50.0 15.0 0.0 0 1 50.0 0.0 A 50.0 15.0 0.0 0 1 100.0 15.0 L 100.0 185.0 A 50.0 15.0 0.0 0 1 50.0 200.0 A 50.0 15.0 0.0 0 1 0.0 185.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></symbol>
-    <symbol id="sym_drum" viewBox="0 0 91.5 30.0" overflow="visible"><path d="M 5.77 30.0 L 85.77 30.0 A 5.0 13.0 0.0 0 0 91.5392 15.0 A 5.0 13.0 0.0 0 0 85.77 0.0 L 5.77 0.0 A 5.0 13.0 0.0 0 0 0.0008 15.0 A 5.0 13.0 0.0 0 0 5.77 30.0 Z M 5.77 0.0 L 5.77 30.0 M 85.77 0.0 L 85.77 30.0" fill="none" stroke="#111" stroke-width="2.0"/></symbol>
     <symbol id="sym_hex_kettle" viewBox="0 0 91.5 33.0" overflow="visible"><path d="M 4.5 15.0 L 16.5 15.0 L 16.5 30.0 L 4.5 30.0 A 3.0 5.0 0.0 0 1 0.0 22.5 A 3.0 5.0 0.0 0 1 4.5 15.0 M 19.5 15.0 L 26.5 15.0 L 41.5 0.0 L 86.5 0.0 A 5.0 15.0 0.0 0 1 91.5 15.0 A 5.0 15.0 0.0 0 1 86.5 30.0 L 19.5 30.0 Z M 4.5 15.0 L 4.5 30.0 M 41.5 0.0 L 41.5 30.0 M 86.5 0.0 L 86.5 30.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="16.5" y="12.0" width="3.0" height="21.0" fill="none" stroke="#111" stroke-width="2.0"/></symbol>
     <symbol id="sym_hex_shell_tube" viewBox="0 0 60.0 60.0" overflow="visible"><ellipse cx="30.0" cy="30.0" rx="30.0" ry="30.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 30.0 L 10.0 30.0 L 20.0 15.0 L 40.0 45.0 L 50.0 30.0 L 60.0 30.0" fill="none" stroke="#111" stroke-width="2.0"/></symbol>
     <symbol id="sym_pump" viewBox="0 0 70.0 67.0" overflow="visible"><path d="M 12.0 54.0 L 0.0 67.0 L 60.0 67.0 L 48.0 54.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.6 25.0 A 30.0 30.0 0.0 0 1 30.0 0.0 L 70.0 0.0 L 70.0 20.0 L 58.45 20.0 A 30.0 30.0 0.0 0 1 51.8587 50.8297 A 30.0 30.0 0.0 0 1 21.3414 58.7425 A 30.0 30.0 0.0 0 1 0.6 35.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 21.4 25.0 A 10.0 10.0 0.0 1 1 21.4 35.0" fill="none" stroke="#111" stroke-width="2.0"/></symbol>
     <symbol id="sym_splitter" viewBox="0 0 50.0 50.0" overflow="visible"><polygon points="0,25 50,0 50,50" fill="none" stroke="black" stroke-width="2"/></symbol>
+    <symbol id="sym_vessel_horizontal" viewBox="0 0 91.5 30.0" overflow="visible"><path d="M 5.77 30.0 L 85.77 30.0 A 5.0 13.0 0.0 0 0 91.5392 15.0 A 5.0 13.0 0.0 0 0 85.77 0.0 L 5.77 0.0 A 5.0 13.0 0.0 0 0 0.0008 15.0 A 5.0 13.0 0.0 0 0 5.77 30.0 Z M 5.77 0.0 L 5.77 30.0 M 85.77 0.0 L 85.77 30.0" fill="none" stroke="#111" stroke-width="2.0"/></symbol>
   </defs>
   <g id="units">
     <polygon points="54.0,377 125,377 140,390 125,403 54.0,403" fill="transparent" stroke="black" stroke-width="2" />
@@ -19,7 +19,7 @@
     <text x="89.5" y="398" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PFD-100</text>
     <use href="#sym_column" x="300" y="260" width="100.0" height="200.0" />
     <use href="#sym_hex_shell_tube" x="620" y="70" width="110" height="110" />
-    <use href="#sym_drum" x="600" y="220" width="130" height="44" />
+    <use href="#sym_vessel_horizontal" x="600" y="220" width="130" height="44" />
     <polygon points="900,220 979.0,220 994.0,233 979.0,246 900,246" fill="transparent" stroke="black" stroke-width="2" />
     <text x="939.5" y="229" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Vent Gas</text>
     <text x="939.5" y="241" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PFD-900</text>

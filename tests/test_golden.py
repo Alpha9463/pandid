@@ -232,7 +232,9 @@ def _column_reflux() -> Flowsheet:
             description="Overhead Condenser",
         )
     )
-    drum = fs.add(units.Drum("V-701", width=130, height=44, description="Reflux Drum"))
+    drum = fs.add(
+        units.Vessel("V-701", variant="horizontal", width=130, height=44, description="Reflux Drum")
+    )
     drum.port_face("inlet", "N")
     vent = fs.add(units.Product("Vent Gas", reference="PFD-900"))
     pump = fs.add(units.Pump("P-701", description="Reflux Pump"))

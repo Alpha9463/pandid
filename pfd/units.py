@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "Unit",
-    "Feed", "Product", "Pump", "Compressor", "Blower", "Valve", "Vessel", "Tank", "Drum",
+    "Feed", "Product", "Pump", "Compressor", "Blower", "Valve", "Vessel", "Tank",
     "HeatExchanger", "Heater", "Cooler", "Reactor", "Separator", "Column",
     "Mixer", "Splitter", "Reducer", "Furnace", "Turbine", "Filter", "Dryer",
     "Instrument",
@@ -203,10 +203,25 @@ class Valve(Unit):
 
 
 class Vessel(Unit):
-    """Generic pressure vessel or storage tank."""
+    """Generic pressure vessel — holdup, not phase separation.
+
+    Variants: ``"default"`` and ``"dished"`` stand upright; ``"horizontal"`` is
+    a lying cylinder with dished ends, which is how a reflux drum, accumulator
+    or knock-out pot is drawn. Use the variant rather than rotating an upright
+    vessel: skirts, saddles and shell bands do not survive a quarter turn, and
+    the outlet still has to drain from the bottom whichever way the artwork is
+    spun.
+
+    Reach for :class:`Separator` instead when the point of the vessel is
+    splitting phases and you want to name the vapour and liquid products.
+    """
 
     kind = "vessel"
-    _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+    _PORTS = [
+        ("inlet", "inlet", "process"),
+        ("outlet", "outlet", "process"),
+        ("vent", "outlet", "vapor"),
+    ]
 
 
 class Tank(Unit):
@@ -214,23 +229,6 @@ class Tank(Unit):
 
     kind = "tank"
     _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
-
-
-class Drum(Unit):
-    """Horizontal drum — reflux drum, accumulator, knock-out pot.
-
-    Deliberately *not* a :class:`Separator`: a drum is a holdup vessel, so its
-    connections are simply what goes in and what comes out, plus a vent. Reach
-    for :class:`Separator` when the point of the vessel is splitting phases and
-    you want to name the vapour and liquid products.
-    """
-
-    kind = "drum"
-    _PORTS = [
-        ("inlet", "inlet", "process"),
-        ("outlet", "outlet", "process"),
-        ("vent", "outlet", "vapor"),
-    ]
 
 
 class Blower(Unit):
