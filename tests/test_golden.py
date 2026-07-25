@@ -223,32 +223,55 @@ def _column_reflux() -> Flowsheet:
     fs = Flowsheet("Column Overhead System")
     feed = fs.add(units.Feed("Feed", reference="PFD-100"))
     col = fs.add(units.Column("T-701", description="Main Fractionator"))
-    cond = fs.add(units.HeatExchanger("E-701", description="Overhead Condenser"))
-    drum = fs.add(
-        units.Separator(
-            "V-701", variant="horizontal", width=125, height=45, description="Reflux Drum"
+    cond = fs.add(
+        units.HeatExchanger(
+            "E-701",
+            variant="shell_tube",
+            width=110,
+            height=110,
+            description="Overhead Condenser",
         )
     )
+    drum = fs.add(units.Drum("V-701", width=130, height=44, description="Reflux Drum"))
+    drum.port_face("inlet", "N")
     vent = fs.add(units.Product("Vent Gas", reference="PFD-900"))
-    rpump = fs.add(units.Pump("P-701", description="Reflux Pump"))
-    rsplit = fs.add(units.Splitter("SP-701", n_outlets=2, description="Reflux Split"))
+    pump = fs.add(units.Pump("P-701", description="Reflux Pump"))
+    split = fs.add(units.Splitter("SP-701", n_outlets=2, description="Reflux Split"))
     dist = fs.add(units.Product("Distillate", reference="PFD-200"))
-    reb = fs.add(units.HeatExchanger("E-702", description="Reboiler"))
-    bsplit = fs.add(units.Splitter("SP-702", n_outlets=2, description="Boilup Split"))
+    bsplit = fs.add(units.Splitter("SP-702", n_outlets=2, description="Bottoms Split"))
+    reb = fs.add(
+        units.HeatExchanger(
+            "E-702", variant="kettle", width=150, height=54, description="Kettle Reboiler"
+        )
+    )
     bot = fs.add(units.Product("Bottoms", reference="PFD-300"))
+
+    col_x, col_y, col_h = 300, 260, 200
+    feed.pin(x=90, y=col_y + 105)
+    col.pin(x=col_x, y=col_y)
+    ovhd_y = col_y - 190
+    cond.pin(x=620, y=ovhd_y)
+    drum.pin(x=600, y=ovhd_y + 150)
+    vent.pin(x=900, y=ovhd_y + 138)
+    pump.pin(x=690, y=ovhd_y + 260)
+    split.pin(x=860, y=ovhd_y + 252)
+    dist.pin(x=1020, y=ovhd_y + 257)
+    bsplit.pin(x=520, y=col_y + col_h + 55)
+    reb.pin(x=680, y=col_y + col_h + 35)
+    bot.pin(x=940, y=col_y + col_h + 130)
 
     fs.connect(feed.outlet, col.feed)
     fs.connect(col.distillate, cond.hot_in)
-    fs.connect(cond.hot_out, drum.feed)
-    fs.connect(drum.vapor, vent.inlet)
-    fs.connect(drum.liquid, rpump.suction)
-    fs.connect(rpump.discharge, rsplit.inlet)
-    fs.connect(rsplit.out_1, dist.inlet)
-    fs.connect(rsplit.out_2, col.reflux_in, tear_hint=True)
-    fs.connect(col.bottoms, reb.cold_in)
-    fs.connect(reb.cold_out, bsplit.inlet)
-    fs.connect(bsplit.out_1, bot.inlet)
-    fs.connect(bsplit.out_2, col.boilup_in, tear_hint=True)
+    fs.connect(cond.hot_out, drum.inlet)
+    fs.connect(drum.vent, vent.inlet)
+    fs.connect(drum.outlet, pump.suction)
+    fs.connect(pump.discharge, split.inlet)
+    fs.connect(split.out_1, dist.inlet)
+    fs.connect(split.out_2, col.reflux_in, tear_hint=True)
+    fs.connect(col.bottoms, bsplit.inlet)
+    fs.connect(bsplit.out_1, reb.cold_in)
+    fs.connect(reb.cold_out, col.boilup_in, tear_hint=True)
+    fs.connect(bsplit.out_2, bot.inlet)
     return fs
 
 

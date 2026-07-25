@@ -118,10 +118,19 @@ KIND_MAP = {
     # with dished ends. Feed enters the left head, vapour leaves the top face
     # and liquid draws off the bottom face (both span x 5.77..85.77).
     #
-    # A drum can be fed from either dished head or from above, so feed lists
-    # alternates (see Unit.port_face). Vapour and liquid have none: on a lying
-    # cylinder vapour always disengages off the top and liquid draws off the
-    # bottom, and putting them on the heads would collide with the feed nozzle.
+    # Horizontal drum: reflux drum, accumulator, knock-out pot. A lying cylinder
+    # with dished ends — inlet on either head or from above, liquid out of the
+    # bottom, vent off the top. The top and bottom faces span x 5.77..85.77.
+    # The outlet takes no alternate: liquid draws off the bottom, and the right
+    # head is already the inlet's alternate — giving both an "E" option lands
+    # two nozzles on the same point.
+    ("drum", "default"): ("vessels", "Drum or Condenser",
+                          {"inlet": [("W", 15), ("N", 20.0), ("E", 15)],
+                           "outlet": ("S", 68.0),
+                           "vent": ("N", 55.0)}),
+    # The same shape as a horizontal phase separator, where naming the vapour
+    # and liquid products is the point. Neither product takes an alternate face:
+    # vapour always disengages off the top, liquid draws off the bottom.
     ("separator", "horizontal"): ("vessels", "Drum or Condenser",
                                   {"feed": [("W", 15), ("N", 20.0), ("E", 15)],
                                    "vapor": ("N", 30.0),

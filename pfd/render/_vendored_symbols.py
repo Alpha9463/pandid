@@ -280,6 +280,14 @@ def register_vendored(registry):
         ports={'feed': (0.0, 30.0), 'outlet': (20.0, 95.4), 'duty': (40.0, 47.0), 'vent': (30.0, 7.7)},
     ), 'plain')
 
+    # draw.io vessels:Drum or Condenser -> drum/default
+    registry.register('drum', Symbol(
+        svg='<g id="sym_drum"><path d="M 5.77 30.0 L 85.77 30.0 A 5.0 13.0 0.0 0 0 91.5392 15.0 A 5.0 13.0 0.0 0 0 85.77 0.0 L 5.77 0.0 A 5.0 13.0 0.0 0 0 0.0008 15.0 A 5.0 13.0 0.0 0 0 5.77 30.0 Z M 5.77 0.0 L 5.77 30.0 M 85.77 0.0 L 85.77 30.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=91.5, height=30.0,
+        ports={'inlet': (0.0, 15.0), 'outlet': (68.0, 30.0), 'vent': (55.0, 0.0)},
+        port_alts={'inlet': {'N': (20.0, 0.0), 'E': (91.5, 15.0)}},
+    ), 'default')
+
     # draw.io vessels:Drum or Condenser -> separator/horizontal
     registry.register('separator', Symbol(
         svg='<g id="sym_separator_horizontal"><path d="M 5.77 30.0 L 85.77 30.0 A 5.0 13.0 0.0 0 0 91.5392 15.0 A 5.0 13.0 0.0 0 0 85.77 0.0 L 5.77 0.0 A 5.0 13.0 0.0 0 0 0.0008 15.0 A 5.0 13.0 0.0 0 0 5.77 30.0 Z M 5.77 0.0 L 5.77 30.0 M 85.77 0.0 L 85.77 30.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',

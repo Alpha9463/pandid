@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "Unit",
-    "Feed", "Product", "Pump", "Compressor", "Blower", "Valve", "Vessel", "Tank",
+    "Feed", "Product", "Pump", "Compressor", "Blower", "Valve", "Vessel", "Tank", "Drum",
     "HeatExchanger", "Heater", "Cooler", "Reactor", "Separator", "Column",
     "Mixer", "Splitter", "Reducer", "Furnace", "Turbine", "Filter", "Dryer",
     "Instrument",
@@ -214,6 +214,23 @@ class Tank(Unit):
 
     kind = "tank"
     _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+
+
+class Drum(Unit):
+    """Horizontal drum — reflux drum, accumulator, knock-out pot.
+
+    Deliberately *not* a :class:`Separator`: a drum is a holdup vessel, so its
+    connections are simply what goes in and what comes out, plus a vent. Reach
+    for :class:`Separator` when the point of the vessel is splitting phases and
+    you want to name the vapour and liquid products.
+    """
+
+    kind = "drum"
+    _PORTS = [
+        ("inlet", "inlet", "process"),
+        ("outlet", "outlet", "process"),
+        ("vent", "outlet", "vapor"),
+    ]
 
 
 class Blower(Unit):
