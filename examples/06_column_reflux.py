@@ -13,6 +13,8 @@ Without those nozzles a reflux loop has to be modelled as a recycle to some
 upstream unit, which drags the whole overhead system back across the sheet.
 """
 
+from _bootstrap import out  # runs from the repo root or from examples/
+
 from pfd import Flowsheet, units
 
 
@@ -54,7 +56,7 @@ def main():
     fs.connect(bsplit.out_1, bot.inlet)
     fs.connect(bsplit.out_2, col.boilup_in, tear_hint=True)      # boilup return
 
-    fs.render("column_reflux.svg")
+    fs.render(out("column_reflux.svg"))
     print("Generated column_reflux.svg")
 
 

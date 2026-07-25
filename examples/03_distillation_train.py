@@ -6,6 +6,8 @@ across a complex flowsheet with tall equipment (columns), multiple
 outlets, and recycled loops.  Uses ISO 10628-2 compliant symbols.
 """
 
+from _bootstrap import out  # runs from the repo root or from examples/
+
 from pfd import Flowsheet, units
 
 def main():
@@ -148,7 +150,7 @@ def main():
     }, align="top-left"))
 
     # --- Render ---
-    fs.render("distillation_train.svg", show_stream_table=True, styling="pid")
+    fs.render(out("distillation_train.svg"), show_stream_table=True, styling="pid")
     print("Generated distillation_train.svg")
 
 if __name__ == "__main__":

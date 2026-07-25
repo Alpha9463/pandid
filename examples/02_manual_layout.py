@@ -13,6 +13,8 @@ inlet sit at y+25; the heat-exchanger cold side sits at y+30. So a Feed/Product
 pinned 5px *above* an exchanger lines the stream up perfectly.
 """
 
+from _bootstrap import out  # runs from the repo root or from examples/
+
 from pfd import Flowsheet, units
 
 
@@ -44,7 +46,7 @@ def main():
         (410, 330),
     ])
 
-    out_file = "manual_layout.svg"
+    out_file = out("manual_layout.svg")
     fs.render(out_file)
     print(f"Flowsheet rendered successfully to {out_file}")
 
