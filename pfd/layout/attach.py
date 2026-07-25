@@ -131,7 +131,18 @@ def place_attached(fs: "Flowsheet") -> bool:
             old = inst.frame
             if old is None or abs(old.x - cx) > 0.01 or abs(old.y - cy) > 0.01:
                 moved = True
-            inst.frame = Frame(x=cx, y=cy, w=w, h=h, label_pos="center")
+            # Carry the placement transform across: an attached balloon is
+            # positioned by its host rather than by the coordinate pass, so
+            # without this a pin(mirrored=...) on one is silently dropped —
+            # and mirroring is how a balloon puts its signal port on the side
+            # the run actually comes from.
+            pin = inst.pin_
+            inst.frame = Frame(
+                x=cx, y=cy, w=w, h=h, label_pos="center",
+                orientation=pin.orientation if pin else 0.0,
+                mirrored=pin.mirrored if pin else False,
+                mirror_y=pin.mirror_y if pin else False,
+            )
             inst.tap = (tx, ty)
             pending.remove(inst)
             progressed = True

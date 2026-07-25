@@ -45,7 +45,10 @@ def main():
     strainer.pin(x=190, y=280)         # ports at y + 20
     pump.pin(x=280, y=270)             # suction y + 30, discharge y + 10
     meter.pin(x=430, y=265)            # ports at y + 15
-    fv.pin(x=540, y=250.2)             # ports at y + 29.8
+    # Flipped top-to-bottom so the motor operator faces down, on the same side
+    # as the controller: otherwise the signal has to climb over the vessel to
+    # reach it. Mirroring moves the process ports to y + 14.7.
+    fv.pin(x=540, y=265.3, mirrored="y")
     surge.pin(x=680, y=210)            # inlet/outlet at half height
     glass.pin(x=850, y=267.5)          # ports at y + 12.5
     prod.pin(x=980, y=255)
@@ -73,6 +76,10 @@ def main():
     # instrument placed into equipment is a hard validation error, not a nudge.
     lic = fs.add_instrument("LIC", 101, on=surge, at="S", offset=115,
                             variant="panel")
+    # Mirrored so the balloon's signal port faces west, towards the valve it
+    # drives. The circle is symmetric, so this moves the port without changing
+    # how the balloon looks.
+    lic.pin(mirrored="x")
     fs.connect(lic.sig_out, fv.actuator, kind="electric")
 
     fs.render(out("metering_skid.svg"))

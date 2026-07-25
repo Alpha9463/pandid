@@ -292,6 +292,53 @@ def _column_reflux() -> Flowsheet:
     return fs
 
 
+def _metering_skid() -> Flowsheet:
+    fs = Flowsheet("Feed Metering Skid")
+    feed = fs.add(units.Feed("Raw Feed", reference="PFD-100"))
+    strainer = fs.add(units.Fitting("ST-101", variant="strainer", description="Suction Strainer"))
+    pump = fs.add(units.Pump("P-101", description="Feed Pump"))
+    meter = fs.add(
+        units.Fitting("FI-101", variant="rotameter", description="Variable-Area Flow Meter")
+    )
+    fv = fs.add(units.Valve("FV-101", variant="motor", description="Motor-Operated Throttle Valve"))
+    surge = fs.add(units.Vessel("V-101", width=90, height=140, description="Surge Vessel"))
+    psv = fs.add(
+        units.Valve(
+            "PSV-101", variant="psv", width=40, height=68, description="Vessel Relief Valve"
+        )
+    )
+    flare = fs.add(units.Product("To Flare", reference="PFD-900"))
+    glass = fs.add(units.Fitting("SG-101", variant="sight_glass", description="Sight Glass"))
+    prod = fs.add(units.Product("To Unit 200", reference="PFD-200"))
+
+    feed.pin(x=60, y=275)
+    strainer.pin(x=190, y=280)
+    pump.pin(x=280, y=270)
+    meter.pin(x=430, y=265)
+    fv.pin(x=540, y=265.3, mirrored="y")
+    surge.pin(x=680, y=210)
+    glass.pin(x=850, y=267.5)
+    prod.pin(x=980, y=255)
+    surge_vent_x = 680 + (31 / 62) * 90
+    psv.pin(x=surge_vent_x - (10.5 / 27.8) * 40, y=110)
+    flare.pin(x=900, y=110 + (30.2 / 47.2) * 68 - 25)
+
+    fs.connect(feed.outlet, strainer.inlet)
+    fs.connect(strainer.outlet, pump.suction)
+    fs.connect(pump.discharge, meter.inlet)
+    fs.connect(meter.outlet, fv.inlet)
+    fs.connect(fv.outlet, surge.inlet)
+    fs.connect(surge.outlet, glass.inlet)
+    fs.connect(glass.outlet, prod.inlet)
+    fs.connect(surge.vent, psv.inlet)
+    fs.connect(psv.outlet, flare.inlet)
+
+    lic = fs.add_instrument("LIC", 101, on=surge, at="S", offset=115, variant="panel")
+    lic.pin(mirrored="x")
+    fs.connect(lic.sig_out, fv.actuator, kind="electric")
+    return fs
+
+
 SCENARIOS = {
     "01_ammonia_loop": (_ammonia_loop, {}),
     "02_manual_layout": (_manual_layout, {}),
@@ -299,6 +346,7 @@ SCENARIOS = {
     "04_control_loop": (_control_loop, {}),
     "05_reactor_recycle": (_reactor_recycle, {}),
     "06_column_reflux": (_column_reflux, {}),
+    "07_metering_skid": (_metering_skid, {}),
 }
 
 
