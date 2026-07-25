@@ -105,6 +105,17 @@ def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
     return out
 
 
+def is_anchored(unit: "Unit", port_name: str) -> bool:
+    """True when the symbol authors a coordinate for this port.
+
+    An unanchored port — a ``Mixer``'s third inlet, past the two its symbol
+    draws — falls back to the centre of the box, so any two of them land on the
+    same point by construction. That is a gap in the symbol rather than a
+    placement, and callers that police collisions have to tell the two apart.
+    """
+    return port_name in _sym(unit).ports
+
+
 def unit_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
     """True drawn bounding box (x_min, y_min, x_max, y_max) of a unit.
 

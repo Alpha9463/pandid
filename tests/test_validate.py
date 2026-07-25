@@ -43,3 +43,62 @@ def test_clean_flowsheet_has_no_errors():
     fs.route()
     errors = [i for i in fs.validate() if i.severity == "error"]
     assert errors == []
+
+
+# --- coincident connected ports ----------------------------------------------
+
+
+def _loop_with_a_balloon():
+    """A controller taking a signal in and driving a valve, plus its process tap.
+
+    A balloon is a circle, so all three of its connections offer all four faces
+    and the symbol-level duplicate-nozzle check must let those menus overlap.
+    Which placement each one actually took is only visible on a laid-out sheet.
+    """
+    fs = Flowsheet("loop")
+    feed = fs.add(U.Feed("Feed")).pin(x=60, y=170)
+    fv = fs.add(U.Valve("FV-101", variant="control")).pin(x=300, y=180)
+    prod = fs.add(U.Product("Product")).pin(x=520, y=170)
+    fs.connect(feed.outlet, fv.inlet)
+    fs.connect(fv.outlet, prod.inlet)
+    lt = fs.add(U.Instrument("LT-101")).pin(x=300, y=400)
+    lic = fs.add(U.Instrument("LIC-101", variant="panel")).pin(x=300, y=520)
+    fs.connect(lt.sig_out, lic.sig_in, kind="electric")
+    fs.connect(lic.sig_out, fv.actuator, kind="electric")
+    return fs, lic
+
+
+def test_two_live_connections_on_one_point_are_an_error():
+    fs, lic = _loop_with_a_balloon()
+    lic.nozzle("sig_out", "W")  # onto sig_in's own placement on the west
+    fs.layout()
+    errors = [i for i in fs.validate() if i.severity == "error"]
+    assert [i.code for i in errors] == ["coincident-ports"]
+    assert "LIC-101.sig_in and LIC-101.sig_out" in errors[0].message
+    with pytest.raises(ValueError, match="coincident-ports"):
+        fs.to_svg()
+
+
+def test_distinct_placements_on_the_same_balloon_are_fine():
+    fs, lic = _loop_with_a_balloon()
+    lic.nozzle("sig_out", "N")
+    fs.layout()
+    assert [i for i in fs.validate() if i.code == "coincident-ports"] == []
+
+
+def test_ports_the_symbol_never_anchored_warn_rather_than_raise():
+    """A Mixer past its symbol's two drawn inlets: the extra ports fall back to
+    the centre of the box, so they coincide by construction. That is a gap in
+    the symbol, not a contradiction on the sheet, and must not stop rendering."""
+    fs = Flowsheet("wide-mixer")
+    mix = fs.add(U.Mixer("M-1", n_inlets=4))
+    prod = fs.add(U.Product("P"))
+    for i in range(1, 5):
+        feed = fs.add(U.Feed(f"F{i}"))
+        fs.connect(feed.outlet, mix.ports[f"in_{i}"])
+    fs.connect(mix.outlet, prod.inlet)
+    fs.layout()
+    issues = [i for i in fs.validate() if i.code == "coincident-ports"]
+    assert [i.severity for i in issues] == ["warning"]
+    assert "anchors no nozzle" in issues[0].message
+    fs.to_svg()  # must not raise
