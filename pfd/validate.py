@@ -110,7 +110,7 @@ def validate(fs: "Flowsheet") -> list["Issue"]:
                 issue = Issue(
                     "error" if anchored else "warning", "coincident-ports",
                     f"{u.name}.{first} and {u.name}.{name} are both connected and "
-                    f"both resolve to {pt[0]}, {pt[1]}"
+                    f"both resolve to ({pt[0]}, {pt[1]})"
                     + ("" if anchored else "; the symbol anchors no nozzle for one "
                        "of them, so both fall back to the centre of the box"))
                 (errors if anchored else warnings).append(issue)

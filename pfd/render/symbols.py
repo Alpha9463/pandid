@@ -409,7 +409,7 @@ class SymbolRegistry:
                        "W": (0.0, 22.0), "E": (44.0, 22.0)}
         _inst_ports = {'pv': (22.0, 44.0), 'sig_in': (0.0, 22.0), 'sig_out': (44.0, 22.0)}
         # Every connection offers every face, so none of them owns one: the
-        # menus overlap on purpose, and only one placement per port is ever live.
+        # menus overlap on purpose, which is what faceless_ports declares.
         _inst_menu = {name: dict(_inst_faces) for name in _inst_ports}
         _inst_faceless = frozenset(_inst_ports)
         self.register("instrument", Symbol(
