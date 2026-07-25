@@ -63,11 +63,17 @@ KIND_MAP = {
                             {"inlet": "W", "outlet": "E", "duty": "N"}),
     # Vessels / columns / reactors / separators / tanks.
     ("vessel", "default"): ("vessels", "Barrel, Drum", {"inlet": "W", "outlet": "E"}),
+    # reflux_in / boilup_in ride the same straight shell wall as the feed (the
+    # shell spans y 15..185), reflux high and boilup low, matching where those
+    # streams physically re-enter the tower.
     ("column", "default"): ("vessels", "Pressurized Vessel",
                             {"feed": ("W", 130), "distillate": ("N", 50), "bottoms": ("S", 50),
+                             "reflux_in": ("W", 40), "boilup_in": ("W", 175),
                              "reboiler_duty": ("E", 170), "condenser_duty": ("E", 40)}),
+    # vent sits on the vessel's top edge, clear of the agitator shaft at x 24..26.
     ("reactor", "default"): ("vessels", "Mixing Reactor",
-                             {"feed": "W", "outlet": "S", "duty": "E"}),
+                             {"feed": "W", "outlet": "S", "duty": "E",
+                              "vent": ("AT", 40.0, 32.4)}),
     ("separator", "default"): ("vessels", "Knock-out Drum",
                                {"feed": ("W", 55), "vapor": ("N", 25), "liquid": ("S", 25)}),
     # Both roofs rise inside the bounding box, so an inlet on the box's top edge
@@ -104,7 +110,9 @@ KIND_MAP = {
     ("tank", "floating_roof"): ("vessels", "Tank (Floating Roof)", {"inlet": ("N", 30), "outlet": ("S", 50)}),
     ("tank", "sphere"):        ("vessels", "Storage Sphere", {"inlet": ("N", 40), "outlet": ("S", 40)}),
     # Reactor / separator styles.
-    ("reactor", "plain"):     ("vessels", "Reactor", {"feed": ("W", 30), "outlet": ("S", 20), "duty": ("E", 47)}),
+    ("reactor", "plain"):     ("vessels", "Reactor",
+                               {"feed": ("W", 30), "outlet": ("S", 20), "duty": ("E", 47),
+                                "vent": ("AT", 30.0, 7.69)}),
     ("separator", "cyclone"): ("separators", "Separator (Cyclone)", {"feed": "W", "vapor": "N", "liquid": "S"}),
     ("separator", "gravity"): ("separators", "Gravity Separator, Settling Chamber",
                                {"feed": "W", "vapor": "E", "liquid": "S"}),

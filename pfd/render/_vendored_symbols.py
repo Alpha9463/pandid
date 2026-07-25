@@ -158,14 +158,14 @@ def register_vendored(registry):
     registry.register('column', Symbol(
         svg='<g id="sym_column"><path d="M 0.0 15.0 A 50.0 15.0 0.0 0 1 50.0 0.0 A 50.0 15.0 0.0 0 1 100.0 15.0 L 100.0 185.0 A 50.0 15.0 0.0 0 1 50.0 200.0 A 50.0 15.0 0.0 0 1 0.0 185.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=200.0,
-        ports={'feed': (0.0, 130.0), 'distillate': (50.0, 0.0), 'bottoms': (50.0, 200.0), 'reboiler_duty': (100.0, 170.0), 'condenser_duty': (100.0, 40.0)},
+        ports={'feed': (0.0, 130.0), 'distillate': (50.0, 0.0), 'bottoms': (50.0, 200.0), 'reflux_in': (0.0, 40.0), 'boilup_in': (0.0, 175.0), 'reboiler_duty': (100.0, 170.0), 'condenser_duty': (100.0, 40.0)},
     ), 'default')
 
     # draw.io vessels:Mixing Reactor -> reactor/default
     registry.register('reactor', Symbol(
         svg='<g id="sym_reactor"><path d="M 31.0 2.4 L 31.0 27.4 A 5.0 2.0 0.0 0 1 25.0 29.8 A 5.0 2.0 0.0 0 1 19.0 27.4 L 19.0 2.4 A 5.0 2.0 0.0 0 1 25.0 0.0 A 5.0 2.0 0.0 0 1 31.0 2.4 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 26.0 32.4 L 50.0 32.4 L 50.0 77.4 L 25.0 96.4 L 0.0 77.4 L 0.0 32.4 L 24.0 32.4 M 19.0 2.4 L 31.0 2.4 M 19.0 27.4 L 31.0 27.4 M 24.0 29.4 L 24.0 56.9 M 26.0 29.4 L 26.0 56.9 M 0.0 77.4 L 50.0 77.4" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="30.0" cy="57.4" rx="5.0" ry="1.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="20.0" cy="57.4" rx="5.0" ry="1.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=50.0, height=96.4,
-        ports={'feed': (0.0, 48.2), 'outlet': (25.0, 96.4), 'duty': (50.0, 48.2)},
+        ports={'feed': (0.0, 48.2), 'outlet': (25.0, 96.4), 'duty': (50.0, 48.2), 'vent': (40.0, 32.4)},
     ), 'default')
 
     # draw.io vessels:Knock-out Drum -> separator/default
@@ -277,7 +277,7 @@ def register_vendored(registry):
     registry.register('reactor', Symbol(
         svg='<g id="sym_reactor_plain"><path d="M 40.0 7.69 L 40.0 87.69 A 13.0 5.0 0.0 0 1 20.0 95.3823 A 13.0 5.0 0.0 0 1 0.0 87.69 L 0.0 7.69 A 13.0 5.0 0.0 0 1 20.0 -0.0023 A 13.0 5.0 0.0 0 1 40.0 7.69 Z M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69 M 0.0 67.69 L 40.0 67.69 M 0.0 27.69 L 40.0 27.69 M 8.0 27.69 L 0.0 35.69 M 24.0 27.69 L 0.0 51.69 M 32.0 27.69 L 0.0 59.69 M 40.0 27.69 L 0.0 67.69 M 40.0 35.69 L 8.0 67.69 M 40.0 51.69 L 24.0 67.69 M 40.0 59.69 L 32.0 67.69 M 16.0 27.69 L 0.0 43.69 M 40.0 43.69 L 16.0 67.69" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=40.0, height=95.4,
-        ports={'feed': (0.0, 30.0), 'outlet': (20.0, 95.4), 'duty': (40.0, 47.0)},
+        ports={'feed': (0.0, 30.0), 'outlet': (20.0, 95.4), 'duty': (40.0, 47.0), 'vent': (30.0, 7.7)},
     ), 'plain')
 
     # draw.io separators:Separator (Cyclone) -> separator/cyclone
