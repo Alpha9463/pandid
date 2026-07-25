@@ -292,6 +292,13 @@ class SymbolRegistry:
             # nozzle stub instead of floating 3 units clear of the outline.
             width=44.0, height=44.0, label_pos="center",
             ports={**_inst_ports, "pv": (22.0, 42.0)}), "computer")
+        # Interlock / shared logic: a small bare square carrying only the
+        # interlock number, hung under the instrument it trips (ISA-5.1).
+        self.register("instrument", Symbol(
+            svg='<g id="sym_instrument_logic"><rect x="1" y="1" width="26" height="26" fill="white" stroke="black" stroke-width="2"/></g>',
+            width=28.0, height=28.0, label_pos="center",
+            ports={'pv': (14.0, 27.0), 'sig_in': (1.0, 14.0), 'sig_out': (27.0, 14.0)}),
+            "logic")
 
         # Vendored draw.io symbols (Apache-2.0) — registered last so they
         # override the hand-drawn defaults for shared kinds and add variants.

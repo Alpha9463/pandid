@@ -181,18 +181,32 @@ def _distillation_train() -> Flowsheet:
 
 def _control_loop() -> Flowsheet:
     fs = Flowsheet("Flow Control Loop")
-    feed = fs.add(units.Feed("Feed"))
-    fv = fs.add(units.Valve("FV-101", variant="control"))
-    prod = fs.add(units.Product("Product"))
-    fs.connect(feed.outlet, fv.inlet)
-    fs.connect(fv.outlet, prod.inlet)
-    ft = fs.add(units.Instrument("FT-101"))
-    fic = fs.add(units.Instrument("FIC-101", variant="panel"))
-    fy = fs.add(units.Instrument("FY-101", variant="computer"))
-    fr = fs.add(units.Instrument("FR-101", variant="shared"))
+    feed = fs.add(units.Feed("Feed")).pin(x=60, y=170)
+    fv = fs.add(units.Valve("FV-101", variant="control")).pin(x=270, y=180)
+    drum = fs.add(units.Vessel("V-101", description="Surge Drum")).pin(x=420, y=145)
+    lv = fs.add(units.Valve("LV-101", variant="control")).pin(x=640, y=180)
+    prod = fs.add(units.Product("Product")).pin(x=790, y=170)
+    psv = fs.add(units.Valve("PSV-101", variant="relief")).pin(x=441, y=55)
+    flare = fs.add(units.Product("To Flare", reference="P&ID-902")).pin(x=630, y=5)
+
+    line = fs.connect(feed.outlet, fv.inlet)
+    fs.connect(fv.outlet, drum.inlet)
+    fs.connect(drum.outlet, lv.inlet)
+    fs.connect(lv.outlet, prod.inlet)
+    fs.connect(drum.vent, psv.inlet)
+    fs.connect(psv.outlet, flare.inlet)
+
+    fs.add_instrument("FE", 101, on=line, at=0.5, offset=0)
+    ft = fs.add_instrument("FT", 101, on=line, at=0.5, offset=62)
+    fic = fs.add_instrument("FIC", 101, on=ft, at="N", offset=125, angle=35, variant="panel")
     fs.connect(ft.sig_out, fic.sig_in, kind="electric")
-    fs.connect(fic.sig_out, fy.sig_in, kind="pneumatic")
-    fs.connect(fy.sig_out, fr.sig_in, kind="data")
+    fs.connect(fic.sig_out, fv.actuator, kind="pneumatic")
+
+    lic = fs.add_instrument("LIC", 101, on=drum, at="S", offset=90, variant="panel")
+    lah = fs.add_instrument("LAH", 101, on=lic, at="W", offset=50)
+    fs.add_instrument("LAL", 101, on=lah, at="W", offset=50)
+    fs.add_instrument("I", 1, on=lic, at="S", offset=44, variant="logic")
+    fs.connect(lic.sig_out, lv.actuator, kind="electric")
     return fs
 
 

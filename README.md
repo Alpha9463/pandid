@@ -19,8 +19,10 @@ routes every stream, and draws industry-standard symbols.
 - **Pixel-perfect overrides** — `pin()` equipment to exact coordinates and
   `.via()` a stream through explicit waypoints; the engine honors them and
   auto-routes the rest.
-- **Instrumentation (ISA-5.1)** — instrument balloons with tags drawn inside,
-  location variants, and typed signal lines (electric / pneumatic / data).
+- **Instrumentation (ISA-5.1)** — instrument balloons anchored to the line or
+  the equipment they read (with impulse lines), tags drawn inside, location
+  variants, alarms and interlock squares, typed signal lines (electric /
+  pneumatic / data), and controller outputs landing on a valve's actuator.
 - **Engineering sheet framing** — a zone-ruled drawing border (ASME-style
   letter/number grid), a full-width title strip (integrated revision history,
   company/logo cell, status / drawing-number / two-line title / date / rev),
@@ -142,19 +144,58 @@ from your intent and auto-routes anything you didn't pin.
 ## Instrumentation & signals
 
 ```python
-ft  = fs.add(units.Instrument("FT-101"))                       # field flow transmitter
-fic = fs.add(units.Instrument("FIC-101", variant="panel"))     # panel-mounted controller
-fy  = fs.add(units.Instrument("FY-101", variant="computer"))   # computing relay
-# variants: field (default), panel, aux, shared (DCS square), computer (hexagon)
+ft  = fs.add_instrument("FT", 101)                             # field flow transmitter
+fic = fs.add_instrument("FIC", 101, variant="panel")           # panel-mounted controller
+fy  = fs.add_instrument("FY", 101, variant="computer")         # computing relay
+# variants: field (default), panel, aux, shared (DCS square), computer (hexagon),
+#           logic (interlock square)
 
 fs.connect(ft.sig_out, fic.sig_in, kind="electric")        # dashed
 fs.connect(fic.sig_out, fy.sig_in, kind="pneumatic")       # slash-ticks
 ```
 
-The instrument's `name` is its tag, drawn inside the balloon (functional letters
-over loop number). Signal `kind`s: `electric`, `pneumatic`, `data`/`software`,
+`type` and `number` make the tag: `unit.name` is `"FT-101"` for equipment lists
+and cross-references, while the balloon draws the letters over the **bare**
+number, as a real sheet does. (`units.Instrument("FT-101")` is still accepted
+and split.) Signal `kind`s: `electric`, `pneumatic`, `data`/`software`,
 `capillary` — rendered with the right line style, no arrowheads, and no stream
 numbers.
+
+**Attaching a balloon.** A bubble measures something, so anchor it to that
+thing with `on=` rather than letting the ranker float it in its own row:
+
+```python
+s   = fs.connect(feed.outlet, fv.inlet)
+fs.add_instrument("FE", 101, on=s, at=0.4, offset=0)             # element sits ON the line
+ft  = fs.add_instrument("FT", 101, on=s, at=0.4, offset=60)      # transmitter above the tap
+lic = fs.add_instrument("LIC", 101, on=drum, at="E", variant="panel")   # mounted on the drum
+fs.add_instrument("LAH", 101, on=lic, at="N", offset=48)         # alarm, same loop number
+fs.add_instrument("I", 1, on=lic, at="S", offset=44, variant="logic")   # interlock square
+```
+
+- `on=` a **stream** taps the line, or a **unit** mounts on equipment.
+- `at=` is a fraction `0..1` along the host stream's routed path, or a face
+  (`"N"`/`"S"`/`"E"`/`"W"`) of a host unit's box.
+- `offset=` is the distance from the tap to the balloon centre; `offset=0`
+  leaves an in-line primary element sitting on the line.
+- `angle=` is the branch direction in degrees from the **flow direction at the
+  tap**, counter-clockwise positive (default `90`, i.e. perpendicular) — so a
+  tap keeps its orientation when the line is re-routed.
+
+An impulse line is drawn from the tap to the balloon: a fine solid line to a
+process host, dashed where a balloon hangs off another balloon. Attached
+balloons take no part in the layout ranking, and are drawn over the lines so
+neither an in-line element nor a stream number is lost underneath one.
+
+**Final control element.** `Valve.actuator` is the signal connection on top of
+the valve, so a controller output terminates on real equipment:
+
+```python
+fs.connect(fic.sig_out, fv.actuator, kind="pneumatic")
+```
+
+A relief valve is an ordinary `Valve` with `variant="relief"`; its tag is drawn
+as plain text beside the symbol (`PSV-308`), not in a balloon.
 
 Inline fittings (valves, reducers) carry the stream number **through** them; set
 `unit.significant = True` to break the number at an important valve.
@@ -226,7 +267,8 @@ Runnable scripts in `examples/`:
 - `02_manual_layout.py` — `pin()` + `.via()` overrides.
 - `03_distillation_train.py` — two-column train, recycle, stream table, P&ID
   title block with revision history.
-- `04_control_loop.py` — ISA instrument balloons and signal-line types.
+- `04_control_loop.py` — ISA balloons attached to the line and to equipment,
+  alarms, an interlock, a PSV, and both loops closing on a valve actuator.
 
 ## Architecture
 

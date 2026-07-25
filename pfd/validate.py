@@ -97,8 +97,8 @@ def validate(fs: "Flowsheet") -> list["Issue"]:
             for k in range(len(pts) - 1):
                 (x1, y1), (x2, y2) = pts[k], pts[k + 1]
                 for u, box in boxes:
-                    if u is src_u or u is dst_u:
-                        continue
+                    if u is src_u or u is dst_u or getattr(u, "host", None) is s:
+                        continue  # an in-line element sits on its own line by design
                     if _seg_crosses_box(x1, y1, x2, y2, box):
                         warnings.append(Issue("warning", "route-crosses-unit",
                                               f"stream {s.name} crosses {u.name}"))

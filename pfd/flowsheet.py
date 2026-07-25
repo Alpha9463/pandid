@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from pfd.components import Component
     from pfd.document import TitleBlock
     from pfd.ports import Port
-    from pfd.units import Unit
+    from pfd.units import Instrument, Unit
 
 _ENERGY_ROLES = {"energy", "utility"}
 
@@ -59,6 +59,30 @@ class Flowsheet:
         unit.flowsheet = self
         self.units.append(unit)
         return unit
+
+    def add_instrument(self, type: str, number: str | int = "", *,
+                       on: "Stream | Unit | None" = None, at: float | str | None = None,
+                       offset: float = 45.0, angle: float = 90.0,
+                       variant: str = "default", **kwargs) -> "Instrument":
+        """Add an ISA-5.1 instrument balloon, optionally anchored to its host.
+
+        ``type`` is the functional letter string and ``number`` the loop number;
+        together they make the tag (``add_instrument("FT", 101)`` -> ``FT-101``).
+        ``on``/``at``/``offset``/``angle`` are passed straight to
+        :meth:`~pfd.units.Instrument.attach`; without ``on`` the balloon is laid
+        out like any other unit.
+
+        >>> s = fs.connect(feed.outlet, fv.inlet)
+        >>> fs.add_instrument("FE", 101, on=s, at=0.4, offset=0)     # in-line element
+        >>> fs.add_instrument("FT", 101, on=s, at=0.4, offset=60)    # transmitter above
+        """
+        from pfd.units import Instrument
+
+        inst = Instrument(type, number, variant=variant, **kwargs)
+        self.add(inst)
+        if on is not None:
+            inst.attach(on, at=at, offset=offset, angle=angle)
+        return inst
 
     def add_component(self, component: "Component") -> "Component":
         """Register a chemical component. Returns the component for chaining."""
@@ -173,6 +197,15 @@ class Flowsheet:
             from pfd.routing import DefaultRouter
             router = DefaultRouter()
         router.route(self)
+        # An attached balloon hangs off its host's *routed* path, so where it
+        # finally lands is only known once that path exists. Layout placed it on
+        # the straight port-to-port line, which is already right for a straight
+        # run; when the router bent the line, re-place it and re-route the
+        # signal lines that now leave from somewhere else.
+        from pfd.layout.attach import place_attached
+        if place_attached(self):
+            router.route(self)
+            place_attached(self)
 
     def renumber_streams(self) -> None:
         """Assign stream numbers, carrying one number through inline fittings.

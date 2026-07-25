@@ -10,23 +10,26 @@ if TYPE_CHECKING:
 
 def order_within_layers(fs: "Flowsheet") -> None:
     """Assign a row index to each unit to minimise stream crossings."""
-    if not fs.units:
+    from pfd.layout.attach import free_streams, free_units
+
+    units = free_units(fs)
+    if not units:
         return
-        
+
     # Group units by column
     cols: dict[int, list["Unit"]] = defaultdict(list)
-    for u in fs.units:
+    for u in units:
         assert u._slot is not None and u._slot.col is not None
         cols[u._slot.col].append(u)
-        
+
     if not cols:
         return
-        
+
     max_col = max(cols.keys())
-    
+
     # 0. Identify user-pinned rows before we overwrite anything
     pinned_rows = {}
-    for u in fs.units:
+    for u in units:
         assert u._slot is not None
         if u._slot.row is not None:
             pinned_rows[u] = u._slot.row
@@ -47,7 +50,7 @@ def order_within_layers(fs: "Flowsheet") -> None:
     parents_of: dict["Unit", list["Unit"]] = defaultdict(list)
     children_of: dict["Unit", list["Unit"]] = defaultdict(list)
     
-    for s in fs.streams:
+    for s in free_streams(fs):
         if not s.is_recycle:
             u, v = s.source.owner, s.dest.owner
             assert u is not None and v is not None
