@@ -26,7 +26,7 @@ import xml.etree.ElementTree as ET
 import pytest
 
 from pfd.portgeom import outward_dir
-from pfd.render.symbols import default_registry
+from pfd.render.symbols import Symbol, default_registry
 
 BOX_EPS = 1.0  # bounding-box slack, in symbol-space units
 GEOM_TOL = 2.0  # max distance from a port to the nearest drawn segment
@@ -409,61 +409,83 @@ def test_port_faces_lie_on_drawn_geometry(entry):
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_no_two_fixed_ports_coincide(entry):
+def test_no_two_ports_coincide(entry):
     (kind, variant), sym = entry
     if (kind, variant) in _KNOWN_DUPLICATE_PORTS:
         pytest.skip(f"{kind}/{variant}: known duplicate, see _KNOWN_DUPLICATE_PORTS")
-    # Two DIFFERENT ports must never resolve to the same point, or a stream
-    # routed to one lands exactly on top of a stream routed to the other. (Two
-    # placements of a SINGLE port may coincide -- only one of them is ever live.)
-    #
-    # A port whose menu has more than one entry has no face of its own: a
-    # balloon is a circle, so a signal may meet it anywhere and every one of its
-    # connections offers every face. Those are exempt from *each other*, since
-    # the overlap is a menu rather than a collision -- but not from the rule,
-    # and they are still checked against ports that do own their face. Whether
-    # the *chosen* placements collide is a property of a laid-out sheet, checked
-    # by test_connected_ports_never_share_a_point.
-    movable = {name for name, faces in sym.port_faces.items() if len(faces) > 1}
-    placements: list[tuple[str, tuple[float, float]]] = [
-        (name, xy) for name, faces in sym.port_faces.items() for xy in faces.values()
-    ]
-
-    for i in range(len(placements)):
-        n1, p1 = placements[i]
-        for j in range(i + 1, len(placements)):
-            n2, p2 = placements[j]
-            if n1 == n2 or (n1 in movable and n2 in movable):
-                continue
-            if math.hypot(p1[0] - p2[0], p1[1] - p2[1]) < 0.5:
-                pytest.fail(f"{kind}/{variant}: ports {n1!r} and {n2!r} both resolve to {p1}")
+    # The rule itself lives on Symbol, so a third-party symbol this suite never
+    # sees is held to it too. Here we only assert the shipped registry is clean.
+    assert sym.coincident_ports() == [], f"{kind}/{variant}: " + "; ".join(
+        f"ports {a!r} and {b!r} both resolve to {xy}" for a, b, xy in sym.coincident_ports()
+    )
 
 
-def test_connected_ports_never_share_a_point():
-    """The dynamic half of the rule above, on real sheets.
+def _colliding_symbol(**kwargs) -> Symbol:
+    """Build a Symbol that is *expected* to have coincident ports.
 
-    A symbol may legitimately offer one face to two movable ports; what must
-    never happen is two *live* connections resolving to the same coordinate,
-    which the static check cannot see because it does not know which placement
-    each port took, nor what mirroring did to it.
+    Registering one warns — the engine consults the rule, not just this suite —
+    so the warning is asserted here rather than left to leak into the report.
     """
-    from test_golden import SCENARIOS  # the example corpus, already built there
+    with pytest.warns(UserWarning, match="Only ports named in faceless_ports"):
+        return Symbol(svg='<g id="sym_under_test"/>', **kwargs)
 
-    from pfd.portgeom import port_point
 
-    for name, (build, kwargs) in SCENARIOS.items():
-        fs = build()
-        fs.to_svg(**kwargs)  # lays out and routes
-        for unit in fs.units:
-            if unit.frame is None:
-                continue
-            seen: dict[tuple[float, float], str] = {}
-            for port_name, port in unit.ports.items():
-                if port.stream is None:
-                    continue
-                p = tuple(round(v, 3) for v in port_point(unit, unit.frame, port_name))
-                assert p not in seen, (
-                    f"{name}: {unit.name}.{port_name} and {unit.name}.{seen[p]} are "
-                    f"both connected and both resolve to {p}"
-                )
-                seen[p] = port_name
+def test_authored_alternates_do_not_buy_a_shared_face():
+    """The historical ``separator/horizontal`` bug: the vapour outlet handed a
+    copy of the feed's menu. Both ports then have more than one placement, so a
+    "the menu is multi-entry" exemption waves the collision through — which is
+    the point of naming faceless connections instead of inferring them."""
+    sym = _colliding_symbol(
+        width=91.5,
+        height=30.0,
+        ports={"feed": (0.0, 15.0), "vapor": (30.0, 0.0), "liquid": (68.0, 30.0)},
+        port_faces={
+            "feed": {"W": (0.0, 15.0), "N": (20.0, 0.0), "E": (91.5, 15.0)},
+            "vapor": {"W": (0.0, 15.0), "E": (91.5, 15.0)},
+        },
+    )
+    assert sym.coincident_ports() == [("feed", "vapor", (0.0, 15.0))]
+
+
+def test_a_second_nozzle_on_an_alternates_own_coordinate_is_caught():
+    """The historical ``vessel/horizontal`` bug: the outlet given the right head
+    the inlet already offers, landing two nozzles on (91.5, 15.0)."""
+    sym = _colliding_symbol(
+        width=91.5,
+        height=30.0,
+        ports={"inlet": (0.0, 15.0), "outlet": (68.0, 30.0)},
+        port_faces={
+            "inlet": {"W": (0.0, 15.0), "N": (20.0, 0.0), "E": (91.5, 15.0)},
+            "outlet": {"E": (91.5, 15.0)},
+        },
+    )
+    assert sym.coincident_ports() == [("inlet", "outlet", (91.5, 15.0))]
+
+
+def test_faceless_connections_may_share_a_placement():
+    """A balloon is a circle, so every signal connection offers every face and
+    the overlap is a menu rather than a collision."""
+    faces = {"N": (22.0, 0.0), "S": (22.0, 44.0), "W": (0.0, 22.0), "E": (44.0, 22.0)}
+    ports = {"pv": (22.0, 44.0), "sig_in": (0.0, 22.0), "sig_out": (44.0, 22.0)}
+    sym = Symbol(
+        svg='<g id="sym_balloon"/>',
+        width=44.0,
+        height=44.0,
+        ports=ports,
+        port_faces={name: dict(faces) for name in ports},
+        faceless_ports=frozenset(ports),
+    )
+    assert sym.coincident_ports() == []
+    # ...but a nozzle that does own its face is still checked against them.
+    with_stub = _colliding_symbol(
+        width=44.0,
+        height=44.0,
+        ports={**ports, "tap": (22.0, 0.0)},
+        port_faces={name: dict(faces) for name in ports},
+        faceless_ports=frozenset(ports),
+    )
+    assert [(a, b) for a, b, _ in with_stub.coincident_ports()] == [
+        ("pv", "tap"),
+        ("sig_in", "tap"),
+        ("sig_out", "tap"),
+    ]

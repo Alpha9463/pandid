@@ -289,14 +289,16 @@ def test_balloon_signal_ports_reach_every_face():
 
 
 def test_balloon_ports_have_no_face_of_their_own_but_equipment_nozzles_do():
-    # "No face of its own" is not a flag any more, it is the shape of the menu:
-    # a balloon connection offers all four, a drum's draw-off offers the one
-    # gravity picked.
+    # A balloon connection offers all four faces and owns none of them; a drum's
+    # inlet offers three and owns every one, which is why authoring alternates
+    # for it does not let another nozzle share them.
     from pfd.render.symbols import default_registry
 
     balloon = default_registry.get("instrument", "panel")
     for name in ("pv", "sig_in", "sig_out"):
         assert set(balloon.port_faces[name]) == {"N", "S", "E", "W"}
+    assert balloon.faceless_ports == {"pv", "sig_in", "sig_out"}
     drum = default_registry.get("vessel", "horizontal")
     assert set(drum.port_faces["inlet"]) == {"W", "N", "E"}  # either head, or above
     assert set(drum.port_faces["outlet"]) == {"S"}
+    assert not drum.faceless_ports

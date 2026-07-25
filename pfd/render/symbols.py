@@ -20,10 +20,16 @@ Authoring conventions (hand-drawn symbols)
 - Variants share a ``kind`` and register under a ``variant`` name.
 """
 
+import math
+import re
 import warnings
 from dataclasses import InitVar, dataclass, field
 
 from pfd.portgeom import outward_dir
+
+# Two placements closer together than this are the same point as far as a reader
+# (and a stream endpoint) is concerned.
+_COINCIDENT = 0.5
 
 @dataclass
 class Symbol:
@@ -40,21 +46,28 @@ class Symbol:
     # default back in, and a nozzle fixed by physics (a drum's liquid draw is on
     # the bottom because gravity put it there) is simply one with a single entry.
     port_faces: dict[str, dict[str, tuple[float, float]]] = field(default_factory=dict)
+    # Connections with no face of their own. An instrument balloon is a circle,
+    # so a signal may meet it anywhere and "in on the west, out on the east" is
+    # an artefact of having to pick a default rather than physics. Only these
+    # may offer each other the same face: the overlap is a menu, not a
+    # collision, since one placement per port is ever live. Authoring
+    # *alternates* for an equipment nozzle does not make it faceless — a drum's
+    # inlet may be moved to the right head, but that is still the inlet's
+    # nozzle and nothing else may sit on it.
+    faceless_ports: frozenset[str] = frozenset()
     label_pos: str | None = None
-    # Deprecated spellings, accepted so a symbol authored against the old
-    # interface still registers. ``port_alts`` listed only the *extra* faces;
-    # ``free_ports`` named the ports with no face of their own, which is now
-    # simply "the menu has more than one entry".
+    # Deprecated spelling, accepted so a symbol authored against the old
+    # interface still registers. ``port_alts`` listed only the *extra* faces.
     port_alts: InitVar[dict[str, dict[str, tuple[float, float]]] | None] = None
     free_ports: InitVar[frozenset[str] | None] = None
 
     def __post_init__(self, port_alts, free_ports) -> None:
         if free_ports is not None:
             warnings.warn(
-                "Symbol.free_ports is gone: a port with no face of its own is one "
-                "whose port_faces menu has more than one entry.",
+                "Symbol.free_ports is now Symbol.faceless_ports.",
                 DeprecationWarning, stacklevel=2,
             )
+            self.faceless_ports = frozenset(self.faceless_ports) | frozenset(free_ports)
         declared = {name: dict(faces) for name, faces in self.port_faces.items()}
         if port_alts is not None:
             warnings.warn(
@@ -72,6 +85,48 @@ class Symbol:
             faces[home] = xy   # ``ports`` stays the authority on the home nozzle
             menu[name] = faces
         self.port_faces = menu
+        for a, b, xy in self.coincident_ports():
+            warnings.warn(
+                f"{self.symbol_id()}: ports {a!r} and {b!r} both have a placement "
+                f"at {xy}, so a stream routed to one lands on top of a stream "
+                f"routed to the other. Only ports named in faceless_ports may "
+                f"share a placement.",
+                stacklevel=2,
+            )
+
+    def symbol_id(self) -> str:
+        """The svg id, for messages — a Symbol carries no name of its own."""
+        match = re.search(r'\bid="([^"]+)"', self.svg)
+        return match.group(1) if match else "<symbol>"
+
+    def coincident_ports(self) -> list[tuple[str, str, tuple[float, float]]]:
+        """Pairs of *different* ports sharing a placement, with the point.
+
+        Two ports at one coordinate means a stream routed to one lands exactly
+        on top of a stream routed to the other. Two placements of a *single*
+        port may of course coincide — only one of them is ever live.
+
+        :attr:`faceless_ports` are exempt from *each other*, not from the rule:
+        they are still checked against the nozzles that do own their face. The
+        exemption is a declaration, deliberately, rather than something read off
+        the shape of the menu — "this connection is faceless" and "this nozzle
+        has authored alternatives" both produce a multi-entry menu, and only the
+        first of them justifies two ports sitting on one point.
+        """
+        placements = [(name, xy) for name, faces in self.port_faces.items()
+                      for xy in faces.values()]
+        hits: list[tuple[str, str, tuple[float, float]]] = []
+        seen: set[tuple[str, str]] = set()
+        for i, (n1, p1) in enumerate(placements):
+            for n2, p2 in placements[i + 1:]:
+                if n1 == n2 or (n1 in self.faceless_ports and n2 in self.faceless_ports):
+                    continue
+                pair = (n1, n2) if n1 < n2 else (n2, n1)
+                if pair in seen or math.hypot(p1[0] - p2[0], p1[1] - p2[1]) >= _COINCIDENT:
+                    continue
+                seen.add(pair)
+                hits.append((pair[0], pair[1], p1))
+        return hits
 
 class SymbolRegistry:
     def __init__(self):
@@ -321,28 +376,30 @@ class SymbolRegistry:
         # Every connection offers every face, so none of them owns one: the
         # menus overlap on purpose, and only one placement per port is ever live.
         _inst_menu = {name: dict(_inst_faces) for name in _inst_ports}
+        _inst_faceless = frozenset(_inst_ports)
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
-            label_pos="center"))
+            faceless_ports=_inst_faceless, label_pos="center"))
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_panel"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="22" x2="43" y2="22" stroke="black" stroke-width="1.5"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
-            label_pos="center"), "panel")
+            faceless_ports=_inst_faceless, label_pos="center"), "panel")
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_aux"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="19" x2="43" y2="19" stroke="black" stroke-width="1.5"/><line x1="1" y1="25" x2="43" y2="25" stroke="black" stroke-width="1.5"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
-            label_pos="center"), "aux")
+            faceless_ports=_inst_faceless, label_pos="center"), "aux")
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_shared"><rect x="1" y="1" width="42" height="42" fill="white" stroke="black" stroke-width="2"/><circle cx="22" cy="22" r="20" fill="none" stroke="black" stroke-width="2"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
-            label_pos="center"), "shared")
+            faceless_ports=_inst_faceless, label_pos="center"), "shared")
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_computer"><polygon points="11,3 33,3 43,22 33,41 11,41 1,22" fill="white" stroke="black" stroke-width="2"/></g>',
             # The hexagon's flat bottom is at y=41, not y=43 like the circular
             # variants, so pv needs its own coordinate to keep the same 1-unit
             # nozzle stub instead of floating 3 units clear of the outline.
             width=44.0, height=44.0, label_pos="center",
+            faceless_ports=_inst_faceless,
             ports={**_inst_ports, "pv": (22.0, 42.0)},
             # the hexagon is flat-topped at y=3 and flat-bottomed at y=41, so N and S
             # need their own stubs; the side vertices sit where the circles do.
