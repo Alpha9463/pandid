@@ -83,29 +83,27 @@ class Unit:
         symbol: ``True`` or ``"x"`` left↔right (swapping its E and W faces),
         ``"y"`` top↔bottom (swapping N and S), ``"xy"`` both.
         """
+        from dataclasses import replace
+
         from pfd.geometry import normalize_mirror, normalize_orientation
 
-        if self.pin_ is None:
-            self.pin_ = Pin()
-        if col is not None:
-            self.pin_.col = col
-        if row is not None:
-            self.pin_.row = row
-        if x is not None:
-            self.pin_.x = x
-        if y is not None:
-            self.pin_.y = y
-        self.pin_.orientation = normalize_orientation(orientation)
-        self.pin_.mirrored, self.pin_.mirror_y = normalize_mirror(mirrored)
-        # A nozzle() choice names a face on the finished sheet, and the transform
-        # set here is what decides which placement lands there. Re-checking now
-        # is the difference between a clear error and a nozzle that quietly
-        # falls back to its home face at render time.
+        candidate = replace(self.pin_ if self.pin_ is not None else Pin())
+        for axis, value in (("col", col), ("row", row), ("x", x), ("y", y)):
+            if value is not None:
+                setattr(candidate, axis, value)
+        candidate.orientation = normalize_orientation(orientation)
+        candidate.mirrored, candidate.mirror_y = normalize_mirror(mirrored)
+        # A nozzle() choice names a face on the finished sheet, and this
+        # transform is what decides which placement lands there. Check the
+        # *candidate*: asking about the committed placement answers for the
+        # sheet this call is replacing, and committing first would leave the
+        # unit in exactly the state a raise here exists to prevent.
         if self._port_faces:
             from pfd.portgeom import port_faces
 
             for port_name, face in self._port_faces.items():
-                self._check_face(port_name, face, port_faces(self, port_name))
+                self._check_face(port_name, face, port_faces(self, port_name, candidate))
+        self.pin_ = candidate
         return self
 
     def nozzle(self, port_name: str, face: str) -> "Unit":
@@ -139,13 +137,16 @@ class Unit:
         return self
 
     def _check_face(self, port_name: str, face: str, options: list[str]) -> None:
-        if face in options:
-            return
-        offered = " or ".join(filter(None, [", ".join(options[:-1]), *options[-1:]]))
-        raise ValueError(
-            f"{self.name}.{port_name} can be piped from {offered or 'nowhere'} as "
-            f"drawn; you asked for {face!r}"
-        )
+        """Raise unless ``face`` is one this port can be piped from as drawn.
+
+        The message comes from :mod:`pfd.portgeom`, which raises the same one at
+        resolve time: this check only moves the complaint forward to the call
+        that caused it.
+        """
+        if face not in options:
+            from pfd.portgeom import unreachable_face
+
+            raise unreachable_face(self, port_name, face, options)
 
     def port_face(self, port_name: str, face: str) -> "Unit":
         """Deprecated alias for :meth:`nozzle`.

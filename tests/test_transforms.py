@@ -162,6 +162,51 @@ def test_pin_rechecks_a_face_the_new_transform_can_no_longer_reach():
         drum.pin(x=200, y=100, orientation=90)
 
 
+def test_a_face_is_named_against_the_pin_not_the_frame_it_replaces():
+    """#38/D2: port_faces() preferred the resolved frame, so once a layout had
+    run a pin() answered from the transform it was in the act of replacing --
+    and the accepted face then fell back to the home nozzle at resolve time.
+    This is the order the docs recommend: pin, then nozzle."""
+    drum = units.Separator("V-1", variant="horizontal")
+    _drum_sheet(drum)  # lays out, so drum.frame is resolved at orientation 0
+    drum.pin(x=200, y=100, orientation=90)
+    with pytest.raises(ValueError, match="you asked for 'W'"):
+        drum.nozzle("feed", "W")
+
+
+def test_an_unreachable_face_raises_at_resolve_time_rather_than_falling_back():
+    """#38/D2: the guard that matters is the one in the resolver. Every check
+    upstream of it can be outrun by a later change of transform -- a frame
+    another engine wrote, here -- and it is the resolver that decides where the
+    ink goes, so a fall-back to the home nozzle there is silent by definition."""
+    from pfd.portgeom import resolve_port
+
+    drum = units.Separator("V-1", variant="horizontal")
+    _drum_sheet(drum)
+    drum.nozzle("feed", "W")
+    assert resolve_port(drum, drum.frame, "feed").face == "W"
+
+    drum.frame.orientation = 90
+    with pytest.raises(ValueError, match="you asked for 'W'"):
+        resolve_port(drum, drum.frame, "feed")
+
+
+def test_pin_leaves_the_transform_alone_when_it_rejects_the_placement():
+    """#38/D3: pin() committed the new transform and only then re-checked, so
+    catching the error left the unit in the state the check exists to prevent."""
+    drum = units.Separator("V-1", variant="horizontal")
+    drum.pin(x=200, y=100)
+    drum.nozzle("feed", "W")
+    with pytest.raises(ValueError):
+        drum.pin(x=640, y=480, orientation=90)
+    assert (drum.pin_.x, drum.pin_.y) == (200.0, 100.0)
+    assert (drum.pin_.orientation, drum.pin_.mirrored, drum.pin_.mirror_y) == (0, False, False)
+    fs = Flowsheet("still-valid")
+    fs.add(drum)
+    fs.layout()
+    assert port_anchor(drum, drum.frame, "feed")[2] == "W"
+
+
 def test_port_face_still_works_and_warns():
     drum = units.Separator("V-1", variant="horizontal")
     with pytest.deprecated_call():

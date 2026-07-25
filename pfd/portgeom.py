@@ -57,23 +57,44 @@ def symbol_to_box(px: float, py: float, sw: float, sh: float,
     return px, py, sw, sh
 
 
-def port_faces(unit: "Unit", port_name: str) -> list[str]:
+def port_faces(unit: "Unit", port_name: str, placed=None) -> list[str]:
     """Faces this port may be piped from *as drawn*, most-preferred first.
 
     The symbol authors an exact coordinate per face, so an alternate placement
     still lands on drawn ink. Answers in the same frame of reference as
-    :meth:`pfd.units.Unit.nozzle` takes its argument, reading the resolved frame
-    once layout has run and the pin intent before that — which is why it has to
-    apply the mirror the way :func:`port_anchor` does rather than report the
+    :meth:`pfd.units.Unit.nozzle` takes its argument, which is why it has to
+    apply the mirror the way :func:`resolve_port` does rather than report the
     symbol's own faces.
+
+    ``placed`` is the placement to answer for — a :class:`~pfd.geometry.Pin` or
+    :class:`~pfd.geometry.Frame`. It defaults to the unit's own, preferring the
+    *pin* over the frame: the transform is intent, which layout copies onto the
+    frame, so a ``pin()`` already made describes the sheet that is coming rather
+    than the one it replaces. A caller about to change the pin must pass its
+    candidate, since answering from the committed one answers about a sheet that
+    is on its way out.
     """
     if port_name not in _sym(unit).ports:
         return []
-    frame = unit.frame
-    placed = frame if frame is not None else unit.pin_
+    if placed is None:
+        placed = unit.pin_ if unit.pin_ is not None else unit.frame
     rot, mx, my = _xform(placed) if placed is not None else (0, False, False)
-    w, h = (frame.w, frame.h) if frame is not None else resolve_size(unit)
+    w, h = resolve_size(unit, placed)
     return list(_drawn_placements(unit, port_name, w, h, rot, mx, my))
+
+
+def unreachable_face(unit: "Unit", port_name: str, face: str,
+                     options: list[str]) -> ValueError:
+    """The error for a face this port cannot be put on under its transform.
+
+    Built here so the message :meth:`pfd.units.Unit.nozzle` raises up front and
+    the one the resolver raises later are the same sentence about the same rule.
+    """
+    offered = " or ".join(filter(None, [", ".join(options[:-1]), *options[-1:]]))
+    return ValueError(
+        f"{unit.name}.{port_name} can be piped from {offered or 'nowhere'} as "
+        f"drawn; you asked for {face!r}"
+    )
 
 
 def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
@@ -144,13 +165,17 @@ def face_point(unit: "Unit", frame, face: str) -> tuple[tuple[float, float],
     }[face.upper()]
 
 
-def resolve_size(unit: "Unit") -> tuple[float, float]:
+def resolve_size(unit: "Unit", placed=None) -> tuple[float, float]:
     """Intrinsic (w, h) of a unit's placed box.
 
     Explicit ``width``/``height`` win and are taken as the *final* box, so a
     caller who sizes a rotated unit gets exactly what they asked for. Symbol
     defaults are swapped by a quarter turn. Feed/Product get a dynamic width
     sized to their label text.
+
+    ``placed`` names the placement whose quarter turn decides that swap, and
+    defaults to the unit's pin; a caller weighing a placement it has not
+    committed passes the candidate.
     """
     sym = _sym(unit)
     if unit.kind in ("feed", "product"):
@@ -161,8 +186,8 @@ def resolve_size(unit: "Unit") -> tuple[float, float]:
         return w, unit.height if unit.height is not None else sym.height
 
     sym_w, sym_h = sym.width, sym.height
-    pin = getattr(unit, "pin_", None)
-    if pin is not None and int(getattr(pin, "orientation", 0) or 0) in (90, 270):
+    turn = placed if placed is not None else getattr(unit, "pin_", None)
+    if turn is not None and int(getattr(turn, "orientation", 0) or 0) in (90, 270):
         sym_w, sym_h = sym_h, sym_w
     w = unit.width if unit.width is not None else sym_w
     h = unit.height if unit.height is not None else sym_h
@@ -196,12 +221,20 @@ def _local_port(unit: "Unit", port_name: str, w: float, h: float,
     :meth:`pfd.units.Unit.nozzle`, else the symbol's own nozzle — which is the
     menu's first entry, since the whole point of folding the home in is that
     there is no second place to look.
+
+    A face that *was* chosen and this transform cannot reach raises. Falling
+    back to the home nozzle instead is what let a rotation applied after the
+    choice move the stream to the far side of the unit with nobody saying so:
+    every guard upstream of here can be defeated by a later ``pin()``, but this
+    is the call that decides where the ink goes.
     """
     placements = _drawn_placements(unit, port_name, w, h, rot, mirrored, mirror_y)
     want = (getattr(unit, "_port_faces", None) or {}).get(port_name)
-    if want in placements:
-        return placements[want]
-    return next(iter(placements.values()))
+    if want is None:
+        return next(iter(placements.values()))
+    if want not in placements:
+        raise unreachable_face(unit, port_name, want, list(placements))
+    return placements[want]
 
 
 class ResolvedPort(NamedTuple):
