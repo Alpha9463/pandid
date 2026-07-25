@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="699" height="277" viewBox="-35.0 -5.0 699.0 277.0">
+  <!-- Background -->
+  <rect x="-35.0" y="-5.0" width="699.0" height="277.0" fill="white" />
+  <defs>
+    <marker id="arrow_black" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="black" />
+    </marker>
+    <symbol id="sym_instrument" viewBox="0 0 44.0 44.0" overflow="visible"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/></symbol>
+    <symbol id="sym_instrument_computer" viewBox="0 0 44.0 44.0" overflow="visible"><polygon points="11,3 33,3 43,22 33,41 11,41 1,22" fill="white" stroke="black" stroke-width="2"/></symbol>
+    <symbol id="sym_instrument_panel" viewBox="0 0 44.0 44.0" overflow="visible"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="22" x2="43" y2="22" stroke="black" stroke-width="1.5"/></symbol>
+    <symbol id="sym_instrument_shared" viewBox="0 0 44.0 44.0" overflow="visible"><rect x="1" y="1" width="42" height="42" fill="white" stroke="black" stroke-width="2"/><circle cx="22" cy="22" r="20" fill="none" stroke="black" stroke-width="2"/></symbol>
+    <symbol id="sym_valve_control" viewBox="0 0 49.0 30.0" overflow="visible"><g transform="scale(0.5)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 29.0 18.0 A 25.0 25.0 0.0 0 1 69.0 18.0" fill="none" stroke="#111" stroke-width="4.0"/></g></symbol>
+  </defs>
+  <g id="units">
+    <polygon points="20.0,65.0 85,65.0 100,75.0 85,85.0 20.0,85.0" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="52.5" y="75.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Feed</text>
+    <use href="#sym_valve_control" x="230" y="60" width="49.0" height="30.0" />
+    <polygon points="379.0,65.0 450.0,65.0 465.0,75.0 450.0,85.0 379.0,85.0" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="414.5" y="75.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Product</text>
+    <use href="#sym_instrument" x="50" y="173" width="44.0" height="44.0" />
+    <text x="72.0" y="191.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FT</text>
+    <text x="72.0" y="205.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">101</text>
+    <use href="#sym_instrument_panel" x="230" y="173" width="44.0" height="44.0" />
+    <text x="252.0" y="191.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FIC</text>
+    <text x="252.0" y="205.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">101</text>
+    <use href="#sym_instrument_computer" x="379" y="173" width="44.0" height="44.0" />
+    <text x="401.0" y="191.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FY</text>
+    <text x="401.0" y="205.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">101</text>
+    <use href="#sym_instrument_shared" x="565" y="173" width="44.0" height="44.0" />
+    <text x="587.0" y="191.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FR</text>
+    <text x="587.0" y="205.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">101</text>
+  </g>
+  <g id="streams">
+    <path d="M 100.0,75.0 L 230.0,75.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 279.0,75.0 L 379.0,75.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 94.0,195.0 L 230.0,195.0" fill="none" stroke="black" stroke-width="2" stroke-dasharray="7,4" />
+    <path d="M 274.0,195.0 L 379.0,195.0" fill="none" stroke="black" stroke-width="2" />
+    <line x1="303.5" y1="200.0" x2="309.5" y2="190.0" stroke="black" stroke-width="1.5" />
+    <line x1="307.5" y1="200.0" x2="313.5" y2="190.0" stroke="black" stroke-width="1.5" />
+    <line x1="338.5" y1="200.0" x2="344.5" y2="190.0" stroke="black" stroke-width="1.5" />
+    <line x1="342.5" y1="200.0" x2="348.5" y2="190.0" stroke="black" stroke-width="1.5" />
+    <path d="M 423.0,195.0 L 565.0,195.0" fill="none" stroke="black" stroke-width="2" stroke-dasharray="9,3,2,3" />
+    <rect x="155.8" y="68.5" width="18.4" height="13.0" fill="white" />
+    <text x="165.0" y="75.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S1</text>
+  </g>
+  <g id="unit_labels">
+    <rect x="230.7" y="38.0" width="47.6" height="15.0" fill="white" />
+    <text x="254.5" y="50.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">FV-101</text>
+  </g>
+</svg>
