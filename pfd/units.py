@@ -203,10 +203,25 @@ class Valve(Unit):
 
 
 class Vessel(Unit):
-    """Generic pressure vessel or storage tank."""
+    """Generic pressure vessel — holdup, not phase separation.
+
+    Variants: ``"default"`` and ``"dished"`` stand upright; ``"horizontal"`` is
+    a lying cylinder with dished ends, which is how a reflux drum, accumulator
+    or knock-out pot is drawn. Use the variant rather than rotating an upright
+    vessel: skirts, saddles and shell bands do not survive a quarter turn, and
+    the outlet still has to drain from the bottom whichever way the artwork is
+    spun.
+
+    Reach for :class:`Separator` instead when the point of the vessel is
+    splitting phases and you want to name the vapour and liquid products.
+    """
 
     kind = "vessel"
-    _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+    _PORTS = [
+        ("inlet", "inlet", "process"),
+        ("outlet", "outlet", "process"),
+        ("vent", "outlet", "vapor"),
+    ]
 
 
 class Tank(Unit):
