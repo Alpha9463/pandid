@@ -11,6 +11,9 @@ if TYPE_CHECKING:
     from pfd.flowsheet import Flowsheet
 
 _SIGNAL_KINDS = {"electric", "pneumatic", "data", "capillary", "software"}
+# Balloon variants whose symbol draws a location bar across the middle (see the
+# instrument symbols in pfd.render.symbols): their tag text has to clear it.
+_BARRED_BALLOONS = {"panel", "aux"}
 
 
 def _num(v: float) -> str:
@@ -512,17 +515,24 @@ class SvgRenderer:
         """
         from pfd.units import split_tag
 
+        variant = getattr(u, "variant", "default")
         top, bot = split_tag(getattr(u, "type", "") or u.name, getattr(u, "number", "") or "")
         cx, cy = x + u_width / 2, y + u_height / 2
-        if getattr(u, "variant", "default") == "logic" or not top:
+        if variant == "logic" or not top:
             return [f'    <text x="{cx}" y="{cy}" font-family="sans-serif" '
                     f'font-size="12" text-anchor="middle" '
                     f'dominant-baseline="middle">{html.escape(bot or top)}</text>']
-        out = [f'    <text x="{cx}" y="{cy - 4}" font-family="sans-serif" '
+        # The location bar is what the balloon says about *where* the instrument
+        # lives, and it is drawn across the middle — exactly where the letters
+        # would otherwise sit, which struck them through. ISA-5.1 puts the
+        # letters wholly above the bar and the number wholly below, so a barred
+        # variant needs the pair pushed apart to leave the band clear.
+        letters_dy, number_dy = (-10, 11) if variant in _BARRED_BALLOONS else (-4, 10)
+        out = [f'    <text x="{cx}" y="{cy + letters_dy}" font-family="sans-serif" '
                f'font-size="12" font-weight="bold" text-anchor="middle" '
                f'dominant-baseline="middle">{html.escape(top.upper())}</text>']
         if bot:
-            out.append(f'    <text x="{cx}" y="{cy + 10}" font-family="sans-serif" '
+            out.append(f'    <text x="{cx}" y="{cy + number_dy}" font-family="sans-serif" '
                        f'font-size="11" text-anchor="middle" '
                        f'dominant-baseline="middle">{html.escape(bot)}</text>')
         return out
@@ -659,7 +669,14 @@ class SvgRenderer:
                 for i in range(len(points) - 1):
                     (px1, py1), (px2, py2) = points[i], points[i + 1]
                     seglen = abs(px2 - px1) + abs(py2 - py1)
-                    n = int(seglen // 45)
+                    # ISA-5.1 draws a pneumatic signal as a *solid* line marked
+                    # with double cross-hatches, so the hatch is the only thing
+                    # telling it apart from process piping. At one mark per 45px
+                    # a short run — a transducer to the actuator right beneath it
+                    # — got none at all and read as a plain solid line. Give any
+                    # segment with room for a mark at least one; longer segments
+                    # keep the spacing they already had.
+                    n = int(seglen // 45) or (1 if seglen >= 16 else 0)
                     horiz = abs(py1 - py2) < 0.1
                     for k in range(1, n + 1):
                         t = k / (n + 1)

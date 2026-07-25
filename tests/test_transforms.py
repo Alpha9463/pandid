@@ -4,7 +4,7 @@ port to another face of its symbol."""
 import pytest
 
 from pfd import Flowsheet, units
-from pfd.geometry import normalize_mirror, normalize_orientation
+from pfd.geometry import Pin, normalize_mirror, normalize_orientation
 from pfd.portgeom import port_anchor, symbol_to_box
 
 
@@ -214,19 +214,34 @@ def test_port_face_still_works_and_warns():
     assert drum._port_faces == {"feed": "N"}
 
 
-def test_an_unanchored_port_reports_the_face_it_actually_resolves_to():
-    """#38/D5: a Mixer inlet past the two its symbol draws falls back to the
-    centre of the box, and resolve_port hands that fallback a face. port_faces()
-    used to answer with nothing, so the error text told a caller the port could
-    not be piped from anywhere while the engine was busy piping it."""
+def test_an_unanchored_port_reports_the_face_it_actually_resolves_to(gapped_kind):
+    """#38/D5: a port its symbol does not anchor falls back to the centre of the
+    box, and resolve_port hands that fallback a face. port_faces() used to answer
+    with nothing, so the error text told a caller the port could not be piped
+    from anywhere while the engine was busy piping it."""
     from pfd.portgeom import port_faces, resolve_port
 
-    fs = Flowsheet("wide-mixer")
-    mix = fs.add(units.Mixer("M-1", n_inlets=5)).pin(x=100, y=100)
+    fs = Flowsheet("gapped")
+    unit = fs.add(gapped_kind("G-1")).pin(x=100, y=100)
     fs.layout()
 
-    resolved = resolve_port(mix, mix.frame, "in_5")
-    assert port_faces(mix, "in_5") == [resolved.face]
-    mix.nozzle("in_5", resolved.face)  # the face it is already on
+    resolved = resolve_port(unit, unit.frame, "spare_a")
+    assert port_faces(unit, "spare_a") == [resolved.face]
+    unit.nozzle("spare_a", resolved.face)  # the face it is already on
     with pytest.raises(ValueError, match=r"can be piped from N as drawn"):
-        mix.nozzle("in_5", "S")
+        unit.nozzle("spare_a", "S")
+
+
+def test_a_series_port_survives_a_quarter_turn(gapped_kind):
+    """A Mixer's inlets are placed by rule rather than by coordinate, so the
+    transform has to reach them the same way it reaches an authored nozzle."""
+    from pfd.portgeom import port_faces
+
+    fs = Flowsheet("turned-mixer")
+    mix = fs.add(units.Mixer("M-1", n_inlets=3)).pin(x=100, y=100, orientation=90)
+    fs.layout()
+
+    # The inlets are on the triangle's flat back; a clockwise quarter turn puts
+    # that face up, and mirroring puts it back down.
+    assert [port_faces(mix, f"in_{i}") for i in (1, 2, 3)] == [["N"]] * 3
+    assert port_faces(mix, "in_2", Pin(x=0, y=0, orientation=90, mirrored=True)) == ["S"]

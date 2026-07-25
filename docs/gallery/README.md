@@ -118,3 +118,23 @@ with a spring `psv` to flare, and a `sight_glass` on the way out. The valve is
 making the signal climb over the vessel, and LIC-101 takes its output on the
 west face via `nozzle("sig_out", "W")`. The only rise on the sheet is across
 the pump, whose discharge nozzle really is above its suction.
+
+## 08 — Built from data
+
+[`examples/08_from_data.py`](../../examples/08_from_data.py) ·
+[SVG](08_from_data.svg)
+
+![Built from data](08_from_data.png)
+
+The only example that writes no flowsheet code at all: one plain mapping — the
+kind you would keep in a YAML file beside the equipment list it came from —
+handed to `Flowsheet.from_dict`. Layout, routing and stream numbering run
+exactly as they do for the hand-written sheets, and `to_dict()` writes the same
+spec back out.
+
+The process is a boiler feedwater package, and it carries a complete ISA-5.1
+level loop: `LT-201` on the deaerator measures, `LIC-201` in the control room
+decides, and `LY-201` on the valve acts — an electric signal into the
+controller, an electric signal out of it, and a pneumatic line (solid, double
+cross-hatched) stroking the actuator. `M-201` is a three-inlet header, which is
+the case that used to have nowhere to put its third stream.

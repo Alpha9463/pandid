@@ -95,6 +95,12 @@ and is kept working.
   `Symbol.coincident_ports()` warns about two ports on one coordinate. Only the
   connections named in `Symbol.faceless_ports` — an instrument balloon is a
   circle, so a signal may meet it anywhere — may share a placement.
+- `Symbol.port_series` places a family of like ports whose membership the *unit*
+  decides rather than the symbol. `Mixer(n_inlets=n)` and `Splitter(n_outlets=n)`
+  therefore give every inlet or outlet a nozzle of its own, spread along the flat
+  face, for any `n` — previously the triangles drew exactly two and the rest fell
+  back to the centre of the box, landing every extra stream on one point. Two
+  ports still sit exactly where they always have, so no existing sheet moves.
 - `styling="pid"` — a zone-ruled ASME-style drawing border and a full-width
   engineering title strip. `TitleBlock` plus `Revision` rows carry the metadata,
   with per-row `by`/`checked`/`approved` initials.
@@ -120,9 +126,14 @@ and is kept working.
   Attached balloons take no part in layout ranking.
 - Typed signal lines through `connect(kind=…)`: `electric` (dashed),
   `pneumatic` (slash ticks), `data`/`software`, `capillary` — no arrowheads and
-  no stream numbers.
+  no stream numbers. A pneumatic line is drawn *solid* and marked with double
+  cross-hatches, so the hatch is the only thing distinguishing it from process
+  pipe; every run long enough to hold a mark gets one, however short.
 - A balloon's signal connections may be taken on any face, since a circle has no
   natural side.
+- The `panel` and `aux` variants draw a location bar across the middle of the
+  circle, and the tag clears it: functional letters wholly above, loop number
+  wholly below.
 
 #### Validation
 
@@ -132,10 +143,10 @@ and is kept working.
   crossing a unit body, a grossly indirect route — collect on `fs.warnings`.
 - `coincident-ports` — two connected ports on one unit that resolve to the same
   point, so one stream terminates exactly on top of the other. An error where
-  both are nozzles the symbol anchors; a warning where either is a port the
-  symbol never anchored (a `Mixer`'s inlets past the two its symbol draws all
-  fall back to the centre of the box), which is a gap in the symbol rather than
-  a contradiction on the sheet.
+  both are nozzles the symbol places; a warning where either is a port the
+  symbol never anchored and which therefore fell back to the centre of the box,
+  which is a gap in the symbol rather than a contradiction on the sheet. No
+  shipped symbol has such a gap.
 
 #### Tooling, tests and packaging
 

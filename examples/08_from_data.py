@@ -52,11 +52,29 @@ SPEC = {
         {"kind": "Product", "name": "To Boiler", "reference": "PFD-500"},
     ],
     # --- Instrumentation -------------------------------------------------
-    # ``on``/``at``/``offset`` anchor the balloon to what it measures; its tag
-    # is "LIC-201", so that is how the connection below names it.
+    # A complete ISA-5.1 level loop, drawn the way it is measured: the element
+    # that senses (LT) is on the vessel, the controller (LIC) is in the control
+    # room, and the element that acts (LY) is on the valve. Nothing but signals
+    # runs between them, so a reader can see where the measurement comes from
+    # and what the output finally moves.
+    #
+    # ``on``/``at``/``offset`` anchor each balloon to its host; ``port_faces``
+    # picks which side of the circle a signal leaves from, since a balloon is
+    # round and has no natural in/out side.
     "instruments": [
+        # Field transmitter, hung under the drum it measures.
+        {"type": "LT", "number": 201, "description": "Deaerator Level Transmitter",
+         "on": "V-201", "at": "S", "offset": 58, "port_faces": {"sig_out": "S"}},
+        # Panel-mounted controller, directly below the transmitter so the
+        # measurement signal is a straight drop.
         {"type": "LIC", "number": 201, "variant": "panel",
-         "description": "Deaerator Level Control", "on": "V-201", "at": "S", "offset": 110},
+         "description": "Deaerator Level Control", "on": "V-201", "at": "S",
+         "offset": 140, "port_faces": {"sig_in": "N"}},
+        # I/P transducer on the valve: the loop's final element, drawn as a
+        # balloon above the actuator it drives.
+        {"type": "LY", "number": 201, "description": "Level Valve I/P Transducer",
+         "on": "LV-201", "at": "N", "offset": 58,
+         "port_faces": {"sig_in": "W", "sig_out": "S"}},
     ],
     # --- Stream table ----------------------------------------------------
     # Each connection is a pair of named nozzles, plus whatever the simulation
@@ -77,10 +95,10 @@ SPEC = {
         {"from": ["P-201A/B", "discharge"], "to": ["SP-201", "inlet"],
          "properties": {"Temperature": "77 C", "Pressure": "12.0 barg",
                         "Mass Flow": "66.0 t/h", "Dissolved O2": "1600 ppb"}},
-        {"from": ["SP-201", "out_1"], "to": ["V-201", "inlet"],
+        {"from": ["SP-201", "out_2"], "to": ["V-201", "inlet"],
          "properties": {"Temperature": "77 C", "Pressure": "11.6 barg",
                         "Mass Flow": "60.0 t/h", "Dissolved O2": "1600 ppb"}},
-        {"from": ["SP-201", "out_2"], "to": ["FV-201", "inlet"],
+        {"from": ["SP-201", "out_1"], "to": ["FV-201", "inlet"],
          "properties": {"Temperature": "77 C", "Pressure": "11.6 barg",
                         "Mass Flow": "6.0 t/h", "Dissolved O2": "1600 ppb"}},
         # The spillback closes the loop, so nominate it as the tear: without the
@@ -97,8 +115,13 @@ SPEC = {
         {"from": ["LV-201", "outlet"], "to": ["To Boiler", "inlet"],
          "properties": {"Temperature": "105 C", "Pressure": "0.1 barg",
                         "Mass Flow": "59.7 t/h", "Dissolved O2": "7 ppb"}},
-        # The controller output lands on the valve's actuator, as a signal line.
-        {"from": ["LIC-201", "sig_out"], "to": ["LV-201", "actuator"], "kind": "electric"},
+        # The loop closes through three signal lines, not one: the drum's level
+        # is transmitted to the controller, the controller's output goes to the
+        # transducer on the valve, and only that last leg is pneumatic — it is
+        # what actually strokes the actuator.
+        {"from": ["LT-201", "sig_out"], "to": ["LIC-201", "sig_in"], "kind": "electric"},
+        {"from": ["LIC-201", "sig_out"], "to": ["LY-201", "sig_in"], "kind": "electric"},
+        {"from": ["LY-201", "sig_out"], "to": ["LV-201", "actuator"], "kind": "pneumatic"},
     ],
     "stream_table_sections": [["Dissolved O2", "Water Quality"]],
     # --- Sheet furniture -------------------------------------------------
