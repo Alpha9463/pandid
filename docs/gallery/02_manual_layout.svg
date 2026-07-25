@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="590" height="390" viewBox="-25.0 45.0 590.0 390.0">
+  <!-- Background -->
+  <rect x="-25.0" y="45.0" width="590.0" height="390.0" fill="white" />
+  <defs>
+    <marker id="arrow_black" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="black" />
+    </marker>
+    <symbol id="sym_hex" viewBox="0 0 60.0 60.0" overflow="visible"><ellipse cx="30.0" cy="30.0" rx="30.0" ry="30.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 30.0 L 10.0 30.0 L 20.0 15.0 L 40.0 45.0 L 50.0 30.0 L 60.0 30.0" fill="none" stroke="#111" stroke-width="2.0"/></symbol>
+  </defs>
+  <g id="units">
+    <polygon points="30.0,120 95,120 110,130 95,140 30.0,140" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="62.5" y="130" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">F-1</text>
+    <use href="#sym_hex" x="210" y="100" width="60.0" height="60.0" />
+    <polygon points="430,120 495.0,120 510.0,130 495.0,140 430,140" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="462.5" y="130" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">P-1</text>
+    <polygon points="30.0,320 95,320 110,330 95,340 30.0,340" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="62.5" y="330" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">F-2</text>
+    <use href="#sym_hex" x="210" y="300" width="60.0" height="60.0" />
+    <polygon points="430,320 495.0,320 510.0,330 495.0,340 430,340" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="462.5" y="330" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">P-2</text>
+  </g>
+  <g id="streams">
+    <path d="M 110.0,130.0 L 210.0,130.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 270.0,130.0 L 430,130.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 110.0,330.0 L 210.0,330.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 270.0,330.0 L 360.0,330.0 L 360.0,380.0 L 410.0,380.0 L 410.0,330.0 L 430,330.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <rect x="150.8" y="123.5" width="18.4" height="13.0" fill="white" />
+    <text x="160.0" y="130.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S1</text>
+    <rect x="340.8" y="123.5" width="18.4" height="13.0" fill="white" />
+    <text x="350.0" y="130.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S2</text>
+    <rect x="150.8" y="323.5" width="18.4" height="13.0" fill="white" />
+    <text x="160.0" y="330.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S3</text>
+    <rect x="305.8" y="323.5" width="18.4" height="13.0" fill="white" />
+    <text x="315.0" y="330.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S4</text>
+  </g>
+  <g id="unit_labels">
+    <rect x="226.1" y="78.0" width="27.8" height="15.0" fill="white" />
+    <text x="240.0" y="90" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">E-1</text>
+    <rect x="226.1" y="278.0" width="27.8" height="15.0" fill="white" />
+    <text x="240.0" y="290" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">E-2</text>
+  </g>
+</svg>
