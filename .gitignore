@@ -35,3 +35,6 @@ renders/
 
 # Reference drawings (third-party coursework; kept local, not redistributed)
 professional_examples/
+
+# Agent worktrees (created per-run under .claude/, never part of the project)
+.claude/worktrees/
