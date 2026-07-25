@@ -47,35 +47,43 @@ def main():
     bot = fs.add(units.Product("Bottoms", reference="PFD-300"))
 
     # --- Placement -------------------------------------------------------
-    # The tower sets the datum; everything else hangs off it. Nozzle offsets are
-    # spelled out so the runs come out straight rather than stepping: a symbol's
-    # port sits at a fixed fraction of its box, so aligning two pieces of
-    # equipment means matching those offsets, not their top-left corners.
-    col_x, col_y, col_h = 300, 260, 200
-
-    feed.pin(x=90, y=col_y + 105)            # feed flag's tip is at y+25; nozzle y+130
+    # Equipment is positioned by NOZZLE, not by its top-left corner: a port sits
+    # at a fixed fraction of its symbol's box, so lining two items up means
+    # matching those fractions. Every run below is either dead straight or a
+    # single corner — the only two-corner run is the tower overhead, where both
+    # the distillate and the condenser inlet face upward and the line has no
+    # choice but to rise, cross and drop.
+    col_x, col_y = 300, 260
     col.pin(x=col_x, y=col_y)
+    feed.pin(x=90, y=col_y + 105)            # flag tip y+25 meets the feed nozzle
 
-    # Condenser: vapour in the top shell nozzle (x + 0.75w), condensate out the
-    # bottom one (x + 0.25w). Sits above the drum, both right of the tower.
-    cond.pin(x=560, y=70)
-    cond_out_x = 560 + 0.25 * 120            # = 590
+    # Condenser, mirrored so it drains towards the drum: vapour enters the top
+    # shell nozzle at x + 0.25w, condensate leaves the bottom one at x + 0.75w.
+    cond_x, cond_y, cond_w = 560, 70, 120
+    cond.pin(x=cond_x, y=cond_y, mirrored="x")
+    cond_drain_x = cond_x + 0.75 * cond_w
 
-    # Drum inlet is on its top face (see port_face above), 20/91.5 along.
-    drum.pin(x=cond_out_x - 0.219 * 130, y=200)   # top inlet lands under cond_out
-    drum_out_x = (cond_out_x - 0.219 * 130) + 0.743 * 130   # bottom draw, 68/91.5
-    vent.pin(x=880, y=178)
+    # Drum hung so its top inlet (20/91.5 along the shell) sits directly under
+    # the condenser drain — that run is then a straight drop.
+    drum_w, drum_y = 130, 170
+    drum.pin(x=cond_drain_x - (20 / 91.5) * drum_w, y=drum_y)
+    drum_x = cond_drain_x - (20 / 91.5) * drum_w
+    drum_draw_x = drum_x + (68 / 91.5) * drum_w        # bottom liquid draw
+    vent.pin(x=880, y=100)                             # flag tip clears the condenser
 
-    # Turned a quarter turn so the inlet faces up and both outlets face down:
-    # the drum drains straight into it, and reflux drops out and runs back to
-    # the tower instead of leaving sideways and doubling around.
-    split.pin(x=drum_out_x - 25, y=300, orientation=90)
-    dist.pin(x=900, y=395)
+    # Turned a quarter turn: inlet up, both outlets down. Placed so its inlet is
+    # under the drum's draw (another straight drop), and high enough that reflux
+    # drops to the tower's reflux nozzle rather than having to climb back up.
+    split_y = 240
+    split.pin(x=drum_draw_x - 25, y=split_y, orientation=90)
+    dist.pin(x=900, y=315)
 
-    bsplit.pin(x=520, y=col_y + col_h + 145)  # sump draw sits below the kettle: its
-    # shell inlet faces down, so the line has to come up into it
-    reb.pin(x=660, y=col_y + col_h + 52)     # kettle off the tower bottom
-    bot.pin(x=900, y=col_y + col_h + 150)
+    # Kettle off the tower bottom. Its shell inlet faces down, so the sump
+    # splitter sits below it and the line rises into the nozzle.
+    reb_x, reb_y = 660, 512
+    reb.pin(x=reb_x, y=reb_y)
+    bsplit.pin(x=520, y=590)
+    bot.pin(x=900, y=600)                              # level with the sump draw
 
     # --- Connections -----------------------------------------------------
     fs.connect(feed.outlet, col.feed)

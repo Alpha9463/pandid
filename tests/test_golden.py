@@ -247,19 +247,22 @@ def _column_reflux() -> Flowsheet:
     )
     bot = fs.add(units.Product("Bottoms", reference="PFD-300"))
 
-    col_x, col_y, col_h = 300, 260, 200
-    feed.pin(x=90, y=col_y + 105)
+    col_x, col_y = 300, 260
     col.pin(x=col_x, y=col_y)
-    cond.pin(x=560, y=70)
-    cond_out_x = 560 + 0.25 * 120
-    drum.pin(x=cond_out_x - 0.219 * 130, y=200)
-    drum_out_x = (cond_out_x - 0.219 * 130) + 0.743 * 130
-    vent.pin(x=880, y=178)
-    split.pin(x=drum_out_x - 25, y=300, orientation=90)
-    dist.pin(x=900, y=395)
-    bsplit.pin(x=520, y=col_y + col_h + 145)
-    reb.pin(x=660, y=col_y + col_h + 52)
-    bot.pin(x=900, y=col_y + col_h + 150)
+    feed.pin(x=90, y=col_y + 105)
+    cond_x, cond_y, cond_w = 560, 70, 120
+    cond.pin(x=cond_x, y=cond_y, mirrored="x")
+    cond_drain_x = cond_x + 0.75 * cond_w
+    drum_w, drum_y = 130, 170
+    drum.pin(x=cond_drain_x - (20 / 91.5) * drum_w, y=drum_y)
+    drum_x = cond_drain_x - (20 / 91.5) * drum_w
+    drum_draw_x = drum_x + (68 / 91.5) * drum_w
+    vent.pin(x=880, y=100)
+    split.pin(x=drum_draw_x - 25, y=240, orientation=90)
+    dist.pin(x=900, y=315)
+    reb.pin(x=660, y=512)
+    bsplit.pin(x=520, y=590)
+    bot.pin(x=900, y=600)
 
     fs.connect(feed.outlet, col.feed)
     fs.connect(col.distillate, cond.hot_in)
