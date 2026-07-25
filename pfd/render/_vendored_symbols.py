@@ -285,7 +285,7 @@ def register_vendored(registry):
         svg='<g id="sym_separator_horizontal"><path d="M 5.77 30.0 L 85.77 30.0 A 5.0 13.0 0.0 0 0 91.5392 15.0 A 5.0 13.0 0.0 0 0 85.77 0.0 L 5.77 0.0 A 5.0 13.0 0.0 0 0 0.0008 15.0 A 5.0 13.0 0.0 0 0 5.77 30.0 Z M 5.77 0.0 L 5.77 30.0 M 85.77 0.0 L 85.77 30.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=91.5, height=30.0,
         ports={'feed': (0.0, 15.0), 'vapor': (30.0, 0.0), 'liquid': (68.0, 30.0)},
-        port_alts={'feed': {'N': (20.0, 0.0), 'E': (91.5, 15.0)}, 'vapor': {'E': (91.5, 15.0), 'W': (0.0, 15.0)}},
+        port_alts={'feed': {'N': (20.0, 0.0), 'E': (91.5, 15.0)}},
     ), 'horizontal')
 
     # draw.io separators:Separator (Cyclone) -> separator/cyclone

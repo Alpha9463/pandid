@@ -118,12 +118,13 @@ KIND_MAP = {
     # with dished ends. Feed enters the left head, vapour leaves the top face
     # and liquid draws off the bottom face (both span x 5.77..85.77).
     #
-    # A drum can legitimately be piped from more than one side, so feed and
-    # vapour list alternate faces (see Unit.port_face). Liquid has none — it
-    # draws off the bottom by gravity.
+    # A drum can be fed from either dished head or from above, so feed lists
+    # alternates (see Unit.port_face). Vapour and liquid have none: on a lying
+    # cylinder vapour always disengages off the top and liquid draws off the
+    # bottom, and putting them on the heads would collide with the feed nozzle.
     ("separator", "horizontal"): ("vessels", "Drum or Condenser",
                                   {"feed": [("W", 15), ("N", 20.0), ("E", 15)],
-                                   "vapor": [("N", 30.0), ("E", 15), ("W", 15)],
+                                   "vapor": ("N", 30.0),
                                    "liquid": ("S", 68.0)}),
     ("separator", "cyclone"): ("separators", "Separator (Cyclone)", {"feed": "W", "vapor": "N", "liquid": "S"}),
     ("separator", "gravity"): ("separators", "Gravity Separator, Settling Chamber",
