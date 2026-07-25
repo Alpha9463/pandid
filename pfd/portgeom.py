@@ -5,6 +5,10 @@ Layout, routing, and rendering all resolve a unit's size and its port positions
 of bug this prevents: the renderer forgetting the mirror flip that the router
 applied, which left mirrored units' streams visually disconnected.)
 
+:func:`resolve_port` is the single authority: it answers a port's drawn point,
+its routing anchor and its face together, and everything else here is a wrapper
+over it. Deriving any one of the three somewhere else is the bug.
+
 All functions take a resolved box explicitly (``w``, ``h``, ``mirrored``) rather
 than reading ``unit.frame``, so they work both during layout (on a ``_Slot``)
 and afterwards (on a ``Frame``).
