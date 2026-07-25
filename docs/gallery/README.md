@@ -99,7 +99,7 @@ A fractionation sheet drawn the way one actually is: tower on the left,
 condenser high and right with the reflux drum beneath it, kettle reboiler off
 the bottom. Both loops close on the column itself through its `reflux_in` and
 `boilup_in` return nozzles rather than being faked as recycles to an upstream
-unit. The drum's inlet is moved to its top face with `port_face("inlet", "N")`
+unit. The drum's inlet is moved to its top face with `nozzle("inlet", "N")`
 so the condenser drains straight down into it, and the condenser is
 `mirrored="x"` so it drains toward the drum. Equipment is pinned by nozzle
 fraction, which is what makes every run either straight or a single corner.
@@ -116,5 +116,5 @@ The in-line fitting and actuated-valve families on one spine: a suction
 with a spring `psv` to flare, and a `sight_glass` on the way out. The valve is
 `mirrored="y"` so its operator faces down toward the controller instead of
 making the signal climb over the vessel, and LIC-101 takes its output on the
-west face via `port_face("sig_out", "W")`. The only rise on the sheet is across
+west face via `nozzle("sig_out", "W")`. The only rise on the sheet is across
 the pump, whose discharge nozzle really is above its suction.

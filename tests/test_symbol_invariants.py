@@ -25,7 +25,8 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from pfd.render.symbols import default_registry
+from pfd.portgeom import outward_dir
+from pfd.render.symbols import Symbol, default_registry
 
 BOX_EPS = 1.0  # bounding-box slack, in symbol-space units
 GEOM_TOL = 2.0  # max distance from a port to the nearest drawn segment
@@ -334,16 +335,44 @@ def test_ports_within_bounding_box(entry):
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_port_alts_within_bounding_box(entry):
+def test_port_faces_within_bounding_box(entry):
     (kind, variant), sym = entry
-    for name, faces in (sym.port_alts or {}).items():
+    for name, faces in sym.port_faces.items():
         for face, (x, y) in faces.items():
             assert -BOX_EPS <= x <= sym.width + BOX_EPS, (
-                f"{kind}/{variant} port_alts[{name!r}][{face!r}] x={x} outside [0, {sym.width}]"
+                f"{kind}/{variant} port_faces[{name!r}][{face!r}] x={x} outside [0, {sym.width}]"
             )
             assert -BOX_EPS <= y <= sym.height + BOX_EPS, (
-                f"{kind}/{variant} port_alts[{name!r}][{face!r}] y={y} outside [0, {sym.height}]"
+                f"{kind}/{variant} port_faces[{name!r}][{face!r}] y={y} outside [0, {sym.height}]"
             )
+
+
+@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
+def test_every_menu_entry_resolves_to_the_face_it_claims(entry):
+    """A placement filed under "N" whose coordinate is nearest the west edge is
+    a lie the engine cannot catch: ``port_anchor`` derives the face from the
+    coordinate, so the nozzle silently comes out somewhere else. The home entry
+    is keyed from the coordinate and so cannot fail; an authored alternate can."""
+    (kind, variant), sym = entry
+    for name, faces in sym.port_faces.items():
+        for face, (x, y) in faces.items():
+            got = outward_dir(x, y, sym.width, sym.height)
+            assert got == face, (
+                f"{kind}/{variant} port_faces[{name!r}][{face!r}] at ({x}, {y}) is "
+                f"nearest the {got} edge of the {sym.width}x{sym.height} box"
+            )
+
+
+@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
+def test_the_menu_carries_the_symbols_own_nozzle(entry):
+    """The home placement is folded into the menu, so nothing downstream has a
+    privileged default to merge back in."""
+    (kind, variant), sym = entry
+    assert set(sym.port_faces) == set(sym.ports), f"{kind}/{variant} menu misses a port"
+    for name, xy in sym.ports.items():
+        assert xy in sym.port_faces[name].values(), (
+            f"{kind}/{variant} port {name!r} home {xy} is not in its own menu"
+        )
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
@@ -363,18 +392,18 @@ def test_ports_lie_on_drawn_geometry(entry):
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
-def test_port_alts_lie_on_drawn_geometry(entry):
+def test_port_faces_lie_on_drawn_geometry(entry):
     (kind, variant), sym = entry
     if kind in _DYNAMIC_KINDS:
         pytest.skip("feed/product are drawn dynamically, not from Symbol.svg")
     segments = _collect_segments(sym.svg)
-    for name, faces in (sym.port_alts or {}).items():
+    for name, faces in sym.port_faces.items():
         if (kind, variant, name) in _KNOWN_GEOMETRY_GAPS:
             continue
         for face, (x, y) in faces.items():
             d = _nearest_distance((x, y), segments)
             assert d <= GEOM_TOL, (
-                f"{kind}/{variant} port_alts[{name!r}][{face!r}] at ({x}, {y}) is "
+                f"{kind}/{variant} port_faces[{name!r}][{face!r}] at ({x}, {y}) is "
                 f"{d:.1f}u from the nearest drawn stroke (tolerance {GEOM_TOL})"
             )
 
@@ -384,26 +413,148 @@ def test_no_two_ports_coincide(entry):
     (kind, variant), sym = entry
     if (kind, variant) in _KNOWN_DUPLICATE_PORTS:
         pytest.skip(f"{kind}/{variant}: known duplicate, see _KNOWN_DUPLICATE_PORTS")
-    # Every position a port could occupy: its default, plus each alt face.
-    # Two DIFFERENT ports must never resolve to the same point, or a stream
-    # routed to one lands exactly on top of a stream routed to the other. (An
-    # alt coinciding with its *own* port's default is not a conflict -- only
-    # one of a single port's placements is ever active at a time.)
-    #
-    # Free ports are exempt from *each other*, not from the rule: a balloon's
-    # signal connections have no face of their own, so every one of them offers
-    # every face and the overlap is a menu, not a collision. They are still
-    # checked against fixed ports, which do own their face.
-    free = sym.free_ports or frozenset()
-    placements: list[tuple[str, tuple[float, float]]] = list(sym.ports.items())
-    for name, faces in (sym.port_alts or {}).items():
-        placements.extend((name, xy) for xy in faces.values())
+    # The rule itself lives on Symbol, so a third-party symbol this suite never
+    # sees is held to it too. Here we only assert the shipped registry is clean.
+    assert sym.coincident_ports() == [], f"{kind}/{variant}: " + "; ".join(
+        f"ports {a!r} and {b!r} both resolve to {xy}" for a, b, xy in sym.coincident_ports()
+    )
 
-    for i in range(len(placements)):
-        n1, p1 = placements[i]
-        for j in range(i + 1, len(placements)):
-            n2, p2 = placements[j]
-            if n1 == n2 or (n1 in free and n2 in free):
-                continue
-            if math.hypot(p1[0] - p2[0], p1[1] - p2[1]) < 0.5:
-                pytest.fail(f"{kind}/{variant}: ports {n1!r} and {n2!r} both resolve to {p1}")
+
+def _colliding_symbol(**kwargs) -> Symbol:
+    """Build a Symbol that is *expected* to have coincident ports.
+
+    Registering one warns — the engine consults the rule, not just this suite —
+    so the warning is asserted here rather than left to leak into the report.
+    """
+    with pytest.warns(UserWarning, match="Only ports named in faceless_ports"):
+        return Symbol(svg='<g id="sym_under_test"/>', **kwargs)
+
+
+def test_authored_alternates_do_not_buy_a_shared_face():
+    """The historical ``separator/horizontal`` bug: the vapour outlet handed a
+    copy of the feed's menu. Both ports then have more than one placement, so a
+    "the menu is multi-entry" exemption waves the collision through — which is
+    the point of naming faceless connections instead of inferring them."""
+    sym = _colliding_symbol(
+        width=91.5,
+        height=30.0,
+        ports={"feed": (0.0, 15.0), "vapor": (30.0, 0.0), "liquid": (68.0, 30.0)},
+        port_faces={
+            "feed": {"W": (0.0, 15.0), "N": (20.0, 0.0), "E": (91.5, 15.0)},
+            "vapor": {"W": (0.0, 15.0), "E": (91.5, 15.0)},
+        },
+    )
+    assert sym.coincident_ports() == [("feed", "vapor", (0.0, 15.0))]
+
+
+def test_a_second_nozzle_on_an_alternates_own_coordinate_is_caught():
+    """The historical ``vessel/horizontal`` bug: the outlet given the right head
+    the inlet already offers, landing two nozzles on (91.5, 15.0)."""
+    sym = _colliding_symbol(
+        width=91.5,
+        height=30.0,
+        ports={"inlet": (0.0, 15.0), "outlet": (68.0, 30.0)},
+        port_faces={
+            "inlet": {"W": (0.0, 15.0), "N": (20.0, 0.0), "E": (91.5, 15.0)},
+            "outlet": {"E": (91.5, 15.0)},
+        },
+    )
+    assert sym.coincident_ports() == [("inlet", "outlet", (91.5, 15.0))]
+
+
+def test_faceless_connections_may_share_a_placement():
+    """A balloon is a circle, so every signal connection offers every face and
+    the overlap is a menu rather than a collision."""
+    faces = {"N": (22.0, 0.0), "S": (22.0, 44.0), "W": (0.0, 22.0), "E": (44.0, 22.0)}
+    ports = {"pv": (22.0, 44.0), "sig_in": (0.0, 22.0), "sig_out": (44.0, 22.0)}
+    sym = Symbol(
+        svg='<g id="sym_balloon"/>',
+        width=44.0,
+        height=44.0,
+        ports=ports,
+        port_faces={name: dict(faces) for name in ports},
+        faceless_ports=frozenset(ports),
+    )
+    assert sym.coincident_ports() == []
+    # ...but a nozzle that does own its face is still checked against them.
+    with_stub = _colliding_symbol(
+        width=44.0,
+        height=44.0,
+        ports={**ports, "tap": (22.0, 0.0)},
+        port_faces={name: dict(faces) for name in ports},
+        faceless_ports=frozenset(ports),
+    )
+    assert [(a, b) for a, b, _ in with_stub.coincident_ports()] == [
+        ("pv", "tap"),
+        ("sig_in", "tap"),
+        ("sig_out", "tap"),
+    ]
+
+
+# --- what a symbol may declare -----------------------------------------------
+#
+# The checks above hold the shipped registry to these rules; Symbol's own
+# constructor holds every symbol to them, including the third-party ones this
+# suite never sees. Each of these used to be discarded in silence.
+
+
+def test_a_placement_keyed_to_a_face_it_does_not_land_on_is_rejected():
+    """The menu is re-keyed by coordinate at resolve time, so a mis-keyed
+    alternate never existed: it was filed under the face it actually lands on,
+    where it either clobbered the real entry or was clobbered by it."""
+    with pytest.raises(ValueError, match=r"nearest the W edge"):
+        Symbol(
+            svg='<g id="sym_x"/>',
+            width=91.5,
+            height=30.0,
+            ports={"feed": (30.0, 0.0)},
+            port_faces={"feed": {"N": (0.0, 15.0)}},  # that point is on the west
+        )
+
+
+def test_an_alternate_on_a_ports_own_home_face_is_rejected():
+    """``ports`` is the authority on the home nozzle, so an alternate keyed to
+    the same face could only ever be overwritten by it."""
+    with pytest.raises(ValueError, match=r"but ports\['feed'\] puts the same face at"):
+        Symbol(
+            svg='<g id="sym_x"/>',
+            width=91.5,
+            height=30.0,
+            ports={"feed": (0.0, 15.0)},
+            port_faces={"feed": {"W": (0.0, 12.0)}},  # the west head is already taken
+        )
+
+
+def test_a_menu_for_a_port_the_symbol_does_not_anchor_is_rejected():
+    with pytest.raises(ValueError, match=r"declares a menu for \['nope'\]"):
+        Symbol(
+            svg='<g id="sym_x"/>',
+            width=40.0,
+            height=40.0,
+            ports={"inlet": (0.0, 20.0)},
+            port_faces={"nope": {"E": (40.0, 20.0)}},
+        )
+
+
+def test_a_faceless_port_the_symbol_does_not_anchor_is_rejected():
+    with pytest.raises(ValueError, match=r"faceless_ports names \['typo'\]"):
+        Symbol(
+            svg='<g id="sym_x"/>',
+            width=40.0,
+            height=40.0,
+            ports={"inlet": (0.0, 20.0)},
+            faceless_ports=frozenset({"typo"}),
+        )
+
+
+def test_a_home_placement_restated_in_the_menu_is_accepted():
+    """The vendored symbols emit the whole menu, home included, so restating it
+    with the same coordinate has to stay legal."""
+    sym = Symbol(
+        svg='<g id="sym_x"/>',
+        width=91.5,
+        height=30.0,
+        ports={"feed": (0.0, 15.0)},
+        port_faces={"feed": {"W": (0.0, 15.0), "N": (20.0, 0.0)}},
+    )
+    assert list(sym.port_faces["feed"]) == ["W", "N"]  # home stays most preferred

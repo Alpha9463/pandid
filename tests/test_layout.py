@@ -106,3 +106,22 @@ def test_full_layout_via_render(tmp_path):
 
     content = svg_path.read_text()
     assert "<use" in content
+
+
+def test_spine_straightening_scales_the_port_offset_to_the_resolved_box():
+    """#25: the straightening target was read straight off the symbol.
+
+    A drum resized past its symbol's height carries its inlet proportionally
+    lower, so aiming at the raw symbol-space offset lands the run short by
+    exactly that ratio -- 6px for a 42-high drum on a 30-high symbol. Only bites
+    units left unpinned in y, which is why the examples dodge it: they pin.
+    """
+    from pfd.portgeom import port_point
+
+    fs = Flowsheet("straighten")
+    feed = fs.add(U.Feed("Feed"))
+    drum = fs.add(U.Vessel("V-1", variant="horizontal", height=42))
+    fs.connect(feed.outlet, drum.inlet)
+    fs.layout()
+
+    assert port_point(feed, feed.frame, "outlet")[1] == port_point(drum, drum.frame, "inlet")[1]

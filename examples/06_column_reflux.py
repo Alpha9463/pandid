@@ -34,7 +34,7 @@ def main():
     # The condenser drains straight down into the drum, so take the inlet on the
     # drum's top face instead of its left head — otherwise the line has to hook
     # back on itself to reach the head.
-    drum.port_face("inlet", "N")
+    drum.nozzle("inlet", "N")
     vent = fs.add(units.Product("Vent Gas", reference="PFD-900"))
     split = fs.add(units.Splitter("SP-701", n_outlets=2, description="Reflux Split"))
     dist = fs.add(units.Product("Distillate", reference="PFD-200"))

@@ -53,7 +53,7 @@ def _seg_crosses_box(x1, y1, x2, y2, box) -> bool:
 
 def validate(fs: "Flowsheet") -> list["Issue"]:
     """Return all validation issues for the flowsheet (errors first)."""
-    from pfd.portgeom import port_point, unit_box
+    from pfd.portgeom import is_anchored, port_point, unit_box
 
     errors: list[Issue] = []
     warnings: list[Issue] = []
@@ -83,6 +83,37 @@ def validate(fs: "Flowsheet") -> list["Issue"]:
                 if _overlap(boxes[i][1], boxes[j][1]):
                     errors.append(Issue("error", "unit-overlap",
                                         f"{boxes[i][0].name} and {boxes[j][0].name} overlap"))
+
+        # Hard: two live connections on one unit landing on the same point, so
+        # one stream terminates exactly on top of the other. This is the runtime
+        # half of the symbol-level duplicate-nozzle rule
+        # (:meth:`pfd.render.symbols.Symbol.coincident_ports`), and the only
+        # half that can see it: a symbol may legitimately offer one face to two
+        # faceless connections, and which placement each port took — and what
+        # mirroring then did to it — is a property of the finished sheet.
+        for u in fs.units:
+            seen: dict[tuple[float, ...], str] = {}
+            for name, port in u.ports.items():
+                if port.stream is None:
+                    continue
+                pt = tuple(round(v, 3) for v in port_point(u, u.frame, name))
+                first = seen.get(pt)
+                if first is None:
+                    seen[pt] = name
+                    continue
+                # A port the symbol never anchored has no placement to collide
+                # with — it fell back to the centre of the box, where every
+                # other unanchored port also is. A missing nozzle is a gap in
+                # the symbol, not a contradiction on the sheet, so it does not
+                # stop the drawing.
+                anchored = is_anchored(u, name) and is_anchored(u, first)
+                issue = Issue(
+                    "error" if anchored else "warning", "coincident-ports",
+                    f"{u.name}.{first} and {u.name}.{name} are both connected and "
+                    f"both resolve to ({pt[0]}, {pt[1]})"
+                    + ("" if anchored else "; the symbol anchors no nozzle for one "
+                       "of them, so both fall back to the centre of the box"))
+                (errors if anchored else warnings).append(issue)
 
         # Soft: a route passing through a unit body it does not connect to,
         # and grossly indirect routes.

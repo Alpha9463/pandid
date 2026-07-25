@@ -10,6 +10,7 @@ This module is also the public ``units`` namespace: ``from pfd import units``.
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING
 
 from pfd.geometry import Frame, Pin
@@ -28,6 +29,10 @@ __all__ = [
 ]
 
 _VALID_ROLES = {"process", "feed", "product", "energy", "utility", "vapor", "liquid"}
+
+# The same side vocabulary label_pos uses, so a sheet does not need two spellings
+# for "the top of this unit".
+_FACE_OF_SIDE = {"top": "N", "bottom": "S", "left": "W", "right": "E"}
 
 class Unit:
     kind: str = "unit"
@@ -78,50 +83,84 @@ class Unit:
         symbol: ``True`` or ``"x"`` left↔right (swapping its E and W faces),
         ``"y"`` top↔bottom (swapping N and S), ``"xy"`` both.
         """
+        from dataclasses import replace
+
         from pfd.geometry import normalize_mirror, normalize_orientation
 
-        if self.pin_ is None:
-            self.pin_ = Pin()
-        if col is not None:
-            self.pin_.col = col
-        if row is not None:
-            self.pin_.row = row
-        if x is not None:
-            self.pin_.x = x
-        if y is not None:
-            self.pin_.y = y
-        self.pin_.orientation = normalize_orientation(orientation)
-        self.pin_.mirrored, self.pin_.mirror_y = normalize_mirror(mirrored)
+        candidate = replace(self.pin_ if self.pin_ is not None else Pin())
+        for axis, value in (("col", col), ("row", row), ("x", x), ("y", y)):
+            if value is not None:
+                setattr(candidate, axis, value)
+        candidate.orientation = normalize_orientation(orientation)
+        candidate.mirrored, candidate.mirror_y = normalize_mirror(mirrored)
+        # A nozzle() choice names a face on the finished sheet, and this
+        # transform is what decides which placement lands there. Check the
+        # *candidate*: asking about the committed placement answers for the
+        # sheet this call is replacing, and committing first would leave the
+        # unit in exactly the state a raise here exists to prevent.
+        if self._port_faces:
+            from pfd.portgeom import port_faces
+
+            for port_name, face in self._port_faces.items():
+                self._check_face(port_name, face, port_faces(self, port_name, candidate))
+        self.pin_ = candidate
         return self
 
-    def port_face(self, port_name: str, face: str) -> "Unit":
-        """Move a port to a different face of the symbol.
+    def nozzle(self, port_name: str, face: str) -> "Unit":
+        """Pipe a port from a named face of the unit *as drawn*.
 
         Many vessels can be piped from more than one side; where a symbol
-        declares alternates for a port, this picks one. ``face`` is ``"N"``,
-        ``"S"``, ``"E"`` or ``"W"`` *in the symbol's own frame* — mirroring and
-        rotation are applied on top, so the drawn face follows the placement.
+        authors a coordinate per face, this picks one. ``face`` is the compass
+        point on the finished sheet — ``"N"``/``"S"``/``"E"``/``"W"``, or the
+        ``top``/``bottom``/``left``/``right`` spelling ``label_pos`` uses — so a
+        mirrored unit takes the face the reader sees rather than the one the
+        stencil happened to be drawn with.
 
         Raises :class:`KeyError` for an unknown port and :class:`ValueError` when
-        the symbol offers no alternate on that face (a column's bottoms nozzle,
-        for instance, is fixed by physics and has none).
+        the symbol offers no placement on that face (a column's bottoms nozzle,
+        for instance, is fixed by physics and offers exactly one).
+
+        Because the drawn face depends on the placement transform, a later
+        :meth:`pin` that rotates or mirrors the unit re-checks the choice and
+        raises if it no longer reaches that face.
         """
-        from pfd.portgeom import _sym
+        from pfd.portgeom import port_faces
 
         if port_name not in self.ports:
             raise KeyError(
                 f"{type(self).__name__} {self.name!r} has no port {port_name!r}; "
                 f"available ports: {sorted(self.ports)}"
             )
-        face = face.upper()
-        alts = (getattr(_sym(self), "port_alts", None) or {}).get(port_name) or {}
-        if face not in alts:
-            raise ValueError(
-                f"port {self.name}.{port_name} cannot move to face {face!r}; "
-                f"available: {sorted(alts) or 'none — this nozzle is fixed'}"
-            )
+        face = _FACE_OF_SIDE.get(face.strip().lower(), face.strip().upper())
+        self._check_face(port_name, face, port_faces(self, port_name))
         self._port_faces[port_name] = face
         return self
+
+    def _check_face(self, port_name: str, face: str, options: list[str]) -> None:
+        """Raise unless ``face`` is one this port can be piped from as drawn.
+
+        The message comes from :mod:`pfd.portgeom`, which raises the same one at
+        resolve time: this check only moves the complaint forward to the call
+        that caused it.
+        """
+        if face not in options:
+            from pfd.portgeom import unreachable_face
+
+            raise unreachable_face(self, port_name, face, options)
+
+    def port_face(self, port_name: str, face: str) -> "Unit":
+        """Deprecated alias for :meth:`nozzle`.
+
+        Its ``face`` was documented as the symbol's own frame; :meth:`nozzle`
+        reads it as the drawn one, which is the same thing on an untransformed
+        unit and the right thing on a mirrored one.
+        """
+        warnings.warn(
+            "Unit.port_face() is deprecated; use Unit.nozzle(port, face), whose "
+            "face is the compass point as drawn.",
+            DeprecationWarning, stacklevel=2,
+        )
+        return self.nozzle(port_name, face)
 
     def _add_port(self, name: str, direction: str, role: str,
                   side: str | None = None) -> Port:

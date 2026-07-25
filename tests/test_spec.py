@@ -469,7 +469,12 @@ def test_fixed_nozzle_cannot_be_moved():
                 "units": [{"kind": "Column", "name": "T-1", "port_faces": {"bottoms": "N"}}],
             }
         )
-    assert "cannot move to face 'N'" in str(excinfo.value)
+    # A column's bottoms leaves the bottom because gravity put it there, so its
+    # menu has one entry. The message names the drawn faces actually on offer.
+    message = str(excinfo.value)
+    assert "T-1.bottoms" in message
+    assert "can be piped from S as drawn" in message
+    assert "you asked for 'N'" in message
 
 
 @pytest.mark.parametrize(

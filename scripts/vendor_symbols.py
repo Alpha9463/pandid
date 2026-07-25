@@ -14,7 +14,9 @@ import pathlib
 import sys
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parent))
 from mxgraph_to_svg import shapes_in, convert_shape  # noqa: E402
+from pfd.portgeom import outward_dir  # noqa: E402  (the one place a face is derived)
 
 STENCILS = HERE / "vendor_data" / "drawio"
 OUT = HERE.parent / "pfd" / "render" / "_vendored_symbols.py"
@@ -392,6 +394,10 @@ def build():
         ports = {p: tuple(round(v, 1) for v in xy) for p, xy in ports.items()}
         alts = {p: {f: tuple(round(v, 1) for v in xy) for f, xy in d.items()}
                 for p, d in alts.items()}
+        # Emit the whole menu, home first: Symbol keeps exactly one enumeration
+        # of a port's placements, so a symbol with alternates must declare the
+        # default among them rather than leave it to be merged in later.
+        menu = {p: {outward_dir(*ports[p], w, h): ports[p], **d} for p, d in alts.items()}
         sid = kind if variant == "default" else f"{kind}_{variant}"
         svg = f'<g id="sym_{sid}">{inner}</g>'
         lines += [
@@ -401,8 +407,8 @@ def build():
             f"        width={w}, height={h},",
             f"        ports={ports!r},",
         ]
-        if alts:
-            lines.append(f"        port_alts={alts!r},")
+        if menu:
+            lines.append(f"        port_faces={menu!r},")
         lines += [
             f"    ), {variant!r})",
             "",

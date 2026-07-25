@@ -103,24 +103,130 @@ def test_rotation_moves_the_face_a_port_leaves_from():
 # --- moving a port to another face ------------------------------------------
 
 
-def test_port_face_moves_the_connection():
-    drum = units.Separator("V-1", variant="horizontal")
+def _drum_sheet(drum, **pin_kwargs):
     fs = Flowsheet("D")
-    fs.add(drum).pin(x=200, y=100)
+    fs.add(drum).pin(x=200, y=100, **pin_kwargs)
     fs.add(units.Feed("f")).pin(x=20, y=100)
     fs.connect(fs.units[1].outlet, drum.feed)
     fs.layout()
+    return fs
+
+
+def test_nozzle_moves_the_connection():
+    drum = units.Separator("V-1", variant="horizontal")
+    fs = _drum_sheet(drum)
     assert port_anchor(drum, drum.frame, "feed")[2] == "W"
 
-    drum.port_face("feed", "N")
+    drum.nozzle("feed", "N")
     fs.layout()
     assert port_anchor(drum, drum.frame, "feed")[2] == "N"
 
 
-def test_port_face_rejects_unknown_port_and_fixed_nozzle():
+def test_nozzle_accepts_the_label_pos_side_names():
+    drum = units.Separator("V-1", variant="horizontal")
+    fs = _drum_sheet(drum)
+    drum.nozzle("feed", "top")
+    fs.layout()
+    assert port_anchor(drum, drum.frame, "feed")[2] == "N"
+
+
+def test_nozzle_names_the_face_as_drawn_not_as_authored():
+    """#26: the drum's alternate is authored on the symbol's north head, so on a
+    top-to-bottom mirrored unit that placement is drawn on the SOUTH. Naming the
+    face in drawn space is what stops "N" quietly putting the nozzle below."""
+    drum = units.Separator("V-1", variant="horizontal")
+    fs = _drum_sheet(drum, mirrored="y")
+    with pytest.raises(ValueError, match="you asked for 'N'"):
+        drum.nozzle("feed", "N")
+
+    drum.nozzle("feed", "S")
+    fs.layout()
+    assert port_anchor(drum, drum.frame, "feed") == (220.0, 130.0, "S")
+
+
+def test_nozzle_rejects_unknown_port_and_fixed_nozzle():
     drum = units.Separator("V-1", variant="horizontal")
     with pytest.raises(KeyError):
-        drum.port_face("nope", "N")
-    # liquid draws off the bottom by gravity — the symbol declares no alternates
-    with pytest.raises(ValueError, match="cannot move to face"):
-        drum.port_face("liquid", "N")
+        drum.nozzle("nope", "N")
+    # liquid draws off the bottom by gravity — the symbol authors one placement
+    with pytest.raises(ValueError, match=r"V-1\.liquid can be piped from S as drawn"):
+        drum.nozzle("liquid", "N")
+
+
+def test_pin_rechecks_a_face_the_new_transform_can_no_longer_reach():
+    # A quarter turn takes the drum's three drawn faces from W/N/E to N/E/S, so
+    # a west nozzle chosen beforehand has nowhere to land and must say so.
+    drum = units.Separator("V-1", variant="horizontal")
+    drum.nozzle("feed", "W")
+    with pytest.raises(ValueError, match="you asked for 'W'"):
+        drum.pin(x=200, y=100, orientation=90)
+
+
+def test_a_face_is_named_against_the_pin_not_the_frame_it_replaces():
+    """#38/D2: port_faces() preferred the resolved frame, so once a layout had
+    run a pin() answered from the transform it was in the act of replacing --
+    and the accepted face then fell back to the home nozzle at resolve time.
+    This is the order the docs recommend: pin, then nozzle."""
+    drum = units.Separator("V-1", variant="horizontal")
+    _drum_sheet(drum)  # lays out, so drum.frame is resolved at orientation 0
+    drum.pin(x=200, y=100, orientation=90)
+    with pytest.raises(ValueError, match="you asked for 'W'"):
+        drum.nozzle("feed", "W")
+
+
+def test_an_unreachable_face_raises_at_resolve_time_rather_than_falling_back():
+    """#38/D2: the guard that matters is the one in the resolver. Every check
+    upstream of it can be outrun by a later change of transform -- a frame
+    another engine wrote, here -- and it is the resolver that decides where the
+    ink goes, so a fall-back to the home nozzle there is silent by definition."""
+    from pfd.portgeom import resolve_port
+
+    drum = units.Separator("V-1", variant="horizontal")
+    _drum_sheet(drum)
+    drum.nozzle("feed", "W")
+    assert resolve_port(drum, drum.frame, "feed").face == "W"
+
+    drum.frame.orientation = 90
+    with pytest.raises(ValueError, match="you asked for 'W'"):
+        resolve_port(drum, drum.frame, "feed")
+
+
+def test_pin_leaves_the_transform_alone_when_it_rejects_the_placement():
+    """#38/D3: pin() committed the new transform and only then re-checked, so
+    catching the error left the unit in the state the check exists to prevent."""
+    drum = units.Separator("V-1", variant="horizontal")
+    drum.pin(x=200, y=100)
+    drum.nozzle("feed", "W")
+    with pytest.raises(ValueError):
+        drum.pin(x=640, y=480, orientation=90)
+    assert (drum.pin_.x, drum.pin_.y) == (200.0, 100.0)
+    assert (drum.pin_.orientation, drum.pin_.mirrored, drum.pin_.mirror_y) == (0, False, False)
+    fs = Flowsheet("still-valid")
+    fs.add(drum)
+    fs.layout()
+    assert port_anchor(drum, drum.frame, "feed")[2] == "W"
+
+
+def test_port_face_still_works_and_warns():
+    drum = units.Separator("V-1", variant="horizontal")
+    with pytest.deprecated_call():
+        drum.port_face("feed", "N")
+    assert drum._port_faces == {"feed": "N"}
+
+
+def test_an_unanchored_port_reports_the_face_it_actually_resolves_to():
+    """#38/D5: a Mixer inlet past the two its symbol draws falls back to the
+    centre of the box, and resolve_port hands that fallback a face. port_faces()
+    used to answer with nothing, so the error text told a caller the port could
+    not be piped from anywhere while the engine was busy piping it."""
+    from pfd.portgeom import port_faces, resolve_port
+
+    fs = Flowsheet("wide-mixer")
+    mix = fs.add(units.Mixer("M-1", n_inlets=5)).pin(x=100, y=100)
+    fs.layout()
+
+    resolved = resolve_port(mix, mix.frame, "in_5")
+    assert port_faces(mix, "in_5") == [resolved.face]
+    mix.nozzle("in_5", resolved.face)  # the face it is already on
+    with pytest.raises(ValueError, match=r"can be piped from N as drawn"):
+        mix.nozzle("in_5", "S")

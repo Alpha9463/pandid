@@ -21,8 +21,7 @@ def assign_coordinates(fs: "Flowsheet") -> None:
     """Map (col, row) ranks to absolute (x, y) pixel coordinates and emit frames."""
     from pfd.geometry import Frame
     from pfd.layout.attach import free_streams, free_units, place_attached
-    from pfd.render.symbols import default_registry
-    from pfd.portgeom import outward_dir
+    from pfd.portgeom import resolve_port
 
     units = free_units(fs)
     streams = free_streams(fs)
@@ -72,19 +71,19 @@ def assign_coordinates(fs: "Flowsheet") -> None:
     # height — turning staircase jogs into straight runs (and clean L's for
     # single-stream Feed/Product terminals). Anything that would overlap a
     # neighbour in the same column is left on the row axis.
-    def _sym_of(unit):
-        return default_registry.get(unit.kind, getattr(unit, "variant", "default"))
-
+    # The slot carries the same box the Frame will (size and transform), so the
+    # port resolver answers here exactly as it will once the frames are emitted
+    # — which is the point: a target read off the symbol instead ignores the
+    # resize, the mirror and any nozzle() choice, and aims at the wrong height.
     def _target_y(other_u, other_port):
         """Absolute Y to aim a straight run at, honouring N/S escape lanes."""
-        sym = _sym_of(other_u)
-        opx, opy = sym.ports.get(other_port.name, (sym.width / 2, sym.height / 2))
-        d = outward_dir(opx, opy, sym.width, sym.height, other_u.kind, other_port.name)
+        s = other_u._slot
+        (_, py), _, d = resolve_port(other_u, s, other_port.name)
         if d == "N":
-            return other_u._slot.y - 15.0
+            return s.y - 15.0
         if d == "S":
-            return other_u._slot.y + sym.height + 15.0
-        return other_u._slot.y + opy
+            return s.y + s.h + 15.0
+        return py
 
     def _overlaps(u, s, new_y):
         for other in units:
@@ -120,11 +119,10 @@ def assign_coordinates(fs: "Flowsheet") -> None:
             continue
         # Only straighten horizontal runs: our port must face the neighbour
         # sideways (E/W); vertical ports keep the row axis.
-        msym = _sym_of(u)
-        mpx, mpy = msym.ports.get(my_port.name, (msym.width / 2, msym.height / 2))
-        if outward_dir(mpx, mpy, msym.width, msym.height, u.kind, my_port.name) not in ("E", "W"):
+        (_, my_y), _, my_d = resolve_port(u, s, my_port.name)
+        if my_d not in ("E", "W"):
             continue
-        new_y = _target_y(other_u, other_port) - mpy
+        new_y = _target_y(other_u, other_port) - (my_y - s.y)
         if not _overlaps(u, s, new_y):
             s.y = new_y
 

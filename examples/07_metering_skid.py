@@ -78,7 +78,7 @@ def main():
                             variant="panel")
     # A balloon has no fixed sides — put the signal connection on the face the
     # valve is actually on, rather than letting the run double back to reach it.
-    lic.port_face("sig_out", "W")
+    lic.nozzle("sig_out", "W")
     fs.connect(lic.sig_out, fv.actuator, kind="electric")
 
     fs.render(out("metering_skid.svg"))
