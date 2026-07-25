@@ -130,7 +130,7 @@ def register_vendored(registry):
     registry.register('hex', Symbol(
         svg='<g id="sym_hex_kettle"><path d="M 4.5 15.0 L 16.5 15.0 L 16.5 30.0 L 4.5 30.0 A 3.0 5.0 0.0 0 1 0.0 22.5 A 3.0 5.0 0.0 0 1 4.5 15.0 M 19.5 15.0 L 26.5 15.0 L 41.5 0.0 L 86.5 0.0 A 5.0 15.0 0.0 0 1 91.5 15.0 A 5.0 15.0 0.0 0 1 86.5 30.0 L 19.5 30.0 Z M 4.5 15.0 L 4.5 30.0 M 41.5 0.0 L 41.5 30.0 M 86.5 0.0 L 86.5 30.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="16.5" y="12.0" width="3.0" height="21.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=91.5, height=33.0,
-        ports={'cold_in': (0.0, 22.5), 'cold_out': (91.5, 15.0), 'hot_in': (64.0, 0.0), 'hot_out': (45.8, 30.0)},
+        ports={'cold_in': (45.8, 30.0), 'cold_out': (64.0, 0.0), 'hot_in': (0.0, 22.5), 'hot_out': (91.5, 15.0)},
     ), 'kettle')
 
     # draw.io heat_exchangers:Heater -> heater/default

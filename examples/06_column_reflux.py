@@ -72,7 +72,8 @@ def main():
     split.pin(x=drum_out_x - 25, y=300, orientation=90)
     dist.pin(x=900, y=395)
 
-    bsplit.pin(x=520, y=col_y + col_h + 60)  # sump draw splits below the tower
+    bsplit.pin(x=520, y=col_y + col_h + 145)  # sump draw sits below the kettle: its
+    # shell inlet faces down, so the line has to come up into it
     reb.pin(x=660, y=col_y + col_h + 52)     # kettle off the tower bottom
     bot.pin(x=900, y=col_y + col_h + 150)
 
