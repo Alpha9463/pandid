@@ -3,9 +3,9 @@
 
 mxGraph stencils (jgraph/drawio, Apache-2.0) describe each shape in a small
 drawing language: <path> made of <move>/<line>/<quad>/<curve>/<arc>/<close>,
-plus <rect>/<roundrect>/<ellipse>/<line>, painted by <fillstroke>/<stroke>/
-<fill>. Coordinates are already in the shape's ``w`` × ``h`` space, so they map
-straight onto an SVG ``viewBox="0 0 w h"``.
+plus <rect>/<roundrect>/<ellipse>/<line>/<text>, painted by <fillstroke>/
+<stroke>/<fill>. Coordinates are already in the shape's ``w`` × ``h`` space, so
+they map straight onto an SVG ``viewBox="0 0 w h"``.
 
 `convert_shape(shape_el)` returns (inner_svg, width, height, constraints) where
 constraints is ``{name: (x_abs, y_abs)}`` from the stencil's <connections>.
@@ -101,6 +101,26 @@ def _num(el, attr, default=0.0):
     return float(el.get(attr, default))
 
 
+# mxGraph anchors a <text> by its own box, SVG by the baseline, so each valign
+# needs the distance from that edge down to the baseline (as a fraction of the
+# em). Only the operator letters on actuated valves ("M"/"H"/"S") use text.
+_TEXT_ANCHOR = {"left": "start", "center": "middle", "right": "end"}
+_TEXT_BASELINE = {"top": 0.8, "middle": 0.35, "bottom": -0.2}
+
+
+def _text_svg(el, size):
+    s = (el.get("str") or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    align = _TEXT_ANCHOR.get(el.get("align", "left"), "start")
+    y = _num(el, "y") + _TEXT_BASELINE.get(el.get("valign", "top"), 0.8) * size
+    common = (f'x="{_num(el, "x")}" y="{round(y, 3)}" font-family="sans-serif" '
+              f'font-size="{size}" text-anchor="{align}"')
+    # The operator boxes run a yoke line straight through where the letter goes,
+    # so knock it out behind the glyph rather than let the line strike it.
+    return (f'<text {common} fill="white" stroke="white" stroke-width="{round(size / 4, 3)}" '
+            f'stroke-linejoin="round">{s}</text>'
+            f'<text {common} fill="#111">{s}</text>')
+
+
 def _path_d(path_el) -> str:
     parts = []
     cx = cy = sx = sy = 0.0  # current point + subpath start (for arc subdivision)
@@ -153,6 +173,7 @@ def convert_shape(shape_el, stroke_width=2.0):
 
     out = []
     pending = []   # geometry accumulated since the last paint op
+    font_size = 12.0
 
     def flush(op):
         nonlocal pending
@@ -201,6 +222,11 @@ def convert_shape(shape_el, stroke_width=2.0):
             elif t == "line":
                 pending.append(("line", (_num(el, "x1"), _num(el, "y1"),
                                          _num(el, "x2"), _num(el, "y2"))))
+            elif t == "fontsize":
+                font_size = _num(el, "size", 12)
+            elif t == "text":
+                # <text> paints itself, so it never joins the pending geometry.
+                out.append(_text_svg(el, font_size))
             elif t in _PAINT:
                 flush(t)
     flush("stroke")  # paint anything left

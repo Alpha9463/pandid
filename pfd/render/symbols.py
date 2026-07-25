@@ -4,7 +4,8 @@ Symbols follow ISO 10628-2 / ISA 5.1 conventions and come from two sources:
 
 - **Vendored (draw.io / diagrams.net P&ID stencils, Apache-2.0)** — valves and
   their variants, pumps, compressors, blowers, heat exchangers, vessels,
-  columns, reactors, separators, tanks, and reducers. Converted from mxGraph
+  columns, reactors, separators, tanks, reducers, in-line fittings, ejectors,
+  vents and funnels. Converted from mxGraph
   stencil XML by ``scripts/vendor_symbols.py`` into ``_vendored_symbols.py`` and
   registered last (overriding the hand-drawn defaults of the same kind). See the
   repo ``NOTICE`` for attribution.

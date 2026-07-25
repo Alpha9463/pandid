@@ -9,7 +9,7 @@ routes every stream, and draws industry-standard symbols.
 
 - **Topology-first API** — declare typed units (pumps, columns, reactors,
   heat exchangers, …) and connect their named ports; streams are created for you.
-- **Industry-standard symbol library** — 49+ ISO 10628-2 / ISA-5.1 symbols with
+- **Industry-standard symbol library** — 95+ ISO 10628-2 / ISA-5.1 symbols with
   style **variants** (e.g. a heat exchanger can be shell-&-tube, plate, kettle,
   U-tube…), derived from the Apache-2.0 draw.io P&ID stencils (see `NOTICE`).
 - **Automatic layout** — Sugiyama-style layering, crossing reduction, and a
@@ -98,13 +98,42 @@ fs.add(units.HeatExchanger("E-1", variant="plate"))   # or shell_tube, kettle, u
 fs.add(units.Valve("FV-1", variant="control"))         # gate, globe, ball, butterfly, check, needle, three_way, relief
 fs.add(units.Pump("P-1", variant="gear"))              # centrifugal, gear, screw, vacuum
 fs.add(units.Tank("TK-1", variant="floating_roof"))    # dished, conical, floating_roof, sphere
-fs.add(units.Separator("V-2", variant="cyclone"))      # knock-out, cyclone, gravity
+fs.add(units.Separator("V-2", variant="cyclone"))      # knock-out, cyclone, gravity, scrubber, electrostatic
+fs.add(units.Fitting("ST-1", variant="strainer"))      # see "In-line fittings" below
 ```
 
 Classes include: `Feed`, `Product`, `Pump`, `Compressor`, `Blower`, `Valve`,
 `Vessel`, `Tank`, `HeatExchanger`, `Heater`, `Cooler`, `Reactor`, `Separator`,
-`Column`, `Mixer`, `Splitter`, `Reducer`, `Furnace`, `Turbine`, `Filter`,
-`Dryer`, and `Instrument`.
+`Column`, `Mixer`, `Splitter`, `Reducer`, `Fitting`, `Ejector`, `Vent`,
+`Funnel`, `Furnace`, `Turbine`, `Filter`, `Dryer`, and `Instrument`.
+
+**Valve operators.** Most valve variants draw the body only; these draw the
+operator too, and their `actuator` port sits on its crown rather than on the
+body, so a controller output or interlock lands where the signal really goes:
+
+```python
+fs.add(units.Valve("XV-1", variant="solenoid"))    # motor, solenoid, hydraulic (lettered boxes)
+fs.add(units.Valve("PV-1", variant="pneumatic"))   # diaphragm actuator dome
+fs.add(units.Valve("HV-1", variant="manual"))      # manual, knife (handwheel), butterfly_pneumatic
+fs.add(units.Valve("PCV-1", variant="regulator"))  # self-acting, with its external sense line
+```
+
+Bodies without an operator: `plug`, `pinch`, `angle` (piped from below, out to
+the side) and `psv` (spring-loaded angle safety valve).
+
+**In-line fittings.** `Fitting` is one class because to the flowsheet every
+in-line device is the same thing — a pair of faces on a line — and they differ
+only in what is drawn between them. The variant picks the device: `strainer`,
+`strainer_cone`, `orifice`, `rotameter`, `rupture_disc`, `sight_glass`,
+`sight_glass_lit`, `silencer`, `expansion_joint`, `static_mixer`, `hose`,
+`coupling`, `clamped_coupling`, `flange` (the default), and the flame arrestors
+(`flame_arrestor` plus `_explosion_proof` / `_detonation_proof` /
+`_fire_resistant`).
+
+`Ejector` is separate because it has three connections (`motive`, `suction`,
+`discharge`), and `Vent` / `Funnel` because each has only one: `Vent` is a stack
+open to atmosphere that a PSV tailpipe or a tank breather terminates on, and
+`Funnel` is a manual charging point feeding the line.
 
 ## Manual layout
 
@@ -197,8 +226,9 @@ fs.connect(fic.sig_out, fv.actuator, kind="pneumatic")
 A relief valve is an ordinary `Valve` with `variant="relief"`; its tag is drawn
 as plain text beside the symbol (`PSV-308`), not in a balloon.
 
-Inline fittings (valves, reducers) carry the stream number **through** them; set
-`unit.significant = True` to break the number at an important valve.
+Inline fittings (valves, reducers, `Fitting`s) carry the stream number
+**through** them; set `unit.significant = True` to break the number at an
+important valve.
 
 ## Engineering title block & sheet furniture
 

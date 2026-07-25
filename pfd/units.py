@@ -23,8 +23,8 @@ __all__ = [
     "Unit",
     "Feed", "Product", "Pump", "Compressor", "Blower", "Valve", "Vessel", "Tank",
     "HeatExchanger", "Heater", "Cooler", "Reactor", "Separator", "Column",
-    "Mixer", "Splitter", "Reducer", "Furnace", "Turbine", "Filter", "Dryer",
-    "Instrument",
+    "Mixer", "Splitter", "Reducer", "Fitting", "Ejector", "Vent", "Funnel",
+    "Furnace", "Turbine", "Filter", "Dryer", "Instrument",
 ]
 
 _VALID_ROLES = {"process", "feed", "product", "energy", "utility", "vapor", "liquid"}
@@ -250,6 +250,62 @@ class Reducer(Unit):
 
     kind = "reducer"
     _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+
+
+class Fitting(Unit):
+    """In-line pipe device: whatever sits in the run and is not a valve.
+
+    One class rather than a dozen, because to the flowsheet a strainer, a sight
+    glass and a rupture disc are the same thing — a pair of faces on a line —
+    and differ only in what is drawn between them. The variant picks the device:
+    ``strainer``, ``strainer_cone``, ``orifice``, ``rotameter``,
+    ``rupture_disc``, ``sight_glass``, ``sight_glass_lit``, ``silencer``,
+    ``expansion_joint``, ``static_mixer``, ``hose``, ``coupling``,
+    ``clamped_coupling``, ``flange`` (the default), and the flame arrestors
+    (``flame_arrestor`` plus ``_explosion_proof`` / ``_detonation_proof`` /
+    ``_fire_resistant``).
+
+    Like a valve, a fitting is inline: a stream keeps its number through it
+    unless ``significant`` is set.
+    """
+
+    kind = "fitting"
+    _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+
+
+class Ejector(Unit):
+    """Steam/gas ejector or eductor.
+
+    A motive stream entrains a second one, so this is three connections, not
+    two: ``motive`` drives the nozzle, ``suction`` is what gets entrained, and
+    ``discharge`` leaves the diffuser.
+    """
+
+    kind = "ejector"
+    _PORTS = [("motive", "inlet", "utility"), ("suction", "inlet", "process"),
+              ("discharge", "outlet", "process")]
+
+
+class Vent(Unit):
+    """Open end to atmosphere (vent stack with a weather cap).
+
+    A boundary like :class:`Product`, but drawn as real piping rather than an
+    off-page flag — which is what a PSV tailpipe or a tank breather wants.
+    """
+
+    kind = "vent"
+    _PORTS = [("inlet", "inlet", "vapor")]
+
+
+class Funnel(Unit):
+    """Open charging funnel — a manual addition point feeding the line.
+
+    The mirror of :class:`Vent`: the cone is open to the room and the stem is
+    the process connection, so its single port is an *outlet*.
+    """
+
+    kind = "funnel"
+    _PORTS = [("outlet", "outlet", "feed")]
 
 
 class Furnace(Unit):
