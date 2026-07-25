@@ -210,6 +210,13 @@ def register_vendored(registry):
         ports={'cold_in': (0.0, 15.0), 'cold_out': (91.8, 15.0), 'hot_in': (45.9, 6.0), 'hot_out': (45.9, 24.0)},
     ), 'u_tube')
 
+    # draw.io heat_exchangers:Heat Exchanger (Straight Tubes) -> hex/straight_tubes
+    registry.register('hex', Symbol(
+        svg='<g id="sym_hex_straight_tubes"><rect x="0.0" y="0.0" width="100.0" height="30.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 15.0 0.0 L 15.0 30.0 M 85.0 0.0 L 85.0 30.0 M 85.0 7.5 L 15.0 7.5 M 85.0 15.0 L 15.0 15.0 M 85.0 22.5 L 15.0 22.5" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=100.0, height=30.0,
+        ports={'cold_in': (0.0, 15.0), 'cold_out': (100.0, 15.0), 'hot_in': (75.0, 0.0), 'hot_out': (25.0, 30.0)},
+    ), 'straight_tubes')
+
     # draw.io heat_exchangers:Condenser -> hex/condenser
     registry.register('hex', Symbol(
         svg='<g id="sym_hex_condenser"><ellipse cx="40.0" cy="40.0" rx="30.0" ry="30.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 10.0 40.0 L 20.0 40.0 L 30.0 25.0 L 50.0 55.0 L 60.0 40.0 L 70.0 40.0 M 80.0 0.0 L 0.0 80.0 M 70.0 4.5 L 80.0 0.0 L 75.5 10.0 L 75.0 5.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',

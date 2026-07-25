@@ -94,6 +94,14 @@ KIND_MAP = {
                             {"cold_in": "W", "cold_out": "E", "hot_in": "N", "hot_out": "S"}),
     ("hex", "u_tube"):     ("heat_exchangers", "U-Tube Heat Exchanger",
                             {"cold_in": "W", "cold_out": "E", "hot_in": "N", "hot_out": "S"}),
+    # Horizontal shell-and-tube in elevation — the exchanger a real sheet draws
+    # for an overhead condenser or a feed cooler. (The "shell_tube" variant above
+    # is the ISO circle-and-zigzag; despite the name it is not this shape.)
+    # Tube side runs through the heads at x 0..15 and 85..100; the shell nozzles
+    # sit between the tubesheets, which is where draw.io's NE/SW anchors land.
+    ("hex", "straight_tubes"): ("heat_exchangers", "Heat Exchanger (Straight Tubes)",
+                                {"cold_in": ("W", 15), "cold_out": ("E", 15),
+                                 "hot_in": ("N", 75), "hot_out": ("S", 25)}),
     ("hex", "condenser"):  ("heat_exchangers", "Condenser",
                             {"cold_in": "W", "cold_out": "E", "hot_in": "N", "hot_out": "S"}),
     ("hex", "plate"):      ("heat_exchangers", "Heat Exchanger (Plate)",
