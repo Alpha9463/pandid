@@ -20,12 +20,16 @@ MARGIN_Y = 50
 def assign_coordinates(fs: "Flowsheet") -> None:
     """Map (col, row) ranks to absolute (x, y) pixel coordinates and emit frames."""
     from pfd.geometry import Frame
+    from pfd.layout.attach import free_streams, free_units, place_attached
     from pfd.render.symbols import default_registry
     from pfd.portgeom import outward_dir
 
+    units = free_units(fs)
+    streams = free_streams(fs)
+
     # Max resolved width of units in each column (widths already on the slot).
     col_widths: dict[int, float] = {}
-    for u in fs.units:
+    for u in units:
         col = u._slot.col or 0
         col_widths[col] = max(col_widths.get(col, 0.0), u._slot.w)
 
@@ -40,9 +44,9 @@ def assign_coordinates(fs: "Flowsheet") -> None:
     # top-aligning), so equipment of different heights lines up on one spine —
     # a short mixer and a tall column share a centerline, minimizing the
     # vertical jog between their connecting ports.
-    max_row = max((u._slot.row or 0 for u in fs.units if u._slot.y is None), default=-1)
+    max_row = max((u._slot.row or 0 for u in units if u._slot.y is None), default=-1)
     row_height: dict[int, float] = {r: 50.0 for r in range(max_row + 1)}  # empty rows keep a default band
-    for u in fs.units:
+    for u in units:
         if u._slot.y is None:
             r = u._slot.row or 0
             row_height[r] = max(row_height[r], u._slot.h)
@@ -53,7 +57,7 @@ def assign_coordinates(fs: "Flowsheet") -> None:
         cursor += row_height[r] + ROW_GAP
 
     unpinned_y = set()
-    for u in fs.units:
+    for u in units:
         s = u._slot
         # If the user pinned x / y, keep them; otherwise derive from the grid.
         if s.x is None:
@@ -83,7 +87,7 @@ def assign_coordinates(fs: "Flowsheet") -> None:
         return other_u._slot.y + opy
 
     def _overlaps(u, s, new_y):
-        for other in fs.units:
+        for other in units:
             if other is u or other._slot is None or other._slot.col != s.col:
                 continue
             oy, oh = other._slot.y, other._slot.h
@@ -95,7 +99,7 @@ def assign_coordinates(fs: "Flowsheet") -> None:
         s = u._slot
         ups: list = []
         downs: list = []
-        for st in fs.streams:
+        for st in streams:
             if st.is_recycle or st.kind != "material":
                 continue
             if st.dest.owner is u and st.source.owner is not None:
@@ -124,8 +128,9 @@ def assign_coordinates(fs: "Flowsheet") -> None:
         if not _overlaps(u, s, new_y):
             s.y = new_y
 
-    # Emit the resolved frame for every unit.
-    for u in fs.units:
+    # Emit the resolved frame for every ranked unit; attached instruments take
+    # theirs from their host instead.
+    for u in units:
         s = u._slot
         u.frame = Frame(
             x=s.x, y=s.y, w=s.w, h=s.h,
@@ -133,6 +138,7 @@ def assign_coordinates(fs: "Flowsheet") -> None:
             orientation=s.orientation, mirrored=s.mirrored, mirror_y=s.mirror_y,
         )
 
+    place_attached(fs)
     _assign_labels(fs)
 
 
@@ -150,7 +156,7 @@ def _assign_labels(fs: "Flowsheet") -> None:
     from pfd.portgeom import port_anchor
 
     for u in fs.units:
-        if u.kind in ("feed", "product"):
+        if u.kind in ("feed", "product") or u.frame is None:
             continue  # labels are drawn inline on the arrow
         explicit = getattr(u, "label_pos", None)
         if explicit:

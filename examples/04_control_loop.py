@@ -1,16 +1,24 @@
 """
-Example 4: Instrumentation & control loop (ISA-5.1)
+Example 4: Instrumentation & control loops (ISA-5.1)
 
-Demonstrates the instrumentation subsystem:
+A P&ID balloon belongs *on* what it measures, so every instrument here is
+anchored to a host with ``add_instrument(..., on=...)``:
 
-- ``Instrument`` balloons whose ``name`` is the tag (drawn inside, ISA-style:
-  functional letters over the loop number). Variants pick the balloon style /
-  location: ``"field"`` (bare circle, default), ``"panel"`` (single bar),
-  ``"aux"`` (double bar), ``"shared"`` (DCS square), ``"computer"`` (hexagon).
-- Signal line types via ``connect(kind=...)``: ``"electric"`` (dashed),
-  ``"pneumatic"`` (double-slash ticks), ``"data"``/``"software"`` (dash-dot),
-  ``"capillary"``.
-- A control valve (``Valve`` variant ``"control"``) on the process line.
+- ``on=`` a **stream** taps the line. ``at=`` is the point along its routed
+  path, ``offset=`` how far the balloon stands off the tap (``offset=0`` leaves
+  an in-line primary element sitting on the line), and ``angle=`` which way it
+  branches — measured from the flow direction, so a re-route cannot spin it.
+- ``on=`` a **unit** mounts the balloon on equipment, ``at=`` naming the face.
+- Alarms are ordinary balloons sharing their controller's loop number; the
+  interlock is the ``"logic"`` square hung under it on a dashed line.
+
+Both loops close on a final control element: the controller output lands on
+``Valve.actuator``. Signal line types come from ``connect(kind=...)``:
+``"electric"`` (dashed), ``"pneumatic"`` (slash ticks), ``"data"``/``"software"``
+(dash-dot), ``"capillary"``.
+
+The equipment is pinned so the drawing reads as a sheet rather than a rank
+order — the instrumentation below it is placed entirely by its hosts.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -21,22 +29,37 @@ from pfd import Flowsheet, units
 def main():
     fs = Flowsheet("Flow Control Loop")
 
-    # Process line with a control valve.
-    feed = fs.add(units.Feed("Feed"))
-    fv = fs.add(units.Valve("FV-101", variant="control"))
-    prod = fs.add(units.Product("Product"))
-    fs.connect(feed.outlet, fv.inlet)
-    fs.connect(fv.outlet, prod.inlet)
+    feed = fs.add(units.Feed("Feed")).pin(x=60, y=170)
+    fv = fs.add(units.Valve("FV-101", variant="control")).pin(x=270, y=180)
+    drum = fs.add(units.Vessel("V-101", description="Surge Drum")).pin(x=420, y=145)
+    lv = fs.add(units.Valve("LV-101", variant="control")).pin(x=640, y=180)
+    prod = fs.add(units.Product("Product")).pin(x=790, y=170)
+    # A PSV is tagged as plain text beside the symbol, not in a balloon.
+    psv = fs.add(units.Valve("PSV-101", variant="relief")).pin(x=441, y=55)
+    flare = fs.add(units.Product("To Flare", reference="P&ID-902")).pin(x=630, y=5)
 
-    # Instrument loop: transmitter -> controller -> computing relay -> recorder.
-    ft = fs.add(units.Instrument("FT-101"))                    # field flow transmitter
-    fic = fs.add(units.Instrument("FIC-101", variant="panel")) # panel-mounted controller
-    fy = fs.add(units.Instrument("FY-101", variant="computer")) # computing relay
-    fr = fs.add(units.Instrument("FR-101", variant="shared"))   # shared/DCS recorder
+    line = fs.connect(feed.outlet, fv.inlet)
+    fs.connect(fv.outlet, drum.inlet)
+    fs.connect(drum.outlet, lv.inlet)
+    fs.connect(lv.outlet, prod.inlet)
+    fs.connect(drum.vent, psv.inlet)
+    fs.connect(psv.outlet, flare.inlet)
 
-    fs.connect(ft.sig_out, fic.sig_in, kind="electric")    # 4-20 mA, dashed
-    fs.connect(fic.sig_out, fy.sig_in, kind="pneumatic")   # 3-15 psi, slash ticks
-    fs.connect(fy.sig_out, fr.sig_in, kind="data")         # fieldbus, dash-dot
+    # Flow loop: orifice plate in the line, transmitter above it on the same
+    # impulse line, controller off to one side driving the control valve.
+    fs.add_instrument("FE", 101, on=line, at=0.5, offset=0)
+    ft = fs.add_instrument("FT", 101, on=line, at=0.5, offset=62)
+    fic = fs.add_instrument("FIC", 101, on=ft, at="N", offset=125, angle=35, variant="panel")
+    fs.connect(ft.sig_out, fic.sig_in, kind="electric")
+    fs.connect(fic.sig_out, fv.actuator, kind="pneumatic")
+
+    # Level loop: controller mounted on the drum, its alarm pair alongside on
+    # the same loop number, interlock square hung underneath.
+    lic = fs.add_instrument("LIC", 101, on=drum, at="S", offset=90, variant="panel")
+    lah = fs.add_instrument("LAH", 101, on=lic, at="W", offset=50)
+    fs.add_instrument("LAL", 101, on=lah, at="W", offset=50)
+    fs.add_instrument("I", 1, on=lic, at="S", offset=44, variant="logic")
+    fs.connect(lic.sig_out, lv.actuator, kind="electric")
 
     fs.render(out("control_loop.svg"))
     print("Generated control_loop.svg")

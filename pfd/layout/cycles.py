@@ -15,20 +15,23 @@ def break_cycles(fs: "Flowsheet") -> None:
     Streams marked as is_recycle=True will be drawn backward, while all others
     flow forward through the ranks.
     """
+    from pfd.layout.attach import free_streams, free_units
+
     # 1. Reset all recycles (private field; is_recycle is read-only to callers)
     for s in fs.streams:
         s._is_recycle = False
-        
-    if not fs.units:
+
+    units = free_units(fs)
+    if not units:
         return
-        
+
     # 2. Build adjacency across ALL streams (material, energy, and signal). Any
     # of them can form a cycle the layering DAG must be free of — e.g. a control
     # loop's transmitter -> controller -> valve -> ... signal feedback.
-    adj: dict["Unit", list["Stream"]] = {u: [] for u in fs.units}
-    in_degree: dict["Unit", int] = {u: 0 for u in fs.units}
+    adj: dict["Unit", list["Stream"]] = {u: [] for u in units}
+    in_degree: dict["Unit", int] = {u: 0 for u in units}
 
-    for s in fs.streams:
+    for s in free_streams(fs):
         assert s.source.owner is not None
         assert s.dest.owner is not None
         adj[s.source.owner].append(s)
@@ -37,7 +40,7 @@ def break_cycles(fs: "Flowsheet") -> None:
     # Sort outgoing streams so tear_hint=True are traversed LAST.
     # In DFS, a stream traversed later is more likely to hit a node
     # already on the recursion stack, classifying it as the back-edge.
-    for u in fs.units:
+    for u in units:
         adj[u].sort(key=lambda s: s.tear_hint)
         
     visited = set()
@@ -56,19 +59,19 @@ def break_cycles(fs: "Flowsheet") -> None:
         stack.remove(u)
         
     # Start DFS from feed nodes (in-degree == 0)
-    feeds = [u for u in fs.units if in_degree[u] == 0]
-    
+    feeds = [u for u in units if in_degree[u] == 0]
+
     # If no feeds exist (a perfectly closed loop), start from the unit
     # with the highest out-degree as a heuristic root.
     if not feeds:
-        highest = max(fs.units, key=lambda x: len(adj[x]))
+        highest = max(units, key=lambda x: len(adj[x]))
         feeds = [highest]
-        
+
     for f in feeds:
         if f not in visited:
             dfs(f)
-            
+
     # Catch any disconnected components
-    for u in fs.units:
+    for u in units:
         if u not in visited:
             dfs(u)

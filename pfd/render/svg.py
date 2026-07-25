@@ -119,8 +119,17 @@ class SvgRenderer:
 
         lines.extend(self._defs(fs))
         unit_labels: list = []
-        lines.extend(self._draw_units(fs, unit_labels))
+        balloons: list = []
+        lines.extend(self._draw_units(fs, unit_labels, balloons))
         lines.extend(self._draw_streams(fs, jump_direction))
+        # Instrumentation goes on over the lines: an impulse line runs from the
+        # tap to the balloon, and the balloon's opaque body then knocks out both
+        # it and any process line an in-line element straddles.
+        lines.extend(self._draw_taps(fs))
+        if balloons:
+            lines.append('  <g id="instruments">')
+            lines.extend(balloons)
+            lines.append('  </g>')
         # Equipment tags go on last, haloed, so no stream line strikes through them.
         lines.extend(self._draw_unit_labels(unit_labels))
         lines.append('</svg>')
@@ -388,10 +397,11 @@ class SvgRenderer:
 
     # ------------------------------------------------------------------ units
 
-    def _draw_units(self, fs, label_items):
+    def _draw_units(self, fs, label_items, balloons):
         lines = ['  <g id="units">']
         for u in fs.units:
             f = u.frame
+            out = balloons if u.kind == "instrument" else lines
             x, y = f.x, f.y
             safe_name = html.escape(u.name)
 
@@ -425,16 +435,44 @@ class SvgRenderer:
             if mirror_y:
                 ops.append(f"translate(0, {_num(2 * cy)}) scale(1, -1)")
             transform = f' transform="{" ".join(ops)}"' if ops else ""
-            lines.append(f'    <use href="#{sym_id}" x="{_num(ux)}" y="{_num(uy)}" '
-                         f'width="{bw}" height="{bh}"{transform} />')
+            out.append(f'    <use href="#{sym_id}" x="{_num(ux)}" y="{_num(uy)}" '
+                       f'width="{bw}" height="{bh}"{transform} />')
 
             if u.kind == "instrument":
-                lines.extend(self._draw_instrument_tag(u, x, y, u_width, u_height))
+                out.extend(self._draw_instrument_tag(u, x, y, u_width, u_height))
             else:
                 label_items.append(
                     self._unit_label_item(u, f, x, y, u_width, u_height, safe_name))
         lines.append('  </g>')
         return lines
+
+    def _draw_taps(self, fs):
+        """Impulse lines: the fine line from a tap point to the balloon reading it.
+
+        A process tap is a solid fine line; a balloon hung off another balloon
+        (an interlock under its controller) is an internal loop connection and
+        is drawn dashed. Nothing is drawn where a stream already joins the two,
+        or where the element sits directly on the line (``offset=0``).
+        """
+        from pfd.layout.attach import is_attached
+
+        wired = {(id(s.source.owner), id(s.dest.owner)) for s in fs.streams}
+        out = []
+        for u in fs.units:
+            tap = getattr(u, "tap", None)
+            if not is_attached(u) or tap is None or u.frame is None:
+                continue
+            host = u.host
+            if (id(u), id(host)) in wired or (id(host), id(u)) in wired:
+                continue
+            tx, ty = tap
+            cx, cy = u.frame.cx, u.frame.cy
+            if abs(cx - tx) < 0.5 and abs(cy - ty) < 0.5:
+                continue
+            dash = ' stroke-dasharray="5,4"' if getattr(host, "kind", "") == "instrument" else ""
+            out.append(f'    <line x1="{_num(tx)}" y1="{_num(ty)}" x2="{_num(cx)}" '
+                       f'y2="{_num(cy)}" stroke="black" stroke-width="1"{dash} />')
+        return ['  <g id="instrument_taps">'] + out + ['  </g>'] if out else []
 
     def _draw_boundary(self, u, f, x, y, safe_name):
         """Feed / Product off-page connector flag, with an optional second line
@@ -467,15 +505,19 @@ class SvgRenderer:
         return out
 
     def _draw_instrument_tag(self, u, x, y, u_width, u_height):
-        name = u.name
-        if "-" in name:
-            top, bot = name.split("-", 1)
-        else:
-            i = 0
-            while i < len(name) and not name[i].isdigit():
-                i += 1
-            top, bot = name[:i], name[i:]
+        """Functional letters over the bare loop number, as ISA-5.1 draws them.
+
+        An interlock square carries the number alone — its letters are only the
+        tag prefix, and a real sheet leaves the square holding one figure.
+        """
+        from pfd.units import split_tag
+
+        top, bot = split_tag(getattr(u, "type", "") or u.name, getattr(u, "number", "") or "")
         cx, cy = x + u_width / 2, y + u_height / 2
+        if getattr(u, "variant", "default") == "logic" or not top:
+            return [f'    <text x="{cx}" y="{cy}" font-family="sans-serif" '
+                    f'font-size="12" text-anchor="middle" '
+                    f'dominant-baseline="middle">{html.escape(bot or top)}</text>']
         out = [f'    <text x="{cx}" y="{cy - 4}" font-family="sans-serif" '
                f'font-size="12" font-weight="bold" text-anchor="middle" '
                f'dominant-baseline="middle">{html.escape(top.upper())}</text>']
@@ -636,7 +678,12 @@ class SvgRenderer:
         # Two streams running the same corridor sit only a few px apart, so their
         # labels would overprint at the segment midpoints. Slide each label along
         # its own line to the nearest clear spot instead — what a draftsman does.
-        placed: list[tuple[float, float, float, float]] = []
+        # Balloons are drawn over the lines, so a number parked under one would
+        # simply vanish; seed them as occupied so the number slides clear.
+        placed: list[tuple[float, float, float, float]] = [
+            (u.frame.x, u.frame.y, u.frame.x_max, u.frame.y_max)
+            for u in fs.units if u.kind == "instrument" and u.frame is not None
+        ]
 
         def _clear(box):
             return all(box[2] <= p[0] or box[0] >= p[2] or box[3] <= p[1] or box[1] >= p[3]

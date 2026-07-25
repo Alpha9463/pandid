@@ -22,16 +22,34 @@ OUT = HERE.parent / "pfd" / "render" / "_vendored_symbols.py"
 # (kind, variant) -> (stencil, shape_name, {port_name: "constraint" | (edge, along)})
 KIND_MAP = {
     # Valves — inline family (inlet W / outlet E).
-    ("valve", "default"):   ("valves", "Gate Valve",        {"inlet": "W", "outlet": "E"}),
-    ("valve", "gate"):      ("valves", "Gate Valve",        {"inlet": "W", "outlet": "E"}),
-    ("valve", "globe"):     ("valves", "Globe Valve",       {"inlet": "W", "outlet": "E"}),
-    ("valve", "ball"):      ("valves", "Ball Valve",        {"inlet": "W", "outlet": "E"}),
-    ("valve", "butterfly"): ("valves", "Butterfly Valve 1", {"inlet": "W", "outlet": "E"}),
-    ("valve", "check"):     ("valves", "Check Valve 1",     {"inlet": "W", "outlet": "E"}),
-    ("valve", "control"):   ("valves", "Diaphragm",         {"inlet": "W", "outlet": "E"}),
-    ("valve", "needle"):    ("valves", "Needle",            {"inlet": "W", "outlet": "E"}),
-    ("valve", "three_way"): ("valves", "Three-Way Valve",   {"inlet": "W", "outlet": "E"}),
-    ("valve", "relief"):    ("valves", "Relief PRV",        {"inlet": "S", "outlet": "N"}),
+    #
+    # ``actuator`` is where a controller's output lands. The stencils draw no
+    # operator on most of these shapes, so the port goes on the topmost ink of
+    # the valve's own centreline — the seat, plug crown, shaft boss or stem
+    # top, which is what the operator would be mounted on. Coordinates are in
+    # the *scaled* symbol space (SCALE["valve"] = 0.5).
+    ("valve", "default"):   ("valves", "Gate Valve",        {"inlet": "W", "outlet": "E",
+                             "actuator": ("AT", 49.0, 30.0)}),
+    ("valve", "gate"):      ("valves", "Gate Valve",        {"inlet": "W", "outlet": "E",
+                             "actuator": ("AT", 49.0, 30.0)}),
+    ("valve", "globe"):     ("valves", "Globe Valve",       {"inlet": "W", "outlet": "E",
+                             "actuator": ("AT", 49.0, 10.0)}),
+    ("valve", "ball"):      ("valves", "Ball Valve",        {"inlet": "W", "outlet": "E",
+                             "actuator": ("AT", 49.0, 10.0)}),
+    ("valve", "butterfly"): ("valves", "Butterfly Valve 1", {"inlet": "W", "outlet": "E",
+                             "actuator": ("AT", 49.0, 25.0)}),
+    ("valve", "check"):     ("valves", "Check Valve 1",     {"inlet": "W", "outlet": "E",
+                             "actuator": ("AT", 49.2, 31.0)}),
+    ("valve", "control"):   ("valves", "Diaphragm",         {"inlet": "W", "outlet": "E",
+                             "actuator": ("AT", 49.0, 8.0)}),
+    ("valve", "needle"):    ("valves", "Needle",            {"inlet": "W", "outlet": "E",
+                             "actuator": ("AT", 49.0, 5.0)}),
+    ("valve", "three_way"): ("valves", "Three-Way Valve",   {"inlet": "W", "outlet": "E",
+                             "actuator": ("AT", 49.0, 30.0)}),
+    # A PSV's centreline is taken by its own inlet and outlet; the pilot/solenoid
+    # connection goes on the side of the spring bonnet instead.
+    ("valve", "relief"):    ("valves", "Relief PRV",        {"inlet": "S", "outlet": "N",
+                             "actuator": ("AT", 40.0, 24.0)}),
     # Rotating equipment.
     #
     # draw.io's <constraint> anchors are generic compass points on the bounding

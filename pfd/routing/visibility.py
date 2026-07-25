@@ -26,6 +26,7 @@ class Rect:
 
 class VisibilityGraph:
     def __init__(self, fs: "Flowsheet", margin: float = 15.0):
+        from pfd.layout.attach import is_attached
         from pfd.portgeom import port_anchor
 
         self.obstacles: List[Rect] = []
@@ -44,15 +45,22 @@ class VisibilityGraph:
             u_width, u_height = f.w, f.h
             mirrored = f.mirrored
 
+            # An in-line element straddles its own tap — that is the whole point
+            # of ``offset=0`` — so treating it as an obstacle would push its host
+            # line into a detour around it, and the balloon, being placed from
+            # that line, would then chase the detour. It stands aside instead.
+            tap = getattr(u, "tap", None)
+            inline = (is_attached(u) and tap is not None
+                      and f.x <= tap[0] <= f.x + u_width and f.y <= tap[1] <= f.y + u_height)
+
             # The exact boundary of the unit is an obstacle. Feed keeps its
             # port-at-(x+50) convention: the drawn box extends left from there.
-            if u.kind == "feed":
-                if mirrored:
-                    self.obstacles.append(Rect(f.x, f.x + u_width, f.y, f.y + u_height))
+            if not inline:
+                if u.kind == "feed" and not mirrored:
+                    self.obstacles.append(
+                        Rect(f.x + 50.0 - u_width, f.x + 50.0, f.y, f.y + u_height))
                 else:
-                    self.obstacles.append(Rect(f.x + 50.0 - u_width, f.x + 50.0, f.y, f.y + u_height))
-            else:
-                self.obstacles.append(Rect(f.x, f.x + u_width, f.y, f.y + u_height))
+                    self.obstacles.append(Rect(f.x, f.x + u_width, f.y, f.y + u_height))
 
             lpos = f.label_pos or "top"
             if u.kind not in ("feed", "product") and lpos != "center":

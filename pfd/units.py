@@ -17,6 +17,7 @@ from pfd.ports import Port
 
 if TYPE_CHECKING:
     from pfd.flowsheet import Flowsheet
+    from pfd.streams import Stream
 
 __all__ = [
     "Unit",
@@ -196,10 +197,16 @@ class Compressor(Unit):
 
 
 class Valve(Unit):
-    """Control or let-down valve."""
+    """Control or let-down valve.
+
+    ``actuator`` is the signal connection on top of the valve — the terminus of
+    a control loop, so a controller's output lands on the final control element
+    rather than in mid-air.
+    """
 
     kind = "valve"
-    _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+    _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process"),
+              ("actuator", "inlet", "process")]
 
 
 class Vessel(Unit):
@@ -274,16 +281,118 @@ class Dryer(Unit):
     _PORTS = [("feed", "inlet", "feed"), ("product", "outlet", "process")]
 
 
+def split_tag(type: str, number: str | int = "") -> tuple[str, str]:
+    """Split an instrument tag into its functional letters and its loop number.
+
+    ``("FT", 101)`` and ``"FT-101"`` and ``"FT101"`` all give ``("FT", "101")``.
+    """
+    if number != "" and number is not None:
+        return type.strip(), str(number).strip()
+    tag = type.strip()
+    if "-" in tag:
+        letters, num = tag.split("-", 1)
+        return letters, num
+    i = 0
+    while i < len(tag) and not tag[i].isdigit():
+        i += 1
+    return tag[:i], tag[i:]
+
+
 class Instrument(Unit):
-    """ISA-5.1 instrument balloon. The ``name`` is the tag (e.g. ``"FIC-101"``),
-    drawn inside the balloon. ``pv`` taps the process; ``in``/``out`` carry
-    signals. Variants: ``"field"`` (default), ``"panel"``, ``"aux"``,
-    ``"shared"`` (DCS), ``"computer"``.
+    """ISA-5.1 instrument balloon.
+
+    ``type`` is the functional letter string (``"FT"``, ``"PAH"``, ``"LIC"``)
+    and ``number`` the loop number; the balloon draws the letters over the
+    number, and the number is drawn **bare** — a real sheet does not repeat the
+    letters inside the bubble. ``name`` is the full tag (``"FT-101"``), which is
+    what equipment lists and cross-references want. A single combined argument
+    (``Instrument("FT-101")``) is still accepted and split.
+
+    ``pv`` taps the process; ``sig_in``/``sig_out`` carry signals. Variants:
+    ``"field"`` (default), ``"panel"``, ``"aux"``, ``"shared"`` (DCS),
+    ``"computer"``, ``"logic"`` (interlock square).
+
+    A balloon that measures something belongs *on* what it measures: see
+    :meth:`attach` (and :meth:`pfd.flowsheet.Flowsheet.add_instrument`).
     """
 
     kind = "instrument"
     _PORTS = [("pv", "inlet", "process"), ("sig_in", "inlet", "process"),
               ("sig_out", "outlet", "process")]
+
+    def __init__(self, type: str, number: str | int = "", variant: str = "default",
+                 width: float | None = None, height: float | None = None,
+                 label_pos: str | None = None, description: str = "", reference: str = ""):
+        letters, num = split_tag(type, number)
+        name = f"{type}-{number}" if number != "" and number is not None else type
+        super().__init__(name, variant=variant, width=width, height=height,
+                         label_pos=label_pos, description=description, reference=reference)
+        self.type = letters
+        self.number = num
+        # Attachment intent (set only via attach()); the layout engine resolves
+        # it into a frame, exactly as Pin -> Frame for ordinary equipment.
+        self.host: "Stream | Unit | None" = None
+        self.at: float | str | None = None
+        self.offset: float = 45.0
+        self.angle: float = 90.0
+        self.tap: tuple[float, float] | None = None   # resolved (set only by layout)
+
+    def attach(self, on: "Stream | Unit", *, at: float | str | None = None,
+               offset: float = 45.0, angle: float = 90.0) -> "Instrument":
+        """Anchor this balloon to a process line or to a piece of equipment.
+
+        ``on`` is the host: a :class:`~pfd.streams.Stream` (tap a line) or a
+        :class:`Unit` (mount on equipment). ``at`` locates the tap — a fraction
+        ``0..1`` along the host stream's routed path, or a face (``"N"``,
+        ``"S"``, ``"E"``, ``"W"``) of a host unit's drawn box.
+
+        ``offset`` is the distance from the tap to the balloon centre;
+        ``offset=0`` leaves the element sitting *on* the line, which is how an
+        in-line primary element (an orifice plate FE) is drawn.
+
+        ``angle`` is the direction the balloon branches off, in degrees from the
+        flow direction at the tap, counter-clockwise positive — so the default
+        ``90`` is "perpendicular, upstream side up" and a tap keeps its
+        orientation if the line is later re-routed. On a unit host the reference
+        direction is the face's tangent, so ``90`` again points straight out.
+
+        An attached balloon takes no part in the layout ranking: it is placed
+        from its host, not from the process flow order.
+        """
+        from pfd.streams import Stream
+
+        if not isinstance(on, (Stream, Unit)):
+            raise TypeError(
+                f"{self.name}: attach(on=...) takes a Stream or a Unit, got {type(on).__name__}"
+            )
+        if isinstance(on, Unit) and on is self:
+            raise ValueError(f"{self.name} cannot be attached to itself")
+        if isinstance(on, Stream):
+            if at is None:
+                at = 0.5
+            if isinstance(at, str):
+                raise ValueError(
+                    f"{self.name}: at= on a stream is a fraction 0..1 along its "
+                    f"routed path, got {at!r}"
+                )
+            if not 0.0 <= float(at) <= 1.0:
+                raise ValueError(f"{self.name}: at= must be within 0..1, got {at!r}")
+            at = float(at)
+        else:
+            if at is None:
+                at = "E"
+            if not isinstance(at, str) or at.upper() not in ("N", "S", "E", "W"):
+                raise ValueError(
+                    f"{self.name}: at= on a unit host is a face 'N'/'S'/'E'/'W', got {at!r}"
+                )
+            at = at.upper()
+        if offset < 0:
+            raise ValueError(f"{self.name}: offset= must not be negative, got {offset!r}")
+        self.host = on
+        self.at = at
+        self.offset = float(offset)
+        self.angle = float(angle)
+        return self
 
 
 class HeatExchanger(Unit):

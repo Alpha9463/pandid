@@ -98,6 +98,23 @@ def unit_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
     return (frame.x, frame.y, frame.x + frame.w, frame.y + frame.h)
 
 
+def face_point(unit: "Unit", frame, face: str) -> tuple[tuple[float, float],
+                                                        tuple[float, float]]:
+    """Midpoint of one face of a unit's drawn box, and that face's outward normal.
+
+    The tap point for an instrument mounted on equipment. Read off the same
+    :func:`unit_box` the router treats as the obstacle, so a bubble hung on the
+    east face sits against the same edge a stream would leave from.
+    """
+    x0, y0, x1, y1 = unit_box(unit, frame)
+    return {
+        "N": (((x0 + x1) / 2, y0), (0.0, -1.0)),
+        "S": (((x0 + x1) / 2, y1), (0.0, 1.0)),
+        "W": ((x0, (y0 + y1) / 2), (-1.0, 0.0)),
+        "E": ((x1, (y0 + y1) / 2), (1.0, 0.0)),
+    }[face.upper()]
+
+
 def resolve_size(unit: "Unit") -> tuple[float, float]:
     """Intrinsic (w, h) of a unit's placed box.
 
