@@ -269,12 +269,16 @@ class Cooler(Unit):
 
 
 class Reactor(Unit):
-    """Generic reactor (CSTR, PFR, etc.)."""
+    """Generic reactor (CSTR, PFR, etc.).
+
+    ``vent`` is the off-gas connection at the top of the vessel.
+    """
 
     kind = "reactor"
     _PORTS = [
         ("feed", "inlet", "feed"),
         ("outlet", "outlet", "process"),
+        ("vent", "outlet", "vapor"),
         ("duty", "inlet", "energy"),
     ]
 
@@ -291,13 +295,22 @@ class Separator(Unit):
 
 
 class Column(Unit):
-    """Distillation or absorption column."""
+    """Distillation or absorption column.
+
+    Besides the feed and the two products, a real column has two *return*
+    nozzles that close its internal loops: ``reflux_in`` (liquid back to the top
+    from the reflux drum) and ``boilup_in`` (vapour back to the bottom from the
+    reboiler). Without them a reflux loop has to be modelled as a recycle to
+    some upstream unit, which drags the overhead system across the sheet.
+    """
 
     kind = "column"
     _PORTS = [
         ("feed", "inlet", "feed"),
         ("distillate", "outlet", "vapor"),
         ("bottoms", "outlet", "liquid"),
+        ("reflux_in", "inlet", "liquid"),
+        ("boilup_in", "inlet", "vapor"),
         ("reboiler_duty", "inlet", "energy"),
         ("condenser_duty", "outlet", "energy"),
     ]

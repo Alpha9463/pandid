@@ -67,9 +67,22 @@ def test_fixed_port_units_have_expected_ports():
         "feed",
         "distillate",
         "bottoms",
+        "reflux_in",
+        "boilup_in",
         "reboiler_duty",
         "condenser_duty",
     }
+    assert set(U.Reactor("R").ports) == {"feed", "outlet", "vent", "duty"}
+
+
+def test_column_return_nozzles_close_the_internal_loops():
+    # reflux and boilup return to the tower itself; without them a reflux loop
+    # has to be faked as a recycle to an upstream unit.
+    col = U.Column("T-101")
+    assert col.reflux_in.direction == "inlet"
+    assert col.boilup_in.direction == "inlet"
+    assert col.reflux_in.role == "liquid"
+    assert col.boilup_in.role == "vapor"
 
 
 def test_reactor_duty_is_energy_role():
