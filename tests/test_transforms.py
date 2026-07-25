@@ -212,3 +212,21 @@ def test_port_face_still_works_and_warns():
     with pytest.deprecated_call():
         drum.port_face("feed", "N")
     assert drum._port_faces == {"feed": "N"}
+
+
+def test_an_unanchored_port_reports_the_face_it_actually_resolves_to():
+    """#38/D5: a Mixer inlet past the two its symbol draws falls back to the
+    centre of the box, and resolve_port hands that fallback a face. port_faces()
+    used to answer with nothing, so the error text told a caller the port could
+    not be piped from anywhere while the engine was busy piping it."""
+    from pfd.portgeom import port_faces, resolve_port
+
+    fs = Flowsheet("wide-mixer")
+    mix = fs.add(units.Mixer("M-1", n_inlets=5)).pin(x=100, y=100)
+    fs.layout()
+
+    resolved = resolve_port(mix, mix.frame, "in_5")
+    assert port_faces(mix, "in_5") == [resolved.face]
+    mix.nozzle("in_5", resolved.face)  # the face it is already on
+    with pytest.raises(ValueError, match=r"can be piped from N as drawn"):
+        mix.nozzle("in_5", "S")

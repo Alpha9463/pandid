@@ -73,9 +73,12 @@ def port_faces(unit: "Unit", port_name: str, placed=None) -> list[str]:
     than the one it replaces. A caller about to change the pin must pass its
     candidate, since answering from the committed one answers about a sheet that
     is on its way out.
+
+    A port the symbol never anchored answers with the one face its box-centre
+    fallback comes out of, not with nothing: :func:`resolve_port` places it and
+    gives it a face, and an answer of "nowhere" here would be a claim about the
+    engine that the engine does not honour. See :func:`is_anchored`.
     """
-    if port_name not in _sym(unit).ports:
-        return []
     if placed is None:
         placed = unit.pin_ if unit.pin_ is not None else unit.frame
     rot, mx, my = _xform(placed) if placed is not None else (0, False, False)
@@ -90,10 +93,12 @@ def unreachable_face(unit: "Unit", port_name: str, face: str,
     Built here so the message :meth:`pfd.units.Unit.nozzle` raises up front and
     the one the resolver raises later are the same sentence about the same rule.
     """
+    # Every port resolves *somewhere*, so the list is never empty and there is
+    # no "nowhere" case to word.
     offered = " or ".join(filter(None, [", ".join(options[:-1]), *options[-1:]]))
     return ValueError(
-        f"{unit.name}.{port_name} can be piped from {offered or 'nowhere'} as "
-        f"drawn; you asked for {face!r}"
+        f"{unit.name}.{port_name} can be piped from {offered} as drawn; "
+        f"you asked for {face!r}"
     )
 
 
