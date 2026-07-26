@@ -213,8 +213,8 @@ Each entry is `port` *(direction / role)*.
 | `Vessel` | `vessel` | `inlet` *(in)*, `outlet` *(out)*, `vent` *(out/vapor)* |
 | `Tank` | `tank` | `inlet` *(in)*, `outlet` *(out)* |
 | `Separator` | `separator` | `feed` *(in)*, `vapor` *(out/vapor)*, `liquid` *(out/liquid)* |
-| `Column` | `column` | `feed` *(in/feed)* — or `feed_1` … `feed_n`, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*, `reflux_in` *(in/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*, `condenser_duty` *(out/energy)* |
-| `Reactor` | `reactor` | `feed` *(in/feed)* — or `feed_1` … `feed_n`, `outlet` *(out)*, `vent` *(out/vapor)*, `duty` *(in/energy)* |
+| `Column` | `column` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*, `reflux_in` *(in/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*, `condenser_duty` *(out/energy)* |
+| `Reactor` | `reactor` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `outlet` *(out)*, `vent` *(out/vapor)*, `duty` *(in/energy)* |
 | `HeatExchanger` | `hex` | `hot_in`, `hot_out`, `cold_in`, `cold_out`; `kettle` adds `bottoms` *(out/liquid)* |
 | `Heater` | `heater` | `inlet` *(in)*, `outlet` *(out)*, `duty` *(in/energy)* |
 | `Cooler` | `cooler` | `inlet` *(in)*, `outlet` *(out)*, `duty` *(out/energy)* |
@@ -247,7 +247,7 @@ units.Reactor(name, n_feeds=1, variant="default", width=None, height=None,
 classes.)
 
 Every port gets a nozzle of its own on the face its family owns, whatever the
-count: they sit a fixed pitch apart — 20 px on a mixer or splitter — or are
+count. They sit a fixed pitch apart, 20 px on a mixer or splitter, or are
 squeezed into a band of that face once there are too many for that. The count
 the symbol was drawn for lands where it always has, so raising a count on one
 unit never moves any other, and a single-feed `Column` draws exactly the
@@ -292,9 +292,9 @@ is a visual style within it. The first name in each list is that kind's
 | `Instrument` | `default` (field balloon), `panel`, `aux`, `shared`, `computer`, `logic` |
 | `Column`, `Heater`, `Cooler`, `Furnace`, `Turbine`, `Blower`, `Reducer`, `Ejector`, `Vent`, `Funnel`, `Mixer`, `Splitter`, `Feed`, `Product` | `default` only |
 
-`HeatExchanger(variant="kettle")` carries a fifth nozzle, `bottoms` — the draw
-at the weir end of the shell, where what does not boil leaves as the tower's
-bottoms product. No other exchanger has a weir, so no other variant has it, and
+`HeatExchanger(variant="kettle")` carries a fifth nozzle, `bottoms`. It is the
+draw at the weir end of the shell, where what does not boil leaves as the
+tower's bottoms product. No other exchanger has a weir, so no other variant has it, and
 asking a plate exchanger for `.bottoms` raises.
 
 The operator-bearing valve variants put `actuator` on the operator's crown
