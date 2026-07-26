@@ -217,6 +217,18 @@ first, then warnings) and is often the fastest way to describe what went wrong.
 
 ## Licence
 
-Apache-2.0. Contributions are accepted under the same licence. Symbols derived
-from the draw.io / diagrams.net P&ID stencils stay attributed in `NOTICE`; if
-you vendor anything new, update `NOTICE` in the same PR.
+The engine is under the [PolyForm Small Business License
+1.0.0](https://polyformproject.org/licenses/small-business/1.0.0) — free for
+individuals, research, teaching and small companies; a commercial licence is
+required above 100 people or 1,000,000 USD revenue. It is source-available
+rather than OSI open source.
+
+By opening a pull request you agree that your contribution is licensed under
+those same terms, and that the maintainer may also offer it under a commercial
+licence. If that is not something you want, say so in the PR and it will not be
+merged rather than left ambiguous.
+
+Symbols derived from the draw.io / diagrams.net P&ID stencils are **Apache-2.0**
+and stay that way — that licence permits the surrounding work to be licensed
+differently only while its own terms and attribution are preserved. If you
+vendor anything new, add it to the file list in `NOTICE` in the same PR.

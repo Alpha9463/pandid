@@ -187,6 +187,13 @@ and is kept working.
   or from `examples/` itself, and rendered into `docs/gallery/`.
 - Packaged as the **`pandid`** distribution — how "P&ID" is said out loud. The
   import name is `pfd`; plain `pfd` is taken on PyPI by an unrelated project.
+- Licensed under the **PolyForm Small Business License 1.0.0**: free for
+  individuals, research, teaching, and companies under 100 people and
+  1,000,000 USD revenue; a commercial licence is required above either
+  threshold. Source-available rather than OSI open source. The vendored draw.io
+  symbol geometry remains **Apache-2.0**, as that licence requires — `NOTICE`
+  lists exactly which files fall under which, and both texts ship in the
+  distribution.
 - `pfd/py.typed` — the PEP 561 marker, so an installing project's type checker
   reads the annotations instead of treating the whole package as `Any`.
 - `pfd.__version__` is the only place the version is written; the build backend
