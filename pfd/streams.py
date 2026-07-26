@@ -1,5 +1,7 @@
 """Stream — a connection from one outlet Port to one inlet Port.
 
+`name` is the stream number. On an auto-named stream the flowsheet owns it and
+keeps it equal to what gets drawn; a name passed to `connect()` is never touched.
 `kind` is "material" or "energy". `is_recycle` is COMPUTED later by the layout
 engine's cycle-detection phase and must never be set by API callers. `tear_hint`
 lets a caller nudge which stream is chosen as a tear/back-edge in ambiguous

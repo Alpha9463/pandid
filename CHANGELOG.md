@@ -43,7 +43,10 @@ and is kept working.
 - Automatic stream numbering (`stream_naming_scheme`, default `"S{n}"`) that
   carries one number *through* inline valves, reducers and fittings;
   `unit.significant = True` breaks the number at an important valve. Explicitly
-  named streams and signal lines are left alone.
+  named streams are left alone. Numbering settles inside `connect()`, so the
+  number on the stream you hold is the number that gets drawn; process streams
+  take the low numbers, with energy streams and then unlabelled signal lines
+  after them.
 
 #### Layout
 

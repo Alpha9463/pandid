@@ -277,7 +277,8 @@ as plain text beside the symbol (`PSV-308`), not in a balloon.
 
 Inline fittings (valves, reducers, `Fitting`s) carry the stream number
 **through** them; set `unit.significant = True` to break the number at an
-important valve.
+important valve. `connect()` hands back the number that gets drawn, so
+`s.name` is safe to quote in a report or a stream table of your own.
 
 ## Engineering title block & sheet furniture
 
@@ -368,7 +369,6 @@ A complete sheet:
 
 ```yaml
 name: Feed Metering Skid          # the only required field
-direction: LR                     # default "LR"
 stream_naming_scheme: "S{n}"
 components: [Water, {name: Ethanol, formula: C2H6O}]
 

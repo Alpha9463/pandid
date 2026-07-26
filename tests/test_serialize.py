@@ -3,7 +3,7 @@ from pfd import Component, Flowsheet, units as U
 
 
 def test_to_dict_captures_topology():
-    fs = Flowsheet("Demo", direction="RL")
+    fs = Flowsheet("Demo")
     fs.add_component(Component("Water", "H2O"))
     feed = fs.add(U.Feed("Feed"))
     pump = fs.add(U.Pump("K-101"))
@@ -11,7 +11,6 @@ def test_to_dict_captures_topology():
 
     d = fs.to_dict()
     assert d["name"] == "Demo"
-    assert d["direction"] == "RL"
     assert d["components"] == [{"name": "Water", "formula": "H2O"}]
 
     assert d["units"] == [
@@ -31,7 +30,6 @@ def test_to_dict_omits_defaults():
     fs.connect(feed.outlet, prod.inlet)
 
     d = fs.to_dict()
-    assert "direction" not in d  # LR is the default
     assert "stream_naming_scheme" not in d
     assert "variant" not in d["units"][0]  # "default"
     assert "kind" not in d["streams"][0]  # "material"

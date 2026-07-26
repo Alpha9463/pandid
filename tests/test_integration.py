@@ -12,7 +12,7 @@ from pfd import Flowsheet, units as U
 
 def build_ammonia_loop():
     """Build a simplified ammonia synthesis loop PFD."""
-    fs = Flowsheet("Ammonia Loop", direction="LR")
+    fs = Flowsheet("Ammonia Loop")
     feed = fs.add(U.Feed("Natural Gas"))
     reformer = fs.add(U.Reactor("R-101"))
     hx = fs.add(U.HeatExchanger("E-101"))

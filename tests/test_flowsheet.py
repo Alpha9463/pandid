@@ -28,6 +28,13 @@ def test_auto_stream_names_increment():
     assert s2.name == "S2"
 
 
+def test_naming_scheme_is_keyword_only():
+    """The second positional slot used to be ``direction``; a sheet written
+    against it must fail loudly rather than become a naming scheme."""
+    with pytest.raises(TypeError):
+        Flowsheet("Test", "TB")
+
+
 def test_connect_rejects_wrong_directions():
     fs, feed, pump, prod = _fs()
     with pytest.raises(ValueError, match="must be an outlet"):
