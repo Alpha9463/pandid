@@ -138,22 +138,52 @@ class Flowsheet:
         return annotation
 
     def add(self, unit: "Unit") -> "Unit":
-        """Register a unit on this flowsheet. Returns the unit for chaining."""
+        """Register a unit on this flowsheet. Returns the unit for chaining.
+
+        A tag names one item, so a tag already on the sheet is refused. The
+        exception is a symbol that stands for a function rather than a device:
+        an interlock square is one piece of logic drawn at every place it acts,
+        and a sheet that cannot draw it four times cannot draw the interlock.
+        Such a repeat is accepted and given a name of its own — ``I-1``,
+        ``I-1 (2)`` — so the square that a stream, a spec entry or an equipment
+        list means is never in doubt, while the tag drawn stays ``I-1``.
+        """
         if unit in self.units:
             raise ValueError(
                 f"{unit!r} is already on this flowsheet"
             )
-        if any(u.name == unit.name for u in self.units):
+        clash = next((u for u in self.units if u.name == unit.name), None)
+        if clash is not None and not unit.repeats(clash):
             raise ValueError(
-                f"A unit with the name {unit.name!r} already exists on this flowsheet."
+                f"A unit with the name {unit.name!r} already exists on this "
+                f"flowsheet. A tag names one item, so two units cannot share one; "
+                f"the exception is the interlock square (an Instrument with "
+                f"variant='logic'), which is a single logic function drawn at "
+                f"each place it acts."
             )
         if unit.flowsheet is not None:
             raise ValueError(
                 f"{unit!r} is already on flowsheet {unit.flowsheet.name!r}"
             )
+        if clash is not None:
+            unit.name = self._repeat_name(unit.tag)
         unit.flowsheet = self
         self.units.append(unit)
         return unit
+
+    def _repeat_name(self, tag: str) -> str:
+        """A free name for one more drawing of a repeated tag.
+
+        The tag is what the sheet draws and what repeats; the name is what the
+        flowsheet is addressed by, so it stays unique and stays derived from the
+        tag — second, third and fourth square of ``I-1`` become ``I-1 (2)``,
+        ``I-1 (3)``, ``I-1 (4)``, in the order they are added.
+        """
+        taken = {u.name for u in self.units}
+        n = 2
+        while f"{tag} ({n})" in taken:
+            n += 1
+        return f"{tag} ({n})"
 
     def add_instrument(self, type: str, number: str | int = "", *,
                        on: "Stream | Unit | None" = None, at: float | str | None = None,

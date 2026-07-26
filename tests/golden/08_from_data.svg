@@ -1,89 +1,77 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1573" height="915" viewBox="-116.0 496.0 1573.0 915.0">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1573" height="807" viewBox="-116.0 604.0 1573.0 807.0">
   <!-- Background -->
-  <rect x="-116.0" y="496.0" width="1573.0" height="915.0" fill="white" />
-    <rect x="-108.0" y="504.0" width="1557.0" height="899.0" fill="none" stroke="black" stroke-width="1"/>
-    <rect x="-92.0" y="520.0" width="1525.0" height="867.0" fill="none" stroke="black" stroke-width="2"/>
-    <text x="-7.3" y="515.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">9</text>
+  <rect x="-116.0" y="604.0" width="1573.0" height="807.0" fill="white" />
+    <rect x="-108.0" y="612.0" width="1557.0" height="791.0" fill="none" stroke="black" stroke-width="1"/>
+    <rect x="-92.0" y="628.0" width="1525.0" height="759.0" fill="none" stroke="black" stroke-width="2"/>
+    <text x="-7.3" y="623.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">9</text>
     <text x="-7.3" y="1398.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">9</text>
-    <line x1="77.4" y1="504.0" x2="77.4" y2="520.0" stroke="black" stroke-width="0.75"/>
+    <line x1="77.4" y1="612.0" x2="77.4" y2="628.0" stroke="black" stroke-width="0.75"/>
     <line x1="77.4" y1="1387.0" x2="77.4" y2="1403.0" stroke="black" stroke-width="0.75"/>
-    <text x="162.2" y="515.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">8</text>
+    <text x="162.2" y="623.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">8</text>
     <text x="162.2" y="1398.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">8</text>
-    <line x1="246.9" y1="504.0" x2="246.9" y2="520.0" stroke="black" stroke-width="0.75"/>
+    <line x1="246.9" y1="612.0" x2="246.9" y2="628.0" stroke="black" stroke-width="0.75"/>
     <line x1="246.9" y1="1387.0" x2="246.9" y2="1403.0" stroke="black" stroke-width="0.75"/>
-    <text x="331.6" y="515.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">7</text>
+    <text x="331.6" y="623.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">7</text>
     <text x="331.6" y="1398.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">7</text>
-    <line x1="416.3" y1="504.0" x2="416.3" y2="520.0" stroke="black" stroke-width="0.75"/>
+    <line x1="416.3" y1="612.0" x2="416.3" y2="628.0" stroke="black" stroke-width="0.75"/>
     <line x1="416.3" y1="1387.0" x2="416.3" y2="1403.0" stroke="black" stroke-width="0.75"/>
-    <text x="501.1" y="515.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">6</text>
+    <text x="501.1" y="623.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">6</text>
     <text x="501.1" y="1398.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">6</text>
-    <line x1="585.8" y1="504.0" x2="585.8" y2="520.0" stroke="black" stroke-width="0.75"/>
+    <line x1="585.8" y1="612.0" x2="585.8" y2="628.0" stroke="black" stroke-width="0.75"/>
     <line x1="585.8" y1="1387.0" x2="585.8" y2="1403.0" stroke="black" stroke-width="0.75"/>
-    <text x="670.5" y="515.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">5</text>
+    <text x="670.5" y="623.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">5</text>
     <text x="670.5" y="1398.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">5</text>
-    <line x1="755.2" y1="504.0" x2="755.2" y2="520.0" stroke="black" stroke-width="0.75"/>
+    <line x1="755.2" y1="612.0" x2="755.2" y2="628.0" stroke="black" stroke-width="0.75"/>
     <line x1="755.2" y1="1387.0" x2="755.2" y2="1403.0" stroke="black" stroke-width="0.75"/>
-    <text x="839.9" y="515.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">4</text>
+    <text x="839.9" y="623.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">4</text>
     <text x="839.9" y="1398.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">4</text>
-    <line x1="924.7" y1="504.0" x2="924.7" y2="520.0" stroke="black" stroke-width="0.75"/>
+    <line x1="924.7" y1="612.0" x2="924.7" y2="628.0" stroke="black" stroke-width="0.75"/>
     <line x1="924.7" y1="1387.0" x2="924.7" y2="1403.0" stroke="black" stroke-width="0.75"/>
-    <text x="1009.4" y="515.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">3</text>
+    <text x="1009.4" y="623.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">3</text>
     <text x="1009.4" y="1398.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">3</text>
-    <line x1="1094.1" y1="504.0" x2="1094.1" y2="520.0" stroke="black" stroke-width="0.75"/>
+    <line x1="1094.1" y1="612.0" x2="1094.1" y2="628.0" stroke="black" stroke-width="0.75"/>
     <line x1="1094.1" y1="1387.0" x2="1094.1" y2="1403.0" stroke="black" stroke-width="0.75"/>
-    <text x="1178.8" y="515.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">2</text>
+    <text x="1178.8" y="623.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">2</text>
     <text x="1178.8" y="1398.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">2</text>
-    <line x1="1263.6" y1="504.0" x2="1263.6" y2="520.0" stroke="black" stroke-width="0.75"/>
+    <line x1="1263.6" y1="612.0" x2="1263.6" y2="628.0" stroke="black" stroke-width="0.75"/>
     <line x1="1263.6" y1="1387.0" x2="1263.6" y2="1403.0" stroke="black" stroke-width="0.75"/>
-    <text x="1348.3" y="515.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">1</text>
+    <text x="1348.3" y="623.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">1</text>
     <text x="1348.3" y="1398.0" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">1</text>
-    <text x="-100.0" y="609.7" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">E</text>
-    <text x="1441.0" y="609.7" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">E</text>
-    <line x1="-108.0" y1="693.4" x2="-92.0" y2="693.4" stroke="black" stroke-width="0.75"/>
-    <line x1="1433.0" y1="693.4" x2="1449.0" y2="693.4" stroke="black" stroke-width="0.75"/>
-    <text x="-100.0" y="783.1" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">D</text>
-    <text x="1441.0" y="783.1" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">D</text>
-    <line x1="-108.0" y1="866.8" x2="-92.0" y2="866.8" stroke="black" stroke-width="0.75"/>
-    <line x1="1433.0" y1="866.8" x2="1449.0" y2="866.8" stroke="black" stroke-width="0.75"/>
-    <text x="-100.0" y="956.5" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">C</text>
-    <text x="1441.0" y="956.5" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">C</text>
-    <line x1="-108.0" y1="1040.2" x2="-92.0" y2="1040.2" stroke="black" stroke-width="0.75"/>
-    <line x1="1433.0" y1="1040.2" x2="1449.0" y2="1040.2" stroke="black" stroke-width="0.75"/>
-    <text x="-100.0" y="1129.9" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">B</text>
-    <text x="1441.0" y="1129.9" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">B</text>
-    <line x1="-108.0" y1="1213.6" x2="-92.0" y2="1213.6" stroke="black" stroke-width="0.75"/>
-    <line x1="1433.0" y1="1213.6" x2="1449.0" y2="1213.6" stroke="black" stroke-width="0.75"/>
-    <text x="-100.0" y="1303.3" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">A</text>
-    <text x="1441.0" y="1303.3" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">A</text>
-    <rect x="-86.0" y="526.0" width="147.0" height="85.0" fill="white" stroke="black" stroke-width="1.5"/>
-    <text x="-12.5" y="543.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">LEGEND</text>
-    <line x1="-86.0" y1="549.0" x2="61.0" y2="549.0" stroke="black" stroke-width="1"/>
-    <text x="-77.0" y="563.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">BFW</text>
-    <text x="-46.5" y="563.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Boiler Feedwater</text>
-    <text x="-77.0" y="581.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">DA</text>
-    <text x="-46.5" y="581.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Deaerator</text>
-    <text x="-77.0" y="599.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">NTS</text>
-    <text x="-46.5" y="599.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Not To Scale</text>
-    <rect x="1175.1" y="520.0" width="257.9" height="175.0" fill="white" stroke="black" stroke-width="1.5"/>
-    <text x="1304.0" y="537.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">EQUIPMENT LIST</text>
-    <line x1="1175.1" y1="543.0" x2="1433.0" y2="543.0" stroke="black" stroke-width="1"/>
-    <text x="1184.1" y="557.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">ST-201</text>
-    <text x="1245.4" y="557.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Makeup Water Strainer</text>
-    <text x="1184.1" y="575.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">M-201</text>
-    <text x="1245.4" y="575.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">BFW Suction Header</text>
-    <text x="1184.1" y="593.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">P-201A/B</text>
-    <text x="1245.4" y="593.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Boiler Feedwater Pump</text>
-    <text x="1184.1" y="611.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">SP-201</text>
-    <text x="1245.4" y="611.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Minimum-Flow Tee</text>
-    <text x="1184.1" y="629.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">FV-201</text>
-    <text x="1245.4" y="629.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Minimum-Flow Spillback Valve</text>
-    <text x="1184.1" y="647.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">V-201</text>
-    <text x="1245.4" y="647.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Deaerator Drum</text>
-    <text x="1184.1" y="665.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">VT-201</text>
-    <text x="1245.4" y="665.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Deaerator Vent Stack</text>
-    <text x="1184.1" y="683.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">CV-201</text>
-    <text x="1245.4" y="683.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Deaerator Level Control Valve</text>
+    <text x="-100.0" y="706.9" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">E</text>
+    <text x="1441.0" y="706.9" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">E</text>
+    <line x1="-108.0" y1="779.8" x2="-92.0" y2="779.8" stroke="black" stroke-width="0.75"/>
+    <line x1="1433.0" y1="779.8" x2="1449.0" y2="779.8" stroke="black" stroke-width="0.75"/>
+    <text x="-100.0" y="858.7" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">D</text>
+    <text x="1441.0" y="858.7" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">D</text>
+    <line x1="-108.0" y1="931.6" x2="-92.0" y2="931.6" stroke="black" stroke-width="0.75"/>
+    <line x1="1433.0" y1="931.6" x2="1449.0" y2="931.6" stroke="black" stroke-width="0.75"/>
+    <text x="-100.0" y="1010.5" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">C</text>
+    <text x="1441.0" y="1010.5" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">C</text>
+    <line x1="-108.0" y1="1083.4" x2="-92.0" y2="1083.4" stroke="black" stroke-width="0.75"/>
+    <line x1="1433.0" y1="1083.4" x2="1449.0" y2="1083.4" stroke="black" stroke-width="0.75"/>
+    <text x="-100.0" y="1162.3" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">B</text>
+    <text x="1441.0" y="1162.3" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">B</text>
+    <line x1="-108.0" y1="1235.2" x2="-92.0" y2="1235.2" stroke="black" stroke-width="0.75"/>
+    <line x1="1433.0" y1="1235.2" x2="1449.0" y2="1235.2" stroke="black" stroke-width="0.75"/>
+    <text x="-100.0" y="1314.1" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">A</text>
+    <text x="1441.0" y="1314.1" font-family="sans-serif" font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">A</text>
+    <rect x="-86.0" y="634.0" width="147.0" height="85.0" fill="white" stroke="black" stroke-width="1.5"/>
+    <text x="-12.5" y="651.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">LEGEND</text>
+    <line x1="-86.0" y1="657.0" x2="61.0" y2="657.0" stroke="black" stroke-width="1"/>
+    <text x="-77.0" y="671.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">BFW</text>
+    <text x="-46.5" y="671.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Boiler Feedwater</text>
+    <text x="-77.0" y="689.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">DA</text>
+    <text x="-46.5" y="689.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Deaerator</text>
+    <text x="-77.0" y="707.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">NTS</text>
+    <text x="-46.5" y="707.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Not To Scale</text>
+    <rect x="1224.4" y="628.0" width="208.6" height="67.0" fill="white" stroke="black" stroke-width="1.5"/>
+    <text x="1328.7" y="645.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">EQUIPMENT LIST</text>
+    <line x1="1224.4" y1="651.0" x2="1433.0" y2="651.0" stroke="black" stroke-width="1"/>
+    <text x="1233.4" y="665.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">P-201A/B</text>
+    <text x="1294.6" y="665.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Boiler Feedwater Pump</text>
+    <text x="1233.4" y="683.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">V-201</text>
+    <text x="1294.6" y="683.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Deaerator Drum</text>
     <rect x="1064.2" y="709.0" width="368.8" height="85.0" fill="white" stroke="black" stroke-width="1.5"/>
     <text x="1248.6" y="726.0" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">NOTES</text>
     <line x1="1064.2" y1="732.0" x2="1433.0" y2="732.0" stroke="black" stroke-width="1"/>

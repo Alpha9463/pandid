@@ -535,15 +535,16 @@ def test_golden_svg(name):
 def test_the_fractionator_schedules_only_equipment_that_exists():
     """The bottoms product leaves over the reboiler's weir, off the kettle's own
     draw. Splitting the sump line instead needs a piece of equipment that is not
-    in the plant, and the auto equipment list would then schedule it."""
+    in the plant, and the sheet would then carry a tag for it."""
     fs = _column_reflux()
+    col = next(u for u in fs.units if u.name == "T-701")
     reb = next(u for u in fs.units if u.name == "E-702")
+    assert col.bottoms.stream.dest.owner is reb  # nothing invented in the sump
     assert reb.bottoms.stream is not None
     assert reb.bottoms.stream.dest.owner.name == "Bottoms"
     assert [tag for tag, _ in equipment_list(fs).rows] == [
         "T-701",
         "E-701",
         "V-701",
-        "SP-701",
         "E-702",
     ]

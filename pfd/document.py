@@ -158,31 +158,90 @@ class TableBox:
 # Convenience constructors for the common boxes
 # ---------------------------------------------------------------------------
 
-# Unit kinds that are drawing furniture / boundaries, not scheduled equipment.
-_NON_EQUIPMENT = {"feed", "product", "instrument"}
+# The kinds an equipment list schedules: major plant — the items that carry a
+# tag on the sheet *and* a datasheet, a foundation and a purchase order behind
+# it. Everything else on a flowsheet is one of three other things, and none of
+# them is scheduled:
+#
+# * bulk items — valves, fittings, reducers, vents and funnels — which are
+#   bought by the line and specified by the piping class, not item by item;
+# * junctions — a mixer or splitter is a branch in the piping drawn as a
+#   triangle, so scheduling one puts plant that does not exist on the sheet;
+# * sheet boundaries and instruments, which are not equipment at all.
+#
+# A separate valve or instrument schedule is a real drawing, so ``include=``
+# names its rows explicitly and this rule stands aside for it.
+_MAJOR_EQUIPMENT = frozenset({
+    "blower", "column", "compressor", "cooler", "dryer", "ejector", "filter",
+    "furnace", "heater", "hex", "pump", "reactor", "separator", "tank",
+    "turbine", "vessel",
+})
+
+# What each kind is called in words. ``kind`` is a lookup key, so a schedule
+# that falls back to it reads ``('E-101', 'Hex')`` — the source code quoted at
+# the reader in place of the equipment description an engineer would write.
+_KIND_LABELS = {
+    "blower": "Blower",
+    "column": "Column",
+    "compressor": "Compressor",
+    "cooler": "Cooler",
+    "dryer": "Dryer",
+    "ejector": "Ejector",
+    "feed": "Feed",
+    "filter": "Filter",
+    "fitting": "In-Line Fitting",
+    "funnel": "Charging Funnel",
+    "furnace": "Fired Heater",
+    "heater": "Heater",
+    "hex": "Heat Exchanger",
+    "instrument": "Instrument",
+    "mixer": "Mixer",
+    "product": "Product",
+    "pump": "Pump",
+    "reactor": "Reactor",
+    "reducer": "Reducer",
+    "separator": "Separator",
+    "splitter": "Splitter",
+    "tank": "Tank",
+    "turbine": "Turbine",
+    "valve": "Valve",
+    "vent": "Vent",
+    "vessel": "Vessel",
+}
+
+
+def _describe(unit):
+    """The words an equipment list puts against a tag.
+
+    The unit's own ``description`` when it has one, otherwise what its kind is
+    called (see :data:`_KIND_LABELS`).
+    """
+    return (getattr(unit, "description", "")
+            or _KIND_LABELS.get(unit.kind, unit.kind.replace("_", " ").title()))
 
 
 def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right", anchor=None,
                    position=None, margin=0.0, include=None, width=None):
-    """Build an :class:`Annotation` scheduling every real equipment item.
+    """Build an :class:`Annotation` scheduling the flowsheet's major equipment.
 
-    Each row is ``(tag, description)``; the description comes from the unit's
-    ``description`` (falling back to a humanized kind). ``include`` optionally
-    restricts to an explicit ordered list of tags. ``align`` / ``position`` /
-    ``margin`` place the box (see :class:`Annotation`); ``anchor`` is a
-    deprecated alias for ``align``.
+    Each row is ``(tag, description)``; the description is the unit's
+    ``description``, or what its kind is called when it has none. Only major
+    equipment is scheduled (see :data:`_MAJOR_EQUIPMENT`).
+
+    ``include`` names the rows explicitly instead, in the order given, and takes
+    whatever it names — which is how a valve or instrument schedule, a real
+    drawing in its own right, gets built from the same flowsheet. A tag that is
+    not on the flowsheet contributes no row.
+
+    ``align`` / ``position`` / ``margin`` place the box (see
+    :class:`Annotation`); ``anchor`` is a deprecated alias for ``align``.
     """
-    rows = []
-    for u in fs.units:
-        if u.kind in _NON_EQUIPMENT:
-            continue
-        if include is not None and u.name not in include:
-            continue
-        desc = getattr(u, "description", "") or u.kind.replace("_", " ").title()
-        rows.append((u.name, desc))
-    if include is not None:
-        order = {t: i for i, t in enumerate(include)}
-        rows.sort(key=lambda r: order.get(r[0], len(order)))
+    if include is None:
+        chosen = [u for u in fs.units if u.kind in _MAJOR_EQUIPMENT]
+    else:
+        by_name = {u.name: u for u in fs.units}
+        chosen = [by_name[tag] for tag in include if tag in by_name]
+    rows = [(u.name, _describe(u)) for u in chosen]
     return Annotation(title=title, rows=rows, align=align, anchor=anchor,
                       position=position, margin=margin, width=width)
 

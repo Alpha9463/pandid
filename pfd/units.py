@@ -79,6 +79,26 @@ class Unit:
             self._add_port(*spec)
 
     @property
+    def tag(self) -> str:
+        """The tag drawn against this unit.
+
+        One piece of plant carries one tag and is drawn once, so for equipment
+        the tag *is* the name the flowsheet knows it by. Only a symbol that
+        stands for something drawn in several places has to tell the two apart;
+        see :attr:`Instrument.tag`.
+        """
+        return self.name
+
+    def repeats(self, other: "Unit") -> bool:
+        """Whether this unit is *another drawing of* ``other``.
+
+        False here, and so for every piece of equipment: two units answering to
+        ``P-101`` are two pumps sharing a tag, which is a mistake in the
+        drawing rather than a convention of it.
+        """
+        return False
+
+    @property
     def significant(self) -> bool:
         """For inline fittings (valve/reducer/fitting): if True, the stream
         number — or the line number, where the line has one — breaks across this
@@ -460,6 +480,13 @@ class Instrument(Unit):
     _PORTS = [("pv", "inlet", "signal"), ("sig_in", "inlet", "signal"),
               ("sig_out", "outlet", "signal")]
 
+    #: The one variant that stands for a function rather than a device. A
+    #: balloon is a thing — a transmitter in the field, a faceplate in the
+    #: control room — and there is one of it. An interlock square is a *logic
+    #: function*, which acts in several places at once and is therefore drawn in
+    #: each of them, carrying the same tag every time.
+    _REPEATABLE_VARIANT = "logic"
+
     def __init__(self, type: str, number: str | int = "", variant: str = "default",
                  width: float | None = None, height: float | None = None,
                  label_pos: str | None = None, description: str = "", reference: str = ""):
@@ -469,6 +496,9 @@ class Instrument(Unit):
                          label_pos=label_pos, description=description, reference=reference)
         self.type = letters
         self.number = num
+        # The drawn tag, kept apart from the name because a repeated square
+        # needs a name of its own to be addressed by. See :attr:`tag`.
+        self._tag = name
         # Attachment intent (set only via attach()); the layout engine resolves
         # it into a frame, exactly as Pin -> Frame for ordinary equipment.
         self.host: "Stream | Unit | None" = None
@@ -476,6 +506,29 @@ class Instrument(Unit):
         self.offset: float = 45.0
         self.angle: float = 90.0
         self.tap: tuple[float, float] | None = None   # resolved (set only by layout)
+
+    @property
+    def tag(self) -> str:
+        """The ISA tag drawn in the balloon or square (``"I-1"``).
+
+        Equal to :attr:`~Unit.name` for everything drawn once. An interlock
+        square repeats — the same logic function appears wherever it acts — so
+        the sheet shows one tag several times while the flowsheet keeps a
+        distinct name for each square to address it by (``I-1``, ``I-1 (2)``).
+        """
+        return self._tag
+
+    def repeats(self, other: "Unit") -> bool:
+        """Whether this square is another drawing of the same logic function.
+
+        Both ends have to be interlock squares carrying the same tag: an
+        ``LT-101`` drawn twice is two transmitters on one loop number, and a
+        square sharing its tag with a balloon is two different symbols claiming
+        to be the same thing.
+        """
+        return (isinstance(other, Instrument)
+                and other.tag == self.tag
+                and self.variant == other.variant == self._REPEATABLE_VARIANT)
 
     def attach(self, on: "Stream | Unit", *, at: float | str | None = None,
                offset: float = 45.0, angle: float = 90.0) -> "Instrument":
