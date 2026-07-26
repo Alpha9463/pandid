@@ -1,4 +1,4 @@
-# Contributing to `chem-pfd`
+# Contributing to `pandid`
 
 Thanks for helping. This document covers the setup, the checks that have to pass,
 and — more usefully — the four things about this codebase that a new contributor

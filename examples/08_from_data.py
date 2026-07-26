@@ -8,7 +8,7 @@ changes; layout, routing and stream numbering all run exactly as before.
 
     fs = Flowsheet.from_dict(SPEC)      # a dict, from anywhere
     fs = Flowsheet.from_json("bfw.json")
-    fs = Flowsheet.from_yaml("bfw.yaml")   # needs: pip install 'chem-pfd[yaml]'
+    fs = Flowsheet.from_yaml("bfw.yaml")   # needs: pip install 'pandid[yaml]'
     spec = fs.to_dict()                 # writes the same spec back out
 
 The process is a boiler feedwater package: makeup water is strained and joins

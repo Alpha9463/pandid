@@ -423,7 +423,7 @@ def test_from_yaml_without_pyyaml_says_exactly_what_to_install(tmp_path, monkeyp
         Flowsheet.from_yaml(path)
     message = str(excinfo.value)
     assert "PyYAML" in message
-    assert "pip install 'chem-pfd[yaml]'" in message
+    assert "pip install 'pandid[yaml]'" in message
     assert "from_json" in message  # and the way out that needs nothing
 
 
