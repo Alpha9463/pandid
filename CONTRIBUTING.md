@@ -193,6 +193,22 @@ running them and copying the output — see `docs/gallery/README.md`. If you add
 an example, add it to the gallery in the same PR, and consider adding the
 scenario to `tests/test_golden.py`.
 
+## Releasing
+
+The version is written in exactly one place, `pfd/__init__.py`. `pyproject.toml`
+declares it `dynamic` and the build backend reads that literal, so there is no
+second copy to forget. To cut a release: bump `__version__`, move the CHANGELOG
+`[Unreleased]` heading to the new number, merge, then push the matching tag.
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+`.github/workflows/release.yml` takes it from there — it re-runs the four gates
+against the tagged commit, refuses to build if the tag and `pfd.__version__`
+disagree, builds the sdist and wheel, and publishes to PyPI over Trusted
+Publishing. Nothing is uploaded from a laptop and there is no API token to leak.
+
 ## Reporting a bug
 
 Include the flowsheet that reproduces it — the topology is usually 15 lines —

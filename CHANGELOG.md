@@ -187,6 +187,13 @@ and is kept working.
   or from `examples/` itself, and rendered into `docs/gallery/`.
 - Packaged as the **`pandid`** distribution — how "P&ID" is said out loud. The
   import name is `pfd`; plain `pfd` is taken on PyPI by an unrelated project.
+- `pfd/py.typed` — the PEP 561 marker, so an installing project's type checker
+  reads the annotations instead of treating the whole package as `Any`.
+- `pfd.__version__` is the only place the version is written; the build backend
+  reads it from there, so the distribution metadata cannot disagree with it.
+- Release workflow (`.github/workflows/release.yml`): pushing a `v*` tag re-runs
+  the four gates, checks the tag against `pfd.__version__`, builds the sdist and
+  wheel, and uploads to PyPI over Trusted Publishing (OIDC — no API token).
 
 ### Deprecated
 

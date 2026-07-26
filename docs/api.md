@@ -11,7 +11,7 @@ listed here is either internal or not part of the supported surface.
 ```python
 from pfd import Flowsheet, Component, units
 import pfd
-pfd.__version__          # "0.0.1"
+pfd.__version__          # the installed version, e.g. "0.0.1"
 ```
 
 ---
