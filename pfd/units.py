@@ -59,14 +59,28 @@ class Unit:
         self.flowsheet: Flowsheet | None = None
         self.ports: dict[str, Port] = {}
         self.params: dict = {}
-        # For inline fittings (valve/reducer): if True, the stream number breaks
-        # across this unit instead of carrying through it. See Flowsheet naming.
-        self.significant = False
+        self._significant = False
         self.pin_: Pin | None = None      # user intent (set only via pin())
         self.frame: Frame | None = None   # resolved geometry (set only by layout)
         self._port_faces: dict[str, str] = {}   # port name -> chosen face
         for spec in self._PORTS:
             self._add_port(*spec)
+
+    @property
+    def significant(self) -> bool:
+        """For inline fittings (valve/reducer/fitting): if True, the stream
+        number breaks across this unit instead of carrying through it.
+
+        Setting it renumbers the flowsheet, so the names on the stream objects
+        the caller already holds stay the names that get drawn.
+        """
+        return self._significant
+
+    @significant.setter
+    def significant(self, value: bool) -> None:
+        self._significant = value
+        if self.flowsheet is not None:
+            self.flowsheet.renumber_streams()
 
     def pin(
         self,

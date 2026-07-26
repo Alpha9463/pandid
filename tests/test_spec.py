@@ -167,9 +167,16 @@ def test_components_accept_a_bare_name_or_a_formula():
 
 
 def test_flowsheet_level_options():
-    fs = Flowsheet.from_dict({"name": "T", "direction": "RL", "stream_naming_scheme": "L-{n}"})
-    assert fs.direction == "RL"
+    fs = Flowsheet.from_dict({"name": "T", "stream_naming_scheme": "L-{n}"})
     assert fs.stream_naming_scheme == "L-{n}"
+
+
+def test_retired_direction_key_is_refused():
+    """A file written against the old format is told what happened, not ignored."""
+    with pytest.raises(SpecError) as e:
+        Flowsheet.from_dict(_spec(direction="TB"))
+    assert "'direction' is no longer part of the spec" in str(e.value)
+    assert "left to right" in str(e.value)
 
 
 # --- connections --------------------------------------------------------------

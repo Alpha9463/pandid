@@ -22,9 +22,8 @@ _ENERGY_ROLES = {"energy", "utility"}
 class Flowsheet:
     """A process flow diagram's topology: units, streams, and components."""
 
-    def __init__(self, name: str, direction: str = "LR", stream_naming_scheme: str | Callable[[int], str] = "S{n}"):
+    def __init__(self, name: str, *, stream_naming_scheme: str | Callable[[int], str] = "S{n}"):
         self.name = name
-        self.direction = direction
         self.stream_naming_scheme = stream_naming_scheme
         self.units: list = []
         self.streams: list[Stream] = []
@@ -93,6 +92,9 @@ class Flowsheet:
                 name: str | None = None, tear_hint: bool = False) -> Stream:
         """Create a stream connecting *src* (outlet port) to *dst* (inlet port).
 
+        The returned stream already carries the number it will be drawn with;
+        see :meth:`renumber_streams`.
+
         Raises :class:`ValueError` if any validation rule is violated.
         """
         _KINDS = {"material", "energy", "electric", "pneumatic", "data", "capillary", "software"}
@@ -124,24 +126,21 @@ class Flowsheet:
         if kind == "material" and src.role in _ENERGY_ROLES and dst.role in _ENERGY_ROLES:
             kind = "energy"
 
-        explicit = bool(name)
-        if not name:
-            if callable(self.stream_naming_scheme):
-                name = self.stream_naming_scheme(len(self.streams) + 1)
-            else:
-                name = self.stream_naming_scheme.format(n=len(self.streams) + 1)
-
         stream = Stream(
-            name=name,
+            name=name or "",  # an auto-named stream is numbered by renumber_streams()
             source=src,
             dest=dst,
             kind=kind,
             tear_hint=tear_hint,
-            auto_named=not explicit,
+            auto_named=not name,
         )
         src.stream = stream
         dst.stream = stream
         self.streams.append(stream)
+        # The number a caller reads off the returned stream — into a report, a
+        # stream table, a label of their own — has to be the number that gets
+        # drawn, so numbering is settled here rather than at render time.
+        self.renumber_streams()
         return stream
 
     @classmethod
@@ -210,10 +209,18 @@ class Flowsheet:
     def renumber_streams(self) -> None:
         """Assign stream numbers, carrying one number through inline fittings.
 
+        Runs on every :meth:`connect` and again before rendering, so the name on
+        the stream object a caller holds is the name that gets drawn.
+
         Valves, reducers and fittings are inline: a stream keeps its number as
         it passes through them (set ``unit.significant = True`` to break the
-        number at an important valve). Only auto-named material streams are
-        renumbered; explicitly-named streams and signal lines are left untouched.
+        number at an important valve). Explicitly-named streams keep their name
+        and lend it to their whole inline group.
+
+        Process streams take the low numbers because they are the ones drawn on
+        the sheet and quoted in the stream table; energy streams, which are also
+        drawn, follow, and unlabelled signal lines come last. One sequence
+        covers all three so no two streams answer to the same name.
         """
         _INLINE = {"valve", "reducer", "fitting"}
         material = [s for s in self.streams if s.kind == "material"]
@@ -241,23 +248,32 @@ class Flowsheet:
             if not s.auto_named:
                 explicit.setdefault(find(i), s.name)
 
-        group_name: dict = {}
         n = 0
+
+        def next_name() -> str:
+            nonlocal n
+            n += 1
+            return (self.stream_naming_scheme(n)
+                    if callable(self.stream_naming_scheme)
+                    else self.stream_naming_scheme.format(n=n))
+
+        group_name: dict = {}
         for i in range(len(material)):  # first-appearance order
             r = find(i)
             if r in group_name:
                 continue
-            if r in explicit:
-                group_name[r] = explicit[r]
-            else:
-                n += 1
-                group_name[r] = (self.stream_naming_scheme(n)
-                                 if callable(self.stream_naming_scheme)
-                                 else self.stream_naming_scheme.format(n=n))
+            group_name[r] = explicit[r] if r in explicit else next_name()
 
         for i, s in enumerate(material):
             if s.auto_named:
                 s.name = group_name[find(i)]
+
+        # Energy before signals: `sorted` is stable, so each kind keeps its
+        # creation order within the tail of the sequence.
+        for s in sorted((s for s in self.streams if s.kind != "material"),
+                        key=lambda s: s.kind != "energy"):
+            if s.auto_named:
+                s.name = next_name()
 
     def validate(self) -> list:
         """Return validation issues for the flowsheet (errors first, then warnings).

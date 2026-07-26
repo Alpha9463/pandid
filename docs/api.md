@@ -19,8 +19,7 @@ pfd.__version__          # "0.0.1"
 ## `Flowsheet`
 
 ```text
-Flowsheet(name: str,
-          direction: str = "LR",
+Flowsheet(name: str, *,
           stream_naming_scheme: str | Callable[[int], str] = "S{n}")
 ```
 
@@ -28,9 +27,7 @@ The container and the single source of truth for connectivity.
 
 - `name` — the flowsheet's name.
 - `stream_naming_scheme` — either a format string taking `{n}` (default
-  `"S{n}"` → `S1`, `S2`, …) or a callable `int -> str`.
-- `direction` — recorded on the flowsheet and included in `to_dict()`, but the
-  layout engine does not read it. Leave it at the default.
+  `"S{n}"` → `S1`, `S2`, …) or a callable `int -> str`. Keyword-only.
 
 ### Attributes
 
@@ -91,7 +88,7 @@ See [Instrumentation](#instrumentation).
 ```text
 layout(engine=None) -> None      # run auto-layout; resolves a Frame per unit
 route(router=None) -> None       # run the orthogonal router; layouts first if needed
-renumber_streams() -> None       # assign stream numbers (called by to_svg)
+renumber_streams() -> None       # assign stream numbers (called by connect and to_svg)
 validate() -> list[Issue]        # errors first, then warnings
 to_dict() -> dict                # JSON-safe topology
 ```
@@ -385,12 +382,21 @@ fs.connect(feed.outlet, hx.cold_in).via([(130, 65), (130, 110)])
 
 ### Stream numbering
 
-`renumber_streams()` runs automatically inside `to_svg()`. A stream keeps its
-number as it passes through an inline valve, reducer or fitting, so a run does
-not gain a new number every time it crosses a hand valve. Set
-`unit.significant = True` to break the number at a unit that matters. Only
-auto-named material streams are renumbered; explicit names and signal lines are
-left alone, and an explicit name on one segment names its whole group.
+`renumber_streams()` runs automatically inside `connect()` and again inside
+`to_svg()`, so the number on the stream object you hold is the number the sheet
+gets drawn with — `s.name` can go straight into a report or a stream table of
+your own. A stream keeps its number as it passes through an inline valve,
+reducer or fitting, so a run does not gain a new number every time it crosses a
+hand valve. Set `unit.significant = True` to break the number at a unit that
+matters; setting it renumbers the flowsheet there and then. Explicitly named
+streams are never renumbered, and an explicit name on one segment names its
+whole group.
+
+Process streams take the low numbers, since they are the ones drawn on the sheet
+and quoted in the stream table; energy streams, also drawn, follow, and
+unlabelled signal lines come last. One sequence covers all three, so no two
+streams answer to the same name and an energy or signal line never consumes a
+process number.
 
 ### Stream properties and the table
 

@@ -21,7 +21,6 @@ nozzle off the sheet. Every message names the entry it came from
 The format::
 
     name: Feed Metering Skid          # required; everything else is optional
-    direction: LR
     stream_naming_scheme: "S{n}"
     components: [{name: Water, formula: H2O}]
 
@@ -193,8 +192,13 @@ def _resolve_kind(value: Any, where: str) -> type[Unit]:
 # ---------------------------------------------------------------------------
 
 _TOP_KEYS = {
-    "name", "direction", "stream_naming_scheme", "components", "units",
+    "name", "stream_naming_scheme", "components", "units",
     "instruments", "streams", "stream_table_sections", "title_block", "annotations",
+}
+# Keys the format no longer has. A file written against the old one names the
+# sheet it wants; saying so beats "unknown key" and beats honouring it silently.
+_RETIRED_KEYS = {
+    "direction": "the layout engine only draws left to right, so it never did anything",
 }
 _PIN_KEYS = {"x", "y", "col", "row", "orientation", "mirrored"}
 _UNIT_KEYS = {
@@ -220,6 +224,9 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
     """
     where = "the flowsheet spec"
     data = _mapping(spec, where)
+    for key, why in _RETIRED_KEYS.items():
+        if key in data:
+            raise SpecError(f"{where}: {key!r} is no longer part of the spec — {why}; remove it")
     _check_keys(data, _TOP_KEYS, where)
     if "name" not in data:
         raise SpecError(f"{where} needs a 'name' (the flowsheet's title)")
@@ -227,7 +234,6 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
     scheme = data.get("stream_naming_scheme", "S{n}")
     fs = Flowsheet(
         _text(data["name"], f"{where}: 'name'"),
-        direction=_text(data.get("direction", "LR"), f"{where}: 'direction'"),
         stream_naming_scheme=_text(scheme, f"{where}: 'stream_naming_scheme'"),
     )
 
@@ -681,8 +687,6 @@ def to_dict(fs: Flowsheet) -> dict:
             "string such as 'S{n}'"
         )
     spec: dict[str, Any] = {"name": fs.name}
-    if fs.direction != "LR":
-        spec["direction"] = fs.direction
     if fs.stream_naming_scheme != "S{n}":
         spec["stream_naming_scheme"] = fs.stream_naming_scheme
     if fs.components:
@@ -764,7 +768,8 @@ def _write_instrument(inst: Instrument) -> dict[str, Any]:
     _write_common(inst, entry)
     if inst.host is not None:
         # Name a stream by the port it leaves, not by its number: auto-numbering
-        # rewrites the name at render time, and a spec must survive that.
+        # owns that name and re-derives it as the sheet grows, and a spec must
+        # survive that.
         entry["on"] = (
             [inst.host.source.owner.name, inst.host.source.name]
             if isinstance(inst.host, Stream) else inst.host.name
