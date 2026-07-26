@@ -71,6 +71,20 @@ class PortSeries:
         return {"W": (0.0, t), "E": (width, t),
                 "N": (t, 0.0), "S": (t, height)}[self.face]
 
+    def reach(self, width: float, height: float) -> tuple[float, float, float]:
+        """Where members can land: ``(face_coordinate, lo, hi)`` along the face.
+
+        A series has no fixed membership, so it has no fixed set of points to
+        compare a nozzle against — it has a *stretch of face* it may put one on,
+        for some count. One member sits at the middle; the widest run reaches
+        ``extent`` of the face. Anything inside that band shares a placement with
+        a member sooner or later, which is what a collision check needs to know.
+        """
+        along = height if self.face in ("W", "E") else width
+        half = self.extent * along / 2
+        fixed = {"W": 0.0, "E": width, "N": 0.0, "S": height}[self.face]
+        return fixed, along / 2 - half, along / 2 + half
+
 
 @dataclass
 class Symbol:
@@ -215,6 +229,13 @@ class Symbol:
         the shape of the menu — "this connection is faceless" and "this nozzle
         has authored alternatives" both produce a multi-entry menu, and only the
         first of them justifies two ports sitting on one point.
+
+        A :class:`PortSeries` is checked as the band of face it may place a
+        member on, reported against ``prefix*``. Its membership belongs to the
+        unit rather than the symbol, so there is no set of points to compare —
+        but a nozzle standing inside that band shares a placement with a member
+        for some count, and the whole value of a static check is saying so
+        before a drawing is made.
         """
         placements = [(name, xy) for name, faces in self.port_faces.items()
                       for xy in faces.values()]
@@ -229,6 +250,17 @@ class Symbol:
                     continue
                 seen.add(pair)
                 hits.append((pair[0], pair[1], p1))
+        for series in self.port_series:
+            fixed, lo, hi = series.reach(self.width, self.height)
+            member = f"{series.prefix}*"
+            for name, xy in placements:
+                across, along = (xy[0], xy[1]) if series.face in ("W", "E") else (xy[1], xy[0])
+                pair = (name, member) if name < member else (member, name)
+                if pair in seen or abs(across - fixed) >= _COINCIDENT:
+                    continue
+                if lo - _COINCIDENT < along < hi + _COINCIDENT:
+                    seen.add(pair)
+                    hits.append((pair[0], pair[1], xy))
         return hits
 
 class SymbolRegistry:

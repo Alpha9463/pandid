@@ -434,7 +434,8 @@ inline item), and `n_inlets` / `n_outlets` for `Mixer` / `Splitter`.
 
 **`pin` / `port_faces`** — `pin` mirrors `pin()`: `x`/`y` (absolute), `col`/`row`
 (grid), `orientation` (`0`/`90`/`180`/`270`) and `mirrored` (`x`/`y`/`xy`).
-`port_faces` maps a port to the face it leaves from, as `port_face()` does.
+`port_faces` maps a port to the face it leaves from **as drawn**, so a
+mirrored or turned unit takes the face the reader sees.
 
 **`instruments`** — `type` (required) and `number` make the tag, so `{type: LIC,
 number: 101}` is referred to elsewhere as `LIC-101`. `on` names the host: a unit,
