@@ -1,6 +1,9 @@
 """Placement transforms: quarter-turn rotation, two-axis mirroring, and moving a
 port to another face of its symbol."""
 
+import math
+import re
+
 import pytest
 
 from pfd import Flowsheet, units
@@ -245,3 +248,88 @@ def test_a_series_port_survives_a_quarter_turn(gapped_kind):
     # that face up, and mirroring puts it back down.
     assert [port_faces(mix, f"in_{i}") for i in (1, 2, 3)] == [["N"]] * 3
     assert port_faces(mix, "in_2", Pin(x=0, y=0, orientation=90, mirrored=True)) == ["S"]
+
+
+# ---------------------------------------------------------------------------
+# A symbol's own lettering under a placement transform.
+# ---------------------------------------------------------------------------
+
+
+def _linear(transform: str) -> tuple[float, float, float, float]:
+    """Linear part (a, b, c, d) of an SVG transform list, applied right-to-left."""
+    a, b, c, d = 1.0, 0.0, 0.0, 1.0
+    ops = re.findall(r"(translate|scale|rotate)\(([^)]*)\)", transform)
+    for name, raw in reversed(ops):
+        args = [float(v) for v in re.split(r"[,\s]+", raw.strip()) if v]
+        if name == "translate":
+            continue  # no contribution to the linear part
+        if name == "scale":
+            sx = args[0]
+            sy = args[1] if len(args) > 1 else sx
+            m = (sx, 0.0, 0.0, sy)
+        else:
+            t = math.radians(args[0])
+            m = (math.cos(t), math.sin(t), -math.sin(t), math.cos(t))
+        # this op is applied before what we have so far: (a,b,c,d) . m
+        a, b, c, d = (
+            a * m[0] + c * m[1],
+            b * m[0] + d * m[1],
+            a * m[2] + c * m[3],
+            b * m[2] + d * m[3],
+        )
+    return a, b, c, d
+
+
+@pytest.mark.parametrize(
+    "rot,mirror",
+    [
+        (0, False),
+        (90, False),
+        (180, False),
+        (270, False),
+        (0, "x"),
+        (0, "y"),
+        (90, "y"),
+        (180, "x"),
+    ],
+)
+def test_a_symbols_own_lettering_stays_upright(rot, mirror):
+    """Flipping a motor-operated valve to put its operator under the line says
+    something about the equipment, not about the letter stamped on it: the box
+    moves, the "M" does not end up upside down or on its side."""
+    fs = Flowsheet("lettering")
+    fs.add(units.Valve("FV-1", variant="motor")).pin(x=200, y=200, orientation=rot, mirrored=mirror)
+    fs.layout()
+    svg = fs.to_svg(check=False)
+
+    use = re.search(r'<use href="#(sym_valve_motor[^"]*)"[^>]*?(?:transform="([^"]*)")?\s*/>', svg)
+    assert use, "no <use> for the valve"
+    body = re.search(rf'<symbol id="{use.group(1)}".*?</symbol>', svg, re.S)
+    assert body, f"no <symbol> defining {use.group(1)}"
+    wrapped = re.findall(r'<g transform="([^"]*)"><text', body.group(0))
+    assert wrapped or (not rot and not mirror), "lettering was left un-counter-transformed"
+
+    for inner in wrapped or [""]:
+        a, b, c, d = _linear(" ".join([use.group(2) or "", inner]))
+        # Upright and unreflected: no rotation or skew, and no negative scale.
+        assert abs(b) < 1e-9 and abs(c) < 1e-9, f"glyph is rotated: {(a, b, c, d)}"
+        assert a > 0 and d > 0, f"glyph is mirrored: {(a, b, c, d)}"
+
+
+def test_lettered_symbols_get_one_definition_per_transform():
+    """The counter-transform is baked into the definition, so two valves placed
+    differently cannot share one — while everything without lettering still
+    shares a single definition however it is placed."""
+    fs = Flowsheet("defs")
+    fs.add(units.Valve("FV-1", variant="motor")).pin(x=100, y=100)
+    fs.add(units.Valve("FV-2", variant="motor")).pin(x=300, y=100, mirrored="y")
+    fs.add(units.Valve("HV-1", variant="control")).pin(x=500, y=100)
+    fs.add(units.Valve("HV-2", variant="control")).pin(x=700, y=100, mirrored="y")
+    fs.layout()
+    svg = fs.to_svg(check=False)
+
+    assert sorted(set(re.findall(r'<symbol id="(sym_valve_motor[^"]*)"', svg))) == [
+        "sym_valve_motor",
+        "sym_valve_motor_ty",
+    ]
+    assert re.findall(r'<symbol id="(sym_valve_control[^"]*)"', svg) == ["sym_valve_control"]

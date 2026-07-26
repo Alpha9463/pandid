@@ -231,7 +231,7 @@ is a visual style within it. The first name in each list is that kind's
 |---|---|
 | `Pump` | `default` (centrifugal), `gear`, `screw`, `vacuum` |
 | `Compressor` | `default`, `liquid_ring`, `reciprocating`, `rotary` |
-| `HeatExchanger` | `default`, `shell_tube`, `straight_tubes`, `plate`, `kettle`, `u_tube`, `condenser` |
+| `HeatExchanger` | `default`, `shell_tube`, `straight_tubes`, `plate`, `kettle`, `u_tube`, `condenser`, `spiral` |
 | `Vessel` | `default`, `dished`, `dome`, `horizontal` |
 | `Tank` | `default` (dished roof), `conical`, `floating_roof`, `sphere` |
 | `Separator` | `default` (knock-out drum), `horizontal`, `cyclone`, `gravity`, `scrubber`, `electrostatic` |

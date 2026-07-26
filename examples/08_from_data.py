@@ -47,8 +47,13 @@ SPEC = {
         {"kind": "Vessel", "name": "V-201", "variant": "horizontal", "width": 150, "height": 48,
          "description": "Deaerator Drum", "port_faces": {"inlet": "N"}},
         {"kind": "Vent", "name": "VT-201", "description": "Deaerator Vent Stack"},
-        {"kind": "Valve", "name": "LV-201", "variant": "control",
-         "description": "Deaerator Level Control Valve"},
+        # Flipped top-to-bottom so its actuator faces down: the loop's final
+        # element then sits below the line with the controller, instead of the
+        # signal having to climb past the drum outlet to reach a stem on top.
+        # Only the transform is pinned — where the valve goes is still the
+        # engine's decision.
+        {"kind": "Valve", "name": "CV-201", "variant": "control",
+         "description": "Deaerator Level Control Valve", "pin": {"mirrored": "y"}},
         {"kind": "Product", "name": "To Boiler", "reference": "PFD-500"},
     ],
     # --- Instrumentation -------------------------------------------------
@@ -70,11 +75,12 @@ SPEC = {
         {"type": "LIC", "number": 201, "variant": "panel",
          "description": "Deaerator Level Control", "on": "V-201", "at": "S",
          "offset": 140, "port_faces": {"sig_in": "N"}},
-        # I/P transducer on the valve: the loop's final element, drawn as a
-        # balloon above the actuator it drives.
-        {"type": "LY", "number": 201, "description": "Level Valve I/P Transducer",
-         "on": "LV-201", "at": "N", "offset": 58,
-         "port_faces": {"sig_in": "W", "sig_out": "S"}},
+        # I/P transducer on the valve: the loop's final element, under the
+        # actuator it drives now that the valve is flipped, and on the same side
+        # of the line as the controller feeding it.
+        {"type": "LV", "number": 201, "description": "Level Valve I/P Transducer",
+         "on": "CV-201", "at": "S", "offset": 58,
+         "port_faces": {"sig_in": "W", "sig_out": "N"}},
     ],
     # --- Stream table ----------------------------------------------------
     # Each connection is a pair of named nozzles, plus whatever the simulation
@@ -83,10 +89,10 @@ SPEC = {
         {"from": ["Makeup Water", "outlet"], "to": ["ST-201", "inlet"],
          "properties": {"Temperature": "25 C", "Pressure": "4.0 barg",
                         "Mass Flow": "12.0 t/h", "Dissolved O2": "8000 ppb"}},
-        {"from": ["ST-201", "outlet"], "to": ["M-201", "in_1"],
+        {"from": ["ST-201", "outlet"], "to": ["M-201", "in_2"],
          "properties": {"Temperature": "25 C", "Pressure": "3.8 barg",
                         "Mass Flow": "12.0 t/h", "Dissolved O2": "8000 ppb"}},
-        {"from": ["Condensate Return", "outlet"], "to": ["M-201", "in_2"],
+        {"from": ["Condensate Return", "outlet"], "to": ["M-201", "in_3"],
          "properties": {"Temperature": "88 C", "Pressure": "3.5 barg",
                         "Mass Flow": "48.0 t/h", "Dissolved O2": "150 ppb"}},
         {"from": ["M-201", "outlet"], "to": ["P-201A/B", "suction"],
@@ -103,16 +109,16 @@ SPEC = {
                         "Mass Flow": "6.0 t/h", "Dissolved O2": "1600 ppb"}},
         # The spillback closes the loop, so nominate it as the tear: without the
         # hint the cycle could be broken at the pump instead.
-        {"from": ["FV-201", "outlet"], "to": ["M-201", "in_3"], "tear_hint": True,
+        {"from": ["FV-201", "outlet"], "to": ["M-201", "in_1"], "tear_hint": True,
          "properties": {"Temperature": "77 C", "Pressure": "3.4 barg",
                         "Mass Flow": "6.0 t/h", "Dissolved O2": "1600 ppb"}},
         {"from": ["V-201", "vent"], "to": ["VT-201", "inlet"],
          "properties": {"Temperature": "105 C", "Pressure": "0.2 barg",
                         "Mass Flow": "0.3 t/h", "Dissolved O2": "-"}},
-        {"from": ["V-201", "outlet"], "to": ["LV-201", "inlet"],
+        {"from": ["V-201", "outlet"], "to": ["CV-201", "inlet"],
          "properties": {"Temperature": "105 C", "Pressure": "0.2 barg",
                         "Mass Flow": "59.7 t/h", "Dissolved O2": "7 ppb"}},
-        {"from": ["LV-201", "outlet"], "to": ["To Boiler", "inlet"],
+        {"from": ["CV-201", "outlet"], "to": ["To Boiler", "inlet"],
          "properties": {"Temperature": "105 C", "Pressure": "0.1 barg",
                         "Mass Flow": "59.7 t/h", "Dissolved O2": "7 ppb"}},
         # The loop closes through three signal lines, not one: the drum's level
@@ -120,8 +126,8 @@ SPEC = {
         # transducer on the valve, and only that last leg is pneumatic — it is
         # what actually strokes the actuator.
         {"from": ["LT-201", "sig_out"], "to": ["LIC-201", "sig_in"], "kind": "electric"},
-        {"from": ["LIC-201", "sig_out"], "to": ["LY-201", "sig_in"], "kind": "electric"},
-        {"from": ["LY-201", "sig_out"], "to": ["LV-201", "actuator"], "kind": "pneumatic"},
+        {"from": ["LIC-201", "sig_out"], "to": ["LV-201", "sig_in"], "kind": "electric"},
+        {"from": ["LV-201", "sig_out"], "to": ["CV-201", "actuator"], "kind": "pneumatic"},
     ],
     "stream_table_sections": [["Dissolved O2", "Water Quality"]],
     # --- Sheet furniture -------------------------------------------------
@@ -146,7 +152,7 @@ SPEC = {
         {"type": "notes", "align": "top-right", "items": [
             "Deaerator vent to atmosphere; no isolation permitted.",
             "FV-201 maintains P-201A/B above 10% of rated flow.",
-            "Dissolved oxygen sampled downstream of LV-201.",
+            "Dissolved oxygen sampled downstream of CV-201.",
         ]},
         {"type": "legend", "align": "top-left", "margin": 6, "entries": {
             "BFW": "Boiler Feedwater",

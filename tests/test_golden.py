@@ -200,6 +200,7 @@ def _control_loop() -> Flowsheet:
     fs.add_instrument("FE", 101, on=line, at=0.5, offset=0)
     ft = fs.add_instrument("FT", 101, on=line, at=0.5, offset=62)
     fic = fs.add_instrument("FIC", 101, on=ft, at="N", offset=125, angle=35, variant="panel")
+    fic.nozzle("sig_out", "S")
     fs.connect(ft.sig_out, fic.sig_in, kind="electric")
     fs.connect(fic.sig_out, fv.actuator, kind="pneumatic")
 

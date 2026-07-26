@@ -84,7 +84,7 @@ and is kept working.
 - Canvas fitted to content — no letterboxing, no clipping, uniform 2 px symbol
   strokes, and stream-number labels drawn on a wipe so the line never strikes
   through the text.
-- 95+ registered `(kind, variant)` symbols following ISO 10628-2 / ISA-5.1,
+- 100 registered `(kind, variant)` symbols following ISO 10628-2 / ISA-5.1,
   generated from the draw.io / diagrams.net P&ID stencils (Apache-2.0) by
   `scripts/vendor_symbols.py`; Feed/Product flags, Mixer, Splitter and the
   instrument balloons are hand-drawn originals.
@@ -95,6 +95,10 @@ and is kept working.
   `Symbol.coincident_ports()` warns about two ports on one coordinate. Only the
   connections named in `Symbol.faceless_ports` — an instrument balloon is a
   circle, so a signal may meet it anywhere — may share a placement.
+- A symbol's own lettering — the `M` in a motor operator, the `S` in a solenoid —
+  stays upright and readable under every placement transform. Flipping a valve to
+  put its operator below the line is a statement about the equipment, not about
+  the letter stamped on it.
 - `Symbol.port_series` places a family of like ports whose membership the *unit*
   decides rather than the symbol. `Mixer(n_inlets=n)` and `Splitter(n_outlets=n)`
   therefore give every inlet or outlet a nozzle of its own, spread along the flat
