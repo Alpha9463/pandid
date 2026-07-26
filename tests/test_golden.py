@@ -252,7 +252,6 @@ def _column_reflux() -> Flowsheet:
     drum = fs.add(
         units.Vessel("V-701", variant="horizontal", width=130, height=42, description="Reflux Drum")
     )
-    drum.nozzle("inlet", "N")
     vent = fs.add(units.Product("Vent Gas", reference="PFD-900"))
     split = fs.add(units.Splitter("SP-701", n_outlets=2, description="Reflux Split"))
     dist = fs.add(units.Product("Distillate", reference="PFD-200"))
@@ -337,7 +336,6 @@ def _metering_skid() -> Flowsheet:
     fs.connect(psv.outlet, flare.inlet)
 
     lic = fs.add_instrument("LIC", 101, on=surge, at="S", offset=115, variant="panel")
-    lic.nozzle("sig_out", "W")
     fs.connect(lic.sig_out, fv.actuator, kind="electric")
     return fs
 

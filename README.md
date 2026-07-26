@@ -62,6 +62,8 @@ browser, and a flowsheet renders inline in Jupyter.
   heat exchangers, …) and connect their named ports; streams are created for you.
 - **Automatic layout** — Sugiyama-style layering, crossing reduction, and a
   center-aligned flow spine; recycles are detected and routed around the sheet.
+  Ports that a symbol authors on more than one face are put on the face the
+  peer is actually on, so a drum under its condenser is fed from the top.
 - **Orthogonal A\* routing** — clean right-angle streams with crossing jump-gaps
   and parallel-segment separation. Never emits a disconnected stream.
 - **Industry-standard symbol library** — 95+ ISO 10628-2 / ISA-5.1 symbols with
@@ -213,14 +215,20 @@ fs.add(units.Pump("P-1")).pin(x=200, y=100, orientation=90)      # discharge now
 fs.add(units.Pump("P-2")).pin(x=400, y=100, mirrored="y")        # flipped top-to-bottom
 ```
 
-**Choosing a port's face.** Many vessels can be piped from more than one side.
-Where a symbol authors a coordinate per face, `nozzle()` picks one — naming the
-compass point **as drawn**, so mirroring cannot invert it. Nozzles fixed by
-physics (a column's bottoms, a drum's liquid draw-off) offer one face and raise:
+**Choosing a port's face.** Many vessels can be piped from more than one side,
+and the engine picks which one: it scores every face the symbol authored against
+where the unit at the other end of the stream actually landed, and takes the
+shortest run. A reflux drum sitting under its condenser is fed from the top
+without being told. Nozzles fixed by physics (a column's bottoms, a drum's
+liquid draw-off) offer one face and are never moved.
+
+`nozzle()` overrides the choice where the sheet wants a particular convention,
+naming the compass point **as drawn** so mirroring cannot invert it;
+`Flowsheet(..., auto_faces=False)` turns the whole thing off:
 
 ```python
 drum = fs.add(units.Separator("V-1", variant="horizontal"))
-drum.nozzle("feed", "N")        # feed the drum from above instead of the left head
+drum.nozzle("feed", "N")        # always from above, however the header is laid in
 ```
 
 Pinned and auto-placed units mix freely — the engine resolves each unit's frame
@@ -479,7 +487,9 @@ this inline item), and `n_inlets` / `n_outlets` for `Mixer` / `Splitter`.
 **`pin` / `port_faces`** — `pin` mirrors `pin()`: `x`/`y` (absolute), `col`/`row`
 (grid), `orientation` (`0`/`90`/`180`/`270`) and `mirrored` (`x`/`y`/`xy`).
 `port_faces` maps a port to the face it leaves from **as drawn**, so a
-mirrored or turned unit takes the face the reader sees.
+mirrored or turned unit takes the face the reader sees. It is an override —
+without it the engine picks the face itself, and the top-level `auto_faces:
+false` is how you stop it.
 
 **`instruments`** — `type` (required) and `number` make the tag, so `{type: LIC,
 number: 101}` is referred to elsewhere as `LIC-101`. `on` names the host: a unit,
@@ -538,8 +548,9 @@ Runnable scripts in `examples/`, each usable from the repo root or from
 1. **Topology** (`pfd/flowsheet.py`, `pfd/units.py`, `pfd/ports.py`,
    `pfd/streams.py`) — units, ports, and stream connectivity.
 2. **Geometry** — `pfd/layout/` (Sugiyama layering → ordering → coordinates,
-   emitting each unit's resolved `Frame`), `pfd/portgeom.py` (single source of
-   truth for port geometry), `pfd/routing/` (visibility graph + A\*).
+   emitting each unit's resolved `Frame`, then port-face selection and label
+   placement), `pfd/portgeom.py` (single source of truth for port geometry),
+   `pfd/routing/` (visibility graph + A\*).
 3. **Render** (`pfd/render/`) — SVG output, the symbol registry, and
    `pfd/validate.py` / `pfd/document.py`.
 

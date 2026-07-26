@@ -23,7 +23,8 @@ Flowsheet(name: str, *,
           stream_naming_scheme: str | Callable[[int], str] = "S{n}",
           line_numbering_scheme: str | Callable[[Stream], str]
               = "{size}-{service}-{sequence}-{spec}",
-          line_number_start: int = 1001)
+          line_number_start: int = 1001,
+          auto_faces: bool = True)
 ```
 
 The container and the single source of truth for connectivity.
@@ -37,6 +38,8 @@ The container and the single source of truth for connectivity.
   way. Keyword-only. See [Line numbers](#line-numbers).
 - `line_number_start` — where the automatic sequence begins (default `1001`, so
   the first line is `…-1001-…`). Keyword-only.
+- `auto_faces` — let the engine choose which face each movable port is piped
+  from. See [automatic face selection](#automatic-face-selection). Keyword-only.
 
 ### Attributes
 
@@ -45,6 +48,7 @@ The container and the single source of truth for connectivity.
 | `units` | `list[Unit]` | in insertion order |
 | `streams` | `list[Stream]` | in creation order |
 | `components` | `list[Component]` | |
+| `auto_faces` | `bool` | engine picks movable ports' faces; default `True` |
 | `warnings` | `list[Issue]` | soft findings from the last render |
 | `title_block` | `TitleBlock \| None` | drawn under `styling="pid"` |
 | `annotations` | `list` | sheet furniture boxes |
@@ -338,18 +342,56 @@ fs.add(units.Pump("P-1")).pin(x=200, y=100, orientation=90)   # discharge now fa
 fs.add(units.Pump("P-2")).pin(x=400, y=100, mirrored="y")     # flipped top-to-bottom
 ```
 
+### Automatic face selection
+
+A port that its symbol authors on more than one face is **movable**, and the
+engine picks which of them the stream leaves from. It scores each declared face
+by the orthogonal run to the unit at the other end of the stream, charging a
+face that points away from that unit for the detour back around the box, and
+takes the cheapest — so a reflux drum sitting under its condenser is fed from
+the top without anyone saying so.
+
+Selection is a layout phase: it runs once per `layout()`, after every drawn box
+is settled and before labels, routing and rendering read a face. The choice is a
+*result*, so it lives on the resolved `Frame` (`frame.port_faces`), never on the
+unit — `to_dict()` writes the faces you named and not the ones the engine
+picked, and laying the same sheet out twice draws it the same way.
+
+Three things it will not do:
+
+- **Override you.** A face named with [`nozzle()`](#nozzle) always wins. That is
+  the point of keeping the call: the engine removes detours, it does not
+  adjudicate drawing conventions, and where a sheet wants a particular one you
+  still say so.
+- **Move a nozzle fixed by physics.** A column's bottoms, a drum's liquid draw —
+  the symbol authors one placement, so there is nothing to choose between and
+  the port is never even considered.
+- **Land two live connections on one point.** Ports are served in declaration
+  order and each takes the cheapest face still free, so the selector cannot
+  create the collision `validate()` reports as `coincident-ports`.
+
+`Flowsheet(..., auto_faces=False)` (or `fs.auto_faces = False`) turns it off:
+every port then sits on its symbol's own nozzle unless `nozzle()` moved it,
+which is what a sheet already tuned by hand wants. In the spec format it is the
+top-level `auto_faces` key.
+
+Ties are common — a balloon is square, so stepping a signal round to the next
+face trades exactly as much horizontal run for vertical. They break towards the
+face pointing most directly at the peer, then on the symbol's own order of
+preference.
+
 ### `nozzle`
 
 ```text
 unit.nozzle(port_name: str, face: str) -> Unit
 ```
 
-Pipes a port from a named face of the unit **as drawn**. `face` is the compass
-point on the finished sheet — `"N"`, `"S"`, `"E"`, `"W"`, or the
-`top`/`bottom`/`left`/`right` spelling `label_pos` uses — so a mirrored or
-rotated unit takes the face the reader sees, not the one the stencil was drawn
-with. Raises `KeyError` for an unknown port and `ValueError` when the symbol
-offers no placement on that face.
+Pipes a port from a named face of the unit **as drawn**, overriding whatever the
+engine would have picked. `face` is the compass point on the finished sheet —
+`"N"`, `"S"`, `"E"`, `"W"`, or the `top`/`bottom`/`left`/`right` spelling
+`label_pos` uses — so a mirrored or rotated unit takes the face the reader sees,
+not the one the stencil was drawn with. Raises `KeyError` for an unknown port and
+`ValueError` when the symbol offers no placement on that face.
 
 The face has to be reachable under the placement the unit ends up with, and
 either call order enforces that: a `pin()` that rotates or mirrors the unit
@@ -366,18 +408,22 @@ them, and `nozzle()` always takes the moved face):
 
 | Symbol | Port | Faces |
 |---|---|---|
-| `Vessel(variant="horizontal")` | `inlet` | `W` (default), `N`, `E` |
-| `Separator(variant="horizontal")` | `feed` | `W` (default), `N`, `E` |
+| `Vessel(variant="horizontal")` | `inlet` | `W` (home), `N`, `E` |
+| `Separator(variant="horizontal")` | `feed` | `W` (home), `N`, `E` |
 | `Instrument` — `default`, `panel`, `aux`, `shared`, `computer` | `pv`, `sig_in`, `sig_out` | `N`, `S`, `E`, `W` |
 
 (`Instrument(variant="logic")`, the interlock square, offers no choice either.)
+The home is the symbol's own nozzle — where the port sits with `auto_faces` off,
+and the first entry of the menu the engine chooses from with it on.
 
 ```python
+# Both of these are conventions the geometry alone would not arrive at: the
+# engine takes the shortest run, and a shortest run is not always the drawing.
 drum = fs.add(units.Separator("V-1", variant="horizontal"))
-drum.nozzle("feed", "N")      # feed from above instead of the left head
+drum.nozzle("feed", "N")      # always from above, however the header is laid in
 
 lic = fs.add_instrument("LIC", 101, on=vessel, at="S", variant="panel")
-lic.nozzle("sig_out", "W")    # take the output on the side the valve is on
+lic.nozzle("sig_out", "W")    # keep the loop's output on the panel side
 ```
 
 `port_face()` is the deprecated spelling of the same call. It read its `face` in

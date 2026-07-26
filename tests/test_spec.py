@@ -169,6 +169,16 @@ def test_components_accept_a_bare_name_or_a_formula():
 def test_flowsheet_level_options():
     fs = Flowsheet.from_dict({"name": "T", "stream_naming_scheme": "L-{n}"})
     assert fs.stream_naming_scheme == "L-{n}"
+    assert fs.auto_faces is True
+
+
+def test_auto_faces_off_survives_a_round_trip():
+    """A sheet whose faces were settled by hand has to come back settled by
+    hand; silently re-enabling the selector would redraw it on reload."""
+    fs = Flowsheet.from_dict({"name": "T", "auto_faces": False})
+    assert fs.auto_faces is False
+    assert fs.to_dict()["auto_faces"] is False
+    assert "auto_faces" not in Flowsheet("T").to_dict()
 
 
 def test_retired_direction_key_is_refused():

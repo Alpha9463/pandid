@@ -106,6 +106,11 @@ class Frame:
     mirrored: bool = False
     mirror_y: bool = False
     label_pos: str | None = None  # resolved label side: top/bottom/left/right
+    # Faces the engine picked for movable ports (see pfd.layout.faces), keyed by
+    # port name. A *result*, so it belongs here and not on the unit: the unit
+    # carries only what the author asked for, and a layout run that started from
+    # a previous run's pick would not be idempotent.
+    port_faces: dict[str, str] = field(default_factory=dict)
 
     @property
     def x_max(self) -> float:

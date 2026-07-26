@@ -136,9 +136,11 @@ class Unit:
     def nozzle(self, port_name: str, face: str) -> "Unit":
         """Pipe a port from a named face of the unit *as drawn*.
 
-        Many vessels can be piped from more than one side; where a symbol
-        authors a coordinate per face, this picks one. ``face`` is the compass
-        point on the finished sheet — ``"N"``/``"S"``/``"E"``/``"W"``, or the
+        Many vessels can be piped from more than one side, and the layout engine
+        already picks between them from where the peer landed (see
+        :mod:`pfd.layout.faces`); this overrides that pick, which is how a
+        drawing convention gets stated. ``face`` is the compass point on the
+        finished sheet — ``"N"``/``"S"``/``"E"``/``"W"``, or the
         ``top``/``bottom``/``left``/``right`` spelling ``label_pos`` uses — so a
         mirrored unit takes the face the reader sees rather than the one the
         stencil happened to be drawn with.

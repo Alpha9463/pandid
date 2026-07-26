@@ -7,7 +7,10 @@ unit's streams visually disconnected.
 
 :func:`resolve_port` is the single authority: it answers a port's drawn point,
 its routing anchor and its face together, and everything else here is a wrapper
-over it. Deriving any one of the three somewhere else is the bug.
+over it. Deriving any one of the three somewhere else is the bug. Which of a
+port's declared faces it puts the ink on comes from :func:`chosen_face`, so
+there is one precedence — the author's, then the engine's, then the symbol's —
+and one place stating it.
 
 All functions take a resolved box explicitly (``w``, ``h``, ``mirrored``) rather
 than reading ``unit.frame``, so they work both during layout (on a ``_Slot``)
@@ -241,15 +244,30 @@ def outward_dir(px: float, py: float, w: float, h: float,
     return "E"
 
 
+def chosen_face(unit: "Unit", placed, port_name: str) -> str | None:
+    """The face this port is to be piped from, or None for the symbol's own.
+
+    An explicit :meth:`pfd.units.Unit.nozzle` beats the face the layout engine
+    picked: naming a face is how a drawing convention is stated, and a
+    convention the geometry may overrule is not one. The engine's own answer
+    rides on the resolved :class:`~pfd.geometry.Frame` rather than on the unit,
+    which is what keeps it a *result* — recomputed from scratch by every layout
+    run, and invisible to the solver's ``_Slot``, which has no such field.
+    """
+    explicit = (getattr(unit, "_port_faces", None) or {}).get(port_name)
+    if explicit is not None:
+        return explicit
+    return (getattr(placed, "port_faces", None) or {}).get(port_name)
+
+
 def _local_port(unit: "Unit", port_name: str, w: float, h: float,
-                mirrored: bool, mirror_y: bool = False, rot: int = 0
+                mirrored: bool, mirror_y: bool, rot: int, want: str | None
                 ) -> tuple[float, float]:
     """Port position relative to the unit's top-left, in resolved pixels.
 
-    Takes the placement whose drawn face the caller asked for through
-    :meth:`pfd.units.Unit.nozzle`, else the symbol's own nozzle — which is the
-    menu's first entry, since the whole point of folding the home in is that
-    there is no second place to look.
+    Takes the placement on the face ``want`` names, else the symbol's own nozzle
+    — which is the menu's first entry, since the whole point of folding the home
+    in is that there is no second place to look.
 
     A face that *was* chosen and this transform cannot reach raises rather than
     falling back to the home nozzle, which would move the stream to the far side
@@ -257,7 +275,6 @@ def _local_port(unit: "Unit", port_name: str, w: float, h: float,
     a later ``pin()``, and this is the call that decides where the ink goes.
     """
     placements = _drawn_placements(unit, port_name, w, h, rot, mirrored, mirror_y)
-    want = (getattr(unit, "_port_faces", None) or {}).get(port_name)
     if want is None:
         return next(iter(placements.values()))
     if want not in placements:
@@ -283,7 +300,8 @@ def resolve_port(unit: "Unit", frame, port_name: str) -> ResolvedPort:
     """
     w, h = frame.w, frame.h
     rot, mirrored, mirror_y = _xform(frame)
-    px, py = _local_port(unit, port_name, w, h, mirrored, mirror_y, rot)
+    want = chosen_face(unit, frame, port_name)
+    px, py = _local_port(unit, port_name, w, h, mirrored, mirror_y, rot, want)
     d = outward_dir(px, py, w, h, unit.kind, port_name, mirrored)
 
     if unit.kind in ("feed", "product"):

@@ -3,6 +3,10 @@
 Maps each unit's grid rank (``_slot.col``/``_slot.row``) to absolute pixel
 coordinates, honoring any pinned ``x``/``y``, then emits the resolved
 :class:`~pfd.geometry.Frame` the router and renderer consume.
+
+:func:`assign_labels` closes the run but is a separate phase the engine calls
+after :mod:`pfd.layout.faces` has chosen the movable ports' faces, since a label
+dodges the faces the nozzles actually leave from.
 """
 
 from typing import TYPE_CHECKING
@@ -137,13 +141,12 @@ def assign_coordinates(fs: "Flowsheet") -> None:
         )
 
     place_attached(fs)
-    _assign_labels(fs)
 
 
 _DIR_OF_SIDE = {"top": "N", "bottom": "S", "left": "W", "right": "E"}
 
 
-def _assign_labels(fs: "Flowsheet") -> None:
+def assign_labels(fs: "Flowsheet") -> None:
     """Resolve each unit's label side, avoiding faces a connected port occupies.
 
     Explicit user ``label_pos`` or a symbol default wins; otherwise the label
