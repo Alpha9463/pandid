@@ -35,8 +35,8 @@
     <text x="184.0" y="108.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S1</text>
     <rect x="358.8" y="91.7" width="18.4" height="13.0" fill="white" />
     <text x="368.0" y="98.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S2</text>
-    <rect x="543.8" y="100.8" width="18.4" height="13.0" fill="white" />
-    <text x="553.0" y="107.3" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S3</text>
+    <rect x="546.5" y="98.1" width="13.0" height="18.4" fill="white" />
+    <text x="553.0" y="107.3" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 553.0, 107.3)">S3</text>
     <rect x="653.8" y="136.7" width="18.4" height="13.0" fill="white" />
     <text x="663.0" y="143.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S4</text>
     <rect x="806.8" y="66.7" width="18.4" height="13.0" fill="white" />

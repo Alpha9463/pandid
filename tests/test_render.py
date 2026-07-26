@@ -1,4 +1,46 @@
+import re
+
 from pfd import Flowsheet, units as U
+
+# A stream-number label: its opaque halo, then the text it backs.
+_LABEL = re.compile(
+    r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" height="([\d.]+)" fill="white" />\s*'
+    r'(<text [^>]*font-size="10"[^>]*>)([^<]*)</text>'
+)
+_PROCESS_LINE = re.compile(r'<path d="([^"]+)" fill="none" stroke="[^"]*" stroke-width="2"')
+
+
+def _stream_labels(svg):
+    """``(halo box, text tag, name)`` for every stream number drawn on the sheet."""
+    out = []
+    for x, y, w, h, tag, name in _LABEL.findall(svg):
+        x, y, w, h = float(x), float(y), float(w), float(h)
+        out.append(((x, y, x + w, y + h), tag, name))
+    return out
+
+
+def _stream_runs(svg):
+    """Straight runs of every drawn process line, as ``((x1, y1), (x2, y2))``."""
+    runs = []
+    for d in _PROCESS_LINE.findall(svg):
+        pts = [tuple(map(float, p.split(","))) for p in re.findall(r"-?[\d.]+,-?[\d.]+", d)]
+        runs += list(zip(pts, pts[1:]))
+    return runs
+
+
+def _covers(box, run):
+    """Whether *box* swallows *run* end to end, leaving no line drawn."""
+    x0, y0, x1, y1 = box
+    return all(x0 <= x <= x1 and y0 <= y <= y1 for x, y in run)
+
+
+def _overlaps(box, run):
+    """Whether *box* touches any part of an axis-aligned *run*."""
+    x0, y0, x1, y1 = box
+    (rx0, ry0), (rx1, ry1) = run
+    return (
+        min(rx0, rx1) <= x1 and max(rx0, rx1) >= x0 and min(ry0, ry1) <= y1 and max(ry0, ry1) >= y0
+    )
 
 
 def test_render_svg_with_manual_placements(tmp_path):
@@ -65,8 +107,6 @@ def test_unit_labels_drawn_over_streams_with_a_halo():
 def test_stream_number_labels_do_not_overprint():
     # Streams sharing a corridor sit a few px apart; their numbers must be slid
     # along the line rather than stacked on the same point.
-    import re
-
     fs = Flowsheet("Crossing")
     f1, f2 = fs.add(U.Feed("Feed A")), fs.add(U.Feed("Feed B"))
     s1 = fs.add(U.Splitter("SP-501", n_outlets=2))
@@ -94,6 +134,70 @@ def test_stream_number_labels_do_not_overprint():
             dx = abs(pts[i][0] - pts[j][0])
             dy = abs(pts[i][1] - pts[j][1])
             assert dx >= 12 or dy >= 12, f"labels overprint at {pts[i]} / {pts[j]}"
+
+
+def _transfer_sheet():
+    """Two short runs carrying line numbers far wider than the runs themselves."""
+    fs = Flowsheet("Line Numbers")
+    feed = fs.add(U.Feed("Raw Feed")).pin(x=60, y=100)
+    valve = fs.add(U.Valve("FV-101", variant="control")).pin(x=180, y=110)
+    prod = fs.add(U.Product("To Unit 200")).pin(x=280, y=100)
+    valve.significant = True  # a spec break, so each side is its own line
+    fs.connect(feed.outlet, valve.inlet, size='8"', service="P", spec="A1A")
+    fs.connect(valve.outlet, prod.inlet, size='6"', service="P", spec="D1B")
+    return fs
+
+
+def test_stream_label_halo_never_erases_its_own_run():
+    # The halo is opaque and sized from the character count, so a line number is
+    # wider than many of the runs it can land on. A halo that covers a run end to
+    # end leaves a floating label with an arrowhead attached to nothing.
+    svg = _transfer_sheet().to_svg()
+
+    labels = _stream_labels(svg)
+    assert len(labels) == 2
+    for box, _, name in labels:
+        for run in _stream_runs(svg):
+            assert not _covers(box, run), f"{name} erases the run {run}"
+
+
+def test_a_label_too_wide_for_its_run_is_written_beside_it():
+    # No amount of sliding rescues a label wider than its run, so it steps off
+    # the line entirely and leaves the pipe untouched.
+    svg = _transfer_sheet().to_svg()
+
+    runs = _stream_runs(svg)
+    for box, _, name in _stream_labels(svg):
+        assert not any(_overlaps(box, run) for run in runs), f"{name} still sits on a line"
+
+
+def test_a_label_with_room_to_spare_stays_on_its_run():
+    # The line number is the exception, not the rule: a stream number on an
+    # ordinary run still reads as a break in the line, the way a sheet draws it.
+    fs = Flowsheet("Plain")
+    feed = fs.add(U.Feed("F")).pin(x=60, y=100)
+    prod = fs.add(U.Product("P")).pin(x=400, y=100)
+    fs.connect(feed.outlet, prod.inlet)
+    svg = fs.to_svg()
+
+    ((box, tag, _),) = _stream_labels(svg)
+    assert any(_overlaps(box, run) for run in _stream_runs(svg))
+    assert "rotate" not in tag  # a horizontal run needs no turning
+
+
+def test_stream_label_on_a_vertical_run_reads_bottom_to_top():
+    # ISO 129-1 / ASME Y14.5 aligned text: a label follows its line, and a
+    # vertical one is turned so the sheet is read from the right, never upside
+    # down. Its halo turns with it, so the box is taller than it is wide.
+    fs = Flowsheet("Riser")
+    feed = fs.add(U.Feed("F")).pin(x=60, y=300)
+    prod = fs.add(U.Product("P")).pin(x=400, y=60)
+    fs.connect(feed.outlet, prod.inlet).via([(250, 325), (250, 85)])
+    svg = fs.to_svg()
+
+    ((box, tag, _),) = _stream_labels(svg)
+    assert 'transform="rotate(-90, ' in tag
+    assert box[3] - box[1] > box[2] - box[0]
 
 
 def test_render_svg_generic_symbol_duplicate_ids(tmp_path):
