@@ -1,12 +1,12 @@
-# pandid — P&ID and process flow diagram engine
+# pandid: P&ID and process flow diagram engine
 
 `pfd` is a zero-dependency, pure-Python engine that turns a topological
 flowsheet definition into a publication-quality, orthogonal **PFD / P&ID** as
-SVG. You describe *what connects to what*; the engine lays out the equipment,
+SVG. You describe *what connects to what*. The engine lays out the equipment,
 routes every stream, and draws industry-standard symbols.
 
-The distribution is **`pandid`** — how "P&ID" is said out loud — and it imports
-as **`pfd`**.
+The distribution is **`pandid`**, how "P&ID" is said out loud. It imports as
+**`pfd`**.
 
 [![Distillation train](https://raw.githubusercontent.com/Alpha9463/py-chemengg/main/docs/gallery/03_distillation_train.png)](https://github.com/Alpha9463/py-chemengg/blob/main/docs/gallery/README.md)
 
@@ -51,10 +51,10 @@ fs.connect(drum.liquid,   liquid.inlet)
 fs.render("flash.svg")        # layout + routing run automatically
 ```
 
-No coordinates anywhere: `render()` runs layout and routing for you. It infers
-the format from the extension (`.svg`, or `.pdf`/`.png` with the optional
-backend). `fs.to_svg()` returns the SVG string, `fs.show()` opens it in a
-browser, and a flowsheet renders inline in Jupyter.
+No coordinates anywhere. `render()` infers the format from the extension
+(`.svg`, or `.pdf`/`.png` with the optional backend). `fs.to_svg()` returns the
+SVG string, `fs.show()` opens it in a browser, and a flowsheet renders inline in
+Jupyter.
 
 ## What it does
 
@@ -112,11 +112,11 @@ supply; nothing is calculated from them. This is a drawing engine.
 
 ## Equipment & variants
 
-A **class** is a functional equipment type (defined by its ports); a **variant**
-is a visual style within it. Pick a variant with the `variant=` argument; the
-`"default"` variant is listed first with the shape it draws — those brackets are
-descriptions, not names. A name no symbol answers to raises `ValueError` listing
-the ones that kind does have.
+A **class** is a functional equipment type, defined by its ports. A **variant**
+is a visual style within it, picked with `variant=`. Each kind's `"default"` is
+listed first below, with the shape it draws in brackets. Those brackets are
+descriptions, not names. An unknown variant raises `ValueError` listing the ones
+that kind does have.
 
 ```python
 fs.add(units.HeatExchanger("E-1", variant="plate"))    # default, shell_tube, straight_tubes, plate, kettle, u_tube, condenser, spiral
@@ -134,9 +134,9 @@ Classes include: `Feed`, `Product`, `Pump`, `Compressor`, `Blower`, `Valve`,
 [API reference](https://github.com/Alpha9463/py-chemengg/blob/main/docs/api.md#units-and-ports) lists every class's ports and every
 registered variant.
 
-**Valve operators.** Most valve variants draw the body only; these draw the
-operator too, and their `actuator` port sits on its crown rather than on the
-body, so a controller output or interlock lands where the signal really goes:
+**Valve operators.** Most valve variants draw the body only. These also draw the
+operator, and put `actuator` on its crown rather than on the body, so a signal
+lands where it physically goes.
 
 ```python
 fs.add(units.Valve("XV-1", variant="solenoid"))    # motor, solenoid, hydraulic (lettered boxes)
@@ -148,25 +148,23 @@ fs.add(units.Valve("PCV-1", variant="regulator"))  # self-acting, with its exter
 Bodies without an operator: `plug`, `pinch`, `angle` (piped from below, out to
 the side) and `psv` (spring-loaded angle safety valve).
 
-**In-line fittings.** `Fitting` is one class because to the flowsheet every
-in-line device is the same thing — a pair of faces on a line — and they differ
-only in what is drawn between them. The variant picks the device: `strainer`,
-`strainer_cone`, `orifice`, `rotameter`, `rupture_disc`, `sight_glass`,
-`sight_glass_lit`, `silencer`, `expansion_joint`, `static_mixer`, `hose`,
-`coupling`, `clamped_coupling`, `flange` (the default), and the flame arrestors
-(`flame_arrestor` plus `_explosion_proof` / `_detonation_proof` /
+**In-line fittings.** Every in-line device is a pair of faces on a line, so
+`Fitting` is one class and the variant picks the device: `strainer`, `strainer_cone`, `orifice`, `rotameter`, `rupture_disc`,
+`sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `static_mixer`,
+`hose`, `coupling`, `clamped_coupling`, `flange` (the default), and the flame
+arrestors (`flame_arrestor` plus `_explosion_proof` / `_detonation_proof` /
 `_fire_resistant`).
 
 `Ejector` is separate because it has three connections (`motive`, `suction`,
-`discharge`), and `Vent` / `Funnel` because each has only one: `Vent` is a stack
-open to atmosphere that a PSV tailpipe or a tank breather terminates on, and
-`Funnel` is a manual charging point feeding the line.
+`discharge`). `Vent` and `Funnel` have one each: `Vent` is a stack open to
+atmosphere that a PSV tailpipe or a tank breather terminates on, and `Funnel` is
+a manual charging point feeding the line.
 
 ## Automatic layout and recycles
 
 Given only the topology, the engine layers the units, orders them to reduce
 crossings, aligns the main process line onto one axis, and detects feedback
-loops itself — you never declare a stream to be a recycle:
+loops itself. You never declare a stream to be a recycle.
 
 ```python
 from pfd import Flowsheet, units
@@ -205,10 +203,10 @@ fs.connect(feed.outlet, hx.cold_in).via([(130, 65), (130, 110)])
 ```
 
 **Orientation and mirroring.** `orientation` is a clockwise quarter turn in
-degrees (`0`/`90`/`180`/`270`) and swaps the unit's width and height; `mirrored`
-flips it — `True` or `"x"` left↔right (swapping the E and W faces), `"y"`
+degrees (`0`/`90`/`180`/`270`) and swaps the unit's width and height. `mirrored`
+flips it: `True` or `"x"` is left↔right (swapping the E and W faces), `"y"` is
 top↔bottom (swapping N and S), `"xy"` both. Ports follow the placement, so a
-stream never detaches from its nozzle:
+stream never detaches from its nozzle.
 
 ```python
 fs.add(units.Pump("P-1")).pin(x=200, y=100, orientation=90)      # discharge now faces S
@@ -231,10 +229,9 @@ drum = fs.add(units.Separator("V-1", variant="horizontal"))
 drum.nozzle("feed", "N")        # always from above, however the header is laid in
 ```
 
-Pinned and auto-placed units mix freely — the engine resolves each unit's frame
-from your intent and auto-routes anything you didn't pin. A port sits at a fixed
-*fraction* of its symbol's box, so lining two items up means matching those
-fractions rather than their corners; see [example 06](https://github.com/Alpha9463/py-chemengg/blob/main/docs/gallery/README.md#06--column-reflux-and-reboiler).
+Pinned and auto-placed units mix freely. A port sits at a fixed *fraction* of
+its symbol's box, so lining two items up means matching those fractions rather
+than their corners. See [example 06](https://github.com/Alpha9463/py-chemengg/blob/main/docs/gallery/README.md#06--column-reflux-and-reboiler).
 
 ## Instrumentation & signals
 
@@ -249,15 +246,15 @@ fs.connect(ft.sig_out, fic.sig_in, kind="electric")        # dashed
 fs.connect(fic.sig_out, fy.sig_in, kind="pneumatic")       # slash-ticks
 ```
 
-`type` and `number` make the tag: `unit.name` is `"FT-101"` for equipment lists
+`type` and `number` make the tag. `unit.name` is `"FT-101"` for equipment lists
 and cross-references, while the balloon draws the letters over the **bare**
 number, as a real sheet does. (`units.Instrument("FT-101")` is still accepted
-and split.) Signal `kind`s: `electric`, `pneumatic`, `data`/`software`,
-`capillary` — rendered with the right line style, no arrowheads, and no stream
+and split.) The signal `kind`s are `electric`, `pneumatic`, `data`/`software`
+and `capillary`, each with its own line style, no arrowheads and no stream
 numbers.
 
-**Attaching a balloon.** A bubble measures something, so anchor it to that
-thing with `on=` rather than letting the ranker float it in its own row:
+**Attaching a balloon.** A bubble measures something, so anchor it to that thing
+with `on=`.
 
 ```python
 s   = fs.connect(feed.outlet, fv.inlet)
@@ -271,31 +268,31 @@ fs.add_instrument("I", 1, on=lic, at="S", offset=44, variant="logic")   # interl
 - `on=` a **stream** taps the line, or a **unit** mounts on equipment.
 - `at=` is a fraction `0..1` along the host stream's routed path, or a face
   (`"N"`/`"S"`/`"E"`/`"W"`) of a host unit's box.
-- `offset=` is the distance from the tap to the balloon centre; `offset=0`
+- `offset=` is the distance from the tap to the balloon centre. `offset=0`
   leaves an in-line primary element sitting on the line.
 - `angle=` is the branch direction in degrees from the **flow direction at the
-  tap**, counter-clockwise positive (default `90`, i.e. perpendicular) — so a
-  tap keeps its orientation when the line is re-routed.
+  tap**, counter-clockwise positive (default `90`, i.e. perpendicular). Measured
+  from the flow, so a tap keeps its orientation when the line is re-routed.
 
-An impulse line is drawn from the tap to the balloon: a fine solid line to a
-process host, dashed where a balloon hangs off another balloon. Attached
-balloons take no part in the layout ranking, and are drawn over the lines so
-neither an in-line element nor a stream number is lost underneath one.
+An impulse line runs from the tap to the balloon: fine and solid to a process
+host, dashed where a balloon hangs off another balloon. Attached balloons take
+no part in layout ranking and are drawn over the lines, so neither an in-line
+element nor a stream number is lost underneath one.
 
 **Final control element.** `Valve.actuator` is the signal connection on top of
-the valve, so a controller output terminates on real equipment:
+the valve, so a controller output terminates on real equipment.
 
 ```python
 fs.connect(fic.sig_out, fv.actuator, kind="pneumatic")
 ```
 
-A relief valve is an ordinary `Valve` with `variant="relief"`; its tag is drawn
+A relief valve is an ordinary `Valve` with `variant="relief"`. Its tag is drawn
 as plain text beside the symbol (`PSV-308`), not in a balloon.
 
 Inline fittings (valves, reducers, `Fitting`s) carry the stream number
-**through** them; set `unit.significant = True` to break the number at an
-important valve. `connect()` hands back the number that gets drawn, so
-`s.name` is safe to quote in a report or a stream table of your own.
+**through** them. Set `unit.significant = True` to break the number at an
+important valve. `connect()` returns the number that gets drawn, so `s.name` is
+safe to quote in a report or a stream table of your own.
 
 ## Line numbers
 
@@ -331,10 +328,10 @@ is numbered exactly as before.
 ## Engineering title block & sheet furniture
 
 Under `styling="pid"` the sheet gets a zone-ruled border and a full-width
-engineering title strip. `title`/`subtitle` are the two title lines; `company`
+engineering title strip. `title`/`subtitle` are the two title lines, `company`
 fills the logo cell and `status` the issue-status cell. Each `Revision` carries
-its own `by`/`checked`/`approved` initials (the block-level
-`drawn_by`/`checked_by`/`approved_by` backfill the newest row).
+its own `by`/`checked`/`approved` initials, and the block-level
+`drawn_by`/`checked_by`/`approved_by` backfill the newest row.
 
 ```python
 from pfd.document import TitleBlock, Revision
@@ -350,14 +347,14 @@ fs.title_block = TitleBlock(
 )
 ```
 
-**Generic titled boxes** dock **flush to the sheet frame** — like a real
-drawing, not floating in the whitespace. `align=` is a nine-point grid
+**Generic titled boxes** dock **flush to the sheet frame**, as on a real
+drawing. `align=` is a nine-point grid
 (`top-left`/`top`/`top-right`/`left`/`center`/`right`/`bottom-left`/`bottom`/
-`bottom-right`); the box's matching corner/edge is pinned to the frame's, inset
-by an optional `margin=`. For hand-placed furniture, `position=(x, y)` pins the
-box's **top-left corner** at absolute sheet coordinates instead. Equipment
-lists, notes, and legends are thin wrappers over `Annotation`; `TableBox` is a
-bordered grid for anything else. Add them with `fs.add_annotation(...)`.
+`bottom-right`) that pins the box's matching corner or edge to the frame's,
+inset by an optional `margin=`. `position=(x, y)` instead pins the box's
+**top-left corner** at absolute sheet coordinates. Equipment lists, notes and
+legends are thin wrappers over `Annotation`, and `TableBox` is a bordered grid
+for anything else. Add them with `fs.add_annotation(...)`.
 
 ```python
 from pfd.document import equipment_list, notes, legend, Annotation, TableBox
@@ -372,16 +369,16 @@ fs.add_annotation(Annotation(title="HOLD", rows=["Awaiting vendor data"],
 
 (`anchor=` is still accepted as a deprecated alias for `align=`.)
 
-**Off-page connectors** — a boundary flag's `reference` is drawn as its second
-line (the drawing the stream comes from / goes to):
+**Off-page connectors.** A boundary flag's `reference` is drawn as its second
+line, naming the drawing the stream comes from or goes to.
 
 ```python
 fs.add(units.Feed("Fermentation Broth", reference="PFD-201"))
 ```
 
-**Stream table** — property rows render in first-seen key order (values are the
-strings you supply and carry their own units); inject section headers with
-`stream_table_sections`:
+**Stream table.** Property rows render in first-seen key order. Values are the
+strings you supply and carry their own units. Inject section headers with
+`stream_table_sections`.
 
 ```python
 fs.stream_table_sections = [("Ethanol", "Mass Fraction")]   # header before "Ethanol"
@@ -390,10 +387,9 @@ fs.render("sheet.svg", styling="pid", show_stream_table=True)
 
 ## Building a flowsheet from data
 
-An equipment list and a stream table are data, and they usually already exist —
-in a spreadsheet, a YAML file, or a simulator export. The same flowsheet can be
-declared as a plain mapping and handed to the engine, so nobody has to retype a
-schedule as Python:
+An equipment list and a stream table are data, and usually already exist in a
+spreadsheet, a YAML file, or a simulator export. Declare the flowsheet as a
+plain mapping and hand it to the engine instead of retyping it as Python.
 
 ```python
 from pfd import Flowsheet
@@ -406,11 +402,11 @@ spec = fs.to_dict()                      # writes the same spec back out
 fs.render("bfw.svg", styling="pid", show_stream_table=True)
 ```
 
-`to_dict()` **round-trips**: `Flowsheet.from_dict(fs.to_dict())` rebuilds an
-equivalent flowsheet — same equipment, same nozzles, same placement, same
-drawing. Only intent is written, never the engine's results (resolved frames,
-routed paths, computed stream numbers), so the file stays short and re-lays out
-cleanly. YAML is the one optional extra; `from_dict` and `from_json` need
+`to_dict()` **round-trips**. `Flowsheet.from_dict(fs.to_dict())` rebuilds an
+equivalent flowsheet with the same equipment, nozzles, placement and drawing.
+Only intent is written, never the engine's results (resolved frames, routed
+paths, computed stream numbers), so the file stays short and re-lays out
+cleanly. YAML is the one optional extra. `from_dict` and `from_json` need
 nothing, and asking for YAML without PyYAML installed says exactly that.
 
 A complete sheet:
@@ -491,14 +487,14 @@ mirrored or turned unit takes the face the reader sees. It is an override —
 without it the engine picks the face itself, and the top-level `auto_faces:
 false` is how you stop it.
 
-**`instruments`** — `type` (required) and `number` make the tag, so `{type: LIC,
-number: 101}` is referred to elsewhere as `LIC-101`. `on` names the host: a unit,
-a named stream, or `[unit, port]` for the line leaving that nozzle — which is how
-`to_dict()` writes it, since auto-numbered stream names are rewritten at render
+**`instruments`.** `type` (required) and `number` make the tag, so
+`{type: LIC, number: 101}` is `LIC-101` elsewhere. `on` names the host: a unit,
+a named stream, or `[unit, port]` for the line leaving that nozzle. `to_dict()`
+writes that last form, since auto-numbered stream names are rewritten at render
 time. `at` / `offset` / `angle` / `variant` / `port_faces` behave as in
 `add_instrument()`. An instrument with no `on` is laid out like any other unit.
 
-**`streams`** — `from` and `to` are `[unit, port]` pairs (or
+**`streams`.** `from` and `to` are `[unit, port]` pairs (or
 `{unit: ..., port: ...}`). `kind` makes a signal line (`electric`, `pneumatic`,
 `data`, …), `name` overrides the auto number, `tear_hint` nominates the recycle
 to cut, `via` forces waypoints, and `properties` is that line's stream-table
@@ -507,13 +503,13 @@ components, and `sequence` overrides the one auto-numbering would assign —
 which is why `to_dict()` writes the components but never the computed
 sequence.
 
-**Sheet furniture** — `title_block` takes the `TitleBlock` fields plus
-`revisions`; each `annotations` entry is one box, typed `equipment_list`,
-`notes`, `legend`, `annotation` or `table`, and placed with `align` /
-`position` / `margin` exactly as above.
+**Sheet furniture.** `title_block` takes the `TitleBlock` fields plus
+`revisions`. Each `annotations` entry is one box, typed `equipment_list`,
+`notes`, `legend`, `annotation` or `table`, placed with `align` / `position` /
+`margin` exactly as above.
 
-**Errors name the entry and what would have worked** — the format is validated,
-not interpreted, so a typo cannot silently drop a nozzle off the drawing:
+**Errors name the entry and what would have worked**, so a typo cannot silently
+drop a nozzle off the drawing:
 
 ```
 units[3] 'P-101': unknown key 'varient' (did you mean 'variant'?); allowed keys:
@@ -557,9 +553,9 @@ Runnable scripts in `examples/`, each usable from the repo root or from
 Geometry separates *intent* (`Pin`, from `pin()`) from *result* (`Frame`,
 computed by the layout engine), so layout is idempotent.
 
-The symbol library is generated by `scripts/vendor_symbols.py`
-(mxGraph stencil XML → SVG via `scripts/mxgraph_to_svg.py`) into
-`pfd/render/_vendored_symbols.py`; `scripts/symbol_sheet.py` renders a catalogue.
+`scripts/vendor_symbols.py` generates the symbol library into
+`pfd/render/_vendored_symbols.py`, converting mxGraph stencil XML to SVG via
+`scripts/mxgraph_to_svg.py`. `scripts/symbol_sheet.py` renders a catalogue.
 
 ## Contributing
 
@@ -573,18 +569,17 @@ companies**, under the [PolyForm Small Business License 1.0.0](https://polyformp
 
 You may use it at no cost if your company has **fewer than 100 people** and
 **under 1,000,000 USD** (2019, inflation adjusted) of revenue in its prior tax
-year. Students, academics, hobbyists and small consultancies are covered.
-
-A company above either threshold needs a commercial licence. Contact
+year. Students, academics, hobbyists and small consultancies are covered. A
+company above either threshold needs a commercial licence. Contact
 `<add your contact address>`.
 
-This is a source-available licence, not an OSI-approved open-source one — worth
-knowing if your organisation screens dependencies by licence.
+This is a source-available licence, not an OSI-approved open-source one, which
+matters if your organisation screens dependencies.
 
 **Equipment symbols are Apache-2.0 and stay that way.** They derive from the
 draw.io / diagrams.net P&ID stencils, so `pfd/render/_vendored_symbols.py` and
 `scripts/vendor_data/drawio/` carry the original licence rather than the one
 above. [`NOTICE`](https://github.com/Alpha9463/py-chemengg/blob/main/NOTICE)
-says exactly which files are which; the full texts are in
+says exactly which files are which. The full texts are in
 [`LICENSE`](https://github.com/Alpha9463/py-chemengg/blob/main/LICENSE) and
 [`LICENSE-APACHE`](https://github.com/Alpha9463/py-chemengg/blob/main/LICENSE-APACHE).

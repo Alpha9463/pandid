@@ -2,7 +2,7 @@
 
 Every script in [`examples/`](../../examples) rendered to SVG and PNG. The PNG is
 shown inline (raster, 1600 px wide); the SVG beside each heading is the real
-output — vector, searchable text, and what `fs.render("…svg")` actually writes.
+output: vector, searchable text, and what `fs.render("…svg")` actually writes.
 
 These are **generated, not hand-drawn**. To rebuild them, run the examples and
 copy their output:
@@ -14,12 +14,12 @@ for f in examples/0*.py; do python "$f"; done
 Each script writes its SVG next to itself in `examples/` (gitignored); the
 gallery copies are those files, with the PNGs rasterized from them by
 `cairosvg` at `output_width=1600`. Note that `03` leaves its `TitleBlock.date`
-blank, so the renderer stamps the current date — that image changes whenever it
-is regenerated.
+blank, so the renderer stamps the current date and that image changes whenever
+it is regenerated.
 
 ---
 
-## 01 — Ammonia loop
+## 01 · Ammonia loop
 
 [`examples/01_ammonia_loop.py`](../../examples/01_ammonia_loop.py) ·
 [SVG](01_ammonia_loop.svg)
@@ -32,7 +32,7 @@ axis and routes every stream. The compressor discharge back to the mixer is
 detected as the recycle and carried across the top of the sheet, and the streams
 are numbered `S1`…`S7` in creation order.
 
-## 02 — Manual layout
+## 02 · Manual layout
 
 [`examples/02_manual_layout.py`](../../examples/02_manual_layout.py) ·
 [SVG](02_manual_layout.svg)
@@ -41,10 +41,10 @@ are numbered `S1`…`S7` in creation order.
 
 The two pixel-level escape hatches. Every unit is `pin(x=…, y=…)`ed, with the
 port heights matched so three of the four runs come out dead straight. The
-fourth uses `via([...])` to force the stream down, along and back up — an
-explicit detour the auto-router would never choose, honoured verbatim.
+fourth uses `via([...])` to force the stream down, along and back up, an
+explicit detour the auto-router would never choose but honours verbatim.
 
-## 03 — Distillation train
+## 03 · Distillation train
 
 [`examples/03_distillation_train.py`](../../examples/03_distillation_train.py) ·
 [SVG](03_distillation_train.svg)
@@ -53,14 +53,14 @@ explicit detour the auto-router would never choose, honoured verbatim.
 
 The full engineering sheet: `styling="pid"` draws the zone-ruled ASME-style
 border and the full-width title strip with its revision history, company cell
-and issue status. Around it, furniture docked flush to the frame — an auto
+and issue status. Around it, furniture docked flush to the frame: an auto
 `equipment_list()` built from each unit's `description`, numbered `notes()`, and
 a `legend()`. Along the bottom, the stream property table with a "Mass Fraction"
 section header injected via `stream_table_sections`. Two columns, their
 overheads and bottoms pumps, a bottoms splitter, and a recycle through FV-200
 back to the feed mixer. Boundary flags carry off-page `reference`s.
 
-## 04 — Control loop
+## 04 · Control loop
 
 [`examples/04_control_loop.py`](../../examples/04_control_loop.py) ·
 [SVG](04_control_loop.svg)
@@ -75,7 +75,7 @@ its high/low alarms alongside on the same loop number and an interlock square
 hung underneath on a dashed line. PSV-101 is an ordinary `Valve(variant="relief")`,
 tagged as plain text beside the symbol rather than in a balloon.
 
-## 05 — Reactor recycle
+## 05 · Reactor recycle
 
 [`examples/05_reactor_recycle.py`](../../examples/05_reactor_recycle.py) ·
 [SVG](05_reactor_recycle.svg)
@@ -88,7 +88,7 @@ axis. The splitter purges one outlet to a product flag and recycles
 the other back to the mixer; `tear_hint=True` tells the cycle breaker which edge
 to tear, and the recycle is routed clear across the top.
 
-## 06 — Column reflux and reboiler
+## 06 · Column reflux and reboiler
 
 [`examples/06_column_reflux.py`](../../examples/06_column_reflux.py) ·
 [SVG](06_column_reflux.svg)
@@ -104,7 +104,7 @@ one, since the condenser drains straight down onto it, and the condenser is
 `mirrored="x"` so it drains toward the drum. Equipment is pinned by nozzle
 fraction, which is what makes every run either straight or a single corner.
 
-## 07 — Metering skid
+## 07 · Metering skid
 
 [`examples/07_metering_skid.py`](../../examples/07_metering_skid.py) ·
 [SVG](07_metering_skid.svg)
@@ -119,15 +119,15 @@ making the signal climb over the vessel, and LIC-101 takes its output on its
 west face because that is the side the valve is on. The only rise on the sheet
 is across the pump, whose discharge nozzle really is above its suction.
 
-## 08 — Built from data
+## 08 · Built from data
 
 [`examples/08_from_data.py`](../../examples/08_from_data.py) ·
 [SVG](08_from_data.svg)
 
 ![Built from data](08_from_data.png)
 
-The only example that writes no flowsheet code at all: one plain mapping — the
-kind you would keep in a YAML file beside the equipment list it came from —
+The only example that writes no flowsheet code at all: one plain mapping, the
+kind you would keep in a YAML file beside the equipment list it came from,
 handed to `Flowsheet.from_dict`. Layout, routing and stream numbering run
 exactly as they do for the hand-written sheets, and `to_dict()` writes the same
 spec back out.
