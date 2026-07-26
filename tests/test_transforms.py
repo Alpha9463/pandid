@@ -103,6 +103,39 @@ def test_rotation_moves_the_face_a_port_leaves_from():
     assert port_anchor(turned, turned.frame, "discharge")[2] == "S"
 
 
+# --- what a second pin() call keeps ------------------------------------------
+
+
+def test_a_second_pin_keeps_the_transform_the_first_asked_for():
+    """#29: orientation and mirrored were written on every call, unlike the
+    axes, so nudging a unit with pin(y=...) un-turned and un-flipped it -- and
+    the sheet still rendered, so nothing was left to say so."""
+    drum = units.Separator("V-1", variant="horizontal")
+    drum.pin(x=100, y=100, orientation=90, mirrored="xy")
+    drum.pin(y=200)
+    assert (drum.pin_.x, drum.pin_.y) == (100.0, 200.0)
+    assert (drum.pin_.orientation, drum.pin_.mirrored, drum.pin_.mirror_y) == (90, True, True)
+
+
+def test_pin_still_clears_a_transform_when_asked_to():
+    drum = units.Separator("V-1", variant="horizontal")
+    drum.pin(x=100, y=100, orientation=90, mirrored=True)
+    drum.pin(orientation=0, mirrored=False)
+    assert (drum.pin_.orientation, drum.pin_.mirrored, drum.pin_.mirror_y) == (0, False, False)
+
+
+def test_a_nudged_unit_is_still_drawn_turned():
+    """The intent has to survive as far as the resolved frame: what the reader
+    of the sheet sees is the drawn box and the face a stream leaves from."""
+    fs, p = _pump_sheet(orientation=90)
+    turned_box = (p.frame.w, p.frame.h)
+    p.pin(y=260)
+    fs.layout()
+    assert p.frame.y == 260.0
+    assert (p.frame.w, p.frame.h) == turned_box
+    assert port_anchor(p, p.frame, "discharge")[2] == "S"
+
+
 # --- moving a port to another face ------------------------------------------
 
 
