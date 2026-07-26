@@ -1,6 +1,7 @@
-"""Golden-file SVG regression over a fixed corpus: the eight examples'
-flowsheets, two of which (03 and 08) also exercise ``styling="pid"`` with the
-stream table and sheet furniture (title block, equipment list, notes, legend).
+"""Golden-file SVG regression over a fixed corpus: the nine examples'
+flowsheets, three of which (03, 08 and 09) also exercise ``styling="pid"`` with
+the stream table and sheet furniture (title block, equipment list, notes,
+legend).
 
 The flowsheets are rebuilt here rather than by importing examples/*.py: those
 scripts render straight to a file under examples/ (a side effect a test suite
@@ -374,6 +375,81 @@ def _from_data() -> Flowsheet:
     return Flowsheet.from_dict(data)
 
 
+def _line_numbers() -> Flowsheet:
+    fs = Flowsheet("Transfer and Relief")
+    feed = fs.add(units.Feed("Raw Feed", reference="PFD-100"))
+    hv = fs.add(units.Valve("HV-101", description="Suction Isolation Valve"))
+    strainer = fs.add(units.Fitting("ST-101", variant="strainer", description="Suction Strainer"))
+    pump = fs.add(units.Pump("P-101", description="Transfer Pump"))
+    fv = fs.add(units.Valve("FV-101", variant="control", description="Discharge Control Valve"))
+    surge = fs.add(units.Vessel("V-101", width=90, height=140, description="Surge Vessel"))
+    psv = fs.add(
+        units.Valve(
+            "PSV-101", variant="psv", width=40, height=68, description="Vessel Relief Valve"
+        )
+    )
+    flare = fs.add(units.Product("To Flare", reference="PFD-900"))
+    prod = fs.add(units.Product("To Unit 200", reference="PFD-200"))
+
+    fv.significant = True
+    psv.significant = True
+
+    feed.pin(x=60, y=275)
+    hv.pin(x=235, y=285)
+    strainer.pin(x=335, y=280)
+    pump.pin(x=425, y=270)
+    fv.pin(x=575, y=265)
+    surge.pin(x=725, y=210)
+    prod.pin(x=925, y=255)
+    surge_vent_x = 725 + (31 / 62) * 90
+    psv.pin(x=surge_vent_x - (10.5 / 27.8) * 40, y=110)
+    flare.pin(x=945, y=110 + (30.2 / 47.2) * 68 - 25)
+
+    suction = fs.connect(feed.outlet, hv.inlet, size='8"', service="P", spec="A1A")
+    fs.connect(hv.outlet, strainer.inlet)
+    fs.connect(strainer.outlet, pump.suction)
+    discharge = fs.connect(pump.discharge, fv.inlet, size='6"', service="P", spec="A1A")
+    downstream = fs.connect(fv.outlet, surge.inlet, size='6"', service="P", spec="D1B")
+    to_unit = fs.connect(surge.outlet, prod.inlet, size='6"', service="P", spec="D1B")
+    relief = fs.connect(surge.vent, psv.inlet, size='3"', service="P", spec="A1A")
+    tail = fs.connect(psv.outlet, flare.inlet, size='4"', service="FL", sequence=2740, spec="A1A")
+
+    conditions = [
+        (suction, "25 C", "1.2 bara", "42000"),
+        (discharge, "26 C", "9.5 bara", "42000"),
+        (downstream, "26 C", "4.0 bara", "42000"),
+        (to_unit, "26 C", "3.6 bara", "42000"),
+        (relief, "26 C", "4.0 bara", "0"),
+        (tail, "26 C", "1.1 bara", "0"),
+    ]
+    for stream, temperature, pressure, flow in conditions:
+        stream.properties = {
+            "Temperature": temperature,
+            "Pressure": pressure,
+            "Mass Flow (kg/h)": flow,
+        }
+
+    fs.title_block = TitleBlock(
+        title="Transfer and Relief U100",
+        subtitle="Piping and Instrumentation Diagram",
+        drawing_number="P&ID-1009",
+        project="Feed Transfer Package",
+        company="THE UNIVERSITY OF QUEENSLAND",
+        status="ISSUED FOR REVIEW",
+        sheet="1",
+        of_sheets="1",
+        scale="NTS",
+        drawn_by="A. Anderson",
+        checked_by="J. Smith",
+        date="2026-07-15",
+        revisions=[
+            Revision("A", "2026-06-20", "Issued for internal review", "AA"),
+            Revision("B", "2026-07-15", "Line numbers added", "AA", "JS"),
+        ],
+    )
+    return fs
+
+
 SCENARIOS = {
     "01_ammonia_loop": (_ammonia_loop, {}),
     "02_manual_layout": (_manual_layout, {}),
@@ -383,6 +459,7 @@ SCENARIOS = {
     "06_column_reflux": (_column_reflux, {}),
     "07_metering_skid": (_metering_skid, {}),
     "08_from_data": (_from_data, {"show_stream_table": True, "styling": "pid"}),
+    "09_line_numbers": (_line_numbers, {"show_stream_table": True, "styling": "pid"}),
 }
 
 

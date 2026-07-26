@@ -47,6 +47,17 @@ and is kept working.
   number on the stream you hold is the number that gets drawn; process streams
   take the low numbers, with energy streams and then unlabelled signal lines
   after them.
+- Line numbers — the identifier a P&ID actually labels a line with, and the one
+  the line list, the stress calculation and the isometric key on. `connect()`
+  takes `size`, `service`, `spec` and `insulation`; auto-numbering fills
+  `sequence` from `line_number_start` (default `1001`), and
+  `line_numbering_scheme` (default `"{size}-{service}-{sequence}-{spec}"`, a
+  format string or a callable) spells the site's convention. A line number is
+  assigned by the same pass as a stream number, so it carries through in-line
+  fittings and breaks where `significant` marks the spec break; an unset
+  component drops out with its separator, an explicitly named stream is never
+  reformatted, and a stream with no components set is numbered exactly as
+  before. The stream table heads each column with the line number.
 
 #### Layout
 
@@ -183,7 +194,7 @@ and is kept working.
 - GitHub Actions CI: `ruff check`, `ruff format --check tests`, `mypy pfd`
   (blocking), and `pytest` on Python 3.10, 3.11, 3.12 and 3.13.
 - `pre-commit` configuration mirroring the CI lint gates.
-- Eight runnable examples in `examples/`, each usable from the repository root
+- Nine runnable examples in `examples/`, each usable from the repository root
   or from `examples/` itself, and rendered into `docs/gallery/`.
 - Packaged as the **`pandid`** distribution — how "P&ID" is said out loud. The
   import name is `pfd`; plain `pfd` is taken on PyPI by an unrelated project.

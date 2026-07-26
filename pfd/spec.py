@@ -22,6 +22,8 @@ The format::
 
     name: Feed Metering Skid          # required; everything else is optional
     stream_naming_scheme: "S{n}"
+    line_numbering_scheme: "{size}-{service}-{sequence}-{spec}"
+    line_number_start: 1001
     components: [{name: Water, formula: H2O}]
 
     units:
@@ -36,7 +38,7 @@ The format::
          on: V-101, at: S, offset: 115, port_faces: {sig_out: W}}
 
     streams:
-      - {from: [Raw Feed, outlet], to: [ST-101, inlet]}
+      - {from: [Raw Feed, outlet], to: [ST-101, inlet], size: '6"', service: P, spec: A1A}
       - {from: [LIC-101, sig_out], to: [FV-101, actuator], kind: electric}
       - {from: [FV-200, outlet], to: [M-100, in_2], tear_hint: true,
          properties: {"Temperature (C)": 25 C}}
@@ -59,9 +61,13 @@ from typing import Any
 from pfd import units as unit_types
 from pfd.components import Component
 from pfd.document import Annotation, Revision, TableBox, TitleBlock, equipment_list, legend, notes
-from pfd.flowsheet import Flowsheet
+from pfd.flowsheet import (
+    DEFAULT_LINE_NUMBER_START,
+    DEFAULT_LINE_NUMBERING_SCHEME,
+    Flowsheet,
+)
 from pfd.ports import Port
-from pfd.streams import Stream
+from pfd.streams import LINE_NUMBER_FIELDS, Stream
 from pfd.units import Instrument, Unit
 
 
@@ -140,6 +146,17 @@ def _flag(value: Any, where: str) -> bool:
     return value
 
 
+def _component(value: Any, where: str) -> str | float:
+    """A line-number component: text such as ``6"``, or the number an unquoted
+    metric size (``size: 150``) parses as."""
+    if isinstance(value, bool) or not isinstance(value, (str, int, float)):
+        raise SpecError(
+            f"{where} must be text or a number (an imperial size carries its own "
+            f"inch mark, e.g. '6\"'), got {value!r}"
+        )
+    return value
+
+
 def _fail_from(error: Exception, where: str) -> SpecError:
     """Re-raise a library error against the spec entry that provoked it."""
     message = error.args[0] if error.args else str(error)
@@ -192,7 +209,8 @@ def _resolve_kind(value: Any, where: str) -> type[Unit]:
 # ---------------------------------------------------------------------------
 
 _TOP_KEYS = {
-    "name", "stream_naming_scheme", "components", "units",
+    "name", "stream_naming_scheme", "line_numbering_scheme", "line_number_start",
+    "components", "units",
     "instruments", "streams", "stream_table_sections", "title_block", "annotations",
 }
 # Keys the format no longer has. A file written against the old one names the
@@ -211,6 +229,7 @@ _INSTRUMENT_KEYS = {
 }
 _STREAM_KEYS = {
     "from", "to", "kind", "name", "tear_hint", "properties", "via", "color", "dasharray",
+    *LINE_NUMBER_FIELDS,
 }
 _COMPONENT_KEYS = {"name", "formula"}
 _VARIABLE_PORTS = {"n_inlets": "Mixer", "n_outlets": "Splitter"}
@@ -232,9 +251,13 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
         raise SpecError(f"{where} needs a 'name' (the flowsheet's title)")
 
     scheme = data.get("stream_naming_scheme", "S{n}")
+    line_scheme = data.get("line_numbering_scheme", DEFAULT_LINE_NUMBERING_SCHEME)
+    start = data.get("line_number_start", DEFAULT_LINE_NUMBER_START)
     fs = Flowsheet(
         _text(data["name"], f"{where}: 'name'"),
         stream_naming_scheme=_text(scheme, f"{where}: 'stream_naming_scheme'"),
+        line_numbering_scheme=_text(line_scheme, f"{where}: 'line_numbering_scheme'"),
+        line_number_start=_integer(start, f"{where}: 'line_number_start'"),
     )
 
     for i, entry in enumerate(_sequence(data.get("components", []), "components")):
@@ -452,6 +475,9 @@ def _read_stream(fs: Flowsheet, entry: Any, where: str) -> Stream:
         kwargs["name"] = _text(data["name"], f"{where}.name")
     if "tear_hint" in data:
         kwargs["tear_hint"] = _flag(data["tear_hint"], f"{where}.tear_hint")
+    for key in LINE_NUMBER_FIELDS:
+        if key in data:
+            kwargs[key] = _component(data[key], f"{where}.{key}")
     try:
         stream = fs.connect(src, dst, **kwargs)
     except ValueError as e:
@@ -686,9 +712,18 @@ def to_dict(fs: Flowsheet) -> dict:
             "a callable stream_naming_scheme cannot be written to a spec; use a format "
             "string such as 'S{n}'"
         )
+    if not isinstance(fs.line_numbering_scheme, str):
+        raise SpecError(
+            "a callable line_numbering_scheme cannot be written to a spec; use a format "
+            f"string such as {DEFAULT_LINE_NUMBERING_SCHEME!r}"
+        )
     spec: dict[str, Any] = {"name": fs.name}
     if fs.stream_naming_scheme != "S{n}":
         spec["stream_naming_scheme"] = fs.stream_naming_scheme
+    if fs.line_numbering_scheme != DEFAULT_LINE_NUMBERING_SCHEME:
+        spec["line_numbering_scheme"] = fs.line_numbering_scheme
+    if fs.line_number_start != DEFAULT_LINE_NUMBER_START:
+        spec["line_number_start"] = fs.line_number_start
     if fs.components:
         spec["components"] = [
             c.name if c.formula is None else {"name": c.name, "formula": c.formula}
@@ -793,6 +828,12 @@ def _write_stream(stream: Stream) -> dict[str, Any]:
         entry["name"] = stream.name
     if stream.tear_hint:
         entry["tear_hint"] = True
+    for key in LINE_NUMBER_FIELDS:
+        value = getattr(stream, key)
+        # The sequence auto-numbering assigned is a result, not intent: writing
+        # it would pin a number the engine re-derives from the topology.
+        if value is not None and not (key == "sequence" and value == stream._auto_sequence):
+            entry[key] = value
     for key in ("color", "dasharray"):
         if getattr(stream, key) is not None:
             entry[key] = getattr(stream, key)

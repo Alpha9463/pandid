@@ -20,7 +20,10 @@ pfd.__version__          # the installed version, e.g. "0.0.1"
 
 ```text
 Flowsheet(name: str, *,
-          stream_naming_scheme: str | Callable[[int], str] = "S{n}")
+          stream_naming_scheme: str | Callable[[int], str] = "S{n}",
+          line_numbering_scheme: str | Callable[[Stream], str]
+              = "{size}-{service}-{sequence}-{spec}",
+          line_number_start: int = 1001)
 ```
 
 The container and the single source of truth for connectivity.
@@ -28,6 +31,12 @@ The container and the single source of truth for connectivity.
 - `name` — the flowsheet's name.
 - `stream_naming_scheme` — either a format string taking `{n}` (default
   `"S{n}"` → `S1`, `S2`, …) or a callable `int -> str`. Keyword-only.
+- `line_numbering_scheme` — either a format string taking the line-number
+  components (`{size}`, `{service}`, `{sequence}`, `{spec}`, `{insulation}`) or
+  a callable `Stream -> str`, for a site whose convention is spelled some other
+  way. Keyword-only. See [Line numbers](#line-numbers).
+- `line_number_start` — where the automatic sequence begins (default `1001`, so
+  the first line is `…-1001-…`). Keyword-only.
 
 ### Attributes
 
@@ -53,7 +62,8 @@ if the unit is already on a flowsheet or if the name is already taken.
 connect(src: Port, dst: Port, *,
         kind: str = "material",
         name: str | None = None,
-        tear_hint: bool = False) -> Stream
+        tear_hint: bool = False,
+        size=None, service=None, sequence=None, spec=None, insulation=None) -> Stream
 ```
 Creates the stream. `src` must be an outlet and `dst` an inlet, both units must
 already be on this flowsheet, and neither port may already carry a stream —
@@ -65,6 +75,11 @@ connection between two energy/utility-role ports is silently promoted to
 `"energy"`. `name` overrides the auto-generated stream number.
 `tear_hint=True` nudges the cycle breaker toward tearing *this* edge when a
 recycle loop is ambiguous — advisory only.
+
+`size` / `service` / `spec` / `insulation` are the line-number components —
+text or a number; supplying any of them identifies the line by its line number
+instead of a stream number. `sequence` is filled by auto-numbering unless it is
+given here. See [Line numbers](#line-numbers).
 
 ```text
 add_component(component: Component) -> Component
@@ -377,9 +392,11 @@ face than `nozzle()` does — see the CHANGELOG.
 
 | Member | Type | Notes |
 |---|---|---|
-| `name` | `str` | the stream number; auto-assigned unless you passed `name=` |
+| `name` | `str` | the stream number, or the line number where the line has one; auto-assigned unless you passed `name=` |
 | `source` / `dest` | `Port` | |
 | `kind` | `str` | see `connect()` |
+| `size` / `service` / `sequence` / `spec` / `insulation` | `str \| float \| None` | line-number components; `sequence` is filled by auto-numbering |
+| `has_line_number` | `bool` | **read-only**, true once a component other than `sequence` is set |
 | `is_recycle` | `bool` | **read-only**, computed by cycle detection during layout |
 | `properties` | `dict[str, str \| float]` | free-form; rendered by the stream table verbatim |
 | `color` | `str \| None` | SVG stroke colour override |
@@ -413,6 +430,49 @@ and quoted in the stream table; energy streams, also drawn, follow, and
 unlabelled signal lines come last. One sequence covers all three, so no two
 streams answer to the same name and an energy or signal line never consumes a
 process number.
+
+### Line numbers
+
+A P&ID identifies a line by its full line number — size, service, sequence,
+spec — because that is the identifier the line list, the stress calculation and
+the isometric all key on. Supply the components on `connect()` and the line is
+named that way instead of `S1`:
+
+```python
+s = fs.connect(pump.discharge, fv.inlet, size='6"', service="P", spec="A1A")
+s.name        # '6"-P-1001-A1A'  — drawn on the line and headed on its table column
+s.sequence    # '1001'           — filled by auto-numbering
+```
+
+The components are `size`, `service`, `sequence`, `spec` and `insulation`, each
+text or a number. The author supplies all but `sequence`, which auto-numbering
+fills from `line_number_start` (default `1001`); set it yourself to tie into a
+line that already exists on someone else's list. A component left unset drops
+out, and so does the text introducing it, so a line with no spec issued yet
+reads `6"-P-1001` rather than `6"-P-1001-`.
+
+A line number is assigned by `renumber_streams()`, on exactly the terms a stream
+number is: it carries **through** an inline valve, reducer or fitting, and
+breaks at a unit marked `significant` — which is where the spec break goes. The
+first segment of a group that carries components supplies them for the whole
+group, so a run does not have to repeat its identity at every fitting. A stream
+named explicitly with `connect(name=…)` is never reformatted, and a stream with
+no components set is numbered exactly as it always was.
+
+`line_numbering_scheme` spells the convention, as a format string over the
+component names or as a callable taking the `Stream`. A format spec applies, so
+a site that pads its sequence says so:
+
+```python
+Flowsheet("U100", line_numbering_scheme="{size}-{service}-{sequence:0>6}-{spec}-{insulation}")
+Flowsheet("U100", line_numbering_scheme=lambda s: f"{s.service}-{s.size}-{s.sequence}")
+```
+
+A scheme naming something that is not a component raises `ValueError`, as does a
+line whose components the scheme never uses — its line number would be empty.
+
+With `show_stream_table=True` each column is headed by its line number, and the
+corner cell reads `Line Number` when every line in the table has one.
 
 ### Stream properties and the table
 
