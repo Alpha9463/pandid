@@ -1,11 +1,12 @@
-# chem-pfd — Process Flow Diagram engine
+# pandid — P&ID and process flow diagram engine
 
 `pfd` is a zero-dependency, pure-Python engine that turns a topological
 flowsheet definition into a publication-quality, orthogonal **PFD / P&ID** as
 SVG. You describe *what connects to what*; the engine lays out the equipment,
 routes every stream, and draws industry-standard symbols.
 
-The distribution is **`chem-pfd`**; it imports as **`pfd`**.
+The distribution is **`pandid`** — how "P&ID" is said out loud — and it imports
+as **`pfd`**.
 
 [![Distillation train](docs/gallery/03_distillation_train.png)](docs/gallery/README.md)
 
@@ -16,9 +17,9 @@ The distribution is **`chem-pfd`**; it imports as **`pfd`**.
 Requires Python 3.10+.
 
 ```bash
-pip install chem-pfd
-pip install 'chem-pfd[pdf]'    # optional PDF/PNG export backend (cairosvg)
-pip install 'chem-pfd[yaml]'   # optional YAML spec reader (Flowsheet.from_yaml)
+pip install pandid
+pip install 'pandid[pdf]'    # optional PDF/PNG export backend (cairosvg)
+pip install 'pandid[yaml]'   # optional YAML spec reader (Flowsheet.from_yaml)
 ```
 
 From a checkout:
@@ -351,7 +352,7 @@ from pfd import Flowsheet
 
 fs   = Flowsheet.from_dict(spec)         # a plain dict, from anywhere
 fs   = Flowsheet.from_json("bfw.json")   # standard library only
-fs   = Flowsheet.from_yaml("bfw.yaml")   # pip install 'chem-pfd[yaml]'
+fs   = Flowsheet.from_yaml("bfw.yaml")   # pip install 'pandid[yaml]'
 spec = fs.to_dict()                      # writes the same spec back out
 
 fs.render("bfw.svg", styling="pid", show_stream_table=True)

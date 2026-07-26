@@ -163,10 +163,10 @@ and is kept working.
 - GitHub Actions CI: `ruff check`, `ruff format --check tests`, `mypy pfd`
   (blocking), and `pytest` on Python 3.10, 3.11, 3.12 and 3.13.
 - `pre-commit` configuration mirroring the CI lint gates.
-- Seven runnable examples in `examples/`, each usable from the repository root
+- Eight runnable examples in `examples/`, each usable from the repository root
   or from `examples/` itself, and rendered into `docs/gallery/`.
-- Packaged as the **`chem-pfd`** distribution; the import name is `pfd`. Plain
-  `pfd` is taken on PyPI by an unrelated project.
+- Packaged as the **`pandid`** distribution — how "P&ID" is said out loud. The
+  import name is `pfd`; plain `pfd` is taken on PyPI by an unrelated project.
 
 ### Deprecated
 

@@ -3,17 +3,18 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-# Distribution name is chem-pfd; the import name stays `pfd` (as scikit-learn
-# installs but imports as sklearn). Plain "pfd" is taken on PyPI by an unrelated
-# project (Parallel Fast Downloader).
-name = "chem-pfd"
+# Distribution name is pandid — how "P&ID" is said out loud. The import name
+# stays `pfd` (as scikit-learn installs but imports as sklearn); plain "pfd" is
+# taken on PyPI by an unrelated project (Parallel Fast Downloader).
+name = "pandid"
 version = "0.0.1"
-description = "Generate chemical-engineering Process Flow Diagrams with automatic layout and orthogonal stream routing."
+description = "Generate chemical-engineering P&IDs and process flow diagrams with automatic layout and orthogonal stream routing."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [{ name = "Alex Anderson" }]
-keywords = ["chemical-engineering", "process-flow-diagram", "pfd", "flowsheet"]
+keywords = ["chemical-engineering", "p&id", "piping-and-instrumentation-diagram",
+            "process-flow-diagram", "pfd", "flowsheet", "isa-5.1", "iso-10628"]
 dependencies = []
 
 [project.optional-dependencies]

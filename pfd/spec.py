@@ -901,7 +901,7 @@ def from_yaml(path: str | Path) -> Flowsheet:
     except ImportError as e:
         raise ImportError(
             "Reading a flowsheet from YAML needs PyYAML, which is not installed. "
-            "Install it with:  pip install 'chem-pfd[yaml]'  (or: pip install PyYAML). "
+            "Install it with:  pip install 'pandid[yaml]'  (or: pip install PyYAML). "
             "Flowsheet.from_dict() and Flowsheet.from_json() need no extra packages."
         ) from e
     text = Path(path).read_text(encoding="utf-8")
