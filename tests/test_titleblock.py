@@ -266,6 +266,95 @@ def test_annotation_absolute_position():
     assert re.search(r'<rect x="500.0" y="120.0" [^>]*stroke-width="1.5"/>', svg)
 
 
+# --- what the equipment list schedules, and what it calls it ------------------
+
+
+def _schedule(fs, **kwargs):
+    from pfd.document import equipment_list
+
+    return equipment_list(fs, **kwargs).rows
+
+
+def test_bulk_items_and_junctions_are_not_scheduled():
+    """An equipment list is major plant. A valve, a strainer, a reducer, a vent
+    and a funnel are bought by the line and covered by the piping class; a mixer
+    or splitter is a branch in that line drawn as a triangle. Scheduling them
+    puts items on the sheet that no one buys, builds or maintains."""
+    fs = Flowsheet("Bulk")
+    fs.add(U.Pump("P-101", description="Feed Pump"))
+    fs.add(U.Valve("FV-100"))
+    fs.add(U.Fitting("ST-101", variant="strainer"))
+    fs.add(U.Reducer("RD-101"))
+    fs.add(U.Vent("VT-101"))
+    fs.add(U.Funnel("FN-101"))
+    fs.add(U.Mixer("M-100", n_inlets=2))
+    fs.add(U.Splitter("SP-100", n_outlets=2))
+    fs.add(U.Feed("Raw Feed"))
+    fs.add(U.Product("To Unit 200"))
+    fs.add_instrument("FT", 101)
+    assert [tag for tag, _ in _schedule(fs)] == ["P-101"]
+
+
+def test_major_equipment_is_scheduled_whatever_it_is():
+    fs = Flowsheet("Plant")
+    for unit in (
+        U.Vessel("V-101"),
+        U.Column("T-101"),
+        U.HeatExchanger("E-101"),
+        U.Heater("H-101"),
+        U.Cooler("C-101"),
+        U.Pump("P-101"),
+        U.Compressor("K-101"),
+        U.Blower("B-101"),
+        U.Tank("TK-101"),
+        U.Reactor("R-101"),
+        U.Separator("S-101"),
+        U.Filter("F-101"),
+        U.Dryer("D-101"),
+        U.Furnace("FH-101"),
+        U.Turbine("TU-101"),
+        U.Ejector("EJ-101"),
+    ):
+        fs.add(unit)
+    assert [tag for tag, _ in _schedule(fs)] == [u.name for u in fs.units]
+
+
+def test_the_description_is_words_not_the_kind_key():
+    """``kind`` is a dict key. A schedule reading ('E-101', 'Hex') quotes the
+    source code at the reader instead of naming the exchanger."""
+    fs = Flowsheet("Named")
+    fs.add(U.HeatExchanger("E-101"))
+    fs.add(U.HeatExchanger("E-102", description="Feed/Effluent Exchanger"))
+    assert _schedule(fs) == [
+        ("E-101", "Heat Exchanger"),
+        ("E-102", "Feed/Effluent Exchanger"),
+    ]
+
+
+def test_every_registered_kind_names_itself():
+    """A kind with no label falls back to its own key, so the map has to cover
+    the library rather than the kinds that happened to need it first."""
+    from pfd.document import _KIND_LABELS
+
+    kinds = {getattr(U, name).kind for name in U.__all__ if name != "Unit"}
+    assert kinds <= set(_KIND_LABELS)
+    assert not [label for label in _KIND_LABELS.values() if not label[:1].isupper()]
+
+
+def test_include_builds_a_schedule_of_its_own():
+    """A valve schedule is a real drawing, so naming the rows takes whatever is
+    named, in that order, bulk item or not."""
+    fs = Flowsheet("Valves")
+    fs.add(U.Pump("P-101", description="Feed Pump"))
+    fs.add(U.Valve("FV-100", description="Feed Control Valve"))
+    fs.add(U.Valve("FV-200"))
+    assert _schedule(fs, title="VALVE SCHEDULE", include=["FV-200", "FV-100"]) == [
+        ("FV-200", "Valve"),
+        ("FV-100", "Feed Control Valve"),
+    ]
+    assert _schedule(fs, include=["P-999"]) == []
+
+
 def test_stream_table_section_header():
     fs = Flowsheet("Tabled")
     feed = fs.add(U.Feed("F"))

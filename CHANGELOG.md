@@ -198,6 +198,15 @@ and is kept working.
   hand-placed with `position=(x, y)`: `Annotation`, `TableBox`, and the
   `equipment_list()` / `notes()` / `legend()` constructors. Like the title
   strip, a box added to the flowsheet is drawn on the sheet whatever the border.
+- `equipment_list()` schedules major equipment only: vessels, columns, tanks,
+  reactors, separators, exchangers, heaters, coolers, furnaces, pumps,
+  compressors, blowers, turbines, ejectors, filters and dryers. Valves,
+  fittings, reducers, vents and funnels are bulk items bought by the line and
+  covered by the piping class, and a mixer or splitter is a junction in that
+  line, so none of them is plant to schedule. Each row says what the unit is
+  (`E-101` reads `Heat Exchanger`, not the `hex` dict key). `include=[...]`
+  names the rows explicitly instead and takes whatever it names, which is how a
+  valve schedule is built from the same flowsheet.
 - An unknown `border=` or `styling=` raises rather than silently drawing the
   plain sheet.
 - Optional stream property table (`show_stream_table=True`) with section headers
@@ -227,6 +236,14 @@ and is kept working.
   short.
 - A balloon's signal connections may be taken on any face, since a circle has no
   natural side.
+- An interlock square repeats. A tag names one item, so `add()` refuses one
+  already on the sheet, and a second `P-101` or a second `LT-101` still raises.
+  An `Instrument(variant="logic")` is a logic function rather than a device and
+  is drawn at every place it acts, carrying the same tag each time, so a repeat
+  is accepted and given a name of its own: `I-1`, `I-1 (2)`, `I-1 (3)`. The tag
+  is what the sheet draws; the name is what a stream endpoint, a spec entry and
+  an equipment-list row address, and it stays unique. `Instrument.tag` reads the
+  drawn tag back.
 - The `panel` and `aux` variants draw a location bar across the middle of the
   circle, and the tag clears it: functional letters wholly above, loop number
   wholly below.

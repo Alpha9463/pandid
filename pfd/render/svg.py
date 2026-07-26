@@ -810,7 +810,10 @@ class SvgRenderer:
         from pfd.units import split_tag
 
         variant = getattr(u, "variant", "default")
-        top, bot = split_tag(getattr(u, "type", "") or u.name, getattr(u, "number", "") or "")
+        # The tag, not the name: a repeated square is drawn with the tag it
+        # shares and named apart only so the flowsheet can address it.
+        tag = getattr(u, "tag", "") or u.name
+        top, bot = split_tag(getattr(u, "type", "") or tag, getattr(u, "number", "") or "")
         cx, cy = x + u_width / 2, y + u_height / 2
         if variant == "logic" or not top:
             return [f'    <text x="{cx}" y="{cy}" font-family="sans-serif" '

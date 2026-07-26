@@ -47,6 +47,11 @@ The format::
     stream_table_sections: [[Benzene, Mass Fraction]]
     title_block: {title: ..., revisions: [{rev: A, date: ..., by: AA}]}
     annotations: [{type: equipment_list, align: top-right}]
+
+A unit is addressed by its name, so an interlock square drawn more than once —
+the one tag a flowsheet lets repeat — is addressed by the name the flowsheet
+gives each drawing of it: the first entry is ``I-1``, the second ``I-1 (2)``,
+in the order the ``instruments:`` list declares them.
 """
 
 from __future__ import annotations

@@ -401,3 +401,79 @@ def test_a_short_pneumatic_run_still_gets_its_cross_hatch():
     assert 16 <= length < 45, f"specimen must be a *short* run, got {length}"
     # Two strokes per mark, drawn at 1.5 width; nothing else on the sheet is.
     assert fs.to_svg(check=False).count('stroke-width="1.5"') >= 2
+
+
+# --- a tag that repeats, and one that must not --------------------------------
+
+
+def _interlocked(n=4):
+    """One trip acting on *n* valves — the shape of P&ID_301's interlock I 1."""
+    fs = Flowsheet("interlock")
+    pairs = []
+    for i in range(n):
+        valve = fs.add(U.Valve(f"XV-{i + 1}", variant="control")).pin(x=200 + 260 * i, y=400)
+        square = fs.add(U.Instrument("I", 1, variant="logic")).pin(x=210 + 260 * i, y=250)
+        fs.connect(square.sig_out, valve.actuator, kind="electric")
+        pairs.append((square, valve))
+    return fs, pairs
+
+
+def test_an_interlock_square_is_drawn_at_every_place_it_acts():
+    """P&ID_301 draws interlock I 1 four times: one logic function, tripping
+    four valves, shown where each of them is. A sheet that cannot repeat the
+    square cannot draw the interlock at all."""
+    fs, pairs = _interlocked()
+    squares = [square for square, _ in pairs]
+    assert [s.tag for s in squares] == ["I-1"] * 4
+    assert [s.name for s in squares] == ["I-1", "I-1 (2)", "I-1 (3)", "I-1 (4)"]
+
+
+def test_each_repeated_square_is_still_one_unit_to_look_up():
+    """The tag repeats; the name does not, so a stream endpoint, a spec entry
+    and an equipment-list row still each mean exactly one square."""
+    fs, pairs = _interlocked()
+    for square, valve in pairs:
+        assert [u for u in fs.units if u.name == square.name] == [square]
+        assert square.sig_out.stream.dest.owner is valve
+
+
+def test_the_repeated_square_draws_the_tag_it_shares():
+    """The name that tells two squares apart is the flowsheet's bookkeeping. The
+    square drawn carries the interlock number, four times over."""
+    fs, _ = _interlocked()
+    svg = fs.to_svg()
+    assert svg.count(">1</text>") == 4
+    assert "(2)" not in svg
+
+
+def test_two_transmitters_on_one_loop_number_are_refused():
+    """A balloon is a device and there is one of it: a second LT-101 is a tag
+    used twice, not one measurement shown twice."""
+    fs = Flowsheet("loop")
+    fs.add(U.Instrument("LT", 101))
+    with pytest.raises(ValueError, match="already exists on this flowsheet"):
+        fs.add(U.Instrument("LT", 101))
+
+
+@pytest.mark.parametrize("variants", [("logic", "default"), ("default", "logic")])
+def test_a_square_and_a_balloon_cannot_share_a_tag(variants):
+    """Two different symbols claiming to be the same thing, whichever is drawn
+    first."""
+    first, second = variants
+    fs = Flowsheet("mixed")
+    fs.add(U.Instrument("I", 1, variant=first))
+    with pytest.raises(ValueError, match="already exists on this flowsheet"):
+        fs.add(U.Instrument("I", 1, variant=second))
+
+
+def test_a_repeated_square_survives_a_round_trip_through_a_spec():
+    """Each square is written out and read back as its own entry, wired to its
+    own valve — which is what needs a name the spec can address it by."""
+    fs, _ = _interlocked()
+    spec = fs.to_dict()
+    rebuilt = Flowsheet.from_dict(spec)
+    assert sorted(u.name for u in rebuilt.units) == sorted(u.name for u in fs.units)
+    assert [(s.source.owner.name, s.dest.owner.name) for s in rebuilt.streams] == [
+        (s.source.owner.name, s.dest.owner.name) for s in fs.streams
+    ]
+    assert rebuilt.to_dict() == spec

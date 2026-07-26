@@ -269,12 +269,26 @@ fs.connect(ft.sig_out, fic.sig_in, kind="electric")        # dashed
 fs.connect(fic.sig_out, fy.sig_in, kind="pneumatic")       # slash-ticks
 ```
 
-`type` and `number` make the tag. `unit.name` is `"FT-101"` for equipment lists
-and cross-references, while the balloon draws the letters over the **bare**
-number, as a real sheet does. (`units.Instrument("FT-101")` is still accepted
-and split.) The signal `kind`s are `electric`, `pneumatic`, `data`/`software`
-and `capillary`, each with its own line style, no arrowheads and no stream
-numbers.
+`type` and `number` make the tag. `instrument.tag` is `"FT-101"` for equipment
+lists and cross-references, while the balloon draws the letters over the
+**bare** number, as a real sheet does. (`units.Instrument("FT-101")` is still
+accepted and split.) The signal `kind`s are `electric`, `pneumatic`,
+`data`/`software` and `capillary`, each with its own line style, no arrowheads
+and no stream numbers.
+
+**A tag names one item**, so `add()` refuses one already on the sheet: two
+`P-101`s, or two `LT-101`s, are a mistake in the drawing. The interlock square
+is the exception, because it is a logic function rather than a device and is
+drawn at every place it acts:
+
+```python
+squares = [fs.add_instrument("I", 1, variant="logic") for _ in range(4)]
+[s.tag for s in squares]     # ['I-1', 'I-1', 'I-1', 'I-1']   drawn four times
+[s.name for s in squares]    # ['I-1', 'I-1 (2)', 'I-1 (3)', 'I-1 (4)']
+```
+
+The tag repeats; the name does not, so a stream endpoint, a spec entry or an
+equipment-list row still means exactly one square.
 
 A balloon's `pv`, `sig_in` and `sig_out`, and a valve's `actuator`, are **signal
 connections**: nothing flows through them, so they take a signal `kind` and
@@ -396,11 +410,22 @@ inset by an optional `margin=`. `position=(x, y)` instead pins the box's
 legends are thin wrappers over `Annotation`, and `TableBox` is a bordered grid
 for anything else. Add them with `fs.add_annotation(...)`.
 
+`equipment_list()` schedules **major equipment**: vessels, columns, tanks,
+reactors, separators, exchangers, heaters, coolers, furnaces, pumps,
+compressors, blowers, turbines, ejectors, filters and dryers. Valves, fittings,
+reducers, vents and funnels are bulk items bought by the line and covered by the
+piping class; mixers and splitters are junctions in that line; feeds, products
+and instruments are not equipment. `include=[...]` names the rows explicitly
+instead, in the order given, which is how a valve schedule is built from the
+same flowsheet.
+
 ```python
 from pfd.document import equipment_list, notes, legend, Annotation, TableBox
 
 fs.add(units.Column("T-101", description="Beer Column"))   # feeds the equipment list
 fs.add_annotation(equipment_list(fs, align="top-right"))
+fs.add_annotation(equipment_list(fs, title="VALVE SCHEDULE", align="right",
+                                 include=["FV-101", "PSV-101"]))   # a list of its own
 fs.add_annotation(notes(["Sampling point on every product line."], align="top"))
 fs.add_annotation(legend({"SS": "Stainless Steel 316L"}, align="top-left"))
 fs.add_annotation(Annotation(title="HOLD", rows=["Awaiting vendor data"],

@@ -59,7 +59,24 @@ The container and the single source of truth for connectivity.
 add(unit: Unit) -> Unit
 ```
 Registers a unit and returns it, so it chains with `.pin()`. Raises `ValueError`
-if the unit is already on a flowsheet or if the name is already taken.
+if the unit is already on a flowsheet, or if the tag is already taken: a tag
+names one item, so two pumps called `P-101` are a mistake in the drawing.
+
+The one exception is the **interlock square** (`Instrument(variant="logic")`),
+which is a logic function rather than a device and is drawn at every place it
+acts, carrying the same tag each time. A repeat is accepted and given a name of
+its own, so a stream endpoint, a spec entry or an equipment-list row still means
+exactly one square:
+
+```python
+squares = [fs.add_instrument("I", 1, variant="logic") for _ in range(4)]
+[s.tag for s in squares]     # ['I-1', 'I-1', 'I-1', 'I-1']   drawn four times
+[s.name for s in squares]    # ['I-1', 'I-1 (2)', 'I-1 (3)', 'I-1 (4)']
+```
+
+Nothing else repeats. A second `LT-101` balloon is one loop number used twice,
+and a square sharing its tag with a balloon is two symbols claiming to be the
+same thing; both raise.
 
 ```text
 connect(src: Port, dst: Port, *,
@@ -204,7 +221,9 @@ Unit(name, variant="default", width=None, height=None,
      label_pos=None, description="", reference="")
 ```
 
-- `name` is the equipment tag. It must be unique on the flowsheet and non-empty.
+- `name` is the equipment tag. It must be non-empty, and unique on the flowsheet
+  save for the one symbol that repeats (see
+  [Building the topology](#building-the-topology)).
 - `variant` is the visual style within the class (see below). A name that kind
   has no symbol for raises `ValueError` listing the ones it does, at the first
   layout or render.
@@ -606,9 +625,12 @@ Constructs an `Instrument`, adds it, and attaches it when `on` is given. Extra
 `description`).
 
 `type` is the functional letter string and `number` the loop number.
-`unit.name` becomes the full tag (`"FT-101"`) for equipment lists and
+`instrument.tag` is the full tag (`"FT-101"`) for equipment lists and
 cross-references, while the balloon draws the letters over the **bare** number,
 as a real sheet does. `units.Instrument("FT-101")` is also accepted and split.
+`unit.name` is the same tag, except on a repeated interlock square where it is
+what tells one square from another (see
+[Building the topology](#building-the-topology)).
 
 ```python
 ft  = fs.add_instrument("FT", 101)                        # field transmitter
@@ -753,17 +775,30 @@ legend(entries, *, title="LEGEND", align="top-left", anchor=None,
        position=None, margin=0.0, width=None)
 ```
 
-All three return an `Annotation`. `equipment_list()` schedules every real
-equipment item as `(tag, description)`, excluding feeds, products and
-instruments, and falls back to a humanized `kind` when a unit has no
-`description`. `include=[…]` restricts and orders it. `legend()` accepts a dict
-or a sequence of `(abbr, meaning)` pairs.
+All three return an `Annotation`. `legend()` accepts a dict or a sequence of
+`(abbr, meaning)` pairs.
+
+`equipment_list()` schedules **major equipment** as `(tag, description)`:
+vessels, columns, tanks, reactors, separators, exchangers, heaters, coolers,
+furnaces, pumps, compressors, blowers, turbines, ejectors, filters and dryers.
+Valves, fittings, reducers, vents and funnels are bulk items bought by the line
+and covered by the piping class; mixers and splitters are junctions in that
+line; feeds, products and instruments are not equipment. None of them is
+scheduled. Where a unit has no `description`, the row says what its kind is
+called (`E-101` reads `Heat Exchanger`).
+
+`include=[…]` names the rows explicitly instead, in the order given, and takes
+whatever it names. That is how a valve schedule, a real drawing in its own
+right, is built from the same flowsheet. A tag that is not on the flowsheet
+contributes no row.
 
 ```python
 from pfd.document import equipment_list, legend, notes
 
 fs.add(units.Column("T-101", description="Beer Column"))
 fs.add_annotation(equipment_list(fs, align="top-right"))
+fs.add_annotation(equipment_list(fs, title="VALVE SCHEDULE", align="right",
+                                 include=["FV-101", "PSV-101"]))
 fs.add_annotation(notes(["Sampling point on every product line."], align="top"))
 fs.add_annotation(legend({"SS": "Stainless Steel 316L"}, align="top-left"))
 ```
