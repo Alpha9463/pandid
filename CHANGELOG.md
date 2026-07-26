@@ -90,6 +90,14 @@ and is kept working.
 - Canvas fitted to content — no letterboxing, no clipping, uniform 2 px symbol
   strokes, and stream-number labels drawn on a wipe so the line never strikes
   through the text.
+- `page_size="A4"`..`"A0"` draws a sheet of exactly that size instead: the border
+  and title strip rule to the page edges and the drawing is fitted into what they
+  leave, scaled down uniformly if it is too big and never enlarged if it is not.
+  A page too small for its own furniture raises rather than clip it. Fixing the
+  page also fixes the zone grid, so a note referring to zone D-4 still means D-4
+  after the next revision grows the drawing.
+- `jump_direction="vertical" | "horizontal"` on `to_svg()` / `render()` — which
+  of two crossing lines gets the semicircle hop.
 - 100 registered `(kind, variant)` symbols following ISO 10628-2 / ISA-5.1,
   generated from the draw.io / diagrams.net P&ID stencils (Apache-2.0) by
   `scripts/vendor_symbols.py`; Feed/Product flags, Mixer, Splitter and the
