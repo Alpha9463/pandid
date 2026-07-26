@@ -11,63 +11,63 @@ def register_vendored(registry):
     registry.register('valve', Symbol(
         svg='<g id="sym_valve"><g transform="scale(0.5)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
         width=49.0, height=30.0,
-        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0), 'actuator': (24.5, 15.0)},
+        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0), 'actuator': (24.5, 0.0)},
     ), 'default')
 
     # draw.io valves:Gate Valve -> valve/gate
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_gate"><g transform="scale(0.5)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
         width=49.0, height=30.0,
-        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0), 'actuator': (24.5, 15.0)},
+        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0), 'actuator': (24.5, 0.0)},
     ), 'gate')
 
     # draw.io valves:Globe Valve -> valve/globe
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_globe"><g transform="scale(0.5)"><path d="M 0.0 0.0 L 31.9 19.7 A 20.0 20.0 0.0 0 1 66.2 19.7 L 98.0 0.0 L 98.0 60.0 L 66.2 40.5 A 20.0 20.0 0.0 0 1 31.9 40.5 L 0.0 60.0 Z" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 31.9 40.5 A 20.0 20.0 0.0 0 1 31.9 19.7 M 66.2 19.7 A 20.0 20.0 0.0 0 1 66.2 40.5" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
         width=49.0, height=30.0,
-        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0), 'actuator': (24.5, 5.0)},
+        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0), 'actuator': (24.5, 0.0)},
     ), 'globe')
 
     # draw.io valves:Ball Valve -> valve/ball
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_ball"><g transform="scale(0.5)"><path d="M 0.0 0.0 L 31.9 19.7 A 20.0 20.0 0.0 0 1 66.2 19.7 L 98.0 0.0 L 98.0 60.0 L 66.2 40.5 A 20.0 20.0 0.0 0 1 31.9 40.5 L 0.0 60.0 Z" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 31.9 40.5 A 20.0 20.0 0.0 0 1 31.9 19.7 M 66.2 19.7 A 20.0 20.0 0.0 0 1 66.2 40.5" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
         width=49.0, height=30.0,
-        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0), 'actuator': (24.5, 5.0)},
+        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0), 'actuator': (24.5, 0.0)},
     ), 'ball')
 
     # draw.io valves:Butterfly Valve 1 -> valve/butterfly
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_butterfly"><g transform="scale(0.5)"><ellipse cx="49.0" cy="30.0" rx="5.0" ry="5.0" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 0.0 60.0 L 0.0 0.0 L 45.0 27.5 M 53.0 32.5 L 98.0 60.0 L 98.0 0.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
         width=49.0, height=30.0,
-        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0), 'actuator': (24.5, 12.5)},
+        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0), 'actuator': (24.5, 0.0)},
     ), 'butterfly')
 
     # draw.io valves:Check Valve 1 -> valve/check
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_check"><g transform="scale(0.5)"><path d="M 3.0 62.0 L 3.0 2.0 L 98.5 62.0 L 98.5 2.0" fill="none" stroke="#111" stroke-width="4.0"/><ellipse cx="3.0" cy="3.0" rx="3.0" ry="3.0" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 89.5 50.0 L 98.5 62.0 L 84.0 59.5 L 89.5 56.5 Z" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
         width=49.2, height=31.0,
-        ports={'inlet': (1.5, 15.5), 'outlet': (49.2, 15.5), 'actuator': (24.6, 15.5)},
+        ports={'inlet': (1.5, 15.5), 'outlet': (49.2, 15.5), 'actuator': (24.6, 0.0)},
     ), 'check')
 
     # draw.io valves:Diaphragm -> valve/control
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_control"><g transform="scale(0.5)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 29.0 18.0 A 25.0 25.0 0.0 0 1 69.0 18.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
         width=49.0, height=30.0,
-        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0), 'actuator': (24.5, 4.0)},
+        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0), 'actuator': (24.5, 0.0)},
     ), 'control')
 
     # draw.io valves:Needle -> valve/needle
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_needle"><g transform="scale(0.5)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z M 49.0 5.0 L 49.0 55.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
         width=49.0, height=30.0,
-        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0), 'actuator': (24.5, 2.5)},
+        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0), 'actuator': (24.5, 0.0)},
     ), 'needle')
 
     # draw.io valves:Three-Way Valve -> valve/three_way
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_three_way"><g transform="scale(0.5)"><path d="M 19.0 79.0 L 49.0 30.0 L 98.0 0.0 L 98.0 60.0 L 0.0 0.0 L 0.0 60.0 L 49.0 30.0 L 79.0 79.0 Z" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
         width=49.0, height=39.5,
-        ports={'inlet': (0.0, 15.2), 'outlet': (49.0, 15.2), 'actuator': (24.5, 15.0)},
+        ports={'inlet': (0.0, 15.2), 'outlet': (49.0, 15.2), 'actuator': (24.5, 0.0)},
     ), 'three_way')
 
     # draw.io valves:Relief PRV -> valve/relief
@@ -81,7 +81,7 @@ def register_vendored(registry):
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_angle"><g transform="scale(0.5)"><path d="M 0.0 79.0 L 30.0 30.0 L 79.0 0.0 L 79.0 60.0 L 30.0 30.0 L 60.0 79.0 Z" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
         width=39.5, height=39.5,
-        ports={'inlet': (15.0, 39.5), 'outlet': (39.5, 15.0), 'actuator': (15.0, 15.0)},
+        ports={'inlet': (15.0, 39.5), 'outlet': (39.5, 15.0), 'actuator': (15.0, 0.0)},
     ), 'angle')
 
     # draw.io valves:Safety PSV 1 -> valve/psv
@@ -95,14 +95,14 @@ def register_vendored(registry):
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_plug"><g transform="scale(0.5)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z M 16.5 10.0 L 81.5 10.0 M 16.5 50.0 L 81.5 50.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
         width=49.0, height=30.0,
-        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0), 'actuator': (24.5, 5.0)},
+        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0), 'actuator': (24.5, 0.0)},
     ), 'plug')
 
     # draw.io valves:Pinch Valve -> valve/pinch
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_pinch"><g transform="scale(0.5)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 31.5 10.0 L 49.0 20.7 L 66.5 10.0 M 31.5 50.0 L 49.0 39.3 L 66.5 50.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
         width=49.0, height=30.0,
-        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0), 'actuator': (24.5, 10.2)},
+        ports={'inlet': (0.0, 15.0), 'outlet': (49.0, 15.0), 'actuator': (24.5, 0.0)},
     ), 'pinch')
 
     # draw.io valves:Motor Operated Valve -> valve/motor
@@ -158,7 +158,7 @@ def register_vendored(registry):
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_regulator"><g transform="scale(0.5)"><path d="M 0.0 94.0 L 0.0 35.0 L 98.0 94.0 L 98.0 35.0 Z M 49.0 35.0 L 49.0 64.0 M 29.0 35.0 A 20.0 20.0 0.0 0 1 49.0 15.0 A 20.0 20.0 0.0 0 1 69.0 35.0 Z" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 49.0 15.0 L 49.0 0.0 L 97.5 0.0 L 49.0 64.5" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
         width=49.0, height=47.0,
-        ports={'inlet': (0.0, 32.2), 'outlet': (49.0, 32.2), 'actuator': (24.5, 7.5)},
+        ports={'inlet': (0.0, 32.2), 'outlet': (49.0, 32.2), 'actuator': (24.5, 0.0)},
     ), 'regulator')
 
     # draw.io pumps:Centrifugal Pump 1 -> pump/default

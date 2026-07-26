@@ -21,7 +21,12 @@ and is kept working.
 - `Flowsheet`, the container and single source of truth for connectivity, with
   `add()`, `connect()`, `add_component()` and `add_annotation()`.
 - `connect()` validates every connection: outlet → inlet only, both units on the
-  same flowsheet, and one stream per port.
+  same flowsheet, one stream per port, and signal against process. A port whose
+  role is `signal` (`Valve.actuator`, `Instrument.pv` / `sig_in` / `sig_out`)
+  joins another signal connection and takes a signal `kind`; a process nozzle
+  joins another process nozzle and takes `material` or `energy`. Neither pairing
+  is drawable as the other, so a pipe into a valve stem and a pneumatic line
+  between two pumps are both rejected by name.
 - Typed `Unit` classes declaring named ports: `Feed`, `Product`, `Pump`,
   `Compressor`, `Blower`, `Valve`, `Vessel`, `Tank`, `HeatExchanger`, `Heater`,
   `Cooler`, `Reactor`, `Separator`, `Column`, `Mixer`, `Splitter`, `Reducer`,
@@ -43,7 +48,10 @@ and is kept working.
   so it no longer has to be taken off a splitter in the sump line, which puts a
   piece of equipment that does not exist on the sheet and in the equipment list.
 - `Valve.actuator`, the signal connection on the valve, so a controller output
-  terminates on the final control element.
+  terminates on the final control element. It sits on the top of the symbol on
+  every one of the 22 valve variants, so the signal stops where it meets the
+  valve instead of running on into the body, and a valve flipped top to bottom
+  carries its operator over with it.
 - `Component` registry and a `State` slot on `Port`/`Stream`, reserved for a
   future mass/energy-balance backend. No balance solving is performed.
 - `Stream.is_recycle` as a read-only computed property. Recycles are detected
@@ -212,7 +220,8 @@ and is kept working.
   Attached balloons take no part in layout ranking.
 - Typed signal lines through `connect(kind=…)`: `electric` (dashed),
   `pneumatic` (slash ticks), `data`/`software` and `capillary`, all with no
-  arrowheads and no stream numbers. A pneumatic line is drawn *solid* and marked
+  arrowheads and no stream numbers, and all of them legal only between two
+  signal connections. A pneumatic line is drawn *solid* and marked
   with double cross-hatches, so the hatch is the only thing distinguishing it
   from process pipe. Every run long enough to hold a mark gets one, however
   short.

@@ -244,6 +244,51 @@ def test_every_valve_variant_has_an_actuator_on_its_symbol():
         assert "actuator" in sym.ports, variant
 
 
+def _valve_variants() -> list[str]:
+    """Every registered valve variant. SymbolRegistry has no "list everything"
+    API by design, so the private dict is the only enumeration available."""
+    from pfd.render.symbols import default_registry
+
+    return sorted(v for kind, v in default_registry._symbols if kind == "valve")
+
+
+def test_no_valve_variant_draws_its_actuator_inside_the_body():
+    """A signal terminates where it meets the valve: it has no nozzle to reach,
+    so the drawn end and the routing anchor are one point.
+
+    They part company when the symbol puts the actuator on interior ink, and
+    then the renderer draws the line into the body while the router stops it at
+    the edge, leaving a signal that ends in the middle of the valve."""
+    from pfd.geometry import Frame
+    from pfd.portgeom import resolve_port, resolve_size
+
+    inside = []
+    for variant in _valve_variants():
+        valve = U.Valve("V-1", variant=variant)
+        w, h = resolve_size(valve)
+        drawn = resolve_port(valve, Frame(x=0.0, y=0.0, w=w, h=h), "actuator")
+        if drawn.point != drawn.anchor:
+            inside.append(variant)
+    assert inside == []
+
+
+def test_flipping_a_valve_turns_its_actuator_over_with_it():
+    """``mirrored="y"`` stands the symbol on its head, so the stem points down
+    and the signal has to arrive from below.
+
+    An actuator parked at the centre of the box is invariant under that mirror,
+    which leaves the operator drawn on top of a valve that has been turned
+    upside down."""
+    from pfd.portgeom import port_faces
+
+    for variant in _valve_variants():
+        valve = U.Valve("V-1", variant=variant).pin(mirrored="y")
+        # The PSV's pilot connection is on the side of its bonnet, and a
+        # top-to-bottom flip leaves an east face where it was.
+        want = "E" if variant == "relief" else "S"
+        assert port_faces(valve, "actuator") == [want], variant
+
+
 def test_relief_valve_is_tagged_as_plain_text_beside_the_symbol():
     fs = Flowsheet("psv")
     drum = fs.add(U.Vessel("V-101")).pin(x=200, y=100)

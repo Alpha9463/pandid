@@ -1,9 +1,13 @@
 """Port — a named nozzle on a unit; the attachment point for a stream.
 
 A port belongs to exactly one unit, has a direction ("inlet"/"outlet") and a
-role (e.g. "feed", "vapor", "energy"), and holds at most one stream. Named
-port anchors are what the (future) router targets; roles/sides are hints the
-(future) renderer and layout engine consume.
+role (e.g. "feed", "vapor", "energy"), and holds at most one stream. Named port
+anchors are what the (future) router targets; roles/sides are hints the (future)
+renderer and layout engine consume.
+
+The role "signal" is the one that also decides what may be connected: a signal
+port carries a signal line and a process port carries fluid, and
+`Flowsheet.connect()` will not mix them.
 """
 
 from __future__ import annotations

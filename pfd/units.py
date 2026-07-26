@@ -28,7 +28,11 @@ __all__ = [
     "Furnace", "Turbine", "Filter", "Dryer", "Instrument",
 ]
 
-_VALID_ROLES = {"process", "feed", "product", "energy", "utility", "vapor", "liquid"}
+# "signal" is the odd one out: every other role names something that flows in a
+# pipe, so only a signal port may carry a signal line and only a process one may
+# carry fluid. :meth:`pfd.flowsheet.Flowsheet.connect` enforces the pairing.
+_VALID_ROLES = {"process", "feed", "product", "energy", "utility", "vapor",
+                "liquid", "signal"}
 
 # The same side vocabulary label_pos uses, so a sheet does not need two spellings
 # for "the top of this unit".
@@ -275,14 +279,15 @@ class Compressor(Unit):
 class Valve(Unit):
     """Control or let-down valve.
 
-    ``actuator`` is the signal connection on top of the valve — the terminus of
+    ``actuator`` is the signal connection on top of the valve, the terminus of
     a control loop, so a controller's output lands on the final control element
-    rather than in mid-air.
+    rather than in mid-air. Being a signal port, it takes a signal ``kind`` and
+    refuses process fluid: a pipe into a valve stem is not a connection.
     """
 
     kind = "valve"
     _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process"),
-              ("actuator", "inlet", "process")]
+              ("actuator", "inlet", "signal")]
 
 
 class Vessel(Unit):
@@ -441,7 +446,9 @@ class Instrument(Unit):
     what equipment lists and cross-references want. A single combined argument
     (``Instrument("FT-101")``) is still accepted and split.
 
-    ``pv`` taps the process; ``sig_in``/``sig_out`` carry signals. Variants:
+    ``pv`` taps the process; ``sig_in``/``sig_out`` carry signals. All three are
+    signal connections and take a signal ``kind``: an impulse line to a
+    transmitter is an instrument connection, not a process pipe. Variants:
     ``"default"`` (field balloon), ``"panel"``, ``"aux"``, ``"shared"`` (DCS),
     ``"computer"``, ``"logic"`` (interlock square).
 
@@ -450,8 +457,8 @@ class Instrument(Unit):
     """
 
     kind = "instrument"
-    _PORTS = [("pv", "inlet", "process"), ("sig_in", "inlet", "process"),
-              ("sig_out", "outlet", "process")]
+    _PORTS = [("pv", "inlet", "signal"), ("sig_in", "inlet", "signal"),
+              ("sig_out", "outlet", "signal")]
 
     def __init__(self, type: str, number: str | int = "", variant: str = "default",
                  width: float | None = None, height: float | None = None,

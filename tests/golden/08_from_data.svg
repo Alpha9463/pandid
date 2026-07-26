@@ -281,9 +281,9 @@
     <path d="M 1205.0,1094.0 L 1305.0,1094.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 981.0,1159.0 L 981.0,1197.0" fill="none" stroke="black" stroke-width="2" stroke-dasharray="7,4" />
     <path d="M 1003.0,1219.0 L 1133.5,1219.0 L 1133.5,1167.0 L 1158.5,1167.0" fill="none" stroke="black" stroke-width="2" stroke-dasharray="7,4" />
-    <path d="M 1180.5,1145.0 L 1180.5,1105.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="1175.5" y1="1119.5" x2="1185.5" y2="1125.5" stroke="black" stroke-width="1.5" />
-    <line x1="1175.5" y1="1123.5" x2="1185.5" y2="1129.5" stroke="black" stroke-width="1.5" />
+    <path d="M 1180.5,1145.0 L 1180.5,1109.0" fill="none" stroke="black" stroke-width="2" />
+    <line x1="1175.5" y1="1121.5" x2="1185.5" y2="1127.5" stroke="black" stroke-width="1.5" />
+    <line x1="1175.5" y1="1125.5" x2="1185.5" y2="1131.5" stroke="black" stroke-width="1.5" />
     <rect x="198.8" y="918.5" width="18.4" height="13.0" fill="white" />
     <text x="208.0" y="925.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S1</text>
     <rect x="246.3" y="1048.5" width="18.4" height="13.0" fill="white" />

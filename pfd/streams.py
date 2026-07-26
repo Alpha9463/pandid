@@ -4,7 +4,8 @@
 keeps it equal to what gets drawn; a name passed to `connect()` is never touched.
 Setting any of `size`, `service`, `spec` or `insulation` turns that number into a
 full line number (`6"-P-1001-A1A`), assembled by the flowsheet's
-`line_numbering_scheme`. `kind` is "material" or "energy". `is_recycle` is
+`line_numbering_scheme`. `kind` is one of `STREAM_KINDS`: a process kind
+("material"/"energy") on a pipe, a signal kind on an instrument line. `is_recycle` is
 COMPUTED later by the layout engine's cycle-detection phase and must never be set
 by API callers. `tear_hint` lets a caller nudge which stream is chosen as a
 tear/back-edge in ambiguous cycles; it is advisory only.
@@ -23,6 +24,17 @@ if TYPE_CHECKING:
 
 #: The parts of a line number, in the order a conventional scheme spells them.
 LINE_NUMBER_FIELDS = ("size", "service", "sequence", "spec", "insulation")
+
+#: Kinds that carry process fluid or duty: what a pipe on the sheet holds.
+PROCESS_KINDS = frozenset({"material", "energy"})
+
+#: Kinds that carry a measurement or a command instead of a fluid. ISA-5.1 gives
+#: each its own line style, and `Flowsheet.connect()` pairs them with the
+#: signal-role ports that are the only things they may run between.
+SIGNAL_KINDS = frozenset({"electric", "pneumatic", "data", "capillary", "software"})
+
+#: Every kind `connect()` accepts.
+STREAM_KINDS = PROCESS_KINDS | SIGNAL_KINDS
 
 
 @dataclass
