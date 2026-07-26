@@ -1,0 +1,65 @@
+name: Release
+
+# Publishing is driven by the tag, not by a branch: pushing `v0.1.0` cuts the
+# release. The tag must name the version in pfd/__init__.py — the build job
+# below refuses to go on if it does not.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  # Re-run the full CI matrix against the tagged commit: a tag can point at a
+  # commit that never went through a pull request.
+  gates:
+    name: Gates
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    name: Build sdist + wheel
+    needs: [gates]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Tag must match pfd.__version__
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          src="$(python -c 'import pfd; print(pfd.__version__)')"
+          if [ "$tag" != "$src" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not name pfd.__version__ ($src)"
+            exit 1
+          fi
+      - name: Build
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+          python -m build
+      - name: Check the metadata PyPI will render
+        run: twine check --strict dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: Publish to PyPI
+    needs: [build]
+    runs-on: ubuntu-latest
+    # Named environment so the repository owner can require a manual approval,
+    # and so the PyPI trusted publisher can be scoped to it, before any upload.
+    environment:
+      name: pypi
+      url: https://pypi.org/p/pandid
+    permissions:
+      id-token: write   # mint the OIDC token PyPI trusted publishing exchanges
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

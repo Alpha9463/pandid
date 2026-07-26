@@ -7,23 +7,59 @@ build-backend = "hatchling.build"
 # stays `pfd` (as scikit-learn installs but imports as sklearn); plain "pfd" is
 # taken on PyPI by an unrelated project (Parallel Fast Downloader).
 name = "pandid"
-version = "0.0.1"
+dynamic = ["version"]     # read from pfd/__init__.py — see [tool.hatch.version]
 description = "Generate chemical-engineering P&IDs and process flow diagrams with automatic layout and orthogonal stream routing."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "Alex Anderson" }]
 keywords = ["chemical-engineering", "p&id", "piping-and-instrumentation-diagram",
             "process-flow-diagram", "pfd", "flowsheet", "isa-5.1", "iso-10628"]
+# No `License ::` trove classifier: `license` above is an SPDX expression, and
+# Metadata 2.4 forbids carrying both (PyPI rejects the upload).
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Manufacturing",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/Alpha9463/py-chemengg"
+Repository = "https://github.com/Alpha9463/py-chemengg"
+Documentation = "https://github.com/Alpha9463/py-chemengg/blob/main/docs/api.md"
+Changelog = "https://github.com/Alpha9463/py-chemengg/blob/main/CHANGELOG.md"
+Issues = "https://github.com/Alpha9463/py-chemengg/issues"
 
 [project.optional-dependencies]
 pdf = ["cairosvg>=2.5"]   # enables PDF/PNG export via fs.render("x.pdf")
 yaml = ["PyYAML>=6"]      # enables Flowsheet.from_yaml(); from_dict/from_json need nothing
 dev = ["pytest>=7", "ruff==0.15.14", "mypy>=1.8", "PyYAML>=6"]
 
+[tool.hatch.version]
+path = "pfd/__init__.py"
+
 [tool.hatch.build.targets.wheel]
-packages = ["pfd"]
+packages = ["pfd"]        # ships pfd/py.typed with it, so installers see the hints
+
+# The sdist is the buildable, testable source: package, tests (goldens included,
+# so the regression suite runs from the tarball), examples, docs and the stencil
+# vendoring pipeline. Only editor/agent scratch is dropped.
+[tool.hatch.build.targets.sdist]
+exclude = [".claude"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

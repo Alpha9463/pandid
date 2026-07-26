@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # The release workflow calls these same gates on the tagged commit, so a
+  # release runs the matrix that is actually maintained rather than a copy.
+  workflow_call:
 
 permissions:
   contents: read
