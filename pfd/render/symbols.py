@@ -48,8 +48,8 @@ class PortSeries:
 
     Ports sit ``pitch`` apart, centred on the face; past the point where that
     would run them off the ends, the whole run is squeezed into the middle
-    ``extent`` of the face instead. Two ports therefore land exactly where the
-    hand-drawn symbols used to put them, and a third does not have to shove the
+    ``extent`` of the face instead. Two ports therefore land exactly where a
+    fixed two-port symbol would put them, and a third does not have to shove the
     first two aside to find room.
     """
 
@@ -140,10 +140,10 @@ class Symbol:
             )
             for name, faces in port_alts.items():
                 declared.setdefault(name, {}).update(faces)
-        # Everything below rejects rather than repairs. A declaration the engine
-        # cannot honour used to be dropped where it was read -- the menu is
-        # re-keyed by coordinate at resolve time, so a placement filed under the
-        # wrong face simply ceased to exist -- and a placement that vanishes is
+        # Everything below rejects rather than repairs. Dropping a declaration
+        # the engine cannot honour would be silent: the menu is re-keyed by
+        # coordinate at resolve time, so a placement filed under the wrong face
+        # simply ceases to exist, and a placement that vanishes is
         # indistinguishable from one that was never authored. The invariant
         # suite catches these for the shipped registry; a third-party symbol
         # only ever meets this constructor.
@@ -222,7 +222,7 @@ class Symbol:
 
         Two ports at one coordinate means a stream routed to one lands exactly
         on top of a stream routed to the other. Two placements of a *single*
-        port may of course coincide — only one of them is ever live.
+        port may coincide — only one of them is ever live.
 
         :attr:`faceless_ports` are exempt from *each other*, not from the rule:
         they are still checked against the nozzles that do own their face. The

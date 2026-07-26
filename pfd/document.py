@@ -69,7 +69,7 @@ _ALIGN = {
     "left", "center", "right",
     "bottom-left", "bottom", "bottom-right",
 }
-_ANCHORS = _ALIGN  # backward-compat alias (older code/tests said "anchor")
+_ANCHORS = _ALIGN  # alias for the deprecated ``anchor`` spelling
 
 
 def _resolve_align(align, anchor, default):

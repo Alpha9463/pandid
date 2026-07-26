@@ -164,7 +164,7 @@ _CLASSES: dict[str, type[Unit]] = {
 
 # A spec is hand-written, so accept every name the reader might reasonably use:
 # the class name from the README (``HeatExchanger``), its snake_case spelling,
-# and the internal ``Unit.kind`` tag (``hex``) that ``to_dict`` used to emit.
+# and the internal ``Unit.kind`` tag (``hex``).
 _ALIASES: dict[str, str] = {}
 for _name, _cls in _CLASSES.items():
     for _alias in (_name, _snake(_name), _cls.kind):

@@ -105,8 +105,8 @@ def test_ports_the_symbol_never_anchored_warn_rather_than_raise(gapped_kind):
 
 
 def test_a_mixers_extra_inlets_get_nozzles_of_their_own():
-    """The regression the fallback used to hide: a third inlet is a real nozzle
-    on the flat face, not a third stream landing in the middle of the symbol."""
+    """A third inlet is a real nozzle on the flat face, not a third stream
+    landing in the middle of the symbol on the box-centre fallback."""
     fs = Flowsheet("wide-mixer")
     mix = fs.add(U.Mixer("M-1", n_inlets=4))
     prod = fs.add(U.Product("P"))

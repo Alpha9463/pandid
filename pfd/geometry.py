@@ -1,6 +1,6 @@
 """Geometry primitives for PFD elements.
 
-The model separates two distinct things that used to be conflated:
+The model keeps two distinct things apart:
 
 - :class:`Pin` — the user's *intent*: "put this unit at column 2" or "pin it to
   exactly (x, y)". Set only through :meth:`pfd.units.Unit.pin`. Never written by
@@ -37,7 +37,7 @@ def normalize_mirror(value) -> tuple[bool, bool]:
     """Resolve a mirror spec to ``(mirror_x, mirror_y)``.
 
     ``mirror_x`` flips left↔right (swapping the E and W faces), ``mirror_y``
-    flips top↔bottom (swapping N and S). Accepts ``True`` (the historical
+    flips top↔bottom (swapping N and S). Accepts ``True`` (shorthand for the
     left↔right flip), or one of ``"x"``/``"horizontal"``, ``"y"``/``"vertical"``,
     ``"xy"``/``"both"``.
     """

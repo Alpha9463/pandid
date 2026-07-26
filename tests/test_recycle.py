@@ -1,4 +1,4 @@
-"""`is_recycle` is computed by layout and read-only to API callers (spec §4/§9)."""
+"""`is_recycle` is computed by layout and read-only to API callers."""
 
 import pytest
 

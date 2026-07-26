@@ -9,14 +9,13 @@ from pfd import units as U
 def gapped_kind():
     """A unit kind whose symbol forgets two of the unit's ports.
 
-    No *shipped* symbol has this gap any more — a Mixer's inlets past the two
-    the triangle used to draw were the last of them, and they are now placed by
-    a :class:`~pfd.render.symbols.PortSeries`. The centre-of-the-box fallback
-    they used to exercise is still reachable, though: it is what any symbol
-    registered from outside this package gets when it anchors fewer ports than
-    its unit declares. Tests that cover the fallback build their own specimen
-    here rather than leaning on a defect in the shipped registry, which is how
-    they came to be testing a bug that had been fixed underneath them.
+    No shipped symbol has this gap: every port a built-in unit declares is
+    either anchored or placed by a :class:`~pfd.render.symbols.PortSeries`. The
+    centre-of-the-box fallback is still reachable, though — it is what any
+    symbol registered from outside this package gets when it anchors fewer
+    ports than its unit declares. Tests covering that fallback build their own
+    specimen here rather than leaning on a gap in the shipped registry, which
+    would leave them silently exercising nothing once it was closed.
 
     ``spare_a`` and ``spare_b`` are the unanchored pair; ``inlet``/``outlet``
     are anchored, so a test can tell the two cases apart on one unit.

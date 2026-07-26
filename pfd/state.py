@@ -1,10 +1,9 @@
 """State — the thermodynamic condition of a stream or port.
 
-This is the seam the (future, commercial) mass/energy-balance engine writes to.
-It carries no property calculations itself in v1; a pluggable thermo backend
-attaches those later. Keeping this slot on :class:`~pfd.ports.Port` and
-:class:`~pfd.streams.Stream` now means the balance engine can be added without
-reshaping the topology model (design spec §4, §10, §12).
+This is the seam a mass/energy-balance engine writes to. It carries no property
+calculations itself; a pluggable thermo backend attaches those. Keeping this
+slot on :class:`~pfd.ports.Port` and :class:`~pfd.streams.Stream` means such an
+engine can be added without reshaping the topology model.
 """
 
 from __future__ import annotations

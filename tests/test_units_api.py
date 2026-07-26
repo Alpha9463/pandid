@@ -6,7 +6,7 @@ from pfd import units as U
 
 
 def test_product_port_has_product_role():
-    # Spec §4 table: Product's inlet has role "product", not the generic "process".
+    # Product's inlet has role "product", not the generic "process".
     assert U.Product("P1").inlet.role == "product"
 
 

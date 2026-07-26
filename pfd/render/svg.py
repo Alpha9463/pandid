@@ -318,7 +318,7 @@ class SvgRenderer:
         if sheet is not None:
             # A named page fixes the frame: the sheet inset by the zone band and
             # the margin outside it, so the border rules to the sheet edges and
-            # the zone count no longer drifts with the drawing.
+            # the zone count does not drift with the drawing.
             edge = OUT + F.ZONE_BAND
             need_w = max(band_w, left_w + right_w + 2 * INNER)
             need_h = max(top_h + bottom_h + 2 * INNER,
@@ -689,9 +689,9 @@ class SvgRenderer:
                     f'dominant-baseline="middle">{html.escape(bot or top)}</text>']
         # The location bar is what the balloon says about *where* the instrument
         # lives, and it is drawn across the middle — exactly where the letters
-        # would otherwise sit, which struck them through. ISA-5.1 puts the
-        # letters wholly above the bar and the number wholly below, so a barred
-        # variant needs the pair pushed apart to leave the band clear.
+        # would otherwise sit. ISA-5.1 puts the letters wholly above the bar and
+        # the number wholly below, so a barred variant needs the pair pushed
+        # apart to leave the band clear.
         letters_dy, number_dy = (-10, 11) if variant in _BARRED_BALLOONS else (-4, 10)
         out = [f'    <text x="{cx}" y="{cy + letters_dy}" font-family="sans-serif" '
                f'font-size="12" font-weight="bold" text-anchor="middle" '
@@ -836,11 +836,11 @@ class SvgRenderer:
                     seglen = abs(px2 - px1) + abs(py2 - py1)
                     # ISA-5.1 draws a pneumatic signal as a *solid* line marked
                     # with double cross-hatches, so the hatch is the only thing
-                    # telling it apart from process piping. At one mark per 45px
-                    # a short run — a transducer to the actuator right beneath it
-                    # — got none at all and read as a plain solid line. Give any
-                    # segment with room for a mark at least one; longer segments
-                    # keep the spacing they already had.
+                    # telling it apart from process piping. One mark per 45px
+                    # alone leaves a short run — a transducer to the actuator
+                    # right beneath it — with none at all, reading as plain pipe.
+                    # Any segment with room for a mark gets at least one; longer
+                    # segments keep the 45px spacing.
                     n = int(seglen // 45) or (1 if seglen >= 16 else 0)
                     horiz = abs(py1 - py2) < 0.1
                     for k in range(1, n + 1):

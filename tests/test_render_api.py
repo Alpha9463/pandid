@@ -1,5 +1,5 @@
 """render() contract: to_svg() returns a string; render(path) writes the file
-whose format is inferred from the extension and returns None (spec §9)."""
+whose format is inferred from the extension and returns None."""
 
 import re
 import sys
@@ -133,7 +133,7 @@ def test_render_unknown_extension_raises_valueerror(tmp_path):
 
 def test_canvas_fits_content_and_is_not_padded_to_page_size():
     # A two-box diagram must frame tightly, not float in a full A3 sheet
-    # (1587x1122). Regression guard for the canvas-fit fix.
+    # (1587x1122).
     svg = _fs().to_svg()
     w, h = _canvas(svg)  # width/height in px equal the viewBox → no letterbox
     assert w < 800 and h < 500

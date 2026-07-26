@@ -306,8 +306,8 @@ def test_balloon_ports_have_no_face_of_their_own_but_equipment_nozzles_do():
 
 def test_a_barred_balloons_tag_clears_its_location_bar():
     """The panel and aux variants draw a location bar across the middle of the
-    circle, and the tag letters used to be drawn straight through it. ISA-5.1
-    puts the letters wholly above the bar and the number wholly below."""
+    circle, right where the tag letters would otherwise sit. ISA-5.1 puts the
+    letters wholly above the bar and the number wholly below."""
     import re
 
     from pfd.render.symbols import default_registry
@@ -335,8 +335,8 @@ def test_a_barred_balloons_tag_clears_its_location_bar():
 def test_a_short_pneumatic_run_still_gets_its_cross_hatch():
     """ISA draws a pneumatic signal as a *solid* line marked with double
     cross-hatches, so the hatch is the only thing distinguishing it from process
-    piping. One mark per 45px left a short run — a transducer to the actuator
-    right beneath it — with none at all, rendering it as plain pipe."""
+    piping. One mark per 45px alone leaves a short run — a transducer to the
+    actuator right beneath it — with none at all, rendering it as plain pipe."""
     fs = Flowsheet("short-pneumatic")
     valve = fs.add(U.Valve("LV-101", variant="control")).pin(x=300, y=300)
     ly = fs.add_instrument("LY", 101, on=valve, at="N", offset=58)

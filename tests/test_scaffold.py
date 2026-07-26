@@ -1,4 +1,3 @@
-# tests/test_scaffold.py
 def test_package_imports():
     import pfd
 

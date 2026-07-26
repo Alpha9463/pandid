@@ -11,7 +11,7 @@ class VirtualNode:
     """A dummy node inserted to split long edges across multiple ranks."""
     def __init__(self, original_stream):
         self.original_stream = original_stream
-        self.placement = None  # Will be assigned later
+        self.placement = None
 
 
 def assign_layers(fs: "Flowsheet") -> None:
@@ -68,7 +68,6 @@ def assign_layers(fs: "Flowsheet") -> None:
         if u._slot.col is None:
             u._slot.col = ranks[u]
 
-    # Note: Virtual Node insertion for long edges (spanning > 1 rank) 
-    # would go here if we were doing full Sugiyama crossing reduction.
-    # For v1, we will handle crossing reduction directly on units and let 
-    # the orthogonal router deal with edge geometries.
+    # Virtual-node insertion for long edges (spanning > 1 rank) would go here in
+    # full Sugiyama crossing reduction. Crossing reduction runs directly on the
+    # units instead, leaving edge geometry to the orthogonal router.

@@ -89,7 +89,8 @@ def test_parallel_runs_sharing_a_corridor_are_separated():
 
 
 def test_routes_remain_orthogonal_and_clear_of_equipment():
-    # Guard against the fix introducing diagonal segments or obstacle crossings.
+    # No routing refinement may buy its result with diagonal segments or
+    # obstacle crossings.
     fs = _ammonia_loop()
     fs.layout()
     fs.route()
@@ -146,7 +147,7 @@ def _nozzle_above_its_target_lane():
     """A downward nozzle 15px above the lane it has to join, projected 25px out.
 
     The escape projection overshoots the lane, so the run has to come back up to
-    it — the shape that made the search take a spur out and straight back.
+    it — the geometry that tempts the search into a spur out and straight back.
     """
     fs = Flowsheet("Overshot Nozzle")
     hx = fs.add(U.HeatExchanger("E-101")).pin(x=568, y=68)
@@ -157,8 +158,9 @@ def _nozzle_above_its_target_lane():
 
 def test_no_run_doubles_back_along_its_own_axis():
     # A reversal draws the run it has just drawn a second time. The cost model
-    # charged that spur one bend, undercutting the honest two-bend detour round
-    # whatever provoked it, so the search preferred the line over itself.
+    # charges that spur a single bend, undercutting the honest two-bend detour
+    # round whatever provoked it, so nothing but an explicit ban keeps the search
+    # off a line drawn over itself.
     for build in (
         _ammonia_loop,
         _crossing_network,
@@ -200,9 +202,9 @@ def test_a_port_does_not_overshoot_the_lane_it_is_leaving_for():
 
 
 def test_separation_only_moves_runs_that_actually_collide():
-    # Clustering tracks with a window of twice the spacing chained runs a
-    # comfortable 12px apart into one cluster and then packed them onto the
-    # spacing grid — leaving them 6px apart, i.e. closer than they started.
+    # Clustering tracks with a window of twice the spacing would chain runs a
+    # comfortable 12px apart into one cluster and then pack them onto the
+    # spacing grid — leaving them 6px apart, closer than they started.
     fs = Flowsheet("Parallel Runs")
     streams = []
     for i, y in enumerate((100, 400, 700, 1000)):

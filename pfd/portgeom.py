@@ -1,9 +1,9 @@
 """Single source of truth for unit sizing and port geometry.
 
 Layout, routing, and rendering all resolve a unit's size and its port positions
-*here*, so the drawn diagram and the routed paths can never disagree. (The class
-of bug this prevents: the renderer forgetting the mirror flip that the router
-applied, which left mirrored units' streams visually disconnected.)
+*here*, so the drawn diagram and the routed paths can never disagree — the
+renderer cannot forget a mirror flip the router applied and leave a mirrored
+unit's streams visually disconnected.
 
 :func:`resolve_port` is the single authority: it answers a port's drawn point,
 its routing anchor and its face together, and everything else here is a wrapper
@@ -251,11 +251,10 @@ def _local_port(unit: "Unit", port_name: str, w: float, h: float,
     menu's first entry, since the whole point of folding the home in is that
     there is no second place to look.
 
-    A face that *was* chosen and this transform cannot reach raises. Falling
-    back to the home nozzle instead is what let a rotation applied after the
-    choice move the stream to the far side of the unit with nobody saying so:
-    every guard upstream of here can be defeated by a later ``pin()``, but this
-    is the call that decides where the ink goes.
+    A face that *was* chosen and this transform cannot reach raises rather than
+    falling back to the home nozzle, which would move the stream to the far side
+    of the unit without saying so: every guard upstream of here can be outrun by
+    a later ``pin()``, and this is the call that decides where the ink goes.
     """
     placements = _drawn_placements(unit, port_name, w, h, rot, mirrored, mirror_y)
     want = (getattr(unit, "_port_faces", None) or {}).get(port_name)
@@ -276,12 +275,11 @@ class ResolvedPort(NamedTuple):
 def resolve_port(unit: "Unit", frame, port_name: str) -> ResolvedPort:
     """Resolve a port's drawn geometry: nozzle point, routing anchor and face.
 
-    All three together, because deriving one of them somewhere else is how the
-    renderer and the router came to disagree in the first place. The anchor is
-    the point projected onto the bounding-box edge the port faces, so the
-    visibility grid and the router leave a unit where the ink does; Feed/Product
-    use their arrow-tip convention for both (the port sits at the tip, whichever
-    way it points).
+    All three together, because deriving one of them somewhere else is what lets
+    the renderer and the router disagree. The anchor is the point projected onto
+    the bounding-box edge the port faces, so the visibility grid and the router
+    leave a unit where the ink does; Feed/Product use their arrow-tip convention
+    for both (the port sits at the tip, whichever way it points).
     """
     w, h = frame.w, frame.h
     rot, mirrored, mirror_y = _xform(frame)

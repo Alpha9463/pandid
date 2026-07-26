@@ -345,9 +345,9 @@ def _from_data() -> Flowsheet:
     """Example 08 -- the whole flowsheet declared as data, not as code.
 
     Its input *is* a mapping, so this reads the example's own ``SPEC`` instead
-    of keeping a second copy of it in step by hand. The copy that used to live
-    here had already drifted: a swap of the splitter's two outlets in the
-    example never reached it, so the golden was guarding a sheet nobody drew.
+    of keeping a second copy of it in step by hand. A local copy drifts silently
+    -- an edit to the example never reaches it -- leaving the golden guarding a
+    sheet nobody draws.
 
     Importing the module does not render anything -- the example guards that
     behind ``__main__`` -- but it does leave the title block's date blank for

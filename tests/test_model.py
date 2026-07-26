@@ -1,4 +1,3 @@
-# tests/test_model.py
 from pfd.components import Component
 from pfd.ports import Port
 

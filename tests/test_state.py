@@ -1,7 +1,7 @@
-"""State object (future M&E balance seam) — §4/§12 of the design spec.
+"""State object — the mass/energy-balance seam.
 
-The topology objects must carry a `state` slot now so a balance engine can
-attach later without a rewrite.
+The topology objects carry a `state` slot so a balance engine can attach
+without a rewrite.
 """
 
 from pfd import Flowsheet, units as U

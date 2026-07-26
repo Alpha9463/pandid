@@ -131,15 +131,15 @@ KIND_MAP = {
                           "hot_in": ("W", 22.5), "hot_out": ("E", 15.0)}),
     # Heater and cooler are one stencil pair: the same circle and zigzag, with
     # the diagonal arrow pointing in (heat added) or out (heat removed). Taking
-    # the cooler from anywhere else breaks the pairing -- it used to come from
-    # "Heat Exchanger (Spiral)", which is a different piece of equipment
-    # entirely and, at 100x100, drew a utility cooler larger than the reactor
-    # upstream of it. draw.io files the heat-removed one under "Condenser".
+    # the cooler from anywhere else breaks the pairing: "Heat Exchanger
+    # (Spiral)" is a different piece of equipment entirely and, at 100x100,
+    # draws a utility cooler larger than the reactor upstream of it. draw.io
+    # files the heat-removed one under "Condenser".
     ("heater", "default"): ("heat_exchangers", "Heater",
                             {"inlet": "W", "outlet": "E", "duty": "S"}),
     ("cooler", "default"): ("heat_exchangers", "Condenser",
                             {"inlet": "W", "outlet": "E", "duty": "N"}),
-    # Still a real exchanger style, just not what a Cooler is drawn as.
+    # A real exchanger style in its own right, just not what a Cooler is drawn as.
     ("hex", "spiral"):     ("heat_exchangers", "Heat Exchanger (Spiral)",
                             {"cold_in": "W", "cold_out": "E",
                              "hot_in": "N", "hot_out": "S"}),
@@ -255,17 +255,11 @@ KIND_MAP = {
     ("reactor", "plain"):     ("vessels", "Reactor",
                                {"feed": ("W", 30), "outlet": ("S", 20), "duty": ("E", 47),
                                 "vent": ("AT", 30.0, 7.69)}),
-    # Horizontal drum (reflux drum / accumulator / KO drum): a lying cylinder
-    # with dished ends. Feed enters the left head, vapour leaves the top face
-    # and liquid draws off the bottom face (both span x 5.77..85.77).
-    #
-    # Horizontal drum: reflux drum, accumulator, knock-out pot. A lying cylinder
-    # with dished ends — inlet on either head or from above, liquid out of the
-    # bottom, vent off the top. The top and bottom faces span x 5.77..85.77.
     # Horizontal vessel: reflux drum, accumulator, knock-out pot. A lying
     # cylinder with dished ends — the shape a vertical vessel does NOT become
-    # when rotated, since its saddles and shell bands would turn with it. The
-    # top and bottom faces span x 5.77..85.77.
+    # when rotated, since its saddles and shell bands would turn with it.
+    # Inlet on either head or from above, liquid out of the bottom, vent off the
+    # top; the top and bottom faces span x 5.77..85.77.
     #
     # The outlet takes no alternate: liquid draws off the bottom, and the right
     # head is already the inlet's alternate — giving both an "E" option would
