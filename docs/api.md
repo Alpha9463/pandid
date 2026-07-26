@@ -213,9 +213,9 @@ Each entry is `port` *(direction / role)*.
 | `Vessel` | `vessel` | `inlet` *(in)*, `outlet` *(out)*, `vent` *(out/vapor)* |
 | `Tank` | `tank` | `inlet` *(in)*, `outlet` *(out)* |
 | `Separator` | `separator` | `feed` *(in)*, `vapor` *(out/vapor)*, `liquid` *(out/liquid)* |
-| `Column` | `column` | `feed` *(in)*, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*, `reflux_in` *(in/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*, `condenser_duty` *(out/energy)* |
-| `Reactor` | `reactor` | `feed` *(in/feed)*, `outlet` *(out)*, `vent` *(out/vapor)*, `duty` *(in/energy)* |
-| `HeatExchanger` | `hex` | `hot_in`, `hot_out`, `cold_in`, `cold_out` |
+| `Column` | `column` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*, `reflux_in` *(in/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*, `condenser_duty` *(out/energy)* |
+| `Reactor` | `reactor` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `outlet` *(out)*, `vent` *(out/vapor)*, `duty` *(in/energy)* |
+| `HeatExchanger` | `hex` | `hot_in`, `hot_out`, `cold_in`, `cold_out`; `kettle` adds `bottoms` *(out/liquid)* |
 | `Heater` | `heater` | `inlet` *(in)*, `outlet` *(out)*, `duty` *(in/energy)* |
 | `Cooler` | `cooler` | `inlet` *(in)*, `outlet` *(out)*, `duty` *(out/energy)* |
 | `Furnace` | `furnace` | `inlet` *(in)*, `outlet` *(out)*, `fuel` *(in/feed)* |
@@ -237,14 +237,32 @@ units.Mixer(name, n_inlets=2, variant="default", width=None, height=None,
             description="", reference="")
 units.Splitter(name, n_outlets=2, variant="default", width=None, height=None,
                description="", reference="")
+units.Column(name, n_feeds=1, variant="default", width=None, height=None,
+             label_pos=None, description="", reference="")
+units.Reactor(name, n_feeds=1, variant="default", width=None, height=None,
+              label_pos=None, description="", reference="")
 ```
 
-(Neither accepts `label_pos`, unlike the fixed-port classes.)
+(`Mixer` and `Splitter` do not accept `label_pos`, unlike the fixed-port
+classes.)
 
-Every port gets a nozzle of its own on the triangle's flat face, whatever the
-count: they sit 20 px apart, or are squeezed into the middle 70 % of the face
-once there are too many for that. Two ports land where they always have, so
-raising a count on one unit never moves any other.
+Every port gets a nozzle of its own on the face its family owns, whatever the
+count. They sit a fixed pitch apart, 20 px on a mixer or splitter, or are
+squeezed into a band of that face once there are too many for that. The count
+the symbol was drawn for lands where it always has, so raising a count on one
+unit never moves any other, and a single-feed `Column` draws exactly the
+tower it always did.
+
+A second feed is what changes the spelling: `col.feed` on a one-feed tower,
+`col.feed_1` … `col.feed_n` once there is more than one, drawn top to bottom in
+that order. The feeds stay on the shell wall opposite the `reflux_in` and
+`boilup_in` returns, so no count can put a feed on a return nozzle.
+
+```python
+tower = units.Column("T-302", n_feeds=2, description="Extractive Column")
+fs.connect(solvent.outlet, tower.feed_1)   # solvent enters above...
+fs.connect(feed.outlet, tower.feed_2)      # ...the feed tray
+```
 
 `Valve.actuator` is the signal connection on the valve, not a process nozzle. It
 is where a controller output or an interlock terminates.
@@ -273,6 +291,11 @@ is a visual style within it. The first name in each list is that kind's
 | `Fitting` | `default` (flanged connection), `flange`, `strainer`, `strainer_cone`, `orifice`, `rotameter`, `rupture_disc`, `sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `static_mixer`, `hose`, `coupling`, `clamped_coupling`, `flame_arrestor`, `flame_arrestor_explosion_proof`, `flame_arrestor_detonation_proof`, `flame_arrestor_fire_resistant` |
 | `Instrument` | `default` (field balloon), `panel`, `aux`, `shared`, `computer`, `logic` |
 | `Column`, `Heater`, `Cooler`, `Furnace`, `Turbine`, `Blower`, `Reducer`, `Ejector`, `Vent`, `Funnel`, `Mixer`, `Splitter`, `Feed`, `Product` | `default` only |
+
+`HeatExchanger(variant="kettle")` carries a fifth nozzle, `bottoms`. It is the
+draw at the weir end of the shell, where what does not boil leaves as the
+tower's bottoms product. No other exchanger has a weir, so no other variant has it, and
+asking a plate exchanger for `.bottoms` raises.
 
 The operator-bearing valve variants put `actuator` on the operator's crown
 rather than on the valve body, so a controller output lands where the signal
@@ -359,9 +382,11 @@ Three things it will not do:
   the point of keeping the call: the engine removes detours, it does not
   adjudicate drawing conventions, and where a sheet wants a particular one you
   still say so.
-- **Move a nozzle fixed by physics.** For a column's bottoms or a drum's liquid
-  draw the symbol authors one placement, so there is nothing to choose between
-  and the port is never even considered.
+- **Move a nozzle fixed by physics.** For a column's bottoms, a drum's liquid
+  draw or a kettle's bottoms draw the symbol authors one placement, so there is
+  nothing to choose between and the port is never even considered. A member of a
+  port family (`in_1`, `feed_2`) is fixed the same way, because a family spreads
+  *along* one face and does not offer others.
 - **Land two live connections on one point.** Ports are served in declaration
   order and each takes the cheapest face still free, so the selector cannot
   create the collision `validate()` reports as `coincident-ports`.

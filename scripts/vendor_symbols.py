@@ -126,9 +126,14 @@ KIND_MAP = {
     #
     # Only one tube-side opening is drawn, so hot_out has to take the shell's
     # far dished head; treat it as the heating-medium return.
+    #
+    # ``bottoms`` is the draw at the weir end: what does not boil overflows the
+    # plate at x = 86.5 and leaves the bottom of the shell, which is how a
+    # tower's bottoms product actually gets off the sheet.
     ("hex", "kettle"):  ("heat_exchangers", "Reboiler",
                          {"cold_in": ("AT", 45.8, 30.0), "cold_out": ("N", 64.0),
-                          "hot_in": ("W", 22.5), "hot_out": ("E", 15.0)}),
+                          "hot_in": ("W", 22.5), "hot_out": ("E", 15.0),
+                          "bottoms": ("AT", 85.0, 30.0)}),
     # Heater and cooler are one stencil pair: the same circle and zigzag, with
     # the diagonal arrow pointing in (heat added) or out (heat removed). Taking
     # the cooler from anywhere else breaks the pairing: "Heat Exchanger
@@ -150,13 +155,21 @@ KIND_MAP = {
     # side the overhead and reboiler systems are drawn on. reflux_in sits high
     # and boilup_in low on the straight shell wall (which spans y 15..185), with
     # the two duty arrows spaced between them.
+    #
+    # The feeds are a family: an extractive tower takes its solvent above the
+    # feed tray. They stay on the west wall, between the two duty arrows'
+    # heights, so however many there are none can reach the returns opposite.
     ("column", "default"): ("vessels", "Pressurized Vessel",
-                            {"feed": ("W", 130), "distillate": ("N", 50), "bottoms": ("S", 50),
+                            {"feed": ("SERIES", "W", 130, 35, 0.5),
+                             "distillate": ("N", 50), "bottoms": ("S", 50),
                              "reflux_in": ("E", 35), "boilup_in": ("E", 175),
                              "condenser_duty": ("E", 65), "reboiler_duty": ("E", 145)}),
     # vent sits on the vessel's top edge, clear of the agitator shaft at x 24..26.
+    # The charge nozzles spread along the straight west wall, which spans
+    # y 32.4..77.4 — the vessel is dished below that and open above it.
     ("reactor", "default"): ("vessels", "Mixing Reactor",
-                             {"feed": "W", "outlet": "S", "duty": "E",
+                             {"feed": ("SERIES", "W", 48.2, 14, 0.32),
+                              "outlet": "S", "duty": "E",
                               "vent": ("AT", 40.0, 32.4)}),
     ("separator", "default"): ("vessels", "Knock-out Drum",
                                {"feed": ("W", 55), "vapor": ("N", 25), "liquid": ("S", 25)}),
@@ -251,9 +264,10 @@ KIND_MAP = {
                            {"inlet": ("W", 27), "outlet": ("E", 27), "vent": ("N", 62.7)}),
     ("tank", "floating_roof"): ("vessels", "Tank (Floating Roof)", {"inlet": ("N", 30), "outlet": ("S", 50)}),
     ("tank", "sphere"):        ("vessels", "Storage Sphere", {"inlet": ("N", 40), "outlet": ("S", 40)}),
-    # Reactor / separator styles.
+    # Reactor / separator styles. The straight wall spans y 7.69..87.69.
     ("reactor", "plain"):     ("vessels", "Reactor",
-                               {"feed": ("W", 30), "outlet": ("S", 20), "duty": ("E", 47),
+                               {"feed": ("SERIES", "W", 30, 14, 0.4),
+                                "outlet": ("S", 20), "duty": ("E", 47),
                                 "vent": ("AT", 30.0, 7.69)}),
     # Horizontal vessel: reflux drum, accumulator, knock-out pot. A lying
     # cylinder with dished ends — the shape a vertical vessel does NOT become
@@ -328,6 +342,11 @@ KIND_MAP = {
 SCALE = {"valve": 0.5, "fitting": 0.5, "vent": 0.5, "funnel": 0.5}
 
 
+def is_series(spec):
+    """True for a port spec declaring a *family* rather than one nozzle."""
+    return isinstance(spec, tuple) and spec[0] == "SERIES"
+
+
 def resolve_port(spec, constraints, w, h):
     """Resolve a port spec to (x, y) in the shape's own units.
 
@@ -336,6 +355,11 @@ def resolve_port(spec, constraints, w, h):
     ``("AT", x, y)``   - an absolute point, for nozzles that sit inboard of the
                          bounding box (e.g. a dome crown, or a shell wall drawn
                          inside the box because brackets widen the extent).
+
+    A fifth form, ``("SERIES", edge, along, pitch, extent)``, is not a nozzle at
+    all: it hands the port to a :class:`~pfd.render.symbols.PortSeries`, which
+    places as many as the unit turns out to have, ``pitch`` apart and centred on
+    ``along``. See :func:`is_series`.
     """
     if isinstance(spec, str):
         if spec not in constraints:
@@ -356,6 +380,9 @@ def build():
         for name, el in shapes_in(STENCILS / f"{stencil}.xml"):
             index[(stencil, name)] = el
 
+    imports = "PortSeries, Symbol" if any(
+        is_series(spec) for _, _, port_map in KIND_MAP.values() for spec in port_map.values()
+    ) else "Symbol"
     lines = [
         '"""draw.io-derived equipment symbols (Apache-2.0). GENERATED by',
         'scripts/vendor_symbols.py — do not edit by hand. See NOTICE for attribution."""',
@@ -364,7 +391,7 @@ def build():
         "def register_vendored(registry):",
         '    """Register the vendored draw.io symbols, overriding hand-drawn',
         '    defaults of the same (kind, variant)."""',
-        "    from pfd.render.symbols import Symbol",
+        f"    from pfd.render.symbols import {imports}",
         "",
     ]
     for (kind, variant), (stencil, shape, port_map) in KIND_MAP.items():
@@ -378,8 +405,12 @@ def build():
         # A port spec may be a LIST: the first entry is the default placement and
         # the rest are alternate faces the user can move that port to, keyed by
         # the edge each one names.
-        ports, alts = {}, {}
+        ports, alts, series = {}, {}, {}
         for p, spec in port_map.items():
+            if is_series(spec):
+                _, edge, along, pitch, extent = spec
+                series[p] = (edge, float(along), float(pitch), float(extent))
+                continue
             choices = spec if isinstance(spec, list) else [spec]
             ports[p] = resolve_port(choices[0], constraints, w, h)
             for extra in choices[1:]:
@@ -394,6 +425,7 @@ def build():
             w, h = w * s, h * s
             ports = {p: (x * s, y * s) for p, (x, y) in ports.items()}
             alts = {p: {f: (x * s, y * s) for f, (x, y) in d.items()} for p, d in alts.items()}
+            series = {p: (e, at * s, pitch * s, ext) for p, (e, at, pitch, ext) in series.items()}
         w, h = round(w, 1), round(h, 1)
         ports = {p: tuple(round(v, 1) for v in xy) for p, xy in ports.items()}
         alts = {p: {f: tuple(round(v, 1) for v in xy) for f, xy in d.items()}
@@ -413,6 +445,15 @@ def build():
         ]
         if menu:
             lines.append(f"        port_faces={menu!r},")
+        # A family is named after the port it replaces: one member keeps that
+        # name, and only a second one numbers them.
+        if series:
+            declared = ", ".join(
+                f"PortSeries({p + '_'!r}, {edge!r}, pitch={round(pitch, 1)}, "
+                f"extent={extent}, at={round(at, 1)}, singular={p!r})"
+                for p, (edge, at, pitch, extent) in series.items()
+            )
+            lines.append(f"        port_series=({declared},),")
         lines += [
             f"    ), {variant!r})",
             "",

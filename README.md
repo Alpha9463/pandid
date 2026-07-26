@@ -148,6 +148,25 @@ fs.add(units.Valve("PCV-1", variant="regulator"))  # self-acting, with its exter
 Bodies without an operator: `plug`, `pinch`, `angle` (piped from below, out to
 the side) and `psv` (spring-loaded angle safety valve).
 
+**More than one of the same nozzle.** `Mixer(n_inlets=…)` and
+`Splitter(n_outlets=…)` spread their connections along the triangle's flat face.
+`Column(n_feeds=…)` and `Reactor(n_feeds=…)` do the same down the shell wall, for
+the extractive tower that has to take its solvent above the feed tray. They are
+`feed_1` … `feed_n`, top to bottom, once there is more than one. A single feed
+keeps the plain `feed` on the nozzle it always had, and stays clear of the
+`reflux_in` / `boilup_in` returns however many there are.
+
+```python
+tower = fs.add(units.Column("T-302", n_feeds=2))
+fs.connect(solvent.outlet, tower.feed_1)   # above the feed tray
+fs.connect(crude.outlet, tower.feed_2)
+```
+
+**A kettle reboiler draws its own bottoms.** `HeatExchanger(variant="kettle")`
+has a fifth nozzle, `bottoms`, at the weir end of the shell. What does not boil
+overflows and leaves there as the tower's bottoms product, so the sump line
+needs no splitter that the plant does not have.
+
 **In-line fittings.** Every in-line device is a pair of faces on a line, so
 `Fitting` is one class and the variant picks the device: `strainer`, `strainer_cone`, `orifice`, `rotameter`, `rupture_disc`,
 `sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `static_mixer`,
@@ -478,7 +497,8 @@ any spelling you would reasonably write: `HeatExchanger`, `heat_exchanger` or
 `hex`. `name` (required) is the tag. Then `variant`, `description` (feeds the
 equipment list), `reference` (a boundary flag's off-page drawing), explicit
 `width`/`height`, `label_pos`, `significant` (break the stream or line number at
-this inline item), and `n_inlets` / `n_outlets` for `Mixer` / `Splitter`.
+this inline item), `n_inlets` / `n_outlets` for `Mixer` / `Splitter`, and
+`n_feeds` for `Column` / `Reactor`.
 
 **`pin` / `port_faces`**: `pin` mirrors `pin()` with `x`/`y` (absolute), `col`/`row`
 (grid), `orientation` (`0`/`90`/`180`/`270`) and `mirrored` (`x`/`y`/`xy`).
@@ -534,7 +554,7 @@ Runnable scripts in `examples/`, each usable from the repo root or from
 | `03_distillation_train.py` | two-column train, recycle, stream table, P&ID title block with revision history, equipment list / notes / legend |
 | `04_control_loop.py` | ISA balloons attached to the line and to equipment, alarms, an interlock, a PSV, and both loops closing on a valve actuator |
 | `05_reactor_recycle.py` | automatic recycle + purge split, straightened process spine |
-| `06_column_reflux.py` | fractionation sheet: overhead condenser, reflux drum, kettle reboiler, both loops closing on the column's return nozzles |
+| `06_column_reflux.py` | fractionation sheet: overhead condenser, reflux drum, kettle reboiler taking bottoms off its own draw, both loops closing on the column's return nozzles |
 | `07_metering_skid.py` | in-line fittings and actuated valves on one spine, PSV to flare, level controller on the valve operator |
 | `08_from_data.py` | the whole flowsheet declared as data and built with `Flowsheet.from_dict()` |
 | `09_line_numbers.py` | full line numbers (`8"-P-1001-A1A`) carried through in-line fittings and broken at two spec breaks, with the stream table headed by them |

@@ -29,10 +29,19 @@ and is kept working.
   `Dryer` and `Instrument`. Ports are reachable both as `unit.ports[name]` and
   as attributes (`pump.suction`), and a typo raises an error naming the real
   ports.
-- Variable-port `Mixer(n_inlets=…)` and `Splitter(n_outlets=…)`.
+- Variable-port `Mixer(n_inlets=…)`, `Splitter(n_outlets=…)` and
+  `Column(n_feeds=…)` / `Reactor(n_feeds=…)`. A tower fed more than once, as in
+  extractive distillation where the solvent enters above the feed tray, spreads
+  `feed_1` … `feed_n` down the shell wall between the two duty arrows, so no
+  count can reach the reflux and boilup returns opposite. One feed keeps the
+  singular `feed` and the nozzle it always had.
 - `Column.reflux_in` / `Column.boilup_in` return nozzles and `Reactor.vent`, so
   an overhead or reboiler loop closes on the column instead of being modelled as
   a recycle to some upstream unit.
+- `HeatExchanger(variant="kettle").bottoms` is the liquid draw at the weir end
+  of a kettle reboiler. A tower's bottoms product physically leaves from there,
+  so it no longer has to be taken off a splitter in the sump line, which puts a
+  piece of equipment that does not exist on the sheet and in the equipment list.
 - `Valve.actuator`, the signal connection on the valve, so a controller output
   terminates on the final control element.
 - `Component` registry and a `State` slot on `Port`/`Stream`, reserved for a

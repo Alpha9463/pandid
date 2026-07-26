@@ -44,31 +44,39 @@ class PortSeries:
 
     Members are ``prefix`` followed by a 1-based index (``in_1``, ``in_2``, ...),
     matching the names :class:`~pfd.units.Mixer` and
-    :class:`~pfd.units.Splitter` generate.
+    :class:`~pfd.units.Splitter` generate. A family that is usually singular
+    names its lone member ``singular`` instead: a :class:`~pfd.units.Column`
+    with one feed has a nozzle called ``feed``, and only grows ``feed_1``,
+    ``feed_2`` when it is given more than one.
 
-    Ports sit ``pitch`` apart, centred on the face; past the point where that
-    would run them off the ends, the whole run is squeezed into the middle
-    ``extent`` of the face instead. Two ports therefore land exactly where a
-    fixed two-port symbol would put them, and a third does not have to shove the
-    first two aside to find room.
+    Ports sit ``pitch`` apart, centred on ``at`` — the point along the face the
+    symbol would have drawn a single nozzle at, or the middle of the face when
+    it names none. Past the point where that spacing would run them off the
+    ends, the whole run is squeezed into ``extent`` of the face instead. The
+    count the symbol was drawn for therefore lands exactly where a fixed symbol
+    would put it, and one more does not shove the others aside to find room.
     """
 
     prefix: str
     face: str
     pitch: float = 20.0
     extent: float = 0.7
+    at: float | None = None
+    singular: str | None = None
 
     def matches(self, port_name: str) -> bool:
         """True when ``port_name`` is a member of this series."""
-        return (port_name.startswith(self.prefix)
-                and port_name[len(self.prefix):].isdigit())
+        return port_name == self.singular or (
+            port_name.startswith(self.prefix)
+            and port_name[len(self.prefix):].isdigit())
 
     def placement(self, index: int, count: int,
                   width: float, height: float) -> tuple[float, float]:
         """Symbol-space coordinate of member ``index`` of ``count`` (0-based)."""
         along = height if self.face in ("W", "E") else width
+        centre = along / 2 if self.at is None else self.at
         span = min(self.pitch * (count - 1), self.extent * along)
-        t = along / 2 if count < 2 else (along - span) / 2 + span * index / (count - 1)
+        t = centre if count < 2 else centre - span / 2 + span * index / (count - 1)
         return {"W": (0.0, t), "E": (width, t),
                 "N": (t, 0.0), "S": (t, height)}[self.face]
 
@@ -77,14 +85,16 @@ class PortSeries:
 
         A series has no fixed membership, so it has no fixed set of points to
         compare a nozzle against — it has a *stretch of face* it may put one on,
-        for some count. One member sits at the middle; the widest run reaches
-        ``extent`` of the face. Anything inside that band shares a placement with
-        a member sooner or later, which is what a collision check needs to know.
+        for some count. One member sits at ``at``; the widest run spreads
+        ``extent`` of the face around it. Anything inside that band shares a
+        placement with a member sooner or later, which is what a collision check
+        needs to know.
         """
         along = height if self.face in ("W", "E") else width
+        centre = along / 2 if self.at is None else self.at
         half = self.extent * along / 2
         fixed = {"W": 0.0, "E": width, "N": 0.0, "S": height}[self.face]
-        return fixed, along / 2 - half, along / 2 + half
+        return fixed, centre - half, centre + half
 
 
 @dataclass

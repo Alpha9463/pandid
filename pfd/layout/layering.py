@@ -7,13 +7,6 @@ if TYPE_CHECKING:
     from pfd.flowsheet import Flowsheet
 
 
-class VirtualNode:
-    """A dummy node inserted to split long edges across multiple ranks."""
-    def __init__(self, original_stream):
-        self.original_stream = original_stream
-        self.placement = None
-
-
 def assign_layers(fs: "Flowsheet") -> None:
     """Assign a column rank to each unit using longest-path algorithm.
 

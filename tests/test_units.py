@@ -91,6 +91,63 @@ def test_reactor_duty_is_energy_role():
     assert r.outlet.direction == "outlet"
 
 
+def test_a_column_takes_more_than_one_feed():
+    """Extractive distillation puts the solvent in above the feed tray, so a
+    tower with a single nozzle cannot be drawn at all."""
+    col = U.Column("T-302", n_feeds=2)
+    assert set(col.ports) == {
+        "feed_1",
+        "feed_2",
+        "distillate",
+        "bottoms",
+        "reflux_in",
+        "boilup_in",
+        "reboiler_duty",
+        "condenser_duty",
+    }
+    assert col.feed_1.direction == "inlet"
+    assert col.feed_2.role == "feed"
+
+
+def test_one_feed_keeps_the_singular_name():
+    """The count only changes the spelling once there is more than one of them,
+    so every sheet ever drawn against ``col.feed`` still says what it meant."""
+    assert "feed" in U.Column("T-101").ports
+    assert "feed_1" not in U.Column("T-101").ports
+    assert "feed" in U.Reactor("R-101").ports
+
+
+def test_a_reactor_takes_more_than_one_charge_nozzle():
+    r = U.Reactor("R-201", n_feeds=3)
+    assert {"feed_1", "feed_2", "feed_3"} <= set(r.ports)
+    assert "feed" not in r.ports
+
+
+def test_a_unit_with_no_feed_at_all_is_rejected():
+    with pytest.raises(ValueError, match="Column requires at least 1 feed"):
+        U.Column("T", n_feeds=0)
+    with pytest.raises(ValueError, match="Reactor requires at least 1 feed"):
+        U.Reactor("R", n_feeds=0)
+
+
+def test_a_kettle_reboiler_has_a_bottoms_draw():
+    """What does not boil overflows the weir and leaves the plant from there,
+    which is why the draw belongs on the exchanger and not on an invented
+    splitter in the sump line."""
+    kettle = U.HeatExchanger("E-702", variant="kettle")
+    assert kettle.bottoms.direction == "outlet"
+    assert kettle.bottoms.role == "liquid"
+
+
+def test_only_the_kettle_carries_the_bottoms_draw():
+    """A plate exchanger has no weir, so handing every hex the nozzle would give
+    most of them one the symbol cannot place."""
+    plate = U.HeatExchanger("E-1", variant="plate")
+    assert "bottoms" not in plate.ports
+    with pytest.raises(AttributeError, match="available ports"):
+        plate.bottoms
+
+
 def test_mixer_variable_inlets():
     m = U.Mixer("M", n_inlets=3)
     assert set(m.ports) == {"in_1", "in_2", "in_3", "outlet"}

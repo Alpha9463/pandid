@@ -99,10 +99,13 @@ A fractionation sheet drawn the way one actually is: tower on the left,
 condenser high and right with the reflux drum beneath it, kettle reboiler off
 the bottom. Both loops close on the column itself through its `reflux_in` and
 `boilup_in` return nozzles rather than being faked as recycles to an upstream
-unit. The drum's inlet is authored on three faces and the engine takes the top
-one, since the condenser drains straight down onto it, and the condenser is
-`mirrored="x"` so it drains toward the drum. Equipment is pinned by nozzle
-fraction, which is what makes every run either straight or a single corner.
+unit. The sump drains into the kettle and the bottoms product leaves from the
+reboiler's own draw at the weir end, so nothing on the sheet is there to make
+the topology work. The drum's inlet is authored on three faces and the engine
+takes the top one, since the condenser drains straight down onto it, and the
+condenser is `mirrored="x"` so it drains toward the drum. Equipment is pinned by
+nozzle fraction, which is what makes every run either straight or a single
+corner.
 
 ## 07 · Metering skid
 

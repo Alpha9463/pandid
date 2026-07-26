@@ -562,13 +562,18 @@ def test_a_home_placement_restated_in_the_menu_is_accepted():
 
 
 @pytest.mark.parametrize(
-    "kind,prefix,ctor_arg,face",
+    "kind,prefix,ctor_arg,face,variant",
     [
-        ("mixer", "in_", "n_inlets", "W"),
-        ("splitter", "out_", "n_outlets", "E"),
+        ("mixer", "in_", "n_inlets", "W", "default"),
+        ("splitter", "out_", "n_outlets", "E", "default"),
+        ("column", "feed_", "n_feeds", "W", "default"),
+        ("reactor", "feed_", "n_feeds", "W", "default"),
+        ("reactor", "feed_", "n_feeds", "W", "plain"),
     ],
 )
-def test_every_member_of_a_port_series_gets_a_nozzle_of_its_own(kind, prefix, ctor_arg, face):
+def test_every_member_of_a_port_series_gets_a_nozzle_of_its_own(
+    kind, prefix, ctor_arg, face, variant
+):
     """Without a series a Mixer's third inlet falls through to the centre of the
     box, landing on top of every other unplaced port -- three streams into one
     point in the middle of the triangle. Each member gets its own spot on
@@ -576,9 +581,9 @@ def test_every_member_of_a_port_series_gets_a_nozzle_of_its_own(kind, prefix, ct
     from pfd import units as U
     from pfd.portgeom import _drawn_placements, is_anchored, resolve_size
 
-    cls = {"mixer": U.Mixer, "splitter": U.Splitter}[kind]
-    for count in range(1, 9):
-        unit = cls("X", **{ctor_arg: count})
+    cls = {"mixer": U.Mixer, "splitter": U.Splitter, "column": U.Column, "reactor": U.Reactor}[kind]
+    for count in range(2, 9):
+        unit = cls("X", variant=variant, **{ctor_arg: count})
         w, h = resolve_size(unit)
         seen = []
         for i in range(1, count + 1):
@@ -591,6 +596,75 @@ def test_every_member_of_a_port_series_gets_a_nozzle_of_its_own(kind, prefix, ct
             seen.append(y)
         assert len(set(seen)) == count, f"{kind} n={count}: ports share a point"
         assert seen == sorted(seen), f"{kind} n={count}: ports out of order"
+
+
+@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
+def test_series_members_lie_on_drawn_geometry(entry):
+    """A family is placed by rule rather than authored point by point, so
+    nothing else checks that the rule keeps its members on the vessel: a band
+    reaching past the straight shell puts the last feed on a dished head."""
+    (kind, variant), sym = entry
+    if kind in _DYNAMIC_KINDS:
+        pytest.skip("feed/product are drawn dynamically, not from Symbol.svg")
+    segments = _collect_segments(sym.svg)
+    for series in sym.port_series:
+        for count in range(1, 9):
+            for index in range(count):
+                x, y = series.placement(index, count, sym.width, sym.height)
+                d = _nearest_distance((x, y), segments)
+                assert d <= GEOM_TOL, (
+                    f"{kind}/{variant} {series.prefix}{index + 1} of {count} at "
+                    f"({x}, {y}) is {d:.1f}u from the nearest drawn stroke"
+                )
+
+
+def test_a_lone_member_lands_where_the_fixed_nozzle_did():
+    """One feed is the count every existing column sheet was drawn with, so the
+    family has to reproduce that nozzle exactly -- otherwise supporting a second
+    feed moves the first one on every drawing already issued."""
+    from pfd import units as U
+    from pfd.portgeom import _drawn_placements, resolve_size
+
+    for unit, want in (
+        (U.Column("T"), (0.0, 130.0)),
+        (U.Reactor("R"), (0.0, 48.2)),
+        (U.Reactor("R", variant="plain"), (0.0, 30.0)),
+    ):
+        w, h = resolve_size(unit)
+        placed = _drawn_placements(unit, "feed", w, h, 0, False, False)
+        assert list(placed) == ["W"]
+        assert placed["W"] == pytest.approx(want)
+
+
+def test_a_feed_family_reaching_the_return_nozzles_is_caught():
+    """The feeds are on the tower's west wall and the returns on its east one,
+    which is what keeps them apart however many feeds there are. Put the family
+    on the returns' face and the band covers both of them -- and a collision a
+    count away is still a collision, so the check has to say so."""
+    from pfd.render.symbols import PortSeries
+
+    column = default_registry.get("column")
+    clash = _colliding_symbol(
+        width=column.width,
+        height=column.height,
+        ports=dict(column.ports),
+        port_series=(PortSeries("feed_", "E", pitch=35.0, extent=0.9, at=100.0, singular="feed"),),
+    )
+    assert clash.coincident_ports() == [
+        ("feed_*", "reflux_in", (100.0, 35.0)),
+        ("boilup_in", "feed_*", (100.0, 175.0)),
+        ("condenser_duty", "feed_*", (100.0, 65.0)),
+        ("feed_*", "reboiler_duty", (100.0, 145.0)),
+    ]
+
+
+def test_the_shipped_feed_families_reach_nothing_else():
+    """The column and both reactors ship a feed family beside fixed nozzles;
+    each is the case the check above exists to protect."""
+    for kind, variant in (("column", "default"), ("reactor", "default"), ("reactor", "plain")):
+        sym = default_registry.get(kind, variant)
+        assert sym.port_series, f"{kind}/{variant} has no feed family"
+        assert sym.coincident_ports() == [], f"{kind}/{variant}"
 
 
 def test_two_series_ports_land_where_the_symbol_used_to_draw_them():
