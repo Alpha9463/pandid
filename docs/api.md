@@ -382,9 +382,11 @@ Three things it will not do:
   the point of keeping the call: the engine removes detours, it does not
   adjudicate drawing conventions, and where a sheet wants a particular one you
   still say so.
-- **Move a nozzle fixed by physics.** For a column's bottoms or a drum's liquid
-  draw the symbol authors one placement, so there is nothing to choose between
-  and the port is never even considered.
+- **Move a nozzle fixed by physics.** For a column's bottoms, a drum's liquid
+  draw or a kettle's bottoms draw the symbol authors one placement, so there is
+  nothing to choose between and the port is never even considered. A member of a
+  port family (`in_1`, `feed_2`) is fixed the same way, because a family spreads
+  *along* one face and does not offer others.
 - **Land two live connections on one point.** Ports are served in declaration
   order and each takes the cheapest face still free, so the selector cannot
   create the collision `validate()` reports as `coincident-ports`.

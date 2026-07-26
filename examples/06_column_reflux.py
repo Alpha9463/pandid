@@ -5,7 +5,8 @@ Laid out the way a fractionation sheet is actually drawn: the column stands tall
 on the left, its overhead condenser sits high and to the right with the reflux
 drum beneath it, and the kettle reboiler hangs off the bottom of the tower. Both
 loops close on the column itself, through its ``reflux_in`` and ``boilup_in``
-return nozzles.
+return nozzles, and the bottoms product leaves from the reboiler's own draw at
+the weir end — which is where it leaves the plant.
 
 That arrangement is a drawing convention rather than something a topological
 layout can infer, so the equipment is pinned. Everything else — routing, stream
@@ -49,9 +50,10 @@ def main():
     # Equipment is positioned by NOZZLE, not by its top-left corner: a port sits
     # at a fixed fraction of its symbol's box, so lining two items up means
     # matching those fractions. Every run below is either dead straight or a
-    # single corner — the only two-corner run is the tower overhead, where both
-    # the distillate and the condenser inlet face upward and the line has no
-    # choice but to rise, cross and drop.
+    # single corner, bar the two that cannot be: the tower overhead, where the
+    # distillate and the condenser inlet both face upward and the line has to
+    # rise, cross and drop, and the sump, which leaves the tower downward and
+    # has to climb back into the kettle's underside.
     col_x, col_y = 300, 260
     col.pin(x=col_x, y=col_y)
     feed.pin(x=90, y=col_y + 105)            # flag tip y+25 meets the feed nozzle

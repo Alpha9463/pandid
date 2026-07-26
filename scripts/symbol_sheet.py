@@ -49,8 +49,12 @@ def main():
         gx = ox + (CELL_W - sw) / 2
         gy = oy + (CELL_H - sh) / 2 - 8
         L.append(f'<g transform="translate({gx:.1f},{gy:.1f}) scale({s:.3f})">{inner(sym.svg)}</g>')
-        # port anchors
-        for pname, (px, py) in sym.ports.items():
+        # port anchors, plus where each port *family* puts its lone member: the
+        # count belongs to the unit, and a symbol sheet has no unit in hand.
+        anchors = list(sym.ports.values())
+        anchors += [series.placement(0, 1, sym.width, sym.height)
+                    for series in sym.port_series]
+        for px, py in anchors:
             ax, ay = gx + px * s, gy + py * s
             L.append(f'<circle cx="{ax:.1f}" cy="{ay:.1f}" r="3.2" fill="#d1495b"/>')
         name = kind if variant == "default" else f"{kind}/{variant}"
@@ -58,7 +62,7 @@ def main():
                  f'font-size="13" text-anchor="middle" font-weight="bold">{name}</text>')
         L.append(f'<text x="{ox + CELL_W/2}" y="{oy + CELL_H - 30}" font-family="sans-serif" '
                  f'font-size="9" fill="#777" text-anchor="middle">{int(sym.width)}×{int(sym.height)} · '
-                 f'{len(sym.ports)} ports</text>')
+                 f'{len(anchors)} ports</text>')
 
     L.append("</svg>")
     out.write_text("\n".join(L), encoding="utf-8")
