@@ -1,5 +1,5 @@
 """Golden-file SVG regression over a fixed corpus: the nine examples'
-flowsheets, three of which (03, 08 and 09) also exercise ``styling="pid"`` with
+flowsheets, three of which (03, 08 and 09) also exercise ``border="zone"`` with
 the stream table and sheet furniture (title block, equipment list, notes,
 legend).
 
@@ -142,6 +142,7 @@ def _distillation_train() -> Flowsheet:
         subtitle="Process Flow Diagram 1",
         drawing_number="PFD-1001",
         project="Aromatics Recovery Unit",
+        client="Aromatics Australia Pty Ltd",
         company="THE UNIVERSITY OF QUEENSLAND",
         status="ISSUED FOR REVIEW",
         sheet="1",
@@ -448,13 +449,13 @@ def _line_numbers() -> Flowsheet:
 SCENARIOS = {
     "01_ammonia_loop": (_ammonia_loop, {}),
     "02_manual_layout": (_manual_layout, {}),
-    "03_distillation_train": (_distillation_train, {"show_stream_table": True, "styling": "pid"}),
+    "03_distillation_train": (_distillation_train, {"show_stream_table": True, "border": "zone"}),
     "04_control_loop": (_control_loop, {}),
     "05_reactor_recycle": (_reactor_recycle, {}),
     "06_column_reflux": (_column_reflux, {}),
     "07_metering_skid": (_metering_skid, {}),
-    "08_from_data": (_from_data, {"show_stream_table": True, "styling": "pid"}),
-    "09_line_numbers": (_line_numbers, {"show_stream_table": True, "styling": "pid"}),
+    "08_from_data": (_from_data, {"show_stream_table": True, "border": "zone"}),
+    "09_line_numbers": (_line_numbers, {"show_stream_table": True, "border": "zone"}),
 }
 
 

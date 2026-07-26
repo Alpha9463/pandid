@@ -124,7 +124,7 @@ def main():
         ],
     )
 
-    fs.render(out("line_numbers.svg"), styling="pid", show_stream_table=True)
+    fs.render(out("line_numbers.svg"), border="zone", show_stream_table=True)
     print("Generated line_numbers.svg")
     for stream in fs.streams:
         print(f"  {stream.source.owner.name} -> {stream.dest.owner.name}: {stream.name}")

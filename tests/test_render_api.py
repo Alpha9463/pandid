@@ -148,6 +148,23 @@ def test_page_size_draws_a_sheet_of_exactly_that_size(name, size, styling):
     assert _canvas(_fs().to_svg(page_size=name, styling=styling)) == size
 
 
+def test_a_furnished_page_is_that_size_with_or_without_a_border():
+    # The border is ink, not layout: a title strip rules to the same place on a
+    # fixed page whether or not the frame around it is drawn.
+    from pfd.document import TitleBlock
+
+    def build():
+        fs = _spanning(600.0)
+        fs.title_block = TitleBlock(drawing_number="PFD-1")
+        return fs
+
+    assert _canvas(build().to_svg(page_size="A3", border="zone")) == A3
+    assert _canvas(build().to_svg(page_size="A3", border="none")) == A3
+    assert _fit(build().to_svg(page_size="A3", border="none")) == _fit(
+        build().to_svg(page_size="A3", border="zone")
+    )
+
+
 def test_page_sizes_differ_from_one_another():
     sheets = {n: _canvas(_fs().to_svg(page_size=n)) for n in ("A4", "A3", "A2", "A1", "A0")}
     assert len(set(sheets.values())) == len(sheets)

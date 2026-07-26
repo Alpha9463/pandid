@@ -82,12 +82,13 @@ Jupyter.
   the equipment they read (with impulse lines), tags drawn inside, location
   variants, alarms and interlock squares, typed signal lines (electric /
   pneumatic / data), and controller outputs landing on a valve's actuator.
-- **Engineering sheet framing.** A zone-ruled drawing border (ASME-style
-  letter/number grid), a full-width title strip (integrated revision history,
-  company/logo cell, status / drawing-number / two-line title / date / rev),
-  and generic titled boxes docked to the corners (auto **equipment list**,
-  **notes**, **legend**, or any `Annotation` / `TableBox`), plus a sectioned
-  stream-property table. Off-page connectors carry a drawing reference.
+- **Engineering sheet framing.** A full-width title strip (integrated revision
+  history, company/logo cell, client and project, status / drawing-number /
+  two-line title / scale / date / rev), generic titled boxes docked to the
+  corners (auto **equipment list**, **notes**, **legend**, or any `Annotation` /
+  `TableBox`), and a sectioned stream-property table, with an optional
+  zone-ruled drawing border (ASME-style letter/number grid) around the lot.
+  Off-page connectors carry a drawing reference.
 - **Declare it as data.** A round-trippable spec format (`dict`, JSON, or
   YAML) covering everything above, so an equipment list and a stream table go
   straight to a drawing without anyone writing Python. Validated, not
@@ -348,11 +349,15 @@ is numbered exactly as before.
 
 ## Engineering title block & sheet furniture
 
-Under `styling="pid"` the sheet gets a zone-ruled border and a full-width
-engineering title strip. `title`/`subtitle` are the two title lines, `company`
-fills the logo cell and `status` the issue-status cell. Each `Revision` carries
-its own `by`/`checked`/`approved` initials, and the block-level
-`drawn_by`/`checked_by`/`approved_by` backfill the newest row.
+Give a flowsheet a title block and the sheet is drawn with a full-width
+engineering title strip. A PFD carries one as readily as a P&ID does, so no
+option turns it on: `border="zone"` is a separate choice, and adds the
+zone-ruled drawing frame around whatever furniture the sheet carries.
+
+`title`/`subtitle` are the two title lines, `client` and `project` rule a row
+each above them, `company` fills the logo cell and `status` the issue-status
+cell. Each `Revision` carries its own `by`/`checked`/`approved` initials, and
+the block-level `drawn_by`/`checked_by`/`approved_by` backfill the newest row.
 
 ```python
 from pfd.document import TitleBlock, Revision
@@ -360,6 +365,7 @@ from pfd.document import TitleBlock, Revision
 fs.title_block = TitleBlock(
     title="Aromatics Recovery A100", subtitle="Process Flow Diagram 1",
     drawing_number="PFD-1001", company="THE UNIVERSITY OF QUEENSLAND",
+    client="Aromatics Australia Pty Ltd", project="Aromatics Recovery Unit",
     status="ISSUED FOR REVIEW", sheet="1", of_sheets="3",
     revisions=[
         Revision("B", "2026-07-01", "Issued for design", "AA", "JS", "RL"),
@@ -367,6 +373,11 @@ fs.title_block = TitleBlock(
     ],
 )
 ```
+
+`scale` states the scale cell. Left blank it reports the ratio the drawing was
+actually placed at, which is a real number once `page_size` fixes the page and
+nothing at all on a sheet sized to fit its drawing, where there is no scale to
+state.
 
 **Generic titled boxes** dock **flush to the sheet frame**, as on a real
 drawing. `align=` is a nine-point grid
@@ -391,7 +402,9 @@ fs.add_annotation(Annotation(title="HOLD", rows=["Awaiting vendor data"],
 (`anchor=` is still accepted as a deprecated alias for `align=`.)
 
 **Off-page connectors.** A boundary flag's `reference` is drawn as its second
-line, naming the drawing the stream comes from or goes to.
+line, naming the drawing the stream comes from or goes to. Only a flag has that
+line, so `reference=` on equipment raises rather than being kept and never
+drawn.
 
 ```python
 fs.add(units.Feed("Fermentation Broth", reference="PFD-201"))
@@ -403,7 +416,7 @@ strings you supply and carry their own units. Inject section headers with
 
 ```python
 fs.stream_table_sections = [("Ethanol", "Mass Fraction")]   # header before "Ethanol"
-fs.render("sheet.svg", styling="pid", show_stream_table=True)
+fs.render("sheet.svg", border="zone", show_stream_table=True)
 ```
 
 ## Building a flowsheet from data
@@ -420,7 +433,7 @@ fs   = Flowsheet.from_json("bfw.json")   # standard library only
 fs   = Flowsheet.from_yaml("bfw.yaml")   # pip install 'pandid[yaml]'
 spec = fs.to_dict()                      # writes the same spec back out
 
-fs.render("bfw.svg", styling="pid", show_stream_table=True)
+fs.render("bfw.svg", border="zone", show_stream_table=True)
 ```
 
 `to_dict()` **round-trips**. `Flowsheet.from_dict(fs.to_dict())` rebuilds an

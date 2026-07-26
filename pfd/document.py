@@ -1,10 +1,12 @@
 """Drawing documentation — the engineering title block and sheet furniture.
 
 Attach a :class:`TitleBlock` to a flowsheet (``fs.title_block = TitleBlock(...)``)
-and render with ``styling="pid"`` to draw a full-width engineering title strip
-(revision history + company/logo cell + status / drawing-number / title / date /
-rev cells) inside a zone-ruled drawing border — the metadata that ISO 10628 /
-ASME Y14 sheets require.
+and the sheet is drawn with a full-width engineering title strip (revision
+history + company/logo cell + client / project / status / drawing-number / title
+/ date / scale / rev cells), the metadata that ISO 10628 / ASME Y14 sheets
+require. A PFD carries a title strip as readily as a P&ID does, so the strip
+follows the block, not the border: ``border="zone"`` adds the zone-ruled drawing
+frame around it.
 
 Around the drawing you can place *generic titled boxes* — :class:`Annotation`
 (a title over free-form, optionally columnar, text) and :class:`TableBox`
@@ -12,7 +14,8 @@ Around the drawing you can place *generic titled boxes* — :class:`Annotation`
 are all just :class:`Annotation` boxes; :func:`equipment_list`, :func:`notes`
 and :func:`legend` are thin constructors for the common cases.
 
-Add them with ``fs.annotations.append(...)`` (or ``fs.add_annotation(...)``).
+Add them with ``fs.annotations.append(...)`` (or ``fs.add_annotation(...)``);
+a box on the flowsheet is a box on the sheet, whichever border is drawn.
 """
 
 from dataclasses import dataclass, field
@@ -41,6 +44,16 @@ class TitleBlock:
     the drawing type — ``"Ethanol Purification A300"`` / ``"Process Flow
     Diagram 1"``). ``company`` fills the logo/company cell, ``status`` the
     issue-status cell (e.g. ``"ISSUED FOR REVIEW"``).
+
+    ``client`` and ``project`` head the information block, above the title,
+    where ISO 5457 puts the owner of the drawing. Either may be left blank and
+    the line for it is not ruled.
+
+    ``scale`` is the scale cell. Left blank, the sheet reports the ratio the
+    renderer actually placed the drawing at, which is a real number once
+    ``page_size`` fixes the page; a drawing on a sheet sized to fit it has no
+    scale to state, so the cell is not ruled. Give the field a value
+    (``"NTS"``, ``"1:100"``) to state one regardless.
     """
     title: str = ""
     subtitle: str = ""
@@ -51,7 +64,7 @@ class TitleBlock:
     status: str = ""
     sheet: str = "1"
     of_sheets: str = "1"
-    scale: str = "NTS"
+    scale: str = ""
     drawn_by: str = ""
     checked_by: str = ""
     approved_by: str = ""

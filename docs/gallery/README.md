@@ -51,11 +51,11 @@ explicit detour the auto-router would never choose but honours verbatim.
 
 ![Distillation train](03_distillation_train.png)
 
-The full engineering sheet: `styling="pid"` draws the zone-ruled ASME-style
-border and the full-width title strip with its revision history, company cell
-and issue status. Around it, furniture docked flush to the frame: an auto
-`equipment_list()` built from each unit's `description`, numbered `notes()`, and
-a `legend()`. Along the bottom, the stream property table with a "Mass Fraction"
+The full engineering sheet: the title block draws the full-width title strip
+with its revision history, client and project rows, company cell, issue status
+and scale, and `border="zone"` rules the ASME-style zone border around it.
+Around that, furniture docked flush to the frame: an auto `equipment_list()`
+built from each unit's `description`, numbered `notes()`, and a `legend()`. Along the bottom, the stream property table with a "Mass Fraction"
 section header injected via `stream_table_sections`. Two columns, their
 overheads and bottoms pumps, a bottoms splitter, and a recycle through FV-200
 back to the feed mixer. Boundary flags carry off-page `reference`s.

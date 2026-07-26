@@ -19,6 +19,27 @@ def test_unknown_port_attribute_gives_helpful_error():
     assert "outlet" in msg  # lists the ports that DO exist
 
 
+def test_boundary_flags_take_an_off_page_reference():
+    assert U.Feed("Raw Feed", reference="PFD-100").reference == "PFD-100"
+    assert U.Product("To Flare", reference="PFD-900").reference == "PFD-900"
+
+
+@pytest.mark.parametrize(
+    "unit",
+    [
+        lambda: U.Pump("P-101", reference="PFD-100"),
+        lambda: U.Column("T-101", reference="PFD-100"),
+        lambda: U.Instrument("FT", 101, reference="PFD-100"),
+    ],
+)
+def test_an_off_page_reference_on_equipment_is_refused(unit):
+    # Only a boundary flag has a second line to draw it on, so anywhere else the
+    # field would be stored and never seen.
+    with pytest.raises(ValueError) as excinfo:
+        unit()
+    assert "Feed or Product" in str(excinfo.value)
+
+
 def test_units_namespace_hides_internal_helpers():
     assert "Reactor" in U.__all__
     assert "Placement" not in U.__all__

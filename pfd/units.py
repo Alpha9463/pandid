@@ -54,7 +54,15 @@ class Unit:
         # Free-text equipment description (used by the auto equipment list).
         self.description = description
         # Off-page reference for boundary flags (Feed/Product): the drawing this
-        # stream comes from / goes to, drawn as the connector's second line.
+        # stream comes from / goes to, drawn as the connector's second line. It
+        # is a statement about where the sheet ends, and equipment is not where
+        # a sheet ends, so nothing else has anywhere to draw it.
+        if reference and self.kind not in ("feed", "product"):
+            raise ValueError(
+                f"{name}: reference= names the drawing an off-page connector "
+                f"continues onto, and a {type(self).__name__} is drawn as equipment. "
+                f"Put it on the Feed or Product where the line crosses the sheet edge."
+            )
         self.reference = reference
         self.flowsheet: Flowsheet | None = None
         self.ports: dict[str, Port] = {}

@@ -168,17 +168,36 @@ and is kept working.
   face, for any `n`. Previously the triangles drew exactly two and the rest fell
   back to the centre of the box, landing every extra stream on one point. Two
   ports still sit exactly where they always have, so no existing sheet moves.
-- `styling="pid"` draws a zone-ruled ASME-style drawing border and a full-width
-  engineering title strip. `TitleBlock` plus `Revision` rows carry the metadata,
-  with per-row `by`/`checked`/`approved` initials.
+- A full-width engineering title strip, drawn whenever the flowsheet carries a
+  `TitleBlock`. Both reference PFDs have a title strip and an equipment list, so
+  the furniture belongs to the sheet rather than to one drawing type: `border=`
+  is the separate choice of whether the zone-ruled ASME-style drawing frame is
+  ruled around it, and a border a sheet did not ask for is not drawn.
+  `TitleBlock` plus `Revision` rows carry the metadata, with per-row
+  `by`/`checked`/`approved` initials.
+- `TitleBlock.client` and `.project` rule a row each above the drawing title,
+  where ISO 5457 puts the owner of the drawing; a block naming neither is ruled
+  no row for them.
+- `TitleBlock.scale` fills the scale cell, alongside the drawing number and the
+  revision index as ASME Y14.1 has it. Left blank it reports the ratio the
+  drawing was actually placed at, which is a real number once `page_size` fixes
+  the page, and nothing at all on a sheet sized to fit its drawing, where no
+  scale exists to state.
+- Title-strip values too long for their cell are trimmed with an ellipsis, so a
+  long client or project name cannot run across the rule into its neighbour or
+  under the sheet count.
 - Sheet furniture docked flush to the frame on a nine-point `align` grid, or
   hand-placed with `position=(x, y)`: `Annotation`, `TableBox`, and the
-  `equipment_list()` / `notes()` / `legend()` constructors.
+  `equipment_list()` / `notes()` / `legend()` constructors. Like the title
+  strip, a box added to the flowsheet is drawn on the sheet whatever the border.
+- An unknown `border=` or `styling=` raises rather than silently drawing the
+  plain sheet.
 - Optional stream property table (`show_stream_table=True`) with section headers
   injected via `Flowsheet.stream_table_sections`. Property values are supplied
   by the caller as strings; the engine does not compute them.
 - Off-page connectors: a `Feed`/`Product` flag's `reference` is drawn as its
-  second line.
+  second line. A flag is the only thing with a second line, so `reference=` on
+  equipment raises and names the boundary to put it on.
 
 #### Instrumentation (ISA-5.1)
 
@@ -249,6 +268,10 @@ and is kept working.
 
 ### Deprecated
 
+- `styling="pid"` on `to_svg()` / `render()`. Use `border="zone"`, which names
+  what it actually does now that the title strip and the docked boxes follow the
+  furniture the flowsheet carries rather than this option. `styling="pid"` still
+  means `border="zone"`; asking for both at once, disagreeing, raises.
 - `anchor=` on `Annotation`, `TableBox`, `equipment_list()`, `notes()` and
   `legend()`. Use `align=` instead. The alias still works and wins over `align`
   when both are given.
