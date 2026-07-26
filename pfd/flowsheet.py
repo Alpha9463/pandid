@@ -74,11 +74,18 @@ class Flowsheet:
         stream_naming_scheme: str | Callable[[int], str] = "S{n}",
         line_numbering_scheme: str | Callable[[Stream], str] = DEFAULT_LINE_NUMBERING_SCHEME,
         line_number_start: int = DEFAULT_LINE_NUMBER_START,
+        auto_faces: bool = True,
     ):
         self.name = name
         self.stream_naming_scheme = stream_naming_scheme
         self.line_numbering_scheme = line_numbering_scheme
         self.line_number_start = line_number_start
+        # Let the layout engine pick which face a movable port is piped from,
+        # given where its peer landed (see :mod:`pfd.layout.faces`). Turn it off
+        # to pin every port to its symbol's own nozzle plus whatever
+        # :meth:`~pfd.units.Unit.nozzle` named, which is what a sheet already
+        # tuned by hand wants.
+        self.auto_faces = auto_faces
         self.units: list = []
         self.streams: list[Stream] = []
         self.components: list = []

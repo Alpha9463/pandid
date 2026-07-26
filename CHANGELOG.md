@@ -74,15 +74,30 @@ and is kept working.
   Repeated calls merge: only the arguments passed are written, so nudging a unit
   with a second `pin(y=…)` keeps the turn and the flip the first one asked for,
   and `orientation=0` / `mirrored=False` are how you put them back.
+- Automatic port-face selection: a port its symbol authors on more than one face
+  is put on the face the unit at the other end of the stream is actually on,
+  scored by the orthogonal run plus the detour a face pointing away would cost.
+  A reflux drum under its condenser is fed from the top, and a controller takes
+  its output on the side its valve is on, without anyone saying so. It runs as a
+  layout phase, once every drawn box is settled and before anything reads a
+  face; the choice lands on the resolved `Frame`, so it is a result rather than
+  intent and `layout()` stays idempotent. Nozzles fixed by physics have one
+  placement and are never considered, and the selector will not land two live
+  connections on one point. `Flowsheet(auto_faces=False)` — or the spec's
+  top-level `auto_faces` key — turns it off, leaving every port on its symbol's
+  own nozzle.
 - `Unit.nozzle()` — pipe a port from a named face of the unit *as drawn*,
-  accepting `top`/`bottom`/`left`/`right` as well as the compass points. A port
-  can only take a face its symbol authored a coordinate for, so the moved nozzle
-  still lands on drawn ink; a nozzle fixed by physics has one placement and
-  raises. The choice is re-checked against any later `pin()`, and the resolver
-  raises rather than falling back to the home nozzle if a face becomes
-  unreachable.
+  accepting `top`/`bottom`/`left`/`right` as well as the compass points, and
+  overriding the engine's pick: the engine removes detours, it does not
+  adjudicate drawing conventions. A port can only take a face its symbol
+  authored a coordinate for, so the moved nozzle still lands on drawn ink; a
+  nozzle fixed by physics has one placement and raises. The choice is re-checked
+  against any later `pin()`, and the resolver raises rather than falling back to
+  the home nozzle if a face becomes unreachable.
 - Automatic label placement: an equipment tag goes to a face no connected
-  nozzle occupies, so a stream no longer runs through its own label.
+  nozzle occupies, so a stream no longer runs through its own label. It runs
+  after face selection, so the face it dodges is the one the stream really
+  leaves from.
 
 #### Routing
 

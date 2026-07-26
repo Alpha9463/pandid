@@ -29,12 +29,11 @@ def main():
     # far past its drawn aspect is what makes a sheet look wrong.
     cond = fs.add(units.HeatExchanger("E-701", variant="straight_tubes", width=120,
                                       height=36, description="Overhead Condenser"))
+    # The drum's inlet is authored on three faces, and the engine takes the top
+    # one on its own: the condenser drains straight down onto it, so reaching
+    # the left head instead would mean hooking back on itself.
     drum = fs.add(units.Vessel("V-701", variant="horizontal", width=130, height=42,
                                description="Reflux Drum"))
-    # The condenser drains straight down into the drum, so take the inlet on the
-    # drum's top face instead of its left head — otherwise the line has to hook
-    # back on itself to reach the head.
-    drum.nozzle("inlet", "N")
     vent = fs.add(units.Product("Vent Gas", reference="PFD-900"))
     split = fs.add(units.Splitter("SP-701", n_outlets=2, description="Reflux Split"))
     dist = fs.add(units.Product("Distillate", reference="PFD-200"))

@@ -6,6 +6,11 @@ Phase 0: Cycle breaking
 Phase 1: Layering (Rank Assignment)
 Phase 2: Ordering (Crossing Reduction)
 Phase 3/4: Coordinate Assignment
+
+Two phases follow, both of which need every drawn box to be final and neither of
+which may move one: port-face selection, then label placement. Their order is
+load-bearing — a label goes to a face no connected nozzle occupies, so it has to
+be told which faces those are.
 """
 
 from typing import Protocol, TYPE_CHECKING
@@ -50,13 +55,16 @@ class SugiyamaLayoutEngine:
         from pfd.layout.cycles import break_cycles
         from pfd.layout.layering import assign_layers
         from pfd.layout.ordering import order_within_layers
-        from pfd.layout.coordinates import assign_coordinates
+        from pfd.layout.coordinates import assign_coordinates, assign_labels
+        from pfd.layout.faces import select_faces
 
         break_cycles(fs)
         _seed_slots(fs)
         assign_layers(fs)
         order_within_layers(fs)
         assign_coordinates(fs)
+        select_faces(fs)
+        assign_labels(fs)
 
 
 default_layout_engine = SugiyamaLayoutEngine()

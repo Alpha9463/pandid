@@ -142,6 +142,11 @@ def place_attached(fs: "Flowsheet") -> bool:
                 orientation=pin.orientation if pin else 0.0,
                 mirrored=pin.mirrored if pin else False,
                 mirror_y=pin.mirror_y if pin else False,
+                # Faces chosen in layout ride across the re-place. Re-deciding
+                # here would move a nozzle the router has already drawn to, and
+                # would make the answer depend on the routed path — which is
+                # itself downstream of the face.
+                port_faces=dict(old.port_faces) if old is not None else {},
             )
             inst.tap = (tx, ty)
             pending.remove(inst)

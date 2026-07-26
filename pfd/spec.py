@@ -24,6 +24,7 @@ The format::
     stream_naming_scheme: "S{n}"
     line_numbering_scheme: "{size}-{service}-{sequence}-{spec}"
     line_number_start: 1001
+    auto_faces: true                  # engine picks each movable port's face
     components: [{name: Water, formula: H2O}]
 
     units:
@@ -210,7 +211,7 @@ def _resolve_kind(value: Any, where: str) -> type[Unit]:
 
 _TOP_KEYS = {
     "name", "stream_naming_scheme", "line_numbering_scheme", "line_number_start",
-    "components", "units",
+    "auto_faces", "components", "units",
     "instruments", "streams", "stream_table_sections", "title_block", "annotations",
 }
 # Keys the format no longer has. A file written against the old one names the
@@ -258,6 +259,7 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
         stream_naming_scheme=_text(scheme, f"{where}: 'stream_naming_scheme'"),
         line_numbering_scheme=_text(line_scheme, f"{where}: 'line_numbering_scheme'"),
         line_number_start=_integer(start, f"{where}: 'line_number_start'"),
+        auto_faces=_flag(data.get("auto_faces", True), f"{where}: 'auto_faces'"),
     )
 
     for i, entry in enumerate(_sequence(data.get("components", []), "components")):
@@ -724,6 +726,8 @@ def to_dict(fs: Flowsheet) -> dict:
         spec["line_numbering_scheme"] = fs.line_numbering_scheme
     if fs.line_number_start != DEFAULT_LINE_NUMBER_START:
         spec["line_number_start"] = fs.line_number_start
+    if not fs.auto_faces:
+        spec["auto_faces"] = False
     if fs.components:
         spec["components"] = [
             c.name if c.formula is None else {"name": c.name, "formula": c.formula}

@@ -70,7 +70,10 @@ def _loop_with_a_balloon():
 
 def test_two_live_connections_on_one_point_are_an_error():
     fs, lic = _loop_with_a_balloon()
-    lic.nozzle("sig_out", "W")  # onto sig_in's own placement on the west
+    # Both named, because an override is the only way onto one point: the engine
+    # picks a free face for anything the author leaves open.
+    lic.nozzle("sig_in", "W")
+    lic.nozzle("sig_out", "W")
     fs.layout()
     errors = [i for i in fs.validate() if i.severity == "error"]
     assert [i.code for i in errors] == ["coincident-ports"]

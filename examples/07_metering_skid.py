@@ -74,11 +74,10 @@ def main():
     # Level controller on the vessel driving the throttle valve's operator.
     # Hung below rather than beside it: the east side is the outlet run, and an
     # instrument placed into equipment is a hard validation error, not a nudge.
+    # A balloon has no fixed sides, so the engine takes the signal out on the
+    # face the valve is actually on rather than letting the run double back.
     lic = fs.add_instrument("LIC", 101, on=surge, at="S", offset=115,
                             variant="panel")
-    # A balloon has no fixed sides — put the signal connection on the face the
-    # valve is actually on, rather than letting the run double back to reach it.
-    lic.nozzle("sig_out", "W")
     fs.connect(lic.sig_out, fv.actuator, kind="electric")
 
     fs.render(out("metering_skid.svg"))
