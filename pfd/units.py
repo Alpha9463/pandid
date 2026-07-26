@@ -11,7 +11,7 @@ This module is also the public ``units`` namespace: ``from pfd import units``.
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pfd.geometry import Frame, Pin
 from pfd.ports import Port
@@ -33,6 +33,11 @@ _VALID_ROLES = {"process", "feed", "product", "energy", "utility", "vapor", "liq
 # The same side vocabulary label_pos uses, so a sheet does not need two spellings
 # for "the top of this unit".
 _FACE_OF_SIDE = {"top": "N", "bottom": "S", "left": "W", "right": "E"}
+
+# "not supplied", for pin() arguments whose falsy value is a real request.
+# ``orientation=0`` and ``mirrored=False`` mean "put it back", so they cannot
+# double as the default the way ``None`` does for the pinned axes.
+_UNCHANGED: Any = object()
 
 class Unit:
     kind: str = "unit"
@@ -70,8 +75,8 @@ class Unit:
         row: int | None = None,
         x: float | None = None,
         y: float | None = None,
-        orientation: float = 0.0,
-        mirrored: bool | str = False,
+        orientation: float = _UNCHANGED,
+        mirrored: bool | str = _UNCHANGED,
     ) -> "Unit":
         """Pin the unit to a specific layout grid cell or exact pixel coordinate.
 
@@ -82,6 +87,11 @@ class Unit:
         quarter turn swaps the unit's width and height. ``mirrored`` flips the
         symbol: ``True`` or ``"x"`` left↔right (swapping its E and W faces),
         ``"y"`` top↔bottom (swapping N and S), ``"xy"`` both.
+
+        Every argument is optional and an omitted one leaves that part of the
+        placement as it stands, so nudging a unit with a second ``pin(y=...)``
+        keeps the turn and the flip the first call asked for. Pass
+        ``orientation=0`` / ``mirrored=False`` to clear them.
         """
         from dataclasses import replace
 
@@ -91,8 +101,10 @@ class Unit:
         for axis, value in (("col", col), ("row", row), ("x", x), ("y", y)):
             if value is not None:
                 setattr(candidate, axis, value)
-        candidate.orientation = normalize_orientation(orientation)
-        candidate.mirrored, candidate.mirror_y = normalize_mirror(mirrored)
+        if orientation is not _UNCHANGED:
+            candidate.orientation = normalize_orientation(orientation)
+        if mirrored is not _UNCHANGED:
+            candidate.mirrored, candidate.mirror_y = normalize_mirror(mirrored)
         # A nozzle() choice names a face on the finished sheet, and this
         # transform is what decides which placement lands there. Check the
         # *candidate*: asking about the committed placement answers for the
@@ -271,7 +283,8 @@ class Vessel(Unit):
 
 
 class Tank(Unit):
-    """Storage tank (cone/dished bottom). Variants: ``"default"``, ``"dished"``."""
+    """Storage tank. Variants: ``"default"`` (dished roof), ``"conical"``,
+    ``"floating_roof"``, ``"sphere"``."""
 
     kind = "tank"
     _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
@@ -404,7 +417,7 @@ class Instrument(Unit):
     (``Instrument("FT-101")``) is still accepted and split.
 
     ``pv`` taps the process; ``sig_in``/``sig_out`` carry signals. Variants:
-    ``"field"`` (default), ``"panel"``, ``"aux"``, ``"shared"`` (DCS),
+    ``"default"`` (field balloon), ``"panel"``, ``"aux"``, ``"shared"`` (DCS),
     ``"computer"``, ``"logic"`` (interlock square).
 
     A balloon that measures something belongs *on* what it measures: see

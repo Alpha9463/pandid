@@ -24,6 +24,7 @@ import math
 import re
 import warnings
 from dataclasses import InitVar, dataclass, field
+from difflib import get_close_matches
 
 from pfd.portgeom import outward_dir
 
@@ -271,12 +272,31 @@ class SymbolRegistry:
     def register(self, kind: str, template: Symbol, variant: str = "default") -> None:
         self._symbols[(kind, variant)] = template
 
+    def variants(self, kind: str) -> list[str]:
+        """Every variant registered for a kind, ``default`` first then A-Z."""
+        names = [variant for (k, variant) in self._symbols if k == kind]
+        return sorted(names, key=lambda name: (name != "default", name))
+
     def get(self, kind: str, variant: str = "default") -> Symbol:
         if (kind, variant) in self._symbols:
             return self._symbols[(kind, variant)]
-        if (kind, "default") in self._symbols:
-            return self._symbols[(kind, "default")]
-        return self._generic_symbol()
+        known = self.variants(kind)
+        if not known:
+            # A kind with no artwork at all -- a Unit subclass from outside this
+            # package -- draws a generic box, and there is no catalogue to hold
+            # its variant against. Only a kind that *has* a catalogue can be
+            # said to lack a name from it.
+            return self._generic_symbol()
+        # A name no symbol answers to is a typo, and drawing the kind's default
+        # in its place is silent by construction: the sheet comes out looking
+        # right, so nothing downstream is ever in a position to say the symbol
+        # the author asked for does not exist.
+        close = get_close_matches(variant, known, n=1, cutoff=0.6)
+        suggestion = f" (did you mean {close[0]!r}?)" if close else ""
+        raise ValueError(
+            f"{kind} has no variant {variant!r}{suggestion}; "
+            f"registered {kind} variants: {', '.join(known)}"
+        )
 
     def _generic_symbol(self) -> Symbol:
         svg = (
@@ -500,7 +520,7 @@ class SymbolRegistry:
         # ISA-5.1 instrument bubbles. The tag text is drawn dynamically from the
         # unit name by the renderer, so the symbol is just the balloon + its
         # location bar. Ports: pv (process connection, bottom), in/out (signals).
-        # Variants: field (bare balloon), panel (single bar), aux (double bar),
+        # Variants: default (bare field balloon), panel (single bar), aux (double bar),
         # shared (balloon-in-square = DCS/shared display), computer (hexagon).
         # ====================================================================
         # A balloon is a circle: a signal can meet it anywhere, so every

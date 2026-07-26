@@ -692,3 +692,47 @@ def test_a_series_on_another_face_is_not_a_collision():
     spread along the opposite face — the shipped case that must stay quiet."""
     assert default_registry.get("splitter").coincident_ports() == []
     assert default_registry.get("mixer").coincident_ports() == []
+
+
+# ---------------------------------------------------------------------------
+# Looking a variant up.
+# ---------------------------------------------------------------------------
+
+
+def test_variants_lists_a_kinds_catalogue_default_first():
+    assert default_registry.variants("tank") == ["default", "conical", "floating_roof", "sphere"]
+
+
+def test_an_unregistered_variant_raises_naming_the_ones_that_exist():
+    """#31: get() fell back to the kind's default, so a typo drew the plain
+    symbol and came out of the printer looking like a drawing decision."""
+    with pytest.raises(ValueError) as excinfo:
+        default_registry.get("vessel", "dishd")
+    message = str(excinfo.value)
+    assert "vessel has no variant 'dishd'" in message
+    assert "did you mean 'dished'?" in message
+    for variant in default_registry.variants("vessel"):
+        assert variant in message
+
+
+def test_a_variant_typo_stops_the_sheet_rather_than_drawing_something_else():
+    """The registry is looked up at render time, so that is where a name
+    nobody registered has to be caught -- not at construction, which a later
+    assignment to unit.variant would walk straight past."""
+    from pfd import Flowsheet, units as U
+
+    fs = Flowsheet("typo")
+    feed = fs.add(U.Feed("F"))
+    tank = fs.add(U.Tank("TK-1", variant="dished"))
+    fs.connect(feed.outlet, tank.inlet)
+    with pytest.raises(ValueError, match=r"tank has no variant 'dished'"):
+        fs.to_svg()
+
+
+def test_a_kind_with_no_symbols_at_all_still_draws_a_generic_box():
+    """The fallback that is load-bearing: a Unit subclass registered by nobody
+    has no catalogue for its variant to be measured against, so there is no
+    name to reject and a generic box is the only honest answer."""
+    assert default_registry.variants("no_such_kind") == []
+    assert default_registry.get("no_such_kind").symbol_id() == "sym_generic"
+    assert default_registry.get("no_such_kind", "anything").symbol_id() == "sym_generic"

@@ -155,8 +155,9 @@ Unit(name, variant="default", width=None, height=None,
 ```
 
 - `name` — the equipment tag. Must be unique on the flowsheet and non-empty.
-- `variant` — the visual style within the class (see below). An unregistered
-  variant name silently falls back to that kind's `default` symbol.
+- `variant` — the visual style within the class (see below). A name that kind
+  has no symbol for raises `ValueError` listing the ones it does, at the first
+  layout or render.
 - `width` / `height` — override the symbol's intrinsic size. Taken as the
   *final* box, so a rotated unit gets exactly what you asked for.
 - `label_pos` — `"top"`, `"bottom"`, `"left"`, `"right"` or `"center"`. Left
@@ -257,7 +258,7 @@ draws its tag as plain text beside the symbol rather than in a balloon.
 
 ```text
 unit.pin(*, col=None, row=None, x=None, y=None,
-         orientation=0.0, mirrored=False) -> Unit
+         orientation=unchanged, mirrored=unchanged) -> Unit
 ```
 
 Records placement **intent** and returns the unit, so it chains off `add()`.
@@ -279,9 +280,11 @@ hx = fs.add(units.HeatExchanger("E-1")).pin(x=100, y=50)
 fv = fs.add(units.Valve("FV-1")).pin(col=2, row=1, mirrored=True)
 ```
 
-Calling `pin()` more than once merges: only the arguments you pass are updated —
-except `orientation` and `mirrored`, which are always written, so a later bare
-`pin(x=…)` resets them to their defaults.
+Calling `pin()` more than once merges: only the arguments you pass are updated,
+`orientation` and `mirrored` included, so a later bare `pin(x=…)` nudges the
+unit along without undoing a turn or a flip. A unit that has never been pinned
+starts square and unflipped; pass `orientation=0` / `mirrored=False` to put one
+back.
 
 ### `orientation`
 
@@ -617,7 +620,10 @@ Defaults: `pfd.layout.SugiyamaLayoutEngine` (exported as
 `default_layout_engine`) and `pfd.routing.DefaultRouter`.
 
 The symbol registry is `pfd.render.symbols.default_registry`, a
-`SymbolRegistry` with `register(kind, symbol, variant="default")` and
-`get(kind, variant="default")`; `get()` falls back to the kind's `default` and
-then to a generic box. New *equipment* symbols should come from the vendored
-stencil pipeline rather than being hand-registered — see `CONTRIBUTING.md`.
+`SymbolRegistry` with `register(kind, symbol, variant="default")`,
+`variants(kind)` and `get(kind, variant="default")`. `get()` raises
+`ValueError` for a variant that kind has no symbol for, naming the ones it
+does; a kind with no symbols at all — a `Unit` subclass of your own — draws a
+generic box, since there is no catalogue to hold its variant against. New
+*equipment* symbols should come from the vendored stencil pipeline rather than
+being hand-registered — see `CONTRIBUTING.md`.

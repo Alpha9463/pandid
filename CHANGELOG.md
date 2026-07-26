@@ -57,6 +57,9 @@ and is kept working.
 - `Unit.pin()` to a grid cell (`col`/`row`) or exact coordinates (`x`/`y`), with
   `orientation` (0/90/180/270 clockwise quarter turns) and `mirrored`
   (`True`/`"x"`, `"y"`, `"xy"`). Pinned and auto-placed units mix freely.
+  Repeated calls merge: only the arguments passed are written, so nudging a unit
+  with a second `pin(y=…)` keeps the turn and the flip the first one asked for,
+  and `orientation=0` / `mirrored=False` are how you put them back.
 - `Unit.nozzle()` — pipe a port from a named face of the unit *as drawn*,
   accepting `top`/`bottom`/`left`/`right` as well as the compass points. A port
   can only take a face its symbol authored a coordinate for, so the moved nozzle
@@ -95,6 +98,12 @@ and is kept working.
   `Symbol.coincident_ports()` warns about two ports on one coordinate. Only the
   connections named in `Symbol.faceless_ports` — an instrument balloon is a
   circle, so a signal may meet it anywhere — may share a placement.
+- `variant=` is checked against the registry: a name the kind has no symbol for
+  raises `ValueError` naming the nearest match and the whole catalogue, rather
+  than drawing that kind's `default` and letting the typo reach the printer.
+  `SymbolRegistry.variants(kind)` enumerates them. A kind with no symbols at all
+  — a `Unit` subclass of your own — still draws a generic box, since there is no
+  catalogue to hold its variant against.
 - A symbol's own lettering — the `M` in a motor operator, the `S` in a solenoid —
   stays upright and readable under every placement transform. Flipping a valve to
   put its operator below the line is a statement about the equipment, not about

@@ -106,10 +106,12 @@ supply; nothing is calculated from them. This is a drawing engine.
 
 A **class** is a functional equipment type (defined by its ports); a **variant**
 is a visual style within it. Pick a variant with the `variant=` argument; the
-`"default"` variant is listed first with the shape it draws.
+`"default"` variant is listed first with the shape it draws — those brackets are
+descriptions, not names. A name no symbol answers to raises `ValueError` listing
+the ones that kind does have.
 
 ```python
-fs.add(units.HeatExchanger("E-1", variant="plate"))    # default, shell_tube, straight_tubes, plate, kettle, u_tube, condenser
+fs.add(units.HeatExchanger("E-1", variant="plate"))    # default, shell_tube, straight_tubes, plate, kettle, u_tube, condenser, spiral
 fs.add(units.Valve("FV-1", variant="control"))         # default (gate), gate, globe, ball, butterfly, check, needle, three_way, control, relief
 fs.add(units.Pump("P-1", variant="gear"))              # default (centrifugal), gear, screw, vacuum
 fs.add(units.Tank("TK-1", variant="floating_roof"))    # default (dished roof), conical, floating_roof, sphere
