@@ -538,6 +538,22 @@ empty.
 With `show_stream_table=True` each column is headed by its line number, and the
 corner cell reads `Line Number` when every line in the table has one.
 
+### Where the number sits on the line
+
+A stream number or a line number is drawn once, on the longest straight run of
+the line it names, parallel to that run. It sits **on** the line, on an opaque
+wipe, only where the run is long enough to leave pipe showing past the wipe at
+each end; otherwise it steps **beside** the line, offset perpendicular, above a
+horizontal run and to the left of a vertical one. A line number is a dozen
+characters wide and most runs are not, so beside is the usual answer for one.
+
+On a vertical run the label is turned a quarter clockwise, so it reads bottom to
+top and never upside down: the aligned-text convention of ISO 129-1 and
+ASME Y14.5.
+
+Wherever it lands, a number is slid along its own run until it clears the
+equipment, tags, balloons and other numbers already on the sheet.
+
 ### Stream properties and the table
 
 `Stream.properties` is a plain dict you fill in. **Nothing computes it**, as

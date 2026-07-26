@@ -123,9 +123,16 @@ and is kept working.
   `.pdf`/`.png` go through the optional `cairosvg` backend.
 - `Flowsheet.show()` opens the drawing in a browser, and a flowsheet renders
   inline in Jupyter via `_repr_svg_`.
-- Canvas fitted to content, with no letterboxing, no clipping, uniform 2 px
-  symbol strokes, and stream-number labels drawn on a wipe so the line never
-  strikes through the text.
+- Canvas fitted to content, with no letterboxing, no clipping and uniform 2 px
+  symbol strokes.
+- A stream number or line number drawn parallel to the line it names, on a wipe
+  so no line strikes through the text. It sits on the line only where the run
+  can still show pipe past the wipe at each end, and steps beside the line where
+  it cannot, which is the usual answer for a line number a dozen characters
+  wide. On a vertical run it is turned to read bottom to top, per the
+  aligned-text convention of ISO 129-1 and ASME Y14.5, and wherever it lands it
+  slides along its own run until it clears the equipment, tags, balloons and
+  other numbers already on the sheet.
 - `page_size="A4"`..`"A0"` draws a sheet of exactly that size instead: the border
   and title strip rule to the page edges and the drawing is fitted into what they
   leave, scaled down uniformly if it is too big and never enlarged if it is not.

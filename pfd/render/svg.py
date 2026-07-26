@@ -19,6 +19,63 @@ _SYMBOL_TEXT = re.compile(
 # instrument symbols in pfd.render.symbols): their tag text has to clear it.
 _BARRED_BALLOONS = {"panel", "aux"}
 
+# --- stream-label placement -------------------------------------------------
+# A stream label is written on an opaque halo, so it can only sit *on* the pipe
+# where the run is long enough to leave pipe showing at each end: the 12px
+# arrowhead, plus enough line either side that the run still reads as one line
+# rather than two stubs. Anything shorter is written beside the pipe instead,
+# which is what a sheet does with a line number a dozen characters long.
+_LABEL_CLEAR = 20.0
+# Gap from the pipe to the near edge of a label written beside it.
+_LABEL_GAP = 4.0
+# Search step along the run. Fine, because a label only has to clear whatever it
+# landed on rather than jump a whole label width.
+_LABEL_STEP = 6.0
+
+
+def _slide(x: float, y: float, room: float, vertical: bool):
+    """Anchor positions along a run: centred first, then out either way."""
+    yield x, y
+    for k in range(1, int(room // _LABEL_STEP) + 1):
+        d = k * _LABEL_STEP
+        yield (x, y - d) if vertical else (x - d, y)
+        yield (x, y + d) if vertical else (x + d, y)
+
+
+def _label_anchors(cx: float, cy: float, span: float, hw: float, hh: float, vertical: bool):
+    """Where a label of ``hw`` x ``hh`` may go on a run of ``span``, best first.
+
+    On the pipe only while the run can still show clear line at each end; then
+    beside it (above a horizontal run, left of a vertical one), then the far
+    side, then further out. Each of those is slid along the run in turn, so the
+    label leaves the pipe before it leaves the neighbourhood of its own line.
+
+    On the pipe the label has to stay within the run, clearance and all. Beside
+    it, it erases nothing, so it may slide until its near edge reaches the run's
+    end: far enough to get out from under a symbol the run butts into, and no
+    further, since past that it stops reading as this line's number.
+    """
+    if span >= hw + 2 * _LABEL_CLEAR:
+        yield from _slide(cx, cy, (span - hw) / 2 - _LABEL_CLEAR, vertical)
+    for out in range(3):
+        off = hh / 2 + _LABEL_GAP + out * hh
+        for side in (-1.0, 1.0):
+            ax = cx + side * off if vertical else cx
+            ay = cy if vertical else cy + side * off
+            yield from _slide(ax, ay, (span + hw) / 2, vertical)
+
+
+def _unit_label_box(item) -> "tuple[float, float, float, float] | None":
+    """Halo rect of an equipment tag. ``None`` for a ``center`` tag, which sits
+    inside its own symbol and so is drawn without one."""
+    lx, ly, anchor, baseline, lpos, text = item
+    if lpos == "center":
+        return None
+    hw, hh = len(text) * 6.6 + 8, 15.0
+    rx = lx - hw / 2 if anchor == "middle" else (lx - hw if anchor == "end" else lx)
+    ry = ly - hh / 2 if baseline == "middle" else ly - hh + 3
+    return (rx, ry, rx + hw, ry + hh)
+
 
 def _num(v: float) -> str:
     """Format a coordinate without trailing zeros (100.0 -> '100')."""
@@ -210,7 +267,7 @@ class SvgRenderer:
         unit_labels: list = []
         balloons: list = []
         drawing = self._draw_units(fs, unit_labels, balloons)
-        drawing.extend(self._draw_streams(fs, jump_direction))
+        drawing.extend(self._draw_streams(fs, jump_direction, unit_labels))
         # Instrumentation goes on over the lines: an impulse line runs from the
         # tap to the balloon, and the balloon's opaque body then knocks out both
         # it and any process line an in-line element straddles.
@@ -732,13 +789,13 @@ class SvgRenderer:
         sits inside its symbol, so it gets no halo that would erase detail.
         """
         out = ['  <g id="unit_labels">']
-        for lx, ly, anchor, baseline, lpos, text in items:
-            if lpos != "center":
-                hw, hh = len(text) * 6.6 + 8, 15.0
-                rx = lx - hw / 2 if anchor == "middle" else (lx - hw if anchor == "end" else lx)
-                ry = ly - hh / 2 if baseline == "middle" else ly - hh + 3
-                out.append(f'    <rect x="{rx:.1f}" y="{ry:.1f}" width="{hw:.1f}" '
-                           f'height="{hh:.1f}" fill="white" />')
+        for item in items:
+            lx, ly, anchor, baseline, _, text = item
+            box = _unit_label_box(item)
+            if box is not None:
+                rx, ry, rx1, ry1 = box
+                out.append(f'    <rect x="{rx:.1f}" y="{ry:.1f}" width="{rx1 - rx:.1f}" '
+                           f'height="{ry1 - ry:.1f}" fill="white" />')
             out.append(f'    <text x="{lx}" y="{ly}" font-family="sans-serif" '
                        f'font-size="12" text-anchor="{anchor}" '
                        f'dominant-baseline="{baseline}">{text}</text>')
@@ -747,8 +804,8 @@ class SvgRenderer:
 
     # ------------------------------------------------------------------ streams
 
-    def _draw_streams(self, fs, jump_direction):
-        from pfd.portgeom import port_point
+    def _draw_streams(self, fs, jump_direction, unit_labels):
+        from pfd.portgeom import port_point, unit_box
 
         stream_geoms, horizontals, verticals = [], [], []
         for s in fs.streams:
@@ -860,17 +917,22 @@ class SvgRenderer:
                                              f'x2="{mx+5:.1f}" y2="{my+off+3:.1f}" stroke="{color}" stroke-width="1.5" />')
 
         # Final pass: stream-number labels, each on a white halo so it reads
-        # cleanly over its own line and any line that crosses beneath it.
+        # cleanly over any line that crosses beneath it.
         #
-        # Two streams running the same corridor sit only a few px apart, so their
-        # labels would overprint at the segment midpoints. Slide each label along
-        # its own line to the nearest clear spot instead — what a draftsman does.
-        # Balloons are drawn over the lines, so a number parked under one would
-        # simply vanish; seed them as occupied so the number slides clear.
+        # A label runs parallel to the pipe it names, turned a quarter clockwise
+        # on a vertical run so it reads bottom to top and never upside down: the
+        # aligned-text convention of ISO 129-1 and ASME Y14.5.
+        #
+        # Everything already on the sheet is seeded as occupied so a label slides
+        # clear of it: balloons and equipment tags are drawn over the lines, so a
+        # number parked under one would simply vanish, and a number over a symbol
+        # would take a bite out of it with its own halo. Two streams sharing a
+        # corridor sit only a few px apart, so their labels are held apart the
+        # same way, which is what a draftsman does.
         placed: list[tuple[float, float, float, float]] = [
-            (u.frame.x, u.frame.y, u.frame.x_max, u.frame.y_max)
-            for u in fs.units if u.kind == "instrument" and u.frame is not None
+            unit_box(u, u.frame) for u in fs.units if u.frame is not None
         ]
+        placed += [b for b in map(_unit_label_box, unit_labels) if b is not None]
 
         def _clear(box):
             return all(box[2] <= p[0] or box[0] >= p[2] or box[3] <= p[1] or box[1] >= p[3]
@@ -882,27 +944,26 @@ class SvgRenderer:
             cx, cy = (sx1 + sx2) / 2, (sy1 + sy2) / 2
             vertical = abs(sx2 - sx1) < abs(sy2 - sy1)
             span = abs(sy2 - sy1) if vertical else abs(sx2 - sx1)
-            step = (hh + 3) if vertical else (hw + 6)
-            room = max(0.0, (span - (hh if vertical else hw)) / 2)
-            tx, ty = cx, cy
-            for k in range(int(room // step) + 1):
-                for d in (0,) if k == 0 else (k, -k):
-                    ux = cx if vertical else cx + d * step
-                    uy = cy + d * step if vertical else cy
-                    box = (ux - hw / 2, uy - hh / 2, ux + hw / 2, uy + hh / 2)
-                    if _clear(box):
-                        tx, ty = ux, uy
-                        break
-                else:
-                    continue
-                break
-            placed.append((tx - hw / 2, ty - hh / 2, tx + hw / 2, ty + hh / 2))
-            lines.append(f'    <rect x="{tx - hw / 2:.1f}" y="{ty - hh / 2:.1f}" '
-                         f'width="{hw:.1f}" height="{hh:.1f}" fill="white" />')
+            # Turned to follow the run, the halo measures hw along it, hh across.
+            bw, bh = (hh, hw) if vertical else (hw, hh)
+
+            spot = None
+            for ux, uy in _label_anchors(cx, cy, span, hw, hh, vertical):
+                box = (ux - bw / 2, uy - bh / 2, ux + bw / 2, uy + bh / 2)
+                if spot is None:
+                    spot = (ux, uy)  # first choice, kept if nothing is ever clear
+                if _clear(box):
+                    spot = (ux, uy)
+                    break
+            tx, ty = spot
+            placed.append((tx - bw / 2, ty - bh / 2, tx + bw / 2, ty + bh / 2))
+            lines.append(f'    <rect x="{tx - bw / 2:.1f}" y="{ty - bh / 2:.1f}" '
+                         f'width="{bw:.1f}" height="{bh:.1f}" fill="white" />')
+            turn = f' transform="rotate(-90, {tx:.1f}, {ty:.1f})"' if vertical else ""
             lines.append(
                 f'    <text x="{tx:.1f}" y="{ty:.1f}" font-family="sans-serif" font-size="10" '
                 f'text-anchor="middle" dominant-baseline="middle" '
-                f'fill="{color}">{html.escape(name)}</text>'
+                f'fill="{color}"{turn}>{html.escape(name)}</text>'
             )
         lines.append('  </g>')
         return lines

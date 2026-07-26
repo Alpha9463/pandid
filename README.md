@@ -75,7 +75,9 @@ Jupyter.
 - **Line numbers.** A line is labelled the way the line list has it
   (`6"-P-1001-A1A`: size, service, sequence, spec), not `S1`. The sequence is
   filled automatically, the number carries through in-line fittings and breaks
-  at a spec break, and the convention is a format string you can replace.
+  at a spec break, and the convention is a format string you can replace. It is
+  drawn parallel to its pipe: on the line where the run has room for it, beside
+  the line where it has not, and turned to read bottom to top on a riser.
 - **Instrumentation (ISA-5.1).** Instrument balloons anchored to the line or
   the equipment they read (with impulse lines), tags drawn inside, location
   variants, alarms and interlock squares, typed signal lines (electric /

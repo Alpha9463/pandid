@@ -50,8 +50,8 @@
     <text x="390.0" y="280.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S2</text>
     <rect x="800.8" y="273.5" width="18.4" height="13.0" fill="white" />
     <text x="810.0" y="280.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S3</text>
-    <rect x="715.8" y="187.5" width="18.4" height="13.0" fill="white" />
-    <text x="725.0" y="194.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S4</text>
+    <rect x="708.0" y="184.8" width="13.0" height="18.4" fill="white" />
+    <text x="714.5" y="194.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 714.5, 194.0)">S4</text>
   </g>
   <g id="instrument_taps">
     <line x1="725" y1="350" x2="725" y2="465" stroke="black" stroke-width="1" />
