@@ -90,9 +90,10 @@ class Flowsheet:
         self.streams: list[Stream] = []
         self.components: list = []
         self.warnings: list = []  # soft validation findings from the last render
-        self.title_block: "TitleBlock | None" = None  # for pid styling
+        # The sheet's own metadata; a block set here is a title strip drawn.
+        self.title_block: "TitleBlock | None" = None
         # Generic titled boxes (equipment list, notes, legend, tables) docked to
-        # the sheet corners; drawn under pid styling. See pfd.document.
+        # the sheet corners, drawn wherever they are added. See pfd.document.
         self.annotations: list = []
         # Section headers to inject into the stream table: (before_key, label).
         self.stream_table_sections: list[tuple[str, str]] = []
@@ -380,10 +381,16 @@ class Flowsheet:
         return _validate(self)
 
     def to_svg(self, *, show_stream_table: bool = False,
-               styling: str = "default", page_size: str | None = None,
+               styling: str = "default", border: str | None = None,
+               page_size: str | None = None,
                jump_direction: str = "vertical", check: bool = True) -> str:
         """Render the flowsheet to an SVG string, running ``layout()`` and
         ``route()`` first if they have not been run yet.
+
+        ``border`` rules the sheet: ``"zone"`` for the ASME-style zone-ruled
+        drawing frame, ``"none"`` (the default) for a plain edge. The title
+        block and annotation boxes attached to this flowsheet are drawn either
+        way. ``styling="pid"`` is the older spelling of ``border="zone"``.
 
         ``page_size`` draws a sheet of exactly that standard size (``"A4"``
         through ``"A0"``), fitting the drawing into what the sheet furniture
@@ -411,11 +418,12 @@ class Flowsheet:
         from pfd.render.svg import SvgRenderer
         return SvgRenderer().render(
             self, show_stream_table=show_stream_table, styling=styling,
-            page_size=page_size, jump_direction=jump_direction
+            border=border, page_size=page_size, jump_direction=jump_direction
         )
 
     def render(self, path: str | Path, *, show_stream_table: bool = False,
-               styling: str = "default", page_size: str | None = None,
+               styling: str = "default", border: str | None = None,
+               page_size: str | None = None,
                jump_direction: str = "vertical", check: bool = True) -> None:
         """Render the flowsheet and write it to *path*.
 
@@ -428,15 +436,16 @@ class Flowsheet:
         Args:
             path: Output file path; its extension selects the format.
             show_stream_table: Draw a property table of all streams at the bottom.
-            styling: ``"default"`` or ``"pid"`` (adds a title block and border).
+            border: ``"none"`` or ``"zone"`` (the zone-ruled drawing frame).
+            styling: The older spelling: ``"pid"`` means ``border="zone"``.
             page_size: Draw on a sheet of exactly this standard size, e.g.
                 ``"A3"``; omit to size the sheet to the drawing.
             jump_direction: Which crossing lines hop, ``"vertical"`` or ``"horizontal"``.
             check: Validate first; errors raise, warnings collect on ``warnings``.
         """
         svg = self.to_svg(
-            show_stream_table=show_stream_table, styling=styling, page_size=page_size,
-            jump_direction=jump_direction, check=check,
+            show_stream_table=show_stream_table, styling=styling, border=border,
+            page_size=page_size, jump_direction=jump_direction, check=check,
         )
         ext = Path(path).suffix.lower()
         if ext in ("", ".svg"):

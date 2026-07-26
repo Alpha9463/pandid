@@ -170,7 +170,7 @@ def main():
     # whoever maintains the data file — ``json.dump(fs.to_dict(), f)`` and done.
     assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
 
-    fs.render(out("from_data.svg"), show_stream_table=True, styling="pid")
+    fs.render(out("from_data.svg"), show_stream_table=True, border="zone")
     print("Generated from_data.svg")
 
 

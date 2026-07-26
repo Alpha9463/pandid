@@ -28,6 +28,20 @@ def text_width(s, size: float, bold: bool = False) -> float:
     return len(str(s)) * size * (_ADV_BOLD if bold else _ADV)
 
 
+def clip(s, room: float, size: float, bold: bool = False) -> str:
+    """Trim a value to the room its cell has.
+
+    A title-block cell is ruled, so a value longer than its cell would run
+    across the rule and into the value beside it. A draftsman abbreviates;
+    an ellipsis at least says the text was abbreviated.
+    """
+    s = str(s)
+    if text_width(s, size, bold) <= room:
+        return s
+    per = size * (_ADV_BOLD if bold else _ADV)
+    return s[: max(0, int(room / per) - 1)].rstrip() + "…"
+
+
 def _esc(s) -> str:
     return html.escape(str(s))
 
@@ -157,7 +171,8 @@ def draw_table(tb, x: float, y: float) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# Engineering title strip (revision table | company | status/dwg/title/rev)
+# Engineering title strip (revision table | company | client/project, title,
+# status, drawing number / scale / date / rev)
 # ---------------------------------------------------------------------------
 
 _REV_W = 300.0
@@ -166,16 +181,34 @@ _INFO_W = 252.0
 _REV_ROW = 14.0
 _REV_COLS = (("REV", 22), ("DATE", 42), ("DESCRIPTION", 140),
              ("BY", 32), ("CHK'D", 32), ("APP'D", 32))
+# The title / status / drawing-number bands, which every sheet carries.
+_BODY_H = 80.0
+# One client or project line above them. ISO 5457 puts the legal owner of the
+# drawing over its title, so the pair heads the information block; a block that
+# names neither is ruled no row for them.
+_HDR_ROW = 13.0
+_HDR_VALUE_X = 40.0
+
+
+def _header_lines(tb) -> list[tuple[str, str]]:
+    return [(label, value) for label, value
+            in (("CLIENT", tb.client), ("PROJECT", tb.project)) if value]
 
 
 def measure_title_strip(tb) -> tuple[float, float]:
     n = len(tb.revisions)
-    h = max((n + 1) * _REV_ROW, 80.0)
+    h = max((n + 1) * _REV_ROW, _BODY_H) + _HDR_ROW * len(_header_lines(tb))
     return _REV_W + _COMPANY_W + _INFO_W, h
 
 
-def draw_title_strip(tb, name: str, date: str, right: float, bottom: float) -> list[str]:
-    """Draw the strip so its bottom-right corner sits at (right, bottom)."""
+def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
+                     fit_scale: str = "") -> list[str]:
+    """Draw the strip so its bottom-right corner sits at (right, bottom).
+
+    ``fit_scale`` is the ratio the renderer actually placed the drawing at, which
+    is what the scale cell reports for a sheet that does not state a scale of
+    its own.
+    """
     w, h = measure_title_strip(tb)
     x, y = right - w, bottom - h
     L = [f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" '
@@ -230,37 +263,60 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float) -> l
             L.append(_text(rx + _COMPANY_W / 2, cy, ln, 8, anchor="middle", bold=True))
             cy += 12
 
-    # --- Info block (right): title band, status band, dwg/date/rev band ---
+    # --- Info block (right): client/project header, title, status, dwg/date/rev ---
     ix = cx2
-    title_h = h * 0.40
-    status_h = h * 0.28
-    band2 = y + title_h
-    band3 = y + title_h + status_h
-    for ly in (band2, band3):
+    header = _header_lines(tb)
+    top = y + _HDR_ROW * len(header)     # top of the title band
+    body = h - _HDR_ROW * len(header)
+    title_h = body * 0.40
+    status_h = body * 0.28
+    band2 = top + title_h
+    band3 = top + title_h + status_h
+    hy = y
+    for i, (label, value) in enumerate(header):
+        if i:
+            L.append(f'<line x1="{ix:.1f}" y1="{hy:.1f}" x2="{x + w:.1f}" '
+                     f'y2="{hy:.1f}" stroke="black" stroke-width="0.5"/>')
+        L.append(_text(ix + 6, hy + _HDR_ROW - 4, label, 6.5, fill="#666"))
+        L.append(_text(ix + _HDR_VALUE_X, hy + _HDR_ROW - 4,
+                       clip(value, _INFO_W - _HDR_VALUE_X - 5, 9), 9))
+        hy += _HDR_ROW
+    for ly in ([top] if header else []) + [band2, band3]:
         L.append(f'<line x1="{ix:.1f}" y1="{ly:.1f}" x2="{x + w:.1f}" '
                  f'y2="{ly:.1f}" stroke="black" stroke-width="0.75"/>')
     # title + subtitle, with sheet count tucked top-right of the title band
-    L.append(_text(ix + 6, y + 15, tb.title or name, 12.5, bold=True))
+    sheets = f"SHEET {tb.sheet} of {tb.of_sheets}"
+    L.append(_text(ix + 6, top + 15,
+                   clip(tb.title or name, _INFO_W - 10 - text_width(sheets, 7.5), 12.5, True),
+                   12.5, bold=True))
     if tb.subtitle:
-        L.append(_text(ix + 6, band2 - 6, tb.subtitle, 10.5))
-    L.append(_text(x + w - 5, y + 11, f"SHEET {tb.sheet} of {tb.of_sheets}", 7.5,
-                   anchor="end", fill="#666"))
+        L.append(_text(ix + 6, band2 - 6, clip(tb.subtitle, _INFO_W - 12, 10.5), 10.5))
+    L.append(_text(x + w - 5, top + 11, sheets, 7.5, anchor="end", fill="#666"))
     # status (tiny label at cell top, value below)
     L.append(_text(ix + 6, band2 + 8, "STATUS", 6.5, fill="#666"))
     L.append(_text(ix + 6, band3 - 5, tb.status or "—", 11, bold=True))
-    # bottom band: DRAWING No | DATE | REV
+    # Bottom band: DRAWING No | SCALE | DATE | REV. ASME Y14.1 keeps the scale
+    # with the number and the revision index, and a sheet with no scale to state
+    # gives its room back to the three cells that identify the drawing.
     rev = tb.revisions[-1].rev if tb.revisions else "0"
-    thirds: list[tuple[float, str, str]] = [
+    scale = tb.scale or fit_scale
+    cells: list[tuple[float, str, str]] = [
+        (_INFO_W * 0.38, "DRAWING No", tb.drawing_number or "—"),
+        (_INFO_W * 0.21, "SCALE", scale),
+        (_INFO_W * 0.29, "DATE", date),
+        (_INFO_W * 0.12, "REV", rev)] if scale else [
         (_INFO_W * 0.50, "DRAWING No", tb.drawing_number or "—"),
         (_INFO_W * 0.30, "DATE", date),
         (_INFO_W * 0.20, "REV", rev)]
     cxr = ix
-    for j, (seg_w, seg_label, seg_val) in enumerate(thirds):
+    for j, (seg_w, seg_label, seg_val) in enumerate(cells):
         if j:
             L.append(f'<line x1="{cxr:.1f}" y1="{band3:.1f}" x2="{cxr:.1f}" '
                      f'y2="{bottom:.1f}" stroke="black" stroke-width="0.5"/>')
+        bold = seg_label != "DATE"
         L.append(_text(cxr + 5, band3 + 8, seg_label, 6.5, fill="#666"))
-        L.append(_text(cxr + 5, bottom - 5, seg_val, 11, bold=(seg_label != "DATE")))
+        L.append(_text(cxr + 5, bottom - 5, clip(seg_val, seg_w - 8, 11, bold), 11,
+                       bold=bold))
         cxr += seg_w
     return L
 
@@ -274,6 +330,16 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float) -> l
 ZONE_BAND = 16.0
 
 
+def sheet_rect(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BAND
+               ) -> tuple[float, float, float, float]:
+    """The sheet rectangle around a drawing frame, ruled or not.
+
+    An unruled sheet keeps the band as plain margin, so turning the border on
+    and off leaves every piece of furniture exactly where it was.
+    """
+    return ix - band, iy - band, iw + 2 * band, ih + 2 * band
+
+
 def zone_frame(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BAND
                ) -> tuple[list[str], tuple[float, float, float, float]]:
     """Draw the drawing frame (inner rect) plus the sheet border (outer rect)
@@ -282,8 +348,7 @@ def zone_frame(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BA
     (``ix``, ``iy``, ``iw``, ``ih``) is the inner drawing rectangle. Returns the
     SVG fragments and the outer sheet rectangle (x, y, w, h).
     """
-    ox, oy = ix - band, iy - band
-    ow, oh = iw + 2 * band, ih + 2 * band
+    ox, oy, ow, oh = sheet_rect(ix, iy, iw, ih, band)
     cols = max(4, min(12, round(iw / 165)))
     rows = max(3, min(8, round(ih / 165)))
     L = [f'<rect x="{ox:.1f}" y="{oy:.1f}" width="{ow:.1f}" height="{oh:.1f}" '

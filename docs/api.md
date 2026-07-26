@@ -49,8 +49,8 @@ The container and the single source of truth for connectivity.
 | `components` | `list[Component]` | |
 | `auto_faces` | `bool` | engine picks movable ports' faces; default `True` |
 | `warnings` | `list[Issue]` | soft findings from the last render |
-| `title_block` | `TitleBlock \| None` | drawn under `styling="pid"` |
-| `annotations` | `list` | sheet furniture boxes |
+| `title_block` | `TitleBlock \| None` | drawn whenever it is set |
+| `annotations` | `list` | sheet furniture boxes, drawn whenever they are added |
 | `stream_table_sections` | `list[tuple[str, str]]` | `(before_key, header_label)` |
 
 ### Building the topology
@@ -113,6 +113,7 @@ to_dict() -> dict                # JSON-safe topology
 
 ```text
 to_svg(*, show_stream_table: bool = False,
+       border: str | None = None,
        styling: str = "default",
        page_size: str | None = None,
        jump_direction: str = "vertical",
@@ -123,8 +124,9 @@ run. With `check=True`, validation errors raise `ValueError` and warnings land
 on `fs.warnings`.
 
 ```text
-render(path: str | Path, *, show_stream_table=False, styling="default",
-       page_size=None, jump_direction="vertical", check=True) -> None
+render(path: str | Path, *, show_stream_table=False, border=None,
+       styling="default", page_size=None, jump_direction="vertical",
+       check=True) -> None
 ```
 Writes the drawing. The format comes from the extension: `.svg` (or no
 extension) is pure Python; `.pdf` and `.png` need the optional `cairosvg`
@@ -140,7 +142,8 @@ _repr_svg_() -> str              # Jupyter renders a flowsheet inline
 
 | Option | Values | Effect |
 |---|---|---|
-| `styling` | `"default"`, `"pid"` | `"pid"` adds the zone-ruled border, the engineering title strip, and draws docked furniture boxes |
+| `border` | `"none"`, `"zone"` | `"zone"` rules the sheet with the ASME-style zone-lettered drawing frame. Anything else raises `ValueError` |
+| `styling` | `"default"`, `"pid"` | the older spelling of the same choice: `"pid"` means `border="zone"` |
 | `show_stream_table` | `bool` | draws the stream property table (one column per unique material stream) |
 | `check` | `bool` | run `validate()` first; errors raise, warnings collect |
 | `page_size` | `None`, `"A4"`, `"A3"`, `"A2"`, `"A1"`, `"A0"` | `None` (the default) sizes the sheet to the drawing; a name draws a sheet of exactly that size |
@@ -154,7 +157,7 @@ border and title strip rule to its edges, and the drawing is fitted into what
 they leave.
 
 ```python
-fs.render("sheet.svg", page_size="A3", styling="pid")
+fs.render("sheet.svg", page_size="A3", border="zone")
 ```
 
 Fix the sheet when the zone grid has to be stable. It is then a property of the
@@ -195,7 +198,8 @@ Unit(name, variant="default", width=None, height=None,
   order, so a nozzle's stream does not run through the tag.
 - `description` is free text, and feeds the auto equipment list.
 - `reference` is the off-page drawing reference, drawn as a boundary flag's
-  second line (`Feed` / `Product`).
+  second line. Only `Feed` and `Product` have that line, so giving it to
+  anything else raises `ValueError`.
 
 ### Port table
 
@@ -234,13 +238,13 @@ Variable-port constructors take their count first:
 
 ```text
 units.Mixer(name, n_inlets=2, variant="default", width=None, height=None,
-            description="", reference="")
+            description="")
 units.Splitter(name, n_outlets=2, variant="default", width=None, height=None,
-               description="", reference="")
+               description="")
 units.Column(name, n_feeds=1, variant="default", width=None, height=None,
-             label_pos=None, description="", reference="")
+             label_pos=None, description="")
 units.Reactor(name, n_feeds=1, variant="default", width=None, height=None,
-              label_pos=None, description="", reference="")
+              label_pos=None, description="")
 ```
 
 (`Mixer` and `Splitter` do not accept `label_pos`, unlike the fixed-port
@@ -563,7 +567,7 @@ units. Rows appear in first-seen key order, and missing values render as `-`.
 ```python
 s.properties = {"Temperature": "120 C", "Pressure": "3.5 bara", "Flow": "1000 kg/h"}
 fs.stream_table_sections = [("Benzene", "Mass Fraction")]   # header row before "Benzene"
-fs.render("sheet.svg", styling="pid", show_stream_table=True)
+fs.render("sheet.svg", border="zone", show_stream_table=True)
 ```
 
 ---
@@ -577,7 +581,7 @@ fs.add_instrument(type, number="", *, on=None, at=None,
 
 Constructs an `Instrument`, adds it, and attaches it when `on` is given. Extra
 `**kwargs` go to the `Instrument` constructor (`width`, `height`, `label_pos`,
-`description`, `reference`).
+`description`).
 
 `type` is the functional letter string and `number` the loop number.
 `unit.name` becomes the full tag (`"FT-101"`) for equipment lists and
@@ -640,7 +644,8 @@ excluded from the stream table.
 
 ## Sheet furniture
 
-Everything here lives in `pfd.document` and is drawn under `styling="pid"`.
+Everything here lives in `pfd.document`. A title block or a box on the flowsheet
+is drawn because it is there, whatever `border` is set to.
 
 ### `TitleBlock` and `Revision`
 
@@ -651,7 +656,8 @@ fs.title_block = TitleBlock(
     title="Aromatics Recovery A100",      # the two title lines
     subtitle="Process Flow Diagram 1",
     drawing_number="PFD-1001",
-    project="", client="",
+    client="Aromatics Australia Pty Ltd",     # above the title, as ISO 5457 has it
+    project="Aromatics Recovery Unit",
     company="THE UNIVERSITY OF QUEENSLAND",   # logo / company cell
     status="ISSUED FOR REVIEW",               # issue-status cell
     sheet="1", of_sheets="3", scale="NTS",
@@ -670,6 +676,21 @@ optional per row and stay blank when omitted. The block-level
 `TitleBlock.date` empty makes the renderer stamp the current date, so a
 committed drawing changes day to day. Set it explicitly if you need reproducible
 output.
+
+`client` and `project` each rule a row above the title when they carry a value,
+and none when they do not.
+
+`scale` is the scale cell. Left blank it reports the ratio the drawing was
+actually placed at, which is a real number as soon as `page_size` fixes the
+page (`1:2.47`) and nothing at all on a sheet sized to fit its drawing, since
+there is then no scale to state. Give it a value to state one regardless:
+
+```python
+fs.title_block = TitleBlock(title="Transfer and Relief U100", scale="NTS")
+```
+
+A value too long for its cell is trimmed with an ellipsis rather than run across
+the rule into the cell beside it.
 
 ### `Annotation` and `TableBox`
 
@@ -731,6 +752,9 @@ the stream comes from or goes to:
 ```python
 fs.add(units.Feed("Fermentation Broth", reference="PFD-201"))
 ```
+
+The flag is the only thing with a second line to draw it on, so `reference=` on
+a pump or a column raises `ValueError` naming the boundary to put it on.
 
 ---
 

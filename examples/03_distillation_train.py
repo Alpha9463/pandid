@@ -118,13 +118,14 @@ def main():
         }
     fs.stream_table_sections = [("Benzene", "Mass Fraction")]
 
-    # --- Title block + revision history (drawn when styling="pid") ---
+    # --- Title block + revision history ---
     from pfd.document import (TitleBlock, Revision, equipment_list, notes, legend)
     fs.title_block = TitleBlock(
         title="Aromatics Recovery A100",
         subtitle="Process Flow Diagram 1",
         drawing_number="PFD-1001",
         project="Aromatics Recovery Unit",
+        client="Aromatics Australia Pty Ltd",
         company="THE UNIVERSITY OF QUEENSLAND",
         status="ISSUED FOR REVIEW",
         sheet="1", of_sheets="3", scale="NTS",
@@ -150,7 +151,7 @@ def main():
     }, align="top-left"))
 
     # --- Render ---
-    fs.render(out("distillation_train.svg"), show_stream_table=True, styling="pid")
+    fs.render(out("distillation_train.svg"), show_stream_table=True, border="zone")
     print("Generated distillation_train.svg")
 
 if __name__ == "__main__":

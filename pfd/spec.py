@@ -375,7 +375,10 @@ def _read_instrument(fs: Flowsheet, entry: Any, where: str) -> Instrument:
     for key in ("width", "height"):
         if key in data:
             kwargs[key] = _number(data[key], f"{where}.{key}")
-    inst = Instrument(type_, number, **kwargs)
+    try:
+        inst = Instrument(type_, number, **kwargs)
+    except ValueError as e:
+        raise _fail_from(e, where) from None
     _read_common(fs, inst, data, f"{where} {inst.name!r}")
     return inst
 

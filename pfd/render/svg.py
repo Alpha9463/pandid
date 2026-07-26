@@ -154,6 +154,53 @@ def _page(page_size: "str | None") -> "_Sheet | None":
     return _Sheet(page_size.upper(), *dims)
 
 
+# The frame the sheet is ruled with, and the older spelling of the same choice.
+_BORDERS = ("none", "zone")
+_STYLINGS = {"default": "none", "pid": "zone"}
+
+
+def _resolve_border(styling: str, border: "str | None") -> str:
+    """The border to rule, from either spelling of the request.
+
+    A name neither spelling knows is a frame the renderer cannot draw, so it
+    raises rather than quietly handing back a plain sheet.
+    """
+    if styling not in _STYLINGS:
+        raise ValueError(
+            f"Unknown styling {styling!r}; use border='zone' for the zone-ruled "
+            f"engineering frame or border='none' for a plain sheet."
+        )
+    if border is None:
+        return _STYLINGS[styling]
+    if border not in _BORDERS:
+        raise ValueError(
+            f"Unknown border {border!r}; use one of {', '.join(_BORDERS)}."
+        )
+    if styling != "default" and border != _STYLINGS[styling]:
+        raise ValueError(
+            f"border={border!r} and styling={styling!r} ask for different frames; "
+            f"pass border= alone."
+        )
+    return border
+
+
+def _fit_scale(dw: float, dh: float, free) -> float:
+    """The uniform scale that puts a ``dw`` x ``dh`` drawing inside *free*.
+
+    Never enlarges: sheet furniture is drawn at a fixed size, so blowing a small
+    drawing up to fill the page would swell its line weights and lettering out
+    of proportion to the border and title strip around it. A draftsman picks a
+    scale that fits and leaves the rest of the sheet white.
+    """
+    _, _, fw, fh = free
+    return min(1.0, fw / dw if dw > 0 else 1.0, fh / dh if dh > 0 else 1.0)
+
+
+def _scale_text(s: float) -> str:
+    """A fit scale as a title-block ratio."""
+    return "1:1" if s >= 1.0 else f"1:{1 / s:.3g}"
+
+
 def _too_small(sheet: _Sheet, need_w: float, need_h: float) -> ValueError:
     """Furniture is drawn at a fixed size, so a sheet too small to hold it is an
     error no scale of the drawing can resolve."""
@@ -174,6 +221,7 @@ class SvgRenderer:
 
     def render(self, fs: "Flowsheet", *, jump_direction: str = "vertical",
                show_stream_table: bool = False, styling: str = "default",
+               border: "str | None" = None,
                page_size: "str | None" = None, **opts) -> str:
         """Render the flowsheet to SVG.
 
@@ -185,9 +233,13 @@ class SvgRenderer:
             Which crossing lines get a semicircle bump: ``"vertical"`` or ``"horizontal"``.
         show_stream_table : bool
             Whether to render a stream property table on the sheet.
+        border : str | None
+            ``"none"`` for a plain sheet edge, ``"zone"`` for the zone-ruled
+            ASME-style drawing frame. The flowsheet's title block and annotation
+            boxes are drawn whichever is chosen.
         styling : str
-            ``"default"`` for plain, ``"pid"`` for the engineering title strip,
-            zone-ruled border, and any docked furniture boxes.
+            The older spelling of the same choice: ``"pid"`` means
+            ``border="zone"``.
         page_size : str | None
             Standard paper size — ``"A4"``, ``"A3"``, ``"A2"``, ``"A1"``, ``"A0"`` —
             drawn at exactly that size, with the furniture docked to the sheet edges
@@ -195,7 +247,7 @@ class SvgRenderer:
             the sheet to the drawing instead.
         """
         from pfd.portgeom import unit_box
-        pid = styling == "pid"
+        border = _resolve_border(styling, border)
         sheet = _page(page_size)
 
         # 1. Diagram bounding box — union of every unit's drawn box and every
@@ -232,9 +284,15 @@ class SvgRenderer:
             U[2], U[3] = max(U[2], x1), max(U[3], y1)
 
         free = None  # region a fixed sheet leaves for the drawing
-        if pid:
-            (frame_x, frame_y, canvas_width, canvas_height), free = self._place_pid(
-                fs, st_layout, dx0, dy0, dx1, dy1, furniture, sheet)
+        # Furniture belongs to the sheet, not to the border: a title block or a
+        # docked box is drawn because it was supplied. A zone border implies a
+        # formal sheet, which carries a title strip whether one was filled in or
+        # not.
+        furnished = (border == "zone" or fs.title_block is not None
+                     or bool(getattr(fs, "annotations", None)))
+        if furnished:
+            (frame_x, frame_y, canvas_width, canvas_height), free = self._place_furniture(
+                fs, st_layout, dx0, dy0, dx1, dy1, furniture, sheet, border)
         elif sheet is not None:
             free = self._place_plain(st_layout, sheet, margin, furniture)
             frame_x, frame_y = 0.0, 0.0
@@ -289,24 +347,19 @@ class SvgRenderer:
         return "\n".join(lines)
 
     def _fit(self, dx0, dy0, dx1, dy1, free) -> str:
-        """Transform centring the drawing in *free* at a uniform scale.
-
-        Never enlarges: sheet furniture is drawn at a fixed size, so blowing a
-        small drawing up to fill the page would swell its line weights and
-        lettering out of proportion to the border and title strip around it.
-        A draftsman picks a scale that fits and leaves the rest of the sheet white.
-        """
+        """Transform centring the drawing in *free* at a uniform scale."""
         fx, fy, fw, fh = free
         dw, dh = dx1 - dx0, dy1 - dy0
-        s = min(1.0, fw / dw if dw > 0 else 1.0, fh / dh if dh > 0 else 1.0)
+        s = _fit_scale(dw, dh, free)
         return (f"translate({_num(fx + (fw - s * dw) / 2 - s * dx0)}, "
                 f"{_num(fy + (fh - s * dh) / 2 - s * dy0)}) scale({s:.6g})")
 
     # ------------------------------------------------------------------ furniture
 
-    def _place_pid(self, fs, st_layout, dx0, dy0, dx1, dy1, furniture, sheet):
-        """Dock furniture flush to the sheet *frame* (not the drawing) and draw
-        the zone border.
+    def _place_furniture(self, fs, st_layout, dx0, dy0, dx1, dy1, furniture, sheet,
+                         border):
+        """Dock furniture flush to the sheet *frame* (not the drawing), and rule
+        that frame into zones when the sheet asked for a border.
 
         Boxes are grouped into edge *bands* by ``align``; the frame grows
         outward from the diagram bounds just enough to hold them, and each box
@@ -329,9 +382,10 @@ class SvgRenderer:
             furniture.extend(F.draw_table(a, x, y) if isinstance(a, TableBox)
                              else F.draw_annotation(a, x, y))
 
-        # Title strip + stream table are mandatory bottom furniture. Represent
-        # them as sentinel "boxes" at the foot of the bottom-right / bottom-left
-        # columns so the band maths sizes the frame around them too.
+        # Title strip + stream table are bottom furniture. Represent them as
+        # sentinel "boxes" at the foot of the bottom-right / bottom-left columns
+        # so the band maths sizes the frame around them too.
+        strip = fs.title_block is not None or border == "zone"
         tb = fs.title_block or TitleBlock()
         ts_w, ts_h = F.measure_title_strip(tb)
         date = tb.date or datetime.now().strftime("%Y-%m-%d")
@@ -346,7 +400,8 @@ class SvgRenderer:
                 positioned.append((a, a.position[0], a.position[1], w, h))
             else:
                 cols[a.align].append((a, w, h))
-        cols["bottom-right"].append((TITLE, ts_w, ts_h))
+        if strip:
+            cols["bottom-right"].append((TITLE, ts_w, ts_h))
         if st_layout:
             cols["bottom-left"].append((STREAM, st_layout["w"], st_layout["h"]))
 
@@ -399,6 +454,16 @@ class SvgRenderer:
                 iyb += extra / 2
         iw, ih = ixr - ix, iyb - iy
 
+        # The bands are measured, so the region left for the drawing is settled
+        # and so is the ratio it will be placed at: the number the title strip's
+        # scale cell reports. A frame grown to the drawing has no fixed page and
+        # so no scale to state.
+        free = None if sheet is None else (
+            ix + left_w + INNER, iy + top_h + INNER,
+            iw - left_w - right_w - 2 * INNER, ih - top_h - bottom_h - 2 * INNER)
+        fit = "" if free is None else _scale_text(
+            _fit_scale(dx1 - dx0, dy1 - dy0, free))
+
         # --- place each column flush to the frame -----------------------------
         def x_for(mode, w, m):
             if mode == "l":
@@ -409,7 +474,8 @@ class SvgRenderer:
 
         def place(obj, x, y, w, h):
             if obj is TITLE:
-                furniture.extend(F.draw_title_strip(tb, name, date, x + w, y + h))
+                furniture.extend(
+                    F.draw_title_strip(tb, name, date, x + w, y + h, fit_scale=fit))
             elif obj is STREAM:
                 furniture.extend(self._draw_stream_table(st_layout, x, y))
             else:
@@ -459,12 +525,13 @@ class SvgRenderer:
             ixr, iyb = max(ixr, px + w + INNER), max(iyb, py + h + INNER)
         iw, ih = ixr - ix, iyb - iy
 
-        # --- zone-ruled border around the frame, then the sheet edge ----------
-        frame_lines, (ox, oy, ow, oh) = F.zone_frame(ix, iy, iw, ih)
-        furniture[:0] = frame_lines  # border sits behind the boxes
-        free = None if sheet is None else (
-            ix + left_w + INNER, iy + top_h + INNER,
-            iw - left_w - right_w - 2 * INNER, ih - top_h - bottom_h - 2 * INNER)
+        # --- border around the frame, then the sheet edge ---------------------
+        if border == "zone":
+            frame_lines, outer = F.zone_frame(ix, iy, iw, ih)
+            furniture[:0] = frame_lines  # border sits behind the boxes
+        else:
+            outer = F.sheet_rect(ix, iy, iw, ih)
+        ox, oy, ow, oh = outer
         return (ox - OUT, oy - OUT, ow + 2 * OUT, oh + 2 * OUT), free
 
     def _place_plain(self, st_layout, sheet, margin, furniture):

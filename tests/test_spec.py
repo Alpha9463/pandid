@@ -95,21 +95,31 @@ def test_unit_fields():
                     "name": "FV-1",
                     "variant": "control",
                     "description": "Feed Control Valve",
-                    "reference": "PFD-100",
                     "width": 60,
                     "height": 32,
                     "label_pos": "bottom",
                     "significant": True,
-                }
+                },
+                {"kind": "Feed", "name": "Raw Feed", "reference": "PFD-100"},
             ],
         }
     )
-    valve = fs.units[0]
+    valve, feed = fs.units
     assert (valve.variant, valve.width, valve.height) == ("control", 60, 32)
     assert valve.description == "Feed Control Valve"
-    assert valve.reference == "PFD-100"
+    assert feed.reference == "PFD-100"
     assert valve.label_pos == "bottom"
     assert valve.significant is True
+
+
+def test_reference_on_equipment_is_refused():
+    # An off-page reference belongs to the sheet boundary, and a valve is not
+    # one: honouring the key on equipment would draw nothing.
+    with pytest.raises(SpecError) as excinfo:
+        Flowsheet.from_dict(
+            _spec(units=[{"kind": "Valve", "name": "FV-1", "reference": "PFD-100"}])
+        )
+    assert "Feed or Product" in str(excinfo.value)
 
 
 def test_variable_port_units():
