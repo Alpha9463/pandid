@@ -628,3 +628,23 @@ def test_a_series_may_not_restate_a_port_the_symbol_already_anchors():
             ports={"in_1": (0.0, 15.0), "outlet": (50.0, 25.0)},
             port_series=(PortSeries("in_", "W"),),
         )
+
+
+def test_heater_and_cooler_are_one_stencil_pair():
+    """They are the same circle and zigzag with the duty arrow reversed, so
+    they have to be the same size: a utility cooler drawn half again bigger
+    than the heater beside it reads as a different class of equipment. The
+    cooler used to come from "Heat Exchanger (Spiral)", a 100x100 stencil for
+    a different machine, which drew it larger than the reactor upstream."""
+    heater = default_registry.get("heater", "default")
+    cooler = default_registry.get("cooler", "default")
+    assert (cooler.width, cooler.height) == (heater.width, heater.height)
+    assert cooler.ports["inlet"] == heater.ports["inlet"]
+    assert cooler.ports["outlet"] == heater.ports["outlet"]
+    # Heat in from below, heat out through the top.
+    assert outward_dir(*heater.ports["duty"], heater.width, heater.height) == "S"
+    assert outward_dir(*cooler.ports["duty"], cooler.width, cooler.height) == "N"
+    # And the spiral exchanger is still reachable, under the kind it belongs to.
+    spiral = default_registry.get("hex", "spiral")
+    assert (spiral.width, spiral.height) == (100.0, 100.0)
+    assert set(spiral.ports) == {"cold_in", "cold_out", "hot_in", "hot_out"}

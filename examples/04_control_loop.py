@@ -50,6 +50,10 @@ def main():
     fs.add_instrument("FE", 101, on=line, at=0.5, offset=0)
     ft = fs.add_instrument("FT", 101, on=line, at=0.5, offset=62)
     fic = fs.add_instrument("FIC", 101, on=ft, at="N", offset=125, angle=35, variant="panel")
+    # The controller lands almost directly above the valve it drives, so take
+    # its output off the bottom of the balloon: on the default east face the
+    # signal leaves away from the valve and has to double back to reach it.
+    fic.nozzle("sig_out", "S")
     fs.connect(ft.sig_out, fic.sig_in, kind="electric")
     fs.connect(fic.sig_out, fv.actuator, kind="pneumatic")
 

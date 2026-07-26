@@ -11,6 +11,10 @@ if TYPE_CHECKING:
     from pfd.flowsheet import Flowsheet
 
 _SIGNAL_KINDS = {"electric", "pneumatic", "data", "capillary", "software"}
+# A symbol's own lettering — the "M" in a motor operator, the "S" in a solenoid.
+# Matched to be counter-transformed when the symbol is turned or flipped.
+_SYMBOL_TEXT = re.compile(
+    r'<text\b[^>]*?\bx="(-?[\d.]+)"[^>]*?\by="(-?[\d.]+)"[^>]*?>.*?</text>', re.S)
 # Balloon variants whose symbol draws a location bar across the middle (see the
 # instrument symbols in pfd.render.symbols): their tag text has to clear it.
 _BARRED_BALLOONS = {"panel", "aux"}
@@ -19,6 +23,49 @@ _BARRED_BALLOONS = {"panel", "aux"}
 def _num(v: float) -> str:
     """Format a coordinate without trailing zeros (100.0 -> '100')."""
     return f"{v:.2f}".rstrip("0").rstrip(".") or "0"
+
+
+def _xform_tag(rot: int, mirror_x: bool, mirror_y: bool) -> str:
+    """Short id suffix naming a placement transform ('' for the identity)."""
+    if not (rot or mirror_x or mirror_y):
+        return ""
+    return "_t" + (f"r{rot}" if rot else "") + ("x" if mirror_x else "") + ("y" if mirror_y else "")
+
+
+def _upright_text(svg: str, rot: int, mirror_x: bool, mirror_y: bool) -> str:
+    """Keep a symbol's own lettering readable under a placement transform.
+
+    Flipping a motor-operated valve to put its operator below the line is a
+    statement about the *equipment*, not about the letter stamped on it: the
+    box moves, the "M" inside it does not turn upside down. The transform on
+    the ``<use>`` reaches the glyphs as readily as the strokes, so each text is
+    wrapped in the inverse of that transform taken about its own anchor. The
+    anchor still lands where the flip puts it — only the orientation is undone.
+    """
+    if not (rot or mirror_x or mirror_y):
+        return svg
+
+    def wrap(match: "re.Match[str]") -> str:
+        tx, ty = float(match.group(1)), float(match.group(2))
+        # Pivot on the glyph's visual centre, not on its anchor: `y` is a
+        # *baseline*, and reflecting a baseline leaves the letter hanging off
+        # the top of the box it is stamped in, since the glyph body sits above
+        # the line rather than astride it. Cap height is ~0.7em, so the middle
+        # of a capital is ~0.35em above the baseline. `x` needs no such
+        # correction — these are all text-anchor="middle".
+        size = re.search(r'font-size="(-?[\d.]+)"', match.group(0))
+        cy = ty - 0.35 * float(size.group(1) if size else 12.0)
+        # Undone in the reverse of the order the <use> applies them.
+        ops = []
+        if mirror_x:
+            ops.append(f"translate({_num(2 * tx)}, 0) scale(-1, 1)")
+        if mirror_y:
+            ops.append(f"translate(0, {_num(2 * cy)}) scale(1, -1)")
+        if rot:
+            ops.append(f"rotate({-rot}, {_num(tx)}, {_num(cy)})")
+        return f'<g transform="{" ".join(ops)}">{match.group(0)}</g>'
+
+    return _SYMBOL_TEXT.sub(wrap, svg)
 
 # Standard page sizes in landscape orientation (mm → px at 96 dpi).
 _PAGE_SIZES = {
@@ -361,6 +408,19 @@ class SvgRenderer:
 
     # ------------------------------------------------------------------ defs
 
+    def _text_xform(self, u) -> tuple[int, bool, bool]:
+        """The placement transform a unit's symbol definition must bake in.
+
+        The identity for every symbol without lettering of its own, so those
+        keep sharing one definition and one id no matter how they are placed.
+        """
+        sym = self.registry.get(u.kind, getattr(u, "variant", "default"))
+        f = getattr(u, "frame", None)
+        if f is None or "<text" not in sym.svg:
+            return (0, False, False)
+        return (int(getattr(f, "orientation", 0) or 0),
+                bool(f.mirrored), bool(getattr(f, "mirror_y", False)))
+
     def _defs(self, fs):
         lines = []
         # Sorted, not raw set order: set iteration depends on the process hash
@@ -377,12 +437,18 @@ class SvgRenderer:
             lines.append(f'      <path d="M 0 0 L 10 5 L 0 10 z" fill="{c}" />')
             lines.append('    </marker>')
 
+        # A symbol carrying its own lettering needs one definition per placement
+        # transform in use, since the counter-transform that keeps the letters
+        # readable is baked into the definition. Everything else — the great
+        # majority — still shares a single definition however it is placed.
         used_symbols = sorted({(u.kind, getattr(u, 'variant', 'default'))
+                               + self._text_xform(u)
                                for u in fs.units if u.kind not in ("feed", "product")})
-        for kind, variant in used_symbols:
+        for kind, variant, rot, mirror_x, mirror_y in used_symbols:
             sym = self.registry.get(kind, variant)
-            svg_str = sym.svg
-            sym_id = f"sym_{kind}" if variant == "default" else f"sym_{kind}_{variant}"
+            svg_str = _upright_text(sym.svg, rot, mirror_x, mirror_y)
+            sym_id = (f"sym_{kind}" if variant == "default" else f"sym_{kind}_{variant}")
+            sym_id += _xform_tag(rot, mirror_x, mirror_y)
             if svg_str.startswith('<g'):
                 inner = svg_str[svg_str.find('>') + 1:svg_str.rfind('</g>')]
                 # overflow="visible": a <symbol> viewport defaults to overflow:hidden,
@@ -414,6 +480,7 @@ class SvgRenderer:
 
             variant = getattr(u, 'variant', 'default')
             sym_id = f"sym_{u.kind}" if variant == "default" else f"sym_{u.kind}_{variant}"
+            sym_id += _xform_tag(*self._text_xform(u))
             u_width, u_height = f.w, f.h
             rot = int(getattr(f, "orientation", 0) or 0)
             mirror_x, mirror_y = bool(f.mirrored), bool(getattr(f, "mirror_y", False))

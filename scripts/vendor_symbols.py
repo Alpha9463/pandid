@@ -129,10 +129,20 @@ KIND_MAP = {
     ("hex", "kettle"):  ("heat_exchangers", "Reboiler",
                          {"cold_in": ("AT", 45.8, 30.0), "cold_out": ("N", 64.0),
                           "hot_in": ("W", 22.5), "hot_out": ("E", 15.0)}),
+    # Heater and cooler are one stencil pair: the same circle and zigzag, with
+    # the diagonal arrow pointing in (heat added) or out (heat removed). Taking
+    # the cooler from anywhere else breaks the pairing -- it used to come from
+    # "Heat Exchanger (Spiral)", which is a different piece of equipment
+    # entirely and, at 100x100, drew a utility cooler larger than the reactor
+    # upstream of it. draw.io files the heat-removed one under "Condenser".
     ("heater", "default"): ("heat_exchangers", "Heater",
                             {"inlet": "W", "outlet": "E", "duty": "S"}),
-    ("cooler", "default"): ("heat_exchangers", "Heat Exchanger (Spiral)",
+    ("cooler", "default"): ("heat_exchangers", "Condenser",
                             {"inlet": "W", "outlet": "E", "duty": "N"}),
+    # Still a real exchanger style, just not what a Cooler is drawn as.
+    ("hex", "spiral"):     ("heat_exchangers", "Heat Exchanger (Spiral)",
+                            {"cold_in": "W", "cold_out": "E",
+                             "hot_in": "N", "hot_out": "S"}),
     # Vessels / columns / reactors / separators / tanks.
     ("vessel", "default"): ("vessels", "Barrel, Drum",
                             {"inlet": "W", "outlet": "E", "vent": ("N", 31.0)}),

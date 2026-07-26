@@ -224,12 +224,19 @@ def register_vendored(registry):
         ports={'inlet': (9.9, 40.0), 'outlet': (70.1, 40.0), 'duty': (40.0, 70.1)},
     ), 'default')
 
-    # draw.io heat_exchangers:Heat Exchanger (Spiral) -> cooler/default
+    # draw.io heat_exchangers:Condenser -> cooler/default
     registry.register('cooler', Symbol(
-        svg='<g id="sym_cooler"><rect x="0.0" y="0.0" width="100.0" height="100.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="50.0" cy="50.0" rx="15.0" ry="15.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="50.0" cy="50.0" rx="27.5" ry="27.5" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="50.0" cy="50.0" rx="40.0" ry="40.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 50.0 L 10.0 50.0 M 90.0 50.0 L 100.0 50.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
-        width=100.0, height=100.0,
-        ports={'inlet': (0.0, 50.0), 'outlet': (100.0, 50.0), 'duty': (50.0, 0.0)},
+        svg='<g id="sym_cooler"><ellipse cx="40.0" cy="40.0" rx="30.0" ry="30.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 10.0 40.0 L 20.0 40.0 L 30.0 25.0 L 50.0 55.0 L 60.0 40.0 L 70.0 40.0 M 80.0 0.0 L 0.0 80.0 M 70.0 4.5 L 80.0 0.0 L 75.5 10.0 L 75.0 5.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=80.0, height=80.0,
+        ports={'inlet': (9.9, 40.0), 'outlet': (70.1, 40.0), 'duty': (40.0, 9.9)},
     ), 'default')
+
+    # draw.io heat_exchangers:Heat Exchanger (Spiral) -> hex/spiral
+    registry.register('hex', Symbol(
+        svg='<g id="sym_hex_spiral"><rect x="0.0" y="0.0" width="100.0" height="100.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="50.0" cy="50.0" rx="15.0" ry="15.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="50.0" cy="50.0" rx="27.5" ry="27.5" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="50.0" cy="50.0" rx="40.0" ry="40.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 50.0 L 10.0 50.0 M 90.0 50.0 L 100.0 50.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=100.0, height=100.0,
+        ports={'cold_in': (0.0, 50.0), 'cold_out': (100.0, 50.0), 'hot_in': (50.0, 0.0), 'hot_out': (50.0, 100.0)},
+    ), 'spiral')
 
     # draw.io vessels:Barrel, Drum -> vessel/default
     registry.register('vessel', Symbol(
