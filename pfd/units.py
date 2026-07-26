@@ -69,7 +69,8 @@ class Unit:
     @property
     def significant(self) -> bool:
         """For inline fittings (valve/reducer/fitting): if True, the stream
-        number breaks across this unit instead of carrying through it.
+        number — or the line number, where the line has one — breaks across this
+        unit instead of carrying through it, which is where a spec break goes.
 
         Setting it renumbers the flowsheet, so the names on the stream objects
         the caller already holds stay the names that get drawn.

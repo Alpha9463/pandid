@@ -457,8 +457,13 @@ class SvgRenderer:
             if k in sec_before:
                 disp.append(("section", sec_before[k]))
             disp.append(("data", k))
+        # The corner cell has to be true of every column under it, so the table
+        # only calls itself a line-number table when every line drawn in it is
+        # identified that way.
+        heading = ("Line Number" if all(s.has_line_number for s in streams)
+                   else "Stream Number")
         return dict(streams=streams, disp=disp, size=size, row_h=row_h,
-                    label_w=label_w, name_w=name_w,
+                    label_w=label_w, name_w=name_w, heading=heading,
                     w=label_w + name_w * n, h=row_h * (1 + len(disp)))
 
     def _draw_stream_table(self, L, left, top):
@@ -480,9 +485,9 @@ class SvgRenderer:
                        f'font-family="{F.FONT}" font-size="{size:.1f}"{wt} '
                        f'text-anchor="{anchor}">{html.escape(str(text))}</text>')
 
-        # header row: "Stream Number" + each stream name
+        # header row: the corner heading + each stream's number or line number
         y = top
-        cell(left, y, label_w, "Stream Number", fill="#eee", bold=True, anchor="start")
+        cell(left, y, label_w, L["heading"], fill="#eee", bold=True, anchor="start")
         cx = left + label_w
         for s in streams:
             cell(cx, y, name_w, s.name, fill="#eee", bold=True)

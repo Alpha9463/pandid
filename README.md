@@ -10,7 +10,7 @@ as **`pfd`**.
 
 [![Distillation train](https://raw.githubusercontent.com/Alpha9463/py-chemengg/main/docs/gallery/03_distillation_train.png)](https://github.com/Alpha9463/py-chemengg/blob/main/docs/gallery/README.md)
 
-<sub>[`examples/03_distillation_train.py`](https://github.com/Alpha9463/py-chemengg/blob/main/examples/03_distillation_train.py) — see the [gallery](https://github.com/Alpha9463/py-chemengg/blob/main/docs/gallery/README.md) for all eight.</sub>
+<sub>[`examples/03_distillation_train.py`](https://github.com/Alpha9463/py-chemengg/blob/main/examples/03_distillation_train.py) — see the [gallery](https://github.com/Alpha9463/py-chemengg/blob/main/docs/gallery/README.md) for all nine.</sub>
 
 ## Install
 
@@ -70,6 +70,10 @@ browser, and a flowsheet renders inline in Jupyter.
 - **Pixel-perfect overrides** — `pin()` equipment to exact coordinates and
   `.via()` a stream through explicit waypoints; the engine honors them and
   auto-routes the rest.
+- **Line numbers** — a line is labelled the way the line list has it
+  (`6"-P-1001-A1A`: size, service, sequence, spec), not `S1`. The sequence is
+  filled automatically, the number carries through in-line fittings and breaks
+  at a spec break, and the convention is a format string you can replace.
 - **Instrumentation (ISA-5.1)** — instrument balloons anchored to the line or
   the equipment they read (with impulse lines), tags drawn inside, location
   variants, alarms and interlock squares, typed signal lines (electric /
@@ -97,7 +101,7 @@ supply; nothing is calculated from them. This is a drawing engine.
 
 | Where | What |
 |---|---|
-| [Example gallery](https://github.com/Alpha9463/py-chemengg/blob/main/docs/gallery/README.md) | all eight examples rendered, with what each one demonstrates |
+| [Example gallery](https://github.com/Alpha9463/py-chemengg/blob/main/docs/gallery/README.md) | all nine examples rendered, with what each one demonstrates |
 | [API reference](https://github.com/Alpha9463/py-chemengg/blob/main/docs/api.md) | every public class, port and option, verified against the source |
 | [Contributing](https://github.com/Alpha9463/py-chemengg/blob/main/CONTRIBUTING.md) | setup, the four gates, and the conventions that are easy to get wrong |
 | [Changelog](https://github.com/Alpha9463/py-chemengg/blob/main/CHANGELOG.md) | what is in this release |
@@ -285,6 +289,37 @@ Inline fittings (valves, reducers, `Fitting`s) carry the stream number
 important valve. `connect()` hands back the number that gets drawn, so
 `s.name` is safe to quote in a report or a stream table of your own.
 
+## Line numbers
+
+A P&ID identifies a line the way the line list does — size, service, sequence,
+spec — because that is what ties the drawing to the stress calculation and the
+isometric. Give `connect()` the components and the line is named that way
+instead of `S1`:
+
+```python
+s = fs.connect(pump.discharge, fv.inlet, size='6"', service="P", spec="A1A")
+s.name        # '6"-P-1001-A1A'
+s.sequence    # '1001' — filled by auto-numbering, from line_number_start
+```
+
+You supply `size`, `service`, `spec` and `insulation`; auto-numbering fills
+`sequence`, unless you set it to tie into a line that already exists. The number
+carries **through** an in-line valve or strainer and breaks at a unit marked
+`significant` — which is exactly where the spec breaks. A component left unset
+drops out, so a line with no spec issued yet reads `6"-P-1001`.
+
+The convention is a format string (or a callable), so a site that spells it
+differently says so once:
+
+```python
+fs = Flowsheet("U100", line_numbering_scheme="{service}-{size}-{sequence:0>6}-{insulation}",
+               line_number_start=1)
+```
+
+Under `show_stream_table=True` each column is headed by its line number, so a
+column ties to a line without a second lookup. A stream with no components set
+is numbered exactly as before.
+
 ## Engineering title block & sheet furniture
 
 Under `styling="pid"` the sheet gets a zone-ruled border and a full-width
@@ -375,6 +410,8 @@ A complete sheet:
 ```yaml
 name: Feed Metering Skid          # the only required field
 stream_naming_scheme: "S{n}"
+line_numbering_scheme: "{size}-{service}-{sequence}-{spec}"
+line_number_start: 1001
 components: [Water, {name: Ethanol, formula: C2H6O}]
 
 units:
@@ -399,6 +436,9 @@ streams:
   - {from: [M-101, outlet], to: [P-101, suction]}
   - from: [P-101, discharge]
     to:   [SP-101, inlet]
+    size: '6"'
+    service: P
+    spec: A1A
     properties: {Temperature: 25 C, Pressure: 4.0 barg, Ethanol: "0.92"}
   - {from: [SP-101, out_1], to: [V-101, inlet]}
   - {from: [SP-101, out_2], to: [FV-101, inlet]}
@@ -433,8 +473,8 @@ annotations:
 any spelling you would reasonably write: `HeatExchanger`, `heat_exchanger` or
 `hex`. `name` (required) is the tag. Then `variant`, `description` (feeds the
 equipment list), `reference` (a boundary flag's off-page drawing), explicit
-`width`/`height`, `label_pos`, `significant` (break the stream number at this
-inline item), and `n_inlets` / `n_outlets` for `Mixer` / `Splitter`.
+`width`/`height`, `label_pos`, `significant` (break the stream or line number at
+this inline item), and `n_inlets` / `n_outlets` for `Mixer` / `Splitter`.
 
 **`pin` / `port_faces`** — `pin` mirrors `pin()`: `x`/`y` (absolute), `col`/`row`
 (grid), `orientation` (`0`/`90`/`180`/`270`) and `mirrored` (`x`/`y`/`xy`).
@@ -452,7 +492,10 @@ time. `at` / `offset` / `angle` / `variant` / `port_faces` behave as in
 `{unit: ..., port: ...}`). `kind` makes a signal line (`electric`, `pneumatic`,
 `data`, …), `name` overrides the auto number, `tear_hint` nominates the recycle
 to cut, `via` forces waypoints, and `properties` is that line's stream-table
-column.
+column. `size` / `service` / `spec` / `insulation` are the line-number
+components, and `sequence` overrides the one auto-numbering would assign —
+which is why `to_dict()` writes the components but never the computed
+sequence.
 
 **Sheet furniture** — `title_block` takes the `TitleBlock` fields plus
 `revisions`; each `annotations` entry is one box, typed `equipment_list`,
@@ -475,7 +518,7 @@ Every failure raises `pfd.SpecError`, a `ValueError`.
 ## Examples
 
 Runnable scripts in `examples/`, each usable from the repo root or from
-`examples/` itself. All eight are rendered in the
+`examples/` itself. All nine are rendered in the
 [gallery](https://github.com/Alpha9463/py-chemengg/blob/main/docs/gallery/README.md).
 
 | Script | Demonstrates |
@@ -488,6 +531,7 @@ Runnable scripts in `examples/`, each usable from the repo root or from
 | `06_column_reflux.py` | fractionation sheet: overhead condenser, reflux drum, kettle reboiler, both loops closing on the column's return nozzles |
 | `07_metering_skid.py` | in-line fittings and actuated valves on one spine, PSV to flare, level controller on the valve operator |
 | `08_from_data.py` | the whole flowsheet declared as data and built with `Flowsheet.from_dict()` |
+| `09_line_numbers.py` | full line numbers (`8"-P-1001-A1A`) carried through in-line fittings and broken at two spec breaks, with the stream table headed by them |
 
 ## Architecture
 

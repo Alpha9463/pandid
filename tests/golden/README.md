@@ -1,11 +1,12 @@
 # Golden SVG fixtures
 
-One `.svg` per fixed scenario exercised by `tests/test_golden.py`: the eight
-examples' flowsheets (`01_ammonia_loop` .. `08_from_data`), where
-`03_distillation_train` and `08_from_data` also cover `styling="pid"` with the
-stream table and equipment-list / notes / legend furniture. `08_from_data` is
-built through `Flowsheet.from_dict`, so it also pins the declarative spec
-format's rendered output.
+One `.svg` per fixed scenario exercised by `tests/test_golden.py`: the nine
+examples' flowsheets (`01_ammonia_loop` .. `09_line_numbers`), where
+`03_distillation_train`, `08_from_data` and `09_line_numbers` also cover
+`styling="pid"` with the stream table and equipment-list / notes / legend
+furniture. `08_from_data` is built through `Flowsheet.from_dict`, so it also
+pins the declarative spec format's rendered output, and `09_line_numbers` pins
+a sheet whose lines are identified by line number rather than stream number.
 
 The flowsheets are rebuilt inline in `test_golden.py` rather than by running
 `examples/*.py` directly — those scripts write into `examples/` (a side

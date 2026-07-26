@@ -6,6 +6,7 @@ rule.
 
 from __future__ import annotations
 from pathlib import Path
+from string import Formatter
 from typing import Callable, TYPE_CHECKING
 
 from pfd.streams import Stream
@@ -18,13 +19,66 @@ if TYPE_CHECKING:
 
 _ENERGY_ROLES = {"energy", "utility"}
 
+#: Size, service, sequence and spec — the four parts almost every site's line
+#: number opens with. Insulation is available to a scheme that wants it.
+DEFAULT_LINE_NUMBERING_SCHEME = "{size}-{service}-{sequence}-{spec}"
+
+#: Line sequences conventionally start well clear of 1, so the drawing reads
+#: 1001 rather than 1 out of the box.
+DEFAULT_LINE_NUMBER_START = 1001
+
+
+def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream) -> str:
+    """Assemble one stream's line number from the components the author set.
+
+    A component left unset drops out, and so does the text introducing it, so a
+    line with no spec reads ``6"-P-1001`` rather than ``6"-P-1001-``. A format
+    spec still applies, which is how a site pads its sequence:
+    ``"{size}-{service}-{sequence:0>4}"``.
+    """
+    if callable(scheme):
+        return scheme(stream)
+    parts = stream.line_components()
+    out: list[str] = []
+    pending = ""  # literal text held back until a component earns it
+    for literal, name, format_spec, _ in Formatter().parse(scheme):
+        pending += literal
+        if name is None:
+            continue
+        if name not in parts:
+            raise ValueError(
+                f"line_numbering_scheme {scheme!r} asks for {name!r}, which is not a "
+                f"line-number component; available components: {sorted(parts)}"
+            )
+        value = parts[name]
+        if not value:
+            pending = ""
+            continue
+        out.append(pending + (format(value, format_spec) if format_spec else value))
+        pending = ""
+    line_number = "".join(out) + pending
+    if not line_number:
+        raise ValueError(
+            f"stream {stream.name!r} carries line-number components that "
+            f"line_numbering_scheme {scheme!r} never uses, so its line number would be "
+            f"empty; name the components you set, or set the ones the scheme names"
+        )
+    return line_number
+
 
 class Flowsheet:
     """A process flow diagram's topology: units, streams, and components."""
 
-    def __init__(self, name: str, *, stream_naming_scheme: str | Callable[[int], str] = "S{n}"):
+    def __init__(
+        self, name: str, *,
+        stream_naming_scheme: str | Callable[[int], str] = "S{n}",
+        line_numbering_scheme: str | Callable[[Stream], str] = DEFAULT_LINE_NUMBERING_SCHEME,
+        line_number_start: int = DEFAULT_LINE_NUMBER_START,
+    ):
         self.name = name
         self.stream_naming_scheme = stream_naming_scheme
+        self.line_numbering_scheme = line_numbering_scheme
+        self.line_number_start = line_number_start
         self.units: list = []
         self.streams: list[Stream] = []
         self.components: list = []
@@ -89,11 +143,19 @@ class Flowsheet:
         return component
 
     def connect(self, src: "Port", dst: "Port", *, kind: str = "material",
-                name: str | None = None, tear_hint: bool = False) -> Stream:
+                name: str | None = None, tear_hint: bool = False,
+                size: str | float | None = None, service: str | float | None = None,
+                sequence: str | float | None = None, spec: str | float | None = None,
+                insulation: str | float | None = None) -> Stream:
         """Create a stream connecting *src* (outlet port) to *dst* (inlet port).
 
         The returned stream already carries the number it will be drawn with;
         see :meth:`renumber_streams`.
+
+        ``size``/``service``/``spec``/``insulation`` are the line-number
+        components; supplying any of them draws this line with its line number
+        instead of a stream number. ``sequence`` is filled by auto-numbering
+        unless it is given here.
 
         Raises :class:`ValueError` if any validation rule is violated.
         """
@@ -133,6 +195,11 @@ class Flowsheet:
             kind=kind,
             tear_hint=tear_hint,
             auto_named=not name,
+            size=size,
+            service=service,
+            sequence=sequence,
+            spec=spec,
+            insulation=insulation,
         )
         src.stream = stream
         dst.stream = stream
@@ -217,6 +284,12 @@ class Flowsheet:
         number at an important valve). Explicitly-named streams keep their name
         and lend it to their whole inline group.
 
+        A line carrying line-number components is named by its line number
+        rather than its stream number, on the same terms: the first segment of a
+        group that carries components supplies them for the whole group, so a
+        line number survives an inline valve and breaks where a significant one
+        does — which is exactly where the spec breaks.
+
         Process streams take the low numbers because they are the ones drawn on
         the sheet and quoted in the stream table; energy streams, which are also
         drawn, follow, and unlabelled signal lines come last. One sequence
@@ -250,19 +323,33 @@ class Flowsheet:
 
         n = 0
 
-        def next_name() -> str:
+        def next_name(group: list[Stream]) -> str:
+            """Take the next number for one group of segments sharing a name."""
             nonlocal n
             n += 1
+            sequence = str(self.line_number_start + n - 1)
+            for s in group:
+                # A sequence the author put there outranks the one numbering
+                # would assign, however often numbering re-runs.
+                if s.sequence is None or s.sequence == s._auto_sequence:
+                    s.sequence = s._auto_sequence = sequence
+            carrier = next((s for s in group if s.has_line_number), None)
+            if carrier is not None:
+                return _format_line_number(self.line_numbering_scheme, carrier)
             return (self.stream_naming_scheme(n)
                     if callable(self.stream_naming_scheme)
                     else self.stream_naming_scheme.format(n=n))
+
+        segments: dict = {}
+        for i, s in enumerate(material):
+            segments.setdefault(find(i), []).append(s)
 
         group_name: dict = {}
         for i in range(len(material)):  # first-appearance order
             r = find(i)
             if r in group_name:
                 continue
-            group_name[r] = explicit[r] if r in explicit else next_name()
+            group_name[r] = explicit[r] if r in explicit else next_name(segments[r])
 
         for i, s in enumerate(material):
             if s.auto_named:
@@ -273,7 +360,7 @@ class Flowsheet:
         for s in sorted((s for s in self.streams if s.kind != "material"),
                         key=lambda s: s.kind != "energy"):
             if s.auto_named:
-                s.name = next_name()
+                s.name = next_name([s])
 
     def validate(self) -> list:
         """Return validation issues for the flowsheet (errors first, then warnings).

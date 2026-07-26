@@ -138,3 +138,21 @@ decides, and `LY-201` on the valve acts — an electric signal into the
 controller, an electric signal out of it, and a pneumatic line (solid, double
 cross-hatched) stroking the actuator. `M-201` is a three-inlet header, which is
 the case that used to have nowhere to put its third stream.
+
+## 09 — Line numbers
+
+[`examples/09_line_numbers.py`](../../examples/09_line_numbers.py) ·
+[SVG](09_line_numbers.svg)
+
+![Line numbers](09_line_numbers.png)
+
+Every line is labelled the way the line list has it — `8"-P-1001-A1A`, size,
+service, sequence and spec — instead of `S1`. The components go in on
+`connect()`; the sequence is filled by the same numbering that hands out stream
+numbers, so nothing has to be kept unique by hand. The suction line keeps one
+number through HV-101 and ST-101, and breaks at the two units marked
+`significant`: the spec changes A1A → D1B across FV-101, and the size changes
+3" → 4" across PSV-101, which is what a spec break is. The tail-pipe to flare
+takes its `sequence` by hand, for a line that already exists on someone else's
+list. The stream table underneath is headed by the same line numbers, so a
+column ties to a line without a second lookup.
