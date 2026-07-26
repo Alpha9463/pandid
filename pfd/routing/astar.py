@@ -45,9 +45,9 @@ def find_path(
     if edge_penalties is None:
         edge_penalties = {}
         
-    # Priority queue: (f_score, g_score, current_node, current_dir, path)
-    # The tiebreaker is intrinsically handled if we use an id, but since we store path, 
-    # we'll just push path length as tiebreaker to avoid comparing node tuples if f and g match.
+    # Priority queue: (f_score, g_score, counter, current_node, current_dir, path)
+    # The counter breaks ties so equal (f, g) entries never fall through to
+    # comparing the node tuples themselves.
     queue: list[tuple[float, float, int, tuple[float, float], Optional[str], list[tuple[float, float]]]] = []
     heapq.heappush(queue, (0, 0, 0, start, start_dir, [start]))
     
@@ -74,26 +74,26 @@ def find_path(
             # 1. Never reverse along the axis just travelled. A reversal
             #    retraces the segment it just drew, and the cost model charges
             #    it a single bend — cheaper than the honest two-bend detour
-            #    around the obstacle that provoked it, so the search preferred
-            #    lines drawn over themselves.
+            #    around the obstacle that provoked it, so without this ban the
+            #    search prefers lines drawn over themselves.
             #
             #    ``start`` is the port's *projected* escape node and the caller
             #    draws the anchor->projection stub itself, so the square exit is
             #    already guaranteed. Seeding ``cur_dir`` with ``start_dir`` and
             #    banning the reverse is therefore the whole port constraint:
             #    the path may turn immediately, but never back over the stub.
-            #    (Re-imposing ``start_dir`` on the first step instead bought an
-            #    arbitrary extra hop outward before any turn was allowed.)
+            #    Re-imposing ``start_dir`` on the first step instead would buy an
+            #    arbitrary extra hop outward before any turn was allowed.
             if cur_dir and ndir == OPPOSITE[cur_dir]:
                 continue
 
             # 2. Goal approach. The router appends a perpendicular goal_proj->port
-            #    segment, so the port is always entered squarely regardless of how
-            #    we reach goal_proj. Allow reaching it head-on OR from either side;
-            #    only forbid arriving from *behind* (heading along the outward
-            #    normal = coming through the unit body). Requiring a strictly
-            #    head-on arrival forced tall detours up to the sheet edge to line
-            #    up above a top/bottom port.
+            #    segment, so the port is always entered squarely however
+            #    goal_proj is reached. Allow reaching it head-on OR from either
+            #    side; only forbid arriving from *behind* (heading along the
+            #    outward normal = coming through the unit body). Requiring a
+            #    strictly head-on arrival forces tall detours up to the sheet
+            #    edge to line up above a top/bottom port.
             if neighbor == goal and goal_dir:
                 if ndir == goal_dir:
                     continue

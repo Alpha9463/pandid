@@ -37,7 +37,7 @@ def test_orientation_accepts_quarter_turns_only():
 
 def test_mirror_spec_covers_both_axes():
     assert normalize_mirror(False) == (False, False)
-    assert normalize_mirror(True) == (True, False)  # historical bool = left/right
+    assert normalize_mirror(True) == (True, False)  # bool shorthand = left/right
     assert normalize_mirror("x") == (True, False)
     assert normalize_mirror("vertical") == (False, True)
     assert normalize_mirror("xy") == (True, True)
@@ -107,9 +107,10 @@ def test_rotation_moves_the_face_a_port_leaves_from():
 
 
 def test_a_second_pin_keeps_the_transform_the_first_asked_for():
-    """#29: orientation and mirrored were written on every call, unlike the
-    axes, so nudging a unit with pin(y=...) un-turned and un-flipped it -- and
-    the sheet still rendered, so nothing was left to say so."""
+    """orientation and mirrored are left alone by a call that does not name
+    them, exactly as the axes are: nudging a unit with pin(y=...) must not
+    un-turn and un-flip it. A sheet drawn that way still renders, so nothing
+    downstream would report the loss."""
     drum = units.Separator("V-1", variant="horizontal")
     drum.pin(x=100, y=100, orientation=90, mirrored="xy")
     drum.pin(y=200)
@@ -167,7 +168,7 @@ def test_nozzle_accepts_the_label_pos_side_names():
 
 
 def test_nozzle_names_the_face_as_drawn_not_as_authored():
-    """#26: the drum's alternate is authored on the symbol's north head, so on a
+    """The drum's alternate is authored on the symbol's north head, so on a
     top-to-bottom mirrored unit that placement is drawn on the SOUTH. Naming the
     face in drawn space is what stops "N" quietly putting the nozzle below."""
     drum = units.Separator("V-1", variant="horizontal")
@@ -199,10 +200,11 @@ def test_pin_rechecks_a_face_the_new_transform_can_no_longer_reach():
 
 
 def test_a_face_is_named_against_the_pin_not_the_frame_it_replaces():
-    """#38/D2: port_faces() preferred the resolved frame, so once a layout had
-    run a pin() answered from the transform it was in the act of replacing --
-    and the accepted face then fell back to the home nozzle at resolve time.
-    This is the order the docs recommend: pin, then nozzle."""
+    """port_faces() answers from the pin rather than the resolved frame, so once
+    a layout has run a pin() is judged against the transform it asks for and not
+    the one it is replacing -- otherwise the accepted face falls back to the home
+    nozzle at resolve time. This is the order the docs recommend: pin, then
+    nozzle."""
     drum = units.Separator("V-1", variant="horizontal")
     _drum_sheet(drum)  # lays out, so drum.frame is resolved at orientation 0
     drum.pin(x=200, y=100, orientation=90)
@@ -211,10 +213,10 @@ def test_a_face_is_named_against_the_pin_not_the_frame_it_replaces():
 
 
 def test_an_unreachable_face_raises_at_resolve_time_rather_than_falling_back():
-    """#38/D2: the guard that matters is the one in the resolver. Every check
-    upstream of it can be outrun by a later change of transform -- a frame
-    another engine wrote, here -- and it is the resolver that decides where the
-    ink goes, so a fall-back to the home nozzle there is silent by definition."""
+    """The guard that matters is the one in the resolver. Every check upstream
+    of it can be outrun by a later change of transform -- a frame another engine
+    wrote, here -- and it is the resolver that decides where the ink goes, so a
+    fall-back to the home nozzle there is silent by definition."""
     from pfd.portgeom import resolve_port
 
     drum = units.Separator("V-1", variant="horizontal")
@@ -228,8 +230,8 @@ def test_an_unreachable_face_raises_at_resolve_time_rather_than_falling_back():
 
 
 def test_pin_leaves_the_transform_alone_when_it_rejects_the_placement():
-    """#38/D3: pin() committed the new transform and only then re-checked, so
-    catching the error left the unit in the state the check exists to prevent."""
+    """pin() re-checks before it commits the new transform, so catching the
+    error leaves the unit in the state the check exists to protect."""
     drum = units.Separator("V-1", variant="horizontal")
     drum.pin(x=200, y=100)
     drum.nozzle("feed", "W")
@@ -251,10 +253,10 @@ def test_port_face_still_works_and_warns():
 
 
 def test_an_unanchored_port_reports_the_face_it_actually_resolves_to(gapped_kind):
-    """#38/D5: a port its symbol does not anchor falls back to the centre of the
-    box, and resolve_port hands that fallback a face. port_faces() used to answer
-    with nothing, so the error text told a caller the port could not be piped
-    from anywhere while the engine was busy piping it."""
+    """A port its symbol does not anchor falls back to the centre of the box,
+    and resolve_port gives that fallback a real face -- so port_faces() must
+    report it rather than answering with nothing, which would tell a caller the
+    port could not be piped from anywhere while the engine was busy piping it."""
     from pfd.portgeom import port_faces, resolve_port
 
     fs = Flowsheet("gapped")
@@ -303,7 +305,7 @@ def _linear(transform: str) -> tuple[float, float, float, float]:
         else:
             t = math.radians(args[0])
             m = (math.cos(t), math.sin(t), -math.sin(t), math.cos(t))
-        # this op is applied before what we have so far: (a,b,c,d) . m
+        # this op is applied before those accumulated so far: (a,b,c,d) . m
         a, b, c, d = (
             a * m[0] + c * m[1],
             b * m[0] + d * m[1],

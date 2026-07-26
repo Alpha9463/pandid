@@ -40,8 +40,8 @@ def test_router_integration():
 
     assert s.route is not None
     assert isinstance(s.route.waypoints, list)
-    # Ensure it's not a straight line (i.e. length > 0)
-    # It has to step orthogonally around things!
+    # Diagonally offset ports cannot be joined by one straight line: the run has
+    # to step orthogonally.
     assert len(s.route.waypoints) >= 1
 
 

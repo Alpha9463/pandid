@@ -1,4 +1,3 @@
-# tests/test_integration.py
 """End-to-end integration test: ammonia synthesis loop.
 
 This test assembles a realistic process flow diagram using the full public API
@@ -33,7 +32,7 @@ def test_ammonia_loop_assembles():
     fs = build_ammonia_loop()
     assert len(fs.units) == 6
     assert len(fs.streams) == 6
-    # Recycle is not user-declared; it stays False until the layout milestone.
+    # Recycle is not user-declared; it stays False until layout runs.
     assert all(s.is_recycle is False for s in fs.streams)
 
 

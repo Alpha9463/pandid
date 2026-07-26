@@ -16,7 +16,7 @@ from __future__ import annotations
 import html
 import string
 
-# Rough advance width of the sans-serif we render with, as a fraction of the
+# Rough advance width of the sans-serif the renderer uses, as a fraction of the
 # font size. Slightly generous so auto-sized boxes never clip their text.
 _ADV = 0.56
 _ADV_BOLD = 0.62

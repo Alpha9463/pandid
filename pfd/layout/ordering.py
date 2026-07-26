@@ -27,7 +27,7 @@ def order_within_layers(fs: "Flowsheet") -> None:
 
     max_col = max(cols.keys())
 
-    # 0. Identify user-pinned rows before we overwrite anything
+    # 0. Identify user-pinned rows before anything is overwritten
     pinned_rows = {}
     for u in units:
         assert u._slot is not None
@@ -76,7 +76,7 @@ def order_within_layers(fs: "Flowsheet") -> None:
                     break
                 offset += 1
                 
-    for _ in range(4): # 4 iterations
+    for _ in range(4):
         # Down sweep (left to right)
         for col_idx in range(1, max_col + 1):
             if col_idx not in cols:

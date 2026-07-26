@@ -1,4 +1,3 @@
-# tests/test_flowsheet.py
 import pytest
 from pfd import Flowsheet, units as U
 
@@ -29,8 +28,8 @@ def test_auto_stream_names_increment():
 
 
 def test_naming_scheme_is_keyword_only():
-    """The second positional slot used to be ``direction``; a sheet written
-    against it must fail loudly rather than become a naming scheme."""
+    """``stream_naming_scheme`` takes no positional slot, so a stray second
+    argument fails loudly rather than being silently adopted as the scheme."""
     with pytest.raises(TypeError):
         Flowsheet("Test", "TB")
 

@@ -117,7 +117,7 @@ def assign_coordinates(fs: "Flowsheet") -> None:
         my_port, other_u, other_port = anchor
         if other_u._slot is None or other_u._slot.y is None:
             continue
-        # Only straighten horizontal runs: our port must face the neighbour
+        # Only straighten horizontal runs: the port must face the neighbour
         # sideways (E/W); vertical ports keep the row axis.
         (_, my_y), _, my_d = resolve_port(u, s, my_port.name)
         if my_d not in ("E", "W"):
@@ -148,7 +148,7 @@ def _assign_labels(fs: "Flowsheet") -> None:
 
     Explicit user ``label_pos`` or a symbol default wins; otherwise the label
     goes to the first free face in top → bottom → right → left order, so a stream
-    leaving (say) a pump's top nozzle no longer runs through its label.
+    leaving (say) a pump's top nozzle does not run through its label.
     """
     from pfd.render.symbols import default_registry
     from pfd.portgeom import port_anchor

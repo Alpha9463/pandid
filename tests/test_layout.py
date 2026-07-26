@@ -109,12 +109,14 @@ def test_full_layout_via_render(tmp_path):
 
 
 def test_spine_straightening_scales_the_port_offset_to_the_resolved_box():
-    """#25: the straightening target was read straight off the symbol.
+    """The straightening target has to come from the resolved box, not the
+    symbol.
 
     A drum resized past its symbol's height carries its inlet proportionally
     lower, so aiming at the raw symbol-space offset lands the run short by
-    exactly that ratio -- 6px for a 42-high drum on a 30-high symbol. Only bites
-    units left unpinned in y, which is why the examples dodge it: they pin.
+    exactly that ratio -- 6px for a 42-high drum on a 30-high symbol. Only units
+    left unpinned in y are affected, which is why the examples do not show it:
+    they pin.
     """
     from pfd.portgeom import port_point
 

@@ -1,11 +1,10 @@
 """Symbol-invariant tests over EVERY (kind, variant) in the registry.
 
-This is the class of defect the other render tests never caught -- a port
-placed in empty space, a stroke half-clipped by an SVG viewport, a label
-struck through by a line -- because those tests only ever exercise the
-handful of symbols the example flowsheets happen to use. Every registered
-symbol is checked here, so the ~50 about to be added get the same scrutiny
-for free.
+These are the defects the other render tests cannot reach -- a port placed in
+empty space, a stroke half-clipped by an SVG viewport, a label struck through
+by a line -- because those tests only ever exercise the handful of symbols the
+example flowsheets happen to use. Every registered symbol is checked here, so a
+newly added one gets the same scrutiny for free.
 
 Geometry is approximated, not hit-tested exactly: SVG path/rect/ellipse/
 circle/line/polygon primitives are flattened into straight-line segments
@@ -278,13 +277,10 @@ def _nearest_distance(p: Point, segments: list[Segment]) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Known, pre-existing exceptions.
+# Exemptions.
 #
-# These are real defects these checks surfaced in the current registry.
-# Reported (see the task's final write-up), not fixed here: this suite is
-# test-only and pfd/ is out of scope. Exempting the specific (kind, variant[,
-# port]) keeps every invariant strict for every other symbol, including the
-# ~50 about to be added.
+# Each names a specific (kind, variant[, port]), so every invariant stays
+# strict for every other symbol -- including any added later.
 # ---------------------------------------------------------------------------
 
 # feed/product are drawn dynamically by SvgRenderer._draw_boundary and never
@@ -292,7 +288,7 @@ def _nearest_distance(p: Point, segments: list[Segment]) -> float:
 # their registered geometry is intentionally unrelated to their ports.
 _DYNAMIC_KINDS = {"feed", "product"}
 
-# port sits several units off the nearest drawn stroke.
+# Ports sitting several units off the nearest drawn stroke.
 # Intentional, not defects: on these symbols the casing is drawn *open* where
 # the suction nozzle attaches, and the port sits in the mouth of that opening —
 # which is where the pipe should meet it. The nearest stroke is therefore half
@@ -303,9 +299,6 @@ _KNOWN_GEOMETRY_GAPS = {
     ("pump", "screw", "suction"),
 }
 
-# Two distinct ports resolving to the identical coordinate. Empty: keep it that
-# way — a duplicate means two streams land on the same point and draw over each
-# other, so a new entry here should be a fix, not an exemption.
 # No public "list everything" API on SymbolRegistry (by design: callers look
 # up one (kind, variant) at a time), so reach into the private dict to
 # enumerate the full registry for exhaustive testing.
@@ -417,7 +410,7 @@ def test_port_faces_lie_on_drawn_geometry(entry):
 def test_no_two_ports_coincide(entry):
     (kind, variant), sym = entry
     # The rule itself lives on Symbol, so a third-party symbol this suite never
-    # sees is held to it too. Here we only assert the shipped registry is clean.
+    # sees is held to it too; this assertion covers the shipped registry.
     assert sym.coincident_ports() == [], f"{kind}/{variant}: " + "; ".join(
         f"ports {a!r} and {b!r} both resolve to {xy}" for a, b, xy in sym.coincident_ports()
     )
@@ -434,10 +427,10 @@ def _colliding_symbol(**kwargs) -> Symbol:
 
 
 def test_authored_alternates_do_not_buy_a_shared_face():
-    """The historical ``separator/horizontal`` bug: the vapour outlet handed a
-    copy of the feed's menu. Both ports then have more than one placement, so a
-    "the menu is multi-entry" exemption waves the collision through — which is
-    the point of naming faceless connections instead of inferring them."""
+    """Handing a vapour outlet a copy of the feed's menu gives both ports more
+    than one placement, so a "the menu is multi-entry" exemption would wave the
+    collision through — which is the point of naming faceless connections
+    instead of inferring them from the shape of the menu."""
     sym = _colliding_symbol(
         width=91.5,
         height=30.0,
@@ -451,8 +444,8 @@ def test_authored_alternates_do_not_buy_a_shared_face():
 
 
 def test_a_second_nozzle_on_an_alternates_own_coordinate_is_caught():
-    """The historical ``vessel/horizontal`` bug: the outlet given the right head
-    the inlet already offers, landing two nozzles on (91.5, 15.0)."""
+    """An outlet given the right head the inlet already offers lands two
+    nozzles on (91.5, 15.0)."""
     sym = _colliding_symbol(
         width=91.5,
         height=30.0,
@@ -498,13 +491,13 @@ def test_faceless_connections_may_share_a_placement():
 #
 # The checks above hold the shipped registry to these rules; Symbol's own
 # constructor holds every symbol to them, including the third-party ones this
-# suite never sees. Each of these used to be discarded in silence.
+# suite never sees. Each is rejected rather than discarded in silence.
 
 
 def test_a_placement_keyed_to_a_face_it_does_not_land_on_is_rejected():
     """The menu is re-keyed by coordinate at resolve time, so a mis-keyed
-    alternate never existed: it was filed under the face it actually lands on,
-    where it either clobbered the real entry or was clobbered by it."""
+    alternate would not exist: it lands under the face it actually reaches,
+    where it either clobbers the real entry or is clobbered by it."""
     with pytest.raises(ValueError, match=r"nearest the W edge"):
         Symbol(
             svg='<g id="sym_x"/>',
@@ -576,9 +569,9 @@ def test_a_home_placement_restated_in_the_menu_is_accepted():
     ],
 )
 def test_every_member_of_a_port_series_gets_a_nozzle_of_its_own(kind, prefix, ctor_arg, face):
-    """A Mixer's third inlet used to fall through to the centre of the box,
-    where it landed on top of every other unplaced port -- three streams into
-    one point in the middle of the triangle. Each member gets its own spot on
+    """Without a series a Mixer's third inlet falls through to the centre of the
+    box, landing on top of every other unplaced port -- three streams into one
+    point in the middle of the triangle. Each member gets its own spot on
     the flat face, however many there are."""
     from pfd import units as U
     from pfd.portgeom import _drawn_placements, is_anchored, resolve_size
@@ -602,8 +595,9 @@ def test_every_member_of_a_port_series_gets_a_nozzle_of_its_own(kind, prefix, ct
 
 def test_two_series_ports_land_where_the_symbol_used_to_draw_them():
     """The two-port case is the one every existing sheet draws, so the spacing
-    rule has to reproduce it exactly rather than merely closely -- otherwise
-    every mixer and splitter on every drawing shifts to fix a three-port bug."""
+    rule has to reproduce the fixed-symbol coordinates exactly rather than
+    merely closely -- otherwise accommodating a third port shifts every mixer
+    and splitter on every drawing."""
     from pfd import units as U
     from pfd.portgeom import _drawn_placements
 
@@ -636,9 +630,9 @@ def test_a_series_may_not_restate_a_port_the_symbol_already_anchors():
 def test_heater_and_cooler_are_one_stencil_pair():
     """They are the same circle and zigzag with the duty arrow reversed, so
     they have to be the same size: a utility cooler drawn half again bigger
-    than the heater beside it reads as a different class of equipment. The
-    cooler used to come from "Heat Exchanger (Spiral)", a 100x100 stencil for
-    a different machine, which drew it larger than the reactor upstream."""
+    than the heater beside it reads as a different class of equipment. Taking
+    the cooler from "Heat Exchanger (Spiral)" instead -- a 100x100 stencil for a
+    different machine -- draws it larger than the reactor upstream."""
     heater = default_registry.get("heater", "default")
     cooler = default_registry.get("cooler", "default")
     assert (cooler.width, cooler.height) == (heater.width, heater.height)
@@ -647,7 +641,7 @@ def test_heater_and_cooler_are_one_stencil_pair():
     # Heat in from below, heat out through the top.
     assert outward_dir(*heater.ports["duty"], heater.width, heater.height) == "S"
     assert outward_dir(*cooler.ports["duty"], cooler.width, cooler.height) == "N"
-    # And the spiral exchanger is still reachable, under the kind it belongs to.
+    # And the spiral exchanger is reachable under the kind it belongs to.
     spiral = default_registry.get("hex", "spiral")
     assert (spiral.width, spiral.height) == (100.0, 100.0)
     assert set(spiral.ports) == {"cold_in", "cold_out", "hot_in", "hot_out"}
@@ -655,10 +649,10 @@ def test_heater_and_cooler_are_one_stencil_pair():
 
 def test_a_nozzle_standing_in_a_series_band_is_a_collision():
     """A series has no fixed membership, so it has no fixed points to compare a
-    nozzle against — which left the check blind to it entirely. A nozzle inside
-    the stretch of face a series may place a member on shares a placement with
-    one for some count, and a static check exists to say so before anything is
-    drawn."""
+    nozzle against — the band it may place a member on is what a collision check
+    has to test instead. A nozzle inside the stretch of face a series may place
+    a member on shares a placement with one for some count, and a static check
+    exists to say so before anything is drawn."""
     from pfd.render.symbols import PortSeries
 
     with pytest.warns(UserWarning, match=r"both have a placement"):
@@ -704,8 +698,8 @@ def test_variants_lists_a_kinds_catalogue_default_first():
 
 
 def test_an_unregistered_variant_raises_naming_the_ones_that_exist():
-    """#31: get() fell back to the kind's default, so a typo drew the plain
-    symbol and came out of the printer looking like a drawing decision."""
+    """Falling back to the kind's default would let a typo draw the plain
+    symbol, which comes out of the printer looking like a drawing decision."""
     with pytest.raises(ValueError) as excinfo:
         default_registry.get("vessel", "dishd")
     message = str(excinfo.value)

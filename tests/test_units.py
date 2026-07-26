@@ -1,4 +1,3 @@
-# tests/test_units.py
 import pytest
 from pfd.units import Unit
 from pfd.ports import Port
@@ -52,7 +51,7 @@ def test_invalid_port_role_raises():
         _BadRole("B-2")
 
 
-# --- Task 5: Built-in unit types ---
+# --- Built-in unit types ---
 
 from pfd import units as U  # noqa: E402
 
@@ -106,7 +105,7 @@ def test_splitter_variable_outlets():
 
 
 def test_tank_is_its_own_kind():
-    # Tank is now a distinct storage-tank symbol, not a Vessel alias.
+    # Tank draws its own storage-tank symbol; it is not a Vessel alias.
     assert U.Tank is not U.Vessel
     assert U.Tank("T-1").kind == "tank"
     assert U.Vessel("V-1").kind == "vessel"

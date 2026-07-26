@@ -1,4 +1,3 @@
-# tests/test_serialize.py
 from pfd import Component, Flowsheet, units as U
 
 
