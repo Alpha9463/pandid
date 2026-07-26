@@ -381,7 +381,7 @@ def _read_port_faces(unit: Unit, entry: Any, where: str) -> None:
     for port_name, face in _mapping(entry, where).items():
         _find_port(unit, port_name, where)
         try:
-            unit.port_face(port_name, _text(face, f"{where}.{port_name}"))
+            unit.nozzle(port_name, _text(face, f"{where}.{port_name}"))
         except ValueError as e:
             raise _fail_from(e, f"{where}.{port_name}") from None
 

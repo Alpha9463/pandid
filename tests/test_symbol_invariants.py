@@ -306,8 +306,6 @@ _KNOWN_GEOMETRY_GAPS = {
 # Two distinct ports resolving to the identical coordinate. Empty: keep it that
 # way — a duplicate means two streams land on the same point and draw over each
 # other, so a new entry here should be a fix, not an exemption.
-_KNOWN_DUPLICATE_PORTS: set = set()
-
 # No public "list everything" API on SymbolRegistry (by design: callers look
 # up one (kind, variant) at a time), so reach into the private dict to
 # enumerate the full registry for exhaustive testing.
@@ -350,9 +348,13 @@ def test_port_faces_within_bounding_box(entry):
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_every_menu_entry_resolves_to_the_face_it_claims(entry):
     """A placement filed under "N" whose coordinate is nearest the west edge is
-    a lie the engine cannot catch: ``port_anchor`` derives the face from the
-    coordinate, so the nozzle silently comes out somewhere else. The home entry
-    is keyed from the coordinate and so cannot fail; an authored alternate can."""
+    a lie: ``port_anchor`` derives the face from the coordinate, so the nozzle
+    silently comes out somewhere else.
+
+    ``Symbol.__post_init__`` rejects such a declaration outright, so this is a
+    postcondition over the shipped registry rather than the primary guard —
+    it would only fire if that check were weakened *and* a symbol were authored
+    wrongly. The constructor's own rejection is tested separately."""
     (kind, variant), sym = entry
     for name, faces in sym.port_faces.items():
         for face, (x, y) in faces.items():
@@ -366,7 +368,10 @@ def test_every_menu_entry_resolves_to_the_face_it_claims(entry):
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_the_menu_carries_the_symbols_own_nozzle(entry):
     """The home placement is folded into the menu, so nothing downstream has a
-    privileged default to merge back in."""
+    privileged default to merge back in.
+
+    Like the check above, this is a postcondition of ``Symbol.__post_init__``
+    over the shipped registry, not the guard that enforces it."""
     (kind, variant), sym = entry
     assert set(sym.port_faces) == set(sym.ports), f"{kind}/{variant} menu misses a port"
     for name, xy in sym.ports.items():
@@ -411,8 +416,6 @@ def test_port_faces_lie_on_drawn_geometry(entry):
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_no_two_ports_coincide(entry):
     (kind, variant), sym = entry
-    if (kind, variant) in _KNOWN_DUPLICATE_PORTS:
-        pytest.skip(f"{kind}/{variant}: known duplicate, see _KNOWN_DUPLICATE_PORTS")
     # The rule itself lives on Symbol, so a third-party symbol this suite never
     # sees is held to it too. Here we only assert the shipped registry is clean.
     assert sym.coincident_ports() == [], f"{kind}/{variant}: " + "; ".join(
@@ -648,3 +651,44 @@ def test_heater_and_cooler_are_one_stencil_pair():
     spiral = default_registry.get("hex", "spiral")
     assert (spiral.width, spiral.height) == (100.0, 100.0)
     assert set(spiral.ports) == {"cold_in", "cold_out", "hot_in", "hot_out"}
+
+
+def test_a_nozzle_standing_in_a_series_band_is_a_collision():
+    """A series has no fixed membership, so it has no fixed points to compare a
+    nozzle against — which left the check blind to it entirely. A nozzle inside
+    the stretch of face a series may place a member on shares a placement with
+    one for some count, and a static check exists to say so before anything is
+    drawn."""
+    from pfd.render.symbols import PortSeries
+
+    with pytest.warns(UserWarning, match=r"both have a placement"):
+        clash = Symbol(
+            svg='<g id="sym_clash"/>',
+            width=50.0,
+            height=50.0,
+            ports={"tap": (0.0, 25.0)},  # dead centre of the W face
+            port_series=(PortSeries("in_", "W"),),
+        )
+    assert clash.coincident_ports() == [("in_*", "tap", (0.0, 25.0))]
+
+
+def test_a_nozzle_clear_of_the_series_band_is_not_a_collision():
+    """The band is the middle ``extent`` of the face, not the whole of it: a
+    nozzle out at the corner is somewhere a member can never be put."""
+    from pfd.render.symbols import PortSeries
+
+    clear = Symbol(
+        svg='<g id="sym_clear"/>',
+        width=50.0,
+        height=50.0,
+        ports={"tap": (0.0, 2.0)},  # outside the 70% band
+        port_series=(PortSeries("in_", "W"),),
+    )
+    assert clear.coincident_ports() == []
+
+
+def test_a_series_on_another_face_is_not_a_collision():
+    """A splitter's inlet sits on the point of the triangle while its outlets
+    spread along the opposite face — the shipped case that must stay quiet."""
+    assert default_registry.get("splitter").coincident_ports() == []
+    assert default_registry.get("mixer").coincident_ports() == []
