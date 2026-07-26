@@ -11,8 +11,11 @@ dynamic = ["version"]     # read from pfd/__init__.py — see [tool.hatch.versio
 description = "Generate chemical-engineering P&IDs and process flow diagrams with automatic layout and orthogonal stream routing."
 readme = "README.md"
 requires-python = ">=3.10"
-license = "Apache-2.0"
-license-files = ["LICENSE", "NOTICE"]
+# The engine is PolyForm Small Business; the vendored draw.io symbol geometry
+# in pfd/render/_vendored_symbols.py stays Apache-2.0, as that licence requires.
+# NOTICE says which files are which -- the expression alone cannot.
+license = "LicenseRef-PolyForm-Small-Business-1.0.0 AND Apache-2.0"
+license-files = ["LICENSE", "LICENSE-APACHE", "NOTICE"]
 authors = [{ name = "Alex Anderson" }]
 keywords = ["chemical-engineering", "p&id", "piping-and-instrumentation-diagram",
             "process-flow-diagram", "pfd", "flowsheet", "isa-5.1", "iso-10628"]

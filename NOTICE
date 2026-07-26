@@ -1,17 +1,50 @@
-py-chemengg (pfd) — third-party notices
-========================================
+pandid — licensing and third-party notices
+==========================================
 
-Equipment symbols in pfd/render/symbols.py are derived from the draw.io /
-diagrams.net P&ID stencil library:
+This distribution contains material under two different licences. Which one
+applies depends on the file.
+
+
+1. The engine — PolyForm Small Business License 1.0.0
+-----------------------------------------------------
+
+Everything in this repository EXCEPT the files listed in section 2 is
+
+    Copyright (c) Alex Anderson
+    Licensed under the PolyForm Small Business License 1.0.0
+    See LICENSE, or https://polyformproject.org/licenses/small-business/1.0.0
+
+In short: free to use for individuals, for research and teaching, and for any
+company with fewer than 100 people and under 1,000,000 USD (2019, inflation
+adjusted) of revenue in its prior tax year. A company above either threshold
+needs a separate commercial licence — see the Licensing section of README.md.
+
+This is a source-available licence, not an OSI-approved open-source licence.
+
+
+2. Equipment symbols — Apache License 2.0
+-----------------------------------------
+
+The drawn equipment symbols are derived from the draw.io / diagrams.net P&ID
+stencil library:
 
     https://github.com/jgraph/drawio  (src/main/webapp/stencils/pid)
     Copyright (c) JGraph Ltd, draw.io / diagrams.net
-    Licensed under the Apache License, Version 2.0.
+    Licensed under the Apache License, Version 2.0
+    See LICENSE-APACHE, or http://www.apache.org/licenses/LICENSE-2.0
 
-The source stencils are vendored under scripts/vendor_data/drawio/ and converted
-from mxGraph stencil XML to SVG by scripts/mxgraph_to_svg.py. Port anchor
-positions are taken from each stencil's named <constraint> connections (or
-re-derived on the bounding-box edge) for this project's routing model.
+The following are derivative works of that library and remain under the Apache
+License 2.0, NOT the PolyForm licence above:
 
-Feed/Product boundary markers and the (variable-port) Mixer and Splitter symbols
-are original hand-drawn geometric primitives.
+    pfd/render/_vendored_symbols.py     generated symbol geometry
+    scripts/vendor_data/drawio/         the source mxGraph stencil XML
+
+The source stencils are converted from mxGraph stencil XML to SVG by
+scripts/mxgraph_to_svg.py, driven by the mapping table in
+scripts/vendor_symbols.py. Port anchor positions are taken from each stencil's
+named <constraint> connections (or re-derived on the bounding-box edge) for
+this project's routing model.
+
+Feed/Product boundary markers, the instrument balloons, and the variable-port
+Mixer and Splitter symbols are original geometric primitives and fall under
+section 1.
