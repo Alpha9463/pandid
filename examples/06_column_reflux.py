@@ -38,9 +38,9 @@ def main():
     split = fs.add(units.Splitter("SP-701", n_outlets=2, description="Reflux Split"))
     dist = fs.add(units.Product("Distillate", reference="PFD-200"))
 
-    # Bottoms: the sump draw splits — most of it recirculates through the kettle
-    # reboiler and returns as boilup, the rest leaves as bottoms product.
-    bsplit = fs.add(units.Splitter("SP-702", n_outlets=2, description="Bottoms Split"))
+    # Bottoms: the sump drains into the kettle, where what boils returns to the
+    # tower as boilup and what does not overflows the weir and leaves as bottoms
+    # product — off the reboiler's own draw, which is where it leaves the plant.
     reb = fs.add(units.HeatExchanger("E-702", variant="kettle", width=120, height=44,
                                      description="Kettle Reboiler"))
     bot = fs.add(units.Product("Bottoms", reference="PFD-300"))
@@ -77,12 +77,10 @@ def main():
     split.pin(x=drum_draw_x - 25, y=split_y, orientation=90)
     dist.pin(x=900, y=315)
 
-    # Kettle off the tower bottom. Its shell inlet faces down, so the sump
-    # splitter sits below it and the line rises into the nozzle.
-    reb_x, reb_y = 660, 512
-    reb.pin(x=reb_x, y=reb_y)
-    bsplit.pin(x=520, y=590)
-    bot.pin(x=900, y=600)                              # level with the sump draw
+    # Kettle off the tower bottom. Its shell inlet faces down, so the sump line
+    # drops out of the tower, runs across and rises into the nozzle.
+    reb.pin(x=660, y=512)
+    bot.pin(x=900, y=620)                              # below the kettle's draw
 
     # --- Connections -----------------------------------------------------
     fs.connect(feed.outlet, col.feed)
@@ -94,10 +92,9 @@ def main():
     fs.connect(split.out_1, dist.inlet)
     fs.connect(split.out_2, col.reflux_in, tear_hint=True)   # reflux to the tower
 
-    fs.connect(col.bottoms, bsplit.inlet)
-    fs.connect(bsplit.out_1, reb.cold_in)                    # recirculate to the kettle
+    fs.connect(col.bottoms, reb.cold_in)                     # sump into the kettle
     fs.connect(reb.cold_out, col.boilup_in, tear_hint=True)  # boilup to the tower
-    fs.connect(bsplit.out_2, bot.inlet)
+    fs.connect(reb.bottoms, bot.inlet)                       # over the weir, off the sheet
 
     fs.render(out("column_reflux.svg"))
     print("Generated column_reflux.svg")

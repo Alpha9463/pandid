@@ -74,6 +74,40 @@ def test_a_nozzle_fixed_by_physics_is_never_considered():
     assert col.frame.port_faces == {}
 
 
+def test_a_feed_family_is_fixed_the_way_a_single_nozzle_is():
+    """Each member of a column's feed family has exactly one placement — the
+    family spreads *along* the shell wall, it does not offer other walls — so
+    selection has nothing to choose between and leaves every one of them where
+    the symbol put it."""
+    fs = Flowsheet("extractive")
+    col = fs.add(units.Column("T-302", n_feeds=2)).pin(x=300, y=200)
+    solvent = fs.add(units.Feed("Solvent")).pin(x=80, y=250)
+    wash = fs.add(units.Feed("Wash")).pin(x=80, y=330)
+    fs.connect(solvent.outlet, col.feed_1)
+    fs.connect(wash.outlet, col.feed_2)
+    fs.layout()
+    assert port_anchor(col, col.frame, "feed_1")[2] == "W"
+    assert port_anchor(col, col.frame, "feed_2")[2] == "W"
+    assert col.frame.port_faces == {}
+    # ...and they are two nozzles, not one drawn twice.
+    assert port_anchor(col, col.frame, "feed_1") != port_anchor(col, col.frame, "feed_2")
+
+
+def test_a_kettles_bottoms_draw_is_a_fixed_target_its_peer_aims_at():
+    """The draw is on the shell bottom and offers nothing else, so it is what a
+    movable port at the other end of the line gets scored against."""
+    fs = Flowsheet("reboiler")
+    reb = fs.add(units.HeatExchanger("E-702", variant="kettle")).pin(x=300, y=200)
+    # Hung so its north shell nozzle is directly under the draw, which is the
+    # face a straight drop reaches.
+    drum = fs.add(units.Separator("V-1", variant="horizontal")).pin(x=365, y=380)
+    fs.connect(reb.bottoms, drum.feed)
+    fs.layout()
+    assert port_anchor(reb, reb.frame, "bottoms")[2] == "S"
+    assert reb.frame.port_faces == {}
+    assert drum.frame.port_faces == {"feed": "N"}
+
+
 def test_a_port_with_no_stream_keeps_its_home():
     fs, drum = _drum_fed_from(220, 60)
     fs.layout()

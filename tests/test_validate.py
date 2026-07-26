@@ -107,6 +107,35 @@ def test_ports_the_symbol_never_anchored_warn_rather_than_raise(gapped_kind):
     fs.to_svg()  # must not raise
 
 
+def test_an_extractive_towers_feeds_get_nozzles_of_their_own():
+    """The solvent enters above the feed tray: two real nozzles down the shell,
+    not two streams landing on one point in the middle of the tower."""
+    fs = Flowsheet("extractive")
+    col = fs.add(U.Column("T-302", n_feeds=2))
+    for port in ("feed_1", "feed_2"):
+        feed = fs.add(U.Feed(port))
+        fs.connect(feed.outlet, col.ports[port])
+    fs.connect(col.distillate, fs.add(U.Product("D")).inlet)
+    fs.connect(col.bottoms, fs.add(U.Product("B")).inlet)
+    fs.layout()
+    assert [i for i in fs.validate() if i.code == "coincident-ports"] == []
+    fs.to_svg()  # must not raise
+
+
+def test_a_kettle_takes_its_bottoms_off_its_own_draw():
+    """The draw is a nozzle of the reboiler's, so a tower can hand it the sump
+    and take product back without an imaginary splitter in between."""
+    fs = Flowsheet("reboiler")
+    col = fs.add(U.Column("T-701"))
+    reb = fs.add(U.HeatExchanger("E-702", variant="kettle"))
+    fs.connect(col.bottoms, reb.cold_in)
+    fs.connect(reb.cold_out, col.boilup_in, tear_hint=True)
+    fs.connect(reb.bottoms, fs.add(U.Product("Bottoms")).inlet)
+    fs.layout()
+    assert [i for i in fs.validate() if i.code == "coincident-ports"] == []
+    fs.to_svg()  # must not raise
+
+
 def test_a_mixers_extra_inlets_get_nozzles_of_their_own():
     """A third inlet is a real nozzle on the flat face, not a third stream
     landing in the middle of the symbol on the box-centre fallback."""

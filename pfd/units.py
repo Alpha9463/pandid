@@ -521,7 +521,14 @@ class Instrument(Unit):
 
 
 class HeatExchanger(Unit):
-    """Shell-and-tube or plate heat exchanger (two process sides)."""
+    """Shell-and-tube or plate heat exchanger (two process sides).
+
+    The ``kettle`` variant carries one nozzle more: ``bottoms``, the liquid draw
+    at the weir end of the shell. A kettle reboiler is where a tower's bottoms
+    product physically leaves — what does not boil overflows the weir — so the
+    draw belongs on the exchanger and not on an invented splitter in the sump
+    line.
+    """
 
     kind = "hex"
     _PORTS = [
@@ -530,6 +537,20 @@ class HeatExchanger(Unit):
         ("cold_in", "inlet", "process"),
         ("cold_out", "outlet", "process"),
     ]
+    # Nozzles only some variants draw, keyed by the variant that has them: a
+    # plate exchanger has no weir to draw off, so giving every hex a `bottoms`
+    # would hand most of them a port the symbol cannot place.
+    _VARIANT_PORTS = {"kettle": [("bottoms", "outlet", "liquid")]}
+
+    def __init__(self, name: str, variant: str = "default",
+                 width: float | None = None, height: float | None = None,
+                 label_pos: str | None = None, description: str = "",
+                 reference: str = ""):
+        super().__init__(name, variant=variant, width=width, height=height,
+                         label_pos=label_pos, description=description,
+                         reference=reference)
+        for spec in self._VARIANT_PORTS.get(variant, []):
+            self._add_port(*spec)
 
 
 class Heater(Unit):
@@ -554,19 +575,45 @@ class Cooler(Unit):
     ]
 
 
+def _feed_names(n_feeds: int, owner: str) -> list[str]:
+    """Names for a unit's feed nozzles: ``feed`` alone, else ``feed_1`` ... ``feed_n``.
+
+    One feed is the overwhelmingly common case and keeps the singular name, so a
+    second one is what changes the spelling rather than every sheet ever drawn.
+    The symbol declares the same rule as a
+    :class:`~pfd.render.symbols.PortSeries`, which is what spreads the family
+    down the shell.
+    """
+    if n_feeds < 1:
+        raise ValueError(f"{owner} requires at least 1 feed, got {n_feeds}")
+    return ["feed"] if n_feeds == 1 else [f"feed_{i}" for i in range(1, n_feeds + 1)]
+
+
 class Reactor(Unit):
     """Generic reactor (CSTR, PFR, etc.).
 
-    ``vent`` is the off-gas connection at the top of the vessel.
+    ``vent`` is the off-gas connection at the top of the vessel. ``n_feeds``
+    gives the vessel more than one charge nozzle — ``feed_1`` ... ``feed_n``,
+    spread down the shell top to bottom, in place of the single ``feed``.
     """
 
     kind = "reactor"
     _PORTS = [
-        ("feed", "inlet", "feed"),
         ("outlet", "outlet", "process"),
         ("vent", "outlet", "vapor"),
         ("duty", "inlet", "energy"),
     ]
+
+    def __init__(self, name: str, n_feeds: int = 1, variant: str = "default",
+                 width: float | None = None, height: float | None = None,
+                 label_pos: str | None = None, description: str = "",
+                 reference: str = ""):
+        names = _feed_names(n_feeds, "Reactor")
+        super().__init__(name, variant=variant, width=width, height=height,
+                         label_pos=label_pos, description=description,
+                         reference=reference)
+        for feed in names:
+            self._add_port(feed, "inlet", "feed")
 
 
 class Separator(Unit):
@@ -588,11 +635,16 @@ class Column(Unit):
     from the reflux drum) and ``boilup_in`` (vapour back to the bottom from the
     reboiler). Without them a reflux loop has to be modelled as a recycle to
     some upstream unit, which drags the overhead system across the sheet.
+
+    ``n_feeds`` gives the tower more than one feed nozzle — an extractive
+    distillation takes its solvent above the feed tray, an azeotropic tower its
+    entrainer. They are ``feed_1`` ... ``feed_n``, spread down the shell in
+    declaration order, so ``feed_1`` is the highest and ``feed_n`` the lowest;
+    the single-feed column keeps the plain ``feed``.
     """
 
     kind = "column"
     _PORTS = [
-        ("feed", "inlet", "feed"),
         ("distillate", "outlet", "vapor"),
         ("bottoms", "outlet", "liquid"),
         ("reflux_in", "inlet", "liquid"),
@@ -600,6 +652,17 @@ class Column(Unit):
         ("reboiler_duty", "inlet", "energy"),
         ("condenser_duty", "outlet", "energy"),
     ]
+
+    def __init__(self, name: str, n_feeds: int = 1, variant: str = "default",
+                 width: float | None = None, height: float | None = None,
+                 label_pos: str | None = None, description: str = "",
+                 reference: str = ""):
+        names = _feed_names(n_feeds, "Column")
+        super().__init__(name, variant=variant, width=width, height=height,
+                         label_pos=label_pos, description=description,
+                         reference=reference)
+        for feed in names:
+            self._add_port(feed, "inlet", "feed")
 
 
 # ---------------------------------------------------------------------------

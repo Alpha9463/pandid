@@ -233,7 +233,14 @@ _STREAM_KEYS = {
     *LINE_NUMBER_FIELDS,
 }
 _COMPONENT_KEYS = {"name", "formula"}
-_VARIABLE_PORTS = {"n_inlets": "Mixer", "n_outlets": "Splitter"}
+# Port counts, keyed by the classes that take one. A count named on a class that
+# has no such family is rejected rather than ignored: the ports it asked for
+# would simply not exist on the drawing.
+_VARIABLE_PORTS = {
+    "n_inlets": ("Mixer",),
+    "n_outlets": ("Splitter",),
+    "n_feeds": ("Column", "Reactor"),
+}
 
 
 def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
@@ -321,11 +328,12 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
     where = f"{where} {name!r}"
 
     allowed = set(_UNIT_KEYS)
-    for key, owner in _VARIABLE_PORTS.items():
-        if cls.__name__ == owner:
+    for key, owners in _VARIABLE_PORTS.items():
+        if cls.__name__ in owners:
             allowed.add(key)
         elif key in data:
-            raise SpecError(f"{where}: only a {owner} takes {key!r}, not a {cls.__name__}")
+            takers = " or ".join(f"a {owner}" for owner in owners)
+            raise SpecError(f"{where}: only {takers} takes {key!r}, not a {cls.__name__}")
     _check_keys(data, allowed, where)
 
     kwargs: dict[str, Any] = {}
@@ -799,6 +807,12 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
         entry["n_inlets"] = sum(1 for p in unit.ports if p.startswith("in_"))
     elif isinstance(unit, unit_types.Splitter):
         entry["n_outlets"] = sum(1 for p in unit.ports if p.startswith("out_"))
+    elif isinstance(unit, (unit_types.Column, unit_types.Reactor)):
+        # A single feed is the class's own shape and spells its nozzle `feed`,
+        # so writing the count would be writing the default down.
+        feeds = sum(1 for p in unit.ports if p.startswith("feed_"))
+        if feeds:
+            entry["n_feeds"] = feeds
     return _write_placement(unit, entry)
 
 

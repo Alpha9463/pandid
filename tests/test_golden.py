@@ -255,7 +255,6 @@ def _column_reflux() -> Flowsheet:
     vent = fs.add(units.Product("Vent Gas", reference="PFD-900"))
     split = fs.add(units.Splitter("SP-701", n_outlets=2, description="Reflux Split"))
     dist = fs.add(units.Product("Distillate", reference="PFD-200"))
-    bsplit = fs.add(units.Splitter("SP-702", n_outlets=2, description="Bottoms Split"))
     reb = fs.add(
         units.HeatExchanger(
             "E-702", variant="kettle", width=120, height=44, description="Kettle Reboiler"
@@ -277,8 +276,7 @@ def _column_reflux() -> Flowsheet:
     split.pin(x=drum_draw_x - 25, y=240, orientation=90)
     dist.pin(x=900, y=315)
     reb.pin(x=660, y=512)
-    bsplit.pin(x=520, y=590)
-    bot.pin(x=900, y=600)
+    bot.pin(x=900, y=620)
 
     fs.connect(feed.outlet, col.feed)
     fs.connect(col.distillate, cond.hot_in)
@@ -287,10 +285,9 @@ def _column_reflux() -> Flowsheet:
     fs.connect(drum.outlet, split.inlet)
     fs.connect(split.out_1, dist.inlet)
     fs.connect(split.out_2, col.reflux_in, tear_hint=True)
-    fs.connect(col.bottoms, bsplit.inlet)
-    fs.connect(bsplit.out_1, reb.cold_in)
+    fs.connect(col.bottoms, reb.cold_in)
     fs.connect(reb.cold_out, col.boilup_in, tear_hint=True)
-    fs.connect(bsplit.out_2, bot.inlet)
+    fs.connect(reb.bottoms, bot.inlet)
     return fs
 
 
@@ -532,3 +529,20 @@ def test_golden_svg(name):
     fs = build()
     svg = fs.to_svg(**kwargs)
     _check_golden(name, svg)
+
+
+def test_the_fractionator_schedules_only_equipment_that_exists():
+    """The bottoms product leaves over the reboiler's weir, off the kettle's own
+    draw. Splitting the sump line instead needs a piece of equipment that is not
+    in the plant, and the auto equipment list would then schedule it."""
+    fs = _column_reflux()
+    reb = next(u for u in fs.units if u.name == "E-702")
+    assert reb.bottoms.stream is not None
+    assert reb.bottoms.stream.dest.owner.name == "Bottoms"
+    assert [tag for tag, _ in equipment_list(fs).rows] == [
+        "T-701",
+        "E-701",
+        "V-701",
+        "SP-701",
+        "E-702",
+    ]

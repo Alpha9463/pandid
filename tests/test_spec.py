@@ -126,6 +126,30 @@ def test_variable_port_units():
     assert sorted(fs.units[1].ports) == ["inlet", "out_1", "out_2", "out_3"]
 
 
+def test_a_column_or_reactor_feed_count_round_trips():
+    fs = Flowsheet.from_dict(
+        {
+            "name": "T",
+            "units": [
+                {"kind": "Column", "name": "T-302", "n_feeds": 2},
+                {"kind": "Reactor", "name": "R-1"},
+            ],
+        }
+    )
+    assert {"feed_1", "feed_2"} <= set(fs.units[0].ports)
+    assert "feed" in fs.units[1].ports
+    written = {u["name"]: u for u in fs.to_dict()["units"]}
+    assert written["T-302"]["n_feeds"] == 2
+    # One feed is the class's own shape, so the count is not written down.
+    assert "n_feeds" not in written["R-1"]
+
+
+def test_a_feed_count_on_a_kind_with_no_feed_family_is_rejected():
+    with pytest.raises(SpecError) as excinfo:
+        Flowsheet.from_dict({"name": "T", "units": [{"kind": "Pump", "name": "P-1", "n_feeds": 2}]})
+    assert "only a Column or a Reactor takes 'n_feeds', not a Pump" in str(excinfo.value)
+
+
 def test_pin_absolute_and_grid():
     fs = Flowsheet.from_dict(
         {
