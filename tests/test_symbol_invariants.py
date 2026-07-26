@@ -24,6 +24,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
+from pfd import units
 from pfd.portgeom import outward_dir
 from pfd.render.symbols import Symbol, default_registry
 
@@ -299,6 +300,17 @@ _KNOWN_GEOMETRY_GAPS = {
     ("pump", "screw", "suction"),
 }
 
+# A signal connection is not a nozzle: nothing flows through a valve stem or an
+# instrument tap, so the line stops at the symbol's outline instead of reaching
+# in to meet ink, and most stencils draw no operator there to meet. They answer
+# to the outline rule below instead; every port a pipe attaches to keeps this one.
+_SIGNAL_PORTS = {
+    (cls.kind, name)
+    for cls in (getattr(units, n) for n in units.__all__)
+    for name, _, role in getattr(cls, "_PORTS", ())
+    if role == "signal"
+}
+
 # No public "list everything" API on SymbolRegistry (by design: callers look
 # up one (kind, variant) at a time), so reach into the private dict to
 # enumerate the full registry for exhaustive testing.
@@ -380,7 +392,7 @@ def test_ports_lie_on_drawn_geometry(entry):
         pytest.skip("feed/product are drawn dynamically, not from Symbol.svg")
     segments = _collect_segments(sym.svg)
     for name, (x, y) in sym.ports.items():
-        if (kind, variant, name) in _KNOWN_GEOMETRY_GAPS:
+        if (kind, variant, name) in _KNOWN_GEOMETRY_GAPS or (kind, name) in _SIGNAL_PORTS:
             continue
         d = _nearest_distance((x, y), segments)
         assert d <= GEOM_TOL, (
@@ -396,7 +408,7 @@ def test_port_faces_lie_on_drawn_geometry(entry):
         pytest.skip("feed/product are drawn dynamically, not from Symbol.svg")
     segments = _collect_segments(sym.svg)
     for name, faces in sym.port_faces.items():
-        if (kind, variant, name) in _KNOWN_GEOMETRY_GAPS:
+        if (kind, variant, name) in _KNOWN_GEOMETRY_GAPS or (kind, name) in _SIGNAL_PORTS:
             continue
         for face, (x, y) in faces.items():
             d = _nearest_distance((x, y), segments)
@@ -404,6 +416,33 @@ def test_port_faces_lie_on_drawn_geometry(entry):
                 f"{kind}/{variant} port_faces[{name!r}][{face!r}] at ({x}, {y}) is "
                 f"{d:.1f}u from the nearest drawn stroke (tolerance {GEOM_TOL})"
             )
+
+
+@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
+def test_signal_ports_sit_on_the_symbols_outline(entry):
+    """A signal connection terminates where the line meets the symbol, so its
+    coordinate belongs on the edge of the box and not inside it.
+
+    The renderer draws to the port's own point while the router steers to that
+    point projected onto the box edge, so a coordinate parked on interior ink
+    (a gate valve's seat, a butterfly's shaft boss) draws the signal running
+    into the body and stopping in the middle of it. The allowance is the same
+    nozzle stub the balloons use, which is what lets a hexagon or a square
+    drawn inboard of its box put the terminal on its own outline."""
+    (kind, variant), sym = entry
+    placements = {(name, "port"): xy for name, xy in sym.ports.items()}
+    placements.update(
+        {(name, face): xy for name, faces in sym.port_faces.items() for face, xy in faces.items()}
+    )
+    for (name, where), (x, y) in placements.items():
+        if (kind, name) not in _SIGNAL_PORTS:
+            continue
+        inboard = min(x, y, sym.width - x, sym.height - y)
+        assert inboard <= GEOM_TOL, (
+            f"{kind}/{variant} signal port {name!r} ({where}) at ({x}, {y}) is "
+            f"{inboard:.1f}u inside the {sym.width}x{sym.height} box "
+            f"(tolerance {GEOM_TOL})"
+        )
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)

@@ -9,7 +9,7 @@ from pathlib import Path
 from string import Formatter
 from typing import Callable, TYPE_CHECKING
 
-from pfd.streams import Stream
+from pfd.streams import PROCESS_KINDS, SIGNAL_KINDS, STREAM_KINDS, Stream
 
 if TYPE_CHECKING:
     from pfd.components import Component
@@ -64,6 +64,40 @@ def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream)
             f"empty; name the components you set, or set the ones the scheme names"
         )
     return line_number
+
+
+def _spell(port: "Port") -> str:
+    return f"{port.owner.name}.{port.name}"
+
+
+def _check_signal_pairing(src: "Port", dst: "Port", kind: str) -> None:
+    """Raise unless the stream's kind matches what its two ports are.
+
+    A signal port is a terminal for a measurement or a command: a valve's stem,
+    an instrument's tap and its two signal connections. Nothing flows through
+    one, so a signal line runs between two of them and process fluid runs
+    between two nozzles. Unchecked, the sheet draws a process pipe into a valve
+    top, or a control signal between two pumps, and claims both are real.
+    """
+    signal_ends = [p for p in (src, dst) if p.role == "signal"]
+    if len(signal_ends) == 1:
+        signal = signal_ends[0]
+        process = dst if signal is src else src
+        raise ValueError(
+            f"{_spell(signal)} is a signal connection and {_spell(process)} is a "
+            f"process connection; a stream joins two signal connections or two "
+            f"process ones"
+        )
+    if signal_ends and kind not in SIGNAL_KINDS:
+        raise ValueError(
+            f"{_spell(src)} to {_spell(dst)} is a signal line; kind must be one "
+            f"of {sorted(SIGNAL_KINDS)}, got {kind!r}"
+        )
+    if not signal_ends and kind in SIGNAL_KINDS:
+        raise ValueError(
+            f"{_spell(src)} to {_spell(dst)} is process piping; kind must be one "
+            f"of {sorted(PROCESS_KINDS)}, got {kind!r}"
+        )
 
 
 class Flowsheet:
@@ -160,6 +194,12 @@ class Flowsheet:
         The returned stream already carries the number it will be drawn with;
         see :meth:`renumber_streams`.
 
+        ``kind`` has to match what the two ports are: a signal kind runs between
+        two signal connections (a valve's ``actuator``, an instrument's ``pv``
+        and ``sig_in``/``sig_out``) and a process kind between two process
+        nozzles. Mixing them draws a pipe into a valve stem or a control signal
+        between two pumps.
+
         ``size``/``service``/``spec``/``insulation`` are the line-number
         components; supplying any of them draws this line with its line number
         instead of a stream number. ``sequence`` is filled by auto-numbering
@@ -167,10 +207,11 @@ class Flowsheet:
 
         Raises :class:`ValueError` if any validation rule is violated.
         """
-        _KINDS = {"material", "energy", "electric", "pneumatic", "data", "capillary", "software"}
-        if kind not in _KINDS:
-            raise ValueError(f"Stream kind must be one of {sorted(_KINDS)}, got {kind!r}")
-            
+        if kind not in STREAM_KINDS:
+            raise ValueError(
+                f"Stream kind must be one of {sorted(STREAM_KINDS)}, got {kind!r}"
+            )
+
         if src.direction != "outlet":
             raise ValueError(
                 f"source port {src.owner.name}.{src.name} must be an outlet, "
@@ -193,6 +234,7 @@ class Flowsheet:
             raise ValueError(
                 f"port {dst.owner.name}.{dst.name} is already connected"
             )
+        _check_signal_pairing(src, dst, kind)
         if kind == "material" and src.role in _ENERGY_ROLES and dst.role in _ENERGY_ROLES:
             kind = "energy"
 

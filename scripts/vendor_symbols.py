@@ -25,46 +25,53 @@ OUT = HERE.parent / "pfd" / "render" / "_vendored_symbols.py"
 KIND_MAP = {
     # Valves — inline family (inlet W / outlet E).
     #
-    # ``actuator`` is where a controller's output lands. The stencils draw no
-    # operator on most of these shapes, so the port goes on the topmost ink of
-    # the valve's own centreline — the seat, plug crown, shaft boss or stem
-    # top, which is what the operator would be mounted on. Coordinates are in
-    # the *scaled* symbol space (SCALE["valve"] = 0.5).
+    # ``actuator`` is where a controller's output lands. It is a signal terminal
+    # and not a nozzle: nothing flows through it, so the line stops at the valve
+    # rather than reaching into it, and the port belongs on the edge of the
+    # symbol's own extent, at the point the operator would be mounted on. A
+    # coordinate inboard of that edge draws the signal ending inside the body,
+    # since the router steers to the edge and the renderer draws to the
+    # coordinate. Coordinates are in the stencil's own space, which
+    # SCALE["valve"] = 0.5 then halves.
     ("valve", "default"):   ("valves", "Gate Valve",        {"inlet": "W", "outlet": "E",
-                             "actuator": ("AT", 49.0, 30.0)}),
+                             "actuator": ("N", 49.0)}),
     ("valve", "gate"):      ("valves", "Gate Valve",        {"inlet": "W", "outlet": "E",
-                             "actuator": ("AT", 49.0, 30.0)}),
+                             "actuator": ("N", 49.0)}),
     ("valve", "globe"):     ("valves", "Globe Valve",       {"inlet": "W", "outlet": "E",
-                             "actuator": ("AT", 49.0, 10.0)}),
+                             "actuator": ("N", 49.0)}),
     ("valve", "ball"):      ("valves", "Ball Valve",        {"inlet": "W", "outlet": "E",
-                             "actuator": ("AT", 49.0, 10.0)}),
+                             "actuator": ("N", 49.0)}),
     ("valve", "butterfly"): ("valves", "Butterfly Valve 1", {"inlet": "W", "outlet": "E",
-                             "actuator": ("AT", 49.0, 25.0)}),
+                             "actuator": ("N", 49.0)}),
     ("valve", "check"):     ("valves", "Check Valve 1",     {"inlet": "W", "outlet": "E",
-                             "actuator": ("AT", 49.2, 31.0)}),
+                             "actuator": ("N", 49.25)}),
     ("valve", "control"):   ("valves", "Diaphragm",         {"inlet": "W", "outlet": "E",
-                             "actuator": ("AT", 49.0, 8.0)}),
+                             "actuator": ("N", 49.0)}),
     ("valve", "needle"):    ("valves", "Needle",            {"inlet": "W", "outlet": "E",
-                             "actuator": ("AT", 49.0, 5.0)}),
+                             "actuator": ("N", 49.0)}),
     ("valve", "three_way"): ("valves", "Three-Way Valve",   {"inlet": "W", "outlet": "E",
-                             "actuator": ("AT", 49.0, 30.0)}),
+                             "actuator": ("N", 49.0)}),
     # A PSV's centreline is taken by its own inlet and outlet; the pilot/solenoid
     # connection goes on the side of the spring bonnet instead.
     ("valve", "relief"):    ("valves", "Relief PRV",        {"inlet": "S", "outlet": "N",
                              "actuator": ("AT", 40.0, 24.0)}),
     # Angle body: the seat turns the flow a quarter, so this one is piped from
-    # below and out to the side. No operator is drawn, so the actuator takes the
-    # hub the stem would rise from — the vertex the two halves meet at.
+    # below and out to the side. The stem rises from the vertex where the two
+    # halves meet, so the actuator sits above it on that vertex's centreline
+    # rather than on the middle of the top edge.
     ("valve", "angle"):     ("valves", "Angle",             {"inlet": "S", "outlet": "E",
-                             "actuator": ("AT", 30.0, 30.0)}),
+                             "actuator": ("N", 30.0)}),
     # Spring-loaded angle safety valve — the PSV a real sheet draws, with the
     # spring bonnet on top of the inlet leg. The stem runs to y = 0.
     ("valve", "psv"):       ("valves", "Safety PSV 1",      {"inlet": "S", "outlet": "E",
                              "actuator": ("AT", 21.0, 0.0)}),
+    # These two stencils name an "N" constraint, but draw.io puts it on the
+    # inboard ink (the plug's upper seat line, the pinch sleeve's crown) rather
+    # than on the top of the shape, so both are placed on the edge instead.
     ("valve", "plug"):      ("valves", "Plug",              {"inlet": "W", "outlet": "E",
-                             "actuator": "N"}),
+                             "actuator": ("N", 49.0)}),
     ("valve", "pinch"):     ("valves", "Pinch Valve",       {"inlet": "W", "outlet": "E",
-                             "actuator": "N"}),
+                             "actuator": ("N", 49.0)}),
 
     # --- Valves that draw their operator ---
     #
@@ -95,8 +102,10 @@ KIND_MAP = {
                                        {"inlet": "W", "outlet": "E", "actuator": "N"}),
     # Self-acting pressure regulator: the dome is its own diaphragm, so the
     # "actuator" is the external pilot connection rather than a signal terminus.
+    # The stencil draws that pilot line running up from the dome crown to the
+    # top of the shape, which is where the port goes.
     ("valve", "regulator"): ("valves", "Back Pressure Regulator 1",
-                             {"inlet": "W", "outlet": "E", "actuator": ("AT", 49.0, 15.0)}),
+                             {"inlet": "W", "outlet": "E", "actuator": ("N", 49.0)}),
     # Rotating equipment.
     #
     # draw.io's <constraint> anchors are generic compass points on the bounding

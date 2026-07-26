@@ -137,9 +137,10 @@ Classes include: `Feed`, `Product`, `Pump`, `Compressor`, `Blower`, `Valve`,
 [API reference](https://github.com/Alpha9463/py-chemengg/blob/main/docs/api.md#units-and-ports) lists every class's ports and every
 registered variant.
 
-**Valve operators.** Most valve variants draw the body only. These also draw the
-operator, and put `actuator` on its crown rather than on the body, so a signal
-lands where it physically goes.
+**Valve operators.** Most valve variants draw the body only, with `actuator` on
+the top of the symbol where an operator would be mounted. These also draw the
+operator, and put `actuator` on its crown, so a signal lands where it physically
+goes.
 
 ```python
 fs.add(units.Valve("XV-1", variant="solenoid"))    # motor, solenoid, hydraulic (lettered boxes)
@@ -275,6 +276,12 @@ and split.) The signal `kind`s are `electric`, `pneumatic`, `data`/`software`
 and `capillary`, each with its own line style, no arrowheads and no stream
 numbers.
 
+A balloon's `pv`, `sig_in` and `sig_out`, and a valve's `actuator`, are **signal
+connections**: nothing flows through them, so they take a signal `kind` and
+refuse process fluid, and a process nozzle refuses a signal `kind` in return.
+`connect()` raises on either, naming both ports, rather than drawing a pipe into
+a valve stem or a control signal down a pipe run.
+
 **Attaching a balloon.** A bubble measures something, so anchor it to that thing
 with `on=`.
 
@@ -302,7 +309,8 @@ no part in layout ranking and are drawn over the lines, so neither an in-line
 element nor a stream number is lost underneath one.
 
 **Final control element.** `Valve.actuator` is the signal connection on top of
-the valve, so a controller output terminates on real equipment.
+the valve, so a controller output terminates on real equipment, at the point
+where the line meets the valve.
 
 ```python
 fs.connect(fic.sig_out, fv.actuator, kind="pneumatic")

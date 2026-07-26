@@ -75,7 +75,24 @@ of those raises `ValueError`.
 `kind` is one of `"material"`, `"energy"`, `"electric"`, `"pneumatic"`,
 `"data"`, `"software"` or `"capillary"`. Anything else raises. A `"material"`
 connection between two energy/utility-role ports is silently promoted to
-`"energy"`. `name` overrides the auto-generated stream number. `tear_hint=True`
+`"energy"`.
+
+`kind` also has to agree with what the two ports are. A **signal connection**
+(role `signal`: `Valve.actuator` and an instrument's `pv`, `sig_in`, `sig_out`)
+is a terminal for a measurement or a command, so nothing flows through it: it
+joins another signal connection and takes one of the four signal kinds. Every
+other port is a nozzle and takes `"material"` or `"energy"`. Both mismatches
+raise, naming the two ports:
+
+```python
+fs.connect(feed.outlet, fv.actuator)                       # ValueError: FV-101.actuator
+                                                           # is a signal connection and
+                                                           # Feed.outlet is a process one
+fs.connect(pump_a.discharge, pump_b.suction, kind="pneumatic")   # ValueError: process
+                                                                 # piping
+```
+
+`name` overrides the auto-generated stream number. `tear_hint=True`
 is advisory, nudging the cycle breaker toward tearing *this* edge when a recycle
 loop is ambiguous.
 
@@ -213,7 +230,7 @@ Each entry is `port` *(direction / role)*.
 | `Compressor` | `compressor` | `suction` *(in)*, `discharge` *(out)* |
 | `Blower` | `blower` | `suction` *(in)*, `discharge` *(out)* |
 | `Turbine` | `turbine` | `inlet` *(in)*, `outlet` *(out)* |
-| `Valve` | `valve` | `inlet` *(in)*, `outlet` *(out)*, `actuator` *(in)* |
+| `Valve` | `valve` | `inlet` *(in)*, `outlet` *(out)*, `actuator` *(in/signal)* |
 | `Vessel` | `vessel` | `inlet` *(in)*, `outlet` *(out)*, `vent` *(out/vapor)* |
 | `Tank` | `tank` | `inlet` *(in)*, `outlet` *(out)* |
 | `Separator` | `separator` | `feed` *(in)*, `vapor` *(out/vapor)*, `liquid` *(out/liquid)* |
@@ -230,7 +247,7 @@ Each entry is `port` *(direction / role)*.
 | `Ejector` | `ejector` | `motive` *(in/utility)*, `suction` *(in)*, `discharge` *(out)* |
 | `Vent` | `vent` | `inlet` *(in/vapor)* |
 | `Funnel` | `funnel` | `outlet` *(out/feed)* |
-| `Instrument` | `instrument` | `pv` *(in)*, `sig_in` *(in)*, `sig_out` *(out)* |
+| `Instrument` | `instrument` | `pv` *(in/signal)*, `sig_in` *(in/signal)*, `sig_out` *(out/signal)* |
 | `Mixer` | `mixer` | `in_1` … `in_n` *(in)*, `outlet` *(out)* |
 | `Splitter` | `splitter` | `inlet` *(in)*, `out_1` … `out_n` *(out)* |
 
@@ -269,7 +286,9 @@ fs.connect(feed.outlet, tower.feed_2)      # ...the feed tray
 ```
 
 `Valve.actuator` is the signal connection on the valve, not a process nozzle. It
-is where a controller output or an interlock terminates.
+is where a controller output or an interlock terminates, and it will not take
+process fluid. It sits on the top of the symbol, so the signal stops where it
+meets the valve rather than running on into the body.
 
 `unit.significant = True` on an inline unit (valve, reducer, fitting) breaks the
 stream number across it (see [Stream numbering](#stream-numbering)).
@@ -301,9 +320,12 @@ draw at the weir end of the shell, where what does not boil leaves as the
 tower's bottoms product. No other exchanger has a weir, so no other variant has it, and
 asking a plate exchanger for `.bottoms` raises.
 
-The operator-bearing valve variants put `actuator` on the operator's crown
-rather than on the valve body, so a controller output lands where the signal
-physically goes. `angle` and `psv` are piped from below and out to the side
+The operator-bearing valve variants put `actuator` on the operator's crown, and
+the bare bodies put it on the top of the symbol where an operator would be
+mounted, so a controller output lands where the signal physically goes on either.
+`relief` is the exception: a PSV's centreline is taken by its own inlet and
+outlet, so its pilot connection is on the side of the bonnet.
+`angle` and `psv` are piped from below and out to the side
 (`inlet` on S, `outlet` on E). `relief` is piped `inlet` S / `outlet` N and
 draws its tag as plain text beside the symbol rather than in a balloon.
 
@@ -638,7 +660,9 @@ fs.connect(fic.sig_out, fv.actuator, kind="pneumatic")  # slash ticks
 
 `electric`, `pneumatic`, `data`/`software` and `capillary` each get their own
 line style. Signal lines carry no arrowheads and no stream numbers, and are
-excluded from the stream table.
+excluded from the stream table. Both ends have to be signal connections, so a
+signal kind between two process nozzles raises rather than drawing a control
+line down a pipe run.
 
 ---
 

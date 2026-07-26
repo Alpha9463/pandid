@@ -6,11 +6,11 @@ import re
 from datetime import datetime
 
 from pfd.render import furniture as F
+from pfd.streams import SIGNAL_KINDS as _SIGNAL_KINDS
 
 if TYPE_CHECKING:
     from pfd.flowsheet import Flowsheet
 
-_SIGNAL_KINDS = {"electric", "pneumatic", "data", "capillary", "software"}
 # A symbol's own lettering — the "M" in a motor operator, the "S" in a solenoid.
 # Matched to be counter-transformed when the symbol is turned or flipped.
 _SYMBOL_TEXT = re.compile(
