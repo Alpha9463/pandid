@@ -96,7 +96,8 @@ to_dict() -> dict                # JSON-safe topology
 ```text
 to_svg(*, show_stream_table: bool = False,
        styling: str = "default",
-       page_size: str = "A3",
+       page_size: str | None = None,
+       jump_direction: str = "vertical",
        check: bool = True) -> str
 ```
 Returns the SVG string, running `layout()` and `route()` first if they have not
@@ -105,7 +106,7 @@ on `fs.warnings`.
 
 ```text
 render(path: str | Path, *, show_stream_table=False, styling="default",
-       page_size="A3", check=True) -> None
+       page_size=None, jump_direction="vertical", check=True) -> None
 ```
 Writes the drawing. The format comes from the extension: `.svg` (or no
 extension) is pure Python; `.pdf` and `.png` need the optional `cairosvg`
@@ -124,18 +125,33 @@ _repr_svg_() -> str              # Jupyter renders a flowsheet inline
 | `styling` | `"default"`, `"pid"` | `"pid"` adds the zone-ruled border, the engineering title strip, and draws docked furniture boxes |
 | `show_stream_table` | `bool` | draws the stream property table (one column per unique material stream) |
 | `check` | `bool` | run `validate()` first; errors raise, warnings collect |
-| `page_size` | `"A4"`, `"A3"`, `"A2"`, `"A1"`, `"A0"` | **only takes effect on an empty flowsheet.** A flowsheet with units sizes its canvas to its content, so this argument is currently inert for real drawings |
+| `page_size` | `None`, `"A4"`, `"A3"`, `"A2"`, `"A1"`, `"A0"` | `None` (the default) sizes the sheet to the drawing; a name draws a sheet of exactly that size |
+| `jump_direction` | `"vertical"`, `"horizontal"` | which of two crossing lines gets the semicircle hop |
 
-The renderer itself (`pfd.render.svg.SvgRenderer`) also accepts
-`jump_direction="vertical" | "horizontal"` — which of two crossing lines gets
-the semicircle bump — but `Flowsheet.to_svg()` does not forward it. To change
-it you have to call the renderer directly:
+### Sheet size
+
+Without `page_size` the canvas is the union of the drawing and its furniture —
+the sheet fits the drawing. Naming a size inverts that: the sheet is fixed, the
+border and title strip rule to its edges, and the drawing is fitted into what
+they leave.
 
 ```python
-from pfd.render.svg import SvgRenderer
-fs.layout(); fs.route(); fs.renumber_streams()
-svg = SvgRenderer().render(fs, jump_direction="horizontal")
+fs.render("sheet.svg", page_size="A3", styling="pid")
 ```
+
+A fixed sheet is the one worth referencing. Its zone grid is a property of the
+page, so a note reading "valve in D-4" still points at D-4 after the next
+revision adds an exchanger; a fitted sheet rules its zones from the drawing and
+renumbers them whenever it grows.
+
+Sizes are landscape, in px at 96 dpi: A4 1122x794, A3 1587x1122, A2 2245x1587,
+A1 3175x2245, A0 4489x3175.
+
+A drawing too big for the page is scaled down uniformly to fit — never clipped,
+and never enlarged when it is already smaller, since line weights and lettering
+would then swell out of proportion to the sheet-fixed furniture around them. A
+page too small for that furniture itself (a wide stream table on A4, say) raises
+`ValueError` naming the size it needed, because no drawing scale can fix it.
 
 ---
 

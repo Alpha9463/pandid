@@ -1,6 +1,6 @@
 """SVG rendering backend."""
 
-from typing import TYPE_CHECKING
+from typing import NamedTuple, TYPE_CHECKING
 import html
 import re
 from datetime import datetime
@@ -77,6 +77,37 @@ _PAGE_SIZES = {
 }
 
 
+class _Sheet(NamedTuple):
+    """A fixed sheet the drawing is placed on, rather than sized to."""
+    name: str
+    width: float
+    height: float
+
+
+def _page(page_size: "str | None") -> "_Sheet | None":
+    """Resolve ``page_size``; ``None`` means fit the sheet to the drawing."""
+    if page_size is None:
+        return None
+    dims = _PAGE_SIZES.get(page_size.upper())
+    if dims is None:
+        raise ValueError(
+            f"Unknown page size {page_size!r}; use one of {', '.join(_PAGE_SIZES)}, "
+            "or omit page_size to fit the sheet to the drawing."
+        )
+    return _Sheet(page_size.upper(), *dims)
+
+
+def _too_small(sheet: _Sheet, need_w: float, need_h: float) -> ValueError:
+    """Furniture is drawn at a fixed size, so a sheet too small to hold it is an
+    error no scale of the drawing can resolve."""
+    return ValueError(
+        f"The sheet furniture does not fit page size {sheet.name}: the border, title strip "
+        f"and docked boxes need at least {need_w:.0f}x{need_h:.0f}px of the "
+        f"{sheet.width:.0f}x{sheet.height:.0f}px sheet. Use a larger page_size, or omit "
+        "page_size to fit the sheet to the drawing."
+    )
+
+
 class SvgRenderer:
     """Renders a Flowsheet to an SVG file using manual geometry."""
 
@@ -86,7 +117,7 @@ class SvgRenderer:
 
     def render(self, fs: "Flowsheet", *, jump_direction: str = "vertical",
                show_stream_table: bool = False, styling: str = "default",
-               page_size: str = "A3", **opts) -> str:
+               page_size: "str | None" = None, **opts) -> str:
         """Render the flowsheet to SVG.
 
         Parameters
@@ -100,11 +131,15 @@ class SvgRenderer:
         styling : str
             ``"default"`` for plain, ``"pid"`` for the engineering title strip,
             zone-ruled border, and any docked furniture boxes.
-        page_size : str
-            Standard paper size: ``"A4"``, ``"A3"`` (default), ``"A2"``, ``"A1"``, ``"A0"``.
+        page_size : str | None
+            Standard paper size — ``"A4"``, ``"A3"``, ``"A2"``, ``"A1"``, ``"A0"`` —
+            drawn at exactly that size, with the furniture docked to the sheet edges
+            and the drawing fitted into what they leave. ``None`` (the default) sizes
+            the sheet to the drawing instead.
         """
         from pfd.portgeom import unit_box
         pid = styling == "pid"
+        sheet = _page(page_size)
 
         # 1. Diagram bounding box — union of every unit's drawn box and every
         #    route waypoint. Furniture is placed *around* this fixed region.
@@ -122,9 +157,8 @@ class SvgRenderer:
                     dx0, dy0 = min(dx0, px), min(dy0, py)
                     dx1, dy1 = max(dx1, px), max(dy1, py)
         if not fs.units:  # empty flowsheet: fall back to the nominal page size
-            page_w, page_h = _PAGE_SIZES.get(page_size.upper(), _PAGE_SIZES["A3"])
             dx0 = dy0 = 0.0
-            dx1, dy1 = page_w, page_h
+            dx1, dy1 = _PAGE_SIZES["A3"] if sheet is None else (sheet.width, sheet.height)
 
         # 2. Which streams get a table column (unique material streams only).
         table_streams = self._table_streams(fs) if show_stream_table else []
@@ -140,9 +174,14 @@ class SvgRenderer:
             U[0], U[1] = min(U[0], x0), min(U[1], y0)
             U[2], U[3] = max(U[2], x1), max(U[3], y1)
 
+        free = None  # region a fixed sheet leaves for the drawing
         if pid:
-            frame_x, frame_y, canvas_width, canvas_height = self._place_pid(
-                fs, st_layout, dx0, dy0, dx1, dy1, furniture)
+            (frame_x, frame_y, canvas_width, canvas_height), free = self._place_pid(
+                fs, st_layout, dx0, dy0, dx1, dy1, furniture, sheet)
+        elif sheet is not None:
+            free = self._place_plain(st_layout, sheet, margin, furniture)
+            frame_x, frame_y = 0.0, 0.0
+            canvas_width, canvas_height = sheet.width, sheet.height
         else:
             # Plain sheet: optional stream table docked below the diagram, left.
             if st_layout:
@@ -170,24 +209,45 @@ class SvgRenderer:
         lines.extend(self._defs(fs))
         unit_labels: list = []
         balloons: list = []
-        lines.extend(self._draw_units(fs, unit_labels, balloons))
-        lines.extend(self._draw_streams(fs, jump_direction))
+        drawing = self._draw_units(fs, unit_labels, balloons)
+        drawing.extend(self._draw_streams(fs, jump_direction))
         # Instrumentation goes on over the lines: an impulse line runs from the
         # tap to the balloon, and the balloon's opaque body then knocks out both
         # it and any process line an in-line element straddles.
-        lines.extend(self._draw_taps(fs))
+        drawing.extend(self._draw_taps(fs))
         if balloons:
-            lines.append('  <g id="instruments">')
-            lines.extend(balloons)
-            lines.append('  </g>')
+            drawing.append('  <g id="instruments">')
+            drawing.extend(balloons)
+            drawing.append('  </g>')
         # Equipment tags go on last, haloed, so no stream line strikes through them.
-        lines.extend(self._draw_unit_labels(unit_labels))
+        drawing.extend(self._draw_unit_labels(unit_labels))
+
+        if free is None:
+            lines.extend(drawing)
+        else:  # a fixed sheet: the drawing is fitted into what the furniture leaves
+            lines.append(f'  <g id="drawing" transform="{self._fit(dx0, dy0, dx1, dy1, free)}">')
+            lines.extend(drawing)
+            lines.append('  </g>')
         lines.append('</svg>')
         return "\n".join(lines)
 
+    def _fit(self, dx0, dy0, dx1, dy1, free) -> str:
+        """Transform centring the drawing in *free* at a uniform scale.
+
+        Never enlarges: sheet furniture is drawn at a fixed size, so blowing a
+        small drawing up to fill the page would swell its line weights and
+        lettering out of proportion to the border and title strip around it.
+        A draftsman picks a scale that fits and leaves the rest of the sheet white.
+        """
+        fx, fy, fw, fh = free
+        dw, dh = dx1 - dx0, dy1 - dy0
+        s = min(1.0, fw / dw if dw > 0 else 1.0, fh / dh if dh > 0 else 1.0)
+        return (f"translate({_num(fx + (fw - s * dw) / 2 - s * dx0)}, "
+                f"{_num(fy + (fh - s * dh) / 2 - s * dy0)}) scale({s:.6g})")
+
     # ------------------------------------------------------------------ furniture
 
-    def _place_pid(self, fs, st_layout, dx0, dy0, dx1, dy1, furniture):
+    def _place_pid(self, fs, st_layout, dx0, dy0, dx1, dy1, furniture, sheet):
         """Dock furniture flush to the sheet *frame* (not the drawing) and draw
         the zone border.
 
@@ -195,7 +255,11 @@ class SvgRenderer:
         outward from the diagram bounds just enough to hold them, and each box
         is placed flush against the frame edge its ``align`` names (inset by its
         ``margin``). A box with an explicit ``position`` is hand-placed instead.
-        Returns the outer canvas rect ``(x, y, w, h)``.
+        Given a *sheet*, the frame is instead the fixed page inset by the border,
+        and the drawing is fitted into the region the bands leave.
+
+        Returns the outer canvas rect ``(x, y, w, h)`` and that free region
+        ``(x, y, w, h)`` — ``None`` when the frame was grown to the drawing.
         """
         from pfd.document import TitleBlock, TableBox, _ALIGN
 
@@ -242,26 +306,40 @@ class SvgRenderer:
                        stack_h(cols["bottom-right"]))
         left_w, right_w = stack_w(cols["left"]), stack_w(cols["right"])
 
-        # --- frame rectangle, grown outward from the diagram bounds -----------
-        ix = dx0 - INNER - left_w
-        iy = dy0 - INNER - top_h
-        ixr = dx1 + INNER + right_w
-        iyb = dy1 + INNER + bottom_h
-
         def row_w(lk, ck, rk):
             lw, cw, rw = stack_w(cols[lk]), stack_w(cols[ck]), stack_w(cols[rk])
             side = (lw + SEP + rw) if (lw and rw) else max(lw, rw)
             return max(side, cw)
 
-        extra = max(row_w("top-left", "top", "top-right"),
-                    row_w("bottom-left", "bottom", "bottom-right")) - (ixr - ix)
-        if extra > 0:  # a wide band forces the frame wider than the drawing
-            ix -= extra / 2      # widen symmetrically → drawing stays centred
-            ixr += extra / 2
-        extra = max(stack_h(cols["left"]), stack_h(cols["right"])) - (iyb - iy)
-        if extra > 0:
-            iy -= extra / 2
-            iyb += extra / 2
+        band_w = max(row_w("top-left", "top", "top-right"),
+                     row_w("bottom-left", "bottom", "bottom-right"))
+
+        # --- frame rectangle --------------------------------------------------
+        if sheet is not None:
+            # A named page fixes the frame: the sheet inset by the zone band and
+            # the margin outside it, so the border rules to the sheet edges and
+            # the zone count no longer drifts with the drawing.
+            edge = OUT + F.ZONE_BAND
+            need_w = max(band_w, left_w + right_w + 2 * INNER)
+            need_h = max(top_h + bottom_h + 2 * INNER,
+                         stack_h(cols["left"]), stack_h(cols["right"]))
+            if (need_w >= sheet.width - 2 * edge) or (need_h >= sheet.height - 2 * edge):
+                raise _too_small(sheet, need_w + 2 * edge, need_h + 2 * edge)
+            ix, iy = edge, edge
+            ixr, iyb = sheet.width - edge, sheet.height - edge
+        else:
+            ix = dx0 - INNER - left_w
+            iy = dy0 - INNER - top_h
+            ixr = dx1 + INNER + right_w
+            iyb = dy1 + INNER + bottom_h
+            extra = band_w - (ixr - ix)
+            if extra > 0:  # a wide band forces the frame wider than the drawing
+                ix -= extra / 2      # widen symmetrically → drawing stays centred
+                ixr += extra / 2
+            extra = max(stack_h(cols["left"]), stack_h(cols["right"])) - (iyb - iy)
+            if extra > 0:
+                iy -= extra / 2
+                iyb += extra / 2
         iw, ih = ixr - ix, iyb - iy
 
         # --- place each column flush to the frame -----------------------------
@@ -318,6 +396,8 @@ class SvgRenderer:
         # --- hand-placed boxes; expand the frame to keep them inside ----------
         for a, px, py, w, h in positioned:
             draw_box(a, px, py)
+            if sheet is not None:  # the page is fixed; absolute means absolute
+                continue
             ix, iy = min(ix, px - INNER), min(iy, py - INNER)
             ixr, iyb = max(ixr, px + w + INNER), max(iyb, py + h + INNER)
         iw, ih = ixr - ix, iyb - iy
@@ -325,7 +405,25 @@ class SvgRenderer:
         # --- zone-ruled border around the frame, then the sheet edge ----------
         frame_lines, (ox, oy, ow, oh) = F.zone_frame(ix, iy, iw, ih)
         furniture[:0] = frame_lines  # border sits behind the boxes
-        return ox - OUT, oy - OUT, ow + 2 * OUT, oh + 2 * OUT
+        free = None if sheet is None else (
+            ix + left_w + INNER, iy + top_h + INNER,
+            iw - left_w - right_w - 2 * INNER, ih - top_h - bottom_h - 2 * INNER)
+        return (ox - OUT, oy - OUT, ow + 2 * OUT, oh + 2 * OUT), free
+
+    def _place_plain(self, st_layout, sheet, margin, furniture):
+        """Fixed page without pid styling: the stream table docks to the foot of
+        the sheet and the drawing takes the region above it. Returns that region."""
+        free_w = sheet.width - 2 * margin
+        free_h = sheet.height - 2 * margin
+        table_h = (st_layout["h"] + 24) if st_layout else 0.0
+        if free_w <= 0 or free_h - table_h <= 0 or (st_layout and st_layout["w"] > free_w):
+            raise _too_small(sheet,
+                             2 * margin + (st_layout["w"] if st_layout else 0.0),
+                             2 * margin + table_h)
+        if st_layout:
+            furniture.extend(self._draw_stream_table(
+                st_layout, margin, sheet.height - margin - st_layout["h"]))
+        return (margin, margin, free_w, free_h - table_h)
 
     def _table_streams(self, fs):
         streams, seen = [], set()

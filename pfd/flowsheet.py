@@ -286,10 +286,16 @@ class Flowsheet:
         return _validate(self)
 
     def to_svg(self, *, show_stream_table: bool = False,
-               styling: str = "default", page_size: str = "A3",
-               check: bool = True) -> str:
+               styling: str = "default", page_size: str | None = None,
+               jump_direction: str = "vertical", check: bool = True) -> str:
         """Render the flowsheet to an SVG string, running ``layout()`` and
         ``route()`` first if they have not been run yet.
+
+        ``page_size`` draws a sheet of exactly that standard size (``"A4"``
+        through ``"A0"``), fitting the drawing into what the sheet furniture
+        leaves; omit it to size the sheet to the drawing instead.
+        ``jump_direction`` selects which of two crossing lines gets the
+        semicircle hop — ``"vertical"`` or ``"horizontal"``.
 
         When ``check`` is true, validation runs first: any *error* raises
         :class:`ValueError`, and *warnings* are collected on ``self.warnings``.
@@ -310,30 +316,33 @@ class Flowsheet:
                 )
         from pfd.render.svg import SvgRenderer
         return SvgRenderer().render(
-            self, show_stream_table=show_stream_table, styling=styling, page_size=page_size
+            self, show_stream_table=show_stream_table, styling=styling,
+            page_size=page_size, jump_direction=jump_direction
         )
 
     def render(self, path: str | Path, *, show_stream_table: bool = False,
-               styling: str = "default", page_size: str = "A3",
-               check: bool = True) -> None:
+               styling: str = "default", page_size: str | None = None,
+               jump_direction: str = "vertical", check: bool = True) -> None:
         """Render the flowsheet and write it to *path*.
 
         The output format is inferred from the file extension:
 
         - ``.svg`` — pure-Python, always available.
         - ``.pdf`` / ``.png`` — require the optional ``cairosvg`` backend
-          (``pip install 'pfd[pdf]'``).
+          (``pip install 'pandid[pdf]'``).
 
         Args:
             path: Output file path; its extension selects the format.
             show_stream_table: Draw a property table of all streams at the bottom.
             styling: ``"default"`` or ``"pid"`` (adds a title block and border).
-            page_size: Sheet size, e.g. ``"A3"`` (default) or ``"A4"``.
+            page_size: Draw on a sheet of exactly this standard size, e.g.
+                ``"A3"``; omit to size the sheet to the drawing.
+            jump_direction: Which crossing lines hop, ``"vertical"`` or ``"horizontal"``.
             check: Validate first; errors raise, warnings collect on ``warnings``.
         """
         svg = self.to_svg(
             show_stream_table=show_stream_table, styling=styling, page_size=page_size,
-            check=check,
+            jump_direction=jump_direction, check=check,
         )
         ext = Path(path).suffix.lower()
         if ext in ("", ".svg"):
@@ -344,7 +353,7 @@ class Flowsheet:
             except ImportError as e:
                 raise ImportError(
                     f"Exporting {ext} requires the optional cairosvg backend. "
-                    "Install it with: pip install 'pfd[pdf]'"
+                    "Install it with: pip install 'pandid[pdf]'"
                 ) from e
             data = svg.encode("utf-8")
             if ext == ".pdf":

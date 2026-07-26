@@ -9,7 +9,7 @@
 - ``out()`` resolves an output filename next to the examples, so a rendered
   drawing lands in the same place no matter where you ran the script from.
 
-Not needed once the package is installed (``pip install pfd`` or
+Not needed once the package is installed (``pip install pandid`` or
 ``pip install -e .``); it just keeps the examples runnable without that step.
 """
 

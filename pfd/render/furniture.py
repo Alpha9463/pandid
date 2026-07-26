@@ -269,7 +269,12 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float) -> l
 # Zone-ruled drawing border (ASME-style: A.. bottom→top, 1.. right→left)
 # ---------------------------------------------------------------------------
 
-def zone_frame(ix: float, iy: float, iw: float, ih: float, band: float = 16.0
+# Width of the lettered/numbered band between the drawing frame and the sheet
+# border. A fixed-size sheet insets its frame by this to rule to the page edge.
+ZONE_BAND = 16.0
+
+
+def zone_frame(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BAND
                ) -> tuple[list[str], tuple[float, float, float, float]]:
     """Draw the drawing frame (inner rect) plus the sheet border (outer rect)
     with zone letters/numbers ruled in the band between them.
