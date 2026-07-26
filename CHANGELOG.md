@@ -48,8 +48,8 @@ and is kept working.
   number on the stream you hold is the number that gets drawn. Process streams
   take the low numbers, with energy streams and then unlabelled signal lines
   after them.
-- Line numbers — the identifier a P&ID actually labels a line with, and the one
-  the line list, the stress calculation and the isometric key on. `connect()`
+- Line numbers. This is the identifier a P&ID actually labels a line with, and
+  the one the line list, the stress calculation and the isometric key on. `connect()`
   takes `size`, `service`, `spec` and `insulation`; auto-numbering fills
   `sequence` from `line_number_start` (default `1001`), and
   `line_numbering_scheme` (default `"{size}-{service}-{sequence}-{spec}"`, a
@@ -84,12 +84,12 @@ and is kept working.
   face; the choice lands on the resolved `Frame`, so it is a result rather than
   intent and `layout()` stays idempotent. Nozzles fixed by physics have one
   placement and are never considered, and the selector will not land two live
-  connections on one point. `Flowsheet(auto_faces=False)` — or the spec's
-  top-level `auto_faces` key — turns it off, leaving every port on its symbol's
+  connections on one point. `Flowsheet(auto_faces=False)`, or the spec's
+  top-level `auto_faces` key, turns it off and leaves every port on its symbol's
   own nozzle.
-- `Unit.nozzle()` — pipe a port from a named face of the unit *as drawn*,
-  accepting `top`/`bottom`/`left`/`right` as well as the compass points, and
-  overriding the engine's pick: the engine removes detours, it does not
+- `Unit.nozzle()` pipes a port from a named face of the unit *as drawn*,
+  accepting `top`/`bottom`/`left`/`right` as well as the compass points. It
+  overrides the engine's pick, because the engine removes detours but does not
   adjudicate drawing conventions. A port can only take a face its symbol
   authored a coordinate for, so the moved nozzle still lands on drawn ink; a
   nozzle fixed by physics has one placement and raises. The choice is re-checked

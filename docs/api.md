@@ -31,13 +31,13 @@ The container and the single source of truth for connectivity.
 
 - `stream_naming_scheme` is either a format string taking `{n}` (default
   `"S{n}"` → `S1`, `S2`, …) or a callable `int -> str`. Keyword-only.
-- `line_numbering_scheme` — either a format string taking the line-number
+- `line_numbering_scheme` is either a format string taking the line-number
   components (`{size}`, `{service}`, `{sequence}`, `{spec}`, `{insulation}`) or
   a callable `Stream -> str`, for a site whose convention is spelled some other
   way. Keyword-only. See [Line numbers](#line-numbers).
-- `line_number_start` — where the automatic sequence begins (default `1001`, so
-  the first line is `…-1001-…`). Keyword-only.
-- `auto_faces` — let the engine choose which face each movable port is piped
+- `line_number_start` sets where the automatic sequence begins (default `1001`,
+  so the first line is `…-1001-…`). Keyword-only.
+- `auto_faces` lets the engine choose which face each movable port is piped
   from. See [automatic face selection](#automatic-face-selection). Keyword-only.
 
 ### Attributes
@@ -79,9 +79,9 @@ connection between two energy/utility-role ports is silently promoted to
 is advisory, nudging the cycle breaker toward tearing *this* edge when a recycle
 loop is ambiguous.
 
-`size` / `service` / `spec` / `insulation` are the line-number components —
-text or a number; supplying any of them identifies the line by its line number
-instead of a stream number. `sequence` is filled by auto-numbering unless it is
+`size` / `service` / `spec` / `insulation` are the line-number components, given
+as text or a number. Supplying any of them identifies the line by its line
+number instead of a stream number. `sequence` is filled by auto-numbering unless it is
 given here. See [Line numbers](#line-numbers).
 
 ```text
@@ -344,14 +344,14 @@ A port that its symbol authors on more than one face is **movable**, and the
 engine picks which of them the stream leaves from. It scores each declared face
 by the orthogonal run to the unit at the other end of the stream, charging a
 face that points away from that unit for the detour back around the box, and
-takes the cheapest — so a reflux drum sitting under its condenser is fed from
-the top without anyone saying so.
+takes the cheapest. A reflux drum sitting under its condenser is therefore fed
+from the top without anyone saying so.
 
 Selection is a layout phase: it runs once per `layout()`, after every drawn box
 is settled and before labels, routing and rendering read a face. The choice is a
 *result*, so it lives on the resolved `Frame` (`frame.port_faces`), never on the
-unit — `to_dict()` writes the faces you named and not the ones the engine
-picked, and laying the same sheet out twice draws it the same way.
+unit. `to_dict()` therefore writes the faces you named and not the ones the
+engine picked, and laying the same sheet out twice draws it the same way.
 
 Three things it will not do:
 
@@ -359,9 +359,9 @@ Three things it will not do:
   the point of keeping the call: the engine removes detours, it does not
   adjudicate drawing conventions, and where a sheet wants a particular one you
   still say so.
-- **Move a nozzle fixed by physics.** A column's bottoms, a drum's liquid draw —
-  the symbol authors one placement, so there is nothing to choose between and
-  the port is never even considered.
+- **Move a nozzle fixed by physics.** For a column's bottoms or a drum's liquid
+  draw the symbol authors one placement, so there is nothing to choose between
+  and the port is never even considered.
 - **Land two live connections on one point.** Ports are served in declaration
   order and each takes the cheapest face still free, so the selector cannot
   create the collision `validate()` reports as `coincident-ports`.
@@ -371,8 +371,8 @@ every port then sits on its symbol's own nozzle unless `nozzle()` moved it,
 which is what a sheet already tuned by hand wants. In the spec format it is the
 top-level `auto_faces` key.
 
-Ties are common — a balloon is square, so stepping a signal round to the next
-face trades exactly as much horizontal run for vertical. They break towards the
+Ties are common, because a balloon is square and stepping a signal round to the
+next face trades exactly as much horizontal run for vertical. They break towards the
 face pointing most directly at the peer, then on the symbol's own order of
 preference.
 
@@ -383,10 +383,10 @@ unit.nozzle(port_name: str, face: str) -> Unit
 ```
 
 Pipes a port from a named face of the unit **as drawn**, overriding whatever the
-engine would have picked. `face` is the compass point on the finished sheet —
+engine would have picked. `face` is the compass point on the finished sheet:
 `"N"`, `"S"`, `"E"`, `"W"`, or the `top`/`bottom`/`left`/`right` spelling
-`label_pos` uses — so a mirrored or rotated unit takes the face the reader sees,
-not the one the stencil was drawn with. Raises `KeyError` for an unknown port and
+`label_pos` uses. A mirrored or rotated unit therefore takes the face the reader
+sees, not the one the stencil was drawn with. Raises `KeyError` for an unknown port and
 `ValueError` when the symbol offers no placement on that face.
 
 The face must be reachable under the placement the unit ends up with, and either
@@ -405,11 +405,12 @@ mirroring move them, and `nozzle()` always takes the moved face.
 |---|---|---|
 | `Vessel(variant="horizontal")` | `inlet` | `W` (home), `N`, `E` |
 | `Separator(variant="horizontal")` | `feed` | `W` (home), `N`, `E` |
-| `Instrument` — `default`, `panel`, `aux`, `shared`, `computer` | `pv`, `sig_in`, `sig_out` | `N`, `S`, `E`, `W` |
+| `Instrument` (`default`, `panel`, `aux`, `shared`, `computer`) | `pv`, `sig_in`, `sig_out` | `N`, `S`, `E`, `W` |
 
 (`Instrument(variant="logic")`, the interlock square, offers no choice either.)
-The home is the symbol's own nozzle — where the port sits with `auto_faces` off,
-and the first entry of the menu the engine chooses from with it on.
+The home is the symbol's own nozzle. It is where the port sits with
+`auto_faces` off, and the first entry of the menu the engine chooses from with
+it on.
 
 ```python
 # Both of these are conventions the geometry alone would not arrive at: the
@@ -470,15 +471,15 @@ to the same name and an energy or signal line never consumes a process number.
 
 ### Line numbers
 
-A P&ID identifies a line by its full line number — size, service, sequence,
-spec — because that is the identifier the line list, the stress calculation and
+A P&ID identifies a line by its full line number of size, service, sequence and
+spec, because that is the identifier the line list, the stress calculation and
 the isometric all key on. Supply the components on `connect()` and the line is
 named that way instead of `S1`:
 
 ```python
 s = fs.connect(pump.discharge, fv.inlet, size='6"', service="P", spec="A1A")
-s.name        # '6"-P-1001-A1A'  — drawn on the line and headed on its table column
-s.sequence    # '1001'           — filled by auto-numbering
+s.name        # '6"-P-1001-A1A'  drawn on the line, and heads its table column
+s.sequence    # '1001'           filled by auto-numbering
 ```
 
 The components are `size`, `service`, `sequence`, `spec` and `insulation`, each
@@ -490,7 +491,7 @@ reads `6"-P-1001` rather than `6"-P-1001-`.
 
 A line number is assigned by `renumber_streams()`, on exactly the terms a stream
 number is: it carries **through** an inline valve, reducer or fitting, and
-breaks at a unit marked `significant` — which is where the spec break goes. The
+breaks at a unit marked `significant`, which is where the spec break goes. The
 first segment of a group that carries components supplies them for the whole
 group, so a run does not have to repeat its identity at every fitting. A stream
 named explicitly with `connect(name=…)` is never reformatted, and a stream with
@@ -506,7 +507,8 @@ Flowsheet("U100", line_numbering_scheme=lambda s: f"{s.service}-{s.size}-{s.sequ
 ```
 
 A scheme naming something that is not a component raises `ValueError`, as does a
-line whose components the scheme never uses — its line number would be empty.
+line whose components the scheme never uses, since its line number would be
+empty.
 
 With `show_stream_table=True` each column is headed by its line number, and the
 corner cell reads `Line Number` when every line in the table has one.

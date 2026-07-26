@@ -10,7 +10,7 @@ The distribution is **`pandid`**, how "P&ID" is said out loud. It imports as
 
 [![Distillation train](https://raw.githubusercontent.com/Alpha9463/py-chemengg/main/docs/gallery/03_distillation_train.png)](https://github.com/Alpha9463/py-chemengg/blob/main/docs/gallery/README.md)
 
-<sub>[`examples/03_distillation_train.py`](https://github.com/Alpha9463/py-chemengg/blob/main/examples/03_distillation_train.py) — see the [gallery](https://github.com/Alpha9463/py-chemengg/blob/main/docs/gallery/README.md) for all nine.</sub>
+<sub>[`examples/03_distillation_train.py`](https://github.com/Alpha9463/py-chemengg/blob/main/examples/03_distillation_train.py). See the [gallery](https://github.com/Alpha9463/py-chemengg/blob/main/docs/gallery/README.md) for all nine.</sub>
 
 ## Install
 
@@ -58,41 +58,41 @@ Jupyter.
 
 ## What it does
 
-- **Topology-first API** — declare typed units (pumps, columns, reactors,
+- **Topology-first API.** Declare typed units (pumps, columns, reactors,
   heat exchangers, …) and connect their named ports; streams are created for you.
-- **Automatic layout** — Sugiyama-style layering, crossing reduction, and a
+- **Automatic layout.** Sugiyama-style layering, crossing reduction, and a
   center-aligned flow spine; recycles are detected and routed around the sheet.
   Ports that a symbol authors on more than one face are put on the face the
   peer is actually on, so a drum under its condenser is fed from the top.
-- **Orthogonal A\* routing** — clean right-angle streams with crossing jump-gaps
+- **Orthogonal A\* routing.** Clean right-angle streams with crossing jump-gaps
   and parallel-segment separation. Never emits a disconnected stream.
-- **Industry-standard symbol library** — 95+ ISO 10628-2 / ISA-5.1 symbols with
+- **Industry-standard symbol library.** 95+ ISO 10628-2 / ISA-5.1 symbols with
   style **variants** (a heat exchanger can be shell-&-tube, plate, kettle,
   U-tube…), derived from the Apache-2.0 draw.io P&ID stencils (see `NOTICE`).
-- **Pixel-perfect overrides** — `pin()` equipment to exact coordinates and
+- **Pixel-perfect overrides.** `pin()` equipment to exact coordinates and
   `.via()` a stream through explicit waypoints; the engine honors them and
   auto-routes the rest.
-- **Line numbers** — a line is labelled the way the line list has it
+- **Line numbers.** A line is labelled the way the line list has it
   (`6"-P-1001-A1A`: size, service, sequence, spec), not `S1`. The sequence is
   filled automatically, the number carries through in-line fittings and breaks
   at a spec break, and the convention is a format string you can replace.
-- **Instrumentation (ISA-5.1)** — instrument balloons anchored to the line or
+- **Instrumentation (ISA-5.1).** Instrument balloons anchored to the line or
   the equipment they read (with impulse lines), tags drawn inside, location
   variants, alarms and interlock squares, typed signal lines (electric /
   pneumatic / data), and controller outputs landing on a valve's actuator.
-- **Engineering sheet framing** — a zone-ruled drawing border (ASME-style
+- **Engineering sheet framing.** A zone-ruled drawing border (ASME-style
   letter/number grid), a full-width title strip (integrated revision history,
   company/logo cell, status / drawing-number / two-line title / date / rev),
   and generic titled boxes docked to the corners (auto **equipment list**,
   **notes**, **legend**, or any `Annotation` / `TableBox`), plus a sectioned
   stream-property table. Off-page connectors carry a drawing reference.
-- **Declare it as data** — a round-trippable spec format (`dict`, JSON, or
+- **Declare it as data.** A round-trippable spec format (`dict`, JSON, or
   YAML) covering everything above, so an equipment list and a stream table go
   straight to a drawing without anyone writing Python. Validated, not
   interpreted: a typo names the entry and lists what would have worked.
-- **Validation** — `fs.validate()` flags overlapping pins, off-sheet
+- **Validation.** `fs.validate()` flags overlapping pins, off-sheet
   coordinates (errors) and routes crossing equipment or big detours (warnings).
-- **Zero runtime dependencies** — the package uses only the Python standard
+- **Zero runtime dependencies.** The package uses only the Python standard
   library. (SVG symbols are pre-converted and inlined; `cairosvg` is optional,
   only for PDF/PNG export, and `PyYAML` only for reading a YAML spec.)
 
@@ -296,21 +296,21 @@ safe to quote in a report or a stream table of your own.
 
 ## Line numbers
 
-A P&ID identifies a line the way the line list does — size, service, sequence,
-spec — because that is what ties the drawing to the stress calculation and the
+A P&ID identifies a line the way the line list does, by size, service, sequence
+and spec, because that is what ties the drawing to the stress calculation and the
 isometric. Give `connect()` the components and the line is named that way
 instead of `S1`:
 
 ```python
 s = fs.connect(pump.discharge, fv.inlet, size='6"', service="P", spec="A1A")
 s.name        # '6"-P-1001-A1A'
-s.sequence    # '1001' — filled by auto-numbering, from line_number_start
+s.sequence    # '1001' filled by auto-numbering, from line_number_start
 ```
 
 You supply `size`, `service`, `spec` and `insulation`; auto-numbering fills
 `sequence`, unless you set it to tie into a line that already exists. The number
 carries **through** an in-line valve or strainer and breaks at a unit marked
-`significant` — which is exactly where the spec breaks. A component left unset
+`significant`, which is exactly where the spec breaks. A component left unset
 drops out, so a line with no spec issued yet reads `6"-P-1001`.
 
 The convention is a format string (or a callable), so a site that spells it
@@ -473,17 +473,17 @@ annotations:
   - {type: table, title: TIE-INS, headers: [Tag, Line], rows: [[TI-1, 6-P-101]]}
 ```
 
-**`units`** — `kind` (required) is the equipment class from the list above, in
+**`units`**: `kind` (required) is the equipment class from the list above, in
 any spelling you would reasonably write: `HeatExchanger`, `heat_exchanger` or
 `hex`. `name` (required) is the tag. Then `variant`, `description` (feeds the
 equipment list), `reference` (a boundary flag's off-page drawing), explicit
 `width`/`height`, `label_pos`, `significant` (break the stream or line number at
 this inline item), and `n_inlets` / `n_outlets` for `Mixer` / `Splitter`.
 
-**`pin` / `port_faces`** — `pin` mirrors `pin()`: `x`/`y` (absolute), `col`/`row`
+**`pin` / `port_faces`**: `pin` mirrors `pin()` with `x`/`y` (absolute), `col`/`row`
 (grid), `orientation` (`0`/`90`/`180`/`270`) and `mirrored` (`x`/`y`/`xy`).
 `port_faces` maps a port to the face it leaves from **as drawn**, so a
-mirrored or turned unit takes the face the reader sees. It is an override —
+mirrored or turned unit takes the face the reader sees. It is an override:
 without it the engine picks the face itself, and the top-level `auto_faces:
 false` is how you stop it.
 
@@ -499,7 +499,7 @@ time. `at` / `offset` / `angle` / `variant` / `port_faces` behave as in
 `data`, …), `name` overrides the auto number, `tear_hint` nominates the recycle
 to cut, `via` forces waypoints, and `properties` is that line's stream-table
 column. `size` / `service` / `spec` / `insulation` are the line-number
-components, and `sequence` overrides the one auto-numbering would assign —
+components, and `sequence` overrides the one auto-numbering would assign,
 which is why `to_dict()` writes the components but never the computed
 sequence.
 
@@ -542,12 +542,12 @@ Runnable scripts in `examples/`, each usable from the repo root or from
 ## Architecture
 
 1. **Topology** (`pfd/flowsheet.py`, `pfd/units.py`, `pfd/ports.py`,
-   `pfd/streams.py`) — units, ports, and stream connectivity.
-2. **Geometry** — `pfd/layout/` (Sugiyama layering → ordering → coordinates,
+   `pfd/streams.py`) holds units, ports, and stream connectivity.
+2. **Geometry.** `pfd/layout/` (Sugiyama layering → ordering → coordinates,
    emitting each unit's resolved `Frame`, then port-face selection and label
    placement), `pfd/portgeom.py` (single source of truth for port geometry),
    `pfd/routing/` (visibility graph + A\*).
-3. **Render** (`pfd/render/`) — SVG output, the symbol registry, and
+3. **Render** (`pfd/render/`) produces SVG output, the symbol registry, and
    `pfd/validate.py` / `pfd/document.py`.
 
 Geometry separates *intent* (`Pin`, from `pin()`) from *result* (`Frame`,
@@ -571,7 +571,7 @@ You may use it at no cost if your company has **fewer than 100 people** and
 **under 1,000,000 USD** (2019, inflation adjusted) of revenue in its prior tax
 year. Students, academics, hobbyists and small consultancies are covered. A
 company above either threshold needs a commercial licence. Contact
-`<add your contact address>`.
+`alexandersonxii+pandid@gmail.com`.
 
 This is a source-available licence, not an OSI-approved open-source one, which
 matters if your organisation screens dependencies.

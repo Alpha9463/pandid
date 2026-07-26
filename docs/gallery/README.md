@@ -134,20 +134,20 @@ spec back out.
 
 The process is a boiler feedwater package, and it carries a complete ISA-5.1
 level loop: `LT-201` on the deaerator measures, `LIC-201` in the control room
-decides, and `LY-201` on the valve acts — an electric signal into the
-controller, an electric signal out of it, and a pneumatic line (solid, double
-cross-hatched) stroking the actuator. `M-201` is a three-inlet header, which is
+decides, and `LY-201` on the valve acts. An electric signal goes into the
+controller, an electric signal comes out of it, and a pneumatic line (solid,
+double cross-hatched) strokes the actuator. `M-201` is a three-inlet header, which is
 the case that used to have nowhere to put its third stream.
 
-## 09 — Line numbers
+## 09 · Line numbers
 
 [`examples/09_line_numbers.py`](../../examples/09_line_numbers.py) ·
 [SVG](09_line_numbers.svg)
 
 ![Line numbers](09_line_numbers.png)
 
-Every line is labelled the way the line list has it — `8"-P-1001-A1A`, size,
-service, sequence and spec — instead of `S1`. The components go in on
+Every line is labelled the way the line list has it, `8"-P-1001-A1A` for size,
+service, sequence and spec, instead of `S1`. The components go in on
 `connect()`; the sequence is filled by the same numbering that hands out stream
 numbers, so nothing has to be kept unique by hand. The suction line keeps one
 number through HV-101 and ST-101, and breaks at the two units marked

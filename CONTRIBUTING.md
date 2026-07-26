@@ -103,16 +103,15 @@ registered `(kind, variant)`, not just the ones the examples use:
   streams on one pixel.
 
 If that suite fails on your symbol, **move the port onto the geometry**. Adding
-the symbol to `_KNOWN_GEOMETRY_GAPS` or `_KNOWN_DUPLICATE_PORTS` is not the fix,
-and a PR that does it will be sent back. Those sets fence off three
-pre-existing, *deliberate* cases: the pump and compressor suction nozzles, which
-sit in the mouth of an opening the casing is drawn around.
-`_KNOWN_DUPLICATE_PORTS` is empty. Keep it empty.
+the symbol to `_KNOWN_GEOMETRY_GAPS` is not the fix, and a PR that does it will
+be sent back. That set fences off three pre-existing, *deliberate* cases: the
+pump and compressor suction nozzles, which sit in the mouth of an opening the
+casing is drawn around.
 
-The one legitimate escape hatch is `Symbol.free_ports`. An instrument balloon is
-a circle, so its signal connections have no face of their own and may offer the
-same faces as each other. Free ports are still checked against fixed ports.
-Equipment nozzles are never free.
+The one legitimate escape hatch is `Symbol.faceless_ports`. An instrument
+balloon is a circle, so its signal connections have no face of their own and may
+offer the same faces as each other. Faceless ports are still checked against the
+nozzles that do own a face, and equipment nozzles are never faceless.
 
 ## 3. Goldens: a changed golden means changed rendering
 
