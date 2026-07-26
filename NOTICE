@@ -1,12 +1,12 @@
-pandid — licensing and third-party notices
-==========================================
+pandid: licensing and third-party notices
+=========================================
 
 This distribution contains material under two different licences. Which one
 applies depends on the file.
 
 
-1. The engine — PolyForm Small Business License 1.0.0
------------------------------------------------------
+1. The engine: PolyForm Small Business License 1.0.0
+----------------------------------------------------
 
 Everything in this repository EXCEPT the files listed in section 2 is
 
@@ -17,13 +17,13 @@ Everything in this repository EXCEPT the files listed in section 2 is
 In short: free to use for individuals, for research and teaching, and for any
 company with fewer than 100 people and under 1,000,000 USD (2019, inflation
 adjusted) of revenue in its prior tax year. A company above either threshold
-needs a separate commercial licence — see the Licensing section of README.md.
+needs a separate commercial licence. See the Licensing section of README.md.
 
 This is a source-available licence, not an OSI-approved open-source licence.
 
 
-2. Equipment symbols — Apache License 2.0
------------------------------------------
+2. Equipment symbols: Apache License 2.0
+----------------------------------------
 
 The drawn equipment symbols are derived from the draw.io / diagrams.net P&ID
 stencil library:

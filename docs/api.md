@@ -29,16 +29,15 @@ Flowsheet(name: str, *,
 
 The container and the single source of truth for connectivity.
 
-- `name` — the flowsheet's name.
-- `stream_naming_scheme` — either a format string taking `{n}` (default
+- `stream_naming_scheme` is either a format string taking `{n}` (default
   `"S{n}"` → `S1`, `S2`, …) or a callable `int -> str`. Keyword-only.
-- `line_numbering_scheme` — either a format string taking the line-number
+- `line_numbering_scheme` is either a format string taking the line-number
   components (`{size}`, `{service}`, `{sequence}`, `{spec}`, `{insulation}`) or
   a callable `Stream -> str`, for a site whose convention is spelled some other
   way. Keyword-only. See [Line numbers](#line-numbers).
-- `line_number_start` — where the automatic sequence begins (default `1001`, so
-  the first line is `…-1001-…`). Keyword-only.
-- `auto_faces` — let the engine choose which face each movable port is piped
+- `line_number_start` sets where the automatic sequence begins (default `1001`,
+  so the first line is `…-1001-…`). Keyword-only.
+- `auto_faces` lets the engine choose which face each movable port is piped
   from. See [automatic face selection](#automatic-face-selection). Keyword-only.
 
 ### Attributes
@@ -70,19 +69,19 @@ connect(src: Port, dst: Port, *,
         size=None, service=None, sequence=None, spec=None, insulation=None) -> Stream
 ```
 Creates the stream. `src` must be an outlet and `dst` an inlet, both units must
-already be on this flowsheet, and neither port may already carry a stream —
-each of those raises `ValueError`.
+already be on this flowsheet, and neither port may already carry a stream. Each
+of those raises `ValueError`.
 
 `kind` is one of `"material"`, `"energy"`, `"electric"`, `"pneumatic"`,
-`"data"`, `"software"`, `"capillary"`; anything else raises. A `"material"`
+`"data"`, `"software"` or `"capillary"`. Anything else raises. A `"material"`
 connection between two energy/utility-role ports is silently promoted to
-`"energy"`. `name` overrides the auto-generated stream number.
-`tear_hint=True` nudges the cycle breaker toward tearing *this* edge when a
-recycle loop is ambiguous — advisory only.
+`"energy"`. `name` overrides the auto-generated stream number. `tear_hint=True`
+is advisory, nudging the cycle breaker toward tearing *this* edge when a recycle
+loop is ambiguous.
 
-`size` / `service` / `spec` / `insulation` are the line-number components —
-text or a number; supplying any of them identifies the line by its line number
-instead of a stream number. `sequence` is filled by auto-numbering unless it is
+`size` / `service` / `spec` / `insulation` are the line-number components, given
+as text or a number. Supplying any of them identifies the line by its line
+number instead of a stream number. `sequence` is filled by auto-numbering unless it is
 given here. See [Line numbers](#line-numbers).
 
 ```text
@@ -149,7 +148,7 @@ _repr_svg_() -> str              # Jupyter renders a flowsheet inline
 
 ### Sheet size
 
-Without `page_size` the canvas is the union of the drawing and its furniture —
+Without `page_size` the canvas is the union of the drawing and its furniture, so
 the sheet fits the drawing. Naming a size inverts that: the sheet is fixed, the
 border and title strip rule to its edges, and the drawing is fitted into what
 they leave.
@@ -158,26 +157,25 @@ they leave.
 fs.render("sheet.svg", page_size="A3", styling="pid")
 ```
 
-A fixed sheet is the one worth referencing. Its zone grid is a property of the
+Fix the sheet when the zone grid has to be stable. It is then a property of the
 page, so a note reading "valve in D-4" still points at D-4 after the next
-revision adds an exchanger; a fitted sheet rules its zones from the drawing and
-renumbers them whenever it grows.
+revision adds an exchanger. A fitted sheet renumbers its zones whenever it
+grows.
 
 Sizes are landscape, in px at 96 dpi: A4 1122x794, A3 1587x1122, A2 2245x1587,
 A1 3175x2245, A0 4489x3175.
 
-A drawing too big for the page is scaled down uniformly to fit — never clipped,
-and never enlarged when it is already smaller, since line weights and lettering
-would then swell out of proportion to the sheet-fixed furniture around them. A
-page too small for that furniture itself (a wide stream table on A4, say) raises
-`ValueError` naming the size it needed, because no drawing scale can fix it.
+A drawing too big for the page is scaled down uniformly to fit, never clipped,
+and never enlarged when it is already smaller. A page too small for the
+furniture itself (a wide stream table on A4, say) raises `ValueError` naming the
+size it needed.
 
 ---
 
 ## Units and ports
 
 Every unit type is reached through the `units` namespace. Ports are exposed both
-as `unit.ports["name"]` and as attributes (`pump.suction`); an unknown attribute
+as `unit.ports["name"]` and as attributes (`pump.suction`). An unknown attribute
 raises `AttributeError` listing the real ports, and `unit.port("name")` raises
 `KeyError` the same way.
 
@@ -186,18 +184,18 @@ Unit(name, variant="default", width=None, height=None,
      label_pos=None, description="", reference="")
 ```
 
-- `name` — the equipment tag. Must be unique on the flowsheet and non-empty.
-- `variant` — the visual style within the class (see below). A name that kind
+- `name` is the equipment tag. It must be unique on the flowsheet and non-empty.
+- `variant` is the visual style within the class (see below). A name that kind
   has no symbol for raises `ValueError` listing the ones it does, at the first
   layout or render.
-- `width` / `height` — override the symbol's intrinsic size. Taken as the
+- `width` / `height` override the symbol's intrinsic size. They are taken as the
   *final* box, so a rotated unit gets exactly what you asked for.
-- `label_pos` — `"top"`, `"bottom"`, `"left"`, `"right"` or `"center"`. Left
+- `label_pos` is `"top"`, `"bottom"`, `"left"`, `"right"` or `"center"`. Left
   unset, the engine picks the first free face in top → bottom → right → left
-  order so a nozzle's stream does not run through the tag.
-- `description` — free text; feeds the auto equipment list.
-- `reference` — off-page drawing reference, drawn as a boundary flag's second
-  line (`Feed` / `Product`).
+  order, so a nozzle's stream does not run through the tag.
+- `description` is free text, and feeds the auto equipment list.
+- `reference` is the off-page drawing reference, drawn as a boundary flag's
+  second line (`Feed` / `Product`).
 
 ### Port table
 
@@ -248,15 +246,15 @@ count: they sit 20 px apart, or are squeezed into the middle 70 % of the face
 once there are too many for that. Two ports land where they always have, so
 raising a count on one unit never moves any other.
 
-`Valve.actuator` is the signal connection on the valve, not a process nozzle —
-it is where a controller output or an interlock terminates.
+`Valve.actuator` is the signal connection on the valve, not a process nozzle. It
+is where a controller output or an interlock terminates.
 
 `unit.significant = True` on an inline unit (valve, reducer, fitting) breaks the
-stream number across it instead of carrying one number through.
+stream number across it (see [Stream numbering](#stream-numbering)).
 
 ### Variants
 
-A **class** is a functional equipment type, defined by its ports; a **variant**
+A **class** is a functional equipment type, defined by its ports. A **variant**
 is a visual style within it. The first name in each list is that kind's
 `default`, with the shape it draws in brackets.
 
@@ -279,7 +277,7 @@ is a visual style within it. The first name in each list is that kind's
 The operator-bearing valve variants put `actuator` on the operator's crown
 rather than on the valve body, so a controller output lands where the signal
 physically goes. `angle` and `psv` are piped from below and out to the side
-(`inlet` on S, `outlet` on E); `relief` is piped `inlet` S / `outlet` N and
+(`inlet` on S, `outlet` on E). `relief` is piped `inlet` S / `outlet` N and
 draws its tag as plain text beside the symbol rather than in a balloon.
 
 ---
@@ -294,18 +292,16 @@ unit.pin(*, col=None, row=None, x=None, y=None,
 ```
 
 Records placement **intent** and returns the unit, so it chains off `add()`.
-The layout engine reads it and resolves the final geometry; pinned axes are
+The layout engine reads it and resolves the final geometry. Pinned axes are
 honoured exactly, and unpinned units are placed around them. Grid intent
-(`col`/`row`) and absolute intent (`x`/`y`) may be mixed — absolute wins for
-whichever axis it sets. `x`/`y` are the unit's frame origin — its **top-left
+(`col`/`row`) and absolute intent (`x`/`y`) may be mixed, and absolute wins for
+whichever axis it sets. `x`/`y` are the unit's frame origin, its **top-left
 corner** in SVG coordinates, not its centre and not a nozzle.
 
-Two things surprise people. A port sits at a fixed *fraction* of its symbol's
-box, so lining two items up means matching those fractions, not their corners
-(the examples pin by nozzle height for exactly this reason). And `Feed` is the
-one exception to "origin = top-left": its width is sized to its label text and
-the flag is drawn extending **left** from `x + 50`, which is where its outlet
-nozzle sits.
+A port sits at a fixed *fraction* of its symbol's box, so lining two items up
+means matching those fractions, not their corners. `Feed` is the one exception
+to "origin = top-left": its width is sized to its label text and the flag is
+drawn extending **left** from `x + 50`, which is where its outlet nozzle sits.
 
 ```python
 hx = fs.add(units.HeatExchanger("E-1")).pin(x=100, y=50)
@@ -315,13 +311,13 @@ fv = fs.add(units.Valve("FV-1")).pin(col=2, row=1, mirrored=True)
 Calling `pin()` more than once merges: only the arguments you pass are updated,
 `orientation` and `mirrored` included, so a later bare `pin(x=…)` nudges the
 unit along without undoing a turn or a flip. A unit that has never been pinned
-starts square and unflipped; pass `orientation=0` / `mirrored=False` to put one
+starts square and unflipped. Pass `orientation=0` / `mirrored=False` to put one
 back.
 
 ### `orientation`
 
 A clockwise quarter turn in degrees: `0`, `90`, `180` or `270`. Anything else
-raises `ValueError` — a non-quarter turn would tilt the text and break the
+raises `ValueError`, since a non-quarter turn would tilt the text and break the
 orthogonal routing grid. A quarter turn swaps the unit's width and height, and
 ports follow, so a stream never detaches from its nozzle.
 
@@ -334,7 +330,7 @@ ports follow, so a stream never detaches from its nozzle.
 | `"y"` / `"v"` / `"vertical"` | top ↔ bottom (swaps N and S) |
 | `"xy"` / `"both"` | both |
 
-Mirroring is applied in the symbol's own frame *before* the quarter turn — the
+Mirroring is applied in the symbol's own frame *before* the quarter turn, the
 same order the renderer's SVG transform composes in.
 
 ```python
@@ -348,14 +344,14 @@ A port that its symbol authors on more than one face is **movable**, and the
 engine picks which of them the stream leaves from. It scores each declared face
 by the orthogonal run to the unit at the other end of the stream, charging a
 face that points away from that unit for the detour back around the box, and
-takes the cheapest — so a reflux drum sitting under its condenser is fed from
-the top without anyone saying so.
+takes the cheapest. A reflux drum sitting under its condenser is therefore fed
+from the top without anyone saying so.
 
 Selection is a layout phase: it runs once per `layout()`, after every drawn box
 is settled and before labels, routing and rendering read a face. The choice is a
 *result*, so it lives on the resolved `Frame` (`frame.port_faces`), never on the
-unit — `to_dict()` writes the faces you named and not the ones the engine
-picked, and laying the same sheet out twice draws it the same way.
+unit. `to_dict()` therefore writes the faces you named and not the ones the
+engine picked, and laying the same sheet out twice draws it the same way.
 
 Three things it will not do:
 
@@ -363,9 +359,9 @@ Three things it will not do:
   the point of keeping the call: the engine removes detours, it does not
   adjudicate drawing conventions, and where a sheet wants a particular one you
   still say so.
-- **Move a nozzle fixed by physics.** A column's bottoms, a drum's liquid draw —
-  the symbol authors one placement, so there is nothing to choose between and
-  the port is never even considered.
+- **Move a nozzle fixed by physics.** For a column's bottoms or a drum's liquid
+  draw the symbol authors one placement, so there is nothing to choose between
+  and the port is never even considered.
 - **Land two live connections on one point.** Ports are served in declaration
   order and each takes the cheapest face still free, so the selector cannot
   create the collision `validate()` reports as `coincident-ports`.
@@ -375,8 +371,8 @@ every port then sits on its symbol's own nozzle unless `nozzle()` moved it,
 which is what a sheet already tuned by hand wants. In the spec format it is the
 top-level `auto_faces` key.
 
-Ties are common — a balloon is square, so stepping a signal round to the next
-face trades exactly as much horizontal run for vertical. They break towards the
+Ties are common, because a balloon is square and stepping a signal round to the
+next face trades exactly as much horizontal run for vertical. They break towards the
 face pointing most directly at the peer, then on the symbol's own order of
 preference.
 
@@ -387,34 +383,34 @@ unit.nozzle(port_name: str, face: str) -> Unit
 ```
 
 Pipes a port from a named face of the unit **as drawn**, overriding whatever the
-engine would have picked. `face` is the compass point on the finished sheet —
+engine would have picked. `face` is the compass point on the finished sheet:
 `"N"`, `"S"`, `"E"`, `"W"`, or the `top`/`bottom`/`left`/`right` spelling
-`label_pos` uses — so a mirrored or rotated unit takes the face the reader sees,
-not the one the stencil was drawn with. Raises `KeyError` for an unknown port and
+`label_pos` uses. A mirrored or rotated unit therefore takes the face the reader
+sees, not the one the stencil was drawn with. Raises `KeyError` for an unknown port and
 `ValueError` when the symbol offers no placement on that face.
 
-The face has to be reachable under the placement the unit ends up with, and
-either call order enforces that: a `pin()` that rotates or mirrors the unit
-re-checks any face already chosen and raises without changing the placement, and
-a `nozzle()` after a `pin()` is checked against that pin rather than against
-whatever a previous `layout()` resolved.
+The face must be reachable under the placement the unit ends up with, and either
+call order enforces that. A `pin()` that rotates or mirrors the unit re-checks
+any face already chosen and raises without changing the placement, and a
+`nozzle()` after a `pin()` is checked against that pin, not against whatever a
+previous `layout()` resolved.
 
-A port can only take a face the symbol has authored a coordinate for, so that
-the moved nozzle still lands on drawn ink. Everything else has one placement and
-is fixed by physics — a column's bottoms, a drum's liquid draw-off. The ports
-that offer a choice (faces of the **untransformed** symbol, which is what you
-name on a unit that is neither rotated nor mirrored; rotation and mirroring move
-them, and `nozzle()` always takes the moved face):
+A port can only take a face the symbol has authored a coordinate for, so the
+moved nozzle still lands on drawn ink. Everything else has one placement, fixed
+by physics: a column's bottoms, a drum's liquid draw-off. The ports that offer a
+choice are listed below, named on the **untransformed** symbol. Rotation and
+mirroring move them, and `nozzle()` always takes the moved face.
 
 | Symbol | Port | Faces |
 |---|---|---|
 | `Vessel(variant="horizontal")` | `inlet` | `W` (home), `N`, `E` |
 | `Separator(variant="horizontal")` | `feed` | `W` (home), `N`, `E` |
-| `Instrument` — `default`, `panel`, `aux`, `shared`, `computer` | `pv`, `sig_in`, `sig_out` | `N`, `S`, `E`, `W` |
+| `Instrument` (`default`, `panel`, `aux`, `shared`, `computer`) | `pv`, `sig_in`, `sig_out` | `N`, `S`, `E`, `W` |
 
 (`Instrument(variant="logic")`, the interlock square, offers no choice either.)
-The home is the symbol's own nozzle — where the port sits with `auto_faces` off,
-and the first entry of the menu the engine chooses from with it on.
+The home is the symbol's own nozzle. It is where the port sits with
+`auto_faces` off, and the first entry of the menu the engine chooses from with
+it on.
 
 ```python
 # Both of these are conventions the geometry alone would not arrive at: the
@@ -428,7 +424,7 @@ lic.nozzle("sig_out", "W")    # keep the loop's output on the panel side
 
 `port_face()` is the deprecated spelling of the same call. It read its `face` in
 the symbol's own frame, so on a mirrored or rotated unit it names a different
-face than `nozzle()` does — see the CHANGELOG.
+face than `nozzle()` does. See the CHANGELOG.
 
 ---
 
@@ -463,31 +459,27 @@ fs.connect(feed.outlet, hx.cold_in).via([(130, 65), (130, 110)])
 
 `renumber_streams()` runs automatically inside `connect()` and again inside
 `to_svg()`, so the number on the stream object you hold is the number the sheet
-gets drawn with — `s.name` can go straight into a report or a stream table of
-your own. A stream keeps its number as it passes through an inline valve,
-reducer or fitting, so a run does not gain a new number every time it crosses a
-hand valve. Set `unit.significant = True` to break the number at a unit that
-matters; setting it renumbers the flowsheet there and then. Explicitly named
-streams are never renumbered, and an explicit name on one segment names its
-whole group.
+gets drawn with, and `s.name` can go straight into a report. A stream keeps its
+number as it passes through an inline valve, reducer or fitting. Set
+`unit.significant = True` to break the number at a unit that matters, which
+renumbers the flowsheet there and then. Explicitly named streams are never
+renumbered, and an explicit name on one segment names its whole group.
 
-Process streams take the low numbers, since they are the ones drawn on the sheet
-and quoted in the stream table; energy streams, also drawn, follow, and
-unlabelled signal lines come last. One sequence covers all three, so no two
-streams answer to the same name and an energy or signal line never consumes a
-process number.
+Process streams take the low numbers, energy streams (also drawn) follow, and
+unlabelled signal lines come last. One sequence covers all three, so no two streams answer
+to the same name and an energy or signal line never consumes a process number.
 
 ### Line numbers
 
-A P&ID identifies a line by its full line number — size, service, sequence,
-spec — because that is the identifier the line list, the stress calculation and
+A P&ID identifies a line by its full line number of size, service, sequence and
+spec, because that is the identifier the line list, the stress calculation and
 the isometric all key on. Supply the components on `connect()` and the line is
 named that way instead of `S1`:
 
 ```python
 s = fs.connect(pump.discharge, fv.inlet, size='6"', service="P", spec="A1A")
-s.name        # '6"-P-1001-A1A'  — drawn on the line and headed on its table column
-s.sequence    # '1001'           — filled by auto-numbering
+s.name        # '6"-P-1001-A1A'  drawn on the line, and heads its table column
+s.sequence    # '1001'           filled by auto-numbering
 ```
 
 The components are `size`, `service`, `sequence`, `spec` and `insulation`, each
@@ -499,7 +491,7 @@ reads `6"-P-1001` rather than `6"-P-1001-`.
 
 A line number is assigned by `renumber_streams()`, on exactly the terms a stream
 number is: it carries **through** an inline valve, reducer or fitting, and
-breaks at a unit marked `significant` — which is where the spec break goes. The
+breaks at a unit marked `significant`, which is where the spec break goes. The
 first segment of a group that carries components supplies them for the whole
 group, so a run does not have to repeat its identity at every fitting. A stream
 named explicitly with `connect(name=…)` is never reformatted, and a stream with
@@ -515,16 +507,17 @@ Flowsheet("U100", line_numbering_scheme=lambda s: f"{s.service}-{s.size}-{s.sequ
 ```
 
 A scheme naming something that is not a component raises `ValueError`, as does a
-line whose components the scheme never uses — its line number would be empty.
+line whose components the scheme never uses, since its line number would be
+empty.
 
 With `show_stream_table=True` each column is headed by its line number, and the
 corner cell reads `Line Number` when every line in the table has one.
 
 ### Stream properties and the table
 
-`Stream.properties` is a plain dict you fill in. **Nothing computes it** — there
-is no balance engine. Values are drawn as given, so they carry their own units.
-Rows appear in first-seen key order; missing values render as `-`.
+`Stream.properties` is a plain dict you fill in. **Nothing computes it**, as
+there is no balance engine. Values are drawn as given, so they carry their own
+units. Rows appear in first-seen key order, and missing values render as `-`.
 
 ```python
 s.properties = {"Temperature": "120 C", "Pressure": "3.5 bara", "Flow": "1000 kg/h"}
@@ -541,9 +534,9 @@ fs.add_instrument(type, number="", *, on=None, at=None,
                   offset=45.0, angle=90.0, variant="default", **kwargs) -> Instrument
 ```
 
-Constructs an `Instrument`, adds it, and — when `on` is given — attaches it.
-Extra `**kwargs` go to the `Instrument` constructor (`width`, `height`,
-`label_pos`, `description`, `reference`).
+Constructs an `Instrument`, adds it, and attaches it when `on` is given. Extra
+`**kwargs` go to the `Instrument` constructor (`width`, `height`, `label_pos`,
+`description`, `reference`).
 
 `type` is the functional letter string and `number` the loop number.
 `unit.name` becomes the full tag (`"FT-101"`) for equipment lists and
@@ -562,25 +555,25 @@ fy  = fs.add_instrument("FY", 101, variant="computer")    # computing relay
 instrument.attach(on, *, at=None, offset=45.0, angle=90.0) -> Instrument
 ```
 
-- `on` — the host: a `Stream` (tap the line) or a `Unit` (mount on equipment).
-  Anything else raises `TypeError`; attaching a balloon to itself raises
+- `on` is the host: a `Stream` (tap the line) or a `Unit` (mount on equipment).
+  Anything else raises `TypeError`, and attaching a balloon to itself raises
   `ValueError`.
-- `at` — on a stream, a fraction `0..1` along the host's **routed** path
+- `at` is, on a stream, a fraction `0..1` along the host's **routed** path
   (default `0.5`); on a unit, a face `"N"`/`"S"`/`"E"`/`"W"` of its drawn box
   (default `"E"`). Out-of-range or wrong-typed values raise `ValueError`.
-- `offset` — distance from the tap to the balloon centre (default `45.0`).
+- `offset` is the distance from the tap to the balloon centre (default `45.0`).
   `offset=0` leaves an in-line primary element sitting *on* the line, which is
   how an orifice-plate FE is drawn. Negative raises.
-- `angle` — the branch direction in degrees from the flow direction at the tap,
-  counter-clockwise positive (default `90`, i.e. perpendicular). Because it is
-  measured from the flow, a re-route cannot spin the tap. On a unit host the
-  reference is the face's tangent, so `90` again points straight out.
+- `angle` is the branch direction in degrees from the flow direction at the tap,
+  counter-clockwise positive (default `90`, i.e. perpendicular). Measured from
+  the flow, so a re-route cannot spin the tap. On a unit host the reference is
+  the face's tangent, so `90` again points straight out.
 
-An impulse line is drawn from the tap to the balloon — a fine solid line to a
+An impulse line is drawn from the tap to the balloon: a fine solid line to a
 process host, dashed where a balloon hangs off another balloon. Attached
 balloons take no part in layout ranking and are drawn over the lines, so neither
-an in-line element nor a stream number is lost underneath one. Balloons chain:
-an alarm on a controller on a transmitter resolves in order.
+an in-line element nor a stream number is lost underneath one. Balloons chain,
+so an alarm on a controller on a transmitter resolves in order.
 
 ```python
 s   = fs.connect(feed.outlet, fv.inlet)
@@ -630,12 +623,12 @@ fs.title_block = TitleBlock(
 )
 ```
 
-`Revision(rev, date, description, by, checked, approved)` — the last two are
-optional per row and stay blank when omitted, which is typical for an early
-un-checked revision. The block-level `drawn_by`/`checked_by`/`approved_by`
-backfill the newest row. Leaving `TitleBlock.date` empty makes the renderer
-stamp the current date, so a committed drawing will change day to day; set it
-explicitly if you need reproducible output.
+In `Revision(rev, date, description, by, checked, approved)` the last two are
+optional per row and stay blank when omitted. The block-level
+`drawn_by`/`checked_by`/`approved_by` backfill the newest row. Leaving
+`TitleBlock.date` empty makes the renderer stamp the current date, so a
+committed drawing changes day to day. Set it explicitly if you need reproducible
+output.
 
 ### `Annotation` and `TableBox`
 
@@ -658,7 +651,7 @@ sheet coordinates and ignores `align`.
 tuple/list of cells that align into columns. `TableBox.col_align` is per-column
 `"l"`/`"c"`/`"r"`, defaulting to centred.
 
-`anchor=` is a deprecated alias for `align=`; when both are given, `anchor`
+`anchor=` is a deprecated alias for `align=`. When both are given, `anchor`
 wins.
 
 ### Convenience constructors
@@ -675,9 +668,9 @@ legend(entries, *, title="LEGEND", align="top-left", anchor=None,
 ```
 
 All three return an `Annotation`. `equipment_list()` schedules every real
-equipment item — feeds, products and instruments are excluded — as
-`(tag, description)`, falling back to a humanized `kind` when a unit has no
-`description`; `include=[…]` restricts and orders it. `legend()` accepts a dict
+equipment item as `(tag, description)`, excluding feeds, products and
+instruments, and falls back to a humanized `kind` when a unit has no
+`description`. `include=[…]` restricts and orders it. `legend()` accepts a dict
 or a sequence of `(abbr, meaning)` pairs.
 
 ```python
@@ -691,8 +684,8 @@ fs.add_annotation(legend({"SS": "Stainless Steel 316L"}, align="top-left"))
 
 ### Off-page connectors
 
-A boundary flag's `reference` is drawn as its second line — the drawing the
-stream comes from or goes to:
+A boundary flag's `reference` is drawn as its second line, naming the drawing
+the stream comes from or goes to:
 
 ```python
 fs.add(units.Feed("Fermentation Broth", reference="PFD-201"))
@@ -717,21 +710,19 @@ and `message`.
 | `pin-out-of-bounds` | error | a pinned `x`/`y` is negative (off-sheet) |
 | `unit-overlap` | error | two units' drawn boxes overlap |
 | `coincident-ports` | error | two connected ports on one unit resolve to the same point |
-| `coincident-ports` | warning | …and one of them is a port the symbol never anchored, so it fell back to the centre of the box. No shipped symbol has such a gap; this covers symbols registered from outside the package |
+| `coincident-ports` | warning | …and one of them is a port the symbol never anchored, so it fell back to the centre of the box. No shipped symbol has such a gap, so this covers symbols registered from outside the package |
 | `route-crosses-unit` | warning | a stream passes through a unit body it does not connect to |
 | `route-detour` | warning | a route is more than 3× its direct span |
 
 Errors raise from `to_svg()`/`render()` unless you pass `check=False`. Warnings
-never raise; they collect on `fs.warnings` after each render.
-
-Geometric checks need resolved frames, so they are skipped before layout has
-run.
+never raise, and collect on `fs.warnings` after each render. Geometric checks
+need resolved frames, so they are skipped before layout has run.
 
 ---
 
 ## Extension points
 
-Both are `typing.Protocol`s — implement the method and pass your object in.
+Both are `typing.Protocol`s. Implement the method and pass your object in.
 
 ```text
 class LayoutEngine(Protocol):      # pfd.layout
@@ -749,9 +740,8 @@ Defaults: `pfd.layout.SugiyamaLayoutEngine` (exported as
 
 The symbol registry is `pfd.render.symbols.default_registry`, a
 `SymbolRegistry` with `register(kind, symbol, variant="default")`,
-`variants(kind)` and `get(kind, variant="default")`. `get()` raises
-`ValueError` for a variant that kind has no symbol for, naming the ones it
-does; a kind with no symbols at all — a `Unit` subclass of your own — draws a
-generic box, since there is no catalogue to hold its variant against. New
-*equipment* symbols should come from the vendored stencil pipeline rather than
-being hand-registered — see `CONTRIBUTING.md`.
+`variants(kind)` and `get(kind, variant="default")`. `get()` raises `ValueError`
+for a variant that kind has no symbol for, naming the ones it does. A kind with
+no symbols at all, such as a `Unit` subclass of your own, draws a generic box.
+New *equipment* symbols should come from the vendored stencil pipeline rather
+than being hand-registered (see `CONTRIBUTING.md`).
