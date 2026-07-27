@@ -162,10 +162,22 @@ and is kept working.
   element, so it prints and exports to PDF at exactly its ISO size.
 - `jump_direction="vertical" | "horizontal"` on `to_svg()` / `render()` selects
   which of two crossing lines gets the semicircle hop.
-- 100 registered `(kind, variant)` symbols following ISO 10628-2 / ISA-5.1,
+- 113 registered `(kind, variant)` symbols following ISO 10628-2 / ISA-5.1,
   generated from the draw.io / diagrams.net P&ID stencils (Apache-2.0) by
   `scripts/vendor_symbols.py`. Feed/Product flags, Mixer, Splitter and the
   instrument balloons are hand-drawn originals.
+- Twelve of those fill gaps a sheet runs into early. `Column(variant="packed")`
+  is the first column symbol that draws an internal, two beds of packing between
+  their support grids, so an absorber or a stripper is no longer a bare shell; it
+  carries the default column's nozzles at the heights they already sit at, so
+  nothing already drawn moves. `HeatExchanger` gains `air_cooled` (a fin-fan,
+  with the bundle piped and the air drawn in under it and out through the fan),
+  `finned`, `double_pipe`, `hairpin`, and `thin_film`, the first evaporator in
+  the set. `Vessel` gains `jacketed`, whose process nozzles sit on the jacket's
+  outer wall so no line is drawn across the jacket, and `skirted`. `Pump` gains
+  `peristaltic` and `submersible`, `Filter` gains `ion_exchange` for water
+  treatment, and `Valve` gains `bleed`, the small drain valve piped down the
+  page.
 - `Symbol` validates its own declaration, so a third-party symbol gets the same
   protection the invariant suite gives the shipped ones: a placement keyed to a
   face its coordinate does not land on, or restating a port's home face at a

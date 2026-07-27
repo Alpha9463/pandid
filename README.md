@@ -125,13 +125,21 @@ descriptions, not names. An unknown variant raises `ValueError` listing the ones
 that kind does have.
 
 ```python
-fs.add(units.HeatExchanger("E-1", variant="plate"))    # default, shell_tube, straight_tubes, plate, kettle, u_tube, condenser, spiral
-fs.add(units.Valve("FV-1", variant="control"))         # default (gate), gate, globe, ball, butterfly, check, needle, three_way, control, relief
-fs.add(units.Pump("P-1", variant="gear"))              # default (centrifugal), gear, screw, vacuum
+fs.add(units.HeatExchanger("E-1", variant="plate"))    # default, shell_tube, straight_tubes, finned, plate, kettle, u_tube, hairpin, double_pipe, condenser, air_cooled, spiral, thin_film
+fs.add(units.Valve("FV-1", variant="control"))         # default (gate), gate, globe, ball, butterfly, check, needle, three_way, control, relief, bleed
+fs.add(units.Pump("P-1", variant="gear"))              # default (centrifugal), gear, screw, vacuum, peristaltic, submersible
 fs.add(units.Tank("TK-1", variant="floating_roof"))    # default (dished roof), conical, floating_roof, sphere
 fs.add(units.Separator("V-2", variant="cyclone"))      # default (knock-out drum), horizontal, cyclone, gravity, scrubber, electrostatic
+fs.add(units.Vessel("V-3", variant="jacketed"))        # default, dished, jacketed, skirted, dome, horizontal
+fs.add(units.Column("T-1", variant="packed"))          # default (plain shell), packed
+fs.add(units.Filter("F-1", variant="ion_exchange"))    # default, gas, press, rotary, ion_exchange
 fs.add(units.Fitting("ST-1", variant="strainer"))      # see "In-line fittings" below
 ```
+
+`Column(variant="packed")` is the one column symbol that draws an internal, two
+beds of packing between their support grids, so an absorber or a stripper stops
+coming out as a bare drum. It carries the default column's nozzles at exactly
+the heights they already sit at, so switching to it moves nothing.
 
 Classes include: `Feed`, `Product`, `Pump`, `Compressor`, `Blower`, `Valve`,
 `Vessel`, `Tank`, `HeatExchanger`, `Heater`, `Cooler`, `Reactor`, `Separator`,
@@ -155,7 +163,9 @@ fs.add(units.Valve("PCV-1", variant="regulator"))  # self-acting, with its exter
 ```
 
 Bodies without an operator: `plug`, `pinch`, `angle` (piped from below, out to
-the side) and `psv` (spring-loaded angle safety valve).
+the side), `psv` (spring-loaded angle safety valve) and `bleed`, the small drain
+valve tapped off a header, which is piped down the page (`inlet` on N, `outlet`
+on S).
 
 **More than one of the same nozzle.** `Mixer(n_inlets=…)` and
 `Splitter(n_outlets=…)` spread their connections along the triangle's flat face.
