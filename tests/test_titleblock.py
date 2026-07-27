@@ -52,7 +52,10 @@ def test_border_and_furniture_are_independent():
 
     zoned = build().to_svg(border="zone")
     plain = build().to_svg(border="none")
-    assert build().to_svg(styling="pid") == zoned  # the older spelling
+    # styling= asks for the frame and the drawing at once, in either spelling.
+    both = build().to_svg(border="zone", diagram="p&id")
+    assert build().to_svg(styling="p&id") == both
+    assert build().to_svg(styling="pid") == both  # the older spelling
     assert '<text x="6' in zoned  # zone letters are ruled only when asked for
     strip = r'<rect x="[-\d.]+" y="[-\d.]+" width="652.0" height="80.0" fill="white"'
     assert re.search(strip, zoned).group(0) == re.search(strip, plain).group(0)

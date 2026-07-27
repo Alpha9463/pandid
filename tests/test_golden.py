@@ -455,7 +455,13 @@ SCENARIOS = {
     "06_column_reflux": (_column_reflux, {}),
     "07_metering_skid": (_metering_skid, {}),
     "08_from_data": (_from_data, {"show_stream_table": True, "border": "zone"}),
-    "09_line_numbers": (_line_numbers, {"show_stream_table": True, "border": "zone"}),
+    # 09 is issued as a P&ID -- line numbers, "P&ID-1009" -- and is the one
+    # scenario drawn as one, so it is also what guards the arrowless process
+    # line. Every other scenario is a PFD and keeps its arrowheads.
+    "09_line_numbers": (
+        _line_numbers,
+        {"show_stream_table": True, "border": "zone", "diagram": "p&id"},
+    ),
 }
 
 

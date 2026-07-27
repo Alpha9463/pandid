@@ -107,6 +107,7 @@ def _draw(args: argparse.Namespace) -> int:
         out,
         page_size=args.page_size,
         border=args.border,
+        diagram=args.diagram,
         show_stream_table=args.stream_table,
         jump_direction=args.jump_direction,
     )
@@ -231,6 +232,11 @@ def _build_parser() -> argparse.ArgumentParser:
     draw.add_argument(
         "--border", choices=("none", "zone"),
         help="'zone' rules the ASME-style zone-lettered drawing frame around the sheet",
+    )
+    draw.add_argument(
+        "--diagram", choices=("pfd", "p&id"), default="pfd",
+        help="which drawing this is; a P&ID draws its process lines without "
+             "arrowheads (default: pfd)",
     )
     draw.add_argument(
         "--stream-table", action="store_true",

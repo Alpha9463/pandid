@@ -149,6 +149,7 @@ to_dict() -> dict                # JSON-safe topology
 ```text
 to_svg(*, show_stream_table: bool = False,
        border: str | None = None,
+       diagram: str | None = None,
        styling: str = "default",
        page_size: str | None = None,
        jump_direction: str = "vertical",
@@ -160,8 +161,8 @@ on `fs.warnings`.
 
 ```text
 render(path: str | Path, *, show_stream_table=False, border=None,
-       styling="default", page_size=None, jump_direction="vertical",
-       check=True) -> None
+       diagram=None, styling="default", page_size=None,
+       jump_direction="vertical", check=True) -> None
 ```
 Writes the drawing. The format comes from the extension: `.svg` (or no
 extension) is pure Python; `.pdf` and `.png` need the optional `cairosvg`
@@ -178,11 +179,32 @@ _repr_svg_() -> str              # Jupyter renders a flowsheet inline
 | Option | Values | Effect |
 |---|---|---|
 | `border` | `"none"`, `"zone"` | `"zone"` rules the sheet with the ASME-style zone-lettered drawing frame. Anything else raises `ValueError` |
-| `styling` | `"default"`, `"pid"` | the older spelling of the same choice: `"pid"` means `border="zone"` |
+| `diagram` | `"pfd"` (the default), `"p&id"` | which drawing this is. A P&ID draws its process lines without arrowheads |
+| `styling` | `"default"`, `"p&id"` | both at once, and the older spelling: `"p&id"` means `border="zone"` with `diagram="p&id"` |
 | `show_stream_table` | `bool` | draws the stream property table (one column per unique material stream) |
 | `check` | `bool` | run `validate()` first; errors raise, warnings collect |
 | `page_size` | `None`, `"A4"`, `"A3"`, `"A2"`, `"A1"`, `"A0"` | `None` (the default) sizes the sheet to the drawing; a name draws a sheet of exactly that size |
 | `jump_direction` | `"vertical"`, `"horizontal"` | which of two crossing lines gets the semicircle hop |
+
+### Which drawing this is
+
+```python
+fs.render("sheet.svg", page_size="A3", border="zone", diagram="p&id")
+```
+
+**A P&ID draws no arrowhead on a process line**, because flow direction on one
+is read off the equipment and the line list rather than off an arrow on every
+run; the arrowhead at the end of each line is a PFD convention, where showing
+where the material goes is the whole job of the line. Nothing else about the
+sheet changes, and signal lines never carried one on either drawing.
+
+`border` and `diagram` are independent, and both spellings of each are accepted
+case-insensitively (`"P&ID"`, `"p&id"`, `"pid"`). A PFD carries the zone frame
+as readily as a P&ID does, as `examples/10_ethanol_pfd.py` does, so
+`border="zone"` says nothing about which drawing is on the sheet, and
+`diagram="p&id"` says nothing about the paper. `styling="p&id"` asks for both
+together and is the one-word spelling of the pair; asking for both at once and
+disagreeing (`styling="p&id", border="none"`) raises.
 
 ### Sheet size
 
@@ -940,7 +962,8 @@ not on PATH. It is a shell over the API above and adds nothing to it.
 
 ```text
 pandid draw SPEC [-o OUT] [--page-size SIZE] [--border {none,zone}]
-                 [--stream-table] [--jump-direction {vertical,horizontal}]
+                 [--diagram {pfd,p&id}] [--stream-table]
+                 [--jump-direction {vertical,horizontal}]
 pandid validate SPEC
 pandid symbols [--kind KIND]
 ```
@@ -960,6 +983,7 @@ under the same name with `.svg`.
 |---|---|
 | `--page-size A3` | `page_size="A3"` |
 | `--border zone` | `border="zone"` |
+| `--diagram 'p&id'` | `diagram="p&id"` |
 | `--stream-table` | `show_stream_table=True` |
 | `--jump-direction horizontal` | `jump_direction="horizontal"` |
 

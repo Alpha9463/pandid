@@ -454,7 +454,7 @@ class Flowsheet:
 
     def to_svg(self, *, show_stream_table: bool = False,
                styling: str = "default", border: str | None = None,
-               page_size: str | None = None,
+               diagram: str | None = None, page_size: str | None = None,
                jump_direction: str = "vertical", check: bool = True) -> str:
         """Render the flowsheet to an SVG string, running ``layout()`` and
         ``route()`` first if they have not been run yet.
@@ -462,7 +462,14 @@ class Flowsheet:
         ``border`` rules the sheet: ``"zone"`` for the ASME-style zone-ruled
         drawing frame, ``"none"`` (the default) for a plain edge. The title
         block and annotation boxes attached to this flowsheet are drawn either
-        way. ``styling="pid"`` is the older spelling of ``border="zone"``.
+        way.
+
+        ``diagram`` says which drawing this is: ``"pfd"`` (the default) or
+        ``"p&id"``, also spelled ``"pid"``. A P&ID draws its process lines
+        without arrowheads, since flow direction is read off the equipment and
+        the line list rather than off an arrow on every run.
+        ``styling="p&id"`` asks for both at once (``border="zone"`` with
+        ``diagram="p&id"``) and is the older spelling of the option.
 
         ``page_size`` draws a sheet of exactly that standard size (``"A4"``
         through ``"A0"``), fitting the drawing into what the sheet furniture
@@ -490,12 +497,13 @@ class Flowsheet:
         from pandid.render.svg import SvgRenderer
         return SvgRenderer().render(
             self, show_stream_table=show_stream_table, styling=styling,
-            border=border, page_size=page_size, jump_direction=jump_direction
+            border=border, diagram=diagram, page_size=page_size,
+            jump_direction=jump_direction
         )
 
     def render(self, path: str | Path, *, show_stream_table: bool = False,
                styling: str = "default", border: str | None = None,
-               page_size: str | None = None,
+               diagram: str | None = None, page_size: str | None = None,
                jump_direction: str = "vertical", check: bool = True) -> None:
         """Render the flowsheet and write it to *path*.
 
@@ -509,7 +517,10 @@ class Flowsheet:
             path: Output file path; its extension selects the format.
             show_stream_table: Draw a property table of all streams at the bottom.
             border: ``"none"`` or ``"zone"`` (the zone-ruled drawing frame).
-            styling: The older spelling: ``"pid"`` means ``border="zone"``.
+            diagram: ``"pfd"`` (the default) or ``"p&id"``, also spelled
+                ``"pid"``. A P&ID draws its process lines without arrowheads.
+            styling: Both at once, and the older spelling: ``"p&id"`` means
+                ``border="zone"`` with ``diagram="p&id"``.
             page_size: Draw on a sheet of exactly this standard size, e.g.
                 ``"A3"``; omit to size the sheet to the drawing.
             jump_direction: Which crossing lines hop, ``"vertical"`` or ``"horizontal"``.
@@ -517,7 +528,8 @@ class Flowsheet:
         """
         svg = self.to_svg(
             show_stream_table=show_stream_table, styling=styling, border=border,
-            page_size=page_size, jump_direction=jump_direction, check=check,
+            diagram=diagram, page_size=page_size, jump_direction=jump_direction,
+            check=check,
         )
         ext = Path(path).suffix.lower()
         if ext in ("", ".svg"):

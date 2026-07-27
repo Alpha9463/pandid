@@ -9,6 +9,10 @@ PFD leaves off.
 
 What a P&ID adds over the PFD of the same unit:
 
+- it is drawn as one, ``diagram="p&id"``, so **no process line carries an
+  arrowhead**: direction on a P&ID is read off the equipment and the line list,
+  and the arrow at the end of every run is the PFD's convention, not this
+  drawing's;
 - every line carries its **line number** rather than a stream number, and one
   number runs through the hand valves and the control valve of a station,
   because a valve station is one line and not four;
@@ -113,8 +117,10 @@ def main():
                                description="Reflux Control Valve"))
     hv303b = fs.add(units.Valve("HV-303B", description="Reflux Isolation Valve"))
     # The reflux flow element sits in the run itself: the balloon beside it
-    # reads the element, it is not the element.
-    fe303 = fs.add(units.Fitting("FE-303", variant="venturi",
+    # reads the element, it is not the element. Its tag is written under the run
+    # because its transmitter stands over it, and an impulse line drawn up
+    # through the tag would be knocked out by the tag's own halo.
+    fe303 = fs.add(units.Fitting("FE-303", variant="venturi", label_pos="bottom",
                                  description="Reflux Flow Element"))
     hv305a = fs.add(units.Valve("HV-305A", description="Distillate Isolation Valve"))
     rd305 = fs.add(units.Reducer("RD-305", description="CV-305 Inlet Reducer"))
@@ -329,11 +335,14 @@ def main():
     fs.connect(tt302.sig_out, tic302.sig_in, kind="electric")
 
     # The transmitter reads the element sitting in the line, so it hangs off
-    # that unit rather than off the pipe. Both balloons sit in the gap between
-    # the reflux run and the boilup.
-    ft303 = fs.add_instrument("FT", 303, on=fe303, at="S", offset=45)
+    # that unit rather than off the pipe. Both balloons stand over the reflux
+    # run, on the side the two lines that reach them come from: CV-303's
+    # actuator is on the crown of the valve, so the output drops onto it, and
+    # the cascade comes down from TIC-302 without having to cross the run to
+    # find them.
+    ft303 = fs.add_instrument("FT", 303, on=fe303, at="N", offset=52)
     fic303 = fs.add_instrument("FIC", 303, on=ft303, at="E", offset=70, variant="shared")
-    fic303.nozzle("sig_out", "E")   # the valve it strokes stands above and right
+    fic303.nozzle("sig_out", "E")   # the valve it strokes stands below and right
     # The measurement lands on the flow controller's pv and the temperature
     # controller sets it: a cascade sets a setpoint, it does not stroke a valve.
     fs.connect(ft303.sig_out, fic303.pv, kind="electric")
@@ -415,7 +424,8 @@ def main():
         "HPSRH": "High Pressure Steam Return Header",
     }, align="top-left"))
 
-    fs.render(out("ethanol_pid.svg"), page_size="A3", border="zone")
+    fs.render(out("ethanol_pid.svg"), page_size="A3", border="zone",
+              diagram="p&id")
     print("Generated ethanol_pid.svg")
     for issue in fs.validate():
         print(f"  {issue}")

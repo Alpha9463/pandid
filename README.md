@@ -85,6 +85,10 @@ Jupyter.
   the equipment they read (with impulse lines), tags drawn inside, location
   variants, alarms and interlock squares, typed signal lines (electric /
   pneumatic / data), and controller outputs landing on a valve's actuator.
+- **PFD or P&ID.** `diagram="p&id"` draws the sheet by the P&ID's own
+  conventions, starting with the one every engineer notices: a process line
+  carries no arrowhead, because direction is read off the equipment and the
+  line list. `diagram="pfd"` is the default and keeps them.
 - **Engineering sheet framing.** A full-width title strip (integrated revision
   history, company/logo cell, client and project, status / drawing-number /
   two-line title / scale / date / rev), generic titled boxes docked to the
@@ -455,6 +459,30 @@ Under `show_stream_table=True` each column is headed by its line number, so a
 column ties to a line without a second lookup. A stream with no components set
 is numbered exactly as before.
 
+## PFD or P&ID
+
+The two drawings are read by different conventions, so the sheet is told which
+one it is:
+
+```python
+fs.render("sheet.svg", page_size="A3", border="zone", diagram="p&id")
+```
+
+**A P&ID draws no arrowhead on a process line.** Flow direction on one is read
+off the equipment and the line list, not off an arrow on every run; the
+arrowhead is a PFD convention, where showing where the material goes is the
+whole job of the line. `diagram="pfd"` is the default and keeps them. Signal
+lines never carried one on either drawing.
+
+`"P&ID"`, `"p&id"` and `"pid"` are all accepted. `styling="p&id"` is the
+one-word way to ask for a P&ID on the engineering frame, and is the older
+spelling of the option.
+
+The frame is a separate choice: `border="zone"` is sheet furniture, and a PFD
+carries it as readily as a P&ID does ([example
+10](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md#10--ethanol-purification-pfd)
+is one), so neither option implies the other.
+
 ## Engineering title block & sheet furniture
 
 Give a flowsheet a title block and the sheet is drawn with a full-width
@@ -689,9 +717,9 @@ pandid symbols --kind valve
 
 `draw` reads a `.yaml`, `.yml` or `.json` spec and writes the format `-o` names:
 `.svg`, or `.pdf` / `.png` with the `pdf` extra. Without `-o` it writes the
-spec's own name with `.svg`. `--page-size`, `--border`, `--stream-table` and
-`--jump-direction` are the render options, and mean what they mean in
-`render()`.
+spec's own name with `.svg`. `--page-size`, `--border`, `--diagram`,
+`--stream-table` and `--jump-direction` are the render options, and mean what
+they mean in `render()`.
 
 `validate` lays the sheet out and reports what the engine found, errors first
 and then warnings. It draws nothing.

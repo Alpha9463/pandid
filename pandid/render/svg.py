@@ -27,9 +27,9 @@ _DIAMOND_BALLOONS = {"sis", "logic", "interlock"}
 # --- stream-label placement -------------------------------------------------
 # A stream label is written on an opaque halo, so it can only sit *on* the pipe
 # where the run is long enough to leave pipe showing at each end: the 12px
-# arrowhead, plus enough line either side that the run still reads as one line
-# rather than two stubs. Anything shorter is written beside the pipe instead,
-# which is what a sheet does with a line number a dozen characters long.
+# arrowhead a PFD draws, plus enough line either side that the run still reads
+# as one line rather than two stubs. Anything shorter is written beside the pipe
+# instead, which is what a sheet does with a line number a dozen characters long.
 _LABEL_CLEAR = 20.0
 # Gap from the pipe to the near edge of a label written beside it.
 _LABEL_GAP = 4.0
@@ -200,34 +200,76 @@ def _page(page_size: "str | None") -> "_Sheet | None":
     return _Sheet(page_size.upper(), *dims)
 
 
-# The frame the sheet is ruled with, and the older spelling of the same choice.
+# The frame the sheet is ruled with: sheet furniture, and a statement about the
+# paper rather than about the diagram drawn on it. A PFD carries a zone frame as
+# readily as a P&ID does.
 _BORDERS = ("none", "zone")
-_STYLINGS = {"default": "none", "pid": "zone"}
+# Which drawing this is, which is a statement about the conventions it is read
+# by. It is what decides whether a process line carries an arrowhead.
+_DIAGRAMS = ("pfd", "p&id")
+# `styling` predates both and says the two together: a P&ID on an engineering
+# frame. Kept as the one-word way to ask for that, and as the older spelling.
+_STYLINGS = {"default": ("none", "pfd"), "p&id": ("zone", "p&id")}
+# The drawing's name has one accepted spelling per value plus whatever the
+# caller can reasonably be expected to type for it.
+_ALIASES = {"pid": "p&id", "p&id": "p&id", "pfd": "pfd", "default": "default"}
 
 
-def _resolve_border(styling: str, border: "str | None") -> str:
-    """The border to rule, from either spelling of the request.
+def _canon(value: str) -> str:
+    """Fold a styling or diagram name to the one spelling the tables key on.
 
-    A name neither spelling knows is a frame the renderer cannot draw, so it
-    raises rather than quietly handing back a plain sheet.
+    Case is folded and the ampersand-less ``"pid"`` is read as ``"p&id"``. This
+    package spells the drawing's name with the ampersand everywhere else, down
+    to the distribution, so an engineer who types ``"P&ID"`` is typing the real
+    name and must not be told it is unknown; ``"pid"`` is the spelling already
+    published and stays working. Nothing else is guessed at.
     """
-    if styling not in _STYLINGS:
+    return _ALIASES.get(value.strip().lower(), value)
+
+
+def _resolve_sheet(styling: str, border: "str | None",
+                   diagram: "str | None") -> "tuple[str, str]":
+    """The frame to rule and the drawing to rule it around, from whichever
+    spelling of the request the caller used.
+
+    A name none of the three knows is a sheet the renderer cannot draw, so it
+    raises rather than quietly handing back a plain PFD.
+    """
+    style = _canon(styling)
+    if style not in _STYLINGS:
         raise ValueError(
-            f"Unknown styling {styling!r}; use border='zone' for the zone-ruled "
-            f"engineering frame or border='none' for a plain sheet."
+            f"Unknown styling {styling!r}; use styling='p&id' (also spelled 'pid') "
+            f"for a P&ID on the zone-ruled engineering frame, or 'default' for a "
+            f"plain PFD sheet. border= and diagram= ask for the two halves of that "
+            f"one at a time."
         )
+    styled_border, styled_diagram = _STYLINGS[style]
+
     if border is None:
-        return _STYLINGS[styling]
-    if border not in _BORDERS:
+        border = styled_border
+    elif border not in _BORDERS:
         raise ValueError(
             f"Unknown border {border!r}; use one of {', '.join(_BORDERS)}."
         )
-    if styling != "default" and border != _STYLINGS[styling]:
+    elif style != "default" and border != styled_border:
         raise ValueError(
             f"border={border!r} and styling={styling!r} ask for different frames; "
             f"pass border= alone."
         )
-    return border
+
+    if diagram is None:
+        return border, styled_diagram
+    kind = _canon(diagram)
+    if kind not in _DIAGRAMS:
+        raise ValueError(
+            f"Unknown diagram {diagram!r}; use 'p&id' (also spelled 'pid') or 'pfd'."
+        )
+    if style != "default" and kind != styled_diagram:
+        raise ValueError(
+            f"diagram={diagram!r} and styling={styling!r} ask for different drawings; "
+            f"pass diagram= alone."
+        )
+    return border, kind
 
 
 def _fit_scale(dw: float, dh: float, free) -> float:
@@ -267,7 +309,7 @@ class SvgRenderer:
 
     def render(self, fs: "Flowsheet", *, jump_direction: str = "vertical",
                show_stream_table: bool = False, styling: str = "default",
-               border: "str | None" = None,
+               border: "str | None" = None, diagram: "str | None" = None,
                page_size: "str | None" = None, **opts) -> str:
         """Render the flowsheet to SVG.
 
@@ -283,9 +325,12 @@ class SvgRenderer:
             ``"none"`` for a plain sheet edge, ``"zone"`` for the zone-ruled
             ASME-style drawing frame. The flowsheet's title block and annotation
             boxes are drawn whichever is chosen.
+        diagram : str | None
+            Which drawing this is: ``"pfd"`` (the default) or ``"p&id"``, also
+            spelled ``"pid"``. A P&ID draws its process lines without arrowheads.
         styling : str
-            The older spelling of the same choice: ``"pid"`` means
-            ``border="zone"``.
+            The one-word way to ask for both, and the older spelling:
+            ``"p&id"`` means ``border="zone"`` with ``diagram="p&id"``.
         page_size : str | None
             Standard paper size — ``"A4"``, ``"A3"``, ``"A2"``, ``"A1"``, ``"A0"`` —
             drawn at exactly that size, with the furniture docked to the sheet edges
@@ -293,7 +338,12 @@ class SvgRenderer:
             the sheet to the drawing instead.
         """
         from pandid.portgeom import unit_box
-        border = _resolve_border(styling, border)
+        border, diagram = _resolve_sheet(styling, border, diagram)
+        # ANSI/ISA-5.1 draws process piping on a P&ID as plain line. Flow
+        # direction is read off the equipment and off the line list, so an
+        # arrowhead at the end of every run is a PFD convention, where showing
+        # where the material goes is the whole job of the line.
+        arrows = diagram != "p&id"
         sheet = _page(page_size)
 
         # 1. Diagram bounding box — union of every unit's drawn box and every
@@ -377,11 +427,11 @@ class SvgRenderer:
         for item in furniture:
             lines.append("    " + item)
 
-        lines.extend(self._defs(fs))
+        lines.extend(self._defs(fs, arrows))
         unit_labels: list = []
         balloons: list = []
         drawing = self._draw_units(fs, unit_labels, balloons)
-        drawing.extend(self._draw_streams(fs, jump_direction, unit_labels))
+        drawing.extend(self._draw_streams(fs, jump_direction, unit_labels, arrows))
         # Instrumentation goes on over the lines: an impulse line runs from the
         # tap to the balloon, and the balloon's opaque body then knocks out both
         # it and any process line an in-line element straddles.
@@ -591,8 +641,9 @@ class SvgRenderer:
         return (ox - OUT, oy - OUT, ow + 2 * OUT, oh + 2 * OUT), free
 
     def _place_plain(self, st_layout, sheet, margin, furniture):
-        """Fixed page without pid styling: the stream table docks to the foot of
-        the sheet and the drawing takes the region above it. Returns that region."""
+        """Fixed page carrying no furniture of its own: the stream table docks to
+        the foot of the sheet and the drawing takes the region above it. Returns
+        that region."""
         free_w = sheet.width - 2 * margin
         free_h = sheet.height - 2 * margin
         table_h = (st_layout["h"] + 24) if st_layout else 0.0
@@ -717,14 +768,16 @@ class SvgRenderer:
         sym_id += self.registry.for_unit(u).id_suffix
         return sym_id + _xform_tag(*self._text_xform(u))
 
-    def _defs(self, fs):
+    def _defs(self, fs, arrows=True):
         lines = []
         # Sorted, not raw set order: set iteration depends on the process hash
         # seed, so an identical flowsheet would otherwise emit byte-different
         # SVG from run to run — breaking diffs, caching and golden tests.
         used_colors = sorted({s.color or "black" for s in fs.streams})
         lines.append('  <defs>')
-        for c in used_colors:
+        # A sheet that draws no arrowhead defines none: the only lines that ever
+        # wore one are the process lines, so on a P&ID the whole set is dead.
+        for c in used_colors if arrows else ():
             marker_id = f'arrow_{c.replace("#", "").replace(" ", "_")}'
             lines.append(
                 f'    <marker id="{marker_id}" viewBox="0 0 10 10" refX="10" refY="5" '
@@ -975,7 +1028,7 @@ class SvgRenderer:
 
     # ------------------------------------------------------------------ streams
 
-    def _draw_streams(self, fs, jump_direction, unit_labels):
+    def _draw_streams(self, fs, jump_direction, unit_labels, arrows=True):
         from pandid.portgeom import port_point, unit_box
 
         stream_geoms, horizontals, verticals = [], [], []
@@ -1057,7 +1110,7 @@ class SvgRenderer:
                 labeled_names.add(s.name)
                 label_items.append((longest_seg, s.name, color))
 
-            marker = "" if is_signal else f' marker-end="url(#{marker_id})"'
+            marker = f' marker-end="url(#{marker_id})"' if arrows and not is_signal else ""
             lines.append(
                 f'    <path d="{d_str}" fill="none" '
                 f'stroke="{color}" stroke-width="2"{dash}{marker} />'

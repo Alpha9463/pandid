@@ -154,6 +154,16 @@ and is kept working.
   `.pdf`/`.png` go through the optional `cairosvg` backend.
 - `Flowsheet.show()` opens the drawing in a browser, and a flowsheet renders
   inline in Jupyter via `_repr_svg_`.
+- `diagram=` on `to_svg()` / `render()` (and `--diagram` on `pandid draw`) says
+  which of the two drawings the sheet is: `"pfd"` (the default) or `"p&id"`,
+  also spelled `"pid"` and matched case-insensitively, so the drawing's own
+  name is what an engineer may type. **A P&ID draws its process lines without
+  arrowheads**, since flow direction on one is read off the equipment and the
+  line list rather than off an arrow on every run; the arrowhead is a PFD
+  convention. Nothing else about the sheet changes, and a signal line carried
+  none on either drawing. It is deliberately separate from `border=`: the frame
+  is sheet furniture and a PFD carries the zone-ruled one as readily as a P&ID
+  does, so neither option implies the other.
 - Canvas fitted to content, with no letterboxing, no clipping and uniform 2 px
   symbol strokes.
 - A unit given an explicit `width`/`height` is drawn *at* that box. Where the
@@ -321,8 +331,8 @@ and is kept working.
   (`E-101` reads `Heat Exchanger`, not the `hex` dict key). `include=[...]`
   names the rows explicitly instead and takes whatever it names, which is how a
   valve schedule is built from the same flowsheet.
-- An unknown `border=` or `styling=` raises rather than silently drawing the
-  plain sheet.
+- An unknown `border=`, `diagram=` or `styling=` raises, naming the spellings
+  that work, rather than silently drawing the plain sheet.
 - Optional stream property table (`show_stream_table=True`) with section headers
   injected via `Flowsheet.stream_table_sections`. Property values are supplied
   by the caller as strings; the engine does not compute them.
@@ -447,10 +457,13 @@ and is kept working.
 
 ### Deprecated
 
-- `styling="pid"` on `to_svg()` / `render()`. Use `border="zone"`, which names
-  what it actually does now that the title strip and the docked boxes follow the
-  furniture the flowsheet carries rather than this option. `styling="pid"` still
-  means `border="zone"`; asking for both at once, disagreeing, raises.
+- `styling=` on `to_svg()` / `render()`. Use `border="zone"` and
+  `diagram="p&id"`, which name the two things it asks for now that the title
+  strip and the docked boxes follow the furniture the flowsheet carries rather
+  than this option. `styling="p&id"` still means both together, `"pid"` is
+  still accepted for it, and asking for either half separately and disagreeing
+  raises. The canonical spelling is now `"p&id"`, the way this package writes
+  the drawing's name everywhere else.
 - `anchor=` on `Annotation`, `TableBox`, `equipment_list()`, `notes()` and
   `legend()`. Use `align=` instead. The alias still works and wins over `align`
   when both are given.

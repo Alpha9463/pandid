@@ -124,7 +124,11 @@ def main():
         ],
     )
 
-    fs.render(out("line_numbers.svg"), border="zone", show_stream_table=True)
+    # A line number is a P&ID's identifier, and this sheet is issued as one, so
+    # it is drawn as one: its process lines carry no arrowheads, because flow
+    # direction on a P&ID is read off the equipment and the line list.
+    fs.render(out("line_numbers.svg"), border="zone", diagram="p&id",
+              show_stream_table=True)
     print("Generated line_numbers.svg")
     for stream in fs.streams:
         print(f"  {stream.source.owner.name} -> {stream.dest.owner.name}: {stream.name}")
