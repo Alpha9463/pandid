@@ -24,7 +24,7 @@ def gapped_kind():
 
     class Gapped(U.Unit):
         kind = "gapped_test_unit"
-        _PORTS = [
+        PORTS = [
             ("inlet", "inlet", "process"),
             ("outlet", "outlet", "process"),
             ("spare_a", "inlet", "process"),

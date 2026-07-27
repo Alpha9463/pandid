@@ -34,6 +34,18 @@ and is kept working.
   `Dryer`, `Conveyor` and `Instrument`. Ports are reachable both as
   `unit.ports[name]` and as attributes (`pump.suction`), and a typo raises an
   error naming the real ports.
+- Custom equipment. A `Unit` subclass declaring its own `kind` and `PORTS`, with
+  a `Symbol` registered under that kind, is validated, laid out, routed and drawn
+  like a shipped class, and draws a generic box where no symbol is registered.
+  The declaration is `PORTS`: it was `_PORTS`, whose underscore said "private"
+  about the one attribute a unit type of your own has to set. `docs/api.md`
+  documents the workflow (ports, symbol coordinates, the rule that a port must
+  land on drawn ink, and `variant=`), and `tests/test_custom_units.py` runs it
+  end to end, so the page cannot drift from the engine. The spec layer is the
+  one thing custom equipment does not reach: `pfd.spec` builds units from the
+  shipped classes by name, so `to_dict()` raises `SpecError` naming the class
+  rather than writing a spec that cannot be read back, and a `kind:` naming a
+  custom class is refused the same way.
 - `Conveyor(length=…)`, a belt conveyor drawn to the length the drawing gives
   it. The symbol is built to the belt run rather than scaled to it, so a longer
   conveyor grows only the straight bar between its two rollers and the rollers
@@ -348,3 +360,8 @@ and is kept working.
 - `Symbol.port_alts`. Declare the whole menu, home placement included, in
   `Symbol.port_faces`. `Symbol.free_ports` is now `Symbol.faceless_ports`. Both
   old spellings still register.
+- `Unit._PORTS`. Use `Unit.PORTS`, which is the same list of
+  `(name, direction, role)` tuples under a name that does not tell the one
+  attribute a subclass must set that it is private. `_PORTS` is still read, so
+  no unit loses its nozzles: whichever spelling is declared nearest in the class
+  hierarchy wins, and a class using the old one warns where it is defined.

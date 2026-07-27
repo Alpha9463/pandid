@@ -307,7 +307,7 @@ _KNOWN_GEOMETRY_GAPS = {
 _SIGNAL_PORTS = {
     (cls.kind, name)
     for cls in (getattr(units, n) for n in units.__all__)
-    for name, _, role in getattr(cls, "_PORTS", ())
+    for name, _, role in cls.PORTS
     if role == "signal"
 }
 

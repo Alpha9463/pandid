@@ -1,6 +1,6 @@
 """Unit operations and the built-in unit-type library.
 
-Each Unit subclass declares its named ports via the class attribute ``_PORTS``
+Each Unit subclass declares its named ports via the class attribute ``PORTS``
 (a list of ``(name, direction, role)`` tuples), or, for variable-port units,
 by adding ports in ``__init__``. Ports are exposed both as a ``ports`` dict and as
 attributes (e.g. ``pump.suction``).
@@ -44,8 +44,44 @@ _FACE_OF_SIDE = {"top": "N", "bottom": "S", "left": "W", "right": "E"}
 _UNCHANGED: Any = object()
 
 class Unit:
+    #: The equipment type this unit is drawn as: the key the symbol registry is
+    #: looked up by, and the tag a spec's ``kind:`` names. One per class.
     kind: str = "unit"
+    #: The unit's nozzles, one ``(name, direction, role)`` tuple each — the name
+    #: a stream is connected by, ``"inlet"`` or ``"outlet"``, and one of
+    #: :data:`_VALID_ROLES`. Read once when the unit is constructed, so the
+    #: nearest declaration in the class hierarchy is the whole list. A unit
+    #: whose nozzle count the caller decides adds its ports in ``__init__``
+    #: instead, as :class:`Mixer` does.
+    PORTS: list[tuple[str, str, str]] = []
+    #: The name :attr:`PORTS` had while it was private. Still read, so a unit
+    #: written against it keeps its nozzles, and deprecated: the one attribute a
+    #: subclass has to set cannot be the one its name says not to touch.
     _PORTS: list[tuple[str, str, str]] = []
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if "_PORTS" in cls.__dict__:
+            warnings.warn(
+                f"{cls.__name__} declares its ports as _PORTS, the private name the "
+                f"attribute used to have; it is now PORTS. _PORTS is still read, so "
+                f"the class keeps its nozzles either way.",
+                DeprecationWarning, stacklevel=2,
+            )
+
+    @classmethod
+    def _declared_ports(cls) -> list[tuple[str, str, str]]:
+        """The ports this class declares, under whichever spelling it uses.
+
+        The nearest class in the MRO to name either one answers for the whole
+        list, empty or not, exactly as an attribute lookup would: overriding a
+        declaration replaces it. A class naming both is taken at its public word.
+        """
+        for klass in cls.__mro__:
+            for attr in ("PORTS", "_PORTS"):
+                if attr in klass.__dict__:
+                    return list(klass.__dict__[attr])
+        return []
 
     def __init__(self, name: str, variant: str = "default", width: float | None = None, height: float | None = None, label_pos: str | None = None, description: str = "", reference: str = ""):
         if not name:
@@ -75,7 +111,7 @@ class Unit:
         self.pin_: Pin | None = None      # user intent (set only via pin())
         self.frame: Frame | None = None   # resolved geometry (set only by layout)
         self._port_faces: dict[str, str] = {}   # port name -> chosen face
-        for spec in self._PORTS:
+        for spec in self._declared_ports():
             self._add_port(*spec)
 
     @property
@@ -272,28 +308,28 @@ class Feed(Unit):
     """Boundary condition: a stream source entering the flowsheet."""
 
     kind = "feed"
-    _PORTS = [("outlet", "outlet", "feed")]
+    PORTS = [("outlet", "outlet", "feed")]
 
 
 class Product(Unit):
     """Boundary condition: a stream sink leaving the flowsheet."""
 
     kind = "product"
-    _PORTS = [("inlet", "inlet", "product")]
+    PORTS = [("inlet", "inlet", "product")]
 
 
 class Pump(Unit):
     """Centrifugal or positive-displacement pump."""
 
     kind = "pump"
-    _PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
+    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
 
 class Compressor(Unit):
     """Gas compressor."""
 
     kind = "compressor"
-    _PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
+    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
 
 class Valve(Unit):
@@ -306,8 +342,8 @@ class Valve(Unit):
     """
 
     kind = "valve"
-    _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process"),
-              ("actuator", "inlet", "signal")]
+    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process"),
+             ("actuator", "inlet", "signal")]
 
 
 class Vessel(Unit):
@@ -325,7 +361,7 @@ class Vessel(Unit):
     """
 
     kind = "vessel"
-    _PORTS = [
+    PORTS = [
         ("inlet", "inlet", "process"),
         ("outlet", "outlet", "process"),
         ("vent", "outlet", "vapor"),
@@ -337,21 +373,21 @@ class Tank(Unit):
     ``"floating_roof"``, ``"sphere"``."""
 
     kind = "tank"
-    _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
 
 class Blower(Unit):
     """Fan or blower."""
 
     kind = "blower"
-    _PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
+    PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
 
 class Reducer(Unit):
     """Concentric pipe reducer/expander."""
 
     kind = "reducer"
-    _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
 
 class Fitting(Unit):
@@ -372,7 +408,7 @@ class Fitting(Unit):
     """
 
     kind = "fitting"
-    _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
 
 class Ejector(Unit):
@@ -384,8 +420,8 @@ class Ejector(Unit):
     """
 
     kind = "ejector"
-    _PORTS = [("motive", "inlet", "utility"), ("suction", "inlet", "process"),
-              ("discharge", "outlet", "process")]
+    PORTS = [("motive", "inlet", "utility"), ("suction", "inlet", "process"),
+             ("discharge", "outlet", "process")]
 
 
 class Vent(Unit):
@@ -396,7 +432,7 @@ class Vent(Unit):
     """
 
     kind = "vent"
-    _PORTS = [("inlet", "inlet", "vapor")]
+    PORTS = [("inlet", "inlet", "vapor")]
 
 
 class Funnel(Unit):
@@ -407,36 +443,36 @@ class Funnel(Unit):
     """
 
     kind = "funnel"
-    _PORTS = [("outlet", "outlet", "feed")]
+    PORTS = [("outlet", "outlet", "feed")]
 
 
 class Furnace(Unit):
     """Fired heater / furnace (process stream heated by burning fuel)."""
 
     kind = "furnace"
-    _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process"),
-              ("fuel", "inlet", "feed")]
+    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process"),
+             ("fuel", "inlet", "feed")]
 
 
 class Turbine(Unit):
     """Steam/gas turbine or expander."""
 
     kind = "turbine"
-    _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
 
 class Filter(Unit):
     """Filter (liquid or gas)."""
 
     kind = "filter"
-    _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
 
 class Dryer(Unit):
     """Dryer (removes moisture from a feed solid/slurry)."""
 
     kind = "dryer"
-    _PORTS = [("feed", "inlet", "feed"), ("product", "outlet", "process")]
+    PORTS = [("feed", "inlet", "feed"), ("product", "outlet", "process")]
 
 
 class Conveyor(Unit):
@@ -456,7 +492,7 @@ class Conveyor(Unit):
     """
 
     kind = "conveyor"
-    _PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     _length: float
 
@@ -536,8 +572,8 @@ class Instrument(Unit):
     """
 
     kind = "instrument"
-    _PORTS = [("pv", "inlet", "signal"), ("sig_in", "inlet", "signal"),
-              ("sig_out", "outlet", "signal")]
+    PORTS = [("pv", "inlet", "signal"), ("sig_in", "inlet", "signal"),
+             ("sig_out", "outlet", "signal")]
 
     #: The one variant that stands for a function rather than a device. A
     #: balloon is a thing — a transmitter in the field, a faceplate in the
@@ -658,7 +694,7 @@ class HeatExchanger(Unit):
     """
 
     kind = "hex"
-    _PORTS = [
+    PORTS = [
         ("hot_in", "inlet", "process"),
         ("hot_out", "outlet", "process"),
         ("cold_in", "inlet", "process"),
@@ -684,7 +720,7 @@ class Heater(Unit):
     """Single-stream heater (utility heating)."""
 
     kind = "heater"
-    _PORTS = [
+    PORTS = [
         ("inlet", "inlet", "process"),
         ("outlet", "outlet", "process"),
         ("duty", "inlet", "energy"),
@@ -695,7 +731,7 @@ class Cooler(Unit):
     """Single-stream cooler (utility cooling)."""
 
     kind = "cooler"
-    _PORTS = [
+    PORTS = [
         ("inlet", "inlet", "process"),
         ("outlet", "outlet", "process"),
         ("duty", "outlet", "energy"),
@@ -725,7 +761,7 @@ class Reactor(Unit):
     """
 
     kind = "reactor"
-    _PORTS = [
+    PORTS = [
         ("outlet", "outlet", "process"),
         ("vent", "outlet", "vapor"),
         ("duty", "inlet", "energy"),
@@ -747,7 +783,7 @@ class Separator(Unit):
     """Flash drum or phase separator."""
 
     kind = "separator"
-    _PORTS = [
+    PORTS = [
         ("feed", "inlet", "feed"),
         ("vapor", "outlet", "vapor"),
         ("liquid", "outlet", "liquid"),
@@ -771,7 +807,7 @@ class Column(Unit):
     """
 
     kind = "column"
-    _PORTS = [
+    PORTS = [
         ("distillate", "outlet", "vapor"),
         ("bottoms", "outlet", "liquid"),
         ("reflux_in", "inlet", "liquid"),

@@ -5,7 +5,7 @@ from pfd.ports import Port
 
 class _Widget(Unit):
     kind = "widget"
-    _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
 
 def test_unit_declares_ports_as_dict_and_attributes():
@@ -36,7 +36,7 @@ def test_port_lookup_raises_helpful_error():
 def test_duplicate_port_name_raises():
     class _Bad(Unit):
         kind = "bad"
-        _PORTS = [("x", "inlet", "process"), ("x", "outlet", "process")]
+        PORTS = [("x", "inlet", "process"), ("x", "outlet", "process")]
 
     with pytest.raises(ValueError, match="already has a port named 'x'"):
         _Bad("B-1")
@@ -45,7 +45,7 @@ def test_duplicate_port_name_raises():
 def test_invalid_port_role_raises():
     class _BadRole(Unit):
         kind = "badrole"
-        _PORTS = [("in", "inlet", "magic")]
+        PORTS = [("in", "inlet", "magic")]
 
     with pytest.raises(ValueError, match="Invalid role 'magic'"):
         _BadRole("B-2")
