@@ -200,6 +200,17 @@ and is kept working.
   `peristaltic` and `submersible`, `Filter` gains `ion_exchange` for water
   treatment, and `Valve` gains `bleed`, the small drain valve piped down the
   page.
+- The in-line families are drawn at the size a real sheet draws them. draw.io
+  cuts its stencils for a diagram rather than for a drawing, and at the scale
+  they were first vendored at a gate valve came out 49 units — 13 mm on an A3
+  sheet, against the 6 mm an issued P&ID draws one at — so a station with
+  isolation valves either side of a control valve took the width that five
+  valves, a flow element and an instrument square occupy on a real sheet. The
+  bowtie is now 24.5 x 15 units, 6.5 x 4.0 mm. Everything that shares a pipe
+  with it moves with it, since one line size is what makes them read as one
+  family: strainers, orifice plates, sight glasses, couplings and the rest of
+  the `Fitting` variants, the open `Vent` and `Funnel`, and `Reducer`, which is
+  the same `fittings` stencil as the others and only had a kind of its own.
 - `Symbol` validates its own declaration, so a third-party symbol gets the same
   protection the invariant suite gives the shipped ones: a placement keyed to a
   face its coordinate does not land on, or restating a port's home face at a
@@ -268,7 +279,12 @@ and is kept working.
 - `Flowsheet.add_instrument(type, number, …)` and the `Instrument` unit, drawing
   the functional letters over a bare loop number the way a real sheet does.
   Balloon variants: `default` (field), `panel`, `aux`, `shared` (DCS square),
-  `computer` (hexagon), `logic` (interlock square).
+  `computer` (hexagon), `logic` (interlock square). The interlock square is the
+  ISA-5.1 programmable-logic symbol: a diamond inscribed in the square, its four
+  vertices on the midpoints of the square's sides, with the interlock number in
+  the lower half of the diamond. A bare square is the shared-display symbol
+  without its balloon, so the diamond is what tells a reader the box is logic
+  rather than an instrument.
 - `Instrument.attach(on=…, at=…, offset=…, angle=…)` anchors a balloon to the
   stream or the equipment it reads, with an impulse line drawn to the tap.
   `angle` is measured from the flow direction at the tap, so a re-route cannot

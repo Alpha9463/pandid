@@ -42,7 +42,7 @@ KIND_MAP = {
     # coordinate inboard of that edge draws the signal ending inside the body,
     # since the router steers to the edge and the renderer draws to the
     # coordinate. Coordinates are in the stencil's own space, which
-    # SCALE["valve"] = 0.5 then halves.
+    # SCALE["valve"] = 0.25 then quarters.
     ("valve", "default"):   ("valves", "Gate Valve",        {"inlet": "W", "outlet": "E",
                              "actuator": ("N", 49.0)}),
     ("valve", "gate"):      ("valves", "Gate Valve",        {"inlet": "W", "outlet": "E",
@@ -513,7 +513,34 @@ ADAPTED_ELSEWHERE = {
 # vessel is the short one. That stroke compensation is taken from sx, so the
 # shell walls — the long strokes, and the ones a reader takes the line weight
 # from — are the pair that lands exactly on 2px.
-SCALE = {"valve": 0.5, "fitting": 0.5, "vent": 0.5, "funnel": 0.5,
+#
+# 0.25 is the inline family's factor, and it is measured rather than chosen. A
+# drawing unit is the CSS pixel, so an A3 sheet is 420 mm x 96/25.4 = 1587 units
+# wide and 1 mm is 3.78 of them. An issued A3 P&ID draws its gate valves 17.0 pt
+# long and 8.5 pt across — 6.0 mm x 3.0 mm, the same 17.0 pt its instrument
+# balloons and its interlock squares are drawn at, the whole sheet being cut to
+# one 6 mm module. The valve stencil is 98 x 60, so 0.25 puts it at 24.5 x 15.0
+# units, 6.5 mm x 4.0 mm: within 8% of the reference along the flow axis, which
+# is the axis that decides how many valves fit on a run. At the 0.5 this
+# replaces, the same valve was 49 units — 13 mm, over twice the reference, which
+# is why a station with isolation valves either side of a control valve took the
+# width five valves and a flow element occupy on a real sheet.
+#
+# It stays a single factor rather than an (sx, sy) pair even though the
+# reference's bowtie is 2:1 against the stencil's 98:60. Squashing the family to
+# match would draw the globe and ball seats as ovals and the check valve's
+# arrowhead askew, and the stroke compensation comes from sx alone, so the
+# diagonals would land off 2px. A valve one third taller than the reference's is
+# a smaller error than a valve whose internals are wrong.
+#
+# Everything that shares a pipe with a valve takes the same factor, because they
+# share a line size: a strainer, an orifice plate or a sight glass left at the
+# old scale would be drawn half again longer than the valve beside it. That
+# includes ``reducer``, which is the fittings.xml stencil like the rest of them
+# and only had a kind of its own; at 1.0 it was 70 x 50, nearly three times the
+# new valve.
+SCALE = {"valve": 0.25, "fitting": 0.25, "reducer": 0.25,
+         "vent": 0.25, "funnel": 0.25,
          # 62 x 100, at 1:1.6 against the column's 1:2 — a drum is short because
          # it holds inventory, a tower is slender because it holds trays, and
          # two shapes cut to the same proportions read as one piece of equipment

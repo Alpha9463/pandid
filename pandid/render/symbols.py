@@ -676,7 +676,8 @@ class SymbolRegistry:
         # unit name by the renderer, so the symbol is just the balloon + its
         # location bar. Ports: pv (process connection, bottom), in/out (signals).
         # Variants: default (bare field balloon), panel (single bar), aux (double bar),
-        # shared (balloon-in-square = DCS/shared display), computer (hexagon).
+        # shared (balloon-in-square = DCS/shared display), computer (hexagon),
+        # logic (diamond-in-square = interlock / programmable logic).
         # ====================================================================
         # A balloon is a circle: a signal can meet it anywhere, so every
         # connection offers all four faces and none of them owns one. The
@@ -724,12 +725,37 @@ class SymbolRegistry:
             # need their own stubs; the side vertices sit where the circles do.
             port_faces={n: {**_inst_faces, "N": (22.0, 2.0), "S": (22.0, 42.0)}
                         for n in _inst_ports}), "computer")
-        # Interlock / shared logic: a small bare square carrying only the
-        # interlock number, hung under the instrument it trips (ISA-5.1).
+        # Interlock / shared logic, hung under the instrument it trips: the
+        # ISA-5.1 programmable-logic symbol is a diamond inscribed in a square,
+        # its four vertices on the midpoints of the square's sides, carrying the
+        # interlock number. A bare square is the *shared display* symbol without
+        # its balloon, not this one, so the diamond is what tells a reader the
+        # box is logic rather than an instrument.
+        #
+        # The box is 40 rather than the 28 the bare square was drawn at. An
+        # inscribed diamond has half its square's area, and all of that loss is
+        # taken out of the corners the number's corners occupy, so a 28 square
+        # that held a two-figure number in full holds it only by crossing the
+        # diamond's lower edges: the square has to grow by root two, 28 * 1.414
+        # = 39.6, for the number to sit inside the diamond with the clearance it
+        # had inside the square. 40 also lands just inside the 44 balloon, which
+        # is the relationship a real sheet draws — on P&ID_301 the interlock
+        # square and the balloons are both 17.0 pt, cut to one module.
+        #
+        # The three ports are unchanged and need no adjusting: the midpoint of
+        # each side is where the diamond's vertices now are, so every one of
+        # them lands on both outlines at once.
         self.register("instrument", Symbol(
-            svg='<g id="sym_instrument_logic"><rect x="1" y="1" width="26" height="26" fill="white" stroke="black" stroke-width="2"/></g>',
-            width=28.0, height=28.0, label_pos="center", stretchable=False,
-            ports={'pv': (14.0, 27.0), 'sig_in': (1.0, 14.0), 'sig_out': (27.0, 14.0)}),
+            svg='<g id="sym_instrument_logic">'
+                '<rect x="1" y="1" width="38" height="38" fill="white" stroke="black" stroke-width="2"/>'
+                '<polygon points="20,1 39,20 20,39 1,20" fill="none" stroke="black" stroke-width="2"/>'
+                '</g>',
+            # A diamond on the square's diagonals is as much a shape that carries
+            # meaning as the balloon's circle: stretched to a box of another
+            # proportion its vertices leave the sides' midpoints, which is where
+            # all three ports sit.
+            width=40.0, height=40.0, label_pos="center", stretchable=False,
+            ports={'pv': (20.0, 39.0), 'sig_in': (1.0, 20.0), 'sig_out': (39.0, 20.0)}),
             "logic")
 
         # Vendored draw.io symbols (Apache-2.0) — registered last so they

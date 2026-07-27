@@ -8,10 +8,20 @@ from pandid import Flowsheet, units as U
 
 
 def _line(**kw):
-    """A left-to-right process line with a bubble tapping the middle of it."""
+    """A left-to-right process line with a bubble tapping the middle of it.
+
+    The valve is pinned by its centreline rather than by a literal, so the run
+    stays the straight horizontal these tests measure along however tall the
+    valve symbol is drawn: a pin tuned to one symbol height puts the nozzle off
+    the feed's outlet the moment the artwork is rescaled, and the router answers
+    with a jog that every "along the line" assertion here then reads through.
+    """
+    from pandid.portgeom import resolve_size
+
     fs = Flowsheet("tap")
     feed = fs.add(U.Feed("Feed")).pin(x=60, y=170)
-    fv = fs.add(U.Valve("FV-101", variant="control")).pin(x=300, y=180)
+    fv = fs.add(U.Valve("FV-101", variant="control"))
+    fv.pin(x=300, y=195 - resolve_size(fv)[1] / 2)  # feed's outlet is at y=195
     prod = fs.add(U.Product("Product")).pin(x=520, y=170)
     s = fs.connect(feed.outlet, fv.inlet)
     fs.connect(fv.outlet, prod.inlet)

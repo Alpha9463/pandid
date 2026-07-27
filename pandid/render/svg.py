@@ -899,7 +899,20 @@ class SvgRenderer:
         tag = getattr(u, "tag", "") or u.name
         top, bot = split_tag(getattr(u, "type", "") or tag, getattr(u, "number", "") or "")
         cx, cy = x + u_width / 2, y + u_height / 2
-        if variant == "logic" or not top:
+        if variant == "logic":
+            # The square's content is a diamond, which is widest on its
+            # horizontal diagonal and narrows to nothing at the bottom vertex,
+            # so the number cannot simply be centred in the box the way a bare
+            # square's was: it goes in the lower half, where ISA-5.1 puts it and
+            # where a real sheet draws it under the interlock designator, but
+            # only as far down as the sloping sides still leave it room. Seven
+            # units below the middle of a 40 box is where a two-figure number's
+            # bottom corners clear the edges; it is set at the balloons' own
+            # number size, being the same loop number they carry.
+            return [f'    <text x="{cx}" y="{cy + 7}" font-family="sans-serif" '
+                    f'font-size="11" text-anchor="middle" '
+                    f'dominant-baseline="middle">{html.escape(bot or top)}</text>']
+        if not top:
             return [f'    <text x="{cx}" y="{cy}" font-family="sans-serif" '
                     f'font-size="12" text-anchor="middle" '
                     f'dominant-baseline="middle">{html.escape(bot or top)}</text>']
