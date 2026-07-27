@@ -1,6 +1,9 @@
 """SVG symbol registry for the topology primitives.
 
-Symbols follow ISO 10628-2 / ISA 5.1 conventions and come from two sources:
+Equipment shapes follow the conventions of ISO 10628-2 and instrument balloons
+follow ANSI/ISA-5.1. Neither set is certified conformant to anything, and the
+stencil library the equipment comes from makes no standards claim of its own.
+Sources:
 
 - **Vendored (draw.io / diagrams.net P&ID stencils, Apache-2.0)** — valves and
   their variants, pumps, compressors, blowers, heat exchangers, vessels,
@@ -470,9 +473,16 @@ class SymbolRegistry:
             ports={"inlet": (0.0, 25.0)}
         ))
 
+        # The equipment symbols below are fallbacks: the vendored registry at
+        # the bottom of this method registers over every one of them, so none is
+        # what a sheet draws today. They are kept as the shape of last resort if
+        # a stencil is ever dropped, and their geometry notes describe them, not
+        # the artwork in use. The Mixer and the Splitter are the exceptions;
+        # there is no stencil for either, so those two are drawn as written.
+
         # ====================================================================
-        # Centrifugal Pump — ISO 10628-2 standard symbol
-        # Circle with discharge nozzle at top, suction on left, baseplate line
+        # Centrifugal Pump — circle with discharge nozzle at top, suction on
+        # left, baseplate line
         # ====================================================================
         self.register("pump", Symbol(
             svg=(
@@ -502,7 +512,7 @@ class SymbolRegistry:
         ))
 
         # ====================================================================
-        # Separator — vertical vessel with elliptical heads (ISO 10628-2)
+        # Separator — vertical vessel with elliptical heads
         # ====================================================================
         self.register("separator", Symbol(
             svg=(
@@ -533,7 +543,7 @@ class SymbolRegistry:
         ))
 
         # ====================================================================
-        # Shell & Tube Heat Exchanger — ISO 10628-2 standard
+        # Shell & Tube Heat Exchanger
         # Horizontal cylinder with two tube-side nozzles on ends
         # and two shell-side nozzles on top/bottom
         # ====================================================================
@@ -568,8 +578,7 @@ class SymbolRegistry:
         ))
 
         # ====================================================================
-        # Valve — ISO 10628-2 butterfly / gate valve (bowtie)
-        # Two opposing triangles forming a bowtie shape
+        # Valve — a bowtie, two opposing triangles, with a stem bar
         # ====================================================================
         self.register("valve", Symbol(
             svg=(

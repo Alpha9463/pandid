@@ -170,10 +170,10 @@ and is kept working.
   so no line strikes through the text. It sits on the line only where the run
   can still show pipe past the wipe at each end, and steps beside the line where
   it cannot, which is the usual answer for a line number a dozen characters
-  wide. On a vertical run it is turned to read bottom to top, per the
-  aligned-text convention of ISO 129-1 and ASME Y14.5, and wherever it lands it
-  slides along its own run until it clears the equipment, tags, balloons and
-  other numbers already on the sheet.
+  wide. On a vertical run it is turned to read bottom to top, so the sheet is
+  read from the bottom or the right the way ISO 5457 §4.1 fixes for the drawing
+  as a whole, and wherever it lands it slides along its own run until it clears
+  the equipment, tags, balloons and other numbers already on the sheet.
 - `page_size="A4"`..`"A0"` draws a sheet of exactly that size instead: the border
   and title strip rule to the page edges and the drawing is fitted into what they
   leave, scaled down uniformly if it is too big and never enlarged if it is not.
@@ -184,10 +184,10 @@ and is kept working.
   element, so it prints and exports to PDF at exactly its ISO size.
 - `jump_direction="vertical" | "horizontal"` on `to_svg()` / `render()` selects
   which of two crossing lines gets the semicircle hop.
-- 137 registered `(kind, variant)` symbols following ISO 10628-2 / ISA-5.1,
-  generated from the draw.io / diagrams.net P&ID stencils (Apache-2.0) by
-  `scripts/vendor_symbols.py`. Feed/Product flags, Mixer, Splitter and the
-  instrument balloons are hand-drawn originals.
+- 137 registered `(kind, variant)` symbols, generated from the draw.io /
+  diagrams.net P&ID stencils (Apache-2.0) by `scripts/vendor_symbols.py` and
+  matched to ISO 10628-2 symbols where one exists. Feed/Product flags, Mixer,
+  Splitter and the ANSI/ISA-5.1 instrument balloons are hand-drawn originals.
 - Twelve of those fill gaps a sheet runs into early. `Column(variant="packed")`
   is the first column symbol that draws an internal, two beds of packing between
   their support grids, so an absorber or a stripper is no longer a bare shell; it
@@ -260,14 +260,16 @@ and is kept working.
   ruled around it, and a border a sheet did not ask for is not drawn.
   `TitleBlock` plus `Revision` rows carry the metadata, with per-row
   `by`/`checked`/`approved` initials.
-- `TitleBlock.client` and `.project` rule a row each above the drawing title,
-  where ISO 5457 puts the owner of the drawing; a block naming neither is ruled
-  no row for them.
+- `TitleBlock.client` and `.project` rule a row each above the drawing title.
+  Neither is a standard field: ISO 5457 specifies no title-block data fields and
+  defers them to ISO 7200, whose "legal owner" is the issuing organisation, i.e.
+  `TitleBlock.company`. A block naming neither is ruled no row for them.
 - `TitleBlock.scale` fills the scale cell, alongside the drawing number and the
-  revision index as ASME Y14.1 has it. Left blank it reports the ratio the
-  drawing was actually placed at, which is a real number once `page_size` fixes
-  the page, and nothing at all on a sheet sized to fit its drawing, where no
-  scale exists to state.
+  revision index, which is common drafting practice rather than a standard
+  requirement: ISO 7200 §4 puts scale outside the block. Left blank it reports
+  the ratio the drawing was actually placed at, which is a real number once
+  `page_size` fixes the page, and nothing at all on a sheet sized to fit its
+  drawing, where no scale exists to state.
 - Title-strip values too long for their cell are trimmed with an ellipsis, so a
   long client or project name cannot run across the rule into its neighbour or
   under the sheet count.
@@ -297,8 +299,8 @@ and is kept working.
 
 - `Flowsheet.add_instrument(type, number, …)` and the `Instrument` unit, drawing
   the functional letters over a bare loop number the way a real sheet does.
-  Balloon variants: `default` (field), `panel`, `aux`, `shared` (DCS square),
-  `computer` (hexagon).
+  Balloon variants: `default` (field), `panel`, `aux`, `shared` (a circle in a
+  square: shared display and shared control), `computer` (hexagon).
 - The two trip squares, which ANSI/ISA-5.1-2009 draws as two different symbols:
   `interlock`, a **plain diamond** (Table 5.1.2 items 3-5, the generic interlock
   logic function), and `sis`, a **diamond inscribed in a square** (Table 5.1.1
@@ -395,9 +397,11 @@ and is kept working.
   individuals, research, teaching, and companies under 100 people and
   1,000,000 USD revenue; a commercial licence is required above either
   threshold. Source-available rather than OSI open source. The vendored draw.io
-  symbol geometry remains **Apache-2.0**, as that licence requires. `NOTICE`
-  lists exactly which files fall under which, and both texts ship in the
-  distribution.
+  symbol geometry remains **Apache-2.0**, as that licence requires. The stencil
+  artwork carries one additional field-of-use restriction on top of that grant,
+  naming Atlassian products and marketplace distribution and excluding diagram
+  output; `NOTICE` reproduces it in full. `NOTICE` also lists exactly which
+  files fall under which licence, and both texts ship in the distribution.
 - `pandid/py.typed`, the PEP 561 marker, so an installing project's type checker
   reads the annotations instead of treating the whole package as `Any`.
 - `pandid.__version__` is the only place the version is written; the build backend

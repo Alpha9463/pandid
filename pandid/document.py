@@ -3,8 +3,10 @@
 Attach a :class:`TitleBlock` to a flowsheet (``fs.title_block = TitleBlock(...)``)
 and the sheet is drawn with a full-width engineering title strip (revision
 history + company/logo cell + client / project / status / drawing-number / title
-/ date / scale / rev cells), the metadata that ISO 10628 / ASME Y14 sheets
-require. A PFD carries a title strip as readily as a P&ID does, so the strip
+/ date / scale / rev cells), the data fields ISO 7200 specifies for a title
+block and ISO 10628-1 §5.1.2 requires on a process diagram. Seven of the eight
+ISO 7200 mandatory fields have a cell; the eighth, document type, does not.
+A PFD carries a title strip as readily as a P&ID does, so the strip
 follows the block, not the border: ``border="zone"`` adds the zone-ruled drawing
 frame around it.
 
@@ -45,8 +47,11 @@ class TitleBlock:
     Diagram 1"``). ``company`` fills the logo/company cell, ``status`` the
     issue-status cell (e.g. ``"ISSUED FOR REVIEW"``).
 
-    ``client`` and ``project`` head the information block, above the title,
-    where ISO 5457 puts the owner of the drawing. Either may be left blank and
+    ``client`` and ``project`` head the information block, above the title.
+    Neither is an ISO 7200 field: ISO 5457 specifies no title-block data fields
+    at all and defers them to ISO 7200, whose mandatory "legal owner" is the
+    organisation issuing the drawing, which is ``company`` here. An issued sheet
+    names its client anyway, so the pair is drawn. Either may be left blank and
     the line for it is not ruled.
 
     ``scale`` is the scale cell. Left blank, the sheet reports the ratio the

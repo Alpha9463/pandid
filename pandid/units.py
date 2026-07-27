@@ -585,7 +585,9 @@ class Instrument(Unit):
     ``pv`` taps the process; ``sig_in``/``sig_out`` carry signals. All three are
     signal connections and take a signal ``kind``: an impulse line to a
     transmitter is an instrument connection, not a process pipe. Variants:
-    ``"default"`` (field balloon), ``"panel"``, ``"aux"``, ``"shared"`` (DCS),
+    ``"default"`` (field balloon), ``"panel"``, ``"aux"``, ``"shared"``
+    (a circle in a square: shared display and shared control, which ISA-5.1 no
+    longer reads as "DCS"),
     ``"computer"``, ``"sis"`` (a diamond in a square — ANSI/ISA-5.1-2009
     Table 5.1.1 column B, the safety-instrumented-system symbol an issued sheet
     draws a trip with, also spelled ``"logic"``) and ``"interlock"`` (a plain

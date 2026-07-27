@@ -1091,8 +1091,12 @@ class SvgRenderer:
         # cleanly over any line that crosses beneath it.
         #
         # A label runs parallel to the pipe it names, turned a quarter clockwise
-        # on a vertical run so it reads bottom to top and never upside down: the
-        # aligned-text convention of ISO 129-1 and ASME Y14.5.
+        # on a vertical run so it reads bottom to top and never upside down, and
+        # the sheet is read from the bottom or the right the way ISO 5457 §4.1
+        # fixes for the drawing as a whole. No standard governs a label on a
+        # process diagram: ISO 129-1 §4.1.1 says the same thing about text on a
+        # dimension, but its scope is dimensions and tolerances and a P&ID has
+        # none, and ASME Y14.5 uses the opposite, unidirectional convention.
         #
         # Everything already on the sheet is seeded as occupied so a label slides
         # clear of it: balloons and equipment tags are drawn over the lines, so a
