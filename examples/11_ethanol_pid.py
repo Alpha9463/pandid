@@ -163,8 +163,8 @@ def main():
     # the run rather than over the tower.
     overhead_y = 140.0
     cond.pin(x=880, y=180)
-    cond_hot_in_x = 880 + nozzle_at(cond, "hot_in")[0]
-    cw_cond_y = 180 + nozzle_at(cond, "cold_in")[1]
+    cond_shell_in_x = 880 + nozzle_at(cond, "shell_in")[0]
+    cw_cond_y = 180 + nozzle_at(cond, "tube_in")[1]
     on_run(cv3011, 800, overhead_y)
     cv3011_top = overhead_y - nozzle_at(cv3011, "inlet")[1]
     on_run(cws_cond, 150, cw_cond_y, port="outlet")
@@ -176,7 +176,7 @@ def main():
     # the top one is named here, so the nozzle the drum is positioned by is the
     # nozzle the condensate arrives at.
     drum.nozzle("inlet", "N")
-    drum_x = 880 + nozzle_at(cond, "hot_out")[0] - nozzle_at(drum, "inlet")[0]
+    drum_x = 880 + nozzle_at(cond, "shell_out")[0] - nozzle_at(drum, "inlet")[0]
     drum.pin(x=drum_x, y=270)
     drum_draw_x = drum_x + nozzle_at(drum, "outlet")[0]
     split.pin(x=drum_draw_x - split_w / 2, y=350, orientation=90)  # inlet up, outlets down
@@ -203,15 +203,16 @@ def main():
     on_run(hv305b, 1295, dist_y)
     on_run(ae_prod, 1480, dist_y, port="inlet")
 
-    # Reboiler off the tower sump; steam spine on its shell inlet.
+    # Reboiler off the tower sump; steam spine on its tube inlet, which is the
+    # channel head the heating medium enters.
     reb.pin(x=700, y=580)
-    steam_y = 580 + nozzle_at(reb, "hot_in")[1]
+    steam_y = 580 + nozzle_at(reb, "tube_in")[1]
     on_run(steam, 150, steam_y, port="outlet")
     on_run(hv308a, 240, steam_y)
     on_run(rd308, 300, steam_y)
     on_run(cv308, 350, steam_y)
     on_run(hv308b, 420, steam_y)
-    on_run(condensate, 1480, 580 + nozzle_at(reb, "hot_out")[1], port="inlet")
+    on_run(condensate, 1480, 580 + nozzle_at(reb, "tube_out")[1], port="inlet")
 
     # Bottoms over the weir, cooled and sent off the sheet. The bottoms valve
     # is flipped so its operator faces the controller standing below it.
@@ -219,9 +220,9 @@ def main():
     on_run(cv306, 900, bottoms_y, mirrored="y")
     on_run(nrv306, 1000, bottoms_y)
     cooler.pin(x=1100, y=720)
-    cooler_hot_in_x = 1100 + nozzle_at(cooler, "hot_in")[0]
-    cooler_hot_out_x = 1100 + nozzle_at(cooler, "hot_out")[0]
-    cw_cool_y = 720 + nozzle_at(cooler, "cold_in")[1]
+    cooler_shell_in_x = 1100 + nozzle_at(cooler, "shell_in")[0]
+    cooler_shell_out_x = 1100 + nozzle_at(cooler, "shell_out")[0]
+    cw_cool_y = 720 + nozzle_at(cooler, "tube_in")[1]
     cooled_y = 805.0
     on_run(cws_cool, 150, cw_cool_y, port="outlet")
     on_run(hv315, 320, cw_cool_y)
@@ -243,13 +244,13 @@ def main():
     # kept the longer of the two and the number is read clear of the crossing.
     vapour = fs.connect(col.distillate, cv3011.inlet, service="AE", sequence=302,
                         size=300, spec="80-SS").via([(col_axis, overhead_y)])
-    fs.connect(cv3011.outlet, cond.hot_in).via([(cond_hot_in_x, overhead_y)])
-    fs.connect(cond.hot_out, drum.inlet, service="AE", sequence=304, size=150,
+    fs.connect(cv3011.outlet, cond.shell_in).via([(cond_shell_in_x, overhead_y)])
+    fs.connect(cond.shell_out, drum.inlet, service="AE", sequence=304, size=150,
                spec="80-SS")
     fs.connect(cws_cond.outlet, hv311.inlet, service="CWS", sequence=311, size=150,
                spec="150-CS")
-    fs.connect(hv311.outlet, cond.cold_in)
-    cw_return = fs.connect(cond.cold_out, cwr_cond.inlet, service="CWR",
+    fs.connect(hv311.outlet, cond.tube_in)
+    cw_return = fs.connect(cond.tube_out, cwr_cond.inlet, service="CWR",
                            sequence=312, size=150,
                            spec="150-CS").via([(1200, cw_cond_y)])
 
@@ -271,11 +272,11 @@ def main():
     fs.connect(cv305.outlet, hv305b.inlet)
     fs.connect(hv305b.outlet, ae_prod.inlet)
 
-    sump_x = 700 + nozzle_at(reb, "cold_in")[0]
-    boilup_x = 700 + nozzle_at(reb, "cold_out")[0]
-    sump = fs.connect(col.bottoms, reb.cold_in, service="FB", sequence=307,
+    sump_x = 700 + nozzle_at(reb, "shell_in")[0]
+    boilup_x = 700 + nozzle_at(reb, "shell_out")[0]
+    sump = fs.connect(col.bottoms, reb.shell_in, service="FB", sequence=307,
                       size=250, spec="160-SS").via([(col_axis, 655), (sump_x, 655)])
-    boilup = fs.connect(reb.cold_out, col.boilup_in, service="FB", sequence=310,
+    boilup = fs.connect(reb.shell_out, col.boilup_in, service="FB", sequence=310,
                         size=300, spec="160-SS",
                         tear_hint=True).via([(boilup_x, 535), (595, 535), (595, boilup_y)])
     fs.connect(steam.outlet, hv308a.inlet, service="HPS", sequence=308, size=100,
@@ -283,20 +284,20 @@ def main():
     fs.connect(hv308a.outlet, rd308.inlet)
     fs.connect(rd308.outlet, cv308.inlet)
     fs.connect(cv308.outlet, hv308b.inlet)
-    fs.connect(hv308b.outlet, reb.hot_in)
-    fs.connect(reb.hot_out, condensate.inlet, service="HPR", sequence=317, size=80,
+    fs.connect(hv308b.outlet, reb.tube_in)
+    fs.connect(reb.tube_out, condensate.inlet, service="HPR", sequence=317, size=80,
                spec="300-CS")
 
     fs.connect(reb.bottoms, cv306.inlet, service="FB", sequence=306, size=100,
                spec="160-SS")
     fs.connect(cv306.outlet, nrv306.inlet)
-    fs.connect(nrv306.outlet, cooler.hot_in).via([(cooler_hot_in_x, bottoms_y)])
-    fs.connect(cooler.hot_out, bottoms_prod.inlet, service="FB", sequence=314,
-               size=100, spec="160-SS").via([(cooler_hot_out_x, cooled_y)])
+    fs.connect(nrv306.outlet, cooler.shell_in).via([(cooler_shell_in_x, bottoms_y)])
+    fs.connect(cooler.shell_out, bottoms_prod.inlet, service="FB", sequence=314,
+               size=100, spec="160-SS").via([(cooler_shell_out_x, cooled_y)])
     fs.connect(cws_cool.outlet, hv315.inlet, service="CWS", sequence=315, size=100,
                spec="150-CS")
-    fs.connect(hv315.outlet, cooler.cold_in)
-    fs.connect(cooler.cold_out, cwr_cool.inlet, service="CWR", sequence=316, size=100,
+    fs.connect(hv315.outlet, cooler.tube_in)
+    fs.connect(cooler.tube_out, cwr_cool.inlet, service="CWR", sequence=316, size=100,
                spec="150-CS")
 
     # --- Feed trip and local indication ----------------------------------

@@ -104,8 +104,8 @@ def test_a_sequence_the_author_set_is_never_overwritten():
     feed = fs.add(U.Feed("F"))
     hx = fs.add(U.HeatExchanger("E-101"))
     prod = fs.add(U.Product("P"))
-    first = fs.connect(feed.outlet, hx.cold_in, size='6"', service="P", sequence="2740", spec="A1A")
-    second = fs.connect(hx.cold_out, prod.inlet, size='6"', service="P", spec="A1A")
+    first = fs.connect(feed.outlet, hx.tube_in, size='6"', service="P", sequence="2740", spec="A1A")
+    second = fs.connect(hx.tube_out, prod.inlet, size='6"', service="P", spec="A1A")
     fs.to_svg()
     assert first.name == '6"-P-2740-A1A'
     assert second.name == '6"-P-1002-A1A'  # the automatic sequence ran on regardless
@@ -167,8 +167,8 @@ def test_a_line_number_does_not_consume_a_stream_number():
     feed = fs.add(U.Feed("F"))
     hx = fs.add(U.HeatExchanger("E-101"))
     prod = fs.add(U.Product("P"))
-    first = fs.connect(feed.outlet, hx.cold_in, size='6"', service="P", spec="A1A")
-    second = fs.connect(hx.cold_out, prod.inlet)
+    first = fs.connect(feed.outlet, hx.tube_in, size='6"', service="P", spec="A1A")
+    second = fs.connect(hx.tube_out, prod.inlet)
     assert (first.name, second.name) == ('6"-P-1001-A1A', "S2")
 
 
@@ -203,8 +203,8 @@ def test_a_mixed_sheet_keeps_the_stream_number_heading():
     feed = fs.add(U.Feed("F"))
     hx = fs.add(U.HeatExchanger("E-101"))
     prod = fs.add(U.Product("P"))
-    fs.connect(feed.outlet, hx.cold_in, size='6"', service="P", spec="A1A")
-    fs.connect(hx.cold_out, prod.inlet)
+    fs.connect(feed.outlet, hx.tube_in, size='6"', service="P", spec="A1A")
+    fs.connect(hx.tube_out, prod.inlet)
     for s in fs.streams:
         s.properties = {"Temperature": "25 C"}
     svg = fs.to_svg(show_stream_table=True)

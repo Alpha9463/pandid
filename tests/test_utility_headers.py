@@ -25,8 +25,8 @@ def _two_taps(**flag):
     for hx, size in ((e1, '6"'), (e2, '4"')):
         supply = fs.add(U.Feed("CWSH", header=True, **flag))
         ret = fs.add(U.Product("CWRH", header=True, **flag))
-        fs.connect(supply.outlet, hx.cold_in, size=size, service="CWS", spec="A1A")
-        fs.connect(hx.cold_out, ret.inlet, size=size, service="CWR", spec="A1A")
+        fs.connect(supply.outlet, hx.tube_in, size=size, service="CWS", spec="A1A")
+        fs.connect(hx.tube_out, ret.inlet, size=size, service="CWR", spec="A1A")
         taps.append((supply, ret))
     return fs, taps
 

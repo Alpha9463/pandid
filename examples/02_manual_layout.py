@@ -9,7 +9,7 @@ Demonstrates pixel-level control with two overrides:
   the auto-router for that one stream.
 
 Port height cheat-sheet (local y within the symbol): Feed outlet and Product
-inlet sit at y+25; the heat-exchanger cold side sits at y+30. So a Feed/Product
+inlet sit at y+25; the heat-exchanger tube side sits at y+30. So a Feed/Product
 pinned 5px *above* an exchanger lines the stream up perfectly.
 """
 
@@ -32,14 +32,14 @@ def main():
     p2 = fs.add(units.Product("P-2")).pin(x=430, y=305)
 
     # These auto-route into clean straight lines because the pins are aligned.
-    fs.connect(f1.outlet, e1.cold_in)
-    fs.connect(e1.cold_out, p1.inlet)
-    fs.connect(f2.outlet, e2.cold_in)
+    fs.connect(f1.outlet, e1.tube_in)
+    fs.connect(e1.tube_out, p1.inlet)
+    fs.connect(f2.outlet, e2.tube_in)
 
     # via() override: deliberately dip this run down and bring it back up to
     # enter P-2 horizontally (e.g. to clear a walkway). The waypoints are
     # absolute pixels; the router uses them verbatim.
-    fs.connect(e2.cold_out, p2.inlet).via([
+    fs.connect(e2.tube_out, p2.inlet).via([
         (360, 330),
         (360, 380),
         (410, 380),

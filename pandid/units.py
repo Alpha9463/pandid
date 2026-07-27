@@ -931,8 +931,30 @@ class Instrument(Unit):
         return self
 
 
+def _side_ports(*sides: str) -> list[tuple[str, str, str]]:
+    """One inlet and one outlet on each of an exchanger's two sides."""
+    return [
+        (f"{side}_{end}", direction, "process")
+        for side in sides
+        for end, direction in (("in", "inlet"), ("out", "outlet"))
+    ]
+
+
 class HeatExchanger(Unit):
-    """Shell-and-tube or plate heat exchanger (two process sides).
+    """Heat exchanger, with a nozzle pair on each of its two sides.
+
+    Nozzles are named for the **side of the equipment** they sit on, never for
+    the duty the stream carries. Which fluid runs in the shell and which in the
+    tubes is a design decision an engineer makes deliberately — fouling service
+    goes tube side because tubes can be cleaned, condensing vapour goes shell
+    side — and that is a fact about the exchanger, so the drawing records it.
+    Which side is the hot one inverts between operating cases while the nozzle
+    stays where it is.
+
+    Most variants are a shell and a tube side. The ones that are neither say so:
+    ``air_cooled`` is a tube bundle with air across it, ``plate`` and ``spiral``
+    have two interchangeable channel sets and letter them, and ``thin_film`` is
+    an evaporator with a jacket and a product side.
 
     The ``kettle`` variant carries one nozzle more: ``bottoms``, the liquid draw
     at the weir end of the shell. A kettle reboiler is where a tower's bottoms
@@ -942,16 +964,24 @@ class HeatExchanger(Unit):
     """
 
     kind = "hex"
-    PORTS = [
-        ("hot_in", "inlet", "process"),
-        ("hot_out", "outlet", "process"),
-        ("cold_in", "inlet", "process"),
-        ("cold_out", "outlet", "process"),
-    ]
-    # Nozzles only some variants draw, keyed by the variant that has them: a
-    # plate exchanger has no weir to draw off, so giving every hex a `bottoms`
-    # would hand most of them a port the symbol cannot place.
-    _VARIANT_PORTS = {"kettle": [("bottoms", "outlet", "liquid")]}
+    # Empty because which nozzles an exchanger has depends on its variant, and
+    # Unit.__init__ reads PORTS before a variant is in hand. _VARIANT_PORTS
+    # below is the declaration, and __init__ lays it down.
+    PORTS: list[tuple[str, str, str]] = []
+    # The shell-and-tube family, which is what most of the variants are.
+    _SHELL_AND_TUBE = _side_ports("shell", "tube")
+    #: The nozzles each variant has, keyed by variant, defaulting to
+    #: :data:`_SHELL_AND_TUBE`. A variant that is not a shell and tubes names
+    #: its own two sides rather than borrowing a vocabulary it has no parts for,
+    #: and only the kettle has a weir to draw off, so giving every exchanger a
+    #: ``bottoms`` would hand most of them a port the symbol cannot place.
+    _VARIANT_PORTS = {
+        "kettle": [*_SHELL_AND_TUBE, ("bottoms", "outlet", "liquid")],
+        "air_cooled": _side_ports("tube", "air"),
+        "plate": _side_ports("side_a", "side_b"),
+        "spiral": _side_ports("side_a", "side_b"),
+        "thin_film": _side_ports("jacket", "product"),
+    }
 
     def __init__(self, name: str, variant: str = "default",
                  width: float | None = None, height: float | None = None,
@@ -960,29 +990,37 @@ class HeatExchanger(Unit):
         super().__init__(name, variant=variant, width=width, height=height,
                          label_pos=label_pos, description=description,
                          reference=reference)
-        for spec in self._VARIANT_PORTS.get(variant, []):
+        for spec in self._VARIANT_PORTS.get(variant, self._SHELL_AND_TUBE):
             self._add_port(*spec)
 
 
 class Heater(Unit):
-    """Single-stream heater (utility heating)."""
+    """Single-stream heater (utility heating).
+
+    ``utility_in`` is the heating medium's connection: named for what lands on
+    it, on the same principle as :class:`HeatExchanger`'s nozzles.
+    """
 
     kind = "heater"
     PORTS = [
         ("inlet", "inlet", "process"),
         ("outlet", "outlet", "process"),
-        ("duty", "inlet", "energy"),
+        ("utility_in", "inlet", "energy"),
     ]
 
 
 class Cooler(Unit):
-    """Single-stream cooler (utility cooling)."""
+    """Single-stream cooler (utility cooling).
+
+    ``utility_out`` is the cooling medium's connection, the counterpart of
+    :class:`Heater`'s ``utility_in``.
+    """
 
     kind = "cooler"
     PORTS = [
         ("inlet", "inlet", "process"),
         ("outlet", "outlet", "process"),
-        ("duty", "outlet", "energy"),
+        ("utility_out", "outlet", "energy"),
     ]
 
 

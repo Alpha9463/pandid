@@ -214,35 +214,35 @@ def register_vendored(registry):
     registry.register('hex', Symbol(
         svg='<g id="sym_hex"><ellipse cx="30.0" cy="30.0" rx="30.0" ry="30.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 30.0 L 10.0 30.0 L 20.0 15.0 L 40.0 45.0 L 50.0 30.0 L 60.0 30.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=60.0, height=60.0,
-        ports={'cold_in': (0.0, 30.0), 'cold_out': (60.0, 30.0), 'hot_in': (30.0, 0.0), 'hot_out': (30.0, 60.0)},
+        ports={'tube_in': (0.0, 30.0), 'tube_out': (60.0, 30.0), 'shell_in': (30.0, 0.0), 'shell_out': (30.0, 60.0)},
     ), 'default')
 
     # draw.io heat_exchangers:Reboiler (aspect=variable) -> hex/kettle
     registry.register('hex', Symbol(
         svg='<g id="sym_hex_kettle"><path d="M 4.5 15.0 L 16.5 15.0 L 16.5 30.0 L 4.5 30.0 A 3.0 5.0 0.0 0 1 0.0 22.5 A 3.0 5.0 0.0 0 1 4.5 15.0 M 19.5 15.0 L 26.5 15.0 L 41.5 0.0 L 86.5 0.0 A 5.0 15.0 0.0 0 1 91.5 15.0 A 5.0 15.0 0.0 0 1 86.5 30.0 L 19.5 30.0 Z M 4.5 15.0 L 4.5 30.0 M 41.5 0.0 L 41.5 30.0 M 86.5 0.0 L 86.5 30.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="16.5" y="12.0" width="3.0" height="21.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=91.5, height=33.0,
-        ports={'cold_in': (45.8, 30.0), 'cold_out': (64.0, 0.0), 'hot_in': (0.0, 22.5), 'hot_out': (91.5, 15.0), 'bottoms': (85.0, 30.0)},
+        ports={'shell_in': (45.8, 30.0), 'shell_out': (64.0, 0.0), 'tube_in': (0.0, 22.5), 'tube_out': (91.5, 15.0), 'bottoms': (85.0, 30.0)},
     ), 'kettle')
 
     # draw.io heat_exchangers:Heater (aspect=variable) -> heater/default
     registry.register('heater', Symbol(
         svg='<g id="sym_heater"><ellipse cx="40.0" cy="40.0" rx="30.0" ry="30.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 10.0 40.0 L 20.0 40.0 L 30.0 25.0 L 50.0 55.0 L 60.0 40.0 L 70.0 40.0 M 80.0 0.0 L 0.0 80.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 4.5 70.0 L 0.0 80.0 L 10.0 75.5 L 5.0 75.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=80.0,
-        ports={'inlet': (9.9, 40.0), 'outlet': (70.1, 40.0), 'duty': (40.0, 70.1)},
+        ports={'inlet': (9.9, 40.0), 'outlet': (70.1, 40.0), 'utility_in': (40.0, 70.1)},
     ), 'default')
 
     # draw.io heat_exchangers:Condenser (aspect=variable) -> cooler/default
     registry.register('cooler', Symbol(
         svg='<g id="sym_cooler"><ellipse cx="40.0" cy="40.0" rx="30.0" ry="30.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 10.0 40.0 L 20.0 40.0 L 30.0 25.0 L 50.0 55.0 L 60.0 40.0 L 70.0 40.0 M 80.0 0.0 L 0.0 80.0 M 70.0 4.5 L 80.0 0.0 L 75.5 10.0 L 75.0 5.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=80.0,
-        ports={'inlet': (9.9, 40.0), 'outlet': (70.1, 40.0), 'duty': (40.0, 9.9)},
+        ports={'inlet': (9.9, 40.0), 'outlet': (70.1, 40.0), 'utility_out': (40.0, 9.9)},
     ), 'default')
 
     # draw.io heat_exchangers:Heat Exchanger (Spiral) (aspect=variable) -> hex/spiral
     registry.register('hex', Symbol(
         svg='<g id="sym_hex_spiral"><rect x="0.0" y="0.0" width="100.0" height="100.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="50.0" cy="50.0" rx="15.0" ry="15.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="50.0" cy="50.0" rx="27.5" ry="27.5" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="50.0" cy="50.0" rx="40.0" ry="40.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 50.0 L 10.0 50.0 M 90.0 50.0 L 100.0 50.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=100.0,
-        ports={'cold_in': (0.0, 50.0), 'cold_out': (100.0, 50.0), 'hot_in': (50.0, 0.0), 'hot_out': (50.0, 100.0)},
+        ports={'side_a_in': (0.0, 50.0), 'side_a_out': (100.0, 50.0), 'side_b_in': (50.0, 0.0), 'side_b_out': (50.0, 100.0)},
     ), 'spiral')
 
     # draw.io vessels:Pressurized Vessel (aspect=variable) -> vessel/default
@@ -596,70 +596,70 @@ def register_vendored(registry):
     registry.register('hex', Symbol(
         svg='<g id="sym_hex_shell_tube"><ellipse cx="30.0" cy="30.0" rx="30.0" ry="30.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 30.0 L 10.0 30.0 L 20.0 15.0 L 40.0 45.0 L 50.0 30.0 L 60.0 30.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=60.0, height=60.0,
-        ports={'cold_in': (0.0, 30.0), 'cold_out': (60.0, 30.0), 'hot_in': (30.0, 0.0), 'hot_out': (30.0, 60.0)},
+        ports={'tube_in': (0.0, 30.0), 'tube_out': (60.0, 30.0), 'shell_in': (30.0, 0.0), 'shell_out': (30.0, 60.0)},
     ), 'shell_tube')
 
     # draw.io heat_exchangers:U-Tube Heat Exchanger (aspect=variable) -> hex/u_tube
     registry.register('hex', Symbol(
         svg='<g id="sym_hex_u_tube"><path d="M 15.0 24.0 L 15.0 30.0 L 0.0 30.0 L 0.0 0.0 L 15.0 0.0 L 15.0 6.0 L 85.0 6.0 A 6.0 8.0 0.0 0 1 91.75 15.0 A 6.0 8.0 0.0 0 1 85.0 24.0 L 15.0 24.0 Z M 15.0 6.0 L 15.0 24.0 M 0.0 15.0 L 15.0 15.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=91.8, height=30.0,
-        ports={'cold_in': (0.0, 15.0), 'cold_out': (91.8, 15.0), 'hot_in': (45.9, 6.0), 'hot_out': (45.9, 24.0)},
+        ports={'tube_in': (0.0, 7.5), 'tube_out': (0.0, 22.5), 'shell_in': (45.9, 6.0), 'shell_out': (45.9, 24.0)},
     ), 'u_tube')
 
     # draw.io heat_exchangers:Heat Exchanger (Straight Tubes) (aspect=variable) -> hex/straight_tubes
     registry.register('hex', Symbol(
         svg='<g id="sym_hex_straight_tubes"><rect x="0.0" y="0.0" width="100.0" height="30.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 15.0 0.0 L 15.0 30.0 M 85.0 0.0 L 85.0 30.0 M 85.0 7.5 L 15.0 7.5 M 85.0 15.0 L 15.0 15.0 M 85.0 22.5 L 15.0 22.5" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=30.0,
-        ports={'cold_in': (0.0, 15.0), 'cold_out': (100.0, 15.0), 'hot_in': (75.0, 0.0), 'hot_out': (25.0, 30.0)},
+        ports={'tube_in': (0.0, 15.0), 'tube_out': (100.0, 15.0), 'shell_in': (75.0, 0.0), 'shell_out': (25.0, 30.0)},
     ), 'straight_tubes')
 
     # draw.io heat_exchangers:Condenser (aspect=variable) -> hex/condenser
     registry.register('hex', Symbol(
         svg='<g id="sym_hex_condenser"><ellipse cx="40.0" cy="40.0" rx="30.0" ry="30.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 10.0 40.0 L 20.0 40.0 L 30.0 25.0 L 50.0 55.0 L 60.0 40.0 L 70.0 40.0 M 80.0 0.0 L 0.0 80.0 M 70.0 4.5 L 80.0 0.0 L 75.5 10.0 L 75.0 5.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=80.0,
-        ports={'cold_in': (9.9, 40.0), 'cold_out': (70.1, 40.0), 'hot_in': (40.0, 9.9), 'hot_out': (40.0, 70.1)},
+        ports={'tube_in': (9.9, 40.0), 'tube_out': (70.1, 40.0), 'shell_in': (40.0, 9.9), 'shell_out': (40.0, 70.1)},
     ), 'condenser')
 
     # draw.io heat_exchangers:Heat Exchanger (Plate) (aspect=variable) -> hex/plate
     registry.register('hex', Symbol(
         svg='<g id="sym_hex_plate"><rect x="0.0" y="0.0" width="100.0" height="30.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 50.0 0.0 L 50.0 30.0 M 73.0 0.0 L 73.2 30.0 M 25.0 0.0 L 25.0 30.0 M 10.0 0.0 L 90.0 30.0 M 10.0 30.0 L 90.0 0.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=30.0,
-        ports={'cold_in': (7.0, 30.0), 'cold_out': (93.0, 30.0), 'hot_in': (7.0, 0.0), 'hot_out': (93.0, 0.0)},
+        ports={'side_a_in': (7.0, 0.0), 'side_a_out': (93.0, 30.0), 'side_b_in': (7.0, 30.0), 'side_b_out': (93.0, 0.0)},
     ), 'plate')
 
     # draw.io heat_exchangers:Heat Exchanger (Finned Tubes) (aspect=variable) -> hex/finned
     registry.register('hex', Symbol(
         svg='<g id="sym_hex_finned"><rect x="0.0" y="0.0" width="100.0" height="30.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 15.0 0.0 L 15.0 30.0 M 85.0 0.0 L 85.0 30.0 M 26.0 10.0 L 26.0 20.0 M 42.0 10.0 L 42.0 20.0 M 58.0 10.0 L 58.0 20.0 M 74.0 10.0 L 74.0 20.0 M 66.0 10.0 L 66.0 20.0 M 50.0 10.0 L 50.0 20.0 M 34.0 10.0 L 34.0 20.0 M 15.12 15.0 L 85.0 15.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=30.0,
-        ports={'cold_in': (0.0, 15.0), 'cold_out': (100.0, 15.0), 'hot_in': (75.0, 0.0), 'hot_out': (25.0, 30.0)},
+        ports={'tube_in': (0.0, 15.0), 'tube_out': (100.0, 15.0), 'shell_in': (75.0, 0.0), 'shell_out': (25.0, 30.0)},
     ), 'finned')
 
     # draw.io heat_exchangers:Heat Exchanger (Finned Tubes, Fan) (aspect=variable) -> hex/air_cooled
     registry.register('hex', Symbol(
         svg='<g id="sym_hex_air_cooled"><rect x="0.0" y="0.0" width="100.0" height="100.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 40.0 75.0 L 40.0 85.0 M 60.0 75.0 L 60.0 85.0 M 70.0 75.0 L 70.0 85.0 M 50.0 75.0 L 50.0 85.0 M 30.0 75.0 L 30.0 85.0 M 15.0 80.0 L 85.0 80.0 M 60.0 12.0 L 71.0 48.0 M 40.0 12.0 L 29.0 48.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="50.0" cy="35.0" rx="25.0" ry="25.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=100.0,
-        ports={'hot_in': (0.0, 80.0), 'hot_out': (100.0, 80.0), 'cold_in': (50.0, 100.0), 'cold_out': (50.0, 0.0)},
+        ports={'tube_in': (0.0, 80.0), 'tube_out': (100.0, 80.0), 'air_in': (50.0, 100.0), 'air_out': (50.0, 0.0)},
     ), 'air_cooled')
 
     # draw.io heat_exchangers:Double Pipe Heat Exchanger (aspect=variable) -> hex/double_pipe
     registry.register('hex', Symbol(
         svg='<g id="sym_hex_double_pipe"><rect x="5.0" y="5.0" width="70.0" height="10.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="5.0" y="35.0" width="70.0" height="10.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 10.0 L 75.0 10.0 A 15.0 15.0 0.0 0 1 90.0 25.0 A 15.0 15.0 0.0 0 1 75.0 40.0 L 0.0 40.0 M 10.0 0.0 L 10.0 5.0 M 8.0 0.0 L 12.0 0.0 M 0.0 8.0 L 0.0 12.0 M 0.0 38.0 L 0.0 42.0 M 10.0 45.0 L 10.0 50.0 M 8.0 50.0 L 12.0 50.0 M 70.0 15.0 L 70.0 35.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=90.0, height=50.0,
-        ports={'cold_in': (9.9, 0.0), 'cold_out': (9.9, 50.0), 'hot_in': (0.0, 40.0), 'hot_out': (0.0, 10.0)},
+        ports={'shell_in': (9.9, 0.0), 'shell_out': (9.9, 50.0), 'tube_in': (0.0, 40.0), 'tube_out': (0.0, 10.0)},
     ), 'double_pipe')
 
     # draw.io heat_exchangers:Hairpin Exchanger (aspect=variable) -> hex/hairpin
     registry.register('hex', Symbol(
         svg='<g id="sym_hex_hairpin"><path d="M 5.0 6.0 L 15.0 6.0 L 15.0 0.0 L 20.0 0.0 L 20.0 6.0 L 70.0 6.0 L 70.0 0.0 L 75.0 0.0 L 75.0 6.0 L 85.0 6.0 A 6.0 8.0 0.0 0 1 91.75 15.0 A 6.0 8.0 0.0 0 1 85.0 24.0 L 75.0 24.0 L 75.0 30.0 L 70.0 30.0 L 70.0 24.0 L 20.0 24.0 L 20.0 30.0 L 15.0 30.0 L 15.0 24.0 L 5.0 24.0 L 0.0 23.0 L 0.0 20.0 L 5.0 19.0 L 83.0 19.0 A 3.5 4.0 0.0 0 0 86.5 15.0 A 3.5 4.0 0.0 0 0 83.0 11.0 L 5.0 11.0 L 0.0 10.0 L 0.0 7.0 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 5.0 3.0 L 5.0 14.0 M 5.0 16.0 L 5.0 27.0 M 15.0 6.0 L 20.0 6.0 M 70.0 6.0 L 75.0 6.0 M 75.0 24.0 L 70.0 24.0 M 20.0 24.0 L 15.0 24.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 2.0 8.0 L 2.0 9.5 M 3.0 7.0 L 3.0 9.0 M 2.0 21.0 L 2.0 22.5 M 3.0 20.0 L 3.0 22.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=91.8, height=30.0,
-        ports={'cold_in': (0.0, 8.5), 'cold_out': (0.0, 21.5), 'hot_in': (72.5, 0.0), 'hot_out': (17.5, 30.0)},
+        ports={'tube_in': (0.0, 8.5), 'tube_out': (0.0, 21.5), 'shell_in': (72.5, 0.0), 'shell_out': (17.5, 30.0)},
     ), 'hairpin')
 
     # draw.io heat_exchangers:Thin-Film Evaporator (aspect=variable) -> hex/thin_film
     registry.register('hex', Symbol(
         svg='<g id="sym_hex_thin_film"><path d="M 0.0 10.0 L 80.0 10.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 25.0 30.0 L 25.0 95.0 M 55.0 30.0 L 55.0 95.0 M 25.0 40.0 L 55.0 40.0 M 25.0 85.0 L 55.0 85.0 M 40.0 0.0 L 40.0 40.0 M 0.0 30.0 L 15.0 30.0 L 15.0 95.0 M 80.0 30.0 L 65.0 30.0 L 65.0 95.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=120.0,
-        ports={'cold_in': (20.0, 10.0), 'cold_out': (40.0, 120.0), 'hot_in': (0.0, 30.0), 'hot_out': (80.0, 30.0)},
+        ports={'product_in': (20.0, 10.0), 'product_out': (40.0, 120.0), 'jacket_in': (0.0, 30.0), 'jacket_out': (80.0, 30.0)},
     ), 'thin_film')
 
     # draw.io pumps:Vacuum Pump (aspect=variable) -> pump/vacuum

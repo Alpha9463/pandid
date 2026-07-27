@@ -161,25 +161,41 @@ KIND_MAP = {
     ("compressor", "reciprocating"): ("compressors", "Reciprocating Compressor",
                                       {"suction": "W", "discharge": ("E", 25.0)}),
     ("blower", "default"):     ("compressors", "Compressor", {"suction": "W", "discharge": "N"}),
-    # Heat exchangers (horizontal shell & tube: cold through tubes W->E, hot shell N/S).
+    # Heat exchangers.
+    #
+    # A nozzle is named for the SIDE OF THE EQUIPMENT it is on — shell or tube —
+    # and never for the duty the stream happens to carry. Which fluid goes in
+    # the shell and which in the tubes is a design decision an engineer makes
+    # deliberately (fouling service goes tube side, since tubes can be cleaned;
+    # condensing vapour goes shell side), so it is a fact about the exchanger and
+    # belongs on the drawing. Hot and cold invert between operating cases while
+    # the nozzle stays where it is, and they did not even land on the same face
+    # from one variant to the next.
+    #
+    # The ISO circle-and-zigzag: the zigzag is the tube, entering at W and
+    # leaving at E, and the circle around it is the shell, so the shell nozzles
+    # take N and S.
     ("hex", "default"): ("heat_exchangers", "Shell and Tube Heat Exchanger 1",
-                         {"cold_in": "W", "cold_out": "E", "hot_in": "N", "hot_out": "S"}),
+                         {"tube_in": "W", "tube_out": "E", "shell_in": "N", "shell_out": "S"}),
     # Kettle reboiler. The stencil draws a channel head at x 0..16.5 separated
     # from the shell by a tubesheet (the rect at x 16.5..19.5), so the left stub
     # is the TUBE side — the heating medium — not a process connection. The
     # process boils in the shell: liquid in at the bottom, vapour off the top.
-    # Mapping cold_in to that left stub, as the plain W anchor does, pipes the
-    # column bottoms straight into the steam side.
+    # Piping the column bottoms to that left stub would run it straight into the
+    # steam side, which is what the plain W anchor does.
     #
-    # Only one tube-side opening is drawn, so hot_out has to take the shell's
-    # far dished head; treat it as the heating-medium return.
+    # Only one channel-head opening is drawn, so ``tube_out`` has to take the
+    # shell's far dished head. It is the heating-medium return and the one nozzle
+    # here whose name is truer than its position; a second opening on the head
+    # would have to be invented, and a nozzle is drawn where the stencil draws
+    # one.
     #
     # ``bottoms`` is the draw at the weir end: what does not boil overflows the
     # plate at x = 86.5 and leaves the bottom of the shell, which is how a
     # tower's bottoms product actually gets off the sheet.
     ("hex", "kettle"):  ("heat_exchangers", "Reboiler",
-                         {"cold_in": ("AT", 45.8, 30.0), "cold_out": ("N", 64.0),
-                          "hot_in": ("W", 22.5), "hot_out": ("E", 15.0),
+                         {"shell_in": ("AT", 45.8, 30.0), "shell_out": ("N", 64.0),
+                          "tube_in": ("W", 22.5), "tube_out": ("E", 15.0),
                           "bottoms": ("AT", 85.0, 30.0)}),
     # Heater and cooler are one stencil pair: the same circle and zigzag, with
     # the diagonal arrow pointing in (heat added) or out (heat removed). Taking
@@ -187,14 +203,23 @@ KIND_MAP = {
     # (Spiral)" is a different piece of equipment entirely and, at 100x100,
     # draws a utility cooler larger than the reactor upstream of it. draw.io
     # files the heat-removed one under "Condenser".
+    #
+    # The third connection is the utility one: steam into the heater, cooling
+    # medium out of the cooler. It is named for what lands on it rather than for
+    # the duty, on the same principle as the exchanger nozzles above.
     ("heater", "default"): ("heat_exchangers", "Heater",
-                            {"inlet": "W", "outlet": "E", "duty": "S"}),
+                            {"inlet": "W", "outlet": "E", "utility_in": "S"}),
     ("cooler", "default"): ("heat_exchangers", "Condenser",
-                            {"inlet": "W", "outlet": "E", "duty": "N"}),
+                            {"inlet": "W", "outlet": "E", "utility_out": "N"}),
     # A real exchanger style in its own right, just not what a Cooler is drawn as.
+    #
+    # Two spiral channels, neither of them a shell or a tube, so the sides are
+    # lettered. Only side A's pair is drawn as stubs, on the outer coil at
+    # (10, 50) and (90, 50); the second channel's connections are axial and a
+    # plan view cannot draw them, so side B takes the casing's own N and S faces.
     ("hex", "spiral"):     ("heat_exchangers", "Heat Exchanger (Spiral)",
-                            {"cold_in": "W", "cold_out": "E",
-                             "hot_in": "N", "hot_out": "S"}),
+                            {"side_a_in": "W", "side_a_out": "E",
+                             "side_b_in": "N", "side_b_out": "S"}),
     # Vessels / columns / reactors / separators / tanks.
     #
     # The generic ISO 10628 vessel: a vertical cylinder with dished heads, the
@@ -438,48 +463,78 @@ KIND_MAP = {
     # --- Variants (style choices within a class; same ports) ---
     # Heat exchanger styles.
     ("hex", "shell_tube"): ("heat_exchangers", "Shell and Tube Heat Exchanger 1",
-                            {"cold_in": "W", "cold_out": "E", "hot_in": "N", "hot_out": "S"}),
+                            {"tube_in": "W", "tube_out": "E",
+                             "shell_in": "N", "shell_out": "S"}),
+    # U-tube: the channel head is the box at x 0..15, split into two chambers by
+    # the pass partition the stencil draws at y = 15, and the shell runs from the
+    # tubesheet at x = 15 to a dished head that bulges to x = 91.75. A U-tube
+    # bundle turns round inside the shell, so BOTH tube connections are on that
+    # channel head, one chamber each — the same arrangement "hairpin" below is
+    # drawn with, and the reason the variant is called u_tube at all.
+    #
+    # draw.io offers one W anchor, on the partition itself at (0, 15), and an E
+    # anchor on the shell's far head. Taking the pair would put a tube nozzle on
+    # the shell, so the two chambers are addressed directly instead and the E
+    # anchor goes unused. The shell keeps N and S, which are on its walls.
     ("hex", "u_tube"):     ("heat_exchangers", "U-Tube Heat Exchanger",
-                            {"cold_in": "W", "cold_out": "E", "hot_in": "N", "hot_out": "S"}),
+                            {"tube_in": ("W", 7.5), "tube_out": ("W", 22.5),
+                             "shell_in": "N", "shell_out": "S"}),
     # Horizontal shell-and-tube in elevation — the exchanger a real sheet draws
     # for an overhead condenser or a feed cooler. (The "shell_tube" variant above
     # is the ISO circle-and-zigzag; despite the name it is not this shape.)
     # Tube side runs through the heads at x 0..15 and 85..100; the shell nozzles
     # sit between the tubesheets, which is where draw.io's NE/SW anchors land.
     ("hex", "straight_tubes"): ("heat_exchangers", "Heat Exchanger (Straight Tubes)",
-                                {"cold_in": ("W", 15), "cold_out": ("E", 15),
-                                 "hot_in": ("N", 75), "hot_out": ("S", 25)}),
+                                {"tube_in": ("W", 15), "tube_out": ("E", 15),
+                                 "shell_in": ("N", 75), "shell_out": ("S", 25)}),
+    # The same circle-and-zigzag as "default", inside a box and with the
+    # heat-removed arrow across it, so the sides read the same way: zigzag W->E
+    # is the tube, the circle around it is the shell.
     ("hex", "condenser"):  ("heat_exchangers", "Condenser",
-                            {"cold_in": "W", "cold_out": "E", "hot_in": "N", "hot_out": "S"}),
+                            {"tube_in": "W", "tube_out": "E",
+                             "shell_in": "N", "shell_out": "S"}),
+    # Plate: a pack of plates with the two circuits drawn as an X across it,
+    # (10, 0)->(90, 30) and (10, 30)->(90, 0). Neither circuit is a shell or a
+    # tube and the two are physically interchangeable, so they are lettered
+    # rather than named, and each one follows the diagonal the stencil actually
+    # draws — NW to SE and SW to NE. Pairing along the top and bottom edges
+    # instead, as the old naming did, crossed both streams over the ink.
     ("hex", "plate"):      ("heat_exchangers", "Heat Exchanger (Plate)",
-                            {"cold_in": "SW", "cold_out": "SE", "hot_in": "NW", "hot_out": "NE"}),
+                            {"side_a_in": "NW", "side_a_out": "SE",
+                             "side_b_in": "SW", "side_b_out": "NE"}),
     # Finned tubes: the same casing as "straight_tubes", with a finned tube in
     # place of the bundle, so it takes that variant's nozzles exactly and is a
-    # drop-in change of artwork. draw.io's own N/S anchors are at x = 7 and 93,
-    # which is over the channel heads rather than between the tubesheets at
-    # x = 15 and 85 — a shell nozzle cannot be on the tube side.
+    # drop-in change of artwork. It is a shell-and-tube exchanger and not an air
+    # cooler: the stencil draws a closed casing with tubesheets at x = 15 and 85
+    # and no fan, so the N/S pair is a piped shell connection. draw.io's own N/S
+    # anchors are at x = 7 and 93, which is over the channel heads rather than
+    # between the tubesheets — a shell nozzle cannot be on the tube side.
     ("hex", "finned"):     ("heat_exchangers", "Heat Exchanger (Finned Tubes)",
-                            {"cold_in": "W", "cold_out": "E",
-                             "hot_in": ("N", 75), "hot_out": ("S", 25)}),
+                            {"tube_in": "W", "tube_out": "E",
+                             "shell_in": ("N", 75), "shell_out": ("S", 25)}),
     # Air cooler (fin-fan). The only piped side is the tube bundle, drawn across
-    # the bottom at y = 80 where the stencil's own W/E anchors sit, so that is
-    # the PROCESS side and it is named hot: an air cooler is what cools a
-    # stream, the way the kettle above is named for the side that boils. Air is
-    # the cold stream, and it is not piped — an induced-draft bay pulls it in
-    # under the bundle and discharges it through the fan on top, so cold_in and
-    # cold_out sit on the plenum's own bottom and top faces on the fan's
-    # centreline.
+    # the bottom at y = 80 where the stencil's own W/E anchors sit. There is no
+    # shell: the other side is air, and it is not piped either — an induced-draft
+    # bay pulls it in under the bundle and discharges it through the fan on top,
+    # so air_in and air_out sit on the plenum's own bottom and top faces on the
+    # fan's centreline.
     ("hex", "air_cooled"): ("heat_exchangers", "Heat Exchanger (Finned Tubes, Fan)",
-                            {"hot_in": ("W", 80), "hot_out": ("E", 80),
-                             "cold_in": ("S", 50), "cold_out": ("N", 50)}),
-    # Double pipe, drawn as a hairpin: the inner pipe is stubbed up at (10, 0)
-    # and down at (10, 50), and the annulus opens on the west face at y = 10 and
-    # y = 40. Both fluids therefore enter at the same end and turn round at the
-    # far one, which is why the annulus has no east nozzle to give hot_out.
-    # Counter-current: the annulus enters low where the tube leaves.
+                            {"tube_in": ("W", 80), "tube_out": ("E", 80),
+                             "air_in": ("S", 50), "air_out": ("N", 50)}),
+    # Double pipe, drawn as a hairpin. The two bands at y 5..15 and y 35..45 are
+    # the OUTER pipe's walls and the line drawn down the middle of each is the
+    # inner pipe: it enters the west face at y = 10 and y = 40, where the stencil
+    # draws its flange ticks, and its return bend swings out to x = 90, clear of
+    # the annulus's own bend at x = 70. The annulus is the side that is stubbed
+    # up at (10, 0) and down at (10, 50), so N and S are the shell connections
+    # and the west pair is the tube.
+    #
+    # Both fluids enter at the same end and turn round at the far one, which is
+    # why neither side has an east nozzle. Counter-current: the tube enters low
+    # at (0, 40) where the annulus leaves.
     ("hex", "double_pipe"): ("heat_exchangers", "Double Pipe Heat Exchanger",
-                             {"cold_in": "N", "cold_out": "S",
-                              "hot_in": "SW", "hot_out": "NW"}),
+                             {"shell_in": "N", "shell_out": "S",
+                              "tube_in": "SW", "tube_out": "NW"}),
     # Hairpin: a U-tube in a shell, with no <connections> at all. The tube ends
     # are the two flared openings on the west face (y 7..10 and y 20..23); the
     # shell draws four stubs, and the pair taken is the diagonal one, far end
@@ -487,18 +542,19 @@ KIND_MAP = {
     # above, the tube returns to the end it came in at, so both tube nozzles are
     # on the west face.
     ("hex", "hairpin"):    ("heat_exchangers", "Hairpin Exchanger",
-                            {"cold_in": ("W", 8.5), "cold_out": ("W", 21.5),
-                             "hot_in": ("N", 72.5), "hot_out": ("S", 17.5)}),
-    # Thin-film (wiped-film) evaporator — the one evaporator in the set. The
-    # process runs top to bottom: feed onto the wiper at the shell's top face,
-    # which is drawn at y = 10 rather than on the box edge, and concentrate out
-    # of the cone apex at (40, 120). The port is offset to x = 20 to keep the
-    # inlet line off the rotor shaft the stencil draws down the centre.
-    # The jacket is the hot side, and the stencil opens it on both walls at
-    # y = 30, so that is where the heating medium goes in and comes out.
+                            {"tube_in": ("W", 8.5), "tube_out": ("W", 21.5),
+                             "shell_in": ("N", 72.5), "shell_out": ("S", 17.5)}),
+    # Thin-film (wiped-film) evaporator — the one evaporator in the set, and the
+    # one exchanger whose two sides are a jacket and a product side rather than a
+    # shell and tubes. The product runs top to bottom: feed onto the wiper at the
+    # shell's top face, which is drawn at y = 10 rather than on the box edge, and
+    # concentrate out of the cone apex at (40, 120). The port is offset to x = 20
+    # to keep the inlet line off the rotor shaft the stencil draws down the
+    # centre. The jacket is opened on both walls at y = 30, so that is where the
+    # heating medium goes in and comes out.
     ("hex", "thin_film"):  ("heat_exchangers", "Thin-Film Evaporator",
-                            {"cold_in": ("AT", 20.0, 10.0), "cold_out": ("S", 40),
-                             "hot_in": ("W", 30), "hot_out": ("E", 30)}),
+                            {"product_in": ("AT", 20.0, 10.0), "product_out": ("S", 40),
+                             "jacket_in": ("W", 30), "jacket_out": ("E", 30)}),
     # Pump / compressor styles.
     ("pump", "vacuum"):           ("pumps", "Vacuum Pump",
                                    {"suction": ("W", 25.0), "discharge": ("E", 25.0)}),

@@ -87,16 +87,16 @@ def main():
     # --- Connections -----------------------------------------------------
     fs.connect(feed.outlet, col.feed)
 
-    fs.connect(col.distillate, cond.hot_in)
-    fs.connect(cond.hot_out, drum.inlet)
+    fs.connect(col.distillate, cond.shell_in)
+    fs.connect(cond.shell_out, drum.inlet)
     fs.connect(drum.vent, vent.inlet)
     fs.connect(drum.outlet, split.inlet)
     fs.connect(split.out_1, dist.inlet)
     fs.connect(split.out_2, col.reflux_in, tear_hint=True)   # reflux to the tower
 
-    fs.connect(col.bottoms, reb.cold_in)                     # sump into the kettle
-    fs.connect(reb.cold_out, col.boilup_in, tear_hint=True)  # boilup to the tower
-    fs.connect(reb.bottoms, bot.inlet)                       # over the weir, off the sheet
+    fs.connect(col.bottoms, reb.shell_in)                     # sump into the kettle
+    fs.connect(reb.shell_out, col.boilup_in, tear_hint=True)  # boilup to the tower
+    fs.connect(reb.bottoms, bot.inlet)                        # over the weir, off the sheet
 
     fs.render(out("column_reflux.svg"))
     print("Generated column_reflux.svg")

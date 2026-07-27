@@ -20,10 +20,10 @@ def build_ammonia_loop():
     prod = fs.add(U.Product("Ammonia"))
 
     fs.connect(feed.outlet, reformer.feed)
-    fs.connect(reformer.outlet, hx.hot_in)
-    fs.connect(hx.hot_out, sep.feed)
+    fs.connect(reformer.outlet, hx.shell_in)
+    fs.connect(hx.shell_out, sep.feed)
     fs.connect(sep.vapor, comp.suction)
-    fs.connect(comp.discharge, hx.cold_in)  # a recycle back-edge
+    fs.connect(comp.discharge, hx.tube_in)  # a recycle back-edge
     fs.connect(sep.liquid, prod.inlet)
     return fs
 

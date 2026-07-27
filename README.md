@@ -260,6 +260,21 @@ fs.connect(solvent.outlet, tower.feed_1)   # above the feed tray
 fs.connect(crude.outlet, tower.feed_2)
 ```
 
+**An exchanger's nozzles name the side, not the duty.** They are `shell_in`,
+`shell_out`, `tube_in` and `tube_out`, because which fluid runs in the shell and
+which in the tubes is a design decision the drawing has to record — fouling
+service goes tube side, since tubes can be rodded out — while which side is the
+hot one inverts between operating cases without the nozzle moving. The variants
+that have no shell and no tubes say what they do have: `air_cooled` is
+`tube_*` and `air_*`, `plate` and `spiral` letter their two interchangeable
+circuits `side_a_*` / `side_b_*`, and `thin_film` is `jacket_*` and `product_*`.
+`Heater` and `Cooler` take a `utility_in` / `utility_out` on the same principle.
+
+```python
+fs.connect(overhead.outlet, cond.shell_in)   # condensing vapour, shell side
+fs.connect(cw.outlet, cond.tube_in)          # cooling water through the tubes
+```
+
 **A kettle reboiler draws its own bottoms.** `HeatExchanger(variant="kettle")`
 has a fifth nozzle, `bottoms`, at the weir end of the shell. What does not boil
 overflows and leaves there as the tower's bottoms product, so the sump line
@@ -336,8 +351,8 @@ prod     = fs.add(units.Product("Ammonia"))
 
 fs.connect(feed.outlet,     mixer.in_1)
 fs.connect(mixer.outlet,    reformer.feed)
-fs.connect(reformer.outlet, hx.hot_in)
-fs.connect(hx.hot_out,      sep.feed)
+fs.connect(reformer.outlet, hx.shell_in)
+fs.connect(hx.shell_out,    sep.feed)
 fs.connect(sep.vapor,       comp.suction)
 fs.connect(comp.discharge,  mixer.in_2)   # detected as the recycle
 fs.connect(sep.liquid,      prod.inlet)
@@ -354,7 +369,7 @@ hx = fs.add(units.HeatExchanger("E-1")).pin(x=100, y=50)
 fv = fs.add(units.Valve("FV-1")).pin(col=2, row=1, mirrored=True)
 
 # Force a stream through explicit orthogonal waypoints:
-fs.connect(feed.outlet, hx.cold_in).via([(130, 65), (130, 110)])
+fs.connect(feed.outlet, hx.tube_in).via([(130, 65), (130, 110)])
 ```
 
 **Orientation and mirroring.** `orientation` is a clockwise quarter turn in

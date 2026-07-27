@@ -983,12 +983,12 @@ def test_heater_and_cooler_are_one_stencil_pair():
     assert cooler.ports["inlet"] == heater.ports["inlet"]
     assert cooler.ports["outlet"] == heater.ports["outlet"]
     # Heat in from below, heat out through the top.
-    assert outward_dir(*heater.ports["duty"], heater.width, heater.height) == "S"
-    assert outward_dir(*cooler.ports["duty"], cooler.width, cooler.height) == "N"
+    assert outward_dir(*heater.ports["utility_in"], heater.width, heater.height) == "S"
+    assert outward_dir(*cooler.ports["utility_out"], cooler.width, cooler.height) == "N"
     # And the spiral exchanger is reachable under the kind it belongs to.
     spiral = default_registry.get("hex", "spiral")
     assert (spiral.width, spiral.height) == (100.0, 100.0)
-    assert set(spiral.ports) == {"cold_in", "cold_out", "hot_in", "hot_out"}
+    assert set(spiral.ports) == {"side_a_in", "side_a_out", "side_b_in", "side_b_out"}
 
 
 def test_a_nozzle_standing_in_a_series_band_is_a_collision():

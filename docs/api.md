@@ -305,9 +305,9 @@ Each entry is `port` *(direction / role)*.
 | `Separator` | `separator` | `feed` *(in)*, `vapor` *(out/vapor)*, `liquid` *(out/liquid)* |
 | `Column` | `column` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*, `reflux_in` *(in/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*, `condenser_duty` *(out/energy)* |
 | `Reactor` | `reactor` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `outlet` *(out)*, `vent` *(out/vapor)*, `duty` *(in/energy)* |
-| `HeatExchanger` | `hex` | `hot_in`, `hot_out`, `cold_in`, `cold_out`; `kettle` adds `bottoms` *(out/liquid)* |
-| `Heater` | `heater` | `inlet` *(in)*, `outlet` *(out)*, `duty` *(in/energy)* |
-| `Cooler` | `cooler` | `inlet` *(in)*, `outlet` *(out)*, `duty` *(out/energy)* |
+| `HeatExchanger` | `hex` | `shell_in`, `shell_out`, `tube_in`, `tube_out`; `kettle` adds `bottoms` *(out/liquid)*. four variants name their sides differently — see [Variants](#variants) |
+| `Heater` | `heater` | `inlet` *(in)*, `outlet` *(out)*, `utility_in` *(in/energy)* |
+| `Cooler` | `cooler` | `inlet` *(in)*, `outlet` *(out)*, `utility_out` *(out/energy)* |
 | `Furnace` | `furnace` | `inlet` *(in)*, `outlet` *(out)*, `fuel` *(in/feed)* |
 | `Filter` | `filter` | `inlet` *(in)*, `outlet` *(out)* |
 | `Dryer` | `dryer` | `feed` *(in/feed)*, `product` *(out)* |
@@ -538,14 +538,40 @@ draw at the weir end of the shell, where what does not boil leaves as the
 tower's bottoms product. No other exchanger has a weir, so no other variant has it, and
 asking a plate exchanger for `.bottoms` raises.
 
-Every exchanger answers to the same four nozzles, but not all four are piped
-across the symbol. `hairpin` and `double_pipe` turn the tube round at the far
-end and bring it back, so both tube nozzles are on the same face. `air_cooled`
-is a fin-fan: the bundle is the piped side and is named hot, and the air is the
-cold stream, drawn in under the bundle (`cold_in` on S) and out through the fan
-(`cold_out` on N). `thin_film` is an evaporator standing on end, fed onto the
-wiper at the top and drawing concentrate off the cone at the bottom, with the
-jacket as the hot side.
+**An exchanger's nozzles are named for the side of the equipment they sit on,
+never for the duty the stream carries.** Which fluid runs in the shell and which
+in the tubes is a design decision an engineer makes deliberately — fouling
+service goes tube side because tubes can be rodded out, condensing vapour goes
+shell side — so it is a fact about the exchanger and the drawing records it.
+Hot and cold, by contrast, invert between operating cases while the nozzle stays
+exactly where it is, and they did not even land on the same face from one
+variant to the next.
+
+Most variants are a shell and a tube side, and answer to `shell_in`,
+`shell_out`, `tube_in` and `tube_out`. Four have no shell or no tubes and say
+what they do have instead:
+
+| Variants | Nozzles |
+|---|---|
+| `default`, `shell_tube`, `straight_tubes`, `finned`, `condenser`, `u_tube`, `hairpin`, `double_pipe`, `kettle` | `shell_in` `shell_out` `tube_in` `tube_out` |
+| `air_cooled` | `tube_in` `tube_out` `air_in` `air_out` |
+| `plate`, `spiral` | `side_a_in` `side_a_out` `side_b_in` `side_b_out` |
+| `thin_film` | `jacket_in` `jacket_out` `product_in` `product_out` |
+
+Not all four are piped across the symbol. `u_tube`, `hairpin` and `double_pipe`
+turn the tube round at the far end and bring it back, so both tube nozzles are
+on the same face. `air_cooled` is a fin-fan: the bundle is the only piped side,
+and the air is not piped at all, so `air_in` sits on the plenum's floor under
+the bundle and `air_out` on the fan above it. `plate` and `spiral` have two
+symmetric channel sets with no geometric distinction to name, so they are
+lettered; on the plate exchanger each side follows one of the two diagonals the
+symbol draws. `thin_film` is an evaporator standing on end, fed onto the wiper
+at the top (`product_in`) and drawing concentrate off the cone at the bottom
+(`product_out`), with the heating medium in the jacket.
+
+`Heater` and `Cooler` take `utility_in` and `utility_out` on the same
+principle: the nozzle names the connection the heating or cooling medium lands
+on, rather than the duty crossing it.
 
 `Column(variant="packed")` draws two beds of packing between their support
 grids, which is the one column symbol with an internal. Its nozzles are the
@@ -759,7 +785,7 @@ Forces the stream through those exact orthogonal pixel waypoints, overriding the
 auto-router for that one stream. Chains off `connect()`:
 
 ```python
-fs.connect(feed.outlet, hx.cold_in).via([(130, 65), (130, 110)])
+fs.connect(feed.outlet, hx.tube_in).via([(130, 65), (130, 110)])
 ```
 
 ### Stream numbering
@@ -1095,8 +1121,8 @@ tap and is labelled the same way at every one:
 for hx in (condenser, cooler):
     cws = fs.add(units.Feed("CWSH", header=True))
     cwr = fs.add(units.Product("CWRH", header=True))
-    fs.connect(cws.outlet, hx.cold_in)
-    fs.connect(hx.cold_out, cwr.inlet)
+    fs.connect(cws.outlet, hx.tube_in)
+    fs.connect(hx.tube_out, cwr.inlet)
 ```
 
 Both taps draw `CWSH`; the flowsheet names them `CWSH` and `CWSH (2)` so each is

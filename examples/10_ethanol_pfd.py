@@ -116,7 +116,7 @@ def main():
     broth.pin(x=140, y=col_feed_y - 25)             # flag tip meets the feed nozzle
 
     # Condenser over the tower on the same axis, flipped top-to-bottom so its
-    # hot inlet is underneath: the overhead then rises into it dead straight.
+    # shell inlet is underneath: the overhead then rises into it dead straight.
     cond_w = 64.0
     cond.pin(x=col_axis - cond_w / 2, y=56, mirrored="y")
 
@@ -136,8 +136,9 @@ def main():
     reb.pin(x=640, y=420)
 
     # Bottoms cooler on the kettle's weir draw. The process runs left to right
-    # through the shell, so it takes the exchanger's W-E pair of nozzles and the
-    # cooling water the N-S pair, which is the way a shell-and-tube is drawn.
+    # through the tubes, so it takes the exchanger's W-E pair of nozzles and the
+    # cooling water the shell's N-S pair, which is the way a shell-and-tube is
+    # drawn: the dirty stream goes tube side, where it can be rodded out.
     hx_y, hx_h = 510.0, 45.0
     hx.pin(x=900, y=hx_y)
     hx_axis_y = hx_y + hx_h / 2                     # dewatering train runs on it
@@ -169,16 +170,16 @@ def main():
     fs.connect(water.outlet, mix1.feed_2, name="S-304")
 
     fs.connect(refl.out_1, ethanol.inlet, name="S-305")
-    fs.connect(col.distillate, cond.hot_in, name="S-305")
-    fs.connect(cond.hot_out, drum.inlet, name="S-305")
+    fs.connect(col.distillate, cond.shell_in, name="S-305")
+    fs.connect(cond.shell_out, drum.inlet, name="S-305")
     fs.connect(drum.outlet, refl.inlet, name="S-305")
     fs.connect(refl.out_2, col.reflux_in, name="S-305", tear_hint=True)
 
-    fs.connect(col.bottoms, reb.cold_in, name="S-306")
-    fs.connect(reb.cold_out, col.boilup_in, name="S-306", tear_hint=True)
-    fs.connect(reb.bottoms, hx.cold_in, name="S-306")
+    fs.connect(col.bottoms, reb.shell_in, name="S-306")
+    fs.connect(reb.shell_out, col.boilup_in, name="S-306", tear_hint=True)
+    fs.connect(reb.bottoms, hx.tube_in, name="S-306")
 
-    fs.connect(hx.cold_out, mix2.in_1, name="S-307")
+    fs.connect(hx.tube_out, mix2.in_1, name="S-307")
     fs.connect(mix1.outlet, mix2.in_2, name="S-308")
 
     fs.connect(mix2.outlet, press.inlet, name="S-309")
