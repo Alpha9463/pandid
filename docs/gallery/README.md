@@ -159,3 +159,27 @@ number through HV-101 and ST-101, and breaks at the two units marked
 takes its `sequence` by hand, for a line that already exists on someone else's
 list. The stream table underneath is headed by the same line numbers, so a
 column ties to a line without a second lookup.
+
+## 10 · Ethanol purification PFD
+
+[`examples/10_ethanol_pfd.py`](../../examples/10_ethanol_pfd.py) ·
+[SVG](10_ethanol_pfd.svg)
+
+![Ethanol purification PFD](10_ethanol_pfd.png)
+
+A whole issue-ready sheet, and the one example drawn on a **real A3 page**:
+`page_size="A3"` fixes the sheet at 420 × 297 mm, so the SVG declares that
+physical size, the zone grid belongs to the page rather than to the drawing,
+and the scale cell reports the ratio the drawing was actually placed at. The
+furniture rules to the page edges and the drawing is fitted into what is left.
+
+The process is the front end of a fuel-ethanol purification train: beer column
+T-301 with its overhead condenser, reflux drum and kettle reboiler, the bottoms
+cooled in HX-301, flocculant made up with RO water in M-301, dosed into the beer
+in M-302, and the slurry dewatered in the membrane filter press F-301. Six
+off-page connectors carry the drawing they tie into, the equipment list is named
+row by row with `include=`, a `TableBox` carries the utilities summary above the
+title strip, and the stream table along the foot is sectioned into a "Mass
+Fraction" block. Where the sheet leaves a line unnumbered — the tower overhead,
+the reboiler circuit — the segments share the number of the stream they serve,
+so each is drawn once and heads one table column.
