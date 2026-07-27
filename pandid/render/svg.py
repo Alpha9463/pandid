@@ -932,7 +932,10 @@ class SvgRenderer:
             f = u.frame
             out = balloons if u.kind == "instrument" else lines
             x, y = f.x, f.y
-            safe_name = html.escape(u.name)
+            # The tag, not the name: a symbol that repeats — a trip square, a
+            # utility header flag — is drawn with the tag it shares and named
+            # apart only so the flowsheet can address each drawing of it.
+            safe_name = html.escape(u.tag)
 
             if u.kind in ("feed", "product"):
                 lines.extend(self._draw_boundary(u, f, x, y, safe_name))
@@ -1118,7 +1121,7 @@ class SvgRenderer:
         lx, ly, anchor, baseline = self._label_place(lpos, x, y, u_width, u_height)
         if (f.label_pos or "top") == lpos:
             tag = _unit_label_box(self._unit_label_item(
-                u, f, x, y, u_width, u_height, html.escape(u.name)))
+                u, f, x, y, u_width, u_height, html.escape(u.tag)))
             if tag is not None:
                 if lpos == "bottom":
                     ly = tag[3] + 8

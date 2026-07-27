@@ -243,9 +243,11 @@ def resolve_size(unit: "Unit", placed=None) -> tuple[float, float]:
     """
     sym = _sym(unit)
     if unit.kind in ("feed", "product"):
-        # Boundary flag: size to the wider of the name or the off-page reference
+        # Boundary flag: size to the wider of the label or the off-page reference
         # (drawn as the connector's second line), so neither overflows the flag.
-        text_len = max(len(unit.name), len(getattr(unit, "reference", "") or ""))
+        # The label is the tag, not the name: every tap of one header is drawn
+        # at the same size, however the flowsheet tells the taps apart.
+        text_len = max(len(unit.tag), len(getattr(unit, "reference", "") or ""))
         w = unit.width if unit.width is not None else max(80.0, text_len * 8.0 + 30.0)
         return w, unit.height if unit.height is not None else sym.height
 

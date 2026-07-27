@@ -410,9 +410,10 @@ accepted and split.) The signal `kind`s are `electric`, `pneumatic`,
 and no stream numbers.
 
 **A tag names one item**, so `add()` refuses one already on the sheet: two
-`P-101`s, or two `LT-101`s, are a mistake in the drawing. A trip square is the
-exception, because it is a logic function rather than a device and is drawn at
-every place it acts:
+`P-101`s, or two `LT-101`s, are a mistake in the drawing. Two symbols are the
+exception, because each stands for one thing shown in several places. A trip
+square is a logic function rather than a device and is drawn at every place it
+acts:
 
 ```python
 squares = [fs.add_instrument("I", 1, variant="logic") for _ in range(4)]
@@ -420,8 +421,18 @@ squares = [fs.add_instrument("I", 1, variant="logic") for _ in range(4)]
 [s.name for s in squares]    # ['I-1', 'I-1 (2)', 'I-1 (3)', 'I-1 (4)']
 ```
 
+A utility header flag — `Feed`/`Product` with `header=True` — is one service
+drawn at every place it is tapped, which is how cooling water reaches two
+coolers under the one label:
+
+```python
+cws = [fs.add(units.Feed("CWSH", header=True)) for _ in range(2)]
+[f.tag for f in cws]         # ['CWSH', 'CWSH']       drawn twice
+[f.name for f in cws]        # ['CWSH', 'CWSH (2)']
+```
+
 The tag repeats; the name does not, so a stream endpoint, a spec entry or an
-equipment-list row still means exactly one square.
+equipment-list row still means exactly one square, and one tap.
 
 A balloon's `pv`, `sig_in` and `sig_out`, and a valve's `actuator`, are **signal
 connections**: nothing flows through them, so they take a signal `kind` and

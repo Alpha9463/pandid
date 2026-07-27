@@ -29,6 +29,7 @@ The format::
 
     units:
       - {kind: Feed, name: Raw Feed, reference: PFD-100, pin: {x: 60, y: 275}}
+      - {kind: Feed, name: CWSH, header: true}   # a header: tap it as often as needed
       - {kind: Fitting, name: ST-101, variant: strainer, description: Strainer}
       - {kind: Valve, name: HV-101, variant: gate, normal_position: closed}
       - {kind: Mixer, name: M-100, n_inlets: 2}
@@ -49,10 +50,12 @@ The format::
     title_block: {title: ..., revisions: [{rev: A, date: ..., by: AA}]}
     annotations: [{type: equipment_list, align: top-right}]
 
-A unit is addressed by its name, so an interlock square drawn more than once —
-the one tag a flowsheet lets repeat — is addressed by the name the flowsheet
-gives each drawing of it: the first entry is ``I-1``, the second ``I-1 (2)``,
-in the order the ``instruments:`` list declares them.
+A unit is addressed by its name, so a symbol drawn more than once — an
+interlock square, a utility header flag, the two tags a flowsheet lets repeat —
+is addressed by the name the flowsheet gives each drawing of it: the first entry
+is ``I-1``, the second ``I-1 (2)``, in the order the list declares them. Each
+entry carries the tag, so a header tapped twice is written out as two ``CWSH``
+entries and read back as the same two taps.
 """
 
 from __future__ import annotations
@@ -75,7 +78,7 @@ from pandid.flowsheet import (
 )
 from pandid.ports import Port
 from pandid.streams import LINE_NUMBER_FIELDS, Stream
-from pandid.units import Instrument, Unit
+from pandid.units import Instrument, Unit, _Boundary
 
 
 class SpecError(ValueError):
@@ -260,6 +263,13 @@ _KIND_SIZES = {
 _KIND_TEXT = {
     "normal_position": ("Valve", "Fitting"),
 }
+# Flags only some classes carry. ``header`` says a boundary flag stands for a
+# utility service tapped wherever it is wanted rather than for one line leaving
+# the sheet, which is what lets it be drawn more than once; equipment is drawn
+# once whatever it is connected to, so the question does not arise for it.
+_KIND_FLAGS = {
+    "header": ("Feed", "Product"),
+}
 
 
 def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
@@ -347,7 +357,8 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
     where = f"{where} {name!r}"
 
     allowed = set(_UNIT_KEYS)
-    for key, owners in {**_VARIABLE_PORTS, **_KIND_SIZES, **_KIND_TEXT}.items():
+    for key, owners in {**_VARIABLE_PORTS, **_KIND_SIZES, **_KIND_TEXT,
+                        **_KIND_FLAGS}.items():
         if cls.__name__ in owners:
             allowed.add(key)
         elif key in data:
@@ -371,6 +382,9 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
     for key in _KIND_TEXT:
         if key in data:
             kwargs[key] = _text(data[key], f"{where}.{key}")
+    for key in _KIND_FLAGS:
+        if key in data:
+            kwargs[key] = _flag(data[key], f"{where}.{key}")
     try:
         unit = cls(name, **kwargs)
     except ValueError as e:
@@ -829,7 +843,10 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
             f"{unit.name!r} is a {kind}, which is not one of the built-in equipment "
             f"classes, so it cannot be written to a spec; available kinds: {sorted(_CLASSES)}"
         )
-    entry: dict[str, Any] = {"kind": kind, "name": unit.name}
+    # The tag, not the name: a header tapped twice is two entries carrying the
+    # one label, and reading them back re-derives the names the flowsheet tells
+    # the taps apart by, exactly as it did the first time.
+    entry: dict[str, Any] = {"kind": kind, "name": unit.tag}
     _write_common(unit, entry)
     if isinstance(unit, unit_types.Mixer):
         entry["n_inlets"] = sum(1 for p in unit.ports if p.startswith("in_"))
@@ -850,6 +867,11 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
         # absence of one, so writing it down would be writing the default down.
         if unit.normal_position != "open":
             entry["normal_position"] = unit.normal_position
+    elif isinstance(unit, _Boundary):
+        # Only when set: a flag standing for one line leaving the sheet is the
+        # ordinary case, and it is what a flag without the word already means.
+        if unit.header:
+            entry["header"] = True
     return _write_placement(unit, entry)
 
 

@@ -46,6 +46,22 @@ and is kept working.
   shipped classes by name, so `to_dict()` raises `SpecError` naming the class
   rather than writing a spec that cannot be read back, and a `kind:` naming a
   custom class is refused the same way.
+- `Feed(header=True)` / `Product(header=True)`, the utility header flag. A
+  boundary flag is an off-page connector rather than a piece of plant, and a
+  header — cooling water, steam, flare, plant air — is a service tapped wherever
+  it is wanted and labelled the same way at every tap. The reference sheet this
+  project reproduces brings cooling water on twice and sends it back twice, all
+  four flags reading `CWSH` / `CWRH`. `add()` accepts such a repeat and gives it
+  a name of its own (`CWSH`, `CWSH (2)`), exactly as it does an interlock
+  square, so each tap is still one unit for a stream endpoint or a spec entry to
+  address while the flag drawn stays `CWSH`. Both taps are drawn at the same
+  size, get their own stream and line numbers, and the pair is written to a spec
+  and read back as the same two taps.
+  - Opt-in, because two flags accidentally sharing a name are two services the
+    reader cannot tell apart, and only the author knows which case it is. A flag
+    without the word still raises, as does equipment, and both drawings have to
+    be of the same thing: a `Feed` and a `Product` under one label, or two flags
+    naming different `reference` drawings, clash.
 - `Conveyor(length=…)`, a belt conveyor drawn to the length the drawing gives
   it. The symbol is built to the belt run rather than scaled to it, so a longer
   conveyor grows only the straight bar between its two rollers and the rollers
