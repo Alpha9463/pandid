@@ -183,9 +183,10 @@ _REV_COLS = (("REV", 22), ("DATE", 42), ("DESCRIPTION", 140),
              ("BY", 32), ("CHK'D", 32), ("APP'D", 32))
 # The title / status / drawing-number bands, which every sheet carries.
 _BODY_H = 80.0
-# One client or project line above them. ISO 5457 puts the legal owner of the
-# drawing over its title, so the pair heads the information block; a block that
-# names neither is ruled no row for them.
+# One client or project line above them. Neither is an ISO 7200 field. Its
+# mandatory "legal owner" is the issuing organisation, which is the company
+# cell. An issued sheet names both anyway, so the pair heads the information
+# block; a block that names neither is ruled no row for them.
 _HDR_ROW = 13.0
 _HDR_VALUE_X = 40.0
 
@@ -295,9 +296,12 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
     # status (tiny label at cell top, value below)
     L.append(_text(ix + 6, band2 + 8, "STATUS", 6.5, fill="#666"))
     L.append(_text(ix + 6, band3 - 5, tb.status or "—", 11, bold=True))
-    # Bottom band: DRAWING No | SCALE | DATE | REV. ASME Y14.1 keeps the scale
-    # with the number and the revision index, and a sheet with no scale to state
-    # gives its room back to the three cells that identify the drawing.
+    # Bottom band: DRAWING No | SCALE | DATE | REV. Keeping the scale with the
+    # number and the revision index is common drafting practice rather than a
+    # standard: ISO 7200 §4 puts scale outside the title block, and ASME
+    # title-block content is Y14.100's concern, not Y14.1's. A sheet with no
+    # scale to state gives its room back to the three cells that identify the
+    # drawing.
     rev = tb.revisions[-1].rev if tb.revisions else "0"
     scale = tb.scale or fit_scale
     cells: list[tuple[float, str, str]] = [
@@ -323,6 +327,12 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
 
 # ---------------------------------------------------------------------------
 # Zone-ruled drawing border (ASME-style: A.. bottom→top, 1.. right→left)
+#
+# This is a drawing-frame zone reference in the ASME idiom, not an ISO 5457
+# grid. ISO 5457 §4.4 runs letters top down and numerals left to right at a
+# fixed 50 mm pitch with the field counts of its Table 2, and §4.3/§4.5 add
+# centring and trimming marks. None of that is drawn here: the band is a
+# constant in drawing units and the field count is chosen to suit the sheet.
 # ---------------------------------------------------------------------------
 
 # Width of the lettered/numbered band between the drawing frame and the sheet

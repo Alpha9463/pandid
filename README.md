@@ -66,9 +66,12 @@ Jupyter.
   peer is actually on, so a drum under its condenser is fed from the top.
 - **Orthogonal A\* routing.** Clean right-angle streams with crossing jump-gaps
   and parallel-segment separation. Never emits a disconnected stream.
-- **Industry-standard symbol library.** 95+ ISO 10628-2 / ISA-5.1 symbols with
-  style **variants** (a heat exchanger can be shell-&-tube, plate, kettle,
-  U-tube…), derived from the Apache-2.0 draw.io P&ID stencils (see `NOTICE`).
+- **Industry-standard symbol library.** 137 registered symbols with style
+  **variants** (a heat exchanger can be shell-&-tube, plate, kettle, U-tube…),
+  derived from the Apache-2.0 draw.io P&ID stencils (see `NOTICE`). Equipment
+  shapes follow the conventions of ISO 10628-2 and instrument symbols follow
+  ANSI/ISA-5.1; see [Standards](#standards) for what that does and does not
+  claim.
 - **Pixel-perfect overrides.** `pin()` equipment to exact coordinates and
   `.via()` a stream through explicit waypoints; the engine honors them and
   auto-routes the rest.
@@ -104,6 +107,44 @@ Jupyter.
 
 **It does not do mass or energy balances.** Stream properties are strings you
 supply; nothing is calculated from them. This is a drawing engine.
+
+## Standards
+
+`pandid` draws in the idiom of the process-industry drawing standards. It does
+not claim conformance to any of them, and nothing it produces has been certified
+against one. What it follows, feature by feature:
+
+- **Equipment symbols** follow the conventions of **ISO 10628-2**. They are
+  derived from the draw.io / diagrams.net P&ID stencil set, which makes no
+  standards claim of its own, so a shape is matched to the ISO 10628-2 symbol
+  where one exists rather than reproduced from the standard itself.
+- **Instrument balloons, signal lines and tag letters** follow **ANSI/ISA-5.1**.
+  ISO 10628-1 §4.1 calls for instrumentation to IEC 62424 instead. `pandid` uses
+  ISA-5.1 in preference, because it is what North American practice draws and
+  what the reference sheets this package was built against use. ISA-5.1
+  §2.8.1(b) allows a standard to be adopted with exceptions provided each one is
+  documented in the user's own standard and on the drawing: `legend()` is where
+  a drawing says so.
+- **Sheet sizes** are the **ISO 216** A series, declared in millimetres on the
+  SVG root so a sheet prints at its physical size.
+- **The zone grid** is a drawing-frame zone reference in the ASME idiom: letters
+  run bottom to top, numerals right to left. It is **not** an ISO 5457 grid.
+  ISO 5457 §4.4 runs letters top down and numerals left to right at a fixed
+  50 mm pitch with the field counts of its Table 2, and also requires centring
+  marks, trimming marks and a 20 mm filing margin, none of which `pandid` draws.
+  The interval and the field count here are chosen to suit the sheet.
+- **The title block** carries the data fields **ISO 7200** specifies, which
+  ISO 10628-1 §5.1.2 requires on a process diagram: identification number, date
+  of issue, sheet number, title, approval person, creator, and legal owner,
+  which is the issuing organisation and so is the `company` cell. `client` is
+  not an ISO 7200 field; it is there because issued sheets carry one. ISO 7200's
+  eighth mandatory field, **document type**, has no cell yet.
+- **Nothing standardises where a label sits on a pipe** or which way it reads.
+  See [Line numbers](#line-numbers) for what `pandid` does and why.
+
+The largest remaining gap against ISO 10628-1 is §5.3.1 and §5.4.2: line widths
+and character heights are in drawing units and are scaled with the drawing, so
+no physical width or height in millimetres is controlled.
 
 ## Documentation
 
@@ -306,7 +347,7 @@ than their corners. See [example 06](https://github.com/Alpha9463/py-chemengg/bl
 ft  = fs.add_instrument("FT", 101)                             # field flow transmitter
 fic = fs.add_instrument("FIC", 101, variant="panel")           # panel-mounted controller
 fy  = fs.add_instrument("FY", 101, variant="computer")         # computing relay
-# variants: default (field balloon), panel, aux, shared (DCS square),
+# variants: default (field balloon), panel, aux, shared (circle in a square),
 #           computer (hexagon), sis (diamond in a square; also spelled
 #           "logic"), interlock (plain diamond)
 
@@ -740,7 +781,11 @@ matters if your organisation screens dependencies.
 draw.io / diagrams.net P&ID stencils, so `pandid/render/_vendored_symbols.py` and
 `scripts/vendor_data/drawio/` carry the original licence rather than the one
 above, as does the conveyor symbol in `pandid/render/symbols.py`, which is adapted
-from a stencil rather than generated from one.
+from a stencil rather than generated from one. The stencil artwork carries one
+additional field-of-use restriction on top of Apache-2.0, naming Atlassian
+products and marketplace distribution; it does not reach a drawing you make with
+`pandid`, and `NOTICE` reproduces it in full for anyone redistributing the
+symbols themselves.
 [`NOTICE`](https://github.com/Alpha9463/py-chemengg/blob/main/NOTICE)
 says exactly which files are which. The full texts are in
 [`LICENSE`](https://github.com/Alpha9463/py-chemengg/blob/main/LICENSE) and

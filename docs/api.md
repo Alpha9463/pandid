@@ -203,6 +203,13 @@ grows.
 Sizes are the ISO 216 landscape sheets, in mm: A4 297x210, A3 420x297,
 A2 594x420, A1 841x594, A0 1189x841.
 
+The grid itself runs `A` upward from the bottom and `1` leftward from the right,
+which is US/ASME practice, and it is a drawing-frame zone reference rather than
+an ISO 5457 grid. ISO 5457 §4.4 runs letters top down and numerals left to right
+at a fixed 50 mm pitch with the field counts of its Table 2, and §4.2, §4.3 and
+§4.5 add a 20 mm filing margin and centring and trimming marks. `pandid` matches
+none of those: the interval and the field count are chosen to suit the sheet.
+
 A named sheet declares that physical size on the `<svg>` element, so it prints
 and exports to PDF at exactly its ISO size rather than at whatever the reader
 takes a user unit to be worth:
@@ -665,8 +672,11 @@ horizontal run and to the left of a vertical one. A line number is a dozen
 characters wide and most runs are not, so beside is the usual answer for one.
 
 On a vertical run the label is turned a quarter clockwise, so it reads bottom to
-top and never upside down: the aligned-text convention of ISO 129-1 and
-ASME Y14.5.
+top and never upside down, and the sheet is read from the bottom or the right,
+the reading directions ISO 5457 §4.1 fixes for the drawing as a whole. No
+standard governs a label on a process diagram. ISO 129-1 §4.1.1 states the same
+rule for the text of a dimension, but its scope is dimensions and tolerances and
+a P&ID has none; ASME Y14.5 uses the opposite, unidirectional convention.
 
 Wherever it lands, a number is slid along its own run until it clears the
 equipment, tags, balloons and other numbers already on the sheet.
@@ -774,7 +784,7 @@ fs.title_block = TitleBlock(
     title="Aromatics Recovery A100",      # the two title lines
     subtitle="Process Flow Diagram 1",
     drawing_number="PFD-1001",
-    client="Aromatics Australia Pty Ltd",     # above the title, as ISO 5457 has it
+    client="Aromatics Australia Pty Ltd",     # above the title; not an ISO field
     project="Aromatics Recovery Unit",
     company="THE UNIVERSITY OF QUEENSLAND",   # logo / company cell
     status="ISSUED FOR REVIEW",               # issue-status cell
@@ -796,7 +806,12 @@ committed drawing changes day to day. Set it explicitly if you need reproducible
 output.
 
 `client` and `project` each rule a row above the title when they carry a value,
-and none when they do not.
+and none when they do not. Neither is a title-block field of any standard.
+ISO 5457 specifies no data fields at all and defers them to ISO 7200, whose
+mandatory "legal owner" is the organisation issuing the drawing, which is
+`company`. The block carries seven of ISO 7200's eight mandatory fields:
+`drawing_number`, `date`, `sheet`, `title`, `approved_by`, `drawn_by` and
+`company`. The eighth, document type, has no cell.
 
 `scale` is the scale cell. Left blank it reports the ratio the drawing was
 actually placed at, which is a real number as soon as `page_size` fixes the

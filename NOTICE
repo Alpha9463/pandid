@@ -33,6 +33,28 @@ stencil library:
     Licensed under the Apache License, Version 2.0
     See LICENSE-APACHE, or http://www.apache.org/licenses/LICENSE-2.0
 
+The stencil directory carries a second licence file of its own, at
+src/main/webapp/stencils/LICENSE. It does not replace the Apache grant above
+and does not revoke it. It adds one field-of-use restriction on the artwork,
+reproduced here in full:
+
+    The icon sets and stencil libraries included in this software, and any
+    derivatives thereof (including conversions to other formats, traced
+    reproductions, substantially similar visual representations, or
+    AI-generated images created using these icons as reference or training
+    input), may not be used as software assets in, distributed for use with,
+    or incorporated into Atlassian products or products distributed through
+    the Atlassian marketplace or plugin ecosystem, without explicit written
+    permission.
+
+    This restriction does not apply to end-user diagram output (such as
+    exported images or documents) created using this software.
+
+The symbol geometry this project generates is a conversion of that artwork to
+another format, so the restriction travels with it and with anyone who
+redistributes it. A drawing you produce with pandid is diagram output, which
+the second paragraph excludes. Nothing else in this distribution is affected.
+
 The following are derivative works of that library and remain under the Apache
 License 2.0, NOT the PolyForm licence above:
 
