@@ -577,6 +577,21 @@ def register_vendored(registry):
         ports={'inlet': (0.0, 5.0), 'outlet': (25.0, 5.0)},
     ), 'spool')
 
+    # draw.io piping:Open Figure 8 Blind (aspect=variable) -> fitting/blind
+    registry.register('fitting', Symbol(
+        svg='<g id="sym_fitting_blind"><g transform="scale(0.5)"><ellipse cx="10.0" cy="30.0" rx="10.0" ry="10.0" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 10.0 40.0 L 10.0 80.0" fill="none" stroke="#111" stroke-width="4.0"/><ellipse cx="10.0" cy="10.0" rx="10.0" ry="10.0" fill="#111" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=10.0, height=40.0,
+        ports={'inlet': (0.0, 15.0), 'outlet': (10.0, 15.0)},
+    ), 'blind')
+
+    # draw.io piping:Closed Figure 8 Blind (aspect=variable) -> fitting/blind [normally closed]
+    registry.register_closed('fitting', Symbol(
+        svg='<g id="sym_fitting_blind_closed"><g transform="scale(0.5)"><ellipse cx="10.0" cy="30.0" rx="10.0" ry="10.0" fill="#111" stroke="#111" stroke-width="4.0"/><path d="M 10.0 40.0 L 10.0 80.0" fill="none" stroke="#111" stroke-width="4.0"/><ellipse cx="10.0" cy="10.0" rx="10.0" ry="10.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=10.0, height=40.0,
+        ports={'inlet': (0.0, 15.0), 'outlet': (10.0, 15.0)},
+        id_suffix='_closed',
+    ), 'blind')
+
     # draw.io heat_exchangers:Shell and Tube Heat Exchanger 1 (aspect=variable) -> hex/shell_tube
     registry.register('hex', Symbol(
         svg='<g id="sym_hex_shell_tube"><ellipse cx="30.0" cy="30.0" rx="30.0" ry="30.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 30.0 L 10.0 30.0 L 20.0 15.0 L 40.0 45.0 L 50.0 30.0 L 60.0 30.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',

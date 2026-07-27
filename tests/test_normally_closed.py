@@ -1,12 +1,19 @@
-"""Normally closed valves: PIP PIC001 4.2.2.7's darkened body, and 4.2.2.8's
-``NC`` abbreviation for a body that cannot carry it.
+"""Devices declared in a normal position, and what each one draws for it.
 
-Not an ISA-5.1 convention -- ISA-5.1 says nothing about valve fill -- so the
-drawn behaviour is pinned here rather than assumed from any standard the rest
-of the package follows.
+Normally closed valves: PIP PIC001 4.2.2.7's darkened body, and 4.2.2.8's
+``NC`` abbreviation for a body that cannot carry it. Not an ISA-5.1 convention
+-- ISA-5.1 says nothing about valve fill -- so the drawn behaviour is pinned
+here rather than assumed from any standard the rest of the package follows.
+
+Spectacle blinds: the same ``normal_position``, drawn a different way. A blind
+is two discs and the sheet says which is in the line by filling it, so the two
+states are two *shapes* the stencil set already draws, not a mark applied to
+one of them.
 """
 
 from __future__ import annotations
+
+import re
 
 import pytest
 
@@ -213,6 +220,136 @@ def test_the_letters_step_past_a_tag_already_on_that_side():
     assert nc[1] > tag[1], "the abbreviation clears the tag it would have landed on"
 
 
+# ------------------------------------------------------- the spectacle blind
+
+
+def _discs(sym):
+    """Every disc the symbol draws: centre height in symbol space -> its fill.
+
+    The artwork is drawn in the stencil's own units inside one uniform
+    ``scale()``, so the factor is undone here to compare a disc's centre with a
+    port, which is authored in the symbol's coordinates.
+    """
+    scale = float(re.search(r"scale\(([\d.]+)\)", sym.svg).group(1))
+    return {
+        round(float(cy) * scale, 1): fill
+        for cy, fill in re.findall(r'<ellipse[^>]*cy="([\d.]+)"[^>]*fill="([^"]+)"', sym.svg)
+    }
+
+
+def test_a_blind_carries_the_same_attribute_a_valve_does():
+    """One vocabulary, held in one place: the shared base is what keeps the
+    valve's names and the blind's from drifting into two spellings of one idea."""
+    blind = units.Fitting("SB-1", variant="blind")
+    assert blind.normal_position == "open"
+    assert blind.NORMAL_POSITIONS == units.Valve.NORMAL_POSITIONS
+    assert isinstance(blind, units.Unit)
+    with pytest.raises(ValueError, match="normal_position is 'open' or 'closed'"):
+        units.Fitting("SB-1", variant="blind", normal_position="shut")
+
+
+def test_the_two_states_are_two_stencils_and_not_a_mark():
+    """The blind's position is *which shape*, not something added to one. Both
+    are drawn upstream, so the closed state is a registered symbol rather than a
+    derived one -- and everything except the ink has to be identical, or
+    declaring the position would move a line already drawn."""
+    open_blind = registry.for_unit(units.Fitting("SB-1", variant="blind"))
+    shut = registry.for_unit(units.Fitting("SB-2", variant="blind", normal_position="closed"))
+    assert open_blind is registry.get("fitting", "blind")
+    assert shut is registry.closed_symbol("fitting", "blind")
+    assert shut.svg != open_blind.svg
+    assert (shut.width, shut.height) == (open_blind.width, open_blind.height)
+    assert shut.ports == open_blind.ports
+    assert shut.port_faces == open_blind.port_faces
+    assert shut.stretchable == open_blind.stretchable
+    assert closed_marking(units.Fitting("SB-2", variant="blind", normal_position="closed")) == (
+        "stencil"
+    )
+
+
+def test_the_disc_in_the_line_is_bored_when_open_and_solid_when_closed():
+    """The whole of what the symbol says. The run enters at the inlet's height,
+    so the disc centred there is the one in the line: a ring lets the line
+    through, a solid plate blanks it, and the other disc is parked off the run
+    carrying the opposite fill."""
+    open_blind = registry.for_unit(units.Fitting("SB-1", variant="blind"))
+    shut = registry.for_unit(units.Fitting("SB-2", variant="blind", normal_position="closed"))
+    line = open_blind.ports["inlet"][1]
+    assert open_blind.ports["outlet"][1] == line, "both faces are on the one disc"
+    for sym, in_line, parked in ((open_blind, "none", "#111"), (shut, "#111", "none")):
+        discs = _discs(sym)
+        assert len(discs) == 2, "a figure-8 is two discs"
+        assert discs.pop(line) == in_line
+        assert set(discs.values()) == {parked}
+
+
+def test_a_closed_blind_renders_as_its_own_definition():
+    svg = _line(units.Fitting("SB-1", variant="blind", normal_position="closed"))
+    assert 'href="#sym_fitting_blind_closed"' in svg
+    assert 'href="#sym_fitting_blind"' not in svg
+
+
+def test_the_two_blinds_are_separate_definitions_on_one_sheet():
+    svg = _line(
+        units.Fitting("SB-1", variant="blind", normal_position="closed"),
+        units.Fitting("SB-2", variant="blind"),
+    )
+    assert svg.count('<symbol id="sym_fitting_blind_closed"') == 1
+    assert svg.count('<symbol id="sym_fitting_blind"') == 1
+
+
+def test_a_closed_blind_is_not_lettered_nc():
+    """PIP PIC001's abbreviation is the *valve* fallback, for a body that cannot
+    carry a fill. A blind's position is drawn, so lettering it would say the
+    same thing twice -- and the letters are what a reader looks for on a valve."""
+    svg = _line(units.Fitting("SB-1", variant="blind", normal_position="closed"))
+    assert ">NC</text>" not in svg
+
+
+@pytest.mark.parametrize("variant", ["default", "strainer", "venturi", "spool"])
+def test_a_fitting_drawn_one_way_has_no_position_to_state(variant):
+    """A strainer is a strainer whatever the plant is doing. Declaring one
+    closed would set an attribute nothing on the sheet draws, which is the
+    silence that makes a wrong drawing plausible."""
+    with pytest.raises(ValueError) as excinfo:
+        units.Fitting("ST-1", variant=variant, normal_position="closed")
+    assert "blind" in str(excinfo.value), "the message names the fittings that do"
+    assert units.Fitting("ST-1", variant=variant, normal_position="open").normal_position == "open"
+
+
+def test_a_blind_retyped_after_it_was_closed_stops_the_sheet():
+    """The refusal is at construction, and ``variant`` is a plain attribute, so
+    it can still be assigned past it. Drawing the open symbol then would be the
+    silent failure this whole feature exists to avoid: a sheet issued showing a
+    line open when the model says it is blanked."""
+    blind = units.Fitting("SB-1", variant="blind", normal_position="closed")
+    blind.variant = "strainer"
+    with pytest.raises(ValueError, match="drawn one way"):
+        registry.for_unit(blind)
+
+
+def test_a_blanked_blind_is_not_confusable_with_a_darkened_valve():
+    """Both say "closed" with ink, so the two must not be read for each other.
+    A valve fills its whole body, which is a bowtie lying along the run; a blind
+    fills one small disc, straddling the run with its companion and its handle
+    clear of it. Different shape, different axis, different share of the box."""
+    shut_valve = registry.for_unit(units.Valve("HV-1", variant="gate", normal_position="closed"))
+    shut_blind = registry.for_unit(units.Fitting("SB-1", variant="blind", normal_position="closed"))
+    # The valve's ink is its body: a filled <path>, running the length of a box
+    # wider than it is tall. The blind draws no filled path at all.
+    assert re.search(r'<path[^>]*fill="#111"', shut_valve.svg)
+    assert not re.search(r'<path[^>]*fill="#111"', shut_blind.svg)
+    assert shut_valve.width > shut_valve.height
+    assert shut_blind.height > shut_blind.width
+    # ...and the blind's solid disc covers a small part of its box, where the
+    # valve's darkened body is the box. _FEATURE_AREA in the invariant suite is
+    # the same 0.5 boundary, from the other side.
+    solid = float(re.search(r'<ellipse[^>]*rx="([\d.]+)"[^>]*fill="#111"', shut_blind.svg).group(1))
+    scale = float(re.search(r"scale\(([\d.]+)\)", shut_blind.svg).group(1))
+    covered = (2 * solid * scale) ** 2 / (shut_blind.width * shut_blind.height)
+    assert covered < 0.5
+
+
 # ------------------------------------------------------------- the spec layer
 
 
@@ -232,6 +369,46 @@ def test_the_position_round_trips_through_a_spec():
     assert spec.to_dict(rebuilt) == written
 
 
+def test_a_blind_position_round_trips_through_a_spec():
+    """Both directions, and both states: the position is the only thing that
+    tells the two drawings apart, so a spec that loses it loses the drawing."""
+    fs = Flowsheet("round trip")
+    fs.add(units.Fitting("SB-1", variant="blind", normal_position="closed"))
+    fs.add(units.Fitting("SB-2", variant="blind"))
+    fs.add(units.Fitting("ST-1", variant="strainer"))
+
+    written = spec.to_dict(fs)
+    entries = {u["name"]: u for u in written["units"]}
+    assert entries["SB-1"]["normal_position"] == "closed"
+    assert "normal_position" not in entries["SB-2"], "open is the default, not an entry"
+    assert "normal_position" not in entries["ST-1"]
+
+    rebuilt = Flowsheet.from_dict(written)
+    positions = {u.name: u.normal_position for u in rebuilt.units}
+    assert positions == {"SB-1": "closed", "SB-2": "open", "ST-1": "open"}
+    assert spec.to_dict(rebuilt) == written
+    drawn = {u.name: registry.for_unit(u).symbol_id() for u in rebuilt.units}
+    assert drawn["SB-1"] == "sym_fitting_blind_closed"
+    assert drawn["SB-2"] == "sym_fitting_blind"
+
+
+def test_a_spec_may_not_close_a_fitting_that_is_drawn_one_way():
+    with pytest.raises(spec.SpecError, match="no normally closed position"):
+        Flowsheet.from_dict(
+            {
+                "name": "bad",
+                "units": [
+                    {
+                        "kind": "Fitting",
+                        "name": "ST-1",
+                        "variant": "strainer",
+                        "normal_position": "closed",
+                    }
+                ],
+            }
+        )
+
+
 def test_a_spec_position_that_is_not_one_names_the_entry():
     with pytest.raises(spec.SpecError, match=r"units\[0\] 'HV-1'"):
         Flowsheet.from_dict(
@@ -239,8 +416,8 @@ def test_a_spec_position_that_is_not_one_names_the_entry():
         )
 
 
-def test_only_a_valve_takes_a_normal_position_in_a_spec():
-    with pytest.raises(spec.SpecError, match="only a Valve takes 'normal_position'"):
+def test_only_a_positioned_unit_takes_a_normal_position_in_a_spec():
+    with pytest.raises(spec.SpecError, match="only a Valve or a Fitting takes 'normal_position'"):
         Flowsheet.from_dict(
             {
                 "name": "bad",

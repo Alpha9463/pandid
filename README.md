@@ -269,10 +269,28 @@ needs no splitter that the plant does not have.
 `Fitting` is one class and the variant picks the device: `strainer`, `strainer_cone`, `strainer_y`,
 `strainer_basket`, `strainer_duplex`, `orifice`, `rotameter`, `rupture_disc`,
 `sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `bellows`,
-`damper`, `spool`, `static_mixer`,
+`blind`, `damper`, `spool`, `static_mixer`,
 `hose`, `coupling`, `clamped_coupling`, `flange` (the default), and the flame
 arrestors (`flame_arrestor` plus `_explosion_proof` / `_detonation_proof` /
 `_fire_resistant`).
+
+**Spectacle blinds.** `Fitting(variant="blind")` is the figure-8 blind: two
+discs on a common tie, one bored through and one solid, bolted between a pair
+of flanges. Which of them is in the line is the whole of what the symbol says,
+so a blind takes the same `normal_position` a valve does:
+
+```python
+fs.add(units.Fitting("SB-101", variant="blind"))                            # line through
+fs.add(units.Fitting("SB-102", variant="blind", normal_position="closed"))  # line blanked
+```
+
+The line runs through the lower disc. Open draws it as a ring, with the solid
+disc parked above; closed draws it solid, with the ring parked above. That is a
+change of shape rather than a mark added to one, because the stencil set draws
+both, and it is the device's own convention rather than an extension of a
+standard, so it needs no legend entry. No other fitting variant takes a
+position: a strainer is a strainer whatever the plant is doing, and asking for
+one raises.
 
 **Primary flow elements.** The device an FE balloon reads is in the run like any
 other fitting, so it is a `Fitting` variant too: `venturi`, `flow_nozzle`,
@@ -686,7 +704,7 @@ equipment list), `reference` (a boundary flag's off-page drawing), explicit
 `width`/`height`, `label_pos`, `significant` (break the stream or line number at
 this inline item), `n_inlets` / `n_outlets` for `Mixer` / `Splitter`,
 `n_feeds` for `Column` / `Reactor`, `length` for `Conveyor`, and
-`normal_position` (`open` / `closed`) for `Valve`.
+`normal_position` (`open` / `closed`) for `Valve` and for `Fitting`'s `blind`.
 
 **`pin` / `port_faces`**: `pin` mirrors `pin()` with `x`/`y` (absolute), `col`/`row`
 (grid), `orientation` (`0`/`90`/`180`/`270`) and `mirrored` (`x`/`y`/`xy`).

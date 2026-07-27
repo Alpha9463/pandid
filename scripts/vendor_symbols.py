@@ -411,6 +411,29 @@ KIND_MAP = {
     # maintenance, drawn as a pipe between two flanges.
     ("fitting", "spool"):          ("piping", "Removable Spool",
                                     {"inlet": "W", "outlet": "E"}),
+    # Spectacle blind (figure-8 blind): two discs on a common tie, one bored
+    # through and one solid, bolted between a pair of flanges. Which of them is
+    # in the line is the whole of what it says, so it is the one in-line device
+    # the stencil set draws in two states -- see CLOSED_SHAPES, and
+    # ``Fitting(normal_position=...)``, which is how a user asks for the other.
+    #
+    # The stencil is 20 x 80: the two discs stacked at y 0..40, then a 40-long
+    # tie down to a lone "S" constraint at (10, 80). That constraint is where
+    # draw.io means the drawing to be dropped on a line, which would make this a
+    # flag on a stalk rather than a device in a run -- and a Fitting is a pair of
+    # faces on a line. So the run is taken THROUGH the disc in function, which
+    # is the lower one: the stencil pair fills that disc in the closed state and
+    # the upper, parked one in the open state, so a line drawn through it meets
+    # solid ink exactly when the line is blanked. Both points are on the
+    # ellipse's own extrema (it spans y 20..40 about x = 10, r = 10), and the
+    # tie hangs below the run as the handle it is.
+    #
+    # Piping the two ends N and S instead -- along the stencil's own axis, with
+    # the tie read as pipe -- draws every blind across its run, since face
+    # selection only chooses among declared alternates and nothing turns a unit
+    # but the author's own pin(). A blind sits in the run it isolates.
+    ("fitting", "blind"):          ("piping", "Open Figure 8 Blind",
+                                    {"inlet": ("W", 30.0), "outlet": ("E", 30.0)}),
 
     # --- Variants (style choices within a class; same ports) ---
     # Heat exchanger styles.
@@ -625,6 +648,40 @@ KIND_MAP = {
 }
 
 
+# Devices the stencil set draws twice: once open, once closed.
+#
+# These are not two shapes a user picks between. They are one device in two
+# positions, and the position is a property of the unit
+# (``Fitting(normal_position="closed")``), exactly as it is on a Valve. The
+# generator emits the second shape as a second Symbol, registered under the same
+# (kind, variant) through ``SymbolRegistry.register_closed``, so the name a user
+# writes stays the name of the device.
+#
+# Both shapes go through the same port map and the same SCALE, and build()
+# refuses to emit a pair whose boxes, nozzles or aspect disagree: two positions
+# of one device must differ in ink and in nothing else, or declaring the
+# position would move a line already drawn.
+#
+# Only the figure-8 pair is mapped. fittings.xml carries two more:
+#
+#   Open Disc / Blind Disc -- a single disc on a 100-long handle in a 40 x 140
+#   box, so 71% of the shape is bare stalk. Scaled until the disc reads, the
+#   stalk is most of a centimetre of plain line hanging off the run, which on a
+#   P&ID is how a branch is drawn. It also carries no <connections> at all,
+#   which is the stencil author saying overlay rather than device -- the same
+#   thing that keeps fittings.xml's "Orifice Plate" out of the table above.
+#
+#   Interchangeable Disc (Open Disc In Function) / (Blind Disc) -- the same
+#   drawing as the figure-8 pair: two tangent discs on a handle, one of them
+#   filled, at 40 x 140 instead of 20 x 80 (1:3.5 against 1:4). Two mappings a
+#   reader cannot tell apart are one mapping and a trap, so this ships once.
+#
+# (kind, variant) -> the shape drawn when the device is declared normally closed
+CLOSED_SHAPES = {
+    ("fitting", "blind"): "Closed Figure 8 Blind",
+}
+
+
 # Corrections to the vendored stencils themselves.
 #
 # vendor_data/drawio/*.xml is a mirror of jgraph/drawio and stays byte-for-byte
@@ -766,6 +823,15 @@ HALF_SCALE_FITTINGS = (
     # piping.xml — the in-line devices
     "strainer_y", "strainer_basket", "strainer_duplex",
     "bellows", "damper", "spool",
+    # ...and the spectacle blind, which is on that file's module like the rest
+    # of them and takes its factor for the same reason. It happens to be the
+    # right size for its own reason too: 0.5 draws each disc 10 units across, so
+    # the figure-8 is 20 — the 5.3 mm that lands on the reference sheet's 6 mm
+    # module, and enough for the open disc's 8-unit bore to read as a hole
+    # rather than as a thick dot. The whole symbol is that one distinction, so
+    # it was checked at 1:1 and at print before this factor was settled; 0.375
+    # closes the bore to 5.5 units and the two states start to converge.
+    "blind",
 )
 
 SCALE = {"valve": 0.25, "fitting": 0.25, "reducer": 0.25,
@@ -846,6 +912,57 @@ def resolve_port(spec, constraints, w, h):
             "E": (float(w), float(along)), "W": (0.0, float(along))}[edge]
 
 
+def drawing(el, kind, variant, port_map, sx, sy):
+    """One shape converted, its ports resolved, both at the family's scale.
+
+    Returns ``(inner, w, h, ports, menu, series, aspect)``: the artwork, and
+    everything a :class:`~pandid.render.symbols.Symbol` is built from except its
+    id. Split out so the two states of a device (see :data:`CLOSED_SHAPES`) go
+    through exactly the same arithmetic, which is what lets :func:`build` insist
+    afterwards that the pair differs in ink and in nothing else.
+    """
+    # Emit a heavier stroke on scaled symbols so it renders at 2px after the
+    # scale transform (2px matches streams + hand-drawn symbols exactly).
+    inner, w, h, constraints, aspect = convert_shape(el, stroke_width=round(2.0 / sx, 3))
+    # A port spec may be a LIST: the first entry is the default placement and
+    # the rest are alternate faces the user can move that port to, keyed by
+    # the edge each one names.
+    ports, alts, series = {}, {}, {}
+    for p, spec in port_map.items():
+        if is_series(spec):
+            _, edge, along, pitch, extent = spec
+            series[p] = (edge, float(along), float(pitch), float(extent))
+            continue
+        choices = spec if isinstance(spec, list) else [spec]
+        ports[p] = resolve_port(choices[0], constraints, w, h)
+        for extra in choices[1:]:
+            if not isinstance(extra, tuple) or extra[0] not in ("N", "S", "E", "W"):
+                raise SystemExit(
+                    f"{kind}/{variant} port {p!r}: an alternate face must be an "
+                    f'edge spec like ("N", 30.0), got {extra!r}')
+            alts.setdefault(p, {})[extra[0]] = resolve_port(extra, constraints, w, h)
+
+    if (sx, sy) != (1.0, 1.0):
+        factors = f"{sx}" if sx == sy else f"{sx}, {sy}"
+        inner = f'<g transform="scale({factors})">{inner}</g>'
+        w, h = w * sx, h * sy
+        ports = {p: (x * sx, y * sy) for p, (x, y) in ports.items()}
+        alts = {p: {f: (x * sx, y * sy) for f, (x, y) in d.items()} for p, d in alts.items()}
+        # A series runs along one face, so it is the along-axis that scales it.
+        series = {p: (e, at * (sy if e in ("W", "E") else sx),
+                      pitch * (sy if e in ("W", "E") else sx), ext)
+                  for p, (e, at, pitch, ext) in series.items()}
+    w, h = round(w, 1), round(h, 1)
+    ports = {p: tuple(round(v, 1) for v in xy) for p, xy in ports.items()}
+    alts = {p: {f: tuple(round(v, 1) for v in xy) for f, xy in d.items()}
+            for p, d in alts.items()}
+    # Emit the whole menu, home first: Symbol keeps exactly one enumeration
+    # of a port's placements, so a symbol with alternates must declare the
+    # default among them rather than leave it to be merged in later.
+    menu = {p: {outward_dir(*ports[p], w, h): ports[p], **d} for p, d in alts.items()}
+    return inner, w, h, ports, menu, series, aspect
+
+
 def build():
     # Index every shape once, correcting the ones STENCIL_PATCHES names.
     index = {}
@@ -860,6 +977,14 @@ def build():
         raise SystemExit(
             "STENCIL_PATCHES names shapes the generator did not load: "
             + ", ".join(f"{stencil}:{shape}" for stencil, shape in missing)
+        )
+    # A closed state for a device nothing draws is a position with no symbol
+    # behind it, which is exactly the silence the pairing exists to prevent.
+    orphans = sorted(key for key in CLOSED_SHAPES if key not in KIND_MAP)
+    if orphans:
+        raise SystemExit(
+            "CLOSED_SHAPES names symbols KIND_MAP does not draw: "
+            + ", ".join(f"{kind}/{variant}" for kind, variant in orphans)
         )
 
     imports = "PortSeries, Symbol" if any(
@@ -877,79 +1002,73 @@ def build():
         "",
     ]
     for (kind, variant), (stencil, shape, port_map) in KIND_MAP.items():
-        el = index.get((stencil, shape))
-        if el is None:
-            raise SystemExit(f"shape {shape!r} not in {stencil}.xml")
         sx, sy = scale_for(kind, variant)
-        # Emit a heavier stroke on scaled symbols so it renders at 2px after the
-        # scale transform (2px matches streams + hand-drawn symbols exactly).
-        inner, w, h, constraints, aspect = convert_shape(el, stroke_width=round(2.0 / sx, 3))
-        # A port spec may be a LIST: the first entry is the default placement and
-        # the rest are alternate faces the user can move that port to, keyed by
-        # the edge each one names.
-        ports, alts, series = {}, {}, {}
-        for p, spec in port_map.items():
-            if is_series(spec):
-                _, edge, along, pitch, extent = spec
-                series[p] = (edge, float(along), float(pitch), float(extent))
-                continue
-            choices = spec if isinstance(spec, list) else [spec]
-            ports[p] = resolve_port(choices[0], constraints, w, h)
-            for extra in choices[1:]:
-                if not isinstance(extra, tuple) or extra[0] not in ("N", "S", "E", "W"):
-                    raise SystemExit(
-                        f"{kind}/{variant} port {p!r}: an alternate face must be an "
-                        f'edge spec like ("N", 30.0), got {extra!r}')
-                alts.setdefault(p, {})[extra[0]] = resolve_port(extra, constraints, w, h)
-
-        if (sx, sy) != (1.0, 1.0):
-            factors = f"{sx}" if sx == sy else f"{sx}, {sy}"
-            inner = f'<g transform="scale({factors})">{inner}</g>'
-            w, h = w * sx, h * sy
-            ports = {p: (x * sx, y * sy) for p, (x, y) in ports.items()}
-            alts = {p: {f: (x * sx, y * sy) for f, (x, y) in d.items()} for p, d in alts.items()}
-            # A series runs along one face, so it is the along-axis that scales it.
-            series = {p: (e, at * (sy if e in ("W", "E") else sx),
-                          pitch * (sy if e in ("W", "E") else sx), ext)
-                      for p, (e, at, pitch, ext) in series.items()}
-        w, h = round(w, 1), round(h, 1)
-        ports = {p: tuple(round(v, 1) for v in xy) for p, xy in ports.items()}
-        alts = {p: {f: tuple(round(v, 1) for v in xy) for f, xy in d.items()}
-                for p, d in alts.items()}
-        # Emit the whole menu, home first: Symbol keeps exactly one enumeration
-        # of a port's placements, so a symbol with alternates must declare the
-        # default among them rather than leave it to be merged in later.
-        menu = {p: {outward_dir(*ports[p], w, h): ports[p], **d} for p, d in alts.items()}
-        sid = kind if variant == "default" else f"{kind}_{variant}"
-        svg = f'<g id="sym_{sid}">{inner}</g>'
-        lines += [
-            f"    # draw.io {stencil}:{shape} (aspect={aspect}) -> {kind}/{variant}",
-            f"    registry.register({kind!r}, Symbol(",
-            f"        svg={svg!r},",
-            f"        width={w}, height={h},",
-            f"        ports={ports!r},",
-        ]
-        # Only the shapes that refuse to be reshaped say so: stretchable is the
-        # default on Symbol, exactly as "variable" is the default in a stencil.
-        if aspect == "fixed":
-            lines.append("        stretchable=False,")
-        if menu:
-            lines.append(f"        port_faces={menu!r},")
-        # A family is named after the port it replaces: one member keeps that
-        # name, and only a second one numbers them.
-        if series:
-            declared = ", ".join(
-                f"PortSeries({p + '_'!r}, {edge!r}, pitch={round(pitch, 1)}, "
-                f"extent={extent}, at={round(at, 1)}, singular={p!r})"
-                for p, (edge, at, pitch, extent) in series.items()
-            )
-            lines.append(f"        port_series=({declared},),")
-        lines += [
-            f"    ), {variant!r})",
-            "",
-        ]
+        # The open drawing, then the closed one where the stencil set has one.
+        states = [("register", "", shape)]
+        if (kind, variant) in CLOSED_SHAPES:
+            states.append(("register_closed", "_closed", CLOSED_SHAPES[(kind, variant)]))
+        drawn = {}
+        for _, suffix, shape_name in states:
+            el = index.get((stencil, shape_name))
+            if el is None:
+                raise SystemExit(f"shape {shape_name!r} not in {stencil}.xml")
+            drawn[suffix] = drawing(el, kind, variant, port_map, sx, sy)
+        if "_closed" in drawn:
+            opened, closed = drawn[""], drawn["_closed"]
+            # Same device, two positions. A pair whose boxes or nozzles differ
+            # would move a line already drawn the moment the position was
+            # declared; a pair whose artwork does not differ would draw the two
+            # positions identically and say nothing at all.
+            if opened[1:] != closed[1:]:
+                raise SystemExit(
+                    f"{kind}/{variant}: {shape!r} and "
+                    f"{CLOSED_SHAPES[(kind, variant)]!r} are two positions of one "
+                    f"device, so their boxes, nozzles and aspect must agree"
+                )
+            if opened[0] == closed[0]:
+                raise SystemExit(
+                    f"{kind}/{variant}: {shape!r} and "
+                    f"{CLOSED_SHAPES[(kind, variant)]!r} draw the same thing, so "
+                    f"declaring the position would draw nothing"
+                )
+        for method, suffix, shape_name in states:
+            inner, w, h, ports, menu, series, aspect = drawn[suffix]
+            sid = kind if variant == "default" else f"{kind}_{variant}"
+            svg = f'<g id="sym_{sid}{suffix}">{inner}</g>'
+            lines += [
+                f"    # draw.io {stencil}:{shape_name} (aspect={aspect}) -> {kind}/{variant}"
+                + (" [normally closed]" if suffix else ""),
+                f"    registry.{method}({kind!r}, Symbol(",
+                f"        svg={svg!r},",
+                f"        width={w}, height={h},",
+                f"        ports={ports!r},",
+            ]
+            if suffix:
+                # A second drawing of one (kind, variant) needs a <defs> entry of
+                # its own, which is what the suffix on the id buys.
+                lines.append(f"        id_suffix={suffix!r},")
+            # Only the shapes that refuse to be reshaped say so: stretchable is
+            # the default on Symbol, exactly as "variable" is in a stencil.
+            if aspect == "fixed":
+                lines.append("        stretchable=False,")
+            if menu:
+                lines.append(f"        port_faces={menu!r},")
+            # A family is named after the port it replaces: one member keeps
+            # that name, and only a second one numbers them.
+            if series:
+                declared = ", ".join(
+                    f"PortSeries({p + '_'!r}, {edge!r}, pitch={round(pitch, 1)}, "
+                    f"extent={extent}, at={round(at, 1)}, singular={p!r})"
+                    for p, (edge, at, pitch, extent) in series.items()
+                )
+                lines.append(f"        port_series=({declared},),")
+            lines += [
+                f"    ), {variant!r})",
+                "",
+            ]
     OUT.write_text("\n".join(lines), encoding="utf-8")
-    print(f"wrote {OUT} ({len(KIND_MAP)} symbols)")
+    print(f"wrote {OUT} ({len(KIND_MAP)} symbols, "
+          f"{len(CLOSED_SHAPES)} of them in two positions)")
 
 
 if __name__ == "__main__":

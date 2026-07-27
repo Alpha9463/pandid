@@ -449,6 +449,57 @@ Say where the valve fails instead, or put the mark on the hand valve that
 actually isolates the line. A control valve may still be declared
 `normal_position="open"`; the prohibition is only on showing one closed.
 
+### Spectacle blinds
+
+```text
+units.Fitting(name, variant="blind", normal_position="open")
+blind.normal_position = "closed"
+```
+
+A spectacle blind (figure-8 blind) is two discs on a common tie, one bored
+through and one solid, bolted between a pair of flanges. Turning it over swaps
+which disc is in the line, and that is the whole of what the symbol says, so it
+carries the same `normal_position` a valve does:
+
+```python
+fs.add(units.Fitting("SB-101", variant="blind"))                            # line through
+fs.add(units.Fitting("SB-102", variant="blind", normal_position="closed"))  # line blanked
+```
+
+The run passes through the lower disc. `"open"` (the default) draws that disc
+as a **ring**, with the solid one parked above it. `"closed"` draws it
+**solid**, with the ring parked above. The tie hangs below the run as the
+handle it is.
+
+| | Drawn |
+|---|---|
+| `normal_position="open"` | the disc in the line is bored: the line is through |
+| `normal_position="closed"` | the disc in the line is solid: the line is blanked |
+
+Two differences from the valve's darkened body are worth naming.
+
+- It is a change of **shape**, not a mark applied to one. Both drawings come
+  from the stencil set, so the closed blind is a symbol of its own with its own
+  `<defs>` entry, and the two states differ in ink alone: same box, same
+  nozzles, same faces. Declaring the position never moves a line already drawn.
+- It needs **no legend entry**. A solid disc blanking a line is the device's
+  own long-standing convention rather than an extension of ISA-5.1, which is
+  what obliges the darkened valve body to be declared.
+
+`blind` is the only fitting variant with a position. Every other one is drawn a
+single way, so declaring it closed would set an attribute nothing on the sheet
+draws, and raises instead:
+
+```python
+units.Fitting("ST-1", variant="strainer", normal_position="closed")
+# ValueError: ST-1: variant 'strainer' is drawn one way, so it has no normally
+# closed position to state; the fittings drawn in two positions are: blind. ...
+```
+
+`normal_position` itself lives on a base shared by `Valve` and `Fitting`, so
+there is one attribute with one vocabulary; only what a sheet draws for it
+differs between them.
+
 ### Variants
 
 A **class** is a functional equipment type, defined by its ports. A **variant**
@@ -468,7 +519,7 @@ is a visual style within it. The first name in each list is that kind's
 | `Filter` | `default`, `gas`, `press`, `rotary`, `ion_exchange` |
 | `Dryer` | `default`, `fluidized_bed`, `spray` |
 | `Valve` | bodies: `default` (gate), `gate`, `globe`, `ball`, `butterfly`, `check`, `needle`, `three_way`, `control`, `plug`, `pinch`, `angle`, `psv`, `relief`, `bleed`<br>with a drawn operator: `motor`, `solenoid`, `hydraulic`, `pneumatic`, `manual`, `knife`, `butterfly_pneumatic`, `regulator` |
-| `Fitting` | devices: `default` (flanged connection), `flange`, `strainer`, `strainer_cone`, `strainer_y`, `strainer_basket`, `strainer_duplex`, `orifice`, `rotameter`, `rupture_disc`, `sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `bellows`, `damper`, `spool`, `static_mixer`, `hose`, `coupling`, `clamped_coupling`, `flame_arrestor`, `flame_arrestor_explosion_proof`, `flame_arrestor_detonation_proof`, `flame_arrestor_fire_resistant`<br>primary flow elements: `venturi`, `flow_nozzle`, `coriolis`, `vortex`, `ultrasonic`, `turbine_meter`, `positive_displacement`, `v_cone`, `wedge`, `target`, `pitot`, `averaging_pitot` |
+| `Fitting` | devices: `default` (flanged connection), `flange`, `strainer`, `strainer_cone`, `strainer_y`, `strainer_basket`, `strainer_duplex`, `orifice`, `rotameter`, `rupture_disc`, `sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `bellows`, `blind` (spectacle blind, and the one variant with a [`normal_position`](#spectacle-blinds)), `damper`, `spool`, `static_mixer`, `hose`, `coupling`, `clamped_coupling`, `flame_arrestor`, `flame_arrestor_explosion_proof`, `flame_arrestor_detonation_proof`, `flame_arrestor_fire_resistant`<br>primary flow elements: `venturi`, `flow_nozzle`, `coriolis`, `vortex`, `ultrasonic`, `turbine_meter`, `positive_displacement`, `v_cone`, `wedge`, `target`, `pitot`, `averaging_pitot` |
 | `Reducer` | `default` (cone to a point), `concentric` (trapezoid), `eccentric` |
 | `Vent` | `default` (stack with a weather cap), `exhaust_head`, `breather` |
 | `Instrument` | `default` (field balloon), `panel`, `aux`, `shared`, `computer`, `sis` (diamond in a square, also spelled `logic`), `interlock` (plain diamond) |

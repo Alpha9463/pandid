@@ -97,6 +97,34 @@ and is kept working.
     seat is a compact bead inside two conspicuously white triangles and a
     darkened body is black edge to edge, so the device marker and the position
     marker are never read for each other.
+- `Fitting(variant="blind")`, the spectacle blind (figure-8 blind): two discs on
+  a common tie, one bored through and one solid, bolted between a pair of
+  flanges. Which disc is in the line is the whole of what the symbol says, so it
+  takes the same `normal_position` a valve does. The run passes through the
+  lower disc; `"open"` draws that disc as a ring with the solid one parked
+  above, `"closed"` draws it solid with the ring parked above, and the tie hangs
+  below the run as the handle it is.
+  - The position is a change of *shape*, not a mark applied to one: draw.io's
+    P&ID stencils draw both states, so the closed blind is a symbol of its own
+    with its own `<defs>` entry. The generator refuses a pair whose boxes,
+    nozzles or aspect disagree, or whose artwork does not, so the two differ in
+    ink alone and declaring the position cannot move a line already drawn.
+  - It needs no legend entry, unlike the darkened valve body. A solid disc
+    blanking a line is the device's own convention rather than an extension of
+    ISA-5.1.
+  - `normal_position` now lives on a base shared with `Valve`, so there is one
+    attribute with one vocabulary and one validation. What a sheet draws for it
+    is what differs, and each class says separately which of its variants may be
+    shown closed: every fitting variant but `blind` is drawn a single way, so
+    declaring one closed raises rather than setting a position nothing draws.
+  - Three more open/closed stencil pairs were considered and left out.
+    fittings.xml's `Open Disc` / `Blind Disc` is a single disc on a handle
+    filling 71% of a 40 x 140 box, and carries no connection points at all,
+    which is an overlay to drop on a line rather than a device in one, so any
+    scale that makes the disc read hangs a centimetre of plain line off the run,
+    where a P&ID reads plain line as a branch. Its `Interchangeable Disc` pair
+    is the figure-8 again at other proportions, and two mappings a reader cannot
+    tell apart are one mapping and a trap.
 - Variable-port `Mixer(n_inlets=…)`, `Splitter(n_outlets=…)` and
   `Column(n_feeds=…)` / `Reactor(n_feeds=…)`. A tower fed more than once, as in
   extractive distillation where the solvent enters above the feed tray, spreads

@@ -332,7 +332,73 @@ class Compressor(Unit):
     PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
 
-class Valve(Unit):
+class _NormallyPositioned(Unit):
+    """A unit that carries a ``normal_position``, the base of Valve and Fitting.
+
+    One attribute with one meaning — where the device sits with the plant
+    running — and one validated vocabulary, held in one place rather than
+    written out twice. A pump has no such position, and neither does a vessel;
+    only a device a line can be stopped at does.
+
+    What a *sheet* draws for the position is not shared, because the two
+    devices do not share a convention. A closed valve is the open valve with
+    its body darkened (PIP PIC001 4.2.2.7). A closed blind is not the open
+    blind with anything added: it is the other of the two shapes the drawing
+    already had, with the solid disc in the line instead of the bored one. The
+    common part is therefore the attribute and its two names; each subclass
+    says separately which of its variants may be *shown* closed, by overriding
+    :meth:`_refuse_closed`, and :func:`pandid.render.symbols.closed_marking`
+    says how each is drawn.
+    """
+
+    #: The positions such a unit may be declared in. A drawing convention exists
+    #: for exactly one of them; the other is the unmarked default. Held as a
+    #: tuple rather than a bool because the position is what the *plant* is in,
+    #: and the designations a P&ID draws are an enumeration (NC today, the locked
+    #: and car-sealed ones later) rather than a switch with two settings.
+    NORMAL_POSITIONS = ("open", "closed")
+
+    def __init__(self, name: str, variant: str = "default",
+                 width: float | None = None, height: float | None = None,
+                 label_pos: str | None = None, description: str = "",
+                 reference: str = "", normal_position: str = "open"):
+        super().__init__(name, variant=variant, width=width, height=height,
+                         label_pos=label_pos, description=description,
+                         reference=reference)
+        self._normal_position = "open"
+        self.normal_position = normal_position
+
+    @property
+    def normal_position(self) -> str:
+        """``"open"`` or ``"closed"``: where the device sits when running.
+
+        See the owning class's docstring for what each one draws, and for the
+        variants that refuse to be shown closed at all.
+        """
+        return self._normal_position
+
+    @normal_position.setter
+    def normal_position(self, value: str) -> None:
+        if value not in self.NORMAL_POSITIONS:
+            raise ValueError(
+                f"{self.name}: normal_position is "
+                f"{' or '.join(repr(p) for p in self.NORMAL_POSITIONS)}, got {value!r}"
+            )
+        if value == "closed":
+            self._refuse_closed()
+        self._normal_position = value
+
+    def _refuse_closed(self) -> None:
+        """Raise if this unit may not be *shown* normally closed.
+
+        The position is a fact about the plant and every subclass takes it; the
+        drawing is where the two differ, and a position nothing on the sheet
+        can state is worse than no position at all. Refusing here rather than
+        at render time means the sheet is never built.
+        """
+
+
+class Valve(_NormallyPositioned):
     """Control or let-down valve.
 
     ``actuator`` is the signal connection on top of the valve, the terminus of
@@ -374,55 +440,19 @@ class Valve(Unit):
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process"),
              ("actuator", "inlet", "signal")]
 
-    #: The positions a valve may be declared in. A drawing convention exists for
-    #: exactly one of them; the other is the unmarked default. Held as a tuple
-    #: rather than a bool because the position is what the *plant* is in, and the
-    #: designations a P&ID draws are an enumeration (NC today, the locked and
-    #: car-sealed ones later) rather than a switch with two settings.
-    NORMAL_POSITIONS = ("open", "closed")
+    def _refuse_closed(self) -> None:
+        from pandid.render.symbols import NC_FORBIDDEN
 
-    def __init__(self, name: str, variant: str = "default",
-                 width: float | None = None, height: float | None = None,
-                 label_pos: str | None = None, description: str = "",
-                 reference: str = "", normal_position: str = "open"):
-        super().__init__(name, variant=variant, width=width, height=height,
-                         label_pos=label_pos, description=description,
-                         reference=reference)
-        self._normal_position = "open"
-        self.normal_position = normal_position
-
-    @property
-    def normal_position(self) -> str:
-        """``"open"`` or ``"closed"``: where the valve sits when running.
-
-        Setting it to ``"closed"`` darkens the body (PIP PIC001 4.2.2.7), or
-        writes ``NC`` beside the valve where the body cannot carry the fill
-        (4.2.2.8). See the class docstring, including the legend a darkened
-        valve obliges the sheet to carry.
-        """
-        return self._normal_position
-
-    @normal_position.setter
-    def normal_position(self, value: str) -> None:
-        if value not in self.NORMAL_POSITIONS:
+        if self.variant in NC_FORBIDDEN:
             raise ValueError(
-                f"{self.name}: normal_position is "
-                f"{' or '.join(repr(p) for p in self.NORMAL_POSITIONS)}, got {value!r}"
+                f"{self.name}: PIP PIC001 clause 4.2.2.10 says control valves and "
+                f"relief valves shall not be shown as NC, and variant "
+                f"{self.variant!r} draws one. A darkened control valve on an issued "
+                f"sheet reads as a block valve someone has closed. Say where the "
+                f"valve fails instead (the actuator's fail action), or put the "
+                f"normally closed mark on the hand valve that actually isolates "
+                f"the line."
             )
-        if value == "closed":
-            from pandid.render.symbols import NC_FORBIDDEN
-
-            if self.variant in NC_FORBIDDEN:
-                raise ValueError(
-                    f"{self.name}: PIP PIC001 clause 4.2.2.10 says control valves and "
-                    f"relief valves shall not be shown as NC, and variant "
-                    f"{self.variant!r} draws one. A darkened control valve on an issued "
-                    f"sheet reads as a block valve someone has closed. Say where the "
-                    f"valve fails instead (the actuator's fail action), or put the "
-                    f"normally closed mark on the hand valve that actually isolates "
-                    f"the line."
-                )
-        self._normal_position = value
 
 
 class Vessel(Unit):
@@ -477,7 +507,7 @@ class Reducer(Unit):
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
 
-class Fitting(Unit):
+class Fitting(_NormallyPositioned):
     """In-line pipe device: whatever sits in the run and is not a valve.
 
     One class rather than a dozen, because to the flowsheet a strainer, a sight
@@ -486,8 +516,8 @@ class Fitting(Unit):
     ``strainer``, ``strainer_cone``, ``strainer_y``, ``strainer_basket``,
     ``strainer_duplex``, ``orifice``, ``rotameter``,
     ``rupture_disc``, ``sight_glass``, ``sight_glass_lit``, ``silencer``,
-    ``expansion_joint``, ``bellows``, ``damper``, ``spool``, ``static_mixer``,
-    ``hose``, ``coupling``,
+    ``expansion_joint``, ``bellows``, ``blind``, ``damper``, ``spool``,
+    ``static_mixer``, ``hose``, ``coupling``,
     ``clamped_coupling``, ``flange`` (the default), and the flame arrestors
     (``flame_arrestor`` plus ``_explosion_proof`` / ``_detonation_proof`` /
     ``_fire_resistant``).
@@ -501,10 +531,38 @@ class Fitting(Unit):
 
     Like a valve, a fitting is inline: a stream keeps its number through it
     unless ``significant`` is set.
+
+    ``blind`` is the **spectacle blind** (figure-8 blind), and it is the one
+    fitting with a ``normal_position``. It is a pair of discs on a common tie —
+    one bored through, one solid — bolted between a pair of flanges, and which
+    of them is in the line is the whole of what the symbol says. So the line
+    passes through the lower disc, and:
+
+    - ``normal_position="open"`` (the default) draws that disc as a **ring**,
+      with the solid one parked above it: the line is through.
+    - ``normal_position="closed"`` draws it **solid**, with the ring parked
+      above: the line is blanked.
+
+    That is a change of *shape*, not a mark added to one — the stencil set
+    draws both — so a blind is never shown in a position by inference and the
+    two are never one drawing. Any other fitting variant refuses ``"closed"``:
+    a strainer has no position, and a position nothing draws is worse than none.
     """
 
     kind = "fitting"
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+
+    def _refuse_closed(self) -> None:
+        from pandid.render.symbols import default_registry
+
+        if default_registry.closed_symbol(self.kind, self.variant) is None:
+            drawn = default_registry.closed_variants(self.kind)
+            raise ValueError(
+                f"{self.name}: variant {self.variant!r} is drawn one way, so it has "
+                f"no normally closed position to state; the fittings drawn in two "
+                f"positions are: {', '.join(drawn)}. Use a valve if what closes the "
+                f"line is a valve."
+            )
 
 
 class Ejector(Unit):
