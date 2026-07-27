@@ -199,8 +199,19 @@ page, so a note reading "valve in D-4" still points at D-4 after the next
 revision adds an exchanger. A fitted sheet renumbers its zones whenever it
 grows.
 
-Sizes are landscape, in px at 96 dpi: A4 1122x794, A3 1587x1122, A2 2245x1587,
-A1 3175x2245, A0 4489x3175.
+Sizes are the ISO 216 landscape sheets, in mm: A4 297x210, A3 420x297,
+A2 594x420, A1 841x594, A0 1189x841.
+
+A named sheet declares that physical size on the `<svg>` element, so it prints
+and exports to PDF at exactly its ISO size rather than at whatever the reader
+takes a user unit to be worth:
+
+```python
+fs.render("sheet.pdf", page_size="A3", border="zone")   # a 420x297 mm PDF page
+```
+
+A sheet fitted to its drawing has no physical size to declare and stays in user
+units.
 
 A drawing too big for the page is scaled down uniformly to fit, never clipped,
 and never enlarged when it is already smaller. A page too small for the

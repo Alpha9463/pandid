@@ -124,21 +124,41 @@ def _upright_text(svg: str, rot: int, mirror_x: bool, mirror_y: bool) -> str:
 
     return _SYMBOL_TEXT.sub(wrap, svg)
 
-# Standard page sizes in landscape orientation (mm → px at 96 dpi).
+# Standard page sizes in millimetres, landscape, straight from ISO 216. Held in
+# millimetres because that is what the sizes are defined in: deriving each one
+# from the last by doubling accumulates ISO's per-size rounding, which is how A1
+# and A0 previously came out a millimetre short.
 _PAGE_SIZES = {
-    "A4": (1122.0, 793.7),
-    "A3": (1587.4, 1122.0),
-    "A2": (2245.0, 1587.4),
-    "A1": (3174.8, 2245.0),
-    "A0": (4489.1, 3174.8),
+    "A4": (297.0, 210.0),
+    "A3": (420.0, 297.0),
+    "A2": (594.0, 420.0),
+    "A1": (841.0, 594.0),
+    "A0": (1189.0, 841.0),
 }
+
+# The user unit the drawing is laid out in is the CSS pixel, 1/96 inch.
+_PX_PER_MM = 96.0 / 25.4
 
 
 class _Sheet(NamedTuple):
-    """A fixed sheet the drawing is placed on, rather than sized to."""
+    """A fixed sheet the drawing is placed on, rather than sized to.
+
+    ``width``/``height`` are the layout units the diagram is placed in;
+    ``width_mm``/``height_mm`` are the physical size the SVG declares, so the
+    sheet prints and converts to PDF at exactly its ISO size rather than at
+    whatever the consumer assumes a pixel is worth.
+    """
     name: str
-    width: float
-    height: float
+    width_mm: float
+    height_mm: float
+
+    @property
+    def width(self) -> float:
+        return self.width_mm * _PX_PER_MM
+
+    @property
+    def height(self) -> float:
+        return self.height_mm * _PX_PER_MM
 
 
 def _page(page_size: "str | None") -> "_Sheet | None":
@@ -266,8 +286,10 @@ class SvgRenderer:
                     dx0, dy0 = min(dx0, px), min(dy0, py)
                     dx1, dy1 = max(dx1, px), max(dy1, py)
         if not fs.units:  # empty flowsheet: fall back to the nominal page size
+            nominal = sheet or _page("A3")
+            assert nominal is not None
             dx0 = dy0 = 0.0
-            dx1, dy1 = _PAGE_SIZES["A3"] if sheet is None else (sheet.width, sheet.height)
+            dx1, dy1 = nominal.width, nominal.height
 
         # 2. Which streams get a table column (unique material streams only).
         table_streams = self._table_streams(fs) if show_stream_table else []
@@ -309,9 +331,17 @@ class SvgRenderer:
 
         # 4. SVG document.
         lines = ['<?xml version="1.0" encoding="UTF-8"?>']
+        # A named page size declares its physical size, so the sheet prints and
+        # converts to PDF at exactly that ISO size instead of at whatever the
+        # consumer takes a user unit to be worth. A sheet fitted to the drawing
+        # has no physical size to declare and stays in user units.
+        if sheet is not None:
+            decl_w, decl_h = f"{sheet.width_mm:g}mm", f"{sheet.height_mm:g}mm"
+        else:
+            decl_w, decl_h = f"{canvas_width:.0f}", f"{canvas_height:.0f}"
         lines.append(
             f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" '
-            f'width="{canvas_width:.0f}" height="{canvas_height:.0f}" '
+            f'width="{decl_w}" height="{decl_h}" '
             f'viewBox="{frame_x:.1f} {frame_y:.1f} {canvas_width:.1f} {canvas_height:.1f}">'
         )
         lines.append('  <!-- Background -->')

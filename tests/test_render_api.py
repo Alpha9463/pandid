@@ -3,19 +3,26 @@ whose format is inferred from the extension and returns None."""
 
 import re
 import sys
+import zlib
 
 import pytest
 
 from pfd import Flowsheet, units as U
 
-# mm -> px at 96 dpi, landscape. Restated here rather than imported so a silent
-# edit to the renderer's own table cannot make these assertions vacuous.
-A4 = (1122.0, 793.7)
-A3 = (1587.4, 1122.0)
-A0 = (4489.1, 3174.8)
+# ISO 216 landscape in millimetres, and the same sheets in the px the drawing is
+# laid out in. Restated here rather than imported so a silent edit to the
+# renderer's own table cannot make these assertions vacuous.
+PX_PER_MM = 96.0 / 25.4
+A4_MM = (297.0, 210.0)
+A3_MM = (420.0, 297.0)
+A0_MM = (1189.0, 841.0)
+A4 = (A4_MM[0] * PX_PER_MM, A4_MM[1] * PX_PER_MM)
+A3 = (A3_MM[0] * PX_PER_MM, A3_MM[1] * PX_PER_MM)
+A0 = (A0_MM[0] * PX_PER_MM, A0_MM[1] * PX_PER_MM)
 
 _CANVAS = re.compile(
-    r'width="(\d+)" height="(\d+)" viewBox="([-\d.]+) ([-\d.]+) ([\d.]+) ([\d.]+)"'
+    r'width="([\d.]+)(mm)?" height="([\d.]+)(mm)?" '
+    r'viewBox="([-\d.]+) ([-\d.]+) ([\d.]+) ([\d.]+)"'
 )
 _FIT = re.compile(
     r'<g id="drawing" transform="translate\(([-\d.]+), ([-\d.]+)\) scale\(([\d.e+-]+)\)"'
@@ -42,13 +49,46 @@ def _spanning(width: float) -> Flowsheet:
 
 
 def _canvas(svg: str) -> tuple[float, float]:
+    """The sheet's px canvas, cross-checked against the size ``<svg>`` declares."""
     m = _CANVAS.search(svg)
     assert m, "no canvas on the <svg> element"
-    assert (float(m.group(1)), float(m.group(2))) == (
-        round(float(m.group(5))),
-        round(float(m.group(6))),
-    )
-    return float(m.group(5)), float(m.group(6))
+    view = float(m.group(7)), float(m.group(8))
+    declared = float(m.group(1)), float(m.group(3))
+    if m.group(2):  # a physical size: it must describe the same sheet
+        assert (declared[0] * PX_PER_MM, declared[1] * PX_PER_MM) == pytest.approx(view, abs=0.1)
+    else:
+        assert declared == (round(view[0]), round(view[1]))
+    return view
+
+
+def _sheet_mm(svg: str) -> "tuple[float, float] | None":
+    """The physical size the sheet declares, in mm; ``None`` if it declares none."""
+    m = _CANVAS.search(svg)
+    assert m, "no canvas on the <svg> element"
+    if not m.group(2):
+        return None
+    return float(m.group(1)), float(m.group(3))
+
+
+def _pdf_page_pt(pdf: bytes) -> tuple[float, float]:
+    """The page size a PDF declares, in points, from its first ``/MediaBox``.
+
+    cairosvg writes the page object into a compressed object stream, so the box
+    has to be inflated out of one rather than read from the file directly.
+    """
+    bodies = [pdf]
+    for m in re.finditer(rb"/Type\s*/ObjStm.*?stream\r?\n", pdf, re.S):
+        chunk = pdf[m.end() :]
+        try:
+            bodies.append(zlib.decompress(chunk[: chunk.find(b"\nendstream")]))
+        except zlib.error:  # not the stream we are after
+            continue
+    for body in bodies:
+        box = re.search(rb"/MediaBox\s*\[([^\]]*)\]", body)
+        if box:
+            _, _, width, height = (float(v) for v in box.group(1).split())
+            return width, height
+    raise AssertionError("no /MediaBox in the exported PDF")
 
 
 def _fit(svg: str) -> tuple[float, float, float]:
@@ -142,10 +182,11 @@ def test_canvas_fits_content_and_is_not_padded_to_page_size():
 # --- page_size: a named sheet is drawn at exactly that size --------------------
 
 
-@pytest.mark.parametrize("name,size", [("A4", A4), ("A3", A3), ("A0", A0)])
+@pytest.mark.parametrize("name,mm", [("A4", A4_MM), ("A3", A3_MM), ("A0", A0_MM)])
 @pytest.mark.parametrize("styling", ["default", "pid"])
-def test_page_size_draws_a_sheet_of_exactly_that_size(name, size, styling):
-    assert _canvas(_fs().to_svg(page_size=name, styling=styling)) == size
+def test_page_size_draws_a_sheet_of_exactly_that_size(name, mm, styling):
+    svg = _fs().to_svg(page_size=name, styling=styling)
+    assert _sheet_mm(svg) == mm
 
 
 def test_a_furnished_page_is_that_size_with_or_without_a_border():
@@ -158,26 +199,28 @@ def test_a_furnished_page_is_that_size_with_or_without_a_border():
         fs.title_block = TitleBlock(drawing_number="PFD-1")
         return fs
 
-    assert _canvas(build().to_svg(page_size="A3", border="zone")) == A3
-    assert _canvas(build().to_svg(page_size="A3", border="none")) == A3
+    assert _sheet_mm(build().to_svg(page_size="A3", border="zone")) == A3_MM
+    assert _sheet_mm(build().to_svg(page_size="A3", border="none")) == A3_MM
     assert _fit(build().to_svg(page_size="A3", border="none")) == _fit(
         build().to_svg(page_size="A3", border="zone")
     )
 
 
 def test_page_sizes_differ_from_one_another():
-    sheets = {n: _canvas(_fs().to_svg(page_size=n)) for n in ("A4", "A3", "A2", "A1", "A0")}
+    sheets = {n: _sheet_mm(_fs().to_svg(page_size=n)) for n in ("A4", "A3", "A2", "A1", "A0")}
     assert len(set(sheets.values())) == len(sheets)
 
 
 def test_page_size_is_case_insensitive():
-    assert _canvas(_fs().to_svg(page_size="a3")) == A3
+    assert _sheet_mm(_fs().to_svg(page_size="a3")) == A3_MM
 
 
 def test_omitting_page_size_fits_the_sheet_to_the_drawing():
     fitted = _fs().to_svg()
     assert fitted == _fs().to_svg(page_size=None)
     assert _canvas(fitted) != A3
+    # No paper was asked for, so the sheet claims no physical size either.
+    assert _sheet_mm(fitted) is None
     assert '<g id="drawing"' not in fitted  # nothing to fit into, so nothing wraps it
 
 
@@ -219,7 +262,8 @@ def test_pid_furniture_rules_to_the_sheet_edges():
     )
     fx, fy, fw, fh = (float(g) for g in frame.groups())
     assert fx == fy and fx < ZONE_BAND + 12
-    assert (fx + fw, fy + fh) == pytest.approx((A3[0] - fx, A3[1] - fy))
+    # Coordinates are written to one decimal, so allow half of that last place.
+    assert (fx + fw, fy + fh) == pytest.approx((A3[0] - fx, A3[1] - fy), abs=0.05)
     # the title strip is docked into the frame's bottom-right corner
     sw, sh = measure_title_strip(fs.title_block)
     strip = re.search(
@@ -265,4 +309,15 @@ def test_page_too_small_for_its_own_furniture_raises():
 def test_page_size_reaches_render_as_well_as_to_svg(tmp_path):
     out = tmp_path / "sheet.svg"
     _fs().render(str(out), page_size="A4")
-    assert _canvas(out.read_text(encoding="utf-8")) == A4
+    assert _sheet_mm(out.read_text(encoding="utf-8")) == A4_MM
+
+
+@pytest.mark.parametrize("name,mm", [("A4", A4_MM), ("A3", A3_MM), ("A0", A0_MM)])
+def test_exported_pdf_lands_on_a_page_of_exactly_that_size(tmp_path, name, mm):
+    # The end of the line for page_size: what a printer is handed. A sheet that
+    # is A3 only if the reader happens to call a user unit 1/96 inch is not A3.
+    pytest.importorskip("cairosvg")
+    out = tmp_path / "sheet.pdf"
+    _fs().render(str(out), page_size=name, styling="pid")
+    width_pt, height_pt = _pdf_page_pt(out.read_bytes())
+    assert (width_pt / 72 * 25.4, height_pt / 72 * 25.4) == pytest.approx(mm, abs=0.01)
