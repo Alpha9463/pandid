@@ -7,6 +7,7 @@ import re
 from datetime import datetime
 
 from pandid.render import furniture as F
+from pandid.render.symbols import closed_marking
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
 
 if TYPE_CHECKING:
@@ -828,6 +829,11 @@ class SvgRenderer:
             else:
                 label_items.append(
                     self._unit_label_item(u, f, x, y, u_width, u_height, safe_name))
+                # A body that cannot carry the darkening says so in letters
+                # instead; see PIP PIC001 4.2.2.8 and _nc_label_item.
+                if closed_marking(u) == "NC":
+                    label_items.append(
+                        self._nc_label_item(u, f, x, y, u_width, u_height, rot))
         lines.append('  </g>')
         return lines
 
@@ -935,21 +941,48 @@ class SvgRenderer:
                        f'dominant-baseline="middle">{html.escape(bot)}</text>')
         return out
 
+    def _label_place(self, lpos, x, y, u_width, u_height):
+        """Where a label on side ``lpos`` of a unit's box goes, and how it sets."""
+        if lpos == "bottom":
+            return x + u_width / 2, y + u_height + 15, "middle", "middle"
+        if lpos == "left":
+            return x - 10, y + u_height / 2, "end", "middle"
+        if lpos == "right":
+            return x + u_width + 10, y + u_height / 2, "start", "middle"
+        if lpos == "center":
+            return x + u_width / 2, y + u_height / 2, "middle", "middle"
+        return x + u_width / 2, y - 10, "middle", "baseline"  # top
+
     def _unit_label_item(self, u, f, x, y, u_width, u_height, safe_name):
         """Resolve a unit label's placement. Drawn in a final pass (see
         :meth:`_draw_unit_labels`) so stream lines never strike through it."""
         lpos = f.label_pos or "top"
-        if lpos == "bottom":
-            lx, ly, anchor, baseline = x + u_width / 2, y + u_height + 15, "middle", "middle"
-        elif lpos == "left":
-            lx, ly, anchor, baseline = x - 10, y + u_height / 2, "end", "middle"
-        elif lpos == "right":
-            lx, ly, anchor, baseline = x + u_width + 10, y + u_height / 2, "start", "middle"
-        elif lpos == "center":
-            lx, ly, anchor, baseline = x + u_width / 2, y + u_height / 2, "middle", "middle"
-        else:  # top
-            lx, ly, anchor, baseline = x + u_width / 2, y - 10, "middle", "baseline"
-        return (lx, ly, anchor, baseline, lpos, safe_name)
+        return (*self._label_place(lpos, x, y, u_width, u_height), lpos, safe_name)
+
+    def _nc_label_item(self, u, f, x, y, u_width, u_height, rot):
+        """The ``NC`` abbreviation, for a valve whose body cannot be darkened.
+
+        PIP PIC001 4.2.2.8 places it directly below the valve on a horizontal
+        line and to the right of it on a vertical one. Which of the two the
+        valve is in is the quarter turn its placement carries: an inline symbol
+        is drawn along its run, so a valve turned 90 or 270 is in a vertical
+        line and one left square is in a horizontal one.
+
+        Where the equipment tag already sits on that side, the abbreviation
+        steps past it rather than over it. Both are drawn on opaque halos in the
+        same final pass, so the second one down would otherwise erase the first.
+        """
+        lpos = "right" if rot in (90, 270) else "bottom"
+        lx, ly, anchor, baseline = self._label_place(lpos, x, y, u_width, u_height)
+        if (f.label_pos or "top") == lpos:
+            tag = _unit_label_box(self._unit_label_item(
+                u, f, x, y, u_width, u_height, html.escape(u.name)))
+            if tag is not None:
+                if lpos == "bottom":
+                    ly = tag[3] + 8
+                else:
+                    lx = tag[2] + 6
+        return (lx, ly, anchor, baseline, lpos, "NC")
 
     def _draw_unit_labels(self, items):
         """Final pass: equipment tags on white halos, over every stream line.

@@ -30,6 +30,7 @@ The format::
     units:
       - {kind: Feed, name: Raw Feed, reference: PFD-100, pin: {x: 60, y: 275}}
       - {kind: Fitting, name: ST-101, variant: strainer, description: Strainer}
+      - {kind: Valve, name: HV-101, variant: gate, normal_position: closed}
       - {kind: Mixer, name: M-100, n_inlets: 2}
       - {kind: Vessel, name: V-101, variant: horizontal, width: 130, height: 42,
          port_faces: {inlet: N}, pin: {x: 680, y: 210, mirrored: y}}
@@ -252,6 +253,12 @@ _VARIABLE_PORTS = {
 _KIND_SIZES = {
     "length": ("Conveyor",),
 }
+# Text fields only some classes carry. ``normal_position`` is where a valve sits
+# with the plant running, and a darkened body is what a P&ID says it with; a
+# pump has no such position, so naming one on it is a statement nothing draws.
+_KIND_TEXT = {
+    "normal_position": ("Valve",),
+}
 
 
 def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
@@ -339,7 +346,7 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
     where = f"{where} {name!r}"
 
     allowed = set(_UNIT_KEYS)
-    for key, owners in {**_VARIABLE_PORTS, **_KIND_SIZES}.items():
+    for key, owners in {**_VARIABLE_PORTS, **_KIND_SIZES, **_KIND_TEXT}.items():
         if cls.__name__ in owners:
             allowed.add(key)
         elif key in data:
@@ -360,6 +367,9 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
     for key in _KIND_SIZES:
         if key in data:
             kwargs[key] = _number(data[key], f"{where}.{key}")
+    for key in _KIND_TEXT:
+        if key in data:
+            kwargs[key] = _text(data[key], f"{where}.{key}")
     try:
         unit = cls(name, **kwargs)
     except ValueError as e:
@@ -834,6 +844,11 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
         # Always written: it is how long the belt is, which is the whole of a
         # conveyor's geometry, and nothing else on the entry records it.
         entry["length"] = unit.length
+    elif isinstance(unit, unit_types.Valve):
+        # Only when closed. "Open" is not a convention a P&ID draws, it is the
+        # absence of one, so writing it down would be writing the default down.
+        if unit.normal_position != "open":
+            entry["normal_position"] = unit.normal_position
     return _write_placement(unit, entry)
 
 

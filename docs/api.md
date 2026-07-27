@@ -350,6 +350,83 @@ meets the valve rather than running on into the body.
 `unit.significant = True` on an inline unit (valve, reducer, fitting) breaks the
 stream number across it (see [Stream numbering](#stream-numbering)).
 
+### Normally closed valves
+
+```text
+units.Valve(name, variant="default", normal_position="open")
+valve.normal_position = "closed"
+```
+
+`normal_position` is where the valve sits with the plant running: `"open"` (the
+default) or `"closed"`. A closed one is drawn with its body **darkened solid**.
+
+```python
+fs.add(units.Valve("HV-301", variant="gate", normal_position="closed"))  # drain
+fs.add(units.Valve("HV-302", variant="gate"))                            # isolation
+```
+
+The source is **PIP PIC001 clause 4.2.2.7**, *"normally closed manual valves
+shall be shown using a darkened solid symbol"*. It is **not** an ISA-5.1 or
+ISO 10628 convention: ISA-5.1 says nothing about valve fill and hands manual
+block valve depiction to the piping group, and ISO 10628 does not have the
+symbol either.
+
+The rule is one-sided. Normally open is not marked at all, so `"open"` draws
+exactly what a valve constructed without the argument draws, and the fill is the
+whole of what `"closed"` adds. Nothing about the symbol's box, nozzles or
+alternate faces changes, so declaring a valve closed never moves a line already
+drawn.
+
+**Legend.** ISA-5.1 clauses 2.8.1(b)(1), 2.8.2 and 5.2.5 make it *mandatory* to
+declare on a legend or cover sheet any symbol that deviates from or extends the
+standard, and a darkened valve is exactly such an extension. A sheet that draws
+one owes its reader a legend entry saying what the fill means. Nothing adds it
+for you; [`legend`](#convenience-constructors) builds the box:
+
+```python
+from pandid.document import legend
+
+fs.add_annotation(legend({"Darkened valve body": "Normally closed (NC)"}))
+```
+
+**Bodies that cannot be darkened.** Filling a body leaves only its outline, so
+the fill is used where the outline alone still names the device. Where the
+device is named by something *inside* the outline, filling over it would draw a
+darkened gate valve wearing another name, so clause 4.2.2.8's abbreviation
+**NC** is written beside the valve instead: directly below it on a horizontal
+line, to the right of it on a vertical one, which is the quarter turn the valve
+is placed at.
+
+| | Valve variants |
+|---|---|
+| darkened body | `default`, `gate`, `globe`, `ball`, `needle`, `plug`, `pinch`, `three_way`, `angle`, `bleed`, `manual`, `motor`, `solenoid`, `hydraulic` |
+| `NC` in letters | `butterfly` (the standard's own example), `butterfly_pneumatic`, `check`, `knife` |
+| refused | `control`, `pneumatic`, `regulator`, `relief`, `psv` |
+
+The list is `pandid.render.symbols.NC_DARKENS`, and a variant added later takes
+the letters until it is put on it. That is the safe way round, since a variant
+falling through both would state its position nowhere.
+
+Darkened, a valve keeps only its outline, so a normally closed `globe` and a
+normally closed `ball` are the same drawing: the seat that tells them apart is
+inside the body the fill covers. That is what the convention costs, and another
+reason the sheet needs its legend entry.
+
+**Control and relief valves are refused.** Clause 4.2.2.10, *"control valves or
+relief valves shall not be shown as NC"*, is enforced rather than warned about,
+because a darkened control valve on an issued sheet reads as a block valve
+someone has closed:
+
+```python
+units.Valve("FV-1", variant="control", normal_position="closed")
+# ValueError: FV-1: PIP PIC001 clause 4.2.2.10 says control valves and relief
+# valves shall not be shown as NC, and variant 'control' draws one. ...
+```
+
+Say where the valve fails instead, or put the mark on the hand valve that
+actually isolates the line. A control valve may still be declared
+`normal_position="open"`; the prohibition is only on showing one closed.
+
 ### Variants
 
 A **class** is a functional equipment type, defined by its ports. A **variant**

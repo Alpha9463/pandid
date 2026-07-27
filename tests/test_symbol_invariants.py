@@ -1269,6 +1269,13 @@ def _ink_extents(svg: str) -> list[tuple[str, float, float]]:
 _FEATURE_AREA = 0.5
 
 
+def _body_fill(sym: Symbol) -> float:
+    """The largest share of a symbol's box any one filled element covers."""
+    return max(
+        [(w * h) / (sym.width * sym.height) for _, w, h in _ink_extents(sym.svg)], default=0.0
+    )
+
+
 def test_no_valve_body_is_drawn_filled():
     """A fully darkened valve body is its own convention -- normally closed,
     PIP PIC001 4.2.2.7 -- so no symbol may spend that reading by accident.
@@ -1277,14 +1284,58 @@ def test_no_valve_body_is_drawn_filled():
     their white interiors, which is what holds the two apart at sheet scale. A
     valve that filled its *outline* would be claiming something else entirely,
     and would do it silently, since a solid bowtie is a perfectly plausible
-    thing to have drawn on purpose."""
-    for (kind, variant), sym in _SYMBOLS:
-        if kind != "valve":
-            continue
+    thing to have drawn on purpose.
+
+    Every valve a flowsheet can put in a line is checked, resolved the way the
+    renderer resolves it. The one exemption is a valve *declared* normally
+    closed, which is filled on purpose and is the subject of the next test:
+    the claim here is that nothing is filled by accident, and a declaration is
+    the opposite of an accident."""
+    for variant in default_registry.variants("valve"):
+        valve = units.Valve("HV-1", variant=variant)
+        assert valve.normal_position == "open", "an undeclared valve is not marked"
+        sym = default_registry.for_unit(valve)
         for tag, w, h in _ink_extents(sym.svg):
             covered = (w * h) / (sym.width * sym.height)
             assert covered < _FEATURE_AREA, (
-                f"{kind}/{variant} fills a <{tag}> covering {covered:.0%} of its "
+                f"valve/{variant} fills a <{tag}> covering {covered:.0%} of its "
                 f"{sym.width}x{sym.height} box -- that is the body, not a feature of it, "
                 f"and a filled body means normally closed"
             )
+
+
+def test_a_normally_closed_valve_is_the_one_valve_drawn_filled():
+    """The other side of the rule above: declaring the position must actually
+    darken the body, or the convention is documented and not drawn.
+
+    Every variant is accounted for. It either darkens, or it is forbidden the
+    mark outright by PIP PIC001 4.2.2.10, or it carries the NC abbreviation of
+    4.2.2.8 -- and a variant that fell through all three would state its
+    position nowhere at all, which is the silent failure this catches."""
+    from pandid.render.symbols import NC_DARKENS, NC_FORBIDDEN, closed_marking
+
+    seen = set()
+    for variant in default_registry.variants("valve"):
+        if variant in NC_FORBIDDEN:
+            with pytest.raises(ValueError, match="4.2.2.10"):
+                units.Valve("HV-1", variant=variant, normal_position="closed")
+            seen.add(variant)
+            continue
+        valve = units.Valve("HV-1", variant=variant, normal_position="closed")
+        mark = closed_marking(valve)
+        assert mark in ("fill", "NC"), f"valve/{variant} states its position nowhere"
+        seen.add(variant)
+        sym = default_registry.for_unit(valve)
+        if variant in NC_DARKENS:
+            assert mark == "fill"
+            assert _body_fill(sym) >= _FEATURE_AREA, (
+                f"valve/{variant} is declared normally closed but nothing it draws "
+                f"covers enough of its box to read as a darkened body"
+            )
+        else:
+            assert mark == "NC"
+            assert _artwork(sym) == _artwork(default_registry.get("valve", variant)), (
+                f"valve/{variant} cannot be darkened, so its artwork must be the "
+                f"ordinary one and the position said in letters instead"
+            )
+    assert seen == set(default_registry.variants("valve"))
