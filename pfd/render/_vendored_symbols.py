@@ -238,9 +238,9 @@ def register_vendored(registry):
         ports={'cold_in': (0.0, 50.0), 'cold_out': (100.0, 50.0), 'hot_in': (50.0, 0.0), 'hot_out': (50.0, 100.0)},
     ), 'spiral')
 
-    # draw.io vessels:Barrel, Drum -> vessel/default
+    # draw.io vessels:Pressurized Vessel -> vessel/default
     registry.register('vessel', Symbol(
-        svg='<g id="sym_vessel"><rect x="1.0" y="0.0" width="60.0" height="100.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="0.0" width="62.0" height="2.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="32.0" width="62.0" height="2.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="66.0" width="62.0" height="2.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="98.0" width="62.0" height="2.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_vessel"><g transform="scale(0.62, 0.5)"><path d="M 0.0 15.0 A 50.0 15.0 0.0 0 1 50.0 0.0 A 50.0 15.0 0.0 0 1 100.0 15.0 L 100.0 185.0 A 50.0 15.0 0.0 0 1 50.0 200.0 A 50.0 15.0 0.0 0 1 0.0 185.0 Z" fill="none" stroke="#111" stroke-width="3.226"/></g></g>',
         width=62.0, height=100.0,
         ports={'inlet': (0.0, 50.0), 'outlet': (62.0, 50.0), 'vent': (31.0, 0.0)},
     ), 'default')

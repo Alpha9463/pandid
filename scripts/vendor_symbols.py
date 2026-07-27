@@ -158,8 +158,27 @@ KIND_MAP = {
                             {"cold_in": "W", "cold_out": "E",
                              "hot_in": "N", "hot_out": "S"}),
     # Vessels / columns / reactors / separators / tanks.
-    ("vessel", "default"): ("vessels", "Barrel, Drum",
-                            {"inlet": "W", "outlet": "E", "vent": ("N", 31.0)}),
+    #
+    # The generic ISO 10628 vessel: a vertical cylinder with dished heads, the
+    # same stencil the column is drawn from. "Barrel, Drum" is a 44-gallon
+    # shipping barrel — hoop bands and all — which is a container rather than a
+    # piece of process equipment.
+    #
+    # Sharing the stencil with the column is why SCALE reproportions this one:
+    # a tower is slender because it is full of trays, and a drum drawn to the
+    # same proportions reads as a small tower on a sheet carrying both. See
+    # SCALE for the box it comes out at.
+    #
+    # Ports are the barrel's, and the dished variant's: in one shell wall and
+    # out the other at mid-height, with the vapour connection on the crown of
+    # the top head at (50, 0). Switching a vessel between variants is a change
+    # of artwork, not of piping, so the two must offer the same nozzles in the
+    # same places. Both process nozzles are at mid-height, which is on the
+    # straight shell (it spans y 15..185) at any box the unit is drawn at,
+    # rather than on a head, where the ink curves away from the box edge.
+    ("vessel", "default"): ("vessels", "Pressurized Vessel",
+                            {"inlet": ("W", 100.0), "outlet": ("E", 100.0),
+                             "vent": ("N", 50.0)}),
     # Feed enters on the left; the returns come back on the RIGHT, which is the
     # side the overhead and reboiler systems are drawn on. reflux_in sits high
     # and boilup_in low on the straight shell wall (which spans y 15..185), with
@@ -347,8 +366,37 @@ KIND_MAP = {
 
 
 # draw.io draws inline devices oversized; scale them to read as small devices
-# (lines stay 2px thanks to non-scaling-stroke).
-SCALE = {"valve": 0.5, "fitting": 0.5, "vent": 0.5, "funnel": 0.5}
+# (the converter is handed a matching heavier stroke, so the line still lands at
+# 2px once the transform has been applied).
+#
+# A key is a kind, or one (kind, variant) where a single variant is drawn at a
+# different size from the rest of its class. A value is one factor, or a pair
+# (sx, sy) for the one case where a symbol has to be *reproportioned* rather
+# than merely resized: the vessel and the column are the same stencil, and the
+# vessel is the short one. That stroke compensation is taken from sx, so the
+# shell walls — the long strokes, and the ones a reader takes the line weight
+# from — are the pair that lands exactly on 2px.
+SCALE = {"valve": 0.5, "fitting": 0.5, "vent": 0.5, "funnel": 0.5,
+         # 62 x 100, at 1:1.6 against the column's 1:2 — a drum is short because
+         # it holds inventory, a tower is slender because it holds trays, and
+         # two shapes cut to the same proportions read as one piece of equipment
+         # drawn at two sizes. It lands in the same family as vessel/dished
+         # (60 x 95), the knock-out drum (51 x 95) and the reactor (50 x 96).
+         #
+         # It is also the box the barrel occupied, to the unit: the nozzles keep
+         # the heights every pinned sheet was drawn to, so this changes what a
+         # vessel looks like without moving a single run.
+         ("vessel", "default"): (0.62, 0.5)}
+
+
+def scale_for(kind, variant):
+    """The (sx, sy) a symbol's artwork is drawn at, from :data:`SCALE`.
+
+    A (kind, variant) entry beats the kind's own, so one variant can be resized
+    without dragging its siblings with it.
+    """
+    s = SCALE.get((kind, variant), SCALE.get(kind, 1.0))
+    return (float(s), float(s)) if isinstance(s, (int, float)) else (float(s[0]), float(s[1]))
 
 
 def is_series(spec):
@@ -407,10 +455,10 @@ def build():
         el = index.get((stencil, shape))
         if el is None:
             raise SystemExit(f"shape {shape!r} not in {stencil}.xml")
-        s = SCALE.get(kind, 1.0)
+        sx, sy = scale_for(kind, variant)
         # Emit a heavier stroke on scaled symbols so it renders at 2px after the
         # scale transform (2px matches streams + hand-drawn symbols exactly).
-        inner, w, h, constraints = convert_shape(el, stroke_width=round(2.0 / s, 3))
+        inner, w, h, constraints = convert_shape(el, stroke_width=round(2.0 / sx, 3))
         # A port spec may be a LIST: the first entry is the default placement and
         # the rest are alternate faces the user can move that port to, keyed by
         # the edge each one names.
@@ -429,12 +477,16 @@ def build():
                         f'edge spec like ("N", 30.0), got {extra!r}')
                 alts.setdefault(p, {})[extra[0]] = resolve_port(extra, constraints, w, h)
 
-        if s != 1.0:
-            inner = f'<g transform="scale({s})">{inner}</g>'
-            w, h = w * s, h * s
-            ports = {p: (x * s, y * s) for p, (x, y) in ports.items()}
-            alts = {p: {f: (x * s, y * s) for f, (x, y) in d.items()} for p, d in alts.items()}
-            series = {p: (e, at * s, pitch * s, ext) for p, (e, at, pitch, ext) in series.items()}
+        if (sx, sy) != (1.0, 1.0):
+            factors = f"{sx}" if sx == sy else f"{sx}, {sy}"
+            inner = f'<g transform="scale({factors})">{inner}</g>'
+            w, h = w * sx, h * sy
+            ports = {p: (x * sx, y * sy) for p, (x, y) in ports.items()}
+            alts = {p: {f: (x * sx, y * sy) for f, (x, y) in d.items()} for p, d in alts.items()}
+            # A series runs along one face, so it is the along-axis that scales it.
+            series = {p: (e, at * (sy if e in ("W", "E") else sx),
+                          pitch * (sy if e in ("W", "E") else sx), ext)
+                      for p, (e, at, pitch, ext) in series.items()}
         w, h = round(w, 1), round(h, 1)
         ports = {p: tuple(round(v, 1) for v in xy) for p, xy in ports.items()}
         alts = {p: {f: tuple(round(v, 1) for v in xy) for f, xy in d.items()}
