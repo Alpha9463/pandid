@@ -121,7 +121,7 @@ class Unit:
         One piece of plant carries one tag and is drawn once, so for equipment
         the tag *is* the name the flowsheet knows it by. Only a symbol that
         stands for something drawn in several places has to tell the two apart;
-        see :attr:`Instrument.tag`.
+        see :attr:`Instrument.tag` and :attr:`_Boundary.tag`.
         """
         return self.name
 
@@ -130,7 +130,10 @@ class Unit:
 
         False here, and so for every piece of equipment: two units answering to
         ``P-101`` are two pumps sharing a tag, which is a mistake in the
-        drawing rather than a convention of it.
+        drawing rather than a convention of it. Overridden by the two symbols
+        that stand for one thing shown in several places: the interlock square
+        (:meth:`Instrument.repeats`) and the utility header flag
+        (:meth:`_Boundary.repeats`).
         """
         return False
 
@@ -304,15 +307,89 @@ class Unit:
 # ---------------------------------------------------------------------------
 
 
-class Feed(Unit):
-    """Boundary condition: a stream source entering the flowsheet."""
+class _Boundary(Unit):
+    """Where the sheet ends: the off-page connector flag Feed and Product draw.
+
+    Not a piece of plant. The flag stands for a line crossing the sheet edge,
+    and its label is the whole of what identifies the service to the reader,
+    which is why ``reference`` — the drawing the line continues onto — is drawn
+    here and nowhere else.
+
+    ``header`` says the flag stands for a *utility header* rather than for one
+    line: cooling water supply, steam, flare, plant air. A header is a service
+    available all over the plant and tapped wherever it is wanted, so it is
+    drawn at each tap and labelled the same way every time. See :meth:`repeats`.
+    """
+
+    def __init__(self, name: str, variant: str = "default",
+                 width: float | None = None, height: float | None = None,
+                 label_pos: str | None = None, description: str = "",
+                 reference: str = "", header: bool = False):
+        super().__init__(name, variant=variant, width=width, height=height,
+                         label_pos=label_pos, description=description,
+                         reference=reference)
+        #: One service tapped at several points, rather than one line crossing
+        #: the sheet edge once. Opt in, because two flags accidentally given one
+        #: name are two services the reader cannot tell apart, which is a defect
+        #: in the drawing and worth catching.
+        self.header = bool(header)
+        # The drawn label, kept apart from the name because a tapped header
+        # needs a name of its own to be addressed by. See :attr:`tag`.
+        self._tag = name
+
+    @property
+    def tag(self) -> str:
+        """The service drawn on the flag (``"CWSH"``).
+
+        Equal to :attr:`~Unit.name` for a flag drawn once. A header repeats —
+        the same service appears wherever it is tapped — so the sheet shows one
+        label several times while the flowsheet keeps a distinct name for each
+        tap to address it by (``CWSH``, ``CWSH (2)``).
+        """
+        return self._tag
+
+    def repeats(self, other: "Unit") -> bool:
+        """Whether this flag is another tap of the same header.
+
+        Both ends have to be headers carrying the same label: two flags called
+        ``Reactor Effluent`` are one line drawn as if it left the sheet twice,
+        which is a mistake worth catching, and the author says which case this
+        is by passing ``header=True``.
+
+        They also have to be *the same drawing* of it, since the reader has only
+        the flag to go on — same class, so a supply and a return sharing a label
+        still clash, and the same ``reference``, since two taps of one header
+        continue onto one drawing.
+        """
+        return (self.header
+                and isinstance(other, _Boundary)
+                and type(other) is type(self)
+                and other.header
+                and other.tag == self.tag
+                and other.variant == self.variant
+                and other.reference == self.reference)
+
+
+class Feed(_Boundary):
+    """Boundary condition: a stream source entering the flowsheet.
+
+    ``header=True`` marks the flag as a utility supply header — cooling water,
+    steam, plant air — which a sheet taps wherever it needs it and labels the
+    same way at every tap. Such a flag may be added more than once; see
+    :meth:`_Boundary.repeats`.
+    """
 
     kind = "feed"
     PORTS = [("outlet", "outlet", "feed")]
 
 
-class Product(Unit):
-    """Boundary condition: a stream sink leaving the flowsheet."""
+class Product(_Boundary):
+    """Boundary condition: a stream sink leaving the flowsheet.
+
+    ``header=True`` marks the flag as a return or collection header — cooling
+    water return, condensate, flare — which takes from wherever it is tapped
+    and is labelled the same way each time. See :meth:`_Boundary.repeats`.
+    """
 
     kind = "product"
     PORTS = [("inlet", "inlet", "product")]

@@ -62,12 +62,14 @@ Registers a unit and returns it, so it chains with `.pin()`. Raises `ValueError`
 if the unit is already on a flowsheet, or if the tag is already taken: a tag
 names one item, so two pumps called `P-101` are a mistake in the drawing.
 
-The one exception is a **trip square** (`Instrument(variant="sis")`, its
-`"logic"` spelling, or `variant="interlock"`), which is a logic function rather
-than a device and is drawn at every place it acts, carrying the same tag each
-time. A repeat is accepted and given a name of its own, so a stream endpoint, a
-spec entry or an equipment-list row still means exactly one square. The two are
-different ISA-5.1 symbols, so a tag drawn as both is still a clash:
+Two symbols stand for one thing shown in several places and are the exceptions.
+A **trip square** (`Instrument(variant="sis")`, its `"logic"` spelling, or
+`variant="interlock"`) is a logic function rather than a device and is drawn at
+every place it acts; a **utility header flag** (`Feed`/`Product` with
+`header=True`, see [Off-page connectors](#off-page-connectors)) is one service
+drawn at every place it is tapped. Both carry the same tag each time. A repeat
+is accepted and given a name of its own, so a stream endpoint, a spec entry or
+an equipment-list row still means exactly one of them:
 
 ```python
 squares = [fs.add_instrument("I", 1, variant="logic") for _ in range(4)]
@@ -75,9 +77,11 @@ squares = [fs.add_instrument("I", 1, variant="logic") for _ in range(4)]
 [s.name for s in squares]    # ['I-1', 'I-1 (2)', 'I-1 (3)', 'I-1 (4)']
 ```
 
-Nothing else repeats. A second `LT-101` balloon is one loop number used twice,
-and a square sharing its tag with a balloon is two symbols claiming to be the
-same thing; both raise.
+Nothing else repeats, and both drawings have to be of the same thing. A second
+`LT-101` balloon is one loop number used twice, a square sharing its tag with a
+balloon is two ISA-5.1 symbols claiming to be the same thing, and a `Feed` and a
+`Product` under one label are two services pointing opposite ways; all of them
+raise.
 
 ```text
 connect(src: Port, dst: Port, *,
@@ -264,7 +268,7 @@ Unit(name, variant="default", width=None, height=None,
 ```
 
 - `name` is the equipment tag. It must be non-empty, and unique on the flowsheet
-  save for the one symbol that repeats (see
+  save for the two symbols that repeat (see
   [Building the topology](#building-the-topology)).
 - `variant` is the visual style within the class (see below). A name that kind
   has no symbol for raises `ValueError` listing the ones it does, at the first
@@ -278,6 +282,10 @@ Unit(name, variant="default", width=None, height=None,
 - `reference` is the off-page drawing reference, drawn as a boundary flag's
   second line. Only `Feed` and `Product` have that line, so giving it to
   anything else raises `ValueError`.
+
+`Feed` and `Product` take one argument of their own, `header=False`, which marks
+the flag a utility header and is what lets it be added once per tap. See
+[Off-page connectors](#off-page-connectors).
 
 ### Port table
 
@@ -1026,6 +1034,26 @@ fs.add(units.Feed("Fermentation Broth", reference="PFD-201"))
 
 The flag is the only thing with a second line to draw it on, so `reference=` on
 a pump or a column raises `ValueError` naming the boundary to put it on.
+
+`header=True` says the flag stands for a **utility header** — cooling water,
+steam, flare, plant air — rather than for one line crossing the sheet edge. A
+header is a service tapped wherever it is wanted, so it may be added once per
+tap and is labelled the same way at every one:
+
+```python
+for hx in (condenser, cooler):
+    cws = fs.add(units.Feed("CWSH", header=True))
+    cwr = fs.add(units.Product("CWRH", header=True))
+    fs.connect(cws.outlet, hx.cold_in)
+    fs.connect(hx.cold_out, cwr.inlet)
+```
+
+Both taps draw `CWSH`; the flowsheet names them `CWSH` and `CWSH (2)` so each is
+still one unit to address. Without the word, two flags of one name raise: two
+process boundaries sharing a label are a service the reader cannot resolve, and
+only the author knows which case it is. Both drawings have to be of the same
+thing, so a `Feed` and a `Product`, or two flags naming different `reference`
+drawings, still clash.
 
 ---
 

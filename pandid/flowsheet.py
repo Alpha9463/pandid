@@ -141,11 +141,16 @@ class Flowsheet:
         """Register a unit on this flowsheet. Returns the unit for chaining.
 
         A tag names one item, so a tag already on the sheet is refused. The
-        exception is a symbol that stands for a function rather than a device:
-        an interlock square is one piece of logic drawn at every place it acts,
-        and a sheet that cannot draw it four times cannot draw the interlock.
+        exceptions are the symbols that stand for one thing shown in several
+        places: an interlock square is one piece of logic drawn at every place
+        it acts, and a utility header flag
+        (``Feed``/``Product`` with ``header=True``) is one service drawn at
+        every place it is tapped. A sheet that cannot draw the square four
+        times cannot draw the interlock, and one that cannot draw ``CWSH``
+        twice cannot show cooling water reaching two coolers.
+
         Such a repeat is accepted and given a name of its own — ``I-1``,
-        ``I-1 (2)`` — so the square that a stream, a spec entry or an equipment
+        ``I-1 (2)`` — so the unit that a stream, a spec entry or an equipment
         list means is never in doubt, while the tag drawn stays ``I-1``.
         """
         if unit in self.units:
@@ -156,10 +161,14 @@ class Flowsheet:
         if clash is not None and not unit.repeats(clash):
             raise ValueError(
                 f"A unit with the name {unit.name!r} already exists on this "
-                f"flowsheet. A tag names one item, so two units cannot share one; "
-                f"the exception is a trip square (an Instrument with variant="
-                f"'sis'/'logic' or 'interlock'), which is a single logic "
-                f"function drawn at each place it acts."
+                f"flowsheet. A tag names one item, so two units cannot share one. "
+                f"Two symbols stand for one thing shown in several places and may "
+                f"repeat: a trip square (an Instrument with variant='sis'/'logic' "
+                f"or 'interlock'), a single logic function drawn at each place it "
+                f"acts, and a utility header flag (a Feed or Product with "
+                f"header=True), one service drawn at each place it is tapped. Both "
+                f"drawings have to be of the same thing, so they must agree on the "
+                f"class and the variant, and two flags on the off-page reference."
             )
         if unit.flowsheet is not None:
             raise ValueError(
