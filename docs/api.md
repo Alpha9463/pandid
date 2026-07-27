@@ -246,7 +246,7 @@ units.
 A drawing too big for the page is scaled down uniformly to fit, never clipped,
 and never enlarged when it is already smaller. A page too small for the
 furniture itself (a wide stream table on A4, say) raises `ValueError` naming the
-size it needed.
+size it needed and the widest piece of furniture that needed it.
 
 ---
 
@@ -792,6 +792,14 @@ fs.stream_table_sections = [("Benzene", "Mass Fraction")]   # header row before 
 fs.render("sheet.svg", border="zone", show_stream_table=True)
 ```
 
+Every column is ruled wide enough for everything drawn in it: the row labels,
+the stream number or line number heading the column, the values under it, and
+any section header spanning the table. The table's width is an output of the
+layout rather than a fixed budget, so a long row label or a value carrying its
+units widens the table rather than running into the cell beside it. On a fixed
+`page_size` that can make the table the thing that will not fit, which raises
+and says so.
+
 ---
 
 ## Instrumentation
@@ -921,8 +929,25 @@ there is then no scale to state. Give it a value to state one regardless:
 fs.title_block = TitleBlock(title="Transfer and Relief U100", scale="NTS")
 ```
 
-A value too long for its cell is trimmed with an ellipsis rather than run across
-the rule into the cell beside it.
+The strip is fixed geometry, so a value too long for its cell is trimmed with an
+ellipsis rather than run across the rule into the cell beside it — and the
+render says which field it trimmed, on `fs.warnings`, naming the field and
+quoting the value in full:
+
+```python
+fs.title_block = TitleBlock(title="Ethanol Purification A300")
+fs.to_svg(page_size="A3", border="zone")
+for w in fs.warnings:
+    print(w)
+# [warning] text-truncated: title was truncated to fit its cell:
+#     'Ethanol Purification A300' drawn as 'Ethanol Purification A3…'
+```
+
+A cell with nothing worth trimming — the company name, whose only break points
+are between words, and the `SHEET n of m` count, half of which reads as a
+different sheet — is drawn in full and reported as `text-overruns-cell`
+instead. Both codes are rebuilt on every render, so shortening the field and
+rendering again clears the finding.
 
 ### `Annotation` and `TableBox`
 

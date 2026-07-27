@@ -9,6 +9,7 @@ from datetime import datetime
 from pandid.render import furniture as F
 from pandid.render.symbols import closed_marking
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
+from pandid.validate import Issue
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -290,15 +291,42 @@ def _scale_text(s: float) -> str:
     return "1:1" if s >= 1.0 else f"1:{1 / s:.3g}"
 
 
-def _too_small(sheet: _Sheet, need_w: float, need_h: float) -> ValueError:
+# Findings this renderer raises about text that did not fit the cell drawn for
+# it, as opposed to the validator's findings about the diagram.
+_FIT_CODES = ("text-truncated", "text-overruns-cell")
+
+
+def _too_small(sheet: _Sheet, need_w: float, need_h: float,
+               cause: str = "") -> ValueError:
     """Furniture is drawn at a fixed size, so a sheet too small to hold it is an
-    error no scale of the drawing can resolve."""
+    error no scale of the drawing can resolve.
+
+    ``cause`` names the widest piece, which is the one worth shortening: a
+    stream table sized to its own contents is usually what pushed a sheet over,
+    and "the furniture does not fit" does not say which furniture.
+    """
+    blame = f" The widest piece is {cause}." if cause else ""
     return ValueError(
         f"The sheet furniture does not fit page size {sheet.name}: the border, title strip "
         f"and docked boxes need at least {need_w:.0f}x{need_h:.0f}px of the "
-        f"{sheet.width:.0f}x{sheet.height:.0f}px sheet. Use a larger page_size, or omit "
+        f"{sheet.width:.0f}x{sheet.height:.0f}px sheet.{blame} Use a larger page_size, or omit "
         "page_size to fit the sheet to the drawing."
     )
+
+
+# The title strip and stream table are placed by the same band arithmetic as the
+# boxes the caller docked, but neither is an object of the caller's, so each
+# stands in the columns as a sentinel. Naming them is what an error that has to
+# say *which* piece of furniture will not fit needs.
+TITLE, STREAM = "\x00title", "\x00stream"
+_FURNITURE_NAMES = {TITLE: "the title strip", STREAM: "the stream table"}
+
+
+def _furniture_name(obj) -> str:
+    if isinstance(obj, str):
+        return _FURNITURE_NAMES.get(obj, obj)
+    title = getattr(obj, "title", "")
+    return f"the {title!r} box" if title else "an untitled annotation box"
 
 
 class SvgRenderer:
@@ -383,6 +411,17 @@ class SvgRenderer:
             U[2], U[3] = max(U[2], x1), max(U[3], y1)
 
         free = None  # region a fixed sheet leaves for the drawing
+        fit_issues: list[Issue] = []
+
+        def report(field: str, text: str, drawn: str) -> None:
+            fit_issues.append(
+                Issue("warning", "text-truncated",
+                      f"{field} was truncated to fit its cell: "
+                      f"{text!r} drawn as {drawn!r}")
+                if drawn != text else
+                Issue("warning", "text-overruns-cell",
+                      f"{field} is wider than the cell it is drawn in: {text!r}"))
+
         # Furniture belongs to the sheet, not to the border: a title block or a
         # docked box is drawn because it was supplied. A zone border implies a
         # formal sheet, which carries a title strip whether one was filled in or
@@ -391,7 +430,7 @@ class SvgRenderer:
                      or bool(getattr(fs, "annotations", None)))
         if furnished:
             (frame_x, frame_y, canvas_width, canvas_height), free = self._place_furniture(
-                fs, st_layout, dx0, dy0, dx1, dy1, furniture, sheet, border)
+                fs, st_layout, dx0, dy0, dx1, dy1, furniture, sheet, border, report)
         elif sheet is not None:
             free = self._place_plain(st_layout, sheet, margin, furniture)
             frame_x, frame_y = 0.0, 0.0
@@ -405,6 +444,13 @@ class SvgRenderer:
             frame_x, frame_y = U[0] - margin, U[1] - margin
             canvas_width = (U[2] - U[0]) + 2 * margin
             canvas_height = (U[3] - U[1]) + 2 * margin
+
+        # A cell that could not hold its text is a finding about this render, so
+        # it joins the validator's on ``fs.warnings``. Findings from an earlier
+        # render are dropped rather than added to: a title shortened and
+        # re-rendered must stop warning about the old one.
+        fs.warnings = [w for w in fs.warnings
+                       if getattr(w, "code", "") not in _FIT_CODES] + fit_issues
 
         # 4. SVG document.
         lines = ['<?xml version="1.0" encoding="UTF-8"?>']
@@ -464,7 +510,7 @@ class SvgRenderer:
     # ------------------------------------------------------------------ furniture
 
     def _place_furniture(self, fs, st_layout, dx0, dy0, dx1, dy1, furniture, sheet,
-                         border):
+                         border, report=None):
         """Dock furniture flush to the sheet *frame* (not the drawing), and rule
         that frame into zones when the sheet asked for a border.
 
@@ -487,17 +533,17 @@ class SvgRenderer:
 
         def draw_box(a, x, y):
             furniture.extend(F.draw_table(a, x, y) if isinstance(a, TableBox)
-                             else F.draw_annotation(a, x, y))
+                             else F.draw_annotation(a, x, y, report=report))
 
         # Title strip + stream table are bottom furniture. Represent them as
-        # sentinel "boxes" at the foot of the bottom-right / bottom-left columns
-        # so the band maths sizes the frame around them too.
+        # sentinel "boxes" (see TITLE / STREAM) at the foot of the bottom-right
+        # / bottom-left columns so the band maths sizes the frame around them
+        # too.
         strip = fs.title_block is not None or border == "zone"
         tb = fs.title_block or TitleBlock()
         ts_w, ts_h = F.measure_title_strip(tb)
         date = tb.date or datetime.now().strftime("%Y-%m-%d")
         name = tb.title or fs.name
-        TITLE, STREAM = "\x00title", "\x00stream"
 
         cols: dict[str, list] = {k: [] for k in _ALIGN}
         positioned: list = []
@@ -517,6 +563,15 @@ class SvgRenderer:
 
         def stack_w(items):
             return max((w for _, w, _ in items), default=0.0)
+
+        def biggest(dim: int) -> str:
+            """Name the largest piece of furniture on the sheet along ``dim``
+            (1 = width, 2 = height), for an error that has to say which piece
+            will not fit rather than that something will not."""
+            items = [it for col in cols.values() for it in col]
+            if not items:
+                return ""
+            return _furniture_name(max(items, key=lambda it: it[dim])[0])
 
         # --- band thicknesses -------------------------------------------------
         top_h = max(stack_h(cols["top-left"]), stack_h(cols["top"]),
@@ -542,8 +597,10 @@ class SvgRenderer:
             need_w = max(band_w, left_w + right_w + 2 * INNER)
             need_h = max(top_h + bottom_h + 2 * INNER,
                          stack_h(cols["left"]), stack_h(cols["right"]))
-            if (need_w >= sheet.width - 2 * edge) or (need_h >= sheet.height - 2 * edge):
-                raise _too_small(sheet, need_w + 2 * edge, need_h + 2 * edge)
+            too_wide = need_w >= sheet.width - 2 * edge
+            if too_wide or need_h >= sheet.height - 2 * edge:
+                raise _too_small(sheet, need_w + 2 * edge, need_h + 2 * edge,
+                                 biggest(1 if too_wide else 2))
             ix, iy = edge, edge
             ixr, iyb = sheet.width - edge, sheet.height - edge
         else:
@@ -582,7 +639,8 @@ class SvgRenderer:
         def place(obj, x, y, w, h):
             if obj is TITLE:
                 furniture.extend(
-                    F.draw_title_strip(tb, name, date, x + w, y + h, fit_scale=fit))
+                    F.draw_title_strip(tb, name, date, x + w, y + h, fit_scale=fit,
+                                       report=report))
             elif obj is STREAM:
                 furniture.extend(self._draw_stream_table(st_layout, x, y))
             else:
@@ -651,11 +709,22 @@ class SvgRenderer:
         if free_w <= 0 or free_h - table_h <= 0 or (st_layout and st_layout["w"] > free_w):
             raise _too_small(sheet,
                              2 * margin + (st_layout["w"] if st_layout else 0.0),
-                             2 * margin + table_h)
+                             2 * margin + table_h,
+                             "the stream table" if st_layout else "")
         if st_layout:
             furniture.extend(self._draw_stream_table(
                 st_layout, margin, sheet.height - margin - st_layout["h"]))
         return (margin, margin, free_w, free_h - table_h)
+
+    @staticmethod
+    def _cell_text(s, key) -> str:
+        """What one stream's cell draws for one property row.
+
+        The single place the placeholder for a missing value is decided, so the
+        column that is *measured* is the column that is drawn.
+        """
+        val = s.properties.get(key, "-")
+        return "-" if val in (None, "") else str(val)
 
     def _table_streams(self, fs):
         streams, seen = [], set()
@@ -681,9 +750,6 @@ class SvgRenderer:
         n = len(streams)
         size = 10.5 if n <= 18 else max(8.0, 190.0 / n)
         row_h = 20.0 if n <= 18 else max(15.0, size + 5)
-        label_w = 122.0
-        name_w = max(52.0, max((F.text_width(s.name, size, bold=True)
-                                for s in streams), default=52.0) + 14)
         disp = []  # ('section', label) | ('data', key)
         for k in order:
             if k in sec_before:
@@ -694,6 +760,30 @@ class SvgRenderer:
         # identified that way.
         heading = ("Line Number" if all(s.has_line_number for s in streams)
                    else "Stream Number")
+
+        # Every column is sized to what goes in it. The table's width is a
+        # layout *output* — it is placed at whatever it measures, and the sheet
+        # is grown or the page is refused around it — so there is no fixed cell
+        # here to abbreviate into: a stream table that cannot show
+        # "0.0441 kg/kg total" is not a stream table. A minimum keeps a table of
+        # short values from ruling columns too narrow to read as columns.
+        GUTTER = 14.0                     # the same either side of any cell
+        labels = [heading] + [key for kind, key in disp if kind == "data"]
+        label_w = max(122.0, max(F.text_width(t, size, bold=True)
+                                 for t in labels) + GUTTER)
+        values = [self._cell_text(s, key) for kind, key in disp if kind == "data"
+                  for s in streams]
+        name_w = max(52.0,
+                     max((F.text_width(s.name, size, bold=True) for s in streams),
+                         default=0.0) + GUTTER,
+                     max((F.text_width(v, size) for v in values), default=0.0) + GUTTER)
+        # A section header spans the whole table, so it is the total width it
+        # constrains rather than any one column; the row label column is the
+        # only one free to take up the slack.
+        sections = [label for kind, label in disp if kind == "section"]
+        span = max((F.text_width(t, size, bold=True) for t in sections),
+                   default=0.0) + GUTTER
+        label_w = max(label_w, span - name_w * n)
         return dict(streams=streams, disp=disp, size=size, row_h=row_h,
                     label_w=label_w, name_w=name_w, heading=heading,
                     w=label_w + name_w * n, h=row_h * (1 + len(disp)))
@@ -734,8 +824,7 @@ class SvgRenderer:
             cell(left, y, label_w, key, fill="#f9f9f9", bold=True, anchor="start")
             cx = left + label_w
             for s in streams:
-                val = s.properties.get(key, "-")
-                cell(cx, y, name_w, "-" if val in (None, "") else val, fill="white")
+                cell(cx, y, name_w, self._cell_text(s, key), fill="white")
                 cx += name_w
             y += row_h
         out.append('</g>')

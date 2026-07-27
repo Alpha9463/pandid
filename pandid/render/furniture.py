@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import html
 import string
+from typing import Callable
 
 # Rough advance width of the sans-serif the renderer uses, as a fraction of the
 # font size. Slightly generous so auto-sized boxes never clip their text.
@@ -23,23 +24,52 @@ _ADV_BOLD = 0.62
 
 FONT = "sans-serif"
 
+# How a cell says it could not hold what it was given: the field it draws, the
+# text it was asked for, and the text it actually drew (the same string when
+# nothing was trimmed). An ellipsis tells whoever reads the sheet that a value
+# was abbreviated; it tells the program that supplied the value nothing at all,
+# and that program is the one that can shorten the field or ask for a bigger
+# sheet. Every fixed-width cell in this module therefore measures first and
+# reports through one of these.
+Reporter = Callable[[str, str, str], None]
+
 
 def text_width(s, size: float, bold: bool = False) -> float:
     return len(str(s)) * size * (_ADV_BOLD if bold else _ADV)
 
 
-def clip(s, room: float, size: float, bold: bool = False) -> str:
-    """Trim a value to the room its cell has.
+def clip(s, room: float, size: float, bold: bool = False, *,
+         field: str = "", report: "Reporter | None" = None) -> str:
+    """Trim a value to the room its cell has, and report what was cut.
 
-    A title-block cell is ruled, so a value longer than its cell would run
-    across the rule and into the value beside it. A draftsman abbreviates;
-    an ellipsis at least says the text was abbreviated.
+    A title-block cell is ruled and the strip is fixed geometry, so a value
+    longer than its cell would run across the rule and into the value beside it
+    and no amount of growing can help. A draftsman abbreviates.
     """
     s = str(s)
     if text_width(s, size, bold) <= room:
         return s
     per = size * (_ADV_BOLD if bold else _ADV)
-    return s[: max(0, int(room / per) - 1)].rstrip() + "…"
+    drawn = s[: max(0, int(room / per) - 1)].rstrip() + "…"
+    if report is not None:
+        report(field, s, drawn)
+    return drawn
+
+
+def check_fit(s, room: float, size: float, bold: bool = False, *,
+              field: str = "", report: "Reporter | None" = None) -> str:
+    """Measure a value that is drawn whole whatever it measures, and report an
+    overrun.
+
+    Some cells have nothing worth trimming. Half a sheet count reads as a
+    different sheet count, and a company name broken mid-word reads as a
+    different company, so those are drawn in full and the overrun is reported
+    instead of hidden.
+    """
+    s = str(s)
+    if report is not None and text_width(s, size, bold) > room:
+        report(field, s, s)
+    return s
 
 
 def _esc(s) -> str:
@@ -83,11 +113,36 @@ def measure_annotation(ann) -> tuple[float, float]:
     return w, h
 
 
-def draw_annotation(ann, x: float, y: float) -> list[str]:
-    """Draw an Annotation with its top-left corner at (x, y)."""
+def _overflowing_text(ann, size: float, body_w: float) -> str:
+    """The one string a too-narrow box is best described by: its title where
+    that is what overruns, otherwise the row that does."""
+    if text_width(ann.title, size + 1, bold=True) > body_w:
+        return ann.title
+
+    def flat(r):
+        return "   ".join(str(c) for c in r) if isinstance(r, (tuple, list)) else str(r)
+    return max((flat(r) for r in ann.rows), key=lambda s: text_width(s, size),
+               default=ann.title)
+
+
+def draw_annotation(ann, x: float, y: float, *,
+                    report: "Reporter | None" = None) -> list[str]:
+    """Draw an Annotation with its top-left corner at (x, y).
+
+    A box left to size itself is sized from its own rows, so it always fits.
+    One given an explicit ``width`` is a fixed cell like any other: the rows are
+    still drawn at the column stops their content asks for, so a width smaller
+    than that content runs the text out through the side of the box.
+    """
     size, row_h, title_h, col_w = _ann_layout(ann)
     pad, gap = 9.0, 12.0
     w, h = measure_annotation(ann)
+    if report is not None and ann.width is not None:
+        body_w = sum(col_w) + gap * (len(col_w) - 1)
+        inner = max(body_w, text_width(ann.title, size + 1, bold=True))
+        if ann.width < inner + 2 * pad:
+            over = _overflowing_text(ann, size, body_w)
+            report(f"annotation {ann.title!r} (width={ann.width:g})", over, over)
     L = [f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" '
          f'fill="white" stroke="black" stroke-width="1.5"/>']
     if ann.title:
@@ -179,10 +234,25 @@ _REV_W = 300.0
 _COMPANY_W = 100.0
 _INFO_W = 252.0
 _REV_ROW = 14.0
-_REV_COLS = (("REV", 22), ("DATE", 42), ("DESCRIPTION", 140),
-             ("BY", 32), ("CHK'D", 32), ("APP'D", 32))
+# (heading, width, the Revision field the column draws). The widths sum to
+# _REV_W. DATE holds a full ISO 8601 date at 7.5 with a gutter either side,
+# which is what fixes it at 50: at the 42 it was, the date every one of these
+# sheets is stamped with ran over its own rule.
+_REV_COLS = (("REV", 22, "rev"), ("DATE", 50, "date"),
+             ("DESCRIPTION", 132, "description"), ("BY", 32, "by"),
+             ("CHK'D", 32, "checked"), ("APP'D", 32, "approved"))
+# Gutter between a revision cell's rule and its text, left and right.
+_REV_PAD = 3.0
 # The title / status / drawing-number bands, which every sheet carries.
 _BODY_H = 80.0
+# The sheet count is drawn top-right of the title band, on the same line as the
+# title. Reserving it a fixed slot is what keeps the title's own budget a
+# constant: how much of a drawing's title survives must not depend on how many
+# sheets the set happens to have, which is not a fact about the title. Sized for
+# "SHEET 1 of 12" at 7.5; a longer count is drawn whole and reported, since half
+# a sheet count reads as a different sheet.
+_SHEET_W = 55.0
+_TITLE_W = _INFO_W - 10 - _SHEET_W
 # One client or project line above them. Neither is an ISO 7200 field. Its
 # mandatory "legal owner" is the issuing organisation, which is the company
 # cell. An issued sheet names both anyway, so the pair heads the information
@@ -203,12 +273,18 @@ def measure_title_strip(tb) -> tuple[float, float]:
 
 
 def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
-                     fit_scale: str = "") -> list[str]:
+                     fit_scale: str = "", *,
+                     report: "Reporter | None" = None) -> list[str]:
     """Draw the strip so its bottom-right corner sits at (right, bottom).
 
     ``fit_scale`` is the ratio the renderer actually placed the drawing at, which
     is what the scale cell reports for a sheet that does not state a scale of
     its own.
+
+    The strip is fixed geometry — an ISO 7200 block is a known rectangle in a
+    known corner — so a value too long for its cell cannot be given more room
+    and is abbreviated instead. ``report`` is how each such cell says which
+    field it abbreviated and what it was given; see :data:`Reporter`.
     """
     w, h = measure_title_strip(tb)
     x, y = right - w, bottom - h
@@ -221,16 +297,20 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
                  f'stroke="black" stroke-width="1.5"/>')
 
     # --- Revision table (left): header row at the bottom, revisions above it ---
-    def rev_cells(ry, vals, bold=False):
+    def rev_cells(ry, vals, bold=False, where=""):
         cx = x
-        for (_, cw), v in zip(_REV_COLS, vals):
-            L.append(_text(cx + 3, ry + _REV_ROW - 4, v, 7.5, bold=bold))
+        for (_, cw, attr), v in zip(_REV_COLS, vals):
+            L.append(_text(cx + _REV_PAD, ry + _REV_ROW - 4,
+                           clip(v, cw - 2 * _REV_PAD, 7.5, bold,
+                                field=f"{where}.{attr}",
+                                report=report if where else None),
+                           7.5, bold=bold))
             cx += cw
     header_y = bottom - _REV_ROW
     L.append(f'<line x1="{x:.1f}" y1="{header_y:.1f}" x2="{rx:.1f}" y2="{header_y:.1f}" '
              f'stroke="black" stroke-width="1"/>')
     cx = x
-    for _, cw in _REV_COLS[:-1]:
+    for _, cw, _attr in _REV_COLS[:-1]:
         cx += cw
         L.append(f'<line x1="{cx:.1f}" y1="{y:.1f}" x2="{cx:.1f}" y2="{bottom:.1f}" '
                  f'stroke="black" stroke-width="0.5"/>')
@@ -244,7 +324,8 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
         by = rv.by or (tb.drawn_by if newest else "")
         chk = rv.checked or (tb.checked_by if newest else "")
         app = rv.approved or (tb.approved_by if newest else "")
-        rev_cells(ry, [rv.rev, rv.date, rv.description, by, chk, app])
+        rev_cells(ry, [rv.rev, rv.date, rv.description, by, chk, app],
+                  where=f"revisions[{len(tb.revisions) - 1 - idx}]")
         ry -= _REV_ROW
 
     # --- Company / logo cell (middle) ---
@@ -261,7 +342,13 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
             lines.append(line)
         cy = y + h / 2 - (len(lines) - 1) * 6
         for ln in lines:
-            L.append(_text(rx + _COMPANY_W / 2, cy, ln, 8, anchor="middle", bold=True))
+            # A word too long for the cell has no break point the wrapper may
+            # use: hyphenating a company name invents one, so it is drawn whole
+            # and said out loud instead.
+            L.append(_text(rx + _COMPANY_W / 2, cy,
+                           check_fit(ln, _COMPANY_W - 10, 8, True,
+                                     field="company", report=report),
+                           8, anchor="middle", bold=True))
             cy += 12
 
     # --- Info block (right): client/project header, title, status, dwg/date/rev ---
@@ -280,7 +367,8 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
                      f'y2="{hy:.1f}" stroke="black" stroke-width="0.5"/>')
         L.append(_text(ix + 6, hy + _HDR_ROW - 4, label, 6.5, fill="#666"))
         L.append(_text(ix + _HDR_VALUE_X, hy + _HDR_ROW - 4,
-                       clip(value, _INFO_W - _HDR_VALUE_X - 5, 9), 9))
+                       clip(value, _INFO_W - _HDR_VALUE_X - 5, 9,
+                            field=label.lower(), report=report), 9))
         hy += _HDR_ROW
     for ly in ([top] if header else []) + [band2, band3]:
         L.append(f'<line x1="{ix:.1f}" y1="{ly:.1f}" x2="{x + w:.1f}" '
@@ -288,14 +376,21 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
     # title + subtitle, with sheet count tucked top-right of the title band
     sheets = f"SHEET {tb.sheet} of {tb.of_sheets}"
     L.append(_text(ix + 6, top + 15,
-                   clip(tb.title or name, _INFO_W - 10 - text_width(sheets, 7.5), 12.5, True),
+                   clip(tb.title or name, _TITLE_W, 12.5, True,
+                        field="title", report=report),
                    12.5, bold=True))
     if tb.subtitle:
-        L.append(_text(ix + 6, band2 - 6, clip(tb.subtitle, _INFO_W - 12, 10.5), 10.5))
-    L.append(_text(x + w - 5, top + 11, sheets, 7.5, anchor="end", fill="#666"))
+        L.append(_text(ix + 6, band2 - 6,
+                       clip(tb.subtitle, _INFO_W - 12, 10.5,
+                            field="subtitle", report=report), 10.5))
+    L.append(_text(x + w - 5, top + 11,
+                   check_fit(sheets, _SHEET_W, 7.5, field="sheet", report=report),
+                   7.5, anchor="end", fill="#666"))
     # status (tiny label at cell top, value below)
     L.append(_text(ix + 6, band2 + 8, "STATUS", 6.5, fill="#666"))
-    L.append(_text(ix + 6, band3 - 5, tb.status or "—", 11, bold=True))
+    L.append(_text(ix + 6, band3 - 5,
+                   clip(tb.status or "—", _INFO_W - 12, 11, True,
+                        field="status", report=report), 11, bold=True))
     # Bottom band: DRAWING No | SCALE | DATE | REV. Keeping the scale with the
     # number and the revision index is common drafting practice rather than a
     # standard: ISO 7200 §4 puts scale outside the title block, and ASME
@@ -304,22 +399,24 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
     # drawing.
     rev = tb.revisions[-1].rev if tb.revisions else "0"
     scale = tb.scale or fit_scale
-    cells: list[tuple[float, str, str]] = [
-        (_INFO_W * 0.38, "DRAWING No", tb.drawing_number or "—"),
-        (_INFO_W * 0.21, "SCALE", scale),
-        (_INFO_W * 0.29, "DATE", date),
-        (_INFO_W * 0.12, "REV", rev)] if scale else [
-        (_INFO_W * 0.50, "DRAWING No", tb.drawing_number or "—"),
-        (_INFO_W * 0.30, "DATE", date),
-        (_INFO_W * 0.20, "REV", rev)]
+    cells: list[tuple[float, str, str, str]] = [
+        (_INFO_W * 0.38, "DRAWING No", tb.drawing_number or "—", "drawing_number"),
+        (_INFO_W * 0.21, "SCALE", scale, "scale"),
+        (_INFO_W * 0.29, "DATE", date, "date"),
+        (_INFO_W * 0.12, "REV", rev, "rev")] if scale else [
+        (_INFO_W * 0.50, "DRAWING No", tb.drawing_number or "—", "drawing_number"),
+        (_INFO_W * 0.30, "DATE", date, "date"),
+        (_INFO_W * 0.20, "REV", rev, "rev")]
     cxr = ix
-    for j, (seg_w, seg_label, seg_val) in enumerate(cells):
+    for j, (seg_w, seg_label, seg_val, seg_field) in enumerate(cells):
         if j:
             L.append(f'<line x1="{cxr:.1f}" y1="{band3:.1f}" x2="{cxr:.1f}" '
                      f'y2="{bottom:.1f}" stroke="black" stroke-width="0.5"/>')
         bold = seg_label != "DATE"
         L.append(_text(cxr + 5, band3 + 8, seg_label, 6.5, fill="#666"))
-        L.append(_text(cxr + 5, bottom - 5, clip(seg_val, seg_w - 8, 11, bold), 11,
+        L.append(_text(cxr + 5, bottom - 5,
+                       clip(seg_val, seg_w - 8, 11, bold,
+                            field=seg_field, report=report), 11,
                        bold=bold))
         cxr += seg_w
     return L
