@@ -157,9 +157,9 @@ class Flowsheet:
             raise ValueError(
                 f"A unit with the name {unit.name!r} already exists on this "
                 f"flowsheet. A tag names one item, so two units cannot share one; "
-                f"the exception is the interlock square (an Instrument with "
-                f"variant='logic'), which is a single logic function drawn at "
-                f"each place it acts."
+                f"the exception is a trip square (an Instrument with variant="
+                f"'sis'/'logic' or 'interlock'), which is a single logic "
+                f"function drawn at each place it acts."
             )
         if unit.flowsheet is not None:
             raise ValueError(

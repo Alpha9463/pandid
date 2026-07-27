@@ -285,7 +285,8 @@ ft  = fs.add_instrument("FT", 101)                             # field flow tran
 fic = fs.add_instrument("FIC", 101, variant="panel")           # panel-mounted controller
 fy  = fs.add_instrument("FY", 101, variant="computer")         # computing relay
 # variants: default (field balloon), panel, aux, shared (DCS square),
-#           computer (hexagon), logic (interlock square)
+#           computer (hexagon), sis (diamond in a square; also spelled
+#           "logic"), interlock (plain diamond)
 
 fs.connect(ft.sig_out, fic.sig_in, kind="electric")        # dashed
 fs.connect(fic.sig_out, fy.sig_in, kind="pneumatic")       # slash-ticks
@@ -299,9 +300,9 @@ accepted and split.) The signal `kind`s are `electric`, `pneumatic`,
 and no stream numbers.
 
 **A tag names one item**, so `add()` refuses one already on the sheet: two
-`P-101`s, or two `LT-101`s, are a mistake in the drawing. The interlock square
-is the exception, because it is a logic function rather than a device and is
-drawn at every place it acts:
+`P-101`s, or two `LT-101`s, are a mistake in the drawing. A trip square is the
+exception, because it is a logic function rather than a device and is drawn at
+every place it acts:
 
 ```python
 squares = [fs.add_instrument("I", 1, variant="logic") for _ in range(4)]

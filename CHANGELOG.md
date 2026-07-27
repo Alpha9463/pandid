@@ -184,7 +184,7 @@ and is kept working.
   element, so it prints and exports to PDF at exactly its ISO size.
 - `jump_direction="vertical" | "horizontal"` on `to_svg()` / `render()` selects
   which of two crossing lines gets the semicircle hop.
-- 113 registered `(kind, variant)` symbols following ISO 10628-2 / ISA-5.1,
+- 115 registered `(kind, variant)` symbols following ISO 10628-2 / ISA-5.1,
   generated from the draw.io / diagrams.net P&ID stencils (Apache-2.0) by
   `scripts/vendor_symbols.py`. Feed/Product flags, Mixer, Splitter and the
   instrument balloons are hand-drawn originals.
@@ -200,6 +200,17 @@ and is kept working.
   `peristaltic` and `submersible`, `Filter` gains `ion_exchange` for water
   treatment, and `Valve` gains `bleed`, the small drain valve piped down the
   page.
+- The in-line families are drawn at the size a real sheet draws them. draw.io
+  cuts its stencils for a diagram rather than for a drawing, and at the scale
+  they were first vendored at a gate valve came out 49 units — 13 mm on an A3
+  sheet, against the 6 mm an issued P&ID draws one at — so a station with
+  isolation valves either side of a control valve took the width that five
+  valves, a flow element and an instrument square occupy on a real sheet. The
+  bowtie is now 24.5 x 15 units, 6.5 x 4.0 mm. Everything that shares a pipe
+  with it moves with it, since one line size is what makes them read as one
+  family: strainers, orifice plates, sight glasses, couplings and the rest of
+  the `Fitting` variants, the open `Vent` and `Funnel`, and `Reducer`, which is
+  the same `fittings` stencil as the others and only had a kind of its own.
 - `Symbol` validates its own declaration, so a third-party symbol gets the same
   protection the invariant suite gives the shipped ones: a placement keyed to a
   face its coordinate does not land on, or restating a port's home face at a
@@ -268,7 +279,18 @@ and is kept working.
 - `Flowsheet.add_instrument(type, number, …)` and the `Instrument` unit, drawing
   the functional letters over a bare loop number the way a real sheet does.
   Balloon variants: `default` (field), `panel`, `aux`, `shared` (DCS square),
-  `computer` (hexagon), `logic` (interlock square).
+  `computer` (hexagon).
+- The two trip squares, which ANSI/ISA-5.1-2009 draws as two different symbols:
+  `interlock`, a **plain diamond** (Table 5.1.2 items 3-5, the generic interlock
+  logic function), and `sis`, a **diamond inscribed in a square** (Table 5.1.1
+  column B, the safety-instrumented-system / alternate-choice symbol, and what
+  an issued sheet draws a trip with). Both carry the interlock number in the
+  lower half of the diamond, and both repeat: a trip is a logic function, so the
+  same tag may be drawn at each place it acts. `sis` is also spelled `logic`,
+  which is the name the package shipped and what every drawing already authored
+  uses; the two names are one symbol and one `Symbol` object. A *bare* square is
+  neither of them — that is `shared` with its balloon left off, which is what
+  `logic` used to be drawn as.
 - `Instrument.attach(on=…, at=…, offset=…, angle=…)` anchors a balloon to the
   stream or the equipment it reads, with an impulse line drawn to the tap.
   `angle` is measured from the flow direction at the tap, so a re-route cannot

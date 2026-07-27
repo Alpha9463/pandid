@@ -62,11 +62,12 @@ Registers a unit and returns it, so it chains with `.pin()`. Raises `ValueError`
 if the unit is already on a flowsheet, or if the tag is already taken: a tag
 names one item, so two pumps called `P-101` are a mistake in the drawing.
 
-The one exception is the **interlock square** (`Instrument(variant="logic")`),
-which is a logic function rather than a device and is drawn at every place it
-acts, carrying the same tag each time. A repeat is accepted and given a name of
-its own, so a stream endpoint, a spec entry or an equipment-list row still means
-exactly one square:
+The one exception is a **trip square** (`Instrument(variant="sis")`, its
+`"logic"` spelling, or `variant="interlock"`), which is a logic function rather
+than a device and is drawn at every place it acts, carrying the same tag each
+time. A repeat is accepted and given a name of its own, so a stream endpoint, a
+spec entry or an equipment-list row still means exactly one square. The two are
+different ISA-5.1 symbols, so a tag drawn as both is still a clash:
 
 ```python
 squares = [fs.add_instrument("I", 1, variant="logic") for _ in range(4)]
@@ -362,7 +363,7 @@ is a visual style within it. The first name in each list is that kind's
 | `Dryer` | `default`, `fluidized_bed`, `spray` |
 | `Valve` | bodies: `default` (gate), `gate`, `globe`, `ball`, `butterfly`, `check`, `needle`, `three_way`, `control`, `plug`, `pinch`, `angle`, `psv`, `relief`, `bleed`<br>with a drawn operator: `motor`, `solenoid`, `hydraulic`, `pneumatic`, `manual`, `knife`, `butterfly_pneumatic`, `regulator` |
 | `Fitting` | `default` (flanged connection), `flange`, `strainer`, `strainer_cone`, `orifice`, `rotameter`, `rupture_disc`, `sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `static_mixer`, `hose`, `coupling`, `clamped_coupling`, `flame_arrestor`, `flame_arrestor_explosion_proof`, `flame_arrestor_detonation_proof`, `flame_arrestor_fire_resistant` |
-| `Instrument` | `default` (field balloon), `panel`, `aux`, `shared`, `computer`, `logic` |
+| `Instrument` | `default` (field balloon), `panel`, `aux`, `shared`, `computer`, `sis` (diamond in a square, also spelled `logic`), `interlock` (plain diamond) |
 | `Heater`, `Cooler`, `Furnace`, `Turbine`, `Blower`, `Reducer`, `Ejector`, `Vent`, `Funnel`, `Conveyor`, `Mixer`, `Splitter`, `Feed`, `Product` | `default` only |
 
 `HeatExchanger(variant="kettle")` carries a fifth nozzle, `bottoms`. It is the
@@ -529,7 +530,8 @@ mirroring move them, and `nozzle()` always takes the moved face.
 | `Separator(variant="horizontal")` | `feed` | `W` (home), `N`, `E` |
 | `Instrument` (`default`, `panel`, `aux`, `shared`, `computer`) | `pv`, `sig_in`, `sig_out` | `N`, `S`, `E`, `W` |
 
-(`Instrument(variant="logic")`, the interlock square, offers no choice either.)
+(The trip squares — `Instrument(variant="sis")`, `"logic"` and `"interlock"` —
+offer no choice either.)
 The home is the symbol's own nozzle. It is where the port sits with
 `auto_faces` off, and the first entry of the menu the engine chooses from with
 it on.

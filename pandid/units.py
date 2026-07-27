@@ -565,7 +565,10 @@ class Instrument(Unit):
     signal connections and take a signal ``kind``: an impulse line to a
     transmitter is an instrument connection, not a process pipe. Variants:
     ``"default"`` (field balloon), ``"panel"``, ``"aux"``, ``"shared"`` (DCS),
-    ``"computer"``, ``"logic"`` (interlock square).
+    ``"computer"``, ``"sis"`` (a diamond in a square — ANSI/ISA-5.1-2009
+    Table 5.1.1 column B, the safety-instrumented-system symbol an issued sheet
+    draws a trip with, also spelled ``"logic"``) and ``"interlock"`` (a plain
+    diamond — Table 5.1.2 items 3-5, the generic interlock logic function).
 
     A balloon that measures something belongs *on* what it measures: see
     :meth:`attach` (and :meth:`pandid.flowsheet.Flowsheet.add_instrument`).
@@ -575,12 +578,13 @@ class Instrument(Unit):
     PORTS = [("pv", "inlet", "signal"), ("sig_in", "inlet", "signal"),
              ("sig_out", "outlet", "signal")]
 
-    #: The one variant that stands for a function rather than a device. A
-    #: balloon is a thing — a transmitter in the field, a faceplate in the
-    #: control room — and there is one of it. An interlock square is a *logic
-    #: function*, which acts in several places at once and is therefore drawn in
-    #: each of them, carrying the same tag every time.
-    _REPEATABLE_VARIANT = "logic"
+    #: The variants that stand for a function rather than a device. A balloon is
+    #: a thing — a transmitter in the field, a faceplate in the control room —
+    #: and there is one of it. A trip square is a *logic function*, which acts in
+    #: several places at once and is therefore drawn in each of them, carrying
+    #: the same tag every time. ``"sis"`` and ``"logic"`` are two names for one
+    #: symbol, so a repeat spelled either way is the same function.
+    _REPEATABLE_VARIANTS = frozenset({"sis", "logic", "interlock"})
 
     def __init__(self, type: str, number: str | int = "", variant: str = "default",
                  width: float | None = None, height: float | None = None,
@@ -616,14 +620,21 @@ class Instrument(Unit):
     def repeats(self, other: "Unit") -> bool:
         """Whether this square is another drawing of the same logic function.
 
-        Both ends have to be interlock squares carrying the same tag: an
-        ``LT-101`` drawn twice is two transmitters on one loop number, and a
-        square sharing its tag with a balloon is two different symbols claiming
-        to be the same thing.
+        Both ends have to be trip squares carrying the same tag: an ``LT-101``
+        drawn twice is two transmitters on one loop number, and a square sharing
+        its tag with a balloon is two different symbols claiming to be the same
+        thing. They also have to be the *same* square — a plain interlock
+        diamond and a diamond-in-square are two different ISA-5.1 symbols, so
+        one of each on a tag is still a clash — except that ``"sis"`` and
+        ``"logic"`` name one symbol and so count as the same.
         """
+        def symbol(variant: object) -> object:
+            return "sis" if variant == "logic" else variant
+
         return (isinstance(other, Instrument)
                 and other.tag == self.tag
-                and self.variant == other.variant == self._REPEATABLE_VARIANT)
+                and self.variant in self._REPEATABLE_VARIANTS
+                and symbol(self.variant) == symbol(other.variant))
 
     def attach(self, on: "Stream | Unit", *, at: float | str | None = None,
                offset: float = 45.0, angle: float = 90.0) -> "Instrument":
