@@ -855,6 +855,87 @@ need resolved frames, so they are skipped before layout has run.
 
 ---
 
+## Command line
+
+Installing the distribution installs a `pandid` command. `python -m pfd` is the
+same entry point, for a checkout or an environment whose scripts directory is
+not on PATH. It is a shell over the API above and adds nothing to it.
+
+```text
+pandid draw SPEC [-o OUT] [--page-size SIZE] [--border {none,zone}]
+                 [--stream-table] [--jump-direction {vertical,horizontal}]
+pandid validate SPEC
+pandid symbols [--kind KIND]
+```
+
+`SPEC` is a spec file: `.yaml` or `.yml` (needs the `yaml` extra) or `.json`.
+Any other extension is refused rather than guessed at. The format itself is
+`pfd.spec`, documented in the README.
+
+### `draw`
+
+Renders the spec and writes it. The output format comes from `-o`'s extension,
+exactly as [`render()`](#geometry-and-output) decides it: `.svg`, or `.pdf` /
+`.png` with the `pdf` extra. Without `-o` the drawing goes next to the spec,
+under the same name with `.svg`.
+
+| Option | The same as |
+|---|---|
+| `--page-size A3` | `page_size="A3"` |
+| `--border zone` | `border="zone"` |
+| `--stream-table` | `show_stream_table=True` |
+| `--jump-direction horizontal` | `jump_direction="horizontal"` |
+
+One line on stdout says what was drawn, and any warnings the sheet carries are
+counted on stderr, since the drawing was still made:
+
+```text
+wrote plant.pdf  (A3, 14 units, 14 streams)
+```
+
+### `validate`
+
+Reads the spec, runs `layout()` and `route()`, and prints `validate()`'s
+findings as `severity: code: message`, one per line, with a count after them.
+The layout runs first because the geometric checks have nothing to measure until
+every unit has a frame, so without it only the spec reader's own findings would
+be reported.
+
+Warnings do not stop a render, so they do not fail the command either. An error
+does.
+
+### `symbols`
+
+Lists every registered `(kind, variant)`, grouped by kind, one kind per line.
+`--kind` takes any spelling a spec's `kind` takes (`Valve`, `heat_exchanger`,
+`hex`), and an unknown one is refused naming the nearest match and the whole
+catalogue.
+
+```text
+$ pandid symbols --kind valve
+Valve  default  angle  ball  butterfly  butterfly_pneumatic  check  control  gate  globe
+       hydraulic  knife  manual  motor  needle  pinch  plug  pneumatic  psv  regulator
+       relief  solenoid  three_way
+```
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | the command did what it was asked |
+| `1` | the flowsheet was rejected: the spec could not be read or understood, validation found an error, or the engine refused the request (an unknown page size, an output extension it cannot write, a page too small for its own furniture) |
+| `2` | the command line was wrong: an unknown flag, a missing argument, an option value the CLI checks itself |
+| `3` | an optional extra the request needs is not installed: PyYAML for a YAML spec, cairosvg for `.pdf` / `.png` |
+
+Every failure is one line on stderr, beginning `error: `, carrying the engine's
+own message. A traceback out of the CLI is a bug in the engine, not a bad spec.
+
+```bash
+pandid validate plant.yaml && pandid draw plant.yaml -o plant.pdf
+```
+
+---
+
 ## Extension points
 
 Both are `typing.Protocol`s. Implement the method and pass your object in.

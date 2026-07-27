@@ -7,6 +7,7 @@ and the build backend ships metadata disagreeing with ``pfd.__version__``. Both
 are invisible in a checkout and expensive to fix once a release is on PyPI.
 """
 
+import importlib
 import importlib.metadata
 import re
 from pathlib import Path
@@ -34,6 +35,19 @@ def test_installed_metadata_matches_module_version():
     except importlib.metadata.PackageNotFoundError:
         pytest.skip("pandid is not installed; no distribution metadata to compare against")
     assert installed == pfd.__version__
+
+
+def test_console_script_points_at_something_that_exists():
+    """`pandid` is wired up in pyproject; a target that has moved fails at install
+    time, in someone else's environment, long after the rename that broke it."""
+    if not _PYPROJECT.is_file():
+        pytest.skip("running against an installed package rather than a checkout")
+
+    text = _PYPROJECT.read_text(encoding="utf-8")
+    entry = re.search(r'^pandid = "([\w.]+):(\w+)"$', text, re.M)
+    assert entry, "no [project.scripts] entry named pandid"
+    module = importlib.import_module(entry.group(1))
+    assert callable(getattr(module, entry.group(2)))
 
 
 def test_pyproject_takes_its_version_from_the_module():
