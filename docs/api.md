@@ -77,6 +77,12 @@ squares = [fs.add_instrument("I", 1, variant="logic") for _ in range(4)]
 [s.name for s in squares]    # ['I-1', 'I-1 (2)', 'I-1 (3)', 'I-1 (4)']
 ```
 
+A [`Tee`](#units-and-ports) repeats for the opposite reason: it draws no tag at
+all, so two of them are not two things a reader could confuse. `Tee()` defaults
+to the name `TEE` and the second one becomes `TEE (2)`. It may still not take a
+name that already means something else, because that name is what a stream and a
+spec entry reach it by.
+
 Nothing else repeats, and both drawings have to be of the same thing. A second
 `LT-101` balloon is one loop number used twice, a square sharing its tag with a
 balloon is two ISA-5.1 symbols claiming to be the same thing, and a `Feed` and a
@@ -313,6 +319,7 @@ Each entry is `port` *(direction / role)*.
 | `Dryer` | `dryer` | `feed` *(in/feed)*, `product` *(out)* |
 | `Conveyor` | `conveyor` | `feed` *(in/feed)*, `discharge` *(out)* |
 | `Reducer` | `reducer` | `inlet` *(in)*, `outlet` *(out)* |
+| `Tee` | `tee` | `inlet` *(in)*, `outlet` *(out)*, `branch` *(out, or in with `branch="inlet"`)* |
 | `Fitting` | `fitting` | `inlet` *(in)*, `outlet` *(out)* |
 | `Ejector` | `ejector` | `motive` *(in/utility)*, `suction` *(in)*, `discharge` *(out)* |
 | `Vent` | `vent` | `inlet` *(in/vapor)* |
@@ -336,6 +343,31 @@ units.Reactor(name, n_feeds=1, variant="default", width=None, height=None,
 
 (`Mixer` and `Splitter` do not accept `label_pos`, unlike the fixed-port
 classes.)
+
+`Tee` is the pipe tee, the junction where a line branches: a bypass leg, a
+drain, a vent, a sample point, a PSV takeoff. It is drawn as bare pipe — the run
+straight through and the branch off it, nothing at the junction — and carries no
+tag, so it never reaches the equipment list.
+
+```text
+units.Tee(name="", branch="outlet", variant="default", width=None, height=None,
+          description="")
+```
+
+`branch="outlet"` takes flow off the run and `branch="inlet"` returns it. The
+branch leaves the **south** face as drawn, so the side is the tee's placement:
+nothing for south, `pin(mirrored="y")` for north, `pin(orientation=90)` for a
+run standing on end with the branch west, `270` for east.
+
+`name` may be left out. A tee has no tag to be told apart by, so
+`Tee.repeats()` lets any two share a name and `Flowsheet.add()` hands out
+`TEE (2)`, `TEE (3)` — the same mechanism a repeated interlock square and a
+tapped utility header use. It may still not take a name that already means
+something else, since that name is what a stream and a spec entry reach it by.
+
+The run keeps one stream or line number straight through a tee, as it does
+through a valve or a reducer, and each branch takes one of its own;
+`significant` breaks the run's number at the junction.
 
 Every port gets a nozzle of its own on the face its family owns, whatever the
 count. They sit a fixed pitch apart, 20 px on a mixer or splitter, or are
@@ -531,7 +563,7 @@ is a visual style within it. The first name in each list is that kind's
 | `Reducer` | `default` (cone to a point), `concentric` (trapezoid), `eccentric` |
 | `Vent` | `default` (stack with a weather cap), `exhaust_head`, `breather` |
 | `Instrument` | `default` (field balloon), `panel`, `aux`, `shared`, `computer`, `sis` (diamond in a square, also spelled `logic`), `interlock` (plain diamond) |
-| `Heater`, `Cooler`, `Furnace`, `Turbine`, `Blower`, `Ejector`, `Funnel`, `Conveyor`, `Mixer`, `Splitter`, `Feed`, `Product` | `default` only |
+| `Heater`, `Cooler`, `Furnace`, `Turbine`, `Blower`, `Ejector`, `Funnel`, `Conveyor`, `Mixer`, `Splitter`, `Tee`, `Feed`, `Product` | `default` only |
 
 `HeatExchanger(variant="kettle")` carries a fifth nozzle, `bottoms`. It is the
 draw at the weir end of the shell, where what does not boil leaves as the
@@ -1052,8 +1084,8 @@ All three return an `Annotation`. `legend()` accepts a dict or a sequence of
 vessels, columns, tanks, reactors, separators, exchangers, heaters, coolers,
 furnaces, pumps, compressors, blowers, turbines, ejectors, filters, dryers and
 conveyors.
-Valves, fittings, reducers, vents and funnels are bulk items bought by the line
-and covered by the piping class; mixers and splitters are junctions in that
+Valves, fittings, reducers, tees, vents and funnels are bulk items bought by the
+line and covered by the piping class; mixers and splitters are junctions in that
 line; feeds, products and instruments are not equipment. None of them is
 scheduled. Where a unit has no `description`, the row says what its kind is
 called (`E-101` reads `Heat Exchanger`).

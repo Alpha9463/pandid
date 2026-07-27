@@ -262,6 +262,9 @@ _KIND_SIZES = {
 # a statement nothing draws.
 _KIND_TEXT = {
     "normal_position": ("Valve", "Fitting"),
+    # Which way a tee's third connection runs. Nothing else has a third
+    # connection to a run, so nothing else has the question to answer.
+    "branch": ("Tee",),
 }
 # Flags only some classes carry. ``header`` says a boundary flag stands for a
 # utility service tapped wherever it is wanted rather than for one line leaving
@@ -845,8 +848,10 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
         )
     # The tag, not the name: a header tapped twice is two entries carrying the
     # one label, and reading them back re-derives the names the flowsheet tells
-    # the taps apart by, exactly as it did the first time.
-    entry: dict[str, Any] = {"kind": kind, "name": unit.tag}
+    # the taps apart by, exactly as it did the first time. A tee has no tag, so
+    # its name is written instead — already unique, and already the only thing
+    # the junction is addressed by.
+    entry: dict[str, Any] = {"kind": kind, "name": unit.tag or unit.name}
     _write_common(unit, entry)
     if isinstance(unit, unit_types.Mixer):
         entry["n_inlets"] = sum(1 for p in unit.ports if p.startswith("in_"))
@@ -858,6 +863,11 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
         feeds = sum(1 for p in unit.ports if p.startswith("feed_"))
         if feeds:
             entry["n_feeds"] = feeds
+    elif isinstance(unit, unit_types.Tee):
+        # Only a returning tee. A takeoff is the ordinary case and is what a
+        # tee without the word already is.
+        if unit.branch_direction != "outlet":
+            entry["branch"] = unit.branch_direction
     elif isinstance(unit, unit_types.Conveyor):
         # Always written: it is how long the belt is, which is the whole of a
         # conveyor's geometry, and nothing else on the entry records it.

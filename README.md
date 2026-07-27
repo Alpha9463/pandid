@@ -190,7 +190,7 @@ the heights they already sit at, so switching to it moves nothing.
 
 Classes include: `Feed`, `Product`, `Pump`, `Compressor`, `Blower`, `Valve`,
 `Vessel`, `Tank`, `HeatExchanger`, `Heater`, `Cooler`, `Reactor`, `Separator`,
-`Column`, `Mixer`, `Splitter`, `Reducer`, `Fitting`, `Ejector`, `Vent`,
+`Column`, `Mixer`, `Splitter`, `Tee`, `Reducer`, `Fitting`, `Ejector`, `Vent`,
 `Funnel`, `Furnace`, `Turbine`, `Filter`, `Dryer`, `Conveyor`, and
 `Instrument`. `Conveyor` is sized by `length=` rather than `width=`: its belt
 grows and its rollers stay round. The
@@ -264,6 +264,38 @@ fs.connect(crude.outlet, tower.feed_2)
 has a fifth nozzle, `bottoms`, at the weir end of the shell. What does not boil
 overflows and leaves there as the tower's bottoms product, so the sump line
 needs no splitter that the plant does not have.
+
+**Branching a line.** A P&ID branches constantly — a bypass leg around a control
+valve, a drain off the underside of a run, a vent off the top, a sample point, a
+PSV takeoff — and every one of those is a line splitting in two rather than a
+piece of plant. `Tee` is the fitting that splits it. It is drawn as an issued
+sheet draws one: three lines meeting, the run passing straight through and the
+branch leaving at a right angle, at the same line weight, with **nothing** at
+the junction. No tag, no symbol, and no row on the equipment list.
+
+`branch="outlet"` (the default) takes flow off the run; `branch="inlet"` returns
+it, which is how a bypass rejoins. The branch leaves the south face as drawn, so
+the side it comes off is the tee's placement:
+
+```python
+takeoff = fs.add(units.Tee().pin(mirrored="y"))   # branch north, over the top
+rejoin  = fs.add(units.Tee(branch="inlet").pin(mirrored="y"))
+drain   = fs.add(units.Tee())                     # branch south, off the underside
+
+fs.connect(upstream.outlet, takeoff.inlet)        # the run, straight through
+fs.connect(takeoff.outlet, hv_a.inlet)
+fs.connect(takeoff.branch, bypass_valve.inlet)    # the leg, off the run
+fs.connect(bypass_valve.outlet, rejoin.branch)
+```
+
+`pin(orientation=90)` and `pin(orientation=270)` stand the run on end with the
+branch west and east. A tee needs no name: it defaults to `TEE` and the
+flowsheet tells repeats apart as `TEE (2)`, `TEE (3)`, the way it does for a
+repeated interlock square. The run keeps one stream or line number through a
+tee, as it does through a valve, and each branch takes a number of its own.
+
+Reach for `Mixer` or `Splitter` only where the branch really is plant: both are
+tagged equipment drawn as a triangle and scheduled on the equipment list.
 
 **In-line fittings.** Every in-line device is a pair of faces on a line, so
 `Fitting` is one class and the variant picks the device: `strainer`, `strainer_cone`, `strainer_y`,
@@ -581,7 +613,7 @@ for anything else. Add them with `fs.add_annotation(...)`.
 `equipment_list()` schedules **major equipment**: vessels, columns, tanks,
 reactors, separators, exchangers, heaters, coolers, furnaces, pumps,
 compressors, blowers, turbines, ejectors, filters, dryers and conveyors. Valves, fittings,
-reducers, vents and funnels are bulk items bought by the line and covered by the
+reducers, tees, vents and funnels are bulk items bought by the line and covered by the
 piping class; mixers and splitters are junctions in that line; feeds, products
 and instruments are not equipment. `include=[...]` names the rows explicitly
 instead, in the order given, which is how a valve schedule is built from the
@@ -714,8 +746,9 @@ any spelling you would reasonably write: `HeatExchanger`, `heat_exchanger` or
 equipment list), `reference` (a boundary flag's off-page drawing), explicit
 `width`/`height`, `label_pos`, `significant` (break the stream or line number at
 this inline item), `n_inlets` / `n_outlets` for `Mixer` / `Splitter`,
-`n_feeds` for `Column` / `Reactor`, `length` for `Conveyor`, and
-`normal_position` (`open` / `closed`) for `Valve` and for `Fitting`'s `blind`.
+`n_feeds` for `Column` / `Reactor`, `length` for `Conveyor`, `branch`
+(`outlet` / `inlet`) for `Tee`, and `normal_position` (`open` / `closed`) for
+`Valve` and for `Fitting`'s `blind`.
 
 **`pin` / `port_faces`**: `pin` mirrors `pin()` with `x`/`y` (absolute), `col`/`row`
 (grid), `orientation` (`0`/`90`/`180`/`270`) and `mirrored` (`x`/`y`/`xy`).
