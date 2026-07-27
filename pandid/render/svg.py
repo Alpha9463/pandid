@@ -19,6 +19,10 @@ _SYMBOL_TEXT = re.compile(
 # Balloon variants whose symbol draws a location bar across the middle (see the
 # instrument symbols in pandid.render.symbols): their tag text has to clear it.
 _BARRED_BALLOONS = {"panel", "aux"}
+# Variants drawn as a diamond (ISA-5.1-2009 Table 5.1.1 column B and Table 5.1.2
+# items 3-5): they carry the interlock number alone, and it has to sit where the
+# sloping sides leave room for it rather than in the middle of the box.
+_DIAMOND_BALLOONS = {"sis", "logic", "interlock"}
 
 # --- stream-label placement -------------------------------------------------
 # A stream label is written on an opaque halo, so it can only sit *on* the pipe
@@ -899,16 +903,16 @@ class SvgRenderer:
         tag = getattr(u, "tag", "") or u.name
         top, bot = split_tag(getattr(u, "type", "") or tag, getattr(u, "number", "") or "")
         cx, cy = x + u_width / 2, y + u_height / 2
-        if variant == "logic":
-            # The square's content is a diamond, which is widest on its
-            # horizontal diagonal and narrows to nothing at the bottom vertex,
-            # so the number cannot simply be centred in the box the way a bare
-            # square's was: it goes in the lower half, where ISA-5.1 puts it and
-            # where a real sheet draws it under the interlock designator, but
-            # only as far down as the sloping sides still leave it room. Seven
-            # units below the middle of a 40 box is where a two-figure number's
-            # bottom corners clear the edges; it is set at the balloons' own
-            # number size, being the same loop number they carry.
+        if variant in _DIAMOND_BALLOONS:
+            # A diamond is widest on its horizontal diagonal and narrows to
+            # nothing at the bottom vertex, so the number cannot simply be
+            # centred in the box the way the old bare square's was: it goes in
+            # the lower half, where ISA-5.1 draws it under the interlock
+            # designator, but only as far down as the sloping sides still leave
+            # it room. Seven units below the middle of a 40 box is where a
+            # two-figure number's bottom corners clear the edges; it is set at
+            # the balloons' own number size, being the same loop number they
+            # carry.
             return [f'    <text x="{cx}" y="{cy + 7}" font-family="sans-serif" '
                     f'font-size="11" text-anchor="middle" '
                     f'dominant-baseline="middle">{html.escape(bot or top)}</text>']

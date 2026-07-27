@@ -184,7 +184,7 @@ and is kept working.
   element, so it prints and exports to PDF at exactly its ISO size.
 - `jump_direction="vertical" | "horizontal"` on `to_svg()` / `render()` selects
   which of two crossing lines gets the semicircle hop.
-- 113 registered `(kind, variant)` symbols following ISO 10628-2 / ISA-5.1,
+- 115 registered `(kind, variant)` symbols following ISO 10628-2 / ISA-5.1,
   generated from the draw.io / diagrams.net P&ID stencils (Apache-2.0) by
   `scripts/vendor_symbols.py`. Feed/Product flags, Mixer, Splitter and the
   instrument balloons are hand-drawn originals.
@@ -279,12 +279,18 @@ and is kept working.
 - `Flowsheet.add_instrument(type, number, …)` and the `Instrument` unit, drawing
   the functional letters over a bare loop number the way a real sheet does.
   Balloon variants: `default` (field), `panel`, `aux`, `shared` (DCS square),
-  `computer` (hexagon), `logic` (interlock square). The interlock square is the
-  ISA-5.1 programmable-logic symbol: a diamond inscribed in the square, its four
-  vertices on the midpoints of the square's sides, with the interlock number in
-  the lower half of the diamond. A bare square is the shared-display symbol
-  without its balloon, so the diamond is what tells a reader the box is logic
-  rather than an instrument.
+  `computer` (hexagon).
+- The two trip squares, which ANSI/ISA-5.1-2009 draws as two different symbols:
+  `interlock`, a **plain diamond** (Table 5.1.2 items 3-5, the generic interlock
+  logic function), and `sis`, a **diamond inscribed in a square** (Table 5.1.1
+  column B, the safety-instrumented-system / alternate-choice symbol, and what
+  an issued sheet draws a trip with). Both carry the interlock number in the
+  lower half of the diamond, and both repeat: a trip is a logic function, so the
+  same tag may be drawn at each place it acts. `sis` is also spelled `logic`,
+  which is the name the package shipped and what every drawing already authored
+  uses; the two names are one symbol and one `Symbol` object. A *bare* square is
+  neither of them — that is `shared` with its balloon left off, which is what
+  `logic` used to be drawn as.
 - `Instrument.attach(on=…, at=…, offset=…, angle=…)` anchors a balloon to the
   stream or the equipment it reads, with an impulse line drawn to the tap.
   `angle` is measured from the flow direction at the tap, so a re-route cannot

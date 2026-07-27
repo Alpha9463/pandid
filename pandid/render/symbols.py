@@ -677,7 +677,8 @@ class SymbolRegistry:
         # location bar. Ports: pv (process connection, bottom), in/out (signals).
         # Variants: default (bare field balloon), panel (single bar), aux (double bar),
         # shared (balloon-in-square = DCS/shared display), computer (hexagon),
-        # logic (diamond-in-square = interlock / programmable logic).
+        # sis / logic (diamond-in-square = safety instrumented system),
+        # interlock (plain diamond = interlock logic function).
         # ====================================================================
         # A balloon is a circle: a signal can meet it anywhere, so every
         # connection offers all four faces and none of them owns one. The
@@ -725,28 +726,47 @@ class SymbolRegistry:
             # need their own stubs; the side vertices sit where the circles do.
             port_faces={n: {**_inst_faces, "N": (22.0, 2.0), "S": (22.0, 42.0)}
                         for n in _inst_ports}), "computer")
-        # Interlock / shared logic, hung under the instrument it trips: the
-        # ISA-5.1 programmable-logic symbol is a diamond inscribed in a square,
-        # its four vertices on the midpoints of the square's sides, carrying the
-        # interlock number. A bare square is the *shared display* symbol without
-        # its balloon, not this one, so the diamond is what tells a reader the
-        # box is logic rather than an instrument.
+        # The two trip / logic squares, hung under the instrument they act on.
+        # ANSI/ISA-5.1-2009 draws these as two *different* symbols, and the
+        # package now carries both rather than conflating them:
         #
-        # The box is 40 rather than the 28 the bare square was drawn at. An
+        #   Table 5.1.2 items 3-5    a plain diamond              -> "interlock"
+        #   Table 5.1.1 column B     a diamond inside a square    -> "sis"/"logic"
+        #
+        # The plain diamond is the generic interlock logic function. The
+        # diamond-in-square is the safety-instrumented-system / alternate-choice
+        # instrument symbol, and it is what an issued sheet draws for a trip:
+        # every occurrence on the reference P&ID-301 is diamond-in-square. What
+        # neither of them is, is a bare square — that is the shared-display
+        # symbol of the "shared" variant with its balloon left off, which is
+        # what this variant used to be drawn as.
+        #
+        # ``logic`` is retained as a second name for the diamond-in-square. It
+        # is the name the package shipped, the one every drawing already
+        # authored uses, and the one `Instrument` keys its repeat rule on; it is
+        # a package spelling of ``sis`` and is documented as one rather than as
+        # a claim about Table 5.1.2.
+        #
+        # Both are drawn in a 40 box, not the 28 the bare square used. An
         # inscribed diamond has half its square's area, and all of that loss is
         # taken out of the corners the number's corners occupy, so a 28 square
         # that held a two-figure number in full holds it only by crossing the
         # diamond's lower edges: the square has to grow by root two, 28 * 1.414
         # = 39.6, for the number to sit inside the diamond with the clearance it
         # had inside the square. 40 also lands just inside the 44 balloon, which
-        # is the relationship a real sheet draws — on P&ID_301 the interlock
-        # square and the balloons are both 17.0 pt, cut to one module.
+        # is the relationship a real sheet draws — on P&ID-301 the trip square
+        # and the balloons are both 17.0 pt, cut to one module.
         #
         # The three ports are unchanged and need no adjusting: the midpoint of
-        # each side is where the diamond's vertices now are, so every one of
-        # them lands on both outlines at once.
-        self.register("instrument", Symbol(
-            svg='<g id="sym_instrument_logic">'
+        # each side of the box is where the diamond's vertices are, so every one
+        # of them lands on the diamond, and on the square where there is one.
+        _logic_ports = {'pv': (20.0, 39.0), 'sig_in': (1.0, 20.0), 'sig_out': (39.0, 20.0)}
+        # One Symbol registered under two names, so the two spellings cannot
+        # drift apart. The ``<defs>`` id still follows the spelling, since that
+        # is what the renderer keys a definition by; a sheet using both would
+        # carry the same drawing twice, which is harmless and vanishingly rare.
+        _sis = Symbol(
+            svg='<g id="sym_instrument_sis">'
                 '<rect x="1" y="1" width="38" height="38" fill="white" stroke="black" stroke-width="2"/>'
                 '<polygon points="20,1 39,20 20,39 1,20" fill="none" stroke="black" stroke-width="2"/>'
                 '</g>',
@@ -755,8 +775,19 @@ class SymbolRegistry:
             # proportion its vertices leave the sides' midpoints, which is where
             # all three ports sit.
             width=40.0, height=40.0, label_pos="center", stretchable=False,
-            ports={'pv': (20.0, 39.0), 'sig_in': (1.0, 20.0), 'sig_out': (39.0, 20.0)}),
-            "logic")
+            ports=_logic_ports)
+        self.register("instrument", _sis, "sis")
+        self.register("instrument", _sis, "logic")
+        # The plain diamond fills its own outline: nothing is drawn behind it to
+        # show through, and a white body keeps a line it is dropped on from
+        # striking through the interlock number.
+        self.register("instrument", Symbol(
+            svg='<g id="sym_instrument_interlock">'
+                '<polygon points="20,1 39,20 20,39 1,20" fill="white" stroke="black" stroke-width="2"/>'
+                '</g>',
+            width=40.0, height=40.0, label_pos="center", stretchable=False,
+            ports=_logic_ports),
+            "interlock")
 
         # Vendored draw.io symbols (Apache-2.0) — registered last so they
         # override the hand-drawn defaults for shared kinds and add variants.

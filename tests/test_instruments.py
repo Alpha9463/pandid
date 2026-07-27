@@ -97,6 +97,62 @@ def test_interlock_square_carries_only_its_number():
     assert ">2<" in svg and ">I<" not in svg
 
 
+def test_the_two_trip_squares_are_the_two_isa_symbols_they_claim_to_be():
+    """ANSI/ISA-5.1-2009 draws these as two different symbols, and conflating
+    them is what the bare square used to do.
+
+    Table 5.1.2 items 3-5 give the generic interlock logic function a *plain
+    diamond*; Table 5.1.1 column B gives the safety instrumented system a
+    *diamond inscribed in a square*. Both carry the interlock number in the
+    lower half of the diamond, so the number is not what tells them apart --
+    the square is.
+    """
+    from pandid.render.symbols import default_registry
+
+    sis = default_registry.get("instrument", "sis")
+    interlock = default_registry.get("instrument", "interlock")
+    assert "<rect" in sis.svg and "<polygon" in sis.svg
+    assert "<rect" not in interlock.svg and "<polygon" in interlock.svg
+    # The diamond is the same diamond: vertices on the midpoints of a 40 box.
+    for sym in (sis, interlock):
+        assert 'points="20,1 39,20 20,39 1,20"' in sym.svg
+        assert (sym.width, sym.height) == (40.0, 40.0)
+
+
+def test_logic_is_a_second_name_for_the_sis_square():
+    """The name the package shipped keeps working and keeps drawing the same
+    artwork, so no sheet already authored moves."""
+    from pandid.render.symbols import default_registry
+
+    assert default_registry.get("instrument", "sis") is default_registry.get("instrument", "logic")
+    svgs = set()
+    for variant in ("sis", "logic"):
+        fs = Flowsheet("i")
+        fs.add(U.Instrument("I", 1, variant=variant)).pin(x=40, y=40)
+        # the <defs> id follows the spelling; the geometry inside it must not
+        svgs.add(fs.to_svg().replace(f"sym_instrument_{variant}", "ID"))
+    assert len(svgs) == 1
+
+
+@pytest.mark.parametrize("variant", ["sis", "logic", "interlock"])
+def test_every_trip_square_repeats_wherever_its_logic_acts(variant):
+    """A trip square stands for a function, not a device, so the same tag may be
+    drawn at each place it acts -- whichever of the two symbols it is drawn as."""
+    fs = Flowsheet("i")
+    squares = [fs.add_instrument("I", 1, variant=variant) for _ in range(3)]
+    assert [s.tag for s in squares] == ["I-1"] * 3
+    assert len({s.name for s in squares}) == 3
+
+
+def test_a_plain_diamond_and_a_diamond_in_a_square_are_not_one_function():
+    """They are different ISA-5.1 symbols, so one of each on a tag is two
+    different things claiming to be the same -- the clash `add()` exists for."""
+    fs = Flowsheet("i")
+    fs.add(U.Instrument("I", 1, variant="sis"))
+    with pytest.raises(ValueError, match=r"already exists"):
+        fs.add(U.Instrument("I", 1, variant="interlock"))
+
+
 # --- attachment to a stream --------------------------------------------------
 
 
