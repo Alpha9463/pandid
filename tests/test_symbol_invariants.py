@@ -194,9 +194,14 @@ def _path_segments(d: str) -> list[Segment]:
             if relative:
                 x, y = x + cur[0], y + cur[1]
         newp = (x, y)
-        segs.append((cur, newp))
         if upper == "M":
+            # A moveto lifts the pen. Counting the jump as a segment draws a
+            # phantom stroke across the symbol -- from the origin to the first
+            # subpath, and between every subpath after it -- and a port measured
+            # against one of those is measured against a line nobody drew.
             start, cmd = newp, ("l" if relative else "L")
+        else:
+            segs.append((cur, newp))
         cur = newp
     return segs
 
@@ -1132,3 +1137,154 @@ def test_every_stencil_shape_the_generator_vendors_may_be_stretched():
         if (kind, variant) in vendor.KIND_MAP and not sym.stretchable
     ]
     assert vendored == []
+
+
+# ---------------------------------------------------------------------------
+# What a fill comes out as.
+#
+# mxGraph paint ops name the operation, not the colour: a fill is painted in
+# the canvas's current fill colour, which <fillcolor> sets. Reading a bare
+# <fill> as "make this black" turned the floating-roof tank into a solid block
+# -- a defect no reader could diagnose, because a block is a perfectly
+# plausible thing to have drawn on purpose. These pin the distinction, because
+# only three shapes in the whole stencil set use a bare <fill> and it would
+# otherwise be one symbol's business.
+# ---------------------------------------------------------------------------
+
+
+def _converted_fills(body: str) -> list[str]:
+    """Every ``fill=`` the converter emits for one stencil <foreground>."""
+    shape = ET.fromstring(f'<shape w="10" h="10"><foreground>{body}</foreground></shape>')
+    return re.findall(r'fill="([^"]*)"', _script("mxgraph_to_svg").convert_shape(shape)[0])
+
+
+def _painted(ops: str) -> list[str]:
+    """The fills for a single rect painted by ``ops``."""
+    return _converted_fills(f'<rect x="0" y="0" w="10" h="10"/>{ops}')
+
+
+def test_a_fill_takes_the_paper_until_the_stencil_asks_for_ink():
+    """The sheet is monochrome and its outlines are transparent, so the fill
+    colour starts at "none" -- for <fill> exactly as for <fillstroke>, since
+    both paint the same canvas state. A bare <fill> is a background wash, and
+    a wash in no colour draws nothing at all rather than an invisible element
+    for some later reader to mistake for ink."""
+    assert _painted("<fillstroke/>") == ["none"]
+    assert _painted("<stroke/>") == ["none"]
+    assert _painted("<fill/>") == []
+
+
+def test_fillcolor_is_how_a_stencil_asks_for_a_solid_shape():
+    """It is the idiom draw.io's own shapes use for a damper's pivot and a
+    flow arrow's head, and the converter has to keep it: making the converter
+    incapable of a solid would trade one wrong drawing for another."""
+    assert _painted('<fillcolor color="#000000"/><fillstroke/>') == ["#111"]
+    assert _painted('<fillcolor color="#000000"/><fill/>') == ["#111"]
+    # mxGraph's two keywords: "stroke" means the ink, "none" the paper.
+    assert _painted('<fillcolor color="stroke"/><fillstroke/>') == ["#111"]
+    assert _painted('<fillcolor color="none"/><fillstroke/>') == ["none"]
+
+
+def test_save_and_restore_bracket_the_fill_colour():
+    """Several stencils set a fill colour inside <save>/<restore> and expect
+    the next shape to be back on the paper; without the stack the ink leaks
+    forward and blacks out the rest of the drawing."""
+    assert _converted_fills(
+        '<save/><rect x="0" y="0" w="4" h="4"/><fillcolor color="#000000"/><fillstroke/>'
+        '<restore/><rect x="5" y="5" w="4" h="4"/><fillstroke/>'
+    ) == ["#111", "none"]
+
+
+# ---------------------------------------------------------------------------
+# Corrections applied to the vendored stencils.
+# ---------------------------------------------------------------------------
+
+
+def test_every_stencil_patch_still_finds_its_shape():
+    """A patch matching nothing is a correction that has quietly stopped being
+    applied, and the drawing reverts to the defect it was written for. The
+    generator refuses to run in that case; this makes the same claim without
+    regenerating anything, so it fails in CI rather than on the next person's
+    laptop."""
+    vendor = _script("vendor_symbols")
+    assert vendor.STENCIL_PATCHES, "the patch table is where a stencil defect is recorded"
+    for stencil, shape in vendor.STENCIL_PATCHES:
+        names = {name for name, _ in vendor.shapes_in(vendor.STENCILS / f"{stencil}.xml")}
+        assert shape in names, f"{stencil}.xml has no shape {shape!r} to patch"
+
+
+def test_the_globe_and_ball_valves_are_not_one_drawing():
+    """draw.io ships "Globe Valve" as a byte-for-byte copy of "Ball Valve":
+    both draw the bowtie pinched around an OPEN seat, which is the ball valve.
+    Two valves drawing one symbol is not a plain drawing, it is the wrong one,
+    since the reader has no way to tell which is in the line. The globe's seat
+    is filled; everything else about the pair -- box, nozzles, alternates --
+    stays identical, because they are the same body."""
+    globe = default_registry.get("valve", "globe")
+    ball = default_registry.get("valve", "ball")
+    assert _artwork(globe) != _artwork(ball)
+    assert 'fill="#111"' in globe.svg, "the globe's seat is solid"
+    assert 'fill="#111"' not in ball.svg, "the ball's seat is open"
+    assert (globe.width, globe.height) == (ball.width, ball.height)
+    assert globe.ports == ball.ports
+    assert globe.port_faces == ball.port_faces
+
+
+def _artwork(sym: Symbol) -> str:
+    """A symbol's drawing, with the id that names it stripped off."""
+    return re.sub(r'id="[^"]*"', "", sym.svg)
+
+
+def _ink_extents(svg: str) -> list[tuple[str, float, float]]:
+    """(tag, width, height) of every element painted in ink, in symbol space.
+
+    An element is flattened in its own coordinates and then carried out through
+    its ancestors' transforms, so a valve's ``scale(0.25)`` is accounted for and
+    the extent is comparable with ``Symbol.width``/``height``. <text> has no
+    geometry to flatten and so never appears: an operator letter is ink by
+    definition and is not what this measures.
+    """
+    found: list[tuple[str, float, float]] = []
+
+    def walk(el, m: Matrix) -> None:
+        tag = el.tag.split("}")[-1]
+        if el.get("fill", "none") not in ("none", "white"):
+            solo = _collect_segments(f"<g>{ET.tostring(el, encoding='unicode')}</g>")
+            points = [_apply(m, *p) for seg in solo for p in seg]
+            if points:
+                xs = [x for x, _ in points]
+                ys = [y for _, y in points]
+                found.append((tag, max(xs) - min(xs), max(ys) - min(ys)))
+        child_m = _compose(m, _parse_transform(el.get("transform", "")))
+        for child in el:
+            walk(child, child_m)
+
+    walk(ET.fromstring(svg), _IDENTITY)
+    return found
+
+
+#: How much of a symbol's box a filled shape may cover before it stops reading
+#: as a feature of the body and starts reading as the body. The globe's seat,
+#: the widest thing any valve fills, covers 27% of it.
+_FEATURE_AREA = 0.5
+
+
+def test_no_valve_body_is_drawn_filled():
+    """A fully darkened valve body is its own convention -- normally closed,
+    PIP PIC001 4.2.2.7 -- so no symbol may spend that reading by accident.
+
+    The globe's seat is an interior feature of a body whose two triangles keep
+    their white interiors, which is what holds the two apart at sheet scale. A
+    valve that filled its *outline* would be claiming something else entirely,
+    and would do it silently, since a solid bowtie is a perfectly plausible
+    thing to have drawn on purpose."""
+    for (kind, variant), sym in _SYMBOLS:
+        if kind != "valve":
+            continue
+        for tag, w, h in _ink_extents(sym.svg):
+            covered = (w * h) / (sym.width * sym.height)
+            assert covered < _FEATURE_AREA, (
+                f"{kind}/{variant} fills a <{tag}> covering {covered:.0%} of its "
+                f"{sym.width}x{sym.height} box -- that is the body, not a feature of it, "
+                f"and a filled body means normally closed"
+            )

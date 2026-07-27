@@ -78,6 +78,18 @@ scripts/vendor_symbols.py. Port anchor positions are taken from each stencil's
 named <constraint> connections (or re-derived on the bounding-box edge) for
 this project's routing model.
 
+The files under scripts/vendor_data/drawio/ are unmodified copies of the
+upstream stencils. Where a shape is drawn wrongly upstream, the correction is
+applied on the way through instead, from STENCIL_PATCHES in
+scripts/vendor_symbols.py, so the generated geometry in
+pandid/render/_vendored_symbols.py differs from what draw.io draws. Each patch
+names the shape and what is wrong with it. Those fragments are written in the
+stencil's own drawing language and quote the shapes they correct, so they are
+derivative of the Apache-2.0 library and are covered by this section, not by
+section 1; the rest of scripts/vendor_symbols.py is original. At present there
+is one: the seat of valves.xml "Globe Valve", which upstream ships as a copy of
+its "Ball Valve".
+
 Feed/Product boundary markers, the instrument balloons, and the variable-port
 Mixer and Splitter symbols are original geometric primitives and fall under
 section 1.

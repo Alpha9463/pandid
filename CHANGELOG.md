@@ -188,6 +188,41 @@ and is kept working.
   diagrams.net P&ID stencils (Apache-2.0) by `scripts/vendor_symbols.py` and
   matched to ISO 10628-2 symbols where one exists. Feed/Product flags, Mixer,
   Splitter and the ANSI/ISA-5.1 instrument balloons are hand-drawn originals.
+- Every symbol draws the thing it is named after. Two did not, and neither was
+  diagnosable from the output, which is why both are called out rather than
+  folded away silently.
+  - `Tank(variant="floating_roof")` came out as a solid black rectangle. The
+    converter read mxGraph's `<fill>` as "paint this in the stroke colour",
+    but a paint op names the operation and the *fill colour* names the colour;
+    a bare `<fill>` is a background wash, and on a monochrome sheet whose
+    outlines are transparent it washes in nothing. The converter now keeps the
+    fill colour as canvas state, which `<fillcolor>` sets and `<save>`/
+    `<restore>` bracket — so it can still draw a solid shape, and draws one
+    exactly where a stencil asks for it. That also restores four details the
+    converter had been dropping: the pivot dot on `Fitting(variant="damper")`
+    and the flow arrowheads inside `Separator(variant=…)` `cyclone`, `gravity`
+    and `scrubber`, all of which the stencils mark solid.
+  - `Valve(variant="globe")` and `Valve(variant="ball")` were one drawing.
+    draw.io ships "Globe Valve" as a byte-for-byte copy of "Ball Valve", and
+    both draw the bowtie pinched around an *open* seat, which is the ball
+    valve (ISO 10628-2 X8071). A globe valve (X8068) is that same seat drawn
+    solid, and the contrast is the whole of what tells a reader which valve is
+    in the line. The globe's seat is now filled. Its body — the two triangles —
+    keeps its white interiors, so it stays clear of the fully darkened body
+    that means *normally closed* (PIP PIC001 4.2.2.7). The correction is
+    recorded in `STENCIL_PATCHES` in `scripts/vendor_symbols.py`, in the
+    stencil's own drawing language, so `scripts/vendor_data/` stays an
+    unmodified mirror of upstream and the generator refuses to run if a patch
+    ever stops matching its shape.
+- Two more nozzles that were never on the ink, both hidden by the drawing rather
+  than by the geometry. `Tank(variant="floating_roof")`'s inlet sat 5 units above
+  the roof plate, in the gap the roof floats in — invisible while the tank was
+  painted as a solid block — and `Tank(variant="sphere")`'s sat 5 units above the
+  sphere's crown, in the gap between the two lines its legs are drawn against.
+  Both now land on the drawing, as the dished and conical roofs already did. The
+  invariant suite could not see either, because its path flattener counted a
+  `moveto` as a drawn segment and so ruled a phantom stroke straight across the
+  gap; it no longer does.
 - Twelve of those fill gaps a sheet runs into early. `Column(variant="packed")`
   is the first column symbol that draws an internal, two beds of packing between
   their support grids, so an absorber or a stripper is no longer a bare shell; it
