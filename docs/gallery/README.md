@@ -8,7 +8,7 @@ These are **generated, not hand-drawn**. To rebuild them, run the examples and
 copy their output:
 
 ```bash
-for f in examples/0*.py; do python "$f"; done
+for f in examples/[0-9]*.py; do python "$f"; done
 ```
 
 Each script writes its SVG next to itself in `examples/` (gitignored); the
@@ -183,3 +183,22 @@ title strip, and the stream table along the foot is sectioned into a "Mass
 Fraction" block. Where the sheet leaves a line unnumbered — the tower overhead,
 the reboiler circuit — the segments share the number of the stream they serve,
 so each is drawn once and heads one table column.
+
+## 11 · Ethanol purification P&ID
+
+[`examples/11_ethanol_pid.py`](../../examples/11_ethanol_pid.py) ·
+[SVG](11_ethanol_pid.svg)
+
+![Ethanol purification P&ID](11_ethanol_pid.png)
+
+The P&ID counterpart of `10`: the same unit on the same `page_size="A3"` sheet,
+drawn as the piping and instrumentation diagram. Every line is identified by its
+line number, and one number runs through the hand valves and the control valve
+of a station because a station is one line. Five loops close on a final control element —
+`PIC-301` on the tower overhead, `LIC-304` on the distillate, `TIC-307` on the
+steam, `LIC-306` on the bottoms draw, and `TT-302 → TIC-302 → FIC-303` cascading
+the tower-top temperature onto the reflux flow controller — with `PAH`/`PAL` and
+`LAH`/`LAL` alarm pairs and the `logic` interlock square drawn at all four
+places the trip acts. `via()` pins the routes of the lines that carry balloons,
+since an attached instrument hangs off the *routed* path and would move with a
+line the router was free to re-bend.
