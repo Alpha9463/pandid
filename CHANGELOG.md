@@ -214,6 +214,17 @@ and is kept working.
   onto unit boundaries and used-edge penalties so runs do not overlap.
 - Crossing jump-gaps and separation of co-located parallel runs.
 - `Stream.via([...])` to force a stream through explicit orthogonal waypoints.
+- `Flowsheet.route()` places attached instruments and re-routes until the two
+  agree, rather than trading a fixed two passes. A balloon is placed on its
+  host's *routed* path and the box it lands in is an obstacle the next pass
+  routes around, which can bend that same path and move the balloon again, so
+  the two chase each other to a fixed point. Left at two passes, a dense sheet
+  ended with its balloons in one place and its signal lines drawn to where they
+  had been, which is a line leaving one balloon's edge and reaching diagonally
+  past the other. Capped at `pandid.layout.attach.MAX_PLACEMENT_PASSES`, since a
+  sheet can trade between two arrangements indefinitely; every pass ends on a
+  route, so running out of passes still leaves each line drawn to the balloon it
+  belongs to. Whether the last run settled is on `Flowsheet.route_converged`.
 
 #### Rendering
 
@@ -496,6 +507,10 @@ and is kept working.
   raised where a piece of sheet furniture could not hold the text it was given.
   Each names the field and quotes what it was asked to draw. They are rebuilt on
   every render, so shortening a title and rendering again clears the finding.
+- `route-not-settled` warns when routing and instrument placement never agreed
+  and `route()` ran out of passes. The drawing is still coherent, but which of
+  the arrangements it caught is arbitrary, so the sheet is not reproducible
+  until the balloon-carrying lines are pinned with `via()`.
 
 #### Command line
 
@@ -527,6 +542,11 @@ and is kept working.
   coinciding — and the same, on a rendered sheet, at box shapes nothing is drawn
   at, which is where a resolved port and the artwork it belongs to can drift
   apart.
+- Route-invariant suite (`tests/test_route_invariants.py`) over the whole shipped
+  corpus, the golden scenarios and both ethanol sheets: every routed stream
+  begins and ends on its own port anchors, and nothing is drawn diagonally.
+  Neither invariant knows anything about instrument attachment, which is the
+  point; both catch a routing result that nothing re-checked.
 - GitHub Actions CI: `ruff check`, `ruff format --check tests`, `mypy pandid`
   (blocking), and `pytest` on Python 3.10, 3.11, 3.12 and 3.13.
 - `pre-commit` configuration mirroring the CI lint gates.

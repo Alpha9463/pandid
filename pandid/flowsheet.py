@@ -124,6 +124,10 @@ class Flowsheet:
         self.streams: list[Stream] = []
         self.components: list = []
         self.warnings: list = []  # soft validation findings from the last render
+        # Did the last route() settle its attached instruments, or run out of
+        # passes still moving them? Read by validate(), which is what carries
+        # the answer onto `warnings` and in front of the author.
+        self.route_converged: bool = True
         # The sheet's own metadata; a block set here is a title strip drawn.
         self.title_block: "TitleBlock | None" = None
         # Generic titled boxes (equipment list, notes, legend, tables) docked to
@@ -336,22 +340,37 @@ class Flowsheet:
 
         Runs :meth:`layout` first if any unit still lacks a resolved frame, since
         routing needs geometry to work against.
+
+        Attached instruments are placed and the sheet re-routed until the two
+        agree, up to :data:`~pandid.layout.attach.MAX_PLACEMENT_PASSES`. A sheet
+        that never settles leaves ``route_converged`` false, which
+        :meth:`validate` reports as a warning.
         """
         if any(u.frame is None for u in self.units):
             self.layout()
         if router is None:
             from pandid.routing import DefaultRouter
             router = DefaultRouter()
+        from pandid.layout.attach import MAX_PLACEMENT_PASSES, place_attached
         router.route(self)
         # An attached balloon hangs off its host's *routed* path, so where it
         # finally lands is only known once that path exists. Layout placed it on
         # the straight port-to-port line, which is already right for a straight
         # run; when the router bent the line, re-place it and re-route the
         # signal lines that now leave from somewhere else.
-        from pandid.layout.attach import place_attached
-        if place_attached(self):
+        #
+        # That re-route can move a balloon again, because the box it now
+        # occupies is an obstacle in a place the last pass had clear, so the two
+        # chase each other to a fixed point rather than trading a fixed two
+        # turns. The loop always ends on a route, whether it converged or ran
+        # out of passes, so the waypoints describe the balloons where they now
+        # are and no signal line is left pointing at where one used to be.
+        self.route_converged = False
+        for _ in range(MAX_PLACEMENT_PASSES):
+            if not place_attached(self):
+                self.route_converged = True
+                break
             router.route(self)
-            place_attached(self)
 
     def renumber_streams(self) -> None:
         """Assign stream numbers, carrying one number through inline fittings.
