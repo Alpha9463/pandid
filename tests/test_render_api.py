@@ -179,6 +179,89 @@ def test_canvas_fits_content_and_is_not_padded_to_page_size():
     assert w < 800 and h < 500
 
 
+# --- diagram: a P&ID draws its process lines without arrowheads ----------------
+
+# An arrowhead on a drawn line, and the marker definition it points at.
+_ARROWHEAD = re.compile(r'\s*marker-end="url\(#arrow_[^"]*\)"')
+_MARKER_DEF = re.compile(r'<marker id="arrow_.*?</marker>', re.S)
+
+
+def _loop() -> Flowsheet:
+    """Two process lines and the pneumatic signal that strokes their valve."""
+    fs = Flowsheet("loop")
+    feed = fs.add(U.Feed("F"))
+    fv = fs.add(U.Valve("FV-1", variant="control"))
+    prod = fs.add(U.Product("P"))
+    fs.connect(feed.outlet, fv.inlet)
+    fs.connect(fv.outlet, prod.inlet)
+    fic = fs.add_instrument("FIC", 1, on=fv, at="N", offset=80)
+    fs.connect(fic.sig_out, fv.actuator, kind="pneumatic")
+    return fs
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"diagram": "p&id"},
+        {"diagram": "pid"},  # the ampersand-less spelling
+        {"diagram": "P&ID"},  # ...and the drawing's own name, as it is written
+        {"styling": "p&id"},
+        {"styling": "pid"},
+    ],
+)
+def test_a_pid_draws_its_process_lines_without_arrowheads(kwargs):
+    svg = _loop().to_svg(**kwargs)
+    assert '<g id="streams">' in svg  # the lines are still drawn
+    assert not _ARROWHEAD.search(svg)  # ...with nothing on the end of them
+    assert not _MARKER_DEF.search(svg)  # ...and nothing left defining one
+
+
+@pytest.mark.parametrize("kwargs", [{}, {"diagram": "pfd"}, {"border": "zone"}])
+def test_a_sheet_that_is_not_a_pid_keeps_its_arrowheads(kwargs):
+    # Including a PFD ruled with the engineering frame: the border is furniture
+    # and says nothing about which drawing is on the sheet.
+    svg = _loop().to_svg(**kwargs)
+    assert len(_ARROWHEAD.findall(svg)) == 2  # one per process line
+    assert _MARKER_DEF.search(svg)
+
+
+def test_a_pid_takes_the_arrowheads_off_and_changes_nothing_else():
+    # The signal lines never carried one and must not move, and neither must a
+    # symbol, a balloon or a stream number.
+    pfd = _loop().to_svg(diagram="pfd")
+    pid = _loop().to_svg(diagram="p&id")
+    stripped = _ARROWHEAD.sub("", _MARKER_DEF.sub("", pfd))
+    assert " ".join(stripped.split()) == " ".join(pid.split())
+
+
+def test_both_spellings_of_a_pid_mean_the_same_drawing():
+    assert _loop().to_svg(diagram="p&id") == _loop().to_svg(diagram="pid")
+    assert _loop().to_svg(styling="p&id") == _loop().to_svg(styling="pid")
+    # ...and the one-word spelling is the two halves of it asked for together.
+    assert _loop().to_svg(styling="p&id") == _loop().to_svg(border="zone", diagram="p&id")
+
+
+def test_a_pid_reaches_render_as_well_as_to_svg(tmp_path):
+    out = tmp_path / "sheet.svg"
+    _loop().render(str(out), diagram="p&id")
+    assert not _ARROWHEAD.search(out.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize(
+    "kwargs,expected",
+    [
+        ({"diagram": "isometric"}, ["'p&id'", "'pid'", "'pfd'"]),
+        ({"styling": "isometric"}, ["'p&id'", "'pid'", "'default'"]),
+        ({"styling": "p&id", "diagram": "pfd"}, ["different drawings"]),
+    ],
+)
+def test_a_drawing_the_renderer_cannot_draw_raises_naming_the_spellings(kwargs, expected):
+    with pytest.raises(ValueError) as excinfo:
+        _loop().to_svg(**kwargs)
+    for token in expected:
+        assert token in str(excinfo.value)
+
+
 # --- page_size: a named sheet is drawn at exactly that size --------------------
 
 

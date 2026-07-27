@@ -111,13 +111,19 @@ def test_draw_options_reach_the_renderer(tmp_path, capsys):
         "A3",
         "--border",
         "zone",
+        "--diagram",
+        "p&id",
         "--stream-table",
         "--jump-direction",
         "horizontal",
     ]
     assert main(argv) == EXIT_OK
     assert out.read_text(encoding="utf-8") == Flowsheet.from_dict(SPEC).to_svg(
-        page_size="A3", border="zone", show_stream_table=True, jump_direction="horizontal"
+        page_size="A3",
+        border="zone",
+        diagram="p&id",
+        show_stream_table=True,
+        jump_direction="horizontal",
     )
     assert "(A3, 4 units, 3 streams)" in capsys.readouterr().out
 

@@ -158,7 +158,9 @@ number through HV-101 and ST-101, and breaks at the two units marked
 3" → 4" across PSV-101, which is what a spec break is. The tail-pipe to flare
 takes its `sequence` by hand, for a line that already exists on someone else's
 list. The stream table underneath is headed by the same line numbers, so a
-column ties to a line without a second lookup.
+column ties to a line without a second lookup. The sheet is issued as a P&ID
+and drawn as one (`diagram="p&id"`), so its process lines carry no arrowheads:
+direction on a P&ID is read off the equipment and the line list.
 
 ## 10 · Ethanol purification PFD
 
@@ -194,12 +196,14 @@ so each is drawn once and heads one table column.
 ![Ethanol purification P&ID](11_ethanol_pid.png)
 
 The P&ID counterpart of `10`: the same unit on the same `page_size="A3"` sheet,
-drawn as the piping and instrumentation diagram. Every line is identified by its
+drawn as the piping and instrumentation diagram (`diagram="p&id"`, so no
+process line carries an arrowhead; compare `10`, which is the same plant as a
+PFD and keeps them). Every line is identified by its
 line number, and one number runs through the hand valves, the reducer and the
 control valve of a station because a station is one line. The reflux, distillate
 and steam control valves are each drawn as a full station — isolation valve,
 reducer, control valve, isolation valve — and the reflux flow element `FE-303`
-is a `Fitting` sitting in the run with `FT-303` hung off it. Five loops close on
+is a `Fitting` sitting in the run with `FT-303` standing over it. Five loops close on
 a final control element —
 `PIC-301` on the tower overhead, `LIC-304` on the distillate, `TIC-307` on the
 steam, `LIC-306` on the bottoms draw, and `TT-302 → TIC-302 → FIC-303` cascading
