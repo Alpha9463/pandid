@@ -1,7 +1,7 @@
 """The custom unit operation documented in ``docs/api.md``, run end to end.
 
-The docs tell a user to subclass :class:`~pfd.units.Unit`, register a
-:class:`~pfd.render.symbols.Symbol` for its ``kind``, and draw the sheet. This
+The docs tell a user to subclass :class:`~pandid.units.Unit`, register a
+:class:`~pandid.render.symbols.Symbol` for its ``kind``, and draw the sheet. This
 module is that page as code: if the workflow stops working, the documentation is
 wrong and this suite says so.
 
@@ -11,11 +11,11 @@ rest of the suite sees is the shipped one.
 
 import pytest
 
-from pfd import Flowsheet, units
-from pfd.document import equipment_list
-from pfd.portgeom import port_point
-from pfd.render.symbols import Symbol, default_registry
-from pfd.spec import SpecError
+from pandid import Flowsheet, units
+from pandid.document import equipment_list
+from pandid.portgeom import port_point
+from pandid.render.symbols import Symbol, default_registry
+from pandid.spec import SpecError
 
 # Straight sides on a conical bottom: the feed enters the shell wall, the mother
 # liquor leaves the opposite one, and the crystals fall out of the cone.

@@ -3,8 +3,8 @@ a golden byte-match would localise — forward streams staying off the sheet-edg
 recycle lanes, runs never drawn over themselves, ports leaving squarely without a
 gratuitous hop, and the separation pass moving only the runs that actually collide."""
 
-from pfd import Flowsheet, units as U
-from pfd.routing.visibility import VisibilityGraph
+from pandid import Flowsheet, units as U
+from pandid.routing.visibility import VisibilityGraph
 
 
 def _ammonia_loop():

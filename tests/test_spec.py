@@ -17,9 +17,9 @@ import pytest
 # copies drift.
 from test_golden import SCENARIOS
 
-from pfd import Flowsheet, units
-from pfd.document import Annotation, TableBox
-from pfd.spec import SpecError
+from pandid import Flowsheet, units
+from pandid.document import Annotation, TableBox
+from pandid.spec import SpecError
 
 try:  # PyYAML is an optional extra, so the YAML tests skip without it
     import yaml  # noqa: F401

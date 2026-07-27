@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from pfd import Flowsheet, units as U
+from pandid import Flowsheet, units as U
 
 
 def _line(**kw):
@@ -206,8 +206,8 @@ def test_attachment_survives_a_second_layout():
 
 
 def test_controller_output_routes_to_the_valve_actuator():
-    from pfd.layout.attach import stream_path
-    from pfd.portgeom import port_point
+    from pandid.layout.attach import stream_path
+    from pandid.portgeom import port_point
 
     fs, _, ft, fv = _line(at=0.4, offset=60)
     fic = fs.add_instrument("FIC", 101, on=ft, at="N", offset=120, angle=35, variant="panel")
@@ -226,7 +226,7 @@ def test_controller_output_routes_to_the_valve_actuator():
 
 
 def test_every_valve_variant_has_an_actuator_on_its_symbol():
-    from pfd.render.symbols import default_registry
+    from pandid.render.symbols import default_registry
 
     for variant in (
         "default",
@@ -247,7 +247,7 @@ def test_every_valve_variant_has_an_actuator_on_its_symbol():
 def _valve_variants() -> list[str]:
     """Every registered valve variant. SymbolRegistry has no "list everything"
     API by design, so the private dict is the only enumeration available."""
-    from pfd.render.symbols import default_registry
+    from pandid.render.symbols import default_registry
 
     return sorted(v for kind, v in default_registry._symbols if kind == "valve")
 
@@ -259,8 +259,8 @@ def test_no_valve_variant_draws_its_actuator_inside_the_body():
     They part company when the symbol puts the actuator on interior ink, and
     then the renderer draws the line into the body while the router stops it at
     the edge, leaving a signal that ends in the middle of the valve."""
-    from pfd.geometry import Frame
-    from pfd.portgeom import resolve_port, resolve_size
+    from pandid.geometry import Frame
+    from pandid.portgeom import resolve_port, resolve_size
 
     inside = []
     for variant in _valve_variants():
@@ -279,7 +279,7 @@ def test_flipping_a_valve_turns_its_actuator_over_with_it():
     An actuator parked at the centre of the box is invariant under that mirror,
     which leaves the operator drawn on top of a valve that has been turned
     upside down."""
-    from pfd.portgeom import port_faces
+    from pandid.portgeom import port_faces
 
     for variant in _valve_variants():
         valve = U.Valve("V-1", variant=variant).pin(mirrored="y")
@@ -320,7 +320,7 @@ def test_interlock_hangs_off_its_controller_on_a_dashed_line():
 def test_balloon_signal_ports_reach_every_face():
     """A balloon is a circle: a signal can meet it anywhere, so its connections
     have no face of their own and every one of them offers all four."""
-    from pfd.portgeom import port_anchor
+    from pandid.portgeom import port_anchor
 
     seen = {}
     for face in ("N", "S", "E", "W"):
@@ -337,7 +337,7 @@ def test_balloon_ports_have_no_face_of_their_own_but_equipment_nozzles_do():
     # A balloon connection offers all four faces and owns none of them; a drum's
     # inlet offers three and owns every one, which is why authoring alternates
     # for it does not let another nozzle share them.
-    from pfd.render.symbols import default_registry
+    from pandid.render.symbols import default_registry
 
     balloon = default_registry.get("instrument", "panel")
     for name in ("pv", "sig_in", "sig_out"):
@@ -355,7 +355,7 @@ def test_a_barred_balloons_tag_clears_its_location_bar():
     letters wholly above the bar and the number wholly below."""
     import re
 
-    from pfd.render.symbols import default_registry
+    from pandid.render.symbols import default_registry
 
     for variant, bars in (("panel", (22.0,)), ("aux", (19.0, 25.0))):
         fs = Flowsheet(f"bar-{variant}")
@@ -389,7 +389,7 @@ def test_a_short_pneumatic_run_still_gets_its_cross_hatch():
     fs.connect(ly.sig_out, valve.actuator, kind="pneumatic")
     fs.layout()
 
-    from pfd.portgeom import port_point
+    from pandid.portgeom import port_point
 
     run = next(s for s in fs.streams if s.kind == "pneumatic")
     points = (

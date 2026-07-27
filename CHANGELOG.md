@@ -42,7 +42,7 @@ and is kept working.
   documents the workflow (ports, symbol coordinates, the rule that a port must
   land on drawn ink, and `variant=`), and `tests/test_custom_units.py` runs it
   end to end, so the page cannot drift from the engine. The spec layer is the
-  one thing custom equipment does not reach: `pfd.spec` builds units from the
+  one thing custom equipment does not reach: `pandid.spec` builds units from the
   shipped classes by name, so `to_dict()` raises `SpecError` naming the class
   rather than writing a spec that cannot be read back, and a `kind:` naming a
   custom class is refused the same way.
@@ -306,7 +306,7 @@ and is kept working.
   options that matter, `pandid validate plant.yaml` reports what the engine makes
   of one without drawing it, and `pandid symbols --kind valve` lists the
   registered `(kind, variant)` pairs, so the variant names are in front of
-  whoever is writing the spec. `python -m pfd` is the same entry point from a
+  whoever is writing the spec. `python -m pandid` is the same entry point from a
   checkout. Built on `argparse`: the package still has no runtime dependencies.
 - Exit codes a build script can gate on rather than one number for everything:
   `0` done, `1` the flowsheet was rejected (a spec that could not be read, a
@@ -322,11 +322,11 @@ and is kept working.
 
 - Golden-SVG visual regression suite over a fixed corpus of scenarios
   (`tests/test_golden.py`, fixtures in `tests/golden/`), regenerated with
-  `PFD_UPDATE_GOLDEN=1`.
+  `PANDID_UPDATE_GOLDEN=1`.
 - Symbol-invariant suite over every registered `(kind, variant)`: well-formed
   SVG, ports inside the bounding box, ports on drawn ink, no two ports
   coinciding.
-- GitHub Actions CI: `ruff check`, `ruff format --check tests`, `mypy pfd`
+- GitHub Actions CI: `ruff check`, `ruff format --check tests`, `mypy pandid`
   (blocking), and `pytest` on Python 3.10, 3.11, 3.12 and 3.13.
 - `pre-commit` configuration mirroring the CI lint gates.
 - Eleven runnable examples in `examples/`, each usable from the repository root
@@ -335,8 +335,8 @@ and is kept working.
   numbers on every line, hand-isolated control valve stations, five loops
   closing on an actuator with one cascade, alarm pairs and a repeated interlock
   square.
-- Packaged as the **`pandid`** distribution, how "P&ID" is said out loud. The
-  import name is `pfd`, since plain `pfd` is taken on PyPI by an unrelated
+- Packaged as **`pandid`**, how "P&ID" is said out loud, and the import name as
+  well as the distribution name. Plain `pfd` is taken on PyPI by an unrelated
   project.
 - Licensed under the **PolyForm Small Business License 1.0.0**: free for
   individuals, research, teaching, and companies under 100 people and
@@ -345,12 +345,12 @@ and is kept working.
   symbol geometry remains **Apache-2.0**, as that licence requires. `NOTICE`
   lists exactly which files fall under which, and both texts ship in the
   distribution.
-- `pfd/py.typed`, the PEP 561 marker, so an installing project's type checker
+- `pandid/py.typed`, the PEP 561 marker, so an installing project's type checker
   reads the annotations instead of treating the whole package as `Any`.
-- `pfd.__version__` is the only place the version is written; the build backend
+- `pandid.__version__` is the only place the version is written; the build backend
   reads it from there, so the distribution metadata cannot disagree with it.
 - Release workflow (`.github/workflows/release.yml`): pushing a `v*` tag re-runs
-  the four gates, checks the tag against `pfd.__version__`, builds the sdist and
+  the four gates, checks the tag against `pandid.__version__`, builds the sdist and
   wheel, and uploads to PyPI over Trusted Publishing (OIDC, no API token).
 
 ### Deprecated

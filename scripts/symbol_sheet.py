@@ -12,7 +12,7 @@ import sys
 import pathlib
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
-from pfd.render.symbols import default_registry as R  # noqa: E402
+from pandid.render.symbols import default_registry as R  # noqa: E402
 
 CELL_W, CELL_H = 200, 200
 FIT = 110.0          # target max symbol dimension inside a cell
@@ -37,7 +37,7 @@ def main():
          f'viewBox="0 0 {W} {H}">',
          f'<rect width="{W}" height="{H}" fill="white"/>',
          f'<text x="20" y="36" font-family="sans-serif" font-size="22" '
-         f'font-weight="bold">pfd symbol library — {len(items)} symbols</text>']
+         f'font-weight="bold">pandid symbol library — {len(items)} symbols</text>']
 
     for idx, ((kind, variant), sym) in enumerate(items):
         r, c = divmod(idx, COLS)

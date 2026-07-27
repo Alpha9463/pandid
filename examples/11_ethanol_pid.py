@@ -25,8 +25,8 @@ What a P&ID adds over the PFD of the same unit:
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pfd import Flowsheet, units
-from pfd.document import Annotation, Revision, TitleBlock, legend, notes
+from pandid import Flowsheet, units
+from pandid.document import Annotation, Revision, TitleBlock, legend, notes
 
 
 def main():

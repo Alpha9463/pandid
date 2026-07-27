@@ -25,7 +25,7 @@ the README, and examples 03, 06 and 07 for what those overrides are for.
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pfd import Flowsheet
+from pandid import Flowsheet
 
 SPEC = {
     "name": "Boiler Feedwater Package",

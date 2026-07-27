@@ -28,7 +28,7 @@ verbatim, so a real rendering regression still fails the test.
 After an intentional rendering change:
 
 ```
-PFD_UPDATE_GOLDEN=1 python -m pytest tests/test_golden.py -q
+PANDID_UPDATE_GOLDEN=1 python -m pytest tests/test_golden.py -q
 ```
 
 Then inspect `git diff tests/golden/` before committing — a golden update

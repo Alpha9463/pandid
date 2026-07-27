@@ -1,9 +1,9 @@
-from pfd import Flowsheet, units as U
-from pfd.layout import _seed_slots
-from pfd.layout.cycles import break_cycles
-from pfd.layout.layering import assign_layers
-from pfd.layout.ordering import order_within_layers
-from pfd.layout.coordinates import assign_coordinates
+from pandid import Flowsheet, units as U
+from pandid.layout import _seed_slots
+from pandid.layout.cycles import break_cycles
+from pandid.layout.layering import assign_layers
+from pandid.layout.ordering import order_within_layers
+from pandid.layout.coordinates import assign_coordinates
 
 
 def test_cycle_breaking():
@@ -118,7 +118,7 @@ def test_spine_straightening_scales_the_port_offset_to_the_resolved_box():
     left unpinned in y are affected, which is why the examples do not show it:
     they pin.
     """
-    from pfd.portgeom import port_point
+    from pandid.portgeom import port_point
 
     fs = Flowsheet("straighten")
     feed = fs.add(U.Feed("Feed"))

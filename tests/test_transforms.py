@@ -6,9 +6,9 @@ import re
 
 import pytest
 
-from pfd import Flowsheet, units
-from pfd.geometry import Pin, normalize_mirror, normalize_orientation
-from pfd.portgeom import port_anchor, symbol_to_box
+from pandid import Flowsheet, units
+from pandid.geometry import Pin, normalize_mirror, normalize_orientation
+from pandid.portgeom import port_anchor, symbol_to_box
 
 
 def _pump_sheet(**pin_kwargs):
@@ -217,7 +217,7 @@ def test_an_unreachable_face_raises_at_resolve_time_rather_than_falling_back():
     of it can be outrun by a later change of transform -- a frame another engine
     wrote, here -- and it is the resolver that decides where the ink goes, so a
     fall-back to the home nozzle there is silent by definition."""
-    from pfd.portgeom import resolve_port
+    from pandid.portgeom import resolve_port
 
     drum = units.Separator("V-1", variant="horizontal")
     _drum_sheet(drum)
@@ -257,7 +257,7 @@ def test_an_unanchored_port_reports_the_face_it_actually_resolves_to(gapped_kind
     and resolve_port gives that fallback a real face -- so port_faces() must
     report it rather than answering with nothing, which would tell a caller the
     port could not be piped from anywhere while the engine was busy piping it."""
-    from pfd.portgeom import port_faces, resolve_port
+    from pandid.portgeom import port_faces, resolve_port
 
     fs = Flowsheet("gapped")
     unit = fs.add(gapped_kind("G-1")).pin(x=100, y=100)
@@ -273,7 +273,7 @@ def test_an_unanchored_port_reports_the_face_it_actually_resolves_to(gapped_kind
 def test_a_series_port_survives_a_quarter_turn(gapped_kind):
     """A Mixer's inlets are placed by rule rather than by coordinate, so the
     transform has to reach them the same way it reaches an authored nozzle."""
-    from pfd.portgeom import port_faces
+    from pandid.portgeom import port_faces
 
     fs = Flowsheet("turned-mixer")
     mix = fs.add(units.Mixer("M-1", n_inlets=3)).pin(x=100, y=100, orientation=90)

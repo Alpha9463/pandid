@@ -2,7 +2,7 @@
 
 import pytest
 
-from pfd import units as U
+from pandid import units as U
 
 
 def test_product_port_has_product_role():

@@ -1,5 +1,5 @@
-from pfd.components import Component
-from pfd.ports import Port
+from pandid.components import Component
+from pandid.ports import Port
 
 
 def test_component_holds_name_and_formula():
@@ -22,7 +22,7 @@ def test_port_fields_and_default_stream():
 
 
 def test_stream_defaults():
-    from pfd.streams import Stream
+    from pandid.streams import Stream
 
     src = Port(name="outlet", owner=None, direction="outlet", role="feed")
     dst = Port(name="inlet", owner=None, direction="inlet", role="feed")

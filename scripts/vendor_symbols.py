@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate pfd/render/_vendored_symbols.py from draw.io (jgraph/drawio) P&ID
+"""Generate pandid/render/_vendored_symbols.py from draw.io (jgraph/drawio) P&ID
 stencils (Apache-2.0). See NOTICE for attribution.
 
 Each mapped symbol is converted from mxGraph stencil XML to plain SVG by
@@ -19,10 +19,10 @@ HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
 from mxgraph_to_svg import shapes_in, convert_shape  # noqa: E402
-from pfd.portgeom import outward_dir  # noqa: E402  (the one place a face is derived)
+from pandid.portgeom import outward_dir  # noqa: E402  (the one place a face is derived)
 
 STENCILS = HERE / "vendor_data" / "drawio"
-OUT = HERE.parent / "pfd" / "render" / "_vendored_symbols.py"
+OUT = HERE.parent / "pandid" / "render" / "_vendored_symbols.py"
 
 # (kind, variant) -> (stencil, shape_name, {port_name: "constraint" | (edge, along)})
 KIND_MAP = {
@@ -489,7 +489,7 @@ KIND_MAP = {
 ADAPTED_ELSEWHERE = {
     ("conveyor", "default"): (
         "driers", "Drier (Roller Conveyor Belt)",
-        "pfd.render.symbols.conveyor_symbol",
+        "pandid.render.symbols.conveyor_symbol",
         "drier housing dropped; roller spacing made a parameter, roller r=10 kept",
     ),
 }
@@ -557,7 +557,7 @@ def resolve_port(spec, constraints, w, h):
                          inside the box because brackets widen the extent).
 
     A fifth form, ``("SERIES", edge, along, pitch, extent)``, is not a nozzle at
-    all: it hands the port to a :class:`~pfd.render.symbols.PortSeries`, which
+    all: it hands the port to a :class:`~pandid.render.symbols.PortSeries`, which
     places as many as the unit turns out to have, ``pitch`` apart and centred on
     ``along``. See :func:`is_series`.
     """
@@ -591,7 +591,7 @@ def build():
         "def register_vendored(registry):",
         '    """Register the vendored draw.io symbols, overriding hand-drawn',
         '    defaults of the same (kind, variant)."""',
-        f"    from pfd.render.symbols import {imports}",
+        f"    from pandid.render.symbols import {imports}",
         "",
     ]
     for (kind, variant), (stencil, shape, port_map) in KIND_MAP.items():

@@ -10,7 +10,7 @@ drawn before line numbers existed.
 
 import pytest
 
-from pfd import Flowsheet, units as U
+from pandid import Flowsheet, units as U
 
 
 def _skid(**line):
@@ -293,7 +293,7 @@ def test_the_defaults_stay_out_of_the_spec():
 
 
 def test_a_callable_scheme_cannot_be_written_to_a_spec():
-    from pfd.spec import SpecError
+    from pandid.spec import SpecError
 
     fs = Flowsheet("t", line_numbering_scheme=lambda s: str(s.sequence))
     fs.add(U.Feed("F"))
@@ -302,7 +302,7 @@ def test_a_callable_scheme_cannot_be_written_to_a_spec():
 
 
 def test_a_component_that_is_neither_text_nor_a_number_is_rejected():
-    from pfd.spec import SpecError
+    from pandid.spec import SpecError
 
     spec = {
         "name": "t",

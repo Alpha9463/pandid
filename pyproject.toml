@@ -3,16 +3,16 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-# Distribution name is pandid — how "P&ID" is said out loud. The import name
-# stays `pfd` (as scikit-learn installs but imports as sklearn); plain "pfd" is
-# taken on PyPI by an unrelated project (Parallel Fast Downloader).
+# `pandid` is how "P&ID" is said out loud, and is both the distribution name and
+# the import name, so there is one name to remember. Plain "pfd" was not an
+# option: it is taken on PyPI by an unrelated project (Parallel Fast Downloader).
 name = "pandid"
-dynamic = ["version"]     # read from pfd/__init__.py — see [tool.hatch.version]
+dynamic = ["version"]     # read from pandid/__init__.py — see [tool.hatch.version]
 description = "Generate chemical-engineering P&IDs and process flow diagrams with automatic layout and orthogonal stream routing."
 readme = "README.md"
 requires-python = ">=3.10"
 # The engine is PolyForm Small Business; the vendored draw.io symbol geometry
-# in pfd/render/_vendored_symbols.py stays Apache-2.0, as that licence requires.
+# in pandid/render/_vendored_symbols.py stays Apache-2.0, as that licence requires.
 # NOTICE says which files are which -- the expression alone cannot.
 license = "LicenseRef-PolyForm-Small-Business-1.0.0 AND Apache-2.0"
 license-files = ["LICENSE", "LICENSE-APACHE", "NOTICE"]
@@ -40,11 +40,10 @@ classifiers = [
 ]
 dependencies = []
 
-# The command is named after the distribution, not after the import name, so a
-# reader who installed `pandid` types `pandid`. `python -m pfd` runs the same
-# entry point from a checkout.
+# A reader who installed `pandid` types `pandid`. `python -m pandid` runs the
+# same entry point from a checkout.
 [project.scripts]
-pandid = "pfd.cli:main"
+pandid = "pandid.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/Alpha9463/py-chemengg"
@@ -59,10 +58,10 @@ yaml = ["PyYAML>=6"]      # enables Flowsheet.from_yaml(); from_dict/from_json n
 dev = ["pytest>=7", "ruff==0.15.14", "mypy>=1.8", "PyYAML>=6"]
 
 [tool.hatch.version]
-path = "pfd/__init__.py"
+path = "pandid/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["pfd"]        # ships pfd/py.typed with it, so installers see the hints
+packages = ["pandid"]        # ships pandid/py.typed with it, so installers see the hints
 
 # The sdist is the buildable, testable source: package, tests (goldens included,
 # so the regression suite runs from the tarball), examples, docs and the stencil
