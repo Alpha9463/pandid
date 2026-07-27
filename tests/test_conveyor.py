@@ -16,9 +16,9 @@ import xml.etree.ElementTree as ET
 import pytest
 from test_symbol_invariants import GEOM_TOL, _collect_segments, _nearest_distance
 
-from pfd import Flowsheet, units as U
-from pfd.portgeom import port_point, resolve_size, symbol_to_box
-from pfd.render.symbols import (
+from pandid import Flowsheet, units as U
+from pandid.portgeom import port_point, resolve_size, symbol_to_box
+from pandid.render.symbols import (
     CONVEYOR_LENGTH,
     CONVEYOR_MIN_LENGTH,
     CONVEYOR_ROLLER,
@@ -231,7 +231,7 @@ def test_conveyors_of_one_length_share_a_definition_and_others_do_not():
 
 
 def test_a_conveyor_is_scheduled_on_the_equipment_list():
-    from pfd.document import equipment_list
+    from pandid.document import equipment_list
 
     fs = Flowsheet("cake handling")
     fs.add(U.Conveyor("BC-301"))
@@ -264,7 +264,7 @@ def test_a_conveyor_round_trips_through_a_spec_with_its_length():
 
 
 def test_a_length_on_something_that_is_not_a_conveyor_is_refused():
-    from pfd.spec import SpecError
+    from pandid.spec import SpecError
 
     spec = {"name": "s", "units": [{"kind": "Pump", "name": "P-101", "length": 200}]}
     with pytest.raises(SpecError, match=r"only a Conveyor takes 'length'"):
@@ -272,7 +272,7 @@ def test_a_length_on_something_that_is_not_a_conveyor_is_refused():
 
 
 def test_a_spec_length_below_the_minimum_names_the_entry():
-    from pfd.spec import SpecError
+    from pandid.spec import SpecError
 
     spec = {"name": "s", "units": [{"kind": "Conveyor", "name": "BC-301", "length": 10}]}
     with pytest.raises(SpecError, match=r"units\[0\] 'BC-301'"):

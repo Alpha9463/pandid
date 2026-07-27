@@ -1,5 +1,5 @@
 import pytest
-from pfd import Flowsheet, units as U
+from pandid import Flowsheet, units as U
 
 
 def _fs():

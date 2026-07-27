@@ -6,7 +6,7 @@ streams auto-name, energy detection works, and the whole thing serializes to
 a JSON-safe dict.
 """
 
-from pfd import Flowsheet, units as U
+from pandid import Flowsheet, units as U
 
 
 def build_ammonia_loop():

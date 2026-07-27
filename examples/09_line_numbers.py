@@ -21,8 +21,8 @@ that already exists on someone else's line list.
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pfd import Flowsheet, units
-from pfd.document import Revision, TitleBlock
+from pandid import Flowsheet, units
+from pandid.document import Revision, TitleBlock
 
 
 def main():

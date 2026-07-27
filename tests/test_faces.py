@@ -1,8 +1,8 @@
 """Automatic port-face selection: the engine picking which face a movable port
 is piped from, given where the unit at the other end of the stream landed."""
 
-from pfd import Flowsheet, units
-from pfd.portgeom import port_anchor
+from pandid import Flowsheet, units
+from pandid.portgeom import port_anchor
 
 
 def _drum_fed_from(x, y, *, fs=None, **drum_pin):

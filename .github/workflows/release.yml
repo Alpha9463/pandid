@@ -1,7 +1,7 @@
 name: Release
 
 # Publishing is driven by the tag, not by a branch: pushing `v0.1.0` cuts the
-# release. The tag must name the version in pfd/__init__.py — the build job
+# release. The tag must name the version in pandid/__init__.py — the build job
 # below refuses to go on if it does not.
 on:
   push:
@@ -26,12 +26,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Tag must match pfd.__version__
+      - name: Tag must match pandid.__version__
         run: |
           tag="${GITHUB_REF_NAME#v}"
-          src="$(python -c 'import pfd; print(pfd.__version__)')"
+          src="$(python -c 'import pandid; print(pandid.__version__)')"
           if [ "$tag" != "$src" ]; then
-            echo "::error::tag $GITHUB_REF_NAME does not name pfd.__version__ ($src)"
+            echo "::error::tag $GITHUB_REF_NAME does not name pandid.__version__ ($src)"
             exit 1
           fi
       - name: Build

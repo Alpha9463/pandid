@@ -4,8 +4,8 @@ import re
 
 import pytest
 
-from pfd import Flowsheet, units as U
-from pfd.document import TitleBlock, Revision
+from pandid import Flowsheet, units as U
+from pandid.document import TitleBlock, Revision
 
 
 def _sheet(name="Demo", span=0.0):
@@ -31,7 +31,7 @@ def test_title_block_draws_without_a_border():
 
 
 def test_annotations_draw_without_a_border():
-    from pfd.document import equipment_list, notes
+    from pandid.document import equipment_list, notes
 
     fs = _sheet()
     fs.add(U.Pump("P-101", description="Transfer Pump"))
@@ -88,7 +88,7 @@ def test_client_and_project_are_drawn():
 
 
 def test_the_strip_grows_a_row_for_each_of_them():
-    from pfd.render.furniture import measure_title_strip
+    from pandid.render.furniture import measure_title_strip
 
     bare = measure_title_strip(TitleBlock())
     one = measure_title_strip(TitleBlock(project="Ethanol A300"))
@@ -162,7 +162,7 @@ def test_no_title_block_still_renders_pid():
 
 def test_title_block_fits_narrow_sheet():
     import re
-    from pfd.render.furniture import measure_title_strip
+    from pandid.render.furniture import measure_title_strip
 
     fs = Flowsheet("Tiny")
     a = fs.add(U.Feed("F"))
@@ -186,7 +186,7 @@ def test_title_block_fits_narrow_sheet():
 
 
 def test_furniture_boxes_rendered():
-    from pfd.document import equipment_list, notes, legend
+    from pandid.document import equipment_list, notes, legend
 
     fs = Flowsheet("Furnished")
     feed = fs.add(U.Feed("Crude", reference="PFD-000"))
@@ -214,7 +214,7 @@ def test_furniture_boxes_rendered():
 
 def test_align_nine_point_and_anchor_alias():
     import pytest
-    from pfd.document import Annotation
+    from pandid.document import Annotation
 
     assert Annotation(align="top").align == "top"
     assert Annotation(align="center").align == "center"
@@ -226,7 +226,7 @@ def test_align_nine_point_and_anchor_alias():
 
 def test_annotation_docks_flush_to_frame():
     import re
-    from pfd.document import Annotation
+    from pandid.document import Annotation
 
     fs = Flowsheet("Flush")
     a = fs.add(U.Feed("F"))
@@ -254,7 +254,7 @@ def test_annotation_docks_flush_to_frame():
 
 def test_annotation_absolute_position():
     import re
-    from pfd.document import Annotation
+    from pandid.document import Annotation
 
     fs = Flowsheet("Placed")
     a = fs.add(U.Feed("F"))
@@ -270,7 +270,7 @@ def test_annotation_absolute_position():
 
 
 def _schedule(fs, **kwargs):
-    from pfd.document import equipment_list
+    from pandid.document import equipment_list
 
     return equipment_list(fs, **kwargs).rows
 
@@ -334,7 +334,7 @@ def test_the_description_is_words_not_the_kind_key():
 def test_every_registered_kind_names_itself():
     """A kind with no label falls back to its own key, so the map has to cover
     the library rather than the kinds that happened to need it first."""
-    from pfd.document import _KIND_LABELS
+    from pandid.document import _KIND_LABELS
 
     kinds = {getattr(U, name).kind for name in U.__all__ if name != "Unit"}
     assert kinds <= set(_KIND_LABELS)

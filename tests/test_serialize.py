@@ -1,4 +1,4 @@
-from pfd import Component, Flowsheet, units as U
+from pandid import Component, Flowsheet, units as U
 
 
 def test_to_dict_captures_topology():

@@ -1,12 +1,12 @@
 # pandid: P&ID and process flow diagram engine
 
-`pfd` is a zero-dependency, pure-Python engine that turns a topological
+`pandid` is a zero-dependency, pure-Python engine that turns a topological
 flowsheet definition into a publication-quality, orthogonal **PFD / P&ID** as
 SVG. You describe *what connects to what*. The engine lays out the equipment,
 routes every stream, and draws industry-standard symbols.
 
 The distribution is **`pandid`**, how "P&ID" is said out loud. It imports as
-**`pfd`**.
+**`pandid`**.
 
 [![Distillation train](https://raw.githubusercontent.com/Alpha9463/py-chemengg/main/docs/gallery/03_distillation_train.png)](https://github.com/Alpha9463/py-chemengg/blob/main/docs/gallery/README.md)
 
@@ -34,7 +34,7 @@ pip install -e '.[dev]'       # pytest, ruff, mypy
 ## Quick start
 
 ```python
-from pfd import Flowsheet, units
+from pandid import Flowsheet, units
 
 fs = Flowsheet("Flash Separation")
 feed   = fs.add(units.Feed("Crude"))
@@ -212,7 +212,7 @@ crossings, aligns the main process line onto one axis, and detects feedback
 loops itself. You never declare a stream to be a recycle.
 
 ```python
-from pfd import Flowsheet, units
+from pandid import Flowsheet, units
 
 fs = Flowsheet("Ammonia Loop")
 
@@ -404,7 +404,7 @@ cell. Each `Revision` carries its own `by`/`checked`/`approved` initials, and
 the block-level `drawn_by`/`checked_by`/`approved_by` backfill the newest row.
 
 ```python
-from pfd.document import TitleBlock, Revision
+from pandid.document import TitleBlock, Revision
 
 fs.title_block = TitleBlock(
     title="Aromatics Recovery A100", subtitle="Process Flow Diagram 1",
@@ -442,7 +442,7 @@ instead, in the order given, which is how a valve schedule is built from the
 same flowsheet.
 
 ```python
-from pfd.document import equipment_list, notes, legend, Annotation, TableBox
+from pandid.document import equipment_list, notes, legend, Annotation, TableBox
 
 fs.add(units.Column("T-101", description="Beer Column"))   # feeds the equipment list
 fs.add_annotation(equipment_list(fs, align="top-right"))
@@ -481,7 +481,7 @@ spreadsheet, a YAML file, or a simulator export. Declare the flowsheet as a
 plain mapping and hand it to the engine instead of retyping it as Python.
 
 ```python
-from pfd import Flowsheet
+from pandid import Flowsheet
 
 fs   = Flowsheet.from_dict(spec)         # a plain dict, from anywhere
 fs   = Flowsheet.from_json("bfw.json")   # standard library only
@@ -609,12 +609,12 @@ streams[6].from: Pump 'P-101' has no port 'dischrge' (did you mean 'discharge'?)
 available ports: ['discharge', 'suction']
 ```
 
-Every failure raises `pfd.SpecError`, a `ValueError`.
+Every failure raises `pandid.SpecError`, a `ValueError`.
 
 ## Command line
 
 Installing the package installs a `pandid` command, so a spec file becomes a
-drawing without opening Python. `python -m pfd` runs the same thing from a
+drawing without opening Python. `python -m pandid` runs the same thing from a
 checkout.
 
 ```bash
@@ -678,26 +678,26 @@ Runnable scripts in `examples/`, each usable from the repo root or from
 
 ## Architecture
 
-1. **Topology** (`pfd/flowsheet.py`, `pfd/units.py`, `pfd/ports.py`,
-   `pfd/streams.py`) holds units, ports, and stream connectivity.
-2. **Geometry.** `pfd/layout/` (Sugiyama layering → ordering → coordinates,
+1. **Topology** (`pandid/flowsheet.py`, `pandid/units.py`, `pandid/ports.py`,
+   `pandid/streams.py`) holds units, ports, and stream connectivity.
+2. **Geometry.** `pandid/layout/` (Sugiyama layering → ordering → coordinates,
    emitting each unit's resolved `Frame`, then port-face selection and label
-   placement), `pfd/portgeom.py` (single source of truth for port geometry),
-   `pfd/routing/` (visibility graph + A\*).
-3. **Render** (`pfd/render/`) produces SVG output, the symbol registry, and
-   `pfd/validate.py` / `pfd/document.py`.
+   placement), `pandid/portgeom.py` (single source of truth for port geometry),
+   `pandid/routing/` (visibility graph + A\*).
+3. **Render** (`pandid/render/`) produces SVG output, the symbol registry, and
+   `pandid/validate.py` / `pandid/document.py`.
 
 Geometry separates *intent* (`Pin`, from `pin()`) from *result* (`Frame`,
 computed by the layout engine), so layout is idempotent.
 
 `scripts/vendor_symbols.py` generates the symbol library into
-`pfd/render/_vendored_symbols.py`, converting mxGraph stencil XML to SVG via
+`pandid/render/_vendored_symbols.py`, converting mxGraph stencil XML to SVG via
 `scripts/mxgraph_to_svg.py`. `scripts/symbol_sheet.py` renders a catalogue.
 
 ## Contributing
 
 See [CONTRIBUTING.md](https://github.com/Alpha9463/py-chemengg/blob/main/CONTRIBUTING.md). The gates are `pytest`, `ruff check .`,
-`ruff format --check tests` and `mypy pfd`.
+`ruff format --check tests` and `mypy pandid`.
 
 ## Licence & attribution
 
@@ -714,9 +714,9 @@ This is a source-available licence, not an OSI-approved open-source one, which
 matters if your organisation screens dependencies.
 
 **Equipment symbols are Apache-2.0 and stay that way.** They derive from the
-draw.io / diagrams.net P&ID stencils, so `pfd/render/_vendored_symbols.py` and
+draw.io / diagrams.net P&ID stencils, so `pandid/render/_vendored_symbols.py` and
 `scripts/vendor_data/drawio/` carry the original licence rather than the one
-above, as does the conveyor symbol in `pfd/render/symbols.py`, which is adapted
+above, as does the conveyor symbol in `pandid/render/symbols.py`, which is adapted
 from a stencil rather than generated from one.
 [`NOTICE`](https://github.com/Alpha9463/py-chemengg/blob/main/NOTICE)
 says exactly which files are which. The full texts are in

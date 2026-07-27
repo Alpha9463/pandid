@@ -5,7 +5,7 @@ a report, a stream table or a label written from ``s.name`` before the render
 must not disagree with the drawing.
 """
 
-from pfd import Flowsheet, units as U
+from pandid import Flowsheet, units as U
 
 
 def test_valve_carries_stream_number():

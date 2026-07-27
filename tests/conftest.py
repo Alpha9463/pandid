@@ -2,7 +2,7 @@
 
 import pytest
 
-from pfd import units as U
+from pandid import units as U
 
 
 @pytest.fixture
@@ -10,7 +10,7 @@ def gapped_kind():
     """A unit kind whose symbol forgets two of the unit's ports.
 
     No shipped symbol has this gap: every port a built-in unit declares is
-    either anchored or placed by a :class:`~pfd.render.symbols.PortSeries`. The
+    either anchored or placed by a :class:`~pandid.render.symbols.PortSeries`. The
     centre-of-the-box fallback is still reachable, though — it is what any
     symbol registered from outside this package gets when it anchors fewer
     ports than its unit declares. Tests covering that fallback build their own
@@ -20,7 +20,7 @@ def gapped_kind():
     ``spare_a`` and ``spare_b`` are the unanchored pair; ``inlet``/``outlet``
     are anchored, so a test can tell the two cases apart on one unit.
     """
-    from pfd.render.symbols import Symbol, default_registry
+    from pandid.render.symbols import Symbol, default_registry
 
     class Gapped(U.Unit):
         kind = "gapped_test_unit"

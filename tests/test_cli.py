@@ -14,8 +14,8 @@ import sys
 
 import pytest
 
-from pfd import Flowsheet
-from pfd.cli import EXIT_FAILED, EXIT_MISSING_DEPENDENCY, EXIT_OK, EXIT_USAGE, main
+from pandid import Flowsheet
+from pandid.cli import EXIT_FAILED, EXIT_MISSING_DEPENDENCY, EXIT_OK, EXIT_USAGE, main
 
 SPEC = {
     "name": "Feed Skid",
@@ -168,7 +168,7 @@ def test_symbols_lists_every_symbol_in_the_registry(capsys):
     # The listing is built from the unit classes, and the registry is the other
     # side of the same fact, so a symbol the classes cannot reach shows up here
     # as a variant missing from the output or a count that disagrees.
-    from pfd.render.symbols import default_registry
+    from pandid.render.symbols import default_registry
 
     assert main(["symbols"]) == EXIT_OK
     captured = capsys.readouterr()
@@ -278,19 +278,19 @@ def test_the_four_exit_codes_are_four_different_numbers():
 def test_help_calls_the_command_by_the_name_it_is_installed_under(capsys):
     assert main(["--help"]) == EXIT_OK
     out = capsys.readouterr().out
+    # argparse defaults to sys.argv[0], which under pytest is the test runner.
     assert out.startswith("usage: pandid")
-    assert "pfd" not in out  # the import name is not what a reader types
 
 
 def test_version_reports_the_distribution(capsys):
-    import pfd
+    import pandid
 
     assert main(["--version"]) == EXIT_OK
-    assert capsys.readouterr().out.strip() == f"pandid {pfd.__version__}"
+    assert capsys.readouterr().out.strip() == f"pandid {pandid.__version__}"
 
 
 def test_python_m_runs_the_same_entry_point():
-    import pfd.__main__ as entry
-    import pfd.cli
+    import pandid.__main__ as entry
+    import pandid.cli
 
-    assert entry.main is pfd.cli.main
+    assert entry.main is pandid.cli.main

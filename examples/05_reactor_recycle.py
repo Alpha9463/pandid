@@ -13,7 +13,7 @@ topology alone. It exercises:
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pfd import Flowsheet, units
+from pandid import Flowsheet, units
 
 
 def main():

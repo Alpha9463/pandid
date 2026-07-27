@@ -3,15 +3,15 @@
 Everything a process engineer touches, verified against the source. Anything not
 listed here is either internal or not part of the supported surface.
 
-> **Scope.** `pfd` draws diagrams. There is **no mass or energy balance engine**:
+> **Scope.** `pandid` draws diagrams. There is **no mass or energy balance engine**:
 > stream properties are strings you supply, and nothing is computed from them.
-> `pfd.state.State` and the `state` slots on `Port`/`Stream` are reserved for a
+> `pandid.state.State` and the `state` slots on `Port`/`Stream` are reserved for a
 > future backend and are never written by this library.
 
 ```python
-from pfd import Flowsheet, Component, units
-import pfd
-pfd.__version__          # the installed version, e.g. "0.0.1"
+from pandid import Flowsheet, Component, units
+import pandid
+pandid.__version__          # the installed version, e.g. "0.0.1"
 ```
 
 ---
@@ -742,13 +742,13 @@ line down a pipe run.
 
 ## Sheet furniture
 
-Everything here lives in `pfd.document`. A title block or a box on the flowsheet
+Everything here lives in `pandid.document`. A title block or a box on the flowsheet
 is drawn because it is there, whatever `border` is set to.
 
 ### `TitleBlock` and `Revision`
 
 ```python
-from pfd.document import TitleBlock, Revision
+from pandid.document import TitleBlock, Revision
 
 fs.title_block = TitleBlock(
     title="Aromatics Recovery A100",      # the two title lines
@@ -817,7 +817,7 @@ wins.
 ### Convenience constructors
 
 ```text
-from pfd.document import equipment_list, notes, legend
+from pandid.document import equipment_list, notes, legend
 
 equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right", anchor=None,
                position=None, margin=0.0, include=None, width=None)
@@ -846,7 +846,7 @@ right, is built from the same flowsheet. A tag that is not on the flowsheet
 contributes no row.
 
 ```python
-from pfd.document import equipment_list, legend, notes
+from pandid.document import equipment_list, legend, notes
 
 fs.add(units.Column("T-101", description="Beer Column"))
 fs.add_annotation(equipment_list(fs, align="top-right"))
@@ -899,7 +899,7 @@ need resolved frames, so they are skipped before layout has run.
 
 ## Command line
 
-Installing the distribution installs a `pandid` command. `python -m pfd` is the
+Installing the distribution installs a `pandid` command. `python -m pandid` is the
 same entry point, for a checkout or an environment whose scripts directory is
 not on PATH. It is a shell over the API above and adds nothing to it.
 
@@ -912,7 +912,7 @@ pandid symbols [--kind KIND]
 
 `SPEC` is a spec file: `.yaml` or `.yml` (needs the `yaml` extra) or `.json`.
 Any other extension is refused rather than guessed at. The format itself is
-`pfd.spec`, documented in the README.
+`pandid.spec`, documented in the README.
 
 ### `draw`
 
@@ -992,7 +992,7 @@ rest of the catalogue, and is covered by the symbol invariants.
 ### The class
 
 ```python
-from pfd import Flowsheet, units
+from pandid import Flowsheet, units
 
 class Crystalliser(units.Unit):
     kind = "crystalliser"
@@ -1037,7 +1037,7 @@ Without a symbol the unit draws a generic box (below). To draw it properly,
 register a `Symbol` under the same `kind`:
 
 ```python
-from pfd.render.symbols import Symbol, default_registry
+from pandid.render.symbols import Symbol, default_registry
 
 default_registry.register("crystalliser", Symbol(
     svg=(
@@ -1131,7 +1131,7 @@ the shape of the box is not.
 
 ### What a custom unit does not get
 
-- **A spec file.** `pfd.spec` builds units from the shipped classes by name, so
+- **A spec file.** `pandid.spec` builds units from the shipped classes by name, so
   it can neither read nor write one it has never heard of. `fs.to_dict()` raises
   `SpecError` naming the class rather than writing a spec that cannot be read
   back, and a `kind:` naming a custom class is refused the same way. A flowsheet
@@ -1149,26 +1149,26 @@ the shape of the box is not.
 Both are `typing.Protocol`s. Implement the method and pass your object in.
 
 ```text
-class LayoutEngine(Protocol):      # pfd.layout
+class LayoutEngine(Protocol):      # pandid.layout
     def layout(self, fs: Flowsheet) -> None: ...
 
-class Router(Protocol):            # pfd.routing
+class Router(Protocol):            # pandid.routing
     def route(self, fs: Flowsheet) -> None: ...
 
 fs.layout(engine=MyEngine())
 fs.route(router=MyRouter())
 ```
 
-Defaults: `pfd.layout.SugiyamaLayoutEngine` (exported as
-`default_layout_engine`) and `pfd.routing.DefaultRouter`.
+Defaults: `pandid.layout.SugiyamaLayoutEngine` (exported as
+`default_layout_engine`) and `pandid.routing.DefaultRouter`.
 
-The symbol registry is `pfd.render.symbols.default_registry`, a
+The symbol registry is `pandid.render.symbols.default_registry`, a
 `SymbolRegistry` with `register(kind, symbol, variant="default")`,
 `variants(kind)` and `get(kind, variant="default")`. `get()` raises `ValueError`
 for a variant that kind has no symbol for, naming the ones it does. A kind with
 no symbols at all draws a generic box; registering one for a unit type of your
 own is [Custom equipment](#custom-equipment).
-`for_unit(unit)` is what the renderer and `pfd.portgeom` actually call: it is
+`for_unit(unit)` is what the renderer and `pandid.portgeom` actually call: it is
 `get()` for every fixed symbol, and for a symbol drawn to a size the unit
 carries, such as a `Conveyor`, it builds one at that size. New *equipment*
 symbols should come from the vendored stencil pipeline rather than being

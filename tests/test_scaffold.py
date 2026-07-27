@@ -1,4 +1,4 @@
 def test_package_imports():
-    import pfd
+    import pandid
 
-    assert isinstance(pfd.__version__, str)
+    assert isinstance(pandid.__version__, str)

@@ -24,9 +24,9 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from pfd import units
-from pfd.portgeom import outward_dir
-from pfd.render.symbols import Symbol, default_registry
+from pandid import units
+from pandid.portgeom import outward_dir
+from pandid.render.symbols import Symbol, default_registry
 
 BOX_EPS = 1.0  # bounding-box slack, in symbol-space units
 GEOM_TOL = 2.0  # max distance from a port to the nearest drawn segment
@@ -617,8 +617,8 @@ def test_every_member_of_a_port_series_gets_a_nozzle_of_its_own(
     box, landing on top of every other unplaced port -- three streams into one
     point in the middle of the triangle. Each member gets its own spot on
     the flat face, however many there are."""
-    from pfd import units as U
-    from pfd.portgeom import _drawn_placements, is_anchored, resolve_size
+    from pandid import units as U
+    from pandid.portgeom import _drawn_placements, is_anchored, resolve_size
 
     cls = {"mixer": U.Mixer, "splitter": U.Splitter, "column": U.Column, "reactor": U.Reactor}[kind]
     for count in range(2, 9):
@@ -661,8 +661,8 @@ def test_a_lone_member_lands_where_the_fixed_nozzle_did():
     """One feed is the count every existing column sheet was drawn with, so the
     family has to reproduce that nozzle exactly -- otherwise supporting a second
     feed moves the first one on every drawing already issued."""
-    from pfd import units as U
-    from pfd.portgeom import _drawn_placements, resolve_size
+    from pandid import units as U
+    from pandid.portgeom import _drawn_placements, resolve_size
 
     for unit, want in (
         (U.Column("T"), (0.0, 130.0)),
@@ -680,7 +680,7 @@ def test_a_feed_family_reaching_the_return_nozzles_is_caught():
     which is what keeps them apart however many feeds there are. Put the family
     on the returns' face and the band covers both of them -- and a collision a
     count away is still a collision, so the check has to say so."""
-    from pfd.render.symbols import PortSeries
+    from pandid.render.symbols import PortSeries
 
     column = default_registry.get("column")
     clash = _colliding_symbol(
@@ -711,8 +711,8 @@ def test_two_series_ports_land_where_the_symbol_used_to_draw_them():
     rule has to reproduce the fixed-symbol coordinates exactly rather than
     merely closely -- otherwise accommodating a third port shifts every mixer
     and splitter on every drawing."""
-    from pfd import units as U
-    from pfd.portgeom import _drawn_placements
+    from pandid import units as U
+    from pandid.portgeom import _drawn_placements
 
     mixer = U.Mixer("M", n_inlets=2)
     assert [_drawn_placements(mixer, f"in_{i}", 50, 50, 0, False, False)["W"] for i in (1, 2)] == [
@@ -728,7 +728,7 @@ def test_two_series_ports_land_where_the_symbol_used_to_draw_them():
 def test_a_series_may_not_restate_a_port_the_symbol_already_anchors():
     """Two authorities on one port's position is the bug the series exists to
     remove, so declaring both is rejected rather than silently resolved."""
-    from pfd.render.symbols import PortSeries
+    from pandid.render.symbols import PortSeries
 
     with pytest.raises(ValueError, match=r"only authority"):
         Symbol(
@@ -766,7 +766,7 @@ def test_a_nozzle_standing_in_a_series_band_is_a_collision():
     has to test instead. A nozzle inside the stretch of face a series may place
     a member on shares a placement with one for some count, and a static check
     exists to say so before anything is drawn."""
-    from pfd.render.symbols import PortSeries
+    from pandid.render.symbols import PortSeries
 
     with pytest.warns(UserWarning, match=r"both have a placement"):
         clash = Symbol(
@@ -782,7 +782,7 @@ def test_a_nozzle_standing_in_a_series_band_is_a_collision():
 def test_a_nozzle_clear_of_the_series_band_is_not_a_collision():
     """The band is the middle ``extent`` of the face, not the whole of it: a
     nozzle out at the corner is somewhere a member can never be put."""
-    from pfd.render.symbols import PortSeries
+    from pandid.render.symbols import PortSeries
 
     clear = Symbol(
         svg='<g id="sym_clear"/>',
@@ -826,7 +826,7 @@ def test_a_variant_typo_stops_the_sheet_rather_than_drawing_something_else():
     """The registry is looked up at render time, so that is where a name
     nobody registered has to be caught -- not at construction, which a later
     assignment to unit.variant would walk straight past."""
-    from pfd import Flowsheet, units as U
+    from pandid import Flowsheet, units as U
 
     fs = Flowsheet("typo")
     feed = fs.add(U.Feed("F"))

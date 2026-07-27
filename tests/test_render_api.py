@@ -7,7 +7,7 @@ import zlib
 
 import pytest
 
-from pfd import Flowsheet, units as U
+from pandid import Flowsheet, units as U
 
 # ISO 216 landscape in millimetres, and the same sheets in the px the drawing is
 # laid out in. Restated here rather than imported so a silent edit to the
@@ -99,7 +99,7 @@ def _fit(svg: str) -> tuple[float, float, float]:
 
 
 def _drawing_bbox(fs: Flowsheet) -> tuple[float, float, float, float]:
-    from pfd.portgeom import unit_box
+    from pandid.portgeom import unit_box
 
     xs: list[float] = []
     ys: list[float] = []
@@ -129,7 +129,7 @@ def test_render_svg_writes_file_and_returns_none(tmp_path):
 
 
 def test_pdf_hint_names_the_distribution_on_pypi(tmp_path, monkeypatch):
-    # `pfd` on PyPI is an unrelated project; the distribution is `pandid`.
+    # `pandid` on PyPI is an unrelated project; the distribution is `pandid`.
     monkeypatch.setitem(sys.modules, "cairosvg", None)  # makes `import cairosvg` fail
     with pytest.raises(ImportError) as excinfo:
         _fs().render(str(tmp_path / "d.pdf"))
@@ -139,7 +139,7 @@ def test_pdf_hint_names_the_distribution_on_pypi(tmp_path, monkeypatch):
 
 
 def test_jump_direction_reaches_the_public_api():
-    from pfd.render.svg import SvgRenderer
+    from pandid.render.svg import SvgRenderer
 
     # Two lines that cross: which of them bulges is what the option chooses.
     def build():
@@ -192,7 +192,7 @@ def test_page_size_draws_a_sheet_of_exactly_that_size(name, mm, styling):
 def test_a_furnished_page_is_that_size_with_or_without_a_border():
     # The border is ink, not layout: a title strip rules to the same place on a
     # fixed page whether or not the frame around it is drawn.
-    from pfd.document import TitleBlock
+    from pandid.document import TitleBlock
 
     def build():
         fs = _spanning(600.0)
@@ -248,8 +248,8 @@ def test_zone_grid_is_fixed_by_the_page_not_by_the_drawing():
 
 
 def test_pid_furniture_rules_to_the_sheet_edges():
-    from pfd.document import TitleBlock
-    from pfd.render.furniture import ZONE_BAND, measure_title_strip
+    from pandid.document import TitleBlock
+    from pandid.render.furniture import ZONE_BAND, measure_title_strip
 
     fs = _spanning(600.0)
     fs.title_block = TitleBlock(drawing_number="PFD-1")
@@ -295,7 +295,7 @@ def test_a_drawing_that_already_fits_is_never_blown_up():
 
 
 def test_page_too_small_for_its_own_furniture_raises():
-    from pfd.document import TableBox
+    from pandid.document import TableBox
 
     fs = _spanning(300.0)
     fs.add_annotation(TableBox(title="SCHEDULE", headers=["Tag"] * 40, rows=[["x"] * 40]))

@@ -1,6 +1,6 @@
 import re
 
-from pfd import Flowsheet, units as U
+from pandid import Flowsheet, units as U
 
 # A stream-number label: its opaque halo, then the text it backs.
 _LABEL = re.compile(

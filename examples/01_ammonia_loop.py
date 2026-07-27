@@ -1,6 +1,6 @@
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pfd import Flowsheet, units
+from pandid import Flowsheet, units
 
 fs = Flowsheet("Ammonia Loop Auto")
 feed = fs.add(units.Feed("Natural Gas"))

@@ -20,8 +20,8 @@ table along the foot, and a utilities summary beside the title strip.
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pfd import Flowsheet, units
-from pfd.document import Revision, TableBox, TitleBlock, equipment_list
+from pandid import Flowsheet, units
+from pandid.document import Revision, TableBox, TitleBlock, equipment_list
 
 # --- Stream property table -------------------------------------------------
 # Rows render in first-seen key order, so every stream carries the same keys in

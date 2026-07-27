@@ -17,11 +17,11 @@ from pathlib import Path
 
 import pytest
 
-from pfd import Flowsheet, units
-from pfd.document import Revision, TitleBlock, equipment_list, legend, notes
+from pandid import Flowsheet, units
+from pandid.document import Revision, TitleBlock, equipment_list, legend, notes
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
-UPDATE = os.environ.get("PFD_UPDATE_GOLDEN") == "1"
+UPDATE = os.environ.get("PANDID_UPDATE_GOLDEN") == "1"
 
 
 # --- scenarios, one per example -----------------------------------------------
@@ -518,7 +518,7 @@ def _check_golden(name: str, svg: str) -> None:
         path.write_text(normalized, encoding="utf-8")
         return
     if not path.exists():
-        pytest.fail(f"no golden at {path}; regenerate with PFD_UPDATE_GOLDEN=1", pytrace=False)
+        pytest.fail(f"no golden at {path}; regenerate with PANDID_UPDATE_GOLDEN=1", pytrace=False)
     golden = _normalize(path.read_text(encoding="utf-8"))
     if golden != normalized:
         pytest.fail(_diff_message(name, golden, normalized), pytrace=False)

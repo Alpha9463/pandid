@@ -4,8 +4,8 @@ The topology objects carry a `state` slot so a balance engine can attach
 without a rewrite.
 """
 
-from pfd import Flowsheet, units as U
-from pfd.state import State
+from pandid import Flowsheet, units as U
+from pandid.state import State
 
 
 def test_state_holds_composition_and_conditions():

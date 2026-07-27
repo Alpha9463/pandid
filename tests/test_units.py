@@ -1,6 +1,6 @@
 import pytest
-from pfd.units import Unit
-from pfd.ports import Port
+from pandid.units import Unit
+from pandid.ports import Port
 
 
 class _Widget(Unit):
@@ -53,7 +53,7 @@ def test_invalid_port_role_raises():
 
 # --- Built-in unit types ---
 
-from pfd import units as U  # noqa: E402
+from pandid import units as U  # noqa: E402
 
 
 def test_fixed_port_units_have_expected_ports():

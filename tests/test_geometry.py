@@ -1,4 +1,4 @@
-from pfd import Flowsheet, units as U
+from pandid import Flowsheet, units as U
 
 
 def test_unit_pin_sets_pin():

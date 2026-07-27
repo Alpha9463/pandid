@@ -2,7 +2,7 @@
 
 import pytest
 
-from pfd import Flowsheet, units as U
+from pandid import Flowsheet, units as U
 
 
 def test_overlapping_pins_raise():

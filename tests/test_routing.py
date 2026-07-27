@@ -1,7 +1,7 @@
-from pfd.flowsheet import Flowsheet
-from pfd.units import Feed, Product
-from pfd.routing import get_outward_dir
-from pfd.routing.visibility import Rect, VisibilityGraph
+from pandid.flowsheet import Flowsheet
+from pandid.units import Feed, Product
+from pandid.routing import get_outward_dir
+from pandid.routing.visibility import Rect, VisibilityGraph
 
 
 def test_rect_intersection():
@@ -46,7 +46,7 @@ def test_router_integration():
 
 
 def test_no_obstacle_intersection():
-    from pfd.units import Separator, Compressor
+    from pandid.units import Separator, Compressor
 
     fs = Flowsheet("intersect_test")
     v = fs.add(Separator("V1"))
@@ -61,7 +61,7 @@ def test_no_obstacle_intersection():
 
     graph = VisibilityGraph(fs)
 
-    from pfd.render.symbols import default_registry
+    from pandid.render.symbols import default_registry
 
     src_sym = default_registry.get(v.kind)
     dst_sym = default_registry.get(c.kind)

@@ -1,6 +1,6 @@
 """Invariants for the intent (Pin) / result (Frame) geometry model."""
 
-from pfd import Flowsheet, units as U
+from pandid import Flowsheet, units as U
 
 
 def _small_auto():
@@ -46,7 +46,7 @@ def test_pin_honored_exactly():
 def test_mirror_consistent_and_rendered():
     """The renderer and the router must resolve a mirrored unit's ports to the
     same side, and the drawn stream must start at the mirror-correct port."""
-    from pfd.portgeom import port_point, port_anchor
+    from pandid.portgeom import port_point, port_anchor
 
     fs = Flowsheet("mirror")
     feed = fs.add(U.Feed("F")).pin(x=0, y=0)

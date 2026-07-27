@@ -8,7 +8,7 @@ outlets, and recycled loops.  Uses ISO 10628-2 compliant symbols.
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pfd import Flowsheet, units
+from pandid import Flowsheet, units
 
 def main():
     fs = Flowsheet("Distillation Train")
@@ -119,7 +119,7 @@ def main():
     fs.stream_table_sections = [("Benzene", "Mass Fraction")]
 
     # --- Title block + revision history ---
-    from pfd.document import (TitleBlock, Revision, equipment_list, notes, legend)
+    from pandid.document import (TitleBlock, Revision, equipment_list, notes, legend)
     fs.title_block = TitleBlock(
         title="Aromatics Recovery A100",
         subtitle="Process Flow Diagram 1",
