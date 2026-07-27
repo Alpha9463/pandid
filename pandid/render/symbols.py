@@ -404,25 +404,135 @@ def conveyor_symbol(length: float = CONVEYOR_LENGTH) -> Symbol:
 _BUILT_TO_SIZE = {"conveyor": lambda unit: conveyor_symbol(unit.length)}
 
 
+# ---------------------------------------------------------------------------
+# Normally closed valves: PIP PIC001 4.2.2.7 draws one with its body darkened
+# solid. Not an ISA-5.1 convention -- ISA-5.1 says nothing about valve fill and
+# leaves manual block valve depiction to the piping group -- and not an
+# ISO 10628 one either, so a sheet that draws one owes its reader a legend
+# entry (ISA-5.1 2.8.1(b)(1), 2.8.2, 5.2.5). See :class:`pandid.units.Valve`.
+# ---------------------------------------------------------------------------
+
+#: Valve variants whose body may be darkened. Filling a body leaves only its
+#: *outline*, so the test is whether the outline alone still names the device.
+#: A gate's pinched waist, a globe's and a ball's round one, an angle body's
+#: right-angled lobes and a three-way's third lobe all survive, as do the marks
+#: a plug and a pinch valve draw in the open notches above and below the waist,
+#: the needle's stem across it, and every operator drawn *outside* the body --
+#: the lettered boxes, the handwheel, the bleeder's tap.
+#:
+#: Everything else takes the NC abbreviation of clause 4.2.2.8 instead, which
+#: is the safe default for a variant added later: a butterfly's disc (the
+#: standard's own example), a check valve's flow arrow and a knife gate's blade
+#: are all *inside* the outline, and a body filled over them draws a darkened
+#: gate valve wearing another name.
+#:
+#: ``solenoid`` is on the list. Its stencil is called "Solenoid Valve Closed",
+#: but the artwork is byte-for-byte the motor- and hydraulic-operated valves'
+#: -- same body path, same operator box, differing only in the letter -- and
+#: carries no fill of its own. The name is draw.io's label for the mechanism's
+#: rest state, not something the drawing says, so the fill is the only thing on
+#: that symbol that states a position.
+NC_DARKENS = frozenset({
+    "default", "gate", "globe", "ball", "needle", "plug", "pinch", "three_way",
+    "angle", "bleed", "manual", "motor", "solenoid", "hydraulic",
+})
+
+#: Valve variants that may not be shown normally closed at all. PIP PIC001
+#: clause 4.2.2.10: "Control valves or relief valves shall not be shown as NC."
+#: A darkened control valve on an issued sheet reads as a block valve someone
+#: has closed, which is a drafting error rather than a style.
+NC_FORBIDDEN = frozenset({"control", "pneumatic", "regulator", "relief", "psv"})
+
+#: The ink a darkened body is filled with -- the colour the vendored valve
+#: artwork already strokes in, so the fill and the outline around it are one
+#: solid symbol rather than a black shape in a grey frame.
+_BODY_INK = "#111"
+
+#: The body is the artwork's first ``<path>``. True of every variant in
+#: :data:`NC_DARKENS` and checked rather than assumed, because
+#: ``_vendored_symbols.py`` is generated: a stencil that grows a foreground
+#: element ahead of its background one would otherwise have the wrong shape
+#: filled, silently and plausibly.
+_FIRST_PATH = re.compile(r"<path\b[^>]*>")
+
+
+def closed_marking(unit) -> str:
+    """How a unit's normally closed position is drawn, ``""`` when it is not one.
+
+    ``"fill"`` darkens the body (PIP PIC001 4.2.2.7); ``"NC"`` is the
+    abbreviation written beside the valve for a body that cannot carry the fill
+    (4.2.2.8). The two are one decision made in one place, so the renderer
+    cannot letter a valve the registry has already darkened, or darken one it
+    is about to letter.
+    """
+    if getattr(unit, "normal_position", "open") != "closed":
+        return ""
+    return "fill" if getattr(unit, "variant", "") in NC_DARKENS else "NC"
+
+
+def darkened(sym: Symbol) -> Symbol:
+    """``sym`` with its body filled solid: the normally closed valve symbol.
+
+    A separate ``Symbol`` rather than a fill applied at draw time, because the
+    ``<defs>`` entry a ``<use>`` points at is keyed by the artwork: the open and
+    the closed valve are two drawings and need two definitions, which is what
+    the ``_nc`` :attr:`Symbol.id_suffix` buys. Everything else about the symbol
+    -- box, nozzles, alternates, aspect -- is the same valve.
+    """
+    head = _FIRST_PATH.search(sym.svg)
+    if head is None or 'fill="none"' not in head.group(0):
+        raise ValueError(
+            f"{sym.symbol_id()}: cannot be darkened -- its first <path> is not an "
+            f"unfilled body. A symbol whose body is not the first path it draws "
+            f"does not belong in NC_DARKENS; PIP PIC001 4.2.2.8's NC abbreviation "
+            f"is what such a valve states its position with."
+        )
+    filled = head.group(0).replace('fill="none"', f'fill="{_BODY_INK}"', 1)
+    svg = sym.svg[:head.start()] + filled + sym.svg[head.end():]
+    return Symbol(
+        svg=re.sub(r'id="([^"]*)"', r'id="\1_nc"', svg, count=1),
+        width=sym.width, height=sym.height, ports=dict(sym.ports),
+        port_faces={name: dict(faces) for name, faces in sym.port_faces.items()},
+        faceless_ports=sym.faceless_ports, port_series=sym.port_series,
+        label_pos=sym.label_pos, id_suffix=sym.id_suffix + "_nc",
+        stretchable=sym.stretchable,
+    )
+
+
 class SymbolRegistry:
     def __init__(self):
         self._symbols: dict[tuple[str, str], Symbol] = {}
+        # Darkened bodies, built once each on demand. Port resolution asks for a
+        # unit's symbol on every call, and the registry hands out one shared
+        # instance per fixed symbol; a derived one has to be shared the same way
+        # or every nozzle lookup rebuilds the artwork.
+        self._darkened: dict[tuple[str, str], Symbol] = {}
         self._register_defaults()
 
     def register(self, kind: str, template: Symbol, variant: str = "default") -> None:
         self._symbols[(kind, variant)] = template
+        self._darkened.pop((kind, variant), None)
 
     def for_unit(self, unit) -> Symbol:
         """The symbol to draw ``unit`` with, built to its size where it has one.
 
         :meth:`get` answers for a ``(kind, variant)``, which is everything a
         fixed drawing depends on. A conveyor's artwork depends on the unit as
-        well, since it is made to its belt run; the lookup still runs either
-        way, so a variant name nobody registered is still rejected.
+        well, since it is made to its belt run, and a valve's on whether it is
+        declared normally closed, which darkens the body; the lookup still runs
+        either way, so a variant name nobody registered is still rejected.
         """
-        sym = self.get(unit.kind, getattr(unit, "variant", "default"))
+        variant = getattr(unit, "variant", "default")
+        sym = self.get(unit.kind, variant)
         build = _BUILT_TO_SIZE.get(unit.kind)
-        return sym if build is None else build(unit)
+        if build is not None:
+            return build(unit)
+        if closed_marking(unit) == "fill":
+            key = (unit.kind, variant)
+            if key not in self._darkened:
+                self._darkened[key] = darkened(sym)
+            return self._darkened[key]
+        return sym
 
     def variants(self, kind: str) -> list[str]:
         """Every variant registered for a kind, ``default`` first then A-Z."""

@@ -110,6 +110,16 @@ KIND_MAP = {
     #
     # The three letter-box operators share one body and differ only in the
     # letter, so they must stay three separate variants.
+    #
+    # "Solenoid Valve Closed" is draw.io's name for the mechanism's rest state,
+    # not something its drawing says. The three shapes are identical but for the
+    # letter (same background body path, same operator box, no <fillcolor>
+    # anywhere), and the library ships no open counterpart to differ from. So
+    # the symbol does not depict a closed valve, and the darkened body of
+    # ``Valve(normal_position="closed")`` is the only thing on it that states a
+    # position. Contrast the genuine state pairs elsewhere in the library (the
+    # Figure 8 blinds, the open/blind discs), where the two shapes differ by a
+    # <fillcolor> and the fill is the convention.
     ("valve", "motor"):     ("valves", "Motor Operated Valve",
                              {"inlet": "W", "outlet": "E", "actuator": ("AT", 49.0, 0.0)}),
     ("valve", "solenoid"):  ("valves", "Solenoid Valve Closed",

@@ -339,11 +339,90 @@ class Valve(Unit):
     a control loop, so a controller's output lands on the final control element
     rather than in mid-air. Being a signal port, it takes a signal ``kind`` and
     refuses process fluid: a pipe into a valve stem is not a connection.
+
+    ``normal_position`` is where the valve sits with the plant running:
+    ``"open"`` (the default) or ``"closed"``. A closed one is drawn with its
+    body **darkened solid**, which is the convention of **PIP PIC001 clause
+    4.2.2.7**: *"normally closed manual valves shall be shown using a darkened
+    solid symbol"*. The rule is one-sided. An open valve is not marked at all,
+    so ``"open"`` draws exactly what a valve without the argument draws, and
+    the fill is the whole of what ``"closed"`` adds.
+
+    Where the body cannot carry the fill legibly, clause 4.2.2.8 writes the
+    abbreviation **NC** instead, directly below the valve on a horizontal run
+    and to the right of it on a vertical one. That is the case for a
+    butterfly's disc, a check valve's arrow and a knife gate's blade, which all
+    live inside the outline and are swallowed by the fill. Those variants draw
+    the letters, so the position is always stated somehow.
+    :data:`pandid.render.symbols.NC_DARKENS` is the list of variants that
+    darken.
+
+    Clause 4.2.2.10, *"control valves or relief valves shall not be shown as
+    NC"*, is enforced: a ``control``, ``pneumatic``, ``regulator``, ``relief``
+    or ``psv`` valve raises rather than drawing a mark the standard forbids.
+
+    **This is not an ISA-5.1 or ISO 10628 convention.** ISA-5.1 says nothing
+    about valve fill and hands manual block valve depiction to the piping
+    group. Clauses 2.8.1(b)(1), 2.8.2 and 5.2.5 of ISA-5.1 make it *mandatory*
+    to declare on a legend or cover sheet any symbol extending the standard, so
+    a sheet that draws a darkened valve owes its reader a legend entry saying
+    what the fill means. :func:`pandid.document.legend` builds the box; nothing
+    adds the entry for you.
     """
 
     kind = "valve"
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process"),
              ("actuator", "inlet", "signal")]
+
+    #: The positions a valve may be declared in. A drawing convention exists for
+    #: exactly one of them; the other is the unmarked default. Held as a tuple
+    #: rather than a bool because the position is what the *plant* is in, and the
+    #: designations a P&ID draws are an enumeration (NC today, the locked and
+    #: car-sealed ones later) rather than a switch with two settings.
+    NORMAL_POSITIONS = ("open", "closed")
+
+    def __init__(self, name: str, variant: str = "default",
+                 width: float | None = None, height: float | None = None,
+                 label_pos: str | None = None, description: str = "",
+                 reference: str = "", normal_position: str = "open"):
+        super().__init__(name, variant=variant, width=width, height=height,
+                         label_pos=label_pos, description=description,
+                         reference=reference)
+        self._normal_position = "open"
+        self.normal_position = normal_position
+
+    @property
+    def normal_position(self) -> str:
+        """``"open"`` or ``"closed"``: where the valve sits when running.
+
+        Setting it to ``"closed"`` darkens the body (PIP PIC001 4.2.2.7), or
+        writes ``NC`` beside the valve where the body cannot carry the fill
+        (4.2.2.8). See the class docstring, including the legend a darkened
+        valve obliges the sheet to carry.
+        """
+        return self._normal_position
+
+    @normal_position.setter
+    def normal_position(self, value: str) -> None:
+        if value not in self.NORMAL_POSITIONS:
+            raise ValueError(
+                f"{self.name}: normal_position is "
+                f"{' or '.join(repr(p) for p in self.NORMAL_POSITIONS)}, got {value!r}"
+            )
+        if value == "closed":
+            from pandid.render.symbols import NC_FORBIDDEN
+
+            if self.variant in NC_FORBIDDEN:
+                raise ValueError(
+                    f"{self.name}: PIP PIC001 clause 4.2.2.10 says control valves and "
+                    f"relief valves shall not be shown as NC, and variant "
+                    f"{self.variant!r} draws one. A darkened control valve on an issued "
+                    f"sheet reads as a block valve someone has closed. Say where the "
+                    f"valve fails instead (the actuator's fail action), or put the "
+                    f"normally closed mark on the hand valve that actually isolates "
+                    f"the line."
+                )
+        self._normal_position = value
 
 
 class Vessel(Unit):

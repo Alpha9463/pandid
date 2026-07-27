@@ -57,6 +57,46 @@ and is kept working.
   piped into it; `discharge` is the head end, also offered underneath. Below two
   roller diameters the rollers overlap, which is refused with the minimum in the
   message. It is scheduled on the equipment list like other major plant.
+- `Valve(normal_position="closed")`, the normally closed valve, drawn with its
+  body darkened solid. The source is **PIP PIC001 clause 4.2.2.7**: "normally
+  closed manual valves shall be shown using a darkened solid symbol". It is
+  **not** an ISA-5.1 or ISO 10628 convention. ISA-5.1 says nothing about valve
+  fill and hands manual block valve depiction to the piping group, and ISO 10628
+  has no such symbol. Because it is an extension rather than a standard symbol,
+  ISA-5.1 clauses 2.8.1(b)(1), 2.8.2 and 5.2.5 oblige a sheet that draws one to
+  declare it on a legend or cover sheet; `pandid.document.legend` builds the box
+  and the entry is the author's to add.
+  - The rule is one-sided. Normally open is not marked at all, so `"open"` is
+    the default and draws exactly what a `Valve` without the argument draws; the
+    fill is the whole of what `"closed"` adds. The symbol's box, nozzles and
+    alternate faces are untouched, so declaring a valve closed never moves a
+    line already drawn.
+  - `normal_position` rather than a boolean, because the position is what the
+    *plant* is in, and the designations a P&ID draws it with are an enumeration
+    (NC now, PIC001's locked and car-sealed ones later) rather than a switch. It
+    is also readable in a spec, which round-trips it, and only when closed:
+    writing `open` down would be writing the default down.
+  - Filling a body leaves only its outline, so the fill is used where the
+    outline alone still names the device: `default`, `gate`, `globe`, `ball`,
+    `needle`, `plug`, `pinch`, `three_way`, `angle`, `bleed`, `manual`, `motor`,
+    `solenoid` and `hydraulic`. Where the device is named by something *inside*
+    the outline, such as a butterfly's disc, a check valve's flow arrow or a
+    knife gate's blade, a filled body would draw a darkened gate valve wearing
+    another name, so clause 4.2.2.8's abbreviation `NC` is written beside the
+    valve instead, directly below it on a horizontal line and to the right of it
+    on a vertical one. A variant added later takes the letters until it is put
+    on the list, which is the safe way round: a variant falling through both
+    would state its position nowhere.
+  - Clause 4.2.2.10, "control valves or relief valves shall not be shown as NC",
+    is enforced rather than warned about. `control`, `pneumatic`, `regulator`,
+    `relief` and `psv` raise, naming the clause, because a darkened control
+    valve on an issued sheet reads as a block valve someone has closed.
+  - The one thing the fill costs: darkened, a globe and a ball are the same
+    drawing, since the seat that tells them apart is inside the body the fill
+    covers. `Valve(variant="globe")` in its normal position is unaffected. Its
+    seat is a compact bead inside two conspicuously white triangles and a
+    darkened body is black edge to edge, so the device marker and the position
+    marker are never read for each other.
 - Variable-port `Mixer(n_inlets=…)`, `Splitter(n_outlets=…)` and
   `Column(n_feeds=…)` / `Reactor(n_feeds=…)`. A tower fed more than once, as in
   extractive distillation where the solvent enters above the feed tray, spreads

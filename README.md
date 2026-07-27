@@ -221,6 +221,31 @@ the side), `psv` (spring-loaded angle safety valve) and `bleed`, the small drain
 valve tapped off a header, which is piped down the page (`inlet` on N, `outlet`
 on S).
 
+**Normally closed valves.** `normal_position` is where a valve sits with the
+plant running. A closed one is drawn with its body darkened solid, which is how
+every drain and bypass on an issued sheet is marked:
+
+```python
+fs.add(units.Valve("HV-301", variant="gate", normal_position="closed"))  # drain
+fs.add(units.Valve("HV-302", variant="gate"))                            # isolation
+```
+
+The source is **PIP PIC001 clause 4.2.2.7**, "normally closed manual valves
+shall be shown using a darkened solid symbol". It is **not** an ISA-5.1 or
+ISO 10628 convention. ISA-5.1 says nothing about valve fill and leaves manual
+block valve depiction to the piping group, which is why ISA-5.1 clauses
+2.8.1(b)(1), 2.8.2 and 5.2.5 oblige a sheet drawing one to declare it on a
+legend. Add the entry yourself; nothing adds it for you.
+
+The rule is one-sided: normally open is not marked at all, so `"open"` is the
+default and draws exactly what leaving the argument out draws. A body that
+cannot carry the fill legibly (`butterfly`, `butterfly_pneumatic`, `check`,
+`knife`) writes the abbreviation `NC` beside the valve instead, per clause
+4.2.2.8. Clause 4.2.2.10 forbids showing a control or relief valve as NC, so
+`control`, `pneumatic`, `regulator`, `relief` and `psv` raise rather than draw
+one. See the
+[API reference](https://github.com/Alpha9463/pandid/blob/main/docs/api.md#normally-closed-valves).
+
 **More than one of the same nozzle.** `Mixer(n_inlets=…)` and
 `Splitter(n_outlets=…)` spread their connections along the triangle's flat face.
 `Column(n_feeds=…)` and `Reactor(n_feeds=…)` do the same down the shell wall, for
@@ -659,8 +684,9 @@ any spelling you would reasonably write: `HeatExchanger`, `heat_exchanger` or
 `hex`. `name` (required) is the tag. Then `variant`, `description` (feeds the
 equipment list), `reference` (a boundary flag's off-page drawing), explicit
 `width`/`height`, `label_pos`, `significant` (break the stream or line number at
-this inline item), `n_inlets` / `n_outlets` for `Mixer` / `Splitter`, and
-`n_feeds` for `Column` / `Reactor`.
+this inline item), `n_inlets` / `n_outlets` for `Mixer` / `Splitter`,
+`n_feeds` for `Column` / `Reactor`, `length` for `Conveyor`, and
+`normal_position` (`open` / `closed`) for `Valve`.
 
 **`pin` / `port_faces`**: `pin` mirrors `pin()` with `x`/`y` (absolute), `col`/`row`
 (grid), `orientation` (`0`/`90`/`180`/`270`) and `mirrored` (`x`/`y`/`xy`).
