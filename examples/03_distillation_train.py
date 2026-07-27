@@ -2,8 +2,9 @@
 Example 3: Advanced Distillation Train
 
 This example demonstrates the engine's capability to route streams
-across a complex flowsheet with tall equipment (columns), multiple 
-outlets, and recycled loops.  Uses ISO 10628-2 compliant symbols.
+across a complex flowsheet with tall equipment (columns), multiple
+outlets, and recycled loops. The equipment shapes follow the conventions
+of ISO 10628-2.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
