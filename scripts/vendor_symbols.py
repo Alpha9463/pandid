@@ -17,9 +17,16 @@ the keyword, since stretchable is the default on both sides.
 ``ADAPTED_ELSEWHERE`` records the stencil-derived symbols this generator cannot
 emit — the parametric ones — and where they are written instead.
 
+``STENCIL_PATCHES`` records the corrections applied to the vendored stencils on
+the way through, for the shapes draw.io draws wrongly. The vendored XML stays
+exactly as vendored; the correction is written in the stencil's own language
+here, so the deviation from upstream is in this file rather than hidden in a
+mirrored data file.
+
 Run:  python scripts/vendor_symbols.py
 """
 import pathlib
+import xml.etree.ElementTree as ET
 
 import sys
 HERE = pathlib.Path(__file__).resolve().parent
@@ -502,8 +509,20 @@ KIND_MAP = {
     ("vessel", "skirted"): ("vessels", "Vessel (Dished Ends, Skirts)",
                             {"inlet": ("W", 47.7), "outlet": ("E", 47.7),
                              "vent": ("N", 20.0)}),
-    ("tank", "floating_roof"): ("vessels", "Tank (Floating Roof)", {"inlet": ("N", 30), "outlet": ("S", 50)}),
-    ("tank", "sphere"):        ("vessels", "Storage Sphere", {"inlet": ("N", 40), "outlet": ("S", 40)}),
+    # The third roof that rises inside its bounding box, and the same treatment
+    # the dished and conical ones get above: the shell is open between x = 5 and
+    # x = 95 at y = 0 — that gap is what the roof floats in — so an inlet on the
+    # box's top edge is drawn in mid-air 5 units above the roof plate. Put it on
+    # the plate, which spans x 5..95 at y = 5. (Nothing showed while the tank was
+    # painted as a solid block; with the block gone the nozzle is in the open.)
+    ("tank", "floating_roof"): ("vessels", "Tank (Floating Roof)",
+                                {"inlet": ("AT", 30.0, 5.0), "outlet": ("S", 50)}),
+    # ...and the third: the sphere rides on legs inside its box, so its crown is
+    # at (40, 5) and the box's top edge carries only the two short lines the
+    # legs are drawn against, at x 15..33 and x 47..65. An inlet at x = 40 falls
+    # in the gap between them. Put it on the crown, as on the dished roof.
+    ("tank", "sphere"):        ("vessels", "Storage Sphere",
+                                {"inlet": ("AT", 40.0, 5.0), "outlet": ("S", 40)}),
     # Reactor / separator styles. The straight wall spans y 7.69..87.69.
     ("reactor", "plain"):     ("vessels", "Reactor",
                                {"feed": ("SERIES", "W", 30, 14, 0.4),
@@ -594,6 +613,77 @@ KIND_MAP = {
     # free end at (25, 30) is the tank connection.
     ("vent", "breather"):     ("piping", "Breather", {"inlet": ("S", 25.0)}),
 }
+
+
+# Corrections to the vendored stencils themselves.
+#
+# vendor_data/drawio/*.xml is a mirror of jgraph/drawio and stays byte-for-byte
+# what was vendored, so re-vendoring is a file copy and nothing else. Where a
+# shape is *wrong* — not merely a style this library does not use — the
+# correction lives here instead: an mxGraph fragment appended to the shape's
+# <foreground>, written in the stencil's own drawing language and converted by
+# the same converter as the rest of the shape. Provenance therefore stays in
+# this file beside KIND_MAP, and a re-vendor cannot quietly drop the fix,
+# because a shape a patch cannot find stops the generator (see build()).
+#
+# This is not a way to draw something the stencil set lacks. A symbol nothing
+# upstream draws is a hand-drawn primitive and belongs in symbols.py, under the
+# rules in CONTRIBUTING section 1.
+#
+# (stencil, shape) -> (what is wrong upstream, mxGraph fragment)
+STENCIL_PATCHES = {
+    # draw.io's "Globe Valve" is a byte-for-byte copy of its "Ball Valve":
+    # strip the name and the two shapes' XML is identical, down to the
+    # <connections>. Both draw the bowtie whose waist is pinched around an OPEN
+    # circle, which is the ball valve (ISO 10628-2 X8071). The globe valve
+    # (X8068) is that same seat drawn SOLID, and the contrast between the two is
+    # the whole of what tells a reader which valve is in the line — so shipping
+    # them identical is not a plain drawing, it is the wrong one.
+    #
+    # The patch fills the seat, and nothing else: the four arcs below are the
+    # stencil's own, quoted from its background and foreground paths in the
+    # order that walks the circle once, so the filled region is exactly the seat
+    # already drawn rather than a circle re-derived from it. The two triangles
+    # that make up the BODY keep their white interiors, which is what keeps this
+    # clear of the fully-darkened body that means "normally closed"
+    # (PIP PIC001 4.2.2.7).
+    ("valves", "Globe Valve"): (
+        "identical to Ball Valve upstream; ISO 10628-2 X8068 fills the seat",
+        '<fillcolor color="#000000"/>'
+        '<path>'
+        '<move x="31.9" y="19.7"/>'
+        '<arc rx="20" ry="20" x-axis-rotation="0" large-arc-flag="0" sweep-flag="1"'
+        ' x="66.2" y="19.7"/>'
+        '<arc rx="20" ry="20" x-axis-rotation="0" large-arc-flag="0" sweep-flag="1"'
+        ' x="66.2" y="40.5"/>'
+        '<arc rx="20" ry="20" x-axis-rotation="0" large-arc-flag="0" sweep-flag="1"'
+        ' x="31.9" y="40.5"/>'
+        '<arc rx="20" ry="20" x-axis-rotation="0" large-arc-flag="0" sweep-flag="1"'
+        ' x="31.9" y="19.7"/>'
+        '<close/>'
+        '</path>'
+        '<fillstroke/>'
+    ),
+}
+
+
+def patch_shape(stencil, name, el):
+    """Apply :data:`STENCIL_PATCHES` to one parsed <shape>, if it has one.
+
+    The fragment is appended to the shape's <foreground>, so it paints over
+    what the stencil already drew, exactly as a stencil author would have
+    written it in the first place.
+    """
+    entry = STENCIL_PATCHES.get((stencil, name))
+    if entry is None:
+        return el
+    _why, fragment = entry
+    foreground = el.find("foreground")
+    if foreground is None:
+        foreground = ET.SubElement(el, "foreground")
+    for op in ET.fromstring(f"<foreground>{fragment}</foreground>"):
+        foreground.append(op)
+    return el
 
 
 # Stencil-derived symbols this generator cannot emit, and where they live
@@ -747,11 +837,20 @@ def resolve_port(spec, constraints, w, h):
 
 
 def build():
-    # Index every shape once.
+    # Index every shape once, correcting the ones STENCIL_PATCHES names.
     index = {}
     for stencil in {m[0] for m in KIND_MAP.values()}:
         for name, el in shapes_in(STENCILS / f"{stencil}.xml"):
-            index[(stencil, name)] = el
+            index[(stencil, name)] = patch_shape(stencil, name, el)
+    # A patch that matches nothing is a fix that has silently stopped being
+    # applied -- an upstream rename, or a stencil this generator no longer
+    # reads. Either way the drawing quietly reverts, so say so instead.
+    missing = sorted(key for key in STENCIL_PATCHES if key not in index)
+    if missing:
+        raise SystemExit(
+            "STENCIL_PATCHES names shapes the generator did not load: "
+            + ", ".join(f"{stencil}:{shape}" for stencil, shape in missing)
+        )
 
     imports = "PortSeries, Symbol" if any(
         is_series(spec) for _, _, port_map in KIND_MAP.values() for spec in port_map.values()

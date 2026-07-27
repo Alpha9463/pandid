@@ -7,6 +7,13 @@ plus <rect>/<roundrect>/<ellipse>/<line>/<text>, painted by <fillstroke>/
 <stroke>/<fill>. Coordinates are already in the shape's ``w`` × ``h`` space, so
 they map straight onto an SVG ``viewBox="0 0 w h"``.
 
+A paint op names the operation, not the colour: what a fill comes out as is the
+canvas's current fill colour, which <fillcolor> sets and <save>/<restore>
+bracket. That is how a stencil says a part of itself is solid — a damper's
+pivot, a flow arrow's head — and, being state rather than a property of the op,
+it is also why a plain <fill> is a *background wash* in the shape's own fill
+colour rather than a request for black.
+
 `convert_shape(shape_el)` returns (inner_svg, width, height, constraints, aspect)
 where constraints is ``{name: (x_abs, y_abs)}`` from the stencil's <connections>
 and aspect is the stencil's own ``aspect`` attribute.
@@ -89,13 +96,36 @@ def _arc_to_path(x0, y0, rx, ry, phi_deg, fa, fs, x, y):
                      f"{round(ex, 4)} {round(ey, 4)}")
     return " ".join(parts)
 
-# Paint style for each paint op: (fill, stroke). Monochrome PFD convention —
-# outlines are transparent, only explicit <fill> makes a solid black shape.
+#: The one ink the sheet is drawn in. A P&ID is monochrome, so every stroke and
+#: every solid shape is this colour and nothing else is.
+INK = "#111"
+
+#: What the fill colour starts at. mxGraph paints a fill in the shape's
+#: ``fillColor``, which in draw.io defaults to the page's own white; on a
+#: monochrome sheet the equivalent is to let the paper through, which is what
+#: every outline in this library already does. It is a *state*, not a constant:
+#: <fillcolor> below is how a stencil asks for a solid shape instead.
+DEFAULT_FILL = "none"
+
+# Which of the two the mxGraph paint ops apply, as (fills, strokes). What each
+# one is painted *with* is the current fill colour and the ink — a paint op
+# names the operation, not the colour.
 _PAINT = {
-    "fillstroke": ("none", "#111"),
-    "stroke": ("none", "#111"),
-    "fill": ("#111", "none"),
+    "fillstroke": (True, True),
+    "stroke": (False, True),
+    "fill": (True, False),
 }
+
+
+def _fill_colour(named):
+    """The fill a stencil's ``<fillcolor color=...>`` asks for.
+
+    mxGraph takes a real colour here, plus the keywords ``"none"`` and
+    ``"stroke"``. The sheet has one ink, so the only distinction that survives
+    is transparent versus solid: every colour a stencil names for a fill is
+    naming the thing it wants drawn solid.
+    """
+    return DEFAULT_FILL if (named or "none").strip().lower() == "none" else INK
 
 
 def _num(el, attr, default=0.0):
@@ -119,7 +149,7 @@ def _text_svg(el, size):
     # so knock it out behind the glyph rather than let the line strike it.
     return (f'<text {common} fill="white" stroke="white" stroke-width="{round(size / 4, 3)}" '
             f'stroke-linejoin="round">{s}</text>'
-            f'<text {common} fill="#111">{s}</text>')
+            f'<text {common} fill="{INK}">{s}</text>')
 
 
 def _path_d(path_el) -> str:
@@ -188,28 +218,38 @@ def convert_shape(shape_el, stroke_width=2.0):
     out = []
     pending = []   # geometry accumulated since the last paint op
     font_size = 12.0
+    fill = DEFAULT_FILL   # canvas state, as mxGraph keeps it
+    saved = []            # <save>/<restore> stack for that state
 
     def flush(op):
         nonlocal pending
         if not pending:
             return
-        fill, stroke = _PAINT.get(op, ("none", "#111"))
+        fills, strokes = _PAINT.get(op, (False, True))
+        paint = fill if fills else "none"
+        stroke = INK if strokes else "none"
+        if paint == "none" and stroke == "none":
+            # Neither filled nor stroked: mxGraph draws nothing, so nor does
+            # this. Emitting an invisible element would leave the geometry in
+            # the SVG for every later reader of it to mistake for ink.
+            pending = []
+            return
         sw = f' stroke-width="{stroke_width}"' if stroke != "none" else ""
         for kind, data in pending:
             if kind == "path":
-                out.append(f'<path d="{data}" fill="{fill}" stroke="{stroke}"{sw}/>')
+                out.append(f'<path d="{data}" fill="{paint}" stroke="{stroke}"{sw}/>')
             elif kind == "rect":
                 x, y, rw, rh = data
                 out.append(f'<rect x="{x}" y="{y}" width="{rw}" height="{rh}" '
-                           f'fill="{fill}" stroke="{stroke}"{sw}/>')
+                           f'fill="{paint}" stroke="{stroke}"{sw}/>')
             elif kind == "rrect":
                 x, y, rw, rh, r = data
                 out.append(f'<rect x="{x}" y="{y}" width="{rw}" height="{rh}" rx="{r}" '
-                           f'fill="{fill}" stroke="{stroke}"{sw}/>')
+                           f'fill="{paint}" stroke="{stroke}"{sw}/>')
             elif kind == "ellipse":
                 x, y, rw, rh = data
                 out.append(f'<ellipse cx="{x+rw/2}" cy="{y+rh/2}" rx="{rw/2}" ry="{rh/2}" '
-                           f'fill="{fill}" stroke="{stroke}"{sw}/>')
+                           f'fill="{paint}" stroke="{stroke}"{sw}/>')
             elif kind == "line":
                 x1, y1, x2, y2 = data
                 out.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" '
@@ -238,6 +278,14 @@ def convert_shape(shape_el, stroke_width=2.0):
                                          _num(el, "x2"), _num(el, "y2"))))
             elif t == "fontsize":
                 font_size = _num(el, "size", 12)
+            elif t == "fillcolor":
+                # Canvas state, read at paint time — the stencils set it after
+                # the geometry it applies to and before the op that paints it.
+                fill = _fill_colour(el.get("color"))
+            elif t == "save":
+                saved.append(fill)
+            elif t == "restore":
+                fill = saved.pop() if saved else DEFAULT_FILL
             elif t == "text":
                 # <text> paints itself, so it never joins the pending geometry.
                 out.append(_text_svg(el, font_size))

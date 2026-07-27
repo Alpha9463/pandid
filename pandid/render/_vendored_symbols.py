@@ -23,7 +23,7 @@ def register_vendored(registry):
 
     # draw.io valves:Globe Valve (aspect=variable) -> valve/globe
     registry.register('valve', Symbol(
-        svg='<g id="sym_valve_globe"><g transform="scale(0.25)"><path d="M 0.0 0.0 L 31.9 19.7 A 20.0 20.0 0.0 0 1 66.2 19.7 L 98.0 0.0 L 98.0 60.0 L 66.2 40.5 A 20.0 20.0 0.0 0 1 31.9 40.5 L 0.0 60.0 Z" fill="none" stroke="#111" stroke-width="8.0"/><path d="M 31.9 40.5 A 20.0 20.0 0.0 0 1 31.9 19.7 M 66.2 19.7 A 20.0 20.0 0.0 0 1 66.2 40.5" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
+        svg='<g id="sym_valve_globe"><g transform="scale(0.25)"><path d="M 0.0 0.0 L 31.9 19.7 A 20.0 20.0 0.0 0 1 66.2 19.7 L 98.0 0.0 L 98.0 60.0 L 66.2 40.5 A 20.0 20.0 0.0 0 1 31.9 40.5 L 0.0 60.0 Z" fill="none" stroke="#111" stroke-width="8.0"/><path d="M 31.9 40.5 A 20.0 20.0 0.0 0 1 31.9 19.7 M 66.2 19.7 A 20.0 20.0 0.0 0 1 66.2 40.5" fill="none" stroke="#111" stroke-width="8.0"/><path d="M 31.9 19.7 A 20.0 20.0 0.0 0 1 66.2 19.7 A 20.0 20.0 0.0 0 1 66.2 40.5 A 20.0 20.0 0.0 0 1 31.9 40.5 A 20.0 20.0 0.0 0 1 31.9 19.7 Z" fill="#111" stroke="#111" stroke-width="8.0"/></g></g>',
         width=24.5, height=15.0,
         ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.2, 0.0)},
     ), 'globe')
@@ -565,7 +565,7 @@ def register_vendored(registry):
 
     # draw.io piping:Damper (aspect=variable) -> fitting/damper
     registry.register('fitting', Symbol(
-        svg='<g id="sym_fitting_damper"><g transform="scale(0.5)"><rect x="0.0" y="3.0" width="50.0" height="14.0" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 50.0 0.0 L 50.0 20.0 M 0.0 0.0 L 0.0 20.0 M 32.0 5.0 L 18.0 15.0" fill="none" stroke="#111" stroke-width="4.0"/><ellipse cx="25.0" cy="10.0" rx="3.0" ry="3.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        svg='<g id="sym_fitting_damper"><g transform="scale(0.5)"><rect x="0.0" y="3.0" width="50.0" height="14.0" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 50.0 0.0 L 50.0 20.0 M 0.0 0.0 L 0.0 20.0 M 32.0 5.0 L 18.0 15.0" fill="none" stroke="#111" stroke-width="4.0"/><ellipse cx="25.0" cy="10.0" rx="3.0" ry="3.0" fill="#111" stroke="#111" stroke-width="4.0"/></g></g>',
         width=25.0, height=10.0,
         ports={'inlet': (0.0, 5.0), 'outlet': (25.0, 5.0)},
     ), 'damper')
@@ -712,16 +712,16 @@ def register_vendored(registry):
 
     # draw.io vessels:Tank (Floating Roof) (aspect=variable) -> tank/floating_roof
     registry.register('tank', Symbol(
-        svg='<g id="sym_tank_floating_roof"><path d="M 0.0 0.0 L 0.0 70.0 L 100.0 70.0 L 100.0 0.0 L 95.0 0.0 L 95.0 5.0 L 5.0 5.0 L 5.0 0.0 Z" fill="#111" stroke="none"/><path d="M 0.0 0.0 L 0.0 70.0 L 100.0 70.0 L 100.0 0.0 M 5.0 0.0 L 5.0 5.0 L 95.0 5.0 L 95.0 0.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_tank_floating_roof"><path d="M 0.0 0.0 L 0.0 70.0 L 100.0 70.0 L 100.0 0.0 M 5.0 0.0 L 5.0 5.0 L 95.0 5.0 L 95.0 0.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=70.0,
-        ports={'inlet': (30.0, 0.0), 'outlet': (50.0, 70.0)},
+        ports={'inlet': (30.0, 5.0), 'outlet': (50.0, 70.0)},
     ), 'floating_roof')
 
     # draw.io vessels:Storage Sphere (aspect=variable) -> tank/sphere
     registry.register('tank', Symbol(
         svg='<g id="sym_tank_sphere"><rect x="34.0" y="78.0" width="12.0" height="12.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="18.0" y="0.0" width="12.0" height="12.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="50.0" y="0.0" width="12.0" height="12.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 45.0 L 0.0 100.0 L 80.0 100.0 L 80.0 45.0 M 15.0 0.0 L 33.0 0.0 M 47.0 0.0 L 65.0 0.0 M 31.0 90.0 L 49.0 90.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="40.0" cy="45.0" rx="40.0" ry="40.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=100.0,
-        ports={'inlet': (40.0, 0.0), 'outlet': (40.0, 100.0)},
+        ports={'inlet': (40.0, 5.0), 'outlet': (40.0, 100.0)},
     ), 'sphere')
 
     # draw.io vessels:Reactor (aspect=variable) -> reactor/plain
@@ -750,21 +750,21 @@ def register_vendored(registry):
 
     # draw.io separators:Separator (Cyclone) (aspect=variable) -> separator/cyclone
     registry.register('separator', Symbol(
-        svg='<g id="sym_separator_cyclone"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 35.0 15.0 A 30.0 15.0 0.0 0 1 65.0 30.0 A 30.0 15.0 0.0 0 1 35.0 45.0 A 10.0 5.0 0.0 0 1 25.9681 42.5693 A 10.0 5.0 0.0 0 1 25.9681 37.4407 A 10.0 5.0 0.0 0 1 35.0 35.01 A 30.0 15.0 0.0 0 1 61.6252 42.3935 A 30.0 15.0 0.0 0 1 61.6252 57.6165 A 30.0 15.0 0.0 0 1 35.0 65.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 35.0 63.0 L 35.0 67.0 L 30.0 65.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_separator_cyclone"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 35.0 15.0 A 30.0 15.0 0.0 0 1 65.0 30.0 A 30.0 15.0 0.0 0 1 35.0 45.0 A 10.0 5.0 0.0 0 1 25.9681 42.5693 A 10.0 5.0 0.0 0 1 25.9681 37.4407 A 10.0 5.0 0.0 0 1 35.0 35.01 A 30.0 15.0 0.0 0 1 61.6252 42.3935 A 30.0 15.0 0.0 0 1 61.6252 57.6165 A 30.0 15.0 0.0 0 1 35.0 65.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 35.0 63.0 L 35.0 67.0 L 30.0 65.0 Z" fill="#111" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=120.0,
         ports={'feed': (0.0, 12.0), 'vapor': (40.0, 0.0), 'liquid': (40.0, 120.0)},
     ), 'cyclone')
 
     # draw.io separators:Gravity Separator, Settling Chamber (aspect=variable) -> separator/gravity
     registry.register('separator', Symbol(
-        svg='<g id="sym_separator_gravity"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z M 40.0 10.0 L 40.0 65.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 38.0 65.0 L 42.0 65.0 L 40.0 70.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_separator_gravity"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z M 40.0 10.0 L 40.0 65.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 38.0 65.0 L 42.0 65.0 L 40.0 70.0 Z" fill="#111" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=120.0,
         ports={'feed': (0.0, 12.0), 'vapor': (80.0, 12.0), 'liquid': (40.0, 120.0)},
     ), 'gravity')
 
     # draw.io separators:Separator (Wet Scrubber) (aspect=variable) -> separator/scrubber
     registry.register('separator', Symbol(
-        svg='<g id="sym_separator_scrubber"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 40.0 10.0 L 40.0 65.0 M 50.0 10.0 A 5.0 5.0 0.0 0 0 55.0 15.0 A 5.0 5.0 0.0 0 0 60.0 10.0 M 60.0 10.0 A 5.0 5.0 0.0 0 0 65.0 15.0 A 5.0 5.0 0.0 0 0 70.0 10.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 38.0 65.0 L 42.0 65.0 L 40.0 70.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_separator_scrubber"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 40.0 10.0 L 40.0 65.0 M 50.0 10.0 A 5.0 5.0 0.0 0 0 55.0 15.0 A 5.0 5.0 0.0 0 0 60.0 10.0 M 60.0 10.0 A 5.0 5.0 0.0 0 0 65.0 15.0 A 5.0 5.0 0.0 0 0 70.0 10.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 38.0 65.0 L 42.0 65.0 L 40.0 70.0 Z" fill="#111" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=120.0,
         ports={'feed': (0.0, 12.0), 'vapor': (80.0, 12.0), 'liquid': (40.0, 120.0)},
     ), 'scrubber')
