@@ -184,7 +184,7 @@ and is kept working.
   element, so it prints and exports to PDF at exactly its ISO size.
 - `jump_direction="vertical" | "horizontal"` on `to_svg()` / `render()` selects
   which of two crossing lines gets the semicircle hop.
-- 115 registered `(kind, variant)` symbols following ISO 10628-2 / ISA-5.1,
+- 137 registered `(kind, variant)` symbols following ISO 10628-2 / ISA-5.1,
   generated from the draw.io / diagrams.net P&ID stencils (Apache-2.0) by
   `scripts/vendor_symbols.py`. Feed/Product flags, Mixer, Splitter and the
   instrument balloons are hand-drawn originals.
@@ -200,6 +200,25 @@ and is kept working.
   `peristaltic` and `submersible`, `Filter` gains `ion_exchange` for water
   treatment, and `Valve` gains `bleed`, the small drain valve piped down the
   page.
+- A metered line is drawable end to end. Twenty-two more symbols come from two
+  stencil files the project had never taken, `flow_sensors.xml` and
+  `piping.xml`. `Fitting(variant="venturi")` is the primary element an FE
+  balloon is drawn against most often — a converging throat and a diverging
+  recovery cone, closed by a flange face at each end — and it arrives with
+  `flow_nozzle`, `coriolis`, `vortex`, `ultrasonic`, `turbine_meter`,
+  `positive_displacement`, `v_cone`, `wedge`, `target`, `pitot` and
+  `averaging_pitot`. From the piping file: `strainer_y`, `strainer_basket` and
+  `strainer_duplex`, which lie in the run rather than standing across it the way
+  the two existing strainers do; `bellows`, the expansion joint a piping drawing
+  draws; `damper`; and `spool`, the length of pipe taken out to break a line.
+  `Reducer` gains `concentric`, a trapezoid where the default is a cone tapering
+  to a point, and `eccentric`, flat on top with its small end on a lowered
+  centreline — the reducer a pump suction is drawn with, and one the library
+  could not draw at all. `Vent` gains `exhaust_head` and `breather`. All of them
+  are drawn to the in-line family's sheet size: both stencils lay their devices
+  out on a 50-unit module where `valves.xml` uses about 100, so they are scaled
+  by half rather than by a quarter and a venturi comes out 25 x 20 beside a
+  24.5 x 15 valve.
 - The in-line families are drawn at the size a real sheet draws them. draw.io
   cuts its stencils for a diagram rather than for a drawing, and at the scale
   they were first vendored at a gate valve came out 49 units — 13 mm on an A3

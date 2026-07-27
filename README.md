@@ -133,6 +133,8 @@ fs.add(units.Separator("V-2", variant="cyclone"))      # default (knock-out drum
 fs.add(units.Vessel("V-3", variant="jacketed"))        # default, dished, jacketed, skirted, dome, horizontal
 fs.add(units.Column("T-1", variant="packed"))          # default (plain shell), packed
 fs.add(units.Filter("F-1", variant="ion_exchange"))    # default, gas, press, rotary, ion_exchange
+fs.add(units.Reducer("RE-1", variant="eccentric"))     # default, concentric, eccentric
+fs.add(units.Vent("VT-1", variant="exhaust_head"))     # default, exhaust_head, breather
 fs.add(units.Fitting("ST-1", variant="strainer"))      # see "In-line fittings" below
 ```
 
@@ -194,16 +196,36 @@ overflows and leaves there as the tower's bottoms product, so the sump line
 needs no splitter that the plant does not have.
 
 **In-line fittings.** Every in-line device is a pair of faces on a line, so
-`Fitting` is one class and the variant picks the device: `strainer`, `strainer_cone`, `orifice`, `rotameter`, `rupture_disc`,
-`sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `static_mixer`,
+`Fitting` is one class and the variant picks the device: `strainer`, `strainer_cone`, `strainer_y`,
+`strainer_basket`, `strainer_duplex`, `orifice`, `rotameter`, `rupture_disc`,
+`sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `bellows`,
+`damper`, `spool`, `static_mixer`,
 `hose`, `coupling`, `clamped_coupling`, `flange` (the default), and the flame
 arrestors (`flame_arrestor` plus `_explosion_proof` / `_detonation_proof` /
 `_fire_resistant`).
 
+**Primary flow elements.** The device an FE balloon reads is in the run like any
+other fitting, so it is a `Fitting` variant too: `venturi`, `flow_nozzle`,
+`coriolis`, `vortex`, `ultrasonic`, `turbine_meter`, `positive_displacement`,
+`v_cone`, `wedge`, `target`, `pitot` and `averaging_pitot`. Attach the balloon
+to the element with `offset=0` to draw it sitting on the line.
+
+```python
+fe = fs.add(units.Fitting("FE-101", variant="venturi"))
+ft = fs.add_instrument("FT", 101, on=fe, at="N", offset=70)
+```
+
+`Reducer` has three variants. `concentric` is the trapezoid a piping drawing
+draws; `eccentric` is flat on top with its small end on a lowered centreline,
+which is what goes on a pump suction so vapour cannot collect against the roof
+of the line. The `default` is a cone tapering to a point.
+
 `Ejector` is separate because it has three connections (`motive`, `suction`,
 `discharge`). `Vent` and `Funnel` have one each: `Vent` is a stack open to
 atmosphere that a PSV tailpipe or a tank breather terminates on, and `Funnel` is
-a manual charging point feeding the line.
+a manual charging point feeding the line. `Vent(variant="exhaust_head")` is the
+silencing hood on a steam or relief vent and `Vent(variant="breather")` is the
+tank conservation vent.
 
 ## Automatic layout and recycles
 
