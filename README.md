@@ -8,9 +8,9 @@ routes every stream, and draws industry-standard symbols.
 The distribution is **`pandid`**, how "P&ID" is said out loud. It imports as
 **`pandid`**.
 
-[![Distillation train](https://raw.githubusercontent.com/Alpha9463/py-chemengg/main/docs/gallery/03_distillation_train.png)](https://github.com/Alpha9463/py-chemengg/blob/main/docs/gallery/README.md)
+[![Distillation train](https://raw.githubusercontent.com/Alpha9463/pandid/main/docs/gallery/03_distillation_train.png)](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md)
 
-<sub>[`examples/03_distillation_train.py`](https://github.com/Alpha9463/py-chemengg/blob/main/examples/03_distillation_train.py). See the [gallery](https://github.com/Alpha9463/py-chemengg/blob/main/docs/gallery/README.md) for all eleven.</sub>
+<sub>[`examples/03_distillation_train.py`](https://github.com/Alpha9463/pandid/blob/main/examples/03_distillation_train.py). See the [gallery](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md) for all eleven.</sub>
 
 ## Install
 
@@ -150,10 +150,10 @@ no physical width or height in millimetres is controlled.
 
 | Where | What |
 |---|---|
-| [Example gallery](https://github.com/Alpha9463/py-chemengg/blob/main/docs/gallery/README.md) | all ten examples rendered, with what each one demonstrates |
-| [API reference](https://github.com/Alpha9463/py-chemengg/blob/main/docs/api.md) | every public class, port and option, verified against the source |
-| [Contributing](https://github.com/Alpha9463/py-chemengg/blob/main/CONTRIBUTING.md) | setup, the four gates, and the conventions that are easy to get wrong |
-| [Changelog](https://github.com/Alpha9463/py-chemengg/blob/main/CHANGELOG.md) | what is in this release |
+| [Example gallery](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md) | all ten examples rendered, with what each one demonstrates |
+| [API reference](https://github.com/Alpha9463/pandid/blob/main/docs/api.md) | every public class, port and option, verified against the source |
+| [Contributing](https://github.com/Alpha9463/pandid/blob/main/CONTRIBUTING.md) | setup, the four gates, and the conventions that are easy to get wrong |
+| [Changelog](https://github.com/Alpha9463/pandid/blob/main/CHANGELOG.md) | what is in this release |
 
 ---
 
@@ -190,13 +190,13 @@ Classes include: `Feed`, `Product`, `Pump`, `Compressor`, `Blower`, `Valve`,
 `Funnel`, `Furnace`, `Turbine`, `Filter`, `Dryer`, `Conveyor`, and
 `Instrument`. `Conveyor` is sized by `length=` rather than `width=`: its belt
 grows and its rollers stay round. The
-[API reference](https://github.com/Alpha9463/py-chemengg/blob/main/docs/api.md#units-and-ports) lists every class's ports and every
+[API reference](https://github.com/Alpha9463/pandid/blob/main/docs/api.md#units-and-ports) lists every class's ports and every
 registered variant.
 
 **Equipment the catalogue does not have.** A `units.Unit` subclass declaring its
 own `kind` and `PORTS`, with a `Symbol` registered for that kind, is laid out,
 routed and drawn like any shipped class:
-[Custom equipment](https://github.com/Alpha9463/py-chemengg/blob/main/docs/api.md#custom-equipment).
+[Custom equipment](https://github.com/Alpha9463/pandid/blob/main/docs/api.md#custom-equipment).
 It is for genuinely custom plant. Anything standard is better asked for as a
 stencil mapping, so it ships for everyone and stays visually consistent.
 
@@ -339,7 +339,7 @@ drum.nozzle("feed", "N")        # always from above, however the header is laid 
 
 Pinned and auto-placed units mix freely. A port sits at a fixed *fraction* of
 its symbol's box, so lining two items up means matching those fractions rather
-than their corners. See [example 06](https://github.com/Alpha9463/py-chemengg/blob/main/docs/gallery/README.md#06--column-reflux-and-reboiler).
+than their corners. See [example 06](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md#06--column-reflux-and-reboiler).
 
 ## Instrumentation & signals
 
@@ -724,7 +724,7 @@ pandid validate plant.yaml && pandid draw plant.yaml -o plant.pdf
 
 Runnable scripts in `examples/`, each usable from the repo root or from
 `examples/` itself. All eleven are rendered in the
-[gallery](https://github.com/Alpha9463/py-chemengg/blob/main/docs/gallery/README.md).
+[gallery](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md).
 
 | Script | Demonstrates |
 |---|---|
@@ -760,7 +760,7 @@ computed by the layout engine), so layout is idempotent.
 
 ## Contributing
 
-See [CONTRIBUTING.md](https://github.com/Alpha9463/py-chemengg/blob/main/CONTRIBUTING.md). The gates are `pytest`, `ruff check .`,
+See [CONTRIBUTING.md](https://github.com/Alpha9463/pandid/blob/main/CONTRIBUTING.md). The gates are `pytest`, `ruff check .`,
 `ruff format --check tests` and `mypy pandid`.
 
 ## Licence & attribution
@@ -786,7 +786,7 @@ additional field-of-use restriction on top of Apache-2.0, naming Atlassian
 products and marketplace distribution; it does not reach a drawing you make with
 `pandid`, and `NOTICE` reproduces it in full for anyone redistributing the
 symbols themselves.
-[`NOTICE`](https://github.com/Alpha9463/py-chemengg/blob/main/NOTICE)
+[`NOTICE`](https://github.com/Alpha9463/pandid/blob/main/NOTICE)
 says exactly which files are which. The full texts are in
-[`LICENSE`](https://github.com/Alpha9463/py-chemengg/blob/main/LICENSE) and
-[`LICENSE-APACHE`](https://github.com/Alpha9463/py-chemengg/blob/main/LICENSE-APACHE).
+[`LICENSE`](https://github.com/Alpha9463/pandid/blob/main/LICENSE) and
+[`LICENSE-APACHE`](https://github.com/Alpha9463/pandid/blob/main/LICENSE-APACHE).
