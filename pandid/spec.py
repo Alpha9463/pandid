@@ -253,11 +253,12 @@ _VARIABLE_PORTS = {
 _KIND_SIZES = {
     "length": ("Conveyor",),
 }
-# Text fields only some classes carry. ``normal_position`` is where a valve sits
-# with the plant running, and a darkened body is what a P&ID says it with; a
-# pump has no such position, so naming one on it is a statement nothing draws.
+# Text fields only some classes carry. ``normal_position`` is where a valve or a
+# blind sits with the plant running — a darkened body says it for the one and a
+# solid disc for the other; a pump has no such position, so naming one on it is
+# a statement nothing draws.
 _KIND_TEXT = {
-    "normal_position": ("Valve",),
+    "normal_position": ("Valve", "Fitting"),
 }
 
 
@@ -844,7 +845,7 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
         # Always written: it is how long the belt is, which is the whole of a
         # conveyor's geometry, and nothing else on the entry records it.
         entry["length"] = unit.length
-    elif isinstance(unit, unit_types.Valve):
+    elif isinstance(unit, unit_types._NormallyPositioned):
         # Only when closed. "Open" is not a convention a P&ID draws, it is the
         # absence of one, so writing it down would be writing the default down.
         if unit.normal_position != "open":

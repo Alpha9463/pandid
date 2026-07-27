@@ -405,11 +405,21 @@ _BUILT_TO_SIZE = {"conveyor": lambda unit: conveyor_symbol(unit.length)}
 
 
 # ---------------------------------------------------------------------------
+# Devices drawn in a normal position.
+#
 # Normally closed valves: PIP PIC001 4.2.2.7 draws one with its body darkened
 # solid. Not an ISA-5.1 convention -- ISA-5.1 says nothing about valve fill and
 # leaves manual block valve depiction to the piping group -- and not an
 # ISO 10628 one either, so a sheet that draws one owes its reader a legend
 # entry (ISA-5.1 2.8.1(b)(1), 2.8.2, 5.2.5). See :class:`pandid.units.Valve`.
+#
+# A spectacle blind is the other case, and it is not the same one. Its position
+# is not a mark applied to a symbol; it is *which symbol*, because the device is
+# two discs and the drawing says which of them is in the line by filling it.
+# The stencil set draws both, so the closed state is a registered shape rather
+# than a derived one -- see ``SymbolRegistry.register_closed``. Nothing has to
+# be declared on a legend for it: a solid disc blanking a line is the device's
+# own long-standing convention rather than an extension of anybody's standard.
 # ---------------------------------------------------------------------------
 
 #: Valve variants whose body may be darkened. Filling a body leaves only its
@@ -456,18 +466,40 @@ _BODY_INK = "#111"
 _FIRST_PATH = re.compile(r"<path\b[^>]*>")
 
 
-def closed_marking(unit) -> str:
+def closed_marking(unit, registry=None) -> str:
     """How a unit's normally closed position is drawn, ``""`` when it is not one.
 
-    ``"fill"`` darkens the body (PIP PIC001 4.2.2.7); ``"NC"`` is the
-    abbreviation written beside the valve for a body that cannot carry the fill
-    (4.2.2.8). The two are one decision made in one place, so the renderer
-    cannot letter a valve the registry has already darkened, or darken one it
-    is about to letter.
+    ``"stencil"`` swaps in a second drawing the stencil author already made --
+    a spectacle blind's two states are two shapes, and the solid disc is the
+    device's own convention rather than anything applied to it. ``"fill"``
+    darkens the body (PIP PIC001 4.2.2.7), and ``"NC"`` is the abbreviation
+    written beside a valve whose body cannot carry the fill (4.2.2.8).
+
+    All three are one decision made in one place, so the renderer cannot letter
+    a valve the registry has already darkened, or darken one it is about to
+    letter. ``registry`` is the catalogue to answer against, since which
+    devices have a second drawing is a fact about the symbols on hand.
     """
     if getattr(unit, "normal_position", "open") != "closed":
         return ""
-    return "fill" if getattr(unit, "variant", "") in NC_DARKENS else "NC"
+    variant = getattr(unit, "variant", "")
+    reg = default_registry if registry is None else registry
+    if reg.closed_symbol(unit.kind, variant) is not None:
+        return "stencil"
+    # The fill and the abbreviation are the *valve* conventions of PIP PIC001,
+    # and nothing else on a sheet is read by them. So a closed anything-else
+    # whose variant has no second drawing has no way at all to say so. The unit
+    # refuses that at construction; it can still be reached by assigning
+    # ``variant`` afterwards, and drawing the open symbol would be the silent
+    # failure -- an issued sheet showing a line that is open when it is blanked.
+    if unit.kind != "valve":
+        raise ValueError(
+            f"{getattr(unit, 'name', unit.kind)}: {unit.kind}/{variant} is drawn one "
+            f"way, so nothing can show it normally closed. Either it is the wrong "
+            f"variant for a device that isolates a line, or normal_position should "
+            f"be 'open'."
+        )
+    return "fill" if variant in NC_DARKENS else "NC"
 
 
 def darkened(sym: Symbol) -> Symbol:
@@ -507,27 +539,62 @@ class SymbolRegistry:
         # instance per fixed symbol; a derived one has to be shared the same way
         # or every nozzle lookup rebuilds the artwork.
         self._darkened: dict[tuple[str, str], Symbol] = {}
+        # Second drawings, for the devices the stencil set draws in two
+        # positions. Not a variant: one (kind, variant) with two states, and
+        # which one is drawn comes off the unit's ``normal_position``.
+        self._closed: dict[tuple[str, str], Symbol] = {}
         self._register_defaults()
 
     def register(self, kind: str, template: Symbol, variant: str = "default") -> None:
         self._symbols[(kind, variant)] = template
         self._darkened.pop((kind, variant), None)
+        self._closed.pop((kind, variant), None)
+
+    def register_closed(self, kind: str, template: Symbol, variant: str = "default") -> None:
+        """The drawing for ``(kind, variant)`` declared normally closed.
+
+        For a device whose closed state is a *shape of its own* rather than a
+        fill applied to the open one: a spectacle blind is two discs and the
+        solid one is whichever is in the line. Registered against the same
+        ``(kind, variant)`` as :meth:`register`, so the closed state never
+        becomes a second variant name for one device, and always after it,
+        since re-registering the open drawing drops the pairing.
+        """
+        if (kind, variant) not in self._symbols:
+            raise ValueError(
+                f"{kind}/{variant} has no open drawing to be the closed state of; "
+                f"register() it first"
+            )
+        self._closed[(kind, variant)] = template
+
+    def closed_symbol(self, kind: str, variant: str = "default") -> Symbol | None:
+        """``(kind, variant)``'s normally closed drawing, or None if it has none."""
+        return self._closed.get((kind, variant))
+
+    def closed_variants(self, kind: str) -> list[str]:
+        """Every variant of a kind that is drawn in two positions, A-Z."""
+        return sorted(variant for (k, variant) in self._closed if k == kind)
 
     def for_unit(self, unit) -> Symbol:
         """The symbol to draw ``unit`` with, built to its size where it has one.
 
         :meth:`get` answers for a ``(kind, variant)``, which is everything a
         fixed drawing depends on. A conveyor's artwork depends on the unit as
-        well, since it is made to its belt run, and a valve's on whether it is
-        declared normally closed, which darkens the body; the lookup still runs
-        either way, so a variant name nobody registered is still rejected.
+        well, since it is made to its belt run, and a valve's or a blind's on
+        whether it is declared normally closed -- which darkens the one and
+        swaps the other for the second shape its stencil set draws; the lookup
+        still runs either way, so a variant name nobody registered is still
+        rejected.
         """
         variant = getattr(unit, "variant", "default")
         sym = self.get(unit.kind, variant)
         build = _BUILT_TO_SIZE.get(unit.kind)
         if build is not None:
             return build(unit)
-        if closed_marking(unit) == "fill":
+        mark = closed_marking(unit, self)
+        if mark == "stencil":
+            return self._closed[(unit.kind, variant)]
+        if mark == "fill":
             key = (unit.kind, variant)
             if key not in self._darkened:
                 self._darkened[key] = darkened(sym)

@@ -6,7 +6,10 @@ A dev tool for reviewing the icon library visually:
     python scripts/symbol_sheet.py [out.svg]
 
 Each cell shows one (kind, variant) symbol scaled to fit, its name, and a red
-dot at every named port anchor. Purely for inspection — not part of the package.
+dot at every named port anchor. A device drawn in two positions — a spectacle
+blind — gets a cell for each, since the second drawing is a symbol of its own
+and nothing else on this sheet would show it. Purely for inspection — not part
+of the package.
 """
 import sys
 import pathlib
@@ -28,7 +31,12 @@ def inner(svg: str) -> str:
 
 def main():
     out = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else pathlib.Path("symbol_sheet.svg")
-    items = sorted(R._symbols.items(), key=lambda kv: (kv[0][0], kv[0][1]))
+    items = []
+    for (kind, variant), sym in sorted(R._symbols.items()):
+        items.append(((kind, variant), "", sym))
+        shut = R.closed_symbol(kind, variant)
+        if shut is not None:
+            items.append(((kind, variant), " (closed)", shut))
     rows = (len(items) + COLS - 1) // COLS
     W, H = COLS * CELL_W, rows * CELL_H + 60
 
@@ -39,7 +47,7 @@ def main():
          f'<text x="20" y="36" font-family="sans-serif" font-size="22" '
          f'font-weight="bold">pandid symbol library — {len(items)} symbols</text>']
 
-    for idx, ((kind, variant), sym) in enumerate(items):
+    for idx, ((kind, variant), position, sym) in enumerate(items):
         r, c = divmod(idx, COLS)
         ox, oy = c * CELL_W, r * CELL_H + 60
         L.append(f'<rect x="{ox}" y="{oy}" width="{CELL_W}" height="{CELL_H}" '
@@ -57,7 +65,7 @@ def main():
         for px, py in anchors:
             ax, ay = gx + px * s, gy + py * s
             L.append(f'<circle cx="{ax:.1f}" cy="{ay:.1f}" r="3.2" fill="#d1495b"/>')
-        name = kind if variant == "default" else f"{kind}/{variant}"
+        name = (kind if variant == "default" else f"{kind}/{variant}") + position
         L.append(f'<text x="{ox + CELL_W/2}" y="{oy + CELL_H - 14}" font-family="sans-serif" '
                  f'font-size="13" text-anchor="middle" font-weight="bold">{name}</text>')
         L.append(f'<text x="{ox + CELL_W/2}" y="{oy + CELL_H - 30}" font-family="sans-serif" '

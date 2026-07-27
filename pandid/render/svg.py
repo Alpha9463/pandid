@@ -973,7 +973,7 @@ class SvgRenderer:
                     self._unit_label_item(u, f, x, y, u_width, u_height, safe_name))
                 # A body that cannot carry the darkening says so in letters
                 # instead; see PIP PIC001 4.2.2.8 and _nc_label_item.
-                if closed_marking(u) == "NC":
+                if closed_marking(u, self.registry) == "NC":
                     label_items.append(
                         self._nc_label_item(u, f, x, y, u_width, u_height, rot))
         lines.append('  </g>')

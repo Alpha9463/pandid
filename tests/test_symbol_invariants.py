@@ -1230,6 +1230,50 @@ def test_the_globe_and_ball_valves_are_not_one_drawing():
     assert globe.port_faces == ball.port_faces
 
 
+def test_every_paired_shape_is_one_device_in_two_positions():
+    """``CLOSED_SHAPES`` names the second drawing of a device ``KIND_MAP``
+    already draws -- a spectacle blind's blanked state -- and the generator
+    refuses a pair whose boxes, nozzles or aspect disagree, or whose artwork
+    does not.
+
+    Asserted here over the *shipped* registry, so the claim holds without
+    regenerating anything. The two drawings are also required to put their ink
+    in the same places: that is what carries every geometry invariant above,
+    proven for the open drawing, onto the closed one, which the parametrized
+    sweep does not reach because it is not a variant of its own."""
+    vendor = _script("vendor_symbols")
+    assert vendor.CLOSED_SHAPES, "the table is where a two-position device is recorded"
+    for (kind, variant), shape in vendor.CLOSED_SHAPES.items():
+        assert (kind, variant) in vendor.KIND_MAP, f"{kind}/{variant} is drawn by nothing"
+        stencil = vendor.KIND_MAP[(kind, variant)][0]
+        names = {name for name, _ in vendor.shapes_in(vendor.STENCILS / f"{stencil}.xml")}
+        assert shape in names, f"{stencil}.xml has no shape {shape!r}"
+        opened = default_registry.get(kind, variant)
+        closed = default_registry.closed_symbol(kind, variant)
+        assert closed is not None, f"{kind}/{variant} registered no closed drawing"
+        assert (closed.width, closed.height) == (opened.width, opened.height)
+        assert closed.ports == opened.ports
+        assert closed.port_faces == opened.port_faces
+        assert closed.stretchable == opened.stretchable
+        assert closed.id_suffix and not opened.id_suffix, "two drawings, two <defs> ids"
+        assert _artwork(closed) != _artwork(opened), "the position must be drawn"
+        assert _collect_segments(closed.svg) == _collect_segments(opened.svg), (
+            f"{kind}/{variant}: the two positions must differ in ink alone, so that "
+            f"every port checked against the open drawing is checked against both"
+        )
+
+
+def test_a_closed_drawing_may_not_be_registered_without_an_open_one():
+    """The pairing is what keeps the closed state from becoming a variant name
+    of its own, so a closed drawing with nothing to be the closed state *of* is
+    refused rather than filed under a key nobody looks up."""
+    from pandid.render.symbols import SymbolRegistry
+
+    sym = Symbol(svg='<g id="sym_x"/>', width=10.0, height=10.0, ports={"inlet": (0.0, 5.0)})
+    with pytest.raises(ValueError, match="no open drawing"):
+        SymbolRegistry().register_closed("fitting", sym, "no_such_variant")
+
+
 def _artwork(sym: Symbol) -> str:
     """A symbol's drawing, with the id that names it stripped off."""
     return re.sub(r'id="[^"]*"', "", sym.svg)
