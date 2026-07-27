@@ -10,7 +10,7 @@ The distribution is **`pandid`**, how "P&ID" is said out loud. It imports as
 
 [![Distillation train](https://raw.githubusercontent.com/Alpha9463/py-chemengg/main/docs/gallery/03_distillation_train.png)](https://github.com/Alpha9463/py-chemengg/blob/main/docs/gallery/README.md)
 
-<sub>[`examples/03_distillation_train.py`](https://github.com/Alpha9463/py-chemengg/blob/main/examples/03_distillation_train.py). See the [gallery](https://github.com/Alpha9463/py-chemengg/blob/main/docs/gallery/README.md) for all ten.</sub>
+<sub>[`examples/03_distillation_train.py`](https://github.com/Alpha9463/py-chemengg/blob/main/examples/03_distillation_train.py). See the [gallery](https://github.com/Alpha9463/py-chemengg/blob/main/docs/gallery/README.md) for all eleven.</sub>
 
 ## Install
 
@@ -642,7 +642,7 @@ pandid validate plant.yaml && pandid draw plant.yaml -o plant.pdf
 ## Examples
 
 Runnable scripts in `examples/`, each usable from the repo root or from
-`examples/` itself. All ten are rendered in the
+`examples/` itself. All eleven are rendered in the
 [gallery](https://github.com/Alpha9463/py-chemengg/blob/main/docs/gallery/README.md).
 
 | Script | Demonstrates |
@@ -657,6 +657,7 @@ Runnable scripts in `examples/`, each usable from the repo root or from
 | `08_from_data.py` | the whole flowsheet declared as data and built with `Flowsheet.from_dict()` |
 | `09_line_numbers.py` | full line numbers (`8"-P-1001-A1A`) carried through in-line fittings and broken at two spec breaks, with the stream table headed by them |
 | `10_ethanol_pfd.py` | a whole issue-ready sheet on a real `page_size="A3"` page: beer column with condenser, reflux drum and kettle reboiler, filter-press dewatering, six off-page connectors, equipment list, utilities summary and sectioned stream table |
+| `11_ethanol_pid.py` | a whole issued P&ID on a fixed A3 sheet: line numbers on every line, hand-isolated control valve stations, five loops closing on an actuator with one cascade, alarm pairs and a repeated interlock square |
 
 ## Architecture
 

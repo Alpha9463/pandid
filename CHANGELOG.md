@@ -305,8 +305,12 @@ and is kept working.
 - GitHub Actions CI: `ruff check`, `ruff format --check tests`, `mypy pfd`
   (blocking), and `pytest` on Python 3.10, 3.11, 3.12 and 3.13.
 - `pre-commit` configuration mirroring the CI lint gates.
-- Ten runnable examples in `examples/`, each usable from the repository root
-  or from `examples/` itself, and rendered into `docs/gallery/`.
+- Eleven runnable examples in `examples/`, each usable from the repository root
+  or from `examples/` itself, and rendered into `docs/gallery/`. The last of
+  them, `11_ethanol_pid.py`, is a whole issued P&ID on a fixed A3 sheet: line
+  numbers on every line, hand-isolated control valve stations, five loops
+  closing on an actuator with one cascade, alarm pairs and a repeated interlock
+  square.
 - Packaged as the **`pandid`** distribution, how "P&ID" is said out loud. The
   import name is `pfd`, since plain `pfd` is taken on PyPI by an unrelated
   project.
