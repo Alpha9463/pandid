@@ -362,9 +362,11 @@ is a visual style within it. The first name in each list is that kind's
 | `Filter` | `default`, `gas`, `press`, `rotary`, `ion_exchange` |
 | `Dryer` | `default`, `fluidized_bed`, `spray` |
 | `Valve` | bodies: `default` (gate), `gate`, `globe`, `ball`, `butterfly`, `check`, `needle`, `three_way`, `control`, `plug`, `pinch`, `angle`, `psv`, `relief`, `bleed`<br>with a drawn operator: `motor`, `solenoid`, `hydraulic`, `pneumatic`, `manual`, `knife`, `butterfly_pneumatic`, `regulator` |
-| `Fitting` | `default` (flanged connection), `flange`, `strainer`, `strainer_cone`, `orifice`, `rotameter`, `rupture_disc`, `sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `static_mixer`, `hose`, `coupling`, `clamped_coupling`, `flame_arrestor`, `flame_arrestor_explosion_proof`, `flame_arrestor_detonation_proof`, `flame_arrestor_fire_resistant` |
+| `Fitting` | devices: `default` (flanged connection), `flange`, `strainer`, `strainer_cone`, `strainer_y`, `strainer_basket`, `strainer_duplex`, `orifice`, `rotameter`, `rupture_disc`, `sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `bellows`, `damper`, `spool`, `static_mixer`, `hose`, `coupling`, `clamped_coupling`, `flame_arrestor`, `flame_arrestor_explosion_proof`, `flame_arrestor_detonation_proof`, `flame_arrestor_fire_resistant`<br>primary flow elements: `venturi`, `flow_nozzle`, `coriolis`, `vortex`, `ultrasonic`, `turbine_meter`, `positive_displacement`, `v_cone`, `wedge`, `target`, `pitot`, `averaging_pitot` |
+| `Reducer` | `default` (cone to a point), `concentric` (trapezoid), `eccentric` |
+| `Vent` | `default` (stack with a weather cap), `exhaust_head`, `breather` |
 | `Instrument` | `default` (field balloon), `panel`, `aux`, `shared`, `computer`, `sis` (diamond in a square, also spelled `logic`), `interlock` (plain diamond) |
-| `Heater`, `Cooler`, `Furnace`, `Turbine`, `Blower`, `Reducer`, `Ejector`, `Vent`, `Funnel`, `Conveyor`, `Mixer`, `Splitter`, `Feed`, `Product` | `default` only |
+| `Heater`, `Cooler`, `Furnace`, `Turbine`, `Blower`, `Ejector`, `Funnel`, `Conveyor`, `Mixer`, `Splitter`, `Feed`, `Product` | `default` only |
 
 `HeatExchanger(variant="kettle")` carries a fifth nozzle, `bottoms`. It is the
 draw at the weir end of the shell, where what does not boil leaves as the
@@ -388,6 +390,22 @@ when the variant changes.
 `Vessel(variant="jacketed")` puts `inlet` and `outlet` on the jacket's outer
 wall rather than on the shell inside it, so the line stops where it meets the
 equipment instead of being drawn across the jacket.
+
+A primary flow element is a pair of faces on a line like any other in-line
+device, so it is a `Fitting` variant rather than a class of its own. `venturi`
+is the one a differential-pressure loop is usually drawn with. Hang the balloon
+on it with `add_instrument(..., on=element)`, and pass `offset=0` to draw the
+balloon sitting on the line rather than beside it.
+
+`Reducer(variant="eccentric")` is flat on top, so its small end sits on a lower
+centreline than its large end. That is the reducer a pump suction is drawn with,
+where a concentric one would trap vapour against the roof of the line. Its
+`outlet` is on the lowered centreline and not at mid-height.
+
+`Fitting(variant="strainer_y")`, `strainer_basket` and `strainer_duplex` lie in
+the run, with the pipe axis across the top of the symbol and the pocket below
+it. The older `strainer` and `strainer_cone` come from a stencil drawn upright
+and stand across the run instead. All four are the same two nozzles.
 
 The operator-bearing valve variants put `actuator` on the operator's crown, and
 the bare bodies put it on the top of the symbol where an operator would be

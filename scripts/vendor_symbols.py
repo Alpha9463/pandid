@@ -247,6 +247,23 @@ KIND_MAP = {
                            {"inlet": ("N", 50), "outlet": ("S", 50)}),
     # Fittings.
     ("reducer", "default"): ("fittings", "Reducer", {"inlet": "W", "outlet": "E"}),
+    # piping.xml draws the reducer the way a piping drawing does: a trapezoid
+    # between a large face and a small one. (fittings.xml's, above, is a
+    # triangle — a cone tapering to a point, so the outlet nozzle is on the
+    # apex and the line it reduces to has no width at all.)
+    #
+    # Both new bodies are drawn to the same 12.5 the default reducer is, since
+    # a reducer's drawn height is the pipe it sits in and two of them in one
+    # run have to agree about that; see SCALE.
+    ("reducer", "concentric"): ("piping", "Concentric Reducer",
+                                {"inlet": "W", "outlet": "E"}),
+    # Eccentric: flat on top, so the small end's centreline is *below* the large
+    # end's — which is the whole point of it on a pump suction, where a
+    # concentric reducer would trap vapour against the roof of the line. The
+    # stencil's own E anchor is on that lowered centreline (y = 4.5 of 15) and
+    # not at mid-height, so it is taken as named rather than placed.
+    ("reducer", "eccentric"): ("piping", "Eccentric Reducer",
+                               {"inlet": "W", "outlet": "E"}),
     # In-line devices: one class, because a strainer, a sight glass and a
     # rupture disc are the same thing to the flowsheet (a pair of faces on a
     # line) and differ only in what is drawn between them. The default is the
@@ -293,6 +310,89 @@ KIND_MAP = {
     ("fitting", "orifice"):        ("valves", "Orifice", {"inlet": "W", "outlet": "E"}),
     ("fitting", "rotameter"):      ("valves", "Rotameter", {"inlet": "W", "outlet": "E"}),
     ("fitting", "static_mixer"):   ("mixers", "In-Line Static Mixer",
+                                    {"inlet": "W", "outlet": "E"}),
+
+    # --- Primary flow elements (flow_sensors.xml) ---
+    #
+    # The device an FE balloon reads: a venturi, a meter body, a probe in the
+    # line. They are in-line devices with a pair of faces, which is what a
+    # Fitting is, so they are variants of it rather than a class of their own —
+    # nothing about the flowsheet changes because the thing in the run measures
+    # rather than strains. (A ``FlowElement`` class would read better on an
+    # equipment list, and is worth its own change; it is not this one.)
+    #
+    # Every shape here names W and E on its own outline and every one of them is
+    # stroked — the meter bodies are a plain rectangle, and the two profiling
+    # elements close their bodies with a straight face at each end — so all of
+    # them take the stencil's own anchors.
+    #
+    # These are drawn on a 50-unit module rather than valves.xml's ~100, so
+    # SCALE halves them at 0.5 instead of 0.25 and they come out beside a
+    # 24.5 x 15.0 valve at the same length. See SCALE.
+    #
+    # The venturi is the one a differential-pressure loop is actually drawn
+    # with: a converging throat and a diverging recovery cone, closed by a flat
+    # face at each end where the flanges are. The stencil's N anchor is on the
+    # throat rather than the top of the box, and a Fitting has no third port to
+    # put it on, so it is left where it is.
+    ("fitting", "venturi"):        ("flow_sensors", "Venturi",
+                                    {"inlet": "W", "outlet": "E"}),
+    ("fitting", "flow_nozzle"):    ("flow_sensors", "Flow Nozzle",
+                                    {"inlet": "W", "outlet": "E"}),
+    ("fitting", "coriolis"):       ("flow_sensors", "Coriolis",
+                                    {"inlet": "W", "outlet": "E"}),
+    ("fitting", "vortex"):         ("flow_sensors", "Vortex",
+                                    {"inlet": "W", "outlet": "E"}),
+    ("fitting", "ultrasonic"):     ("flow_sensors", "Ultrasonic",
+                                    {"inlet": "W", "outlet": "E"}),
+    # "turbine_meter", not "turbine": a Turbine is already a piece of rotating
+    # equipment in this library, and a variant reading as one would be a trap.
+    ("fitting", "turbine_meter"):  ("flow_sensors", "Turbine",
+                                    {"inlet": "W", "outlet": "E"}),
+    ("fitting", "positive_displacement"): ("flow_sensors", "Positive Displacement",
+                                           {"inlet": "W", "outlet": "E"}),
+    ("fitting", "v_cone"):         ("flow_sensors", "V-cone",
+                                    {"inlet": "W", "outlet": "E"}),
+    ("fitting", "wedge"):          ("flow_sensors", "Wedge",
+                                    {"inlet": "W", "outlet": "E"}),
+    ("fitting", "target"):         ("flow_sensors", "Target",
+                                    {"inlet": "W", "outlet": "E"}),
+    # The two impulse probes. draw.io spells the averaging one "Averging"; the
+    # shape name has to be the stencil's, so the typo is carried here and
+    # corrected in the variant name.
+    ("fitting", "pitot"):          ("flow_sensors", "Pitot Tube",
+                                    {"inlet": "W", "outlet": "E"}),
+    ("fitting", "averaging_pitot"): ("flow_sensors", "Averging Pitot Tube",
+                                     {"inlet": "W", "outlet": "E"}),
+
+    # --- In-line piping devices (piping.xml) ---
+    #
+    # Drawn on the same 50-unit module as the flow elements above and scaled
+    # with them. Each takes its stencil's own W and E, which are on the pipe
+    # stubs the shape draws rather than on bare box corners.
+    #
+    # The three strainer bodies a piping drawing actually names. They are drawn
+    # lying in the run, unlike "strainer"/"strainer_cone" above, which come from
+    # fittings.xml's 40 x 80 upright box and stand across it.
+    ("fitting", "strainer_y"):      ("piping", "Y-Type Strainer",
+                                     {"inlet": "W", "outlet": "E"}),
+    ("fitting", "strainer_basket"): ("piping", "Basket Strainer",
+                                     {"inlet": "W", "outlet": "E"}),
+    ("fitting", "strainer_duplex"): ("piping", "Duplex Strainer",
+                                     {"inlet": "W", "outlet": "E"}),
+    # Bellows: four convolutions between two flanges, which is the expansion
+    # joint a piping drawing draws. "expansion_joint" above is fittings.xml's
+    # Compensator, a plain lens between two faces; both are kept, because a
+    # variant is a style and neither is wrong.
+    ("fitting", "bellows"):        ("piping", "Expansion Joint",
+                                    {"inlet": "W", "outlet": "E"}),
+    # Blade on a pivot between two flanges. ("Damper2" is the same drawing with
+    # the pivot filled in draw.io's theme colour rather than black, and this
+    # converter paints no fills, so it would be a duplicate.)
+    ("fitting", "damper"):         ("piping", "Damper", {"inlet": "W", "outlet": "E"}),
+    # Removable spool: the length of pipe taken out to break a line for
+    # maintenance, drawn as a pipe between two flanges.
+    ("fitting", "spool"):          ("piping", "Removable Spool",
                                     {"inlet": "W", "outlet": "E"}),
 
     # --- Variants (style choices within a class; same ports) ---
@@ -481,6 +581,18 @@ KIND_MAP = {
     # connection is the free end of that stem, at the bottom of the box.
     ("vent", "default"):   ("fittings", "Vent", {"inlet": ("S", 40.0)}),
     ("funnel", "default"): ("fittings", "Funnel", {"outlet": ("S", 40.0)}),
+    # Two more open ends, from piping.xml. Both discharge to atmosphere and are
+    # piped from below, so each has the one connection a Vent declares, on the
+    # point of the body the riser meets. draw.io names W and E on the exhaust
+    # head, which is its generic box anchors rather than a flow path: nothing
+    # passes through an open discharge.
+    #
+    # Exhaust head: the silencing/separating hood on a steam or relief vent.
+    # The riser meets the apex of the cone at (25, 40).
+    ("vent", "exhaust_head"): ("piping", "Exhaust Head", {"inlet": ("S", 25.0)}),
+    # Breather: the tank conservation vent, drawn as a box on a stem. The stem's
+    # free end at (25, 30) is the tank connection.
+    ("vent", "breather"):     ("piping", "Breather", {"inlet": ("S", 25.0)}),
 }
 
 
@@ -539,8 +651,35 @@ ADAPTED_ELSEWHERE = {
 # includes ``reducer``, which is the fittings.xml stencil like the rest of them
 # and only had a kind of its own; at 1.0 it was 70 x 50, nearly three times the
 # new valve.
+#
+# flow_sensors.xml and piping.xml are the exception, and for a reason that is
+# about the stencils rather than about the drawing: they lay their in-line
+# devices out on a 50-unit module where valves.xml and fittings.xml use a ~100
+# one. Halving those would draw a venturi 12.5 units long beside a 24.5-unit
+# valve, so they take 0.5 and land on the same 25 x ~20 box the flame arrestors
+# and the static mixer already occupy. Same sheet size, different stencil scale.
+HALF_SCALE_FITTINGS = (
+    # flow_sensors.xml — the primary elements
+    "venturi", "flow_nozzle", "coriolis", "vortex", "ultrasonic",
+    "turbine_meter", "positive_displacement", "v_cone", "wedge", "target",
+    "pitot", "averaging_pitot",
+    # piping.xml — the in-line devices
+    "strainer_y", "strainer_basket", "strainer_duplex",
+    "bellows", "damper", "spool",
+)
+
 SCALE = {"valve": 0.25, "fitting": 0.25, "reducer": 0.25,
          "vent": 0.25, "funnel": 0.25,
+         **{("fitting", variant): 0.5 for variant in HALF_SCALE_FITTINGS},
+         # ...and the two open ends taken from the same 50-unit file.
+         ("vent", "exhaust_head"): 0.5, ("vent", "breather"): 0.5,
+         # Both piping.xml reducers are drawn 12.5 units tall, which is the
+         # height reducer/default already comes out at. A reducer's drawn height
+         # is the line it sits in, so two of them in one run have to agree about
+         # it; the length follows from each stencil's own proportions (the
+         # eccentric body is drawn longer than it is tall, the concentric one
+         # square).
+         ("reducer", "concentric"): 12.5 / 20, ("reducer", "eccentric"): 12.5 / 15,
          # 62 x 100, at 1:1.6 against the column's 1:2 — a drum is short because
          # it holds inventory, a tower is slender because it holds trays, and
          # two shapes cut to the same proportions read as one piece of equipment

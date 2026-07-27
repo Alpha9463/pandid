@@ -304,6 +304,20 @@ def register_vendored(registry):
         ports={'inlet': (0.0, 6.2), 'outlet': (17.5, 6.2)},
     ), 'default')
 
+    # draw.io piping:Concentric Reducer (aspect=variable) -> reducer/concentric
+    registry.register('reducer', Symbol(
+        svg='<g id="sym_reducer_concentric"><g transform="scale(0.625)"><path d="M 0.0 0.0 L 20.0 5.0 L 20.0 15.0 L 0.0 20.0 Z" fill="none" stroke="#111" stroke-width="3.2"/></g></g>',
+        width=12.5, height=12.5,
+        ports={'inlet': (0.0, 6.2), 'outlet': (12.5, 6.2)},
+    ), 'concentric')
+
+    # draw.io piping:Eccentric Reducer (aspect=variable) -> reducer/eccentric
+    registry.register('reducer', Symbol(
+        svg='<g id="sym_reducer_eccentric"><g transform="scale(0.8333333333333334)"><path d="M 0.0 0.0 L 20.0 0.0 L 20.0 10.0 L 0.0 15.0 Z" fill="none" stroke="#111" stroke-width="2.4"/></g></g>',
+        width=16.7, height=12.5,
+        ports={'inlet': (0.0, 6.2), 'outlet': (16.7, 3.8)},
+    ), 'eccentric')
+
     # draw.io fittings:Flanged Connection (aspect=variable) -> fitting/default
     registry.register('fitting', Symbol(
         svg='<g id="sym_fitting"><g transform="scale(0.25)"><path d="M 0.0 0.0 L 0.0 50.0 M 20.0 0.0 L 20.0 50.0" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
@@ -436,6 +450,132 @@ def register_vendored(registry):
         width=25.0, height=25.0,
         ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
     ), 'static_mixer')
+
+    # draw.io flow_sensors:Venturi (aspect=variable) -> fitting/venturi
+    registry.register('fitting', Symbol(
+        svg='<g id="sym_fitting_venturi"><g transform="scale(0.5)"><path d="M 0.0 0.0 A 60.0 60.0 0.0 0 0 50.0 0.0 L 50.0 40.0 A 60.0 60.0 0.0 0 0 0.0 40.0 Z" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=25.0, height=20.0,
+        ports={'inlet': (0.0, 10.0), 'outlet': (25.0, 10.0)},
+    ), 'venturi')
+
+    # draw.io flow_sensors:Flow Nozzle (aspect=variable) -> fitting/flow_nozzle
+    registry.register('fitting', Symbol(
+        svg='<g id="sym_fitting_flow_nozzle"><g transform="scale(0.5)"><path d="M 0.0 0.0 A 50.0 10.0 0.0 0 0 19.0403 5.2028 A 50.0 10.0 0.0 0 0 50.0 7.0 L 50.0 18.0 A 50.0 10.0 0.0 0 0 19.0403 19.7972 A 50.0 10.0 0.0 0 0 0.0 25.0 Z" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=25.0, height=12.5,
+        ports={'inlet': (0.0, 6.2), 'outlet': (25.0, 6.2)},
+    ), 'flow_nozzle')
+
+    # draw.io flow_sensors:Coriolis (aspect=variable) -> fitting/coriolis
+    registry.register('fitting', Symbol(
+        svg='<g id="sym_fitting_coriolis"><g transform="scale(0.5)"><rect x="0.0" y="0.0" width="50.0" height="50.0" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 5.0 25.0 L 12.5 25.0 L 17.5 18.0 L 27.5 32.0 L 32.5 25.0 L 40.0 25.0 M 10.0 25.0 L 17.5 25.0 L 22.5 18.0 L 32.5 32.0 L 37.5 25.0 L 45.0 25.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=25.0, height=25.0,
+        ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
+    ), 'coriolis')
+
+    # draw.io flow_sensors:Vortex (aspect=variable) -> fitting/vortex
+    registry.register('fitting', Symbol(
+        svg='<g id="sym_fitting_vortex"><g transform="scale(0.5)"><rect x="0.0" y="0.0" width="50.0" height="50.0" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 5.0 5.0 L 45.0 25.0 L 5.0 45.0 Z" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=25.0, height=25.0,
+        ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
+    ), 'vortex')
+
+    # draw.io flow_sensors:Ultrasonic (aspect=variable) -> fitting/ultrasonic
+    registry.register('fitting', Symbol(
+        svg='<g id="sym_fitting_ultrasonic"><g transform="scale(0.5)"><rect x="0.0" y="0.0" width="50.0" height="50.0" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 3.0 25.0 A 6.0 6.0 0.0 0 1 12.5 25.0 A 6.0 6.0 0.0 0 0 22.0 25.0 M 28.0 25.0 A 6.0 6.0 0.0 0 1 37.5 25.0 A 6.0 6.0 0.0 0 0 47.0 25.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=25.0, height=25.0,
+        ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
+    ), 'ultrasonic')
+
+    # draw.io flow_sensors:Turbine (aspect=variable) -> fitting/turbine_meter
+    registry.register('fitting', Symbol(
+        svg='<g id="sym_fitting_turbine_meter"><g transform="scale(0.5)"><rect x="0.0" y="0.0" width="50.0" height="50.0" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 20.0 10.0 A 5.2 5.2 0.0 1 1 30.0 10.0 L 20.0 40.0 A 5.2 5.2 0.0 1 0 30.0 40.0 Z" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=25.0, height=25.0,
+        ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
+    ), 'turbine_meter')
+
+    # draw.io flow_sensors:Positive Displacement (aspect=variable) -> fitting/positive_displacement
+    registry.register('fitting', Symbol(
+        svg='<g id="sym_fitting_positive_displacement"><g transform="scale(0.5)"><rect x="0.0" y="0.0" width="50.0" height="30.0" fill="none" stroke="#111" stroke-width="4.0"/><ellipse cx="12.5" cy="15.0" rx="12.5" ry="12.5" fill="none" stroke="#111" stroke-width="4.0"/><ellipse cx="37.5" cy="15.0" rx="12.5" ry="12.5" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=25.0, height=15.0,
+        ports={'inlet': (0.0, 7.5), 'outlet': (25.0, 7.5)},
+    ), 'positive_displacement')
+
+    # draw.io flow_sensors:V-cone (aspect=variable) -> fitting/v_cone
+    registry.register('fitting', Symbol(
+        svg='<g id="sym_fitting_v_cone"><g transform="scale(0.5)"><rect x="0.0" y="0.0" width="50.0" height="50.0" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 45.0 5.0 L 45.0 45.0 L 15.0 25.0 Z M 15.0 25.0 L 5.0 25.0 L 5.0 0.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=25.0, height=25.0,
+        ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
+    ), 'v_cone')
+
+    # draw.io flow_sensors:Wedge (aspect=variable) -> fitting/wedge
+    registry.register('fitting', Symbol(
+        svg='<g id="sym_fitting_wedge"><g transform="scale(0.5)"><rect x="0.0" y="0.0" width="50.0" height="50.0" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 5.0 0.0 L 25.0 25.0 L 45.0 0.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=25.0, height=25.0,
+        ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
+    ), 'wedge')
+
+    # draw.io flow_sensors:Target (aspect=variable) -> fitting/target
+    registry.register('fitting', Symbol(
+        svg='<g id="sym_fitting_target"><g transform="scale(0.5)"><rect x="0.0" y="0.0" width="50.0" height="50.0" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 25.0 0.0 L 25.0 25.0 L 18.0 25.0 M 18.0 15.0 L 18.0 35.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=25.0, height=25.0,
+        ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
+    ), 'target')
+
+    # draw.io flow_sensors:Pitot Tube (aspect=variable) -> fitting/pitot
+    registry.register('fitting', Symbol(
+        svg='<g id="sym_fitting_pitot"><g transform="scale(0.5)"><rect x="0.0" y="0.0" width="50.0" height="50.0" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 25.0 0.0 L 25.0 25.0 L 10.0 25.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=25.0, height=25.0,
+        ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
+    ), 'pitot')
+
+    # draw.io flow_sensors:Averging Pitot Tube (aspect=variable) -> fitting/averaging_pitot
+    registry.register('fitting', Symbol(
+        svg='<g id="sym_fitting_averaging_pitot"><g transform="scale(0.5)"><rect x="0.0" y="0.0" width="50.0" height="50.0" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 25.0 0.0 L 25.0 35.0 L 10.0 35.0 M 25.0 20.0 L 10.0 20.0 M 25.0 30.0 L 10.0 30.0 M 25.0 25.0 L 10.0 25.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=25.0, height=25.0,
+        ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
+    ), 'averaging_pitot')
+
+    # draw.io piping:Y-Type Strainer (aspect=variable) -> fitting/strainer_y
+    registry.register('fitting', Symbol(
+        svg='<g id="sym_fitting_strainer_y"><g transform="scale(0.5)"><path d="M 0.0 10.0 L 50.0 10.0 M 50.0 0.0 L 50.0 20.0 M 0.0 0.0 L 0.0 20.0 M 25.0 10.0 L 45.0 30.0 M 40.0 34.0 L 50.0 25.5" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=25.0, height=17.0,
+        ports={'inlet': (0.0, 4.9), 'outlet': (25.0, 4.9)},
+    ), 'strainer_y')
+
+    # draw.io piping:Basket Strainer (aspect=variable) -> fitting/strainer_basket
+    registry.register('fitting', Symbol(
+        svg='<g id="sym_fitting_strainer_basket"><g transform="scale(0.5)"><path d="M 40.0 0.0 L 40.0 30.0 A 15.0 15.0 0.0 0 1 25.0 45.0 A 15.0 15.0 0.0 0 1 10.0 30.0 L 10.0 0.0 Z M 50.0 15.0 L 50.0 35.0 M 0.0 15.0 L 0.0 35.0 M 0.0 25.0 L 10.0 25.0 M 40.0 25.0 L 50.0 25.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=25.0, height=22.5,
+        ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
+    ), 'strainer_basket')
+
+    # draw.io piping:Duplex Strainer (aspect=variable) -> fitting/strainer_duplex
+    registry.register('fitting', Symbol(
+        svg='<g id="sym_fitting_strainer_duplex"><g transform="scale(0.5)"><ellipse cx="25.0" cy="30.0" rx="10.0" ry="10.0" fill="none" stroke="#111" stroke-width="4.0"/><ellipse cx="25.0" cy="10.0" rx="10.0" ry="10.0" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 0.0 20.0 L 50.0 20.0 M 50.0 10.0 L 50.0 30.0 M 0.0 10.0 L 0.0 30.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=25.0, height=20.0,
+        ports={'inlet': (0.0, 10.0), 'outlet': (25.0, 10.0)},
+    ), 'strainer_duplex')
+
+    # draw.io piping:Expansion Joint (aspect=variable) -> fitting/bellows
+    registry.register('fitting', Symbol(
+        svg='<g id="sym_fitting_bellows"><g transform="scale(0.5)"><path d="M 0.0 6.0 L 7.0 6.0 A 4.5 4.5 0.0 0 1 11.5 1.5 A 4.5 4.5 0.0 0 1 16.0 6.0 A 4.5 4.5 0.0 0 1 20.5 1.5 A 4.5 4.5 0.0 0 1 25.0 6.0 A 4.5 4.5 0.0 0 1 29.5 1.5 A 4.5 4.5 0.0 0 1 34.0 6.0 A 4.5 4.5 0.0 0 1 38.5 1.5 A 4.5 4.5 0.0 0 1 43.0 6.0 L 50.0 6.0 L 50.0 14.0 L 43.0 14.0 A 4.5 4.5 0.0 0 1 38.5 18.5 A 4.5 4.5 0.0 0 1 34.0 14.0 A 4.5 4.5 0.0 0 1 29.5 18.5 A 4.5 4.5 0.0 0 1 25.0 14.0 A 4.5 4.5 0.0 0 1 20.5 18.5 A 4.5 4.5 0.0 0 1 16.0 14.0 A 4.5 4.5 0.0 0 1 11.5 18.5 A 4.5 4.5 0.0 0 1 7.0 14.0 L 0.0 14.0 Z Z M 50.0 0.0 L 50.0 20.0 M 0.0 0.0 L 0.0 20.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=25.0, height=10.0,
+        ports={'inlet': (0.0, 5.0), 'outlet': (25.0, 5.0)},
+    ), 'bellows')
+
+    # draw.io piping:Damper (aspect=variable) -> fitting/damper
+    registry.register('fitting', Symbol(
+        svg='<g id="sym_fitting_damper"><g transform="scale(0.5)"><rect x="0.0" y="3.0" width="50.0" height="14.0" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 50.0 0.0 L 50.0 20.0 M 0.0 0.0 L 0.0 20.0 M 32.0 5.0 L 18.0 15.0" fill="none" stroke="#111" stroke-width="4.0"/><ellipse cx="25.0" cy="10.0" rx="3.0" ry="3.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=25.0, height=10.0,
+        ports={'inlet': (0.0, 5.0), 'outlet': (25.0, 5.0)},
+    ), 'damper')
+
+    # draw.io piping:Removable Spool (aspect=variable) -> fitting/spool
+    registry.register('fitting', Symbol(
+        svg='<g id="sym_fitting_spool"><g transform="scale(0.5)"><path d="M 0.0 10.0 L 50.0 10.0 M 50.0 0.0 L 50.0 20.0 M 0.0 0.0 L 0.0 20.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=25.0, height=15.0,
+        ports={'inlet': (0.0, 5.0), 'outlet': (25.0, 5.0)},
+    ), 'spool')
 
     # draw.io heat_exchangers:Shell and Tube Heat Exchanger 1 (aspect=variable) -> hex/shell_tube
     registry.register('hex', Symbol(
@@ -726,3 +866,17 @@ def register_vendored(registry):
         width=20.0, height=35.0,
         ports={'outlet': (10.0, 35.0)},
     ), 'default')
+
+    # draw.io piping:Exhaust Head (aspect=variable) -> vent/exhaust_head
+    registry.register('vent', Symbol(
+        svg='<g id="sym_vent_exhaust_head"><g transform="scale(0.5)"><path d="M 0.0 0.0 L 50.0 0.0 L 50.0 20.0 L 25.0 40.0 L 0.0 20.0 Z M 0.0 20.0 L 50.0 20.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=25.0, height=20.0,
+        ports={'inlet': (12.5, 20.0)},
+    ), 'exhaust_head')
+
+    # draw.io piping:Breather (aspect=variable) -> vent/breather
+    registry.register('vent', Symbol(
+        svg='<g id="sym_vent_breather"><g transform="scale(0.5)"><rect x="0.0" y="0.0" width="50.0" height="20.0" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 25.0 20.0 L 25.0 30.0 M 0.0 0.0 L 25.0 20.0 L 50.0 0.0 M 0.0 20.0 L 25.0 0.0 L 50.0 20.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
+        width=25.0, height=15.0,
+        ports={'inlet': (12.5, 15.0)},
+    ), 'breather')

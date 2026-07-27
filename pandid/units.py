@@ -384,7 +384,15 @@ class Blower(Unit):
 
 
 class Reducer(Unit):
-    """Concentric pipe reducer/expander."""
+    """Pipe reducer/expander.
+
+    Variants: ``"default"`` (a cone tapering to a point), ``"concentric"`` (the
+    trapezoid a piping drawing draws) and ``"eccentric"``, flat on top so its
+    small end sits on a lower centreline than its large end. The eccentric body
+    is what goes on a pump suction, where a concentric one would trap vapour
+    against the roof of the line; its ``outlet`` is on that lowered centreline
+    rather than at mid-height.
+    """
 
     kind = "reducer"
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
@@ -396,12 +404,21 @@ class Fitting(Unit):
     One class rather than a dozen, because to the flowsheet a strainer, a sight
     glass and a rupture disc are the same thing — a pair of faces on a line —
     and differ only in what is drawn between them. The variant picks the device:
-    ``strainer``, ``strainer_cone``, ``orifice``, ``rotameter``,
+    ``strainer``, ``strainer_cone``, ``strainer_y``, ``strainer_basket``,
+    ``strainer_duplex``, ``orifice``, ``rotameter``,
     ``rupture_disc``, ``sight_glass``, ``sight_glass_lit``, ``silencer``,
-    ``expansion_joint``, ``static_mixer``, ``hose``, ``coupling``,
+    ``expansion_joint``, ``bellows``, ``damper``, ``spool``, ``static_mixer``,
+    ``hose``, ``coupling``,
     ``clamped_coupling``, ``flange`` (the default), and the flame arrestors
     (``flame_arrestor`` plus ``_explosion_proof`` / ``_detonation_proof`` /
     ``_fire_resistant``).
+
+    A primary flow element is in the run like anything else here, so it is a
+    variant too: ``venturi``, ``flow_nozzle``, ``coriolis``, ``vortex``,
+    ``ultrasonic``, ``turbine_meter``, ``positive_displacement``, ``v_cone``,
+    ``wedge``, ``target``, ``pitot`` and ``averaging_pitot``. Hang the FE
+    balloon on one with
+    :meth:`~pandid.flowsheet.Flowsheet.add_instrument`.
 
     Like a valve, a fitting is inline: a stream keeps its number through it
     unless ``significant`` is set.
@@ -429,6 +446,10 @@ class Vent(Unit):
 
     A boundary like :class:`Product`, but drawn as real piping rather than an
     off-page flag — which is what a PSV tailpipe or a tank breather wants.
+
+    Variants: ``"default"`` (a stack with a weather cap), ``"exhaust_head"``
+    (the silencing hood on a steam or relief vent) and ``"breather"`` (the tank
+    conservation vent). All three carry the one connection, piped from below.
     """
 
     kind = "vent"
