@@ -2,6 +2,7 @@
 
 from typing import NamedTuple, TYPE_CHECKING
 import html
+import math
 import re
 from datetime import datetime
 
@@ -87,6 +88,27 @@ def _xform_tag(rot: int, mirror_x: bool, mirror_y: bool) -> str:
     if not (rot or mirror_x or mirror_y):
         return ""
     return "_t" + (f"r{rot}" if rot else "") + ("x" if mirror_x else "") + ("y" if mirror_y else "")
+
+
+def _reshapes(sym, u) -> bool:
+    """True when a unit's box is a different shape from its symbol's own.
+
+    Which is the whole of what a placement can ask of the artwork beyond a plain
+    resize: an explicit ``width``/``height`` is taken as the final box, so a unit
+    left to size itself lands on the symbol's proportions exactly and one given
+    both may land on any others. A quarter turn swaps the box, and swaps the
+    symbol with it, so it never reshapes anything by itself.
+    """
+    f = getattr(u, "frame", None)
+    if f is None:
+        return False
+    rot = int(getattr(f, "orientation", 0) or 0)
+    bw, bh = (f.h, f.w) if rot in (90, 270) else (f.w, f.h)
+    # Cross-multiplied, so a zero dimension cannot divide. A box that matches is
+    # copied from the symbol's own size and matches to the bit; the tolerance is
+    # only there so arithmetic on a size the author computed cannot claim a
+    # reshaping that is not one.
+    return not math.isclose(sym.width * bh, sym.height * bw, rel_tol=1e-9)
 
 
 def _upright_text(svg: str, rot: int, mirror_x: bool, mirror_y: bool) -> str:
@@ -714,6 +736,15 @@ class SvgRenderer:
         # the scale factor stays exactly 1. Everything else — the great majority
         # — still shares a single definition however it is placed.
         used: dict[tuple, tuple] = {}
+        # Definitions some placement asks to fill a box of another shape. A
+        # <symbol> scales its viewBox to fit and centres what is left over, so a
+        # unit given a width and height of its own is drawn smaller than the box
+        # with whitespace down one pair of sides -- and portgeom, which maps its
+        # ports linearly onto the box, then puts them out in that whitespace.
+        # The two are made to agree by stretching the artwork instead, wherever
+        # the symbol says it may be (see Symbol.stretchable); where it may not,
+        # portgeom follows the letterbox and the ports land on the drawing.
+        stretched: set[tuple] = set()
         for u in fs.units:
             if u.kind in ("feed", "product"):
                 continue
@@ -721,18 +752,25 @@ class SvgRenderer:
             xform = self._text_xform(u)
             key = (u.kind, getattr(u, 'variant', 'default'), sym.id_suffix) + xform
             used[key] = (self._sym_id(u), sym, *xform)
+            if sym.stretchable and _reshapes(sym, u):
+                stretched.add(key)
         for key in sorted(used):
             sym_id, sym, rot, mirror_x, mirror_y = used[key]
             svg_str = _upright_text(sym.svg, rot, mirror_x, mirror_y)
             if svg_str.startswith('<g'):
                 inner = svg_str[svg_str.find('>') + 1:svg_str.rfind('</g>')]
+                # preserveAspectRatio: stated only where a placement reshapes the
+                # artwork, since "none" and the "xMidYMid meet" default are the
+                # same drawing whenever the scale is uniform -- and a definition
+                # nothing reshapes has nothing to say about being reshaped.
+                fill = ' preserveAspectRatio="none"' if key in stretched else ''
                 # overflow="visible": a <symbol> viewport defaults to overflow:hidden,
                 # which clips the outer half of any stroke whose geometry sits on the
                 # viewBox edge (e.g. an ellipse with rx == w/2). That makes a circle
                 # render thin at its four cardinal points while the diagonals stay full
                 # weight. Letting the symbol overflow keeps every stroke at uniform width.
-                svg_str = (f'<symbol id="{sym_id}" viewBox="0 0 {sym.width} {sym.height}" '
-                           f'overflow="visible">{inner}</symbol>')
+                svg_str = (f'<symbol id="{sym_id}" viewBox="0 0 {sym.width} {sym.height}"'
+                           f'{fill} overflow="visible">{inner}</symbol>')
             else:
                 svg_str = re.sub(r'id="[^"]+"', f'id="{sym_id}"', svg_str, count=1)
             lines.append(f'    {svg_str}')

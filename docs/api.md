@@ -1067,7 +1067,12 @@ sheet.
 
 `width` and `height` are the intrinsic size of that box. A `width=` / `height=`
 on the unit overrides them, and the artwork is scaled into the result, unevenly
-if that changes the aspect ratio.
+if that changes the aspect ratio — which is what a shell, a tank or an exchanger
+wants, since the user asked for a box and the equipment simply becomes it. Pass
+`stretchable=False` where the shape carries meaning instead: an ISA-5.1 balloon
+is a circle at every size, so it keeps its proportions and is centred in the box,
+and its ports are resolved against the artwork rather than the box edge the
+artwork no longer reaches.
 
 `ports` maps port name to a point in those same symbol coordinates. The names
 must match the class's port names exactly. **Put every port on drawn ink.** A

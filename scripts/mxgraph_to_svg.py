@@ -7,8 +7,9 @@ plus <rect>/<roundrect>/<ellipse>/<line>/<text>, painted by <fillstroke>/
 <stroke>/<fill>. Coordinates are already in the shape's ``w`` × ``h`` space, so
 they map straight onto an SVG ``viewBox="0 0 w h"``.
 
-`convert_shape(shape_el)` returns (inner_svg, width, height, constraints) where
-constraints is ``{name: (x_abs, y_abs)}`` from the stencil's <connections>.
+`convert_shape(shape_el)` returns (inner_svg, width, height, constraints, aspect)
+where constraints is ``{name: (x_abs, y_abs)}`` from the stencil's <connections>
+and aspect is the stencil's own ``aspect`` attribute.
 """
 from __future__ import annotations
 
@@ -153,16 +154,29 @@ def _path_d(path_el) -> str:
     return " ".join(parts)
 
 
+#: What mxGraph assumes when a <shape> names no ``aspect``: the shape may be
+#: resized along each axis independently. Only a shape that says otherwise is
+#: held to its proportions. (See mxStencil in the mxGraph source.)
+DEFAULT_ASPECT = "variable"
+
+
 def convert_shape(shape_el, stroke_width=2.0):
-    """Convert one <shape> element to (inner_svg, w, h, constraints).
+    """Convert one <shape> element to (inner_svg, w, h, constraints, aspect).
 
     ``stroke_width`` is emitted verbatim on every stroked element (in the
     shape's own units). At a symbol's native scale this equals the sheet's line
     weight; for a symbol later scaled by ``s``, pass ``stroke_width = 2 / s`` so
     the rendered line still lands at 2px.
+
+    ``aspect`` is the stencil author's own statement about resizing —
+    ``"variable"`` for a shape that may be stretched to fill whatever box it is
+    given, ``"fixed"`` for one whose proportions carry meaning. It is reported
+    rather than acted on here: this converts a shape at its native size, and
+    what a box of another shape does to it is the caller's business.
     """
     w = _num(shape_el, "w", 100)
     h = _num(shape_el, "h", 100)
+    aspect = shape_el.get("aspect", DEFAULT_ASPECT)
 
     constraints = {}
     conns = shape_el.find("connections")
@@ -231,7 +245,7 @@ def convert_shape(shape_el, stroke_width=2.0):
                 flush(t)
     flush("stroke")  # paint anything left
 
-    return "".join(out), w, h, constraints
+    return "".join(out), w, h, constraints, aspect
 
 
 def shapes_in(xml_path):

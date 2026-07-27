@@ -156,6 +156,16 @@ and is kept working.
   inline in Jupyter via `_repr_svg_`.
 - Canvas fitted to content, with no letterboxing, no clipping and uniform 2 px
   symbol strokes.
+- A unit given an explicit `width`/`height` is drawn *at* that box. Where the
+  symbol may be reshaped — every equipment symbol, since each draw.io stencil
+  they come from declares `aspect="variable"` — the artwork fills the box, so a
+  `Column(width=110, height=250)` is a column of exactly that size and its
+  distillate and bottoms lines meet its heads instead of stopping 15 px short of
+  them. Where the shape carries meaning it may not be: an ISA-5.1 balloon is a
+  circle at every box it is given and is centred in whatever room is left over,
+  with its taps on the circle rather than out on the box edge.
+  `Symbol.stretchable` is the switch, and the vendored symbols take it from the
+  stencil's own declaration.
 - A stream number or line number drawn parallel to the line it names, on a wipe
   so no line strikes through the text. It sits on the line only where the run
   can still show pipe past the wipe at each end, and steps beside the line where
@@ -325,7 +335,9 @@ and is kept working.
   `PANDID_UPDATE_GOLDEN=1`.
 - Symbol-invariant suite over every registered `(kind, variant)`: well-formed
   SVG, ports inside the bounding box, ports on drawn ink, no two ports
-  coinciding.
+  coinciding — and the same, on a rendered sheet, at box shapes nothing is drawn
+  at, which is where a resolved port and the artwork it belongs to can drift
+  apart.
 - GitHub Actions CI: `ruff check`, `ruff format --check tests`, `mypy pandid`
   (blocking), and `pytest` on Python 3.10, 3.11, 3.12 and 3.13.
 - `pre-commit` configuration mirroring the CI lint gates.

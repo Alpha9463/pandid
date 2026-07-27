@@ -82,6 +82,16 @@ To add or change an equipment symbol:
 4. Commit the regenerated `_vendored_symbols.py` with your `KIND_MAP` change,
    never one without the other.
 
+The shape's `aspect` comes across with it, as `Symbol.stretchable`. The stencil
+author has already answered whether the drawing may be reshaped to fill a box of
+another shape (`aspect="variable"`, mxGraph's default) or has to keep its
+proportions (`aspect="fixed"`), and that is the same question a unit given an
+explicit `width` and `height` asks. Every shape `KIND_MAP` names today is a
+variable one — the 24 fixed shapes in the stencil set are draw.io's own
+instrument balloons, which `pandid` draws itself — so no generated symbol carries
+the keyword. Do not set it by hand on one: change the stencil mapping, or say so
+in `symbols.py` if the symbol is hand-drawn.
+
 Only a handful of symbols are hand-drawn in `pandid/render/symbols.py`: the
 Feed/Product boundary flags, the variable-port Mixer and Splitter, and the
 ISA-5.1 instrument balloons. Those are original primitives, not stencils. New
@@ -91,10 +101,12 @@ consistent and `NOTICE` remains the whole attribution story.
 ### Symbols that have to stretch
 
 There is a third case, and today it has one member. The generator emits one
-fixed-size `Symbol` per shape, and a fixed drawing placed in a box of a
-different aspect ratio is scaled unevenly — so a symbol the user is meant to
-resize along one axis cannot come out of it. Stretching a belt conveyor that way
-would draw its rollers as ellipses.
+fixed-size `Symbol` per shape, and a fixed drawing lands in whatever box its
+unit is given: reshaped to fill it, or held to its own proportions and centred
+in it. Some artwork survives neither. Stretching a belt conveyor draws its
+rollers as ellipses; holding its proportions instead draws a short conveyor
+adrift in a long box. A symbol the user is meant to resize along *one* axis,
+leaving the rest of it alone, cannot come out of the generator at all.
 
 Such a symbol is written as a *builder* in `pandid/render/symbols.py`, taking the
 size and returning a `Symbol` drawn at it, and `SymbolRegistry.for_unit()`
@@ -127,7 +139,21 @@ registered `(kind, variant)`, not just the ones the examples use:
 - every port and alternate is within `GEOM_TOL` (2 units) of the nearest drawn
   stroke, measured against the SVG primitives flattened to line segments;
 - no two *different* ports resolve to the same point, which would stack two
-  streams on one pixel.
+  streams on one pixel;
+- and the same again on a *rendered sheet*, with every unit forced into box
+  shapes nothing is drawn at — much wider than tall, much taller than wide,
+  square. A unit given an explicit `width`/`height` is drawn at that box, so
+  this is where the artwork and the ports can drift apart: the rectangle the
+  drawing lands in is read back out of the SVG and the resolved nozzle is
+  measured against it.
+
+That last one is what `Symbol.stretchable` answers. A symbol that may be
+reshaped fills the box, and its ports map onto it linearly. One that may not —
+an instrument balloon is a circle because ISA-5.1 says a circle — keeps its
+aspect and is centred, and `pandid.portgeom.ink_box` is what keeps its ports on
+the drawing rather than out in the whitespace beside it. The vendored symbols
+take the answer from the stencil's own `aspect` attribute, as section 1 above
+describes.
 
 If that suite fails on your symbol, **move the port onto the geometry**. Adding
 the symbol to `_KNOWN_GEOMETRY_GAPS` is not the fix, and a PR that does it will
@@ -183,6 +209,12 @@ from their nozzles.
 - `symbol_to_box(...)` maps a point from the symbol's own coordinates into the
   placed box, applying mirroring **first** and then the clockwise quarter turn,
   which is exactly the order the renderer's SVG transform composes in.
+- `ink_box(...)` gives the rectangle inside that box the artwork actually
+  occupies: the whole of it for a symbol that may be reshaped, and the centred,
+  aspect-preserving part of it for one that may not. Ports are resolved against
+  *that*, so a symbol drawn smaller than its box keeps its nozzles on the
+  drawing. `unit_box()` stays the full placed box, since that is the space the
+  unit occupies and what the router has to route around.
 - `port_point(unit, frame, name)` is where a stream visually attaches.
 - `port_anchor(unit, frame, name)` is the routing anchor, projected onto the
   bounding-box edge, plus the outward direction.

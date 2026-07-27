@@ -21,6 +21,9 @@ Authoring conventions (hand-drawn symbols)
 - Ports: named anchors on the boundary face a stream attaches to; names MUST
   match the owning :class:`~pandid.units.Unit`'s port names.
 - Variants share a ``kind`` and register under a ``variant`` name.
+- A symbol whose shape carries meaning — a balloon is a circle because ISA-5.1
+  says a circle — sets ``stretchable=False``, and is centred in a box of another
+  shape rather than distorted to fill it.
 """
 
 import math
@@ -139,6 +142,19 @@ class Symbol:
     # every fixed symbol leaves this empty and shares one definition however it
     # is placed.
     id_suffix: str = ""
+    # May the artwork be scaled unevenly to fill a box of another shape? A user
+    # who sizes a unit is asking for a box, and a shell, tank or exchanger
+    # simply becomes that box. A shape whose roundness carries meaning does not:
+    # an instrument balloon is a circle because ISA-5.1 says a circle, so it
+    # keeps its aspect and is centred in the box instead, leaving whitespace.
+    #
+    # The vendored symbols take this from the stencil's own ``aspect``
+    # attribute, which is the draw.io author's statement about the same
+    # question; ``variable`` is stretchable and ``fixed`` is not, and the
+    # default here is theirs. :mod:`pandid.portgeom` resolves ports onto the
+    # artwork either way -- a port in the letterbox would draw a stream that
+    # stops short of its equipment.
+    stretchable: bool = True
     # Deprecated spelling, accepted so a symbol authored against the old
     # interface still registers. ``port_alts`` listed only the *extra* faces.
     port_alts: InitVar[dict[str, dict[str, tuple[float, float]]] | None] = None
@@ -370,6 +386,12 @@ def conveyor_symbol(length: float = CONVEYOR_LENGTH) -> Symbol:
         port_faces={"feed": {"N": (tail, 0.0)},
                     "discharge": {"S": (head, float(height))}},
         id_suffix=suffix,
+        # The rollers are circles, which is the whole reason this symbol is
+        # built to its length instead of scaled to it. A Conveyor is sized by
+        # ``length`` and refuses width/height, so its box is always exactly the
+        # box it was drawn in and nothing ever asks — but the drawing says what
+        # it is either way.
+        stretchable=False,
     )
 
 
@@ -667,28 +689,35 @@ class SymbolRegistry:
         # menus overlap on purpose, which is what faceless_ports declares.
         _inst_menu = {name: dict(_inst_faces) for name in _inst_ports}
         _inst_faceless = frozenset(_inst_ports)
+        # None of them stretches. ISA-5.1 balloons are *circles*, and the square,
+        # the hexagon and the interlock box are read against that circle — an
+        # oval bubble is not a bubble drawn wide, it is a different symbol, and
+        # a squashed hexagon stops being the one that means "computer function".
+        # Sized off their own proportions they keep them and are centred in the
+        # box, which is what makes a balloon a balloon at any width the author
+        # asks for.
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
-            faceless_ports=_inst_faceless, label_pos="center"))
+            faceless_ports=_inst_faceless, label_pos="center", stretchable=False))
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_panel"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="22" x2="43" y2="22" stroke="black" stroke-width="1.5"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
-            faceless_ports=_inst_faceless, label_pos="center"), "panel")
+            faceless_ports=_inst_faceless, label_pos="center", stretchable=False), "panel")
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_aux"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="19" x2="43" y2="19" stroke="black" stroke-width="1.5"/><line x1="1" y1="25" x2="43" y2="25" stroke="black" stroke-width="1.5"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
-            faceless_ports=_inst_faceless, label_pos="center"), "aux")
+            faceless_ports=_inst_faceless, label_pos="center", stretchable=False), "aux")
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_shared"><rect x="1" y="1" width="42" height="42" fill="white" stroke="black" stroke-width="2"/><circle cx="22" cy="22" r="20" fill="none" stroke="black" stroke-width="2"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
-            faceless_ports=_inst_faceless, label_pos="center"), "shared")
+            faceless_ports=_inst_faceless, label_pos="center", stretchable=False), "shared")
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_computer"><polygon points="11,3 33,3 43,22 33,41 11,41 1,22" fill="white" stroke="black" stroke-width="2"/></g>',
             # The hexagon's flat bottom is at y=41, not y=43 like the circular
             # variants, so pv needs its own coordinate to keep the same 1-unit
             # nozzle stub instead of floating 3 units clear of the outline.
-            width=44.0, height=44.0, label_pos="center",
+            width=44.0, height=44.0, label_pos="center", stretchable=False,
             faceless_ports=_inst_faceless,
             ports={**_inst_ports, "pv": (22.0, 42.0)},
             # the hexagon is flat-topped at y=3 and flat-bottomed at y=41, so N and S
@@ -699,7 +728,7 @@ class SymbolRegistry:
         # interlock number, hung under the instrument it trips (ISA-5.1).
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_logic"><rect x="1" y="1" width="26" height="26" fill="white" stroke="black" stroke-width="2"/></g>',
-            width=28.0, height=28.0, label_pos="center",
+            width=28.0, height=28.0, label_pos="center", stretchable=False,
             ports={'pv': (14.0, 27.0), 'sig_in': (1.0, 14.0), 'sig_out': (27.0, 14.0)}),
             "logic")
 
