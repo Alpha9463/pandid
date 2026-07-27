@@ -174,7 +174,9 @@ and the scale cell reports the ratio the drawing was actually placed at. The
 furniture rules to the page edges and the drawing is fitted into what is left.
 
 The process is the front end of a fuel-ethanol purification train: beer column
-T-301 with its overhead condenser, reflux drum and kettle reboiler, the bottoms
+T-301 with its overhead condenser, reflux drum and kettle reboiler, the drum's
+draw split between the reflux the tower needs and the distillate that leaves the
+sheet, the bottoms
 cooled in HX-301, flocculant made up with RO water in M-301, dosed into the beer
 in M-302, and the slurry dewatered in the membrane filter press F-301. Six
 off-page connectors carry the drawing they tie into, the equipment list is named
@@ -193,12 +195,17 @@ so each is drawn once and heads one table column.
 
 The P&ID counterpart of `10`: the same unit on the same `page_size="A3"` sheet,
 drawn as the piping and instrumentation diagram. Every line is identified by its
-line number, and one number runs through the hand valves and the control valve
-of a station because a station is one line. Five loops close on a final control element —
+line number, and one number runs through the hand valves, the reducer and the
+control valve of a station because a station is one line. The reflux, distillate
+and steam control valves are each drawn as a full station — isolation valve,
+reducer, control valve, isolation valve — and the reflux flow element `FE-303`
+is a `Fitting` sitting in the run with `FT-303` hung off it. Five loops close on
+a final control element —
 `PIC-301` on the tower overhead, `LIC-304` on the distillate, `TIC-307` on the
 steam, `LIC-306` on the bottoms draw, and `TT-302 → TIC-302 → FIC-303` cascading
-the tower-top temperature onto the reflux flow controller — with `PAH`/`PAL` and
-`LAH`/`LAL` alarm pairs and the `logic` interlock square drawn at all four
-places the trip acts. `via()` pins the routes of the lines that carry balloons,
-since an attached instrument hangs off the *routed* path and would move with a
-line the router was free to re-bend.
+the tower-top temperature onto the reflux flow controller — every controller and
+alarm drawn as a `shared` display balloon, and the `sis` interlock square drawn
+at all four places the trip acts. `via()` pins the routes of the lines that carry
+balloons, since an attached instrument hangs off the *routed* path and would move
+with a line the router was free to re-bend. Nothing on the sheet is pinned by a
+measured nozzle offset: `on_run()` asks each symbol where its own nozzle sits.

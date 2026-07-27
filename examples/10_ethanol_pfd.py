@@ -7,7 +7,8 @@ grid is a property of the page rather than of the drawing: a note reading
 
 The unit is the front end of a fuel-ethanol purification train. Fermentation
 broth is fed to the beer column T-301, whose overhead condenses to azeotropic
-ethanol and whose bottoms are cooled in HX-301 before the biosolids are
+ethanol, part of it returned to the tower as reflux and the rest taken as
+product, and whose bottoms are cooled in HX-301 before the biosolids are
 flocculated out: the flocculant is made up with RO water in M-301, dosed into
 the beer in M-302, and the slurry is dewatered in the membrane filter press
 F-301, which sends filtrate to effluent and cake off the sheet.
@@ -65,12 +66,18 @@ def main():
     col = fs.add(units.Column("T-301", width=110, height=250, label_pos="center",
                               description="Beer Column"))
     # Overhead: the tower vapour is totally condensed and collected, and the
-    # receiver sends the whole condensate off the sheet as product.
+    # receiver's liquid is split between the reflux the tower needs to make its
+    # separation and the distillate that leaves the sheet as product.
     cond = fs.add(units.HeatExchanger("E-301", variant="condenser", width=64,
                                       height=64,
                                       description="T-301 Overhead Condenser"))
     drum = fs.add(units.Vessel("V-301", variant="horizontal", width=110,
                                height=36, description="T-301 Reflux Drum"))
+    # The drum has one liquid draw and a nozzle takes one stream, so the tee
+    # where the reflux parts from the distillate is drawn as the junction it is.
+    refl_w = 50.0
+    refl = fs.add(units.Splitter("SP-302", n_outlets=2, width=refl_w, height=refl_w,
+                                 description="V-301 Reflux Split"))
     # The sump drains into the kettle; what boils returns to the tower as
     # boilup and what does not overflows the weir as the bottoms product.
     reb = fs.add(units.HeatExchanger("E-302", variant="kettle", width=120,
@@ -114,8 +121,14 @@ def main():
     cond.pin(x=col_axis - cond_w / 2, y=56, mirrored="y")
 
     # Drum clear to the right of the tower, so the condensate leaves the
-    # condenser's crown, runs over the top of the sheet and drops onto it.
-    drum.pin(x=700, y=150)
+    # condenser's crown, runs over the top of the sheet and drops onto it. It
+    # is hung high enough that its draw falls into the reflux split, and the
+    # split high enough that both legs leave it falling: reflux back into the
+    # tower's top nozzle, distillate on across the sheet.
+    drum_x, drum_y, drum_w = 700.0, 100.0, 110.0
+    drum.pin(x=drum_x, y=drum_y)
+    drum_draw_x = drum_x + (68 / 91.5) * drum_w      # liquid draw down the shell
+    refl.pin(x=drum_draw_x - refl_w / 2, y=165, orientation=90)  # inlet up, outlets down
     ethanol.pin(x=1330, y=230)
 
     # Kettle off the tower bottom, low enough that the boilup rises into the
@@ -146,18 +159,20 @@ def main():
     # --- Connections -----------------------------------------------------
     # Declared in stream-number order, which is the order the table reads.
     #
-    # The tower overhead and the reboiler circuit are each one service from the
-    # tower to where the material leaves it, so every segment of one carries the
-    # same number rather than being numbered piece by piece. A number is drawn
-    # once, on the first segment declared, so each group starts with the run the
-    # number belongs on.
+    # The tower overhead and the reboiler circuit are each one service, from the
+    # tower round to where the material leaves it and back in on the return leg,
+    # so every segment of one carries the same number rather than being numbered
+    # piece by piece. A number is drawn once, on the first segment declared, so
+    # each group starts with the run the number belongs on.
     fs.connect(broth.outlet, col.feed, name="S-301")
     fs.connect(floc.outlet, mix1.feed_1, name="S-303")
     fs.connect(water.outlet, mix1.feed_2, name="S-304")
 
-    fs.connect(drum.outlet, ethanol.inlet, name="S-305")
+    fs.connect(refl.out_1, ethanol.inlet, name="S-305")
     fs.connect(col.distillate, cond.hot_in, name="S-305")
     fs.connect(cond.hot_out, drum.inlet, name="S-305")
+    fs.connect(drum.outlet, refl.inlet, name="S-305")
+    fs.connect(refl.out_2, col.reflux_in, name="S-305", tear_hint=True)
 
     fs.connect(col.bottoms, reb.cold_in, name="S-306")
     fs.connect(reb.cold_out, col.boilup_in, name="S-306", tear_hint=True)
@@ -198,8 +213,8 @@ def main():
 
     # --- Sheet furniture -------------------------------------------------
     # The list is named row by row: the condenser, drum and reboiler are tagged
-    # plant on this sheet and belong on it, while the discharge junction is a
-    # branch in the piping and does not.
+    # plant on this sheet and belong on it, while the reflux and discharge
+    # junctions are branches in the piping and do not.
     fs.add_annotation(equipment_list(fs, align="top", include=[
         "T-301", "E-301", "V-301", "E-302", "HX-301", "M-301", "M-302", "F-301",
     ]))
