@@ -7,6 +7,13 @@ scripts/mxgraph_to_svg.py, and its ports are resolved either from the stencil's
 named <constraint> anchors ("W"/"E"/"N"/"S"/...) or placed explicitly on a
 bounding-box edge as ``(edge, along)`` for shapes that lack a needed anchor.
 
+The shape's ``aspect`` comes across with it, as ``Symbol.stretchable``: the
+stencil author already answered whether the drawing may be reshaped to fill a
+box of another shape (``variable``) or has to keep its proportions (``fixed``),
+and that is the same question a unit given an explicit width and height asks.
+It is named in each emitted symbol's comment, and only a ``fixed`` shape carries
+the keyword, since stretchable is the default on both sides.
+
 ``ADAPTED_ELSEWHERE`` records the stencil-derived symbols this generator cannot
 emit — the parametric ones — and where they are written instead.
 
@@ -601,7 +608,7 @@ def build():
         sx, sy = scale_for(kind, variant)
         # Emit a heavier stroke on scaled symbols so it renders at 2px after the
         # scale transform (2px matches streams + hand-drawn symbols exactly).
-        inner, w, h, constraints = convert_shape(el, stroke_width=round(2.0 / sx, 3))
+        inner, w, h, constraints, aspect = convert_shape(el, stroke_width=round(2.0 / sx, 3))
         # A port spec may be a LIST: the first entry is the default placement and
         # the rest are alternate faces the user can move that port to, keyed by
         # the edge each one names.
@@ -641,12 +648,16 @@ def build():
         sid = kind if variant == "default" else f"{kind}_{variant}"
         svg = f'<g id="sym_{sid}">{inner}</g>'
         lines += [
-            f"    # draw.io {stencil}:{shape} -> {kind}/{variant}",
+            f"    # draw.io {stencil}:{shape} (aspect={aspect}) -> {kind}/{variant}",
             f"    registry.register({kind!r}, Symbol(",
             f"        svg={svg!r},",
             f"        width={w}, height={h},",
             f"        ports={ports!r},",
         ]
+        # Only the shapes that refuse to be reshaped say so: stretchable is the
+        # default on Symbol, exactly as "variable" is the default in a stencil.
+        if aspect == "fixed":
+            lines.append("        stretchable=False,")
         if menu:
             lines.append(f"        port_faces={menu!r},")
         # A family is named after the port it replaces: one member keeps that

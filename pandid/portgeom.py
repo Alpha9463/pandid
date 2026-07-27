@@ -60,6 +60,29 @@ def symbol_to_box(px: float, py: float, sw: float, sh: float,
     return px, py, sw, sh
 
 
+def ink_box(bw: float, bh: float, w: float, h: float, stretchable: bool = True
+            ) -> tuple[float, float, float, float]:
+    """Where a symbol's artwork lands inside a ``w`` x ``h`` placed box.
+
+    Returns ``(x, y, width, height)`` relative to the box's top-left.
+    ``bw`` x ``bh`` is the symbol's own box, already turned by
+    :func:`symbol_to_box` if the placement turns it.
+
+    A stretchable symbol fills the box, so the whole of it is ink and the
+    mapping is the plain linear one. A symbol that may not be distorted keeps
+    its aspect and is centred, exactly as an SVG ``<symbol>`` does under its
+    default ``preserveAspectRatio="xMidYMid meet"`` — which leaves whitespace
+    along one axis that the box edge is on and the drawing is not. Resolving a
+    port against the *box* there is the bug this exists to prevent: the nozzle
+    lands out in the letterbox and its stream stops short of the equipment.
+    """
+    if stretchable or bw <= 0 or bh <= 0:
+        return 0.0, 0.0, w, h
+    scale = min(w / bw, h / bh)
+    iw, ih = bw * scale, bh * scale
+    return (w - iw) / 2, (h - ih) / 2, iw, ih
+
+
 def port_faces(unit: "Unit", port_name: str, placed=None) -> list[str]:
     """Faces this port may be piped from *as drawn*, most-preferred first.
 
@@ -115,6 +138,12 @@ def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
     sheet without redoing the mirror arithmetic. Coordinates come back relative
     to the unit's top-left, in resolved pixels. Two placements can collapse onto
     one face after a quarter turn, in which case the more-preferred one wins.
+
+    The map onto the box goes through :func:`ink_box`, so a symbol that keeps
+    its aspect puts its ports on the artwork rather than on the box edge the
+    artwork no longer reaches. The face each lands on is read in the artwork's
+    own rectangle for the same reason: a balloon's west tap is on the west of
+    the *circle*, whatever the box around it is shaped like.
     """
     sym = _sym(unit)
     menu = (getattr(sym, "port_faces", None) or {}).get(port_name)
@@ -130,11 +159,14 @@ def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
         if unit.kind in ("feed", "product"):
             # Boundary flags are drawn directly, not from the symbol box.
             lx, ly = (sym.width - px if mirrored else px), py
+            face = outward_dir(lx, ly, w, h, unit.kind, port_name, mirrored)
         else:
             bx, by, bw, bh = symbol_to_box(px, py, sym.width, sym.height,
                                            rot, mirrored, mirror_y)
-            lx, ly = bx * w / bw, by * h / bh
-        out.setdefault(outward_dir(lx, ly, w, h, unit.kind, port_name, mirrored), (lx, ly))
+            ox, oy, iw, ih = ink_box(bw, bh, w, h, getattr(sym, "stretchable", True))
+            lx, ly = ox + bx * iw / bw, oy + by * ih / bh
+            face = outward_dir(lx - ox, ly - oy, iw, ih, unit.kind, port_name, mirrored)
+        out.setdefault(face, (lx, ly))
     return out
 
 
@@ -262,8 +294,15 @@ def chosen_face(unit: "Unit", placed, port_name: str) -> str | None:
 
 def _local_port(unit: "Unit", port_name: str, w: float, h: float,
                 mirrored: bool, mirror_y: bool, rot: int, want: str | None
-                ) -> tuple[float, float]:
-    """Port position relative to the unit's top-left, in resolved pixels.
+                ) -> tuple[str, tuple[float, float]]:
+    """The face a port comes out of and its position relative to the top-left.
+
+    Both together, in resolved pixels: the menu is keyed by face, so the face is
+    something the placement is *looked up by* rather than something to be read
+    back off the coordinate afterwards. Deriving it a second time from the point
+    is how the two come to disagree — an artwork that keeps its aspect puts the
+    nozzle on the drawing, which is not necessarily nearest the box edge of the
+    same name.
 
     Takes the placement on the face ``want`` names, else the symbol's own nozzle
     — which is the menu's first entry, since the whole point of folding the home
@@ -276,10 +315,10 @@ def _local_port(unit: "Unit", port_name: str, w: float, h: float,
     """
     placements = _drawn_placements(unit, port_name, w, h, rot, mirrored, mirror_y)
     if want is None:
-        return next(iter(placements.values()))
+        return next(iter(placements.items()))
     if want not in placements:
         raise unreachable_face(unit, port_name, want, list(placements))
-    return placements[want]
+    return want, placements[want]
 
 
 class ResolvedPort(NamedTuple):
@@ -294,15 +333,16 @@ def resolve_port(unit: "Unit", frame, port_name: str) -> ResolvedPort:
 
     All three together, because deriving one of them somewhere else is what lets
     the renderer and the router disagree. The anchor is the point projected onto
-    the bounding-box edge the port faces, so the visibility grid and the router
-    leave a unit where the ink does; Feed/Product use their arrow-tip convention
-    for both (the port sits at the tip, whichever way it points).
+    the bounding-box edge the port faces — the full placed box, which is what
+    :func:`unit_box` hands the router as the obstacle, so a symbol drawn smaller
+    than its box is still left by way of the box it occupies. Feed/Product use
+    their arrow-tip convention for both (the port sits at the tip, whichever way
+    it points).
     """
     w, h = frame.w, frame.h
     rot, mirrored, mirror_y = _xform(frame)
     want = chosen_face(unit, frame, port_name)
-    px, py = _local_port(unit, port_name, w, h, mirrored, mirror_y, rot, want)
-    d = outward_dir(px, py, w, h, unit.kind, port_name, mirrored)
+    d, (px, py) = _local_port(unit, port_name, w, h, mirrored, mirror_y, rot, want)
 
     if unit.kind in ("feed", "product"):
         if unit.kind == "feed":

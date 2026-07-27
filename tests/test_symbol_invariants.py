@@ -18,14 +18,16 @@ hit-testing.
 
 from __future__ import annotations
 
+import functools
 import math
+import pathlib
 import re
 import xml.etree.ElementTree as ET
 
 import pytest
 
 from pandid import units
-from pandid.portgeom import outward_dir
+from pandid.portgeom import outward_dir, port_point
 from pandid.render.symbols import Symbol, default_registry
 
 BOX_EPS = 1.0  # bounding-box slack, in symbol-space units
@@ -455,6 +457,230 @@ def test_no_two_ports_coincide(entry):
     )
 
 
+# ---------------------------------------------------------------------------
+# The drawn artwork and the resolved ports have to agree at *every* box shape.
+#
+# Everything above measures a symbol in the coordinates it was drawn in, where
+# the box is by definition the one it was drawn for. A unit given an explicit
+# width and height is placed in a box of some *other* shape, and the port has to
+# follow the ink there too -- whichever way the renderer disposes of the spare
+# room, by filling the box or by centring the artwork in it. Nothing else covers
+# that case, and a port left behind in the whitespace draws a stream that stops
+# short of its equipment.
+#
+# What the artwork did is read back out of the rendered SVG, transform and all,
+# so this measures what the renderer *did* rather than what portgeom assumed it
+# would do -- which is exactly the disagreement being tested.
+# ---------------------------------------------------------------------------
+
+#: Box shapes nothing is drawn at: far wider than tall, far taller than wide,
+#: and square. One of the three is the wrong shape for every symbol there is.
+_ODD_BOXES = ((300.0, 60.0), (60.0, 300.0), (140.0, 140.0))
+
+#: Placement transforms to try each of those at, as ``pin()`` takes them. The
+#: identity, then a quarter turn with a left-right flip and a three-quarter turn
+#: with a top-bottom one: a reshaped box and a turned one compose, and the port
+#: has to come out on the ink under both at once.
+_PLACEMENTS = ({}, {"orientation": 90, "mirrored": "x"}, {"orientation": 270, "mirrored": "y"})
+
+#: The nozzle is measured by inverting the placement the artwork was drawn
+#: under, so a port authored exactly ``GEOM_TOL`` from the ink comes back a few
+#: parts in 10^13 the wrong side of the line. Slack for that round trip and for
+#: nothing else: it is far smaller than any distance a drawing can express.
+_ROUNDTRIP_EPS = 1e-9
+
+#: Kinds that cannot be handed a box at all. A Conveyor is sized by ``length``
+#: and refuses ``width``/``height``, so its artwork is built to its box and the
+#: two can never disagree; tests/test_conveyor.py holds it to that.
+_UNBOXABLE_KINDS = {"conveyor"}
+
+_UNIT_BY_KIND = {cls.kind: cls for cls in (getattr(units, n) for n in units.__all__)}
+
+
+def _sized_unit(kind: str, variant: str, index: int, w: float, h: float):
+    """One unit of ``(kind, variant)``, forced into a ``w`` x ``h`` box."""
+    cls = _UNIT_BY_KIND[kind]
+    if kind == "instrument":  # tagged (type, number) rather than named
+        return cls("XX", index, variant=variant, width=w, height=h)
+    return cls(f"{kind}-{variant}-{index}", variant=variant, width=w, height=h)
+
+
+def _invert(m: Matrix) -> Matrix:
+    """The transform that takes a drawn point back where it was drawn from."""
+    a, b, c, d, e, f = m
+    det = a * d - b * c
+    return (
+        d / det,
+        -b / det,
+        -c / det,
+        a / det,
+        (c * f - d * e) / det,
+        (b * e - a * f) / det,
+    )
+
+
+def _placements(svg: str) -> dict[tuple[float, float], Matrix]:
+    """Symbol coordinates -> sheet coordinates for each placed symbol.
+
+    Keyed by the centre of the box it was placed in, which is the one point a
+    quarter turn and a mirror both leave alone, and so the only handle on a
+    ``<use>`` that survives its own transform.
+
+    A ``<symbol>`` maps its viewBox onto the ``<use>``'s box under its own
+    ``preserveAspectRatio``: ``none`` fills the box exactly, while the default
+    ``xMidYMid meet`` scales uniformly and centres, leaving a letterbox the box
+    edge is no longer on. Whatever the ``<use>`` then does to the result is
+    composed on top, so the matrix is the whole journey from the coordinates the
+    symbol was authored in to the ones the sheet is drawn in.
+    """
+    defs = {m.group(1): m.group(0) for m in re.finditer(r'<symbol id="([^"]+)"[^>]*>', svg)}
+    out: dict[tuple[float, float], Matrix] = {}
+    for use in re.findall(r"<use\b[^>]*/>", svg):
+        attr = dict(re.findall(r'([\w-]+)="([^"]*)"', use))
+        ux, uy = float(attr["x"]), float(attr["y"])
+        uw, uh = float(attr["width"]), float(attr["height"])
+        _, _, vw, vh = _nums(re.search(r'viewBox="([^"]+)"', defs[attr["href"][1:]]).group(1))
+        if 'preserveAspectRatio="none"' in defs[attr["href"][1:]]:
+            sx, sy, ox, oy = uw / vw, uh / vh, 0.0, 0.0
+        else:
+            sx = sy = min(uw / vw, uh / vh)
+            ox, oy = (uw - sx * vw) / 2, (uh - sy * vh) / 2
+        fit: Matrix = (sx, 0.0, 0.0, sy, ux + ox, uy + oy)
+        key = (round(ux + uw / 2, 6), round(uy + uh / 2, 6))
+        out[key] = _compose(_parse_transform(attr.get("transform", "")), fit)
+    return out
+
+
+@pytest.fixture(scope="module")
+def odd_box_sheets():
+    """Every symbol at every shape in :data:`_ODD_BOXES` and every placement.
+
+    One sheet per (shape, placement), built once and shared: the sheets *are*
+    what the checks below measure, and rebuilding a hundred-odd units for each
+    of a hundred-odd test cases would be the bulk of the suite's runtime.
+    """
+    from pandid import Flowsheet
+
+    sheets: dict[tuple, dict[tuple[str, str], tuple]] = {}
+    for box in _ODD_BOXES:
+        for turn, placement in enumerate(_PLACEMENTS):
+            fs = Flowsheet("odd boxes")
+            placed = {}
+            for i, ((kind, variant), _) in enumerate(_SYMBOLS):
+                if kind in _DYNAMIC_KINDS or kind in _UNBOXABLE_KINDS:
+                    continue
+                unit = _sized_unit(kind, variant, i, *box)
+                # Pinned well clear of each other: this sheet is a measuring
+                # jig, not a diagram, and nothing on it is connected to
+                # anything.
+                fs.add(unit).pin(x=200 + 600 * (i % 8), y=200 + 600 * (i // 8), **placement)
+                placed[(kind, variant)] = unit
+            matrices = _placements(fs.to_svg())
+            sheets[(box, turn)] = {
+                key: (unit, matrices[(round(unit.frame.cx, 6), round(unit.frame.cy, 6))])
+                for key, unit in placed.items()
+            }
+    return sheets
+
+
+def _resolved_in_symbol_space(unit, matrix: Matrix, name: str) -> Point:
+    """A port's resolved point, put back in the symbol's own coordinates.
+
+    Which is where ``GEOM_TOL`` is a distance, rather than a distance times
+    whatever the box, the turn and the mirror each did to that axis.
+    """
+    return _apply(_invert(matrix), *port_point(unit, unit.frame, name))
+
+
+@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
+def test_ports_land_on_drawn_ink_at_any_box_shape(entry, odd_box_sheets):
+    """A nozzle follows the artwork into a box of any shape, at any placement."""
+    (kind, variant), sym = entry
+    if kind in _DYNAMIC_KINDS:
+        pytest.skip("feed/product are drawn dynamically, not from Symbol.svg")
+    if kind in _UNBOXABLE_KINDS:
+        pytest.skip("a conveyor is sized by length=, so its box is its artwork's")
+    segments = _collect_segments(sym.svg)
+    for key, sheet in odd_box_sheets.items():
+        unit, matrix = sheet[(kind, variant)]
+        for name in unit.ports:
+            if (kind, variant, name) in _KNOWN_GEOMETRY_GAPS or (kind, name) in _SIGNAL_PORTS:
+                continue
+            d = _nearest_distance(_resolved_in_symbol_space(unit, matrix, name), segments)
+            assert d <= GEOM_TOL + _ROUNDTRIP_EPS, (
+                f"{kind}/{variant} port {name!r} in a {key[0][0]:g}x{key[0][1]:g} box at "
+                f"{_PLACEMENTS[key[1]] or 'no turn'} is {d:.1f}u from the nearest drawn "
+                f"stroke once the artwork's own placement is undone (tolerance {GEOM_TOL})"
+            )
+
+
+@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
+def test_signal_ports_stay_on_the_outline_at_any_box_shape(entry, odd_box_sheets):
+    """The odd-box counterpart of the outline rule, and the balloons' own case.
+
+    A signal terminates where the line meets the symbol, so its coordinate
+    belongs on the symbol's outline -- which is on the *artwork*, not on a box
+    edge that may be a long way from it. Every one of an instrument balloon's
+    connections is a signal, so without this the balloons are exempt from the
+    whole of the check above and nothing holds their taps to the circle."""
+    (kind, variant), sym = entry
+    if kind in _DYNAMIC_KINDS:
+        pytest.skip("feed/product are drawn dynamically, not from Symbol.svg")
+    if kind in _UNBOXABLE_KINDS:
+        pytest.skip("a conveyor is sized by length=, so its box is its artwork's")
+    corners = [(0.0, 0.0), (sym.width, 0.0), (sym.width, sym.height), (0.0, sym.height)]
+    outline = list(zip(corners, corners[1:] + corners[:1]))
+    for key, sheet in odd_box_sheets.items():
+        unit, matrix = sheet[(kind, variant)]
+        for name in unit.ports:
+            if (kind, name) not in _SIGNAL_PORTS:
+                continue
+            d = _nearest_distance(_resolved_in_symbol_space(unit, matrix, name), outline)
+            assert d <= GEOM_TOL + _ROUNDTRIP_EPS, (
+                f"{kind}/{variant} signal port {name!r} in a {key[0][0]:g}x{key[0][1]:g} box "
+                f"at {_PLACEMENTS[key[1]] or 'no turn'} is {d:.1f}u off the "
+                f"{sym.width}x{sym.height} outline once the artwork's own placement is "
+                f"undone (tolerance {GEOM_TOL})"
+            )
+
+
+def test_the_reported_column_and_reactor_meet_their_streams():
+    """The bug as reported, in the two sizes it was reported at.
+
+    A 110 x 250 column drawn from a 100 x 200 symbol had its artwork scaled to
+    fit and centred -- 110 x 220, with 15px of whitespace above and below -- so
+    the distillate and bottoms lines stopped 15px short of the dished heads. An
+    80 x 100 reactor from a 50 x 96.4 symbol came out 51.9 wide inside its 80,
+    and both feed arrows stopped 14.1px short of the vessel wall. Both stencils
+    are variable-aspect, so the artwork fills the box and the gap is gone.
+    """
+    from pandid import Flowsheet
+
+    fs = Flowsheet("as reported")
+    col = fs.add(units.Column("T-301", width=110, height=250)).pin(x=100, y=100)
+    reactor = fs.add(units.Reactor("M-301", width=80, height=100)).pin(x=600, y=100)
+    matrices = _placements(fs.to_svg())
+    for unit in (col, reactor):
+        sym = default_registry.for_unit(unit)
+        frame = unit.frame
+        matrix = matrices[(round(frame.cx, 6), round(frame.cy, 6))]
+        # Whitespace is what the ports were floating in, so start there: the
+        # artwork's own corners land on the box's, and there is none.
+        assert _apply(matrix, 0.0, 0.0) == pytest.approx((frame.x, frame.y))
+        assert _apply(matrix, sym.width, sym.height) == pytest.approx(
+            (frame.x + frame.w, frame.y + frame.h)
+        )
+        drawn = [(_apply(matrix, *a), _apply(matrix, *b)) for a, b in _collect_segments(sym.svg)]
+        for name in unit.ports:
+            if (unit.kind, name) in _SIGNAL_PORTS:
+                continue
+            gap = _nearest_distance(port_point(unit, frame, name), drawn)
+            assert gap <= GEOM_TOL, (
+                f"{unit.name}.{name} is {gap:.1f}px from the nearest drawn stroke "
+                f"of a {frame.w:g}x{frame.h:g} {unit.kind}"
+            )
+
+
 def _colliding_symbol(**kwargs) -> Symbol:
     """Build a Symbol that is *expected* to have coincident ports.
 
@@ -843,3 +1069,66 @@ def test_a_kind_with_no_symbols_at_all_still_draws_a_generic_box():
     assert default_registry.variants("no_such_kind") == []
     assert default_registry.get("no_such_kind").symbol_id() == "sym_generic"
     assert default_registry.get("no_such_kind", "anything").symbol_id() == "sym_generic"
+
+
+# ---------------------------------------------------------------------------
+# Where stretchability comes from.
+#
+# A draw.io stencil declares whether its shape may be reshaped, and scripts/
+# carries that declaration into ``Symbol.stretchable``. Every shape KIND_MAP
+# names happens to be a "variable" one, so nothing in the shipped registry
+# exercises the other half of the reader -- which is exactly why it is exercised
+# here, and why the claim that leaves the generated file free of the keyword is
+# written down rather than left to be rediscovered.
+# ---------------------------------------------------------------------------
+
+
+@functools.lru_cache(maxsize=None)
+def _script(name: str):
+    """Import one of the dev-only generator scripts by path.
+
+    They are not part of the package and not importable as one; ``scripts/``
+    puts itself on ``sys.path`` when loaded, so this only has to find the file.
+    """
+    import importlib.util
+
+    path = pathlib.Path(__file__).resolve().parent.parent / "scripts" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(f"_pandid_script_{name}", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize(
+    "declared,aspect",
+    [('aspect="fixed" ', "fixed"), ('aspect="variable" ', "variable"), ("", "variable")],
+)
+def test_the_converter_reports_a_stencil_shapes_aspect(declared, aspect):
+    """Including the shape that names none: mxGraph's own default is
+    "variable", so a stencil that says nothing is saying it may be stretched."""
+    shape = ET.fromstring(
+        f'<shape {declared}w="100" h="50"><foreground>'
+        f'<rect x="0" y="0" w="100" h="50"/><stroke/></foreground></shape>'
+    )
+    assert _script("mxgraph_to_svg").convert_shape(shape)[4] == aspect
+
+
+def test_every_stencil_shape_the_generator_vendors_may_be_stretched():
+    """All 24 "fixed" shapes in the stencil set are draw.io's own instrument
+    balloons, which pandid draws itself; nothing KIND_MAP names is one. That is
+    why no symbol in the generated file carries ``stretchable=False`` -- if one
+    day one does, this test is what says the pipeline put it there."""
+    vendor = _script("vendor_symbols")
+    fixed = []
+    for stencil in sorted({entry[0] for entry in vendor.KIND_MAP.values()}):
+        wanted = {shape for s, shape, _ in vendor.KIND_MAP.values() if s == stencil}
+        for name, el in vendor.shapes_in(vendor.STENCILS / f"{stencil}.xml"):
+            if name in wanted and el.get("aspect", "variable") != "variable":
+                fixed.append(f"{stencil}:{name}")
+    assert fixed == []
+    vendored = [
+        (kind, variant)
+        for (kind, variant), sym in _SYMBOLS
+        if (kind, variant) in vendor.KIND_MAP and not sym.stretchable
+    ]
+    assert vendored == []
