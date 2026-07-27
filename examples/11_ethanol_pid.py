@@ -39,7 +39,7 @@ from pandid.geometry import Frame, normalize_mirror
 from pandid.portgeom import port_point, resolve_size
 
 
-def nozzle_at(unit, port, mirrored=False):
+def nozzle_at(unit, port, mirrored: "bool | str" = False):
     """Where ``port`` sits relative to the unit's own top-left corner.
 
     Asked of the symbol the unit is drawn with rather than written down as a
@@ -54,7 +54,7 @@ def nozzle_at(unit, port, mirrored=False):
     return port_point(unit, probe, port)
 
 
-def on_run(unit, x, run_y, port="inlet", mirrored=False):
+def on_run(unit, x, run_y, port="inlet", mirrored: "bool | str" = False):
     """Pin an in-line device at ``x`` with ``port`` on its run's centreline."""
     return unit.pin(x=x, y=run_y - nozzle_at(unit, port, mirrored)[1],
                     mirrored=mirrored)
@@ -114,7 +114,7 @@ def main():
     hv303b = fs.add(units.Valve("HV-303B", description="Reflux Isolation Valve"))
     # The reflux flow element sits in the run itself: the balloon beside it
     # reads the element, it is not the element.
-    fe303 = fs.add(units.Fitting("FE-303", variant="orifice",
+    fe303 = fs.add(units.Fitting("FE-303", variant="venturi",
                                  description="Reflux Flow Element"))
     hv305a = fs.add(units.Valve("HV-305A", description="Distillate Isolation Valve"))
     rd305 = fs.add(units.Reducer("RD-305", description="CV-305 Inlet Reducer"))
