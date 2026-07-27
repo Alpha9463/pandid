@@ -142,6 +142,13 @@ grows and its rollers stay round. The
 [API reference](https://github.com/Alpha9463/py-chemengg/blob/main/docs/api.md#units-and-ports) lists every class's ports and every
 registered variant.
 
+**Equipment the catalogue does not have.** A `units.Unit` subclass declaring its
+own `kind` and `PORTS`, with a `Symbol` registered for that kind, is laid out,
+routed and drawn like any shipped class:
+[Custom equipment](https://github.com/Alpha9463/py-chemengg/blob/main/docs/api.md#custom-equipment).
+It is for genuinely custom plant. Anything standard is better asked for as a
+stencil mapping, so it ships for everyone and stays visually consistent.
+
 **Valve operators.** Most valve variants draw the body only, with `actuator` on
 the top of the symbol where an operator would be mounted. These also draw the
 operator, and put `actuator` on its crown, so a signal lands where it physically

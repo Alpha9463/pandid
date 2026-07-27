@@ -225,7 +225,8 @@ size it needed.
 Every unit type is reached through the `units` namespace. Ports are exposed both
 as `unit.ports["name"]` and as attributes (`pump.suction`). An unknown attribute
 raises `AttributeError` listing the real ports, and `unit.port("name")` raises
-`KeyError` the same way.
+`KeyError` the same way. A type of your own is
+[Custom equipment](#custom-equipment).
 
 ```text
 Unit(name, variant="default", width=None, height=None,
@@ -955,6 +956,172 @@ pandid validate plant.yaml && pandid draw plant.yaml -o plant.pdf
 
 ---
 
+## Custom equipment
+
+Every class in the [port table](#port-table) is a `units.Unit` subclass with a
+symbol registered for its `kind`. Neither half is closed, so a piece of plant the
+library does not ship is a class and a symbol of your own.
+
+This is for genuinely custom equipment. Anything a reader would recognise
+from another sheet is better asked for as a stencil mapping (see
+`CONTRIBUTING.md`): it then ships for everyone, is drawn in the same hand as the
+rest of the catalogue, and is covered by the symbol invariants.
+
+### The class
+
+```python
+from pfd import Flowsheet, units
+
+class Crystalliser(units.Unit):
+    kind = "crystalliser"
+    PORTS = [
+        ("feed", "inlet", "process"),
+        ("mother_liquor", "outlet", "process"),
+        ("crystals", "outlet", "process"),
+    ]
+```
+
+`kind` is the equipment type, and the key the symbol registry is looked up by, so
+it is what ties the class to its artwork. Reusing a shipped kind takes over that
+kind's symbol, which is worth doing deliberately or not at all.
+
+`PORTS` is one `(name, direction, role)` tuple per nozzle:
+
+- **`name`** is what the port answers to, both as `unit.ports["feed"]` and as the
+  attribute `unit.feed`, so make it a valid Python identifier. It must be unique
+  on the unit; a repeat raises `ValueError`.
+- **`direction`** is `"inlet"` or `"outlet"`. `connect(src, dst)` requires an
+  outlet as `src` and an inlet as `dst`. Nothing checks the spelling when the
+  class is written, so anything else surfaces at the first `connect()`.
+- **`role`** is one of `process`, `feed`, `product`, `energy`, `utility`,
+  `vapor`, `liquid`, `signal`. Anything else raises `ValueError` when the unit is
+  constructed, listing the eight. Two of them change behaviour: `signal` makes
+  the port a signal connection, which joins another signal connection and takes a
+  signal `kind` (see [`connect()`](#building-the-topology)), and `energy` or
+  `utility` at both ends promotes a `material` connection to `energy`. The rest
+  state what the nozzle carries and are not otherwise interpreted.
+
+Ports are built in declaration order, once, when the unit is constructed.
+`_PORTS` is the name `PORTS` had while it was private; it is still read, so a
+unit written against it keeps its nozzles, and it warns `DeprecationWarning`.
+
+Everything a shipped class has, a custom one has: `pin()`, `nozzle()`,
+`description`, `label_pos`, `width`/`height` and the rest of the
+[`Unit` constructor](#units-and-ports).
+
+### The symbol
+
+Without a symbol the unit draws a generic box (below). To draw it properly,
+register a `Symbol` under the same `kind`:
+
+```python
+from pfd.render.symbols import Symbol, default_registry
+
+default_registry.register("crystalliser", Symbol(
+    svg=(
+        '<g id="sym_crystalliser">'
+        '<path d="M 5 5 L 5 45 L 35 65 L 45 65 L 75 45 L 75 5 Z" '
+        'fill="none" stroke="black" stroke-width="2"/>'
+        '</g>'
+    ),
+    width=80.0,
+    height=70.0,
+    ports={
+        "feed": (5.0, 15.0),
+        "mother_liquor": (75.0, 15.0),
+        "crystals": (40.0, 65.0),
+    },
+))
+```
+
+`svg` is the artwork in the symbol's own coordinates: `(0, 0)` top-left, spanning
+`width` × `height`. Wrap it in a single `<g id="...">`. The renderer lifts the
+group's children into a `<symbol viewBox="0 0 width height">` and places it with
+`<use>`, so the drawing is scaled into whatever box the unit ends up with. The id
+in the output is made from the kind and the variant; the id you write is what
+names the symbol in error messages. Give every stroke an explicit `stroke-width`,
+or it draws at the SVG default of 1 and comes out lighter than the rest of the
+sheet.
+
+`width` and `height` are the intrinsic size of that box. A `width=` / `height=`
+on the unit overrides them, and the artwork is scaled into the result, unevenly
+if that changes the aspect ratio.
+
+`ports` maps port name to a point in those same symbol coordinates. The names
+must match the class's port names exactly. **Put every port on drawn ink.** A
+stream is drawn to the port's point, so a nozzle in whitespace draws a pipe that
+does not touch its equipment. `tests/test_symbol_invariants.py` enforces this for
+every shipped symbol, each port within 2 units of the nearest stroke and no two
+ports on one point, but it only sees the shipped registry, so a symbol of your
+own is checked by eye. The one case the engine does catch is a port the symbol
+never anchored: it falls back to the centre of the box, and if two such ports are
+connected `validate()` reports [`coincident-ports`](#validation) as a warning.
+
+Which face a port comes out of is decided by the nearest edge of the box, so
+`(5.0, 15.0)` in an 80 × 70 box is 5 from the left and 15 from the top and is
+therefore a west nozzle. A port that may be piped from more than one face
+declares the whole menu in `port_faces`, one coordinate per face, which is what
+makes it movable by [`nozzle()`](#nozzle).
+
+That is the whole workflow. The unit now behaves like any other:
+
+```python
+fs = Flowsheet("Salt Plant")
+brine = fs.add(units.Feed("Brine"))
+cr = fs.add(Crystalliser("CR-101", description="Salt Crystalliser"))
+liquor = fs.add(units.Product("Mother Liquor"))
+salt = fs.add(units.Product("Salt"))
+
+fs.connect(brine.outlet, cr.feed)
+fs.connect(cr.mother_liquor, liquor.inlet)
+fs.connect(cr.crystals, salt.inlet)
+
+fs.validate()                  # []
+fs.render("crystalliser.svg")  # lays out, routes and draws
+```
+
+### A second style
+
+`variant=` registers another drawing of the same kind, exactly as it does for the
+shipped symbols. The class is unchanged: a variant is a visual style within a
+functional type, so the two drawings carry the same ports.
+
+```python
+# forced_circulation is a second Symbol, drawn like the one above with the
+# circulation loop added, and carrying the same three ports.
+default_registry.register("crystalliser", forced_circulation, variant="forced_circulation")
+
+fs.add(Crystalliser("CR-102", variant="forced_circulation"))
+```
+
+`default_registry.variants("crystalliser")` lists what is registered, `default`
+first. A variant name nothing was registered under raises `ValueError` at the
+first layout or render, naming the ones that were.
+
+### No symbol at all
+
+A kind with nothing registered draws a **generic box**: an empty 60 × 60 square
+with the tag beside it. Every port falls back to the centre of it, so the streams
+all meet in the middle, and a connected pair of them is reported as the
+`coincident-ports` warning. Nothing else is affected: the unit lays out, routes,
+validates and renders. It is the cheap path when the topology is the point and
+the shape of the box is not.
+
+### What a custom unit does not get
+
+- **A spec file.** `pfd.spec` builds units from the shipped classes by name, so
+  it can neither read nor write one it has never heard of. `fs.to_dict()` raises
+  `SpecError` naming the class rather than writing a spec that cannot be read
+  back, and a `kind:` naming a custom class is refused the same way. A flowsheet
+  using custom equipment is written in Python, not in YAML or JSON, and the CLI
+  cannot draw it.
+- **A row in the automatic equipment list.** `equipment_list(fs)` schedules the
+  kinds listed under [Sheet furniture](#convenience-constructors), which is a
+  fixed set. Name the tag in `include=[…]` to schedule it explicitly; the row
+  then reads its `description`, or its kind in title case where it has none.
+
+---
+
 ## Extension points
 
 Both are `typing.Protocol`s. Implement the method and pass your object in.
@@ -977,7 +1144,8 @@ The symbol registry is `pfd.render.symbols.default_registry`, a
 `SymbolRegistry` with `register(kind, symbol, variant="default")`,
 `variants(kind)` and `get(kind, variant="default")`. `get()` raises `ValueError`
 for a variant that kind has no symbol for, naming the ones it does. A kind with
-no symbols at all, such as a `Unit` subclass of your own, draws a generic box.
+no symbols at all draws a generic box; registering one for a unit type of your
+own is [Custom equipment](#custom-equipment).
 `for_unit(unit)` is what the renderer and `pfd.portgeom` actually call: it is
 `get()` for every fixed symbol, and for a symbol drawn to a size the unit
 carries, such as a `Conveyor`, it builds one at that size. New *equipment*
