@@ -146,7 +146,9 @@ and is kept working.
   leave, scaled down uniformly if it is too big and never enlarged if it is not.
   A page too small for its own furniture raises rather than clip it. Fixing the
   page also fixes the zone grid, so a note referring to zone D-4 still means D-4
-  after the next revision grows the drawing.
+  after the next revision grows the drawing. The sizes are ISO 216 in
+  millimetres, and a named sheet declares that physical size on the `<svg>`
+  element, so it prints and exports to PDF at exactly its ISO size.
 - `jump_direction="vertical" | "horizontal"` on `to_svg()` / `render()` selects
   which of two crossing lines gets the semicircle hop.
 - 100 registered `(kind, variant)` symbols following ISO 10628-2 / ISA-5.1,
