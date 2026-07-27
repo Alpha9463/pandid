@@ -46,11 +46,11 @@ dependencies = []
 pandid = "pandid.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/Alpha9463/py-chemengg"
-Repository = "https://github.com/Alpha9463/py-chemengg"
-Documentation = "https://github.com/Alpha9463/py-chemengg/blob/main/docs/api.md"
-Changelog = "https://github.com/Alpha9463/py-chemengg/blob/main/CHANGELOG.md"
-Issues = "https://github.com/Alpha9463/py-chemengg/issues"
+Homepage = "https://github.com/Alpha9463/pandid"
+Repository = "https://github.com/Alpha9463/pandid"
+Documentation = "https://github.com/Alpha9463/pandid/blob/main/docs/api.md"
+Changelog = "https://github.com/Alpha9463/pandid/blob/main/CHANGELOG.md"
+Issues = "https://github.com/Alpha9463/pandid/issues"
 
 [project.optional-dependencies]
 pdf = ["cairosvg>=2.5"]   # enables PDF/PNG export via fs.render("x.pdf")
