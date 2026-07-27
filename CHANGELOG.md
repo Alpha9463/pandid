@@ -263,6 +263,26 @@ and is kept working.
   of the box, which is a gap in the symbol rather than a contradiction on the
   sheet. No shipped symbol has such a gap.
 
+#### Command line
+
+- A `pandid` command, installed with the distribution, so a spec file becomes a
+  drawing without anyone opening Python. `pandid draw plant.yaml -o plant.pdf
+  --page-size A3 --border zone` renders a YAML or JSON spec with the render
+  options that matter, `pandid validate plant.yaml` reports what the engine makes
+  of one without drawing it, and `pandid symbols --kind valve` lists the
+  registered `(kind, variant)` pairs, so the variant names are in front of
+  whoever is writing the spec. `python -m pfd` is the same entry point from a
+  checkout. Built on `argparse`: the package still has no runtime dependencies.
+- Exit codes a build script can gate on rather than one number for everything:
+  `0` done, `1` the flowsheet was rejected (a spec that could not be read, a
+  validation error, a request the engine refused), `2` the command line was
+  wrong, `3` an optional extra the request needs is not installed. `validate`
+  fails on an error and passes on warnings, which is exactly when a render would.
+- Every failure a user can provoke is one line on stderr. A missing file, a typo
+  in the spec, an unknown page size, an output extension the engine cannot write,
+  and a missing PyYAML or cairosvg all come back as the message the library
+  already wrote to be read, rather than as a traceback.
+
 #### Tooling, tests and packaging
 
 - Golden-SVG visual regression suite over a fixed corpus of scenarios

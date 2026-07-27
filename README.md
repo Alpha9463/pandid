@@ -93,6 +93,9 @@ Jupyter.
   YAML) covering everything above, so an equipment list and a stream table go
   straight to a drawing without anyone writing Python. Validated, not
   interpreted: a typo names the entry and lists what would have worked.
+- **A command line.** `pandid draw plant.yaml -o plant.pdf` for the drawing,
+  `pandid validate` for a check a build script can gate on, `pandid symbols` for
+  what can be drawn. Built on `argparse`, so still no dependencies.
 - **Validation.** `fs.validate()` flags overlapping pins, off-sheet
   coordinates (errors) and routes crossing equipment or big detours (warnings).
 - **Zero runtime dependencies.** The package uses only the Python standard
@@ -588,6 +591,51 @@ available ports: ['discharge', 'suction']
 ```
 
 Every failure raises `pfd.SpecError`, a `ValueError`.
+
+## Command line
+
+Installing the package installs a `pandid` command, so a spec file becomes a
+drawing without opening Python. `python -m pfd` runs the same thing from a
+checkout.
+
+```bash
+pandid draw plant.yaml -o plant.pdf --page-size A3 --border zone --stream-table
+pandid validate plant.yaml
+pandid symbols --kind valve
+```
+
+`draw` reads a `.yaml`, `.yml` or `.json` spec and writes the format `-o` names:
+`.svg`, or `.pdf` / `.png` with the `pdf` extra. Without `-o` it writes the
+spec's own name with `.svg`. `--page-size`, `--border`, `--stream-table` and
+`--jump-direction` are the render options, and mean what they mean in
+`render()`.
+
+`validate` lays the sheet out and reports what the engine found, errors first
+and then warnings. It draws nothing.
+
+```
+$ pandid draw plant.yaml -o plant.pdf --page-size A3 --border zone
+wrote plant.pdf  (A3, 14 units, 14 streams)
+
+$ pandid validate overlap.yaml
+error: unit-overlap: P-101 and FV-101 overlap
+warning: route-detour: stream S2 routes 225px for a 55px span (4.1x)
+overlap.yaml: 1 error, 1 warning
+```
+
+`symbols` lists every registered `(kind, variant)`, grouped by kind, so the
+variant names are in front of you while you write the spec. `--kind` takes any
+spelling the spec takes (`Valve`, `HeatExchanger`, `hex`).
+
+The exit codes are meant to be gated on: `0` done, `1` the flowsheet was
+rejected, `2` the command line was wrong, `3` an optional extra the request
+needs is not installed. Nothing prints a traceback at a mistyped file name, an
+unknown page size or a typo in the spec; each is one line on stderr saying what
+to do instead.
+
+```bash
+pandid validate plant.yaml && pandid draw plant.yaml -o plant.pdf
+```
 
 ## Examples
 

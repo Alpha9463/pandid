@@ -40,6 +40,12 @@ classifiers = [
 ]
 dependencies = []
 
+# The command is named after the distribution, not after the import name, so a
+# reader who installed `pandid` types `pandid`. `python -m pfd` runs the same
+# entry point from a checkout.
+[project.scripts]
+pandid = "pfd.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/Alpha9463/py-chemengg"
 Repository = "https://github.com/Alpha9463/py-chemengg"
