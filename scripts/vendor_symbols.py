@@ -7,6 +7,9 @@ scripts/mxgraph_to_svg.py, and its ports are resolved either from the stencil's
 named <constraint> anchors ("W"/"E"/"N"/"S"/...) or placed explicitly on a
 bounding-box edge as ``(edge, along)`` for shapes that lack a needed anchor.
 
+``ADAPTED_ELSEWHERE`` records the stencil-derived symbols this generator cannot
+emit — the parametric ones — and where they are written instead.
+
 Run:  python scripts/vendor_symbols.py
 """
 import pathlib
@@ -343,6 +346,24 @@ KIND_MAP = {
     # connection is the free end of that stem, at the bottom of the box.
     ("vent", "default"):   ("fittings", "Vent", {"inlet": ("S", 40.0)}),
     ("funnel", "default"): ("fittings", "Funnel", {"outlet": ("S", 40.0)}),
+}
+
+
+# Stencil-derived symbols this generator cannot emit, and where they live
+# instead. It emits one fixed-size Symbol per shape, and a fixed drawing placed
+# in a box of a different aspect ratio is scaled unevenly — so a shape that has
+# to stretch along one axis only cannot come out of here. Recorded so the
+# provenance is in the mapping table with everything else, and so nobody
+# "restores" one of these by adding it to KIND_MAP above: doing that would draw
+# it at one fixed size and undo the reason it was written by hand.
+#
+# (kind, variant) -> (stencil, shape_name, where it lives, what was changed)
+ADAPTED_ELSEWHERE = {
+    ("conveyor", "default"): (
+        "driers", "Drier (Roller Conveyor Belt)",
+        "pfd.render.symbols.conveyor_symbol",
+        "drier housing dropped; roller spacing made a parameter, roller r=10 kept",
+    ),
 }
 
 

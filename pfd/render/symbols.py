@@ -11,6 +11,9 @@ Symbols follow ISO 10628-2 / ISA 5.1 conventions and come from two sources:
   repo ``NOTICE`` for attribution.
 - **Hand-drawn primitives** — Feed/Product boundary markers and the
   variable-port Mixer and Splitter.
+- **Built to size (draw.io-derived, Apache-2.0)** — the belt conveyor. Adapted
+  from a stencil but drawn here rather than generated, because a fixed path
+  cannot stretch; see :func:`conveyor_symbol` and the repo ``NOTICE``.
 
 Authoring conventions (hand-drawn symbols)
 ------------------------------------------
@@ -25,6 +28,7 @@ import re
 import warnings
 from dataclasses import InitVar, dataclass, field
 from difflib import get_close_matches
+from functools import lru_cache
 
 from pfd.portgeom import outward_dir
 
@@ -129,6 +133,12 @@ class Symbol:
     # question, and is rejected below.
     port_series: tuple[PortSeries, ...] = ()
     label_pos: str | None = None
+    # Tells two definitions of one (kind, variant) apart when they are not the
+    # same drawing. A conveyor is built to its belt run rather than scaled to
+    # it, so each length is its own ``<defs>`` entry and needs an id of its own;
+    # every fixed symbol leaves this empty and shares one definition however it
+    # is placed.
+    id_suffix: str = ""
     # Deprecated spelling, accepted so a symbol authored against the old
     # interface still registers. ``port_alts`` listed only the *extra* faces.
     port_alts: InitVar[dict[str, dict[str, tuple[float, float]]] | None] = None
@@ -274,6 +284,101 @@ class Symbol:
                     hits.append((pair[0], pair[1], xy))
         return hits
 
+
+# ---------------------------------------------------------------------------
+# Belt conveyor.
+#
+# Derived from the draw.io / diagrams.net P&ID stencils (Apache-2.0): the shape
+# ``Drier (Roller Conveyor Belt)`` in scripts/vendor_data/drawio/driers.xml
+# (w=100, h=140, aspect="variable"). Two changes were made to it. The
+# ``<background>`` drier housing is dropped, since the housing is the drier and
+# not the conveyor, leaving the ``<foreground>`` roller belt alone. And the
+# distance between the two rollers becomes a parameter, while the rollers keep
+# the stencil's own r=10, so a longer conveyor grows its straight run and its
+# rollers stay circles. See NOTICE, and ADAPTED_ELSEWHERE in
+# scripts/vendor_symbols.py, which records the same provenance beside KIND_MAP,
+# where the next person will look for it.
+#
+# It cannot come through that generator with the rest: the generator emits one
+# fixed-size Symbol per shape, and a fixed drawing placed in a box of another
+# aspect ratio is scaled unevenly — which would draw the rollers as ellipses,
+# the one thing this symbol exists to avoid.
+# ---------------------------------------------------------------------------
+
+#: Roller radius, from the stencil's 20x20 roller ellipses. The same at every
+#: length: only the straight belt run between the rollers grows.
+CONVEYOR_ROLLER = 10.0
+#: Default belt run, from the stencil's own proportions — it draws the rollers
+#: centred at x=20 and x=80, so the conveyor spans x=10..90.
+CONVEYOR_LENGTH = 80.0
+#: Two roller diameters. Any shorter and the rollers overlap, leaving no belt.
+CONVEYOR_MIN_LENGTH = 4 * CONVEYOR_ROLLER
+
+
+def conveyor_too_short(length: float, owner: str = "") -> ValueError:
+    """The error for a belt run the rollers do not leave room for.
+
+    Built here so the message :class:`~pfd.units.Conveyor` raises up front and
+    the one :func:`conveyor_symbol` raises later are the same sentence about the
+    same rule.
+    """
+    return ValueError(
+        f"{owner + ': ' if owner else ''}length={length:g} is shorter than a "
+        f"conveyor can be drawn: the rollers are {CONVEYOR_ROLLER:g} in radius "
+        f"and would overlap. Use length={CONVEYOR_MIN_LENGTH:g} or more, two "
+        f"roller diameters."
+    )
+
+
+@lru_cache(maxsize=None)
+def conveyor_symbol(length: float = CONVEYOR_LENGTH) -> Symbol:
+    """A belt conveyor ``length`` long: two rollers and the belt run between.
+
+    The symbol is *built* to the length rather than scaled to it, so its width
+    **is** the length and the box a conveyor is placed in is exactly the box its
+    artwork was drawn in. That is what holds the rollers to
+    :data:`CONVEYOR_ROLLER` at every length.
+
+    ``feed`` is the tail roller. Its home nozzle is the end of the belt, and it
+    is offered on the top face as well, because material is dropped onto a
+    conveyor rather than piped into it. ``discharge`` is the head roller, where
+    the belt throws off; it is offered on the underside too, for the chute that
+    catches what comes over. Every placement sits on a roller circle or on the
+    end of a belt line, at any length.
+
+    Cached, because port resolution asks for a unit's symbol on every call and
+    the registry already hands out one shared instance per fixed symbol.
+    """
+    if length < CONVEYOR_MIN_LENGTH:
+        raise conveyor_too_short(length)
+    r, height = CONVEYOR_ROLLER, 2 * CONVEYOR_ROLLER
+    tail, head = r, length - r
+    suffix = f"_L{length:g}"
+    roller = ('<ellipse cx="{:g}" cy="{:g}" rx="{:g}" ry="{:g}" fill="none" '
+              'stroke="#111" stroke-width="2"/>')
+    svg = (
+        f'<g id="sym_conveyor{suffix}">'
+        + roller.format(tail, r, r, r)
+        + roller.format(head, r, r, r)
+        + f'<path d="M {tail:g} 0 L {head:g} 0 M {tail:g} {height:g} '
+          f'L {head:g} {height:g}" fill="none" stroke="#111" stroke-width="2"/>'
+        + '</g>'
+    )
+    return Symbol(
+        svg=svg, width=float(length), height=float(height),
+        ports={"feed": (0.0, r), "discharge": (float(length), r)},
+        port_faces={"feed": {"N": (tail, 0.0)},
+                    "discharge": {"S": (head, float(height))}},
+        id_suffix=suffix,
+    )
+
+
+# Kinds whose artwork is built to a size the *unit* carries, rather than drawn
+# once and scaled into whatever box it lands in. Uneven scaling is what turns a
+# conveyor's rollers into ellipses, so its drawing has to be made to measure.
+_BUILT_TO_SIZE = {"conveyor": lambda unit: conveyor_symbol(unit.length)}
+
+
 class SymbolRegistry:
     def __init__(self):
         self._symbols: dict[tuple[str, str], Symbol] = {}
@@ -281,6 +386,18 @@ class SymbolRegistry:
 
     def register(self, kind: str, template: Symbol, variant: str = "default") -> None:
         self._symbols[(kind, variant)] = template
+
+    def for_unit(self, unit) -> Symbol:
+        """The symbol to draw ``unit`` with, built to its size where it has one.
+
+        :meth:`get` answers for a ``(kind, variant)``, which is everything a
+        fixed drawing depends on. A conveyor's artwork depends on the unit as
+        well, since it is made to its belt run; the lookup still runs either
+        way, so a variant name nobody registered is still rejected.
+        """
+        sym = self.get(unit.kind, getattr(unit, "variant", "default"))
+        build = _BUILT_TO_SIZE.get(unit.kind)
+        return sym if build is None else build(unit)
 
     def variants(self, kind: str) -> list[str]:
         """Every variant registered for a kind, ``default`` first then A-Z."""
@@ -514,6 +631,12 @@ class SymbolRegistry:
             }
         ))
         
+
+        # ====================================================================
+        # Belt conveyor — registered at its default length. A conveyor of any
+        # other length gets its own symbol from for_unit(); see conveyor_symbol.
+        # ====================================================================
+        self.register("conveyor", conveyor_symbol())
 
         # ====================================================================
         # Splitter — Standard triangle with point on left, flat on right

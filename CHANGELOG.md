@@ -31,9 +31,20 @@ and is kept working.
   `Compressor`, `Blower`, `Valve`, `Vessel`, `Tank`, `HeatExchanger`, `Heater`,
   `Cooler`, `Reactor`, `Separator`, `Column`, `Mixer`, `Splitter`, `Reducer`,
   `Fitting`, `Ejector`, `Vent`, `Funnel`, `Furnace`, `Turbine`, `Filter`,
-  `Dryer` and `Instrument`. Ports are reachable both as `unit.ports[name]` and
-  as attributes (`pump.suction`), and a typo raises an error naming the real
-  ports.
+  `Dryer`, `Conveyor` and `Instrument`. Ports are reachable both as
+  `unit.ports[name]` and as attributes (`pump.suction`), and a typo raises an
+  error naming the real ports.
+- `Conveyor(length=…)`, a belt conveyor drawn to the length the drawing gives
+  it. The symbol is built to the belt run rather than scaled to it, so a longer
+  conveyor grows only the straight bar between its two rollers and the rollers
+  stay the same circles at every length. `length` is its whole size and its only
+  one: `width=` and `height=` would set the drawn box independently and stretch
+  the rollers, so they are refused and name `length` in their place, and a
+  quarter turn makes the length the unit's height. `feed` is the tail end, also
+  offered on the top face, since material is dropped onto a belt rather than
+  piped into it; `discharge` is the head end, also offered underneath. Below two
+  roller diameters the rollers overlap, which is refused with the minimum in the
+  message. It is scheduled on the equipment list like other major plant.
 - Variable-port `Mixer(n_inlets=…)`, `Splitter(n_outlets=…)` and
   `Column(n_feeds=…)` / `Reactor(n_feeds=…)`. A tower fed more than once, as in
   extractive distillation where the solvent enters above the feed tray, spreads

@@ -246,6 +246,12 @@ _VARIABLE_PORTS = {
     "n_outlets": ("Splitter",),
     "n_feeds": ("Column", "Reactor"),
 }
+# Sizes only some classes carry, policed the same way: a conveyor's belt run is
+# a dimension of its own rather than the generic width, so naming it on anything
+# else asks for a length nothing draws.
+_KIND_SIZES = {
+    "length": ("Conveyor",),
+}
 
 
 def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
@@ -333,7 +339,7 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
     where = f"{where} {name!r}"
 
     allowed = set(_UNIT_KEYS)
-    for key, owners in _VARIABLE_PORTS.items():
+    for key, owners in {**_VARIABLE_PORTS, **_KIND_SIZES}.items():
         if cls.__name__ in owners:
             allowed.add(key)
         elif key in data:
@@ -351,6 +357,9 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
     for key in _VARIABLE_PORTS:
         if key in data:
             kwargs[key] = _integer(data[key], f"{where}.{key}")
+    for key in _KIND_SIZES:
+        if key in data:
+            kwargs[key] = _number(data[key], f"{where}.{key}")
     try:
         unit = cls(name, **kwargs)
     except ValueError as e:
@@ -821,6 +830,10 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
         feeds = sum(1 for p in unit.ports if p.startswith("feed_"))
         if feeds:
             entry["n_feeds"] = feeds
+    elif isinstance(unit, unit_types.Conveyor):
+        # Always written: it is how long the belt is, which is the whole of a
+        # conveyor's geometry, and nothing else on the entry records it.
+        entry["length"] = unit.length
     return _write_placement(unit, entry)
 
 

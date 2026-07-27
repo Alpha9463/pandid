@@ -172,9 +172,9 @@ class TableBox:
 # A separate valve or instrument schedule is a real drawing, so ``include=``
 # names its rows explicitly and this rule stands aside for it.
 _MAJOR_EQUIPMENT = frozenset({
-    "blower", "column", "compressor", "cooler", "dryer", "ejector", "filter",
-    "furnace", "heater", "hex", "pump", "reactor", "separator", "tank",
-    "turbine", "vessel",
+    "blower", "column", "compressor", "conveyor", "cooler", "dryer", "ejector",
+    "filter", "furnace", "heater", "hex", "pump", "reactor", "separator",
+    "tank", "turbine", "vessel",
 })
 
 # What each kind is called in words. ``kind`` is a lookup key, so a schedule
@@ -184,6 +184,7 @@ _KIND_LABELS = {
     "blower": "Blower",
     "column": "Column",
     "compressor": "Compressor",
+    "conveyor": "Conveyor",
     "cooler": "Cooler",
     "dryer": "Dryer",
     "ejector": "Ejector",
