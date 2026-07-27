@@ -1,7 +1,7 @@
 # Golden SVG fixtures
 
-One `.svg` per fixed scenario exercised by `tests/test_golden.py`: the nine
-examples' flowsheets (`01_ammonia_loop` .. `09_line_numbers`), where
+One `.svg` per fixed scenario exercised by `tests/test_golden.py`: the first
+nine examples' flowsheets (`01_ammonia_loop` .. `09_line_numbers`), where
 `03_distillation_train`, `08_from_data` and `09_line_numbers` also cover
 `border="zone"` with the stream table and equipment-list / notes / legend
 furniture. `08_from_data` is built through `Flowsheet.from_dict`, so it also

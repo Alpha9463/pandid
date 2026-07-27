@@ -274,7 +274,7 @@ and is kept working.
 - GitHub Actions CI: `ruff check`, `ruff format --check tests`, `mypy pfd`
   (blocking), and `pytest` on Python 3.10, 3.11, 3.12 and 3.13.
 - `pre-commit` configuration mirroring the CI lint gates.
-- Nine runnable examples in `examples/`, each usable from the repository root
+- Ten runnable examples in `examples/`, each usable from the repository root
   or from `examples/` itself, and rendered into `docs/gallery/`.
 - Packaged as the **`pandid`** distribution, how "P&ID" is said out loud. The
   import name is `pfd`, since plain `pfd` is taken on PyPI by an unrelated

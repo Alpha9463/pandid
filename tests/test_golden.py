@@ -1,4 +1,4 @@
-"""Golden-file SVG regression over a fixed corpus: the nine examples'
+"""Golden-file SVG regression over a fixed corpus: the first nine examples'
 flowsheets, three of which (03, 08 and 09) also exercise ``border="zone"`` with
 the stream table and sheet furniture (title block, equipment list, notes,
 legend).
