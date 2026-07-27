@@ -53,10 +53,25 @@ def _seg_crosses_box(x1, y1, x2, y2, box) -> bool:
 
 def validate(fs: "Flowsheet") -> list["Issue"]:
     """Return all validation issues for the flowsheet (errors first)."""
+    from pandid.layout.attach import MAX_PLACEMENT_PASSES
     from pandid.portgeom import is_anchored, port_point, unit_box
 
     errors: list[Issue] = []
     warnings: list[Issue] = []
+
+    # --- routing settled? (reported by route(), not recomputed here) ---
+    # Placing an instrument moves an obstacle and routing around an obstacle
+    # moves an instrument, so a dense sheet can trade between two arrangements
+    # instead of settling on one. The drawing is still coherent, since the lines
+    # are drawn to where the balloons are, but which of the arrangements it
+    # caught is arbitrary, and an author who wants a repeatable sheet has to pin
+    # the line with via(). That is only worth saying because they cannot see it.
+    if not fs.route_converged:
+        warnings.append(Issue(
+            "warning", "route-not-settled",
+            f"attached instruments were still moving after {MAX_PLACEMENT_PASSES} "
+            "routing passes; a balloon may sit slightly off the line it taps. "
+            "Pin the balloon-carrying lines with via() to settle it"))
 
     # --- pin sanity (no frames required) ---
     for u in fs.units:

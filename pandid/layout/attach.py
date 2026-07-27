@@ -22,6 +22,21 @@ if TYPE_CHECKING:
 
 Point = tuple[float, float]
 
+#: How many times :func:`place_attached` may move a balloon before
+#: :meth:`pandid.flowsheet.Flowsheet.route` gives up and warns.
+#:
+#: Placing and routing chase each other: a balloon is placed on its host's
+#: routed path, and the box it lands in is an obstacle the router then avoids,
+#: which can bend that very path. Every sheet shipped here settles in one or two
+#: passes and the worst converging sheet found by search took four, but there is
+#: no quantity the recursion descends, and sheets do exist that cycle between two
+#: or three arrangements forever. The cap is what stops such a drawing from
+#: hanging, and the warning it raises is what stops it from being silently
+#: whichever arrangement the last pass happened to leave. Every pass ends on a
+#: *route*, so running out of them still leaves each line drawn to the balloon it
+#: belongs to.
+MAX_PLACEMENT_PASSES = 6
+
 
 def is_attached(unit: "Unit | None") -> bool:
     """True when this unit is positioned from a host rather than by the ranker."""
