@@ -355,9 +355,27 @@ and is kept working.
   the ratio the drawing was actually placed at, which is a real number once
   `page_size` fixes the page, and nothing at all on a sheet sized to fit its
   drawing, where no scale exists to state.
-- Title-strip values too long for their cell are trimmed with an ellipsis, so a
-  long client or project name cannot run across the rule into its neighbour or
-  under the sheet count.
+- Every cell on the sheet is measured before it is written into, and a cell that
+  cannot hold what it was given either grows or says so. The title strip is
+  fixed geometry, so it abbreviates with an ellipsis and reports the field and
+  the full text on `fs.warnings`; the drawing title, subtitle, client, project,
+  status, drawing number, scale, date and every revision cell are all covered.
+  Silently drawing text across a rule and into the value beside it is gone: a
+  plant designation losing its last two characters is exactly the error that
+  survives to issue-for-construction, and it used to leave `fs.warnings` empty.
+- How much of a drawing title survives no longer depends on how many sheets the
+  set has. The `SHEET n of m` string shares the title band, and its measured
+  width used to come out of the title's own budget, so the same title was
+  abbreviated differently on a one-sheet drawing and a hundred-sheet one. The
+  count now has a slot of its own.
+- The revision table's `DATE` column holds a full ISO 8601 date. At the width it
+  was, the date every sheet is stamped with ran 3px past its own rule.
+- A company name too long to wrap into the company cell, and a sheet count too
+  long for its slot, are drawn whole and reported rather than trimmed:
+  hyphenating a company name invents a break point, and half a sheet count reads
+  as a different sheet.
+- An `Annotation` given an explicit `width` smaller than its own rows need is
+  reported. A box left to size itself is sized from its rows and always fits.
 - Sheet furniture docked flush to the frame on a nine-point `align` grid, or
   hand-placed with `position=(x, y)`: `Annotation`, `TableBox`, and the
   `equipment_list()` / `notes()` / `legend()` constructors. Like the title
@@ -376,6 +394,17 @@ and is kept working.
 - Optional stream property table (`show_stream_table=True`) with section headers
   injected via `Flowsheet.stream_table_sections`. Property values are supplied
   by the caller as strings; the engine does not compute them.
+- The stream table's columns are sized to everything drawn in them: the row
+  labels, the stream numbers heading each column, the values under them, and any
+  section header spanning the width. The row label column was a hard-coded 122px
+  and the value columns were measured from the stream *names* alone, so a row
+  label like `Vapour Fraction (mass)` and a value like `0.0441 kg/kg total` both
+  overflowed into the cell beside them. The table's width is a layout output
+  rather than a fixed constraint, so it grows: a stream table that cannot show
+  its own value is not a stream table.
+- A fixed `page_size` too small for its furniture names the widest piece in the
+  error, since a table honestly sized to its contents is usually what pushed the
+  sheet over and "the furniture does not fit" does not say which furniture.
 - Off-page connectors: a `Feed`/`Product` flag's `reference` is drawn as its
   second line. A flag is the only thing with a second line, so `reference=` on
   equipment raises and names the boundary to put it on.
@@ -435,6 +464,10 @@ and is kept working.
   a port the symbol never anchored and which therefore fell back to the centre
   of the box, which is a gap in the symbol rather than a contradiction on the
   sheet. No shipped symbol has such a gap.
+- `text-truncated` and `text-overruns-cell` are the renderer's own findings,
+  raised where a piece of sheet furniture could not hold the text it was given.
+  Each names the field and quotes what it was asked to draw. They are rebuilt on
+  every render, so shortening a title and rendering again clears the finding.
 
 #### Command line
 

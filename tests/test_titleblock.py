@@ -368,3 +368,178 @@ def test_stream_table_section_header():
     svg = fs.to_svg(styling="pid", show_stream_table=True)
     assert "Mass Fraction" in svg
     assert "Stream Number" in svg
+
+
+# --- text that does not fit the cell drawn for it -----------------------------
+#
+# Two shapes of answer, and the sheet is entitled to exactly one of them. The
+# stream table is sized by the renderer, so it grows to its contents. The title
+# strip is fixed geometry -- an ISO 7200 block is a known rectangle in a known
+# corner -- so it abbreviates, and says on fs.warnings which field it cut.
+
+_CELL = re.compile(
+    r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" height="[\d.]+" '
+    r'fill="[^"]+" stroke="black" stroke-width="0\.75"/>\s*'
+    r'<text x="([-\d.]+)" y="[-\d.]+" font-family="[^"]+" font-size="([\d.]+)"'
+    r'( font-weight="bold")? text-anchor="(\w+)">([^<]*)</text>'
+)
+
+
+def _table_cells(svg):
+    """Every drawn stream-table cell as (rect, text, ink extent).
+
+    Read straight back out of the SVG: the box the renderer ruled, the string it
+    wrote in it, and where that string's ink actually starts and ends, measured
+    with the same advance width the renderer sizes boxes by.
+    """
+    from pandid.render.furniture import text_width
+
+    body = re.search(r'<g id="stream_table">(.*?)</g>', svg, re.S)
+    assert body, "no stream table drawn"
+    out = []
+    for m in _CELL.finditer(body.group(1)):
+        x, w = float(m.group(1)), float(m.group(3))
+        tx, size, bold, anchor, text = (
+            float(m.group(4)),
+            float(m.group(5)),
+            bool(m.group(6)),
+            m.group(7),
+            m.group(8),
+        )
+        tw = text_width(text, size, bold)
+        left = tx if anchor == "start" else (tx - tw if anchor == "end" else tx - tw / 2)
+        out.append((x, x + w, left, left + tw, text))
+    return out
+
+
+def _wide_table_sheet():
+    """A sheet whose row label and values are both wider than the hard-coded
+    122 x 52 the table used to rule, taken from the case in issue #68."""
+    fs = _sheet()
+    fs.streams[0].properties = {
+        "Vapour Fraction (mass)": "0.0441 kg/kg total",
+        "Temperature": "35 C",
+    }
+    return fs
+
+
+def test_stream_table_columns_are_ruled_wide_enough_for_their_values():
+    svg = _wide_table_sheet().to_svg(show_stream_table=True)
+    assert "Vapour Fraction (mass)" in svg and "0.0441 kg/kg total" in svg
+    for x0, x1, ink0, ink1, text in _table_cells(svg):
+        assert x0 <= ink0 and ink1 <= x1, (
+            f"{text!r} is drawn from {ink0:.1f} to {ink1:.1f}, outside its cell {x0:.1f}..{x1:.1f}"
+        )
+
+
+def test_a_page_too_small_for_the_stream_table_says_so():
+    """The table is sized to its contents, so on a fixed page it can be the
+    thing that does not fit. That is an error, and the error names it."""
+    fs = _sheet()
+    fs.streams[0].properties = {
+        "Vapour Fraction (mass)": "0.0441 kg/kg total " * 12,
+    }
+    with pytest.raises(ValueError, match="stream table"):
+        fs.to_svg(show_stream_table=True, page_size="A4", border="zone")
+
+
+def test_an_abbreviated_title_names_the_field_and_the_text_it_cut():
+    fs = _sheet()
+    fs.title_block = TitleBlock(drawing_number="PFD-1", title="Ethanol Purification A300")
+    svg = fs.to_svg(page_size="A3", border="zone")
+    assert "Ethanol Purification A3…" in svg  # the strip cannot grow: it abbreviates
+    cut = [w for w in fs.warnings if w.code == "text-truncated"]
+    assert cut, "an abbreviated title must not be silent"
+    assert len(cut) == 1 and "title" in cut[0].message
+    assert "Ethanol Purification A300" in cut[0].message
+
+
+def test_a_title_that_fits_says_nothing():
+    fs = _sheet()
+    fs.title_block = TitleBlock(drawing_number="PFD-1", title="Ethanol A300")
+    svg = fs.to_svg(page_size="A3", border="zone")
+    assert "…" not in svg
+    assert not [w for w in fs.warnings if w.code.startswith("text-")]
+
+
+def test_how_much_of_a_title_survives_does_not_depend_on_the_sheet_count():
+    """The sheet count shares the title band, and used to be measured out of the
+    title's own budget: a set of 100 sheets abbreviated the title of sheet 1."""
+
+    def drawn_title(of_sheets):
+        fs = _sheet()
+        fs.title_block = TitleBlock(title="Transfer and Relief U100", of_sheets=of_sheets)
+        svg = fs.to_svg(border="zone")
+        return re.search(
+            r'font-size="12.5" text-anchor="start" '
+            r'font-weight="bold" fill="black">([^<]*)</text>',
+            svg,
+        ).group(1)
+
+    assert drawn_title("1") == "Transfer and Relief U100"
+    assert drawn_title("100") == drawn_title("1")
+
+
+def test_a_status_too_long_for_its_cell_is_reported():
+    """The status cell was drawn with no measurement at all, so a long issue
+    status ran straight out through the side of the strip."""
+    fs = _sheet()
+    fs.title_block = TitleBlock(title="Demo", status="ISSUED FOR CONSTRUCTION, REVIEW AND APPROVAL")
+    fs.to_svg(border="zone")
+    assert [w for w in fs.warnings if w.code == "text-truncated" and "status" in w.message]
+
+
+def test_a_revision_description_too_long_for_its_column_is_reported():
+    fs = _sheet()
+    fs.title_block = TitleBlock(
+        title="Demo",
+        revisions=[
+            Revision(
+                "A",
+                "2026-01-01",
+                "Issued for internal review by the process engineering group",
+                "AA",
+            )
+        ],
+    )
+    fs.to_svg(border="zone")
+    assert [
+        w
+        for w in fs.warnings
+        if w.code == "text-truncated" and "revisions[0].description" in w.message
+    ]
+
+
+def test_the_revision_date_column_holds_a_full_date():
+    """Every sheet in the corpus stamps an ISO 8601 date, and the column it goes
+    in was 3px narrower than one measures."""
+    fs = _sheet()
+    fs.title_block = TitleBlock(
+        title="Demo", revisions=[Revision("A", "2026-01-01", "Issued", "AA")]
+    )
+    svg = fs.to_svg(border="zone")
+    assert ">2026-01-01</text>" in svg
+    assert not fs.warnings
+
+
+def test_a_box_narrower_than_its_own_rows_is_reported():
+    """An Annotation sizes itself to its rows unless it is given a width, and a
+    width smaller than the rows need runs the text out through the side."""
+    from pandid.document import Annotation
+
+    fs = _sheet()
+    fs.add_annotation(
+        Annotation(title="NOTES", width=60, rows=["Sampling point on every product line."])
+    )
+    fs.to_svg(border="zone")
+    assert [w for w in fs.warnings if w.code == "text-overruns-cell" and "NOTES" in w.message]
+
+
+def test_a_finding_from_an_earlier_render_does_not_survive_the_fix():
+    fs = _sheet()
+    fs.title_block = TitleBlock(title="Ethanol Purification A300")
+    fs.to_svg(border="zone")
+    assert [w for w in fs.warnings if w.code == "text-truncated"]
+    fs.title_block.title = "Ethanol A300"
+    fs.to_svg(border="zone")
+    assert not [w for w in fs.warnings if w.code == "text-truncated"]
