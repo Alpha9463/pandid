@@ -68,6 +68,17 @@ KIND_MAP = {
     # spring bonnet on top of the inlet leg. The stem runs to y = 0.
     ("valve", "psv"):       ("valves", "Safety PSV 1",      {"inlet": "S", "outlet": "E",
                              "actuator": ("AT", 21.0, 0.0)}),
+    # Bleeder: the small drain valve tapped off a header. The stencil draws it
+    # vertical — the tap runs down from (12.5, 0) into a bowtie whose open
+    # bottom bar at y = 75 discharges — so it is piped from above and down, not
+    # across. ("Bleeder Valve 2" draws the same valve hanging off a length of
+    # header, which is what settles that top line as the tap and not a stem.)
+    #
+    # The actuator stays on the top face, as on every other valve, but the tap
+    # already owns the centreline, so it is set over to x = 24 rather than
+    # stacked on the inlet.
+    ("valve", "bleed"):     ("valves", "Bleeder Valve 1",   {"inlet": "N", "outlet": "S",
+                             "actuator": ("N", 24.0)}),
     # These two stencils name an "N" constraint, but draw.io puts it on the
     # inboard ink (the plug's upper seat line, the pinch sleeve's crown) rather
     # than on the top of the shape, so both are placed on the edge instead.
@@ -195,6 +206,22 @@ KIND_MAP = {
                              "distillate": ("N", 50), "bottoms": ("S", 50),
                              "reflux_in": ("E", 35), "boilup_in": ("E", 175),
                              "condenser_duty": ("E", 65), "reboiler_duty": ("E", 145)}),
+    # The packed tower: the same shell, with two beds of packing between their
+    # support grids. This is the one column stencil that draws an internal, so
+    # an absorber or a stripper stops coming out as a bare drum.
+    #
+    # Every nozzle is the default column's, restated in the tower's own 97-unit
+    # shell: SCALE puts the shape in a 62 x 200 box, so 16.975 lands on 35,
+    # 31.525 on 65, 70.325 on 145, 84.875 on 175 and the feed family on 130 at a
+    # 35 pitch — the heights every column sheet is already drawn to. The two
+    # products take the head crowns at (7, 0) and (7, 97); everything else is on
+    # the straight shell, which spans y 3.5..93.5 on both walls.
+    ("column", "packed"): ("vessels", "Tower With Packing",
+                           {"feed": ("SERIES", "W", 63.05, 16.975, 0.5),
+                            "distillate": ("N", 7), "bottoms": ("S", 7),
+                            "reflux_in": ("E", 16.975), "boilup_in": ("E", 84.875),
+                            "condenser_duty": ("E", 31.525),
+                            "reboiler_duty": ("E", 70.325)}),
     # vent sits on the vessel's top edge, clear of the agitator shaft at x 24..26.
     # The charge nozzles spread along the straight west wall, which spans
     # y 32.4..77.4 — the vessel is dished below that and open above it.
@@ -279,9 +306,69 @@ KIND_MAP = {
                             {"cold_in": "W", "cold_out": "E", "hot_in": "N", "hot_out": "S"}),
     ("hex", "plate"):      ("heat_exchangers", "Heat Exchanger (Plate)",
                             {"cold_in": "SW", "cold_out": "SE", "hot_in": "NW", "hot_out": "NE"}),
+    # Finned tubes: the same casing as "straight_tubes", with a finned tube in
+    # place of the bundle, so it takes that variant's nozzles exactly and is a
+    # drop-in change of artwork. draw.io's own N/S anchors are at x = 7 and 93,
+    # which is over the channel heads rather than between the tubesheets at
+    # x = 15 and 85 — a shell nozzle cannot be on the tube side.
+    ("hex", "finned"):     ("heat_exchangers", "Heat Exchanger (Finned Tubes)",
+                            {"cold_in": "W", "cold_out": "E",
+                             "hot_in": ("N", 75), "hot_out": ("S", 25)}),
+    # Air cooler (fin-fan). The only piped side is the tube bundle, drawn across
+    # the bottom at y = 80 where the stencil's own W/E anchors sit, so that is
+    # the PROCESS side and it is named hot: an air cooler is what cools a
+    # stream, the way the kettle above is named for the side that boils. Air is
+    # the cold stream, and it is not piped — an induced-draft bay pulls it in
+    # under the bundle and discharges it through the fan on top, so cold_in and
+    # cold_out sit on the plenum's own bottom and top faces on the fan's
+    # centreline.
+    ("hex", "air_cooled"): ("heat_exchangers", "Heat Exchanger (Finned Tubes, Fan)",
+                            {"hot_in": ("W", 80), "hot_out": ("E", 80),
+                             "cold_in": ("S", 50), "cold_out": ("N", 50)}),
+    # Double pipe, drawn as a hairpin: the inner pipe is stubbed up at (10, 0)
+    # and down at (10, 50), and the annulus opens on the west face at y = 10 and
+    # y = 40. Both fluids therefore enter at the same end and turn round at the
+    # far one, which is why the annulus has no east nozzle to give hot_out.
+    # Counter-current: the annulus enters low where the tube leaves.
+    ("hex", "double_pipe"): ("heat_exchangers", "Double Pipe Heat Exchanger",
+                             {"cold_in": "N", "cold_out": "S",
+                              "hot_in": "SW", "hot_out": "NW"}),
+    # Hairpin: a U-tube in a shell, with no <connections> at all. The tube ends
+    # are the two flared openings on the west face (y 7..10 and y 20..23); the
+    # shell draws four stubs, and the pair taken is the diagonal one, far end
+    # top and near end bottom, matching "straight_tubes". Like the double pipe
+    # above, the tube returns to the end it came in at, so both tube nozzles are
+    # on the west face.
+    ("hex", "hairpin"):    ("heat_exchangers", "Hairpin Exchanger",
+                            {"cold_in": ("W", 8.5), "cold_out": ("W", 21.5),
+                             "hot_in": ("N", 72.5), "hot_out": ("S", 17.5)}),
+    # Thin-film (wiped-film) evaporator — the one evaporator in the set. The
+    # process runs top to bottom: feed onto the wiper at the shell's top face,
+    # which is drawn at y = 10 rather than on the box edge, and concentrate out
+    # of the cone apex at (40, 120). The port is offset to x = 20 to keep the
+    # inlet line off the rotor shaft the stencil draws down the centre.
+    # The jacket is the hot side, and the stencil opens it on both walls at
+    # y = 30, so that is where the heating medium goes in and comes out.
+    ("hex", "thin_film"):  ("heat_exchangers", "Thin-Film Evaporator",
+                            {"cold_in": ("AT", 20.0, 10.0), "cold_out": ("S", 40),
+                             "hot_in": ("W", 30), "hot_out": ("E", 30)}),
     # Pump / compressor styles.
     ("pump", "vacuum"):           ("pumps", "Vacuum Pump",
                                    {"suction": ("W", 25.0), "discharge": ("E", 25.0)}),
+    # Peristaltic (hose) pump: the tube runs over the rollers and leaves the top
+    # of the head, so the only connections the stencil draws are the two stubs
+    # at (20, 0) and (40, 0). The casing circle would take a W/E pair and keep
+    # this in line with the rest of the pumps, but it would put both nozzles on
+    # blank casing wall — the rule for this family is that a drawn nozzle wins.
+    ("pump", "peristaltic"):      ("pumps", "Peristaltic",
+                                   {"suction": ("N", 20.0), "discharge": ("N", 40.0)}),
+    # Submersible (sump) pump: it stands in the liquid it pumps, so the suction
+    # is the strainer plate it sits on and takes the stencil's own S anchor. The
+    # discharge is the elbow drawn out of the casing at y = 31.5, and the port
+    # is on the open end of that pipe at x = 96.77, not on the box edge 6.8
+    # further out, so the line meets the pipe instead of stopping short of it.
+    ("pump", "submersible"):      ("pumps", "Submersible Pump",
+                                   {"suction": "S", "discharge": ("AT", 96.77, 31.5)}),
     ("compressor", "rotary"):      ("compressors", "Rotary Compressor", {"suction": "W", "discharge": "N"}),
     ("compressor", "liquid_ring"): ("compressors", "Liquid Ring Compressor", {"suction": "W", "discharge": "N"}),
     # Vessel / tank styles.
@@ -293,6 +380,21 @@ KIND_MAP = {
     # the vent rides the raised manway dome on top, apex near x = 62.7
     ("vessel", "dome"):   ("vessels", "Vessel (Dome)",
                            {"inlet": ("W", 27), "outlet": ("E", 27), "vent": ("N", 62.7)}),
+    # Jacketed: the same dished vessel inside a heating/cooling jacket, drawn as
+    # a panel down each side out to the box edge. The process nozzles go on the
+    # jacket's outer wall rather than on the shell at x = 6 and 46, so the line
+    # stops where it meets the equipment instead of being drawn across the
+    # jacket. Both are at the straight shell's mid-height, and the vent is on
+    # the top head's crown, as on "dished".
+    ("vessel", "jacketed"): ("vessels", "Vessel (Dished Ends, Heating-Cooling Jacket)",
+                             {"inlet": ("W", 47.7), "outlet": ("E", 47.7),
+                              "vent": ("N", 26.0)}),
+    # Skirted: the same 40-wide shell as "dished", standing on a skirt instead
+    # of brackets. Nothing widens the box here, so the shell walls ARE the box's
+    # west and east faces and the two process nozzles take them directly.
+    ("vessel", "skirted"): ("vessels", "Vessel (Dished Ends, Skirts)",
+                            {"inlet": ("W", 47.7), "outlet": ("E", 47.7),
+                             "vent": ("N", 20.0)}),
     ("tank", "floating_roof"): ("vessels", "Tank (Floating Roof)", {"inlet": ("N", 30), "outlet": ("S", 50)}),
     ("tank", "sphere"):        ("vessels", "Storage Sphere", {"inlet": ("N", 40), "outlet": ("S", 40)}),
     # Reactor / separator styles. The straight wall spans y 7.69..87.69.
@@ -339,6 +441,13 @@ KIND_MAP = {
                            {"inlet": ("W", 25.0), "outlet": ("E", 25.0)}),
     ("filter", "rotary"): ("filters", "Liquid Filter (Rotary, Drum or Disc)",
                            {"inlet": ("W", 50.0), "outlet": "E"}),
+    # Ion exchanger: the resin bed between its two retention screens, the water
+    # treatment vessel every demineraliser train is drawn with. The stencil
+    # names only N and S, but the whole 50 x 100 casing is stroked, so the side
+    # walls carry the same W/E faces the rest of the filters use — a change of
+    # variant is a change of artwork, not of piping.
+    ("filter", "ion_exchange"): ("filters", "Liquid Filter (Ion Exchanger)",
+                                 {"inlet": ("W", 50.0), "outlet": ("E", 50.0)}),
     # Drier styles. A spray drier is fed through the atomiser in its roof and
     # drops powder out of the floor, so it is piped top-to-bottom, not across.
     ("dryer", "fluidized_bed"): ("driers", "Drier (Fluidized Bed)",
@@ -407,7 +516,20 @@ SCALE = {"valve": 0.5, "fitting": 0.5, "vent": 0.5, "funnel": 0.5,
          # It is also the box the barrel occupied, to the unit: the nozzles keep
          # the heights every pinned sheet was drawn to, so this changes what a
          # vessel looks like without moving a single run.
-         ("vessel", "default"): (0.62, 0.5)}
+         ("vessel", "default"): (0.62, 0.5),
+         # 62 x 200. The packed tower is drawn 14 x 97, at 1:6.9, which is far
+         # slenderer than anything else on the sheet and would come out 14px
+         # wide. The height is the column's own 200, so every nozzle keeps the
+         # height it has on column/default and no pinned sheet moves vertically.
+         #
+         # The width is the drum's, not the column's, and that is the smaller of
+         # two evils. Stretching to 100 would take the dished heads to 14:1 —
+         # flat lips rather than domes — and, since the stroke compensation
+         # comes from sx, would draw the bed grids and the packing at under a
+         # third of the shell's line weight. At 62 the heads are 8.6:1, which is
+         # where vessel/default's already are, and the internals are within
+         # about half the shell weight.
+         ("column", "packed"): (62 / 14, 200 / 97)}
 
 
 def scale_for(kind, variant):

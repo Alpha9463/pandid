@@ -350,24 +350,43 @@ is a visual style within it. The first name in each list is that kind's
 
 | Class | Variants |
 |---|---|
-| `Pump` | `default` (centrifugal), `gear`, `screw`, `vacuum` |
+| `Pump` | `default` (centrifugal), `gear`, `screw`, `vacuum`, `peristaltic`, `submersible` |
 | `Compressor` | `default`, `liquid_ring`, `reciprocating`, `rotary` |
-| `HeatExchanger` | `default`, `shell_tube`, `straight_tubes`, `plate`, `kettle`, `u_tube`, `condenser`, `spiral` |
-| `Vessel` | `default`, `dished`, `dome`, `horizontal` |
+| `HeatExchanger` | `default`, `shell_tube`, `straight_tubes`, `finned`, `plate`, `kettle`, `u_tube`, `hairpin`, `double_pipe`, `condenser`, `air_cooled`, `spiral`, `thin_film` |
+| `Vessel` | `default`, `dished`, `jacketed`, `skirted`, `dome`, `horizontal` |
 | `Tank` | `default` (dished roof), `conical`, `floating_roof`, `sphere` |
 | `Separator` | `default` (knock-out drum), `horizontal`, `cyclone`, `gravity`, `scrubber`, `electrostatic` |
 | `Reactor` | `default`, `plain` |
-| `Filter` | `default`, `gas`, `press`, `rotary` |
+| `Column` | `default` (plain shell), `packed` |
+| `Filter` | `default`, `gas`, `press`, `rotary`, `ion_exchange` |
 | `Dryer` | `default`, `fluidized_bed`, `spray` |
-| `Valve` | bodies: `default` (gate), `gate`, `globe`, `ball`, `butterfly`, `check`, `needle`, `three_way`, `control`, `plug`, `pinch`, `angle`, `psv`, `relief`<br>with a drawn operator: `motor`, `solenoid`, `hydraulic`, `pneumatic`, `manual`, `knife`, `butterfly_pneumatic`, `regulator` |
+| `Valve` | bodies: `default` (gate), `gate`, `globe`, `ball`, `butterfly`, `check`, `needle`, `three_way`, `control`, `plug`, `pinch`, `angle`, `psv`, `relief`, `bleed`<br>with a drawn operator: `motor`, `solenoid`, `hydraulic`, `pneumatic`, `manual`, `knife`, `butterfly_pneumatic`, `regulator` |
 | `Fitting` | `default` (flanged connection), `flange`, `strainer`, `strainer_cone`, `orifice`, `rotameter`, `rupture_disc`, `sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `static_mixer`, `hose`, `coupling`, `clamped_coupling`, `flame_arrestor`, `flame_arrestor_explosion_proof`, `flame_arrestor_detonation_proof`, `flame_arrestor_fire_resistant` |
 | `Instrument` | `default` (field balloon), `panel`, `aux`, `shared`, `computer`, `logic` |
-| `Column`, `Heater`, `Cooler`, `Furnace`, `Turbine`, `Blower`, `Reducer`, `Ejector`, `Vent`, `Funnel`, `Conveyor`, `Mixer`, `Splitter`, `Feed`, `Product` | `default` only |
+| `Heater`, `Cooler`, `Furnace`, `Turbine`, `Blower`, `Reducer`, `Ejector`, `Vent`, `Funnel`, `Conveyor`, `Mixer`, `Splitter`, `Feed`, `Product` | `default` only |
 
 `HeatExchanger(variant="kettle")` carries a fifth nozzle, `bottoms`. It is the
 draw at the weir end of the shell, where what does not boil leaves as the
 tower's bottoms product. No other exchanger has a weir, so no other variant has it, and
 asking a plate exchanger for `.bottoms` raises.
+
+Every exchanger answers to the same four nozzles, but not all four are piped
+across the symbol. `hairpin` and `double_pipe` turn the tube round at the far
+end and bring it back, so both tube nozzles are on the same face. `air_cooled`
+is a fin-fan: the bundle is the piped side and is named hot, and the air is the
+cold stream, drawn in under the bundle (`cold_in` on S) and out through the fan
+(`cold_out` on N). `thin_film` is an evaporator standing on end, fed onto the
+wiper at the top and drawing concentrate off the cone at the bottom, with the
+jacket as the hot side.
+
+`Column(variant="packed")` draws two beds of packing between their support
+grids, which is the one column symbol with an internal. Its nozzles are the
+default column's, at the same heights, so a sheet already drawn does not move
+when the variant changes.
+
+`Vessel(variant="jacketed")` puts `inlet` and `outlet` on the jacket's outer
+wall rather than on the shell inside it, so the line stops where it meets the
+equipment instead of being drawn across the jacket.
 
 The operator-bearing valve variants put `actuator` on the operator's crown, and
 the bare bodies put it on the top of the symbol where an operator would be
@@ -377,6 +396,9 @@ outlet, so its pilot connection is on the side of the bonnet.
 `angle` and `psv` are piped from below and out to the side
 (`inlet` on S, `outlet` on E). `relief` is piped `inlet` S / `outlet` N and
 draws its tag as plain text beside the symbol rather than in a balloon.
+`bleed` is the small drain valve tapped off a header and runs down the page,
+`inlet` on N and `outlet` on S, with `actuator` set over beside the tap so it
+does not stack on the inlet.
 
 ---
 
