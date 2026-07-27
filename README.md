@@ -136,7 +136,9 @@ fs.add(units.Fitting("ST-1", variant="strainer"))      # see "In-line fittings" 
 Classes include: `Feed`, `Product`, `Pump`, `Compressor`, `Blower`, `Valve`,
 `Vessel`, `Tank`, `HeatExchanger`, `Heater`, `Cooler`, `Reactor`, `Separator`,
 `Column`, `Mixer`, `Splitter`, `Reducer`, `Fitting`, `Ejector`, `Vent`,
-`Funnel`, `Furnace`, `Turbine`, `Filter`, `Dryer`, and `Instrument`. The
+`Funnel`, `Furnace`, `Turbine`, `Filter`, `Dryer`, `Conveyor`, and
+`Instrument`. `Conveyor` is sized by `length=` rather than `width=`: its belt
+grows and its rollers stay round. The
 [API reference](https://github.com/Alpha9463/py-chemengg/blob/main/docs/api.md#units-and-ports) lists every class's ports and every
 registered variant.
 
@@ -415,7 +417,7 @@ for anything else. Add them with `fs.add_annotation(...)`.
 
 `equipment_list()` schedules **major equipment**: vessels, columns, tanks,
 reactors, separators, exchangers, heaters, coolers, furnaces, pumps,
-compressors, blowers, turbines, ejectors, filters and dryers. Valves, fittings,
+compressors, blowers, turbines, ejectors, filters, dryers and conveyors. Valves, fittings,
 reducers, vents and funnels are bulk items bought by the line and covered by the
 piping class; mixers and splitters are junctions in that line; feeds, products
 and instruments are not equipment. `include=[...]` names the rows explicitly
@@ -696,7 +698,9 @@ matters if your organisation screens dependencies.
 **Equipment symbols are Apache-2.0 and stay that way.** They derive from the
 draw.io / diagrams.net P&ID stencils, so `pfd/render/_vendored_symbols.py` and
 `scripts/vendor_data/drawio/` carry the original licence rather than the one
-above. [`NOTICE`](https://github.com/Alpha9463/py-chemengg/blob/main/NOTICE)
+above, as does the conveyor symbol in `pfd/render/symbols.py`, which is adapted
+from a stencil rather than generated from one.
+[`NOTICE`](https://github.com/Alpha9463/py-chemengg/blob/main/NOTICE)
 says exactly which files are which. The full texts are in
 [`LICENSE`](https://github.com/Alpha9463/py-chemengg/blob/main/LICENSE) and
 [`LICENSE-APACHE`](https://github.com/Alpha9463/py-chemengg/blob/main/LICENSE-APACHE).

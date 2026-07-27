@@ -272,6 +272,7 @@ Each entry is `port` *(direction / role)*.
 | `Furnace` | `furnace` | `inlet` *(in)*, `outlet` *(out)*, `fuel` *(in/feed)* |
 | `Filter` | `filter` | `inlet` *(in)*, `outlet` *(out)* |
 | `Dryer` | `dryer` | `feed` *(in/feed)*, `product` *(out)* |
+| `Conveyor` | `conveyor` | `feed` *(in/feed)*, `discharge` *(out)* |
 | `Reducer` | `reducer` | `inlet` *(in)*, `outlet` *(out)* |
 | `Fitting` | `fitting` | `inlet` *(in)*, `outlet` *(out)* |
 | `Ejector` | `ejector` | `motive` *(in/utility)*, `suction` *(in)*, `discharge` *(out)* |
@@ -315,6 +316,23 @@ fs.connect(solvent.outlet, tower.feed_1)   # solvent enters above...
 fs.connect(feed.outlet, tower.feed_2)      # ...the feed tray
 ```
 
+`Conveyor` takes a `length` instead of a `width`:
+
+```text
+units.Conveyor(name, length=80, variant="default", label_pos=None,
+               description="")
+```
+
+`length` is the belt run. The symbol is a bar between two rollers and is drawn
+to that length, so a longer conveyor grows the bar and its rollers stay the same
+circles. It is the unit's whole size: `width=` and `height=` size the drawn box
+instead, which would stretch the rollers, so a `Conveyor` refuses them and names
+`length` in their place. A quarter turn stands the belt on end, where the length
+is its height. The minimum is 40, two roller diameters, below which the rollers
+overlap. `feed` is the tail end and can also be taken from the top face, since
+material is dropped onto a belt rather than piped into it; `discharge` is the
+head end and can also be taken from underneath, for a chute.
+
 `Valve.actuator` is the signal connection on the valve, not a process nozzle. It
 is where a controller output or an interlock terminates, and it will not take
 process fluid. It sits on the top of the symbol, so the signal stops where it
@@ -343,7 +361,7 @@ is a visual style within it. The first name in each list is that kind's
 | `Valve` | bodies: `default` (gate), `gate`, `globe`, `ball`, `butterfly`, `check`, `needle`, `three_way`, `control`, `plug`, `pinch`, `angle`, `psv`, `relief`<br>with a drawn operator: `motor`, `solenoid`, `hydraulic`, `pneumatic`, `manual`, `knife`, `butterfly_pneumatic`, `regulator` |
 | `Fitting` | `default` (flanged connection), `flange`, `strainer`, `strainer_cone`, `orifice`, `rotameter`, `rupture_disc`, `sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `static_mixer`, `hose`, `coupling`, `clamped_coupling`, `flame_arrestor`, `flame_arrestor_explosion_proof`, `flame_arrestor_detonation_proof`, `flame_arrestor_fire_resistant` |
 | `Instrument` | `default` (field balloon), `panel`, `aux`, `shared`, `computer`, `logic` |
-| `Column`, `Heater`, `Cooler`, `Furnace`, `Turbine`, `Blower`, `Reducer`, `Ejector`, `Vent`, `Funnel`, `Mixer`, `Splitter`, `Feed`, `Product` | `default` only |
+| `Column`, `Heater`, `Cooler`, `Furnace`, `Turbine`, `Blower`, `Reducer`, `Ejector`, `Vent`, `Funnel`, `Conveyor`, `Mixer`, `Splitter`, `Feed`, `Product` | `default` only |
 
 `HeatExchanger(variant="kettle")` carries a fifth nozzle, `bottoms`. It is the
 draw at the weir end of the shell, where what does not boil leaves as the
@@ -791,7 +809,8 @@ All three return an `Annotation`. `legend()` accepts a dict or a sequence of
 
 `equipment_list()` schedules **major equipment** as `(tag, description)`:
 vessels, columns, tanks, reactors, separators, exchangers, heaters, coolers,
-furnaces, pumps, compressors, blowers, turbines, ejectors, filters and dryers.
+furnaces, pumps, compressors, blowers, turbines, ejectors, filters, dryers and
+conveyors.
 Valves, fittings, reducers, vents and funnels are bulk items bought by the line
 and covered by the piping class; mixers and splitters are junctions in that
 line; feeds, products and instruments are not equipment. None of them is
@@ -959,5 +978,8 @@ The symbol registry is `pfd.render.symbols.default_registry`, a
 `variants(kind)` and `get(kind, variant="default")`. `get()` raises `ValueError`
 for a variant that kind has no symbol for, naming the ones it does. A kind with
 no symbols at all, such as a `Unit` subclass of your own, draws a generic box.
-New *equipment* symbols should come from the vendored stencil pipeline rather
-than being hand-registered (see `CONTRIBUTING.md`).
+`for_unit(unit)` is what the renderer and `pfd.portgeom` actually call: it is
+`get()` for every fixed symbol, and for a symbol drawn to a size the unit
+carries, such as a `Conveyor`, it builds one at that size. New *equipment*
+symbols should come from the vendored stencil pipeline rather than being
+hand-registered (see `CONTRIBUTING.md`).

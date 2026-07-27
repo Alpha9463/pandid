@@ -88,6 +88,33 @@ ISA-5.1 instrument balloons. Those are original primitives, not stencils. New
 *equipment* should come from the stencils, so the sheet stays visually
 consistent and `NOTICE` remains the whole attribution story.
 
+### Symbols that have to stretch
+
+There is a third case, and today it has one member. The generator emits one
+fixed-size `Symbol` per shape, and a fixed drawing placed in a box of a
+different aspect ratio is scaled unevenly — so a symbol the user is meant to
+resize along one axis cannot come out of it. Stretching a belt conveyor that way
+would draw its rollers as ellipses.
+
+Such a symbol is written as a *builder* in `pfd/render/symbols.py`, taking the
+size and returning a `Symbol` drawn at it, and `SymbolRegistry.for_unit()`
+resolves it against the unit. Because the artwork is built to the size, the
+`<defs>` entry is per size and the placed box is exactly the box it was drawn
+in, so the scale factor is 1 and every rotation and mirror still works the way
+it does for a fixed symbol.
+
+It is still stencil-derived and still Apache-2.0. Adapting one means:
+
+1. write the builder in `pfd/render/symbols.py`, with a comment naming the
+   stencil file, the shape, and what was changed;
+2. record it in `ADAPTED_ELSEWHERE` in `scripts/vendor_symbols.py`, so the
+   mapping table stays the place provenance is looked up;
+3. name it and its file in `NOTICE` section 2. It is not an original primitive
+   and does not belong in the section 1 paragraph that lists those.
+
+Do not reach for this to avoid vendoring. A symbol with a fixed size goes
+through `KIND_MAP` like everything else.
+
 ## 2. Every port must land on drawn ink
 
 A nozzle floating in whitespace draws a stream that fails to touch its

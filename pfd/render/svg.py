@@ -671,12 +671,25 @@ class SvgRenderer:
         The identity for every symbol without lettering of its own, so those
         keep sharing one definition and one id no matter how they are placed.
         """
-        sym = self.registry.get(u.kind, getattr(u, "variant", "default"))
+        sym = self.registry.for_unit(u)
         f = getattr(u, "frame", None)
         if f is None or "<text" not in sym.svg:
             return (0, False, False)
         return (int(getattr(f, "orientation", 0) or 0),
                 bool(f.mirrored), bool(getattr(f, "mirror_y", False)))
+
+    def _sym_id(self, u) -> str:
+        """The ``<defs>`` id a unit's ``<use>`` points at.
+
+        One definition per ``(kind, variant)``, plus a suffix for whatever else
+        is baked into the definition rather than applied by the ``<use>``: the
+        size a built-to-measure symbol was drawn at, and the counter-rotation
+        that keeps a symbol's own lettering readable.
+        """
+        variant = getattr(u, 'variant', 'default')
+        sym_id = f"sym_{u.kind}" if variant == "default" else f"sym_{u.kind}_{variant}"
+        sym_id += self.registry.for_unit(u).id_suffix
+        return sym_id + _xform_tag(*self._text_xform(u))
 
     def _defs(self, fs):
         lines = []
@@ -696,16 +709,21 @@ class SvgRenderer:
 
         # A symbol carrying its own lettering needs one definition per placement
         # transform in use, since the counter-transform that keeps the letters
-        # readable is baked into the definition. Everything else — the great
-        # majority — still shares a single definition however it is placed.
-        used_symbols = sorted({(u.kind, getattr(u, 'variant', 'default'))
-                               + self._text_xform(u)
-                               for u in fs.units if u.kind not in ("feed", "product")})
-        for kind, variant, rot, mirror_x, mirror_y in used_symbols:
-            sym = self.registry.get(kind, variant)
+        # readable is baked into the definition; a symbol built to measure needs
+        # one per size, so the box it is placed in is the box it was drawn in and
+        # the scale factor stays exactly 1. Everything else — the great majority
+        # — still shares a single definition however it is placed.
+        used: dict[tuple, tuple] = {}
+        for u in fs.units:
+            if u.kind in ("feed", "product"):
+                continue
+            sym = self.registry.for_unit(u)
+            xform = self._text_xform(u)
+            key = (u.kind, getattr(u, 'variant', 'default'), sym.id_suffix) + xform
+            used[key] = (self._sym_id(u), sym, *xform)
+        for key in sorted(used):
+            sym_id, sym, rot, mirror_x, mirror_y = used[key]
             svg_str = _upright_text(sym.svg, rot, mirror_x, mirror_y)
-            sym_id = (f"sym_{kind}" if variant == "default" else f"sym_{kind}_{variant}")
-            sym_id += _xform_tag(rot, mirror_x, mirror_y)
             if svg_str.startswith('<g'):
                 inner = svg_str[svg_str.find('>') + 1:svg_str.rfind('</g>')]
                 # overflow="visible": a <symbol> viewport defaults to overflow:hidden,
@@ -735,9 +753,7 @@ class SvgRenderer:
                 lines.extend(self._draw_boundary(u, f, x, y, safe_name))
                 continue
 
-            variant = getattr(u, 'variant', 'default')
-            sym_id = f"sym_{u.kind}" if variant == "default" else f"sym_{u.kind}_{variant}"
-            sym_id += _xform_tag(*self._text_xform(u))
+            sym_id = self._sym_id(u)
             u_width, u_height = f.w, f.h
             rot = int(getattr(f, "orientation", 0) or 0)
             mirror_x, mirror_y = bool(f.mirrored), bool(getattr(f, "mirror_y", False))

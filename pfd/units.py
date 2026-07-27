@@ -25,7 +25,7 @@ __all__ = [
     "Feed", "Product", "Pump", "Compressor", "Blower", "Valve", "Vessel", "Tank",
     "HeatExchanger", "Heater", "Cooler", "Reactor", "Separator", "Column",
     "Mixer", "Splitter", "Reducer", "Fitting", "Ejector", "Vent", "Funnel",
-    "Furnace", "Turbine", "Filter", "Dryer", "Instrument",
+    "Furnace", "Turbine", "Filter", "Dryer", "Conveyor", "Instrument",
 ]
 
 # "signal" is the odd one out: every other role names something that flows in a
@@ -437,6 +437,65 @@ class Dryer(Unit):
 
     kind = "dryer"
     _PORTS = [("feed", "inlet", "feed"), ("product", "outlet", "process")]
+
+
+class Conveyor(Unit):
+    """Belt conveyor — bulk solids carried from the tail end to the head end.
+
+    ``length`` is the belt run: the symbol is a straight bar between two rollers
+    of fixed size, so a longer conveyor grows the bar and the rollers stay
+    round. It is the unit's whole size, and its only one — ``width`` and
+    ``height`` set the drawn box, which would stretch the rollers with it, so
+    they are refused rather than left as a second answer to the same question.
+    A quarter turn stands the belt on end, where the length is its height.
+
+    ``feed`` is the tail end. Material is dropped onto a belt rather than piped
+    into it, so the nozzle can be taken from the top face as well as the end.
+    ``discharge`` is the head end, where the belt throws off; it can be taken
+    from the underside too, for the chute that catches what comes over.
+    """
+
+    kind = "conveyor"
+    _PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+
+    _length: float
+
+    def __init__(self, name: str, length: float | None = None,
+                 variant: str = "default", width: float | None = None,
+                 height: float | None = None, label_pos: str | None = None,
+                 description: str = "", reference: str = ""):
+        from pfd.render.symbols import CONVEYOR_LENGTH
+
+        if width is not None or height is not None:
+            given = width if width is not None else height
+            raise ValueError(
+                f"{name}: a Conveyor is sized by length=, the belt run between "
+                f"its two rollers, and that one number is the only authority on "
+                f"how long the belt is. width= and height= size the drawn box "
+                f"instead, which would stretch the rollers out of round. Pass "
+                f"length={given!r}."
+            )
+        super().__init__(name, variant=variant, label_pos=label_pos,
+                         description=description, reference=reference)
+        self.length = CONVEYOR_LENGTH if length is None else length
+
+    @property
+    def length(self) -> float:
+        """The belt run, tail roller to head roller, in drawn units.
+
+        The symbol is built to it rather than scaled to it, so the box the
+        conveyor is placed in is exactly the box its artwork was drawn in and
+        the rollers are the same circles however long the belt is.
+        """
+        return self._length
+
+    @length.setter
+    def length(self, value: float) -> None:
+        from pfd.render.symbols import CONVEYOR_MIN_LENGTH, conveyor_too_short
+
+        if value < CONVEYOR_MIN_LENGTH:
+            raise conveyor_too_short(value, self.name)
+        self._length = float(value)
 
 
 def split_tag(type: str, number: str | int = "") -> tuple[str, str]:

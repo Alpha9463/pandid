@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 def _sym(unit: "Unit"):
     from pfd.render.symbols import default_registry
-    return default_registry.get(unit.kind, getattr(unit, "variant", "default"))
+    return default_registry.for_unit(unit)
 
 
 def _xform(frame) -> tuple[int, bool, bool]:
