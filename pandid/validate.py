@@ -24,6 +24,39 @@ if TYPE_CHECKING:
 
 _TOL = 1.0  # px tolerance so touching edges are not flagged as overlaps
 
+#: ``(kind, variant)`` pairs a run is *meant* to change centreline through, so
+#: ``run-off-elevation`` has nothing to tell an author who put one in a line.
+#:
+#: One member, and it is the fitting whose entire purpose is the step. An
+#: eccentric reducer is flat on top, so the small end's centreline is the higher
+#: of the two, which is the whole reason it is specified on a pump suction where
+#: a concentric reducer would leave a pocket against the roof of the line for
+#: vapour to collect in (see the reasoning beside its ``KIND_MAP`` entry in
+#: ``scripts/vendor_symbols.py``). Both its nozzles face along the run, so the
+#: pair *does* read as one elevation to :func:`_off_elevation`, and the 2.4px
+#: rise it draws would otherwise be reported as arithmetic the author dropped.
+#: Straightening it is the one change that would break the fitting.
+#:
+#: The relief valves -- ``valve/angle``, ``valve/psv``, ``valve/relief`` -- are
+#: *not* here, and deliberately so, because none of them has a step to be
+#: excused for. The first two turn the run a quarter, so no placement puts both
+#: their nozzles along one elevation and the face test below never reaches them.
+#: The third passes the run straight up; laid on its side it does offer a
+#: horizontal pair, and that pair is level. A name in this set is a rule with no
+#: geometry behind it, which is how such a set grows silently, so
+#: ``tests/test_validate.py`` asserts the geometry over every quarter turn
+#: instead of taking the exemption on faith.
+#:
+#: A device that merely *has* its two nozzles at different heights does not
+#: belong here either. A pump's discharge is drawn above its suction, and the
+#: author still has to put the downstream nozzle on the discharge: the step is
+#: real, so reporting a downstream unit that missed it is the finding working.
+#: What separates the eccentric reducer is that acting on the report -- moving
+#: the far end onto the near end's elevation -- would undo the device.
+OFFSET_BY_DESIGN = frozenset({
+    ("reducer", "eccentric"),
+})
+
 #: The order the control-function letters of a tag have to appear in.
 #: BS ISO 15519-2:2015 §5.2.4, *Sequence of letter codes for control functions*:
 #:
@@ -93,11 +126,75 @@ def _seg_crosses_box(x1, y1, x2, y2, box) -> bool:
     return False
 
 
+def _pinned_y(unit) -> bool:
+    """True when this unit's elevation was written down by hand.
+
+    ``pin(row=...)`` is a grid cell rather than a coordinate, so it is not a
+    number anyone did nozzle arithmetic on and does not count.
+    """
+    pin = getattr(unit, "pin_", None)
+    return pin is not None and getattr(pin, "y", None) is not None
+
+
+def _off_elevation(su, sp, du, dp) -> tuple[float, float, bool] | None:
+    """How far these two connected nozzles near-miss by, or None if they don't.
+
+    *su*/*du* are the units at the two ends of one stream and *sp*/*dp* their
+    resolved ports. Answers ``(offset, span, source_is_shorter)``: the miss, the
+    extent it was measured against, and which end that extent belongs to. All
+    three together, so the message cannot name one device and quote the other
+    one's height at it.
+    """
+    from pandid.portgeom import unit_box
+
+    # A run is a line at one elevation, and only a pair of nozzles that both
+    # face along it has one. A pair with a vertical face is a deliberate turn,
+    # and a pair with two of them is a riser or a drop, where the difference in
+    # y is the *length* of the run rather than a miss. Opposite faces, and the
+    # destination on the side the source points at, so the two are looking at
+    # each other: a run that leaves east and arrives from the east has already
+    # doubled back on itself, and a jog inside a detour is not a step in a
+    # straight line.
+    if {sp.face, dp.face} != {"E", "W"} or (sp.face == "E") != (dp.point[0] > sp.point[0]):
+        return None
+
+    # Offset by design: the fitting is *for* the step. See OFFSET_BY_DESIGN.
+    for u in (su, du):
+        if (u.kind, getattr(u, "variant", "default")) in OFFSET_BY_DESIGN:
+            return None
+
+    offset = abs(dp.point[1] - sp.point[1])
+    if offset <= _TOL:
+        return None  # sub-pixel; nothing is drawn differently
+
+    # The threshold is the shorter symbol's own extent across the run, taken
+    # off the *drawn* box so a unit given an explicit height is measured at the
+    # size it got. The reasoning: the miss this catches is a nozzle offset the
+    # author did not subtract, and a nozzle is somewhere inside its own symbol,
+    # so the whole family of them -- half a valve's height, a strainer's 10
+    # against a valve's 7.5, a sight glass's 6.25 against a vessel's 70 -- is
+    # bounded by how tall the shorter of the two devices is and never exceeds
+    # it. A deliberate change of elevation is a step between *runs*: it clears
+    # the shorter symbol entirely, because a drawing that put the second run
+    # inside the first one's body would not read as two runs.
+    #
+    # Half that extent is the tempting number, since half a symbol height is the
+    # commonest single cause. It is measurably wrong: over this repo's own
+    # examples eight of the misses land on exactly half and two land just past
+    # it (a sight glass 6.3 off a 12.5 body), so half either drops them to a
+    # floating-point tie-break or misses them outright.
+    sb, db = unit_box(su, su.frame), unit_box(du, du.frame)
+    sh, dh = sb[3] - sb[1], db[3] - db[1]
+    span = min(sh, dh)
+    return (offset, span, sh <= dh) if offset < span else None
+
+
 def validate(fs: "Flowsheet") -> list["Issue"]:
     """Return all validation issues for the flowsheet (errors first)."""
     from pandid.layout.attach import MAX_PLACEMENT_PASSES
-    from pandid.portgeom import is_anchored, port_point, unit_box
+    from pandid.portgeom import is_anchored, port_point, resolve_port, unit_box
     from pandid.render.symbols import default_registry
+    from pandid.streams import SIGNAL_KINDS
     from pandid.units import Instrument
 
     errors: list[Issue] = []
@@ -270,5 +367,57 @@ def validate(fs: "Flowsheet") -> list["Issue"]:
                 warnings.append(Issue("warning", "route-detour",
                                       f"stream {s.name} routes {length:.0f}px for a "
                                       f"{direct:.0f}px span ({length / direct:.1f}x)"))
+
+        # Soft: a horizontal run whose two ends nearly, but not quite, share an
+        # elevation. Units are pinned by their top-left corner, so a row pinned
+        # to convenient corner-y values puts its *nozzles* wherever each symbol
+        # happens to carry them, and the router draws a step into the device and
+        # a step back out. Nothing errors and no nozzle leaves its ink: the
+        # sheet is merely, silently, subtly wrong, which is what makes it worth
+        # a finding rather than a docstring.
+        #
+        # ``pin()`` already has the cure and authors do not reach for it, so the
+        # message names it, the way ``gravity-turned`` names the lying drum
+        # instead of leaving the author to find it.
+        for s in fs.streams:
+            # A signal line carries a measurement, not a fluid, so it has no
+            # elevation to be off. Its balloon end is placed by
+            # ``add_instrument(on=..., offset=...)`` rather than by a pin, and
+            # advice to pin a nozzle the author never positioned is advice to
+            # hand-place a sheet that did not ask to be hand-placed.
+            if s.kind in SIGNAL_KINDS:
+                continue
+            su, du = s.source.owner, s.dest.owner
+            # Same reason, for process lines: this finding's whole content is
+            # that a hand-written elevation was arrived at by corner arithmetic,
+            # so it is only raised where a hand-written elevation exists. On an
+            # auto-laid-out sheet the elevations are the engine's own, and it is
+            # already free to move them.
+            if not (_pinned_y(su) or _pinned_y(du)):
+                continue
+            src = resolve_port(su, su.frame, s.source.name)
+            dst = resolve_port(du, du.frame, s.dest.name)
+            near = _off_elevation(su, src, du, dst)
+            if near is None:
+                continue
+            offset, span, at_source = near
+            # Name the shorter device and the elevation to put it on. It is the
+            # one whose own half-height is the arithmetic that went missing, and
+            # the one the step reads as a dogleg *around* rather than as a
+            # second run. Which end that is comes back from the same call that
+            # measured ``span``, so the sentence cannot name one device and
+            # quote the other one's height at it.
+            if at_source:
+                dev, port, target = su, s.source.name, dst.point[1]
+            else:
+                dev, port, target = du, s.dest.name, src.point[1]
+            warnings.append(Issue(
+                "warning", "run-off-elevation",
+                f"stream {s.name} runs from {su.name}.{s.source.name} to "
+                f"{du.name}.{s.dest.name}, whose nozzles are {offset:.1f}px apart "
+                f"-- inside the {span:.0f}px {dev.name} measures across the run, so "
+                f"the line steps into it and back out instead of changing elevation. "
+                f"That is corner arithmetic rather than a step: pin the nozzle, "
+                f"{dev.name}.pin(port={port!r}, y={target:g})"))
 
     return errors + warnings

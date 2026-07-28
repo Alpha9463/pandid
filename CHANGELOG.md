@@ -36,6 +36,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   medium, which is where what the medium sheds is collected; `fixed_bed` and
   `belt` draw the same medium with no hopper, are driven by pressure drop
   across it, and stay turnable.
+- `validate()` reports `run-off-elevation`: two connected nozzles on one
+  horizontal run that are *almost* level, missing by less than the shorter of
+  the two symbols is tall. A unit is pinned by its top-left corner and each
+  symbol carries its nozzles where its artwork puts them, so pinning a row to
+  convenient corner-`y` values silently puts the nozzles on different
+  elevations and the router draws a step into each device and back out. Nothing
+  errored and no nozzle left its ink, which is what made it worth a finding.
+  The message names the cure, `pin(port=…, y=…)`. A large deliberate step, a
+  vertical run, a signal line, a sheet with no pinned elevation, and the
+  eccentric reducer (whose two ends sit on different centrelines on purpose)
+  are all silent. Rendering is unchanged and no golden moves.
 - `Separator(variant="knockout")` draws the knock-out drum the default used to,
   demister pad and level gauge and all, at the size and with the nozzles it had.
 

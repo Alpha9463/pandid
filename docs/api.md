@@ -1766,11 +1766,43 @@ and `message`.
 | `route-detour` | warning | a route is more than 3× its direct span |
 | `letter-sequence` | warning | a tag spells its control-function letters out of the order ISO 15519-2:2015 §5.2.4 requires (I, R, C, S, M, Z, A), so `FCI` where `FIC` was meant. One finding per tag, and the message names the tag it would have been |
 | `gravity-turned` | warning | a unit whose symbol's function depends on gravity has been given a quarter turn, which ISO 15519-1:2010 §11.4.2 excepts from the general permission to turn. One finding per unit; see [Symbols that must not be turned](#symbols-that-must-not-be-turned) |
+| `run-off-elevation` | warning | two connected nozzles on one horizontal run are *almost* level, missing by less than the shorter symbol is tall, so the line steps into a device and back out; see [Runs at one elevation](#runs-at-one-elevation) |
 | `route-not-settled` | warning | routing and instrument placement never agreed and `route()` ran out of passes; see [Routing and instrument placement](#routing-and-instrument-placement) |
 
 Errors raise from `to_svg()`/`render()` unless you pass `check=False`. Warnings
 never raise, and collect on `fs.warnings` after each render. Geometric checks
 need resolved frames, so they are skipped before layout has run.
+
+### Runs at one elevation
+
+A unit is pinned by its **top-left corner**, and every symbol carries its
+nozzles wherever its artwork puts them. A control valve is 15 tall and takes its
+line at mid-body, so its nozzles sit 7.5 below the corner; a vessel takes its
+inlet 50 below. Pinning a row of equipment to convenient corner-`y` values
+therefore puts the *nozzles* on different elevations, and the router draws a
+step into each device and a step back out:
+
+```python
+fv   = fs.add(units.Valve("FV-101", variant="control")).pin(x=270, y=180)  # nozzle at 187.5
+drum = fs.add(units.Vessel("V-101")).pin(x=420, y=145)                     # nozzle at 195
+```
+
+7.5 apart, exactly half a valve. Nothing errors and no nozzle leaves its ink;
+the sheet is only subtly wrong. `validate()` reports it as `run-off-elevation`
+and names the cure, which is [`pin(port=…)`](#pinport) — the form that reads
+the coordinate as the position of a *nozzle* rather than of the corner:
+
+```python
+fv.pin(x=270, port="inlet", y=195)      # put the nozzle on the run
+```
+
+The finding fires only on a **near** miss: an offset smaller than the shorter of
+the two symbols is across the run. A large step between two pieces of equipment
+is a change of elevation someone meant, and stays silent. So do vertical runs,
+where the difference in `y` is the length of the drop rather than a miss; signal
+lines, which carry a measurement and have no elevation; sheets with no pinned
+elevation to have got wrong; and the eccentric reducer, whose two ends sit on
+different centrelines because that is the whole point of the fitting.
 
 ### Routing and instrument placement
 
