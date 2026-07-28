@@ -209,7 +209,7 @@ def main():
     # far end rather than sitting in the middle of its own leg.
     st308 = fs.add_valve_station(
         "CV-308", x=217.5, y=steam_y, bypass_over="downstream_isolation",
-        description="Steam", service="HPS", sequence=308, size=100, schedule=300, spec="CS")
+        description="Steam", service="HPS", sequence=308, size=100, schedule=80, spec="CS")
     condensate.pin(port="inlet", x=1540, y=580 + port_offset(reb, "tube_out")[1])
 
     # Bottoms over the weir, cooled and sent off the sheet. The bottoms valve
@@ -255,11 +255,11 @@ def main():
     fs.connect(cond.shell_out, drum.inlet, service="AE", sequence=304, size=150,
                schedule=80, spec="SS")
     fs.connect(cws_cond.outlet, hv311.inlet, service="CWS", sequence=311, size=150,
-               schedule=150, spec="CS")
+               schedule=40, spec="CS")
     fs.connect(hv311.outlet, cond.tube_in)
     cw_return = fs.connect(cond.tube_out, cwr_cond.inlet, service="CWR",
                            sequence=312, size=150,
-                           schedule=150, spec="CS").via([(1300, cw_cond_y)])
+                           schedule=40, spec="CS").via([(1300, cw_cond_y)])
 
     fs.connect(drum.outlet, t_draw.inlet, service="AE", sequence=309, size=100,
                schedule=80, spec="SS")
@@ -282,10 +282,10 @@ def main():
                         size=300, schedule=160, spec="SS",
                         tear_hint=True).via([(boilup_x, 535), (595, 535), (595, boilup_y)])
     fs.connect(steam.outlet, st308.inlet, service="HPS", sequence=308, size=100,
-               schedule=300, spec="CS")
+               schedule=80, spec="CS")
     fs.connect(st308.outlet, reb.tube_in)
     fs.connect(reb.tube_out, condensate.inlet, service="HPR", sequence=317, size=80,
-               schedule=300, spec="CS")
+               schedule=80, spec="CS")
 
     fs.connect(reb.bottoms, cv306.inlet, service="FB", sequence=306, size=100,
                schedule=160, spec="SS")
@@ -294,10 +294,10 @@ def main():
     fs.connect(cooler.shell_out, bottoms_prod.inlet, service="FB", sequence=314,
                size=100, schedule=160, spec="SS").via([(cooler_shell_out_x, cooled_y)])
     fs.connect(cws_cool.outlet, hv315.inlet, service="CWS", sequence=315, size=100,
-               schedule=150, spec="CS")
+               schedule=40, spec="CS")
     fs.connect(hv315.outlet, cooler.tube_in)
     fs.connect(cooler.tube_out, cwr_cool.inlet, service="CWR", sequence=316, size=100,
-               schedule=150, spec="CS")
+               schedule=40, spec="CS")
 
     # --- Feed trip and local indication ----------------------------------
     # The square is the trip logic rather than a device, so it is drawn at each

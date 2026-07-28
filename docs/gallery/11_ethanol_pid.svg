@@ -387,32 +387,32 @@
     <text x="1086.0" y="416.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">AE-303-80-80-SS</text>
     <rect x="1068.5" y="480.0" width="99.0" height="13.0" fill="white" />
     <text x="1118.0" y="486.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">AE-305-40-80-SS</text>
-    <rect x="203.7" y="631.1" width="117.6" height="13.0" fill="white" />
-    <text x="262.5" y="637.6" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">HPS-308-100-300-CS</text>
+    <rect x="200.8" y="631.1" width="111.4" height="13.0" fill="white" />
+    <text x="256.5" y="637.6" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">HPS-308-100-80-CS</text>
     <rect x="169.3" y="387.0" width="111.4" height="13.0" fill="white" />
     <text x="225.0" y="393.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">FB-301-200-160-SS</text>
     <rect x="999.5" y="254.4" width="13.0" height="105.2" fill="white" />
     <text x="1006.0" y="307.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1006.0, 307.0)">AE-304-150-80-SS</text>
-    <rect x="201.2" y="234.0" width="117.6" height="13.0" fill="white" />
-    <text x="260.0" y="240.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">CWS-311-150-150-CS</text>
-    <rect x="1281.2" y="223.5" width="117.6" height="13.0" fill="white" />
-    <text x="1340.0" y="230.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">CWR-312-150-150-CS</text>
+    <rect x="204.3" y="234.0" width="111.4" height="13.0" fill="white" />
+    <text x="260.0" y="240.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">CWS-311-150-40-CS</text>
+    <rect x="1284.3" y="223.5" width="111.4" height="13.0" fill="white" />
+    <text x="1340.0" y="230.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">CWR-312-150-40-CS</text>
     <rect x="1140.7" y="325.4" width="13.0" height="105.2" fill="white" />
     <text x="1147.2" y="378.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1147.2, 378.0)">AE-309-100-80-SS</text>
     <rect x="589.3" y="648.5" width="111.4" height="13.0" fill="white" />
     <text x="645.0" y="655.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">FB-307-250-160-SS</text>
     <rect x="640.8" y="528.5" width="111.4" height="13.0" fill="white" />
     <text x="696.5" y="535.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">FB-310-300-160-SS</text>
-    <rect x="1134.3" y="596.2" width="111.4" height="13.0" fill="white" />
-    <text x="1190.0" y="602.7" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">HPR-317-80-300-CS</text>
+    <rect x="1137.4" y="596.2" width="105.2" height="13.0" fill="white" />
+    <text x="1190.0" y="602.7" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">HPR-317-80-80-CS</text>
     <rect x="773.3" y="643.0" width="111.4" height="13.0" fill="white" />
     <text x="829.0" y="649.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">FB-306-100-160-SS</text>
     <rect x="1280.5" y="798.5" width="111.4" height="13.0" fill="white" />
     <text x="1336.2" y="805.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">FB-314-100-160-SS</text>
-    <rect x="201.2" y="744.0" width="117.6" height="13.0" fill="white" />
-    <text x="260.0" y="750.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">CWS-315-100-150-CS</text>
-    <rect x="1326.2" y="733.5" width="117.6" height="13.0" fill="white" />
-    <text x="1385.0" y="740.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">CWR-316-100-150-CS</text>
+    <rect x="204.3" y="744.0" width="111.4" height="13.0" fill="white" />
+    <text x="260.0" y="750.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">CWS-315-100-40-CS</text>
+    <rect x="1329.3" y="733.5" width="111.4" height="13.0" fill="white" />
+    <text x="1385.0" y="740.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">CWR-316-100-40-CS</text>
   </g>
   <g id="instrument_taps">
     <line x1="262.25" y1="444.9" x2="262.25" y2="470.9" stroke="black" stroke-width="1" />
