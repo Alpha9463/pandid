@@ -254,6 +254,8 @@ an ISO 5457 grid. ISO 5457 §4.4 runs letters top down and numerals left to righ
 at a fixed 50 mm pitch with the field counts of its Table 2, and §4.2, §4.3 and
 §4.5 add a 20 mm filing margin and centring and trimming marks. `pandid` matches
 none of those: the interval and the field count are chosen to suit the sheet.
+ISO 15519-1 §5.1.2, which is the clause that applies to a diagram, asks for the
+centring marks only on a document prepared for microfilming.
 
 A named sheet declares that physical size on the `<svg>` element, so it prints
 and exports to PDF at exactly its ISO size rather than at whatever the reader
@@ -931,12 +933,36 @@ each end; otherwise it steps **beside** the line, offset perpendicular, above a
 horizontal run and to the left of a vertical one. A line number is a dozen
 characters wide and most runs are not, so beside is the usual answer for one.
 
-On a vertical run the label is turned a quarter clockwise, so it reads bottom to
-top and never upside down, and the sheet is read from the bottom or the right,
-the reading directions ISO 5457 §4.1 fixes for the drawing as a whole. No
-standard governs a label on a process diagram. ISO 129-1 §4.1.1 states the same
-rule for the text of a dimension, but its scope is dimensions and tolerances and
-a P&ID has none; ASME Y14.5 uses the opposite, unidirectional convention.
+Beside is also what **ISO 15519-1 §7.2.5** asks for: a connection's reference
+designation *"should be located above the connection with horizontal connecting
+lines and to the left of vertical connecting lines"*, and *"shall be oriented
+along or adjacent to the relevant connecting lines"*. On the line is a
+divergence from that preference, but §7.2.5 words it as a `should`, and it buys
+back the sheet room that a dozen-character number costs.
+
+That clause reaches a line number only if the line number is read as the
+connection's reference designation. A `pandid` line number is a line-list
+identifier, not the IEC 81346 designation §7.2 is written around, so this is a
+reading rather than a claim of conformance. It is a sound one: §7.3.4 turns off
+the boundary-frame principle for *"diagrams where the connections (pipelines)
+have reference designations"*, which is a P&ID with line numbers on it.
+
+On a vertical run the label is turned so it reads bottom to top and never upside
+down. §5.1.5 allows exactly that: *"Text shall be oriented horizontally or
+vertically corresponding to the reading directions viewed from the bottom edge
+or viewed from the right-hand edge of the document."* Its next sentence,
+*"Reference designations shall be oriented horizontally independent of symbol
+orientation"*, does not reach a line number. It is a rule about a symbol's own
+designation, which is why it is qualified by symbol orientation, and a pipe run
+has none; connections are §7.2.5's subject, and that clause asks for orientation
+*along* the line. ISO 15519-1 draws it both ways in one figure: Figure 40 boxes
+its symbol designations horizontally and turns the annotation on every vertical
+connecting line to read bottom to top, to the left of the line.
+
+Two other standards state a rule for text that is not this one. ISO 129-1 §4.1.1
+says the same thing as §5.1.5 for the text of a dimension, but its scope is
+dimensions and tolerances and a P&ID has none. ASME Y14.5 uses the opposite,
+unidirectional convention.
 
 Wherever it lands, a number is slid along its own run until it clears the
 equipment, tags, balloons and other numbers already on the sheet.

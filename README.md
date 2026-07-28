@@ -123,12 +123,27 @@ against one. What it follows, feature by feature:
   standards claim of its own, so a shape is matched to the ISO 10628-2 symbol
   where one exists rather than reproduced from the standard itself.
 - **Instrument balloons, signal lines and tag letters** follow **ANSI/ISA-5.1**.
-  ISO 10628-1 §4.1 calls for instrumentation to IEC 62424 instead. `pandid` uses
-  ISA-5.1 in preference, because it is what North American practice draws and
-  what the reference sheets this package was built against use. ISA-5.1
-  §2.8.1(b) allows a standard to be adopted with exceptions provided each one is
-  documented in the user's own standard and on the drawing: `legend()` is where
-  a drawing says so.
+  ISO does not speak with one voice here. ISO 10628-1 §4.1 calls for
+  instrumentation to IEC 62424. **ISO 15519-2:2015** is ISO's own standard for
+  measurement and control on a process diagram, from the same subcommittee a
+  year later, and it sends symbols to ISO 14617 and identification to IEC 81346;
+  IEC 62424 and ISA 5.1 appear in its bibliography only. `pandid` takes neither
+  ISO route, because ISA-5.1 is what North American practice draws and what the
+  reference sheets this package was built against use. ISO 15519-1 §7.1 is the
+  permission it stands on: *"Other reference designation principles may be used
+  as long as they are agreed upon between involved parties."* ISA-5.1 §2.8.1(b)
+  asks for the same agreement from its own side, that each exception be
+  documented in the user's standard and on the drawing. `legend()` is where a
+  sheet records it.
+- **The gap to ISO 15519-2 is structural**, not a letter table. Its §5.1.1 says
+  the symbol *"consists of a circle or extended circle"*, and its Table 1 draws
+  only circles and stadiums, so the `shared` square, the `computer` hexagon and
+  the `sis` and `interlock` diamonds have no ISO counterpart at all. Table 1
+  codes location in three states, field / central / subsidiary, with no dashed
+  line and no operator-accessibility axis. Table 2 has no `T` for transmitter
+  and no `V` in any role: a transmitter is a symbol (Annex A.4.04), vibration
+  falls under `S` and viscosity under `Q`. `FT-101` therefore has no reading in
+  ISO 15519-2's terms at all.
 - **Tag numbering** is therefore the ISA-5.1 **loop number** (`FIC-101`), not
   the IEC 81346 reference designation (`LAB01BP01`) that **ISO 15519-2** §5.3
   requires on the lower line of a symbol. A reader coming from ISO should expect
@@ -142,17 +157,27 @@ against one. What it follows, feature by feature:
 - **The zone grid** is a drawing-frame zone reference in the ASME idiom: letters
   run bottom to top, numerals right to left. It is **not** an ISO 5457 grid.
   ISO 5457 §4.4 runs letters top down and numerals left to right at a fixed
-  50 mm pitch with the field counts of its Table 2, and also requires centring
-  marks, trimming marks and a 20 mm filing margin, none of which `pandid` draws.
-  The interval and the field count here are chosen to suit the sheet.
+  50 mm pitch with the field counts of its Table 2, and §4.2, §4.3 and §4.5 add
+  a 20 mm filing margin and centring and trimming marks, none of which `pandid`
+  draws. ISO 15519-1 §5.1.2 asks for the centring marks only on a document
+  prepared for microfilming. The interval and the field count here are chosen to
+  suit the sheet.
 - **The title block** carries the data fields **ISO 7200** specifies, which
   ISO 10628-1 §5.1.2 requires on a process diagram: identification number, date
   of issue, sheet number, title, approval person, creator, and legal owner,
   which is the issuing organisation and so is the `company` cell. `client` is
   not an ISO 7200 field; it is there because issued sheets carry one. ISO 7200's
   eighth mandatory field, **document type**, has no cell yet.
-- **Nothing standardises where a label sits on a pipe** or which way it reads.
-  See [Line numbers](#line-numbers) for what `pandid` does and why.
+- **Where a label sits on a pipe** follows **ISO 15519-1 §7.2.5**, which puts a
+  connection's designation *"above the connection with horizontal connecting
+  lines and to the left of vertical connecting lines"*. That is where `pandid`
+  puts a line number beside its run, turned to read bottom to top on a riser,
+  which is one of the two reading directions §5.1.5 allows. §5.1.5's second
+  sentence, holding a reference designation horizontal *"independent of symbol
+  orientation"*, is a rule about a symbol's own designation and does not reach a
+  connection. `pandid` also draws the number **on** the line where the run is
+  long enough to carry it, which §7.2.5 words as a `should`, so that one is a
+  divergence rather than a breach. See [Line numbers](#line-numbers).
 
 The largest remaining gap against ISO 10628-1 is §5.3.1 and §5.4.2: line widths
 and character heights are in drawing units and are scaled with the drawing, so

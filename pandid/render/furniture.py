@@ -430,6 +430,8 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
 # fixed 50 mm pitch with the field counts of its Table 2, and §4.3/§4.5 add
 # centring and trimming marks. None of that is drawn here: the band is a
 # constant in drawing units and the field count is chosen to suit the sheet.
+# ISO 15519-1 §5.1.2, the clause that applies to a diagram, asks for the
+# centring marks only on a document prepared for microfilming.
 # ---------------------------------------------------------------------------
 
 # Width of the lettered/numbered band between the drawing frame and the sheet

@@ -187,9 +187,10 @@ def test_a_label_with_room_to_spare_stays_on_its_run():
 
 def test_stream_label_on_a_vertical_run_reads_bottom_to_top():
     # A label follows its line, and a vertical one is turned so the sheet is
-    # read from the right, never upside down, which is the reading direction
-    # ISO 5457 §4.1 fixes for the drawing as a whole. Its halo turns with it, so
-    # the box is taller than it is wide.
+    # read from the right, never upside down. That is one of the two reading
+    # directions ISO 15519-1 §5.1.5 allows, and §7.2.5 asks for a connection's
+    # designation to be oriented along its line. Its halo turns with it, so the
+    # box is taller than it is wide.
     fs = Flowsheet("Riser")
     feed = fs.add(U.Feed("F")).pin(x=60, y=300)
     prod = fs.add(U.Product("P")).pin(x=400, y=60)
