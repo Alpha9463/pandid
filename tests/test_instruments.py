@@ -30,6 +30,18 @@ def _line(**kw):
     return fs, s, inst, fv
 
 
+def _hatch_marks(svg: str) -> int:
+    """Cross-hatch strokes on pneumatic signal lines.
+
+    Counted by element rather than by stroke width: every line on a signal is
+    drawn at the one fine weight ISO 15519-2 Annex A.1.02/A.1.03 puts it at, so
+    the width no longer tells a hatch from anything else. A stream is a
+    ``<path>`` and the hatch is the only ``<line>`` ink inside the stream group.
+    """
+    body = svg.split('<g id="streams">', 1)[1].split("</g>", 1)[0]
+    return body.count("<line ")
+
+
 def test_instrument_tag_rendered_inside():
     fs = Flowsheet("i")
     a = fs.add(U.Instrument("FT-101"))
@@ -288,7 +300,7 @@ def test_controller_output_routes_to_the_valve_actuator():
     # the actuator is on top of the valve, not on either process nozzle
     assert end[1] < fv.frame.cy
     assert fv.frame.x < end[0] < fv.frame.x_max
-    assert 'stroke-width="1.5"' in fs.to_svg()  # pneumatic slash ticks drawn
+    assert _hatch_marks(fs.to_svg()) >= 2  # pneumatic slash ticks drawn
 
 
 def test_every_valve_variant_has_an_actuator_on_its_symbol():
@@ -465,8 +477,8 @@ def test_a_short_pneumatic_run_still_gets_its_cross_hatch():
     )
     length = sum(abs(b[0] - a[0]) + abs(b[1] - a[1]) for a, b in zip(points, points[1:]))
     assert 16 <= length < 45, f"specimen must be a *short* run, got {length}"
-    # Two strokes per mark, drawn at 1.5 width; nothing else on the sheet is.
-    assert fs.to_svg(check=False).count('stroke-width="1.5"') >= 2
+    # Two strokes per mark, and the sheet carries exactly the one signal.
+    assert _hatch_marks(fs.to_svg(check=False)) >= 2
 
 
 # --- a tag that repeats, and one that must not --------------------------------

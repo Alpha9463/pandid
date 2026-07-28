@@ -445,16 +445,36 @@ fs.add(units.Valve("HV-302", variant="gate"))                            # isola
 ```
 
 The source is **PIP PIC001 clause 4.2.2.7**, *"normally closed manual valves
-shall be shown using a darkened solid symbol"*. It is **not** an ISA-5.1 or
-ISO 10628 convention: ISA-5.1 says nothing about valve fill and hands manual
-block valve depiction to the piping group, and ISO 10628 does not have the
-symbol either.
+shall be shown using a darkened solid symbol"*. It is **not** an ISA-5.1,
+ISO 10628 or ISO 15519 convention: ISA-5.1 says nothing about valve fill and
+hands manual block valve depiction to the piping group, ISO 10628 does not have
+the symbol either, and **ISO 15519-1 §11.4.5** does rule on the question and
+prescribes a *different answer*: letters, not fill. PIP PIC001 is the only one
+of the four that fills a body, which is why the fill is cited to it and why the
+legend obligation below is not optional.
 
 The rule is one-sided. Normally open is not marked at all, so `"open"` draws
 exactly what a valve constructed without the argument draws, and the fill is the
 whole of what `"closed"` adds. Nothing about the symbol's box, nozzles or
 alternate faces changes, so declaring a valve closed never moves a line already
 drawn.
+
+**An unmarked valve says nothing, and two clauses of ISO 15519-1 disagree about
+what that silence means.** §11.4.5 makes the NC/NO marking optional, which reads
+as leaving an unmarked valve unstated. §11.3.1 a), under *Symbols with movable
+parts*, says a general purpose valve "which does not indicate the operational
+state of the valve (open or closed), **shall be regarded as closed**" -- the
+inverse of the North American default that an unmarked valve is normally open.
+The standard does not reconcile them, and neither does `pandid`. Read against
+§11.3.1's other sub-clauses, a) is fixing a *reference state for drawing
+dependent symbols* rather than saying how the plant runs: §11.3.1 e) draws a
+valve's position contacts "in the position they take on when a valve according
+to a) above is in its closed position", which is what a) exists to define.
+§11.4.5 is the clause about telling a reader the operating state. That reading
+is offered, not asserted. Either way both clauses agree on the operative point:
+an unmarked valve is not a reliable statement of normal position, so say it. The
+`"open"` default draws nothing extra because there is nothing agreed to draw,
+not because an unmarked valve means open.
 
 **Legend.** ISA-5.1 clauses 2.8.1(b)(1), 2.8.2 and 5.2.5 make it *mandatory* to
 declare on a legend or cover sheet any symbol that deviates from or extends the
@@ -471,15 +491,31 @@ fs.add_annotation(legend({"Darkened valve body": "Normally closed (NC)"}))
 **Bodies that cannot be darkened.** Filling a body leaves only its outline, so
 the fill is used where the outline alone still names the device. Where the
 device is named by something *inside* the outline, filling over it would draw a
-darkened gate valve wearing another name, so clause 4.2.2.8's abbreviation
-**NC** is written beside the valve instead: directly below it on a horizontal
-line, to the right of it on a vertical one, which is the quarter turn the valve
-is placed at.
+darkened gate valve wearing another name, so the abbreviation **NC** is written
+beside the valve instead.
+
+The letters follow **ISO 15519-1 §11.4.5**, which is the clause that rules on
+them: the state "may be indicated by adding the letter symbol NC *Normal closed*
+or NO *Normal open* **above the symbol and to the right**, as indicated in
+Figure 28". Figure 28 draws an unfilled bowtie with the letters starting at
+about the valve's right-hand edge, clear above the run, and that is where
+`pandid` puts them. The corner is the same whatever quarter turn the valve is
+placed at, so a reader scans a sheet for one thing; where the equipment tag
+already reaches into it, the abbreviation steps past the tag rather than over
+it.
+
+This is a deliberate split from PIP PIC001, whose clause 4.2.2.8 puts the
+letters *below* a horizontal valve and to the right of a vertical one. Each of
+the two markings is taken from the standard that rules on it: the fill from PIP,
+which is the only source that fills a body, and the letters from ISO 15519-1,
+which is the only source that letters one. `NO` is not written; ISO 15519-1
+offers it, but the fill convention this sits inside is one-sided and marking
+normally open is not implemented.
 
 | | Valve variants |
 |---|---|
 | darkened body | `default`, `gate`, `globe`, `ball`, `needle`, `plug`, `pinch`, `three_way`, `angle`, `bleed`, `manual`, `motor`, `solenoid`, `hydraulic` |
-| `NC` in letters | `butterfly` (the standard's own example), `butterfly_pneumatic`, `check`, `knife` |
+| `NC` in letters | `butterfly` (PIP PIC001 4.2.2.8's own example), `butterfly_pneumatic`, `check`, `knife` |
 | refused | `control`, `pneumatic`, `regulator`, `relief`, `psv` |
 
 The list is `pandid.render.symbols.NC_DARKENS`, and a variant added later takes
@@ -1112,6 +1148,33 @@ line style. Signal lines carry no arrowheads and no stream numbers, and are
 excluded from the stream table. Both ends have to be signal connections, so a
 signal kind between two process nozzles raises rather than drawing a control
 line down a pipe run.
+
+**They are also drawn at half the weight of a process line**, which is the cue a
+reader separates the process from the instrumentation by before reading a single
+dash pattern. **ISO 15519-1 §6.2**: *"If two or more widths of line are used,
+the ratio between any two widths shall be at least 2:1."* Its Table 1 puts
+process-industry connections at 0,2 M and symbols at 0,1 M, and with M = 2,5 mm
+(§11.1.2) that is the 0,5 / 0,25 mm pair. **ISO 15519-2 Annex A.1** spends the
+pair per line type: A.1.01 pipeline **0,50**; A.1.02 instrument connection and
+control connection **0,25**; A.1.03 pilot line and signal line **0,25**.
+
+Which side of the pair a line falls on:
+
+| Weight | Drawn |
+|---|---|
+| heavy (2 units, 0,53 mm on A3 at 1:1) | process streams (`material`, `energy`), equipment and symbol outlines, off-page connector flags |
+| fine (1 unit, 0,26 mm) | every signal kind, the pneumatic cross-hatch marks on one, and instrument tap / impulse lines |
+
+`energy` is a process kind and stays heavy: it is a physical conduit, and the
+fine class in both Annex A entries is explicitly instrument, control and pilot.
+The pneumatic cross-hatch is drawn at the weight of the line it marks rather
+than heavier, since a supplementary symbol on a connection is a graphical symbol
+and ISO 15519-1 §11.1.3 puts one at 0,1 M.
+
+These are relative weights inside one drawing. They still scale with the sheet,
+so a drawing that has been fitted down carries both of them down together; the
+ratio holds, the millimetres do not. Holding a stroke at a physical width is
+ISO 15519-1 §11.1.3's separate and larger problem, and `pandid` does not do it.
 
 ---
 

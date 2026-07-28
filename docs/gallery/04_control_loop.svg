@@ -33,15 +33,15 @@
     <path d="M 664.5,187.5 L 765.0,187.5 L 765.0,195.0 L 790,195.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 451.0,145.0 L 451.0,94.8 L 446.0,94.8 L 446.0,69.8" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 446.0,55.0 L 446.0,30.0 L 630,30.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 215.75,133.0 L 249.14400553612398,133.0 L 249.14400553612398,39.30294545611925 L 274.144005536124,39.30294545611925" fill="none" stroke="black" stroke-width="2" stroke-dasharray="7,4" />
-    <path d="M 296.144005536124,61.30294545611925 L 296.144005536124,155.0 L 282.2,155.0 L 282.2,180.0" fill="none" stroke="black" stroke-width="2" />
-    <line x1="291.1" y1="87.0" x2="301.1" y2="93.0" stroke="black" stroke-width="1.5" />
-    <line x1="291.1" y1="91.0" x2="301.1" y2="97.0" stroke="black" stroke-width="1.5" />
-    <line x1="291.1" y1="118.3" x2="301.1" y2="124.3" stroke="black" stroke-width="1.5" />
-    <line x1="291.1" y1="122.3" x2="301.1" y2="128.3" stroke="black" stroke-width="1.5" />
-    <line x1="277.2" y1="162.0" x2="287.2" y2="168.0" stroke="black" stroke-width="1.5" />
-    <line x1="277.2" y1="166.0" x2="287.2" y2="172.0" stroke="black" stroke-width="1.5" />
-    <path d="M 473.0,335.0 L 625.0,335.0 L 625.0,192.5 A 5 5 0 0 1 625.0,182.5 L 625.0,155.0 L 652.2,155.0 L 652.2,180.0" fill="none" stroke="black" stroke-width="2" stroke-dasharray="7,4" />
+    <path d="M 215.75,133.0 L 249.14400553612398,133.0 L 249.14400553612398,39.30294545611925 L 274.144005536124,39.30294545611925" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
+    <path d="M 296.144005536124,61.30294545611925 L 296.144005536124,155.0 L 282.2,155.0 L 282.2,180.0" fill="none" stroke="black" stroke-width="1" />
+    <line x1="291.1" y1="87.0" x2="301.1" y2="93.0" stroke="black" stroke-width="1" />
+    <line x1="291.1" y1="91.0" x2="301.1" y2="97.0" stroke="black" stroke-width="1" />
+    <line x1="291.1" y1="118.3" x2="301.1" y2="124.3" stroke="black" stroke-width="1" />
+    <line x1="291.1" y1="122.3" x2="301.1" y2="128.3" stroke="black" stroke-width="1" />
+    <line x1="277.2" y1="162.0" x2="287.2" y2="168.0" stroke="black" stroke-width="1" />
+    <line x1="277.2" y1="166.0" x2="287.2" y2="172.0" stroke="black" stroke-width="1" />
+    <path d="M 473.0,335.0 L 625.0,335.0 L 625.0,192.5 A 5 5 0 0 1 625.0,182.5 L 625.0,155.0 L 652.2,155.0 L 652.2,180.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <rect x="150.3" y="188.5" width="18.4" height="13.0" fill="white" />
     <text x="159.5" y="195.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S1</text>
     <rect x="539.3" y="188.5" width="18.4" height="13.0" fill="white" />
