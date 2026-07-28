@@ -284,6 +284,32 @@ and is kept working.
 - Orthogonal A\* router over a visibility graph, with port anchors projected
   onto unit boundaries and used-edge penalties so runs do not overlap.
 - Crossing jump-gaps and separation of co-located parallel runs.
+- The escape stand-off each nozzle claims before a run may turn is a ceiling
+  rather than a fixed distance, and it now gives way at *both* ends. Two ports
+  facing each other each claimed about 25 units independently, so a pair closer
+  together than the two claims added up to overshot each other: the source's
+  escape node landed past the destination's nozzle and the destination's landed
+  back behind the source's, and the leg between them was drawn backwards over
+  both stubs and through the source symbol. A 13 unit span came out as 87 units
+  of path, and the cliff was sharp rather than gradual, with everything from 26
+  units up drawn correctly and everything below it folded back. Where the run
+  has no room for two stand-offs it takes one between them and both ends turn on
+  a shared lane midway across, which draws the span at its own length at every
+  separation. Sharing that lane is a constraint as well as a relaxation, since
+  it is then the only column (or row) the run may cross on, so a pair whose
+  nozzles also sit on different lanes gives it up again if anything (a tag block,
+  most often) stands in the way, and the search picks its own way round as
+  before. Ports facing each other on one lane meet on the shared node and
+  travel nowhere along it, so that case, which is the in-line station, always
+  takes the relaxation.
+  - This is what a station drawn at a real sheet's density needs. An isolation
+    valve, a reducer, a control valve, a second reducer and a second isolation
+    valve in line measure 228 units at the 30 unit spacing that was the tightest
+    the router stayed clean at, and 160 at 13.
+  - The router no longer projects its own escape nodes from a second copy of the
+    stand-off distances; it reads `VisibilityGraph.port_projs`, which is the
+    copy that decides where the routing lanes are. The two agreeing was
+    load-bearing and nothing checked it.
 - `Stream.via([...])` to force a stream through explicit orthogonal waypoints.
 - `Flowsheet.route()` places attached instruments and re-routes until the two
   agree, rather than trading a fixed two passes. A balloon is placed on its

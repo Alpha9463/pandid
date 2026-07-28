@@ -1,7 +1,13 @@
 """Routing polish: geometric properties a routed sheet has to hold, none of which
 a golden byte-match would localise — forward streams staying off the sheet-edge
 recycle lanes, runs never drawn over themselves, ports leaving squarely without a
-gratuitous hop, and the separation pass moving only the runs that actually collide."""
+gratuitous hop, facing nozzles closer than the escape stand-off still running
+straight across, and the separation pass moving only the runs that actually
+collide."""
+
+import math
+
+import pytest
 
 from pandid import Flowsheet, units as U
 from pandid.routing.visibility import VisibilityGraph
@@ -176,6 +182,154 @@ def test_no_run_doubles_back_along_its_own_axis():
                 assert b != OPPOSITE[a], (
                     f"{fs.name}/{s.name} doubles back ({a} then {b}): {s.route.waypoints}"
                 )
+
+
+def _facing_valves(gap: float, drop: float = 0.0, label_pos: str | None = None):
+    """Two gate valves whose facing nozzles sit ``gap`` apart.
+
+    The nozzles land on the box edges, so the space between them is the space
+    between the boxes. A control valve station packs an isolation valve, a
+    reducer, the valve, another reducer and a second isolation valve into spans
+    narrower than a single escape stand-off, which is the density this geometry
+    stands in for.
+
+    ``drop`` puts the second valve on another lane, so the run needs a jog
+    rather than a straight shot. A valve's tag block is drawn above it and is
+    itself an obstacle 45px wide, which straddles the corridor between two
+    valves this close; ``label_pos="center"`` moves the tag onto the symbol so
+    the corridor is about the stand-off and nothing else.
+    """
+    kwargs = {"variant": "gate"}
+    if label_pos is not None:
+        kwargs["label_pos"] = label_pos
+    fs = Flowsheet("Facing Valves")
+    a = fs.add(U.Valve("HV-001", **kwargs)).pin(x=100, y=200)
+    b = fs.add(U.Valve("HV-002", **kwargs)).pin(x=300, y=200)
+    fs.connect(a.outlet, b.inlet)
+    fs.layout()
+    b.pin(x=a.frame.x + a.frame.w + gap, y=200 + drop)
+    fs.layout()
+    fs.route()
+    return fs
+
+
+def _path_length(waypoints):
+    return sum(abs(x2 - x1) + abs(y2 - y1) for (x1, y1), (x2, y2) in zip(waypoints, waypoints[1:]))
+
+
+def test_facing_nozzles_closer_than_the_stand_off_run_straight_across():
+    # The escape stand-off is 25px off each nozzle, so two nozzles 13px apart
+    # demand 50px of room that does not exist. Projecting both the full distance
+    # puts each escape node behind the other one, and the run between them is
+    # then drawn backwards over both stubs: a 13px span came out as 87px of path.
+    fs = _facing_valves(13.0)
+    (stream,) = fs.streams
+    wp = stream.route.waypoints
+    span = math.dist(wp[0], wp[-1])
+    assert span == pytest.approx(13.0), f"expected a 13px span, got {span:.1f}"
+    assert _path_length(wp) == pytest.approx(span), (
+        f"13px span drawn as {_path_length(wp):.1f}px of path: {wp}"
+    )
+    assert _headings(wp) == ["E"], f"run does not go straight across: {wp}"
+
+
+@pytest.mark.parametrize("gap", [5, 10, 15, 20, 25, 30, 35, 40])
+def test_a_tightening_span_costs_path_in_proportion(gap):
+    # No cliff edge: the stand-off gives way gradually as the room runs out,
+    # rather than holding its full distance until the run has to fold back.
+    fs = _facing_valves(float(gap))
+    (stream,) = fs.streams
+    wp = stream.route.waypoints
+    assert _path_length(wp) == pytest.approx(gap), (
+        f"{gap}px span drawn as {_path_length(wp):.1f}px of path: {wp}"
+    )
+    assert _headings(wp) == ["E"], f"run does not go straight across: {wp}"
+
+
+@pytest.mark.parametrize("gap", [5, 13, 25, 40])
+def test_a_tight_span_onto_another_lane_costs_only_its_own_jog(gap):
+    # The same squeeze with the far nozzle 60px down and the tags out of the
+    # corridor. The ideal is the Z: across the gap, down, and in. Anything
+    # longer is the stand-off overshooting, and the shared escape lane is the
+    # one the run turns down — a lane no unit puts there, so the graph has to
+    # carry it or the search has nothing to travel along.
+    drop = 60.0
+    fs = _facing_valves(float(gap), drop=drop, label_pos="center")
+    (stream,) = fs.streams
+    wp = stream.route.waypoints
+    assert _path_length(wp) == pytest.approx(gap + drop), (
+        f"{gap}x{drop:.0f} span drawn as {_path_length(wp):.1f}px of path: {wp}"
+    )
+    for a, b in zip(_headings(wp), _headings(wp)[1:]):
+        assert b != OPPOSITE[a], f"run doubles back: {wp}"
+
+
+def test_a_roomy_span_keeps_its_full_stand_off():
+    # The relaxation is a ceiling on the stand-off, not a replacement for it. Two
+    # valves far enough apart still get the full 25px escape off each nozzle
+    # before the run is allowed to turn.
+    fs = _facing_valves(200.0)
+    (stream,) = fs.streams
+    wp = stream.route.waypoints
+    assert wp[1][0] - wp[0][0] == pytest.approx(25.0), f"source stand-off shrank: {wp}"
+    assert wp[-1][0] - wp[-2][0] == pytest.approx(25.0), f"dest stand-off shrank: {wp}"
+
+
+@pytest.mark.parametrize("gap", [5, 13, 25, 40, 200])
+@pytest.mark.parametrize("drop", [0.0, 60.0])
+def test_a_squeezed_run_still_leaves_and_enters_square(gap, drop):
+    # What the stand-off is for. However far it is relaxed, the first and last
+    # segments must still run along the nozzle's own outward normal — both
+    # valves face east/west here — so the line meets the symbol at a right angle
+    # rather than skimming off it diagonally or along its face.
+    fs = _facing_valves(float(gap), drop=drop)
+    (stream,) = fs.streams
+    wp = stream.route.waypoints
+    assert _headings(wp)[0] == "E", f"run does not leave the source squarely: {wp}"
+    assert _headings(wp)[-1] == "E", f"run does not enter the dest squarely: {wp}"
+
+
+@pytest.mark.parametrize("gap", [5, 13, 25, 40])
+def test_a_squeezed_vertical_run_is_relaxed_the_same_way(gap):
+    # The relaxation is written once for both axes, so the axis and its sign are
+    # looked up rather than branched on. A riser between two valves turned on
+    # end is where getting that lookup the wrong way round would show.
+    fs = Flowsheet("Stacked Valves")
+    a = fs.add(U.Valve("HV-001", variant="gate", label_pos="center"))
+    b = fs.add(U.Valve("HV-002", variant="gate", label_pos="center"))
+    a.pin(x=200, y=100, orientation=90)
+    b.pin(x=200, y=300, orientation=90)
+    stream = fs.connect(a.outlet, b.inlet)
+    fs.layout()
+    b.pin(x=200, y=a.frame.y + a.frame.h + gap, orientation=90)
+    fs.layout()
+    fs.route()
+
+    wp = stream.route.waypoints
+    assert _path_length(wp) == pytest.approx(gap), (
+        f"{gap}px riser drawn as {_path_length(wp):.1f}px of path: {wp}"
+    )
+    assert _headings(wp) == ["S"], f"riser does not go straight up the page: {wp}"
+
+
+@pytest.mark.parametrize("gap", [5, 13, 25, 40, 200])
+@pytest.mark.parametrize("drop", [0.0, 60.0])
+def test_a_squeezed_run_stays_off_both_valve_bodies(gap, drop):
+    # The other thing the stand-off is for: a run that turns too early cuts back
+    # across the symbol it just left. Nothing may pass through either box.
+    fs = _facing_valves(float(gap), drop=drop)
+    (stream,) = fs.streams
+    wp = stream.route.waypoints
+    for u in fs.units:
+        f = u.frame
+        box = (f.x, f.x + f.w, f.y, f.y + f.h)
+        for (x1, y1), (x2, y2) in zip(wp, wp[1:]):
+            x_min, x_max, y_min, y_max = box
+            crosses_x = min(x1, x2) < x_max and max(x1, x2) > x_min
+            crosses_y = min(y1, y2) < y_max and max(y1, y2) > y_min
+            assert not (crosses_x and crosses_y), (
+                f"{u.name}'s box is crossed by ({x1}, {y1})->({x2}, {y2}): {wp}"
+            )
 
 
 def test_a_port_does_not_overshoot_the_lane_it_is_leaving_for():

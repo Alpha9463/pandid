@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Set, Tuple, List, Dict, TYPE_CHECKING
+from typing import Optional, Set, Tuple, List, Dict, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -24,6 +24,76 @@ class Rect:
             return self.y_min <= y1 <= self.y_max and max(x1, x2) > self.x_min and min(x1, x2) < self.x_max
         return False
 
+
+# Outward direction -> the axis it travels along, and its sign along that axis.
+TRAVEL: Dict[str, Tuple[int, float]] = {
+    "E": (0, 1.0),
+    "W": (0, -1.0),
+    "S": (1, 1.0),
+    "N": (1, -1.0),
+}
+
+
+def share_escape_room(
+    start: Tuple[float, float],
+    start_dir: Optional[str],
+    start_proj: Tuple[float, float],
+    goal: Tuple[float, float],
+    goal_dir: Optional[str],
+    goal_proj: Tuple[float, float],
+    obstacles: List[Rect],
+) -> Tuple[Tuple[float, float], Tuple[float, float]]:
+    """Split the gap between two facing nozzles too close to both stand off fully.
+
+    Each end claims its own escape distance before the run is allowed to turn,
+    and the two claims are made independently. Nozzles pointing at each other
+    across less room than the claims add up to therefore overshoot each other:
+    the source's escape node lands beyond the destination's nozzle and the
+    destination's lands back behind the source's, so the leg between them is
+    drawn backwards over both stubs. A 13px span came out as 87px of path, most
+    of it on top of itself and through the source symbol.
+
+    There is no room for two stand-offs, so the pair takes one between them and
+    both escape nodes move to the middle of the gap. The run across is then the
+    straight line, and neither stub is drawn twice. A control valve station
+    packs an isolation valve, a reducer, the valve, another reducer and a second
+    isolation valve into spans narrower than one stand-off, so this is what lets
+    a sheet be drawn at the density a real one is drawn at.
+
+    Both ends have to turn on the *same* lane for neither to overshoot, which is
+    a real constraint and not only a relaxation: it is the one column (or row)
+    the run may cross on. Nozzles that also sit on different lanes have to
+    travel along it, so if anything is in the way the pair keeps its full
+    stand-offs and the search picks its own way round instead. Ports facing each
+    other on one lane meet on it and travel nowhere, so nothing can be in the
+    way and that case always takes the relaxation.
+
+    Pure, and called from two places: the router, to place the escape nodes, and
+    the graph, to carry the lane they land on.
+    """
+    if start_dir is None or goal_dir is None:
+        return start_proj, goal_proj
+    axis, sign = TRAVEL[start_dir]
+    goal_axis, goal_sign = TRAVEL[goal_dir]
+    if goal_axis != axis or goal_sign == sign:
+        return start_proj, goal_proj  # not pointed at each other along one axis
+
+    room = sign * (goal[axis] - start[axis])
+    claimed = sign * (start_proj[axis] - start[axis]) + goal_sign * (goal_proj[axis] - goal[axis])
+    if not 0.0 <= room < claimed:
+        return start_proj, goal_proj  # back to back, or room enough for both
+
+    mid = start[axis] + sign * room / 2.0
+    if axis == 0:
+        shared = ((mid, start_proj[1]), (mid, goal_proj[1]))
+    else:
+        shared = ((start_proj[0], mid), (goal_proj[0], mid))
+    (sx, sy), (gx, gy) = shared
+    if any(o.intersects_segment(sx, sy, gx, gy) for o in obstacles):
+        return start_proj, goal_proj  # the shared lane is not one the run can use
+    return shared
+
+
 class VisibilityGraph:
     def __init__(self, fs: "Flowsheet", margin: float = 15.0):
         from pandid.layout.attach import is_attached
@@ -33,10 +103,13 @@ class VisibilityGraph:
         x_set: Set[float] = set()
         y_set: Set[float] = set()
 
-        # Port anchors and their outward directions — the single geometry
-        # authority the router reads from.
+        # Port anchors, their outward directions, and the escape node each one
+        # stands off to — the single geometry authority the router reads from.
+        # The router used to project its own, from a copy of the distances
+        # below; the copies agreeing was load-bearing and unenforced.
         self.port_anchors: Dict[Tuple[str, str], Tuple[float, float]] = {}
         self.port_dirs: Dict[Tuple[str, str], str] = {}
+        self.port_projs: Dict[Tuple[str, str], Tuple[float, float]] = {}
 
         for u in fs.units:
             f = u.frame
@@ -123,8 +196,29 @@ class VisibilityGraph:
                     px_proj -= proj_dist
                 elif o_dir == "E":
                     px_proj += proj_dist
+                self.port_projs[(u.name, name)] = (px_proj, py_proj)
                 x_set.add(px_proj)
                 y_set.add(py_proj)
+
+        # Two nozzles closer together than their stand-offs add up to turn on a
+        # lane midway between them instead (see ``share_escape_room``), and no
+        # unit puts that lane here. Carry it, or the search has nothing to run
+        # along and the router falls back to an L nothing has checked.
+        for stream in fs.streams:
+            src, dst = stream.source, stream.dest
+            if src.owner is None or dst.owner is None:
+                continue
+            s_key, d_key = (src.owner.name, src.name), (dst.owner.name, dst.name)
+            if s_key not in self.port_projs or d_key not in self.port_projs:
+                continue
+            s_esc, d_esc = share_escape_room(
+                self.port_anchors[s_key], self.port_dirs[s_key], self.port_projs[s_key],
+                self.port_anchors[d_key], self.port_dirs[d_key], self.port_projs[d_key],
+                self.obstacles,
+            )
+            for x, y in (s_esc, d_esc):
+                x_set.add(x)
+                y_set.add(y)
 
         self.recycle_y: List[float] = []
         # Global recycle lanes above, below, left, and right of all equipment
