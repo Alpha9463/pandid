@@ -164,6 +164,7 @@ class Unit:
         y: float | None = None,
         orientation: float = _UNCHANGED,
         mirrored: bool | str = _UNCHANGED,
+        port: str | None = None,
     ) -> "Unit":
         """Pin the unit to a specific layout grid cell or exact pixel coordinate.
 
@@ -174,6 +175,17 @@ class Unit:
         quarter turn swaps the unit's width and height. ``mirrored`` flips the
         symbol: ``True`` or ``"x"`` left↔right (swapping its E and W faces),
         ``"y"`` top↔bottom (swapping N and S), ``"xy"`` both.
+
+        ``port`` names a nozzle, and the coordinates given then locate **that
+        nozzle** rather than the unit's top-left corner. A run is a line at one
+        elevation and the devices on it are whatever size their artwork is, so
+        ``valve.pin(port="inlet", y=run_y)`` is how a valve is put *on* a run
+        without writing down half its height. The offset comes from
+        :func:`pandid.portgeom.port_offset`, which asks the symbol. Only the axes
+        this call names are read that way, so ``pin(x=..., port="inlet",
+        y=run_y)`` steps along a row by the corner and still lands the nozzle on
+        the line. A grid cell has no nozzle in it, so ``port`` refuses
+        ``col``/``row``.
 
         Every argument is optional and an omitted one leaves that part of the
         placement as it stands, so nudging a unit with a second ``pin(y=...)``
@@ -192,6 +204,17 @@ class Unit:
             candidate.orientation = normalize_orientation(orientation)
         if mirrored is not _UNCHANGED:
             candidate.mirrored, candidate.mirror_y = normalize_mirror(mirrored)
+        if port is not None:
+            if col is not None or row is not None:
+                raise ValueError(
+                    f"{self.name}: pin(port=...) reads x/y as the position of a "
+                    f"nozzle, and col/row name a grid cell, which has no nozzle in "
+                    f"it. Give x/y, or drop port="
+                )
+            # After the transform, never before: a mirror moves the nozzle
+            # within the box, so an offset taken from the placement this call
+            # replaces would put the device half a body off its run.
+            self._offset_to_port(candidate, port, x, y)
         # A nozzle() choice names a face on the finished sheet, and this
         # transform is what decides which placement lands there. Check the
         # *candidate*: asking about the committed placement answers for the
@@ -204,6 +227,28 @@ class Unit:
                 self._check_face(port_name, face, port_faces(self, port_name, candidate))
         self.pin_ = candidate
         return self
+
+    def _offset_to_port(self, candidate: Pin, port_name: str,
+                        x: float | None, y: float | None) -> None:
+        """Re-read a candidate's named axes as the position of one nozzle.
+
+        Writes the corner the nozzle asked for back onto the pin, so what is
+        stored stays the one thing a :class:`~pandid.geometry.Pin` has ever
+        meant. Pinning the same nozzle to the same point twice is therefore the
+        same placement twice, not a device walking off its run.
+        """
+        if port_name not in self.ports:
+            raise KeyError(
+                f"{type(self).__name__} {self.name!r} has no port {port_name!r} to "
+                f"pin by; available ports: {sorted(self.ports)}"
+            )
+        from pandid.portgeom import port_offset
+
+        dx, dy = port_offset(self, port_name, candidate)
+        if x is not None:
+            candidate.x = x - dx
+        if y is not None:
+            candidate.y = y - dy
 
     def nozzle(self, port_name: str, face: str) -> "Unit":
         """Pipe a port from a named face of the unit *as drawn*.

@@ -243,6 +243,50 @@ and is kept working.
   nozzles over together, drawing the line backwards through the fitting, which
   is why the package could previously draw a reduction into a device but not the
   expansion out of it.
+- `Flowsheet.add_valve_station()` builds the assembly a control valve is
+  installed in, which is the same eight devices and four tees on every P&ID in
+  the industry and was previously spelled out one unit at a time. Along the run:
+  bypass takeoff, isolation valve, drain tee, **reduction**, **control valve**,
+  **expansion**, drain tee, isolation valve, bypass rejoin, with the bypass
+  carried below on its own normally closed throttling valve and tapped *outside*
+  both isolation valves. That is what the CHEE4001/7103 P&ID guidelines
+  prescribe on p.4 and settle in the *EXAMPLE of a control valve system* figure
+  on p.5, and what the issued sheet the package reproduces draws four times.
+
+  One call declares the twelve units, tags and describes them, pins them along
+  the run at `y` and makes the twelve streams that wire them together. Any part
+  can be left out (`isolation=`, `reducers=`, `bypass=`, `drains=`), except that
+  a bypass with no isolation valves to go round is refused: a bypass exists so
+  the unit keeps running while the control valve is isolated, and there would be
+  nothing to isolate it with. `mirrored=True` pipes the run east to west.
+  `bypass_over=` stands the throttling valve over a named member instead of in
+  the middle of its own leg, for a station whose controller output crosses the
+  leg on its way to the actuator. The line-number components go on the bypass
+  and drain branches, since a branch off a tee starts a number of its own and a
+  bypass is the same service, size and spec as the run it goes round.
+
+  What comes back is a `ValveStation`, a frozen handle and **not** a unit: no
+  symbol, no ports of its own, no tag, never in `fs.units` and never on an
+  equipment list, on the same footing as a `Loop`. Its members
+  (`control`, `upstream_isolation`, `reduction`, `bypass`, and the rest) are
+  ordinary units that can still be re-pinned, re-tagged or instrumented, and
+  `inlet`/`outlet`
+  are the ports the piping either side connects to. Nothing of the station is
+  serialized, because after the call there is nothing left of it that the
+  drawing depends on: `to_dict()` writes the members and reading them back gives
+  the same sheet.
+
+  Member tags are spelled out of the control valve's by
+  `Flowsheet(valve_station_tag_scheme=...)`, or `tag_scheme=` for one station:
+  a format string over `{letters}`, `{number}`, `{suffix}`, `{role}` and
+  `{control}`, or a callable `(role, control_tag) -> str`. It sits beside
+  `line_numbering_scheme` and `stream_naming_scheme` because it is the same kind
+  of thing: the guidelines say outright that tagging *"depends on the practice
+  of the particular design office"*, and the reference sheet tags none of these
+  valves at all. The default `"{letters}-{number}{suffix}"` gives `HV-303A`
+  through `HV-303E` and `RD-303A`/`RD-303B` from `CV-303`, which is the common
+  convention; `number=` overrides the number for a control valve whose own tag
+  carries a suffix its hand valves do not.
 - `HeatExchanger(variant="kettle").bottoms` is the liquid draw at the weir end
   of a kettle reboiler. A tower's bottoms product physically leaves from there,
   so it no longer has to be taken off a splitter in the sump line, which puts a
@@ -292,6 +336,19 @@ and is kept working.
   Repeated calls merge: only the arguments passed are written, so nudging a unit
   with a second `pin(y=…)` keeps the turn and the flip the first one asked for,
   and `orientation=0` / `mirrored=False` are how you put them back.
+- `Unit.pin(port=…)` reads the coordinates given as the position of **that
+  nozzle** rather than of the top-left corner, and `portgeom.port_offset()` is
+  the read-only half of the same idea. A run is a line at one elevation and the
+  devices on it are whatever size their artwork is, so putting a valve *on* a
+  run previously meant writing down half its height, a number true only of the
+  artwork it was measured off, which a redrawn symbol or an explicit `width`
+  silently falsifies. Asked of the symbol, it cannot be wrong. Only the axes the
+  call names are read that way, so `pin(x=…)` then `pin(port="inlet", y=run_y)`
+  steps along a row by the corner and still lands the nozzle on the line; what
+  is stored is still the corner, so pinning the same nozzle twice is the same
+  placement twice. A transform in the same call is applied first, since a mirror
+  moves the nozzle within the box. A grid cell has no nozzle in it, so `port`
+  with `col`/`row` raises.
 - Automatic port-face selection: a port its symbol authors on more than one face
   is put on the face the unit at the other end of the stream is actually on,
   scored by the orthogonal run plus the detour a face pointing away would cost.
