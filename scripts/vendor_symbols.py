@@ -709,6 +709,22 @@ KIND_MAP = {
                            {"inlet": ("W", 25.0), "outlet": ("E", 25.0)}),
     ("filter", "rotary"): ("filters", "Liquid Filter (Rotary, Drum or Disc)",
                            {"inlet": ("W", 50.0), "outlet": "E"}),
+    # The same drum with the knife that lifts the cake off it. That knife is the
+    # whole of what tells the two drawings apart, and the drum is set 7 units
+    # left to make room for its arm.
+    #
+    # The arm reaches out to x = 55 while the casing stays the 50 the rest of
+    # the family is drawn at, so the bounding box is 5 units wider than the
+    # equipment -- exactly what ``vessel/dished``'s brackets do, and it gets
+    # ``vessel/dished``'s answer. A nozzle on the box's east face would be drawn
+    # in the air beside the casing, so the outlet is pinned to the casing wall
+    # instead. draw.io's own "E" is at 0.91 x 55 = 50.05, which is that same
+    # wall rounded to two places; naming 50 outright says so, rather than
+    # leaving a nozzle a twentieth of a unit outside the equipment for the next
+    # reader to measure. Nothing widens the west side, so the inlet keeps the
+    # box's own face there.
+    ("filter", "rotary_scraper"): ("filters", "Liquid Filter (Rotary, Drum or Disc, Scraper)",
+                                   {"inlet": ("W", 50.0), "outlet": ("AT", 50.0, 50.0)}),
     # Ion exchanger: the resin bed between its two retention screens, the water
     # treatment vessel every demineraliser train is drawn with. The stencil
     # names only N and S, but the whole 50 x 100 casing is stroked, so the side
@@ -716,6 +732,35 @@ KIND_MAP = {
     # variant is a change of artwork, not of piping.
     ("filter", "ion_exchange"): ("filters", "Liquid Filter (Ion Exchanger)",
                                  {"inlet": ("W", 50.0), "outlet": ("E", 50.0)}),
+    # Two more media, each drawn twice by the stencil set: once in a liquid
+    # casing and once in a gas one. The gas half of a pair adds the hopper below
+    # the medium and changes nothing else, and that hopper is the reason both
+    # halves ship: it is where what the medium sheds lands, so it is also what
+    # fixes the gas two the right way up and leaves the liquid two free to turn
+    # (see GRAVITY_FIXED).
+    #
+    # All four are piped straight across on the casing's side walls at
+    # mid-height, which is ``ion_exchange``'s placement and its reason: draw.io
+    # names a different subset of the compass points on each of these four
+    # (``fixed_bed`` has N and S alone, and the two ``belt`` shapes have three
+    # each, but not the same three), while the casing rect is stroked all the
+    # way round, so both walls carry a face whether the stencil named it or not.
+    # Choosing between these variants is a statement about the medium, so they
+    # are piped alike and a sheet can swap one for another without moving a run.
+    #
+    # Fixed bed: granular medium -- sand, anthracite, activated carbon -- held
+    # between the two retention screens the X is drawn between.
+    ("filter", "fixed_bed"):     ("filters", "Liquid Filter (Fixed Bed)",
+                                  {"inlet": ("W", 50.0), "outlet": ("E", 50.0)}),
+    ("filter", "gas_fixed_bed"): ("filters", "Gas Filter (Fixed Bed)",
+                                  {"inlet": "W", "outlet": ("E", 50.0)}),
+    # Belt / roll: the medium is a cloth running between two rollers, drawn low
+    # in the casing at y 59..71, so nozzles at mid-height clear it rather than
+    # being piped into the roll.
+    ("filter", "belt"):          ("filters", "Liquid Filter (Belt, Roll)",
+                                  {"inlet": ("W", 50.0), "outlet": "E"}),
+    ("filter", "gas_belt"):      ("filters", "Gas Filter (Belt, Roll)",
+                                  {"inlet": "W", "outlet": ("E", 50.0)}),
     # Drier styles. A spray drier is fed through the atomiser in its roof and
     # drops powder out of the floor, so it is piped top-to-bottom, not across.
     ("dryer", "fluidized_bed"): ("driers", "Drier (Fluidized Bed)",
@@ -920,8 +965,12 @@ ADAPTED_ELSEWHERE = {
 #   rather than about the symbol.
 # * ``dryer/default`` -- a rotary drum drawn as a circle in a box; nothing in it
 #   is up or down. Contrast ``dryer/spray`` and ``dryer/fluidized_bed`` below.
-# * ``fitting/*`` and ``filter`` other than ``gas`` -- plate packs, cartridges and
-#   resin beds drawn as bands in a box, driven by pressure drop.
+# * ``fitting/*`` and every LIQUID ``filter`` -- plate packs, cartridges, resin
+#   and media beds, and a cloth on its rollers, all drawn as bands in a box and
+#   all driven by pressure drop across the medium. A bed rests on its support
+#   the way every piece of plant rests on the ground; nothing in the artwork is
+#   a level, a hopper or a fall. The gas ones are listed below, and they are
+#   listed for the hopper drawn under the medium rather than for the medium.
 #
 # (kind, variant) -> what in the artwork only means one thing one way up
 GRAVITY_FIXED = {
@@ -984,8 +1033,14 @@ GRAVITY_FIXED = {
     # horizontal band of particles on that plate.
     ("dryer", "spray"):         "atomiser in the roof, powder out of the floor",
     ("dryer", "fluidized_bed"): "the bed is a layer on its distributor plate",
-    # The one filter drawn with a dust hopper: what the bags shed falls into it.
-    ("filter", "gas"): "dust hopper under the bags",
+    # The three filters drawn with a dust hopper. It is the whole difference
+    # between each gas casing and the liquid one beside it, and what it draws is
+    # a fall: the dislodged cake drops off the medium and is collected out of
+    # the apex, exactly as the hopper-bottomed separators above collect. Turned,
+    # the hopper is a roof and the dust falls out of the filter.
+    ("filter", "gas"):           "dust hopper under the bags",
+    ("filter", "gas_fixed_bed"): "dust hopper under the bed",
+    ("filter", "gas_belt"):      "dust hopper under the belt",
 }
 
 

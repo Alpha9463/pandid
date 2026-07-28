@@ -863,12 +863,51 @@ def register_vendored(registry):
         ports={'inlet': (0.0, 50.0), 'outlet': (50.0, 50.0)},
     ), 'rotary')
 
+    # draw.io filters:Liquid Filter (Rotary, Drum or Disc, Scraper) (aspect=variable) -> filter/rotary_scraper
+    registry.register('filter', Symbol(
+        svg='<g id="sym_filter_rotary_scraper"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 6.0 31.5 A 22.0 22.0 0.0 0 1 30.0 31.5 M 55.0 65.0 L 33.0 65.0 L 33.0 50.0 L 47.0 65.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 80.0 L 50.0 80.0 M 0.0 20.0 L 50.0 20.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="18.0" cy="50.0" rx="15.0" ry="15.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=55.0, height=100.0,
+        ports={'inlet': (0.0, 50.0), 'outlet': (50.0, 50.0)},
+    ), 'rotary_scraper')
+
     # draw.io filters:Liquid Filter (Ion Exchanger) (aspect=variable) -> filter/ion_exchange
     registry.register('filter', Symbol(
         svg='<g id="sym_filter_ion_exchange"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 20.0 L 50.0 20.0 M 0.0 80.0 L 50.0 80.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=50.0, height=100.0,
         ports={'inlet': (0.0, 50.0), 'outlet': (50.0, 50.0)},
     ), 'ion_exchange')
+
+    # draw.io filters:Liquid Filter (Fixed Bed) (aspect=variable) -> filter/fixed_bed
+    registry.register('filter', Symbol(
+        svg='<g id="sym_filter_fixed_bed"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 20.0 L 50.0 80.0 M 50.0 20.0 L 0.0 80.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 20.0 L 50.0 20.0 M 0.0 80.0 L 50.0 80.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=50.0, height=100.0,
+        ports={'inlet': (0.0, 50.0), 'outlet': (50.0, 50.0)},
+    ), 'fixed_bed')
+
+    # draw.io filters:Gas Filter (Fixed Bed) (aspect=variable) -> filter/gas_fixed_bed
+    registry.register('filter', Symbol(
+        svg='<g id="sym_filter_gas_fixed_bed"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 30.0 L 50.0 70.0 M 50.0 30.0 L 0.0 70.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 70.0 L 25.0 99.5 L 50.0 70.0 M 0.0 20.0 L 50.0 20.0 M 0.0 30.0 L 50.0 30.0 M 0.0 70.0 L 50.0 70.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=50.0, height=100.0,
+        ports={'inlet': (0.0, 50.0), 'outlet': (50.0, 50.0)},
+        # must not be turned: dust hopper under the bed
+        gravity_fixed=True,
+    ), 'gas_fixed_bed')
+
+    # draw.io filters:Liquid Filter (Belt, Roll) (aspect=variable) -> filter/belt
+    registry.register('filter', Symbol(
+        svg='<g id="sym_filter_belt"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="6.0" cy="65.0" rx="6.0" ry="6.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="44.0" cy="65.0" rx="6.0" ry="6.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 80.0 L 50.0 80.0 M 0.0 20.0 L 50.0 20.0 M 6.0 59.0 L 44.0 59.0 M 6.0 71.0 L 44.0 71.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=50.0, height=100.0,
+        ports={'inlet': (0.0, 50.0), 'outlet': (50.0, 50.0)},
+    ), 'belt')
+
+    # draw.io filters:Gas Filter (Belt, Roll) (aspect=variable) -> filter/gas_belt
+    registry.register('filter', Symbol(
+        svg='<g id="sym_filter_gas_belt"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="6.0" cy="65.0" rx="6.0" ry="6.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="44.0" cy="65.0" rx="6.0" ry="6.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 20.0 L 50.0 20.0 M 0.0 70.0 L 25.0 99.5 L 50.0 70.0 M 6.0 59.0 L 44.0 59.0 M 6.0 71.0 L 44.0 71.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=50.0, height=100.0,
+        ports={'inlet': (0.0, 50.0), 'outlet': (50.0, 50.0)},
+        # must not be turned: dust hopper under the belt
+        gravity_fixed=True,
+    ), 'gas_belt')
 
     # draw.io driers:Drier (Fluidized Bed) (aspect=variable) -> dryer/fluidized_bed
     registry.register('dryer', Symbol(

@@ -24,6 +24,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Five `Filter` variants, naming the medium the casing is drawn around:
+  `fixed_bed` and `gas_fixed_bed` (a granular bed between two retention
+  screens), `belt` and `gas_belt` (a cloth running between two rollers), and
+  `rotary_scraper` (the rotary drum of `rotary` with the knife that lifts the
+  cake off it). Each is piped `inlet` west and `outlet` east at mid-height, as
+  the rest of the family is, so swapping one filter for another is a change of
+  artwork and not of piping. `Filter`'s ports are unchanged.
+- `gas_fixed_bed` and `gas_belt` join `filter/gas` among the symbols
+  ISO 15519-1 §11.4.2 forbids turning. Each draws a dust hopper under its
+  medium, which is where what the medium sheds is collected; `fixed_bed` and
+  `belt` draw the same medium with no hopper, are driven by pressure drop
+  across it, and stay turnable.
 - `Separator(variant="knockout")` draws the knock-out drum the default used to,
   demister pad and level gauge and all, at the size and with the nozzles it had.
 
