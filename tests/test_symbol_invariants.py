@@ -1502,3 +1502,297 @@ def test_a_normally_closed_valve_is_the_one_valve_drawn_filled():
                 f"ordinary one and the position said in letters instead"
             )
     assert seen == set(default_registry.variants("valve"))
+
+
+# ---------------------------------------------------------------------------
+# Where a valve's run sits in its box.
+#
+# scripts/vendor_symbols.py states the principle for the vessel family:
+# "Switching a vessel between variants is a change of artwork, not of piping,
+# so the two must offer the same nozzles in the same places." A valve the run
+# goes straight through answers to the same rule, and its nozzles are on the
+# body, which is the part that sits in the line.
+#
+# So the fixed height is measured from the BOTTOM of the box, not the top. An
+# operator is drawn *above* the body -- a handwheel, a motor box, a diaphragm
+# dome -- so choosing an actuated variant makes the box taller by adding to the
+# top of it, and the body underneath stays where it was. valves.xml draws it
+# that way: on every actuated shape the bowtie's lower edge is the bottom of the
+# shape and the operator occupies the space above.
+#
+# Measured from the top the family is not one family at all. A gate valve's
+# nozzles are 7.5 below the top of its box and a motor-operated one's are 14.9,
+# so swapping the two under a corner pin drops the run 7.4 units -- half a valve
+# body -- with nothing in the flowsheet having said anything about piping.
+# ---------------------------------------------------------------------------
+
+#: How far above the bottom of its box a valve carries the run, in symbol-space
+#: units. valves.xml draws the plain bowtie 60 units tall, with the run through
+#: its crossing point and its lower edge on the bottom of the shape, so the
+#: centreline is 30 units up; ``SCALE["valve"] = 0.25`` makes that a 15.0-tall
+#: body in a 24.5 x 15.0 box with the run 7.5 above the bottom of it. Sixteen of
+#: the nineteen straight-through variants land on it.
+_VALVE_RUN_HEIGHT = 7.5
+
+#: One unit of the stencil's own coordinate space, at ``SCALE["valve"] = 0.25``.
+#:
+#: Every source of scatter in the conforming sixteen is sub-unit in the space
+#: the stencil author drew in, so a drawing cannot express a finer distinction
+#: than this and anything inside it is the same centreline:
+#:
+#: * the bowtie is not one size across valves.xml. It is 60 units tall on the
+#:   bare bodies, on Manual Operated (y 5..65) and on Check Valve 1 (y 2..62),
+#:   but 59 on Motor/Solenoid/Hydraulic (y 30..89), Pneumatic Operated
+#:   (y 20..79) and Back Pressure Regulator 1 (y 35..94). Half of 59 against
+#:   half of 60 is 0.5 stencil units of it;
+#: * the nozzle's height is a draw.io ``<constraint>`` authored as a *fraction*
+#:   of the shape's height and rounded to two or three decimals -- 0.5, 0.54,
+#:   0.63, 0.67, 0.685 -- against shapes 60 to 94 tall. One hundredth of an
+#:   89-tall shape is 0.89 units, so the fraction cannot land on the body's
+#:   centre: it misses by up to 1 unit (Check Valve 1, whose 0.5 is the middle
+#:   of the shape while the bowtie inside it is offset 2 units down);
+#: * and the generator rounds what it emits to one decimal, 0.2 units here.
+#:
+#: NOT the quantisation of ``SCALE["valve"] = 0.25`` itself, which was the first
+#: guess: that rounding is worth at most +/-0.05 on each of the two numbers, and
+#: the exact pre-rounding heights are already spread 7.3075 (pneumatic) to 7.75
+#: (check). The scatter is in the stencils, and the drawn-body sizes are most of
+#: it. Worst case in the shipped registry is 0.2 (check at 7.7, and the three
+#: letter-box operators at 7.3), so this accepts the family with 0.05 to spare
+#: and rejects all three exceptions below by an order of magnitude.
+_VALVE_RUN_TOL = 0.25
+
+
+def _straight_through(sym: Symbol) -> bool:
+    """True for a valve the run enters on the west face and leaves on the east.
+
+    The scope is a rule about the nozzles rather than a list of names, so a
+    variant added later is judged by where it is piped. It excludes the devices
+    that have no horizontal run to be level with in the first place: ``relief``
+    is piped bottom to top, ``bleed`` top to bottom, and ``angle`` and ``psv``
+    turn the flow a quarter. Every valve's menu is single-entry, so the one face
+    offered is the home face.
+    """
+    return list(sym.port_faces.get("inlet", ())) == ["W"] and list(
+        sym.port_faces.get("outlet", ())
+    ) == ["E"]
+
+
+_STRAIGHT_VALVES = sorted(
+    variant
+    for variant in default_registry.variants("valve")
+    if _straight_through(default_registry.get("valve", variant))
+)
+
+# ---------------------------------------------------------------------------
+# The valves that leave the run, and why.
+#
+# Written out longhand with a reason each, on the pattern of
+# tests/test_gravity_orientation.GRAVITY_FIXED, and split by *what kind* of
+# exception it is. Moving the run is a statement about the piping, so a variant
+# joining either dict has to be argued for here rather than land silently
+# alongside the artwork that moved it.
+# ---------------------------------------------------------------------------
+
+#: Valves whose box legitimately reaches further below the run than a bowtie
+#: does, because the stencil draws something down there. The nozzles are on the
+#: ink the shape puts on the line; it is the box that is deeper.
+_OFF_THE_RUN_BY_DESIGN = {
+    "three_way": (
+        "Three-Way Valve draws the bowtie across the TOP of its box -- y 0..60 "
+        "of 79 -- and hangs the third way off the crossing point, two legs down "
+        "to (19, 79) and (79, 79). The run is exactly where it is on every other "
+        "valve; the box is what grew, and it grew downward to hold the branch. "
+        "So this is the one straight-through valve fixed against the top of its "
+        "box instead, at 7.6 below it, which is the family's 7.5 to within the "
+        "drawing's own resolution. Bottom-anchoring it measures the run against "
+        "the branch."
+    ),
+    "knife": (
+        "Knife Valve is not a bowtie. It draws a rectangular gate housing, "
+        "x 35..65 and y 15..85 of 85, with the run entering it as two stubs at "
+        "y = 45 and the blade drawn as an arrowhead inside the lower half of it, "
+        "y 50..80. The housing straddles the run rather than sitting under it, "
+        "reaching 40 units below the centreline where a bowtie reaches 30 -- 2.5 "
+        "units at SCALE['valve'] = 0.25 -- so the run comes out 9.9 above the "
+        "bottom. The nozzles are on the stubs the stencil actually draws (11.3 "
+        "against ink at 11.25), so nothing is misplaced. Swapping a gate valve "
+        "for a knife gate still moves a corner-pinned run by those 2.4 units, "
+        "and that is the artwork's doing rather than the port map's."
+    ),
+}
+
+#: Not a difference: a defect, recorded rather than fixed. Fixing it moves ink
+#: on every sheet that draws one, which is a rendering change and a second
+#: concern; this file's job is to say the defect is there and to fail the moment
+#: it stops being.
+_OFF_THE_RUN_BY_DEFECT = {
+    "butterfly_pneumatic": (
+        "Every other straight-through valve shape in valves.xml is drawn on that "
+        "file's ~98-unit module (98, or 98.5 for the check and 100 for the "
+        "knife). 'Pneumatic Operated Butterfly Valve' alone is 60 x 80, and its "
+        "body is the rect x 0..60, y 40..80 rather than a 98 x 60 bowtie. "
+        "SCALE['valve'] = 0.25 is applied to all of them alike and nothing "
+        "rescales this one, so it comes out in a 15.0 x 20.0 box with a "
+        "15.0 x 10.0 body against everyone else's 24.5 x 15.0: 61% of the "
+        "length, and a run 5.0 above the bottom instead of 7.5. Its nozzles sit "
+        "at the centre of the body it is drawn with, so the port map is right "
+        "and the scale is wrong. The fix is a ('valve', 'butterfly_pneumatic') "
+        "entry in SCALE -- (24.5/60, 15.0/40), the non-uniform form the packed "
+        "column already uses -- which draws it 24.5 x 30.0 with a 24.5 x 15.0 "
+        "body and puts the run back on 7.5."
+    ),
+}
+
+_OFF_THE_RUN = {**_OFF_THE_RUN_BY_DESIGN, **_OFF_THE_RUN_BY_DEFECT}
+
+
+def _run_heights(sym: Symbol) -> dict[tuple[str, str], float]:
+    """Every placement of the two process nozzles, as a height above the bottom.
+
+    The whole menu rather than just ``ports``: an alternate face is a nozzle the
+    router may actually resolve to, so it answers to the rule as well.
+    """
+    return {
+        (name, face): sym.height - y
+        for name in ("inlet", "outlet")
+        for face, (_, y) in sym.port_faces[name].items()
+    }
+
+
+def _ink_below_the_run(sym: Symbol) -> float:
+    """How far the artwork reaches below the height the nozzles are drawn at."""
+    lowest = max(max(ay, by) for (_, ay), (_, by) in _collect_segments(sym.svg))
+    return lowest - sym.ports["inlet"][1]
+
+
+@pytest.mark.parametrize("variant", [v for v in _STRAIGHT_VALVES if v not in _OFF_THE_RUN])
+def test_a_straight_through_valve_carries_the_run_at_one_height(variant):
+    """The line through a valve is at the same height whichever valve it is."""
+    sym = default_registry.get("valve", variant)
+    for (name, face), above in _run_heights(sym).items():
+        assert above == pytest.approx(_VALVE_RUN_HEIGHT, abs=_VALVE_RUN_TOL), (
+            f"valve/{variant} puts {name!r} ({face}) {above:.2f}u above the bottom of its "
+            f"{sym.width}x{sym.height} box, not the {_VALVE_RUN_HEIGHT} every other "
+            f"straight-through valve carries the run at (tolerance {_VALVE_RUN_TOL}) -- "
+            f"so swapping a valve for this one moves the line it sits in"
+        )
+
+
+@pytest.mark.parametrize("variant", _STRAIGHT_VALVES)
+def test_the_two_ends_of_a_straight_through_valve_are_level(variant):
+    """Exactly level, not nearly: the two ends are one run, and a valve whose
+    outlet were a rounding below its inlet would draw a step into a straight
+    line. Both ends take the same stencil constraint, so both round alike; a
+    pair that did not agree would be saying the body is not square to the pipe.
+    """
+    sym = default_registry.get("valve", variant)
+    assert sym.ports["inlet"][1] == sym.ports["outlet"][1], (
+        f"valve/{variant} enters at y={sym.ports['inlet'][1]} and leaves at "
+        f"y={sym.ports['outlet'][1]}, which puts a step in the run"
+    )
+
+
+def test_exactly_the_valves_named_above_leave_the_run():
+    """Nothing joins the exceptions without an entry beside it saying why.
+
+    The counterpart of the parametrized rule, which can only speak for the
+    variants it is given: without this, dropping a name into either dict would
+    exempt it and read as green.
+    """
+    strayed = {
+        variant
+        for variant in _STRAIGHT_VALVES
+        if any(
+            abs(above - _VALVE_RUN_HEIGHT) > _VALVE_RUN_TOL
+            for above in _run_heights(default_registry.get("valve", variant)).values()
+        )
+    }
+    assert strayed == set(_OFF_THE_RUN)
+    assert set(_OFF_THE_RUN_BY_DESIGN) & set(_OFF_THE_RUN_BY_DEFECT) == set()
+    assert all(_OFF_THE_RUN.values()), "an exception without a reason is a list of names"
+
+
+def test_the_valves_the_run_does_not_cross_are_out_of_scope():
+    """A PSV is piped bottom to top and an angle body turns the flow a quarter,
+    so neither has a horizontal run for the rule above to be about. They are out
+    by where their nozzles are rather than by name, and this is what says the
+    selection rule still draws the line in the same place -- a straight-through
+    valve quietly falling out of scope would take its own invariant with it.
+    """
+    assert sorted(set(default_registry.variants("valve")) - set(_STRAIGHT_VALVES)) == [
+        "angle",
+        "bleed",
+        "psv",
+        "relief",
+    ]
+    # No assertion on the size of the family: a valve added later is meant to be
+    # picked up and held to the rule, not to fail a count. What must not drift is
+    # the balance -- an invariant most of its family is excused from asserts
+    # nothing, and at that point the rule is the wrong rule rather than the
+    # registry being wrong.
+    assert len(_OFF_THE_RUN) * 2 < len(_STRAIGHT_VALVES), "the exceptions would be the rule"
+
+
+@pytest.mark.parametrize("variant", sorted(_OFF_THE_RUN_BY_DESIGN))
+def test_a_valve_drawn_below_the_run_is_drawn_there_in_ink(variant):
+    """What makes the two by-design exceptions differences rather than defects.
+
+    Each has a box deeper below the run than a bowtie's, and the depth has to be
+    artwork: a nozzle 2.4 units off the family's height in a box whose extra
+    depth is whitespace is not a valve drawn differently, it is a nozzle in the
+    wrong place. So the drawn ink has to reach the bottom of the box, and reach
+    further below the run than the plain body does.
+    """
+    plain = default_registry.get("valve", "gate")
+    assert _ink_below_the_run(plain) == pytest.approx(_VALVE_RUN_HEIGHT)
+    sym = default_registry.get("valve", variant)
+    assert _ink_below_the_run(sym) > _ink_below_the_run(plain), _OFF_THE_RUN_BY_DESIGN[variant]
+    assert _ink_below_the_run(sym) == pytest.approx(
+        sym.height - sym.ports["inlet"][1], abs=_VALVE_RUN_TOL
+    ), f"valve/{variant} has whitespace under it, not a deeper drawing"
+
+
+def test_the_three_way_carries_the_run_at_the_familys_height_from_the_top():
+    """The other half of three_way's reason: the run did not move, the box grew
+    under it. Measured downward from the top of the box it is on the family's
+    own height, which is what makes the branch below it the whole difference."""
+    sym = default_registry.get("valve", "three_way")
+    for name in ("inlet", "outlet"):
+        assert sym.ports[name][1] == pytest.approx(_VALVE_RUN_HEIGHT, abs=_VALVE_RUN_TOL)
+
+
+def test_the_pneumatic_butterfly_is_off_the_run_because_its_stencil_is_undersized():
+    """The defect's cause, so the entry in ``_OFF_THE_RUN_BY_DEFECT`` cannot rot
+    into a name nobody can account for -- and so that adding the SCALE entry
+    that fixes it fails here too, rather than leaving a stale exception behind.
+
+    Nothing here is a second opinion about the drawing: it reads the stencil the
+    generator read and the factor the generator applied.
+    """
+    vendor = _script("vendor_symbols")
+    shapes = {
+        variant: shape
+        for (kind, variant), (_, shape, _) in vendor.KIND_MAP.items()
+        if kind == "valve"
+    }
+    boxes = {
+        name: (float(el.get("w")), float(el.get("h")))
+        for name, el in vendor.shapes_in(vendor.STENCILS / "valves.xml")
+        if name in set(shapes.values())
+    }
+    assert boxes[shapes["butterfly_pneumatic"]] == (60.0, 80.0)
+    others = [
+        boxes[shapes[variant]][0]
+        for variant in _STRAIGHT_VALVES
+        if variant != "butterfly_pneumatic"
+    ]
+    assert min(others) >= 98.0, "the ~98-unit module every other valve is drawn on"
+    # ...and nothing makes up the difference: it takes the kind's own factor.
+    assert vendor.scale_for("valve", "butterfly_pneumatic") == vendor.scale_for("valve", "gate")
+    # ...so it is drawn short, which is the whole of why its run is low.
+    sym = default_registry.get("valve", "butterfly_pneumatic")
+    plain = default_registry.get("valve", "gate")
+    assert (sym.width, sym.height) == (15.0, 20.0)
+    assert sym.width < plain.width
+    assert _ink_below_the_run(sym) < _ink_below_the_run(plain)
