@@ -118,7 +118,7 @@ def main():
                                  description="Reflux Flow Element"))
     # The size steps down 100 -> 40 across it, so the run's number breaks here.
     t_draw = fs.add(units.Tee())
-    t_draw.significant = True
+    t_draw.new_line_number = True
 
     # --- Placement -------------------------------------------------------
     # Pinned by nozzle, not by corner. Every run is named by the elevation of
@@ -268,7 +268,7 @@ def main():
     fs.connect(t_draw.branch, st303.inlet, service="AE", sequence=303, size=80,
                schedule=80, spec="SS")
     fs.connect(st303.outlet, fe303.inlet)
-    fs.connect(fe303.outlet, col.reflux_in, tear_hint=True)
+    fs.connect(fe303.outlet, col.reflux_in, draw_as_recycle=True)
 
     fs.connect(t_draw.outlet, st305.inlet, service="AE", sequence=305, size=40,
                schedule=80, spec="SS")
@@ -280,7 +280,7 @@ def main():
                       size=250, schedule=160, spec="SS").via([(col_axis, 655), (sump_x, 655)])
     boilup = fs.connect(reb.shell_out, col.boilup_in, service="FB", sequence=310,
                         size=300, schedule=160, spec="SS",
-                        tear_hint=True).via([(boilup_x, 535), (595, 535), (595, boilup_y)])
+                        draw_as_recycle=True).via([(boilup_x, 535), (595, 535), (595, boilup_y)])
     fs.connect(steam.outlet, st308.inlet, service="HPS", sequence=308, size=100,
                schedule=80, spec="CS")
     fs.connect(st308.outlet, reb.tube_in)

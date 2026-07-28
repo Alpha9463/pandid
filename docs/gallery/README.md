@@ -85,7 +85,7 @@ tagged as plain text beside the symbol rather than in a balloon.
 Automatic again, and the clearest demonstration of the straightened spine: feed
 → mixer → compressor → cooler → separator → splitter all land on one horizontal
 axis. The splitter purges one outlet to a product flag and recycles
-the other back to the mixer; `tear_hint=True` tells the cycle breaker which edge
+the other back to the mixer; `draw_as_recycle=True` tells the cycle breaker which edge
 to tear, and the recycle is routed clear across the top.
 
 ## 06 · Column reflux and reboiler
@@ -154,7 +154,7 @@ service, sequence and spec, instead of `S1`. The components go in on
 `connect()`; the sequence is filled by the same numbering that hands out stream
 numbers, so nothing has to be kept unique by hand. The suction line keeps one
 number through HV-101 and ST-101, and breaks at the two units marked
-`significant`: the spec changes A1A → D1B across FV-101, and the size changes
+`new_line_number`: the spec changes A1A → D1B across FV-101, and the size changes
 3" → 4" across PSV-101, which is what a spec break is. The tail-pipe to flare
 takes its `sequence` by hand, for a line that already exists on someone else's
 list. The stream table underneath is headed by the same line numbers, so a
@@ -182,8 +182,8 @@ sheet, the bottoms
 cooled in HX-301, flocculant made up with RO water in M-301, dosed into the beer
 in M-302, and the slurry dewatered in the membrane filter press F-301, whose
 cake drops onto the belt BC-301. Both partings are `Tee`s: the reflux one
-carries its number straight through, and the press one is `significant` and
-breaks it, because the size and the service both change there. A tee is drawn as
+carries its number straight through, and the press one sets `new_line_number`
+and breaks it, because the size and the service both change there. A tee is drawn as
 nothing at all and tagged nowhere, so neither puts a symbol on the sheet or a
 row in the equipment list. Six
 off-page connectors carry the drawing they tie into, the equipment list is named

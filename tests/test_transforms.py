@@ -245,10 +245,9 @@ def test_pin_leaves_the_transform_alone_when_it_rejects_the_placement():
     assert port_anchor(drum, drum.frame, "feed")[2] == "W"
 
 
-def test_port_face_still_works_and_warns():
+def test_nozzle_records_the_face_as_drawn():
     drum = units.Separator("V-1", variant="horizontal")
-    with pytest.deprecated_call():
-        drum.port_face("feed", "N")
+    drum.nozzle("feed", "N")
     assert drum._port_faces == {"feed": "N"}
 
 

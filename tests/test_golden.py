@@ -124,7 +124,7 @@ def _distillation_train() -> Flowsheet:
     fs.connect(pump2.discharge, splitter.inlet)
     fs.connect(splitter.out_1, c2_bot.inlet)
     fs.connect(splitter.out_2, recycle_valve.inlet)
-    fs.connect(recycle_valve.outlet, mixer.in_2, tear_hint=True)
+    fs.connect(recycle_valve.outlet, mixer.in_2, draw_as_recycle=True)
 
     for i, s in enumerate(fs.streams):
         s.properties = {
@@ -243,7 +243,7 @@ def _reactor_recycle() -> Flowsheet:
     fs.connect(sep.liquid, prod.inlet)
     fs.connect(sep.vapor, split.inlet)
     fs.connect(split.out_2, purge.inlet)
-    fs.connect(split.out_1, mix.in_1, tear_hint=True)
+    fs.connect(split.out_1, mix.in_1, draw_as_recycle=True)
     return fs
 
 
@@ -295,9 +295,9 @@ def _column_reflux() -> Flowsheet:
     fs.connect(drum.vent, vent.inlet)
     fs.connect(drum.outlet, split.inlet)
     fs.connect(split.out_1, dist.inlet)
-    fs.connect(split.out_2, col.reflux_in, tear_hint=True)
+    fs.connect(split.out_2, col.reflux_in, draw_as_recycle=True)
     fs.connect(col.bottoms, reb.shell_in)
-    fs.connect(reb.shell_out, col.boilup_in, tear_hint=True)
+    fs.connect(reb.shell_out, col.boilup_in, draw_as_recycle=True)
     fs.connect(reb.bottoms, bot.inlet)
     return fs
 
@@ -397,8 +397,8 @@ def _line_numbers() -> Flowsheet:
     flare = fs.add(units.Product("To Flare", reference="PFD-900"))
     prod = fs.add(units.Product("To Unit 200", reference="PFD-200"))
 
-    fv.significant = True
-    psv.significant = True
+    fv.new_line_number = True
+    psv.new_line_number = True
 
     feed.pin(x=60, y=275)
     hv.pin(x=235, y=285)

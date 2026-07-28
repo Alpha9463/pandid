@@ -19,12 +19,12 @@ def test_valve_carries_stream_number():
     assert s1.name == s2.name == "S1"  # one number through the inline valve
 
 
-def test_significant_valve_breaks_number():
+def test_new_line_number_valve_breaks_number():
     fs = Flowsheet("v")
     f = fs.add(U.Feed("F"))
     v = fs.add(U.Valve("FV-1"))
     p = fs.add(U.Product("P"))
-    v.significant = True
+    v.new_line_number = True
     s1 = fs.connect(f.outlet, v.inlet)
     s2 = fs.connect(v.outlet, p.inlet)
     fs.renumber_streams()
@@ -84,7 +84,7 @@ def test_explicit_names_are_never_renumbered():
     assert (named.name, auto.name) == ("100-BFW-01", "S1")
 
 
-def test_significant_set_after_connecting_renumbers():
+def test_new_line_number_set_after_connecting_renumbers():
     fs = Flowsheet("n")
     f = fs.add(U.Feed("F"))
     v = fs.add(U.Valve("FV-1"))
@@ -92,7 +92,7 @@ def test_significant_set_after_connecting_renumbers():
     s1 = fs.connect(f.outlet, v.inlet)
     s2 = fs.connect(v.outlet, p.inlet)
     assert s1.name == s2.name == "S1"  # inline until the valve is called important
-    v.significant = True
+    v.new_line_number = True
     assert (s1.name, s2.name) == ("S1", "S2")  # the break lands without a render
 
 

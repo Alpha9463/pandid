@@ -153,7 +153,7 @@ equipment. `tests/test_symbol_invariants.py` enforces this over **every**
 registered `(kind, variant)`, not just the ones the examples use:
 
 - the symbol SVG parses and declares a `stroke-width`;
-- every port, and every alternate face in `port_alts`, lies inside the symbol's
+- every port, and every alternate face in `port_faces`, lies inside the symbol's
   declared bounding box;
 - every port and alternate is within `GEOM_TOL` (2 units) of the nearest drawn
   stroke, measured against the SVG primitives flattened to line segments;

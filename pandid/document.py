@@ -201,14 +201,11 @@ _ALIGN = {
     "left", "center", "right",
     "bottom-left", "bottom", "bottom-right",
 }
-_ANCHORS = _ALIGN  # alias for the deprecated ``anchor`` spelling
 
 
-def _resolve_align(align, anchor, default):
-    """Resolve the effective alignment, honouring the deprecated ``anchor=``."""
-    value = anchor if anchor is not None else align
-    if value is None:
-        value = default
+def _resolve_align(align, default):
+    """The effective alignment, checked against the nine the sheet dock knows."""
+    value = default if align is None else align
     if value not in _ALIGN:
         raise ValueError(f"align must be one of {sorted(_ALIGN)}, got {value!r}")
     return value
@@ -232,8 +229,6 @@ class Annotation:
     rest following at shared column stops), enough to lay out an equipment
     schedule (``("T-301", "Beer Column")``) or a legend (``("SS", "316L")``)
     without a full table.
-
-    ``anchor`` is a deprecated alias for ``align``.
     """
     title: str = ""
     rows: list = field(default_factory=list)
@@ -242,11 +237,9 @@ class Annotation:
     margin: float = 0.0
     width: float | None = None
     font_size: float = 11.0
-    anchor: str | None = None  # deprecated alias for ``align``
 
     def __post_init__(self):
-        self.align = _resolve_align(self.align, self.anchor, "top-right")
-        self.anchor = self.align
+        self.align = _resolve_align(self.align, "top-right")
 
 
 @dataclass
@@ -256,7 +249,7 @@ class TableBox:
     ``"l"``/``"c"``/``"r"`` (defaults to centered).
 
     Placement (``align`` / ``position`` / ``margin``) works exactly as for
-    :class:`Annotation`; ``anchor`` is a deprecated alias for ``align``.
+    :class:`Annotation`.
     """
     title: str = ""
     headers: list[str] = field(default_factory=list)
@@ -266,11 +259,9 @@ class TableBox:
     margin: float = 0.0
     font_size: float = 11.0
     col_align: list[str] | None = None
-    anchor: str | None = None  # deprecated alias for ``align``
 
     def __post_init__(self):
-        self.align = _resolve_align(self.align, self.anchor, "bottom-right")
-        self.anchor = self.align
+        self.align = _resolve_align(self.align, "bottom-right")
 
 
 # ---------------------------------------------------------------------------
@@ -341,7 +332,7 @@ def _describe(unit):
             or _KIND_LABELS.get(unit.kind, unit.kind.replace("_", " ").title()))
 
 
-def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right", anchor=None,
+def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right",
                    position=None, margin=0.0, include=None, width=None):
     """Build an :class:`Annotation` scheduling the flowsheet's major equipment.
 
@@ -355,7 +346,7 @@ def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right", anchor=None
     not on the flowsheet contributes no row.
 
     ``align`` / ``position`` / ``margin`` place the box (see
-    :class:`Annotation`); ``anchor`` is a deprecated alias for ``align``.
+    :class:`Annotation`).
     """
     if include is None:
         chosen = [u for u in fs.units if u.kind in _MAJOR_EQUIPMENT]
@@ -363,26 +354,26 @@ def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right", anchor=None
         by_name = {u.name: u for u in fs.units}
         chosen = [by_name[tag] for tag in include if tag in by_name]
     rows = [(u.name, _describe(u)) for u in chosen]
-    return Annotation(title=title, rows=rows, align=align, anchor=anchor,
+    return Annotation(title=title, rows=rows, align=align,
                       position=position, margin=margin, width=width)
 
 
-def notes(items, *, title="NOTES", align="top-right", anchor=None, position=None,
+def notes(items, *, title="NOTES", align="top-right", position=None,
           margin=0.0, numbered=True, width=None):
     """Build a numbered (or bullet) notes :class:`Annotation`."""
     rows = []
     for i, text in enumerate(items, start=1):
         rows.append((f"{i}.", text) if numbered else text)
-    return Annotation(title=title, rows=rows, align=align, anchor=anchor,
+    return Annotation(title=title, rows=rows, align=align,
                       position=position, margin=margin, width=width)
 
 
-def legend(entries, *, title="LEGEND", align="top-left", anchor=None,
+def legend(entries, *, title="LEGEND", align="top-left",
            position=None, margin=0.0, width=None):
     """Build an abbreviations/legend :class:`Annotation` from ``(abbr, meaning)``
     pairs (a dict is accepted and keeps insertion order)."""
     if isinstance(entries, dict):
         entries = list(entries.items())
     return Annotation(title=title, rows=[tuple(e) for e in entries],
-                      align=align, anchor=anchor, position=position,
+                      align=align, position=position,
                       margin=margin, width=width)

@@ -10,7 +10,6 @@ This module is also the public ``units`` namespace: ``from pandid import units``
 
 from __future__ import annotations
 
-import warnings
 from typing import TYPE_CHECKING, Any
 
 from pandid.geometry import Frame, Pin
@@ -54,33 +53,18 @@ class Unit:
     #: whose nozzle count the caller decides adds its ports in ``__init__``
     #: instead, as :class:`Mixer` does.
     PORTS: list[tuple[str, str, str]] = []
-    #: The name :attr:`PORTS` had while it was private. Still read, so a unit
-    #: written against it keeps its nozzles, and deprecated: the one attribute a
-    #: subclass has to set cannot be the one its name says not to touch.
-    _PORTS: list[tuple[str, str, str]] = []
-
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        super().__init_subclass__(**kwargs)
-        if "_PORTS" in cls.__dict__:
-            warnings.warn(
-                f"{cls.__name__} declares its ports as _PORTS, the private name the "
-                f"attribute used to have; it is now PORTS. _PORTS is still read, so "
-                f"the class keeps its nozzles either way.",
-                DeprecationWarning, stacklevel=2,
-            )
 
     @classmethod
     def _declared_ports(cls) -> list[tuple[str, str, str]]:
-        """The ports this class declares, under whichever spelling it uses.
+        """The ports this class declares.
 
-        The nearest class in the MRO to name either one answers for the whole
+        The nearest class in the MRO to name :attr:`PORTS` answers for the whole
         list, empty or not, exactly as an attribute lookup would: overriding a
-        declaration replaces it. A class naming both is taken at its public word.
+        declaration replaces it.
         """
         for klass in cls.__mro__:
-            for attr in ("PORTS", "_PORTS"):
-                if attr in klass.__dict__:
-                    return list(klass.__dict__[attr])
+            if "PORTS" in klass.__dict__:
+                return list(klass.__dict__["PORTS"])
         return []
 
     def __init__(self, name: str, variant: str = "default", width: float | None = None, height: float | None = None, label_pos: str | None = None, description: str = "", reference: str = ""):
@@ -107,7 +91,7 @@ class Unit:
         self.flowsheet: Flowsheet | None = None
         self.ports: dict[str, Port] = {}
         self.params: dict = {}
-        self._significant = False
+        self._new_line_number = False
         self.pin_: Pin | None = None      # user intent (set only via pin())
         self.frame: Frame | None = None   # resolved geometry (set only by layout)
         self._port_faces: dict[str, str] = {}   # port name -> chosen face
@@ -139,7 +123,7 @@ class Unit:
         return False
 
     @property
-    def significant(self) -> bool:
+    def new_line_number(self) -> bool:
         """Whether the line identifier breaks across this inline fitting.
 
         On a valve, reducer or fitting, True breaks the stream number (or the
@@ -149,11 +133,11 @@ class Unit:
         Setting it renumbers the flowsheet, so the names on the stream objects
         the caller already holds stay the names that get drawn.
         """
-        return self._significant
+        return self._new_line_number
 
-    @significant.setter
-    def significant(self, value: bool) -> None:
-        self._significant = value
+    @new_line_number.setter
+    def new_line_number(self, value: bool) -> None:
+        self._new_line_number = value
         if self.flowsheet is not None:
             self.flowsheet.renumber_streams()
 
@@ -295,20 +279,6 @@ class Unit:
             from pandid.portgeom import unreachable_face
 
             raise unreachable_face(self, port_name, face, options)
-
-    def port_face(self, port_name: str, face: str) -> "Unit":
-        """Deprecated alias for :meth:`nozzle`.
-
-        Its ``face`` was documented as the symbol's own frame; :meth:`nozzle`
-        reads it as the drawn one, which is the same thing on an untransformed
-        unit and the right thing on a mirrored one.
-        """
-        warnings.warn(
-            "Unit.port_face() is deprecated; use Unit.nozzle(port, face), whose "
-            "face is the compass point as drawn.",
-            DeprecationWarning, stacklevel=2,
-        )
-        return self.nozzle(port_name, face)
 
     def _add_port(self, name: str, direction: str, role: str,
                   side: str | None = None) -> Port:
@@ -852,7 +822,7 @@ class Tee(Unit):
 
     The run keeps its stream or line number straight through a tee, the way it
     does through a valve or a reducer, and the branch starts a number of its
-    own. Set ``significant`` to break the run's number at the junction where the
+    own. Set ``new_line_number`` to break the run's number at the junction where the
     piping class changes there.
     """
 
@@ -929,7 +899,7 @@ class Fitting(_NormallyPositioned):
     :meth:`~pandid.flowsheet.Flowsheet.add_instrument`.
 
     Like a valve, a fitting is inline: a stream keeps its number through it
-    unless ``significant`` is set.
+    unless ``new_line_number`` is set.
 
     ``blind`` is the **spectacle blind** (figure-8 blind), and it is the one
     fitting with a ``normal_position``. It is a pair of discs on a common tie,

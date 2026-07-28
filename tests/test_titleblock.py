@@ -52,10 +52,10 @@ def test_border_and_furniture_are_independent():
 
     zoned = build().to_svg(border="zone")
     plain = build().to_svg(border="none")
-    # styling= asks for the frame and the drawing at once, in either spelling.
+    # The frame and the drawing are asked for separately, and a P&ID ruled with
+    # the frame is the same furniture as a PFD ruled with it.
     both = build().to_svg(border="zone", diagram="p&id")
-    assert build().to_svg(styling="p&id") == both
-    assert build().to_svg(styling="pid") == both  # the older spelling
+    assert '<text x="6' in both
     assert '<text x="6' in zoned  # zone letters are ruled only when asked for
     strip = r'<rect x="[-\d.]+" y="[-\d.]+" width="652.0" height="80.0" fill="white"'
     assert re.search(strip, zoned).group(0) == re.search(strip, plain).group(0)
@@ -70,9 +70,11 @@ def test_a_border_nobody_asked_for_is_not_drawn():
 @pytest.mark.parametrize(
     "kwargs",
     [
-        {"styling": "isometric"},
+        {"border": "isometric"},
         {"border": "ruled"},
-        {"styling": "pid", "border": "none"},
+        # The drawing's name is not one of the frame's: border= rules the sheet
+        # and diagram= says which drawing is on it.
+        {"border": "p&id"},
     ],
 )
 def test_a_frame_the_renderer_cannot_draw_raises(kwargs):
@@ -149,7 +151,7 @@ def test_title_block_fields_rendered():
         approved_by="CC",
         revisions=[Revision("0", "2026-01-01", "Issued", "AA")],
     )
-    svg = fs.to_svg(styling="pid")
+    svg = fs.to_svg(border="zone", diagram="p&id")
     for token in ("PFD-9", "2 of 4", "AA", "BB", "CC", "REV", "DESCRIPTION", "Issued"):
         assert token in svg, token
 
@@ -159,7 +161,7 @@ def test_no_title_block_still_renders_pid():
     fs.add(U.Feed("F"))
     fs.add(U.Product("P"))
     fs.connect(fs.units[0].outlet, fs.units[1].inlet)
-    svg = fs.to_svg(styling="pid")  # falls back to defaults, must not raise
+    svg = fs.to_svg(border="zone", diagram="p&id")  # falls back to defaults, must not raise
     assert "Bare" in svg
 
 
@@ -172,7 +174,7 @@ def test_title_block_fits_narrow_sheet():
     b = fs.add(U.Product("P"))
     fs.connect(a.outlet, b.inlet)
     fs.title_block = TitleBlock(drawing_number="PFD-1")
-    svg = fs.to_svg(styling="pid")
+    svg = fs.to_svg(border="zone", diagram="p&id")
     vb = re.search(r'viewBox="([-\d.]+) [-\d.]+ ([\d.]+)', svg)
     minx, width = float(vb.group(1)), float(vb.group(2))
     strip_w, _ = measure_title_strip(fs.title_block)
@@ -200,7 +202,7 @@ def test_furniture_boxes_rendered():
     fs.add_annotation(equipment_list(fs))
     fs.add_annotation(notes(["First note", "Second note"]))
     fs.add_annotation(legend({"SS": "Stainless Steel"}))
-    svg = fs.to_svg(styling="pid")
+    svg = fs.to_svg(border="zone", diagram="p&id")
     for token in (
         "EQUIPMENT LIST",
         "T-101",
@@ -215,14 +217,13 @@ def test_furniture_boxes_rendered():
         assert token in svg, token
 
 
-def test_align_nine_point_and_anchor_alias():
+def test_align_nine_point():
     import pytest
     from pandid.document import Annotation
 
     assert Annotation(align="top").align == "top"
     assert Annotation(align="center").align == "center"
-    # `anchor=` is the deprecated alias for `align=`
-    assert Annotation(anchor="bottom-left").align == "bottom-left"
+    assert Annotation(align="bottom-left").align == "bottom-left"
     with pytest.raises(ValueError):
         Annotation(align="middle-ish")
 
@@ -236,7 +237,7 @@ def test_annotation_docks_flush_to_frame():
     b = fs.add(U.Product("P"))
     fs.connect(a.outlet, b.inlet)
     fs.add_annotation(Annotation(title="BOX", rows=["row"], align="top-right"))
-    svg = fs.to_svg(styling="pid")
+    svg = fs.to_svg(border="zone", diagram="p&id")
     # the annotation box (stroke-width 1.5, white fill) ...
     box = re.search(
         r'<rect x="([-\d.]+)" y="[-\d.]+" width="([\d.]+)" '
@@ -264,7 +265,7 @@ def test_annotation_absolute_position():
     b = fs.add(U.Product("P"))
     fs.connect(a.outlet, b.inlet)
     fs.add_annotation(Annotation(title="HOLD", rows=["x"], position=(500, 120)))
-    svg = fs.to_svg(styling="pid")
+    svg = fs.to_svg(border="zone", diagram="p&id")
     # top-left corner drawn exactly at the requested absolute coordinates
     assert re.search(r'<rect x="500.0" y="120.0" [^>]*stroke-width="1.5"/>', svg)
 
@@ -365,7 +366,7 @@ def test_stream_table_section_header():
     s = fs.connect(feed.outlet, prod.inlet)
     s.properties = {"Temperature": "25 C", "Ethanol": "0.9"}
     fs.stream_table_sections = [("Ethanol", "Mass Fraction")]
-    svg = fs.to_svg(styling="pid", show_stream_table=True)
+    svg = fs.to_svg(border="zone", diagram="p&id", show_stream_table=True)
     assert "Mass Fraction" in svg
     assert "Stream Number" in svg
 

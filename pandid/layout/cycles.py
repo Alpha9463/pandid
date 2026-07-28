@@ -37,11 +37,11 @@ def break_cycles(fs: "Flowsheet") -> None:
         adj[s.source.owner].append(s)
         in_degree[s.dest.owner] += 1
             
-    # Sort outgoing streams so tear_hint=True are traversed LAST.
+    # Sort outgoing streams so draw_as_recycle=True are traversed LAST.
     # In DFS, a stream traversed later is more likely to hit a node
     # already on the recursion stack, classifying it as the back-edge.
     for u in units:
-        adj[u].sort(key=lambda s: s.tear_hint)
+        adj[u].sort(key=lambda s: s.draw_as_recycle)
         
     visited = set()
     stack = set()

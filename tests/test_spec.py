@@ -98,7 +98,7 @@ def test_unit_fields():
                     "width": 60,
                     "height": 32,
                     "label_pos": "bottom",
-                    "significant": True,
+                    "new_line_number": True,
                 },
                 {"kind": "Feed", "name": "Raw Feed", "reference": "PFD-100"},
             ],
@@ -109,7 +109,7 @@ def test_unit_fields():
     assert valve.description == "Feed Control Valve"
     assert feed.reference == "PFD-100"
     assert valve.label_pos == "bottom"
-    assert valve.significant is True
+    assert valve.new_line_number is True
 
 
 def test_reference_on_equipment_is_refused():
@@ -282,7 +282,7 @@ def test_stream_fields():
                     "from": ["F", "outlet"],
                     "to": ["P-101", "suction"],
                     "name": "100-BFW-01",
-                    "tear_hint": True,
+                    "draw_as_recycle": True,
                     "color": "#0a7",
                     "dasharray": "6,3",
                     "via": [[130, 65], [130, 110]],
@@ -294,7 +294,7 @@ def test_stream_fields():
     stream = fs.streams[0]
     assert stream.name == "100-BFW-01"
     assert stream.auto_named is False
-    assert stream.tear_hint is True
+    assert stream.draw_as_recycle is True
     assert (stream.color, stream.dasharray) == ("#0a7", "6,3")
     assert stream.route.manual is True
     assert stream.route.waypoints == [(130, 65), (130, 110)]
@@ -612,10 +612,10 @@ def test_a_connection_that_is_not_a_mapping_at_all():
             "'variant'",
         ),
         (
-            _spec(streams=[{"from": ["F", "outlet"], "to": ["P-101", "suction"], "tear": True}]),
+            _spec(streams=[{"from": ["F", "outlet"], "to": ["P-101", "suction"], "recycle": True}]),
             "streams[0]",
-            "'tear'",
-            "'tear_hint'",
+            "'recycle'",
+            "'draw_as_recycle'",
         ),
         (
             {"name": "T", "units": [{"kind": "Pump", "name": "P-1", "pin": {"xx": 1}}]},

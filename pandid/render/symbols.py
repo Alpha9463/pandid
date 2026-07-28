@@ -32,7 +32,7 @@ Authoring conventions (hand-drawn symbols)
 import math
 import re
 import warnings
-from dataclasses import InitVar, dataclass, field
+from dataclasses import dataclass, field
 from difflib import get_close_matches
 from functools import lru_cache
 
@@ -191,27 +191,9 @@ class Symbol:
     # paragraph recommends -- "a new symbol should be created to the actual
     # orientation" -- is already here as a variant (``vessel/horizontal``).
     gravity_fixed: bool = False
-    # Deprecated spelling, accepted so a symbol authored against the old
-    # interface still registers. ``port_alts`` listed only the *extra* faces.
-    port_alts: InitVar[dict[str, dict[str, tuple[float, float]]] | None] = None
-    free_ports: InitVar[frozenset[str] | None] = None
 
-    def __post_init__(self, port_alts, free_ports) -> None:
-        if free_ports is not None:
-            warnings.warn(
-                "Symbol.free_ports is now Symbol.faceless_ports.",
-                DeprecationWarning, stacklevel=2,
-            )
-            self.faceless_ports = frozenset(self.faceless_ports) | frozenset(free_ports)
+    def __post_init__(self) -> None:
         declared = {name: dict(faces) for name, faces in self.port_faces.items()}
-        if port_alts is not None:
-            warnings.warn(
-                "Symbol.port_alts is deprecated; declare the whole menu in "
-                "Symbol.port_faces (the symbol's own nozzle is folded in for you).",
-                DeprecationWarning, stacklevel=2,
-            )
-            for name, faces in port_alts.items():
-                declared.setdefault(name, {}).update(faces)
         # Everything below rejects rather than repairs. Dropping a declaration
         # the engine cannot honour would be silent: the menu is re-keyed by
         # coordinate at resolve time, so a placement filed under the wrong face

@@ -7,7 +7,7 @@ number into a full line number (`6"-P-1001-A1A`), assembled by the flowsheet's
 `line_numbering_scheme`. `kind` is one of `STREAM_KINDS`: a process kind
 ("material"/"energy") on a pipe, a signal kind on an instrument line. `is_recycle` is
 COMPUTED later by the layout engine's cycle-detection phase and must never be set
-by API callers. `tear_hint` lets a caller nudge which stream is chosen as a
+by API callers. `draw_as_recycle` lets a caller nudge which stream is chosen as a
 tear/back-edge in ambiguous cycles; it is advisory only.
 """
 
@@ -53,7 +53,7 @@ class Stream:
     source: Port
     dest: Port
     kind: str = "material"
-    tear_hint: bool = False
+    draw_as_recycle: bool = False
     route: Route | None = None
     color: str | None = None
     dasharray: str | None = None
