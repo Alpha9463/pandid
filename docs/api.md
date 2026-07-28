@@ -47,6 +47,7 @@ The container and the single source of truth for connectivity.
 | `units` | `list[Unit]` | in insertion order |
 | `streams` | `list[Stream]` | in creation order |
 | `components` | `list[Component]` | |
+| `loops` | `list[Loop]` | declared control loops, in declaration order; never in `units` |
 | `auto_faces` | `bool` | engine picks movable ports' faces; default `True` |
 | `warnings` | `list[Issue]` | soft findings from the last render |
 | `title_block` | `TitleBlock \| None` | drawn whenever it is set |
@@ -143,8 +144,9 @@ Registers an `Annotation` or `TableBox` (see [Sheet furniture](#sheet-furniture)
 ```text
 add_instrument(type, number="", *, on=None, at=None,
                offset=45.0, angle=90.0, variant="default", **kwargs) -> Instrument
+add_loop(variable: str, number: str | int) -> Loop
 ```
-See [Instrumentation](#instrumentation).
+See [Instrumentation](#instrumentation) and [Control loops](#control-loops).
 
 ### Geometry and output
 
@@ -957,6 +959,57 @@ fic = fs.add_instrument("FIC", 101, variant="panel")      # panel-mounted contro
 fy  = fs.add_instrument("FY", 101, variant="computer")    # computing relay
 ```
 
+### Control loops
+
+```text
+fs.add_loop(variable: str, number: str | int) -> Loop
+loop.tag(letters: str) -> str
+loop.variable   # the measured-variable letter, upper-cased
+loop.number     # the loop number, as text
+loop.name       # "F-303", the loop's identity as a string
+fs.loops        # list[Loop], in declaration order
+```
+
+Declares a control loop and returns the handle its members are tagged from, so
+the number is typed once. `number` on `add_instrument` accepts the handle in
+place of a literal.
+
+```python
+loop = fs.add_loop("F", 303)
+fe  = fs.add(units.Fitting(loop.tag("FE"), variant="venturi"))
+ft  = fs.add_instrument("FT",  loop, on=fe, at="N", offset=90)
+fic = fs.add_instrument("FIC", loop, on=ft, at="E", offset=70, variant="shared")
+cv  = fs.add(units.Valve(loop.tag("CV"), variant="control"))
+fs.connect(fic.sig_out, cv.actuator, kind="pneumatic")
+```
+
+- **A loop is `(variable, number)`.** `add_loop("F", 101)` and
+  `add_loop("L", 101)` are two loops on one sheet. Declaring the same pair twice
+  raises; `variable` must be a single letter and `number` must be non-empty.
+- **The loop replaces the number, not the letters.** Each balloon types its own
+  functional letters and `add_instrument` checks the first of them against the
+  loop, raising `ValueError` at that line: `add_instrument("TT", loop)` on an F
+  loop names the loop's variable and what was passed. The redundancy is what
+  makes the check possible at all.
+- **`loop.tag(letters)`** returns a tag string, so a `Fitting`, a `Valve` or any
+  other class joins on the same terms. It composes and does not check the first
+  letter: a final control element is not tagged from the measured variable, and
+  its number need not match its loop's either. What establishes that membership
+  is the signal edge into the actuator.
+- **A loop is a namespace, not a unit.** It has no frame and no ports, is never
+  in `fs.units`, draws nothing and reaches no equipment list.
+- **A loop number is allocated once and never renumbered**, unlike a stream
+  number, which `renumber_streams()` re-derives on every `connect()`. A loop
+  number leaves the drawing for a DCS database and a valve nameplate.
+- **The loop-less form is unchanged.** `add_instrument("TI", 325)` and
+  `add_instrument("I", 1, variant="logic")` take a literal number and always
+  will: an indicator that is nobody's loop and a repeatable logic function with
+  no measured variable have no loop to belong to.
+
+Loops serialize to an optional `loops:` section of the spec and round-trip
+through it; a sheet that declares none writes no section, so its spec is
+unchanged. See the spec format in the README.
+
 ### Attaching a balloon
 
 ```text
@@ -1199,6 +1252,7 @@ and `message`.
 | `coincident-ports` | warning | …and one of them is a port the symbol never anchored, so it fell back to the centre of the box. No shipped symbol has such a gap, so this covers symbols registered from outside the package |
 | `route-crosses-unit` | warning | a stream passes through a unit body it does not connect to |
 | `route-detour` | warning | a route is more than 3× its direct span |
+| `letter-sequence` | warning | a tag spells its control-function letters out of the order ISO 15519-2:2015 §5.2.4 requires (I, R, C, S, M, Z, A), so `FCI` where `FIC` was meant. One finding per tag, and the message names the tag it would have been |
 
 Errors raise from `to_svg()`/`render()` unless you pass `check=False`. Warnings
 never raise, and collect on `fs.warnings` after each render. Geometric checks

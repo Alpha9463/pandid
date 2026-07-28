@@ -129,6 +129,14 @@ against one. What it follows, feature by feature:
   §2.8.1(b) allows a standard to be adopted with exceptions provided each one is
   documented in the user's own standard and on the drawing: `legend()` is where
   a drawing says so.
+- **Tag numbering** is therefore the ISA-5.1 **loop number** (`FIC-101`), not
+  the IEC 81346 reference designation (`LAB01BP01`) that **ISO 15519-2** §5.3
+  requires on the lower line of a symbol. A reader coming from ISO should expect
+  the tags to look like this, and read it as the same documented exception.
+  One ISO 15519-2 rule is enforced regardless, because it is about the letters
+  and not the numbering: §5.2.4 orders the control-function letters
+  I, R, C, S, M, Z, A, so `FIC` is right and `FCI` earns a `letter-sequence`
+  warning on `fs.warnings`.
 - **Sheet sizes** are the **ISO 216** A series, declared in millimetres on the
   SVG root so a sheet prints at its physical size.
 - **The zone grid** is a drawing-frame zone reference in the ASME idiom: letters
@@ -458,6 +466,45 @@ accepted and split.) The signal `kind`s are `electric`, `pneumatic`,
 `data`/`software` and `capillary`, each with its own line style, no arrowheads
 and no stream numbers.
 
+### Declaring the loop
+
+`add_loop()` types the loop number once and hands it to every member:
+
+```python
+loop = fs.add_loop("F", 303)                     # the pair (F, 303) is the identity
+fe  = fs.add(units.Fitting(loop.tag("FE"), variant="venturi"))   # primary element
+ft  = fs.add_instrument("FT",  loop, on=fe, at="N", offset=90)
+fic = fs.add_instrument("FIC", loop, on=ft, at="E", offset=70, variant="shared")
+cv  = fs.add(units.Valve(loop.tag("CV"), variant="control"))     # final element
+fs.connect(fic.sig_out, cv.actuator, kind="pneumatic")
+
+fs.add_instrument("TT", loop)     # ValueError: loop F-303 measures 'F'...
+```
+
+The loop replaces the **number**, not the letters. Each balloon still types its
+own functional letters and the loop checks the first of them, at the line that
+wrote it rather than as a finding three hundred lines later. That one letter of
+redundancy is the whole point: a loop that supplied the letter would have every
+balloon agreeing by construction, and an `FIC` reading a `TT` would become
+unrepresentable rather than detected.
+
+- **A loop is `(variable, number)`.** `add_loop("F", 101)` and
+  `add_loop("L", 101)` are two loops on one sheet, which is what
+  [example 04](https://github.com/Alpha9463/pandid/blob/main/examples/04_control_loop.py)
+  draws. Nothing recovers loops by grouping tags on the number alone.
+- **`loop.tag(letters)`** returns a plain tag string, so a `Fitting`, a `Valve`
+  or anything else joins on the same terms as a balloon. It composes and does
+  not judge: a final control element is not tagged from the measured variable,
+  and `CV-303` on the flow loop is the ordinary spelling.
+- **`fs.loops`** lists what has been declared. A loop draws nothing, is never in
+  `fs.units`, and reaches no equipment list.
+- **A loop number is allocated once and never renumbered.** A stream number is
+  engine output and is re-derived on every `connect()`; a loop number is author
+  intent that leaves the drawing for the DCS.
+- **The loop-less form is not legacy.** `add_instrument("TI", 325)` is the right
+  spelling for an indicator that is nobody's loop, and a repeated interlock
+  square has no measured variable to declare one with.
+
 **A tag names one item**, so `add()` refuses one already on the sheet: two
 `P-101`s, or two `LT-101`s, are a mistake in the drawing. Two symbols are the
 exception, because each stands for one thing shown in several places. A trip
@@ -716,6 +763,9 @@ units:
      description: Surge Drum, port_faces: {inlet: N}}
   - {kind: Product, name: To Unit 200, reference: PFD-200}
 
+loops:
+  - {variable: L, number: 101}
+
 instruments:
   - {type: LIC, number: 101, variant: panel, on: V-101, at: S, offset: 110,
      port_faces: {sig_out: W}}
@@ -775,6 +825,10 @@ this inline item), `n_inlets` / `n_outlets` for `Mixer` / `Splitter`,
 mirrored or turned unit takes the face the reader sees. It is an override:
 without it the engine picks the face itself, and the top-level `auto_faces:
 false` is how you stop it.
+
+**`loops`.** Declared control loops, `{variable: F, number: 303}`, matching
+`add_loop()`. Members carry their whole tag, so the section only records that
+the loop exists; a sheet that declares none writes no section at all.
 
 **`instruments`.** `type` (required) and `number` make the tag, so
 `{type: LIC, number: 101}` is `LIC-101` elsewhere. `on` names the host: a unit,

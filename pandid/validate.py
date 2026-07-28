@@ -6,8 +6,9 @@ Separates two kinds of problems:
   pinned units, negative/non-finite coordinates). ``render()`` raises on these
   rather than emit a silently-wrong drawing.
 - **warnings** — the drawing is valid but imperfect (a stream crosses a unit
-  body, a route detours excessively). Collected on ``fs.warnings`` for the
-  caller to inspect; never fatal.
+  body, a route detours excessively, a tag spells its letters in an order no
+  standard uses). Collected on ``fs.warnings`` for the caller to inspect; never
+  fatal.
 
 Geometric checks need resolved frames, so they are skipped until layout has run.
 """
@@ -22,6 +23,23 @@ if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
 
 _TOL = 1.0  # px tolerance so touching edges are not flagged as overlaps
+
+#: The order the control-function letters of a tag have to appear in.
+#: BS ISO 15519-2:2015 §5.2.4, *Sequence of letter codes for control functions*:
+#:
+#:     Letter codes for control function shall be represented in following
+#:     sequence: I, R, C, S, M, Z, and A, for example:
+#:     — ICA   Indication, control (closed loop) and alarm;
+#:     — CS    Control (closed loop) and switching (open loop);
+#:     — ICZA  Indication, control (closed loop), switching (open loop) safety
+#:             relevant, and alarm.
+#:
+#: So ``FIC`` is right and ``FCI`` is wrong. Only these seven letters are
+#: ordered: the first letter of a tag is the measured variable (Table 2) and
+#: everything else in the string is either a modifier (Table 3: ``D``, ``H``,
+#: ``L``, ``P``) or an ISA function letter ISO does not sequence (``T``, ``E``,
+#: ``Y``, ``V``), so those keep the position the author gave them.
+CONTROL_FUNCTION_SEQUENCE = "IRCSMZA"
 
 
 @dataclass(frozen=True)
@@ -41,6 +59,30 @@ def _overlap(a: tuple[float, float, float, float],
                 or a[3] - _TOL <= b[1] or b[3] - _TOL <= a[1])
 
 
+def _control_functions(letters: str) -> list[str]:
+    """The sequenced letters of a tag, in the order it spells them.
+
+    The first letter is the measured variable and is skipped: ``C`` opens a
+    conductivity tag as legitimately as it closes ``FIC``.
+    """
+    return [c for c in letters[1:] if c.upper() in CONTROL_FUNCTION_SEQUENCE]
+
+
+def _in_sequence(letters: str) -> str:
+    """*letters* with its control-function letters put into ISO 15519-2 order.
+
+    Only those letters move. A modifier keeps the position it was given, since
+    ``H`` in ``LAH`` says which limit alarmed and reordering it would say
+    something else.
+    """
+    ordered = iter(sorted(_control_functions(letters),
+                          key=lambda c: CONTROL_FUNCTION_SEQUENCE.index(c.upper())))
+    return letters[:1] + "".join(
+        next(ordered) if c.upper() in CONTROL_FUNCTION_SEQUENCE else c
+        for c in letters[1:]
+    )
+
+
 def _seg_crosses_box(x1, y1, x2, y2, box) -> bool:
     """True if an orthogonal segment passes through a box's interior."""
     bx0, by0, bx1, by1 = box
@@ -55,6 +97,7 @@ def validate(fs: "Flowsheet") -> list["Issue"]:
     """Return all validation issues for the flowsheet (errors first)."""
     from pandid.layout.attach import MAX_PLACEMENT_PASSES
     from pandid.portgeom import is_anchored, port_point, unit_box
+    from pandid.units import Instrument
 
     errors: list[Issue] = []
     warnings: list[Issue] = []
@@ -87,6 +130,24 @@ def validate(fs: "Flowsheet") -> list["Issue"]:
             elif v < 0:
                 errors.append(Issue("error", "pin-out-of-bounds",
                                     f"{u.name} pinned {axis}={v} is negative (off-sheet)"))
+
+    # --- tag spelling (no frames required) ---
+    # Soft, not hard: the letters still read, and a sheet whose house style
+    # differs from ISO's is not a sheet the engine should refuse to draw. One
+    # finding per tag, so an interlock square drawn four times says it once.
+    spelled: set[str] = set()
+    for u in fs.units:
+        if not isinstance(u, Instrument) or u.tag in spelled:
+            continue
+        spelled.add(u.tag)
+        ordered = _in_sequence(u.type)
+        if ordered == u.type:
+            continue
+        sequence = ", ".join(CONTROL_FUNCTION_SEQUENCE[:-1]) + f", and {CONTROL_FUNCTION_SEQUENCE[-1]}"
+        warnings.append(Issue(
+            "warning", "letter-sequence",
+            f"{u.tag} spells its control functions {u.type!r}; ISO 15519-2:2015 5.2.4 "
+            f"orders them {sequence}, so this tag reads {ordered!r}"))
 
     # --- geometric checks (need resolved frames) ---
     if fs.units and all(u.frame is not None for u in fs.units):

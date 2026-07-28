@@ -36,6 +36,9 @@ The format::
       - {kind: Vessel, name: V-101, variant: horizontal, width: 130, height: 42,
          port_faces: {inlet: N}, pin: {x: 680, y: 210, mirrored: y}}
 
+    loops:
+      - {variable: L, number: 101}     # declared loops; a loop draws nothing
+
     instruments:
       - {type: LIC, number: 101, variant: panel,
          on: V-101, at: S, offset: 115, port_faces: {sig_out: W}}
@@ -76,6 +79,7 @@ from pandid.flowsheet import (
     DEFAULT_LINE_NUMBERING_SCHEME,
     Flowsheet,
 )
+from pandid.loops import Loop
 from pandid.ports import Port
 from pandid.streams import LINE_NUMBER_FIELDS, Stream
 from pandid.units import Instrument, Unit, _Boundary
@@ -220,7 +224,7 @@ def _resolve_kind(value: Any, where: str) -> type[Unit]:
 
 _TOP_KEYS = {
     "name", "stream_naming_scheme", "line_numbering_scheme", "line_number_start",
-    "auto_faces", "components", "units",
+    "auto_faces", "components", "units", "loops",
     "instruments", "streams", "stream_table_sections", "title_block", "annotations",
 }
 # Keys the format no longer has. A file written against the old one names the
@@ -237,6 +241,7 @@ _INSTRUMENT_KEYS = {
     "type", "number", "variant", "description", "reference", "width", "height",
     "label_pos", "on", "at", "offset", "angle", "pin", "port_faces",
 }
+_LOOP_KEYS = {"variable", "number"}
 _STREAM_KEYS = {
     "from", "to", "kind", "name", "tear_hint", "properties", "via", "color", "dasharray",
     *LINE_NUMBER_FIELDS,
@@ -306,6 +311,9 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
 
     for i, entry in enumerate(_sequence(data.get("units", []), "units")):
         _read_unit(fs, entry, f"units[{i}]")
+
+    for i, entry in enumerate(_sequence(data.get("loops", []), "loops")):
+        _read_loop(fs, entry, f"loops[{i}]")
 
     # Instruments are created before the streams so a controller output can be
     # connected, but attached afterwards because a balloon may hang off a line
@@ -395,6 +403,31 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
 
     _read_common(fs, unit, data, where)
     return unit
+
+
+def _read_loop(fs: Flowsheet, entry: Any, where: str) -> Loop:
+    """Read one declared control loop.
+
+    A loop's members carry their whole tag, so the section says only that the
+    loop was declared. The rule a loop enforces, that a balloon's first letter
+    is the loop's measured variable, is checked where the letters are typed, and
+    in a spec they are typed once, on the instrument itself.
+    """
+    data = _mapping(entry, where)
+    _check_keys(data, _LOOP_KEYS, where)
+    for key in ("variable", "number"):
+        if key not in data:
+            raise SpecError(
+                f"{where} needs a {key!r}: a loop is its measured variable and its "
+                "number together, e.g. {variable: F, number: 303} for loop F-303"
+            )
+    number = data["number"]
+    if not isinstance(number, (str, int)) or isinstance(number, bool):
+        raise SpecError(f"{where}.number must be a loop number or text, got {number!r}")
+    try:
+        return fs.add_loop(_text(data["variable"], f"{where}.variable"), number)
+    except ValueError as e:
+        raise _fail_from(e, where) from None
 
 
 def _read_instrument(fs: Flowsheet, entry: Any, where: str) -> Instrument:
@@ -791,6 +824,11 @@ def to_dict(fs: Flowsheet) -> dict:
     instruments = [u for u in fs.units if isinstance(u, Instrument)]
     if equipment:
         spec["units"] = [_write_unit(u) for u in equipment]
+    # A sheet that declared no loop writes no section, so a spec written before
+    # loops existed and one written after are the same file.
+    if fs.loops:
+        spec["loops"] = [{"variable": loop.variable, "number": loop.number}
+                         for loop in fs.loops]
     if instruments:
         spec["instruments"] = [_write_instrument(u) for u in instruments]
     if fs.streams:
