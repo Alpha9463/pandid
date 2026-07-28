@@ -629,6 +629,22 @@ and is kept working.
 - Off-page connectors: a `Feed`/`Product` flag's `reference` is drawn as its
   second line. A flag is the only thing with a second line, so `reference=` on
   equipment raises and names the boundary to put it on.
+- `pandid.document.location_reference(document, sheet, zone)` composes that
+  reference in the grammar **ISO 15519-1:2010 Clause 9** gives it: a solidus for
+  the sheet, a full stop for the column, row or zone, and the fixed sequence
+  *document, sheet, zone*. All seven rows of the standard's Table 2 come out of
+  it, from `7569/12.B3` down to `/.B3`, and a part left out narrows the scope
+  rather than changing the shape, which is how the table expresses "same
+  document" and "same sheet". `zone` is checked against §5.1.2, where columns are
+  numbers and rows are letters, so `"3B"` raises instead of sending a reader to
+  the wrong place, and the two reserved signs are refused inside a part. It
+  returns a plain string, so `reference=` and the spec format are unchanged: a
+  bare document number is still what a flag usually carries, and is what every
+  off-page connector on the three reference drawings actually reads. §12.6's
+  placement rule and its requirement that the two ends of an interrupted line
+  reference each other are not implemented and are documented as not being: the
+  first is `pin()`'s to satisfy, and the second needs a peer end that a
+  single-sheet `Flowsheet` has no way to reach.
 
 #### Instrumentation (ISA-5.1)
 
@@ -727,6 +743,23 @@ and is kept working.
   shipped example or test violates the clause. Only those seven letters are
   ordered, so a modifier keeps the place the author gave it and `LAH` stays
   `LAH`; the first letter is the measured variable and is left alone.
+- `gravity-turned` warns when a unit whose symbol does its job by gravity has
+  been given a quarter turn. **ISO 15519-1:2010 §11.4.2** allows turning and
+  mirroring to suit the layout and then excepts one class: "symbols representing
+  components or devices where gravity is a functionality, for example symbol
+  2061: Open tank or symbol X 2618: Cyclone separator … Such symbols must not be
+  turned." A new `Symbol.gravity_fixed` marks them, set on 27 of the registered
+  symbols from `GRAVITY_FIXED` in `scripts/vendor_symbols.py`, which records per
+  family what in the artwork only means one thing one way up: the separators, the
+  tanks, the vessels, the columns and reactors, the vents and the funnel, the
+  spray and fluidised-bed driers, and the bag filter. A warning rather than an
+  error, because the sheet still draws and every nozzle still lands on ink, and
+  because turning a symbol is exactly how the invariant suite checks that its
+  ports stay on the drawing. Mirroring is left alone, the clause excepting
+  turning only. Where the equipment really is installed lying down the message
+  names the variant drawn that way, which is the same clause's own advice that "a
+  new symbol should be created to the actual orientation". Nothing shipped
+  violates the rule: no example, golden scenario or spec fixture turns one.
 
 #### Command line
 

@@ -541,7 +541,8 @@ class Vessel(Unit):
     or knock-out pot is drawn. Use the variant rather than rotating an upright
     vessel: skirts, saddles and shell bands do not survive a quarter turn, and
     the outlet still has to drain from the bottom whichever way the artwork is
-    spun.
+    spun. That is ISO 15519-1 §11.4.2's rule as well, and turning one is
+    reported as ``gravity-turned`` by :meth:`~pandid.flowsheet.Flowsheet.validate`.
 
     Reach for :class:`Separator` instead when the point of the vessel is
     splitting phases and you want to name the vapour and liquid products.

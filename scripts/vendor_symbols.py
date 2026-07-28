@@ -842,6 +842,109 @@ ADAPTED_ELSEWHERE = {
 }
 
 
+# Symbols that must not be turned, as ``Symbol.gravity_fixed``.
+#
+# ISO 15519-1 §11.4.2, *Orientation of graphical symbols*, permits turning and
+# mirroring "in order to fit into the actual layout of the diagram", and then:
+#
+#     Exceptions for turning are symbols representing components or devices
+#     where gravity is a functionality, for example symbol 2061: Open tank or
+#     symbol X 2618: Cyclone separator; see Figure 22 b). Such symbols must not
+#     be turned.
+#
+# Figure 22 b) draws those two: an open-topped U, and a body whose conical apex
+# points down with the vortex spiralling into it. Both are devices whose *job* is
+# done by gravity, and both say something the plant cannot do once turned.
+#
+# The test applied here is that one, not "stands on the ground": every piece of
+# plant does. A symbol is listed when the separation, containment or holdup it
+# depicts is performed by gravity **and the artwork draws it**: a free liquid
+# surface, an open top, a settling or classifying body with a low-point draw, a
+# falling-solids path. A device whose function is pressure, rotation, heat
+# transfer or throttling is not listed even when a nozzle happens to sit low,
+# because it is installed in whatever attitude the run wants and turning its
+# symbol states nothing false.
+#
+# What that leaves out, and why:
+#
+# * ``hex/kettle`` -- its bottoms draw is at the weir end and low, but an
+#   exchanger's function is heat transfer and the artwork draws no level. The
+#   rest of the shell-and-tube family is freely turnable and this one shares it.
+# * ``valve/bleed`` -- inlet N / outlet S encodes a *piping arrangement* (the
+#   stencil draws the tap running down into the bowtie), and varying a piping
+#   arrangement is what ``pin()`` and ``nozzle()`` are for. A bleeder tapped off
+#   the top of a line is the same device.
+# * ``conveyor`` -- its artwork is two rollers and a bar, symmetric top to
+#   bottom, so a turn makes nothing in the drawing false; the gravity fact about
+#   a belt lives in its port alternates (feed from above, discharge from
+#   underneath), which the symbol already fixes. ISO cites the conveyor in
+#   §13.1 as the case for a *horizontal-view* layout, which is about the sheet
+#   rather than about the symbol.
+# * ``dryer/default`` -- a rotary drum drawn as a circle in a box; nothing in it
+#   is up or down. Contrast ``dryer/spray`` and ``dryer/fluidized_bed`` below.
+# * ``fitting/*`` and ``filter`` other than ``gas`` -- plate packs, cartridges and
+#   resin beds drawn as bands in a box, driven by pressure drop.
+#
+# (kind, variant) -> what in the artwork only means one thing one way up
+GRAVITY_FIXED = {
+    # ISO's own example, X 2618: the vortex drops the heavy phase out of the
+    # apex. The five siblings separate by density the same way (one of them is
+    # called ``gravity``), and the three hopper-bottomed ones collect out of an
+    # apex exactly as the cyclone does.
+    ("separator", "default"):       "demister on top, vapour up and liquid down",
+    ("separator", "cyclone"):       "ISO 15519-1 symbol X 2618; apex points down",
+    ("separator", "electrostatic"): "hopper bottom, collected phase out of the apex",
+    ("separator", "gravity"):       "settling chamber; the arrow in it points down",
+    ("separator", "horizontal"):    "vapour disengages off the top, liquid draws off the bottom",
+    ("separator", "scrubber"):      "hopper bottom under a wash-liquid header",
+    # ISO's other example, 2061: Open tank. Every variant holds a liquid with a
+    # free surface, fills at the roof and drains at the floor; the floating roof
+    # is drawn floating on that surface.
+    ("tank", "default"):        "dished roof over a free surface, draw at the floor",
+    ("tank", "conical"):        "conical roof over a free surface, draw at the floor",
+    ("tank", "floating_roof"):  "the roof floats on the liquid",
+    ("tank", "sphere"):         "stands on legs, fills at the crown and drains at the bottom",
+    # Holdup with a vapour space: every variant carries its vent on the top head
+    # and drains from the shell, and three of them draw the skirt, brackets or
+    # saddles they stand on. ``Vessel``'s own docstring already says this in
+    # prose, "the outlet still has to drain from the bottom whichever way the
+    # artwork is spun", and ``horizontal`` is the variant that sentence points
+    # at, which is ISO's recommended escape hatch: a new symbol drawn to the
+    # actual orientation, not the upright one turned.
+    ("vessel", "default"):    "vent on the top head, free surface below it",
+    ("vessel", "dished"):     "vent on the top head; stands on brackets",
+    ("vessel", "dome"):       "the manway dome is on top",
+    ("vessel", "horizontal"): "vent off the top, liquid out of the bottom",
+    ("vessel", "jacketed"):   "vent on the top head, free surface below it",
+    ("vessel", "skirted"):    "vent on the top head; stands on a skirt",
+    # A tower works because liquid runs down over the trays and vapour rises
+    # through them: distillate leaves the top head, bottoms the bottom one, and
+    # the packed variant draws the beds resting on their support grids.
+    ("column", "default"): "distillate off the top, bottoms off the floor",
+    ("column", "packed"):  "packed beds rest on their support grids",
+    # A charge vessel: the agitator hangs into it from above and the contents
+    # drain out of the dished bottom, with the off-gas taken from the top.
+    ("reactor", "default"): "top-entering agitator over a dished bottom",
+    ("reactor", "plain"):   "vent on the top head, outlet in the floor",
+    # Open ends. What leaves a vent rises, and what would otherwise fall into it
+    # is what the weather cap and the exhaust head's V-bottom drain are for; a
+    # funnel is charged by pouring into it. Turned, each of these is drawn as
+    # something else: an open end pointing down is a drain, not a vent.
+    ("vent", "default"):      "weather cap on top of the stack",
+    ("vent", "breather"):     "the tank conservation vent sits on the roof",
+    ("vent", "exhaust_head"): "the V-bottom catches and drains condensate",
+    ("funnel", "default"):    "open cone above a stem that drains down",
+    # Solids that fall. The spray drier atomises into its roof and drops powder
+    # out of the floor; the fluidised bed is a layer held down by gravity and
+    # lifted by the gas through its distributor, and the artwork draws it as a
+    # horizontal band of particles on that plate.
+    ("dryer", "spray"):         "atomiser in the roof, powder out of the floor",
+    ("dryer", "fluidized_bed"): "the bed is a layer on its distributor plate",
+    # The one filter drawn with a dust hopper: what the bags shed falls into it.
+    ("filter", "gas"): "dust hopper under the bags",
+}
+
+
 # draw.io draws inline devices oversized; scale them to read as small devices
 # (the converter is handed a matching heavier stroke, so the line still lands at
 # 2px once the transform has been applied).
@@ -1059,6 +1162,14 @@ def build():
             "CLOSED_SHAPES names symbols KIND_MAP does not draw: "
             + ", ".join(f"{kind}/{variant}" for kind, variant in orphans)
         )
+    # ...and a turning rule for a symbol nothing draws is a rule that never
+    # fires, which reads on the page as a symbol that has been cleared to turn.
+    orphans = sorted(key for key in GRAVITY_FIXED if key not in KIND_MAP)
+    if orphans:
+        raise SystemExit(
+            "GRAVITY_FIXED names symbols KIND_MAP does not draw: "
+            + ", ".join(f"{kind}/{variant}" for kind, variant in orphans)
+        )
 
     imports = "PortSeries, Symbol" if any(
         is_series(spec) for _, _, port_map in KIND_MAP.values() for spec in port_map.values()
@@ -1124,6 +1235,12 @@ def build():
             # the default on Symbol, exactly as "variable" is in a stencil.
             if aspect == "fixed":
                 lines.append("        stretchable=False,")
+            # ISO 15519-1 11.4.2: gravity is a functionality here, so the symbol
+            # must not be turned. The reason is carried into the generated file,
+            # since that is where a reader meets the keyword.
+            if (kind, variant) in GRAVITY_FIXED:
+                lines.append(f"        # must not be turned: {GRAVITY_FIXED[(kind, variant)]}")
+                lines.append("        gravity_fixed=True,")
             if menu:
                 lines.append(f"        port_faces={menu!r},")
             # A family is named after the port it replaces: one member keeps
