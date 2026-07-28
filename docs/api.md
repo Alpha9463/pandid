@@ -432,9 +432,12 @@ stream number across it (see [Stream numbering](#stream-numbering)).
 ### Normally closed valves
 
 ```text
-units.Valve(name, variant="default", normal_position="open")
+units.Valve(name, variant="default", normal_position="open", fail="")
 valve.normal_position = "closed"
 ```
+
+This is the *normal* position. Where the valve goes when its actuating energy is
+lost is [`fail`](#fail-position), a separate question with a separate answer.
 
 `normal_position` is where the valve sits with the plant running: `"open"` (the
 default) or `"closed"`. A closed one is drawn with its body **darkened solid**.
@@ -538,9 +541,163 @@ units.Valve("FV-1", variant="control", normal_position="closed")
 # valves shall not be shown as NC, and variant 'control' draws one. ...
 ```
 
-Say where the valve fails instead, or put the mark on the hand valve that
-actually isolates the line. A control valve may still be declared
-`normal_position="open"`; the prohibition is only on showing one closed.
+Say where the valve fails instead ([Fail position](#fail-position)), or put the
+mark on the hand valve that actually isolates the line. A control valve may still
+be declared `normal_position="open"`; the prohibition is only on showing one
+closed.
+
+### Fail position
+
+```text
+units.Valve(name, variant="control", fail="")
+valve.fail = "closed"
+```
+
+`fail` is where the valve goes **when its actuating energy is lost**. It is a
+different property from `normal_position` and running the two together is the
+single easiest mistake to make here:
+
+| | question it answers | marked by |
+|---|---|---|
+| `normal_position` | where the valve sits **with the plant running** | the body darkened, or `NC` beside it |
+| `fail` | where the valve goes **when the air, the hydraulic supply or the power is lost** | letters beside it: `FO`, `FC`, `FL`, `FL/DO`, `FL/DC`, `FI` |
+
+They are independent. A valve may declare either, both or neither, and nothing
+infers one from the other, because nothing can:
+
+```python
+fs.add(units.Valve("FV-303", variant="control", fail="closed"))   # FC, nothing said about normal
+fs.add(units.Valve("XV-304", variant="solenoid",
+                   normal_position="closed", fail="open"))        # darkened body, and FO below
+```
+
+There is **no default**. `normal_position` defaults to `"open"` because open is a
+real state that the convention declines to mark; an undeclared fail position is a
+sheet that has not said, so `fail` is `""` and nothing is drawn.
+
+| `fail` | drawn | ANSI/ISA-5.1-2009 Table 5.4.4 |
+|---|---|---|
+| `"open"` | `FO` | fail to open position |
+| `"closed"` | `FC` | fail to closed position |
+| `"last"` | `FL` | fail locked in last position |
+| `"drift_open"` | `FL/DO` | fail at last position, drift open |
+| `"drift_closed"` | `FL/DC` | fail at last position, drift closed |
+| `"indeterminate"` | `FI` | fail indeterminate (ISA-5.1-1984 §6.7) |
+
+The names are the plant's words and the letters are the drawing's, kept apart the
+way `normal_position="closed"` is not spelled `"NC"`. `FI` is not in the 2009
+table, which drops it; it is kept because **PIP PIC001 4.5.3.2** still names it in
+its own list of four, and because a valve whose failed position genuinely cannot
+be predicted has to be able to say so rather than claim `FL`. The mapping is
+`pandid.render.symbols.FAIL_POSITIONS`.
+
+**Letters, not stem arrows, and not ISO's triangle.** Three standards draw this
+one fact three ways, so a drawing cannot be silent about which it means.
+
+- **ANSI/ISA-5.1-2009 Table 5.4.4** gives two of them itself, *Method A* as
+  arrows or bars on the actuator stem and *Method B* as the letters above. Its
+  note 5.3.4(1) requires the user's standard to "document which symbols have been
+  selected".
+- **ISO 15519-1 §11.3.1 c)** gives the third, geometrically: symbol 654's apex
+  "shall point towards the valve symbol if the valve is closed when in the
+  at-rest position ... and from the valve symbol if the valve is open when in the
+  at-rest position". **ISO 15519-2** Annex A.3 registers the cases as `654V1A`
+  fail close, `654V2A` quick closing, `654V3A` fail open and `659A` fail freeze,
+  and draws each as a small triangle on the stem between a diaphragm dome and the
+  valve body.
+- **PIP PIC001 clause 4.5.3.2** is the only source that chooses between the ISA
+  pair, and it chooses the letters: *"automated valve fail actions shall be shown
+  with text (FC/FO/FL/FI) in accordance with ISA-5.1"*, with the comment that
+  *"using stem arrows as outlined in ISA-5.1 is not recommended"*.
+
+`pandid` follows PIP. Two further things point the same way. The reference sheets
+this package was built against draw every control valve as a plain diaphragm dome
+with the controller output landing on it, carrying neither letters nor stem
+arrows, so nothing on an issued drawing argued for the geometry. And the ISO
+encoding needs the actuator drawn as a separate symbol on a stem clear of the
+body, which is not what the vendored stencils draw: their dome sits directly on
+the bowtie, and the `control` variant draws no operator at all, so there is no
+stem for a triangle to sit on. The choice is recorded in the README's
+[Standards](https://github.com/Alpha9463/pandid/blob/main/README.md#standards)
+section, alongside the balloon set, because it is the same kind of declared
+exception.
+
+**Where the letters sit.** **PIP PIC001 clause 4.2.4.6(1)**: *"Control valve
+failure action abbreviation shall be shown at 0.06 inch directly below the
+control valve in horizontal lines and 0.06 inch to the right of the control valve
+in vertical lines."* That is followed whole, so a quarter turn moves these letters
+where it does not move the `NC` abbreviation. The two are the same principle
+rather than a contradiction: `NC` sits in a *corner*, and a corner is free
+whichever way a valve is laid, which is what lets it be fixed. These sit against a
+*face*, and which face is free is exactly what the quarter turn changes, because
+the face below a valve on a riser is its outlet nozzle with the line running out
+of it.
+
+Everything else around the valve is spoken for. Every valve symbol here draws its
+actuator on top and the controller output or interlock lands there, so above the
+body belongs to the signal line and to the default equipment tag, and the upper
+right corner is `NC`'s. A valve stating both of its positions therefore states
+them in two places that cannot collide; where the equipment tag is already on the
+side the letters want, they step past it rather than over it.
+
+Nothing steps past a *neighbouring* unit, so one case is placed around by hand:
+`pin(mirrored="y")` turns a valve's artwork over and puts its actuator
+underneath, and its signal lead then arrives through the space the letters use. A
+balloon hung directly below such a valve is in the same space. Neither is a
+placement the standard contemplates, since it words the rule for an actuator
+drawn on top. Put the balloon on another side, or leave the valve the way up its
+symbol is drawn.
+
+**Only an actuated valve may declare one.** ISA-5.1 note 5.3.4(10) scopes the
+failure symbols to "all types of control valves and actuators", and an actuator
+is the test: something driven by air, hydraulic fluid or electricity supplied
+from outside the valve.
+
+| | Valve variants |
+|---|---|
+| may declare `fail` | `control`, `pneumatic`, `butterfly_pneumatic`, `solenoid`, `motor`, `hydraulic` |
+| refused, hand-operated | `manual`, `knife` |
+| refused, self-acting | `regulator`, `relief`, `psv` |
+| refused, no operator drawn | `default`, `gate`, `globe`, `ball`, `butterfly`, `check`, `needle`, `plug`, `pinch`, `three_way`, `angle`, `bleed` |
+
+```python
+units.Valve("HV-1", variant="gate", fail="closed")
+# ValueError: HV-1: variant 'gate' has no actuator, so it has no fail position.
+# ANSI/ISA-5.1 note 5.3.4(10) scopes the failure symbols to control valves and
+# actuators: a handwheel loses no air, and a regulator or a relief valve is
+# worked by the process itself. ...
+```
+
+The list is `pandid.render.symbols.FAIL_ACTUATED`, and it is the **mirror** of
+the `NC` rule rather than the same list:
+
+| | `normal_position="closed"` | `fail=…` |
+|---|---|---|
+| `gate` | darkened body | refused, no actuator |
+| `control` | refused (PIP 4.2.2.10) | letters |
+| `solenoid` | darkened body | letters |
+| `relief`, `psv` | refused (PIP 4.2.2.10) | refused, self-acting |
+
+`control` is on the list although its stencil draws a Saunders body rather than an
+operator: it is the variant this package names *the control valve*, it is the one
+clause 4.2.2.10 refuses on the strength of being one, and an automated valve is
+exactly what PIP PIC001 4.5.3.2 requires a fail action on.
+
+Multi-port valves are not reachable today and must not simply be added. PIP
+PIC001 4.5.3.2(2) rules them out of `FO` and `FC`: "for multi-port automated
+valves, FL and FI shall be used where appropriate", commenting that "FO and FC
+shall not be used; instead, arrows shall be used to show fail position flow
+paths", and `pandid` draws no such arrows. `three_way` is a bare body with no
+operator, so the question does not arise.
+
+**One position, not two.** A valve can behave one way on loss of signal and
+another on loss of air, and `fail` holds a single answer. PIP PIC001 4.5.3.2(3):
+*"valves with different fail actions for loss of signal and for loss of motive
+power require an explanatory note."* Declare the motive-power position here and
+add the note; nothing writes it for you.
+
+Nothing about the symbol changes, so unlike a darkened body, declaring a fail
+position can never move a line already drawn.
 
 ### Spectacle blinds
 
@@ -611,7 +768,7 @@ is a visual style within it. The first name in each list is that kind's
 | `Column` | `default` (plain shell), `packed` |
 | `Filter` | `default`, `gas`, `press`, `rotary`, `ion_exchange` |
 | `Dryer` | `default`, `fluidized_bed`, `spray` |
-| `Valve` | bodies: `default` (gate), `gate`, `globe`, `ball`, `butterfly`, `check`, `needle`, `three_way`, `control`, `plug`, `pinch`, `angle`, `psv`, `relief`, `bleed`<br>with a drawn operator: `motor`, `solenoid`, `hydraulic`, `pneumatic`, `manual`, `knife`, `butterfly_pneumatic`, `regulator` |
+| `Valve` | bodies: `default` (gate), `gate`, `globe`, `ball`, `butterfly`, `check`, `needle`, `three_way`, `control`, `plug`, `pinch`, `angle`, `psv`, `relief`, `bleed`<br>with a drawn operator: `motor`, `solenoid`, `hydraulic`, `pneumatic`, `manual`, `knife`, `butterfly_pneumatic`, `regulator`<br>which of them take a [`normal_position`](#normally-closed-valves) and which a [`fail`](#fail-position) are two different lists |
 | `Fitting` | devices: `default` (flanged connection), `flange`, `strainer`, `strainer_cone`, `strainer_y`, `strainer_basket`, `strainer_duplex`, `orifice`, `rotameter`, `rupture_disc`, `sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `bellows`, `blind` (spectacle blind, and the one variant with a [`normal_position`](#spectacle-blinds)), `damper`, `spool`, `static_mixer`, `hose`, `coupling`, `clamped_coupling`, `flame_arrestor`, `flame_arrestor_explosion_proof`, `flame_arrestor_detonation_proof`, `flame_arrestor_fire_resistant`<br>primary flow elements: `venturi`, `flow_nozzle`, `coriolis`, `vortex`, `ultrasonic`, `turbine_meter`, `positive_displacement`, `v_cone`, `wedge`, `target`, `pitot`, `averaging_pitot` |
 | `Reducer` | `default` (the concentric trapezoid), `concentric`, `eccentric`, plus `large_end`, which points the cone |
 | `Vent` | `default` (stack with a weather cap), `exhaust_head`, `breather` |

@@ -152,6 +152,28 @@ against one. What it follows, feature by feature:
   and not the numbering: §5.2.4 orders the control-function letters
   I, R, C, S, M, Z, A, so `FIC` is right and `FCI` earns a `letter-sequence`
   warning on `fs.warnings`.
+- **Valve fail position** is drawn as **letters**, `FO` / `FC` / `FL` / `FL/DO` /
+  `FL/DC` / `FI` beside the valve, and this is a declared choice because three
+  standards draw the one fact three ways. **ANSI/ISA-5.1-2009 Table 5.4.4**
+  offers two of them itself, Method A as arrows or bars on the actuator stem and
+  Method B as the letters, and its note 5.3.4(1) requires the user's standard to
+  "document which symbols have been selected", which is what this bullet is.
+  **ISO 15519-1 §11.3.1 c)** offers the third and encodes it geometrically:
+  symbol 654's apex "shall point towards the valve symbol if the valve is closed
+  when in the at-rest position ... and from the valve symbol if the valve is open
+  when in the at-rest position", registered by **ISO 15519-2** Annex A.3 as
+  `654V1A` fail close, `654V3A` fail open and `659A` fail freeze. `pandid` takes
+  Method B on the authority of **PIP PIC001 clause 4.5.3.2**, the only one of the
+  sources that chooses between the ISA pair: *"automated valve fail actions shall
+  be shown with text (FC/FO/FL/FI) in accordance with ISA-5.1"*, with the comment
+  that *"using stem arrows as outlined in ISA-5.1 is not recommended"*. The
+  placement is PIP's too, **clause 4.2.4.6(1)**, below the valve on a horizontal
+  run and to the right of it on a vertical one. The reference sheets this package
+  was built against draw their control valves as a bare diaphragm dome with
+  neither letters nor stem arrows, so nothing on an issued drawing argued for the
+  geometry, and the ISO encoding needs an actuator drawn on a stem clear of the
+  body, which the stencil set this package draws from does not give it. See
+  [Fail position](https://github.com/Alpha9463/pandid/blob/main/docs/api.md#fail-position).
 - **Sheet sizes** are the **ISO 216** A series, declared in millimetres on the
   SVG root so a sheet prints at its physical size.
 - **The zone grid** is a drawing-frame zone reference in the ASME idiom: letters
@@ -292,6 +314,29 @@ PIP PIC001 clause 4.2.2.10 forbids showing a control or relief valve as NC, so
 `control`, `pneumatic`, `regulator`, `relief` and `psv` raise rather than draw
 one. See the
 [API reference](https://github.com/Alpha9463/pandid/blob/main/docs/api.md#normally-closed-valves).
+
+**Fail position.** `fail` is the other thing a valve says about its position, and
+it is a different question: not where the valve sits with the plant running, but
+where it goes when its air, hydraulic supply or power is lost. It is drawn as
+letters beside the valve, `FO` / `FC` / `FL` / `FL/DO` / `FL/DC` / `FI`:
+
+```python
+fs.add(units.Valve("FV-303", variant="control", fail="closed"))            # FC
+fs.add(units.Valve("XV-304", variant="solenoid",
+                   normal_position="closed", fail="open"))                 # darkened, and FO
+```
+
+The two are independent, so a valve may declare either, both or neither, and
+nothing infers one from the other. Only a valve with an *actuator* may declare a
+fail position (`control`, `pneumatic`, `butterfly_pneumatic`, `solenoid`,
+`motor`, `hydraulic`); a handwheel loses no air and a relief valve or a regulator
+is worked by the process itself, so those raise. That is the mirror of the `NC`
+rule rather than the same list: a gate valve may be shown normally closed but has
+no fail position, and a control valve is the other way round. The letters are
+ANSI/ISA-5.1-2009 Table 5.4.4 Method B and their placement is PIP PIC001
+4.2.4.6(1); the choice of method is a declared one, recorded under
+[Standards](#standards) above. See the
+[API reference](https://github.com/Alpha9463/pandid/blob/main/docs/api.md#fail-position).
 
 **More than one of the same nozzle.** `Mixer(n_inlets=…)` and
 `Splitter(n_outlets=…)` spread their connections along the triangle's flat face.
@@ -869,8 +914,9 @@ equipment list), `reference` (a boundary flag's off-page drawing), explicit
 this inline item), `n_inlets` / `n_outlets` for `Mixer` / `Splitter`,
 `n_feeds` for `Column` / `Reactor`, `length` for `Conveyor`, `branch`
 (`outlet` / `inlet`) for `Tee`, `large_end` (`inlet` / `outlet`) for `Reducer`,
-and `normal_position` (`open` / `closed`) for `Valve` and for `Fitting`'s
-`blind`.
+`normal_position` (`open` / `closed`) for `Valve` and for `Fitting`'s `blind`,
+and `fail` (`open` / `closed` / `last` / `drift_open` / `drift_closed` /
+`indeterminate`) for an actuated `Valve`.
 
 **`pin` / `port_faces`**: `pin` mirrors `pin()` with `x`/`y` (absolute), `col`/`row`
 (grid), `orientation` (`0`/`90`/`180`/`270`) and `mirrored` (`x`/`y`/`xy`).
