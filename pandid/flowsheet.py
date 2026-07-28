@@ -14,6 +14,7 @@ from pandid.streams import PROCESS_KINDS, SIGNAL_KINDS, STREAM_KINDS, Stream
 if TYPE_CHECKING:
     from pandid.components import Component
     from pandid.document import TitleBlock
+    from pandid.loops import Loop
     from pandid.ports import Port
     from pandid.units import Instrument, Unit
 
@@ -123,6 +124,11 @@ class Flowsheet:
         self.units: list = []
         self.streams: list[Stream] = []
         self.components: list = []
+        # Declared control loops, in declaration order. A loop is a namespace
+        # and not a drawn thing, so it is kept apart from `units`: layout,
+        # routing, validation, the renderer and the equipment list all iterate
+        # `units` unconditionally and none of them has anything to do with it.
+        self.loops: list["Loop"] = []
         self.warnings: list = []  # soft validation findings from the last render
         # Did the last route() settle its attached instruments, or run out of
         # passes still moving them? Read by validate(), which is what carries
@@ -206,7 +212,50 @@ class Flowsheet:
             n += 1
         return f"{tag} ({n})"
 
-    def add_instrument(self, type: str, number: str | int = "", *,
+    def add_loop(self, variable: str, number: str | int) -> "Loop":
+        """Declare a control loop and return the handle its members are tagged from.
+
+        ``variable`` is the ISA measured-variable letter (``"F"``, ``"L"``,
+        ``"T"``) and ``number`` the loop number. A loop is identified by the
+        **pair**: ``add_loop("F", 101)`` and ``add_loop("L", 101)`` are two
+        loops on one sheet, which is what most sheets draw.
+
+        The loop replaces the number, not the letters. Each member still types
+        its own functional letters and the loop checks the first of them, so a
+        ``TT`` put on a flow loop raises at that line::
+
+            loop = fs.add_loop("F", 303)
+            fs.add_instrument("FE", loop, on=line, at=0.5, offset=0)
+            ft = fs.add_instrument("FT", loop, on=line, at=0.5, offset=95)
+            cv = fs.add(units.Valve(loop.tag("CV"), variant="control"))
+
+        A loop draws nothing, is never in :attr:`units`, and reaches no
+        equipment list; see :mod:`pandid.loops`. Instruments that are in no loop
+        keep taking a literal number. An indicator standing on its own and a
+        repeated interlock square with no measured variable at all are both
+        correct as they stand.
+
+        Unlike a stream number, a loop number allocates once and is never
+        rewritten: it leaves the drawing for the DCS.
+        """
+        from pandid.loops import Loop
+
+        loop = Loop(variable, number)
+        clash = next((existing for existing in self.loops
+                      if (existing.variable, existing.number) == (loop.variable, loop.number)),
+                     None)
+        if clash is not None:
+            raise ValueError(
+                f"loop {loop.name} is already declared on this flowsheet. A loop is "
+                f"identified by its measured variable and its number together, so two "
+                f"handles on {loop.name} are two names for one loop; hold on to the one "
+                f"add_loop() returned. Two loops may share a number if they measure "
+                f"different variables (F-101 and L-101)"
+            )
+        self.loops.append(loop)
+        return loop
+
+    def add_instrument(self, type: str, number: "str | int | Loop" = "", *,
                        on: "Stream | Unit | None" = None, at: float | str | None = None,
                        offset: float = 45.0, angle: float = 90.0,
                        variant: str = "default", **kwargs) -> "Instrument":
@@ -214,6 +263,9 @@ class Flowsheet:
 
         ``type`` is the functional letter string and ``number`` the loop number;
         together they make the tag (``add_instrument("FT", 101)`` -> ``FT-101``).
+        ``number`` also takes a :class:`~pandid.loops.Loop` from :meth:`add_loop`,
+        which supplies the number and checks ``type`` against the loop's measured
+        variable, raising here rather than warning at render time.
         ``on``/``at``/``offset``/``angle`` are passed straight to
         :meth:`~pandid.units.Instrument.attach`; without ``on`` the balloon is laid
         out like any other unit.
@@ -222,8 +274,12 @@ class Flowsheet:
         >>> fs.add_instrument("FE", 101, on=s, at=0.4, offset=0)     # in-line element
         >>> fs.add_instrument("FT", 101, on=s, at=0.4, offset=60)    # transmitter above
         """
+        from pandid.loops import Loop
         from pandid.units import Instrument
 
+        if isinstance(number, Loop):
+            number.check(type)
+            number = number.number
         inst = Instrument(type, number, variant=variant, **kwargs)
         self.add(inst)
         if on is not None:

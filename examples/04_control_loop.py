@@ -9,8 +9,15 @@ anchored to a host with ``add_instrument(..., on=...)``:
   an in-line primary element sitting on the line), and ``angle=`` which way it
   branches — measured from the flow direction, so a re-route cannot spin it.
 - ``on=`` a **unit** mounts the balloon on equipment, ``at=`` naming the face.
-- Alarms are ordinary balloons sharing their controller's loop number; the
-  interlock is the ``"logic"`` square hung under it on a dashed line.
+- Alarms are ordinary balloons on their controller's loop; the interlock is the
+  ``"logic"`` square hung under it on a dashed line.
+
+``fs.add_loop(variable, number)`` declares the loop the number belongs to, and
+each member is tagged from it: a balloon by passing the loop where the number
+would go, a valve through ``loop.tag(...)``. The letters stay on the member and
+the loop checks the first of them, so a ``TT`` put on a flow loop raises at the
+line that wrote it. The interlock square is in no loop and takes a literal
+number, which is what a symbol with no measured variable should do.
 
 Both loops close on a final control element: the controller output lands on
 ``Valve.actuator``. Signal line types come from ``connect(kind=...)``:
@@ -29,10 +36,15 @@ from pandid import Flowsheet, units
 def main():
     fs = Flowsheet("Flow Control Loop")
 
+    # Both loops are numbered 101. A loop is the measured variable and the
+    # number together, so F-101 and L-101 are two loops and not one.
+    flow = fs.add_loop("F", 101)
+    level = fs.add_loop("L", 101)
+
     feed = fs.add(units.Feed("Feed")).pin(x=60, y=170)
-    fv = fs.add(units.Valve("FV-101", variant="control")).pin(x=270, y=180)
+    fv = fs.add(units.Valve(flow.tag("FV"), variant="control")).pin(x=270, y=180)
     drum = fs.add(units.Vessel("V-101", description="Surge Drum")).pin(x=420, y=145)
-    lv = fs.add(units.Valve("LV-101", variant="control")).pin(x=640, y=180)
+    lv = fs.add(units.Valve(level.tag("LV"), variant="control")).pin(x=640, y=180)
     prod = fs.add(units.Product("Product")).pin(x=790, y=170)
     # A PSV is tagged as plain text beside the symbol, not in a balloon.
     psv = fs.add(units.Valve("PSV-101", variant="relief")).pin(x=441, y=55)
@@ -47,9 +59,9 @@ def main():
 
     # Flow loop: orifice plate in the line, transmitter above it on the same
     # impulse line, controller off to one side driving the control valve.
-    fs.add_instrument("FE", 101, on=line, at=0.5, offset=0)
-    ft = fs.add_instrument("FT", 101, on=line, at=0.5, offset=62)
-    fic = fs.add_instrument("FIC", 101, on=ft, at="N", offset=125, angle=35, variant="panel")
+    fs.add_instrument("FE", flow, on=line, at=0.5, offset=0)
+    ft = fs.add_instrument("FT", flow, on=line, at=0.5, offset=62)
+    fic = fs.add_instrument("FIC", flow, on=ft, at="N", offset=125, angle=35, variant="panel")
     # The controller lands almost directly above the valve it drives, so take
     # its output off the bottom of the balloon: on the default east face the
     # signal leaves away from the valve and has to double back to reach it.
@@ -58,10 +70,10 @@ def main():
     fs.connect(fic.sig_out, fv.actuator, kind="pneumatic")
 
     # Level loop: controller mounted on the drum, its alarm pair alongside on
-    # the same loop number, interlock square hung underneath.
-    lic = fs.add_instrument("LIC", 101, on=drum, at="S", offset=90, variant="panel")
-    lah = fs.add_instrument("LAH", 101, on=lic, at="W", offset=50)
-    fs.add_instrument("LAL", 101, on=lah, at="W", offset=50)
+    # the same loop, interlock square hung underneath.
+    lic = fs.add_instrument("LIC", level, on=drum, at="S", offset=90, variant="panel")
+    lah = fs.add_instrument("LAH", level, on=lic, at="W", offset=50)
+    fs.add_instrument("LAL", level, on=lah, at="W", offset=50)
     fs.add_instrument("I", 1, on=lic, at="S", offset=44, variant="logic")
     fs.connect(lic.sig_out, lv.actuator, kind="electric")
 

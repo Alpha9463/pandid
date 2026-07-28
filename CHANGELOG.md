@@ -598,6 +598,33 @@ and is kept working.
 - The `panel` and `aux` variants draw a location bar across the middle of the
   circle, and the tag clears it: functional letters wholly above, loop number
   wholly below.
+- `Flowsheet.add_loop(variable, number)` declares a control loop and returns the
+  handle its members are tagged from, so the loop number is typed once instead
+  of on every balloon. The loop replaces the **number**, not the letters: each
+  balloon still types its own functional letters and the loop checks the first
+  of them, raising at the call site when a `TT` is put on a flow loop. That one
+  letter of redundancy is what makes the check a check; a loop that supplied the
+  letter would have every balloon agreeing by construction and an `FIC` reading
+  a `TT` would be unrepresentable rather than detected.
+  - A loop is identified by the **pair**, not by the number. `add_loop("F", 101)`
+    and `add_loop("L", 101)` are two loops on one sheet, which is what
+    `examples/04` draws.
+  - `loop.tag(letters)` mints a tag for anything that is not a balloon, so a
+    `Fitting` primary element and a `Valve` final element join on the same terms.
+    It composes and does not judge: a final control element is not tagged from
+    the measured variable, and its number need not match its loop's either.
+  - Declared loops are enumerated on `fs.loops`. A loop draws nothing, is never
+    in `fs.units` and reaches no equipment list.
+  - Loops allocate once and are never renumbered, unlike streams. A stream
+    number is engine output; a loop number is author intent that leaves the
+    drawing for a DCS database, a valve nameplate and a cause-and-effect chart.
+  - Instruments in no loop keep taking a literal number. An indicator standing
+    on its own and a repeated interlock square with no measured variable at all
+    are correct as they are, so the literal-number form is not legacy and takes
+    no deprecation.
+  - A spec carries declared loops in an optional `loops:` section
+    (`{variable: F, number: 303}`) and round-trips them. A sheet that declares
+    no loop writes no section, so its spec is byte-identical to what it was.
 
 #### Validation
 
@@ -619,6 +646,13 @@ and is kept working.
   and `route()` ran out of passes. The drawing is still coherent, but which of
   the arrangements it caught is arbitrary, so the sheet is not reproducible
   until the balloon-carrying lines are pinned with `via()`.
+- `letter-sequence` warns when a tag spells its control-function letters out of
+  order. BS ISO 15519-2:2015 §5.2.4 requires the sequence I, R, C, S, M, Z, A,
+  so `FIC` is right and `FCI` is wrong, and the finding names the tag it would
+  have been. A warning rather than an error: the letters still read, and no
+  shipped example or test violates the clause. Only those seven letters are
+  ordered, so a modifier keeps the place the author gave it and `LAH` stays
+  `LAH`; the first letter is the measured variable and is left alone.
 
 #### Command line
 
