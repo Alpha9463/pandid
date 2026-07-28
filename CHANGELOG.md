@@ -383,10 +383,12 @@ and is kept working.
   so no line strikes through the text. It sits on the line only where the run
   can still show pipe past the wipe at each end, and steps beside the line where
   it cannot, which is the usual answer for a line number a dozen characters
-  wide. On a vertical run it is turned to read bottom to top, so the sheet is
-  read from the bottom or the right the way ISO 5457 §4.1 fixes for the drawing
-  as a whole, and wherever it lands it slides along its own run until it clears
-  the equipment, tags, balloons and other numbers already on the sheet.
+  wide. Beside means above a horizontal run and to the left of a vertical one,
+  which is where ISO 15519-1 §7.2.5 puts a connection's designation. On a
+  vertical run it is turned to read bottom to top, one of the two reading
+  directions §5.1.5 allows, and wherever it lands it slides along its own run
+  until it clears the equipment, tags, balloons and other numbers already on the
+  sheet.
 - `page_size="A4"`..`"A0"` draws a sheet of exactly that size instead: the border
   and title strip rule to the page edges and the drawing is fitted into what they
   leave, scaled down uniformly if it is too big and never enlarged if it is not.

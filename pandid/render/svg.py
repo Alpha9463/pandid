@@ -57,6 +57,10 @@ def _label_anchors(cx: float, cy: float, span: float, hw: float, hh: float, vert
     side, then further out. Each of those is slid along the run in turn, so the
     label leaves the pipe before it leaves the neighbourhood of its own line.
 
+    Above and left is the side ISO 15519-1 §7.2.5 asks for. On the pipe comes
+    first anyway, since a dozen-character line number costs the sheet more room
+    beside the run than on it, and §7.2.5 words its preference as a ``should``.
+
     On the pipe the label has to stay within the run, clearance and all. Beside
     it, it erases nothing, so it may slide until its near edge reaches the run's
     end: far enough to get out from under a symbol the run butts into, and no
@@ -1293,13 +1297,16 @@ class SvgRenderer:
         # Final pass: stream-number labels, each on a white halo so it reads
         # cleanly over any line that crosses beneath it.
         #
-        # A label runs parallel to the pipe it names, turned a quarter clockwise
-        # on a vertical run so it reads bottom to top and never upside down, and
-        # the sheet is read from the bottom or the right the way ISO 5457 §4.1
-        # fixes for the drawing as a whole. No standard governs a label on a
-        # process diagram: ISO 129-1 §4.1.1 says the same thing about text on a
-        # dimension, but its scope is dimensions and tolerances and a P&ID has
-        # none, and ASME Y14.5 uses the opposite, unidirectional convention.
+        # A label runs parallel to the pipe it names, turned on a vertical run so
+        # it reads bottom to top and never upside down. ISO 15519-1 §5.1.5 allows
+        # text read "from the bottom edge or ... from the right-hand edge of the
+        # document", and this is the second of those. Its next sentence, that
+        # reference designations stay horizontal "independent of symbol
+        # orientation", is a rule about a symbol's own designation and does not
+        # reach a connection: §7.2.5 is the clause for those, and it asks for
+        # orientation *along* the connecting line. ISO 15519-1's own Figure 40
+        # turns the annotation on every vertical connecting line to read bottom
+        # to top, left of the line, while boxing symbol designations flat.
         #
         # Everything already on the sheet is seeded as occupied so a label slides
         # clear of it: balloons and equipment tags are drawn over the lines, so a
