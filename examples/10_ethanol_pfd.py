@@ -228,7 +228,7 @@ def main():
         title="Ethanol Purification",
         subtitle="A300 Process Flow Diagram 1",
         drawing_number="PFD-301",
-        company="THE UNIVERSITY OF QUEENSLAND",
+        company="PANDID",
         status="ISSUED FOR REVIEW",
         sheet="1", of_sheets="1",
         date="30/08/25",

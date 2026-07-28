@@ -778,7 +778,7 @@ from pandid.document import TitleBlock, Revision
 
 fs.title_block = TitleBlock(
     title="Aromatics Recovery A100", subtitle="Process Flow Diagram 1",
-    drawing_number="PFD-1001", company="THE UNIVERSITY OF QUEENSLAND",
+    drawing_number="PFD-1001", company="PANDID",
     client="Aromatics Australia Pty Ltd", project="Aromatics Recovery Unit",
     status="ISSUED FOR REVIEW", sheet="1", of_sheets="3",
     revisions=[
@@ -930,7 +930,7 @@ title_block:
   title: Utilities U200
   subtitle: Process Flow Diagram 1
   drawing_number: PFD-2001
-  company: THE UNIVERSITY OF QUEENSLAND
+  company: PANDID
   status: ISSUED FOR REVIEW
   sheet: "1"
   of_sheets: "2"

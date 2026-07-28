@@ -127,7 +127,7 @@ def main():
         drawing_number="PFD-1001",
         project="Aromatics Recovery Unit",
         client="Aromatics Australia Pty Ltd",
-        company="THE UNIVERSITY OF QUEENSLAND",
+        company="PANDID",
         status="ISSUED FOR REVIEW",
         sheet="1", of_sheets="3", scale="NTS",
         drawn_by="A. Anderson", checked_by="J. Smith", approved_by="R. Lee",

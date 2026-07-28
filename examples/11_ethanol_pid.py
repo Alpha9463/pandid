@@ -381,7 +381,7 @@ def main():
         title="Ethanol Purification",
         subtitle="A300 Process & Instrumentation Diagram 1",
         drawing_number="P&ID-301",
-        company="THE UNIVERSITY OF QUEENSLAND",
+        company="PANDID",
         status="ISSUED FOR REVIEW",
         sheet="1", of_sheets="1",
         # Stated rather than left blank, so the sheet renders the same today as

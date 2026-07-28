@@ -108,7 +108,7 @@ def main():
         subtitle="Piping and Instrumentation Diagram",
         drawing_number="P&ID-1009",
         project="Feed Transfer Package",
-        company="THE UNIVERSITY OF QUEENSLAND",
+        company="PANDID",
         status="ISSUED FOR REVIEW",
         sheet="1",
         of_sheets="1",
