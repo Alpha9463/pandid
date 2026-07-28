@@ -5,7 +5,6 @@ from pandid.portgeom import outward_dir as get_outward_dir  # re-exported for ca
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
-    from pandid.units import Unit
 
 __all__ = ["Router", "DefaultRouter", "get_outward_dir"]
 
@@ -13,24 +12,6 @@ __all__ = ["Router", "DefaultRouter", "get_outward_dir"]
 class Router(Protocol):
     def route(self, fs: "Flowsheet") -> None:
         """Route all streams in the flowsheet."""
-
-
-def _label_pos(u: "Unit") -> str:
-    return (u.frame.label_pos if u.frame else None) or "top"
-
-
-def _project(anchor: tuple[float, float], d: str | None, lpos: str | None) -> tuple[float, float]:
-    """Push a port anchor outward to its escape node (label-aware distance)."""
-    x, y = anchor
-    if d == "N":
-        y -= 45.0 if lpos == "top" else 25.0
-    elif d == "S":
-        y += 45.0 if lpos == "bottom" else 25.0
-    elif d == "W":
-        x -= 50.0 if lpos == "left" else 25.0
-    elif d == "E":
-        x += 50.0 if lpos == "right" else 25.0
-    return (x, y)
 
 
 def _clamp_projection(
@@ -69,7 +50,7 @@ def _clamp_projection(
 
 class DefaultRouter:
     def route(self, fs: "Flowsheet") -> None:
-        from pandid.routing.visibility import VisibilityGraph
+        from pandid.routing.visibility import VisibilityGraph, share_escape_room
         from pandid.routing.astar import find_path
 
         graph = VisibilityGraph(fs, margin=15.0)
@@ -94,18 +75,19 @@ class DefaultRouter:
             start_dir = graph.port_dirs.get((src_u.name, stream.source.name))
             goal_dir = graph.port_dirs.get((dst_u.name, stream.dest.name))
 
-            # Label-aware projection out of each port (feed/product have no
-            # external unit label, so they never widen the escape distance).
-            s_lpos: str | None = _label_pos(src_u)
-            d_lpos: str | None = _label_pos(dst_u)
-            if src_u.kind in ("feed", "product") or s_lpos == "center":
-                s_lpos = None
-            if dst_u.kind in ("feed", "product") or d_lpos == "center":
-                d_lpos = None
+            # The graph stood every port off to its escape node already, at the
+            # label-aware distance, and carries the lanes those land on.
+            start_proj = graph.port_projs[(src_u.name, stream.source.name)]
+            goal_proj = graph.port_projs[(dst_u.name, stream.dest.name)]
 
-            start_proj = _project(start, start_dir, s_lpos)
-            goal_proj = _project(goal, goal_dir, d_lpos)
+            # The stand-off is a ceiling, and it applies at both ends. Prefer to
+            # give way onto a lane the grid already carries; only when neither
+            # end can is the room between them split down the middle.
             start_proj = _clamp_projection(start, start_proj, start_dir, goal_proj, graph.nodes)
+            goal_proj = _clamp_projection(goal, goal_proj, goal_dir, start_proj, graph.nodes)
+            start_proj, goal_proj = share_escape_room(
+                start, start_dir, start_proj, goal, goal_dir, goal_proj, graph.obstacles
+            )
 
             is_recycle = getattr(stream, "is_recycle", False)
             path = find_path(graph, start_proj, goal_proj, start_dir, goal_dir, edge_penalties, is_recycle)
