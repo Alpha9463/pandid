@@ -18,9 +18,11 @@ What a P&ID adds over the PFD of the same unit:
   because a valve station is one line and not four;
 - the field devices are drawn: each control valve as the station it is, with
   hand isolation valves either side of it and the reduction to its body
-  between, the flow elements sitting *in* the line with their transmitters
-  hung off them, block valves on the cooling-water tie-ins, a check valve on
-  the bottoms and the solenoid trip on the feed;
+  between, a **bypass** over the top on its own normally closed valve and a
+  **drain** off the underside either side of the control valve, the flow
+  elements sitting *in* the line with their transmitters hung off them, block
+  valves on the cooling-water tie-ins, a check valve on the bottoms and the
+  solenoid trip on the feed;
 - five control loops close on a real final control element, each drawn
   measurement -> controller -> actuator, with the tower-top temperature
   cascaded onto the reflux flow controller. Every controller and alarm is a
@@ -29,6 +31,17 @@ What a P&ID adds over the PFD of the same unit:
 - the interlock square repeats. ``Instrument(variant="sis")`` is the one
   symbol allowed to carry its tag more than once, because a trip is a single
   logic function drawn everywhere it acts.
+
+Three kinds of item on this sheet are drawn more than once, and each says so in
+its own way rather than being renamed apart:
+
+- a **utility header** (``Feed("CWSH", header=True)``) is one service tapped
+  wherever the sheet wants it, so both cooling-water tie-ins carry ``CWSH`` and
+  both returns ``CWRH``, which is what the legend entry explaining them names;
+- a **tee** carries no tag at all — it is bulk piping bought by the line — so
+  the branches around the valve stations put nothing on the drawing and nothing
+  in the equipment list;
+- and the **interlock square**, as above.
 
 Every in-line device is placed with :func:`on_run`, which asks the symbol
 where its own nozzle sits rather than repeating a measured offset, so the runs
@@ -42,8 +55,18 @@ from pandid.document import Annotation, Revision, TitleBlock, legend, notes
 from pandid.geometry import Frame, normalize_mirror
 from pandid.portgeom import port_point, resolve_size
 
+# Spacing along a run, edge of one device to edge of the next. The router needs
+# about 25 units to leave a nozzle before it may turn, so a facing pair closer
+# than that sends the run doubling back on itself; 30 is the tightest that stays
+# clean at every station here. The issued sheet is denser than this.
+GAP = 30.0
+# How far a bypass stands off the run it goes round, and how far a drain drops
+# below it. Both are measured from the run's centreline.
+BYPASS_RISE = 45.0
+DRAIN_DROP = 36.0
 
-def nozzle_at(unit, port, mirrored: "bool | str" = False):
+
+def nozzle_at(unit, port, mirrored: "bool | str" = False, orientation: float = 0):
     """Where ``port`` sits relative to the unit's own top-left corner.
 
     Asked of the symbol the unit is drawn with rather than written down as a
@@ -54,7 +77,7 @@ def nozzle_at(unit, port, mirrored: "bool | str" = False):
     mirror_x, mirror_y = normalize_mirror(mirrored)
     width, height = resolve_size(unit)
     probe = Frame(x=0.0, y=0.0, w=width, h=height,
-                  mirrored=mirror_x, mirror_y=mirror_y)
+                  mirrored=mirror_x, mirror_y=mirror_y, orientation=orientation)
     return port_point(unit, probe, port)
 
 
@@ -62,6 +85,37 @@ def on_run(unit, x, run_y, port="inlet", mirrored: "bool | str" = False):
     """Pin an in-line device at ``x`` with ``port`` on its run's centreline."""
     return unit.pin(x=x, y=run_y - nozzle_at(unit, port, mirrored)[1],
                     mirrored=mirrored)
+
+
+def lay_out(items, x, run_y, gap=GAP):
+    """Pin a station's devices left to right, each one ``gap`` clear of the last.
+
+    ``items`` is (unit, mirrored) in the order they are *drawn*, which is not
+    the order they are piped: a station fed from the right is mirrored end to
+    end and still lays out left to right. Widths come from the symbols, so
+    inserting a tee between two valves moves everything downstream of it by the
+    tee's own width and no measurement has to be revisited.
+    """
+    for unit, mirrored in items:
+        on_run(unit, x, run_y, mirrored=mirrored)
+        x += resolve_size(unit)[0] + gap
+    return x - gap
+
+
+def branch_x(tee, mirrored: "bool | str" = False):
+    """Where a laid-out tee's branch leaves it."""
+    return tee.pin_.x + nozzle_at(tee, "branch", mirrored=mirrored)[0]
+
+
+def on_drain(valve, x, run_y):
+    """Stand a drain valve in the vertical leg hanging under ``x``.
+
+    The leg ends at the valve: a drain runs to a funnel on the floor, which is
+    not on this sheet.
+    """
+    valve.pin(orientation=90)
+    return valve.pin(x=x - nozzle_at(valve, "inlet", orientation=90)[0],
+                     y=run_y + DRAIN_DROP)
 
 
 def main():
@@ -85,48 +139,76 @@ def main():
                                      description="U-tube Kettle Reboiler"))
     cooler = fs.add(units.HeatExchanger("HX-301", variant="straight_tubes", width=130,
                                         height=40, description="Beer Bottoms Cooler"))
-    split_w = 40.0
-    split = fs.add(units.Splitter("SP-301", n_outlets=2, width=split_w, height=split_w,
-                                  description="Reflux Split"))
 
-    # Boundary flags. The two cooling-water tie-ins serve one header but are
-    # numbered apart, because a tag names one item on the sheet.
+    # Boundary flags. The cooling water and the steam are utility headers, not
+    # lines leaving the sheet once: a header is available all over the plant and
+    # is drawn and labelled the same way at every tap, so both tie-ins on each
+    # of them carry the one tag the legend explains.
     fb_feed = fs.add(units.Feed("Fermentation Broth", reference="P&ID-201"))
-    cws_cond = fs.add(units.Feed("CWSH-1"))
-    cwr_cond = fs.add(units.Product("CWRH-1"))
-    cws_cool = fs.add(units.Feed("CWSH-2"))
-    cwr_cool = fs.add(units.Product("CWRH-2"))
-    steam = fs.add(units.Feed("HPSSH"))
-    condensate = fs.add(units.Product("HPSRH"))
+    cws_cond = fs.add(units.Feed("CWSH", header=True))
+    cwr_cond = fs.add(units.Product("CWRH", header=True))
+    cws_cool = fs.add(units.Feed("CWSH", header=True))
+    cwr_cool = fs.add(units.Product("CWRH", header=True))
+    steam = fs.add(units.Feed("HPSSH", header=True))
+    condensate = fs.add(units.Product("HPSRH", header=True))
     ae_prod = fs.add(units.Product("Azeotropic Ethanol", reference="PFD-302"))
     bottoms_prod = fs.add(units.Product("Cooled Bottoms", reference="F-301"))
 
-    # Valve stations. The reflux, distillate and steam control valves are each
-    # drawn as the station they are: hand isolation valves either side so the
-    # valve can be changed out under a line break, and between the upstream
-    # isolation and the valve the reduction down to its own smaller body.
+    # Valve stations. Each control valve is drawn as the station it is: hand
+    # isolation valves either side so the valve can be changed out under a line
+    # break, the reduction down to its own smaller body between the upstream
+    # isolation and the valve, a bypass over the top so the unit keeps running
+    # while it is out, and a drain either side of it so the isolated section can
+    # be emptied first. There is no expander in the package (issue #96), so each
+    # station carries its upstream reducer and the issued sheet's matching
+    # expander is left off.
     xv = fs.add(units.Valve("XV-301", variant="solenoid",
                             description="Feed Trip Valve"))
     meter = fs.add(units.Fitting("FE-313", variant="rotameter",
                                  description="Feed Flow Element"))
+
+    hv301a = fs.add(units.Valve("HV-301A", description="Overhead Isolation Valve"))
+    rd301 = fs.add(units.Reducer("RD-301", description="CV-301-1 Inlet Reducer"))
     cv3011 = fs.add(units.Valve("CV-301-1", variant="control",
                                 description="Overhead Pressure Control Valve"))
+    hv301b = fs.add(units.Valve("HV-301B", description="Overhead Isolation Valve"))
+    hv301c = fs.add(units.Valve("HV-301C", normal_position="closed",
+                                description="CV-301-1 Bypass Valve"))
+    hv301d = fs.add(units.Valve("HV-301D", normal_position="closed",
+                                description="CV-301-1 Upstream Drain Valve"))
+    hv301e = fs.add(units.Valve("HV-301E", normal_position="closed",
+                                description="CV-301-1 Downstream Drain Valve"))
+
     hv303a = fs.add(units.Valve("HV-303A", description="Reflux Isolation Valve"))
     rd303 = fs.add(units.Reducer("RD-303", description="CV-303 Inlet Reducer"))
     cv303 = fs.add(units.Valve("CV-303", variant="control",
                                description="Reflux Control Valve"))
     hv303b = fs.add(units.Valve("HV-303B", description="Reflux Isolation Valve"))
+    hv303c = fs.add(units.Valve("HV-303C", normal_position="closed",
+                                description="CV-303 Bypass Valve"))
+    hv303d = fs.add(units.Valve("HV-303D", normal_position="closed",
+                                description="CV-303 Upstream Drain Valve"))
+    hv303e = fs.add(units.Valve("HV-303E", normal_position="closed",
+                                description="CV-303 Downstream Drain Valve"))
     # The reflux flow element sits in the run itself: the balloon beside it
     # reads the element, it is not the element. Its tag is written under the run
     # because its transmitter stands over it, and an impulse line drawn up
     # through the tag would be knocked out by the tag's own halo.
     fe303 = fs.add(units.Fitting("FE-303", variant="venturi", label_pos="bottom",
                                  description="Reflux Flow Element"))
+
     hv305a = fs.add(units.Valve("HV-305A", description="Distillate Isolation Valve"))
     rd305 = fs.add(units.Reducer("RD-305", description="CV-305 Inlet Reducer"))
     cv305 = fs.add(units.Valve("CV-305", variant="control",
                                description="Distillate Control Valve"))
     hv305b = fs.add(units.Valve("HV-305B", description="Distillate Isolation Valve"))
+    hv305c = fs.add(units.Valve("HV-305C", normal_position="closed",
+                                description="CV-305 Bypass Valve"))
+    hv305d = fs.add(units.Valve("HV-305D", normal_position="closed",
+                                description="CV-305 Upstream Drain Valve"))
+    hv305e = fs.add(units.Valve("HV-305E", normal_position="closed",
+                                description="CV-305 Downstream Drain Valve"))
+
     cv306 = fs.add(units.Valve("CV-306", variant="control",
                                description="Bottoms Control Valve"))
     nrv306 = fs.add(units.Valve("NRV-306", variant="check",
@@ -135,11 +217,39 @@ def main():
     # isolated from the header without shutting the header down.
     hv311 = fs.add(units.Valve("HV-311", description="C-301 Cooling Water Block Valve"))
     hv315 = fs.add(units.Valve("HV-315", description="HX-301 Cooling Water Block Valve"))
+
     hv308a = fs.add(units.Valve("HV-308A", description="Steam Isolation Valve"))
     rd308 = fs.add(units.Reducer("RD-308", description="CV-308 Inlet Reducer"))
     cv308 = fs.add(units.Valve("CV-308", variant="control",
                                description="Steam Control Valve"))
     hv308b = fs.add(units.Valve("HV-308B", description="Steam Isolation Valve"))
+    hv308c = fs.add(units.Valve("HV-308C", normal_position="closed",
+                                description="CV-308 Bypass Valve"))
+    hv308d = fs.add(units.Valve("HV-308D", normal_position="closed",
+                                description="CV-308 Upstream Drain Valve"))
+    hv308e = fs.add(units.Valve("HV-308E", normal_position="closed",
+                                description="CV-308 Downstream Drain Valve"))
+
+    # The junctions. A tee is drawn as nothing at all — three lines meeting,
+    # the run passing straight through — and carries no tag, so none of these
+    # puts a symbol on the sheet or a row in the equipment list. Four of them
+    # make a station's bypass and its two drains; the fifth is where the drum's
+    # single liquid draw parts into reflux and distillate.
+    t301_bya, t301_dra, t301_drb, t301_byb = (
+        fs.add(units.Tee()), fs.add(units.Tee()),
+        fs.add(units.Tee()), fs.add(units.Tee(branch="inlet")))
+    t303_bya, t303_dra, t303_drb, t303_byb = (
+        fs.add(units.Tee()), fs.add(units.Tee()),
+        fs.add(units.Tee()), fs.add(units.Tee(branch="inlet")))
+    t305_bya, t305_dra, t305_drb, t305_byb = (
+        fs.add(units.Tee()), fs.add(units.Tee()),
+        fs.add(units.Tee()), fs.add(units.Tee(branch="inlet")))
+    t308_bya, t308_dra, t308_drb, t308_byb = (
+        fs.add(units.Tee()), fs.add(units.Tee()),
+        fs.add(units.Tee()), fs.add(units.Tee(branch="inlet")))
+    # The size steps down 100 -> 40 across it, so the run's number breaks here.
+    t_draw = fs.add(units.Tee())
+    t_draw.significant = True
 
     # --- Placement -------------------------------------------------------
     # Pinned by nozzle, not by corner. Every run is named by the elevation of
@@ -159,60 +269,88 @@ def main():
     on_run(meter, 350, feed_y)
 
     # Overhead spine, clear above the tower and the condenser. The pressure
-    # control valve throttles into the condenser, so it stands at the far end of
-    # the run rather than over the tower.
-    overhead_y = 140.0
-    cond.pin(x=880, y=180)
-    cond_shell_in_x = 880 + nozzle_at(cond, "shell_in")[0]
-    cw_cond_y = 180 + nozzle_at(cond, "tube_in")[1]
-    on_run(cv3011, 800, overhead_y)
+    # control valve throttles into the condenser, so its station stands at the
+    # far end of the run rather than over the tower. A bypass tee takes its
+    # branch north, so it is flipped top-to-bottom; a drain tee takes its branch
+    # south and is not.
+    overhead_y = 130.0
+    cond_x, cond_y = 1010.0, 210.0
+    cond.pin(x=cond_x, y=cond_y)
+    cond_shell_in_x = cond_x + nozzle_at(cond, "shell_in")[0]
+    cw_cond_y = cond_y + nozzle_at(cond, "tube_in")[1]
+    lay_out([(t301_bya, "y"), (hv301a, False), (t301_dra, False), (rd301, False),
+             (cv3011, False), (t301_drb, False), (hv301b, False), (t301_byb, "y")],
+            720, overhead_y)
     cv3011_top = overhead_y - nozzle_at(cv3011, "inlet")[1]
+    # The bypass valve stands over the station's reducer. The issued sheet puts
+    # it over the control valve, which is where the controller's output crosses
+    # the leg on its way down to the actuator, and a valve body drawn under that
+    # crossing is a valve body with a signal line through it. Each station moves
+    # its own valve along the leg to wherever nothing else is already crossing.
+    on_run(hv301c, rd301.pin_.x, overhead_y - BYPASS_RISE)
+    on_drain(hv301d, branch_x(t301_dra), overhead_y)
+    on_drain(hv301e, branch_x(t301_drb), overhead_y)
     on_run(cws_cond, 150, cw_cond_y, port="outlet")
     on_run(hv311, 320, cw_cond_y)
-    on_run(cwr_cond, 1480, cw_cond_y, port="inlet")
+    on_run(cwr_cond, 1540, cw_cond_y, port="inlet")
 
     # Drum hung so its top inlet sits under the condenser's drain, which makes
     # that run a straight drop. The inlet is authored on more than one face and
     # the top one is named here, so the nozzle the drum is positioned by is the
     # nozzle the condensate arrives at.
     drum.nozzle("inlet", "N")
-    drum_x = 880 + nozzle_at(cond, "shell_out")[0] - nozzle_at(drum, "inlet")[0]
-    drum.pin(x=drum_x, y=270)
+    drum_x = cond_x + nozzle_at(cond, "shell_out")[0] - nozzle_at(drum, "inlet")[0]
+    drum.pin(x=drum_x, y=280)
     drum_draw_x = drum_x + nozzle_at(drum, "outlet")[0]
-    split.pin(x=drum_draw_x - split_w / 2, y=350, orientation=90)  # inlet up, outlets down
 
     # Reflux station, running right to left, so it is mirrored end to end and
     # every device takes flow on its east face. The flow element is last, next
     # to the tower, where it reads the metered stream and not the leakage past
-    # an isolation valve.
+    # an isolation valve; it stands outside the bypass, so it reads the reflux
+    # whether the station is in service or bypassed.
     reflux_run_y = 440.0
-    on_run(hv303a, 910, reflux_run_y, mirrored=True)
-    on_run(rd303, 855, reflux_run_y, mirrored=True)
-    on_run(cv303, 785, reflux_run_y, mirrored=True)
-    on_run(hv303b, 715, reflux_run_y, mirrored=True)
-    on_run(fe303, 655, reflux_run_y, mirrored=True)
+    lay_out([(fe303, True), (t303_byb, "xy"), (hv303b, True), (t303_drb, True),
+             (cv303, True), (rd303, True), (t303_dra, True), (hv303a, True),
+             (t303_bya, "xy")],
+            670, reflux_run_y)
+    on_run(hv303c, rd303.pin_.x, reflux_run_y - BYPASS_RISE, mirrored=True)
+    on_drain(hv303d, branch_x(t303_dra, True), reflux_run_y)
+    on_drain(hv303e, branch_x(t303_drb, True), reflux_run_y)
+
+    # The drum's draw parts into reflux and distillate below the vessel. That
+    # junction is a tee and not a piece of plant: it carries no tag on the
+    # issued sheet and nothing in its equipment list. The run drops on past it
+    # to the distillate station and the branch leaves west onto the reflux run,
+    # which is the way the issued sheet draws it.
+    t_draw.pin(orientation=90)
+    t_draw.pin(x=drum_draw_x - nozzle_at(t_draw, "inlet", orientation=90)[0],
+               y=reflux_run_y - nozzle_at(t_draw, "branch", orientation=90)[1])
 
     # Distillate station, left to right, and well below the reflux run: the two
-    # legs of the same tee read as two lines rather than as one. The station is
-    # far enough along the run for the line number to be drawn on its
-    # horizontal, since a number is drawn on the longest segment it has.
+    # legs of the same tee read as two lines rather than as one.
     dist_y = 510.0
-    on_run(hv305a, 1110, dist_y)
-    on_run(rd305, 1170, dist_y)
-    on_run(cv305, 1225, dist_y)
-    on_run(hv305b, 1295, dist_y)
-    on_run(ae_prod, 1480, dist_y, port="inlet")
+    lay_out([(t305_bya, "y"), (hv305a, False), (t305_dra, False), (rd305, False),
+             (cv305, False), (t305_drb, False), (hv305b, False), (t305_byb, "y")],
+            1147, dist_y)
+    on_run(hv305c, rd305.pin_.x, dist_y - BYPASS_RISE)
+    on_drain(hv305d, branch_x(t305_dra), dist_y)
+    on_drain(hv305e, branch_x(t305_drb), dist_y)
+    on_run(ae_prod, 1540, dist_y, port="inlet")
 
     # Reboiler off the tower sump; steam spine on its tube inlet, which is the
     # channel head the heating medium enters.
     reb.pin(x=700, y=580)
     steam_y = 580 + nozzle_at(reb, "tube_in")[1]
     on_run(steam, 150, steam_y, port="outlet")
-    on_run(hv308a, 240, steam_y)
-    on_run(rd308, 300, steam_y)
-    on_run(cv308, 350, steam_y)
-    on_run(hv308b, 420, steam_y)
-    on_run(condensate, 1480, 580 + nozzle_at(reb, "tube_out")[1], port="inlet")
+    lay_out([(t308_bya, "y"), (hv308a, False), (t308_dra, False), (rd308, False),
+             (cv308, False), (t308_drb, False), (hv308b, False), (t308_byb, "y")],
+            260, steam_y)
+    # TIC-307's balloons stand over this station's reducer and its output crosses
+    # the leg on the way down, so this bypass valve moves along to the far end.
+    on_run(hv308c, hv308b.pin_.x, steam_y - BYPASS_RISE)
+    on_drain(hv308d, branch_x(t308_dra), steam_y)
+    on_drain(hv308e, branch_x(t308_drb), steam_y)
+    on_run(condensate, 1540, 580 + nozzle_at(reb, "tube_out")[1], port="inlet")
 
     # Bottoms over the weir, cooled and sent off the sheet. The bottoms valve
     # is flipped so its operator faces the controller standing below it.
@@ -226,10 +364,17 @@ def main():
     cooled_y = 805.0
     on_run(cws_cool, 150, cw_cool_y, port="outlet")
     on_run(hv315, 320, cw_cool_y)
-    on_run(cwr_cool, 1480, cw_cool_y, port="inlet")
-    on_run(bottoms_prod, 1480, cooled_y, port="inlet")
+    on_run(cwr_cool, 1540, cw_cool_y, port="inlet")
+    on_run(bottoms_prod, 1540, cooled_y, port="inlet")
 
     # --- Process lines ---------------------------------------------------
+    # A station is one line, and that goes for what hangs off it. The bypass is
+    # the same service, size and spec as the run it goes round, and a drain small
+    # enough to be governed by the piping class is part of the line it drains
+    # rather than a line of its own: the size field of a line number is the
+    # line's size and not the size of every branch on it. So all three branches
+    # take the station's number, which is why the issued sheet writes that number
+    # once and writes nothing at all against a bypass or a drain.
     fs.connect(fb_feed.outlet, xv.inlet, service="FB", sequence=301, size=200,
                spec="160-SS")
     fs.connect(xv.outlet, meter.inlet)
@@ -242,9 +387,24 @@ def main():
     # A line number is drawn on the longest segment of its run, and the
     # cooling-water header crosses this one's riser, so the run's horizontal is
     # kept the longer of the two and the number is read clear of the crossing.
-    vapour = fs.connect(col.distillate, cv3011.inlet, service="AE", sequence=302,
+    vapour = fs.connect(col.distillate, t301_bya.inlet, service="AE", sequence=302,
                         size=300, spec="80-SS").via([(col_axis, overhead_y)])
-    fs.connect(cv3011.outlet, cond.shell_in).via([(cond_shell_in_x, overhead_y)])
+    fs.connect(t301_bya.outlet, hv301a.inlet)
+    fs.connect(hv301a.outlet, t301_dra.inlet)
+    fs.connect(t301_dra.outlet, rd301.inlet)
+    fs.connect(rd301.outlet, cv3011.inlet)
+    fs.connect(cv3011.outlet, t301_drb.inlet)
+    fs.connect(t301_drb.outlet, hv301b.inlet)
+    fs.connect(hv301b.outlet, t301_byb.inlet)
+    fs.connect(t301_byb.outlet, cond.shell_in).via([(cond_shell_in_x, overhead_y)])
+    fs.connect(t301_bya.branch, hv301c.inlet, service="AE", sequence=302, size=300,
+               spec="80-SS")
+    fs.connect(hv301c.outlet, t301_byb.branch)
+    fs.connect(t301_dra.branch, hv301d.inlet, service="AE", sequence=302, size=300,
+               spec="80-SS")
+    fs.connect(t301_drb.branch, hv301e.inlet, service="AE", sequence=302, size=300,
+               spec="80-SS")
+
     fs.connect(cond.shell_out, drum.inlet, service="AE", sequence=304, size=150,
                spec="80-SS")
     fs.connect(cws_cond.outlet, hv311.inlet, service="CWS", sequence=311, size=150,
@@ -252,25 +412,48 @@ def main():
     fs.connect(hv311.outlet, cond.tube_in)
     cw_return = fs.connect(cond.tube_out, cwr_cond.inlet, service="CWR",
                            sequence=312, size=150,
-                           spec="150-CS").via([(1200, cw_cond_y)])
+                           spec="150-CS").via([(1300, cw_cond_y)])
 
-    fs.connect(drum.outlet, split.inlet, service="AE", sequence=309, size=100,
+    fs.connect(drum.outlet, t_draw.inlet, service="AE", sequence=309, size=100,
                spec="80-SS")
-    # The left-hand outlet takes the reflux and the right-hand one the
-    # distillate, so the two lines leave the tee without crossing.
-    fs.connect(split.out_2, hv303a.inlet, service="AE", sequence=303, size=80,
+    # The branch takes the reflux and the run carries on down to the distillate,
+    # so the two lines leave the tee without crossing.
+    fs.connect(t_draw.branch, t303_bya.inlet, service="AE", sequence=303, size=80,
                spec="80-SS")
-    fs.connect(hv303a.outlet, rd303.inlet)
+    fs.connect(t303_bya.outlet, hv303a.inlet)
+    fs.connect(hv303a.outlet, t303_dra.inlet)
+    fs.connect(t303_dra.outlet, rd303.inlet)
     fs.connect(rd303.outlet, cv303.inlet)
-    fs.connect(cv303.outlet, hv303b.inlet)
-    fs.connect(hv303b.outlet, fe303.inlet)
+    fs.connect(cv303.outlet, t303_drb.inlet)
+    fs.connect(t303_drb.outlet, hv303b.inlet)
+    fs.connect(hv303b.outlet, t303_byb.inlet)
+    fs.connect(t303_byb.outlet, fe303.inlet)
     fs.connect(fe303.outlet, col.reflux_in, tear_hint=True)
-    fs.connect(split.out_1, hv305a.inlet, service="AE", sequence=305, size=40,
+    fs.connect(t303_bya.branch, hv303c.inlet, service="AE", sequence=303, size=80,
                spec="80-SS")
-    fs.connect(hv305a.outlet, rd305.inlet)
+    fs.connect(hv303c.outlet, t303_byb.branch)
+    fs.connect(t303_dra.branch, hv303d.inlet, service="AE", sequence=303, size=80,
+               spec="80-SS")
+    fs.connect(t303_drb.branch, hv303e.inlet, service="AE", sequence=303, size=80,
+               spec="80-SS")
+
+    fs.connect(t_draw.outlet, t305_bya.inlet, service="AE", sequence=305, size=40,
+               spec="80-SS")
+    fs.connect(t305_bya.outlet, hv305a.inlet)
+    fs.connect(hv305a.outlet, t305_dra.inlet)
+    fs.connect(t305_dra.outlet, rd305.inlet)
     fs.connect(rd305.outlet, cv305.inlet)
-    fs.connect(cv305.outlet, hv305b.inlet)
-    fs.connect(hv305b.outlet, ae_prod.inlet)
+    fs.connect(cv305.outlet, t305_drb.inlet)
+    fs.connect(t305_drb.outlet, hv305b.inlet)
+    fs.connect(hv305b.outlet, t305_byb.inlet)
+    fs.connect(t305_byb.outlet, ae_prod.inlet)
+    fs.connect(t305_bya.branch, hv305c.inlet, service="AE", sequence=305, size=40,
+               spec="80-SS")
+    fs.connect(hv305c.outlet, t305_byb.branch)
+    fs.connect(t305_dra.branch, hv305d.inlet, service="AE", sequence=305, size=40,
+               spec="80-SS")
+    fs.connect(t305_drb.branch, hv305e.inlet, service="AE", sequence=305, size=40,
+               spec="80-SS")
 
     sump_x = 700 + nozzle_at(reb, "shell_in")[0]
     boilup_x = 700 + nozzle_at(reb, "shell_out")[0]
@@ -279,12 +462,23 @@ def main():
     boilup = fs.connect(reb.shell_out, col.boilup_in, service="FB", sequence=310,
                         size=300, spec="160-SS",
                         tear_hint=True).via([(boilup_x, 535), (595, 535), (595, boilup_y)])
-    fs.connect(steam.outlet, hv308a.inlet, service="HPS", sequence=308, size=100,
+    fs.connect(steam.outlet, t308_bya.inlet, service="HPS", sequence=308, size=100,
                spec="300-CS")
-    fs.connect(hv308a.outlet, rd308.inlet)
+    fs.connect(t308_bya.outlet, hv308a.inlet)
+    fs.connect(hv308a.outlet, t308_dra.inlet)
+    fs.connect(t308_dra.outlet, rd308.inlet)
     fs.connect(rd308.outlet, cv308.inlet)
-    fs.connect(cv308.outlet, hv308b.inlet)
-    fs.connect(hv308b.outlet, reb.tube_in)
+    fs.connect(cv308.outlet, t308_drb.inlet)
+    fs.connect(t308_drb.outlet, hv308b.inlet)
+    fs.connect(hv308b.outlet, t308_byb.inlet)
+    fs.connect(t308_byb.outlet, reb.tube_in)
+    fs.connect(t308_bya.branch, hv308c.inlet, service="HPS", sequence=308, size=100,
+               spec="300-CS")
+    fs.connect(hv308c.outlet, t308_byb.branch)
+    fs.connect(t308_dra.branch, hv308d.inlet, service="HPS", sequence=308, size=100,
+               spec="300-CS")
+    fs.connect(t308_drb.branch, hv308e.inlet, service="HPS", sequence=308, size=100,
+               spec="300-CS")
     fs.connect(reb.tube_out, condensate.inlet, service="HPR", sequence=317, size=80,
                spec="300-CS")
 
@@ -337,11 +531,11 @@ def main():
 
     # The transmitter reads the element sitting in the line, so it hangs off
     # that unit rather than off the pipe. Both balloons stand over the reflux
-    # run, on the side the two lines that reach them come from: CV-303's
-    # actuator is on the crown of the valve, so the output drops onto it, and
-    # the cascade comes down from TIC-302 without having to cross the run to
-    # find them.
-    ft303 = fs.add_instrument("FT", 303, on=fe303, at="N", offset=52)
+    # run, clear of the bypass leg crossing beneath them, on the side the two
+    # lines that reach them come from: CV-303's actuator is on the crown of the
+    # valve, so the output drops onto it, and the cascade comes down from
+    # TIC-302 without having to cross the run to find them.
+    ft303 = fs.add_instrument("FT", 303, on=fe303, at="N", offset=90)
     fic303 = fs.add_instrument("FIC", 303, on=ft303, at="E", offset=70, variant="shared")
     fic303.nozzle("sig_out", "E")   # the valve it strokes stands below and right
     # The measurement lands on the flow controller's pv and the temperature
@@ -355,8 +549,8 @@ def main():
     lic304 = fs.add_instrument("LIC", 304, on=lt304, at="E", offset=66, variant="shared")
     lic304.nozzle("sig_out", "S")
     lah = fs.add_instrument("LAH", 304, on=lic304, at="E", offset=46)
-    fs.add_instrument("LAL", 304, on=lah, at="E", offset=46)
-    fs.add_instrument("I", 1, on=lic304, at="N", offset=40, variant="sis")
+    lal = fs.add_instrument("LAL", 304, on=lah, at="E", offset=46)
+    fs.add_instrument("I", 1, on=lal, at="E", offset=40, variant="sis")
     fs.connect(lt304.sig_out, lic304.sig_in, kind="electric")
     fs.connect(lic304.sig_out, cv305.actuator, kind="pneumatic")
 
@@ -414,6 +608,9 @@ def main():
         "Vent",
         "Distillation Tower Flush Line",
     ], align="bottom-left"))
+    # A darkened valve body is not an ISA-5.1 symbol — the standard hands manual
+    # valve depiction to the piping group — so clauses 2.8.1(b)(1) and 5.2.5 of
+    # ISA-5.1 make declaring it here mandatory rather than optional.
     fs.add_annotation(legend({
         "SS": "Stainless Steel 316L",
         "CS": "Carbon Steel A106-B",
@@ -423,6 +620,7 @@ def main():
         "CWRH": "Cooling Water Return Header",
         "HPSSH": "High Pressure Steam Supply Header",
         "HPSRH": "High Pressure Steam Return Header",
+        "NC": "Normally Closed (darkened valve body)",
     }, align="top-left"))
 
     fs.render(out("ethanol_pid.svg"), page_size="A3", border="zone",

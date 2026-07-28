@@ -11,7 +11,15 @@ ethanol, part of it returned to the tower as reflux and the rest taken as
 product, and whose bottoms are cooled in HX-301 before the biosolids are
 flocculated out: the flocculant is made up with RO water in M-301, dosed into
 the beer in M-302, and the slurry is dewatered in the membrane filter press
-F-301, which sends filtrate to effluent and cake off the sheet.
+F-301, which sends filtrate to effluent and drops its cake onto the belt
+BC-301 to leave the sheet.
+
+Two places on it are junctions rather than plant, and both are drawn as the
+:class:`~pandid.units.Tee` they are: where the drum's single draw parts into
+reflux and distillate, and where the press's discharge parts into filtrate and
+cake. A tee is drawn as nothing at all and carries no tag, so neither one puts
+a symbol on the drawing or a row in the equipment list — which is what the
+issued sheet does with both of them.
 
 Everything a real drawing carries is on it: the zone-ruled A3 frame, the title
 strip with its revision history, an equipment list docked top-centre, off-page
@@ -73,11 +81,13 @@ def main():
                                       description="T-301 Overhead Condenser"))
     drum = fs.add(units.Vessel("V-301", variant="horizontal", width=110,
                                height=36, description="T-301 Reflux Drum"))
-    # The drum has one liquid draw and a nozzle takes one stream, so the tee
-    # where the reflux parts from the distillate is drawn as the junction it is.
-    refl_w = 50.0
-    refl = fs.add(units.Splitter("SP-302", n_outlets=2, width=refl_w, height=refl_w,
-                                 description="V-301 Reflux Split"))
+    # The drum has one liquid draw and a nozzle takes one stream, so the point
+    # where the reflux parts from the distillate is a tee: one fluid, two
+    # destinations, and a junction in the piping rather than a piece of plant.
+    # It is drawn as nothing at all and carries no tag, which is how the issued
+    # sheet draws it. A Splitter here would put an item on the drawing and a row
+    # in the equipment list that the plant does not contain.
+    refl = fs.add(units.Tee())
     # The sump drains into the kettle; what boils returns to the tower as
     # boilup and what does not overflows the weir as the bottoms product.
     reb = fs.add(units.HeatExchanger("E-302", variant="kettle", width=120,
@@ -92,11 +102,16 @@ def main():
                               description="Beer Flocculant Mixer Tank"))
     press = fs.add(units.Filter("F-301", variant="press", width=120, height=60,
                                 description="Membrane Pressure Filter Press"))
-    # Filtrate and cake leave the press on separate legs, so its discharge is
-    # drawn as the junction where the two products part and each takes a stream
-    # number of its own.
-    disch = fs.add(units.Splitter("SP-301", n_outlets=2,
-                                  description="F-301 Discharge"))
+    # Filtrate and cake leave the press on separate legs. That parting is a tee
+    # as well, and not the same tee as the reflux one: the size and the service
+    # both change across it, so it is marked ``significant`` and the run's number
+    # breaks there. The cake goes to the belt that carries it off the sheet,
+    # which *is* a tagged item and is scheduled as one.
+    disch = fs.add(units.Tee())
+    disch.significant = True
+    belt = fs.add(units.Conveyor("BC-301", length=120,
+                                 description="Filter Cake Conveyor Belt"))
+    belt.nozzle("feed", "N")            # cake is dropped onto the belt, not piped
 
     ethanol = fs.add(units.Product("Azeotropic Ethanol", reference="PFD-302"))
     effluent = fs.add(units.Product("Wastewater", reference="PCD-302"))
@@ -108,10 +123,15 @@ def main():
     # matching those fractions. Everything below is either a dead-straight run
     # or a single corner, bar the sump line, which leaves the tower downward and
     # has to climb back into the kettle's underside.
+    # A tee is drawn as a 12-unit square with a port on the middle of each face
+    # it uses, so half its width is the whole of the offset from a junction to
+    # the corner it is pinned by.
+    tee_w = 12.0
     col_x, col_y, col_w, col_h = 430.0, 180.0, 110.0, 250.0
     col.pin(x=col_x, y=col_y)
     col_axis = col_x + col_w / 2                    # distillate / bottoms line
     col_feed_y = col_y + 0.65 * col_h               # feed nozzle, down the shell
+    col_reflux_y = col_y + 0.175 * col_h            # reflux return, up the shell
 
     broth.pin(x=140, y=col_feed_y - 25)             # flag tip meets the feed nozzle
 
@@ -121,15 +141,16 @@ def main():
     cond.pin(x=col_axis - cond_w / 2, y=56, mirrored="y")
 
     # Drum clear to the right of the tower, so the condensate leaves the
-    # condenser's crown, runs over the top of the sheet and drops onto it. It
-    # is hung high enough that its draw falls into the reflux split, and the
-    # split high enough that both legs leave it falling: reflux back into the
-    # tower's top nozzle, distillate on across the sheet.
+    # condenser's crown, runs over the top of the sheet and drops onto it. Its
+    # draw falls straight into the tee, which is set on the elevation of the
+    # tower's reflux nozzle: the quarter turn puts the run down the page and the
+    # branch out west, so the reflux leaves for the tower dead level with the
+    # nozzle it returns to and the distillate carries on down and across.
     drum_x, drum_y, drum_w = 700.0, 100.0, 110.0
     drum.pin(x=drum_x, y=drum_y)
     drum_draw_x = drum_x + (68 / 91.5) * drum_w      # liquid draw down the shell
-    refl.pin(x=drum_draw_x - refl_w / 2, y=165, orientation=90)  # inlet up, outlets down
-    ethanol.pin(x=1330, y=230)
+    refl.pin(x=drum_draw_x - tee_w / 2, y=col_reflux_y - tee_w / 2, orientation=90)
+    ethanol.pin(x=1330, y=250)
 
     # Kettle off the tower bottom, low enough that the boilup rises into the
     # return nozzle instead of having to drop back down to it.
@@ -152,10 +173,16 @@ def main():
     water.pin(x=140, y=mix1_y + 0.573 * mix1_h - 25)
 
     mix2.pin(x=1120, y=hx_axis_y - 15)              # in_1 level with the cooler
+    press_h = 60.0
     press.pin(x=1250, y=hx_axis_y - 20)
-    disch.pin(x=1420, y=hx_axis_y - 15)
-    effluent.pin(x=1540, y=hx_axis_y - 25)          # flag tip on the filtrate leg
-    cake.pin(x=1540, y=700)
+    press_out_y = hx_axis_y - 20 + press_h / 2      # discharge, mid-shell
+    disch.pin(x=1400, y=press_out_y - tee_w / 2)
+    effluent.pin(x=1540, y=press_out_y - 25)        # flag tip on the filtrate leg
+    # The belt runs under the branch, so the cake drops onto its tail rather
+    # than being piped into its end, and throws off into the flag at its head.
+    belt_y, belt_tail = 715.0, 10.0                 # tail nozzle, in from the end
+    belt.pin(x=disch.pin_.x + tee_w / 2 - belt_tail, y=belt_y)
+    cake.pin(x=1546, y=belt_y + belt_tail - 25)
 
     # --- Connections -----------------------------------------------------
     # Declared in stream-number order, which is the order the table reads.
@@ -169,11 +196,11 @@ def main():
     fs.connect(floc.outlet, mix1.feed_1, name="S-303")
     fs.connect(water.outlet, mix1.feed_2, name="S-304")
 
-    fs.connect(refl.out_1, ethanol.inlet, name="S-305")
+    fs.connect(refl.outlet, ethanol.inlet, name="S-305")
     fs.connect(col.distillate, cond.shell_in, name="S-305")
     fs.connect(cond.shell_out, drum.inlet, name="S-305")
     fs.connect(drum.outlet, refl.inlet, name="S-305")
-    fs.connect(refl.out_2, col.reflux_in, name="S-305", tear_hint=True)
+    fs.connect(refl.branch, col.reflux_in, name="S-305", tear_hint=True)
 
     fs.connect(col.bottoms, reb.shell_in, name="S-306")
     fs.connect(reb.shell_out, col.boilup_in, name="S-306", tear_hint=True)
@@ -184,8 +211,9 @@ def main():
 
     fs.connect(mix2.outlet, press.inlet, name="S-309")
     fs.connect(press.outlet, disch.inlet, name="S-309")
-    fs.connect(disch.out_1, effluent.inlet, name="S-310")
-    fs.connect(disch.out_2, cake.inlet, name="S-501")
+    fs.connect(disch.outlet, effluent.inlet, name="S-310")
+    fs.connect(disch.branch, belt.feed, name="S-501")
+    fs.connect(belt.discharge, cake.inlet, name="S-501")
 
     for s in fs.streams:
         values = PROPERTIES.get(s.name)
@@ -213,11 +241,13 @@ def main():
     )
 
     # --- Sheet furniture -------------------------------------------------
-    # The list is named row by row: the condenser, drum and reboiler are tagged
-    # plant on this sheet and belong on it, while the reflux and discharge
-    # junctions are branches in the piping and do not.
+    # The list is named row by row: the condenser, drum, reboiler and cake belt
+    # are tagged plant on this sheet and belong on it, while the reflux and
+    # discharge junctions are tees � bulk piping bought by the line � and carry
+    # no tag to schedule.
     fs.add_annotation(equipment_list(fs, align="top", include=[
         "T-301", "E-301", "V-301", "E-302", "HX-301", "M-301", "M-302", "F-301",
+        "BC-301",
     ]))
     fs.add_annotation(TableBox(
         title="UTILITIES SUMMARY",

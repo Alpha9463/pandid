@@ -177,10 +177,15 @@ furniture rules to the page edges and the drawing is fitted into what is left.
 
 The process is the front end of a fuel-ethanol purification train: beer column
 T-301 with its overhead condenser, reflux drum and kettle reboiler, the drum's
-draw split between the reflux the tower needs and the distillate that leaves the
+draw parting into the reflux the tower needs and the distillate that leaves the
 sheet, the bottoms
 cooled in HX-301, flocculant made up with RO water in M-301, dosed into the beer
-in M-302, and the slurry dewatered in the membrane filter press F-301. Six
+in M-302, and the slurry dewatered in the membrane filter press F-301, whose
+cake drops onto the belt BC-301. Both partings are `Tee`s — the reflux one
+carries its number straight through, the press one is `significant` and breaks
+it, because the size and the service both change there — and a tee is drawn as
+nothing at all and tagged nowhere, so neither puts a symbol on the sheet or a
+row in the equipment list. Six
 off-page connectors carry the drawing they tie into, the equipment list is named
 row by row with `include=`, a `TableBox` carries the utilities summary above the
 title strip, and the stream table along the foot is sectioned into a "Mass
@@ -200,10 +205,19 @@ drawn as the piping and instrumentation diagram (`diagram="p&id"`, so no
 process line carries an arrowhead; compare `10`, which is the same plant as a
 PFD and keeps them). Every line is identified by its
 line number, and one number runs through the hand valves, the reducer and the
-control valve of a station because a station is one line. The reflux, distillate
-and steam control valves are each drawn as a full station — isolation valve,
-reducer, control valve, isolation valve — and the reflux flow element `FE-303`
-is a `Fitting` sitting in the run with `FT-303` standing over it. Five loops close on
+control valve of a station because a station is one line. The overhead, reflux,
+distillate and steam control valves are each drawn as a full station —
+isolation valve, reducer, control valve, isolation valve, a bypass over the top
+on its own `normal_position="closed"` valve and a drain off the underside either
+side of the control valve — with `Tee`s making the four branches, drawn as
+nothing at all and scheduled nowhere. The `NC` legend row is what ISA-5.1
+clause 2.8.1(b)(1) requires of a sheet that darkens a valve body, since the fill
+is a PIP PIC001 convention rather than an ISA one. The reflux flow element
+`FE-303`
+is a `Fitting` sitting in the run with `FT-303` standing over it. The
+cooling-water and steam tie-ins are `header=True` flags, so both supplies read
+`CWSH` and both returns `CWRH`, matching the legend rows that explain them.
+Five loops close on
 a final control element —
 `PIC-301` on the tower overhead, `LIC-304` on the distillate, `TIC-307` on the
 steam, `LIC-306` on the bottoms draw, and `TT-302 → TIC-302 → FIC-303` cascading
