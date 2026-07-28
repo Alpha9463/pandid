@@ -360,10 +360,23 @@ fe = fs.add(units.Fitting("FE-101", variant="venturi"))
 ft = fs.add_instrument("FT", 101, on=fe, at="N", offset=70)
 ```
 
-`Reducer` has three variants. `concentric` is the trapezoid a piping drawing
-draws; `eccentric` is flat on top with its small end on a lowered centreline,
-which is what goes on a pump suction so vapour cannot collect against the roof
-of the line. The `default` is a cone tapering to a point.
+`Reducer` is the fitting that changes a line's size, and its variants are the
+body style: `concentric` (the default) is the trapezoid a piping drawing draws,
+symmetric about the run; `eccentric` is flat on top, so the two ends share a
+roof and the small one's centreline is the higher of the two. That is what goes
+on a pump suction, where a concentric body would leave a pocket for vapour to
+collect in against the roof of the line. `pin(mirrored="y")` rolls it over, flat
+on the bottom, for a line that has to drain.
+
+Which way the cone points is `large_end`, not the variant. A reducer's wide face
+is its `inlet` by default, which reduces the line; `large_end="outlet"` is the
+same fitting piped the other way round, which expands it. A control valve
+station has both.
+
+```python
+rd = fs.add(units.Reducer("RD-306A"))                        # into the valve
+ex = fs.add(units.Reducer("RD-306B", large_end="outlet"))    # back out of it
+```
 
 `Ejector` is separate because it has three connections (`motive`, `suction`,
 `discharge`). `Vent` and `Funnel` have one each: `Vent` is a stack open to
@@ -816,8 +829,9 @@ equipment list), `reference` (a boundary flag's off-page drawing), explicit
 `width`/`height`, `label_pos`, `significant` (break the stream or line number at
 this inline item), `n_inlets` / `n_outlets` for `Mixer` / `Splitter`,
 `n_feeds` for `Column` / `Reactor`, `length` for `Conveyor`, `branch`
-(`outlet` / `inlet`) for `Tee`, and `normal_position` (`open` / `closed`) for
-`Valve` and for `Fitting`'s `blind`.
+(`outlet` / `inlet`) for `Tee`, `large_end` (`inlet` / `outlet`) for `Reducer`,
+and `normal_position` (`open` / `closed`) for `Valve` and for `Fitting`'s
+`blind`.
 
 **`pin` / `port_faces`**: `pin` mirrors `pin()` with `x`/`y` (absolute), `col`/`row`
 (grid), `orientation` (`0`/`90`/`180`/`270`) and `mirrored` (`x`/`y`/`xy`).

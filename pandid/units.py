@@ -571,18 +571,83 @@ class Blower(Unit):
 
 
 class Reducer(Unit):
-    """Pipe reducer/expander.
+    """The fitting that changes a line's size: a reducer, or an expander.
 
-    Variants: ``"default"`` (a cone tapering to a point), ``"concentric"`` (the
-    trapezoid a piping drawing draws) and ``"eccentric"``, flat on top so its
-    small end sits on a lower centreline than its large end. The eccentric body
-    is what goes on a pump suction, where a concentric one would trap vapour
-    against the roof of the line; its ``outlet`` is on that lowered centreline
-    rather than at mid-height.
+    Variants are the body style. ``"concentric"`` is the trapezoid a piping
+    drawing draws, symmetric about the run's centreline, and ``"default"`` draws
+    it. ``"eccentric"`` is flat along one side, so the small end sits on a
+    different centreline from the large one; see ``mirrored`` below for which
+    side.
+
+    ``large_end`` says which of the two nozzles is on the wide face, and so
+    which way the cone points:
+
+    ======================  ==================================================
+    ``large_end``           what the fitting does
+    ======================  ==================================================
+    ``"inlet"`` (default)   a **reduction**: the run enters wide and leaves
+                            narrow, as it does going into a control valve
+    ``"outlet"``            an **expansion**: the run enters narrow and leaves
+                            wide, as it does coming back out of one
+    ======================  ==================================================
+
+    It is one fitting either way: the same casting, piped round the other way,
+    which is why this is a property of the unit and not a second variant or a
+    second class. What changes is the artwork and which end each nozzle is on;
+    the run still goes ``inlet`` to ``outlet``, so a station reads
+
+    .. code-block:: python
+
+        fs.connect(hv.outlet, rd.inlet)      # Reducer("RD-306A")
+        fs.connect(rd.outlet, cv.inlet)      # the control valve
+        fs.connect(cv.outlet, ex.inlet)      # Reducer("RD-306B", large_end="outlet")
+
+    :meth:`~Unit.pin` cannot say this instead. ``mirrored="x"`` turns the
+    drawing *and* its nozzles over together, so the run would enter the east
+    face and leave the west one, drawing the line backwards through the fitting,
+    which is the thing this argument exists to avoid.
+
+    **Eccentric bodies.** The stencil draws the eccentric reducer **flat on
+    top**, which is the pump suction arrangement: a concentric body there leaves
+    a pocket against the roof of the line for vapour to collect in and break the
+    pump's suction. Flat on the bottom is the same fitting rolled over, for a
+    line that has to drain, and it is a placement rather than another symbol:
+    ``pin(mirrored="y")`` turns the body top-to-bottom while both nozzles stay
+    on the faces the run enters and leaves by.
     """
 
     kind = "reducer"
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+
+    #: The nozzles the wide face may be on. Not a bool, because the answer names
+    #: a port: "the large end is the outlet" is what an expansion is, and a flag
+    #: called ``expanding`` would have to be read against the flow to be
+    #: understood.
+    LARGE_ENDS = ("inlet", "outlet")
+
+    def __init__(self, name: str, variant: str = "default",
+                 width: float | None = None, height: float | None = None,
+                 label_pos: str | None = None, description: str = "",
+                 reference: str = "", large_end: str = "inlet"):
+        super().__init__(name, variant=variant, width=width, height=height,
+                         label_pos=label_pos, description=description,
+                         reference=reference)
+        self._large_end = "inlet"
+        self.large_end = large_end
+
+    @property
+    def large_end(self) -> str:
+        """``"inlet"`` for a reduction, ``"outlet"`` for an expansion."""
+        return self._large_end
+
+    @large_end.setter
+    def large_end(self, value: str) -> None:
+        if value not in self.LARGE_ENDS:
+            raise ValueError(
+                f"{self.name}: large_end names the nozzle on the wide face and is "
+                f"{' or '.join(repr(end) for end in self.LARGE_ENDS)}, got {value!r}"
+            )
+        self._large_end = value
 
 
 class Tee(Unit):

@@ -297,11 +297,11 @@ def register_vendored(registry):
         ports={'inlet': (50.0, 0.0), 'outlet': (50.0, 90.0)},
     ), 'conical')
 
-    # draw.io fittings:Reducer (aspect=variable) -> reducer/default
+    # draw.io piping:Concentric Reducer (aspect=variable) -> reducer/default
     registry.register('reducer', Symbol(
-        svg='<g id="sym_reducer"><g transform="scale(0.25)"><path d="M 0.0 0.0 L 70.0 25.0 L 0.0 50.0 Z" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
-        width=17.5, height=12.5,
-        ports={'inlet': (0.0, 6.2), 'outlet': (17.5, 6.2)},
+        svg='<g id="sym_reducer"><g transform="scale(0.625)"><path d="M 0.0 0.0 L 20.0 5.0 L 20.0 15.0 L 0.0 20.0 Z" fill="none" stroke="#111" stroke-width="3.2"/></g></g>',
+        width=12.5, height=12.5,
+        ports={'inlet': (0.0, 6.2), 'outlet': (12.5, 6.2)},
     ), 'default')
 
     # draw.io piping:Concentric Reducer (aspect=variable) -> reducer/concentric

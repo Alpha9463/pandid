@@ -575,7 +575,7 @@ is a visual style within it. The first name in each list is that kind's
 | `Dryer` | `default`, `fluidized_bed`, `spray` |
 | `Valve` | bodies: `default` (gate), `gate`, `globe`, `ball`, `butterfly`, `check`, `needle`, `three_way`, `control`, `plug`, `pinch`, `angle`, `psv`, `relief`, `bleed`<br>with a drawn operator: `motor`, `solenoid`, `hydraulic`, `pneumatic`, `manual`, `knife`, `butterfly_pneumatic`, `regulator` |
 | `Fitting` | devices: `default` (flanged connection), `flange`, `strainer`, `strainer_cone`, `strainer_y`, `strainer_basket`, `strainer_duplex`, `orifice`, `rotameter`, `rupture_disc`, `sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `bellows`, `blind` (spectacle blind, and the one variant with a [`normal_position`](#spectacle-blinds)), `damper`, `spool`, `static_mixer`, `hose`, `coupling`, `clamped_coupling`, `flame_arrestor`, `flame_arrestor_explosion_proof`, `flame_arrestor_detonation_proof`, `flame_arrestor_fire_resistant`<br>primary flow elements: `venturi`, `flow_nozzle`, `coriolis`, `vortex`, `ultrasonic`, `turbine_meter`, `positive_displacement`, `v_cone`, `wedge`, `target`, `pitot`, `averaging_pitot` |
-| `Reducer` | `default` (cone to a point), `concentric` (trapezoid), `eccentric` |
+| `Reducer` | `default` (the concentric trapezoid), `concentric`, `eccentric`, plus `large_end`, which points the cone |
 | `Vent` | `default` (stack with a weather cap), `exhaust_head`, `breather` |
 | `Instrument` | `default` (field balloon), `panel`, `aux`, `shared`, `computer`, `sis` (diamond in a square, also spelled `logic`), `interlock` (plain diamond) |
 | `Heater`, `Cooler`, `Furnace`, `Turbine`, `Blower`, `Ejector`, `Funnel`, `Conveyor`, `Mixer`, `Splitter`, `Tee`, `Feed`, `Product` | `default` only |
@@ -635,10 +635,39 @@ is the one a differential-pressure loop is usually drawn with. Hang the balloon
 on it with `add_instrument(..., on=element)`, and pass `offset=0` to draw the
 balloon sitting on the line rather than beside it.
 
-`Reducer(variant="eccentric")` is flat on top, so its small end sits on a lower
-centreline than its large end. That is the reducer a pump suction is drawn with,
-where a concentric one would trap vapour against the roof of the line. Its
-`outlet` is on the lowered centreline and not at mid-height.
+`Reducer(variant="eccentric")` is flat on top, so the two ends share a roof and
+the small end's centreline is the higher of the two. That is the reducer a pump
+suction is drawn with, where a concentric one would leave a pocket for vapour to
+collect in against the roof of the line. Its `outlet` is on that raised
+centreline and not at mid-height. Flat on the *bottom* is the same fitting
+rolled over, for a line that has to drain, and it is a placement rather than a
+second symbol: `pin(mirrored="y")` turns the body top-to-bottom while both
+nozzles stay on the faces the run enters and leaves by.
+
+Which way a reducer's cone points is `large_end`, which names the nozzle on the
+wide face:
+
+| `large_end` | what the fitting does |
+| --- | --- |
+| `"inlet"` (default) | a **reduction**: the run enters wide and leaves narrow, going into a control valve |
+| `"outlet"` | an **expansion**: the run enters narrow and leaves wide, coming back out of one |
+
+It is one fitting either way, the same casting piped round the other way, which
+is why it is a property of the unit rather than a second variant or a second
+class. The artwork is mirrored and the two ends trade names, so the run still
+goes `inlet` to `outlet` and a station reads left to right:
+
+```python
+rd = fs.add(units.Reducer("RD-306A", variant="concentric"))
+cv = fs.add(units.Valve("CV-306", variant="control"))
+ex = fs.add(units.Reducer("RD-306B", variant="concentric", large_end="outlet"))
+fs.connect(rd.outlet, cv.inlet)
+fs.connect(cv.outlet, ex.inlet)
+```
+
+`pin(mirrored="x")` cannot say this instead: that mirror turns the drawing *and*
+its nozzles over together, so the run would enter the east face and leave the
+west one, drawn backwards through the fitting.
 
 `Fitting(variant="strainer_y")`, `strainer_basket` and `strainer_duplex` lie in
 the run, with the pipe axis across the top of the symbol and the pocket below

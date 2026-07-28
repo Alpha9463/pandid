@@ -686,6 +686,125 @@ def test_the_reported_column_and_reactor_meet_their_streams():
             )
 
 
+# ---------------------------------------------------------------------------
+# Symbols the registry *derives* rather than registers.
+#
+# A reducer piped the other way round is an expansion, and the drawing for it is
+# built from the reduction's on demand (SymbolRegistry.for_unit), so it is not in
+# ``_SYMBOLS`` and nothing above sees it. It is a drawing a sheet puts ink on
+# either way, so it answers to the same rules: every nozzle on the artwork, in
+# the coordinates it was drawn in and in a box of any shape.
+# ---------------------------------------------------------------------------
+
+#: Every registered reducer, and the expander derived from it.
+_TURNED = [
+    (
+        (kind, variant),
+        sym,
+        default_registry.for_unit(
+            units.Reducer(f"RD-{variant}", variant=variant, large_end="outlet")
+        ),
+    )
+    for (kind, variant), sym in _SYMBOLS
+    if kind == "reducer"
+]
+_TURNED_IDS = [f"{kind}/{variant}" for (kind, variant), _, _ in _TURNED]
+
+
+@pytest.mark.parametrize("entry", _TURNED, ids=_TURNED_IDS)
+def test_a_turned_fittings_ports_lie_on_drawn_geometry(entry):
+    """The whole menu, on the mirrored artwork's own strokes."""
+    (kind, variant), _, turned = entry
+    segments = _collect_segments(turned.svg)
+    for name, faces in turned.port_faces.items():
+        for face, (x, y) in faces.items():
+            d = _nearest_distance((x, y), segments)
+            assert d <= GEOM_TOL, (
+                f"{kind}/{variant} turned end for end: port_faces[{name!r}][{face!r}] "
+                f"at ({x}, {y}) is {d:.1f}u from the nearest drawn stroke "
+                f"(tolerance {GEOM_TOL})"
+            )
+
+
+@pytest.mark.parametrize("entry", _TURNED, ids=_TURNED_IDS)
+def test_a_turned_fitting_keeps_its_box_and_its_faces(entry):
+    """Same box, same two faces, and no two nozzles on one point.
+
+    The box is what the placement machinery sizes against, so a turned fitting
+    that changed shape would move the run it sits in. The faces are what makes
+    it a *turn* rather than a mirror: ``inlet`` stays on the west and ``outlet``
+    on the east, so the flow still crosses the fitting the way it is drawn.
+    """
+    _, sym, turned = entry
+    assert (turned.width, turned.height) == (sym.width, sym.height)
+    assert turned.stretchable == sym.stretchable
+    assert list(turned.port_faces["inlet"]) == ["W"]
+    assert list(turned.port_faces["outlet"]) == ["E"]
+    assert turned.coincident_ports() == []
+    assert turned.symbol_id() != sym.symbol_id()
+
+
+@pytest.mark.parametrize("entry", _TURNED, ids=_TURNED_IDS)
+def test_a_turned_fitting_opens_out_where_the_reduction_closes_in(entry):
+    """The cone points the other way, which is the whole of what this draws.
+
+    Measured as the drawn height of each end face: a reduction is tall on the
+    west and short on the east, and the expansion is the two swapped. Nothing
+    else distinguishes the two drawings, so nothing else would catch a
+    derivation that returned the artwork unchanged.
+    """
+    _, sym, turned = entry
+
+    def face_height(symbol: Symbol, x: float) -> float:
+        """How much ink stands on the vertical line at ``x``."""
+        ys = [
+            y
+            for (ax, ay), (bx, by) in _collect_segments(symbol.svg)
+            for x0, y in ((ax, ay), (bx, by))
+            if abs(x0 - x) <= BOX_EPS
+        ]
+        return max(ys) - min(ys)
+
+    assert face_height(sym, 0.0) > face_height(sym, sym.width)
+    assert face_height(turned, 0.0) < face_height(turned, turned.width)
+    assert face_height(turned, 0.0) == pytest.approx(face_height(sym, sym.width))
+    assert face_height(turned, turned.width) == pytest.approx(face_height(sym, 0.0))
+
+
+@pytest.mark.parametrize("entry", _TURNED, ids=_TURNED_IDS)
+def test_a_turned_fittings_ports_land_on_drawn_ink_at_any_box_shape(entry):
+    """The odd-box rule, for the drawing the registry derives.
+
+    Its own jig rather than the shared one: ``odd_box_sheets`` places one unit
+    per registered symbol and a turned fitting is not registered, so the sheet
+    it would have to appear on does not exist until it is built here.
+    """
+    from pandid import Flowsheet
+
+    (kind, variant), _, turned = entry
+    segments = _collect_segments(turned.svg)
+    for box in _ODD_BOXES:
+        for placement in _PLACEMENTS:
+            fs = Flowsheet("odd boxes, turned end for end")
+            unit = units.Reducer(
+                f"{kind}-{variant}",
+                variant=variant,
+                large_end="outlet",
+                width=box[0],
+                height=box[1],
+            )
+            fs.add(unit).pin(x=200, y=200, **placement)
+            matrix = _placements(fs.to_svg())[(round(unit.frame.cx, 6), round(unit.frame.cy, 6))]
+            for name in unit.ports:
+                d = _nearest_distance(_resolved_in_symbol_space(unit, matrix, name), segments)
+                assert d <= GEOM_TOL + _ROUNDTRIP_EPS, (
+                    f"{kind}/{variant} turned end for end: port {name!r} in a "
+                    f"{box[0]:g}x{box[1]:g} box at {placement or 'no turn'} is "
+                    f"{d:.1f}u from the nearest drawn stroke once the artwork's own "
+                    f"placement is undone (tolerance {GEOM_TOL})"
+                )
+
+
 def _colliding_symbol(**kwargs) -> Symbol:
     """Build a Symbol that is *expected* to have coincident ports.
 

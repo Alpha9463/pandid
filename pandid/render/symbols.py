@@ -540,6 +540,84 @@ def darkened(sym: Symbol) -> Symbol:
     )
 
 
+# ---------------------------------------------------------------------------
+# The fitting piped the other way round.
+#
+# A reducer and an expander are one casting: a trapezoid between a large face
+# and a small one, installed with the flow going into whichever end the line
+# needs. The drawing has to say which, because the cone points downstream on one
+# and upstream on the other, and a run drawn through the wrong one narrows where
+# it should open out.
+#
+# It cannot be said with ``pin(mirrored="x")``. That mirror is applied to the
+# ports as well as to the ink (portgeom.symbol_to_box), so it swaps the west and
+# east faces and the run enters the fitting from downstream. The two have to
+# move independently, which is what this derivation does: mirror the artwork,
+# then put ``inlet`` back on the west face and ``outlet`` back on the east one.
+# See :attr:`pandid.units.Reducer.large_end`.
+# ---------------------------------------------------------------------------
+
+#: The face a placement lands on after the artwork is mirrored left-to-right.
+#: North and south are unmoved by it.
+_FLIPPED_FACE = {"W": "E", "E": "W", "N": "N", "S": "S"}
+
+
+def expander(sym: Symbol) -> Symbol:
+    """``sym`` turned end for end: the same fitting, piped the other way round.
+
+    The artwork is mirrored left-to-right so the cone points the other way, and
+    the two process nozzles trade names, so ``inlet`` stays on the west face and
+    ``outlet`` on the east and the run still passes through in the direction it
+    was drawn in. Every placement keeps its exact coordinate, mirrored with the
+    ink it was authored against, so a nozzle on drawn stroke stays on drawn
+    stroke.
+
+    A separate ``Symbol`` rather than a transform applied at draw time, for the
+    reason :func:`darkened` is: the ``<defs>`` entry a ``<use>`` points at is
+    keyed by the artwork, so the reduction and the expansion are two drawings
+    and need two definitions, which is what the ``_exp``
+    :attr:`Symbol.id_suffix` buys.
+    """
+    swap = {"inlet": "outlet", "outlet": "inlet"}
+    # Exactly the two, and no family: every nozzle has to be accounted for, or
+    # turning the fitting would quietly drop the ones nothing here knows how to
+    # move, and a symbol short of a nozzle draws a stream to the middle of its
+    # own box.
+    if set(sym.ports) != set(swap) or sym.port_series:
+        raise ValueError(
+            f"{sym.symbol_id()}: cannot be turned end for end -- its nozzles are "
+            f"{sorted(set(sym.ports) | {s.prefix + '*' for s in sym.port_series})}. "
+            f"Only a fitting whose whole connection list is 'inlet' and 'outlet' "
+            f"has two ends to trade."
+        )
+    match = re.match(r"(<g\b[^>]*>)(.*)(</g>)\Z", sym.svg, re.DOTALL)
+    if match is None:
+        raise ValueError(
+            f"{sym.symbol_id()}: cannot be turned end for end -- its artwork is "
+            f"not a single <g> group to mirror"
+        )
+    head, body, tail = match.groups()
+    head = re.sub(r'id="([^"]*)"', r'id="\1_exp"', head, count=1)
+    # Mirror about the box's own mid-line, so the drawing lands back in the box
+    # it was drawn in and the placed geometry is unchanged.
+    svg = (f'{head}<g transform="translate({sym.width:g},0) scale(-1,1)">'
+           f'{body}</g>{tail}')
+
+    def turn(xy: tuple[float, float]) -> tuple[float, float]:
+        return (round(sym.width - xy[0], 4), xy[1])
+
+    return Symbol(
+        svg=svg, width=sym.width, height=sym.height,
+        ports={new: turn(sym.ports[old]) for new, old in swap.items()},
+        port_faces={new: {_FLIPPED_FACE[face]: turn(xy)
+                          for face, xy in sym.port_faces[old].items()}
+                    for new, old in swap.items()},
+        faceless_ports=sym.faceless_ports,
+        label_pos=sym.label_pos, id_suffix=sym.id_suffix + "_exp",
+        stretchable=sym.stretchable, bare_run=sym.bare_run,
+    )
+
+
 class SymbolRegistry:
     def __init__(self):
         self._symbols: dict[tuple[str, str], Symbol] = {}
@@ -552,12 +630,16 @@ class SymbolRegistry:
         # positions. Not a variant: one (kind, variant) with two states, and
         # which one is drawn comes off the unit's ``normal_position``.
         self._closed: dict[tuple[str, str], Symbol] = {}
+        # Fittings turned end for end, built once each on demand and shared for
+        # the same reason the darkened bodies are.
+        self._expanders: dict[tuple[str, str], Symbol] = {}
         self._register_defaults()
 
     def register(self, kind: str, template: Symbol, variant: str = "default") -> None:
         self._symbols[(kind, variant)] = template
         self._darkened.pop((kind, variant), None)
         self._closed.pop((kind, variant), None)
+        self._expanders.pop((kind, variant), None)
 
     def register_closed(self, kind: str, template: Symbol, variant: str = "default") -> None:
         """The drawing for ``(kind, variant)`` declared normally closed.
@@ -591,9 +673,10 @@ class SymbolRegistry:
         fixed drawing depends on. A conveyor's artwork depends on the unit as
         well, since it is made to its belt run, and a valve's or a blind's on
         whether it is declared normally closed -- which darkens the one and
-        swaps the other for the second shape its stencil set draws; the lookup
-        still runs either way, so a variant name nobody registered is still
-        rejected.
+        swaps the other for the second shape its stencil set draws; a reducer's
+        on which end its large face is, which turns the fitting end for end. The
+        lookup still runs in every case, so a variant name nobody registered is
+        still rejected.
         """
         variant = getattr(unit, "variant", "default")
         sym = self.get(unit.kind, variant)
@@ -608,6 +691,13 @@ class SymbolRegistry:
             if key not in self._darkened:
                 self._darkened[key] = darkened(sym)
             return self._darkened[key]
+        # A reduction is the drawing as vendored; an expansion is that same
+        # fitting piped the other way round. See :func:`expander`.
+        if getattr(unit, "large_end", "inlet") == "outlet":
+            key = (unit.kind, variant)
+            if key not in self._expanders:
+                self._expanders[key] = expander(sym)
+            return self._expanders[key]
         return sym
 
     def variants(self, kind: str) -> list[str]:

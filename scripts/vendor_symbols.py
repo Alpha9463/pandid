@@ -288,22 +288,37 @@ KIND_MAP = {
     ("tank", "conical"):  ("vessels", "Tank (Conical Roof)",
                            {"inlet": ("N", 50), "outlet": ("S", 50)}),
     # Fittings.
-    ("reducer", "default"): ("fittings", "Reducer", {"inlet": "W", "outlet": "E"}),
-    # piping.xml draws the reducer the way a piping drawing does: a trapezoid
-    # between a large face and a small one. (fittings.xml's, above, is a
-    # triangle — a cone tapering to a point, so the outlet nozzle is on the
-    # apex and the line it reduces to has no width at all.)
     #
-    # Both new bodies are drawn to the same 12.5 the default reducer is, since
-    # a reducer's drawn height is the pipe it sits in and two of them in one
-    # run have to agree about that; see SCALE.
+    # A reducer is a trapezoid between a large face and a small one, and both
+    # faces are pipe: the run leaves the small end at whatever the reduced line
+    # size is. fittings.xml's "Reducer" is not that shape. It is a triangle,
+    # 70 x 50 to a point at (70, 25), so its E anchor sits on the apex and the
+    # line it reduces to comes out with no width at all: a reducer drawn as a
+    # blind cone. So ``default`` is piping.xml's Concentric Reducer, the same
+    # shape ``concentric`` names, on the pattern ``valve``/``gate`` and
+    # ``fitting``/``flange`` already follow: the unqualified name draws the
+    # ordinary member of the family, and the qualified one says which member
+    # that is. Nothing maps the triangle; a shape that draws the device wrongly
+    # is not a style to be kept under another name.
+    #
+    # Both bodies are drawn 12.5 tall, since a reducer's drawn height is the
+    # pipe it sits in and two of them in one run have to agree about that; see
+    # SCALE.
+    ("reducer", "default"): ("piping", "Concentric Reducer",
+                             {"inlet": "W", "outlet": "E"}),
     ("reducer", "concentric"): ("piping", "Concentric Reducer",
                                 {"inlet": "W", "outlet": "E"}),
-    # Eccentric: flat on top, so the small end's centreline is *below* the large
-    # end's — which is the whole point of it on a pump suction, where a
-    # concentric reducer would trap vapour against the roof of the line. The
-    # stencil's own E anchor is on that lowered centreline (y = 4.5 of 15) and
+    # Eccentric: flat on top, so the two ends share a roof and the small end's
+    # centreline is the HIGHER of the two, which is the whole point of it on a
+    # pump suction, where a concentric reducer would leave a pocket against the
+    # roof of the line for vapour to collect in. The stencil's own E anchor is
+    # on that raised centreline (y = 4.5 of 15, against the W anchor's 7.5) and
     # not at mid-height, so it is taken as named rather than placed.
+    #
+    # Flat on the *bottom* is the same fitting rolled over, for the line that
+    # has to drain rather than vent, and it is a placement rather than a second
+    # drawing: ``pin(mirrored="y")`` turns the body over, and both nozzles stay
+    # on the west and east faces the run enters and leaves by.
     ("reducer", "eccentric"): ("piping", "Eccentric Reducer",
                                {"inlet": "W", "outlet": "E"}),
     # In-line devices: one class, because a strainer, a sight glass and a
@@ -860,10 +875,10 @@ ADAPTED_ELSEWHERE = {
 #
 # Everything that shares a pipe with a valve takes the same factor, because they
 # share a line size: a strainer, an orifice plate or a sight glass left at the
-# old scale would be drawn half again longer than the valve beside it. That
-# includes ``reducer``, which is the fittings.xml stencil like the rest of them
-# and only had a kind of its own; at 1.0 it was 70 x 50, nearly three times the
-# new valve.
+# old scale would be drawn half again longer than the valve beside it.
+# ``reducer`` is the exception in this family and has its own entry below: it is
+# a piping.xml shape drawn on a 20-unit module, so 0.25 would put it at 5 units
+# long, a fifth of the valve it sits beside.
 #
 # flow_sensors.xml and piping.xml are the exception, and for a reason that is
 # about the stencils rather than about the drawing: they lay their in-line
@@ -890,18 +905,20 @@ HALF_SCALE_FITTINGS = (
     "blind",
 )
 
-SCALE = {"valve": 0.25, "fitting": 0.25, "reducer": 0.25,
+SCALE = {"valve": 0.25, "fitting": 0.25,
          "vent": 0.25, "funnel": 0.25,
          **{("fitting", variant): 0.5 for variant in HALF_SCALE_FITTINGS},
          # ...and the two open ends taken from the same 50-unit file.
          ("vent", "exhaust_head"): 0.5, ("vent", "breather"): 0.5,
-         # Both piping.xml reducers are drawn 12.5 units tall, which is the
-         # height reducer/default already comes out at. A reducer's drawn height
-         # is the line it sits in, so two of them in one run have to agree about
-         # it; the length follows from each stencil's own proportions (the
-         # eccentric body is drawn longer than it is tall, the concentric one
-         # square).
-         ("reducer", "concentric"): 12.5 / 20, ("reducer", "eccentric"): 12.5 / 15,
+         # Every reducer body is drawn 12.5 units tall. A reducer's drawn height
+         # is the line it sits in, so two of them in one run (the reduction into
+         # a control valve and the expansion out of it) have to agree about it,
+         # and so must the three variants, since switching one for another is a
+         # change of artwork and not of line size. The length follows from each
+         # stencil's own proportions: the concentric body is drawn square, the
+         # eccentric one longer than it is tall. The kind's entry covers
+         # ``default``, which is the same shape as ``concentric``.
+         "reducer": 12.5 / 20, ("reducer", "eccentric"): 12.5 / 15,
          # 62 x 100, at 1:1.6 against the column's 1:2 — a drum is short because
          # it holds inventory, a tower is slender because it holds trays, and
          # two shapes cut to the same proportions read as one piece of equipment
