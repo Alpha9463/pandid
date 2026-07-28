@@ -19,6 +19,7 @@ import pytest
 
 from pandid import Flowsheet, units
 from pandid.document import Revision, TitleBlock, equipment_list, legend, notes
+from pandid.portgeom import port_offset
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
 UPDATE = os.environ.get("PANDID_UPDATE_GOLDEN") == "1"
@@ -87,27 +88,26 @@ def _distillation_train() -> Flowsheet:
     recycle_valve = fs.add(units.Valve("FV-200"))
 
     col_y = 420
-    mixer_y = col_y + 105 - 25
-    feed_y = mixer_y - 10
-    valve_y = col_y + 105 - 15
-    hx_y = col_y + 105 - 30
-
-    feed.pin(x=160, y=feed_y)
-    mixer.pin(x=290, y=mixer_y)
-    feed_valve.pin(x=410, y=valve_y)
-    preheater.pin(x=520, y=hx_y)
     col1.pin(x=690, y=col_y)
+
+    feed_run_y = col_y + port_offset(col1, "feed")[1]
+    mixer.pin(x=290).pin(port="outlet", y=feed_run_y)
+    feed.pin(port="outlet", x=210, y=mixer.pin_.y + port_offset(mixer, "in_1")[1])
+    feed_valve.pin(x=410, port="inlet", y=feed_run_y)
+    preheater.pin(x=520, port="tube_in", y=feed_run_y)
+
     ovhd_y = col_y - 80
     c1_ovhd.pin(x=820, y=ovhd_y)
-    c1_prod.pin(x=980, y=ovhd_y + 5)
+    ovhd_run_y = ovhd_y + port_offset(c1_ovhd, "tube_out")[1]
+    c1_prod.pin(x=980, port="inlet", y=ovhd_run_y)
     bot_y = col_y + 205 + 30
     pump1.pin(x=820, y=bot_y)
     col2.pin(x=1100, y=col_y)
     c2_ovhd.pin(x=1230, y=ovhd_y)
-    c2_prod.pin(x=1390, y=ovhd_y + 5)
+    c2_prod.pin(x=1390, port="inlet", y=ovhd_run_y)
     pump2.pin(x=1230, y=bot_y)
     splitter.pin(x=1360, y=bot_y - 100)
-    c2_bot.pin(x=1480, y=bot_y - 110)
+    c2_bot.pin(x=1480, port="inlet", y=splitter.pin_.y + port_offset(splitter, "out_1")[1])
     recycle_valve.pin(x=590, y=bot_y + 100, mirrored=True)
 
     fs.connect(feed.outlet, mixer.in_1)
@@ -189,15 +189,22 @@ def _control_loop() -> Flowsheet:
     # is the proof that declaring a loop moves nothing on the sheet.
     flow = fs.add_loop("F", 101)
     level = fs.add_loop("L", 101)
-    feed = fs.add(units.Feed("Feed")).pin(x=60, y=170)
-    fv = fs.add(units.Valve(flow.tag("FV"), variant="control")).pin(x=270, y=180)
-    drum = fs.add(units.Vessel("V-101", description="Surge Drum")).pin(x=420, y=145)
+    run_y = 195
+    feed = fs.add(units.Feed("Feed")).pin(port="outlet", x=110, y=run_y)
+    fv = fs.add(units.Valve(flow.tag("FV"), variant="control")).pin(x=270, port="inlet", y=run_y)
+    drum = fs.add(units.Vessel("V-101", description="Surge Drum")).pin(x=420, port="inlet", y=run_y)
     fe = fs.add(
         units.Fitting(flow.tag("FE"), variant="orifice", description="Feed Orifice Plate")
-    ).pin(x=180, y=180)
-    lv = fs.add(units.Valve(level.tag("LV"), variant="control")).pin(x=640, y=180, mirrored="y")
-    prod = fs.add(units.Product("Product")).pin(x=790, y=170)
-    psv = fs.add(units.Valve("PSV-101", variant="relief")).pin(x=441, y=55)
+    ).pin(x=180, port="inlet", y=run_y)
+    lv = fs.add(units.Valve(level.tag("LV"), variant="control")).pin(
+        x=640, port="inlet", y=run_y, mirrored="y"
+    )
+    prod = fs.add(units.Product("Product")).pin(port="inlet", x=790, y=run_y)
+    psv = (
+        fs.add(units.Valve("PSV-101", variant="relief"))
+        .pin(y=55)
+        .pin(port="inlet", x=420 + port_offset(drum, "vent")[0])
+    )
     flare = fs.add(units.Product("To Flare", reference="P&ID-902")).pin(x=630, y=5)
 
     fs.connect(feed.outlet, fe.inlet)
@@ -321,17 +328,18 @@ def _metering_skid() -> Flowsheet:
     glass = fs.add(units.Fitting("SG-101", variant="sight_glass", description="Sight Glass"))
     prod = fs.add(units.Product("To Unit 200", reference="PFD-200"))
 
-    feed.pin(x=60, y=275)
-    strainer.pin(x=190, y=280)
-    pump.pin(x=280, y=270)
-    meter.pin(x=430, y=265)
-    fv.pin(x=540, y=265.3, mirrored="y")
-    surge.pin(x=680, y=210)
-    glass.pin(x=850, y=267.5)
-    prod.pin(x=980, y=255)
-    surge_vent_x = 680 + (31 / 62) * 90
-    psv.pin(x=surge_vent_x - (10.5 / 27.8) * 40, y=110)
-    flare.pin(x=900, y=110 + (30.2 / 47.2) * 68 - 25)
+    suction_y = 300
+    discharge_y = 280
+    feed.pin(port="outlet", x=110, y=suction_y)
+    strainer.pin(port="inlet", x=190, y=suction_y)
+    pump.pin(port="suction", x=280, y=suction_y)
+    meter.pin(port="inlet", x=430, y=discharge_y)
+    fv.pin(port="inlet", x=540, y=discharge_y, mirrored="y")
+    surge.pin(port="inlet", x=680, y=discharge_y)
+    glass.pin(port="inlet", x=850, y=discharge_y)
+    prod.pin(port="inlet", x=980, y=discharge_y)
+    psv.pin(y=110).pin(port="inlet", x=680 + port_offset(surge, "vent")[0])
+    flare.pin(port="inlet", x=900, y=110 + port_offset(psv, "outlet")[1])
 
     fs.connect(feed.outlet, strainer.inlet)
     fs.connect(strainer.outlet, pump.suction)
@@ -400,16 +408,17 @@ def _line_numbers() -> Flowsheet:
     fv.new_line_number = True
     psv.new_line_number = True
 
-    feed.pin(x=60, y=275)
-    hv.pin(x=235, y=285)
-    strainer.pin(x=335, y=280)
-    pump.pin(x=425, y=270)
-    fv.pin(x=575, y=265)
-    surge.pin(x=725, y=210)
-    prod.pin(x=925, y=255)
-    surge_vent_x = 725 + (31 / 62) * 90
-    psv.pin(x=surge_vent_x - (10.5 / 27.8) * 40, y=110)
-    flare.pin(x=945, y=110 + (30.2 / 47.2) * 68 - 25)
+    suction_y = 300
+    discharge_y = 280
+    feed.pin(port="outlet", x=110, y=suction_y)
+    hv.pin(port="inlet", x=235, y=suction_y)
+    strainer.pin(port="inlet", x=335, y=suction_y)
+    pump.pin(port="suction", x=425, y=suction_y)
+    fv.pin(port="inlet", x=575, y=discharge_y)
+    surge.pin(port="inlet", x=725, y=discharge_y)
+    prod.pin(port="inlet", x=925, y=discharge_y)
+    psv.pin(y=110).pin(port="inlet", x=725 + port_offset(surge, "vent")[0])
+    flare.pin(port="inlet", x=945, y=110 + port_offset(psv, "outlet")[1])
 
     suction = fs.connect(feed.outlet, hv.inlet, size='8"', service="P", spec="A1A")
     fs.connect(hv.outlet, strainer.inlet)
