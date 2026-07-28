@@ -60,11 +60,13 @@ from pandid.portgeom import port_offset, resolve_size
 
 
 def main():
-    # The sheet spells a line number service-sequence-size-spec, and its spec
-    # field carries the flange class and the material together.
+    # The sheet spells a line number service-sequence-size-schedule-spec:
+    # FB-301-200-160-SS is fermentation broth, line 301, DN 200 bore, schedule
+    # 160 wall, in the stainless the legend names. Size and schedule are two
+    # facts and get two fields, so nothing on the sheet reads as a second size.
     fs = Flowsheet(
         "Ethanol Purification A300",
-        line_numbering_scheme="{service}-{sequence}-{size}-{spec}",
+        line_numbering_scheme="{service}-{sequence}-{size}-{schedule}-{spec}",
         line_number_start=301,
     )
 
@@ -153,7 +155,7 @@ def main():
     # valve body with a signal line through it.
     st301 = fs.add_valve_station(
         "CV-301-1", x=677.5, y=overhead_y, number=301, bypass_over="reduction",
-        description="Overhead", service="AE", sequence=302, size=300, spec="80-SS")
+        description="Overhead", service="AE", sequence=302, size=300, schedule=80, spec="SS")
     cws_cond.pin(port="outlet", x=200, y=cw_cond_y)
     hv311.pin(port="inlet", x=320, y=cw_cond_y)
     cwr_cond.pin(port="inlet", x=1540, y=cw_cond_y)
@@ -175,7 +177,7 @@ def main():
     reflux_run_y = 440.0
     st303 = fs.add_valve_station(
         "CV-303", x=672.5, y=reflux_run_y, mirrored=True, bypass_over="reduction",
-        description="Reflux", service="AE", sequence=303, size=80, spec="80-SS")
+        description="Reflux", service="AE", sequence=303, size=80, schedule=80, spec="SS")
     fe303.pin(mirrored=True).pin(port="outlet", x=617.5, y=reflux_run_y)
 
     # The drum's draw parts into reflux and distillate below the vessel. That
@@ -194,7 +196,7 @@ def main():
     dist_y = 510.0
     st305 = fs.add_valve_station(
         "CV-305", x=1147, y=dist_y, gap=26, bypass_over="reduction",
-        description="Distillate", service="AE", sequence=305, size=40, spec="80-SS")
+        description="Distillate", service="AE", sequence=305, size=40, schedule=80, spec="SS")
     ae_prod.pin(port="inlet", x=1540, y=dist_y)
 
     # Reboiler off the tower sump; steam spine on its tube inlet, which is the
@@ -207,7 +209,7 @@ def main():
     # far end rather than sitting in the middle of its own leg.
     st308 = fs.add_valve_station(
         "CV-308", x=217.5, y=steam_y, bypass_over="downstream_isolation",
-        description="Steam", service="HPS", sequence=308, size=100, spec="300-CS")
+        description="Steam", service="HPS", sequence=308, size=100, schedule=300, spec="CS")
     condensate.pin(port="inlet", x=1540, y=580 + port_offset(reb, "tube_out")[1])
 
     # Bottoms over the weir, cooled and sent off the sheet. The bottoms valve
@@ -235,7 +237,7 @@ def main():
     # once and writes nothing at all against a bypass or a drain, and why the
     # station is given the components its own branches are numbered from.
     fs.connect(fb_feed.outlet, xv.inlet, service="FB", sequence=301, size=200,
-               spec="160-SS")
+               schedule=160, spec="SS")
     fs.connect(xv.outlet, meter.inlet)
     fs.connect(meter.outlet, col.feed)
 
@@ -247,55 +249,55 @@ def main():
     # cooling-water header crosses this one's riser, so the run's horizontal is
     # kept the longer of the two and the number is read clear of the crossing.
     vapour = fs.connect(col.distillate, st301.inlet, service="AE", sequence=302,
-                        size=300, spec="80-SS").via([(col_axis, overhead_y)])
+                        size=300, schedule=80, spec="SS").via([(col_axis, overhead_y)])
     fs.connect(st301.outlet, cond.shell_in).via([(cond_shell_in_x, overhead_y)])
 
     fs.connect(cond.shell_out, drum.inlet, service="AE", sequence=304, size=150,
-               spec="80-SS")
+               schedule=80, spec="SS")
     fs.connect(cws_cond.outlet, hv311.inlet, service="CWS", sequence=311, size=150,
-               spec="150-CS")
+               schedule=150, spec="CS")
     fs.connect(hv311.outlet, cond.tube_in)
     cw_return = fs.connect(cond.tube_out, cwr_cond.inlet, service="CWR",
                            sequence=312, size=150,
-                           spec="150-CS").via([(1300, cw_cond_y)])
+                           schedule=150, spec="CS").via([(1300, cw_cond_y)])
 
     fs.connect(drum.outlet, t_draw.inlet, service="AE", sequence=309, size=100,
-               spec="80-SS")
+               schedule=80, spec="SS")
     # The branch takes the reflux and the run carries on down to the distillate,
     # so the two lines leave the tee without crossing.
     fs.connect(t_draw.branch, st303.inlet, service="AE", sequence=303, size=80,
-               spec="80-SS")
+               schedule=80, spec="SS")
     fs.connect(st303.outlet, fe303.inlet)
     fs.connect(fe303.outlet, col.reflux_in, tear_hint=True)
 
     fs.connect(t_draw.outlet, st305.inlet, service="AE", sequence=305, size=40,
-               spec="80-SS")
+               schedule=80, spec="SS")
     fs.connect(st305.outlet, ae_prod.inlet)
 
     sump_x = 700 + port_offset(reb, "shell_in")[0]
     boilup_x = 700 + port_offset(reb, "shell_out")[0]
     sump = fs.connect(col.bottoms, reb.shell_in, service="FB", sequence=307,
-                      size=250, spec="160-SS").via([(col_axis, 655), (sump_x, 655)])
+                      size=250, schedule=160, spec="SS").via([(col_axis, 655), (sump_x, 655)])
     boilup = fs.connect(reb.shell_out, col.boilup_in, service="FB", sequence=310,
-                        size=300, spec="160-SS",
+                        size=300, schedule=160, spec="SS",
                         tear_hint=True).via([(boilup_x, 535), (595, 535), (595, boilup_y)])
     fs.connect(steam.outlet, st308.inlet, service="HPS", sequence=308, size=100,
-               spec="300-CS")
+               schedule=300, spec="CS")
     fs.connect(st308.outlet, reb.tube_in)
     fs.connect(reb.tube_out, condensate.inlet, service="HPR", sequence=317, size=80,
-               spec="300-CS")
+               schedule=300, spec="CS")
 
     fs.connect(reb.bottoms, cv306.inlet, service="FB", sequence=306, size=100,
-               spec="160-SS")
+               schedule=160, spec="SS")
     fs.connect(cv306.outlet, nrv306.inlet)
     fs.connect(nrv306.outlet, cooler.shell_in).via([(cooler_shell_in_x, bottoms_y)])
     fs.connect(cooler.shell_out, bottoms_prod.inlet, service="FB", sequence=314,
-               size=100, spec="160-SS").via([(cooler_shell_out_x, cooled_y)])
+               size=100, schedule=160, spec="SS").via([(cooler_shell_out_x, cooled_y)])
     fs.connect(cws_cool.outlet, hv315.inlet, service="CWS", sequence=315, size=100,
-               spec="150-CS")
+               schedule=150, spec="CS")
     fs.connect(hv315.outlet, cooler.tube_in)
     fs.connect(cooler.tube_out, cwr_cool.inlet, service="CWR", sequence=316, size=100,
-               spec="150-CS")
+               schedule=150, spec="CS")
 
     # --- Feed trip and local indication ----------------------------------
     # The square is the trip logic rather than a device, so it is drawn at each

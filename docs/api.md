@@ -34,9 +34,9 @@ The container and the single source of truth for connectivity.
 - `stream_naming_scheme` is either a format string taking `{n}` (default
   `"S{n}"` → `S1`, `S2`, …) or a callable `int -> str`. Keyword-only.
 - `line_numbering_scheme` is either a format string taking the line-number
-  components (`{size}`, `{service}`, `{sequence}`, `{spec}`, `{insulation}`) or
-  a callable `Stream -> str`, for a site whose convention is spelled some other
-  way. Keyword-only. See [Line numbers](#line-numbers).
+  components (`{size}`, `{schedule}`, `{service}`, `{sequence}`, `{spec}`,
+  `{insulation}`) or a callable `Stream -> str`, for a site whose convention is
+  spelled some other way. Keyword-only. See [Line numbers](#line-numbers).
 - `line_number_start` sets where the automatic sequence begins (default `1001`,
   so the first line is `…-1001-…`). Keyword-only.
 - `valve_station_tag_scheme` spells a valve station's members out of its control
@@ -101,7 +101,8 @@ connect(src: Port, dst: Port, *,
         kind: str = "material",
         name: str | None = None,
         tear_hint: bool = False,
-        size=None, service=None, sequence=None, spec=None, insulation=None) -> Stream
+        size=None, schedule=None, service=None, sequence=None, spec=None,
+        insulation=None) -> Stream
 ```
 Creates the stream. `src` must be an outlet and `dst` an inlet, both units must
 already be on this flowsheet, and neither port may already carry a stream. Each
@@ -131,10 +132,10 @@ fs.connect(pump_a.discharge, pump_b.suction, kind="pneumatic")   # ValueError: p
 is advisory, nudging the cycle breaker toward tearing *this* edge when a recycle
 loop is ambiguous.
 
-`size` / `service` / `spec` / `insulation` are the line-number components, given
-as text or a number. Supplying any of them identifies the line by its line
-number instead of a stream number. `sequence` is filled by auto-numbering unless it is
-given here. See [Line numbers](#line-numbers).
+`size` / `schedule` / `service` / `spec` / `insulation` are the line-number
+components, given as text or a number. Supplying any of them identifies the line
+by its line number instead of a stream number. `sequence` is filled by
+auto-numbering unless it is given here. See [Line numbers](#line-numbers).
 
 ```text
 add_component(component: Component) -> Component
@@ -1085,7 +1086,7 @@ face than `nozzle()` does. See the CHANGELOG.
 | `name` | `str` | the stream number, or the line number where the line has one; auto-assigned unless you passed `name=` |
 | `source` / `dest` | `Port` | |
 | `kind` | `str` | see `connect()` |
-| `size` / `service` / `sequence` / `spec` / `insulation` | `str \| float \| None` | line-number components; `sequence` is filled by auto-numbering |
+| `size` / `schedule` / `service` / `sequence` / `spec` / `insulation` | `str \| float \| None` | line-number components; `sequence` is filled by auto-numbering |
 | `has_line_number` | `bool` | **read-only**, true once a component other than `sequence` is set |
 | `is_recycle` | `bool` | **read-only**, computed by cycle detection during layout |
 | `properties` | `dict[str, str \| float]` | free-form; rendered by the stream table verbatim |
@@ -1130,12 +1131,36 @@ s.name        # '6"-P-1001-A1A'  drawn on the line, and heads its table column
 s.sequence    # '1001'           filled by auto-numbering
 ```
 
-The components are `size`, `service`, `sequence`, `spec` and `insulation`, each
-text or a number. The author supplies all but `sequence`, which auto-numbering
-fills from `line_number_start` (default `1001`); set it yourself to tie into a
-line that already exists on someone else's list. A component left unset drops
-out, and so does the text introducing it, so a line with no spec issued yet
-reads `6"-P-1001` rather than `6"-P-1001-`.
+The components are `size`, `schedule`, `service`, `sequence`, `spec` and
+`insulation`, each text or a number:
+
+| Component | What it says |
+|---|---|
+| `size` | the line's nominal bore, as the site writes it (`'6"'`, `200`) |
+| `schedule` | the wall the line is bought to at that bore: `160`, `40`, or the older `STD` / `XS` / `XXS` |
+| `service` | what the line carries, as a service code (`P`, `FB`, `CWS`) |
+| `sequence` | the number that makes the line unique within the unit |
+| `spec` | the piping class or material the line is built to (`A1A`, `SS`) |
+| `insulation` | the insulation code, where the site puts one in the number |
+
+`size` and `schedule` are two facts about the pipe and get two fields: the bore
+does not imply the wall, and writing them into one field puts a second number
+next to the size that reads like a second size. `spec` is neither of those. It
+is what the line is made of and to what class, which is why a sheet can quote a
+schedule and a material (`…-200-160-SS`) or leave the wall to the class and
+quote only that (`…-6"-P-1001-A1A`).
+
+The author supplies all but `sequence`, which auto-numbering fills from
+`line_number_start` (default `1001`); set it yourself to tie into a line that
+already exists on someone else's list. A component left unset drops out, and so
+does the text introducing it, so a line with no spec issued yet reads
+`6"-P-1001` rather than `6"-P-1001-`.
+
+The list is deliberately fixed. A component the engine cannot name is a
+component the line list cannot be checked against, and a site wanting a fact of
+its own has the callable scheme below. The trigger to add a seventh is a second
+real sheet needing one, which is what `schedule` itself came from: see issue
+\#118.
 
 A line number is assigned by `renumber_streams()`, on exactly the terms a stream
 number is: it carries **through** an inline valve, reducer or fitting, and
@@ -1151,8 +1176,15 @@ a site that pads its sequence says so:
 
 ```python
 Flowsheet("U100", line_numbering_scheme="{size}-{service}-{sequence:0>6}-{spec}-{insulation}")
+Flowsheet("A300", line_numbering_scheme="{service}-{sequence}-{size}-{schedule}-{spec}")
 Flowsheet("U100", line_numbering_scheme=lambda s: f"{s.service}-{s.size}-{s.sequence}")
 ```
+
+The default is `"{size}-{service}-{sequence}-{spec}"` and names neither
+`{schedule}` nor `{insulation}`, because most sheets leave the wall to the
+piping class and carry no insulation code: a site that quotes either says so in
+a scheme of its own. Example 11 is the second form, which is how the issued
+sheet it reproduces spells `FB-301-200-160-SS`.
 
 A scheme naming something that is not a component raises `ValueError`, as does a
 line whose components the scheme never uses, since its line number would be
@@ -1310,7 +1342,8 @@ fs.add_valve_station(
     isolation=True, reducers=True, bypass=True, drains=2,
     description="", bypass_over=None, tag_scheme=None,
     gap=30.0, bypass_rise=45.0, drain_drop=36.0,
-    size=None, service=None, sequence=None, spec=None, insulation=None,
+    size=None, schedule=None, service=None, sequence=None, spec=None,
+    insulation=None,
 ) -> ValveStation
 ```
 
@@ -1328,9 +1361,10 @@ twelve streams for one call.
 ```python
 station = fs.add_valve_station("CV-303", x=670, y=440, mirrored=True,
                                description="Reflux", bypass_over="reduction",
-                               service="AE", sequence=303, size=80, spec="80-SS")
+                               service="AE", sequence=303, size=80,
+                               schedule=80, spec="SS")
 fs.connect(t_draw.branch, station.inlet, service="AE", sequence=303,
-           size=80, spec="80-SS")
+           size=80, schedule=80, spec="SS")
 fs.connect(station.outlet, fe303.inlet)
 fs.connect(fic303.sig_out, station.control.actuator, kind="pneumatic")
 ```
@@ -1391,9 +1425,9 @@ them the members lay out like any other unit.
 **Line numbers.** The run through the station takes the number of whatever is
 connected to `inlet`, carried through the valves, reducers and tees as any
 inline device carries it. A branch off a tee starts a number of its own, so the
-`size`/`service`/`sequence`/`spec`/`insulation` given here are what the bypass
-and the two drains take, since a bypass is the same service, size and spec as
-the run it goes round.
+`size`/`schedule`/`service`/`sequence`/`spec`/`insulation` given here are what
+the bypass and the two drains take, since a bypass is the same service, size and
+spec as the run it goes round.
 
 **Refusals.** A bypass with `isolation=False` raises: a bypass exists so the
 unit keeps running while the control valve is isolated, and there is nothing to

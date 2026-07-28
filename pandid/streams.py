@@ -2,8 +2,8 @@
 
 `name` is the stream number. On an auto-named stream the flowsheet owns it and
 keeps it equal to what gets drawn; a name passed to `connect()` is never touched.
-Setting any of `size`, `service`, `spec` or `insulation` turns that number into a
-full line number (`6"-P-1001-A1A`), assembled by the flowsheet's
+Setting any of `size`, `schedule`, `service`, `spec` or `insulation` turns that
+number into a full line number (`6"-P-1001-A1A`), assembled by the flowsheet's
 `line_numbering_scheme`. `kind` is one of `STREAM_KINDS`: a process kind
 ("material"/"energy") on a pipe, a signal kind on an instrument line. `is_recycle` is
 COMPUTED later by the layout engine's cycle-detection phase and must never be set
@@ -23,7 +23,17 @@ if TYPE_CHECKING:
     from pandid.state import State
 
 #: The parts of a line number, in the order a conventional scheme spells them.
-LINE_NUMBER_FIELDS = ("size", "service", "sequence", "spec", "insulation")
+#: ``schedule`` sits next to ``size`` because it qualifies it: the two together
+#: are the bore and the wall, and the issued reference sheet writes them side by
+#: side (``FB-301-200-160-SS`` is service, sequence, DN 200, schedule 160, 316L).
+#:
+#: The list is deliberately fixed rather than open. A line number identifies a
+#: line to the line list, and a component nothing else on the sheet can spell is
+#: a component the drawing cannot be checked against; an author who wants a fact
+#: of their own writes a callable ``line_numbering_scheme``. The trigger to add
+#: a seventh here is a *second* real sheet needing a component this list lacks,
+#: which is what issue #118 records the reasoning for.
+LINE_NUMBER_FIELDS = ("size", "schedule", "service", "sequence", "spec", "insulation")
 
 #: Kinds that carry process fluid or duty: what a pipe on the sheet holds.
 PROCESS_KINDS = frozenset({"material", "energy"})
@@ -51,6 +61,10 @@ class Stream:
     # Line-number components. The author supplies all but `sequence`, which
     # auto-numbering fills; see Flowsheet.renumber_streams().
     size: str | float | None = None
+    # The wall the line is bought to, at the size above. A schedule number
+    # (40, 80, 160) or one of the older STD/XS/XXS names, so it is not numeric
+    # and takes the same union as the components either side of it.
+    schedule: str | float | None = None
     service: str | float | None = None
     sequence: str | float | None = None
     spec: str | float | None = None
@@ -79,7 +93,7 @@ class Stream:
         every stream, and on its own it only renumbers, which
         ``stream_naming_scheme`` already does.
         """
-        return any((self.size, self.service, self.spec, self.insulation))
+        return any((self.size, self.schedule, self.service, self.spec, self.insulation))
 
     def line_components(self) -> dict[str, str]:
         """The line-number components as text, empty where the author left one

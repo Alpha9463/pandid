@@ -51,7 +51,7 @@ def station():
     """
     fs = Flowsheet(
         "CV-303 Station",
-        line_numbering_scheme="{service}-{sequence}-{size}-{spec}",
+        line_numbering_scheme="{service}-{sequence}-{size}-{schedule}-{spec}",
         line_number_start=303,
     )
     feed = fs.add(units.Feed("From FE-303"))
@@ -87,7 +87,9 @@ def station():
         valve.pin(orientation=90)
         valve.pin(port="inlet", x=junction_x, y=DRAIN_Y)
 
-    fs.connect(feed.outlet, t_by_a.inlet, service="AE", sequence=303, size=80, spec="80-SS")
+    fs.connect(
+        feed.outlet, t_by_a.inlet, service="AE", sequence=303, size=80, schedule=80, spec="SS"
+    )
     fs.connect(t_by_a.outlet, hv_a.inlet)
     fs.connect(hv_a.outlet, t_dr_a.inlet)
     fs.connect(t_dr_a.outlet, rd.inlet)
@@ -97,11 +99,17 @@ def station():
     fs.connect(hv_b.outlet, t_by_b.inlet)
     fs.connect(t_by_b.outlet, prod.inlet)
 
-    fs.connect(t_by_a.branch, hv_bp.inlet, service="AE", sequence=318, size=80, spec="80-SS")
+    fs.connect(
+        t_by_a.branch, hv_bp.inlet, service="AE", sequence=318, size=80, schedule=80, spec="SS"
+    )
     fs.connect(hv_bp.outlet, t_by_b.branch)
 
-    fs.connect(t_dr_a.branch, dv_a.inlet, service="AE", sequence=319, size=25, spec="80-SS")
-    fs.connect(t_dr_b.branch, dv_b.inlet, service="AE", sequence=320, size=25, spec="80-SS")
+    fs.connect(
+        t_dr_a.branch, dv_a.inlet, service="AE", sequence=319, size=25, schedule=80, spec="SS"
+    )
+    fs.connect(
+        t_dr_b.branch, dv_b.inlet, service="AE", sequence=320, size=25, schedule=80, spec="SS"
+    )
     return fs
 
 

@@ -57,6 +57,59 @@ def test_a_scheme_can_name_the_insulation():
     assert s.name == '2"-S-1001-B1A-H'
 
 
+def test_a_scheme_can_name_the_schedule():
+    """The size is the bore and the schedule is the wall, so they are two
+    components and not one field with a hyphen in it."""
+    fs = Flowsheet(
+        "t",
+        line_numbering_scheme="{service}-{sequence}-{size}-{schedule}-{spec}",
+        line_number_start=301,
+    )
+    feed = fs.add(U.Feed("F"))
+    prod = fs.add(U.Product("P"))
+    s = fs.connect(feed.outlet, prod.inlet, service="FB", size=200, schedule=160, spec="SS")
+    assert s.name == "FB-301-200-160-SS"
+
+
+def test_a_schedule_is_not_always_a_number():
+    """Schedule 40 has an older name, and a sheet is free to write it."""
+    fs = Flowsheet("t", line_numbering_scheme="{size}-{schedule}-{service}-{sequence}")
+    feed = fs.add(U.Feed("F"))
+    prod = fs.add(U.Product("P"))
+    s = fs.connect(feed.outlet, prod.inlet, size='6"', schedule="XS", service="P")
+    assert s.name == '6"-XS-P-1001'
+
+
+def test_a_schedule_on_its_own_is_a_line_number():
+    fs = Flowsheet("t", line_numbering_scheme="{schedule}-{spec}")
+    feed = fs.add(U.Feed("F"))
+    prod = fs.add(U.Product("P"))
+    s = fs.connect(feed.outlet, prod.inlet, schedule=80)
+    assert s.has_line_number
+    assert s.name == "80"
+
+
+def test_an_unset_schedule_drops_out_with_its_separator():
+    """The default scheme does not name the schedule, so a sheet that never
+    mentions one is numbered exactly as it was before the component existed."""
+    _, _, (s1, _, _) = _skid(size='6"', service="P", spec="A1A")
+    assert s1.name == '6"-P-1001-A1A'
+
+    fs = Flowsheet("t", line_numbering_scheme="{size}-{schedule}-{service}-{sequence}-{spec}")
+    feed = fs.add(U.Feed("F"))
+    prod = fs.add(U.Product("P"))
+    s = fs.connect(feed.outlet, prod.inlet, size='6"', service="P", spec="A1A")
+    assert s.name == '6"-P-1001-A1A'
+
+
+def test_the_default_scheme_does_not_name_the_schedule():
+    """Most sheets leave the wall to the piping class, so adding the component
+    must not move the number on a sheet that never set one."""
+    from pandid.flowsheet import DEFAULT_LINE_NUMBERING_SCHEME
+
+    assert DEFAULT_LINE_NUMBERING_SCHEME == "{size}-{service}-{sequence}-{spec}"
+
+
 def test_a_callable_scheme_takes_the_stream():
     fs = Flowsheet("t", line_numbering_scheme=lambda s: f"{s.service}{s.sequence}/{s.size}")
     feed = fs.add(U.Feed("F"))
@@ -219,8 +272,11 @@ def test_a_scheme_naming_something_that_is_not_a_component_says_so():
     fs = Flowsheet("t", line_numbering_scheme="{size}-{fluid}")
     feed = fs.add(U.Feed("F"))
     prod = fs.add(U.Product("P"))
-    with pytest.raises(ValueError, match="'fluid'.*not a line-number component"):
+    with pytest.raises(ValueError, match="'fluid'.*not a line-number component") as raised:
         fs.connect(feed.outlet, prod.inlet, size='6"')
+    # The message lists what would have worked, so the fixed set is discoverable
+    # from the error rather than only from the docs.
+    assert "'schedule'" in str(raised.value)
 
 
 def test_components_the_scheme_never_uses_are_not_silently_dropped():
@@ -264,6 +320,34 @@ def test_line_numbers_round_trip_through_a_spec():
     }
     fs = Flowsheet.from_dict(spec)
     assert [s.name for s in fs.streams] == ['6"-P-2000-A1A', '6"-P-2740-D1B']
+    assert fs.to_dict() == spec
+
+
+def test_a_schedule_round_trips_through_a_spec():
+    """Both ways: the reader takes the component off the file and the writer
+    puts it back, so a sheet quoting its schedules survives to_dict()."""
+    spec = {
+        "name": "t",
+        "line_numbering_scheme": "{service}-{sequence}-{size}-{schedule}-{spec}",
+        "line_number_start": 301,
+        "units": [
+            {"kind": "Feed", "name": "Fermentation Broth"},
+            {"kind": "Product", "name": "To T-301"},
+        ],
+        "streams": [
+            {
+                "from": ["Fermentation Broth", "outlet"],
+                "to": ["To T-301", "inlet"],
+                "size": 200,
+                "schedule": 160,
+                "service": "FB",
+                "spec": "SS",
+            },
+        ],
+    }
+    fs = Flowsheet.from_dict(spec)
+    assert [s.name for s in fs.streams] == ["FB-301-200-160-SS"]
+    assert fs.streams[0].schedule == 160
     assert fs.to_dict() == spec
 
 
