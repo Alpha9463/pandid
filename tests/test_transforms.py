@@ -185,7 +185,7 @@ def test_nozzle_rejects_unknown_port_and_fixed_nozzle():
     drum = units.Separator("V-1", variant="horizontal")
     with pytest.raises(KeyError):
         drum.nozzle("nope", "N")
-    # liquid draws off the bottom by gravity — the symbol authors one placement
+    # liquid draws off the bottom by gravity: the symbol authors one placement
     with pytest.raises(ValueError, match=r"V-1\.liquid can be piped from S as drawn"):
         drum.nozzle("liquid", "N")
 
@@ -353,7 +353,7 @@ def test_a_symbols_own_lettering_stays_upright(rot, mirror):
 
 def test_lettered_symbols_get_one_definition_per_transform():
     """The counter-transform is baked into the definition, so two valves placed
-    differently cannot share one — while everything without lettering still
+    differently cannot share one, while everything without lettering still
     shares a single definition however it is placed."""
     fs = Flowsheet("defs")
     fs.add(units.Valve("FV-1", variant="motor")).pin(x=100, y=100)

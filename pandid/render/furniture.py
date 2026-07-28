@@ -4,7 +4,7 @@ tables, and the zone-ruled drawing border.
 Every routine here is a pure function returning a list of SVG-fragment strings
 (or a ``(width, height)`` measurement). The renderer in :mod:`pandid.render.svg`
 measures each piece, places it at a sheet corner, unions the result to size the
-canvas, then draws it — none of the geometry logic lives in the giant render
+canvas, then draws it; none of the geometry logic lives in the giant render
 method.
 
 Coordinates are absolute SVG user units. Boxes are drawn from a top-left origin;
@@ -281,8 +281,8 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
     is what the scale cell reports for a sheet that does not state a scale of
     its own.
 
-    The strip is fixed geometry — an ISO 7200 block is a known rectangle in a
-    known corner — so a value too long for its cell cannot be given more room
+    The strip is fixed geometry (an ISO 7200 block is a known rectangle in a
+    known corner), so a value too long for its cell cannot be given more room
     and is abbreviated instead. ``report`` is how each such cell says which
     field it abbreviated and what it was given; see :data:`Reporter`.
     """

@@ -1,9 +1,9 @@
-"""Build a flowsheet from data — the declarative spec format.
+"""Build a flowsheet from data: the declarative spec format.
 
 The topology API (``fs.add`` / ``fs.connect``) assumes whoever wants a drawing
 writes Python. Most process engineers do not: the equipment list and the stream
 table already exist, in a spreadsheet or a YAML file, and retyping them as code
-is what stops the drawing getting made. This module is the other door — a plain
+is what stops the drawing getting made. This module is the other door: a plain
 mapping describing the same flowsheet, plus the serializer that writes one back
 out, so a diagram round-trips through data:
 
@@ -53,8 +53,8 @@ The format::
     title_block: {title: ..., revisions: [{rev: A, date: ..., by: AA}]}
     annotations: [{type: equipment_list, align: top-right}]
 
-A unit is addressed by its name, so a symbol drawn more than once — an
-interlock square, a utility header flag, the two tags a flowsheet lets repeat —
+A unit is addressed by its name, so a symbol drawn more than once (an
+interlock square, a utility header flag, the two tags a flowsheet lets repeat)
 is addressed by the name the flowsheet gives each drawing of it: the first entry
 is ``I-1``, the second ``I-1 (2)``, in the order the list declares them. Each
 entry carries the tag, so a header tapped twice is written out as two ``CWSH``
@@ -212,7 +212,7 @@ def _resolve_kind(value: Any, where: str) -> type[Unit]:
     if name == "Instrument":
         raise SpecError(
             f"{where}: instruments go in the top-level 'instruments:' section, not in "
-            "'units:' — that is where their tag (type/number) and attachment "
+            "'units:'; that is where their tag (type/number) and attachment "
             "(on/at/offset/angle) live"
         )
     return _CLASSES[name]
@@ -262,7 +262,7 @@ _KIND_SIZES = {
     "length": ("Conveyor",),
 }
 # Text fields only some classes carry. ``normal_position`` is where a valve or a
-# blind sits with the plant running — a darkened body says it for the one and a
+# blind sits with the plant running: a darkened body says it for the one and a
 # solid disc for the other; a pump has no such position, so naming one on it is
 # a statement nothing draws.
 _KIND_TEXT = {
@@ -291,14 +291,14 @@ _KIND_FLAGS = {
 def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
     """Build a :class:`~pandid.flowsheet.Flowsheet` from a declarative mapping.
 
-    Raises :class:`SpecError` — a :class:`ValueError` — naming the offending
+    Raises :class:`SpecError` (a :class:`ValueError`) naming the offending
     entry for anything it cannot honour.
     """
     where = "the flowsheet spec"
     data = _mapping(spec, where)
     for key, why in _RETIRED_KEYS.items():
         if key in data:
-            raise SpecError(f"{where}: {key!r} is no longer part of the spec — {why}; remove it")
+            raise SpecError(f"{where}: {key!r} is no longer part of the spec: {why}; remove it")
     _check_keys(data, _TOP_KEYS, where)
     if "name" not in data:
         raise SpecError(f"{where} needs a 'name' (the flowsheet's title)")
@@ -443,7 +443,7 @@ def _read_instrument(fs: Flowsheet, entry: Any, where: str) -> Instrument:
     _check_keys(data, _INSTRUMENT_KEYS, where)
     if "type" not in data:
         raise SpecError(
-            f"{where} needs a 'type' — the ISA functional letters, e.g. "
+            f"{where} needs a 'type': the ISA functional letters, e.g. "
             "{type: FT, number: 101} for FT-101"
         )
     type_ = _text(data["type"], f"{where}.type")
@@ -541,7 +541,7 @@ def _read_endpoint(fs: Flowsheet, entry: Any, where: str) -> Port:
     elif isinstance(entry, Sequence) and not isinstance(entry, (str, bytes)):
         if len(entry) != 2:
             raise SpecError(
-                f"{where}: an endpoint is [unit, port] — exactly two items — got {list(entry)!r}"
+                f"{where}: an endpoint is [unit, port] (exactly two items), got {list(entry)!r}"
             )
         unit_name, port_name = entry
     else:
@@ -612,14 +612,14 @@ def _read_waypoints(entry: Any, where: str) -> list[tuple[float, float]]:
 
 
 def _read_host(fs: Flowsheet, entry: Any, where: str) -> Stream | Unit:
-    """Resolve an instrument's ``on:`` — a unit/stream name, or a tapped port."""
+    """Resolve an instrument's ``on:`` (a unit/stream name, or a tapped port)."""
     if isinstance(entry, str):
         unit = next((u for u in fs.units if u.name == entry), None)
         stream = next((s for s in fs.streams if s.name == entry), None)
         if unit is not None and stream is not None:
             raise SpecError(
                 f"{where}: {entry!r} names both a unit and a stream; identify the stream "
-                "as [unit, port] — the port it leaves from — instead"
+                "as [unit, port] (the port it leaves from) instead"
             )
         if unit is not None:
             return unit
@@ -646,7 +646,7 @@ def _attach_instrument(fs: Flowsheet, inst: Instrument, data: Mapping[str, Any],
         stray = [key for key in ("at", "offset", "angle") if key in data]
         if stray:
             raise SpecError(
-                f"{where}: {stray} only mean something with 'on' — the stream or unit the "
+                f"{where}: {stray} only mean something with 'on': the stream or unit the "
                 "balloon is anchored to"
             )
         return
@@ -668,8 +668,8 @@ def _read_section(entry: Any, where: str) -> tuple[str, str]:
     pair = _sequence(entry, where)
     if len(pair) != 2:
         raise SpecError(
-            f"{where}: a section is [before_key, heading] — the property row the heading "
-            f"is injected above — got {pair!r}"
+            f"{where}: a section is [before_key, heading] (the property row the heading "
+            f"is injected above), got {pair!r}"
         )
     return _text(pair[0], f"{where}[0]"), _text(pair[1], f"{where}[1]")
 
@@ -711,8 +711,8 @@ def _read_placement(data: Mapping[str, Any], where: str) -> dict[str, Any]:
         pair = _sequence(data["position"], f"{where}.position")
         if len(pair) != 2:
             raise SpecError(
-                f"{where}.position: an absolute placement is [x, y] — the box's top-left "
-                f"corner — got {pair!r}"
+                f"{where}.position: an absolute placement is [x, y] (the box's top-left "
+                f"corner), got {pair!r}"
             )
         out["position"] = (_number(pair[0], f"{where}.position[0]"),
                            _number(pair[1], f"{where}.position[1]"))
@@ -895,7 +895,7 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
     # The tag, not the name: a header tapped twice is two entries carrying the
     # one label, and reading them back re-derives the names the flowsheet tells
     # the taps apart by, exactly as it did the first time. A tee has no tag, so
-    # its name is written instead — already unique, and already the only thing
+    # its name is written instead: already unique, and already the only thing
     # the junction is addressed by.
     entry: dict[str, Any] = {"kind": kind, "name": unit.tag or unit.name}
     _write_common(unit, entry)
@@ -1044,7 +1044,7 @@ def from_json(path: str | Path) -> Flowsheet:
     try:
         data = json.loads(text)
     except json.JSONDecodeError as e:
-        raise SpecError(f"{path}: not valid JSON — {e.msg} at line {e.lineno}, column {e.colno}")
+        raise SpecError(f"{path}: not valid JSON, {e.msg} at line {e.lineno}, column {e.colno}")
     return from_dict(data)
 
 
@@ -1057,7 +1057,7 @@ def _core_schema_loader(yaml_module) -> Any:
     PyYAML implements YAML 1.1, where ``on``, ``off``, ``yes`` and ``no`` are
     booleans and an unquoted date is a ``datetime.date``. That silently turns an
     instrument's ``on:`` key into ``True`` and a revision's ``date:`` into an
-    object — two traps sprung by writing the format exactly as documented. YAML
+    object: two traps sprung by writing the format exactly as documented. YAML
     1.2 dropped both, and only ``true``/``false`` are booleans here.
     """
     global _YAML_LOADER
@@ -1098,7 +1098,7 @@ def from_yaml(path: str | Path) -> Flowsheet:
     try:
         data = yaml.load(text, Loader=_core_schema_loader(yaml))
     except yaml.YAMLError as e:
-        raise SpecError(f"{path}: not valid YAML — {e}") from None
+        raise SpecError(f"{path}: not valid YAML, {e}") from None
     if data is None:
         raise SpecError(f"{path} is empty; a spec needs at least a 'name'")
     return from_dict(data)

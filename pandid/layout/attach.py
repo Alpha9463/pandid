@@ -1,6 +1,6 @@
 """Instrument attachment: balloons anchored to a line or to equipment.
 
-A P&ID bubble is not a node in the process flow — it is furniture hung off a
+A P&ID bubble is not a node in the process flow; it is furniture hung off a
 tap point. So an attached instrument is kept out of the Sugiyama phases
 entirely (it has no rank and no row) and its frame comes from its host instead:
 a point on the host stream's routed path, or the midpoint of a face of the host
@@ -44,7 +44,7 @@ def is_attached(unit: "Unit | None") -> bool:
 
 
 def free_units(fs: "Flowsheet") -> list:
-    """The units the layout ranker sees — everything that is not attached."""
+    """The units the layout ranker sees: everything that is not attached."""
     return [u for u in fs.units if not is_attached(u)]
 
 
@@ -148,9 +148,9 @@ def place_attached(fs: "Flowsheet") -> bool:
                 moved = True
             # Carry the placement transform across: an attached balloon is
             # positioned by its host rather than by the coordinate pass, so
-            # without this a pin(mirrored=...) on one is silently dropped —
-            # and mirroring is how a balloon puts its signal port on the side
-            # the run actually comes from.
+            # without this a pin(mirrored=...) on one is silently dropped, and
+            # mirroring is how a balloon puts its signal port on the side the
+            # run actually comes from.
             pin = inst.pin_
             inst.frame = Frame(
                 x=cx, y=cy, w=w, h=h, label_pos="center",
@@ -159,7 +159,7 @@ def place_attached(fs: "Flowsheet") -> bool:
                 mirror_y=pin.mirror_y if pin else False,
                 # Faces chosen in layout ride across the re-place. Re-deciding
                 # here would move a nozzle the router has already drawn to, and
-                # would make the answer depend on the routed path — which is
+                # would make the answer depend on the routed path, which is
                 # itself downstream of the face.
                 port_faces=dict(old.port_faces) if old is not None else {},
             )

@@ -1,4 +1,4 @@
-"""State object — the mass/energy-balance seam.
+"""State object: the mass/energy-balance seam.
 
 The topology objects carry a `state` slot so a balance engine can attach
 without a rewrite.

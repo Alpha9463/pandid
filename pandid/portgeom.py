@@ -1,7 +1,7 @@
 """Single source of truth for unit sizing and port geometry.
 
 Layout, routing, and rendering all resolve a unit's size and its port positions
-*here*, so the drawn diagram and the routed paths can never disagree — the
+*here*, so the drawn diagram and the routed paths can never disagree: the
 renderer cannot forget a mirror flip the router applied and leave a mirrored
 unit's streams visually disconnected.
 
@@ -9,7 +9,7 @@ unit's streams visually disconnected.
 its routing anchor and its face together, and everything else here is a wrapper
 over it. Deriving any one of the three somewhere else is the bug. Which of a
 port's declared faces it puts the ink on comes from :func:`chosen_face`, so
-there is one precedence — the author's, then the engine's, then the symbol's —
+there is one precedence (the author's, then the engine's, then the symbol's)
 and one place stating it.
 
 All functions take a resolved box explicitly (``w``, ``h``, ``mirrored``) rather
@@ -43,7 +43,7 @@ def symbol_to_box(px: float, py: float, sw: float, sh: float,
     """Map a point from a symbol's own coordinates into its *placed* box.
 
     Mirroring is applied first (in the symbol's frame), then the clockwise
-    quarter turn — the same order the renderer's SVG transform composes in, so
+    quarter turn, the same order the renderer's SVG transform composes in, so
     ports and artwork can never drift apart. Returns ``(x, y, box_w, box_h)``;
     a quarter turn swaps the box's width and height.
     """
@@ -71,7 +71,7 @@ def ink_box(bw: float, bh: float, w: float, h: float, stretchable: bool = True
     A stretchable symbol fills the box, so the whole of it is ink and the
     mapping is the plain linear one. A symbol that may not be distorted keeps
     its aspect and is centred, exactly as an SVG ``<symbol>`` does under its
-    default ``preserveAspectRatio="xMidYMid meet"`` — which leaves whitespace
+    default ``preserveAspectRatio="xMidYMid meet"``, which leaves whitespace
     along one axis that the box edge is on and the drawing is not. Resolving a
     port against the *box* there is the bug this exists to prevent: the nozzle
     lands out in the letterbox and its stream stops short of the equipment.
@@ -92,7 +92,7 @@ def port_faces(unit: "Unit", port_name: str, placed=None) -> list[str]:
     apply the mirror the way :func:`resolve_port` does rather than report the
     symbol's own faces.
 
-    ``placed`` is the placement to answer for — a :class:`~pandid.geometry.Pin` or
+    ``placed`` is the placement to answer for: a :class:`~pandid.geometry.Pin` or
     :class:`~pandid.geometry.Frame`. It defaults to the unit's own, preferring the
     *pin* over the frame: the transform is intent, which layout copies onto the
     frame, so a ``pin()`` already made describes the sheet that is coming rather
@@ -174,8 +174,8 @@ def _series_point(unit: "Unit", sym, port_name: str
                   ) -> tuple[float, float] | None:
     """Symbol-space coordinate of a port placed by one of the symbol's series.
 
-    The count is the unit's, not the symbol's — that is the whole point of a
-    series — so this is where the two meet. Members are ordered by the unit's
+    The count is the unit's, not the symbol's (that is the whole point of a
+    series), so this is where the two meet. Members are ordered by the unit's
     port order rather than by the number in the name, so the drawn top-to-bottom
     order is the order they were declared in.
     """
@@ -285,7 +285,7 @@ def chosen_face(unit: "Unit", placed, port_name: str) -> str | None:
     picked: naming a face is how a drawing convention is stated, and a
     convention the geometry may overrule is not one. The engine's own answer
     rides on the resolved :class:`~pandid.geometry.Frame` rather than on the unit,
-    which is what keeps it a *result* — recomputed from scratch by every layout
+    which is what keeps it a *result*: recomputed from scratch by every layout
     run, and invisible to the solver's ``_Slot``, which has no such field.
     """
     explicit = (getattr(unit, "_port_faces", None) or {}).get(port_name)
@@ -302,13 +302,13 @@ def _local_port(unit: "Unit", port_name: str, w: float, h: float,
     Both together, in resolved pixels: the menu is keyed by face, so the face is
     something the placement is *looked up by* rather than something to be read
     back off the coordinate afterwards. Deriving it a second time from the point
-    is how the two come to disagree — an artwork that keeps its aspect puts the
+    is how the two come to disagree: an artwork that keeps its aspect puts the
     nozzle on the drawing, which is not necessarily nearest the box edge of the
     same name.
 
-    Takes the placement on the face ``want`` names, else the symbol's own nozzle
-    — which is the menu's first entry, since the whole point of folding the home
-    in is that there is no second place to look.
+    Takes the placement on the face ``want`` names, else the symbol's own
+    nozzle, which is the menu's first entry, since the whole point of folding
+    the home in is that there is no second place to look.
 
     A face that *was* chosen and this transform cannot reach raises rather than
     falling back to the home nozzle, which would move the stream to the far side
@@ -335,8 +335,8 @@ def resolve_port(unit: "Unit", frame, port_name: str) -> ResolvedPort:
 
     All three together, because deriving one of them somewhere else is what lets
     the renderer and the router disagree. The anchor is the point projected onto
-    the bounding-box edge the port faces — the full placed box, which is what
-    :func:`unit_box` hands the router as the obstacle, so a symbol drawn smaller
+    the bounding-box edge the port faces (the full placed box, which is what
+    :func:`unit_box` hands the router as the obstacle), so a symbol drawn smaller
     than its box is still left by way of the box it occupies. Feed/Product use
     their arrow-tip convention for both (the port sits at the tip, whichever way
     it points).

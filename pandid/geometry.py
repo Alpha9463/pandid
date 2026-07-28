@@ -2,10 +2,10 @@
 
 The model keeps two distinct things apart:
 
-- :class:`Pin` — the user's *intent*: "put this unit at column 2" or "pin it to
+- :class:`Pin` is the user's *intent*: "put this unit at column 2" or "pin it to
   exactly (x, y)". Set only through :meth:`pandid.units.Unit.pin`. Never written by
   the engine.
-- :class:`Frame` — the *result*: the resolved pixel box (and grid rank) the
+- :class:`Frame` is the *result*: the resolved pixel box (and grid rank) the
   layout engine computes. Written only by the layout engine, read by the router
   and renderer. Recomputed from the :class:`Pin` on every layout run, so layout
   is idempotent.

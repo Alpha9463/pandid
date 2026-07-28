@@ -1,7 +1,7 @@
 """Line numbers: the identifier that ties a line on the sheet to the line list.
 
 A line number is a stream number with the rest of the identity filled in, so it
-is assigned by the same machinery and obeys the same rules — one number through
+is assigned by the same machinery and obeys the same rules: one number through
 an inline fitting, a break where a significant unit marks the spec break, and
 never a word about a stream the caller named itself. A stream with no components
 set is numbered exactly as it always was, which is what protects every sheet

@@ -298,7 +298,7 @@ _DYNAMIC_KINDS = {"feed", "product"}
 
 # Ports sitting several units off the nearest drawn stroke.
 # Intentional, not defects: on these symbols the casing is drawn *open* where
-# the suction nozzle attaches, and the port sits in the mouth of that opening —
+# the suction nozzle attaches, and the port sits in the mouth of that opening,
 # which is where the pipe should meet it. The nearest stroke is therefore half
 # the opening away. Do not "fix" these by moving the port onto the casing.
 _KNOWN_GEOMETRY_GAPS = {
@@ -364,8 +364,8 @@ def test_every_menu_entry_resolves_to_the_face_it_claims(entry):
     silently comes out somewhere else.
 
     ``Symbol.__post_init__`` rejects such a declaration outright, so this is a
-    postcondition over the shipped registry rather than the primary guard —
-    it would only fire if that check were weakened *and* a symbol were authored
+    postcondition over the shipped registry rather than the primary guard.
+    It would only fire if that check were weakened *and* a symbol were authored
     wrongly. The constructor's own rejection is tested separately."""
     (kind, variant), sym = entry
     for name, faces in sym.port_faces.items():
@@ -808,7 +808,7 @@ def test_a_turned_fittings_ports_land_on_drawn_ink_at_any_box_shape(entry):
 def _colliding_symbol(**kwargs) -> Symbol:
     """Build a Symbol that is *expected* to have coincident ports.
 
-    Registering one warns — the engine consults the rule, not just this suite —
+    Registering one warns (the engine consults the rule, not just this suite),
     so the warning is asserted here rather than left to leak into the report.
     """
     with pytest.warns(UserWarning, match="Only ports named in faceless_ports"):
@@ -818,7 +818,7 @@ def _colliding_symbol(**kwargs) -> Symbol:
 def test_authored_alternates_do_not_buy_a_shared_face():
     """Handing a vapour outlet a copy of the feed's menu gives both ports more
     than one placement, so a "the menu is multi-entry" exemption would wave the
-    collision through — which is the point of naming faceless connections
+    collision through, which is the point of naming faceless connections
     instead of inferring them from the shape of the menu."""
     sym = _colliding_symbol(
         width=91.5,
@@ -1112,7 +1112,7 @@ def test_heater_and_cooler_are_one_stencil_pair():
 
 def test_a_nozzle_standing_in_a_series_band_is_a_collision():
     """A series has no fixed membership, so it has no fixed points to compare a
-    nozzle against — the band it may place a member on is what a collision check
+    nozzle against. The band it may place a member on is what a collision check
     has to test instead. A nozzle inside the stretch of face a series may place
     a member on shares a placement with one for some count, and a static check
     exists to say so before anything is drawn."""
@@ -1146,7 +1146,7 @@ def test_a_nozzle_clear_of_the_series_band_is_not_a_collision():
 
 def test_a_series_on_another_face_is_not_a_collision():
     """A splitter's inlet sits on the point of the triangle while its outlets
-    spread along the opposite face — the shipped case that must stay quiet."""
+    spread along the opposite face, the shipped case that must stay quiet."""
     assert default_registry.get("splitter").coincident_ports() == []
     assert default_registry.get("mixer").coincident_ports() == []
 

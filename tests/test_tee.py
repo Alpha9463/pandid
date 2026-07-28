@@ -12,7 +12,7 @@ geometry, that station is:
 * two drain legs dropping 9.64 pt from ``(598.90, 233.29)`` and
   ``(648.51, 233.29)`` into darkened valves, and ending there;
 * every one of those strokes 0.75 pt, the same weight as the run;
-* and **nothing drawn at any of the four junctions** — the sheet contains no
+* and **nothing drawn at any of the four junctions**: the sheet contains no
   filled shape smaller than 6 pt anywhere on it.
 
 So the tests below hold three things: the run does not kink through a tee, the
@@ -45,7 +45,7 @@ def station():
 
     Laid out by hand, exactly as a valve station is drawn: every device pinned
     on the run's centreline, the tees among them. Spacings are the tightest the
-    router's 25-unit escape stand-off leaves clean — a facing pair closer than
+    router's 25-unit escape stand-off leaves clean: a facing pair closer than
     that makes the run double back on itself, which is true of two valves with
     no tee between them and has nothing to do with the junction.
     """

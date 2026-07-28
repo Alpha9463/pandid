@@ -26,7 +26,7 @@ def break_cycles(fs: "Flowsheet") -> None:
         return
 
     # 2. Build adjacency across ALL streams (material, energy, and signal). Any
-    # of them can form a cycle the layering DAG must be free of — e.g. a control
+    # of them can form a cycle the layering DAG must be free of, e.g. a control
     # loop's transmitter -> controller -> valve -> ... signal feedback.
     adj: dict["Unit", list["Stream"]] = {u: [] for u in units}
     in_degree: dict["Unit", int] = {u: 0 for u in units}

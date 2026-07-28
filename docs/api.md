@@ -335,7 +335,7 @@ Each entry is `port` *(direction / role)*.
 | `Separator` | `separator` | `feed` *(in)*, `vapor` *(out/vapor)*, `liquid` *(out/liquid)* |
 | `Column` | `column` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*, `reflux_in` *(in/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*, `condenser_duty` *(out/energy)* |
 | `Reactor` | `reactor` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `outlet` *(out)*, `vent` *(out/vapor)*, `duty` *(in/energy)* |
-| `HeatExchanger` | `hex` | `shell_in`, `shell_out`, `tube_in`, `tube_out`; `kettle` adds `bottoms` *(out/liquid)*. four variants name their sides differently — see [Variants](#variants) |
+| `HeatExchanger` | `hex` | `shell_in`, `shell_out`, `tube_in`, `tube_out`; `kettle` adds `bottoms` *(out/liquid)*. Four variants name their sides differently; see [Variants](#variants) |
 | `Heater` | `heater` | `inlet` *(in)*, `outlet` *(out)*, `utility_in` *(in/energy)* |
 | `Cooler` | `cooler` | `inlet` *(in)*, `outlet` *(out)*, `utility_out` *(out/energy)* |
 | `Furnace` | `furnace` | `inlet` *(in)*, `outlet` *(out)*, `fuel` *(in/feed)* |
@@ -369,8 +369,8 @@ units.Reactor(name, n_feeds=1, variant="default", width=None, height=None,
 classes.)
 
 `Tee` is the pipe tee, the junction where a line branches: a bypass leg, a
-drain, a vent, a sample point, a PSV takeoff. It is drawn as bare pipe — the run
-straight through and the branch off it, nothing at the junction — and carries no
+drain, a vent, a sample point, a PSV takeoff. It is drawn as bare pipe (the run
+straight through and the branch off it, nothing at the junction) and carries no
 tag, so it never reaches the equipment list. Nothing at the junction includes the
 [arrowhead](#which-drawing-this-is): a line ending at a tee has arrived nowhere,
 so it is drawn without one even on a PFD.
@@ -387,7 +387,7 @@ run standing on end with the branch west, `270` for east.
 
 `name` may be left out. A tee has no tag to be told apart by, so
 `Tee.repeats()` lets any two share a name and `Flowsheet.add()` hands out
-`TEE (2)`, `TEE (3)` — the same mechanism a repeated interlock square and a
+`TEE (2)`, `TEE (3)`, by the same mechanism a repeated interlock square and a
 tapped utility header use. It may still not take a name that already means
 something else, since that name is what a stream and a spec entry reach it by.
 
@@ -791,9 +791,9 @@ asking a plate exchanger for `.bottoms` raises.
 
 **An exchanger's nozzles are named for the side of the equipment they sit on,
 never for the duty the stream carries.** Which fluid runs in the shell and which
-in the tubes is a design decision an engineer makes deliberately — fouling
+in the tubes is a design decision an engineer makes deliberately: fouling
 service goes tube side because tubes can be rodded out, condensing vapour goes
-shell side — so it is a fact about the exchanger and the drawing records it.
+shell side. It is a fact about the exchanger, and the drawing records it.
 Hot and cold, by contrast, invert between operating cases while the nozzle stays
 exactly where it is, and they did not even land on the same face from one
 variant to the next.
@@ -1055,7 +1055,7 @@ mirroring move them, and `nozzle()` always takes the moved face.
 | `Separator(variant="horizontal")` | `feed` | `W` (home), `N`, `E` |
 | `Instrument` (`default`, `panel`, `aux`, `shared`, `computer`) | `pv`, `sig_in`, `sig_out` | `N`, `S`, `E`, `W` |
 
-(The trip squares — `Instrument(variant="sis")`, `"logic"` and `"interlock"` —
+(The trip squares, `Instrument(variant="sis")`, `"logic"` and `"interlock"`,
 offer no choice either.)
 The home is the symbol's own nozzle. It is where the port sits with
 `auto_faces` off, and the first entry of the menu the engine chooses from with
@@ -1332,7 +1332,7 @@ fs.connect(fic.sig_out, cv.actuator, kind="pneumatic")
 
 Loops serialize to an optional `loops:` section of the spec and round-trip
 through it; a sheet that declares none writes no section, so its spec is
-unchanged. See the spec format in the README.
+unchanged. See [Declaring a flowsheet as data](#declaring-a-flowsheet-as-data).
 
 ### Valve stations
 
@@ -1565,9 +1565,9 @@ fs.title_block = TitleBlock(title="Transfer and Relief U100", scale="NTS")
 ```
 
 The strip is fixed geometry, so a value too long for its cell is trimmed with an
-ellipsis rather than run across the rule into the cell beside it — and the
-render says which field it trimmed, on `fs.warnings`, naming the field and
-quoting the value in full:
+ellipsis rather than run across the rule into the cell beside it. The render
+says which field it trimmed, on `fs.warnings`, naming the field and quoting the
+value in full:
 
 ```python
 fs.title_block = TitleBlock(title="Ethanol Purification A300")
@@ -1578,10 +1578,10 @@ for w in fs.warnings:
 #     'Ethanol Purification A300' drawn as 'Ethanol Purification A3…'
 ```
 
-A cell with nothing worth trimming — the company name, whose only break points
-are between words, and the `SHEET n of m` count, half of which reads as a
-different sheet — is drawn in full and reported as `text-overruns-cell`
-instead. Both codes are rebuilt on every render, so shortening the field and
+A cell with nothing worth trimming is drawn in full and reported as
+`text-overruns-cell` instead: the company name, whose only break points are
+between words, and the `SHEET n of m` count, half of which reads as a different
+sheet. Both codes are rebuilt on every render, so shortening the field and
 rendering again clears the finding.
 
 ### `Annotation` and `TableBox`
@@ -1668,8 +1668,9 @@ a pump or a column raises `ValueError` naming the boundary to put it on.
 spelled in. Two signs, and a fixed order:
 
 > The following signs shall be used for creating location references:
-> — solidus (/) for identification of a sheet;
-> — full stop (.) for identification of a column, a row or a zone in a sheet.
+>
+> * solidus (/) for identification of a sheet;
+> * full stop (.) for identification of a column, a row or a zone in a sheet.
 >
 > The location reference shall be presented in following sequence:
 > document — sheet — column, row or zone.
@@ -1724,8 +1725,8 @@ flag on the three reference drawings in `professional_examples/` reads as a
 service name over a document (`Fermentation Broth` over `P&ID-201`, `Azeotropic
 Ethanol` over `PFD-302`), and not one names a sheet or a zone.
 
-`header=True` says the flag stands for a **utility header** — cooling water,
-steam, flare, plant air — rather than for one line crossing the sheet edge. A
+`header=True` says the flag stands for a **utility header** (cooling water,
+steam, flare, plant air) rather than for one line crossing the sheet edge. A
 header is a service tapped wherever it is wanted, so it may be added once per
 tap and is labelled the same way at every one:
 
@@ -1829,6 +1830,171 @@ where the flag is set for the vendored symbols.
 
 ---
 
+## Declaring a flowsheet as data
+
+An equipment list and a stream table are data, and usually already exist in a
+spreadsheet, a YAML file or a simulator export. Declare the flowsheet as a plain
+mapping and hand it to the engine instead of retyping it as Python.
+
+```python
+from pandid import Flowsheet
+
+fs   = Flowsheet.from_dict(spec)         # a plain dict, from anywhere
+fs   = Flowsheet.from_json("bfw.json")   # standard library only
+fs   = Flowsheet.from_yaml("bfw.yaml")   # pip install 'pandid[yaml]'
+spec = fs.to_dict()                      # writes the same spec back out
+```
+
+`to_dict()` round-trips. `Flowsheet.from_dict(fs.to_dict())` rebuilds an
+equivalent flowsheet with the same equipment, nozzles, placement and drawing.
+Only intent is written, never the engine's results (resolved frames, routed
+paths, computed stream numbers), so the file stays short and re-lays out
+cleanly. YAML is the one optional extra: `from_dict` and `from_json` need
+nothing, and asking for YAML without PyYAML installed says exactly that.
+
+### A complete sheet
+
+```yaml
+name: Feed Metering Skid          # the only required field
+stream_naming_scheme: "S{n}"
+line_numbering_scheme: "{size}-{service}-{sequence}-{spec}"
+line_number_start: 1001
+components: [Water, {name: Ethanol, formula: C2H6O}]
+
+units:
+  - {kind: Feed, name: Raw Feed, reference: PFD-100, pin: {x: 60, y: 275}}
+  - {kind: Fitting, name: ST-101, variant: strainer, description: Suction Strainer}
+  - {kind: Mixer, name: M-101, n_inlets: 3, description: Suction Header}
+  - {kind: Pump, name: P-101, description: Feed Pump}
+  - {kind: Splitter, name: SP-101, n_outlets: 2, description: Minimum-Flow Tee}
+  - {kind: Valve, name: FV-101, variant: control, significant: true,
+     description: Spillback Valve}
+  - {kind: Vessel, name: V-101, variant: horizontal, width: 130, height: 42,
+     description: Surge Drum, port_faces: {inlet: N}}
+  - {kind: Product, name: To Unit 200, reference: PFD-200}
+
+loops:
+  - {variable: L, number: 101}
+
+instruments:
+  - {type: LIC, number: 101, variant: panel, on: V-101, at: S, offset: 110,
+     port_faces: {sig_out: W}}
+
+streams:
+  - {from: [Raw Feed, outlet], to: [ST-101, inlet]}
+  - {from: [ST-101, outlet], to: [M-101, in_1]}
+  - {from: [M-101, outlet], to: [P-101, suction]}
+  - from: [P-101, discharge]
+    to:   [SP-101, inlet]
+    size: '6"'
+    service: P
+    spec: A1A
+    properties: {Temperature: 25 C, Pressure: 4.0 barg, Ethanol: "0.92"}
+  - {from: [SP-101, out_1], to: [V-101, inlet]}
+  - {from: [SP-101, out_2], to: [FV-101, inlet]}
+  - {from: [FV-101, outlet], to: [M-101, in_3], tear_hint: true}
+  - {from: [V-101, outlet], to: [To Unit 200, inlet]}
+  - {from: [LIC-101, sig_out], to: [FV-101, actuator], kind: electric}
+
+stream_table_sections: [[Ethanol, Mass Fraction]]
+
+title_block:
+  title: Utilities U200
+  subtitle: Process Flow Diagram 1
+  drawing_number: PFD-2001
+  company: PANDID
+  status: ISSUED FOR REVIEW
+  sheet: "1"
+  of_sheets: "2"
+  revisions:
+    - {rev: A, date: 2026-05-18, description: Issued for review, by: AA}
+    - {rev: B, date: 2026-07-02, description: Added spillback, by: AA,
+       checked: JS, approved: RL}
+
+annotations:
+  - {type: equipment_list, align: top-right}
+  - {type: notes, align: top, items: [Sampling point on every product line.]}
+  - {type: legend, align: top-left, margin: 6, entries: {SS: Stainless Steel 316L}}
+  - {type: annotation, title: HOLD, rows: [Awaiting vendor data], position: [1200, 90]}
+  - {type: table, title: TIE-INS, headers: [Tag, Line], rows: [[TI-1, 6-P-101]]}
+```
+
+### The `units` section
+
+`kind` (required) is the equipment class, in any spelling you would reasonably
+write: `HeatExchanger`, `heat_exchanger` or `hex`. `name` (required) is the tag.
+Then `variant`, `description` (feeds the equipment list), `reference` (a boundary
+flag's off-page drawing), explicit `width`/`height`, `label_pos`, `significant`
+(break the stream or line number at this inline item), `n_inlets` / `n_outlets`
+for `Mixer` / `Splitter`, `n_feeds` for `Column` / `Reactor`, `length` for
+`Conveyor`, `branch` (`outlet` / `inlet`) for `Tee`, `large_end` (`inlet` /
+`outlet`) for `Reducer`, `normal_position` (`open` / `closed`) for `Valve` and
+for `Fitting`'s `blind`, and `fail` (`open` / `closed` / `last` / `drift_open` /
+`drift_closed` / `indeterminate`) for an actuated `Valve`.
+
+### The `pin` and `port_faces` keys
+
+`pin` mirrors [`pin()`](#pin) with `x`/`y` (absolute), `col`/`row` (grid),
+`orientation` (`0`/`90`/`180`/`270`) and `mirrored` (`x`/`y`/`xy`). `port_faces`
+maps a port to the face it leaves from **as drawn**, so a mirrored or turned unit
+takes the face the reader sees. It is an override: without it the engine picks
+the face itself, and the top-level `auto_faces: false` is how you stop it.
+
+### The `loops` section
+
+Declared control loops, `{variable: F, number: 303}`, matching
+[`add_loop()`](#control-loops). Members carry their whole tag, so the section
+only records that the loop exists; a sheet that declares none writes no section
+at all.
+
+### The `instruments` section
+
+`type` (required) and `number` make the tag, so `{type: LIC, number: 101}` is
+`LIC-101` elsewhere. `on` names the host: a unit, a named stream, or
+`[unit, port]` for the line leaving that nozzle. `to_dict()` writes that last
+form, since auto-numbered stream names are rewritten at render time. `at`,
+`offset`, `angle`, `variant` and `port_faces` behave as in
+[`add_instrument()`](#instrumentation). An instrument with no `on` is laid out
+like any other unit.
+
+### The `streams` section
+
+`from` and `to` are `[unit, port]` pairs (or `{unit: ..., port: ...}`). `kind`
+makes a signal line (`electric`, `pneumatic`, `data`, and the rest), `name`
+overrides the auto number, `tear_hint` nominates the recycle to cut, `via` forces
+waypoints, and `properties` is that line's stream-table column. `size`,
+`schedule`, `service`, `spec` and `insulation` are the
+[line-number](#line-numbers) components, and `sequence` overrides the one
+auto-numbering would assign, which is why `to_dict()` writes the components but
+never the computed sequence.
+
+### The `title_block` and `annotations` sections
+
+`title_block` takes the [`TitleBlock`](#titleblock-and-revision) fields plus
+`revisions`. Each `annotations` entry is one box, typed `equipment_list`,
+`notes`, `legend`, `annotation` or `table`, placed with `align`, `position` and
+`margin` exactly as in [Sheet furniture](#sheet-furniture).
+
+### Spec errors
+
+An error names the entry and what would have worked, so a typo cannot silently
+drop a nozzle off the drawing:
+
+```text
+units[3] 'P-101': unknown key 'varient' (did you mean 'variant'?); allowed keys:
+['description', 'height', 'kind', 'label_pos', 'name', 'pin', 'port_faces', ...]
+
+streams[6].from: Pump 'P-101' has no port 'dischrge' (did you mean 'discharge'?);
+available ports: ['discharge', 'suction']
+```
+
+Every failure raises `pandid.SpecError`, a `ValueError`.
+
+Custom equipment is the one thing the spec layer does not reach; see
+[What a custom unit does not get](#what-a-custom-unit-does-not-get).
+
+---
+
 ## Command line
 
 Installing the distribution installs a `pandid` command. `python -m pandid` is the
@@ -1845,7 +2011,8 @@ pandid symbols [--kind KIND]
 
 `SPEC` is a spec file: `.yaml` or `.yml` (needs the `yaml` extra) or `.json`.
 Any other extension is refused rather than guessed at. The format itself is
-`pandid.spec`, documented in the README.
+`pandid.spec`, documented under
+[Declaring a flowsheet as data](#declaring-a-flowsheet-as-data).
 
 ### `draw`
 
@@ -2001,7 +2168,7 @@ sheet.
 
 `width` and `height` are the intrinsic size of that box. A `width=` / `height=`
 on the unit overrides them, and the artwork is scaled into the result, unevenly
-if that changes the aspect ratio — which is what a shell, a tank or an exchanger
+if that changes the aspect ratio, which is what a shell, a tank or an exchanger
 wants, since the user asked for a box and the equipment simply becomes it. Pass
 `stretchable=False` where the shape carries meaning instead: an ISA-5.1 balloon
 is a circle at every size, so it keeps its proportions and is centred in the box,
@@ -2119,3 +2286,132 @@ own is [Custom equipment](#custom-equipment).
 carries, such as a `Conveyor`, it builds one at that size. New *equipment*
 symbols should come from the vendored stencil pipeline rather than being
 hand-registered (see `CONTRIBUTING.md`).
+
+---
+
+## Standards
+
+`pandid` draws in the idiom of the process-industry drawing standards. It does
+not claim conformance to any of them, and nothing it produces has been certified
+against one. What it follows, feature by feature:
+
+- **Equipment symbols** follow the conventions of **ISO 10628-2**. They are
+  derived from the draw.io / diagrams.net P&ID stencil set, which makes no
+  standards claim of its own, so a shape is matched to the ISO 10628-2 symbol
+  where one exists rather than reproduced from the standard itself.
+- **Instrument balloons, signal lines and tag letters** follow **ANSI/ISA-5.1**.
+  ISO does not speak with one voice here. ISO 10628-1 §4.1 calls for
+  instrumentation to IEC 62424. **ISO 15519-2:2015** is ISO's own standard for
+  measurement and control on a process diagram, from the same subcommittee a
+  year later, and it sends symbols to ISO 14617 and identification to IEC 81346;
+  IEC 62424 and ISA 5.1 appear in its bibliography only. `pandid` takes neither
+  ISO route, because ISA-5.1 is what North American practice draws and what the
+  reference sheets this package was built against use. ISO 15519-1 §7.1 is the
+  permission it stands on: *"Other reference designation principles may be used
+  as long as they are agreed upon between involved parties."* ISA-5.1 §2.8.1(b)
+  asks for the same agreement from its own side, that each exception be
+  documented in the user's standard and on the drawing. `legend()` is where a
+  sheet records it.
+- **The gap to ISO 15519-2 is structural**, not a letter table. Its §5.1.1 says
+  the symbol *"consists of a circle or extended circle"*, and its Table 1 draws
+  only circles and stadiums, so the `shared` square, the `computer` hexagon and
+  the `sis` and `interlock` diamonds have no ISO counterpart at all. Table 1
+  codes location in three states, field / central / subsidiary, with no dashed
+  line and no operator-accessibility axis. Table 2 has no `T` for transmitter
+  and no `V` in any role: a transmitter is a symbol (Annex A.4.04), vibration
+  falls under `S` and viscosity under `Q`. `FT-101` therefore has no reading in
+  ISO 15519-2's terms at all.
+- **Tag numbering** is therefore the ISA-5.1 **loop number** (`FIC-101`), not
+  the IEC 81346 reference designation (`LAB01BP01`) that **ISO 15519-2** §5.3
+  requires on the lower line of a symbol. A reader coming from ISO should expect
+  the tags to look like this, and read it as the same documented exception.
+  One ISO 15519-2 rule is enforced regardless, because it is about the letters
+  and not the numbering: §5.2.4 orders the control-function letters
+  I, R, C, S, M, Z, A, so `FIC` is right and `FCI` earns a `letter-sequence`
+  warning on `fs.warnings`.
+- **Valve fail position** is drawn as **letters**, `FO` / `FC` / `FL` / `FL/DO` /
+  `FL/DC` / `FI` beside the valve, and this is a declared choice because three
+  standards draw the one fact three ways. **ANSI/ISA-5.1-2009 Table 5.4.4**
+  offers two of them itself, Method A as arrows or bars on the actuator stem and
+  Method B as the letters, and its note 5.3.4(1) requires the user's standard to
+  "document which symbols have been selected", which is what this bullet is.
+  **ISO 15519-1 §11.3.1 c)** offers the third and encodes it geometrically:
+  symbol 654's apex "shall point towards the valve symbol if the valve is closed
+  when in the at-rest position ... and from the valve symbol if the valve is open
+  when in the at-rest position", registered by **ISO 15519-2** Annex A.3 as
+  `654V1A` fail close, `654V3A` fail open and `659A` fail freeze. `pandid` takes
+  Method B on the authority of **PIP PIC001 clause 4.5.3.2**, the only one of the
+  sources that chooses between the ISA pair: *"automated valve fail actions shall
+  be shown with text (FC/FO/FL/FI) in accordance with ISA-5.1"*, with the comment
+  that *"using stem arrows as outlined in ISA-5.1 is not recommended"*. The
+  placement is PIP's too, **clause 4.2.4.6(1)**, below the valve on a horizontal
+  run and to the right of it on a vertical one. The reference sheets this package
+  was built against draw their control valves as a bare diaphragm dome with
+  neither letters nor stem arrows, so nothing on an issued drawing argued for the
+  geometry, and the ISO encoding needs an actuator drawn on a stem clear of the
+  body, which the stencil set this package draws from does not give it. See
+  [Fail position](#fail-position).
+- **A normally closed valve** is drawn with its body darkened solid on the
+  authority of **PIP PIC001 clause 4.2.2.7**. It is not an ISA-5.1, ISO 10628 or
+  ISO 15519 convention, and **ISO 15519-1 §11.4.5** prescribes a different
+  answer: letters, not fill. See
+  [Normally closed valves](#normally-closed-valves).
+- **Sheet sizes** are the **ISO 216** A series, declared in millimetres on the
+  SVG root so a sheet prints at its physical size.
+- **The zone grid** is a drawing-frame zone reference in the ASME idiom: letters
+  run bottom to top, numerals right to left. It is **not** an ISO 5457 grid, and
+  [Sheet size](#sheet-size) gives the clauses it diverges from. ISO 15519-1
+  §5.1.2 asks for the centring marks only on a document prepared for
+  microfilming. The interval and the field count here are chosen to suit the
+  sheet.
+- **The title block** carries the data fields **ISO 7200** specifies, which
+  ISO 10628-1 §5.1.2 requires on a process diagram: identification number, date
+  of issue, sheet number, title, approval person, creator, and legal owner,
+  which is the issuing organisation and so is the `company` cell. `client` is
+  not an ISO 7200 field; it is there because issued sheets carry one. ISO 7200's
+  eighth mandatory field, **document type**, has no cell yet.
+- **Relative line weights** follow **ISO 15519-1 §6.2**, *"if two or more widths
+  of line are used, the ratio between any two widths shall be at least 2:1"*,
+  spent as **ISO 15519-2 Annex A.1** spends it: a pipeline (A.1.01) at twice the
+  weight of an instrument connection, control connection, pilot line or signal
+  line (A.1.02, A.1.03). Process piping and equipment outlines are the heavy
+  class; every signal kind, the instrument taps and the pneumatic cross-hatch
+  are the fine one. On A3 at 1:1 that is 0,53 mm against 0,26 mm, which is the
+  standard's 0,5 / 0,25 pair. See [Signal lines](#signal-lines).
+- **Where a label sits on a pipe** follows **ISO 15519-1 §7.2.5**, which puts a
+  connection's designation *"above the connection with horizontal connecting
+  lines and to the left of vertical connecting lines"*. That is where `pandid`
+  puts a line number beside its run, turned to read bottom to top on a riser,
+  which is one of the two reading directions §5.1.5 allows. §5.1.5's second
+  sentence, holding a reference designation horizontal *"independent of symbol
+  orientation"*, is a rule about a symbol's own designation and does not reach a
+  connection. `pandid` also draws the number **on** the line where the run is
+  long enough to carry it, which §7.2.5 words as a `should`, so that one is a
+  divergence rather than a breach. See
+  [Where the number sits on the line](#where-the-number-sits-on-the-line).
+- **Off-page connector text** is composed by **ISO 15519-1 §9**, which reserves a
+  solidus for the sheet and a full stop for the zone and fixes the sequence the
+  three parts appear in. The clause is quoted in full under
+  [Composing a location reference](#composing-a-location-reference).
+  `location_reference()` spells it, reproducing
+  all seven rows of the standard's Table 2 (`7569/12.B3`, `/12.B3`, `/.B3`). A
+  `reference` is still a plain string, because a document number on its own is
+  what an issued sheet's flags actually carry: the three reference drawings this
+  package was built against name `PFD-201`, `PFD-302`, `PCD-302` and `PFD-501`,
+  and not one of them names a sheet or a zone. §12.6's placement rule, that the
+  references *"shall be placed in the outer grid zone of the content area"*, is
+  left to `pin()`, so the flag goes where the author puts it. Reciprocal
+  references between the two ends of an interrupted line are outside the model,
+  a `Flowsheet` being one sheet with no peer end to read a zone from.
+- **Symbols where gravity is a functionality** are not turned. **ISO 15519-1
+  §11.4.2** excepts them from the general permission to turn and mirror: *"for
+  example symbol 2061: Open tank or symbol X 2618: Cyclone separator … Such
+  symbols must not be turned."* 27 registered symbols carry
+  `Symbol.gravity_fixed`, and
+  [Symbols that must not be turned](#symbols-that-must-not-be-turned) lists them.
+
+The largest remaining gap against ISO 10628-1 is §5.3.1 and §5.4.2, and against
+ISO 15519-1 is §11.1.3 (*"when the size of a symbol is changed, the line width
+shall be unchanged"*): line widths and character heights are in drawing units
+and are scaled with the drawing, so the weights above hold their *ratio* at any
+sheet size but no physical width or height in millimetres is controlled.

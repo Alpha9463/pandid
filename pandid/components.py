@@ -1,4 +1,4 @@
-"""Component — an entry in a flowsheet's chemical-species registry.
+"""Component: an entry in a flowsheet's chemical-species registry.
 
 Carries no thermophysical data yet; a future mass/energy balance backend
 attaches property calculations here.

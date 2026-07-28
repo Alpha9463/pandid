@@ -5,16 +5,16 @@ follow ANSI/ISA-5.1. Neither set is certified conformant to anything, and the
 stencil library the equipment comes from makes no standards claim of its own.
 Sources:
 
-- **Vendored (draw.io / diagrams.net P&ID stencils, Apache-2.0)** — valves and
+- **Vendored (draw.io / diagrams.net P&ID stencils, Apache-2.0)**: valves and
   their variants, pumps, compressors, blowers, heat exchangers, vessels,
   columns, reactors, separators, tanks, reducers, in-line fittings, ejectors,
   vents and funnels. Converted from mxGraph
   stencil XML by ``scripts/vendor_symbols.py`` into ``_vendored_symbols.py`` and
   registered last (overriding the hand-drawn defaults of the same kind). See the
   repo ``NOTICE`` for attribution.
-- **Hand-drawn primitives** — Feed/Product boundary markers, the variable-port
+- **Hand-drawn primitives**: Feed/Product boundary markers, the variable-port
   Mixer and Splitter, and the pipe tee.
-- **Built to size (draw.io-derived, Apache-2.0)** — the belt conveyor. Adapted
+- **Built to size (draw.io-derived, Apache-2.0)**: the belt conveyor. Adapted
   from a stencil but drawn here rather than generated, because a fixed path
   cannot stretch; see :func:`conveyor_symbol` and the repo ``NOTICE``.
 
@@ -24,9 +24,9 @@ Authoring conventions (hand-drawn symbols)
 - Ports: named anchors on the boundary face a stream attaches to; names MUST
   match the owning :class:`~pandid.units.Unit`'s port names.
 - Variants share a ``kind`` and register under a ``variant`` name.
-- A symbol whose shape carries meaning — a balloon is a circle because ISA-5.1
-  says a circle — sets ``stretchable=False``, and is centred in a box of another
-  shape rather than distorted to fill it.
+- A symbol whose shape carries meaning sets ``stretchable=False`` and is
+  centred in a box of another shape rather than distorted to fill it. A balloon
+  is a circle because ISA-5.1 says a circle.
 """
 
 import math
@@ -47,9 +47,9 @@ _COINCIDENT = 0.5
 class PortSeries:
     """A family of like ports spread evenly along one face of a symbol.
 
-    A :class:`~pandid.units.Mixer` does not have a fixed set of inlets — the unit
-    decides how many there are — so the symbol cannot author a coordinate per
-    port the way a pump authors its suction. It declares the *rule* instead, and
+    A :class:`~pandid.units.Mixer` does not have a fixed set of inlets, since
+    the unit decides how many there are, so the symbol cannot author a
+    coordinate per port the way a pump authors its suction. It declares the *rule* instead, and
     the coordinates are resolved once the unit is in hand and the count is known.
 
     Members are ``prefix`` followed by a 1-based index (``in_1``, ``in_2``, ...),
@@ -59,7 +59,7 @@ class PortSeries:
     with one feed has a nozzle called ``feed``, and only grows ``feed_1``,
     ``feed_2`` when it is given more than one.
 
-    Ports sit ``pitch`` apart, centred on ``at`` — the point along the face the
+    Ports sit ``pitch`` apart, centred on ``at``: the point along the face the
     symbol would have drawn a single nozzle at, or the middle of the face when
     it names none. Past the point where that spacing would run them off the
     ends, the whole run is squeezed into ``extent`` of the face instead. The
@@ -94,7 +94,7 @@ class PortSeries:
         """Where members can land: ``(face_coordinate, lo, hi)`` along the face.
 
         A series has no fixed membership, so it has no fixed set of points to
-        compare a nozzle against — it has a *stretch of face* it may put one on,
+        compare a nozzle against. It has a *stretch of face* it may put one on,
         for some count. One member sits at ``at``; the widest run spreads
         ``extent`` of the face around it. Anything inside that band shares a
         placement with a member sooner or later, which is what a collision check
@@ -118,7 +118,7 @@ class Symbol:
     # its own exact coordinate so a moved port still lands on drawn ink:
     #   {"feed": {"W": (0.0, 15.0), "N": (30.0, 0.0), "E": (91.5, 15.0)}}
     # ``__post_init__`` folds the symbol's own nozzle in as the first entry, so
-    # this is the *whole* menu — nothing downstream has to merge a privileged
+    # this is the *whole* menu, so nothing downstream has to merge a privileged
     # default back in, and a nozzle fixed by physics (a drum's liquid draw is on
     # the bottom because gravity put it there) is simply one with a single entry.
     port_faces: dict[str, dict[str, tuple[float, float]]] = field(default_factory=dict)
@@ -127,11 +127,12 @@ class Symbol:
     # an artefact of having to pick a default rather than physics. Only these
     # may offer each other the same face: the overlap is a menu, not a
     # collision, since one placement per port is ever live. Authoring
-    # *alternates* for an equipment nozzle does not make it faceless — a drum's
+    # *alternates* for an equipment nozzle does not make it faceless: a drum's
     # inlet may be moved to the right head, but that is still the inlet's
     # nozzle and nothing else may sit on it.
     faceless_ports: frozenset[str] = frozenset()
-    # Port families whose membership the *unit* decides — a Mixer's inlets. The
+    # Port families whose membership the *unit* decides, such as a Mixer's
+    # inlets. The
     # symbol cannot list them in ``ports`` because it does not know how many
     # there are, so it declares the rule and :mod:`pandid.portgeom` resolves the
     # coordinates against the unit. A series is the sole authority for its own
@@ -284,7 +285,7 @@ class Symbol:
         return None
 
     def symbol_id(self) -> str:
-        """The svg id, for messages — a Symbol carries no name of its own."""
+        """Return the svg id, for messages; a Symbol has no name of its own."""
         match = re.search(r'\bid="([^"]+)"', self.svg)
         return match.group(1) if match else "<symbol>"
 
@@ -293,18 +294,18 @@ class Symbol:
 
         Two ports at one coordinate means a stream routed to one lands exactly
         on top of a stream routed to the other. Two placements of a *single*
-        port may coincide — only one of them is ever live.
+        port may coincide, since only one of them is ever live.
 
         :attr:`faceless_ports` are exempt from *each other*, not from the rule:
         they are still checked against the nozzles that do own their face. The
         exemption is a declaration, deliberately, rather than something read off
-        the shape of the menu — "this connection is faceless" and "this nozzle
+        the shape of the menu: "this connection is faceless" and "this nozzle
         has authored alternatives" both produce a multi-entry menu, and only the
         first of them justifies two ports sitting on one point.
 
         A :class:`PortSeries` is checked as the band of face it may place a
         member on, reported against ``prefix*``. Its membership belongs to the
-        unit rather than the symbol, so there is no set of points to compare —
+        unit rather than the symbol, so there is no set of points to compare,
         but a nozzle standing inside that band shares a placement with a member
         for some count, and the whole value of a static check is saying so
         before a drawing is made.
@@ -352,14 +353,14 @@ class Symbol:
 #
 # It cannot come through that generator with the rest: the generator emits one
 # fixed-size Symbol per shape, and a fixed drawing placed in a box of another
-# aspect ratio is scaled unevenly — which would draw the rollers as ellipses,
+# aspect ratio is scaled unevenly, which would draw the rollers as ellipses,
 # the one thing this symbol exists to avoid.
 # ---------------------------------------------------------------------------
 
 #: Roller radius, from the stencil's 20x20 roller ellipses. The same at every
 #: length: only the straight belt run between the rollers grows.
 CONVEYOR_ROLLER = 10.0
-#: Default belt run, from the stencil's own proportions — it draws the rollers
+#: Default belt run, from the stencil's own proportions: it draws the rollers
 #: centred at x=20 and x=80, so the conveyor spans x=10..90.
 CONVEYOR_LENGTH = 80.0
 #: Two roller diameters. Any shorter and the rollers overlap, leaving no belt.
@@ -424,7 +425,7 @@ def conveyor_symbol(length: float = CONVEYOR_LENGTH) -> Symbol:
         # The rollers are circles, which is the whole reason this symbol is
         # built to its length instead of scaled to it. A Conveyor is sized by
         # ``length`` and refuses width/height, so its box is always exactly the
-        # box it was drawn in and nothing ever asks — but the drawing says what
+        # box it was drawn in and nothing ever asks, but the drawing says what
         # it is either way.
         stretchable=False,
     )
@@ -870,7 +871,7 @@ class SymbolRegistry:
 
     def _register_defaults(self):
         # ====================================================================
-        # Feed / Product — rendered dynamically in svg.py, these are fallbacks
+        # Feed / Product: rendered dynamically in svg.py, these are fallbacks
         # ====================================================================
         self.register("feed", Symbol(
             svg='<g id="sym_feed"><polygon points="0,10 35,10 50,25 35,40 0,40" fill="none" stroke="black" stroke-width="2"/></g>',
@@ -892,7 +893,7 @@ class SymbolRegistry:
         # drawn as written.
 
         # ====================================================================
-        # Centrifugal Pump — circle with discharge nozzle at top, suction on
+        # Centrifugal Pump: circle with discharge nozzle at top, suction on
         # left, baseplate line
         # ====================================================================
         self.register("pump", Symbol(
@@ -909,7 +910,7 @@ class SymbolRegistry:
         ))
 
         # ====================================================================
-        # Compressor — circle with triangle indicator
+        # Compressor: circle with triangle indicator
         # ====================================================================
         self.register("compressor", Symbol(
             svg=(
@@ -923,7 +924,7 @@ class SymbolRegistry:
         ))
 
         # ====================================================================
-        # Separator — vertical vessel with elliptical heads
+        # Separator: vertical vessel with elliptical heads
         # ====================================================================
         self.register("separator", Symbol(
             svg=(
@@ -938,7 +939,7 @@ class SymbolRegistry:
         ))
 
         # ====================================================================
-        # Reactor — vertical vessel with internal coil indicator
+        # Reactor: vertical vessel with internal coil indicator
         # ====================================================================
         self.register("reactor", Symbol(
             svg=(
@@ -978,7 +979,7 @@ class SymbolRegistry:
         
 
         # ====================================================================
-        # Mixer — Standard triangle pointing right
+        # Mixer: standard triangle pointing right
         # All inputs on the left flat face, output at right vertex
         # ====================================================================
         self.register("mixer", Symbol(
@@ -989,7 +990,7 @@ class SymbolRegistry:
         ))
 
         # ====================================================================
-        # Valve — a bowtie, two opposing triangles, with a stem bar
+        # Valve: a bowtie, two opposing triangles, with a stem bar
         # ====================================================================
         self.register("valve", Symbol(
             svg=(
@@ -1004,7 +1005,7 @@ class SymbolRegistry:
         ))
 
         # ====================================================================
-        # Vessel — vertical drum with dished heads
+        # Vessel: vertical drum with dished heads
         # ====================================================================
         self.register("vessel", Symbol(
             svg=(
@@ -1019,7 +1020,7 @@ class SymbolRegistry:
         ))
 
         # ====================================================================
-        # Heater — circle with an internal zigzag (electric heater symbol)
+        # Heater: circle with an internal zigzag (electric heater symbol)
         # ====================================================================
         self.register("heater", Symbol(
             svg=(
@@ -1033,7 +1034,7 @@ class SymbolRegistry:
         ))
 
         # ====================================================================
-        # Cooler — circle with internal zigzag plus cooling arrow
+        # Cooler: circle with internal zigzag plus cooling arrow
         # ====================================================================
         self.register("cooler", Symbol(
             svg=(
@@ -1049,7 +1050,7 @@ class SymbolRegistry:
         ))
 
         # ====================================================================
-        # Distillation Column — tall vertical vessel with internal trays
+        # Distillation Column: tall vertical vessel with internal trays
         # ====================================================================
         self.register("column", Symbol(
             svg=(
@@ -1075,13 +1076,13 @@ class SymbolRegistry:
         
 
         # ====================================================================
-        # Belt conveyor — registered at its default length. A conveyor of any
+        # Belt conveyor: registered at its default length. A conveyor of any
         # other length gets its own symbol from for_unit(); see conveyor_symbol.
         # ====================================================================
         self.register("conveyor", conveyor_symbol())
 
         # ====================================================================
-        # Pipe tee — the junction where a line branches.
+        # Pipe tee: the junction where a line branches.
         #
         # Drawn as the pipe and nothing else. On the reference sheet P&ID-301
         # the CV-303 station carries a bypass over the top and two drain legs
@@ -1123,7 +1124,7 @@ class SymbolRegistry:
         ))
 
         # ====================================================================
-        # Splitter — Standard triangle with point on left, flat on right
+        # Splitter: standard triangle with point on left, flat on right
         # All outputs on the right flat face, input at left vertex
         # ====================================================================
         self.register("splitter", Symbol(
@@ -1154,7 +1155,7 @@ class SymbolRegistry:
         _inst_menu = {name: dict(_inst_faces) for name in _inst_ports}
         _inst_faceless = frozenset(_inst_ports)
         # None of them stretches. ISA-5.1 balloons are *circles*, and the square,
-        # the hexagon and the interlock box are read against that circle — an
+        # the hexagon and the interlock box are read against that circle: an
         # oval bubble is not a bubble drawn wide, it is a different symbol, and
         # a squashed hexagon stops being the one that means "computer function".
         # Sized off their own proportions they keep them and are centred in the
@@ -1199,7 +1200,7 @@ class SymbolRegistry:
         # diamond-in-square is the safety-instrumented-system / alternate-choice
         # instrument symbol, and it is what an issued sheet draws for a trip:
         # every occurrence on the reference P&ID-301 is diamond-in-square. What
-        # neither of them is, is a bare square — that is the shared-display
+        # neither of them is, is a bare square. That is the shared-display
         # symbol of the "shared" variant with its balloon left off, which is
         # what this variant used to be drawn as.
         #
@@ -1216,7 +1217,7 @@ class SymbolRegistry:
         # diamond's lower edges: the square has to grow by root two, 28 * 1.414
         # = 39.6, for the number to sit inside the diamond with the clearance it
         # had inside the square. 40 also lands just inside the 44 balloon, which
-        # is the relationship a real sheet draws — on P&ID-301 the trip square
+        # is the relationship a real sheet draws: on P&ID-301 the trip square
         # and the balloons are both 17.0 pt, cut to one module.
         #
         # The three ports are unchanged and need no adjusting: the midpoint of
@@ -1251,7 +1252,7 @@ class SymbolRegistry:
             ports=_logic_ports),
             "interlock")
 
-        # Vendored draw.io symbols (Apache-2.0) — registered last so they
+        # Vendored draw.io symbols (Apache-2.0): registered last so they
         # override the hand-drawn defaults for shared kinds and add variants.
         from pandid.render._vendored_symbols import register_vendored
         register_vendored(self)

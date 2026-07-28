@@ -2,10 +2,10 @@
 
 Separates two kinds of problems:
 
-- **errors** — genuine contradictions the engine cannot honor (overlapping
+- **errors**: genuine contradictions the engine cannot honor (overlapping
   pinned units, negative/non-finite coordinates). ``render()`` raises on these
   rather than emit a silently-wrong drawing.
-- **warnings** — the drawing is valid but imperfect (a stream crosses a unit
+- **warnings**: the drawing is valid but imperfect (a stream crosses a unit
   body, a route detours excessively, a tag spells its letters in an order no
   standard uses). Collected on ``fs.warnings`` for the caller to inspect; never
   fatal.
@@ -29,9 +29,9 @@ _TOL = 1.0  # px tolerance so touching edges are not flagged as overlaps
 #:
 #:     Letter codes for control function shall be represented in following
 #:     sequence: I, R, C, S, M, Z, and A, for example:
-#:     — ICA   Indication, control (closed loop) and alarm;
-#:     — CS    Control (closed loop) and switching (open loop);
-#:     — ICZA  Indication, control (closed loop), switching (open loop) safety
+#:     * ICA   Indication, control (closed loop) and alarm;
+#:     * CS    Control (closed loop) and switching (open loop);
+#:     * ICZA  Indication, control (closed loop), switching (open loop) safety
 #:             relevant, and alarm.
 #:
 #: So ``FIC`` is right and ``FCI`` is wrong. Only these seven letters are
@@ -217,8 +217,8 @@ def validate(fs: "Flowsheet") -> list["Issue"]:
         # half of the symbol-level duplicate-nozzle rule
         # (:meth:`pandid.render.symbols.Symbol.coincident_ports`), and the only
         # half that can see it: a symbol may legitimately offer one face to two
-        # faceless connections, and which placement each port took — and what
-        # mirroring then did to it — is a property of the finished sheet.
+        # faceless connections, and which placement each port took (and what
+        # mirroring then did to it) is a property of the finished sheet.
         for u in fs.units:
             seen: dict[tuple[float, ...], str] = {}
             for name, port in u.ports.items():
@@ -230,7 +230,7 @@ def validate(fs: "Flowsheet") -> list["Issue"]:
                     seen[pt] = name
                     continue
                 # A port the symbol never anchored has no placement to collide
-                # with — it fell back to the centre of the box, where every
+                # with: it fell back to the centre of the box, where every
                 # other unanchored port also is. A missing nozzle is a gap in
                 # the symbol, not a contradiction on the sheet, so it does not
                 # stop the drawing.

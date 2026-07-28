@@ -1,4 +1,4 @@
-"""pandid — a Python engine for chemical-engineering Process Flow Diagrams.
+"""pandid: a Python engine for chemical-engineering Process Flow Diagrams.
 
 Public API (topology layer)::
 

@@ -9,7 +9,7 @@ Phase 3/4: Coordinate Assignment
 
 Two phases follow, both of which need every drawn box to be final and neither of
 which may move one: port-face selection, then label placement. Their order is
-load-bearing — a label goes to a face no connected nozzle occupies, so it has to
+load-bearing: a label goes to a face no connected nozzle occupies, so it has to
 be told which faces those are.
 """
 

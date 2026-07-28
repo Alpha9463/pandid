@@ -4,7 +4,7 @@ quality of the errors a hand-written file gets back.
 The error tests assert on the *message*, not just the type. Whoever writes one
 of these files is a process engineer with a typo, not a programmer with a
 traceback, so "unknown key 'varient'" that goes on to name the real key is the
-feature — a bare ValueError is a bug report waiting to happen.
+feature. A bare ValueError is a bug report waiting to happen.
 """
 
 import json
@@ -139,7 +139,7 @@ def test_variable_port_units():
 def test_exchanger_side_nozzles_round_trip():
     """An exchanger's nozzles are named for its sides, and the sides depend on
     the variant, so the reader has to build the right four before it can resolve
-    a connection to them — and the writer has to name them back."""
+    a connection to them, and the writer has to name them back."""
     spec = {
         "name": "T",
         "units": [

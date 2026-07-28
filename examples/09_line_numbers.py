@@ -2,7 +2,7 @@
 Example 9: Line numbers
 
 The identifier that ties a line on the sheet to the line list, the stress
-calculation and the isometric: `6"-P-1001-A1A` — size, service, sequence, spec.
+calculation and the isometric: `6"-P-1001-A1A` is size, service, sequence, spec.
 Each line's components go in on `connect()` and the sequence is filled by the
 same numbering that hands out `S1`, `S2`, so nothing has to be kept unique by
 hand.
@@ -12,7 +12,7 @@ match the piping:
 
 - it carries **through** a hand valve and a strainer, so one line keeps one
   number over its whole run;
-- it **breaks** at a unit marked `significant` — which is exactly where the
+- it **breaks** at a unit marked `significant`, which is exactly where the
   spec breaks, at the control valve and across the relief valve.
 
 The tail-pipe to flare shows the other half: `sequence` set by hand, for a line

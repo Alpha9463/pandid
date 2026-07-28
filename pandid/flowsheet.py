@@ -1,7 +1,7 @@
-"""Flowsheet — the top-level container and the single source of truth for
-connectivity. Units are added with ``add()``; streams are created only through
-``connect()``, which validates the connection and enforces the one-stream-per-port
-rule.
+"""The top-level container and the single source of truth for connectivity.
+
+Units are added with ``add()``; streams are created only through ``connect()``,
+which validates the connection and enforces the one-stream-per-port rule.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 _ENERGY_ROLES = {"energy", "utility"}
 
-#: Size, service, sequence and spec — the four parts almost every site's line
+#: Size, service, sequence and spec: the four parts almost every site's line
 #: number opens with. Insulation and schedule are available to a scheme that
 #: wants them, and are left out of the default because most sheets carry
 #: neither: a site that quotes the schedule on the line rather than leaving it
@@ -177,8 +177,8 @@ class Flowsheet:
         :class:`~pandid.units.Tee` repeats for the opposite reason: it draws no
         tag at all, so there is nothing on the sheet for two of them to confuse.
 
-        Such a repeat is accepted and given a name of its own — ``I-1``,
-        ``I-1 (2)`` — so the unit that a stream, a spec entry or an equipment
+        Such a repeat is accepted and given a name of its own (``I-1``,
+        ``I-1 (2)``), so the unit that a stream, a spec entry or an equipment
         list means is never in doubt, while the tag drawn stays ``I-1``.
         """
         if unit in self.units:
@@ -219,7 +219,7 @@ class Flowsheet:
 
         The tag is what the sheet draws and what repeats; the name is what the
         flowsheet is addressed by, so it stays unique and stays derived from the
-        tag — second, third and fourth square of ``I-1`` become ``I-1 (2)``,
+        tag: second, third and fourth square of ``I-1`` become ``I-1 (2)``,
         ``I-1 (3)``, ``I-1 (4)``, in the order they are added.
         """
         taken = {u.name for u in self.units}
@@ -605,8 +605,8 @@ class Flowsheet:
         src.stream = stream
         dst.stream = stream
         self.streams.append(stream)
-        # The number a caller reads off the returned stream — into a report, a
-        # stream table, a label of their own — has to be the number that gets
+        # The number a caller reads off the returned stream, into a report, a
+        # stream table or a label of their own, has to be the number that gets
         # drawn, so numbering is settled here rather than at render time.
         self.renumber_streams()
         return stream
@@ -700,14 +700,14 @@ class Flowsheet:
         break the number at an important valve). Explicitly-named streams keep
         their name and lend it to their whole inline group. What carries the
         number through is the ``inlet`` to ``outlet`` run, so a tee's *branch*
-        takes a number of its own — the bypass leg or drain off a station is its
+        takes a number of its own: the bypass leg or drain off a station is its
         own line, and the run it leaves carries straight on.
 
         A line carrying line-number components is named by its line number
         rather than its stream number, on the same terms: the first segment of a
         group that carries components supplies them for the whole group, so a
         line number survives an inline valve and breaks where a significant one
-        does — which is exactly where the spec breaks.
+        does, which is exactly where the spec breaks.
 
         Process streams take the low numbers because they are the ones drawn on
         the sheet and quoted in the stream table; energy streams, which are also
@@ -819,7 +819,7 @@ class Flowsheet:
         through ``"A0"``), fitting the drawing into what the sheet furniture
         leaves; omit it to size the sheet to the drawing instead.
         ``jump_direction`` selects which of two crossing lines gets the
-        semicircle hop — ``"vertical"`` or ``"horizontal"``.
+        semicircle hop: ``"vertical"`` or ``"horizontal"``.
 
         When ``check`` is true, validation runs first: any *error* raises
         :class:`ValueError`, and *warnings* are collected on ``self.warnings``.
@@ -853,8 +853,8 @@ class Flowsheet:
 
         The output format is inferred from the file extension:
 
-        - ``.svg`` — pure-Python, always available.
-        - ``.pdf`` / ``.png`` — require the optional ``cairosvg`` backend
+        - ``.svg``: pure-Python, always available.
+        - ``.pdf`` / ``.png``: require the optional ``cairosvg`` backend
           (``pip install 'pandid[pdf]'``).
 
         Args:

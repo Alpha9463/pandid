@@ -1,4 +1,4 @@
-"""Stream — a connection from one outlet Port to one inlet Port.
+"""Stream: a connection from one outlet Port to one inlet Port.
 
 `name` is the stream number. On an auto-named stream the flowsheet owns it and
 keeps it equal to what gets drawn; a name passed to `connect()` is never touched.

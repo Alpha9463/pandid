@@ -458,8 +458,8 @@ def test_a_barred_balloons_tag_clears_its_location_bar():
 def test_a_short_pneumatic_run_still_gets_its_cross_hatch():
     """ISA draws a pneumatic signal as a *solid* line marked with double
     cross-hatches, so the hatch is the only thing distinguishing it from process
-    piping. One mark per 45px alone leaves a short run — a transducer to the
-    actuator right beneath it — with none at all, rendering it as plain pipe."""
+    piping. One mark per 45px alone leaves a short run (a transducer to the
+    actuator right beneath it) with none at all, rendering it as plain pipe."""
     fs = Flowsheet("short-pneumatic")
     valve = fs.add(U.Valve("LV-101", variant="control")).pin(x=300, y=300)
     ly = fs.add_instrument("LY", 101, on=valve, at="N", offset=58)
@@ -485,7 +485,7 @@ def test_a_short_pneumatic_run_still_gets_its_cross_hatch():
 
 
 def _interlocked(n=4):
-    """One trip acting on *n* valves — the shape of P&ID_301's interlock I 1."""
+    """One trip acting on *n* valves: the shape of P&ID_301's interlock I 1."""
     fs = Flowsheet("interlock")
     pairs = []
     for i in range(n):
@@ -546,7 +546,7 @@ def test_a_square_and_a_balloon_cannot_share_a_tag(variants):
 
 def test_a_repeated_square_survives_a_round_trip_through_a_spec():
     """Each square is written out and read back as its own entry, wired to its
-    own valve — which is what needs a name the spec can address it by."""
+    own valve, which is what needs a name the spec can address it by."""
     fs, _ = _interlocked()
     spec = fs.to_dict()
     rebuilt = Flowsheet.from_dict(spec)

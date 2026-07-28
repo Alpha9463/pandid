@@ -11,7 +11,7 @@ def gapped_kind():
 
     No shipped symbol has this gap: every port a built-in unit declares is
     either anchored or placed by a :class:`~pandid.render.symbols.PortSeries`. The
-    centre-of-the-box fallback is still reachable, though — it is what any
+    centre-of-the-box fallback is still reachable, though: it is what any
     symbol registered from outside this package gets when it anchors fewer
     ports than its unit declares. Tests covering that fallback build their own
     specimen here rather than leaning on a gap in the shipped registry, which

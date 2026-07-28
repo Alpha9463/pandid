@@ -21,12 +21,12 @@ from pandid import Flowsheet, units
 def main():
     fs = Flowsheet("Manual Override Example")
 
-    # Top train — pinned so every port is on the same line: straight runs.
+    # Top train, pinned so every port is on the same line: straight runs.
     f1 = fs.add(units.Feed("F-1")).pin(x=60, y=105)
     e1 = fs.add(units.HeatExchanger("E-1")).pin(x=210, y=100)
     p1 = fs.add(units.Product("P-1")).pin(x=430, y=105)
 
-    # Bottom train — same idea, 200px lower.
+    # Bottom train: the same idea, 200px lower.
     f2 = fs.add(units.Feed("F-2")).pin(x=60, y=305)
     e2 = fs.add(units.HeatExchanger("E-2")).pin(x=210, y=300)
     p2 = fs.add(units.Product("P-2")).pin(x=430, y=305)

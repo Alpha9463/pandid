@@ -6,9 +6,9 @@ A dev tool for reviewing the icon library visually:
     python scripts/symbol_sheet.py [out.svg]
 
 Each cell shows one (kind, variant) symbol scaled to fit, its name, and a red
-dot at every named port anchor. A device drawn in two positions — a spectacle
-blind — gets a cell for each, since the second drawing is a symbol of its own
-and nothing else on this sheet would show it. Purely for inspection — not part
+dot at every named port anchor. A device drawn in two positions (a spectacle
+blind) gets a cell for each, since the second drawing is a symbol of its own
+and nothing else on this sheet would show it. Purely for inspection, not part
 of the package.
 """
 import sys
@@ -45,7 +45,7 @@ def main():
          f'viewBox="0 0 {W} {H}">',
          f'<rect width="{W}" height="{H}" fill="white"/>',
          f'<text x="20" y="36" font-family="sans-serif" font-size="22" '
-         f'font-weight="bold">pandid symbol library — {len(items)} symbols</text>']
+         f'font-weight="bold">pandid symbol library: {len(items)} symbols</text>']
 
     for idx, ((kind, variant), position, sym) in enumerate(items):
         r, c = divmod(idx, COLS)

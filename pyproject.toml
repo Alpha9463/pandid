@@ -7,13 +7,13 @@ build-backend = "hatchling.build"
 # the import name, so there is one name to remember. Plain "pfd" was not an
 # option: it is taken on PyPI by an unrelated project (Parallel Fast Downloader).
 name = "pandid"
-dynamic = ["version"]     # read from pandid/__init__.py — see [tool.hatch.version]
+dynamic = ["version"]     # read from pandid/__init__.py; see [tool.hatch.version]
 description = "Generate chemical-engineering P&IDs and process flow diagrams with automatic layout and orthogonal stream routing."
 readme = "README.md"
 requires-python = ">=3.10"
 # The engine is PolyForm Small Business; the vendored draw.io symbol geometry
 # in pandid/render/_vendored_symbols.py stays Apache-2.0, as that licence requires.
-# NOTICE says which files are which -- the expression alone cannot.
+# NOTICE says which files are which; the expression alone cannot.
 license = "LicenseRef-PolyForm-Small-Business-1.0.0 AND Apache-2.0"
 license-files = ["LICENSE", "LICENSE-APACHE", "NOTICE"]
 authors = [{ name = "Alex Anderson" }]

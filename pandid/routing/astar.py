@@ -35,10 +35,10 @@ def find_path(
     edge_penalties: Optional[Dict[Tuple[Tuple[float, float], Tuple[float, float]], float]] = None,
     is_recycle: bool = False
 ) -> List[Tuple[float, float]]:
-    """
-    Finds the shortest orthogonal path on the visibility graph using A*.
+    """Find the shortest orthogonal path on the visibility graph using A*.
+
     start_dir: The OUTWARD normal direction of the source port. ``start`` is already
-        the port's projected escape node, so this only seeds the travel direction —
+        the port's projected escape node, so this only seeds the travel direction;
         it is not re-imposed on the first step.
     goal_dir: The OUTWARD normal direction of the destination port. The path must arrive heading the opposite direction.
     """
@@ -73,7 +73,7 @@ def find_path(
             
             # 1. Never reverse along the axis just travelled. A reversal
             #    retraces the segment it just drew, and the cost model charges
-            #    it a single bend — cheaper than the honest two-bend detour
+            #    it a single bend, cheaper than the honest two-bend detour
             #    around the obstacle that provoked it, so without this ban the
             #    search prefers lines drawn over themselves.
             #
@@ -121,7 +121,7 @@ def find_path(
                 if (current[1] == neighbor[1] and current[1] not in graph.recycle_y
                         and current[1] not in (start[1], goal[1])):
                     # Penalize off-lane horizontal travel, EXCEPT at the stream's own
-                    # port elevations — lets a short recycle run straight at its port
+                    # port elevations: lets a short recycle run straight at its port
                     # height instead of dipping down to the lane and back.
                     cost += dist * 10.0
             else:

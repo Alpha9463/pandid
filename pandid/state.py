@@ -1,4 +1,4 @@
-"""State — the thermodynamic condition of a stream or port.
+"""State: the thermodynamic condition of a stream or port.
 
 This is the seam a mass/energy-balance engine writes to. It carries no property
 calculations itself; a pluggable thermo backend attaches those. Keeping this

@@ -1,4 +1,4 @@
-"""Port — a named nozzle on a unit; the attachment point for a stream.
+"""Port: a named nozzle on a unit, the attachment point for a stream.
 
 A port belongs to exactly one unit, has a direction ("inlet"/"outlet") and a
 role (e.g. "feed", "vapor", "energy"), and holds at most one stream. Named port

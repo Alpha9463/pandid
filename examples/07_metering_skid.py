@@ -7,8 +7,8 @@ surge vessel protected by a spring relief valve, and checked through a sight
 glass on the way out.
 
 Everything sits on one spine so the runs are straight. The only rise is across
-the pump, whose discharge nozzle is above its suction — which is what a pump
-actually looks like, not a routing artefact.
+the pump, whose discharge nozzle is above its suction, which is what a pump
+actually looks like rather than a routing artefact.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/

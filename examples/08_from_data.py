@@ -1,9 +1,9 @@
 """
 Example 8: Building a flowsheet from data
 
-Every other example writes Python. This one writes *data*: one plain mapping —
+Every other example writes Python. This one writes *data*: one plain mapping,
 the same thing you would keep in a YAML or JSON file next to the equipment list
-it came from — handed to ``Flowsheet.from_dict``. Nothing else about the engine
+it came from, handed to ``Flowsheet.from_dict``. Nothing else about the engine
 changes; layout, routing and stream numbering all run exactly as before.
 
     fs = Flowsheet.from_dict(SPEC)      # a dict, from anywhere
@@ -17,7 +17,7 @@ above its minimum flow, and the deaerator's level controller throttles the feed
 to the boiler.
 
 Placement is left to the engine here, because that is the point of authoring
-from data — you supply the equipment list and the connectivity, not pixel
+from data: you supply the equipment list and the connectivity, not pixel
 coordinates. The format does carry ``pin`` (with ``orientation``, ``mirrored``
 and ``col``/``row``) and ``port_faces`` for sheets drawn to a convention; see
 the README, and examples 03, 06 and 07 for what those overrides are for.
@@ -50,7 +50,7 @@ SPEC = {
         # Flipped top-to-bottom so its actuator faces down: the loop's final
         # element then sits below the line with the controller, instead of the
         # signal having to climb past the drum outlet to reach a stem on top.
-        # Only the transform is pinned — where the valve goes is still the
+        # Only the transform is pinned; where the valve goes is still the
         # engine's decision.
         {"kind": "Valve", "name": "CV-201", "variant": "control",
          "description": "Deaerator Level Control Valve", "pin": {"mirrored": "y"}},
@@ -123,8 +123,8 @@ SPEC = {
                         "Mass Flow": "59.7 t/h", "Dissolved O2": "7 ppb"}},
         # The loop closes through three signal lines, not one: the drum's level
         # is transmitted to the controller, the controller's output goes to the
-        # transducer on the valve, and only that last leg is pneumatic — it is
-        # what actually strokes the actuator.
+        # transducer on the valve, and only that last leg is pneumatic, since
+        # it is what actually strokes the actuator.
         {"from": ["LT-201", "sig_out"], "to": ["LIC-201", "sig_in"], "kind": "electric"},
         {"from": ["LIC-201", "sig_out"], "to": ["LV-201", "sig_in"], "kind": "electric"},
         {"from": ["LV-201", "sig_out"], "to": ["CV-201", "actuator"], "kind": "pneumatic"},
@@ -167,7 +167,7 @@ def main():
     fs = Flowsheet.from_dict(SPEC)
 
     # The format round-trips, so a sheet tweaked in Python can be handed back to
-    # whoever maintains the data file — ``json.dump(fs.to_dict(), f)`` and done.
+    # whoever maintains the data file: ``json.dump(fs.to_dict(), f)`` and done.
     assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
 
     fs.render(out("from_data.svg"), show_stream_table=True, border="zone")

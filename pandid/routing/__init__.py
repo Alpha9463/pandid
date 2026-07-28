@@ -24,8 +24,8 @@ def _clamp_projection(
     """Pull an escape projection back onto a lane the stub would otherwise overshoot.
 
     The escape distance is a *maximum* stand-off, not a fixed one. When the far
-    end of the run already sits on the outward ray — a nozzle 15px above the
-    lane its stream has to join, say, projected 25px out — insisting on the full
+    end of the run already sits on the outward ray (a nozzle 15px above the lane
+    its stream has to join, say, projected 25px out), insisting on the full
     projection makes the path overshoot and come back, which is two bends and
     part of the stub drawn twice. Turning onto that lane on the way out is one.
 

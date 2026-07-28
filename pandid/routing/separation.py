@@ -82,13 +82,13 @@ def separate_streams(fs: "Flowsheet", spacing: float = 6.0) -> None:
                 if seg["stream"] not in streams_in_comp:
                     streams_in_comp.append(seg["stream"])
             if len(streams_in_comp) <= 1:
-                continue  # one stream's own segments — nothing to separate
+                continue  # one stream's own segments, nothing to separate
 
             # Resolve to absolute *target tracks*, not per-segment deltas: the
             # segments in a component start on slightly different tracks, so
             # nudging each by its own delta can land two of them closer together
             # than they began. Segments attached to a port ("fixed") must stay
-            # put — they hold the line on its nozzle — so they claim their track
+            # put (they hold the line on its nozzle), so they claim their track
             # and everyone else takes the nearest free slot on a spacing grid.
             fixed_track: dict = {}
             for seg in comp:
@@ -150,7 +150,7 @@ def separate_streams(fs: "Flowsheet", spacing: float = 6.0) -> None:
     # and resolved in the same pass; a run further away than that is already
     # legible and has nothing to gain. Chaining at twice the spacing would sweep
     # up runs a comfortable 10–12px apart and then pack them onto the grid at the
-    # 6px minimum — closer together than they started — and, where one stream
+    # 6px minimum (closer together than they started) and, where one stream
     # contributed two tracks to the cluster, would flatten that stream's own jog
     # onto a neighbour's track.
     window = spacing

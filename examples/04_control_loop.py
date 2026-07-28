@@ -7,7 +7,7 @@ anchored to a host with ``add_instrument(..., on=...)``:
 - ``on=`` a **stream** taps the line. ``at=`` is the point along its routed
   path, ``offset=`` how far the balloon stands off the tap (``offset=0`` leaves
   an in-line primary element sitting on the line), and ``angle=`` which way it
-  branches — measured from the flow direction, so a re-route cannot spin it.
+  branches, measured from the flow direction, so a re-route cannot spin it.
 - ``on=`` a **unit** mounts the balloon on equipment, ``at=`` naming the face.
 - Alarms are ordinary balloons on their controller's loop; the interlock is the
   ``"logic"`` square hung under it on a dashed line.
@@ -25,7 +25,7 @@ Both loops close on a final control element: the controller output lands on
 (dash-dot), ``"capillary"``.
 
 The equipment is pinned so the drawing reads as a sheet rather than a rank
-order — the instrumentation below it is placed entirely by its hosts.
+order. The instrumentation below it is placed entirely by its hosts.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
