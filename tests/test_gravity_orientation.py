@@ -137,12 +137,13 @@ def test_a_turned_lying_variant_is_still_reported_and_offered_no_way_out():
 #: ``GRAVITY_FIXED`` in scripts/vendor_symbols.py is a decision this file has to
 #: agree with rather than one that lands silently.
 GRAVITY_FIXED = {
-    # separation by density -- ISO's X 2618 and its five siblings
+    # separation by density -- ISO's X 2618 and its six siblings
     ("separator", "default"),
     ("separator", "cyclone"),
     ("separator", "electrostatic"),
     ("separator", "gravity"),
     ("separator", "horizontal"),
+    ("separator", "knockout"),
     ("separator", "scrubber"),
     # a free liquid surface -- ISO's 2061
     ("tank", "default"),

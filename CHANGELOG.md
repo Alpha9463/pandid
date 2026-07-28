@@ -5,6 +5,28 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- `Separator(variant="default")` is drawn as the plain dished-head vertical
+  cylinder, the same draw.io stencil `Vessel` and `Column` already share, and is
+  reproportioned to the 62 x 100 box `Vessel` comes out at rather than the
+  column's 100 x 200. It was the "Knock-out Drum", which draws a level gauge and
+  a demister pad into the equipment artwork: the gauge is drawn a second time as
+  soon as a real level instrument is added, and `Separator` is the generic flash
+  drum, which does not necessarily have a mesh pad. `vessel`/`horizontal` and
+  `separator`/`horizontal` were already one stencil under two sets of nozzle
+  names, so this makes the upright pair consistent with the lying one. Its
+  nozzles are unchanged in name and role: `feed` on the west shell wall at
+  mid-height, `vapor` and `liquid` on the two head crowns. Examples 01 and 05
+  move, and so do the goldens for them.
+
+### Added
+
+- `Separator(variant="knockout")` draws the knock-out drum the default used to,
+  demister pad and level gauge and all, at the size and with the nozzles it had.
+
 ## [0.1.0] - 2026-07-28
 
 First public release. Nothing was published before it, so everything below is the
