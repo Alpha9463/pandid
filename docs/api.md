@@ -770,7 +770,7 @@ is a visual style within it. The first name in each list is that kind's
 | `HeatExchanger` | `default`, `shell_tube`, `straight_tubes`, `finned`, `plate`, `kettle`, `u_tube`, `hairpin`, `double_pipe`, `condenser`, `air_cooled`, `spiral`, `thin_film` |
 | `Vessel` | `default`, `dished`, `jacketed`, `skirted`, `dome`, `horizontal` |
 | `Tank` | `default` (dished roof), `conical`, `floating_roof`, `sphere` |
-| `Separator` | `default` (knock-out drum), `horizontal`, `cyclone`, `gravity`, `scrubber`, `electrostatic` |
+| `Separator` | `default` (plain vertical drum, the shell `Vessel` and `Column` share), `knockout` (that drum with a demister pad and a level gauge drawn in), `horizontal`, `cyclone`, `gravity`, `scrubber`, `electrostatic` |
 | `Reactor` | `default`, `plain` |
 | `Column` | `default` (plain shell), `packed` |
 | `Filter` | `default`, `gas`, `press`, `rotary`, `ion_exchange` |
@@ -1824,12 +1824,12 @@ names `variant="horizontal"` where it exists.
 Mirroring is left alone. §11.4.2 excepts *turning* only, and flipping a tank left
 to right to put its nozzles on the other side is a placement the clause permits.
 
-The 27 marked symbols, and what in each one's artwork only means one thing one
+The 28 marked symbols, and what in each one's artwork only means one thing one
 way up:
 
 | Symbols | Why |
 |---|---|
-| `separator` `default` `cyclone` `electrostatic` `gravity` `horizontal` `scrubber` | separation by density: `cyclone` **is** ISO's X 2618, `gravity` says so in its name, and the hopper-bottomed three collect out of an apex |
+| `separator` `default` `cyclone` `electrostatic` `gravity` `horizontal` `knockout` `scrubber` | separation by density: `cyclone` **is** ISO's X 2618, `gravity` says so in its name, and the hopper-bottomed three collect out of an apex |
 | `tank` `default` `conical` `floating_roof` `sphere` | ISO's 2061: a free liquid surface, filled at the roof and drained at the floor, with `floating_roof` drawn floating on it |
 | `vessel` `default` `dished` `dome` `horizontal` `jacketed` `skirted` | holdup with a vapour space: the vent is on the top head and the shell drains from the bottom |
 | `column` `default` `packed`, `reactor` `default` `plain` | liquid running down over trays or packing while vapour rises, and an agitator hanging in from above |

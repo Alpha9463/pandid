@@ -1358,7 +1358,32 @@ class Reactor(Unit):
 
 
 class Separator(Unit):
-    """Flash drum or phase separator."""
+    """Flash drum or phase separator.
+
+    Variants: ``"default"`` is the plain dished-head vertical cylinder, the same
+    shell :class:`Vessel` and :class:`Column` are drawn from, because a
+    separator *is* a vessel whose vapour and liquid products are worth naming.
+    ``"horizontal"`` is a lying cylinder with dished ends, and shares its
+    stencil with ``Vessel(variant="horizontal")`` for the same reason. Use it
+    rather than turning the upright one, exactly as a vessel does.
+
+    ``"knockout"`` adds two internals to the upright drum: a demister pad and a
+    level gauge, both drawn into the equipment artwork. Ask for it when the mesh
+    pad is a fact about the equipment worth putting on the sheet, and note that
+    the gauge is *drawn*, not declared, so a level instrument added with
+    :meth:`~pandid.flowsheet.Flowsheet.add_instrument` puts its own ISA-5.1
+    balloon beside it rather than replacing it, and the sheet says the level is
+    measured twice.
+
+    ``"cyclone"``, ``"gravity"``, ``"scrubber"`` and ``"electrostatic"`` are the
+    separating bodies that are not drums at all, each with its own hopper or
+    vortex.
+
+    Every variant is drawn one way up and reported as ``gravity-turned`` by
+    :meth:`~pandid.flowsheet.Flowsheet.validate` if turned: vapour disengages
+    off the top and liquid draws off the bottom, which is ISO 15519-1 §11.4.2's
+    exception for symbols where gravity is a functionality.
+    """
 
     kind = "separator"
     PORTS = [

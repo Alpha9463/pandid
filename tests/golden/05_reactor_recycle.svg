@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1541" height="362" viewBox="-73.0 -85.0 1541.0 361.8">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1552" height="371" viewBox="-73.0 -83.2 1552.0 371.4">
   <!-- Background -->
-  <rect x="-73.0" y="-85.0" width="1541.0" height="361.8" fill="white" />
+  <rect x="-73.0" y="-83.2" width="1552.0" height="371.4" fill="white" />
   <defs>
     <marker id="arrow_black" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="black" />
@@ -10,64 +10,64 @@
     <symbol id="sym_cooler" viewBox="0 0 80.0 80.0" overflow="visible"><ellipse cx="40.0" cy="40.0" rx="30.0" ry="30.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 10.0 40.0 L 20.0 40.0 L 30.0 25.0 L 50.0 55.0 L 60.0 40.0 L 70.0 40.0 M 80.0 0.0 L 0.0 80.0 M 70.0 4.5 L 80.0 0.0 L 75.5 10.0 L 75.0 5.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></symbol>
     <symbol id="sym_mixer" viewBox="0 0 50.0 50.0" overflow="visible"><polygon points="0,0 50,25 0,50" fill="none" stroke="black" stroke-width="2"/></symbol>
     <symbol id="sym_reactor" viewBox="0 0 50.0 96.4" overflow="visible"><path d="M 31.0 2.4 L 31.0 27.4 A 5.0 2.0 0.0 0 1 25.0 29.8 A 5.0 2.0 0.0 0 1 19.0 27.4 L 19.0 2.4 A 5.0 2.0 0.0 0 1 25.0 0.0 A 5.0 2.0 0.0 0 1 31.0 2.4 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 26.0 32.4 L 50.0 32.4 L 50.0 77.4 L 25.0 96.4 L 0.0 77.4 L 0.0 32.4 L 24.0 32.4 M 19.0 2.4 L 31.0 2.4 M 19.0 27.4 L 31.0 27.4 M 24.0 29.4 L 24.0 56.9 M 26.0 29.4 L 26.0 56.9 M 0.0 77.4 L 50.0 77.4" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="30.0" cy="57.4" rx="5.0" ry="1.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="20.0" cy="57.4" rx="5.0" ry="1.0" fill="none" stroke="#111" stroke-width="2.0"/></symbol>
-    <symbol id="sym_separator" viewBox="0 0 51.0 95.4" overflow="visible"><path d="M 40.0 7.69 L 40.0 87.69 A 13.0 5.0 0.0 0 1 20.0 95.3823 A 13.0 5.0 0.0 0 1 0.0 87.69 L 0.0 7.69 A 13.0 5.0 0.0 0 1 20.0 -0.0023 A 13.0 5.0 0.0 0 1 40.0 7.69 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69 M 0.0 17.69 L 40.0 17.69 M 0.0 27.69 L 40.0 27.69 M 0.0 17.69 L 10.0 27.69 L 20.0 17.69 L 30.0 27.69 L 40.0 17.69 M 48.0 34.69 L 48.0 52.69 M 51.0 34.69 L 51.0 52.69 M 0.0 27.69 L 10.0 17.69 L 20.0 27.69 L 30.0 17.69 L 40.0 27.69" fill="none" stroke="#111" stroke-width="2.0"/><rect x="40.0" y="37.5" width="8.0" height="12.0" fill="none" stroke="#111" stroke-width="2.0"/></symbol>
+    <symbol id="sym_separator" viewBox="0 0 62.0 100.0" overflow="visible"><g transform="scale(0.62, 0.5)"><path d="M 0.0 15.0 A 50.0 15.0 0.0 0 1 50.0 0.0 A 50.0 15.0 0.0 0 1 100.0 15.0 L 100.0 185.0 A 50.0 15.0 0.0 0 1 50.0 200.0 A 50.0 15.0 0.0 0 1 0.0 185.0 Z" fill="none" stroke="#111" stroke-width="3.226"/></g></symbol>
     <symbol id="sym_splitter" viewBox="0 0 50.0 50.0" overflow="visible"><polygon points="0,25 50,0 50,50" fill="none" stroke="black" stroke-width="2"/></symbol>
   </defs>
   <g id="units">
-    <polygon points="-18.0,98.2 85,98.2 100,108.2 85,118.2 -18.0,118.2" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="33.5" y="108.2" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Syngas Feed</text>
-    <use href="#sym_mixer" x="268" y="73.2" width="50.0" height="50.0" />
-    <use href="#sym_compressor" x="418" y="68.2" width="70.0" height="67.0" />
-    <use href="#sym_reactor" x="588" y="30" width="50.0" height="96.4" />
-    <use href="#sym_cooler" x="738" y="101.4" width="80.0" height="80.0" />
-    <use href="#sym_separator" x="918" y="86.4" width="51.0" height="95.4" />
-    <use href="#sym_splitter" x="1069" y="46.4" width="50.0" height="50.0" />
-    <polygon points="1069.0,186.8 1196.0,186.8 1211.0,196.8 1196.0,206.8 1069.0,206.8" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="1132.5" y="196.8" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Liquid Product</text>
-    <polygon points="1311.0,71.4 1398.0,71.4 1413.0,81.4 1398.0,91.4 1311.0,91.4" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="1354.5" y="81.4" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Purge Gas</text>
+    <polygon points="-18.0,100.0 85,100.0 100,110.0 85,120.0 -18.0,120.0" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="33.5" y="110.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Syngas Feed</text>
+    <use href="#sym_mixer" x="268" y="75" width="50.0" height="50.0" />
+    <use href="#sym_compressor" x="418" y="70" width="70.0" height="67.0" />
+    <use href="#sym_reactor" x="588" y="31.8" width="50.0" height="96.4" />
+    <use href="#sym_cooler" x="738" y="103.2" width="80.0" height="80.0" />
+    <use href="#sym_separator" x="918" y="93.2" width="62.0" height="100.0" />
+    <use href="#sym_splitter" x="1080" y="53.2" width="50.0" height="50.0" />
+    <polygon points="1080.0,198.2 1207.0,198.2 1222.0,208.2 1207.0,218.2 1080.0,218.2" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="1143.5" y="208.2" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Liquid Product</text>
+    <polygon points="1322.0,78.19999999999999 1409.0,78.19999999999999 1424.0,88.19999999999999 1409.0,98.19999999999999 1322.0,98.19999999999999" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="1365.5" y="88.19999999999999" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Purge Gas</text>
   </g>
   <g id="streams">
-    <path d="M 100.0,108.2 L 268.0,108.2" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 318.0,98.2 L 418.0,98.2" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 488.0,78.2 L 588.0,78.2" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 613.0,126.4 L 613.0,141.4 L 747.9,141.4" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 808.1,141.4 L 918.0,141.4" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 943.0,181.8 L 943.0,196.8 L 1069.0,196.8" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 943.0,86.4 L 943.0,71.4 L 1069.0,71.4" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1119.0,81.4 L 1311.0,81.4" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1119.0,61.400000000000006 L 1144.0,61.400000000000006 L 1144.0,-30.0 L 243.0,-30.0 L 243.0,88.2 L 268.0,88.2" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <rect x="174.8" y="101.7" width="18.4" height="13.0" fill="white" />
-    <text x="184.0" y="108.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S1</text>
-    <rect x="358.8" y="91.7" width="18.4" height="13.0" fill="white" />
-    <text x="368.0" y="98.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S2</text>
-    <rect x="528.8" y="71.7" width="18.4" height="13.0" fill="white" />
-    <text x="538.0" y="78.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S3</text>
-    <rect x="671.2" y="134.9" width="18.4" height="13.0" fill="white" />
-    <text x="680.5" y="141.4" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S4</text>
-    <rect x="853.8" y="134.9" width="18.4" height="13.0" fill="white" />
-    <text x="863.0" y="141.4" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S5</text>
-    <rect x="996.8" y="190.3" width="18.4" height="13.0" fill="white" />
-    <text x="1006.0" y="196.8" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S6</text>
-    <rect x="996.8" y="64.9" width="18.4" height="13.0" fill="white" />
-    <text x="1006.0" y="71.4" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S7</text>
-    <rect x="1205.8" y="74.9" width="18.4" height="13.0" fill="white" />
-    <text x="1215.0" y="81.4" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S8</text>
-    <rect x="684.3" y="-36.5" width="18.4" height="13.0" fill="white" />
-    <text x="693.5" y="-30.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S9</text>
+    <path d="M 100.0,110.0 L 268.0,110.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 318.0,100.0 L 418.0,100.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 488.0,80.0 L 588.0,80.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 613.0,128.2 L 613.0,143.2 L 747.9,143.2" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 808.1,143.2 L 918.0,143.2" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 949.0,193.2 L 949.0,208.2 L 1080.0,208.2" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 949.0,93.19999999999999 L 949.0,78.19999999999999 L 1080.0,78.19999999999999" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1130.0,88.19999999999999 L 1322.0,88.19999999999999" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1130.0,68.19999999999999 L 1155.0,68.19999999999999 L 1155.0,-28.200000000000003 L 243.0,-28.200000000000003 L 243.0,90.0 L 268.0,90.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <rect x="174.8" y="103.5" width="18.4" height="13.0" fill="white" />
+    <text x="184.0" y="110.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S1</text>
+    <rect x="358.8" y="93.5" width="18.4" height="13.0" fill="white" />
+    <text x="368.0" y="100.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S2</text>
+    <rect x="528.8" y="73.5" width="18.4" height="13.0" fill="white" />
+    <text x="538.0" y="80.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S3</text>
+    <rect x="671.2" y="136.7" width="18.4" height="13.0" fill="white" />
+    <text x="680.5" y="143.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S4</text>
+    <rect x="853.8" y="136.7" width="18.4" height="13.0" fill="white" />
+    <text x="863.0" y="143.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S5</text>
+    <rect x="1005.3" y="201.7" width="18.4" height="13.0" fill="white" />
+    <text x="1014.5" y="208.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S6</text>
+    <rect x="1005.3" y="71.7" width="18.4" height="13.0" fill="white" />
+    <text x="1014.5" y="78.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S7</text>
+    <rect x="1216.8" y="81.7" width="18.4" height="13.0" fill="white" />
+    <text x="1226.0" y="88.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S8</text>
+    <rect x="689.8" y="-34.7" width="18.4" height="13.0" fill="white" />
+    <text x="699.0" y="-28.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S9</text>
   </g>
   <g id="unit_labels">
-    <rect x="272.5" y="51.2" width="41.0" height="15.0" fill="white" />
-    <text x="293.0" y="63.2" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">M-201</text>
-    <rect x="432.5" y="46.2" width="41.0" height="15.0" fill="white" />
-    <text x="453.0" y="58.2" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">K-201</text>
-    <rect x="592.5" y="8.0" width="41.0" height="15.0" fill="white" />
-    <text x="613.0" y="20.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">R-201</text>
-    <rect x="757.5" y="79.4" width="41.0" height="15.0" fill="white" />
-    <text x="778.0" y="91.4" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">E-201</text>
-    <rect x="979.0" y="126.6" width="41.0" height="15.0" fill="white" />
-    <text x="979.0" y="134.10000000000002" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">V-201</text>
-    <rect x="1070.2" y="24.4" width="47.6" height="15.0" fill="white" />
-    <text x="1094.0" y="36.400000000000006" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">SP-201</text>
+    <rect x="272.5" y="53.0" width="41.0" height="15.0" fill="white" />
+    <text x="293.0" y="65.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">M-201</text>
+    <rect x="432.5" y="48.0" width="41.0" height="15.0" fill="white" />
+    <text x="453.0" y="60.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">K-201</text>
+    <rect x="592.5" y="9.8" width="41.0" height="15.0" fill="white" />
+    <text x="613.0" y="21.799999999999997" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">R-201</text>
+    <rect x="757.5" y="81.2" width="41.0" height="15.0" fill="white" />
+    <text x="778.0" y="93.19999999999999" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">E-201</text>
+    <rect x="990.0" y="135.7" width="41.0" height="15.0" fill="white" />
+    <text x="990.0" y="143.2" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">V-201</text>
+    <rect x="1081.2" y="31.2" width="47.6" height="15.0" fill="white" />
+    <text x="1105.0" y="43.19999999999999" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">SP-201</text>
   </g>
 </svg>

@@ -278,8 +278,46 @@ KIND_MAP = {
                              {"feed": ("SERIES", "W", 48.2, 14, 0.32),
                               "outlet": "S", "duty": "E",
                               "vent": ("AT", 40.0, 32.4)}),
-    ("separator", "default"): ("vessels", "Knock-out Drum",
-                               {"feed": ("W", 55), "vapor": ("N", 25), "liquid": ("S", 25)}),
+    # The flash drum: the same plain dished-head cylinder the vessel and the
+    # column are drawn from, with the phases named. ``vessel``/``horizontal``
+    # and ``separator``/``horizontal`` are already one stencil ("Drum or
+    # Condenser") differing only in what its nozzles are called, because a
+    # separator IS a vessel the author wants the vapour and liquid products
+    # named on; the vertical pair was the odd one out, and this makes the
+    # family consistent in both attitudes.
+    #
+    # It is also what the class actually claims. A Separator is documented as
+    # the generic flash drum or phase separator, and "Knock-out Drum" asserts
+    # two internals the model never said were there:
+    #
+    # * a LEVEL GAUGE, drawn as a rect and two verticals hanging off the right
+    #   shell wall at x 40..51. pandid draws instruments as ISA-5.1 balloons on
+    #   signal lines (``pandid/loops.py``), so a gauge baked into the equipment
+    #   artwork is drawn a second time the moment a real LG or LT is added.
+    # * a DEMISTER PAD, the crosshatch at y 17.69..27.69. A mesh pad is a design
+    #   decision about entrainment, not something every flash drum has.
+    #
+    # Neither is lost: ``knockout`` below is that stencil, kept under a name
+    # that says what it draws, for the author who does want the mesh pad.
+    #
+    # Ports are the vessel's, in the vessel's places, since switching a vessel
+    # for a separator is a change of what the nozzles are called and not of
+    # where they are: feed in the west shell wall at mid-height (the straight
+    # shell spans y 15..185, so it is on ink at any box the unit is drawn at,
+    # rather than on a head where the ink curves away from the box edge), and
+    # the two products on the head crowns at (50, 0) and (50, 200), which is
+    # exactly where the column takes its distillate and its bottoms.
+    ("separator", "default"): ("vessels", "Pressurized Vessel",
+                               {"feed": ("W", 100.0),
+                                "vapor": ("N", 50.0), "liquid": ("S", 50.0)}),
+    # The knock-out drum, with its mesh pad and its level gauge, under the name
+    # of the thing it draws. Its nozzles are the ones it has always carried, on
+    # its own 51 x 95.38 body: the feed on the west shell wall (which spans
+    # y 7.69..87.69) and the two products on the head crowns, whose arcs reach
+    # y = 0 and y = 95.38 because a 40-wide chord scales rx = 13 / ry = 5 up
+    # until ry is the 7.69 the shell is inset by.
+    ("separator", "knockout"): ("vessels", "Knock-out Drum",
+                                {"feed": ("W", 55), "vapor": ("N", 25), "liquid": ("S", 25)}),
     # Both roofs rise inside the bounding box, so an inlet on the box's top edge
     # floats above the drawn ink. Put it on the roof itself: the dome crown, and
     # the cone apex.
@@ -888,14 +926,20 @@ ADAPTED_ELSEWHERE = {
 # (kind, variant) -> what in the artwork only means one thing one way up
 GRAVITY_FIXED = {
     # ISO's own example, X 2618: the vortex drops the heavy phase out of the
-    # apex. The five siblings separate by density the same way (one of them is
+    # apex. The six siblings separate by density the same way (one of them is
     # called ``gravity``), and the three hopper-bottomed ones collect out of an
     # apex exactly as the cyclone does.
-    ("separator", "default"):       "demister on top, vapour up and liquid down",
+    #
+    # ``default`` no longer draws the demister its reason used to name, so the
+    # reason is now the disengagement itself, in the same words ``horizontal``
+    # already uses: the two are one stencil family in two attitudes and the
+    # fact that fixes them is the same fact.
+    ("separator", "default"):       "vapour disengages off the top, liquid draws off the bottom",
     ("separator", "cyclone"):       "ISO 15519-1 symbol X 2618; apex points down",
     ("separator", "electrostatic"): "hopper bottom, collected phase out of the apex",
     ("separator", "gravity"):       "settling chamber; the arrow in it points down",
     ("separator", "horizontal"):    "vapour disengages off the top, liquid draws off the bottom",
+    ("separator", "knockout"):      "demister on top, vapour up and liquid down",
     ("separator", "scrubber"):      "hopper bottom under a wash-liquid header",
     # ISO's other example, 2061: Open tank. Every variant holds a liquid with a
     # free surface, fills at the roof and drains at the floor; the floating roof
@@ -951,11 +995,11 @@ GRAVITY_FIXED = {
 #
 # A key is a kind, or one (kind, variant) where a single variant is drawn at a
 # different size from the rest of its class. A value is one factor, or a pair
-# (sx, sy) for the one case where a symbol has to be *reproportioned* rather
-# than merely resized: the vessel and the column are the same stencil, and the
-# vessel is the short one. That stroke compensation is taken from sx, so the
-# shell walls (the long strokes, and the ones a reader takes the line weight
-# from) are the pair that lands exactly on 2px.
+# (sx, sy) for the cases where a symbol has to be *reproportioned* rather than
+# merely resized: the vessel, the flash drum and the column are all cut from one
+# stencil, and the first two are the short ones. That stroke compensation is
+# taken from sx, so the shell walls (the long strokes, and the ones a reader
+# takes the line weight from) are the pair that lands exactly on 2px.
 #
 # 0.25 is the inline family's factor, and it is measured rather than chosen. A
 # drawing unit is the CSS pixel, so an A3 sheet is 420 mm x 96/25.4 = 1587 units
@@ -1032,6 +1076,16 @@ SCALE = {"valve": 0.25, "fitting": 0.25,
          # the heights every pinned sheet was drawn to, so this changes what a
          # vessel looks like without moving a single run.
          ("vessel", "default"): (0.62, 0.5),
+         # The flash drum takes vessel/default's reproportioning, for
+         # vessel/default's reason, and this entry is required rather than
+         # cosmetic: separator/default is cut from the same "Pressurized Vessel"
+         # stencil as the column, so left at 1.0 it comes out in the tower's
+         # 100 x 200 box and its artwork is pixel-identical to a column's on a
+         # sheet carrying both. 62 x 100 puts it in the box vessel/default
+         # already occupies, which is the point: a flash drum and a surge drum
+         # are the same size of equipment, and the tower beside them is the
+         # slender one.
+         ("separator", "default"): (0.62, 0.5),
          # 62 x 200. The packed tower is drawn 14 x 97, at 1:6.9, which is far
          # slenderer than anything else on the sheet and would come out 14px
          # wide. The height is the column's own 200, so every nozzle keeps the
