@@ -1,4 +1,4 @@
-"""Drawing documentation — the engineering title block and sheet furniture.
+"""Drawing documentation: the engineering title block and sheet furniture.
 
 Attach a :class:`TitleBlock` to a flowsheet (``fs.title_block = TitleBlock(...)``)
 and the sheet is drawn with a full-width engineering title strip (revision
@@ -10,7 +10,7 @@ A PFD carries a title strip as readily as a P&ID does, so the strip
 follows the block, not the border: ``border="zone"`` adds the zone-ruled drawing
 frame around it.
 
-Around the drawing you can place *generic titled boxes* — :class:`Annotation`
+Around the drawing you can place *generic titled boxes*: :class:`Annotation`
 (a title over free-form, optionally columnar, text) and :class:`TableBox`
 (a title over a bordered header+rows grid). Equipment lists, notes, and legends
 are all just :class:`Annotation` boxes; :func:`equipment_list`, :func:`notes`
@@ -65,10 +65,10 @@ def location_reference(document="", sheet="", zone="") -> str:
 
         The following signs shall be used for creating location references:
 
-        — solidus (/) for identification of a sheet;
+        * solidus (/) for identification of a sheet;
 
-        — full stop (.) for identification of a column, a row or a zone in a
-        sheet.
+        * full stop (.) for identification of a column, a row or a zone in a
+          sheet.
 
         The location reference shall be presented in following sequence:
         document — sheet — column, row or zone.
@@ -157,7 +157,7 @@ class TitleBlock:
     """Title-block metadata for a drawing sheet.
 
     ``title`` and ``subtitle`` are the two title lines (e.g. an area name over
-    the drawing type — ``"Ethanol Purification A300"`` / ``"Process Flow
+    the drawing type, ``"Ethanol Purification A300"`` / ``"Process Flow
     Diagram 1"``). ``company`` fills the logo/company cell, ``status`` the
     issue-status cell (e.g. ``"ISSUED FOR REVIEW"``).
 
@@ -193,7 +193,7 @@ class TitleBlock:
 
 # The nine positions a box can dock to on the sheet *frame* (not the drawing).
 # Corners and edge-centres behave like a 3x3 grid: the box is placed flush
-# against the frame edge(s) its ``align`` names — e.g. ``"top-right"`` puts the
+# against the frame edge(s) its ``align`` names, e.g. ``"top-right"`` puts the
 # box's top-right corner in the frame's top-right corner, ``"top"`` centres it
 # on the top edge. This mirrors how professional sheets pin their furniture.
 _ALIGN = {
@@ -223,13 +223,13 @@ class Annotation:
     * ``align`` docks the box flush to the sheet frame at one of nine positions
       (corners, edge-centres, or dead centre). This is the usual way.
     * ``position=(x, y)`` instead pins the box's **top-left corner** at absolute
-      sheet coordinates, ignoring ``align`` — the escape hatch for hand-placed
+      sheet coordinates, ignoring ``align``: the escape hatch for hand-placed
       furniture.
     * ``margin`` insets a docked box from the frame edge (default ``0`` = flush).
 
     ``rows`` entries are either a plain ``str`` (one left-aligned line) or a
     tuple/list of cell strings that align into columns (first column left, the
-    rest following at shared column stops) — enough to lay out an equipment
+    rest following at shared column stops), enough to lay out an equipment
     schedule (``("T-301", "Beer Column")``) or a legend (``("SS", "316L")``)
     without a full table.
 
@@ -277,14 +277,14 @@ class TableBox:
 # Convenience constructors for the common boxes
 # ---------------------------------------------------------------------------
 
-# The kinds an equipment list schedules: major plant — the items that carry a
+# The kinds an equipment list schedules: major plant (the items that carry a
 # tag on the sheet *and* a datasheet, a foundation and a purchase order behind
-# it. Everything else on a flowsheet is one of three other things, and none of
+# it). Everything else on a flowsheet is one of three other things, and none of
 # them is scheduled:
 #
-# * bulk items — valves, fittings, reducers, tees, vents and funnels — which
+# * bulk items (valves, fittings, reducers, tees, vents and funnels), which
 #   are bought by the line and specified by the piping class, not item by item;
-# * junctions — a mixer or splitter is a branch in the piping drawn as a
+# * junctions: a mixer or splitter is a branch in the piping drawn as a
 #   triangle, so scheduling one puts plant that does not exist on the sheet;
 # * sheet boundaries and instruments, which are not equipment at all.
 #
@@ -297,7 +297,7 @@ _MAJOR_EQUIPMENT = frozenset({
 })
 
 # What each kind is called in words. ``kind`` is a lookup key, so a schedule
-# that falls back to it reads ``('E-101', 'Hex')`` — the source code quoted at
+# that falls back to it reads ``('E-101', 'Hex')``, the source code quoted at
 # the reader in place of the equipment description an engineer would write.
 _KIND_LABELS = {
     "blower": "Blower",
@@ -350,7 +350,7 @@ def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right", anchor=None
     equipment is scheduled (see :data:`_MAJOR_EQUIPMENT`).
 
     ``include`` names the rows explicitly instead, in the order given, and takes
-    whatever it names — which is how a valve or instrument schedule, a real
+    whatever it names. That is how a valve or instrument schedule, a real
     drawing in its own right, gets built from the same flowsheet. A tag that is
     not on the flowsheet contributes no row.
 

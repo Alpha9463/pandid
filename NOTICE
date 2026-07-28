@@ -67,7 +67,7 @@ geometry. It therefore lives in a file section 1 otherwise covers, and only that
 symbol is Apache-2.0:
 
     pandid/render/symbols.py, conveyor_symbol() and the CONVEYOR_* constants it
-    draws from — adapted from the shape "Drier (Roller Conveyor Belt)" in
+    draws from, adapted from the shape "Drier (Roller Conveyor Belt)" in
     scripts/vendor_data/drawio/driers.xml, with the drier housing dropped and
     the distance between the two rollers made a parameter. The rest of
     pandid/render/symbols.py is original and falls under section 1.

@@ -31,7 +31,7 @@ and is kept working.
   `shell_in`, `shell_out`, `tube_in`, `tube_out` in place of `hot_in`,
   `hot_out`, `cold_in`, `cold_out`. Which fluid runs in the shell and which in
   the tubes is a design decision the drawing has to record, while which side is
-  hot inverts between operating cases without the nozzle moving — and the old
+  hot inverts between operating cases without the nozzle moving. The old
   names did not even land on the same face from one variant to the next.
   Variants with no shell or no tubes name what they do have: `air_cooled` is
   `tube_*` and `air_*`, `plate` and `spiral` letter their two interchangeable
@@ -68,7 +68,7 @@ and is kept working.
   custom class is refused the same way.
 - `Feed(header=True)` / `Product(header=True)`, the utility header flag. A
   boundary flag is an off-page connector rather than a piece of plant, and a
-  header — cooling water, steam, flare, plant air — is a service tapped wherever
+  header (cooling water, steam, flare, plant air) is a service tapped wherever
   it is wanted and labelled the same way at every tap. The reference sheet this
   project reproduces brings cooling water on twice and sends it back twice, all
   four flags reading `CWSH` / `CWRH`. `add()` accepts such a repeat and gives it
@@ -253,7 +253,7 @@ and is kept working.
   valve, a drain off the underside of a run, a vent off the top, a sample point
   and a PSV takeoff are all one line splitting in two, and none of them could be
   drawn: `Mixer` and `Splitter` were the only branch primitives, and both are
-  plant — a tagged unit drawn as a solid triangle and scheduled on the equipment
+  plant: a tagged unit drawn as a solid triangle and scheduled on the equipment
   list. A bypass drawn with one puts equipment on the sheet that the plant does
   not contain.
 
@@ -262,8 +262,8 @@ and is kept working.
   sheet draws **nothing at all** where one sits: three lines meeting, the run
   passing straight through and the branch leaving it at a right angle, at the
   same line weight. So the symbol is those two segments and no more, its two run
-  nozzles share one centreline — which is what stops the run kinking through the
-  junction, as it did through a splitter's fixed port pitch — and it draws no
+  nozzles share one centreline, which is what stops the run kinking through the
+  junction as it did through a splitter's fixed port pitch, and it draws no
   tag. Nothing reaches the equipment list either: `"tee"` is not major
   equipment, and `include=` still schedules one by name where a piping schedule
   wants it.
@@ -544,8 +544,8 @@ and is kept working.
 - Canvas fitted to content, with no letterboxing, no clipping and uniform 2 px
   symbol strokes.
 - A unit given an explicit `width`/`height` is drawn *at* that box. Where the
-  symbol may be reshaped — every equipment symbol, since each draw.io stencil
-  they come from declares `aspect="variable"` — the artwork fills the box, so a
+  symbol may be reshaped (every equipment symbol, since each draw.io stencil
+  they come from declares `aspect="variable"`), the artwork fills the box, so a
   `Column(width=110, height=250)` is a column of exactly that size and its
   distillate and bottoms lines meet its heads instead of stopping 15 px short of
   them. Where the shape carries meaning it may not be: an ISA-5.1 balloon is a
@@ -573,7 +573,7 @@ and is kept working.
   element, so it prints and exports to PDF at exactly its ISO size.
 - `jump_direction="vertical" | "horizontal"` on `to_svg()` / `render()` selects
   which of two crossing lines gets the semicircle hop.
-- 137 registered `(kind, variant)` symbols, generated from the draw.io /
+- 139 registered `(kind, variant)` symbols in 28 kinds, generated from the draw.io /
   diagrams.net P&ID stencils (Apache-2.0) by `scripts/vendor_symbols.py` and
   matched to ISO 10628-2 symbols where one exists. Feed/Product flags, Mixer,
   Splitter and the ANSI/ISA-5.1 instrument balloons are hand-drawn originals.
@@ -586,7 +586,7 @@ and is kept working.
     a bare `<fill>` is a background wash, and on a monochrome sheet whose
     outlines are transparent it washes in nothing. The converter now keeps the
     fill colour as canvas state, which `<fillcolor>` sets and `<save>`/
-    `<restore>` bracket — so it can still draw a solid shape, and draws one
+    `<restore>` bracket, so it can still draw a solid shape, and draws one
     exactly where a stencil asks for it. That also restores four details the
     converter had been dropping: the pivot dot on `Fitting(variant="damper")`
     and the flow arrowheads inside `Separator(variant=…)` `cyclone`, `gravity`
@@ -596,7 +596,7 @@ and is kept working.
     both draw the bowtie pinched around an *open* seat, which is the ball
     valve (ISO 10628-2 X8071). A globe valve (X8068) is that same seat drawn
     solid, and the contrast is the whole of what tells a reader which valve is
-    in the line. The globe's seat is now filled. Its body — the two triangles —
+    in the line. The globe's seat is now filled. Its body, the two triangles,
     keeps its white interiors, so it stays clear of the fully darkened body
     that means *normally closed* (PIP PIC001 4.2.2.7). The correction is
     recorded in `STENCIL_PATCHES` in `scripts/vendor_symbols.py`, in the
@@ -605,8 +605,8 @@ and is kept working.
     ever stops matching its shape.
 - Two more nozzles that were never on the ink, both hidden by the drawing rather
   than by the geometry. `Tank(variant="floating_roof")`'s inlet sat 5 units above
-  the roof plate, in the gap the roof floats in — invisible while the tank was
-  painted as a solid block — and `Tank(variant="sphere")`'s sat 5 units above the
+  the roof plate, in the gap the roof floats in, invisible while the tank was
+  painted as a solid block. `Tank(variant="sphere")`'s sat 5 units above the
   sphere's crown, in the gap between the two lines its legs are drawn against.
   Both now land on the drawing, as the dished and conical roofs already did. The
   invariant suite could not see either, because its path flattener counted a
@@ -627,8 +627,8 @@ and is kept working.
 - A metered line is drawable end to end. Twenty-two more symbols come from two
   stencil files the project had never taken, `flow_sensors.xml` and
   `piping.xml`. `Fitting(variant="venturi")` is the primary element an FE
-  balloon is drawn against most often — a converging throat and a diverging
-  recovery cone, closed by a flange face at each end — and it arrives with
+  balloon is drawn against most often, a converging throat and a diverging
+  recovery cone closed by a flange face at each end, and it arrives with
   `flow_nozzle`, `coriolis`, `vortex`, `ultrasonic`, `turbine_meter`,
   `positive_displacement`, `v_cone`, `wedge`, `target`, `pitot` and
   `averaging_pitot`. From the piping file: `strainer_y`, `strainer_basket` and
@@ -651,8 +651,8 @@ and is kept working.
   24.5 x 15 valve.
 - The in-line families are drawn at the size a real sheet draws them. draw.io
   cuts its stencils for a diagram rather than for a drawing, and at the scale
-  they were first vendored at a gate valve came out 49 units — 13 mm on an A3
-  sheet, against the 6 mm an issued P&ID draws one at — so a station with
+  they were first vendored at a gate valve came out 49 units, which is 13 mm on
+  an A3 sheet against the 6 mm an issued P&ID draws one at, so a station with
   isolation valves either side of a control valve took the width that five
   valves, a flow element and an instrument square occupy on a real sheet. The
   bowtie is now 24.5 x 15 units, 6.5 x 4.0 mm. Everything that shares a pipe
@@ -788,7 +788,7 @@ and is kept working.
   same tag may be drawn at each place it acts. `sis` is also spelled `logic`,
   which is the name the package shipped and what every drawing already authored
   uses; the two names are one symbol and one `Symbol` object. A *bare* square is
-  neither of them — that is `shared` with its balloon left off, which is what
+  neither of them: that is `shared` with its balloon left off, which is what
   `logic` used to be drawn as.
 - `Instrument.attach(on=…, at=…, offset=…, angle=…)` anchors a balloon to the
   stream or the equipment it reads, with an impulse line drawn to the tap.
@@ -915,9 +915,9 @@ and is kept working.
   `PANDID_UPDATE_GOLDEN=1`.
 - Symbol-invariant suite over every registered `(kind, variant)`: well-formed
   SVG, ports inside the bounding box, ports on drawn ink, no two ports
-  coinciding — and the same, on a rendered sheet, at box shapes nothing is drawn
-  at, which is where a resolved port and the artwork it belongs to can drift
-  apart.
+  coinciding, and the same again on a rendered sheet, at box shapes nothing is
+  drawn at, which is where a resolved port and the artwork it belongs to can
+  drift apart.
 - Route-invariant suite (`tests/test_route_invariants.py`) over the whole shipped
   corpus, the golden scenarios and both ethanol sheets: every routed stream
   begins and ends on its own port anchors, and nothing is drawn diagonally.
@@ -929,10 +929,10 @@ and is kept working.
 - Eleven runnable examples in `examples/`, each usable from the repository root
   or from `examples/` itself, and rendered into `docs/gallery/`. The last of
   them, `11_ethanol_pid.py`, is a whole issued P&ID on a fixed A3 sheet: line
-  numbers on every line, four control valve stations drawn in full — isolation
+  numbers on every line, four control valve stations drawn in full (isolation
   valves, reducer, a bypass over the top on its own normally closed valve and a
   drain off the underside either side of the control valve, every branch a
-  `Tee` and so drawn as nothing and scheduled nowhere — tapped utility headers
+  `Tee` and so drawn as nothing and scheduled nowhere), tapped utility headers
   labelled the same way at every tap, five loops closing on an actuator with one
   cascade, alarm pairs and a repeated interlock square. Its PFD counterpart,
   `10_ethanol_pfd.py`, draws the reflux and filter-press partings as tees for

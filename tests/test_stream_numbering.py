@@ -1,6 +1,6 @@
 """Stream numbering: inline valves carry the number through; signals unnumbered.
 
-The number ``connect()`` hands back is the number the sheet gets drawn with —
+The number ``connect()`` hands back is the number the sheet gets drawn with:
 a report, a stream table or a label written from ``s.name`` before the render
 must not disagree with the drawing.
 """

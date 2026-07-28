@@ -6,11 +6,11 @@ on the left, its overhead condenser sits high and to the right with the reflux
 drum beneath it, and the kettle reboiler hangs off the bottom of the tower. Both
 loops close on the column itself, through its ``reflux_in`` and ``boilup_in``
 return nozzles, and the bottoms product leaves from the reboiler's own draw at
-the weir end — which is where it leaves the plant.
+the weir end, which is where it leaves the plant.
 
 That arrangement is a drawing convention rather than something a topological
-layout can infer, so the equipment is pinned. Everything else — routing, stream
-numbering, labels — is automatic.
+layout can infer, so the equipment is pinned. Everything else (routing, stream
+numbering and labels) is automatic.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -26,8 +26,8 @@ def main():
     col = fs.add(units.Column("T-701", description="Main Fractionator"))
 
     # Overhead: a horizontal shell-and-tube condenser over a horizontal drum.
-    # Both keep close to their symbols' native proportions — scaling a symbol
-    # far past its drawn aspect is what makes a sheet look wrong.
+    # Both keep close to their symbols' native proportions, because scaling a
+    # symbol far past its drawn aspect is what makes a sheet look wrong.
     cond = fs.add(units.HeatExchanger("E-701", variant="straight_tubes", width=120,
                                       height=36, description="Overhead Condenser"))
     # The drum's inlet is authored on three faces, and the engine takes the top
@@ -41,7 +41,7 @@ def main():
 
     # Bottoms: the sump drains into the kettle, where what boils returns to the
     # tower as boilup and what does not overflows the weir and leaves as bottoms
-    # product — off the reboiler's own draw, which is where it leaves the plant.
+    # product, off the reboiler's own draw, which is where it leaves the plant.
     reb = fs.add(units.HeatExchanger("E-702", variant="kettle", width=120, height=44,
                                      description="Kettle Reboiler"))
     bot = fs.add(units.Product("Bottoms", reference="PFD-300"))
@@ -65,7 +65,7 @@ def main():
     cond_drain_x = cond_x + 0.75 * cond_w
 
     # Drum hung so its top inlet (20/91.5 along the shell) sits directly under
-    # the condenser drain — that run is then a straight drop.
+    # the condenser drain, so that run is then a straight drop.
     drum_w, drum_y = 130, 170
     drum.pin(x=cond_drain_x - (20 / 91.5) * drum_w, y=drum_y)
     drum_x = cond_drain_x - (20 / 91.5) * drum_w

@@ -30,7 +30,7 @@ def test_a_peer_overhead_takes_the_north_shell():
 
 
 def test_a_peer_astern_takes_the_far_head():
-    """The east head, which no example names by hand — the engine reaches it on
+    """The east head, which no example names by hand: the engine reaches it on
     the same evidence it reaches the north shell on."""
     fs, drum = _drum_fed_from(500, 215)
     fs.layout()
@@ -75,8 +75,8 @@ def test_a_nozzle_fixed_by_physics_is_never_considered():
 
 
 def test_a_feed_family_is_fixed_the_way_a_single_nozzle_is():
-    """Each member of a column's feed family has exactly one placement — the
-    family spreads *along* the shell wall, it does not offer other walls — so
+    """Each member of a column's feed family has exactly one placement (the
+    family spreads *along* the shell wall, it does not offer other walls), so
     selection has nothing to choose between and leaves every one of them where
     the symbol put it."""
     fs = Flowsheet("extractive")
@@ -147,7 +147,7 @@ def test_laying_the_sheet_out_twice_draws_it_the_same_way():
 
 def test_a_balloons_pick_survives_being_re_placed_by_the_router():
     """An attached balloon is placed again once its host line is routed, which
-    replaces its frame — and its frame is where the pick lives."""
+    replaces its frame, and its frame is where the pick lives."""
     fs = Flowsheet("loop")
     feed = fs.add(units.Feed("Feed")).pin(x=60, y=270)
     fv = fs.add(units.Valve("FV-1", variant="control")).pin(x=260, y=280)

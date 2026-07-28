@@ -14,7 +14,7 @@ from pandid.validate import Issue
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
 
-# A symbol's own lettering — the "M" in a motor operator, the "S" in a solenoid.
+# A symbol's own lettering: the "M" in a motor operator, the "S" in a solenoid.
 # Matched to be counter-transformed when the symbol is turned or flipped.
 _SYMBOL_TEXT = re.compile(
     r'<text\b[^>]*?\bx="(-?[\d.]+)"[^>]*?\by="(-?[\d.]+)"[^>]*?>.*?</text>', re.S)
@@ -152,7 +152,7 @@ def _upright_text(svg: str, rot: int, mirror_x: bool, mirror_y: bool) -> str:
     box moves, the "M" inside it does not turn upside down. The transform on
     the ``<use>`` reaches the glyphs as readily as the strokes, so each text is
     wrapped in the inverse of that transform taken about its own anchor. The
-    anchor still lands where the flip puts it — only the orientation is undone.
+    anchor still lands where the flip puts it; only the orientation is undone.
     """
     if not (rot or mirror_x or mirror_y):
         return svg
@@ -164,7 +164,7 @@ def _upright_text(svg: str, rot: int, mirror_x: bool, mirror_y: bool) -> str:
         # the top of the box it is stamped in, since the glyph body sits above
         # the line rather than astride it. Cap height is ~0.7em, so the middle
         # of a capital is ~0.35em above the baseline. `x` needs no such
-        # correction — these are all text-anchor="middle".
+        # correction: these are all text-anchor="middle".
         size = re.search(r'font-size="(-?[\d.]+)"', match.group(0))
         cy = ty - 0.35 * float(size.group(1) if size else 12.0)
         # Undone in the reverse of the order the <use> applies them.
@@ -388,7 +388,7 @@ class SvgRenderer:
             The one-word way to ask for both, and the older spelling:
             ``"p&id"`` means ``border="zone"`` with ``diagram="p&id"``.
         page_size : str | None
-            Standard paper size — ``"A4"``, ``"A3"``, ``"A2"``, ``"A1"``, ``"A0"`` —
+            Standard paper size (``"A4"``, ``"A3"``, ``"A2"``, ``"A1"``, ``"A0"``),
             drawn at exactly that size, with the furniture docked to the sheet edges
             and the drawing fitted into what they leave. ``None`` (the default) sizes
             the sheet to the drawing instead.
@@ -402,7 +402,7 @@ class SvgRenderer:
         arrows = diagram != "p&id"
         sheet = _page(page_size)
 
-        # 1. Diagram bounding box — union of every unit's drawn box and every
+        # 1. Diagram bounding box: union of every unit's drawn box and every
         #    route waypoint. Furniture is placed *around* this fixed region.
         dx0 = dy0 = float("inf")
         dx1 = dy1 = float("-inf")
@@ -549,7 +549,7 @@ class SvgRenderer:
         and the drawing is fitted into the region the bands leave.
 
         Returns the outer canvas rect ``(x, y, w, h)`` and that free region
-        ``(x, y, w, h)`` — ``None`` when the frame was grown to the drawing.
+        ``(x, y, w, h)``, or ``None`` when the frame was grown to the drawing.
         """
         from pandid.document import TitleBlock, TableBox, _ALIGN
 
@@ -789,8 +789,8 @@ class SvgRenderer:
                    else "Stream Number")
 
         # Every column is sized to what goes in it. The table's width is a
-        # layout *output* — it is placed at whatever it measures, and the sheet
-        # is grown or the page is refused around it — so there is no fixed cell
+        # layout *output* (it is placed at whatever it measures, and the sheet
+        # is grown or the page is refused around it), so there is no fixed cell
         # here to abbreviate into: a stream table that cannot show
         # "0.0441 kg/kg total" is not a stream table. A minimum keeps a table of
         # short values from ruling columns too narrow to read as columns.
@@ -889,7 +889,7 @@ class SvgRenderer:
         lines = []
         # Sorted, not raw set order: set iteration depends on the process hash
         # seed, so an identical flowsheet would otherwise emit byte-different
-        # SVG from run to run — breaking diffs, caching and golden tests.
+        # SVG from run to run, breaking diffs, caching and golden tests.
         used_colors = sorted({s.color or "black" for s in fs.streams})
         lines.append('  <defs>')
         # A sheet that draws no arrowhead defines none: the only lines that ever
@@ -907,8 +907,8 @@ class SvgRenderer:
         # transform in use, since the counter-transform that keeps the letters
         # readable is baked into the definition; a symbol built to measure needs
         # one per size, so the box it is placed in is the box it was drawn in and
-        # the scale factor stays exactly 1. Everything else — the great majority
-        # — still shares a single definition however it is placed.
+        # the scale factor stays exactly 1. Everything else (the great majority)
+        # still shares a single definition however it is placed.
         used: dict[tuple, tuple] = {}
         # Definitions some placement asks to fill a box of another shape. A
         # <symbol> scales its viewBox to fit and centres what is left over, so a
@@ -959,8 +959,8 @@ class SvgRenderer:
             f = u.frame
             out = balloons if u.kind == "instrument" else lines
             x, y = f.x, f.y
-            # The tag, not the name: a symbol that repeats — a trip square, a
-            # utility header flag — is drawn with the tag it shares and named
+            # The tag, not the name: a symbol that repeats (a trip square, a
+            # utility header flag) is drawn with the tag it shares and named
             # apart only so the flowsheet can address each drawing of it.
             safe_name = html.escape(u.tag)
 
@@ -983,8 +983,8 @@ class SvgRenderer:
                 bw, bh = u_width, u_height
             ux, uy = cx - bw / 2, cy - bh / 2
 
-            # Composed right-to-left by SVG, so this reads "mirror, then rotate"
-            # — the same order portgeom.symbol_to_box uses for the ports.
+            # Composed right-to-left by SVG, so this reads "mirror, then
+            # rotate", the same order portgeom.symbol_to_box uses for the ports.
             ops = []
             if rot:
                 ops.append(f"rotate({rot}, {_num(cx)}, {_num(cy)})")
@@ -1085,7 +1085,7 @@ class SvgRenderer:
     def _draw_instrument_tag(self, u, x, y, u_width, u_height):
         """Functional letters over the bare loop number, as ISA-5.1 draws them.
 
-        An interlock square carries the number alone — its letters are only the
+        An interlock square carries the number alone: its letters are only the
         tag prefix, and a real sheet leaves the square holding one figure.
         """
         from pandid.units import split_tag
@@ -1114,7 +1114,7 @@ class SvgRenderer:
                     f'font-size="12" text-anchor="middle" '
                     f'dominant-baseline="middle">{html.escape(bot or top)}</text>']
         # The location bar is what the balloon says about *where* the instrument
-        # lives, and it is drawn across the middle — exactly where the letters
+        # lives, and it is drawn across the middle, exactly where the letters
         # would otherwise sit. ISA-5.1 puts the letters wholly above the bar and
         # the number wholly below, so a barred variant needs the pair pushed
         # apart to leave the band clear.
@@ -1259,7 +1259,7 @@ class SvgRenderer:
 
         Labels are placed on a free face where one exists, but a passing stream
         (or a unit whose every face carries a nozzle) can still run behind the
-        text — the halo keeps the tag legible either way. A ``center`` label
+        text; the halo keeps the tag legible either way. A ``center`` label
         sits inside its symbol, so it gets no halo that would erase detail.
         """
         out = ['  <g id="unit_labels">']
@@ -1328,7 +1328,7 @@ class SvgRenderer:
 
         lines = ['  <g id="streams">']
         labeled_names: set = set()
-        label_items: list = []   # (tx, ty, name, color) — drawn last, over every line
+        label_items: list = []   # (tx, ty, name, color); drawn last, over every line
         _SIGNAL_DASH = {"electric": "7,4", "data": "9,3,2,3", "software": "9,3,2,3",
                         "capillary": "3,3"}
         for s, points in stream_geoms:
@@ -1397,8 +1397,8 @@ class SvgRenderer:
                     # ISA-5.1 draws a pneumatic signal as a *solid* line marked
                     # with double cross-hatches, so the hatch is the only thing
                     # telling it apart from process piping. One mark per 45px
-                    # alone leaves a short run — a transducer to the actuator
-                    # right beneath it — with none at all, reading as plain pipe.
+                    # alone leaves a short run (a transducer to the actuator
+                    # right beneath it) with none at all, reading as plain pipe.
                     # Any segment with room for a mark gets at least one; longer
                     # segments keep the 45px spacing.
                     #

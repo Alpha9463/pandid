@@ -1,5 +1,5 @@
 """
-Example 11: Ethanol Purification A300 — the P&ID of example 10's unit
+Example 11: Ethanol Purification A300, the P&ID of example 10's unit
 
 The same beer column, condenser, reflux drum, kettle reboiler and bottoms
 cooler as ``10_ethanol_pfd.py``, on the same fixed ``page_size="A3"`` sheet,
@@ -42,7 +42,7 @@ its own way rather than being renamed apart:
 - a **utility header** (``Feed("CWSH", header=True)``) is one service tapped
   wherever the sheet wants it, so both cooling-water tie-ins carry ``CWSH`` and
   both returns ``CWRH``, which is what the legend entry explaining them names;
-- a **tee** carries no tag at all — it is bulk piping bought by the line — so
+- a **tee** carries no tag at all, being bulk piping bought by the line, so
   the branches around the valve stations put nothing on the drawing and nothing
   in the equipment list;
 - and the **interlock square**, as above.
@@ -414,9 +414,9 @@ def main():
         "Vent",
         "Distillation Tower Flush Line",
     ], align="bottom-left"))
-    # A darkened valve body is not an ISA-5.1 symbol — the standard hands manual
-    # valve depiction to the piping group — so clauses 2.8.1(b)(1) and 5.2.5 of
-    # ISA-5.1 make declaring it here mandatory rather than optional.
+    # A darkened valve body is not an ISA-5.1 symbol, since the standard hands
+    # manual valve depiction to the piping group, so clauses 2.8.1(b)(1) and
+    # 5.2.5 of ISA-5.1 make declaring it here mandatory rather than optional.
     fs.add_annotation(legend({
         "SS": "Stainless Steel 316L",
         "CS": "Carbon Steel A106-B",

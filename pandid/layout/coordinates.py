@@ -44,9 +44,9 @@ def assign_coordinates(fs: "Flowsheet") -> None:
         curr_x += col_widths[col] + 100.0  # 100px routing gap minimum
 
     # Center each row's units on a common horizontal flow axis (rather than
-    # top-aligning), so equipment of different heights lines up on one spine —
-    # a short mixer and a tall column share a centerline, minimizing the
-    # vertical jog between their connecting ports.
+    # top-aligning), so equipment of different heights lines up on one spine: a
+    # short mixer and a tall column share a centerline, minimizing the vertical
+    # jog between their connecting ports.
     max_row = max((u._slot.row or 0 for u in units if u._slot.y is None), default=-1)
     row_height: dict[int, float] = {r: 50.0 for r in range(max_row + 1)}  # empty rows keep a default band
     for u in units:
@@ -72,13 +72,13 @@ def assign_coordinates(fs: "Flowsheet") -> None:
     # Post-pass: straighten the process spine. Walk units left-to-right and,
     # where a unit has a single horizontal process connection to a neighbour in
     # another column, shift it vertically so the two ports share an absolute
-    # height — turning staircase jogs into straight runs (and clean L's for
+    # height, turning staircase jogs into straight runs (and clean L's for
     # single-stream Feed/Product terminals). Anything that would overlap a
     # neighbour in the same column is left on the row axis.
     # The slot carries the same box the Frame will (size and transform), so the
-    # port resolver answers here exactly as it will once the frames are emitted
-    # — which is the point: a target read off the symbol instead ignores the
-    # resize, the mirror and any nozzle() choice, and aims at the wrong height.
+    # port resolver answers here exactly as it will once the frames are emitted.
+    # That is the point: a target read off the symbol instead ignores the resize,
+    # the mirror and any nozzle() choice, and aims at the wrong height.
     def _target_y(other_u, other_port):
         """Absolute Y to aim a straight run at, honouring N/S escape lanes."""
         s = other_u._slot

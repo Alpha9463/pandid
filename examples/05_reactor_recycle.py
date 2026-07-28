@@ -1,8 +1,8 @@
 """
 Example 5: Reactor loop with recycle and purge (fully automatic)
 
-No pins, no via() waypoints — the engine lays out and routes everything from the
-topology alone. It exercises:
+No pins and no via() waypoints: the engine lays out and routes everything from
+the topology alone. It exercises:
 
 - automatic recycle detection (the splitter -> mixer edge is torn and routed as
   a recycle lane across the sheet),

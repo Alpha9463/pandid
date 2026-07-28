@@ -104,7 +104,7 @@ class VisibilityGraph:
         y_set: Set[float] = set()
 
         # Port anchors, their outward directions, and the escape node each one
-        # stands off to — the single geometry authority the router reads from.
+        # stands off to: the single geometry authority the router reads from.
         # The router used to project its own, from a copy of the distances
         # below; the copies agreeing was load-bearing and unenforced.
         self.port_anchors: Dict[Tuple[str, str], Tuple[float, float]] = {}
@@ -118,8 +118,8 @@ class VisibilityGraph:
             u_width, u_height = f.w, f.h
             mirrored = f.mirrored
 
-            # An in-line element straddles its own tap — that is the whole point
-            # of ``offset=0`` — so treating it as an obstacle would push its host
+            # An in-line element straddles its own tap (that is the whole point
+            # of ``offset=0``), so treating it as an obstacle would push its host
             # line into a detour around it, and the balloon, being placed from
             # that line, would then chase the detour. It stands aside instead.
             tap = getattr(u, "tap", None)

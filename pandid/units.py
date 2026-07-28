@@ -47,7 +47,7 @@ class Unit:
     #: The equipment type this unit is drawn as: the key the symbol registry is
     #: looked up by, and the tag a spec's ``kind:`` names. One per class.
     kind: str = "unit"
-    #: The unit's nozzles, one ``(name, direction, role)`` tuple each — the name
+    #: The unit's nozzles, one ``(name, direction, role)`` tuple each: the name
     #: a stream is connected by, ``"inlet"`` or ``"outlet"``, and one of
     #: :data:`_VALID_ROLES`. Read once when the unit is constructed, so the
     #: nearest declaration in the class hierarchy is the whole list. A unit
@@ -131,18 +131,20 @@ class Unit:
         False here, and so for every piece of equipment: two units answering to
         ``P-101`` are two pumps sharing a tag, which is a mistake in the
         drawing rather than a convention of it. Overridden by the two symbols
-        that stand for one thing shown in several places — the interlock square
-        (:meth:`Instrument.repeats`) and the utility header flag
-        (:meth:`_Boundary.repeats`) — and by the one that stands for nothing at
+        that stand for one thing shown in several places (the interlock square,
+        :meth:`Instrument.repeats`, and the utility header flag,
+        :meth:`_Boundary.repeats`), and by the one that stands for nothing at
         all, the pipe tee (:meth:`Tee.repeats`), which draws no tag to clash.
         """
         return False
 
     @property
     def significant(self) -> bool:
-        """For inline fittings (valve/reducer/fitting): if True, the stream
-        number — or the line number, where the line has one — breaks across this
-        unit instead of carrying through it, which is where a spec break goes.
+        """Whether the line identifier breaks across this inline fitting.
+
+        On a valve, reducer or fitting, True breaks the stream number (or the
+        line number, where the line has one) across the unit instead of
+        carrying it through, which is where a spec break goes.
 
         Setting it renumbers the flowsheet, so the names on the stream objects
         the caller already holds stay the names that get drawn.
@@ -257,8 +259,8 @@ class Unit:
         already picks between them from where the peer landed (see
         :mod:`pandid.layout.faces`); this overrides that pick, which is how a
         drawing convention gets stated. ``face`` is the compass point on the
-        finished sheet — ``"N"``/``"S"``/``"E"``/``"W"``, or the
-        ``top``/``bottom``/``left``/``right`` spelling ``label_pos`` uses — so a
+        finished sheet (``"N"``/``"S"``/``"E"``/``"W"``, or the
+        ``top``/``bottom``/``left``/``right`` spelling ``label_pos`` uses), so a
         mirrored unit takes the face the reader sees rather than the one the
         stencil happened to be drawn with.
 
@@ -358,7 +360,7 @@ class _Boundary(Unit):
 
     Not a piece of plant. The flag stands for a line crossing the sheet edge,
     and its label is the whole of what identifies the service to the reader,
-    which is why ``reference`` — the drawing the line continues onto — is drawn
+    which is why ``reference``, the drawing the line continues onto, is drawn
     here and nowhere else.
 
     ``header`` says the flag stands for a *utility header* rather than for one
@@ -387,8 +389,8 @@ class _Boundary(Unit):
     def tag(self) -> str:
         """The service drawn on the flag (``"CWSH"``).
 
-        Equal to :attr:`~Unit.name` for a flag drawn once. A header repeats —
-        the same service appears wherever it is tapped — so the sheet shows one
+        Equal to :attr:`~Unit.name` for a flag drawn once. A header repeats:
+        the same service appears wherever it is tapped, so the sheet shows one
         label several times while the flowsheet keeps a distinct name for each
         tap to address it by (``CWSH``, ``CWSH (2)``).
         """
@@ -403,7 +405,7 @@ class _Boundary(Unit):
         is by passing ``header=True``.
 
         They also have to be *the same drawing* of it, since the reader has only
-        the flag to go on — same class, so a supply and a return sharing a label
+        the flag to go on: same class, so a supply and a return sharing a label
         still clash, and the same ``reference``, since two taps of one header
         continue onto one drawing.
         """
@@ -419,8 +421,8 @@ class _Boundary(Unit):
 class Feed(_Boundary):
     """Boundary condition: a stream source entering the flowsheet.
 
-    ``header=True`` marks the flag as a utility supply header — cooling water,
-    steam, plant air — which a sheet taps wherever it needs it and labels the
+    ``header=True`` marks the flag as a utility supply header (cooling water,
+    steam, plant air), which a sheet taps wherever it needs it and labels the
     same way at every tap. Such a flag may be added more than once; see
     :meth:`_Boundary.repeats`.
     """
@@ -432,8 +434,8 @@ class Feed(_Boundary):
 class Product(_Boundary):
     """Boundary condition: a stream sink leaving the flowsheet.
 
-    ``header=True`` marks the flag as a return or collection header — cooling
-    water return, condensate, flare — which takes from wherever it is tapped
+    ``header=True`` marks the flag as a return or collection header (cooling
+    water return, condensate, flare), which takes from wherever it is tapped
     and is labelled the same way each time. See :meth:`_Boundary.repeats`.
     """
 
@@ -458,8 +460,8 @@ class Compressor(Unit):
 class _NormallyPositioned(Unit):
     """A unit that carries a ``normal_position``, the base of Valve and Fitting.
 
-    One attribute with one meaning — where the device sits with the plant
-    running — and one validated vocabulary, held in one place rather than
+    One attribute with one meaning (where the device sits with the plant
+    running) and one validated vocabulary, held in one place rather than
     written out twice. A pump has no such position, and neither does a vessel;
     only a device a line can be stopped at does.
 
@@ -679,7 +681,7 @@ class Valve(_NormallyPositioned):
 
 
 class Vessel(Unit):
-    """Generic pressure vessel — holdup, not phase separation.
+    """Generic pressure vessel: holdup, not phase separation.
 
     Variants: ``"default"`` and ``"dished"`` stand upright; ``"horizontal"`` is
     a lying cylinder with dished ends, which is how a reflux drum, accumulator
@@ -800,7 +802,7 @@ class Tee(Unit):
     """Pipe tee: the junction where a line branches.
 
     A bypass leg around a control valve, a drain off the underside of a run, a
-    vent off the top, a sample point, a PSV takeoff — every one of them is a
+    vent off the top, a sample point, a PSV takeoff: every one of them is a
     line splitting in two, and this is the fitting that splits it. It is not a
     unit operation: a :class:`Mixer` or a :class:`Splitter` is a piece of plant
     drawn as a triangle and scheduled as one, and using either for a branch puts
@@ -808,7 +810,7 @@ class Tee(Unit):
 
     A tee is drawn as **nothing at all**: three lines meeting, the run passing
     straight through unbroken and the branch leaving it at a right angle. That
-    is what the reference sheets draw — P&ID-301's control valve stations put a
+    is what the reference sheets draw. P&ID-301's control valve stations put a
     bypass over the top and two drains below every station, and not one of the
     four junctions carries a dot, a circle or a symbol of any kind. So the
     symbol here is the pipe itself and no more, and the run does not kink
@@ -828,8 +830,8 @@ class Tee(Unit):
     tees may share it: :meth:`repeats` says so, and
     :meth:`~pandid.flowsheet.Flowsheet.add` hands out ``TEE (2)``, ``TEE (3)``
     exactly as it does for a repeated interlock square or a tapped utility
-    header. Nothing is drawn either way, and nothing reaches the equipment list
-    — ``"tee"`` is not in ``pandid.document._MAJOR_EQUIPMENT``.
+    header. Nothing is drawn either way, and nothing reaches the equipment
+    list: ``"tee"`` is not in ``pandid.document._MAJOR_EQUIPMENT``.
 
     ``branch`` says which way the third connection runs: ``"outlet"`` (the
     default) takes flow off the run, which is the takeoff end of a bypass and
@@ -874,8 +876,8 @@ class Tee(Unit):
         if branch not in self.BRANCH_DIRECTIONS:
             raise ValueError(
                 f"{name or self.DEFAULT_NAME}: branch= is "
-                f"{' or '.join(repr(d) for d in self.BRANCH_DIRECTIONS)} — whether "
-                f"the third connection takes flow off the run or returns it — got "
+                f"{' or '.join(repr(d) for d in self.BRANCH_DIRECTIONS)}, whether "
+                f"the third connection takes flow off the run or returns it; got "
                 f"{branch!r}"
             )
         super().__init__(name or self.DEFAULT_NAME, variant=variant, width=width,
@@ -897,7 +899,7 @@ class Tee(Unit):
         A tag names one item and two units may not share one, which is why every
         piece of equipment refuses a repeat. A tee has no tag: the sheet writes
         nothing against it, so two tees answering to one name are not two things
-        the reader could confuse — there is nothing drawn to confuse. The name is
+        the reader could confuse, because there is nothing drawn to confuse. The name is
         purely how the flowsheet addresses the junction, and
         :meth:`~pandid.flowsheet.Flowsheet.add` keeps it unique.
         """
@@ -908,7 +910,7 @@ class Fitting(_NormallyPositioned):
     """In-line pipe device: whatever sits in the run and is not a valve.
 
     One class rather than a dozen, because to the flowsheet a strainer, a sight
-    glass and a rupture disc are the same thing — a pair of faces on a line —
+    glass and a rupture disc are the same thing, a pair of faces on a line,
     and differ only in what is drawn between them. The variant picks the device:
     ``strainer``, ``strainer_cone``, ``strainer_y``, ``strainer_basket``,
     ``strainer_duplex``, ``orifice``, ``rotameter``,
@@ -930,8 +932,8 @@ class Fitting(_NormallyPositioned):
     unless ``significant`` is set.
 
     ``blind`` is the **spectacle blind** (figure-8 blind), and it is the one
-    fitting with a ``normal_position``. It is a pair of discs on a common tie —
-    one bored through, one solid — bolted between a pair of flanges, and which
+    fitting with a ``normal_position``. It is a pair of discs on a common tie,
+    one bored through and one solid, bolted between a pair of flanges, and which
     of them is in the line is the whole of what the symbol says. So the line
     passes through the lower disc, and:
 
@@ -940,8 +942,8 @@ class Fitting(_NormallyPositioned):
     - ``normal_position="closed"`` draws it **solid**, with the ring parked
       above: the line is blanked.
 
-    That is a change of *shape*, not a mark added to one — the stencil set
-    draws both — so a blind is never shown in a position by inference and the
+    That is a change of *shape*, not a mark added to one: the stencil set draws
+    both. A blind is therefore never shown in a position by inference, and the
     two are never one drawing. Any other fitting variant refuses ``"closed"``:
     a strainer has no position, and a position nothing draws is worse than none.
     """
@@ -979,7 +981,7 @@ class Vent(Unit):
     """Open end to atmosphere (vent stack with a weather cap).
 
     A boundary like :class:`Product`, but drawn as real piping rather than an
-    off-page flag — which is what a PSV tailpipe or a tank breather wants.
+    off-page flag, which is what a PSV tailpipe or a tank breather wants.
 
     Variants: ``"default"`` (a stack with a weather cap), ``"exhaust_head"``
     (the silencing hood on a steam or relief vent) and ``"breather"`` (the tank
@@ -991,7 +993,7 @@ class Vent(Unit):
 
 
 class Funnel(Unit):
-    """Open charging funnel — a manual addition point feeding the line.
+    """Open charging funnel: a manual addition point feeding the line.
 
     The mirror of :class:`Vent`: the cone is open to the room and the stem is
     the process connection, so its single port is an *outlet*.
@@ -1031,11 +1033,11 @@ class Dryer(Unit):
 
 
 class Conveyor(Unit):
-    """Belt conveyor — bulk solids carried from the tail end to the head end.
+    """Belt conveyor: bulk solids carried from the tail end to the head end.
 
     ``length`` is the belt run: the symbol is a straight bar between two rollers
     of fixed size, so a longer conveyor grows the bar and the rollers stay
-    round. It is the unit's whole size, and its only one — ``width`` and
+    round. It is the unit's whole size, and its only one. ``width`` and
     ``height`` set the drawn box, which would stretch the rollers with it, so
     they are refused rather than left as a second answer to the same question.
     A quarter turn stands the belt on end, where the length is its height.
@@ -1111,8 +1113,8 @@ class Instrument(Unit):
 
     ``type`` is the functional letter string (``"FT"``, ``"PAH"``, ``"LIC"``)
     and ``number`` the loop number; the balloon draws the letters over the
-    number, and the number is drawn **bare** — a real sheet does not repeat the
-    letters inside the bubble. ``name`` is the full tag (``"FT-101"``), which is
+    number, and the number is drawn **bare**, because a real sheet does not
+    repeat the letters inside the bubble. ``name`` is the full tag (``"FT-101"``), which is
     what equipment lists and cross-references want. A single combined argument
     (``Instrument("FT-101")``) is still accepted and split.
 
@@ -1122,10 +1124,10 @@ class Instrument(Unit):
     ``"default"`` (field balloon), ``"panel"``, ``"aux"``, ``"shared"``
     (a circle in a square: shared display and shared control, which ISA-5.1 no
     longer reads as "DCS"),
-    ``"computer"``, ``"sis"`` (a diamond in a square — ANSI/ISA-5.1-2009
+    ``"computer"``, ``"sis"`` (a diamond in a square: ANSI/ISA-5.1-2009
     Table 5.1.1 column B, the safety-instrumented-system symbol an issued sheet
     draws a trip with, also spelled ``"logic"``) and ``"interlock"`` (a plain
-    diamond — Table 5.1.2 items 3-5, the generic interlock logic function).
+    diamond: Table 5.1.2 items 3-5, the generic interlock logic function).
 
     A balloon that measures something belongs *on* what it measures: see
     :meth:`attach` (and :meth:`pandid.flowsheet.Flowsheet.add_instrument`).
@@ -1136,7 +1138,7 @@ class Instrument(Unit):
              ("sig_out", "outlet", "signal")]
 
     #: The variants that stand for a function rather than a device. A balloon is
-    #: a thing — a transmitter in the field, a faceplate in the control room —
+    #: a thing (a transmitter in the field, a faceplate in the control room)
     #: and there is one of it. A trip square is a *logic function*, which acts in
     #: several places at once and is therefore drawn in each of them, carrying
     #: the same tag every time. ``"sis"`` and ``"logic"`` are two names for one
@@ -1168,7 +1170,7 @@ class Instrument(Unit):
         """The ISA tag drawn in the balloon or square (``"I-1"``).
 
         Equal to :attr:`~Unit.name` for everything drawn once. An interlock
-        square repeats — the same logic function appears wherever it acts — so
+        square repeats: the same logic function appears wherever it acts, so
         the sheet shows one tag several times while the flowsheet keeps a
         distinct name for each square to address it by (``I-1``, ``I-1 (2)``).
         """
@@ -1180,10 +1182,10 @@ class Instrument(Unit):
         Both ends have to be trip squares carrying the same tag: an ``LT-101``
         drawn twice is two transmitters on one loop number, and a square sharing
         its tag with a balloon is two different symbols claiming to be the same
-        thing. They also have to be the *same* square — a plain interlock
+        thing. They also have to be the *same* square: a plain interlock
         diamond and a diamond-in-square are two different ISA-5.1 symbols, so
-        one of each on a tag is still a clash — except that ``"sis"`` and
-        ``"logic"`` name one symbol and so count as the same.
+        one of each on a tag is still a clash. The exception is that ``"sis"``
+        and ``"logic"`` name one symbol and so count as the same.
         """
         def symbol(variant: object) -> object:
             return "sis" if variant == "logic" else variant
@@ -1198,7 +1200,7 @@ class Instrument(Unit):
         """Anchor this balloon to a process line or to a piece of equipment.
 
         ``on`` is the host: a :class:`~pandid.streams.Stream` (tap a line) or a
-        :class:`Unit` (mount on equipment). ``at`` locates the tap — a fraction
+        :class:`Unit` (mount on equipment). ``at`` locates the tap: a fraction
         ``0..1`` along the host stream's routed path, or a face (``"N"``,
         ``"S"``, ``"E"``, ``"W"``) of a host unit's drawn box.
 
@@ -1207,7 +1209,7 @@ class Instrument(Unit):
         in-line primary element (an orifice plate FE) is drawn.
 
         ``angle`` is the direction the balloon branches off, in degrees from the
-        flow direction at the tap, counter-clockwise positive — so the default
+        flow direction at the tap, counter-clockwise positive, so the default
         ``90`` is "perpendicular, upstream side up" and a tap keeps its
         orientation if the line is later re-routed. On a unit host the reference
         direction is the face's tangent, so ``90`` again points straight out.
@@ -1265,9 +1267,9 @@ class HeatExchanger(Unit):
 
     Nozzles are named for the **side of the equipment** they sit on, never for
     the duty the stream carries. Which fluid runs in the shell and which in the
-    tubes is a design decision an engineer makes deliberately — fouling service
+    tubes is a design decision an engineer makes deliberately: fouling service
     goes tube side because tubes can be cleaned, condensing vapour goes shell
-    side — and that is a fact about the exchanger, so the drawing records it.
+    side. That is a fact about the exchanger, so the drawing records it.
     Which side is the hot one inverts between operating cases while the nozzle
     stays where it is.
 
@@ -1278,9 +1280,9 @@ class HeatExchanger(Unit):
 
     The ``kettle`` variant carries one nozzle more: ``bottoms``, the liquid draw
     at the weir end of the shell. A kettle reboiler is where a tower's bottoms
-    product physically leaves — what does not boil overflows the weir — so the
-    draw belongs on the exchanger and not on an invented splitter in the sump
-    line.
+    product physically leaves: what does not boil overflows the weir. The draw
+    therefore belongs on the exchanger and not on an invented splitter in the
+    sump line.
     """
 
     kind = "hex"
@@ -1362,7 +1364,7 @@ class Reactor(Unit):
     """Generic reactor (CSTR, PFR, etc.).
 
     ``vent`` is the off-gas connection at the top of the vessel. ``n_feeds``
-    gives the vessel more than one charge nozzle — ``feed_1`` ... ``feed_n``,
+    gives the vessel more than one charge nozzle: ``feed_1`` ... ``feed_n``,
     spread down the shell top to bottom, in place of the single ``feed``.
     """
 
@@ -1405,7 +1407,7 @@ class Column(Unit):
     reboiler). Without them a reflux loop has to be modelled as a recycle to
     some upstream unit, which drags the overhead system across the sheet.
 
-    ``n_feeds`` gives the tower more than one feed nozzle — an extractive
+    ``n_feeds`` gives the tower more than one feed nozzle: an extractive
     distillation takes its solvent above the feed tray, an azeotropic tower its
     entrainer. They are ``feed_1`` ... ``feed_n``, spread down the shell in
     declaration order, so ``feed_1`` is the highest and ``feed_n`` the lowest;
@@ -1461,7 +1463,7 @@ class Splitter(Unit):
     """Divides one inlet stream into multiple outlets.
 
     A piece of plant, drawn as a triangle and scheduled as one. A bypass leg, a
-    drain, a vent or a sample point is not that — it is a line branching, and
+    drain, a vent or a sample point is not that: it is a line branching, and
     the fitting that branches it is a :class:`Tee`.
     """
 

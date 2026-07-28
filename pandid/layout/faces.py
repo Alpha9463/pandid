@@ -1,7 +1,7 @@
 """Port-face selection: which of a port's declared placements gets the stream.
 
 Policy only. Every coordinate here is asked for from :mod:`pandid.portgeom`, which
-stays the single authority on where a port is — this module names a candidate
+stays the single authority on where a port is; this module names a candidate
 face and reads back where that puts the ink. *portgeom answers where; this
 answers which.*
 
@@ -10,7 +10,7 @@ Where this runs
 Selection is a layout phase, after coordinate assignment has settled every drawn
 box and before anything reads a face. That is the only cut with no cycle in it.
 A face can only be judged against where its peer's box ended up, and the passes
-that place those boxes — ranking, the spine straightener — resolve ports
+that place those boxes (ranking, the spine straightener) resolve ports
 themselves, so a pick they could see would feed back into the geometry it was
 derived from. Downstream, labels, routing and rendering all read
 :func:`~pandid.portgeom.resolve_port` and so all see the same answer.
@@ -31,8 +31,8 @@ if TYPE_CHECKING:
     from pandid.units import Unit
 
 # How far the router stands a run off a nozzle before it may turn. A face
-# pointing away from its peer pays that twice — out to the stand-off, then back
-# past the nozzle before the run has made any ground — which is what separates a
+# pointing away from its peer pays that twice: out to the stand-off, then back
+# past the nozzle before the run has made any ground. That is what separates a
 # detour from a merely longer straight run.
 _ESCAPE = 25.0
 
@@ -55,7 +55,7 @@ def select_faces(fs: "Flowsheet") -> None:
         movable = [name for name in live
                    if name not in unit._port_faces
                    and len(port_faces(unit, name, frame)) > 1]
-        # Points already spoken for — a nozzle the author named, one fixed by
+        # Points already spoken for: a nozzle the author named, one fixed by
         # physics. Two live connections resolving to one point is a hard
         # validation error, and the selector must not be the thing that makes
         # one. Ports are served in declaration order, so a sheet does not depend
@@ -84,10 +84,10 @@ def _reference(port: "Port") -> tuple[float, float] | None:
 
     None when there is nothing placed to aim at. The peer's nozzle is the target
     where it has one placement and so cannot move; where it can move it has no
-    settled position yet — reading a provisional one would make each port's
-    answer depend on the order the ports happened to be visited — so the centre
-    of its unit's drawn box stands in for it, which is the same point whichever
-    face it ends up on.
+    settled position yet (reading a provisional one would make each port's answer
+    depend on the order the ports happened to be visited), so the centre of its
+    unit's drawn box stands in for it, which is the same point whichever face it
+    ends up on.
     """
     from pandid.portgeom import port_faces, resolve_port, unit_box
 

@@ -1,8 +1,8 @@
 """Routing polish: geometric properties a routed sheet has to hold, none of which
-a golden byte-match would localise — forward streams staying off the sheet-edge
-recycle lanes, runs never drawn over themselves, ports leaving squarely without a
-gratuitous hop, facing nozzles closer than the escape stand-off still running
-straight across, and the separation pass moving only the runs that actually
+a golden byte-match would localise. Forward streams stay off the sheet-edge
+recycle lanes, runs are never drawn over themselves, ports leave squarely without
+a gratuitous hop, facing nozzles closer than the escape stand-off still run
+straight across, and the separation pass moves only the runs that actually
 collide."""
 
 import math
@@ -47,8 +47,8 @@ def test_forward_streams_do_not_route_on_the_recycle_lane():
 
 
 def _crossing_network():
-    """Two feeds, each splitting to both mixers — forces two streams to share
-    the vertical corridor between the splitter and mixer columns."""
+    """Two feeds, each splitting to both mixers, which forces two streams to
+    share the vertical corridor between the splitter and mixer columns."""
     fs = Flowsheet("Crossing Network")
     f1, f2 = fs.add(U.Feed("Feed A")), fs.add(U.Feed("Feed B"))
     s1 = fs.add(U.Splitter("SP-501", n_outlets=2))
@@ -69,7 +69,7 @@ def _crossing_network():
 
 def test_parallel_runs_sharing_a_corridor_are_separated():
     # Two streams routed up/down the same corridor must not land on top of each
-    # other — at 2px stroke widths a few px apart reads as one doubled line.
+    # other: at 2px stroke widths a few px apart reads as one doubled line.
     fs = _crossing_network()
     fs.layout()
     fs.route()
@@ -136,7 +136,7 @@ def _inline_element_signal():
     """An E-facing port whose row is open to the west.
 
     An in-line primary element (``offset=0``) deliberately stands aside from the
-    obstacle set, so the row through its east-facing ``sig_out`` is clear — the
+    obstacle set, so the row through its east-facing ``sig_out`` is clear, the
     one geometry in which a run leaving east can turn straight back west.
     """
     fs = Flowsheet("Inline Element")
@@ -153,7 +153,7 @@ def _nozzle_above_its_target_lane():
     """A downward nozzle 15px above the lane it has to join, projected 25px out.
 
     The escape projection overshoots the lane, so the run has to come back up to
-    it — the geometry that tempts the search into a spur out and straight back.
+    it, the geometry that tempts the search into a spur out and straight back.
     """
     fs = Flowsheet("Overshot Nozzle")
     hx = fs.add(U.HeatExchanger("E-101")).pin(x=568, y=68)
@@ -251,7 +251,7 @@ def test_a_tight_span_onto_another_lane_costs_only_its_own_jog(gap):
     # The same squeeze with the far nozzle 60px down and the tags out of the
     # corridor. The ideal is the Z: across the gap, down, and in. Anything
     # longer is the stand-off overshooting, and the shared escape lane is the
-    # one the run turns down — a lane no unit puts there, so the graph has to
+    # one the run turns down: a lane no unit puts there, so the graph has to
     # carry it or the search has nothing to travel along.
     drop = 60.0
     fs = _facing_valves(float(gap), drop=drop, label_pos="center")
@@ -279,8 +279,8 @@ def test_a_roomy_span_keeps_its_full_stand_off():
 @pytest.mark.parametrize("drop", [0.0, 60.0])
 def test_a_squeezed_run_still_leaves_and_enters_square(gap, drop):
     # What the stand-off is for. However far it is relaxed, the first and last
-    # segments must still run along the nozzle's own outward normal — both
-    # valves face east/west here — so the line meets the symbol at a right angle
+    # segments must still run along the nozzle's own outward normal (both
+    # valves face east/west here), so the line meets the symbol at a right angle
     # rather than skimming off it diagonally or along its face.
     fs = _facing_valves(float(gap), drop=drop)
     (stream,) = fs.streams
@@ -358,7 +358,7 @@ def test_a_port_does_not_overshoot_the_lane_it_is_leaving_for():
 def test_separation_only_moves_runs_that_actually_collide():
     # Clustering tracks with a window of twice the spacing would chain runs a
     # comfortable 12px apart into one cluster and then pack them onto the
-    # spacing grid — leaving them 6px apart, closer than they started.
+    # spacing grid, leaving them 6px apart, closer than they started.
     fs = Flowsheet("Parallel Runs")
     streams = []
     for i, y in enumerate((100, 400, 700, 1000)):

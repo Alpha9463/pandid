@@ -1,5 +1,5 @@
 """
-Example 10: Ethanol Purification A300 — a full A3 process flow diagram
+Example 10: Ethanol Purification A300, a full A3 process flow diagram
 
 A complete issue-ready sheet, drawn at a fixed ``page_size="A3"`` so the zone
 grid is a property of the page rather than of the drawing: a note reading
@@ -18,7 +18,7 @@ Two places on it are junctions rather than plant, and both are drawn as the
 :class:`~pandid.units.Tee` they are: where the drum's single draw parts into
 reflux and distillate, and where the press's discharge parts into filtrate and
 cake. A tee is drawn as nothing at all and carries no tag, so neither one puts
-a symbol on the drawing or a row in the equipment list — which is what the
+a symbol on the drawing or a row in the equipment list, which is what the
 issued sheet does with both of them.
 
 Everything a real drawing carries is on it: the zone-ruled A3 frame, the title

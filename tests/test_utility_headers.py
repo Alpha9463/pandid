@@ -148,7 +148,7 @@ def test_header_is_refused_on_equipment():
 
 def test_a_tapped_header_is_scheduled_nowhere():
     """A flag is where the sheet ends, not a piece of plant, so no schedule has
-    a row for it — and a header tapped twice cannot put two."""
+    a row for it, and a header tapped twice cannot put two."""
     fs, _ = _two_taps()
     rows = equipment_list(fs).rows
     assert rows == [("E-301", "Condenser"), ("E-302", "Product Cooler")]

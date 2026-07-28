@@ -9,8 +9,8 @@ they map straight onto an SVG ``viewBox="0 0 w h"``.
 
 A paint op names the operation, not the colour: what a fill comes out as is the
 canvas's current fill colour, which <fillcolor> sets and <save>/<restore>
-bracket. That is how a stencil says a part of itself is solid — a damper's
-pivot, a flow arrow's head — and, being state rather than a property of the op,
+bracket. That is how a stencil says a part of itself is solid (a damper's
+pivot, a flow arrow's head) and, being state rather than a property of the op,
 it is also why a plain <fill> is a *background wash* in the shape's own fill
 colour rather than a request for black.
 
@@ -108,7 +108,7 @@ INK = "#111"
 DEFAULT_FILL = "none"
 
 # Which of the two the mxGraph paint ops apply, as (fills, strokes). What each
-# one is painted *with* is the current fill colour and the ink — a paint op
+# one is painted *with* is the current fill colour and the ink: a paint op
 # names the operation, not the colour.
 _PAINT = {
     "fillstroke": (True, True),
@@ -198,7 +198,7 @@ def convert_shape(shape_el, stroke_width=2.0):
     weight; for a symbol later scaled by ``s``, pass ``stroke_width = 2 / s`` so
     the rendered line still lands at 2px.
 
-    ``aspect`` is the stencil author's own statement about resizing —
+    ``aspect`` is the stencil author's own statement about resizing:
     ``"variable"`` for a shape that may be stretched to fill whatever box it is
     given, ``"fixed"`` for one whose proportions carry meaning. It is reported
     rather than acted on here: this converts a shape at its native size, and
@@ -279,7 +279,7 @@ def convert_shape(shape_el, stroke_width=2.0):
             elif t == "fontsize":
                 font_size = _num(el, "size", 12)
             elif t == "fillcolor":
-                # Canvas state, read at paint time — the stencils set it after
+                # Canvas state, read at paint time: the stencils set it after
                 # the geometry it applies to and before the op that paints it.
                 fill = _fill_colour(el.get("color"))
             elif t == "save":

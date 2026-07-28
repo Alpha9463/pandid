@@ -40,6 +40,25 @@ not auto-formatted, so don't reformat `pandid/` in a feature PR.
 Keep a PR to one concern. If a change touches rendering, say so and show what
 moved (see *Goldens* below).
 
+## Where things live
+
+1. **Topology** (`pandid/flowsheet.py`, `pandid/units.py`, `pandid/ports.py`,
+   `pandid/streams.py`) holds units, ports and stream connectivity.
+2. **Geometry.** `pandid/layout/` runs Sugiyama layering, then ordering, then
+   coordinates, emitting each unit's resolved `Frame`, and finally port-face
+   selection and label placement. `pandid/portgeom.py` is the single source of
+   truth for port geometry, and `pandid/routing/` is the visibility graph and
+   the A\* search over it.
+3. **Render** (`pandid/render/`) produces the SVG output and the symbol
+   registry, with `pandid/validate.py` and `pandid/document.py` beside it.
+
+Geometry separates *intent* (`Pin`, written by `pin()`) from *result* (`Frame`,
+written by the layout engine), which is what makes `layout()` idempotent.
+
+`scripts/vendor_symbols.py` generates the symbol library into
+`pandid/render/_vendored_symbols.py`, converting mxGraph stencil XML to SVG via
+`scripts/mxgraph_to_svg.py`. `scripts/symbol_sheet.py` renders a catalogue.
+
 ---
 
 ## 1. Symbols come from the vendored stencils, never from hand-editing
@@ -87,8 +106,8 @@ author has already answered whether the drawing may be reshaped to fill a box of
 another shape (`aspect="variable"`, mxGraph's default) or has to keep its
 proportions (`aspect="fixed"`), and that is the same question a unit given an
 explicit `width` and `height` asks. Every shape `KIND_MAP` names today is a
-variable one — the 24 fixed shapes in the stencil set are draw.io's own
-instrument balloons, which `pandid` draws itself — so no generated symbol carries
+variable one, because the 24 fixed shapes in the stencil set are draw.io's own
+instrument balloons, which `pandid` draws itself, so no generated symbol carries
 the keyword. Do not set it by hand on one: change the stencil mapping, or say so
 in `symbols.py` if the symbol is hand-drawn.
 
@@ -141,15 +160,15 @@ registered `(kind, variant)`, not just the ones the examples use:
 - no two *different* ports resolve to the same point, which would stack two
   streams on one pixel;
 - and the same again on a *rendered sheet*, with every unit forced into box
-  shapes nothing is drawn at — much wider than tall, much taller than wide,
+  shapes nothing is drawn at: much wider than tall, much taller than wide,
   square. A unit given an explicit `width`/`height` is drawn at that box, so
   this is where the artwork and the ports can drift apart: the rectangle the
   drawing lands in is read back out of the SVG and the resolved nozzle is
   measured against it.
 
 That last one is what `Symbol.stretchable` answers. A symbol that may be
-reshaped fills the box, and its ports map onto it linearly. One that may not —
-an instrument balloon is a circle because ISA-5.1 says a circle — keeps its
+reshaped fills the box, and its ports map onto it linearly. One that may not,
+an instrument balloon being a circle because ISA-5.1 says a circle, keeps its
 aspect and is centred, and `pandid.portgeom.ink_box` is what keeps its ports on
 the drawing rather than out in the whitespace beside it. The vendored symbols
 take the answer from the stencil's own `aspect` attribute, as section 1 above

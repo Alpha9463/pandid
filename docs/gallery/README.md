@@ -181,17 +181,17 @@ draw parting into the reflux the tower needs and the distillate that leaves the
 sheet, the bottoms
 cooled in HX-301, flocculant made up with RO water in M-301, dosed into the beer
 in M-302, and the slurry dewatered in the membrane filter press F-301, whose
-cake drops onto the belt BC-301. Both partings are `Tee`s — the reflux one
-carries its number straight through, the press one is `significant` and breaks
-it, because the size and the service both change there — and a tee is drawn as
+cake drops onto the belt BC-301. Both partings are `Tee`s: the reflux one
+carries its number straight through, and the press one is `significant` and
+breaks it, because the size and the service both change there. A tee is drawn as
 nothing at all and tagged nowhere, so neither puts a symbol on the sheet or a
 row in the equipment list. Six
 off-page connectors carry the drawing they tie into, the equipment list is named
 row by row with `include=`, a `TableBox` carries the utilities summary above the
 title strip, and the stream table along the foot is sectioned into a "Mass
-Fraction" block. Where the sheet leaves a line unnumbered — the tower overhead,
-the reboiler circuit — the segments share the number of the stream they serve,
-so each is drawn once and heads one table column.
+Fraction" block. Where the sheet leaves a line unnumbered, as it does on the
+tower overhead and the reboiler circuit, the segments share the number of the
+stream they serve, so each is drawn once and heads one table column.
 
 ## 11 · Ethanol purification P&ID
 
@@ -218,11 +218,12 @@ is a `Fitting` sitting in the run with `FT-303` standing over it. The
 cooling-water and steam tie-ins are `header=True` flags, so both supplies read
 `CWSH` and both returns `CWRH`, matching the legend rows that explain them.
 Five loops close on
-a final control element —
+a final control element:
 `PIC-301` on the tower overhead, `LIC-304` on the distillate, `TIC-307` on the
 steam, `LIC-306` on the bottoms draw, and `TT-302 → TIC-302 → FIC-303` cascading
-the tower-top temperature onto the reflux flow controller — every controller and
-alarm drawn as a `shared` display balloon, and the `sis` interlock square drawn
+the tower-top temperature onto the reflux flow controller. Every controller and
+alarm is drawn as a `shared` display balloon, and the `sis` interlock square is
+drawn
 at all four places the trip acts. `via()` pins the routes of the lines that carry
 balloons, since an attached instrument hangs off the *routed* path and would move
 with a line the router was free to re-bend. Nothing on the sheet is pinned by a
