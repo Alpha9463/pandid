@@ -265,6 +265,10 @@ _KIND_TEXT = {
     # Which way a tee's third connection runs. Nothing else has a third
     # connection to a run, so nothing else has the question to answer.
     "branch": ("Tee",),
+    # Which nozzle a reducer's wide face is on, and so whether the fitting
+    # reduces the line or expands it. Nothing else has two ends of different
+    # sizes.
+    "large_end": ("Reducer",),
 }
 # Flags only some classes carry. ``header`` says a boundary flag stands for a
 # utility service tapped wherever it is wanted rather than for one line leaving
@@ -868,6 +872,11 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
         # tee without the word already is.
         if unit.branch_direction != "outlet":
             entry["branch"] = unit.branch_direction
+    elif isinstance(unit, unit_types.Reducer):
+        # Only an expansion. A reduction is what a reducer without the word
+        # already is, so writing it would be writing the default down.
+        if unit.large_end != "inlet":
+            entry["large_end"] = unit.large_end
     elif isinstance(unit, unit_types.Conveyor):
         # Always written: it is how long the belt is, which is the whole of a
         # conveyor's geometry, and nothing else on the entry records it.

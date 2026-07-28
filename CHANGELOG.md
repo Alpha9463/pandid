@@ -205,6 +205,22 @@ and is kept working.
   through a valve or a reducer, and each branch takes a number of its own;
   `significant` breaks the run's number at the junction where the piping class
   changes there.
+- `Reducer(large_end=...)` says which of the fitting's two nozzles is on its
+  wide face, so a line can be **expanded** as well as reduced. `"inlet"` (the
+  default) is a reduction, the run entering wide and leaving narrow the way it
+  does going into a control valve; `"outlet"` is the expansion coming back out
+  of one. A control valve station has both, and the reference sheet the package
+  reproduces carries eight size-change fittings, every one of them half of such
+  a pair.
+
+  It is a property of the unit rather than a second variant or a second class,
+  because it is one casting piped round the other way: the artwork is mirrored
+  and the two ends trade names, so the box, the faces and the direction of flow
+  through the fitting are unchanged and the run still goes `inlet` to `outlet`.
+  `pin(mirrored="x")` cannot say it: that mirror turns the drawing *and* its
+  nozzles over together, drawing the line backwards through the fitting, which
+  is why the package could previously draw a reduction into a device but not the
+  expansion out of it.
 - `HeatExchanger(variant="kettle").bottoms` is the liquid draw at the weir end
   of a kettle reboiler. A tower's bottoms product physically leaves from there,
   so it no longer has to be taken off a splitter in the sump line, which puts a
@@ -443,10 +459,16 @@ and is kept working.
   `strainer_duplex`, which lie in the run rather than standing across it the way
   the two existing strainers do; `bellows`, the expansion joint a piping drawing
   draws; `damper`; and `spool`, the length of pipe taken out to break a line.
-  `Reducer` gains `concentric`, a trapezoid where the default is a cone tapering
-  to a point, and `eccentric`, flat on top with its small end on a lowered
-  centreline — the reducer a pump suction is drawn with, and one the library
-  could not draw at all. `Vent` gains `exhaust_head` and `breather`. All of them
+  `Reducer` gains `concentric`, the trapezoid a piping drawing draws, and
+  `eccentric`, flat on top so the two ends share a roof and the small one's
+  centreline is the higher of the two, which is the reducer a pump suction is drawn
+  with, and one the library could not draw at all; `pin(mirrored="y")` rolls it
+  over, flat on the bottom, for a line that has to drain. `default` draws the
+  concentric body, on the pattern `valve`/`gate` already follows. It used to be
+  `fittings.xml`'s "Reducer", which is a triangle rather than a trapezoid: a
+  cone tapering to a point, so the outlet nozzle sat on an apex and the line it
+  reduced to had no width at all. Nothing maps that shape now.
+  `Vent` gains `exhaust_head` and `breather`. All of them
   are drawn to the in-line family's sheet size: both stencils lay their devices
   out on a 50-unit module where `valves.xml` uses about 100, so they are scaled
   by half rather than by a quarter and a venturi comes out 25 x 20 beside a
@@ -460,8 +482,11 @@ and is kept working.
   bowtie is now 24.5 x 15 units, 6.5 x 4.0 mm. Everything that shares a pipe
   with it moves with it, since one line size is what makes them read as one
   family: strainers, orifice plates, sight glasses, couplings and the rest of
-  the `Fitting` variants, the open `Vent` and `Funnel`, and `Reducer`, which is
-  the same `fittings` stencil as the others and only had a kind of its own.
+  the `Fitting` variants, and the open `Vent` and `Funnel`. `Reducer` is drawn
+  to the same line size by its own factor, since it comes off `piping.xml`'s
+  20-unit module rather than the ~100 one the valves use: 12.5 x 12.5 units, so
+  the fitting is half the valve's length, which is what the reference sheet
+  draws.
 - `Symbol` validates its own declaration, so a third-party symbol gets the same
   protection the invariant suite gives the shipped ones: a placement keyed to a
   face its coordinate does not land on, or restating a port's home face at a
