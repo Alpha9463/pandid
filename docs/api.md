@@ -773,7 +773,7 @@ is a visual style within it. The first name in each list is that kind's
 | `Separator` | `default` (plain vertical drum, the shell `Vessel` and `Column` share), `knockout` (that drum with a demister pad and a level gauge drawn in), `horizontal`, `cyclone`, `gravity`, `scrubber`, `electrostatic` |
 | `Reactor` | `default`, `plain` |
 | `Column` | `default` (plain shell), `packed` |
-| `Filter` | `default`, `gas`, `press`, `rotary`, `ion_exchange` |
+| `Filter` | liquid: `default` (bag/candle/cartridge), `fixed_bed`, `belt`, `press`, `rotary`, `rotary_scraper`, `ion_exchange`<br>gas: `gas` (bag/candle/cartridge), `gas_fixed_bed`, `gas_belt`, each drawn with the dust hopper that makes it one of the [symbols that must not be turned](#symbols-that-must-not-be-turned) |
 | `Dryer` | `default`, `fluidized_bed`, `spray` |
 | `Valve` | bodies: `default` (gate), `gate`, `globe`, `ball`, `butterfly`, `check`, `needle`, `three_way`, `control`, `plug`, `pinch`, `angle`, `psv`, `relief`, `bleed`<br>with a drawn operator: `motor`, `solenoid`, `hydraulic`, `pneumatic`, `manual`, `knife`, `butterfly_pneumatic`, `regulator`<br>which of them take a [`normal_position`](#normally-closed-valves) and which a [`fail`](#fail-position) are two different lists |
 | `Fitting` | devices: `default` (flanged connection), `flange`, `strainer`, `strainer_cone`, `strainer_y`, `strainer_basket`, `strainer_duplex`, `orifice`, `rotameter`, `rupture_disc`, `sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `bellows`, `blind` (spectacle blind, and the one variant with a [`normal_position`](#spectacle-blinds)), `damper`, `spool`, `static_mixer`, `hose`, `coupling`, `clamped_coupling`, `flame_arrestor`, `flame_arrestor_explosion_proof`, `flame_arrestor_detonation_proof`, `flame_arrestor_fire_resistant`<br>primary flow elements: `venturi`, `flow_nozzle`, `coriolis`, `vortex`, `ultrasonic`, `turbine_meter`, `positive_displacement`, `v_cone`, `wedge`, `target`, `pitot`, `averaging_pitot` |
@@ -1824,7 +1824,7 @@ names `variant="horizontal"` where it exists.
 Mirroring is left alone. §11.4.2 excepts *turning* only, and flipping a tank left
 to right to put its nozzles on the other side is a placement the clause permits.
 
-The 28 marked symbols, and what in each one's artwork only means one thing one
+The 30 marked symbols, and what in each one's artwork only means one thing one
 way up:
 
 | Symbols | Why |
@@ -1834,14 +1834,19 @@ way up:
 | `vessel` `default` `dished` `dome` `horizontal` `jacketed` `skirted` | holdup with a vapour space: the vent is on the top head and the shell drains from the bottom |
 | `column` `default` `packed`, `reactor` `default` `plain` | liquid running down over trays or packing while vapour rises, and an agitator hanging in from above |
 | `vent` `default` `breather` `exhaust_head`, `funnel` | open ends: what leaves rises, and an open end drawn pointing down is a drain |
-| `dryer` `spray` `fluidized_bed`, `filter` `gas` | solids that fall: an atomiser in the roof, a bed on its distributor plate, a dust hopper under the bags |
+| `dryer` `spray` `fluidized_bed`, `filter` `gas` `gas_fixed_bed` `gas_belt` | solids that fall: an atomiser in the roof, a bed on its distributor plate, and the dust hopper each gas filter casing draws under its medium |
 
 Not marked, and deliberately: a pump, a compressor, a valve, an in-line fitting
 or a heat exchanger is installed in whatever attitude the run wants, so turning
 its symbol states nothing false, even where a nozzle happens to sit low
-(`hex/kettle`) or the stencil draws a downward tap (`valve/bleed`). The reasons
-are recorded beside `GRAVITY_FIXED` in `scripts/vendor_symbols.py`, which is
-where the flag is set for the vendored symbols.
+(`hex/kettle`) or the stencil draws a downward tap (`valve/bleed`). Nor is any
+*liquid* filter, which is the sharpest case in the list: `fixed_bed` and
+`gas_fixed_bed` draw the same bed the same way, and it is only the hopper the gas
+casing adds underneath it that fixes an attitude. A bed driven by pressure drop
+rests on its support the way every piece of plant rests on the ground, and that
+is not the test. The reasons are recorded beside `GRAVITY_FIXED` in
+`scripts/vendor_symbols.py`, which is where the flag is set for the vendored
+symbols.
 
 ---
 

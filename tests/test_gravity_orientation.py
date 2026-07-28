@@ -170,7 +170,10 @@ GRAVITY_FIXED = {
     # solids that fall
     ("dryer", "spray"),
     ("dryer", "fluidized_bed"),
+    # the three gas filters, each drawn with a dust hopper under its medium
     ("filter", "gas"),
+    ("filter", "gas_fixed_bed"),
+    ("filter", "gas_belt"),
 }
 
 
@@ -188,6 +191,8 @@ def test_the_registry_marks_exactly_that_list():
             ("conveyor", "default"),
             ("dryer", "default"),
             ("filter", "default"),
+            ("filter", "fixed_bed"),
+            ("filter", "belt"),
             ("fitting", "rotameter"),
             ("pump", "default"),
             ("mixer", "default"),
@@ -198,7 +203,9 @@ def test_the_deliberate_exclusions_stay_turnable(key):
     """Each of these was considered and left out; the reasons are recorded
     beside GRAVITY_FIXED in scripts/vendor_symbols.py. A conveyor is the one
     worth restating: its artwork is two rollers and a bar, symmetric top to
-    bottom, so a turn makes nothing in the drawing false."""
+    bottom, so a turn makes nothing in the drawing false. The two liquid filters
+    are here for the contrast with the gas casings above: the same medium drawn
+    the same way, and the hopper is the only thing that fixes an attitude."""
     assert not default_registry.get(*key).gravity_fixed
 
 
