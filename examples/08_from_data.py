@@ -109,7 +109,7 @@ SPEC = {
                         "Mass Flow": "6.0 t/h", "Dissolved O2": "1600 ppb"}},
         # The spillback closes the loop, so nominate it as the tear: without the
         # hint the cycle could be broken at the pump instead.
-        {"from": ["FV-201", "outlet"], "to": ["M-201", "in_1"], "tear_hint": True,
+        {"from": ["FV-201", "outlet"], "to": ["M-201", "in_1"], "draw_as_recycle": True,
          "properties": {"Temperature": "77 C", "Pressure": "3.4 barg",
                         "Mass Flow": "6.0 t/h", "Dissolved O2": "1600 ppb"}},
         {"from": ["V-201", "vent"], "to": ["VT-201", "inlet"],

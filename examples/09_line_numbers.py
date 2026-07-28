@@ -12,7 +12,7 @@ match the piping:
 
 - it carries **through** a hand valve and a strainer, so one line keeps one
   number over its whole run;
-- it **breaks** at a unit marked `significant`, which is exactly where the
+- it **breaks** at a unit marked `new_line_number`, which is exactly where the
   spec breaks, at the control valve and across the relief valve.
 
 The tail-pipe to flare shows the other half: `sequence` set by hand, for a line
@@ -47,8 +47,8 @@ def main():
     # sheet: rating and size both change across them, so the number must not
     # run through. The isolation valve and the strainer are ordinary in-line
     # items and keep the suction line whole.
-    fv.significant = True
-    psv.significant = True
+    fv.new_line_number = True
+    psv.new_line_number = True
 
     # --- Placement -------------------------------------------------------
     # Pinned by nozzle height, not by corner: each symbol carries its ports at a

@@ -32,4 +32,4 @@ def test_stream_defaults():
     assert s.dest is dst
     assert s.kind == "material"
     assert s.is_recycle is False
-    assert s.tear_hint is False
+    assert s.draw_as_recycle is False

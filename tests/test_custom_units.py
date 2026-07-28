@@ -181,29 +181,32 @@ def test_a_port_the_symbol_never_anchored_warns_rather_than_raising():
         default_registry._symbols.pop(("crystalliser", "default"), None)
 
 
-def test_ports_may_still_be_declared_under_the_private_name():
-    """``_PORTS`` is what ``PORTS`` was called while it was private. A unit
-    written against it keeps its nozzles, and is told the name has changed."""
-    with pytest.warns(DeprecationWarning, match="_PORTS"):
+def test_ports_are_declared_under_the_public_name():
+    """``PORTS`` is the one attribute a unit type of your own has to set, and
+    the nearest declaration in the hierarchy is the whole list."""
 
-        class _Old(units.Unit):
-            kind = "old_spelling_test_unit"
-            _PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+    class _Own(units.Unit):
+        kind = "own_ports_test_unit"
+        PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
-    unit = _Old("O-1")
+    unit = _Own("O-1")
     assert set(unit.ports) == {"inlet", "outlet"}
     assert unit.inlet.direction == "inlet"
 
 
-def test_the_public_spelling_wins_over_the_private_one():
-    with pytest.warns(DeprecationWarning):
+def test_a_subclass_declaration_replaces_the_one_above_it():
+    """Overriding ``PORTS`` replaces the inherited list rather than adding to
+    it, exactly as an attribute lookup would."""
 
-        class _Both(units.Unit):
-            kind = "both_spellings_test_unit"
-            PORTS = [("inlet", "inlet", "process")]
-            _PORTS = [("outlet", "outlet", "process")]
+    class _Base(units.Unit):
+        kind = "override_base_test_unit"
+        PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
-    assert set(_Both("B-1").ports) == {"inlet"}
+    class _Narrow(_Base):
+        kind = "override_narrow_test_unit"
+        PORTS = [("inlet", "inlet", "process")]
+
+    assert set(_Narrow("B-1").ports) == {"inlet"}
 
 
 def test_a_custom_unit_cannot_be_written_to_a_spec(crystalliser):

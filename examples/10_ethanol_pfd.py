@@ -104,11 +104,11 @@ def main():
                                 description="Membrane Pressure Filter Press"))
     # Filtrate and cake leave the press on separate legs. That parting is a tee
     # as well, and not the same tee as the reflux one: the size and the service
-    # both change across it, so it is marked ``significant`` and the run's number
+    # both change across it, so it is marked ``new_line_number`` and the run's number
     # breaks there. The cake goes to the belt that carries it off the sheet,
     # which *is* a tagged item and is scheduled as one.
     disch = fs.add(units.Tee())
-    disch.significant = True
+    disch.new_line_number = True
     belt = fs.add(units.Conveyor("BC-301", length=120,
                                  description="Filter Cake Conveyor Belt"))
     belt.nozzle("feed", "N")            # cake is dropped onto the belt, not piped
@@ -200,10 +200,10 @@ def main():
     fs.connect(col.distillate, cond.shell_in, name="S-305")
     fs.connect(cond.shell_out, drum.inlet, name="S-305")
     fs.connect(drum.outlet, refl.inlet, name="S-305")
-    fs.connect(refl.branch, col.reflux_in, name="S-305", tear_hint=True)
+    fs.connect(refl.branch, col.reflux_in, name="S-305", draw_as_recycle=True)
 
     fs.connect(col.bottoms, reb.shell_in, name="S-306")
-    fs.connect(reb.shell_out, col.boilup_in, name="S-306", tear_hint=True)
+    fs.connect(reb.shell_out, col.boilup_in, name="S-306", draw_as_recycle=True)
     fs.connect(reb.bottoms, hx.tube_in, name="S-306")
 
     fs.connect(hx.tube_out, mix2.in_1, name="S-307")

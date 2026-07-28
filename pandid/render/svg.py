@@ -236,16 +236,13 @@ _BORDERS = ("none", "zone")
 # Which drawing this is, which is a statement about the conventions it is read
 # by. It is what decides whether a process line carries an arrowhead.
 _DIAGRAMS = ("pfd", "p&id")
-# `styling` predates both and says the two together: a P&ID on an engineering
-# frame. Kept as the one-word way to ask for that, and as the older spelling.
-_STYLINGS = {"default": ("none", "pfd"), "p&id": ("zone", "p&id")}
 # The drawing's name has one accepted spelling per value plus whatever the
 # caller can reasonably be expected to type for it.
-_ALIASES = {"pid": "p&id", "p&id": "p&id", "pfd": "pfd", "default": "default"}
+_ALIASES = {"pid": "p&id", "p&id": "p&id", "pfd": "pfd"}
 
 
 def _canon(value: str) -> str:
-    """Fold a styling or diagram name to the one spelling the tables key on.
+    """Fold a diagram name to the one spelling the table keys on.
 
     Case is folded and the ampersand-less ``"pid"`` is read as ``"p&id"``. This
     package spells the drawing's name with the ampersand everywhere else, down
@@ -256,47 +253,27 @@ def _canon(value: str) -> str:
     return _ALIASES.get(value.strip().lower(), value)
 
 
-def _resolve_sheet(styling: str, border: "str | None",
-                   diagram: "str | None") -> "tuple[str, str]":
-    """The frame to rule and the drawing to rule it around, from whichever
-    spelling of the request the caller used.
+def _resolve_sheet(border: "str | None", diagram: "str | None") -> "tuple[str, str]":
+    """The frame to rule and the drawing to rule it around.
 
-    A name none of the three knows is a sheet the renderer cannot draw, so it
-    raises rather than quietly handing back a plain PFD.
+    The two are independent: the frame is sheet furniture and a PFD carries the
+    zone-ruled one as readily as a P&ID does. A name neither knows is a sheet
+    the renderer cannot draw, so it raises rather than quietly handing back a
+    plain PFD.
     """
-    style = _canon(styling)
-    if style not in _STYLINGS:
-        raise ValueError(
-            f"Unknown styling {styling!r}; use styling='p&id' (also spelled 'pid') "
-            f"for a P&ID on the zone-ruled engineering frame, or 'default' for a "
-            f"plain PFD sheet. border= and diagram= ask for the two halves of that "
-            f"one at a time."
-        )
-    styled_border, styled_diagram = _STYLINGS[style]
-
     if border is None:
-        border = styled_border
+        border = "none"
     elif border not in _BORDERS:
         raise ValueError(
             f"Unknown border {border!r}; use one of {', '.join(_BORDERS)}."
         )
-    elif style != "default" and border != styled_border:
-        raise ValueError(
-            f"border={border!r} and styling={styling!r} ask for different frames; "
-            f"pass border= alone."
-        )
 
     if diagram is None:
-        return border, styled_diagram
+        return border, "pfd"
     kind = _canon(diagram)
     if kind not in _DIAGRAMS:
         raise ValueError(
             f"Unknown diagram {diagram!r}; use 'p&id' (also spelled 'pid') or 'pfd'."
-        )
-    if style != "default" and kind != styled_diagram:
-        raise ValueError(
-            f"diagram={diagram!r} and styling={styling!r} ask for different drawings; "
-            f"pass diagram= alone."
         )
     return border, kind
 
@@ -364,7 +341,7 @@ class SvgRenderer:
         self.registry = registry or default_registry
 
     def render(self, fs: "Flowsheet", *, jump_direction: str = "vertical",
-               show_stream_table: bool = False, styling: str = "default",
+               show_stream_table: bool = False,
                border: "str | None" = None, diagram: "str | None" = None,
                page_size: "str | None" = None, **opts) -> str:
         """Render the flowsheet to SVG.
@@ -384,9 +361,6 @@ class SvgRenderer:
         diagram : str | None
             Which drawing this is: ``"pfd"`` (the default) or ``"p&id"``, also
             spelled ``"pid"``. A P&ID draws its process lines without arrowheads.
-        styling : str
-            The one-word way to ask for both, and the older spelling:
-            ``"p&id"`` means ``border="zone"`` with ``diagram="p&id"``.
         page_size : str | None
             Standard paper size (``"A4"``, ``"A3"``, ``"A2"``, ``"A1"``, ``"A0"``),
             drawn at exactly that size, with the furniture docked to the sheet edges
@@ -394,7 +368,7 @@ class SvgRenderer:
             the sheet to the drawing instead.
         """
         from pandid.portgeom import unit_box
-        border, diagram = _resolve_sheet(styling, border, diagram)
+        border, diagram = _resolve_sheet(border, diagram)
         # ANSI/ISA-5.1 draws process piping on a P&ID as plain line. Flow
         # direction is read off the equipment and off the line list, so an
         # arrowhead at the end of every run is a PFD convention, where showing

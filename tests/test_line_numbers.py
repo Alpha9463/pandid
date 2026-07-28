@@ -2,7 +2,8 @@
 
 A line number is a stream number with the rest of the identity filled in, so it
 is assigned by the same machinery and obeys the same rules: one number through
-an inline fitting, a break where a significant unit marks the spec break, and
+an inline fitting, a break at a unit that sets ``new_line_number`` to mark the
+spec break, and
 never a word about a stream the caller named itself. A stream with no components
 set is numbered exactly as it always was, which is what protects every sheet
 drawn before line numbers existed.
@@ -140,7 +141,7 @@ def test_components_may_be_numbers():
 
 def test_auto_numbering_fills_the_sequence():
     fs, fv, (s1, s2, s3) = _skid(size='6"', service="P", spec="A1A")
-    fv.significant = True  # two lines now, so two sequences
+    fv.new_line_number = True  # two lines now, so two sequences
     assert (s1.sequence, s2.sequence, s3.sequence) == ("1001", "1001", "1002")
 
 
@@ -182,10 +183,10 @@ def test_one_line_number_runs_through_an_inline_valve():
     assert s1.name == s2.name == '6"-P-1001-A1A'
 
 
-def test_a_significant_valve_breaks_the_line_number():
-    """A spec break is exactly what `significant` marks, so it breaks the number."""
+def test_a_new_line_number_valve_breaks_the_line_number():
+    """A spec break is exactly what `new_line_number` marks, so it breaks the number."""
     fs, fv, (s1, s2, s3) = _skid(size='6"', service="P", spec="A1A")
-    fv.significant = True
+    fv.new_line_number = True
     s3.size, s3.service, s3.spec = '6"', "P", "D1B"
     fs.renumber_streams()
     assert s1.name == s2.name == '6"-P-1001-A1A'
@@ -296,7 +297,7 @@ def test_line_numbers_round_trip_through_a_spec():
         "line_number_start": 2000,
         "units": [
             {"kind": "Feed", "name": "F"},
-            {"kind": "Valve", "name": "FV-101", "significant": True},
+            {"kind": "Valve", "name": "FV-101", "new_line_number": True},
             {"kind": "Product", "name": "P"},
         ],
         "streams": [

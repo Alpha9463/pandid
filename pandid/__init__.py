@@ -9,7 +9,7 @@ Public API (topology layer)::
 # time (`[tool.hatch.version]`), so the distribution metadata cannot disagree
 # with what `import pandid` reports, and a source checkout reports the same string
 # without the package having to be installed.
-__version__ = "0.0.1"
+__version__ = "0.1.0"
 
 from pandid.components import Component
 from pandid.flowsheet import Flowsheet

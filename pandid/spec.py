@@ -46,7 +46,7 @@ The format::
     streams:
       - {from: [Raw Feed, outlet], to: [ST-101, inlet], size: '6"', service: P, spec: A1A}
       - {from: [LIC-101, sig_out], to: [FV-101, actuator], kind: electric}
-      - {from: [FV-200, outlet], to: [M-100, in_2], tear_hint: true,
+      - {from: [FV-200, outlet], to: [M-100, in_2], draw_as_recycle: true,
          properties: {"Temperature (C)": 25 C}}
 
     stream_table_sections: [[Benzene, Mass Fraction]]
@@ -235,7 +235,7 @@ _RETIRED_KEYS = {
 _PIN_KEYS = {"x", "y", "col", "row", "orientation", "mirrored"}
 _UNIT_KEYS = {
     "kind", "name", "variant", "description", "reference", "width", "height",
-    "label_pos", "significant", "pin", "port_faces",
+    "label_pos", "new_line_number", "pin", "port_faces",
 }
 _INSTRUMENT_KEYS = {
     "type", "number", "variant", "description", "reference", "width", "height",
@@ -243,7 +243,7 @@ _INSTRUMENT_KEYS = {
 }
 _LOOP_KEYS = {"variable", "number"}
 _STREAM_KEYS = {
-    "from", "to", "kind", "name", "tear_hint", "properties", "via", "color", "dasharray",
+    "from", "to", "kind", "name", "draw_as_recycle", "properties", "via", "color", "dasharray",
     *LINE_NUMBER_FIELDS,
 }
 _COMPONENT_KEYS = {"name", "formula"}
@@ -470,8 +470,8 @@ def _read_common(fs: Flowsheet, unit: Unit, data: Mapping[str, Any], where: str)
     """Apply the fields every unit shares, then register it on the flowsheet."""
     if "label_pos" in data:
         unit.label_pos = _text(data["label_pos"], f"{where}.label_pos")
-    if "significant" in data:
-        unit.significant = _flag(data["significant"], f"{where}.significant")
+    if "new_line_number" in data:
+        unit.new_line_number = _flag(data["new_line_number"], f"{where}.new_line_number")
     try:
         fs.add(unit)
     except ValueError as e:
@@ -569,8 +569,8 @@ def _read_stream(fs: Flowsheet, entry: Any, where: str) -> Stream:
         kwargs["kind"] = _text(data["kind"], f"{where}.kind")
     if "name" in data:
         kwargs["name"] = _text(data["name"], f"{where}.name")
-    if "tear_hint" in data:
-        kwargs["tear_hint"] = _flag(data["tear_hint"], f"{where}.tear_hint")
+    if "draw_as_recycle" in data:
+        kwargs["draw_as_recycle"] = _flag(data["draw_as_recycle"], f"{where}.draw_as_recycle")
     for key in LINE_NUMBER_FIELDS:
         if key in data:
             kwargs[key] = _component(data[key], f"{where}.{key}")
@@ -860,8 +860,8 @@ def _write_common(unit: Unit, entry: dict[str, Any]) -> dict[str, Any]:
     for key in ("width", "height", "label_pos"):
         if getattr(unit, key) is not None:
             entry[key] = getattr(unit, key)
-    if unit.significant:
-        entry["significant"] = True
+    if unit.new_line_number:
+        entry["new_line_number"] = True
     return entry
 
 
@@ -970,8 +970,8 @@ def _write_stream(stream: Stream) -> dict[str, Any]:
         entry["kind"] = stream.kind
     if not stream.auto_named:
         entry["name"] = stream.name
-    if stream.tear_hint:
-        entry["tear_hint"] = True
+    if stream.draw_as_recycle:
+        entry["draw_as_recycle"] = True
     for key in LINE_NUMBER_FIELDS:
         value = getattr(stream, key)
         # The sequence auto-numbering assigned is a result, not intent: writing

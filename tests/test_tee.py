@@ -385,7 +385,7 @@ def test_the_run_keeps_one_number_through_its_tees_and_each_branch_takes_its_own
     }
 
 
-def test_a_significant_tee_breaks_the_run_number():
+def test_a_new_line_number_tee_breaks_the_run_number():
     fs = Flowsheet("t")
     feed = fs.add(units.Feed("F"))
     tee = fs.add(units.Tee())
@@ -395,7 +395,7 @@ def test_a_significant_tee_breaks_the_run_number():
     downstream = fs.connect(tee.outlet, prod.inlet)
     fs.connect(tee.branch, drain.inlet)
     assert upstream.name == downstream.name
-    tee.significant = True
+    tee.new_line_number = True
     assert upstream.name != downstream.name
 
 

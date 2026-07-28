@@ -142,7 +142,7 @@ def _transfer_sheet():
     feed = fs.add(U.Feed("Raw Feed")).pin(x=60, y=100)
     valve = fs.add(U.Valve("FV-101", variant="control")).pin(x=180, y=110)
     prod = fs.add(U.Product("To Unit 200")).pin(x=280, y=100)
-    valve.significant = True  # a spec break, so each side is its own line
+    valve.new_line_number = True  # a spec break, so each side is its own line
     fs.connect(feed.outlet, valve.inlet, size='8"', service="P", spec="A1A")
     fs.connect(valve.outlet, prod.inlet, size='6"', service="P", spec="D1B")
     return fs

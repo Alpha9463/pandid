@@ -205,8 +205,9 @@ def _loop() -> Flowsheet:
         {"diagram": "p&id"},
         {"diagram": "pid"},  # the ampersand-less spelling
         {"diagram": "P&ID"},  # ...and the drawing's own name, as it is written
-        {"styling": "p&id"},
-        {"styling": "pid"},
+        # A P&ID on the engineering frame: the two options are independent, and
+        # asking for both is still one drawing without arrowheads.
+        {"border": "zone", "diagram": "p&id"},
     ],
 )
 def test_a_pid_draws_its_process_lines_without_arrowheads(kwargs):
@@ -236,9 +237,17 @@ def test_a_pid_takes_the_arrowheads_off_and_changes_nothing_else():
 
 def test_both_spellings_of_a_pid_mean_the_same_drawing():
     assert _loop().to_svg(diagram="p&id") == _loop().to_svg(diagram="pid")
-    assert _loop().to_svg(styling="p&id") == _loop().to_svg(styling="pid")
-    # ...and the one-word spelling is the two halves of it asked for together.
-    assert _loop().to_svg(styling="p&id") == _loop().to_svg(border="zone", diagram="p&id")
+    # ...and the drawing's own name, however an engineer capitalises it.
+    assert _loop().to_svg(diagram="P&ID") == _loop().to_svg(diagram="pid")
+
+
+def test_the_frame_and_the_drawing_are_asked_for_separately():
+    """``border`` is sheet furniture and ``diagram`` is which drawing is on it.
+    Neither implies the other, so the four combinations are four sheets."""
+    sheets = {
+        _loop().to_svg(border=b, diagram=d) for b in ("none", "zone") for d in ("pfd", "p&id")
+    }
+    assert len(sheets) == 4
 
 
 def test_a_pid_reaches_render_as_well_as_to_svg(tmp_path):
@@ -251,8 +260,7 @@ def test_a_pid_reaches_render_as_well_as_to_svg(tmp_path):
     "kwargs,expected",
     [
         ({"diagram": "isometric"}, ["'p&id'", "'pid'", "'pfd'"]),
-        ({"styling": "isometric"}, ["'p&id'", "'pid'", "'default'"]),
-        ({"styling": "p&id", "diagram": "pfd"}, ["different drawings"]),
+        ({"border": "isometric"}, ["none", "zone"]),
     ],
 )
 def test_a_drawing_the_renderer_cannot_draw_raises_naming_the_spellings(kwargs, expected):
@@ -266,9 +274,9 @@ def test_a_drawing_the_renderer_cannot_draw_raises_naming_the_spellings(kwargs, 
 
 
 @pytest.mark.parametrize("name,mm", [("A4", A4_MM), ("A3", A3_MM), ("A0", A0_MM)])
-@pytest.mark.parametrize("styling", ["default", "pid"])
-def test_page_size_draws_a_sheet_of_exactly_that_size(name, mm, styling):
-    svg = _fs().to_svg(page_size=name, styling=styling)
+@pytest.mark.parametrize("sheet", [{}, {"border": "zone", "diagram": "p&id"}])
+def test_page_size_draws_a_sheet_of_exactly_that_size(name, mm, sheet):
+    svg = _fs().to_svg(page_size=name, **sheet)
     assert _sheet_mm(svg) == mm
 
 
@@ -319,12 +327,14 @@ def test_zone_grid_is_fixed_by_the_page_not_by_the_drawing():
     # A note reading "valve in D-4" must still point at D-4 after the next
     # revision adds an exchanger; a fitted sheet renumbers its zones instead.
     on_page = [
-        sorted(set(_ZONE.findall(_spanning(w).to_svg(page_size="A3", styling="pid"))))
+        sorted(
+            set(_ZONE.findall(_spanning(w).to_svg(page_size="A3", border="zone", diagram="p&id")))
+        )
         for w in (300.0, 900.0, 1500.0)
     ]
     assert on_page[0] == on_page[1] == on_page[2]
     fitted = [
-        sorted(set(_ZONE.findall(_spanning(w).to_svg(styling="pid"))))
+        sorted(set(_ZONE.findall(_spanning(w).to_svg(border="zone", diagram="p&id"))))
         for w in (300.0, 900.0, 1500.0)
     ]
     assert len(set(map(tuple, fitted))) == 3
@@ -336,7 +346,7 @@ def test_pid_furniture_rules_to_the_sheet_edges():
 
     fs = _spanning(600.0)
     fs.title_block = TitleBlock(drawing_number="PFD-1")
-    svg = fs.to_svg(page_size="A3", styling="pid")
+    svg = fs.to_svg(page_size="A3", border="zone", diagram="p&id")
     # the sheet border sits a hair inside the page, the drawing frame a band in
     frame = re.search(
         r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" height="([\d.]+)" '
@@ -362,7 +372,7 @@ def test_pid_furniture_rules_to_the_sheet_edges():
 
 def test_an_oversized_drawing_is_scaled_onto_the_sheet_not_clipped():
     fs = _spanning(4000.0)
-    svg = fs.to_svg(page_size="A4", styling="pid")
+    svg = fs.to_svg(page_size="A4", border="zone", diagram="p&id")
     tx, ty, scale = _fit(svg)
     assert scale < 1
     x0, y0, x1, y1 = _drawing_bbox(fs)
@@ -373,7 +383,7 @@ def test_an_oversized_drawing_is_scaled_onto_the_sheet_not_clipped():
 def test_a_drawing_that_already_fits_is_never_blown_up():
     # Line weights and lettering are sheet-fixed; a small drawing keeps its size
     # and leaves the rest of the page white.
-    _, _, scale = _fit(_spanning(300.0).to_svg(page_size="A0", styling="pid"))
+    _, _, scale = _fit(_spanning(300.0).to_svg(page_size="A0", border="zone", diagram="p&id"))
     assert scale == 1
 
 
@@ -383,7 +393,7 @@ def test_page_too_small_for_its_own_furniture_raises():
     fs = _spanning(300.0)
     fs.add_annotation(TableBox(title="SCHEDULE", headers=["Tag"] * 40, rows=[["x"] * 40]))
     with pytest.raises(ValueError) as excinfo:
-        fs.to_svg(page_size="A4", styling="pid")
+        fs.to_svg(page_size="A4", border="zone", diagram="p&id")
     message = str(excinfo.value)
     assert "A4" in message
     assert "page_size" in message  # and how to get out of it
@@ -401,6 +411,6 @@ def test_exported_pdf_lands_on_a_page_of_exactly_that_size(tmp_path, name, mm):
     # is A3 only if the reader happens to call a user unit 1/96 inch is not A3.
     pytest.importorskip("cairosvg")
     out = tmp_path / "sheet.pdf"
-    _fs().render(str(out), page_size=name, styling="pid")
+    _fs().render(str(out), page_size=name, border="zone", diagram="p&id")
     width_pt, height_pt = _pdf_page_pt(out.read_bytes())
     assert (width_pt / 72 * 25.4, height_pt / 72 * 25.4) == pytest.approx(mm, abs=0.01)

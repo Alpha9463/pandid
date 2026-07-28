@@ -532,7 +532,7 @@ class Flowsheet:
         return component
 
     def connect(self, src: "Port", dst: "Port", *, kind: str = "material",
-                name: str | None = None, tear_hint: bool = False,
+                name: str | None = None, draw_as_recycle: bool = False,
                 size: str | float | None = None, schedule: str | float | None = None,
                 service: str | float | None = None,
                 sequence: str | float | None = None, spec: str | float | None = None,
@@ -593,7 +593,7 @@ class Flowsheet:
             source=src,
             dest=dst,
             kind=kind,
-            tear_hint=tear_hint,
+            draw_as_recycle=draw_as_recycle,
             auto_named=not name,
             size=size,
             schedule=schedule,
@@ -696,7 +696,7 @@ class Flowsheet:
         the stream object a caller holds is the name that gets drawn.
 
         Valves, reducers, fittings and tees are inline: a stream keeps its
-        number as it passes through them (set ``unit.significant = True`` to
+        number as it passes through them (set ``unit.new_line_number = True`` to
         break the number at an important valve). Explicitly-named streams keep
         their name and lend it to their whole inline group. What carries the
         number through is the ``inlet`` to ``outlet`` run, so a tee's *branch*
@@ -706,8 +706,8 @@ class Flowsheet:
         A line carrying line-number components is named by its line number
         rather than its stream number, on the same terms: the first segment of a
         group that carries components supplies them for the whole group, so a
-        line number survives an inline valve and breaks where a significant one
-        does, which is exactly where the spec breaks.
+        line number survives an inline valve and breaks at one that sets
+        ``new_line_number``, which is exactly where the spec breaks.
 
         Process streams take the low numbers because they are the ones drawn on
         the sheet and quoted in the stream table; energy streams, which are also
@@ -732,7 +732,7 @@ class Flowsheet:
         # a reducer or a fitting they are its only process nozzles, so this is
         # the same joining those kinds already had.
         for u in self.units:
-            if u.kind in _INLINE and not getattr(u, "significant", False):
+            if u.kind in _INLINE and not getattr(u, "new_line_number", False):
                 run = [u.ports.get("inlet"), u.ports.get("outlet")]
                 ends = [pos[id(p.stream)] for p in run
                         if p is not None and p.stream is not None and id(p.stream) in pos]
@@ -797,7 +797,7 @@ class Flowsheet:
         return _validate(self)
 
     def to_svg(self, *, show_stream_table: bool = False,
-               styling: str = "default", border: str | None = None,
+               border: str | None = None,
                diagram: str | None = None, page_size: str | None = None,
                jump_direction: str = "vertical", check: bool = True) -> str:
         """Render the flowsheet to an SVG string, running ``layout()`` and
@@ -811,9 +811,9 @@ class Flowsheet:
         ``diagram`` says which drawing this is: ``"pfd"`` (the default) or
         ``"p&id"``, also spelled ``"pid"``. A P&ID draws its process lines
         without arrowheads, since flow direction is read off the equipment and
-        the line list rather than off an arrow on every run.
-        ``styling="p&id"`` asks for both at once (``border="zone"`` with
-        ``diagram="p&id"``) and is the older spelling of the option.
+        the line list rather than off an arrow on every run. The two are
+        independent: the frame is sheet furniture and a PFD carries the
+        zone-ruled one as readily as a P&ID does.
 
         ``page_size`` draws a sheet of exactly that standard size (``"A4"``
         through ``"A0"``), fitting the drawing into what the sheet furniture
@@ -840,13 +840,13 @@ class Flowsheet:
                 )
         from pandid.render.svg import SvgRenderer
         return SvgRenderer().render(
-            self, show_stream_table=show_stream_table, styling=styling,
+            self, show_stream_table=show_stream_table,
             border=border, diagram=diagram, page_size=page_size,
             jump_direction=jump_direction
         )
 
     def render(self, path: str | Path, *, show_stream_table: bool = False,
-               styling: str = "default", border: str | None = None,
+               border: str | None = None,
                diagram: str | None = None, page_size: str | None = None,
                jump_direction: str = "vertical", check: bool = True) -> None:
         """Render the flowsheet and write it to *path*.
@@ -863,15 +863,13 @@ class Flowsheet:
             border: ``"none"`` or ``"zone"`` (the zone-ruled drawing frame).
             diagram: ``"pfd"`` (the default) or ``"p&id"``, also spelled
                 ``"pid"``. A P&ID draws its process lines without arrowheads.
-            styling: Both at once, and the older spelling: ``"p&id"`` means
-                ``border="zone"`` with ``diagram="p&id"``.
             page_size: Draw on a sheet of exactly this standard size, e.g.
                 ``"A3"``; omit to size the sheet to the drawing.
             jump_direction: Which crossing lines hop, ``"vertical"`` or ``"horizontal"``.
             check: Validate first; errors raise, warnings collect on ``warnings``.
         """
         svg = self.to_svg(
-            show_stream_table=show_stream_table, styling=styling, border=border,
+            show_stream_table=show_stream_table, border=border,
             diagram=diagram, page_size=page_size, jump_direction=jump_direction,
             check=check,
         )

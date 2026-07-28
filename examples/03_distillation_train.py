@@ -105,7 +105,7 @@ def main():
     fs.connect(splitter.out_1, c2_bot.inlet)
     
     fs.connect(splitter.out_2, recycle_valve.inlet)
-    fs.connect(recycle_valve.outlet, mixer.in_2, tear_hint=True)
+    fs.connect(recycle_valve.outlet, mixer.in_2, draw_as_recycle=True)
     
     # Stream properties. Rows render in first-seen key order; values carry their
     # own units. A "Mass Fraction" section header is injected before benzene.
