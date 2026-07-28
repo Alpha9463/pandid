@@ -624,9 +624,14 @@ and is kept working.
 - Eleven runnable examples in `examples/`, each usable from the repository root
   or from `examples/` itself, and rendered into `docs/gallery/`. The last of
   them, `11_ethanol_pid.py`, is a whole issued P&ID on a fixed A3 sheet: line
-  numbers on every line, hand-isolated control valve stations, five loops
-  closing on an actuator with one cascade, alarm pairs and a repeated interlock
-  square.
+  numbers on every line, four control valve stations drawn in full — isolation
+  valves, reducer, a bypass over the top on its own normally closed valve and a
+  drain off the underside either side of the control valve, every branch a
+  `Tee` and so drawn as nothing and scheduled nowhere — tapped utility headers
+  labelled the same way at every tap, five loops closing on an actuator with one
+  cascade, alarm pairs and a repeated interlock square. Its PFD counterpart,
+  `10_ethanol_pfd.py`, draws the reflux and filter-press partings as tees for
+  the same reason.
 - Packaged as **`pandid`**, how "P&ID" is said out loud, and the import name as
   well as the distribution name. Plain `pfd` is taken on PyPI by an unrelated
   project.
