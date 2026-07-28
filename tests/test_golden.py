@@ -192,28 +192,31 @@ def _control_loop() -> Flowsheet:
     feed = fs.add(units.Feed("Feed")).pin(x=60, y=170)
     fv = fs.add(units.Valve(flow.tag("FV"), variant="control")).pin(x=270, y=180)
     drum = fs.add(units.Vessel("V-101", description="Surge Drum")).pin(x=420, y=145)
-    lv = fs.add(units.Valve(level.tag("LV"), variant="control")).pin(x=640, y=180)
+    fe = fs.add(
+        units.Fitting(flow.tag("FE"), variant="orifice", description="Feed Orifice Plate")
+    ).pin(x=180, y=180)
+    lv = fs.add(units.Valve(level.tag("LV"), variant="control")).pin(x=640, y=180, mirrored="y")
     prod = fs.add(units.Product("Product")).pin(x=790, y=170)
     psv = fs.add(units.Valve("PSV-101", variant="relief")).pin(x=441, y=55)
     flare = fs.add(units.Product("To Flare", reference="P&ID-902")).pin(x=630, y=5)
 
-    line = fs.connect(feed.outlet, fv.inlet)
+    fs.connect(feed.outlet, fe.inlet)
+    fs.connect(fe.outlet, fv.inlet)
     fs.connect(fv.outlet, drum.inlet)
     fs.connect(drum.outlet, lv.inlet)
     fs.connect(lv.outlet, prod.inlet)
     fs.connect(drum.vent, psv.inlet)
     fs.connect(psv.outlet, flare.inlet)
 
-    fs.add_instrument("FE", flow, on=line, at=0.5, offset=0)
-    ft = fs.add_instrument("FT", flow, on=line, at=0.5, offset=62)
+    ft = fs.add_instrument("FT", flow, on=fe, at="N", offset=62)
     fic = fs.add_instrument("FIC", flow, on=ft, at="N", offset=125, angle=35, variant="panel")
     fic.nozzle("sig_out", "S")
     fs.connect(ft.sig_out, fic.sig_in, kind="electric")
     fs.connect(fic.sig_out, fv.actuator, kind="pneumatic")
 
     lic = fs.add_instrument("LIC", level, on=drum, at="S", offset=90, variant="panel")
-    lah = fs.add_instrument("LAH", level, on=lic, at="W", offset=50)
-    fs.add_instrument("LAL", level, on=lah, at="W", offset=50)
+    fs.add_instrument("LAH", level, on=lic, at="W", offset=78, angle=62)
+    fs.add_instrument("LAL", level, on=lic, at="W", offset=78, angle=118)
     # In no loop and with no measured variable: a repeatable logic function
     # takes a literal number, and has to keep being able to.
     fs.add_instrument("I", 1, on=lic, at="S", offset=44, variant="logic")
