@@ -1337,7 +1337,7 @@ fs.title_block = TitleBlock(
     drawing_number="PFD-1001",
     client="Aromatics Australia Pty Ltd",     # above the title; not an ISO field
     project="Aromatics Recovery Unit",
-    company="THE UNIVERSITY OF QUEENSLAND",   # logo / company cell
+    company="PANDID",   # logo / company cell
     status="ISSUED FOR REVIEW",               # issue-status cell
     sheet="1", of_sheets="3", scale="NTS",
     drawn_by="A. Anderson", checked_by="J. Smith", approved_by="R. Lee",

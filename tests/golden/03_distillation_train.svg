@@ -296,8 +296,7 @@
     <text x="1195.0" y="890.0" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">AA</text>
     <text x="1227.0" y="890.0" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black"></text>
     <text x="1259.0" y="890.0" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black"></text>
-    <text x="1338.0" y="877.0" font-family="sans-serif" font-size="8.0" text-anchor="middle" font-weight="bold" fill="black">THE UNIVERSITY OF</text>
-    <text x="1338.0" y="889.0" font-family="sans-serif" font-size="8.0" text-anchor="middle" font-weight="bold" fill="black">QUEENSLAND</text>
+    <text x="1338.0" y="883.0" font-family="sans-serif" font-size="8.0" text-anchor="middle" font-weight="bold" fill="black">PANDID</text>
     <text x="1394.0" y="839.0" font-family="sans-serif" font-size="6.5" text-anchor="start" fill="#666">CLIENT</text>
     <text x="1428.0" y="839.0" font-family="sans-serif" font-size="9.0" text-anchor="start" fill="black">Aromatics Australia Pty Ltd</text>
     <line x1="1388.0" y1="843.0" x2="1640.0" y2="843.0" stroke="black" stroke-width="0.5"/>

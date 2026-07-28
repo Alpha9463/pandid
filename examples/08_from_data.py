@@ -136,7 +136,7 @@ SPEC = {
         "subtitle": "Boiler Feedwater Package",
         "drawing_number": "PFD-2001",
         "project": "Steam System Upgrade",
-        "company": "THE UNIVERSITY OF QUEENSLAND",
+        "company": "PANDID",
         "status": "ISSUED FOR REVIEW",
         "sheet": "1", "of_sheets": "2",
         "drawn_by": "A. Anderson", "checked_by": "J. Smith", "approved_by": "R. Lee",
