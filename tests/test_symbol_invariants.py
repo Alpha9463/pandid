@@ -1726,7 +1726,11 @@ def test_the_valves_the_run_does_not_cross_are_out_of_scope():
         "psv",
         "relief",
     ]
-    assert len(_STRAIGHT_VALVES) == 19
+    # No assertion on the size of the family: a valve added later is meant to be
+    # picked up and held to the rule, not to fail a count. What must not drift is
+    # the balance -- an invariant most of its family is excused from asserts
+    # nothing, and at that point the rule is the wrong rule rather than the
+    # registry being wrong.
     assert len(_OFF_THE_RUN) * 2 < len(_STRAIGHT_VALVES), "the exceptions would be the rule"
 
 
