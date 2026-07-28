@@ -497,6 +497,55 @@ Pinned and auto-placed units mix freely. A port sits at a fixed *fraction* of
 its symbol's box, so lining two items up means matching those fractions rather
 than their corners. See [example 06](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md#06--column-reflux-and-reboiler).
 
+**Pinning by a nozzle.** A run is a line at one elevation and the devices on it
+are whatever size their artwork is, so `port=` reads the coordinates as the
+position of that nozzle rather than of the top-left corner:
+
+```python
+valve.pin(port="inlet", x=200, y=run_y)     # the inlet lands exactly there
+```
+
+The offset is asked of the symbol (`portgeom.port_offset()`), so no measured
+number is written down and rescaling the artwork cannot leave a valve off its
+run. Only the axes the call names are read that way.
+
+## Valve stations
+
+A control valve is never a valve on its own. It sits in a standard arrangement
+that every P&ID draws the same way, and `add_valve_station()` builds it: two
+isolation valves, two drains, a bypass over the top on its own normally closed
+throttling valve, and the size change into the valve body and back out.
+
+```python
+station = fs.add_valve_station("CV-303", x=670, y=440, mirrored=True,
+                               description="Reflux", bypass_over="reduction",
+                               service="AE", sequence=303, size=80, spec="80-SS")
+fs.connect(drum_draw.branch, station.inlet, service="AE", sequence=303,
+           size=80, spec="80-SS")
+fs.connect(station.outlet, fe303.inlet)
+fs.connect(fic303.sig_out, station.control.actuator, kind="pneumatic")
+```
+
+Along the run: bypass takeoff, isolation valve, drain tee, **reduction**,
+**control valve**, **expansion**, drain tee, isolation valve, bypass rejoin,
+with the bypass tapped outside both isolation valves. Twelve units and twelve
+streams for one call, pinned along the run at `y` and wired together.
+
+What comes back is a handle, not a unit: it draws nothing, is never in
+`fs.units` and reaches no equipment list, but `station.control`,
+`station.bypass`, `station.upstream_isolation` and the rest are ordinary units
+that can be re-pinned, re-tagged or instrumented. The members' tags are spelled
+out of the control valve's by `valve_station_tag_scheme`, defaulting to
+`HV-303A`…`HV-303E` and `RD-303A`/`RD-303B`. That is a design-office
+convention, so it is a scheme and not a rule, exactly as
+`line_numbering_scheme` is.
+
+Any part can be left out (`isolation=`, `reducers=`, `bypass=`, `drains=`),
+except that a bypass with no isolation valves to go round is refused: there
+would be nothing to isolate the control valve with. See
+[example 11](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md#11--ethanol-purification-pid),
+which draws four of them, and [`docs/api.md`](docs/api.md#valve-stations).
+
 ## Instrumentation & signals
 
 ```python

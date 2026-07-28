@@ -379,3 +379,34 @@ def port_anchor(unit: "Unit", frame, port_name: str) -> tuple[float, float, str]
     """Absolute routing anchor for a port: (x, y, outward_dir)."""
     _, (ax, ay), d = resolve_port(unit, frame, port_name)
     return ax, ay, d
+
+
+def port_offset(unit: "Unit", port_name: str, placed=None) -> tuple[float, float]:
+    """Where a port sits relative to the unit's own top-left corner.
+
+    Asked of the symbol rather than written down as a pair of numbers. A
+    hand-measured offset is only true of the artwork it was measured off, so a
+    run pinned against one drifts off its nozzles the moment the symbol is
+    redrawn or the unit is given a size of its own; asked, it cannot.
+
+    This is what puts a device *on* a run: a valve whose inlet has to land on a
+    line at ``y`` is pinned at ``y - port_offset(valve, "inlet")[1]``, which is
+    :meth:`pandid.units.Unit.pin`'s ``port=`` argument, and it is how an author
+    finds the elevation of a nozzle to run a spine at::
+
+        feed_y = column.pin_.y + port_offset(column, "feed")[1]
+
+    ``placed`` is the placement to answer for and defaults to the unit's own,
+    preferring the *pin* over the frame for the reason :func:`port_faces` does:
+    a ``pin()`` already made describes the sheet that is coming. The offset is
+    measured in the placed box, so a quarter turn or a mirror moves it.
+    """
+    from pandid.geometry import Frame
+
+    if placed is None:
+        placed = unit.pin_ if unit.pin_ is not None else unit.frame
+    rot, mirror_x, mirror_y = _xform(placed) if placed is not None else (0, False, False)
+    w, h = resolve_size(unit, placed)
+    probe = Frame(x=0.0, y=0.0, w=w, h=h, orientation=rot,
+                  mirrored=mirror_x, mirror_y=mirror_y)
+    return port_point(unit, probe, port_name)

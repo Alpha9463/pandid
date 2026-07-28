@@ -9,6 +9,12 @@ from pathlib import Path
 from string import Formatter
 from typing import Callable, TYPE_CHECKING
 
+from pandid.stations import (
+    DEFAULT_BYPASS_RISE,
+    DEFAULT_DRAIN_DROP,
+    DEFAULT_GAP,
+    DEFAULT_VALVE_STATION_TAG_SCHEME,
+)
 from pandid.streams import PROCESS_KINDS, SIGNAL_KINDS, STREAM_KINDS, Stream
 
 if TYPE_CHECKING:
@@ -16,6 +22,7 @@ if TYPE_CHECKING:
     from pandid.document import TitleBlock
     from pandid.loops import Loop
     from pandid.ports import Port
+    from pandid.stations import ValveStation
     from pandid.units import Instrument, Unit
 
 _ENERGY_ROLES = {"energy", "utility"}
@@ -109,12 +116,18 @@ class Flowsheet:
         stream_naming_scheme: str | Callable[[int], str] = "S{n}",
         line_numbering_scheme: str | Callable[[Stream], str] = DEFAULT_LINE_NUMBERING_SCHEME,
         line_number_start: int = DEFAULT_LINE_NUMBER_START,
+        valve_station_tag_scheme: "str | Callable[[str, str], str]" = (
+            DEFAULT_VALVE_STATION_TAG_SCHEME),
         auto_faces: bool = True,
     ):
         self.name = name
         self.stream_naming_scheme = stream_naming_scheme
         self.line_numbering_scheme = line_numbering_scheme
         self.line_number_start = line_number_start
+        # How a valve station spells its members' tags out of its control
+        # valve's. A drawing office convention, like the two schemes above, so
+        # it is set here for a whole sheet and overridable per station.
+        self.valve_station_tag_scheme = valve_station_tag_scheme
         # Let the layout engine pick which face a movable port is piped from,
         # given where its peer landed (see :mod:`pandid.layout.faces`). Turn it off
         # to pin every port to its symbol's own nozzle plus whatever
@@ -285,6 +298,227 @@ class Flowsheet:
         if on is not None:
             inst.attach(on, at=at, offset=offset, angle=angle)
         return inst
+
+    def add_valve_station(
+        self, tag: str, *,
+        x: float | None = None, y: float | None = None, mirrored: bool = False,
+        variant: str = "control", number: str | int | None = None,
+        isolation: bool = True, reducers: bool = True, bypass: bool = True,
+        drains: int = 2, description: str = "", bypass_over: str | None = None,
+        tag_scheme: "str | Callable[[str, str], str] | None" = None,
+        gap: float = DEFAULT_GAP, bypass_rise: float = DEFAULT_BYPASS_RISE,
+        drain_drop: float = DEFAULT_DRAIN_DROP,
+        size: str | float | None = None, service: str | float | None = None,
+        sequence: str | float | None = None, spec: str | float | None = None,
+        insulation: str | float | None = None,
+    ) -> "ValveStation":
+        """Build the standard assembly a control valve is installed in.
+
+        Two isolation valves, two drain valves, one bypass valve on a leg tapped
+        outside the isolations, and a size change at each end: the arrangement
+        the CHEE4001/7103 guidelines draw and :mod:`pandid.stations` quotes. The
+        units are added, tagged, described, pinned along a run at ``y`` and
+        wired to each other; what is left for the author is the piping either
+        side of it, which is what :attr:`~pandid.stations.ValveStation.inlet` and
+        :attr:`~pandid.stations.ValveStation.outlet` are for::
+
+            station = fs.add_valve_station("CV-303", x=670, y=440, mirrored=True,
+                                           description="Reflux", service="AE",
+                                           sequence=303, size=80, spec="80-SS")
+            fs.connect(t_draw.branch, station.inlet, service="AE", sequence=303,
+                       size=80, spec="80-SS")
+            fs.connect(station.outlet, fe303.inlet)
+
+        The returned :class:`~pandid.stations.ValveStation` is a handle, not a
+        unit: it draws nothing, reaches no equipment list, and its members are
+        ordinary units that can be re-pinned, re-tagged or instrumented.
+
+        Args:
+            tag: The control valve's tag, and what the other members' tags are
+                derived from.
+            x: Left edge of the drawn station; ``y`` is the run's **centreline**,
+                so each device lands on the line whatever its artwork measures.
+                Give both or neither; without them the members lay out like any
+                other units, which is a legal sheet but not a station-shaped one.
+            mirrored: Pipe the run east to west. The station still occupies
+                ``x`` rightwards; what reverses is which end the flow enters.
+            variant: The control valve's variant.
+            number: The number the members are tagged from, defaulting to the
+                one in ``tag``. The escape hatch for a control valve whose own
+                number is not what its station is numbered by: ``CV-301-1`` with
+                ``number=301`` gives ``HV-301A``, not ``HV-301-1A``.
+            isolation: Draw the two isolation valves.
+            reducers: Draw the reduction in and the expansion out.
+            bypass: Draw the bypass leg and its normally closed throttling valve.
+            drains: How many drain valves, 0, 1 or 2. One goes upstream.
+            description: The service in words. Each member's description is this
+                plus what it does: ``"Reflux Isolation Valve"``.
+            bypass_over: The member the bypass valve stands over, one of
+                :data:`~pandid.stations.BYPASS_ANCHORS`; by default it sits in
+                the middle of its own leg, which is where the reference figure
+                draws it. Move it when something else already crosses there: a
+                controller's output dropping onto the actuator, most often.
+            tag_scheme: Overrides :attr:`valve_station_tag_scheme` for this
+                station only.
+            gap: Edge to edge between devices along the run.
+            bypass_rise: How far the bypass leg stands off the run.
+            drain_drop: How far a drain leg hangs below it.
+            size, service, sequence, spec, insulation: The line number's
+                components, put on the bypass and drain branches. A branch off a
+                tee starts a number of its own, and a bypass is the same service,
+                size and spec as the run it goes round, so the station's own
+                number is what they take. The run through the station carries the
+                number of whatever is connected to :attr:`inlet`.
+
+        Raises:
+            ValueError: for a station that cannot mean what it says: a bypass
+                with nothing to bypass around, a drain count that is not 0, 1 or
+                2, one of ``x``/``y`` without the other, or a ``bypass_over``
+                naming a member this station was told to leave out.
+        """
+        from pandid.portgeom import port_offset, resolve_size
+        from pandid.stations import (
+            BYPASS_ANCHORS, ROLE_WORDS, ValveStation, member_tag, member_mirror,
+            station_number,
+        )
+        from pandid.units import Reducer, Tee, Valve
+
+        if drains not in (0, 1, 2):
+            raise ValueError(
+                f"{tag}: drains= is how many drain valves the station carries, 0, 1 "
+                f"or 2, one either side of the control valve, got {drains!r}"
+            )
+        if bypass and not isolation:
+            raise ValueError(
+                f"{tag}: a bypass is tapped outside the isolation valves so the unit "
+                f"keeps running while the control valve is isolated, and this station "
+                f"has no isolation valves to tap outside of. Ask for isolation=True, "
+                f"or drop the bypass"
+            )
+        if (x is None) != (y is None):
+            raise ValueError(
+                f"{tag}: a station is a run of devices on one line, so it is placed by "
+                f"an x and the run's centreline y together; got "
+                f"x={x!r}, y={y!r}"
+            )
+        if bypass_over is not None and bypass_over not in BYPASS_ANCHORS:
+            raise ValueError(
+                f"{tag}: bypass_over names the member the bypass valve stands over, "
+                f"one of {', '.join(BYPASS_ANCHORS)}, got {bypass_over!r}"
+            )
+
+        scheme = tag_scheme if tag_scheme is not None else self.valve_station_tag_scheme
+        num = str(number) if number is not None else station_number(tag)
+
+        def described(role: str) -> str:
+            return f"{description} {ROLE_WORDS[role]}".strip()
+
+        def valve(role: str, closed: bool = False) -> "Valve":
+            unit = Valve(member_tag(scheme, role, tag, num),
+                         description=described(role),
+                         normal_position="closed" if closed else "open")
+            self.add(unit)
+            return unit
+
+        def size_change(role: str) -> "Reducer":
+            unit = Reducer(member_tag(scheme, role, tag, num),
+                           description=described(role),
+                           large_end="inlet" if role == "reduction" else "outlet")
+            self.add(unit)
+            return unit
+
+        def tee(returns: bool = False) -> "Tee":
+            unit = Tee(branch="inlet" if returns else "outlet")
+            self.add(unit)
+            return unit
+
+        control = Valve(tag, variant=variant,
+                        description=f"{description} Control Valve".strip())
+        self.add(control)
+        iso_a = valve("upstream_isolation") if isolation else None
+        iso_b = valve("downstream_isolation") if isolation else None
+        byp = valve("bypass", closed=True) if bypass else None
+        dr_a = valve("upstream_drain", closed=True) if drains >= 1 else None
+        dr_b = valve("downstream_drain", closed=True) if drains >= 2 else None
+        red = size_change("reduction") if reducers else None
+        exp = size_change("expansion") if reducers else None
+        t_bya = tee() if bypass else None
+        t_byb = tee(returns=True) if bypass else None
+        t_dra = tee() if dr_a is not None else None
+        t_drb = tee() if dr_b is not None else None
+
+        # The order the fluid meets them, which is the order the figure draws
+        # them and the order the streams below are made in. A mirrored station
+        # is this run drawn the other way round, not a different one.
+        run = [u for u in (t_bya, iso_a, t_dra, red, control, exp, t_drb, iso_b, t_byb)
+               if u is not None]
+        anchors = {"upstream_isolation": iso_a, "downstream_isolation": iso_b,
+                   "reduction": red, "expansion": exp, "control": control}
+
+        if bypass_over is not None and anchors[bypass_over] is None:
+            raise ValueError(
+                f"{tag}: bypass_over={bypass_over!r} names a member this station was "
+                f"told to leave out"
+            )
+
+        if x is not None and y is not None:
+            left: dict[int, float] = {}   # the corner each member was pinned at
+            cursor = x
+            for unit in (reversed(run) if mirrored else run):
+                unit.pin(x=cursor, mirrored=member_mirror(mirrored, unit in (t_bya, t_byb)))
+                unit.pin(port="inlet", y=y)
+                left[id(unit)] = cursor
+                cursor += resolve_size(unit)[0] + gap
+            for junction, drain in ((t_dra, dr_a), (t_drb, dr_b)):
+                if junction is None or drain is None:
+                    continue
+                # A drain runs down to a funnel on the floor, which is not on
+                # this sheet, so the leg ends at the valve.
+                drain.pin(orientation=90)
+                drain.pin(port="inlet",
+                          x=left[id(junction)] + port_offset(junction, "branch")[0],
+                          y=y + drain_drop)
+            if byp is not None and t_bya is not None and t_byb is not None:
+                target = anchors[bypass_over] if bypass_over is not None else None
+                if target is not None:
+                    centre = left[id(target)] + resolve_size(target)[0] / 2
+                else:
+                    # Nothing named, so the middle of its own leg, which is
+                    # where the reference figure draws it.
+                    centre = sum(left[id(t)] + port_offset(t, "branch")[0]
+                                 for t in (t_bya, t_byb)) / 2
+                byp.pin(mirrored="x" if mirrored else False)
+                byp.pin(x=centre - resolve_size(byp)[0] / 2)
+                byp.pin(port="inlet", y=y - bypass_rise)
+
+        def branch_line(src: "Port", dst: "Port") -> Stream:
+            """A leg off the run, carrying the station's own line number."""
+            return self.connect(src, dst, size=size, service=service,
+                                sequence=sequence, spec=spec, insulation=insulation)
+
+        for upstream, downstream in zip(run, run[1:]):
+            self.connect(upstream.outlet, downstream.inlet)
+        if byp is not None and t_bya is not None and t_byb is not None:
+            branch_line(t_bya.branch, byp.inlet)
+            self.connect(byp.outlet, t_byb.branch)
+        for junction, drain in ((t_dra, dr_a), (t_drb, dr_b)):
+            if junction is not None and drain is not None:
+                branch_line(junction.branch, drain.inlet)
+
+        hanging = {id(t_bya): byp, id(t_dra): dr_a, id(t_drb): dr_b}
+        members: list["Unit"] = []
+        for unit in run:
+            members.append(unit)
+            branch = hanging.get(id(unit))
+            if branch is not None:
+                members.append(branch)
+        return ValveStation(
+            control=control, upstream_isolation=iso_a, downstream_isolation=iso_b,
+            reduction=red, expansion=exp, bypass=byp,
+            upstream_drain=dr_a, downstream_drain=dr_b,
+            tees=tuple(t for t in (t_bya, t_dra, t_drb, t_byb) if t is not None),
+            members=tuple(members), inlet=run[0].inlet, outlet=run[-1].outlet,
+        )
 
     def add_component(self, component: "Component") -> "Component":
         """Register a chemical component. Returns the component for chaining."""

@@ -204,13 +204,13 @@ The P&ID counterpart of `10`: the same unit on the same `page_size="A3"` sheet,
 drawn as the piping and instrumentation diagram (`diagram="p&id"`, so no
 process line carries an arrowhead; compare `10`, which is the same plant as a
 PFD and keeps them). Every line is identified by its
-line number, and one number runs through the hand valves, the reducer and the
+line number, and one number runs through the hand valves, the reducers and the
 control valve of a station because a station is one line. The overhead, reflux,
-distillate and steam control valves are each drawn as a full station —
-isolation valve, reducer, control valve, isolation valve, a bypass over the top
-on its own `normal_position="closed"` valve and a drain off the underside either
-side of the control valve — with `Tee`s making the four branches, drawn as
-nothing at all and scheduled nowhere. The `NC` legend row is what ISA-5.1
+distillate and steam control valves are each one `add_valve_station()` call:
+isolation valve, drain tee, reduction, control valve, expansion, drain tee,
+isolation valve, with a bypass over the top on its own
+`normal_position="closed"` valve tapped outside both isolation valves. The four
+branches on each are `Tee`s, drawn as nothing at all and scheduled nowhere. The `NC` legend row is what ISA-5.1
 clause 2.8.1(b)(1) requires of a sheet that darkens a valve body, since the fill
 is a PIP PIC001 convention rather than an ISA one. The reflux flow element
 `FE-303`
@@ -226,4 +226,4 @@ alarm drawn as a `shared` display balloon, and the `sis` interlock square drawn
 at all four places the trip acts. `via()` pins the routes of the lines that carry
 balloons, since an attached instrument hangs off the *routed* path and would move
 with a line the router was free to re-bend. Nothing on the sheet is pinned by a
-measured nozzle offset: `on_run()` asks each symbol where its own nozzle sits.
+measured nozzle offset: `pin(port=…)` asks each symbol where its own nozzle sits.

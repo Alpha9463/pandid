@@ -28,33 +28,16 @@ import pytest
 
 from pandid import Flowsheet, units
 from pandid.document import equipment_list
-from pandid.geometry import Frame, normalize_mirror
-from pandid.portgeom import port_point, resolve_size
+from pandid.portgeom import port_offset, port_point
 
 RUN_Y = 220.0
 BYPASS_Y = RUN_Y - 31.0
 DRAIN_Y = 256.0
 
 
-def nozzle_at(unit, port, mirrored=False, orientation=0):
-    """Where ``port`` sits relative to the unit's own top-left corner."""
-    mirror_x, mirror_y = normalize_mirror(mirrored)
-    width, height = resolve_size(unit)
-    probe = Frame(
-        x=0.0,
-        y=0.0,
-        w=width,
-        h=height,
-        mirrored=mirror_x,
-        mirror_y=mirror_y,
-        orientation=orientation,
-    )
-    return port_point(unit, probe, port)
-
-
 def on_run(unit, x, run_y, port="inlet", mirrored=False):
     """Pin an in-line device at ``x`` with ``port`` on its run's centreline."""
-    return unit.pin(x=x, y=run_y - nozzle_at(unit, port, mirrored)[1], mirrored=mirrored)
+    return unit.pin(x=x, mirrored=mirrored).pin(port=port, y=run_y)
 
 
 def station():
@@ -102,7 +85,7 @@ def station():
     # The leg ends at the valve: a drain runs to a funnel off the sheet.
     for valve, junction_x in ((dv_a, 352.0), (dv_b, 490.0)):
         valve.pin(orientation=90)
-        valve.pin(x=junction_x - nozzle_at(valve, "inlet", orientation=90)[0], y=DRAIN_Y)
+        valve.pin(port="inlet", x=junction_x, y=DRAIN_Y)
 
     fs.connect(feed.outlet, t_by_a.inlet, service="AE", sequence=303, size=80, spec="80-SS")
     fs.connect(t_by_a.outlet, hv_a.inlet)
@@ -199,11 +182,9 @@ def test_the_run_does_not_kink_through_a_junction(cv303):
 def test_the_tees_nozzles_share_the_runs_centreline():
     """The reason the run stays straight: it is a property of the symbol."""
     tee = units.Tee()
-    width, height = resolve_size(tee)
-    frame = Frame(x=0.0, y=0.0, w=width, h=height)
-    assert port_point(tee, frame, "inlet")[1] == port_point(tee, frame, "outlet")[1]
+    assert port_offset(tee, "inlet")[1] == port_offset(tee, "outlet")[1]
     # ...and the branch is somewhere else, or it would be the same nozzle.
-    assert port_point(tee, frame, "branch")[1] != port_point(tee, frame, "inlet")[1]
+    assert port_offset(tee, "branch")[1] != port_offset(tee, "inlet")[1]
 
 
 @pytest.mark.parametrize(

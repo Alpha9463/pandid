@@ -24,6 +24,8 @@ Flowsheet(name: str, *,
           line_numbering_scheme: str | Callable[[Stream], str]
               = "{size}-{service}-{sequence}-{spec}",
           line_number_start: int = 1001,
+          valve_station_tag_scheme: str | Callable[[str, str], str]
+              = "{letters}-{number}{suffix}",
           auto_faces: bool = True)
 ```
 
@@ -37,6 +39,10 @@ The container and the single source of truth for connectivity.
   way. Keyword-only. See [Line numbers](#line-numbers).
 - `line_number_start` sets where the automatic sequence begins (default `1001`,
   so the first line is `…-1001-…`). Keyword-only.
+- `valve_station_tag_scheme` spells a valve station's members out of its control
+  valve's tag: a format string taking `{letters}`, `{number}`, `{suffix}`,
+  `{role}` and `{control}`, or a callable `(role, control_tag) -> str`.
+  Keyword-only. See [Valve stations](#valve-stations).
 - `auto_faces` lets the engine choose which face each movable port is piped
   from. See [automatic face selection](#automatic-face-selection). Keyword-only.
 
@@ -145,8 +151,10 @@ Registers an `Annotation` or `TableBox` (see [Sheet furniture](#sheet-furniture)
 add_instrument(type, number="", *, on=None, at=None,
                offset=45.0, angle=90.0, variant="default", **kwargs) -> Instrument
 add_loop(variable: str, number: str | int) -> Loop
+add_valve_station(tag: str, **kwargs) -> ValveStation
 ```
-See [Instrumentation](#instrumentation) and [Control loops](#control-loops).
+See [Instrumentation](#instrumentation), [Control loops](#control-loops) and
+[Valve stations](#valve-stations).
 
 ### Geometry and output
 
@@ -732,7 +740,7 @@ does not stack on the inlet.
 
 ```text
 unit.pin(*, col=None, row=None, x=None, y=None,
-         orientation=unchanged, mirrored=unchanged) -> Unit
+         orientation=unchanged, mirrored=unchanged, port=None) -> Unit
 ```
 
 Records placement **intent** and returns the unit, so it chains off `add()`.
@@ -757,6 +765,42 @@ Calling `pin()` more than once merges: only the arguments you pass are updated,
 unit along without undoing a turn or a flip. A unit that has never been pinned
 starts square and unflipped. Pass `orientation=0` / `mirrored=False` to put one
 back.
+
+### `pin(port=…)`
+
+`port` names a nozzle, and the coordinates given then locate **that nozzle**
+rather than the top-left corner. A run is a line at one elevation and the
+devices on it are whatever size their artwork is, so this is how a device is put
+*on* a run without writing down half its height:
+
+```python
+valve.pin(port="inlet", x=200, y=run_y)     # the inlet lands exactly there
+```
+
+The offset comes from `portgeom.port_offset()`, which asks the symbol, so no
+measured number is written down and no rescaling of the artwork can leave a
+valve off its run. Only the axes the call names are read that way, so
+`pin(x=…)` followed by `pin(port="inlet", y=run_y)` steps along a row by the
+corner and still lands the nozzle on the line. What gets stored is still the
+corner, so pinning the same nozzle to the same point twice is the same
+placement twice.
+
+The transform in the *same* call is applied first, since a mirror moves the
+nozzle within the box. A grid cell has no nozzle in it, so `port` with
+`col`/`row` raises `ValueError`, and a port the unit does not have raises
+`KeyError` naming the ones it does.
+
+```text
+portgeom.port_offset(unit, port_name, placed=None) -> (dx, dy)
+```
+
+Where a port sits relative to the unit's own top-left corner, under `placed` (a
+`Pin` or a `Frame`) or under the unit's own placement. The read-only half of the
+same idea, for finding the elevation of a nozzle to run a spine at:
+
+```python
+feed_y = column.pin_.y + port_offset(column, "feed")[1]
+```
 
 ### `orientation`
 
@@ -1100,6 +1144,105 @@ fs.connect(fic.sig_out, cv.actuator, kind="pneumatic")
 Loops serialize to an optional `loops:` section of the spec and round-trip
 through it; a sheet that declares none writes no section, so its spec is
 unchanged. See the spec format in the README.
+
+### Valve stations
+
+```text
+fs.add_valve_station(
+    tag, *, x=None, y=None, mirrored=False, variant="control", number=None,
+    isolation=True, reducers=True, bypass=True, drains=2,
+    description="", bypass_over=None, tag_scheme=None,
+    gap=30.0, bypass_rise=45.0, drain_drop=36.0,
+    size=None, service=None, sequence=None, spec=None, insulation=None,
+) -> ValveStation
+```
+
+Builds the assembly a control valve is installed in: two isolation valves, two
+drain valves, one bypass valve on a leg tapped **outside** the isolations, and a
+size change at each end. Along the run:
+
+> bypass takeoff · isolation · drain tee · **reduction** · **control valve** ·
+> **expansion** · drain tee · isolation · bypass rejoin
+
+That is the arrangement the CHEE4001/7103 P&ID guidelines prescribe in words and
+draw in their *EXAMPLE of a control valve system* figure. Twelve units and
+twelve streams for one call.
+
+```python
+station = fs.add_valve_station("CV-303", x=670, y=440, mirrored=True,
+                               description="Reflux", bypass_over="reduction",
+                               service="AE", sequence=303, size=80, spec="80-SS")
+fs.connect(t_draw.branch, station.inlet, service="AE", sequence=303,
+           size=80, spec="80-SS")
+fs.connect(station.outlet, fe303.inlet)
+fs.connect(fic303.sig_out, station.control.actuator, kind="pneumatic")
+```
+
+**What comes back.** A `ValveStation`: a frozen handle, **not** a unit. It has
+no symbol, no ports of its own and no tag, is never in `fs.units`, and reaches
+no equipment list. Its members are ordinary units already on the flowsheet and
+already connected, so any of them can be re-pinned, re-tagged or instrumented.
+
+| Member | What it is |
+|---|---|
+| `control` | the control valve, carrying `tag` |
+| `upstream_isolation`, `downstream_isolation` | the two hand valves |
+| `reduction`, `expansion` | the size change in and back out |
+| `bypass` | the normally closed throttling valve on the leg |
+| `upstream_drain`, `downstream_drain` | the normally closed drains |
+| `tees` | the four junctions, in run order; each carries no tag |
+| `members` | every member, in the order the run meets it |
+| `inlet`, `outlet` | the `Port`s the piping either side connects to |
+
+A member left out is `None`. Nothing of the station itself is serialized,
+because after the call there is nothing left of it the drawing depends on:
+`to_dict()` writes the members out and reading them back gives the same sheet.
+
+**Tags.** `valve_station_tag_scheme` on the `Flowsheet`, or `tag_scheme` for one
+station, spells the members out of the control valve's tag. The default
+`"{letters}-{number}{suffix}"` gives, from `CV-303`:
+
+| Role | `{letters}` | `{suffix}` | Default tag |
+|---|---|---|---|
+| `upstream_isolation` | `HV` | `A` | `HV-303A` |
+| `downstream_isolation` | `HV` | `B` | `HV-303B` |
+| `bypass` | `HV` | `C` | `HV-303C` |
+| `upstream_drain` | `HV` | `D` | `HV-303D` |
+| `downstream_drain` | `HV` | `E` | `HV-303E` |
+| `reduction` | `RD` | `A` | `RD-303A` |
+| `expansion` | `RD` | `B` | `RD-303B` |
+
+`{role}` and `{control}` are available too, and a callable
+`(role, control_tag) -> str` says anything a format string cannot. This is a
+convention, not a rule: the guidelines are explicit that tagging *"depends on
+the practice of the particular design office"*, and the issued reference sheet
+tags none of these valves at all. `number=` overrides the number the scheme
+fills in, for a control valve whose own tag carries a suffix its hand valves do
+not (`add_valve_station("CV-301-1", number=301)` → `HV-301A`).
+
+**Placement.** With `x` and `y` the station pins its own members: `x` is the
+left edge of the drawn assembly and `y` is the run's **centreline**, so each
+device lands on the line whatever its artwork measures. `mirrored=True` pipes
+the run east to west, the same run drawn the other way round, still occupying
+`x` rightwards. `gap`, `bypass_rise` and `drain_drop` are the spacing along the
+run, the height of the bypass leg and the depth of a drain leg. `bypass_over`
+stands the bypass valve over a named member instead of in the middle of its own
+leg, which is what a station wants when a controller's output crosses the leg on
+its way down to the actuator. Give `x` and `y` together or not at all; without
+them the members lay out like any other unit.
+
+**Line numbers.** The run through the station takes the number of whatever is
+connected to `inlet`, carried through the valves, reducers and tees as any
+inline device carries it. A branch off a tee starts a number of its own, so the
+`size`/`service`/`sequence`/`spec`/`insulation` given here are what the bypass
+and the two drains take, since a bypass is the same service, size and spec as
+the run it goes round.
+
+**Refusals.** A bypass with `isolation=False` raises: a bypass exists so the
+unit keeps running while the control valve is isolated, and there is nothing to
+isolate it with. So does a `drains` that is not 0, 1 or 2, one of `x`/`y`
+without the other, and a `bypass_over` naming a member the station was told to
+leave out.
 
 ### Attaching a balloon
 
