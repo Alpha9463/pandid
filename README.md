@@ -589,9 +589,10 @@ throttling valve, and the size change into the valve body and back out.
 ```python
 station = fs.add_valve_station("CV-303", x=670, y=440, mirrored=True,
                                description="Reflux", bypass_over="reduction",
-                               service="AE", sequence=303, size=80, spec="80-SS")
+                               service="AE", sequence=303, size=80,
+                               schedule=80, spec="SS")
 fs.connect(drum_draw.branch, station.inlet, service="AE", sequence=303,
-           size=80, spec="80-SS")
+           size=80, schedule=80, spec="SS")
 fs.connect(station.outlet, fe303.inlet)
 fs.connect(fic303.sig_out, station.control.actuator, kind="pneumatic")
 ```
@@ -762,11 +763,21 @@ s.name        # '6"-P-1001-A1A'
 s.sequence    # '1001' filled by auto-numbering, from line_number_start
 ```
 
-You supply `size`, `service`, `spec` and `insulation`; auto-numbering fills
-`sequence`, unless you set it to tie into a line that already exists. The number
-carries **through** an in-line valve or strainer and breaks at a unit marked
-`significant`, which is exactly where the spec breaks. A component left unset
-drops out, so a line with no spec issued yet reads `6"-P-1001`.
+You supply `size`, `schedule`, `service`, `spec` and `insulation`;
+auto-numbering fills `sequence`, unless you set it to tie into a line that
+already exists. The number carries **through** an in-line valve or strainer and
+breaks at a unit marked `significant`, which is exactly where the spec breaks. A
+component left unset drops out, so a line with no spec issued yet reads
+`6"-P-1001`.
+
+Three of them are easy to run together, so plainly:
+
+- **`size`** is the line's nominal bore, as the site writes it: `'6"'`, `200`.
+- **`schedule`** is the wall the line is bought to at that bore: `160`, `40`, or
+  the older `STD` / `XS` / `XXS`. The bore does not imply the wall, which is why
+  it is a field and not part of the size.
+- **`spec`** is the piping class or the material the line is built to: `A1A`,
+  `SS`. Not a dimension at all.
 
 The convention is a format string (or a callable), so a site that spells it
 differently says so once:
@@ -774,7 +785,14 @@ differently says so once:
 ```python
 fs = Flowsheet("U100", line_numbering_scheme="{service}-{size}-{sequence:0>6}-{insulation}",
                line_number_start=1)
+# FB-301-200-160-SS: DN 200 bore, schedule 160 wall, stainless, as example 11 draws it
+fs = Flowsheet("A300", line_numbering_scheme="{service}-{sequence}-{size}-{schedule}-{spec}",
+               line_number_start=301)
 ```
+
+The default `"{size}-{service}-{sequence}-{spec}"` names neither `{schedule}`
+nor `{insulation}`, because most sheets leave the wall to the piping class and
+carry no insulation code.
 
 Under `show_stream_table=True` each column is headed by its line number, so a
 column ties to a line without a second lookup. A stream with no components set
@@ -1026,9 +1044,9 @@ time. `at` / `offset` / `angle` / `variant` / `port_faces` behave as in
 `{unit: ..., port: ...}`). `kind` makes a signal line (`electric`, `pneumatic`,
 `data`, …), `name` overrides the auto number, `tear_hint` nominates the recycle
 to cut, `via` forces waypoints, and `properties` is that line's stream-table
-column. `size` / `service` / `spec` / `insulation` are the line-number
-components, and `sequence` overrides the one auto-numbering would assign,
-which is why `to_dict()` writes the components but never the computed
+column. `size` / `schedule` / `service` / `spec` / `insulation` are the
+line-number components, and `sequence` overrides the one auto-numbering would
+assign, which is why `to_dict()` writes the components but never the computed
 sequence.
 
 **Sheet furniture.** `title_block` takes the `TitleBlock` fields plus

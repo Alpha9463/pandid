@@ -368,8 +368,8 @@ and is kept working.
   after them.
 - Line numbers. This is the identifier a P&ID actually labels a line with, and
   the one the line list, the stress calculation and the isometric key on. `connect()`
-  takes `size`, `service`, `spec` and `insulation`; auto-numbering fills
-  `sequence` from `line_number_start` (default `1001`), and
+  takes `size`, `schedule`, `service`, `spec` and `insulation`; auto-numbering
+  fills `sequence` from `line_number_start` (default `1001`), and
   `line_numbering_scheme` (default `"{size}-{service}-{sequence}-{spec}"`, a
   format string or a callable) spells the site's convention. A line number is
   assigned by the same pass as a stream number, so it carries through in-line
@@ -377,6 +377,19 @@ and is kept working.
   component drops out with its separator, an explicitly named stream is never
   reformatted, and a stream with no components set is numbered exactly as
   before. The stream table heads each column with the line number.
+- `schedule` is a line-number component of its own, next to `size`, and
+  `add_valve_station()` takes it alongside the rest. The two are separate facts
+  about the pipe, `size` being the nominal bore and `schedule` the wall bought
+  at that bore, and there was nowhere to put the second, so example 11 had been
+  writing `spec="160-SS"`: a schedule and a material joined by a hyphen, with
+  the `160` sitting beside `size=200` and reading like a second size. It is now
+  `size=200, schedule=160, spec="SS"` under
+  `"{service}-{sequence}-{size}-{schedule}-{spec}"`, which spells the same
+  `FB-301-200-160-SS` the issued sheet carries; the rendered sheet is
+  byte-identical. The default scheme is unchanged and does not name
+  `{schedule}`, because most sheets leave the wall to the piping class, so no
+  sheet that never set one moves. The component list stays deliberately fixed:
+  see issue #118 for what would justify a seventh.
 
 #### Layout
 

@@ -28,7 +28,10 @@ if TYPE_CHECKING:
 _ENERGY_ROLES = {"energy", "utility"}
 
 #: Size, service, sequence and spec — the four parts almost every site's line
-#: number opens with. Insulation is available to a scheme that wants it.
+#: number opens with. Insulation and schedule are available to a scheme that
+#: wants them, and are left out of the default because most sheets carry
+#: neither: a site that quotes the schedule on the line rather than leaving it
+#: to the piping class names ``{schedule}`` in a scheme of its own.
 DEFAULT_LINE_NUMBERING_SCHEME = "{size}-{service}-{sequence}-{spec}"
 
 #: Line sequences conventionally start well clear of 1, so the drawing reads
@@ -308,7 +311,8 @@ class Flowsheet:
         tag_scheme: "str | Callable[[str, str], str] | None" = None,
         gap: float = DEFAULT_GAP, bypass_rise: float = DEFAULT_BYPASS_RISE,
         drain_drop: float = DEFAULT_DRAIN_DROP,
-        size: str | float | None = None, service: str | float | None = None,
+        size: str | float | None = None, schedule: str | float | None = None,
+        service: str | float | None = None,
         sequence: str | float | None = None, spec: str | float | None = None,
         insulation: str | float | None = None,
     ) -> "ValveStation":
@@ -324,9 +328,10 @@ class Flowsheet:
 
             station = fs.add_valve_station("CV-303", x=670, y=440, mirrored=True,
                                            description="Reflux", service="AE",
-                                           sequence=303, size=80, spec="80-SS")
+                                           sequence=303, size=80, schedule=80,
+                                           spec="SS")
             fs.connect(t_draw.branch, station.inlet, service="AE", sequence=303,
-                       size=80, spec="80-SS")
+                       size=80, schedule=80, spec="SS")
             fs.connect(station.outlet, fe303.inlet)
 
         The returned :class:`~pandid.stations.ValveStation` is a handle, not a
@@ -363,12 +368,13 @@ class Flowsheet:
             gap: Edge to edge between devices along the run.
             bypass_rise: How far the bypass leg stands off the run.
             drain_drop: How far a drain leg hangs below it.
-            size, service, sequence, spec, insulation: The line number's
-                components, put on the bypass and drain branches. A branch off a
-                tee starts a number of its own, and a bypass is the same service,
-                size and spec as the run it goes round, so the station's own
-                number is what they take. The run through the station carries the
-                number of whatever is connected to :attr:`inlet`.
+            size, schedule, service, sequence, spec, insulation: The line
+                number's components, put on the bypass and drain branches. A
+                branch off a tee starts a number of its own, and a bypass is the
+                same service, size and spec as the run it goes round, so the
+                station's own number is what they take. The run through the
+                station carries the number of whatever is connected to
+                :attr:`inlet`.
 
         Raises:
             ValueError: for a station that cannot mean what it says: a bypass
@@ -493,7 +499,7 @@ class Flowsheet:
 
         def branch_line(src: "Port", dst: "Port") -> Stream:
             """A leg off the run, carrying the station's own line number."""
-            return self.connect(src, dst, size=size, service=service,
+            return self.connect(src, dst, size=size, schedule=schedule, service=service,
                                 sequence=sequence, spec=spec, insulation=insulation)
 
         for upstream, downstream in zip(run, run[1:]):
@@ -527,7 +533,8 @@ class Flowsheet:
 
     def connect(self, src: "Port", dst: "Port", *, kind: str = "material",
                 name: str | None = None, tear_hint: bool = False,
-                size: str | float | None = None, service: str | float | None = None,
+                size: str | float | None = None, schedule: str | float | None = None,
+                service: str | float | None = None,
                 sequence: str | float | None = None, spec: str | float | None = None,
                 insulation: str | float | None = None) -> Stream:
         """Create a stream connecting *src* (outlet port) to *dst* (inlet port).
@@ -541,10 +548,12 @@ class Flowsheet:
         nozzles. Mixing them draws a pipe into a valve stem or a control signal
         between two pumps.
 
-        ``size``/``service``/``spec``/``insulation`` are the line-number
-        components; supplying any of them draws this line with its line number
-        instead of a stream number. ``sequence`` is filled by auto-numbering
-        unless it is given here.
+        ``size``/``schedule``/``service``/``spec``/``insulation`` are the
+        line-number components; supplying any of them draws this line with its
+        line number instead of a stream number. ``sequence`` is filled by
+        auto-numbering unless it is given here. ``size`` is the line's nominal
+        bore, ``schedule`` the wall it is bought to at that bore, and ``spec``
+        the piping class or material the line is built to.
 
         Raises :class:`ValueError` if any validation rule is violated.
         """
@@ -587,6 +596,7 @@ class Flowsheet:
             tear_hint=tear_hint,
             auto_named=not name,
             size=size,
+            schedule=schedule,
             service=service,
             sequence=sequence,
             spec=spec,
