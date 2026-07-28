@@ -1157,6 +1157,27 @@ class SvgRenderer:
 
     # ------------------------------------------------------------------ streams
 
+    def _tipped(self, s, arrows: bool) -> bool:
+        """Does this stream wear an arrowhead at its far end?
+
+        Three things say no. A P&ID draws none at all (``arrows``). A signal
+        line never carried one on either drawing. And a stream that ends at a
+        symbol drawn as bare pipe has not arrived anywhere: a tee is a point on
+        a line where the line divides, and the run carries straight on past it,
+        so a head there reads as flow stopping in the middle of an unbroken
+        run. The question is about the artwork rather than about the class, so
+        it is the symbol that answers it (see ``Symbol.bare_run``): every
+        in-line device that draws a body, a valve or a reducer or a fitting,
+        gives the head something to land against and keeps it.
+
+        A stream *leaving* a junction is untouched. It gets its head at its own
+        destination, which is wherever the branch or the run actually ends.
+        """
+        if not arrows or s.kind in _SIGNAL_KINDS:
+            return False
+        dest = s.dest.owner
+        return not self.registry.for_unit(dest).bare_run
+
     def _draw_streams(self, fs, jump_direction, unit_labels, arrows=True):
         from pandid.portgeom import port_point, unit_box
 
@@ -1239,7 +1260,7 @@ class SvgRenderer:
                 labeled_names.add(s.name)
                 label_items.append((longest_seg, s.name, color))
 
-            marker = f' marker-end="url(#{marker_id})"' if arrows and not is_signal else ""
+            marker = f' marker-end="url(#{marker_id})"' if self._tipped(s, arrows) else ""
             lines.append(
                 f'    <path d="{d_str}" fill="none" '
                 f'stroke="{color}" stroke-width="2"{dash}{marker} />'

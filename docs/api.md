@@ -208,6 +208,17 @@ run; the arrowhead at the end of each line is a PFD convention, where showing
 where the material goes is the whole job of the line. Nothing else about the
 sheet changes, and signal lines never carried one on either drawing.
 
+On a PFD, which keeps them, the head marks where a line *arrives* somewhere, so
+a line ending at a [`Tee`](#units-and-ports) is drawn without one. A junction is
+not somewhere: it is a point on a line where the line divides, drawn as bare pipe
+with the run carrying straight on past it, and a filled triangle there reads as
+flow stopping in the middle of an unbroken run. A line *leaving* a junction is
+untouched and takes its head at its own destination. Every in-line device that
+draws a body of its own, a valve or a reducer or a fitting, gives the head
+something to land against and keeps it; the rule is
+[`Symbol.bare_run`](#the-symbol), so it is the artwork that answers rather than
+the class.
+
 `border` and `diagram` are independent, and both spellings of each are accepted
 case-insensitively (`"P&ID"`, `"p&id"`, `"pid"`). A PFD carries the zone frame
 as readily as a P&ID does, as `examples/10_ethanol_pfd.py` does, so
@@ -347,7 +358,9 @@ classes.)
 `Tee` is the pipe tee, the junction where a line branches: a bypass leg, a
 drain, a vent, a sample point, a PSV takeoff. It is drawn as bare pipe — the run
 straight through and the branch off it, nothing at the junction — and carries no
-tag, so it never reaches the equipment list.
+tag, so it never reaches the equipment list. Nothing at the junction includes the
+[arrowhead](#which-drawing-this-is): a line ending at a tee has arrived nowhere,
+so it is drawn without one even on a PFD.
 
 ```text
 units.Tee(name="", branch="outlet", variant="default", width=None, height=None,
@@ -1371,6 +1384,13 @@ wants, since the user asked for a box and the equipment simply becomes it. Pass
 is a circle at every size, so it keeps its proportions and is centred in the box,
 and its ports are resolved against the artwork rather than the box edge the
 artwork no longer reaches.
+
+`bare_run=True` says the artwork is the pipe itself and nothing else, with the
+run passing straight through it. Only the pipe tee is drawn that way among the
+shipped symbols. It is what makes a PFD leave a line ending there untipped: an
+[arrowhead](#which-drawing-this-is) says the material arrives somewhere, and a
+symbol with no body of its own is a point on a line rather than a place. Leave it
+alone for anything that draws a shape, which is everything else.
 
 `ports` maps port name to a point in those same symbol coordinates. The names
 must match the class's port names exactly. **Put every port on drawn ink.** A

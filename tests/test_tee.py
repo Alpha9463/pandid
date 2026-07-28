@@ -245,6 +245,105 @@ def test_the_junction_is_bare_pipe(cv303):
     assert cv303.to_svg(diagram="p&id").count('href="#sym_tee"') == 4
 
 
+def heads_by_destination(fs, **kwargs):
+    """Every stream on the sheet, keyed by where it ends, paired with whether
+    it was drawn with an arrowhead.
+
+    Read back out of the SVG rather than off the model, because the arrowhead
+    is a rendering decision and the point is what a reader sees. A line's last
+    ``L`` is its far end, which is the nozzle its ``dest`` port resolves to.
+    """
+    svg = fs.to_svg(**kwargs)
+    tipped = {}
+    for d, rest in re.findall(r'<path d="([^"]*)"([^>]*)/>', svg):
+        tipped[d.rsplit("L ", 1)[-1].strip()] = "marker-end" in rest
+    out = {}
+    for stream in fs.streams:
+        dest = stream.dest.owner
+        x, y = port_point(dest, dest.frame, stream.dest.name)
+        out[(dest.name, stream.dest.name)] = tipped[f"{x},{y}"]
+    return out
+
+
+def tee_on_a_pfd():
+    """One run with a junction in the middle of it, and a branch off it.
+
+    Every line but the one into the tee ends somewhere a reader can point at: a
+    boundary flag, a belt, a valve. The tee is the only thing on the sheet that
+    is a point on a line rather than a place.
+    """
+    fs = Flowsheet("Tee on a PFD")
+    source = fs.add(units.Feed("Source"))
+    hand_valve = fs.add(units.Valve("HV-1"))
+    tee = fs.add(units.Tee())
+    run = fs.add(units.Product("Run"))
+    belt = fs.add(units.Conveyor("BC-1", length=90))
+    cake = fs.add(units.Product("Cake"))
+
+    fs.connect(source.outlet, hand_valve.inlet)
+    fs.connect(hand_valve.outlet, tee.inlet)
+    fs.connect(tee.outlet, run.inlet)
+    fs.connect(tee.branch, belt.feed)
+    fs.connect(belt.discharge, cake.inlet)
+    return fs
+
+
+def test_a_run_is_not_tipped_where_it_divides():
+    """The defect: a filled arrowhead in the middle of an unbroken run.
+
+    An arrowhead says the material arrives here. A tee is not a here -- it is a
+    point on a line where the line divides, and the run carries straight on
+    past it -- so the segment ending at one is drawn without a head.
+    """
+    fs = tee_on_a_pfd()
+    heads = heads_by_destination(fs)
+    assert heads[("TEE", "inlet")] is False
+
+
+def test_every_line_that_arrives_somewhere_keeps_its_arrowhead():
+    """Including the two the boundary flags terminate and the one the belt
+    catches, which is a symbol built to its own length rather than a fixed one.
+    """
+    fs = tee_on_a_pfd()
+    heads = heads_by_destination(fs)
+    assert heads[("HV-1", "inlet")] is True
+    assert heads[("Run", "inlet")] is True
+    assert heads[("BC-1", "feed")] is True
+    assert heads[("Cake", "inlet")] is True
+
+
+def test_the_sheet_loses_one_arrowhead_per_junction_and_no_others():
+    fs = tee_on_a_pfd()
+    into_a_junction = sum(1 for s in fs.streams if isinstance(s.dest.owner, units.Tee))
+    assert into_a_junction == 1
+    assert fs.to_svg().count("marker-end=") == len(fs.streams) - into_a_junction
+
+
+def test_a_leg_rejoining_the_run_is_not_tipped_either(cv303):
+    """A bypass coming back is still arriving at a point on a line.
+
+    The station has five lines ending at a junction: four on the run, plus the
+    bypass returning onto the fifth through a tee whose branch is an inlet.
+    Drawn as a PFD, which is the sheet that carries arrowheads at all.
+    """
+    heads = heads_by_destination(cv303, diagram="pfd")
+    junctions = {end: head for end, head in heads.items() if end[0].startswith("TEE")}
+    assert len(junctions) == 5
+    assert ("TEE (4)", "branch") in junctions  # the bypass return
+    assert not any(junctions.values())
+    assert all(head for end, head in heads.items() if not end[0].startswith("TEE"))
+
+
+def test_the_junction_is_the_only_symbol_drawn_as_bare_pipe():
+    """The rule is keyed on what the symbol draws, not on the ``Tee`` class, so
+    this is what says how far it reaches. Every other in-line device -- a valve,
+    a reducer, a fitting -- draws a body the arrowhead lands against."""
+    from pandid.render.symbols import default_registry
+
+    bare = sorted(key for key, symbol in default_registry._symbols.items() if symbol.bare_run)
+    assert bare == [("tee", "default")]
+
+
 def test_the_station_validates_clean(cv303):
     assert cv303.validate() == []
 

@@ -286,7 +286,9 @@ PSV takeoff — and every one of those is a line splitting in two rather than a
 piece of plant. `Tee` is the fitting that splits it. It is drawn as an issued
 sheet draws one: three lines meeting, the run passing straight through and the
 branch leaving at a right angle, at the same line weight, with **nothing** at
-the junction. No tag, no symbol, and no row on the equipment list.
+the junction. No tag, no symbol, no arrowhead even on a PFD, and no row on the
+equipment list. An arrowhead marks where a line arrives somewhere, and a junction
+is a point on a line where the line divides, with the run carrying on past it.
 
 `branch="outlet"` (the default) takes flow off the run; `branch="inlet"` returns
 it, which is how a bypass rejoins. The branch leaves the south face as drawn, so
@@ -573,7 +575,9 @@ fs.render("sheet.svg", page_size="A3", border="zone", diagram="p&id")
 off the equipment and the line list, not off an arrow on every run; the
 arrowhead is a PFD convention, where showing where the material goes is the
 whole job of the line. `diagram="pfd"` is the default and keeps them. Signal
-lines never carried one on either drawing.
+lines never carried one on either drawing, and neither does a line ending at a
+[`Tee`](#equipment--variants) on either: an arrowhead marks where a line arrives
+somewhere, and a junction is a point on a line where the line divides.
 
 `"P&ID"`, `"p&id"` and `"pid"` are all accepted. `styling="p&id"` is the
 one-word way to ask for a P&ID on the engineering frame, and is the older

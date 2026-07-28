@@ -158,6 +158,15 @@ class Symbol:
     # artwork either way -- a port in the letterbox would draw a stream that
     # stops short of its equipment.
     stretchable: bool = True
+    # Is the artwork the pipe itself and nothing else? A tee is three lines
+    # meeting: no body is drawn, and the run passes straight through. That is
+    # what decides whether a stream *ending* here wears the PFD arrowhead. A
+    # head says the material arrives somewhere, and a junction is not
+    # somewhere -- it is a point on a line where the line divides, with the run
+    # carrying on past it, so a head there stops a line that does not stop.
+    # Every symbol with a body of its own -- a valve, a reducer, an in-line
+    # fitting -- gives the head something to land against and keeps it.
+    bare_run: bool = False
     # Deprecated spelling, accepted so a symbol authored against the old
     # interface still registers. ``port_alts`` listed only the *extra* faces.
     port_alts: InitVar[dict[str, dict[str, tuple[float, float]]] | None] = None
@@ -884,6 +893,9 @@ class SymbolRegistry:
             # and the router standing its lines off to clear a label that is
             # never drawn.
             label_pos="center",
+            # ...and for the same reason there is nothing here for an arrowhead
+            # to land against: the run divides and carries on.
+            bare_run=True,
         ))
 
         # ====================================================================

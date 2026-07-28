@@ -314,6 +314,17 @@ and is kept working.
   none on either drawing. It is deliberately separate from `border=`: the frame
   is sheet furniture and a PFD carries the zone-ruled one as readily as a P&ID
   does, so neither option implies the other.
+
+  On the drawing that keeps them, an arrowhead marks where a line *arrives*
+  somewhere, so a line ending at a junction is drawn without one. A `Tee` is a
+  point on a line where the line divides: it draws no body, the run carries
+  straight on past it, and a filled head there reads as flow stopping in the
+  middle of an unbroken run, which no issued PFD draws. What decides it is the
+  artwork rather than the class: `Symbol.bare_run` says a symbol is the pipe
+  itself and nothing else, so a custom symbol drawn that way is treated the
+  same, while every in-line device with a body for the head to land against (a
+  valve, a reducer, a fitting) keeps its head. A line *leaving* a junction is
+  untouched: it takes its head at its own destination.
 - Canvas fitted to content, with no letterboxing, no clipping and uniform 2 px
   symbol strokes.
 - A unit given an explicit `width`/`height` is drawn *at* that box. Where the
