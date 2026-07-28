@@ -7,7 +7,7 @@ import re
 from datetime import datetime
 
 from pandid.render import furniture as F
-from pandid.render.symbols import closed_marking
+from pandid.render.symbols import closed_marking, fail_marking
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
 from pandid.validate import Issue
 
@@ -1010,6 +1010,13 @@ class SvgRenderer:
                 if closed_marking(u, self.registry) == "NC":
                     label_items.append(
                         self._nc_label_item(u, f, x, y, u_width, u_height))
+                # Where an actuated valve goes when its air or power is lost.
+                # A separate question from the one above, in a separate corner;
+                # see ISA-5.1 Table 5.4.4 and _fail_label_item.
+                letters = fail_marking(u)
+                if letters:
+                    label_items.append(
+                        self._fail_label_item(u, f, x, y, u_width, u_height, letters))
         lines.append('  </g>')
         return lines
 
@@ -1179,6 +1186,72 @@ class SvgRenderer:
                 tag[0] < nc[2] and tag[2] > nc[0] and tag[1] < nc[3] and tag[3] > nc[1]):
             lx, ly, anchor, baseline, lpos, text = item
             item = (lx + tag[2] - nc[0] + 6, ly, anchor, baseline, lpos, text)
+        return item
+
+    def _fail_label_item(self, u, f, x, y, u_width, u_height, letters):
+        """The fail position, in letters, beside the valve body.
+
+        The letters are **ANSI/ISA-5.1-2009 Table 5.4.4** Method B, which **PIP
+        PIC001 clause 4.5.3.2** requires over the standard's own Method A stem
+        arrows. See :func:`pandid.render.symbols.fail_marking`.
+
+        **PIP PIC001 clause 4.2.4.6(1)** places them, and is followed exactly:
+        *"Control valve failure action abbreviation shall be shown at 0.06 inch
+        directly below the control valve in horizontal lines and 0.06 inch to
+        the right of the control valve in vertical lines."*
+
+        The quarter turn therefore moves these letters, where it does not move
+        the ``NC`` abbreviation (:meth:`_nc_label_item`), and the two are not
+        inconsistent: they are the same principle applied to marks that live in
+        different places. ``NC`` sits in a *corner*, and a corner is free
+        whichever way a valve is laid, so fixing it lets a reader scan for one
+        thing in one place. These letters sit against a *face*, and which face
+        is free is exactly what the quarter turn changes: the face below a valve
+        on a horizontal run is clear, and the face below the same valve on a
+        riser is its outlet nozzle with the line running out of it. PIP's rule
+        is the geometry, not a style, which is why it is taken whole.
+
+        The remaining sides are spoken for either way. Every valve symbol here
+        draws its actuator on **top** and the controller output or interlock
+        lands there, so the space above the body belongs to the signal line and
+        to the default equipment tag; the upper right corner is the ``NC``
+        abbreviation's, fixed there by ISO 15519-1 §11.4.5. A valve stating both
+        of the two things it can state about its position states them in two
+        places that cannot collide.
+
+        Where the equipment tag is already on the side the letters want -- which
+        the engine chooses freely, and does choose the right-hand side for a
+        valve on a riser -- the letters step past it along that same side rather
+        than over it. Both are drawn on opaque halos in the same final pass, so
+        the second one down would otherwise erase the first.
+
+        Nothing steps past a *neighbouring* unit, which is the one case to place
+        around by hand. ``pin(mirrored="y")`` turns a valve's artwork over and
+        puts its actuator underneath, so its signal lead then arrives through
+        the space PIP reserves for these letters; a balloon hung directly below
+        such a valve is in the same space. Neither is a placement the standard
+        contemplates, since it words the rule for an actuator drawn on top. Put
+        the balloon on another side, or leave the valve the way up its symbol is
+        drawn.
+        """
+        # 90 and 270 both stand the run on end; 0 and 180 both leave it flat.
+        upright = int(getattr(f, "orientation", 0) or 0) in (90, 270)
+        lpos = "right" if upright else "bottom"
+        item = (*self._label_place(lpos, x, y, u_width, u_height), lpos, letters)
+        tag = _unit_label_box(self._unit_label_item(
+            u, f, x, y, u_width, u_height, html.escape(u.tag)))
+        fail = _unit_label_box(item)
+        if tag is not None and fail is not None and (
+                tag[0] < fail[2] and tag[2] > fail[0] and tag[1] < fail[3] and tag[3] > fail[1]):
+            lx, ly, anchor, baseline, lpos, text = item
+            # Step along the axis the side runs off, by the overlap plus a gap.
+            # Sideways is the six _nc_label_item steps by, being the same move;
+            # downwards is tighter, because a halo is 15 tall against 12 of text
+            # and so already carries a margin the horizontal one does not.
+            if upright:
+                item = (lx + tag[2] - fail[0] + 6, ly, anchor, baseline, lpos, text)
+            else:
+                item = (lx, ly + tag[3] - fail[1] + 4, anchor, baseline, lpos, text)
         return item
 
     def _draw_unit_labels(self, items):

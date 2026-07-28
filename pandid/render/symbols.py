@@ -485,6 +485,107 @@ NC_DARKENS = frozenset({
 #: has closed, which is a drafting error rather than a style.
 NC_FORBIDDEN = frozenset({"control", "pneumatic", "regulator", "relief", "psv"})
 
+# ---------------------------------------------------------------------------
+# Fail position: where an actuated valve goes when its motive power is lost.
+#
+# A different property from ``normal_position``, marked by a different standard
+# in a different place, and the two are held apart deliberately -- see
+# :attr:`pandid.units.Valve.fail`.
+# ---------------------------------------------------------------------------
+
+#: The fail positions a valve may be declared in, and the letters each one
+#: draws. The names are the plant's vocabulary and the letters are the drawing's,
+#: kept apart for the reason ``normal_position="closed"`` is not spelled ``"NC"``:
+#: the state is a fact about the actuator, and which mark states it is a choice
+#: this package makes once, here.
+#:
+#: The letters are **ANSI/ISA-5.1-2009 Table 5.4.4** Method B. ``FO``, ``FC`` and
+#: ``FL`` are the three of them ISA-5.1-1984 §6.7 already had; ``FI``, *fail
+#: indeterminate*, is 1984's fourth and is kept because a valve whose failed
+#: position genuinely cannot be predicted has to be able to say so rather than
+#: claim ``FL``. ``FL/DO`` and ``FL/DC`` are 2009's additions, *fail last* with
+#: the direction the valve then drifts, which is a statement about a real
+#: actuator: a piston holding on trapped air holds only until it leaks past.
+#:
+#: Ordered so the error message naming them reads open, closed, then the three
+#: that hold, rather than in dictionary order.
+FAIL_POSITIONS: dict[str, str] = {
+    "open": "FO",
+    "closed": "FC",
+    "last": "FL",
+    "drift_open": "FL/DO",
+    "drift_closed": "FL/DC",
+    "indeterminate": "FI",
+}
+
+#: Valve variants that have motive power to lose, and so a fail position to
+#: declare. **ANSI/ISA-5.1-2009** note 5.3.4(10) says the failure symbols "are
+#: applicable to all types of control valves and actuators", and that is the
+#: test: an *actuator*, driven by air, hydraulic fluid or electricity supplied
+#: from outside the valve.
+#:
+#: Three groups are refused by it, for three different reasons.
+#:
+#: - A **hand-operated** valve has an operator but no actuator. ``manual`` draws
+#:   a handwheel and ``knife`` a rising stem through one; a handwheel loses no
+#:   air, and where the operator leaves it is where it stays.
+#: - A **self-acting** valve is powered by the process it sits in. ``regulator``
+#:   works off its own dome and ``relief`` and ``psv`` off a spring against line
+#:   pressure, so there is no supply whose failure is the question.
+#: - A **bare body** -- ``gate``, ``globe``, ``ball``, ``butterfly`` and the rest
+#:   -- is drawn with no operator at all. Its stem is turned by whatever is
+#:   bolted to it, and the drawing does not say what that is.
+#:
+#: ``control`` is on the list although its stencil draws a Saunders body rather
+#: than an operator. It is the variant this package names *the control valve*,
+#: it is the one :data:`NC_FORBIDDEN` refuses on the strength of being one, and
+#: an automated valve is exactly what PIP PIC001 4.5.3.2 requires a fail action
+#: on.
+#:
+#: Every variant here is a two-port body. PIP PIC001 4.5.3.2(2) rules multi-port
+#: valves out of the letters -- "for multi-port automated valves, FL and FI shall
+#: be used where appropriate", with the comment that "FO and FC shall not be
+#: used; instead, arrows shall be used to show fail position flow paths" -- and
+#: this package draws no such arrows. ``three_way`` is a bare body with no
+#: operator, so the question does not arise today; an actuated multi-port variant
+#: added later must not simply be added to this set.
+FAIL_ACTUATED = frozenset({
+    "control", "pneumatic", "butterfly_pneumatic", "solenoid", "motor", "hydraulic",
+})
+
+
+def fail_marking(unit) -> str:
+    """The letters an actuated valve's fail position is drawn with, ``""`` if none.
+
+    One method, not two. **ANSI/ISA-5.1-2009 Table 5.4.4** offers Method A,
+    arrows or bars on the actuator stem, and Method B, the letters; **PIP PIC001
+    clause 4.5.3.2** picks between them -- *"Automated valve fail actions shall
+    be shown with text (FC/FO/FL/FI) in accordance with ISA-5.1"*, with the
+    comment that *"using stem arrows as outlined in ISA-5.1 is not
+    recommended"* -- and this follows PIP. See
+    :attr:`pandid.units.Valve.fail` for what the ISO alternative would cost.
+
+    The letters, unlike a darkened body, are the *whole* of the mark: nothing
+    about the symbol changes, so a valve keeps the drawing, the box and the
+    nozzles it had before it was given a fail position.
+    """
+    declared = getattr(unit, "fail", "") or ""
+    if not declared:
+        return ""
+    # The unit refuses an unactuated variant at construction; it can still be
+    # reached by assigning ``variant`` afterwards, and drawing nothing would be
+    # the silent failure -- a sheet issued with a trip valve that says where it
+    # goes on a power failure in the model and nowhere on the paper.
+    if getattr(unit, "variant", "") not in FAIL_ACTUATED:
+        raise ValueError(
+            f"{getattr(unit, 'name', unit.kind)}: declared fail={declared!r}, but "
+            f"variant {getattr(unit, 'variant', '')!r} has no actuator to lose its "
+            f"motive power. The variants that take a fail position are: "
+            f"{', '.join(sorted(FAIL_ACTUATED))}."
+        )
+    return FAIL_POSITIONS[declared]
+
+
 #: The ink a darkened body is filled with -- the colour the vendored valve
 #: artwork already strokes in, so the fill and the outline around it are one
 #: solid symbol rather than a black shape in a grey frame.

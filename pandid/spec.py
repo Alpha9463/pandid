@@ -267,6 +267,10 @@ _KIND_SIZES = {
 # a statement nothing draws.
 _KIND_TEXT = {
     "normal_position": ("Valve", "Fitting"),
+    # Where an actuated valve goes when its motive power is lost. A different
+    # question from ``normal_position`` and a narrower one: a blind has a
+    # position but no actuator, so only a valve is asked it.
+    "fail": ("Valve",),
     # Which way a tee's third connection runs. Nothing else has a third
     # connection to a run, so nothing else has the question to answer.
     "branch": ("Tee",),
@@ -924,6 +928,12 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
         # absence of one, so writing it down would be writing the default down.
         if unit.normal_position != "open":
             entry["normal_position"] = unit.normal_position
+        # Only a valve has an actuator, and only a declared fail position is
+        # written. There is no default to leave out here: an undeclared valve
+        # is one the sheet says nothing about, not one that fails somewhere in
+        # particular.
+        if getattr(unit, "fail", ""):
+            entry["fail"] = unit.fail
     elif isinstance(unit, _Boundary):
         # Only when set: a flag standing for one line leaving the sheet is the
         # ordinary case, and it is what a flag without the word already means.

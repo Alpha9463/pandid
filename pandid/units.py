@@ -557,11 +557,112 @@ class Valve(_NormallyPositioned):
     a sheet that draws a darkened valve owes its reader a legend entry saying
     what the fill means. :func:`pandid.document.legend` builds the box; nothing
     adds the entry for you.
+
+    ``fail`` is a **different question** and is described on :attr:`fail`.
     """
 
     kind = "valve"
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process"),
              ("actuator", "inlet", "signal")]
+
+    def __init__(self, name: str, variant: str = "default",
+                 width: float | None = None, height: float | None = None,
+                 label_pos: str | None = None, description: str = "",
+                 reference: str = "", normal_position: str = "open",
+                 fail: str = ""):
+        super().__init__(name, variant=variant, width=width, height=height,
+                         label_pos=label_pos, description=description,
+                         reference=reference, normal_position=normal_position)
+        self._fail = ""
+        self.fail = fail
+
+    @property
+    def fail(self) -> str:
+        """Where the valve goes when its actuating energy is lost, ``""`` unset.
+
+        **This is not** :attr:`~_NormallyPositioned.normal_position`, and the
+        two are the easiest pair on a P&ID to run together:
+
+        ===================  ===================================================
+        ``normal_position``  where the valve sits **with the plant running**.
+                             A fact about the operating case. Marked by
+                             darkening the body, or by ``NC`` beside it.
+        ``fail``             where the valve goes **when the air, the hydraulic
+                             supply or the power is lost**. A fact about the
+                             actuator. Marked by letters beside the body.
+        ===================  ===================================================
+
+        They are independent, and a valve may state either, both or neither. A
+        block valve held open in service and driven shut on a trip is
+        ``normal_position="open", fail="closed"``, and both marks are drawn.
+        Nothing infers one from the other, because nothing can: the two answer
+        different questions and a plant answers them separately.
+
+        Six positions, given as the plant's words and drawn as ISA's letters
+        (:data:`pandid.render.symbols.FAIL_POSITIONS`):
+
+        =====================  =========  ==========================================
+        ``fail``               drawn      ANSI/ISA-5.1-2009 Table 5.4.4
+        =====================  =========  ==========================================
+        ``"open"``             ``FO``     fail open
+        ``"closed"``           ``FC``     fail closed
+        ``"last"``             ``FL``     fail last, holding its position
+        ``"drift_open"``       ``FL/DO``  fail last, then drifting open
+        ``"drift_closed"``     ``FL/DC``  fail last, then drifting closed
+        ``"indeterminate"``    ``FI``     fail indeterminate (ISA-5.1-1984 §6.7)
+        =====================  =========  ==========================================
+
+        **Only an actuated valve may declare one.** A hand-operated valve has no
+        actuating energy to lose, and a relief valve and a regulator are worked
+        by the process itself, so there is no supply whose failure is the
+        question. Those raise rather than carrying a statement about equipment
+        they do not have; the variants that may are listed in
+        :data:`pandid.render.symbols.FAIL_ACTUATED`.
+
+        **Letters, not geometry.** ISA-5.1 Table 5.4.4 offers arrows on the
+        actuator stem as well, and ISO encodes the same fact a third way, as the
+        apex direction of ISO 15519-2 symbol 654 (A.3.50 fail close ``654V1A``,
+        A.3.52 fail open ``654V3A``) drawn on the stem between actuator and
+        body. **PIP PIC001 clause 4.5.3.2** is the source that chooses between
+        the two ISA methods and it chooses the letters, so this does too. See
+        the README's *Standards* section for the whole argument, which a sheet
+        cannot be silent about because ISO and ISA draw this one fact
+        differently.
+
+        **One position, not two.** A valve can behave one way on loss of signal
+        and another on loss of air, and this attribute holds a single answer.
+        PIP PIC001 4.5.3.2(3) is the rule for that case: *"valves with different
+        fail actions for loss of signal and for loss of motive power require an
+        explanatory note."* Declare the motive-power position here and add the
+        note; nothing writes it for you.
+        """
+        return self._fail
+
+    @fail.setter
+    def fail(self, value: str) -> None:
+        from pandid.render.symbols import FAIL_ACTUATED, FAIL_POSITIONS
+
+        if not value:
+            self._fail = ""
+            return
+        if value not in FAIL_POSITIONS:
+            raise ValueError(
+                f"{self.name}: fail is one of "
+                f"{', '.join(repr(p) for p in FAIL_POSITIONS)}, got {value!r}. "
+                f"It is where the valve goes when its actuating energy is lost. "
+                f"Where it sits in normal operation is normal_position."
+            )
+        if self.variant not in FAIL_ACTUATED:
+            raise ValueError(
+                f"{self.name}: variant {self.variant!r} has no actuator, so it has "
+                f"no fail position. ANSI/ISA-5.1 note 5.3.4(10) scopes the failure "
+                f"symbols to control valves and actuators: a handwheel loses no air, "
+                f"and a regulator or a relief valve is worked by the process itself. "
+                f"The variants that take one are: "
+                f"{', '.join(sorted(FAIL_ACTUATED))}. If you meant where the valve "
+                f"sits with the plant running, that is normal_position."
+            )
+        self._fail = value
 
     def _refuse_closed(self) -> None:
         from pandid.render.symbols import NC_FORBIDDEN
@@ -572,9 +673,8 @@ class Valve(_NormallyPositioned):
                 f"relief valves shall not be shown as NC, and variant "
                 f"{self.variant!r} draws one. A darkened control valve on an issued "
                 f"sheet reads as a block valve someone has closed. Say where the "
-                f"valve fails instead (the actuator's fail action), or put the "
-                f"normally closed mark on the hand valve that actually isolates "
-                f"the line."
+                f"valve fails instead (fail='closed'), or put the normally closed "
+                f"mark on the hand valve that actually isolates the line."
             )
 
 

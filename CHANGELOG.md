@@ -155,6 +155,63 @@ and is kept working.
     seat is a compact bead inside two conspicuously white triangles and a
     darkened body is black edge to edge, so the device marker and the position
     marker are never read for each other.
+- `Valve(fail=...)`, where an actuated valve goes when its motive power is lost,
+  drawn as the letters `FO`, `FC`, `FL`, `FL/DO`, `FL/DC` or `FI` beside the
+  valve. **This is not `normal_position`**, and the two are the easiest pair on a
+  P&ID to run together: normal position is where the valve sits with the plant
+  running and fail position is where it goes when the air, the hydraulic supply
+  or the power is lost. They are independent, and a valve may state either, both
+  or neither.
+  - The letters are **ANSI/ISA-5.1-2009 Table 5.4.4** *Control valve failure and
+    de-energized position indications*, whose Method B they are. The same table
+    offers Method A, arrows or bars on the actuator stem, and **ISO 15519-1
+    §11.3.1 c)** offers a third answer, the apex direction of symbol 654
+    (registered by ISO 15519-2 Annex A.3 as `654V1A` fail close, `654V3A` fail
+    open, `659A` fail freeze). **PIP PIC001 clause 4.5.3.2** is the clause that
+    chooses between the two ISA methods and it chooses the letters: "automated
+    valve fail actions shall be shown with text (FC/FO/FL/FI) in accordance with
+    ISA-5.1", commenting that "using stem arrows as outlined in ISA-5.1 is not
+    recommended". ISA-5.1's own note 5.3.4(1) requires the choice to be
+    documented, so it is recorded in the README's Standards section beside the
+    balloon set.
+  - **PIP PIC001 clause 4.2.4.6(1)** places them, and is followed whole:
+    "directly below the control valve in horizontal lines and ... to the right of
+    the control valve in vertical lines". The quarter turn moves these letters
+    where it does not move the `NC` abbreviation, and the two are the same
+    principle rather than a contradiction: `NC` sits in a *corner*, free
+    whichever way a valve is laid, while these sit against a *face*, and the face
+    below a valve on a riser is its outlet nozzle with the line running out of
+    it. Where the equipment tag is already on that side, the letters step past it
+    rather than over it.
+  - The six positions are named in the plant's words and drawn in ISA's letters,
+    the way `normal_position="closed"` is not spelled `"NC"`: `"open"` → `FO`,
+    `"closed"` → `FC`, `"last"` → `FL`, `"drift_open"` → `FL/DO`,
+    `"drift_closed"` → `FL/DC`, `"indeterminate"` → `FI`. `FL/DO` and `FL/DC` are
+    ISA-5.1-2009's additions; `FI` is ISA-5.1-1984 §6.7's fourth code, kept
+    because PIP PIC001 4.5.3.2 names it in its own list of four and because a
+    valve whose failed position genuinely cannot be predicted must be able to say
+    so rather than claim `FL`.
+  - **Only an actuated valve may declare one**, which ISA-5.1 note 5.3.4(10)
+    scopes as "all types of control valves and actuators": `control`,
+    `pneumatic`, `butterfly_pneumatic`, `solenoid`, `motor` and `hydraulic`.
+    Everything else raises. A hand-operated valve has an *operator* but no
+    actuator, so `manual` and `knife` lose no air; `regulator`, `relief` and
+    `psv` are worked by the process they sit in, so there is no supply whose
+    failure is the question; and a bare body is drawn with no operator at all.
+    This is the mirror image of the `NC` rule rather than the same list: a gate
+    valve may be shown normally closed but has no fail position, a control valve
+    has a fail position but may not be shown normally closed, a solenoid valve
+    takes both, and a relief valve takes neither.
+  - There is **no default**. `normal_position` defaults to `"open"` because open
+    is a real state that a convention declines to mark; an undeclared fail
+    position is a sheet that has not said, so the attribute is `""` and nothing
+    is drawn. The spec writes it only when declared and round-trips it both ways.
+  - The letters are the whole of the mark. No artwork changes, so declaring a
+    fail position cannot move a line already drawn, and a valve stating both its
+    positions states them in two places that cannot collide.
+  - A valve that behaves one way on loss of signal and another on loss of motive
+    power holds one answer here. PIP PIC001 4.5.3.2(3) requires an explanatory
+    note for that case, which is the author's to add.
 - `Fitting(variant="blind")`, the spectacle blind (figure-8 blind): two discs on
   a common tie, one bored through and one solid, bolted between a pair of
   flanges. Which disc is in the line is the whole of what the symbol says, so it
