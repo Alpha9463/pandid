@@ -603,6 +603,13 @@ class Tee(Unit):
     symbol here is the pipe itself and no more, and the run does not kink
     through it: ``inlet`` and ``outlet`` sit on one centreline.
 
+    Nothing at all includes the **arrowhead** a PFD draws at the end of every
+    process line. A head says the material arrives somewhere; a tee is a point
+    on a line where the line divides, and the run carries straight on past it,
+    so a line ending at one is drawn without a head and no filled triangle ever
+    lands in the middle of an unbroken run. A line *leaving* a tee is untouched:
+    it takes its head at its own destination.
+
     **It carries no tag.** A tee is a bulk piping item bought by the line and
     specified by the piping class, like the valves and reducers around it, and
     an issued sheet writes nothing against it. The flowsheet still needs a name

@@ -531,7 +531,7 @@
     <path d="M 781.7486338797814,229.75 L 781.7486338797814,275.0 L 1330,275.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 485.0,180.0 L 485.0,112.08" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 485.0,63.92 L 485.0,31.0 L 675.0,31.0 L 675.0,118.0 L 700.0,118.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 781.7486338797814,136.0 L 781.7486338797814,217.75" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 781.7486338797814,136.0 L 781.7486338797814,217.75" fill="none" stroke="black" stroke-width="2" />
     <path d="M 775.7486338797814,223.75 L 540.0,223.75" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 485.0,430.0 L 485.0,489.0 L 700.0655737704918,489.0 L 700.0655737704918,460.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 723.9344262295082,420.0 L 723.9344262295082,398.75 L 540.0,398.75" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
@@ -539,7 +539,7 @@
     <path d="M 1050.0,532.5 L 1120.0,532.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 600.0,720.0 L 600.0,745.0 L 1095.0,745.0 L 1095.0,552.5 L 1120.0,552.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1170.0,542.5 L 1250.0,542.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1370.0,542.5 L 1400.0,542.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1370.0,542.5 L 1400.0,542.5" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1412.0,542.5 L 1540,542.5" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1406.0,548.5 L 1406.0,715.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1516.0,725.0 L 1546,725.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
