@@ -482,7 +482,15 @@ def closed_marking(unit, registry=None) -> str:
     a spectacle blind's two states are two shapes, and the solid disc is the
     device's own convention rather than anything applied to it. ``"fill"``
     darkens the body (PIP PIC001 4.2.2.7), and ``"NC"`` is the abbreviation
-    written beside a valve whose body cannot carry the fill (4.2.2.8).
+    written beside a valve whose body cannot carry the fill.
+
+    The two markings come from two standards, because only one standard offers
+    each. No ISO or ISA document fills a valve body; PIP PIC001 4.2.2.7 is the
+    source for that, and 4.2.2.10's prohibition on control and relief valves
+    comes with it. The letters are the other way round: ISO 15519-1 §11.4.5 is
+    the clause that rules on them, prescribing ``NC``/``NO`` "above the symbol
+    and to the right" (Figure 28), so the letters and their placement are taken
+    from there rather than from PIP PIC001 4.2.2.8, which puts them below.
 
     All three are one decision made in one place, so the renderer cannot letter
     a valve the registry has already darkened, or darken one it is about to

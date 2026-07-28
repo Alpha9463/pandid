@@ -168,6 +168,15 @@ against one. What it follows, feature by feature:
   which is the issuing organisation and so is the `company` cell. `client` is
   not an ISO 7200 field; it is there because issued sheets carry one. ISO 7200's
   eighth mandatory field, **document type**, has no cell yet.
+- **Relative line weights** follow **ISO 15519-1 §6.2**, *"if two or more widths
+  of line are used, the ratio between any two widths shall be at least 2:1"*,
+  spent as **ISO 15519-2 Annex A.1** spends it: a pipeline (A.1.01) at twice the
+  weight of an instrument connection, control connection, pilot line or signal
+  line (A.1.02, A.1.03). Process piping and equipment outlines are the heavy
+  class; every signal kind, the instrument taps and the pneumatic cross-hatch
+  are the fine one. On A3 at 1:1 that is 0,53 mm against 0,26 mm, which is the
+  standard's 0,5 / 0,25 pair. See
+  [Signal lines](https://github.com/Alpha9463/pandid/blob/main/docs/api.md#signal-lines).
 - **Where a label sits on a pipe** follows **ISO 15519-1 §7.2.5**, which puts a
   connection's designation *"above the connection with horizontal connecting
   lines and to the left of vertical connecting lines"*. That is where `pandid`
@@ -179,9 +188,11 @@ against one. What it follows, feature by feature:
   long enough to carry it, which §7.2.5 words as a `should`, so that one is a
   divergence rather than a breach. See [Line numbers](#line-numbers).
 
-The largest remaining gap against ISO 10628-1 is §5.3.1 and §5.4.2: line widths
-and character heights are in drawing units and are scaled with the drawing, so
-no physical width or height in millimetres is controlled.
+The largest remaining gap against ISO 10628-1 is §5.3.1 and §5.4.2, and against
+ISO 15519-1 is §11.1.3 (*"when the size of a symbol is changed, the line width
+shall be unchanged"*): line widths and character heights are in drawing units
+and are scaled with the drawing, so the weights above hold their *ratio* at any
+sheet size but no physical width or height in millimetres is controlled.
 
 ## Documentation
 
@@ -264,17 +275,20 @@ fs.add(units.Valve("HV-302", variant="gate"))                            # isola
 ```
 
 The source is **PIP PIC001 clause 4.2.2.7**, "normally closed manual valves
-shall be shown using a darkened solid symbol". It is **not** an ISA-5.1 or
-ISO 10628 convention. ISA-5.1 says nothing about valve fill and leaves manual
-block valve depiction to the piping group, which is why ISA-5.1 clauses
-2.8.1(b)(1), 2.8.2 and 5.2.5 oblige a sheet drawing one to declare it on a
-legend. Add the entry yourself; nothing adds it for you.
+shall be shown using a darkened solid symbol". It is **not** an ISA-5.1,
+ISO 10628 or ISO 15519 convention. ISA-5.1 says nothing about valve fill and
+leaves manual block valve depiction to the piping group, which is why ISA-5.1
+clauses 2.8.1(b)(1), 2.8.2 and 5.2.5 oblige a sheet drawing one to declare it on
+a legend. **ISO 15519-1 §11.4.5** does rule on the question, and prescribes a
+different answer: letters, not fill. Add the legend entry yourself; nothing adds
+it for you.
 
 The rule is one-sided: normally open is not marked at all, so `"open"` is the
 default and draws exactly what leaving the argument out draws. A body that
 cannot carry the fill legibly (`butterfly`, `butterfly_pneumatic`, `check`,
-`knife`) writes the abbreviation `NC` beside the valve instead, per clause
-4.2.2.8. Clause 4.2.2.10 forbids showing a control or relief valve as NC, so
+`knife`) writes the abbreviation `NC` beside the valve instead, above it and to
+the right, which is the placement ISO 15519-1 §11.4.5 and its Figure 28 give.
+PIP PIC001 clause 4.2.2.10 forbids showing a control or relief valve as NC, so
 `control`, `pneumatic`, `regulator`, `relief` and `psv` raise rather than draw
 one. See the
 [API reference](https://github.com/Alpha9463/pandid/blob/main/docs/api.md#normally-closed-valves).

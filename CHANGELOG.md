@@ -96,9 +96,11 @@ and is kept working.
 - `Valve(normal_position="closed")`, the normally closed valve, drawn with its
   body darkened solid. The source is **PIP PIC001 clause 4.2.2.7**: "normally
   closed manual valves shall be shown using a darkened solid symbol". It is
-  **not** an ISA-5.1 or ISO 10628 convention. ISA-5.1 says nothing about valve
-  fill and hands manual block valve depiction to the piping group, and ISO 10628
-  has no such symbol. Because it is an extension rather than a standard symbol,
+  **not** an ISA-5.1, ISO 10628 or ISO 15519 convention. ISA-5.1 says nothing
+  about valve fill and hands manual block valve depiction to the piping group,
+  ISO 10628 has no such symbol, and ISO 15519-1 §11.4.5 rules on the question
+  and prescribes a different answer, letters rather than fill. Because it is an
+  extension rather than a standard symbol,
   ISA-5.1 clauses 2.8.1(b)(1), 2.8.2 and 5.2.5 oblige a sheet that draws one to
   declare it on a legend or cover sheet; `pandid.document.legend` builds the box
   and the entry is the author's to add.
@@ -118,11 +120,31 @@ and is kept working.
     `solenoid` and `hydraulic`. Where the device is named by something *inside*
     the outline, such as a butterfly's disc, a check valve's flow arrow or a
     knife gate's blade, a filled body would draw a darkened gate valve wearing
-    another name, so clause 4.2.2.8's abbreviation `NC` is written beside the
-    valve instead, directly below it on a horizontal line and to the right of it
-    on a vertical one. A variant added later takes the letters until it is put
-    on the list, which is the safe way round: a variant falling through both
-    would state its position nowhere.
+    another name, so the abbreviation `NC` is written beside the valve instead.
+    A variant added later takes the letters until it is put on the list, which
+    is the safe way round: a variant falling through both would state its
+    position nowhere.
+  - The letters follow **ISO 15519-1 §11.4.5**, which is the clause that rules
+    on them: the state "may be indicated by adding the letter symbol NC *Normal
+    closed* or NO *Normal open* **above the symbol and to the right**, as
+    indicated in Figure 28". They are placed in that corner whatever quarter
+    turn the valve is at, so a reader scans a sheet for one thing, and step past
+    the equipment tag rather than over it where it reaches into the corner
+    already. This is a deliberate split from PIP PIC001 4.2.2.8, which puts them
+    below a horizontal valve: each marking is taken from the standard that rules
+    on it, the fill from the only source that fills a body and the letters from
+    the only source that letters one. `NO` is not written, since the fill
+    convention the marking sits inside is one-sided.
+  - ISO 15519-1 §11.3.1 a) says a general purpose valve that does not indicate
+    its operational state "shall be regarded as closed", which is the inverse of
+    the North American default and sits awkwardly with §11.4.5 making the
+    marking optional. The standard does not reconcile them and neither does
+    `pandid`: read against §11.3.1's other sub-clauses, a) fixes a reference
+    state for drawing dependent symbols such as valve position contacts, not how
+    the plant runs. Both clauses agree on the operative point, that an unmarked
+    valve is not a reliable statement of position, so `"open"` draws nothing
+    extra because there is nothing agreed to draw rather than because unmarked
+    means open. Recorded in `docs/api.md` rather than resolved in code.
   - Clause 4.2.2.10, "control valves or relief valves shall not be shown as NC",
     is enforced rather than warned about. `control`, `pneumatic`, `regulator`,
     `relief` and `psv` raise, naming the clause, because a darkened control
@@ -344,6 +366,31 @@ and is kept working.
 - SVG output with no runtime dependencies. `Flowsheet.to_svg()` returns the
   string, `Flowsheet.render(path)` infers the format from the extension, and
   `.pdf`/`.png` go through the optional `cairosvg` backend.
+- **Two line weights, at the 2:1 ratio ISO 15519 requires.** A signal line is
+  drawn at half the weight of a process pipe, which is the cue a reader
+  separates the process from the instrumentation by before reading a single
+  dash pattern; drawn alike, a pneumatic line to an actuator came out as heavy
+  as the eight-inch pipe it crossed, and on `pneumatic` there is not even a dash
+  to fall back on. **ISO 15519-1 §6.2**: "if two or more widths of line are
+  used, the ratio between any two widths shall be at least 2:1", with Table 1
+  putting process-industry connections at 0,2 M and symbols at 0,1 M and
+  §11.1.2 fixing M = 2,5 mm. **ISO 15519-2 Annex A.1** spends that pair per line
+  type: A.1.01 pipeline **0,50**, A.1.02 instrument and control connection
+  **0,25**, A.1.03 pilot and signal line **0,25**.
+  - Heavy: process streams (`material`, `energy`), equipment and symbol
+    outlines, off-page connector flags. Fine: every signal kind, the instrument
+    tap and impulse lines, and the pneumatic cross-hatch marks. `energy` stays
+    heavy because it is a physical conduit and the fine class in both Annex A
+    entries is explicitly instrument, control and pilot.
+  - The cross-hatch drops from 1,5 to the weight of the line it marks. A
+    supplementary symbol on a connection is a graphical symbol, which
+    ISO 15519-1 §11.1.3 puts at 0,1 M, and a mark heavier than its own line
+    reads as the weightier of the two.
+  - A drawing unit is a CSS pixel, so on A3 at 1:1 the two land on 0,53 mm and
+    0,26 mm, which is the standard's own 0,5 / 0,25 pair. They are relative
+    weights inside one drawing and still scale with the sheet: the ratio holds
+    at any size, the millimetres do not. Holding a stroke at a physical width is
+    ISO 15519-1 §11.1.3's separate problem and is not addressed here.
 - `Flowsheet.show()` opens the drawing in a browser, and a flowsheet renders
   inline in Jupyter via `_repr_svg_`.
 - `diagram=` on `to_svg()` / `render()` (and `--diagram` on `pandid draw`) says

@@ -43,7 +43,7 @@
     <path d="M 875.0,273.7 L 955.0,273.7 L 955.0,280.0 L 980,280.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 725.0,210.0 L 725.0,203.0 L 725.1438848920864,203.0 L 725.1438848920864,178.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 749.8920863309353,153.50847457627117 L 900,153.50847457627117" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 725.0,443.0 L 725.0,390.0 L 552.2,390.0 L 552.2,287.5" fill="none" stroke="black" stroke-width="2" stroke-dasharray="7,4" />
+    <path d="M 725.0,443.0 L 725.0,390.0 L 552.2,390.0 L 552.2,287.5" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <rect x="128.3" y="283.0" width="18.4" height="13.0" fill="white" />
     <text x="137.5" y="289.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S1</text>
     <rect x="368.3" y="263.0" width="18.4" height="13.0" fill="white" />

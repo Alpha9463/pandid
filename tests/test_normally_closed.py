@@ -1,9 +1,10 @@
 """Devices declared in a normal position, and what each one draws for it.
 
-Normally closed valves: PIP PIC001 4.2.2.7's darkened body, and 4.2.2.8's
-``NC`` abbreviation for a body that cannot carry it. Not an ISA-5.1 convention
--- ISA-5.1 says nothing about valve fill -- so the drawn behaviour is pinned
-here rather than assumed from any standard the rest of the package follows.
+Normally closed valves: PIP PIC001 4.2.2.7's darkened body, and ISO 15519-1
+§11.4.5's ``NC`` abbreviation for a body that cannot carry it. Two sources
+because only one standard offers each -- no ISO or ISA document fills a valve
+body, and ISO 15519-1 §11.4.5 is the clause that rules on the letters -- so the
+drawn behaviour is pinned here rather than assumed from any one of them.
 
 Spectacle blinds: the same ``normal_position``, drawn a different way. A blind
 is two discs and the sheet says which is in the line by filling it, so the two
@@ -154,7 +155,7 @@ def test_a_control_valve_may_still_be_declared_open():
 
 @pytest.mark.parametrize("variant", ["butterfly", "butterfly_pneumatic", "check", "knife"])
 def test_a_body_that_cannot_be_darkened_says_so_in_letters(variant):
-    """PIP PIC001 4.2.2.8. The failure this guards against is silence: a valve
+    """ISO 15519-1 §11.4.5. The failure this guards against is silence: a valve
     declared closed whose symbol cannot carry the fill would otherwise draw
     exactly the open valve and say nothing at all."""
     assert variant not in NC_DARKENS
@@ -165,10 +166,12 @@ def test_a_body_that_cannot_be_darkened_says_so_in_letters(variant):
     assert ">NC</text>" in svg
 
 
-def test_the_letters_go_below_a_horizontal_valve_and_right_of_a_vertical_one():
-    """PIP PIC001 4.2.2.8 places the abbreviation directly below the valve on a
-    horizontal line and to the right of it on a vertical one. An inline symbol
-    is drawn along its run, so the quarter turn is which line it is in."""
+def test_the_letters_go_above_the_valve_and_to_the_right():
+    """ISO 15519-1 §11.4.5 puts the abbreviation "above the symbol and to the
+    right", as Figure 28 draws it. The corner is fixed rather than chosen from
+    the valve's quarter turn, so a valve in a vertical run is marked in the same
+    corner as one in a horizontal run and a reader scans a sheet for one thing.
+    """
     from pandid.render.svg import SvgRenderer
 
     flat = units.Valve("HV-1", variant="butterfly", normal_position="closed")
@@ -184,28 +187,26 @@ def test_the_letters_go_below_a_horizontal_valve_and_right_of_a_vertical_one():
     fs.layout()
 
     renderer = SvgRenderer()
-    for valve, side in ((flat, "bottom"), (upright, "right")):
+    for valve in (flat, upright):
         frame = valve.frame
-        item = renderer._nc_label_item(
-            valve, frame, frame.x, frame.y, frame.w, frame.h, int(frame.orientation or 0)
+        lx, ly, anchor, _, lpos, text = renderer._nc_label_item(
+            valve, frame, frame.x, frame.y, frame.w, frame.h
         )
-        assert item[4] == side
-        lx, ly = item[0], item[1]
-        if side == "bottom":
-            assert ly > frame.y + frame.h
-            assert abs(lx - (frame.x + frame.w / 2)) < 1e-9
-        else:
-            assert lx > frame.x + frame.w
-            assert abs(ly - (frame.y + frame.h / 2)) < 1e-9
+        assert (lpos, text, anchor) == ("top_right", "NC", "start")
+        assert ly < frame.y, "above the symbol"
+        assert lx >= frame.x + frame.w, "and to the right"
 
 
-def test_the_letters_step_past_a_tag_already_on_that_side():
+def test_the_letters_step_past_a_tag_already_in_that_corner():
     """Both are drawn on opaque halos in one final pass, so an abbreviation
-    landing on the tag would simply erase it."""
-    from pandid.render.svg import SvgRenderer
+    landing on the tag would simply erase it. A valve's tag sits centred above
+    it by default, and a valve body is narrower than its own tag, so the two
+    reach for the same corner on an ordinary sheet rather than a contrived one.
+    """
+    from pandid.render.svg import SvgRenderer, _unit_label_box
 
-    valve = units.Valve("HV-1", variant="butterfly", normal_position="closed", label_pos="bottom")
-    fs = Flowsheet("nc under a tag")
+    valve = units.Valve("HV-101", variant="butterfly", normal_position="closed")
+    fs = Flowsheet("nc beside a tag")
     feed = fs.add(units.Feed("FEED"))
     fs.add(valve)
     product = fs.add(units.Product("PROD"))
@@ -215,9 +216,12 @@ def test_the_letters_step_past_a_tag_already_on_that_side():
 
     renderer = SvgRenderer()
     frame = valve.frame
-    tag = renderer._unit_label_item(valve, frame, frame.x, frame.y, frame.w, frame.h, "HV-1")
-    nc = renderer._nc_label_item(valve, frame, frame.x, frame.y, frame.w, frame.h, 0)
-    assert nc[1] > tag[1], "the abbreviation clears the tag it would have landed on"
+    args = (valve, frame, frame.x, frame.y, frame.w, frame.h)
+    tag = _unit_label_box(renderer._unit_label_item(*args, "HV-101"))
+    assert tag[2] > frame.x + frame.w, "the tag really does reach into that corner"
+    nc = _unit_label_box(renderer._nc_label_item(*args))
+    assert nc[0] >= tag[2], "the abbreviation clears the tag it would have landed on"
+    assert nc[1] < frame.y, "and is still above the valve"
 
 
 # ------------------------------------------------------- the spectacle blind

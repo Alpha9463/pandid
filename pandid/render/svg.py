@@ -26,6 +26,29 @@ _BARRED_BALLOONS = {"panel", "aux"}
 # sloping sides leave room for it rather than in the middle of the box.
 _DIAMOND_BALLOONS = {"sis", "logic", "interlock"}
 
+# --- line weights ------------------------------------------------------------
+# ISO 15519 draws a process diagram in two weights, and the ratio between them
+# is what tells a reader the process from the instrumentation at a glance.
+#
+# ISO 15519-1 §6.2 Table 1 gives the process industry field symbols 0,1 M and
+# connections 0,2 M, with 0,4 M available where §12.2 wants a significant
+# connection emphasised, and M = 2,5 mm (§11.1.2). That is the 0,25 / 0,5 / 1,0
+# ladder ISO 10628-1 §5.3.1 uses: one ladder, of which ISO 15519 spends two
+# rungs by default and holds the third in reserve. §6.2 then makes the spacing
+# a requirement rather than a habit: "If two or more widths of line are used,
+# the ratio between any two widths shall be at least 2:1."
+#
+# ISO 15519-2 Annex A.1 spends that pair per line type: A.1.01 pipeline 0,50;
+# A.1.02 instrument connection and control connection 0,25; A.1.03 pilot line
+# and signal line 0,25.
+#
+# A drawing unit here is a CSS pixel, 25,4/96 mm, so 2 and 1 land on 0,53 mm and
+# 0,26 mm, which is the standard's own pair at exactly the 2:1 it requires.
+# They are relative weights within one drawing and still scale with the sheet;
+# holding them at a physical width is ISO 15519-1 §11.1.3's separate problem.
+_PROCESS_STROKE = 2
+_SIGNAL_STROKE = 1
+
 # --- stream-label placement -------------------------------------------------
 # A stream label is written on an opaque halo, so it can only sit *on* the pipe
 # where the run is long enough to leave pipe showing at each end: the 12px
@@ -983,10 +1006,10 @@ class SvgRenderer:
                     label_items.append(
                         self._unit_label_item(u, f, x, y, u_width, u_height, safe_name))
                 # A body that cannot carry the darkening says so in letters
-                # instead; see PIP PIC001 4.2.2.8 and _nc_label_item.
+                # instead; see ISO 15519-1 §11.4.5 and _nc_label_item.
                 if closed_marking(u, self.registry) == "NC":
                     label_items.append(
-                        self._nc_label_item(u, f, x, y, u_width, u_height, rot))
+                        self._nc_label_item(u, f, x, y, u_width, u_height))
         lines.append('  </g>')
         return lines
 
@@ -997,6 +1020,10 @@ class SvgRenderer:
         (an interlock under its controller) is an internal loop connection and
         is drawn dashed. Nothing is drawn where a stream already joins the two,
         or where the element sits directly on the line (``offset=0``).
+
+        Fine is the same fine as a signal stream: ISO 15519-2 Annex A.1.02 puts
+        an instrument connection on the 0,25 rung, alongside the signal line and
+        half the pipeline it taps. See :data:`_SIGNAL_STROKE`.
         """
         from pandid.layout.attach import is_attached
 
@@ -1015,7 +1042,7 @@ class SvgRenderer:
                 continue
             dash = ' stroke-dasharray="5,4"' if getattr(host, "kind", "") == "instrument" else ""
             out.append(f'    <line x1="{_num(tx)}" y1="{_num(ty)}" x2="{_num(cx)}" '
-                       f'y2="{_num(cy)}" stroke="black" stroke-width="1"{dash} />')
+                       f'y2="{_num(cy)}" stroke="black" stroke-width="{_SIGNAL_STROKE}"{dash} />')
         return ['  <g id="instrument_taps">'] + out + ['  </g>'] if out else []
 
     def _draw_boundary(self, u, f, x, y, safe_name):
@@ -1104,6 +1131,11 @@ class SvgRenderer:
             return x + u_width + 10, y + u_height / 2, "start", "middle"
         if lpos == "center":
             return x + u_width / 2, y + u_height / 2, "middle", "middle"
+        if lpos == "top_right":
+            # Above the symbol *and to the right*: the text starts at the box's
+            # right edge on the same baseline a top label sets on. Only the NC
+            # marking is placed here; see :meth:`_nc_label_item`.
+            return x + u_width, y - 10, "start", "baseline"
         return x + u_width / 2, y - 10, "middle", "baseline"  # top
 
     def _unit_label_item(self, u, f, x, y, u_width, u_height, safe_name):
@@ -1112,30 +1144,42 @@ class SvgRenderer:
         lpos = f.label_pos or "top"
         return (*self._label_place(lpos, x, y, u_width, u_height), lpos, safe_name)
 
-    def _nc_label_item(self, u, f, x, y, u_width, u_height, rot):
+    def _nc_label_item(self, u, f, x, y, u_width, u_height):
         """The ``NC`` abbreviation, for a valve whose body cannot be darkened.
 
-        PIP PIC001 4.2.2.8 places it directly below the valve on a horizontal
-        line and to the right of it on a vertical one. Which of the two the
-        valve is in is the quarter turn its placement carries: an inline symbol
-        is drawn along its run, so a valve turned 90 or 270 is in a vertical
-        line and one left square is in a horizontal one.
+        **ISO 15519-1 §11.4.5** governs the letters: the state "may be indicated
+        by adding the letter symbol NC *Normal closed* or NO *Normal open*
+        **above the symbol and to the right**, as indicated in Figure 28". The
+        figure draws it on an unfilled bowtie with the letters starting at about
+        the valve's right-hand edge, clear above the run.
 
-        Where the equipment tag already sits on that side, the abbreviation
-        steps past it rather than over it. Both are drawn on opaque halos in the
-        same final pass, so the second one down would otherwise erase the first.
+        The corner is fixed, not chosen from the valve's quarter turn. Reading
+        the marking always in the same place is what lets someone scan a sheet
+        for closed valves, and the upper right is the corner an equipment tag is
+        least likely to be in already: the default tag sits centred *above*.
+
+        This departs from PIP PIC001 4.2.2.8, which puts the letters below a
+        horizontal valve and to the right of a vertical one, and which is where
+        the darkened body of 4.2.2.7 still comes from. The two conventions are
+        answering different questions and are taken from different sources on
+        purpose: PIP is the only standard that fills a valve body, and ISO
+        15519-1 is the only one that letters it. See
+        :func:`pandid.render.symbols.closed_marking`.
+
+        Where the equipment tag already reaches into that corner, the
+        abbreviation steps past it rather than over it. Both are drawn on opaque
+        halos in the same final pass, so the second one down would otherwise
+        erase the first.
         """
-        lpos = "right" if rot in (90, 270) else "bottom"
-        lx, ly, anchor, baseline = self._label_place(lpos, x, y, u_width, u_height)
-        if (f.label_pos or "top") == lpos:
-            tag = _unit_label_box(self._unit_label_item(
-                u, f, x, y, u_width, u_height, html.escape(u.tag)))
-            if tag is not None:
-                if lpos == "bottom":
-                    ly = tag[3] + 8
-                else:
-                    lx = tag[2] + 6
-        return (lx, ly, anchor, baseline, lpos, "NC")
+        item = (*self._label_place("top_right", x, y, u_width, u_height), "top_right", "NC")
+        tag = _unit_label_box(self._unit_label_item(
+            u, f, x, y, u_width, u_height, html.escape(u.tag)))
+        nc = _unit_label_box(item)
+        if tag is not None and nc is not None and (
+                tag[0] < nc[2] and tag[2] > nc[0] and tag[1] < nc[3] and tag[3] > nc[1]):
+            lx, ly, anchor, baseline, lpos, text = item
+            item = (lx + tag[2] - nc[0] + 6, ly, anchor, baseline, lpos, text)
+        return item
 
     def _draw_unit_labels(self, items):
         """Final pass: equipment tags on white halos, over every stream line.
@@ -1265,9 +1309,12 @@ class SvgRenderer:
                 label_items.append((longest_seg, s.name, color))
 
             marker = f' marker-end="url(#{marker_id})"' if self._tipped(s, arrows) else ""
+            # A signal is drawn at half the weight of the pipe it reads, per
+            # ISO 15519-2 Annex A.1.02/A.1.03 against A.1.01. See _SIGNAL_STROKE.
+            width = _SIGNAL_STROKE if is_signal else _PROCESS_STROKE
             lines.append(
                 f'    <path d="{d_str}" fill="none" '
-                f'stroke="{color}" stroke-width="2"{dash}{marker} />'
+                f'stroke="{color}" stroke-width="{width}"{dash}{marker} />'
             )
 
             if s.kind == "pneumatic":
@@ -1281,6 +1328,13 @@ class SvgRenderer:
                     # right beneath it — with none at all, reading as plain pipe.
                     # Any segment with room for a mark gets at least one; longer
                     # segments keep the 45px spacing.
+                    #
+                    # The mark is drawn at the weight of the line it marks. A
+                    # supplementary symbol on a connection is a graphical symbol
+                    # (ISO 15519-2 Annex A.1.09, pneumatic type 433A), and
+                    # ISO 15519-1 §11.1.3 puts a graphical symbol at 0,1 M, the
+                    # same rung the signal line itself sits on. A hatch heavier
+                    # than its own line would read as the weightier of the two.
                     n = int(seglen // 45) or (1 if seglen >= 16 else 0)
                     horiz = abs(py1 - py2) < 0.1
                     for k in range(1, n + 1):
@@ -1289,10 +1343,10 @@ class SvgRenderer:
                         for off in (-2.5, 1.5):
                             if horiz:
                                 lines.append(f'    <line x1="{mx+off-3:.1f}" y1="{my+5:.1f}" '
-                                             f'x2="{mx+off+3:.1f}" y2="{my-5:.1f}" stroke="{color}" stroke-width="1.5" />')
+                                             f'x2="{mx+off+3:.1f}" y2="{my-5:.1f}" stroke="{color}" stroke-width="{_SIGNAL_STROKE}" />')
                             else:
                                 lines.append(f'    <line x1="{mx-5:.1f}" y1="{my+off-3:.1f}" '
-                                             f'x2="{mx+5:.1f}" y2="{my+off+3:.1f}" stroke="{color}" stroke-width="1.5" />')
+                                             f'x2="{mx+5:.1f}" y2="{my+off+3:.1f}" stroke="{color}" stroke-width="{_SIGNAL_STROKE}" />')
 
         # Final pass: stream-number labels, each on a white halo so it reads
         # cleanly over any line that crosses beneath it.
