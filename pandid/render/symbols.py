@@ -12,8 +12,8 @@ Sources:
   stencil XML by ``scripts/vendor_symbols.py`` into ``_vendored_symbols.py`` and
   registered last (overriding the hand-drawn defaults of the same kind). See the
   repo ``NOTICE`` for attribution.
-- **Hand-drawn primitives** — Feed/Product boundary markers and the
-  variable-port Mixer and Splitter.
+- **Hand-drawn primitives** — Feed/Product boundary markers, the variable-port
+  Mixer and Splitter, and the pipe tee.
 - **Built to size (draw.io-derived, Apache-2.0)** — the belt conveyor. Adapted
   from a stencil but drawn here rather than generated, because a fixed path
   cannot stretch; see :func:`conveyor_symbol` and the repo ``NOTICE``.
@@ -654,8 +654,9 @@ class SymbolRegistry:
         # the bottom of this method registers over every one of them, so none is
         # what a sheet draws today. They are kept as the shape of last resort if
         # a stencil is ever dropped, and their geometry notes describe them, not
-        # the artwork in use. The Mixer and the Splitter are the exceptions;
-        # there is no stencil for either, so those two are drawn as written.
+        # the artwork in use. The Mixer, the Splitter and the pipe tee are the
+        # exceptions; there is no stencil for any of the three, so those are
+        # drawn as written.
 
         # ====================================================================
         # Centrifugal Pump — circle with discharge nozzle at top, suction on
@@ -845,6 +846,45 @@ class SymbolRegistry:
         # other length gets its own symbol from for_unit(); see conveyor_symbol.
         # ====================================================================
         self.register("conveyor", conveyor_symbol())
+
+        # ====================================================================
+        # Pipe tee — the junction where a line branches.
+        #
+        # Drawn as the pipe and nothing else. On the reference sheet P&ID-301
+        # the CV-303 station carries a bypass over the top and two drain legs
+        # below, and all four junctions are three lines meeting: the main run is
+        # one unbroken stroke from x=471.34 to x=703.78 at y=233.29, the bypass
+        # leaves it at (569.14, 233.29) and returns at (676.85, 233.29), the two
+        # drains drop from (598.90, 233.29) and (648.51, 233.29), and there is
+        # no dot, circle or fitting symbol at any of them -- the sheet contains
+        # no filled shape smaller than 6 pt anywhere. Every one of those strokes
+        # is 0.75 pt, the same weight as the run, so the branch is pipe and is
+        # drawn as pipe.
+        #
+        # So: the run straight across at mid-height, and the branch stub from
+        # the centre down to the south face. The two run nozzles share one
+        # centreline, which is what keeps the main run from kinking through the
+        # junction. The box is small because a tee has no size -- it is a point
+        # on the line -- and only large enough that the branch stub reads as a
+        # spur at the 2-unit stroke the process lines are drawn in.
+        #
+        # An original primitive rather than a stencil: the draw.io P&ID set
+        # draws no bare junction, and two line segments are not artwork anyone
+        # holds a copyright in. See NOTICE section 1.
+        # ====================================================================
+        self.register("tee", Symbol(
+            svg='<g id="sym_tee">'
+                '<path d="M 0 6 L 12 6 M 6 6 L 6 12" fill="none" stroke="black" '
+                'stroke-width="2"/>'
+                '</g>',
+            width=12.0, height=12.0,
+            ports={"inlet": (0.0, 6.0), "outlet": (12.0, 6.0), "branch": (6.0, 12.0)},
+            # A tee is labelled nowhere, so it has no side to keep clear for a
+            # tag. Saying "center" is what stops the layout engine reserving one
+            # and the router standing its lines off to clear a label that is
+            # never drawn.
+            label_pos="center",
+        ))
 
         # ====================================================================
         # Splitter — Standard triangle with point on left, flat on right

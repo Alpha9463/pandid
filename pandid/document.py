@@ -168,8 +168,8 @@ class TableBox:
 # it. Everything else on a flowsheet is one of three other things, and none of
 # them is scheduled:
 #
-# * bulk items — valves, fittings, reducers, vents and funnels — which are
-#   bought by the line and specified by the piping class, not item by item;
+# * bulk items — valves, fittings, reducers, tees, vents and funnels — which
+#   are bought by the line and specified by the piping class, not item by item;
 # * junctions — a mixer or splitter is a branch in the piping drawn as a
 #   triangle, so scheduling one puts plant that does not exist on the sheet;
 # * sheet boundaries and instruments, which are not equipment at all.
@@ -209,6 +209,7 @@ _KIND_LABELS = {
     "separator": "Separator",
     "splitter": "Splitter",
     "tank": "Tank",
+    "tee": "Pipe Tee",
     "turbine": "Turbine",
     "valve": "Valve",
     "vent": "Vent",

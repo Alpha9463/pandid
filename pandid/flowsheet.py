@@ -151,7 +151,9 @@ class Flowsheet:
         (``Feed``/``Product`` with ``header=True``) is one service drawn at
         every place it is tapped. A sheet that cannot draw the square four
         times cannot draw the interlock, and one that cannot draw ``CWSH``
-        twice cannot show cooling water reaching two coolers.
+        twice cannot show cooling water reaching two coolers. A
+        :class:`~pandid.units.Tee` repeats for the opposite reason: it draws no
+        tag at all, so there is nothing on the sheet for two of them to confuse.
 
         Such a repeat is accepted and given a name of its own — ``I-1``,
         ``I-1 (2)`` — so the unit that a stream, a spec entry or an equipment
@@ -172,14 +174,20 @@ class Flowsheet:
                 f"acts, and a utility header flag (a Feed or Product with "
                 f"header=True), one service drawn at each place it is tapped. Both "
                 f"drawings have to be of the same thing, so they must agree on the "
-                f"class and the variant, and two flags on the off-page reference."
+                f"class and the variant, and two flags on the off-page reference. "
+                f"A Tee repeats against another Tee, having no tag to clash with, "
+                f"but the name is still what a stream and a spec entry reach it by, "
+                f"so it may not take one that already means something else."
             )
         if unit.flowsheet is not None:
             raise ValueError(
                 f"{unit!r} is already on flowsheet {unit.flowsheet.name!r}"
             )
         if clash is not None:
-            unit.name = self._repeat_name(unit.tag)
+            # The tag is what repeats and so what the fresh name is derived
+            # from. A tee draws none, so its name stands in: it is already the
+            # only handle anything has on that junction.
+            unit.name = self._repeat_name(unit.tag or unit.name)
         unit.flowsheet = self
         self.units.append(unit)
         return unit
@@ -387,10 +395,13 @@ class Flowsheet:
         Runs on every :meth:`connect` and again before rendering, so the name on
         the stream object a caller holds is the name that gets drawn.
 
-        Valves, reducers and fittings are inline: a stream keeps its number as
-        it passes through them (set ``unit.significant = True`` to break the
-        number at an important valve). Explicitly-named streams keep their name
-        and lend it to their whole inline group.
+        Valves, reducers, fittings and tees are inline: a stream keeps its
+        number as it passes through them (set ``unit.significant = True`` to
+        break the number at an important valve). Explicitly-named streams keep
+        their name and lend it to their whole inline group. What carries the
+        number through is the ``inlet`` to ``outlet`` run, so a tee's *branch*
+        takes a number of its own — the bypass leg or drain off a station is its
+        own line, and the run it leaves carries straight on.
 
         A line carrying line-number components is named by its line number
         rather than its stream number, on the same terms: the first segment of a
@@ -403,7 +414,7 @@ class Flowsheet:
         drawn, follow, and unlabelled signal lines come last. One sequence
         covers all three so no two streams answer to the same name.
         """
-        _INLINE = {"valve", "reducer", "fitting"}
+        _INLINE = {"valve", "reducer", "fitting", "tee"}
         material = [s for s in self.streams if s.kind == "material"]
         pos = {id(s): i for i, s in enumerate(material)}  # Stream is unhashable
         parent = list(range(len(material)))
@@ -414,14 +425,19 @@ class Flowsheet:
                 i = parent[i]
             return i
 
+        # The run through an inline device is its ``inlet`` to its ``outlet``,
+        # named rather than counted: a tee has a third process connection and
+        # counting cannot say which two of the three are the run. The two names
+        # are the whole of what every inline kind has in common, and on a valve,
+        # a reducer or a fitting they are its only process nozzles, so this is
+        # the same joining those kinds already had.
         for u in self.units:
             if u.kind in _INLINE and not getattr(u, "significant", False):
-                ins = [pos[id(p.stream)] for p in u.ports.values()
-                       if p.direction == "inlet" and p.stream is not None and id(p.stream) in pos]
-                outs = [pos[id(p.stream)] for p in u.ports.values()
-                        if p.direction == "outlet" and p.stream is not None and id(p.stream) in pos]
-                if len(ins) == 1 and len(outs) == 1:
-                    parent[find(ins[0])] = find(outs[0])
+                run = [u.ports.get("inlet"), u.ports.get("outlet")]
+                ends = [pos[id(p.stream)] for p in run
+                        if p is not None and p.stream is not None and id(p.stream) in pos]
+                if len(ends) == 2:
+                    parent[find(ends[0])] = find(ends[1])
 
         # An explicit name on any segment names its whole group.
         explicit: dict = {}

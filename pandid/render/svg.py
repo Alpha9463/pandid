@@ -972,8 +972,12 @@ class SvgRenderer:
             if u.kind == "instrument":
                 out.extend(self._draw_instrument_tag(u, x, y, u_width, u_height))
             else:
-                label_items.append(
-                    self._unit_label_item(u, f, x, y, u_width, u_height, safe_name))
+                # A symbol that carries no tag is labelled nowhere. Only the
+                # pipe tee is such a symbol today: it is bare pipe, and an
+                # issued sheet writes nothing against a junction.
+                if u.tag:
+                    label_items.append(
+                        self._unit_label_item(u, f, x, y, u_width, u_height, safe_name))
                 # A body that cannot carry the darkening says so in letters
                 # instead; see PIP PIC001 4.2.2.8 and _nc_label_item.
                 if closed_marking(u, self.registry) == "NC":

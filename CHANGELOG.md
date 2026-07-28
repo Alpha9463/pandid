@@ -49,9 +49,9 @@ and is kept working.
   on. No other port moved.
 - Typed `Unit` classes declaring named ports: `Feed`, `Product`, `Pump`,
   `Compressor`, `Blower`, `Valve`, `Vessel`, `Tank`, `HeatExchanger`, `Heater`,
-  `Cooler`, `Reactor`, `Separator`, `Column`, `Mixer`, `Splitter`, `Reducer`,
-  `Fitting`, `Ejector`, `Vent`, `Funnel`, `Furnace`, `Turbine`, `Filter`,
-  `Dryer`, `Conveyor` and `Instrument`. Ports are reachable both as
+  `Cooler`, `Reactor`, `Separator`, `Column`, `Mixer`, `Splitter`, `Tee`,
+  `Reducer`, `Fitting`, `Ejector`, `Vent`, `Funnel`, `Furnace`, `Turbine`,
+  `Filter`, `Dryer`, `Conveyor` and `Instrument`. Ports are reachable both as
   `unit.ports[name]` and as attributes (`pump.suction`), and a typo raises an
   error naming the real ports.
 - Custom equipment. A `Unit` subclass declaring its own `kind` and `PORTS`, with
@@ -170,6 +170,41 @@ and is kept working.
 - `Column.reflux_in` / `Column.boilup_in` return nozzles and `Reactor.vent`, so
   an overhead or reboiler loop closes on the column instead of being modelled as
   a recycle to some upstream unit.
+- `Tee`, the pipe tee, so a line can branch. A bypass leg around a control
+  valve, a drain off the underside of a run, a vent off the top, a sample point
+  and a PSV takeoff are all one line splitting in two, and none of them could be
+  drawn: `Mixer` and `Splitter` were the only branch primitives, and both are
+  plant — a tagged unit drawn as a solid triangle and scheduled on the equipment
+  list. A bypass drawn with one puts equipment on the sheet that the plant does
+  not contain.
+
+  A tee is not that. It is a bulk piping item, bought by the line and specified
+  by the piping class like the valves and reducers around it, and an issued
+  sheet draws **nothing at all** where one sits: three lines meeting, the run
+  passing straight through and the branch leaving it at a right angle, at the
+  same line weight. So the symbol is those two segments and no more, its two run
+  nozzles share one centreline — which is what stops the run kinking through the
+  junction, as it did through a splitter's fixed port pitch — and it draws no
+  tag. Nothing reaches the equipment list either: `"tee"` is not major
+  equipment, and `include=` still schedules one by name where a piping schedule
+  wants it.
+
+  The flowsheet needs a handle even where the drawing has no tag, so the name
+  defaults to `TEE` and any two tees may share it, `Tee.repeats()` saying so on
+  the same footing as a repeated interlock square or a tapped utility header;
+  `add()` hands out `TEE (2)`, `TEE (3)`. It may not take a name that already
+  means something else, since that handle is what a stream and a spec entry
+  reach it by.
+
+  `branch="outlet"` (the default) takes flow off the run and `branch="inlet"`
+  returns it, which is the two ends of a bypass. The branch leaves the south
+  face as drawn, so `pin(mirrored="y")` sends it north and `pin(orientation=90)`
+  / `270` stand the run on end with the branch west or east.
+
+  The run carries one stream or line number straight through a tee, as it does
+  through a valve or a reducer, and each branch takes a number of its own;
+  `significant` breaks the run's number at the junction where the piping class
+  changes there.
 - `HeatExchanger(variant="kettle").bottoms` is the liquid draw at the weir end
   of a kettle reboiler. A tower's bottoms product physically leaves from there,
   so it no longer has to be taken off a splitter in the sump line, which puts a

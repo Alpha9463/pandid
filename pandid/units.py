@@ -24,7 +24,7 @@ __all__ = [
     "Unit",
     "Feed", "Product", "Pump", "Compressor", "Blower", "Valve", "Vessel", "Tank",
     "HeatExchanger", "Heater", "Cooler", "Reactor", "Separator", "Column",
-    "Mixer", "Splitter", "Reducer", "Fitting", "Ejector", "Vent", "Funnel",
+    "Mixer", "Splitter", "Tee", "Reducer", "Fitting", "Ejector", "Vent", "Funnel",
     "Furnace", "Turbine", "Filter", "Dryer", "Conveyor", "Instrument",
 ]
 
@@ -131,9 +131,10 @@ class Unit:
         False here, and so for every piece of equipment: two units answering to
         ``P-101`` are two pumps sharing a tag, which is a mistake in the
         drawing rather than a convention of it. Overridden by the two symbols
-        that stand for one thing shown in several places: the interlock square
+        that stand for one thing shown in several places — the interlock square
         (:meth:`Instrument.repeats`) and the utility header flag
-        (:meth:`_Boundary.repeats`).
+        (:meth:`_Boundary.repeats`) — and by the one that stands for nothing at
+        all, the pipe tee (:meth:`Tee.repeats`), which draws no tag to clash.
         """
         return False
 
@@ -582,6 +583,107 @@ class Reducer(Unit):
 
     kind = "reducer"
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+
+
+class Tee(Unit):
+    """Pipe tee: the junction where a line branches.
+
+    A bypass leg around a control valve, a drain off the underside of a run, a
+    vent off the top, a sample point, a PSV takeoff — every one of them is a
+    line splitting in two, and this is the fitting that splits it. It is not a
+    unit operation: a :class:`Mixer` or a :class:`Splitter` is a piece of plant
+    drawn as a triangle and scheduled as one, and using either for a branch puts
+    equipment on the sheet that the plant does not contain.
+
+    A tee is drawn as **nothing at all**: three lines meeting, the run passing
+    straight through unbroken and the branch leaving it at a right angle. That
+    is what the reference sheets draw — P&ID-301's control valve stations put a
+    bypass over the top and two drains below every station, and not one of the
+    four junctions carries a dot, a circle or a symbol of any kind. So the
+    symbol here is the pipe itself and no more, and the run does not kink
+    through it: ``inlet`` and ``outlet`` sit on one centreline.
+
+    **It carries no tag.** A tee is a bulk piping item bought by the line and
+    specified by the piping class, like the valves and reducers around it, and
+    an issued sheet writes nothing against it. The flowsheet still needs a name
+    to address one by, so ``name`` defaults to :data:`DEFAULT_NAME` and any two
+    tees may share it: :meth:`repeats` says so, and
+    :meth:`~pandid.flowsheet.Flowsheet.add` hands out ``TEE (2)``, ``TEE (3)``
+    exactly as it does for a repeated interlock square or a tapped utility
+    header. Nothing is drawn either way, and nothing reaches the equipment list
+    — ``"tee"`` is not in ``pandid.document._MAJOR_EQUIPMENT``.
+
+    ``branch`` says which way the third connection runs: ``"outlet"`` (the
+    default) takes flow off the run, which is the takeoff end of a bypass and
+    every drain, vent and sample point; ``"inlet"`` returns flow to it, which is
+    where a bypass rejoins. The run is always ``inlet`` to ``outlet``.
+
+    The branch leaves the **south** face as drawn, so the side it comes off is
+    the tee's placement, stated with :meth:`~Unit.pin`:
+
+    ==================================  =====================================
+    ``pin(...)``                        run, branch
+    ==================================  =====================================
+    (nothing)                           W to E, branch S
+    ``mirrored="y"``                    W to E, branch N
+    ``orientation=90``                  N to S, branch W
+    ``orientation=270``                 S to N, branch E
+    ==================================  =====================================
+
+    The run keeps its stream or line number straight through a tee, the way it
+    does through a valve or a reducer, and the branch starts a number of its
+    own. Set ``significant`` to break the run's number at the junction where the
+    piping class changes there.
+    """
+
+    kind = "tee"
+    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+
+    #: The name a tee answers to when the author gives it none. A tee has no tag
+    #: to be told apart by, so every one of them may take this and be renamed
+    #: apart by the flowsheet; see :meth:`repeats`.
+    DEFAULT_NAME = "TEE"
+
+    #: What the third connection may be. Not a free choice of role: a tee joins
+    #: three lengths of the same pipe, so the branch carries process fluid like
+    #: the run and differs only in which way it runs.
+    BRANCH_DIRECTIONS = ("outlet", "inlet")
+
+    def __init__(self, name: str = "", branch: str = "outlet",
+                 variant: str = "default", width: float | None = None,
+                 height: float | None = None, description: str = "",
+                 reference: str = ""):
+        if branch not in self.BRANCH_DIRECTIONS:
+            raise ValueError(
+                f"{name or self.DEFAULT_NAME}: branch= is "
+                f"{' or '.join(repr(d) for d in self.BRANCH_DIRECTIONS)} — whether "
+                f"the third connection takes flow off the run or returns it — got "
+                f"{branch!r}"
+            )
+        super().__init__(name or self.DEFAULT_NAME, variant=variant, width=width,
+                         height=height, description=description, reference=reference)
+        #: ``"outlet"`` for a takeoff, ``"inlet"`` for a return. Read-only after
+        #: construction: the port is already built, and turning one direction
+        #: into the other would silently disconnect whatever is on it.
+        self.branch_direction = branch
+        self._add_port("branch", branch, "process")
+
+    @property
+    def tag(self) -> str:
+        """Nothing. A tee is drawn as bare pipe and labelled nowhere."""
+        return ""
+
+    def repeats(self, other: "Unit") -> bool:
+        """Whether ``other`` is another tee, and so no clash with this one.
+
+        A tag names one item and two units may not share one, which is why every
+        piece of equipment refuses a repeat. A tee has no tag: the sheet writes
+        nothing against it, so two tees answering to one name are not two things
+        the reader could confuse — there is nothing drawn to confuse. The name is
+        purely how the flowsheet addresses the junction, and
+        :meth:`~pandid.flowsheet.Flowsheet.add` keeps it unique.
+        """
+        return isinstance(other, Tee)
 
 
 class Fitting(_NormallyPositioned):
@@ -1120,7 +1222,11 @@ class Column(Unit):
 
 
 class Mixer(Unit):
-    """Combines multiple inlet streams into one outlet."""
+    """Combines multiple inlet streams into one outlet.
+
+    A piece of plant, drawn as a triangle and scheduled as one. Where two lines
+    simply meet in the piping, the fitting is a :class:`Tee`.
+    """
 
     kind = "mixer"
 
@@ -1134,7 +1240,12 @@ class Mixer(Unit):
 
 
 class Splitter(Unit):
-    """Divides one inlet stream into multiple outlets."""
+    """Divides one inlet stream into multiple outlets.
+
+    A piece of plant, drawn as a triangle and scheduled as one. A bypass leg, a
+    drain, a vent or a sample point is not that — it is a line branching, and
+    the fitting that branches it is a :class:`Tee`.
+    """
 
     kind = "splitter"
 
