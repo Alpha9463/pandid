@@ -136,6 +136,54 @@ def test_variable_port_units():
     assert sorted(fs.units[1].ports) == ["inlet", "out_1", "out_2", "out_3"]
 
 
+def test_exchanger_side_nozzles_round_trip():
+    """An exchanger's nozzles are named for its sides, and the sides depend on
+    the variant, so the reader has to build the right four before it can resolve
+    a connection to them — and the writer has to name them back."""
+    spec = {
+        "name": "T",
+        "units": [
+            {"kind": "HeatExchanger", "name": "E-1"},
+            {"kind": "HeatExchanger", "name": "E-2", "variant": "air_cooled"},
+            {"kind": "HeatExchanger", "name": "E-3", "variant": "plate"},
+            {"kind": "HeatExchanger", "name": "E-4", "variant": "thin_film"},
+            {"kind": "HeatExchanger", "name": "E-5", "variant": "kettle"},
+            {"kind": "Heater", "name": "H-1"},
+            {"kind": "Cooler", "name": "C-1"},
+        ],
+        "streams": [
+            {"from": ["E-1", "tube_out"], "to": ["E-2", "tube_in"]},
+            {"from": ["E-2", "tube_out"], "to": ["E-3", "side_a_in"]},
+            {"from": ["E-3", "side_a_out"], "to": ["E-4", "product_in"]},
+            {"from": ["E-4", "product_out"], "to": ["E-5", "shell_in"]},
+            {"from": ["E-5", "bottoms"], "to": ["H-1", "inlet"]},
+            {"from": ["C-1", "utility_out"], "to": ["H-1", "utility_in"]},
+        ],
+    }
+    fs = Flowsheet.from_dict(spec)
+    by_name = {u.name: u for u in fs.units}
+    assert sorted(by_name["E-1"].ports) == ["shell_in", "shell_out", "tube_in", "tube_out"]
+    assert sorted(by_name["E-2"].ports) == ["air_in", "air_out", "tube_in", "tube_out"]
+    assert sorted(by_name["E-3"].ports) == [
+        "side_a_in",
+        "side_a_out",
+        "side_b_in",
+        "side_b_out",
+    ]
+    assert sorted(by_name["E-4"].ports) == [
+        "jacket_in",
+        "jacket_out",
+        "product_in",
+        "product_out",
+    ]
+    assert "bottoms" in by_name["E-5"].ports
+    written = fs.to_dict()
+    assert [(s["from"], s["to"]) for s in written["streams"]] == [
+        (s["from"], s["to"]) for s in spec["streams"]
+    ]
+    assert Flowsheet.from_dict(written).to_dict() == written
+
+
 def test_a_column_or_reactor_feed_count_round_trips():
     fs = Flowsheet.from_dict(
         {

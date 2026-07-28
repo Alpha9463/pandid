@@ -128,8 +128,8 @@ def test_a_kettle_takes_its_bottoms_off_its_own_draw():
     fs = Flowsheet("reboiler")
     col = fs.add(U.Column("T-701"))
     reb = fs.add(U.HeatExchanger("E-702", variant="kettle"))
-    fs.connect(col.bottoms, reb.cold_in)
-    fs.connect(reb.cold_out, col.boilup_in, tear_hint=True)
+    fs.connect(col.bottoms, reb.shell_in)
+    fs.connect(reb.shell_out, col.boilup_in, tear_hint=True)
     fs.connect(reb.bottoms, fs.add(U.Product("Bottoms")).inlet)
     fs.layout()
     assert [i for i in fs.validate() if i.code == "coincident-ports"] == []

@@ -103,7 +103,7 @@ def test_energy_stream_does_not_take_a_process_number():
     heater = fs.add(U.Heater("E-1"))
     cooler = fs.add(U.Cooler("C-1"))
     p = fs.add(U.Product("P"))
-    duty = fs.connect(cooler.duty, heater.duty)  # both energy ports
+    duty = fs.connect(cooler.utility_out, heater.utility_in)  # both energy ports
     s1 = fs.connect(f.outlet, heater.inlet)
     s2 = fs.connect(heater.outlet, p.inlet)
     assert duty.kind == "energy"

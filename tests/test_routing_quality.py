@@ -18,8 +18,8 @@ def _ammonia_loop():
     prod = fs.add(U.Product("Ammonia"))
     fs.connect(feed.outlet, mix.in_1)
     fs.connect(mix.outlet, reformer.feed)
-    fs.connect(reformer.outlet, hx.hot_in)
-    fs.connect(hx.hot_out, sep.feed)
+    fs.connect(reformer.outlet, hx.shell_in)
+    fs.connect(hx.shell_out, sep.feed)
     fs.connect(sep.vapor, comp.suction)
     fs.connect(comp.discharge, mix.in_2)  # recycle
     fs.connect(sep.liquid, prod.inlet)
@@ -152,7 +152,7 @@ def _nozzle_above_its_target_lane():
     fs = Flowsheet("Overshot Nozzle")
     hx = fs.add(U.HeatExchanger("E-101")).pin(x=568, y=68)
     sep = fs.add(U.Separator("V-101")).pin(x=728, y=88)
-    fs.connect(hx.hot_out, sep.feed)
+    fs.connect(hx.shell_out, sep.feed)
     return fs
 
 

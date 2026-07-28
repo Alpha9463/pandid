@@ -27,6 +27,26 @@ and is kept working.
   joins another process nozzle and takes `material` or `energy`. Neither pairing
   is drawable as the other, so a pipe into a valve stem and a pneumatic line
   between two pumps are both rejected by name.
+- Heat-exchanger nozzles name the *side of the equipment* rather than the duty:
+  `shell_in`, `shell_out`, `tube_in`, `tube_out` in place of `hot_in`,
+  `hot_out`, `cold_in`, `cold_out`. Which fluid runs in the shell and which in
+  the tubes is a design decision the drawing has to record, while which side is
+  hot inverts between operating cases without the nozzle moving — and the old
+  names did not even land on the same face from one variant to the next.
+  Variants with no shell or no tubes name what they do have: `air_cooled` is
+  `tube_*` and `air_*`, `plate` and `spiral` letter their two interchangeable
+  circuits `side_a_*` / `side_b_*`, and `thin_film` is `jacket_*` and
+  `product_*`. `Heater` and `Cooler` take `utility_in` / `utility_out` in place
+  of `duty` on the same principle. Nothing is published, so the old names are
+  removed rather than aliased; a unit that names one raises the existing "no
+  attribute or port" error, which lists the real ports.
+- Two exchanger symbols had their sides mapped wrongly and are corrected with
+  the rename. `u_tube` put one tube nozzle on the shell's far dished head; a
+  U-tube bundle turns round inside the shell, so both tube connections now sit
+  on the channel head, one either side of the pass partition the stencil draws.
+  `plate` paired each circuit along one edge of the symbol, across the two
+  diagonals the stencil draws; each side now follows the diagonal it is drawn
+  on. No other port moved.
 - Typed `Unit` classes declaring named ports: `Feed`, `Product`, `Pump`,
   `Compressor`, `Blower`, `Valve`, `Vessel`, `Tank`, `HeatExchanger`, `Heater`,
   `Cooler`, `Reactor`, `Separator`, `Column`, `Mixer`, `Splitter`, `Reducer`,

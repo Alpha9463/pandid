@@ -58,9 +58,9 @@ def test_connect_rejects_unit_not_added():
 
 def test_energy_streams_auto_detected():
     fs = Flowsheet("Test")
-    heater = fs.add(U.Heater("E-1"))  # heater.duty is an inlet energy port
-    cooler = fs.add(U.Cooler("C-1"))  # cooler.duty is an outlet energy port
-    s = fs.connect(cooler.duty, heater.duty)  # both roles == "energy"
+    heater = fs.add(U.Heater("E-1"))  # heater.utility_in is an inlet energy port
+    cooler = fs.add(U.Cooler("C-1"))  # cooler.utility_out is an outlet energy port
+    s = fs.connect(cooler.utility_out, heater.utility_in)  # both roles == "energy"
     assert s.kind == "energy"
 
 

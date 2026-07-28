@@ -38,8 +38,8 @@ def _ammonia_loop() -> Flowsheet:
     prod = fs.add(units.Product("Ammonia"))
     fs.connect(feed.outlet, mix.in_2)
     fs.connect(mix.outlet, reformer.feed)
-    fs.connect(reformer.outlet, hx.hot_in)
-    fs.connect(hx.hot_out, sep.feed)
+    fs.connect(reformer.outlet, hx.shell_in)
+    fs.connect(hx.shell_out, sep.feed)
     fs.connect(sep.vapor, comp.suction)
     fs.connect(comp.discharge, mix.in_1)
     fs.connect(sep.liquid, prod.inlet)
@@ -54,10 +54,10 @@ def _manual_layout() -> Flowsheet:
     f2 = fs.add(units.Feed("F-2")).pin(x=60, y=305)
     e2 = fs.add(units.HeatExchanger("E-2")).pin(x=210, y=300)
     p2 = fs.add(units.Product("P-2")).pin(x=430, y=305)
-    fs.connect(f1.outlet, e1.cold_in)
-    fs.connect(e1.cold_out, p1.inlet)
-    fs.connect(f2.outlet, e2.cold_in)
-    fs.connect(e2.cold_out, p2.inlet).via(
+    fs.connect(f1.outlet, e1.tube_in)
+    fs.connect(e1.tube_out, p1.inlet)
+    fs.connect(f2.outlet, e2.tube_in)
+    fs.connect(e2.tube_out, p2.inlet).via(
         [
             (360, 330),
             (360, 380),
@@ -112,14 +112,14 @@ def _distillation_train() -> Flowsheet:
 
     fs.connect(feed.outlet, mixer.in_1)
     fs.connect(mixer.outlet, feed_valve.inlet)
-    fs.connect(feed_valve.outlet, preheater.cold_in)
-    fs.connect(preheater.cold_out, col1.feed)
-    fs.connect(col1.distillate, c1_ovhd.cold_in)
-    fs.connect(c1_ovhd.cold_out, c1_prod.inlet)
+    fs.connect(feed_valve.outlet, preheater.tube_in)
+    fs.connect(preheater.tube_out, col1.feed)
+    fs.connect(col1.distillate, c1_ovhd.tube_in)
+    fs.connect(c1_ovhd.tube_out, c1_prod.inlet)
     fs.connect(col1.bottoms, pump1.suction)
     fs.connect(pump1.discharge, col2.feed)
-    fs.connect(col2.distillate, c2_ovhd.cold_in)
-    fs.connect(c2_ovhd.cold_out, c2_prod.inlet)
+    fs.connect(col2.distillate, c2_ovhd.tube_in)
+    fs.connect(c2_ovhd.tube_out, c2_prod.inlet)
     fs.connect(col2.bottoms, pump2.suction)
     fs.connect(pump2.discharge, splitter.inlet)
     fs.connect(splitter.out_1, c2_bot.inlet)
@@ -280,14 +280,14 @@ def _column_reflux() -> Flowsheet:
     bot.pin(x=900, y=620)
 
     fs.connect(feed.outlet, col.feed)
-    fs.connect(col.distillate, cond.hot_in)
-    fs.connect(cond.hot_out, drum.inlet)
+    fs.connect(col.distillate, cond.shell_in)
+    fs.connect(cond.shell_out, drum.inlet)
     fs.connect(drum.vent, vent.inlet)
     fs.connect(drum.outlet, split.inlet)
     fs.connect(split.out_1, dist.inlet)
     fs.connect(split.out_2, col.reflux_in, tear_hint=True)
-    fs.connect(col.bottoms, reb.cold_in)
-    fs.connect(reb.cold_out, col.boilup_in, tear_hint=True)
+    fs.connect(col.bottoms, reb.shell_in)
+    fs.connect(reb.shell_out, col.boilup_in, tear_hint=True)
     fs.connect(reb.bottoms, bot.inlet)
     return fs
 

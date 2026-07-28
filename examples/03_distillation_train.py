@@ -45,7 +45,7 @@ def main():
     mixer_y = col_y + 105 - 25  # align mixer outlet (y+25) with col feed (col_y+105)
     feed_y = mixer_y - 10       # align feed outlet (y+25) with mixer in_1 (y+15)
     valve_y = col_y + 105 - 15  # align valve ports (y+15) with col feed line
-    hx_y = col_y + 105 - 30     # align HX cold_in (y+30) with col feed line
+    hx_y = col_y + 105 - 30     # align HX tube_in (y+30) with col feed line
 
     # Row positions left-to-right
     feed.pin(x=160, y=feed_y)
@@ -59,7 +59,7 @@ def main():
     # Overhead: HX above column, product to the right
     ovhd_y = col_y - 80         # overhead HX row
     c1_ovhd.pin(x=820, y=ovhd_y)
-    # HX cold_out is at ovhd_y + 30. Product inlet is at y + 25.
+    # HX tube_out is at ovhd_y + 30. Product inlet is at y + 25.
     c1_prod.pin(x=980, y=ovhd_y + 5)
 
     # Bottoms: pump below column
@@ -86,18 +86,18 @@ def main():
     # --- Connections ---
     fs.connect(feed.outlet, mixer.in_1)
     fs.connect(mixer.outlet, feed_valve.inlet)
-    fs.connect(feed_valve.outlet, preheater.cold_in)
-    fs.connect(preheater.cold_out, col1.feed)
-    
-    # Use cold side of HX for left-to-right routing
-    fs.connect(col1.distillate, c1_ovhd.cold_in)
-    fs.connect(c1_ovhd.cold_out, c1_prod.inlet)
-    
+    fs.connect(feed_valve.outlet, preheater.tube_in)
+    fs.connect(preheater.tube_out, col1.feed)
+
+    # The overhead runs through the tubes, which is the exchanger's W-E pair.
+    fs.connect(col1.distillate, c1_ovhd.tube_in)
+    fs.connect(c1_ovhd.tube_out, c1_prod.inlet)
+
     fs.connect(col1.bottoms, pump1.suction)
     fs.connect(pump1.discharge, col2.feed)
-    
-    fs.connect(col2.distillate, c2_ovhd.cold_in)
-    fs.connect(c2_ovhd.cold_out, c2_prod.inlet)
+
+    fs.connect(col2.distillate, c2_ovhd.tube_in)
+    fs.connect(c2_ovhd.tube_out, c2_prod.inlet)
     
     fs.connect(col2.bottoms, pump2.suction)
     fs.connect(pump2.discharge, splitter.inlet)

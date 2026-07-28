@@ -60,7 +60,12 @@ def test_fixed_port_units_have_expected_ports():
     assert set(U.Feed("F").ports) == {"outlet"}
     assert set(U.Product("P").ports) == {"inlet"}
     assert set(U.Pump("K").ports) == {"suction", "discharge"}
-    assert set(U.HeatExchanger("E").ports) == {"hot_in", "hot_out", "cold_in", "cold_out"}
+    assert set(U.HeatExchanger("E").ports) == {
+        "shell_in",
+        "shell_out",
+        "tube_in",
+        "tube_out",
+    }
     assert set(U.Separator("V").ports) == {"feed", "vapor", "liquid"}
     assert set(U.Column("T").ports) == {
         "feed",
@@ -137,6 +142,53 @@ def test_a_kettle_reboiler_has_a_bottoms_draw():
     kettle = U.HeatExchanger("E-702", variant="kettle")
     assert kettle.bottoms.direction == "outlet"
     assert kettle.bottoms.role == "liquid"
+
+
+@pytest.mark.parametrize(
+    "variant,sides",
+    [
+        ("default", ("shell", "tube")),
+        ("shell_tube", ("shell", "tube")),
+        ("straight_tubes", ("shell", "tube")),
+        ("finned", ("shell", "tube")),
+        ("condenser", ("shell", "tube")),
+        ("u_tube", ("shell", "tube")),
+        ("hairpin", ("shell", "tube")),
+        ("double_pipe", ("shell", "tube")),
+        ("kettle", ("shell", "tube")),
+        ("air_cooled", ("tube", "air")),
+        ("plate", ("side_a", "side_b")),
+        ("spiral", ("side_a", "side_b")),
+        ("thin_film", ("jacket", "product")),
+    ],
+)
+def test_an_exchangers_nozzles_are_named_for_its_two_sides(variant, sides):
+    """A nozzle names the side of the equipment it is on, not the duty crossing
+    it: which fluid runs in the shell and which in the tubes is a design
+    decision the drawing records, while which one is hot inverts between
+    operating cases without the nozzle moving. A variant that has no shell and
+    no tubes names what it does have instead."""
+    hx = U.HeatExchanger("E-1", variant=variant)
+    expected = {f"{side}_{end}" for side in sides for end in ("in", "out")}
+    assert set(hx.ports) - {"bottoms"} == expected
+    for side in sides:
+        assert hx.ports[f"{side}_in"].direction == "inlet"
+        assert hx.ports[f"{side}_out"].direction == "outlet"
+
+
+def test_the_old_duty_names_are_gone():
+    """`hot`/`cold` described the process rather than the equipment and did not
+    land on the same face from one variant to the next. They are removed rather
+    than aliased, and the AttributeError names the real nozzles."""
+    for unit, gone in (
+        (U.HeatExchanger("E-1"), "cold_in"),
+        (U.Heater("H-1"), "duty"),
+        (U.Cooler("C-1"), "duty"),
+    ):
+        with pytest.raises(AttributeError, match="available ports"):
+            getattr(unit, gone)
+    assert U.Heater("H-1").utility_in.role == "energy"
+    assert U.Cooler("C-1").utility_out.direction == "outlet"
 
 
 def test_only_the_kettle_carries_the_bottoms_draw():
