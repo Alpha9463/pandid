@@ -250,6 +250,8 @@ def register_vendored(registry):
         svg='<g id="sym_vessel"><g transform="scale(0.62, 0.5)"><path d="M 0.0 15.0 A 50.0 15.0 0.0 0 1 50.0 0.0 A 50.0 15.0 0.0 0 1 100.0 15.0 L 100.0 185.0 A 50.0 15.0 0.0 0 1 50.0 200.0 A 50.0 15.0 0.0 0 1 0.0 185.0 Z" fill="none" stroke="#111" stroke-width="3.226"/></g></g>',
         width=62.0, height=100.0,
         ports={'inlet': (0.0, 50.0), 'outlet': (62.0, 50.0), 'vent': (31.0, 0.0)},
+        # must not be turned: vent on the top head, free surface below it
+        gravity_fixed=True,
     ), 'default')
 
     # draw.io vessels:Pressurized Vessel (aspect=variable) -> column/default
@@ -257,6 +259,8 @@ def register_vendored(registry):
         svg='<g id="sym_column"><path d="M 0.0 15.0 A 50.0 15.0 0.0 0 1 50.0 0.0 A 50.0 15.0 0.0 0 1 100.0 15.0 L 100.0 185.0 A 50.0 15.0 0.0 0 1 50.0 200.0 A 50.0 15.0 0.0 0 1 0.0 185.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=200.0,
         ports={'distillate': (50.0, 0.0), 'bottoms': (50.0, 200.0), 'reflux_in': (100.0, 35.0), 'boilup_in': (100.0, 175.0), 'condenser_duty': (100.0, 65.0), 'reboiler_duty': (100.0, 145.0)},
+        # must not be turned: distillate off the top, bottoms off the floor
+        gravity_fixed=True,
         port_series=(PortSeries('feed_', 'W', pitch=35.0, extent=0.5, at=130.0, singular='feed'),),
     ), 'default')
 
@@ -265,6 +269,8 @@ def register_vendored(registry):
         svg='<g id="sym_column_packed"><g transform="scale(4.428571428571429, 2.0618556701030926)"><path d="M 14.0 3.5 L 14.0 93.5 A 5.0 2.5 0.0 0 1 7.0 97.0 A 5.0 2.5 0.0 0 1 0.0 93.5 L 0.0 3.5 A 5.0 2.5 0.0 0 1 7.0 0.0 A 5.0 2.5 0.0 0 1 14.0 3.5 Z M 0.0 3.5 L 14.0 3.5 M 0.0 93.5 L 14.0 93.5 M 0.0 43.5 L 14.0 43.5 M 0.0 53.5 L 14.0 53.5 M 0.0 18.5 L 14.0 18.5 M 0.0 78.5 L 14.0 78.5 M 14.0 18.5 L 0.0 43.5 M 14.0 43.5 L 0.0 18.5 M 14.0 53.5 L 0.0 78.5 M 14.0 78.5 L 0.0 53.5" fill="none" stroke="#111" stroke-width="0.452"/></g></g>',
         width=62.0, height=200.0,
         ports={'distillate': (31.0, 0.0), 'bottoms': (31.0, 200.0), 'reflux_in': (62.0, 35.0), 'boilup_in': (62.0, 175.0), 'condenser_duty': (62.0, 65.0), 'reboiler_duty': (62.0, 145.0)},
+        # must not be turned: packed beds rest on their support grids
+        gravity_fixed=True,
         port_series=(PortSeries('feed_', 'W', pitch=35.0, extent=0.5, at=130.0, singular='feed'),),
     ), 'packed')
 
@@ -273,6 +279,8 @@ def register_vendored(registry):
         svg='<g id="sym_reactor"><path d="M 31.0 2.4 L 31.0 27.4 A 5.0 2.0 0.0 0 1 25.0 29.8 A 5.0 2.0 0.0 0 1 19.0 27.4 L 19.0 2.4 A 5.0 2.0 0.0 0 1 25.0 0.0 A 5.0 2.0 0.0 0 1 31.0 2.4 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 26.0 32.4 L 50.0 32.4 L 50.0 77.4 L 25.0 96.4 L 0.0 77.4 L 0.0 32.4 L 24.0 32.4 M 19.0 2.4 L 31.0 2.4 M 19.0 27.4 L 31.0 27.4 M 24.0 29.4 L 24.0 56.9 M 26.0 29.4 L 26.0 56.9 M 0.0 77.4 L 50.0 77.4" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="30.0" cy="57.4" rx="5.0" ry="1.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="20.0" cy="57.4" rx="5.0" ry="1.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=50.0, height=96.4,
         ports={'outlet': (25.0, 96.4), 'duty': (50.0, 48.2), 'vent': (40.0, 32.4)},
+        # must not be turned: top-entering agitator over a dished bottom
+        gravity_fixed=True,
         port_series=(PortSeries('feed_', 'W', pitch=14.0, extent=0.32, at=48.2, singular='feed'),),
     ), 'default')
 
@@ -281,6 +289,8 @@ def register_vendored(registry):
         svg='<g id="sym_separator"><path d="M 40.0 7.69 L 40.0 87.69 A 13.0 5.0 0.0 0 1 20.0 95.3823 A 13.0 5.0 0.0 0 1 0.0 87.69 L 0.0 7.69 A 13.0 5.0 0.0 0 1 20.0 -0.0023 A 13.0 5.0 0.0 0 1 40.0 7.69 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69 M 0.0 17.69 L 40.0 17.69 M 0.0 27.69 L 40.0 27.69 M 0.0 17.69 L 10.0 27.69 L 20.0 17.69 L 30.0 27.69 L 40.0 17.69 M 48.0 34.69 L 48.0 52.69 M 51.0 34.69 L 51.0 52.69 M 0.0 27.69 L 10.0 17.69 L 20.0 27.69 L 30.0 17.69 L 40.0 27.69" fill="none" stroke="#111" stroke-width="2.0"/><rect x="40.0" y="37.5" width="8.0" height="12.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=51.0, height=95.4,
         ports={'feed': (0.0, 55.0), 'vapor': (25.0, 0.0), 'liquid': (25.0, 95.4)},
+        # must not be turned: demister on top, vapour up and liquid down
+        gravity_fixed=True,
     ), 'default')
 
     # draw.io vessels:Tank (Dished Roof) (aspect=variable) -> tank/default
@@ -288,6 +298,8 @@ def register_vendored(registry):
         svg='<g id="sym_tank"><rect x="0.0" y="25.46" width="100.0" height="70.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 25.46 A 75.0 75.0 0.0 0 1 100.0 25.46 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=95.5,
         ports={'inlet': (50.0, 6.4), 'outlet': (50.0, 95.5)},
+        # must not be turned: dished roof over a free surface, draw at the floor
+        gravity_fixed=True,
     ), 'default')
 
     # draw.io vessels:Tank (Conical Roof) (aspect=variable) -> tank/conical
@@ -295,6 +307,8 @@ def register_vendored(registry):
         svg='<g id="sym_tank_conical"><path d="M 0.0 20.0 L 0.0 90.0 L 100.0 90.0 L 100.0 20.0 L 50.0 0.0 Z M 0.0 20.0 L 100.0 20.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=90.0,
         ports={'inlet': (50.0, 0.0), 'outlet': (50.0, 90.0)},
+        # must not be turned: conical roof over a free surface, draw at the floor
+        gravity_fixed=True,
     ), 'conical')
 
     # draw.io piping:Concentric Reducer (aspect=variable) -> reducer/default
@@ -702,6 +716,8 @@ def register_vendored(registry):
         svg='<g id="sym_vessel_dished"><path d="M 50.0 7.69 L 50.0 87.69 A 13.0 5.0 0.0 0 1 30.0 95.3823 A 13.0 5.0 0.0 0 1 10.0 87.69 L 10.0 7.69 A 13.0 5.0 0.0 0 1 30.0 -0.0023 A 13.0 5.0 0.0 0 1 50.0 7.69 Z M 10.0 7.69 L 50.0 7.69 M 10.0 87.69 L 50.0 87.69 M 50.0 62.69 L 60.0 72.69 L 50.0 72.69 Z M 10.0 62.69 L 0.0 72.69 L 10.0 72.69 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=60.0, height=95.4,
         ports={'inlet': (10.0, 47.0), 'outlet': (50.0, 47.0), 'vent': (30.0, 0.0)},
+        # must not be turned: vent on the top head; stands on brackets
+        gravity_fixed=True,
     ), 'dished')
 
     # draw.io vessels:Vessel (Dome) (aspect=variable) -> vessel/dome
@@ -709,6 +725,8 @@ def register_vendored(registry):
         svg='<g id="sym_vessel_dome"><path d="M 87.69 14.93 A 5.0 13.0 179.97 0 1 95.3923 34.9272 A 5.0 13.0 179.97 0 1 87.71 54.93 L 7.71 54.97 A 5.0 13.0 179.97 0 1 0.0077 34.9728 A 5.0 13.0 179.97 0 1 7.69 14.97 L 52.69 14.94 L 52.68 4.94 A 10.0 5.0 179.97 0 1 62.6779 -0.065 A 10.0 5.0 179.97 0 1 72.68 4.93 L 72.69 14.93 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=95.4, height=55.0,
         ports={'inlet': (0.0, 27.0), 'outlet': (95.4, 27.0), 'vent': (62.7, 0.0)},
+        # must not be turned: the manway dome is on top
+        gravity_fixed=True,
     ), 'dome')
 
     # draw.io vessels:Vessel (Dished Ends, Heating-Cooling Jacket) (aspect=variable) -> vessel/jacketed
@@ -716,6 +734,8 @@ def register_vendored(registry):
         svg='<g id="sym_vessel_jacketed"><path d="M 46.0 7.69 L 46.0 87.69 A 13.0 5.0 0.0 0 1 26.0 95.3823 A 13.0 5.0 0.0 0 1 6.0 87.69 L 6.0 7.69 A 13.0 5.0 0.0 0 1 26.0 -0.0023 A 13.0 5.0 0.0 0 1 46.0 7.69 Z M 6.0 7.69 L 46.0 7.69 M 6.0 87.69 L 46.0 87.69" fill="none" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="12.69" width="6.0" height="70.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="46.0" y="12.69" width="6.0" height="70.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=52.0, height=95.4,
         ports={'inlet': (0.0, 47.7), 'outlet': (52.0, 47.7), 'vent': (26.0, 0.0)},
+        # must not be turned: vent on the top head, free surface below it
+        gravity_fixed=True,
     ), 'jacketed')
 
     # draw.io vessels:Vessel (Dished Ends, Skirts) (aspect=variable) -> vessel/skirted
@@ -723,6 +743,8 @@ def register_vendored(registry):
         svg='<g id="sym_vessel_skirted"><path d="M 40.0 7.69 L 40.0 87.69 A 13.0 5.0 0.0 0 1 20.0 95.3823 A 13.0 5.0 0.0 0 1 0.0 87.69 L 0.0 7.69 A 13.0 5.0 0.0 0 1 20.0 -0.0023 A 13.0 5.0 0.0 0 1 40.0 7.69 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69 M 0.0 87.69 L 0.0 122.69 L 8.0 122.69 M 40.0 87.69 L 40.0 122.69 L 32.0 122.69" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=40.0, height=122.7,
         ports={'inlet': (0.0, 47.7), 'outlet': (40.0, 47.7), 'vent': (20.0, 0.0)},
+        # must not be turned: vent on the top head; stands on a skirt
+        gravity_fixed=True,
     ), 'skirted')
 
     # draw.io vessels:Tank (Floating Roof) (aspect=variable) -> tank/floating_roof
@@ -730,6 +752,8 @@ def register_vendored(registry):
         svg='<g id="sym_tank_floating_roof"><path d="M 0.0 0.0 L 0.0 70.0 L 100.0 70.0 L 100.0 0.0 M 5.0 0.0 L 5.0 5.0 L 95.0 5.0 L 95.0 0.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=70.0,
         ports={'inlet': (30.0, 5.0), 'outlet': (50.0, 70.0)},
+        # must not be turned: the roof floats on the liquid
+        gravity_fixed=True,
     ), 'floating_roof')
 
     # draw.io vessels:Storage Sphere (aspect=variable) -> tank/sphere
@@ -737,6 +761,8 @@ def register_vendored(registry):
         svg='<g id="sym_tank_sphere"><rect x="34.0" y="78.0" width="12.0" height="12.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="18.0" y="0.0" width="12.0" height="12.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="50.0" y="0.0" width="12.0" height="12.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 45.0 L 0.0 100.0 L 80.0 100.0 L 80.0 45.0 M 15.0 0.0 L 33.0 0.0 M 47.0 0.0 L 65.0 0.0 M 31.0 90.0 L 49.0 90.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="40.0" cy="45.0" rx="40.0" ry="40.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=100.0,
         ports={'inlet': (40.0, 5.0), 'outlet': (40.0, 100.0)},
+        # must not be turned: stands on legs, fills at the crown and drains at the bottom
+        gravity_fixed=True,
     ), 'sphere')
 
     # draw.io vessels:Reactor (aspect=variable) -> reactor/plain
@@ -744,6 +770,8 @@ def register_vendored(registry):
         svg='<g id="sym_reactor_plain"><path d="M 40.0 7.69 L 40.0 87.69 A 13.0 5.0 0.0 0 1 20.0 95.3823 A 13.0 5.0 0.0 0 1 0.0 87.69 L 0.0 7.69 A 13.0 5.0 0.0 0 1 20.0 -0.0023 A 13.0 5.0 0.0 0 1 40.0 7.69 Z M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69 M 0.0 67.69 L 40.0 67.69 M 0.0 27.69 L 40.0 27.69 M 8.0 27.69 L 0.0 35.69 M 24.0 27.69 L 0.0 51.69 M 32.0 27.69 L 0.0 59.69 M 40.0 27.69 L 0.0 67.69 M 40.0 35.69 L 8.0 67.69 M 40.0 51.69 L 24.0 67.69 M 40.0 59.69 L 32.0 67.69 M 16.0 27.69 L 0.0 43.69 M 40.0 43.69 L 16.0 67.69" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=40.0, height=95.4,
         ports={'outlet': (20.0, 95.4), 'duty': (40.0, 47.0), 'vent': (30.0, 7.7)},
+        # must not be turned: vent on the top head, outlet in the floor
+        gravity_fixed=True,
         port_series=(PortSeries('feed_', 'W', pitch=14.0, extent=0.4, at=30.0, singular='feed'),),
     ), 'plain')
 
@@ -752,6 +780,8 @@ def register_vendored(registry):
         svg='<g id="sym_vessel_horizontal"><path d="M 5.77 30.0 L 85.77 30.0 A 5.0 13.0 0.0 0 0 91.5392 15.0 A 5.0 13.0 0.0 0 0 85.77 0.0 L 5.77 0.0 A 5.0 13.0 0.0 0 0 0.0008 15.0 A 5.0 13.0 0.0 0 0 5.77 30.0 Z M 5.77 0.0 L 5.77 30.0 M 85.77 0.0 L 85.77 30.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=91.5, height=30.0,
         ports={'inlet': (0.0, 15.0), 'outlet': (68.0, 30.0), 'vent': (55.0, 0.0)},
+        # must not be turned: vent off the top, liquid out of the bottom
+        gravity_fixed=True,
         port_faces={'inlet': {'W': (0.0, 15.0), 'N': (20.0, 0.0), 'E': (91.5, 15.0)}},
     ), 'horizontal')
 
@@ -760,6 +790,8 @@ def register_vendored(registry):
         svg='<g id="sym_separator_horizontal"><path d="M 5.77 30.0 L 85.77 30.0 A 5.0 13.0 0.0 0 0 91.5392 15.0 A 5.0 13.0 0.0 0 0 85.77 0.0 L 5.77 0.0 A 5.0 13.0 0.0 0 0 0.0008 15.0 A 5.0 13.0 0.0 0 0 5.77 30.0 Z M 5.77 0.0 L 5.77 30.0 M 85.77 0.0 L 85.77 30.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=91.5, height=30.0,
         ports={'feed': (0.0, 15.0), 'vapor': (30.0, 0.0), 'liquid': (68.0, 30.0)},
+        # must not be turned: vapour disengages off the top, liquid draws off the bottom
+        gravity_fixed=True,
         port_faces={'feed': {'W': (0.0, 15.0), 'N': (20.0, 0.0), 'E': (91.5, 15.0)}},
     ), 'horizontal')
 
@@ -768,6 +800,8 @@ def register_vendored(registry):
         svg='<g id="sym_separator_cyclone"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 35.0 15.0 A 30.0 15.0 0.0 0 1 65.0 30.0 A 30.0 15.0 0.0 0 1 35.0 45.0 A 10.0 5.0 0.0 0 1 25.9681 42.5693 A 10.0 5.0 0.0 0 1 25.9681 37.4407 A 10.0 5.0 0.0 0 1 35.0 35.01 A 30.0 15.0 0.0 0 1 61.6252 42.3935 A 30.0 15.0 0.0 0 1 61.6252 57.6165 A 30.0 15.0 0.0 0 1 35.0 65.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 35.0 63.0 L 35.0 67.0 L 30.0 65.0 Z" fill="#111" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=120.0,
         ports={'feed': (0.0, 12.0), 'vapor': (40.0, 0.0), 'liquid': (40.0, 120.0)},
+        # must not be turned: ISO 15519-1 symbol X 2618; apex points down
+        gravity_fixed=True,
     ), 'cyclone')
 
     # draw.io separators:Gravity Separator, Settling Chamber (aspect=variable) -> separator/gravity
@@ -775,6 +809,8 @@ def register_vendored(registry):
         svg='<g id="sym_separator_gravity"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z M 40.0 10.0 L 40.0 65.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 38.0 65.0 L 42.0 65.0 L 40.0 70.0 Z" fill="#111" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=120.0,
         ports={'feed': (0.0, 12.0), 'vapor': (80.0, 12.0), 'liquid': (40.0, 120.0)},
+        # must not be turned: settling chamber; the arrow in it points down
+        gravity_fixed=True,
     ), 'gravity')
 
     # draw.io separators:Separator (Wet Scrubber) (aspect=variable) -> separator/scrubber
@@ -782,6 +818,8 @@ def register_vendored(registry):
         svg='<g id="sym_separator_scrubber"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 40.0 10.0 L 40.0 65.0 M 50.0 10.0 A 5.0 5.0 0.0 0 0 55.0 15.0 A 5.0 5.0 0.0 0 0 60.0 10.0 M 60.0 10.0 A 5.0 5.0 0.0 0 0 65.0 15.0 A 5.0 5.0 0.0 0 0 70.0 10.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 38.0 65.0 L 42.0 65.0 L 40.0 70.0 Z" fill="#111" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=120.0,
         ports={'feed': (0.0, 12.0), 'vapor': (80.0, 12.0), 'liquid': (40.0, 120.0)},
+        # must not be turned: hopper bottom under a wash-liquid header
+        gravity_fixed=True,
     ), 'scrubber')
 
     # draw.io separators:Separator (Electrostatic Precipitator) (aspect=variable) -> separator/electrostatic
@@ -789,6 +827,8 @@ def register_vendored(registry):
         svg='<g id="sym_separator_electrostatic"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 15.0 70.0 L 35.0 70.0 M 35.0 60.0 L 35.0 80.0 M 45.0 60.0 L 45.0 80.0 M 45.0 70.0 L 60.0 70.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=120.0,
         ports={'feed': (0.0, 12.0), 'vapor': (80.0, 12.0), 'liquid': (40.0, 120.0)},
+        # must not be turned: hopper bottom, collected phase out of the apex
+        gravity_fixed=True,
     ), 'electrostatic')
 
     # draw.io filters:Gas Filter (Bag, Candle, Cartridge) (aspect=variable) -> filter/gas
@@ -796,6 +836,8 @@ def register_vendored(registry):
         svg='<g id="sym_filter_gas"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 20.0 L 50.0 20.0 M 0.0 70.0 L 25.0 99.5 L 50.0 70.0 M 0.0 40.0 L 15.0 40.0 L 15.0 60.0 L 35.0 60.0 L 35.0 40.0 L 50.0 40.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=50.0, height=100.0,
         ports={'inlet': (0.0, 50.0), 'outlet': (50.0, 50.0)},
+        # must not be turned: dust hopper under the bags
+        gravity_fixed=True,
     ), 'gas')
 
     # draw.io filters:Press Filter (aspect=variable) -> filter/press
@@ -824,6 +866,8 @@ def register_vendored(registry):
         svg='<g id="sym_dryer_fluidized_bed"><path d="M 10.0 0.0 L 90.0 0.0 L 100.0 25.0 L 100.0 140.0 L 0.0 140.0 L 0.0 25.0 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 40.0 L 100.0 40.0 M 0.0 70.0 L 100.0 70.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="12.5" cy="60.0" rx="0.5" ry="0.5" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="25.0" cy="50.0" rx="0.5" ry="0.5" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="37.5" cy="60.0" rx="0.5" ry="0.5" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="50.0" cy="50.0" rx="0.5" ry="0.5" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="62.5" cy="60.0" rx="0.5" ry="0.5" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="75.0" cy="50.0" rx="0.5" ry="0.5" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="87.5" cy="60.0" rx="0.5" ry="0.5" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=140.0,
         ports={'feed': (0.0, 35.0), 'product': (100.0, 35.0)},
+        # must not be turned: the bed is a layer on its distributor plate
+        gravity_fixed=True,
     ), 'fluidized_bed')
 
     # draw.io driers:Spray Drier (aspect=variable) -> dryer/spray
@@ -831,6 +875,8 @@ def register_vendored(registry):
         svg='<g id="sym_dryer_spray"><path d="M 10.0 0.0 L 90.0 0.0 L 100.0 25.0 L 100.0 140.0 L 0.0 140.0 L 0.0 25.0 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 40.0 10.0 L 50.0 0.0 L 60.0 10.0 M 50.0 0.0 L 50.0 10.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=140.0,
         ports={'feed': (50.0, 0.0), 'product': (50.0, 140.0)},
+        # must not be turned: atomiser in the roof, powder out of the floor
+        gravity_fixed=True,
     ), 'spray')
 
     # draw.io vessels:Furnace (aspect=variable) -> furnace/default
@@ -873,6 +919,8 @@ def register_vendored(registry):
         svg='<g id="sym_vent"><g transform="scale(0.25)"><path d="M 40.0 40.0 L 40.0 140.0 M 0.0 40.0 L 40.0 0.0 L 80.0 40.0" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
         width=20.0, height=35.0,
         ports={'inlet': (10.0, 35.0)},
+        # must not be turned: weather cap on top of the stack
+        gravity_fixed=True,
     ), 'default')
 
     # draw.io fittings:Funnel (aspect=variable) -> funnel/default
@@ -880,6 +928,8 @@ def register_vendored(registry):
         svg='<g id="sym_funnel"><g transform="scale(0.25)"><path d="M 40.0 40.0 L 40.0 140.0 M 0.0 0.0 L 40.0 40.0 L 80.0 0.0" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
         width=20.0, height=35.0,
         ports={'outlet': (10.0, 35.0)},
+        # must not be turned: open cone above a stem that drains down
+        gravity_fixed=True,
     ), 'default')
 
     # draw.io piping:Exhaust Head (aspect=variable) -> vent/exhaust_head
@@ -887,6 +937,8 @@ def register_vendored(registry):
         svg='<g id="sym_vent_exhaust_head"><g transform="scale(0.5)"><path d="M 0.0 0.0 L 50.0 0.0 L 50.0 20.0 L 25.0 40.0 L 0.0 20.0 Z M 0.0 20.0 L 50.0 20.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
         width=25.0, height=20.0,
         ports={'inlet': (12.5, 20.0)},
+        # must not be turned: the V-bottom catches and drains condensate
+        gravity_fixed=True,
     ), 'exhaust_head')
 
     # draw.io piping:Breather (aspect=variable) -> vent/breather
@@ -894,4 +946,6 @@ def register_vendored(registry):
         svg='<g id="sym_vent_breather"><g transform="scale(0.5)"><rect x="0.0" y="0.0" width="50.0" height="20.0" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 25.0 20.0 L 25.0 30.0 M 0.0 0.0 L 25.0 20.0 L 50.0 0.0 M 0.0 20.0 L 25.0 0.0 L 50.0 20.0" fill="none" stroke="#111" stroke-width="4.0"/></g></g>',
         width=25.0, height=15.0,
         ports={'inlet': (12.5, 15.0)},
+        # must not be turned: the tank conservation vent sits on the roof
+        gravity_fixed=True,
     ), 'breather')

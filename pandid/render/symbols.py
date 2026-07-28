@@ -167,6 +167,29 @@ class Symbol:
     # Every symbol with a body of its own -- a valve, a reducer, an in-line
     # fitting -- gives the head something to land against and keeps it.
     bare_run: bool = False
+    # Does the artwork only mean what it says one way up? ISO 15519-1 §11.4.2
+    # permits turning and mirroring "in order to fit into the actual layout of
+    # the diagram", then excepts one class of symbol:
+    #
+    #     Exceptions for turning are symbols representing components or devices
+    #     where gravity is a functionality, for example symbol 2061: Open tank
+    #     or symbol X 2618: Cyclone separator; see Figure 22 b). Such symbols
+    #     must not be turned.
+    #
+    # Set where the separation, containment or holdup the symbol depicts is
+    # performed by gravity and the drawing shows it: a free liquid surface, an
+    # open top, a settling body that drops its heavy phase out of a low point.
+    # Not set for a device whose function is pressure, rotation, heat transfer
+    # or throttling, even when a nozzle happens to be drawn low -- those are
+    # installed in whatever attitude the run wants, and turning the symbol
+    # states nothing false. The vendored symbols take it from GRAVITY_FIXED in
+    # ``scripts/vendor_symbols.py``, which records the reason per family.
+    #
+    # A turned one is reported by :func:`pandid.validate.validate` rather than
+    # refused: the sheet still draws, and the escape hatch ISO's own lettering
+    # paragraph recommends -- "a new symbol should be created to the actual
+    # orientation" -- is already here as a variant (``vessel/horizontal``).
+    gravity_fixed: bool = False
     # Deprecated spelling, accepted so a symbol authored against the old
     # interface still registers. ``port_alts`` listed only the *extra* faces.
     port_alts: InitVar[dict[str, dict[str, tuple[float, float]]] | None] = None
@@ -544,7 +567,8 @@ def darkened(sym: Symbol) -> Symbol:
         port_faces={name: dict(faces) for name, faces in sym.port_faces.items()},
         faceless_ports=sym.faceless_ports, port_series=sym.port_series,
         label_pos=sym.label_pos, id_suffix=sym.id_suffix + "_nc",
-        stretchable=sym.stretchable,
+        stretchable=sym.stretchable, bare_run=sym.bare_run,
+        gravity_fixed=sym.gravity_fixed,
     )
 
 
@@ -623,6 +647,7 @@ def expander(sym: Symbol) -> Symbol:
         faceless_ports=sym.faceless_ports,
         label_pos=sym.label_pos, id_suffix=sym.id_suffix + "_exp",
         stretchable=sym.stretchable, bare_run=sym.bare_run,
+        gravity_fixed=sym.gravity_fixed,
     )
 
 

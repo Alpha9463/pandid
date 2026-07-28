@@ -97,6 +97,7 @@ def validate(fs: "Flowsheet") -> list["Issue"]:
     """Return all validation issues for the flowsheet (errors first)."""
     from pandid.layout.attach import MAX_PLACEMENT_PASSES
     from pandid.portgeom import is_anchored, port_point, unit_box
+    from pandid.render.symbols import default_registry
     from pandid.units import Instrument
 
     errors: list[Issue] = []
@@ -130,6 +131,57 @@ def validate(fs: "Flowsheet") -> list["Issue"]:
             elif v < 0:
                 errors.append(Issue("error", "pin-out-of-bounds",
                                     f"{u.name} pinned {axis}={v} is negative (off-sheet)"))
+
+    # --- turned symbols whose function is gravity (no frames required) ---
+    # ISO 15519-1:2010 §11.4.2, *Orientation of graphical symbols*:
+    #
+    #     Exceptions for turning are symbols representing components or devices
+    #     where gravity is a functionality, for example symbol 2061: Open tank
+    #     or symbol X 2618: Cyclone separator; see Figure 22 b). Such symbols
+    #     must not be turned.
+    #
+    # Soft, and deliberately so, despite the clause's "must not" being the
+    # strongest phrasing in it. An error is for something the engine cannot
+    # honour, and this it can: the sheet draws, every nozzle lands on ink, and
+    # the only thing wrong with it is what it says about the plant. It is the
+    # same kind of finding as ``letter-sequence`` -- a standard's rule the author
+    # may have a reason to break, reported rather than enforced. Refusing would
+    # also make the library unable to check its own artwork, since
+    # ``tests/test_symbol_invariants`` turns every registered symbol through 90°
+    # and 270° to prove its ports stay on the drawing, which is a geometry check
+    # and not a drawing of a plant.
+    #
+    # Mirroring is left alone: §11.4.2 excepts *turning* only, and flipping a
+    # tank left to right to put its nozzles on the other side is a placement the
+    # clause permits.
+    #
+    # Read off the resolved frame where there is one, since that is the placement
+    # that got drawn, and off the pin before layout has run. The solver reseeds
+    # from the pin, so the two agree.
+    for u in fs.units:
+        placed = u.frame if u.frame is not None else u.pin_
+        turn = int(getattr(placed, "orientation", 0) or 0)
+        variant = getattr(u, "variant", "default")
+        # A variant no symbol answers to is the renderer's complaint to make,
+        # with the catalogue to hand; asking for the artwork here would raise out
+        # of a function whose whole contract is to report rather than raise.
+        if not turn or variant not in default_registry.variants(u.kind):
+            continue
+        if not default_registry.for_unit(u).gravity_fixed:
+            continue
+        # ISO's own way out, from the lettering paragraph of the same clause:
+        # "a new symbol should be created to the actual orientation". Two
+        # families ship one, the lying drum, so name it where it exists instead
+        # of leaving the author to find it.
+        lying = ("horizontal" if variant != "horizontal"
+                 and "horizontal" in default_registry.variants(u.kind) else "")
+        warnings.append(Issue(
+            "warning", "gravity-turned",
+            f"{u.name} is turned {turn}°; ISO 15519-1:2010 11.4.2 excepts "
+            f"symbols where gravity is a functionality from turning, and a "
+            f"{u.kind}/{variant} is one of them"
+            + (f". Use variant={lying!r}, which is that equipment drawn lying "
+               f"down rather than the upright one turned" if lying else "")))
 
     # --- tag spelling (no frames required) ---
     # Soft, not hard: the letters still read, and a sheet whose house style

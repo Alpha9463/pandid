@@ -1471,6 +1471,68 @@ fs.add(units.Feed("Fermentation Broth", reference="PFD-201"))
 The flag is the only thing with a second line to draw it on, so `reference=` on
 a pump or a column raises `ValueError` naming the boundary to put it on.
 
+#### Composing a location reference
+
+**ISO 15519-1:2010 Clause 9** gives the grammar a reference to another drawing is
+spelled in. Two signs, and a fixed order:
+
+> The following signs shall be used for creating location references:
+> — solidus (/) for identification of a sheet;
+> — full stop (.) for identification of a column, a row or a zone in a sheet.
+>
+> The location reference shall be presented in following sequence:
+> document — sheet — column, row or zone.
+
+A part left out narrows the *scope* of the reference rather than changing its
+shape, which is what the standard's Table 2 tabulates.
+`pandid.document.location_reference()` composes the string, and reproduces every
+row of that table:
+
+```python
+from pandid.document import location_reference
+
+location_reference("4334", zone="B3")            # "4334/.B3"   zone B3 on single-sheet 4334
+location_reference("7569", "12", "B3")           # "7569/12.B3" zone B3 on sheet 12 of 7569
+location_reference(sheet="2")                    # "/2"         another sheet, same document
+location_reference(sheet="12", zone="B3")        # "/12.B3"     zone B3 on sheet 12
+location_reference(zone="B")                     # "/.B"        row B on the same sheet
+location_reference(zone="3")                     # "/.3"        column 3 on the same sheet
+location_reference(zone="B3")                    # "/.B3"       zone B3 on the same sheet
+location_reference("PFD-302")                    # "PFD-302"    the document itself
+```
+
+It returns a plain string and `reference=` takes one, so this is a way to *spell*
+a reference rather than a new kind of value, and a spec round-trips unchanged:
+
+```python
+fs.add(units.Product("Azeotropic Ethanol",
+                     reference=location_reference("PFD-302", "12", "B3")))
+```
+
+`zone` is checked against §5.1.2, *"Columns are designated with numbers. Rows are
+designated with letters"*, so a zone is its row's letter then its column's number
+(`"B3"`), a row is the letter alone and a column the number alone. `"3B"` raises
+rather than sending a reader to the wrong place. The two reserved signs are
+refused inside any part, since one there would be read as a separator.
+
+**What is not done.** Three of Clause 9's neighbours are the drawing author's,
+not the engine's, and `pandid` says so rather than guessing:
+
+- **§12.6's placement rule**, *"The connecting line references shall be placed in
+  the outer grid zone of the content area"*, is left to `pin()`. The zone grid is
+  measured at render time from the frame the furniture leaves, which is after
+  `validate()` has run, and the reference sheets put their flags in the outer
+  columns by authoring them there.
+- **Reciprocal references** (§12.6: *"the ends shall be mutually referenced"*)
+  need the peer end, which is on another sheet. A `Flowsheet` is one sheet and
+  there is no document object above it, so there is nothing to check against.
+- **Filling a reference from the peer's zone** needs the same missing peer.
+
+A bare document number is what an issued sheet actually carries: every off-page
+flag on the three reference drawings in `professional_examples/` reads as a
+service name over a document (`Fermentation Broth` over `P&ID-201`, `Azeotropic
+Ethanol` over `PFD-302`), and not one names a sheet or a zone.
+
 `header=True` says the flag stands for a **utility header** — cooling water,
 steam, flare, plant air — rather than for one line crossing the sheet edge. A
 header is a service tapped wherever it is wanted, so it may be added once per
@@ -1514,10 +1576,65 @@ and `message`.
 | `route-crosses-unit` | warning | a stream passes through a unit body it does not connect to |
 | `route-detour` | warning | a route is more than 3× its direct span |
 | `letter-sequence` | warning | a tag spells its control-function letters out of the order ISO 15519-2:2015 §5.2.4 requires (I, R, C, S, M, Z, A), so `FCI` where `FIC` was meant. One finding per tag, and the message names the tag it would have been |
+| `gravity-turned` | warning | a unit whose symbol's function depends on gravity has been given a quarter turn, which ISO 15519-1:2010 §11.4.2 excepts from the general permission to turn. One finding per unit; see [Symbols that must not be turned](#symbols-that-must-not-be-turned) |
 
 Errors raise from `to_svg()`/`render()` unless you pass `check=False`. Warnings
 never raise, and collect on `fs.warnings` after each render. Geometric checks
 need resolved frames, so they are skipped before layout has run.
+
+### Symbols that must not be turned
+
+**ISO 15519-1:2010 §11.4.2**, *Orientation of graphical symbols*, allows a symbol
+to be turned or mirrored *"in order to fit into the actual layout of the
+diagram"*, and then makes one exception:
+
+> Exceptions for turning are symbols representing components or devices where
+> gravity is a functionality, for example symbol 2061: Open tank or symbol
+> X 2618: Cyclone separator; see Figure 22 b). Such symbols must not be turned.
+
+Figure 22 b) draws those two: an open-topped U, and a body whose conical apex
+points down with the vortex spiralling into it. Both do their job by gravity, and
+both say something the plant cannot do once turned.
+
+`Symbol.gravity_fixed` marks them, and `pin(orientation=...)` on a unit drawn
+with one earns a `gravity-turned` warning:
+
+```python
+tank = fs.add(units.Tank("TK-301")).pin(x=300, y=200, orientation=90)
+fs.to_svg()
+[w.message for w in fs.warnings]
+# ["TK-301 is turned 90°; ISO 15519-1:2010 11.4.2 excepts symbols where gravity
+#   is a functionality from turning, and a tank/default is one of them"]
+```
+
+A **warning, not an error**. The sheet still draws, every nozzle still lands on
+ink, and the only thing wrong with it is what it says about the plant, which is
+the same kind of finding as `letter-sequence`. Where the equipment really is
+installed lying down, the answer the clause itself gives is *"a new symbol should
+be created to the actual orientation"*, and two families ship one: the message
+names `variant="horizontal"` where it exists.
+
+Mirroring is left alone. §11.4.2 excepts *turning* only, and flipping a tank left
+to right to put its nozzles on the other side is a placement the clause permits.
+
+The 27 marked symbols, and what in each one's artwork only means one thing one
+way up:
+
+| Symbols | Why |
+|---|---|
+| `separator` `default` `cyclone` `electrostatic` `gravity` `horizontal` `scrubber` | separation by density: `cyclone` **is** ISO's X 2618, `gravity` says so in its name, and the hopper-bottomed three collect out of an apex |
+| `tank` `default` `conical` `floating_roof` `sphere` | ISO's 2061: a free liquid surface, filled at the roof and drained at the floor, with `floating_roof` drawn floating on it |
+| `vessel` `default` `dished` `dome` `horizontal` `jacketed` `skirted` | holdup with a vapour space: the vent is on the top head and the shell drains from the bottom |
+| `column` `default` `packed`, `reactor` `default` `plain` | liquid running down over trays or packing while vapour rises, and an agitator hanging in from above |
+| `vent` `default` `breather` `exhaust_head`, `funnel` | open ends: what leaves rises, and an open end drawn pointing down is a drain |
+| `dryer` `spray` `fluidized_bed`, `filter` `gas` | solids that fall: an atomiser in the roof, a bed on its distributor plate, a dust hopper under the bags |
+
+Not marked, and deliberately: a pump, a compressor, a valve, an in-line fitting
+or a heat exchanger is installed in whatever attitude the run wants, so turning
+its symbol states nothing false, even where a nozzle happens to sit low
+(`hex/kettle`) or the stencil draws a downward tap (`valve/bleed`). The reasons
+are recorded beside `GRAVITY_FIXED` in `scripts/vendor_symbols.py`, which is
+where the flag is set for the vendored symbols.
 
 ---
 

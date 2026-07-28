@@ -187,6 +187,31 @@ against one. What it follows, feature by feature:
   connection. `pandid` also draws the number **on** the line where the run is
   long enough to carry it, which §7.2.5 words as a `should`, so that one is a
   divergence rather than a breach. See [Line numbers](#line-numbers).
+- **Off-page connector text** is composed by **ISO 15519-1 §9**, which reserves a
+  solidus for the sheet and a full stop for the zone and fixes the sequence:
+  *"The location reference shall be presented in following sequence: document —
+  sheet — column, row or zone."* `location_reference()` spells it, reproducing
+  all seven rows of the standard's Table 2 (`7569/12.B3`, `/12.B3`, `/.B3`). A
+  `reference` is still a plain string, because a document number on its own is
+  what an issued sheet's flags actually carry: the three reference drawings this
+  package was built against name `PFD-201`, `PFD-302`, `PCD-302` and `PFD-501`,
+  and not one of them names a sheet or a zone. §12.6's placement rule, that the
+  references *"shall be placed in the outer grid zone of the content area"*, is
+  left to `pin()`, so the flag goes where the author puts it. Reciprocal
+  references between the two ends of an interrupted line are outside the model,
+  a `Flowsheet` being one sheet with no peer end to read a zone from.
+- **Symbols where gravity is a functionality** are not turned. **ISO 15519-1
+  §11.4.2** excepts them from the general permission to turn and mirror: *"for
+  example symbol 2061: Open tank or symbol X 2618: Cyclone separator … Such
+  symbols must not be turned."* 27 registered symbols carry
+  `Symbol.gravity_fixed`: the separators, tanks, vessels, columns, reactors,
+  vents, the funnel, the spray and fluidised-bed driers and the bag filter.
+  Turning one earns a `gravity-turned` warning on `fs.warnings`. A warning rather
+  than a refusal, because the sheet still draws correctly and only what it says
+  about the plant is wrong. Where the equipment really is installed lying down,
+  the answer is the variant drawn that way (`Vessel(variant="horizontal")`),
+  which is the same clause's own advice that *"a new symbol should be created to
+  the actual orientation"*.
 
 The largest remaining gap against ISO 10628-1 is §5.3.1 and §5.4.2, and against
 ISO 15519-1 is §11.1.3 (*"when the size of a symbol is changed, the line width
@@ -808,6 +833,18 @@ drawn.
 
 ```python
 fs.add(units.Feed("Fermentation Broth", reference="PFD-201"))
+```
+
+`location_reference()` composes one that names a sheet or a zone as well, in the
+grammar ISO 15519-1 §9 gives (`document`, then `/sheet`, then `.zone`). It
+returns a plain string, so `reference=` is unchanged:
+
+```python
+from pandid.document import location_reference
+
+units.Product("Azeotropic Ethanol",
+              reference=location_reference("PFD-302", sheet="12", zone="B3"))
+#                                                          -> "PFD-302/12.B3"
 ```
 
 **Stream table.** Property rows render in first-seen key order. Values are the
