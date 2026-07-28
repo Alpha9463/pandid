@@ -44,23 +44,31 @@ def main():
     feed = fs.add(units.Feed("Feed")).pin(x=60, y=170)
     fv = fs.add(units.Valve(flow.tag("FV"), variant="control")).pin(x=270, y=180)
     drum = fs.add(units.Vessel("V-101", description="Surge Drum")).pin(x=420, y=145)
-    lv = fs.add(units.Valve(level.tag("LV"), variant="control")).pin(x=640, y=180)
+    fe = fs.add(units.Fitting(flow.tag("FE"), variant="orifice",
+                              description="Feed Orifice Plate")).pin(x=180, y=180)
+    # The actuator faces the controller under the drum, so its signal drops
+    # straight in rather than climbing over the valve to reach a stem on top.
+    lv = fs.add(units.Valve(level.tag("LV"), variant="control")).pin(
+        x=640, y=180, mirrored="y")
     prod = fs.add(units.Product("Product")).pin(x=790, y=170)
     # A PSV is tagged as plain text beside the symbol, not in a balloon.
     psv = fs.add(units.Valve("PSV-101", variant="relief")).pin(x=441, y=55)
     flare = fs.add(units.Product("To Flare", reference="P&ID-902")).pin(x=630, y=5)
 
-    line = fs.connect(feed.outlet, fv.inlet)
+    fs.connect(feed.outlet, fe.inlet)
+    fs.connect(fe.outlet, fv.inlet)
     fs.connect(fv.outlet, drum.inlet)
     fs.connect(drum.outlet, lv.inlet)
     fs.connect(lv.outlet, prod.inlet)
     fs.connect(drum.vent, psv.inlet)
     fs.connect(psv.outlet, flare.inlet)
 
-    # Flow loop: orifice plate in the line, transmitter above it on the same
-    # impulse line, controller off to one side driving the control valve.
-    fs.add_instrument("FE", flow, on=line, at=0.5, offset=0)
-    ft = fs.add_instrument("FT", flow, on=line, at=0.5, offset=62)
+    # Flow loop: FE-101 is the orifice plate in the line, drawn as the fitting
+    # it is. The transmitter reading it stands over it on an impulse line, and
+    # the controller sits off to one side driving the control valve. The
+    # element carries the loop's tag, so the balloon above it is the
+    # transmitter rather than a second FE.
+    ft = fs.add_instrument("FT", flow, on=fe, at="N", offset=62)
     fic = fs.add_instrument("FIC", flow, on=ft, at="N", offset=125, angle=35, variant="panel")
     # The controller lands almost directly above the valve it drives, so take
     # its output off the bottom of the balloon: on the default east face the
@@ -72,8 +80,10 @@ def main():
     # Level loop: controller mounted on the drum, its alarm pair alongside on
     # the same loop, interlock square hung underneath.
     lic = fs.add_instrument("LIC", level, on=drum, at="S", offset=90, variant="panel")
-    lah = fs.add_instrument("LAH", level, on=lic, at="W", offset=50)
-    fs.add_instrument("LAL", level, on=lah, at="W", offset=50)
+    # Both alarms read the controller, so both hang off it. Chaining one to the
+    # other would draw the low alarm as though the high alarm fed it.
+    fs.add_instrument("LAH", level, on=lic, at="W", offset=78, angle=62)
+    fs.add_instrument("LAL", level, on=lic, at="W", offset=78, angle=118)
     fs.add_instrument("I", 1, on=lic, at="S", offset=44, variant="logic")
     fs.connect(lic.sig_out, lv.actuator, kind="electric")
 
