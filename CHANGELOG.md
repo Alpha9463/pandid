@@ -49,6 +49,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are all silent. Rendering is unchanged and no golden moves.
 - `Separator(variant="knockout")` draws the knock-out drum the default used to,
   demister pad and level gauge and all, at the size and with the nozzles it had.
+- Python 3.14 is supported and tested. The trove classifier is declared and
+  CI runs the suite on 3.14 alongside 3.10 to 3.13. The floor is unchanged
+  at 3.10: this widens the supported range at the top and nothing else. No
+  package code had to change to get there, since `pandid/` imports only the
+  standard library and none of what it imports is touched by 3.14's
+  removals; the suite passes unchanged and no golden moves. The optional
+  `pdf` extra works on 3.14 too, `cairosvg` and its C-extension dependency
+  `cffi` both resolving to wheels rather than a source build.
 
 ### Fixed
 
