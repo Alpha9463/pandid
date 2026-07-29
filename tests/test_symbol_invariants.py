@@ -1223,7 +1223,15 @@ def test_a_series_on_another_face_is_not_a_collision():
 
 
 def test_variants_lists_a_kinds_catalogue_default_first():
-    assert default_registry.variants("tank") == ["default", "conical", "floating_roof", "sphere"]
+    assert default_registry.variants("tank") == [
+        "default",
+        "conical",
+        "conical_bottom",
+        "conical_ends",
+        "dished_roof_conical_bottom",
+        "floating_roof",
+        "sphere",
+    ]
 
 
 def test_an_unregistered_variant_raises_naming_the_ones_that_exist():

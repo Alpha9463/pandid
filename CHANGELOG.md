@@ -9,6 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Four more `Vessel` variants, vendored from the same draw.io stencil file the
+  rest of the family comes from: `legs` (the shell standing on a pair of legs),
+  `insulated` (lagged, with the insulation hatched down both walls),
+  `electrical_heating` (a resistor element on the shell wall) and `swaged` (one
+  vessel in two diameters, the larger below).
+
+  Three of them are a change of artwork and nothing else. `legs` is
+  `skirted`'s shell and heads to the unit, in `skirted`'s 40 × 122.7 box, and
+  takes its nozzles verbatim; `insulated` is `jacketed`'s, in `jacketed`'s
+  52 × 95.4 box, with the cladding drawn on the same two lines the jacket
+  panels' outer walls are on. Swapping between any of them moves nothing on a
+  sheet already drawn.
+
+  `electrical_heating` is the exception and says so: the element occupies the
+  east shell wall across the shell's mid-height, so its `outlet` drops to the
+  clear wall below rather than having its run drawn through the heater.
+
+- Three more `Tank` variants, for the tanks that drain to a cone rather than to
+  a floor: `conical_bottom` (flat roof), `conical_ends` (a cone at each end) and
+  `dished_roof_conical_bottom`. The last takes `default`'s port map verbatim —
+  the roof is the same arc over the same chord, so the `inlet` is on the same
+  crown, and `outlet` resolves to the cone's apex where on `default` it resolved
+  to the flat floor.
+
+  All seven join the symbols ISO 15519-1 §11.4.2 forbids turning, taking the
+  count to 41. The vessels for the family's own reason (a vent on the top head
+  over a free surface), and the three cone-bottomed tanks for the fall into the
+  cone, which is what the hopper-bottomed separators are already listed for:
+  turned, the cone is a roof and the tank drains nowhere.
+
+  Nothing already drawable changes. The regenerated symbol file is purely
+  additive, 63 lines added and none removed, and no golden moves.
+
 - Four `Separator` variants that separate **mechanically** rather than into
   phases: `sifter` (a screen deck), `impact` (a baffle), `permanent_magnet` and
   `electromagnetic`. All four are one hopper-bottomed body apart from the

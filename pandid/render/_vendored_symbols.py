@@ -747,6 +747,24 @@ def register_vendored(registry):
         gravity_fixed=True,
     ), 'jacketed')
 
+    # draw.io vessels:Vessel (Dished Ends, Thermal Insulation) (aspect=variable) -> vessel/insulated
+    registry.register('vessel', Symbol(
+        svg='<g id="sym_vessel_insulated"><path d="M 46.0 7.69 L 46.0 87.69 A 13.0 5.0 0.0 0 1 26.0 95.3823 A 13.0 5.0 0.0 0 1 6.0 87.69 L 6.0 7.69 A 13.0 5.0 0.0 0 1 26.0 -0.0023 A 13.0 5.0 0.0 0 1 46.0 7.69 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 6.0 7.69 L 46.0 7.69 M 6.0 87.69 L 46.0 87.69 M 0.0 12.69 L 0.0 82.69 M 52.0 12.69 L 52.0 82.69 M 6.0 12.69 L 0.0 18.69 M 6.0 17.69 L 0.0 23.69 M 6.0 22.69 L 0.0 28.69 M 6.0 27.69 L 0.0 33.69 M 6.0 32.69 L 0.0 38.69 M 6.0 37.69 L 0.0 43.69 M 6.0 42.69 L 0.0 48.69 M 6.0 47.69 L 0.0 53.69 M 6.0 52.69 L 0.0 58.69 M 6.0 57.69 L 0.0 63.69 M 6.0 62.69 L 0.0 68.69 M 6.0 67.69 L 0.0 73.69 M 6.0 72.69 L 0.0 78.69 M 6.0 77.69 L 1.0 82.69 M 52.0 12.69 L 46.0 18.69 M 52.0 17.69 L 46.0 23.69 M 52.0 22.69 L 46.0 28.69 M 52.0 27.69 L 46.0 33.69 M 52.0 32.69 L 46.0 38.69 M 52.0 37.69 L 46.0 43.69 M 52.0 42.69 L 46.0 48.69 M 52.0 47.69 L 46.0 53.69 M 52.0 52.69 L 46.0 58.69 M 52.0 57.69 L 46.0 63.69 M 52.0 62.69 L 46.0 68.69 M 52.0 67.69 L 46.0 73.69 M 52.0 72.69 L 46.0 78.69 M 52.0 77.69 L 47.0 82.69" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=52.0, height=95.4,
+        ports={'inlet': (0.0, 47.7), 'outlet': (52.0, 47.7), 'vent': (26.0, 0.0)},
+        # must not be turned: vent on the top head, free surface below it
+        gravity_fixed=True,
+    ), 'insulated')
+
+    # draw.io vessels:Vessel (Dished Ends, Electrical Heating) (aspect=variable) -> vessel/electrical_heating
+    registry.register('vessel', Symbol(
+        svg='<g id="sym_vessel_electrical_heating"><path d="M 40.0 7.69 L 40.0 87.69 A 13.0 5.0 0.0 0 1 20.0 95.3823 A 13.0 5.0 0.0 0 1 0.0 87.69 L 0.0 7.69 A 13.0 5.0 0.0 0 1 20.0 -0.0023 A 13.0 5.0 0.0 0 1 40.0 7.69 Z M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69" fill="none" stroke="#111" stroke-width="2.0"/><rect x="44.0" y="37.69" width="6.0" height="20.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 47.0 27.69 L 47.0 37.69 M 47.0 57.69 L 47.0 67.69 M 44.0 42.69 L 50.0 42.69 M 44.0 47.69 L 50.0 47.69 M 44.0 52.69 L 50.0 52.69" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=50.0, height=95.4,
+        ports={'inlet': (0.0, 47.7), 'outlet': (40.0, 77.7), 'vent': (20.0, 0.0)},
+        # must not be turned: vent on the top head, low draw-off from the shell
+        gravity_fixed=True,
+    ), 'electrical_heating')
+
     # draw.io vessels:Vessel (Dished Ends, Skirts) (aspect=variable) -> vessel/skirted
     registry.register('vessel', Symbol(
         svg='<g id="sym_vessel_skirted"><path d="M 40.0 7.69 L 40.0 87.69 A 13.0 5.0 0.0 0 1 20.0 95.3823 A 13.0 5.0 0.0 0 1 0.0 87.69 L 0.0 7.69 A 13.0 5.0 0.0 0 1 20.0 -0.0023 A 13.0 5.0 0.0 0 1 40.0 7.69 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69 M 0.0 87.69 L 0.0 122.69 L 8.0 122.69 M 40.0 87.69 L 40.0 122.69 L 32.0 122.69" fill="none" stroke="#111" stroke-width="2.0"/></g>',
@@ -755,6 +773,24 @@ def register_vendored(registry):
         # must not be turned: vent on the top head; stands on a skirt
         gravity_fixed=True,
     ), 'skirted')
+
+    # draw.io vessels:Vessel (Dished Ends, Legs) (aspect=variable) -> vessel/legs
+    registry.register('vessel', Symbol(
+        svg='<g id="sym_vessel_legs"><rect x="0.0" y="87.69" width="8.0" height="35.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="32.0" y="87.69" width="8.0" height="35.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 40.0 7.69 L 40.0 87.69 A 13.0 5.0 0.0 0 1 20.0 95.3823 A 13.0 5.0 0.0 0 1 0.0 87.69 L 0.0 7.69 A 13.0 5.0 0.0 0 1 20.0 -0.0023 A 13.0 5.0 0.0 0 1 40.0 7.69 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=40.0, height=122.7,
+        ports={'inlet': (0.0, 47.7), 'outlet': (40.0, 47.7), 'vent': (20.0, 0.0)},
+        # must not be turned: vent on the top head; stands on legs
+        gravity_fixed=True,
+    ), 'legs')
+
+    # draw.io vessels:Vessel (Different Diameters) (aspect=variable) -> vessel/swaged
+    registry.register('vessel', Symbol(
+        svg='<g id="sym_vessel_swaged"><path d="M 10.0 15.0 A 10.0 10.0 0.0 0 1 25.0 0.0 A 10.0 10.0 0.0 0 1 40.0 15.0 L 40.0 40.0 L 50.0 50.0 L 50.0 85.0 A 20.0 10.0 0.0 0 1 25.0 97.5 A 20.0 10.0 0.0 0 1 0.0 85.0 L 0.0 50.25 L 10.0 40.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=50.0, height=97.5,
+        ports={'inlet': (0.0, 67.0), 'outlet': (50.0, 67.0), 'vent': (25.0, 0.0)},
+        # must not be turned: vent on the top head, and the larger diameter is the one below it
+        gravity_fixed=True,
+    ), 'swaged')
 
     # draw.io vessels:Tank (Floating Roof) (aspect=variable) -> tank/floating_roof
     registry.register('tank', Symbol(
@@ -773,6 +809,33 @@ def register_vendored(registry):
         # must not be turned: stands on legs, fills at the crown and drains at the bottom
         gravity_fixed=True,
     ), 'sphere')
+
+    # draw.io vessels:Tank (Conical Bottom) (aspect=variable) -> tank/conical_bottom
+    registry.register('tank', Symbol(
+        svg='<g id="sym_tank_conical_bottom"><path d="M 0.0 70.0 L 0.0 0.0 L 100.0 0.0 L 100.0 70.0 L 50.0 100.0 Z M 0.0 70.0 L 100.0 70.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=100.0, height=100.0,
+        ports={'inlet': (50.0, 0.0), 'outlet': (50.0, 100.0)},
+        # must not be turned: flat roof over a free surface, drains to the cone apex
+        gravity_fixed=True,
+    ), 'conical_bottom')
+
+    # draw.io vessels:Tank (Conical Roof and Bottom) (aspect=variable) -> tank/conical_ends
+    registry.register('tank', Symbol(
+        svg='<g id="sym_tank_conical_ends"><path d="M 1.0 30.0 L 51.0 0.0 L 101.0 30.0 L 101.0 120.0 L 51.0 150.0 L 1.0 120.0 Z M 1.0 120.0 L 101.0 120.0 M 1.0 30.0 L 101.0 30.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=101.0, height=150.0,
+        ports={'inlet': (51.0, 0.0), 'outlet': (51.0, 150.0)},
+        # must not be turned: conical roof over a free surface, drains to the cone apex
+        gravity_fixed=True,
+    ), 'conical_ends')
+
+    # draw.io vessels:Tank (Dished Roof, Conical Bottom) (aspect=variable) -> tank/dished_roof_conical_bottom
+    registry.register('tank', Symbol(
+        svg='<g id="sym_tank_dished_roof_conical_bottom"><path d="M 0.0 95.46 L 0.0 25.46 A 75.0 75.0 0.0 0 1 100.0 25.46 L 100.0 95.46 L 50.0 125.46 Z M 0.0 25.46 L 100.0 25.46 M 0.0 95.46 L 100.0 95.46" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=100.0, height=125.5,
+        ports={'inlet': (50.0, 6.4), 'outlet': (50.0, 125.5)},
+        # must not be turned: dished roof over a free surface, drains to the cone apex
+        gravity_fixed=True,
+    ), 'dished_roof_conical_bottom')
 
     # draw.io vessels:Reactor (aspect=variable) -> reactor/plain
     registry.register('reactor', Symbol(
