@@ -81,10 +81,10 @@
   <g id="unit_labels">
     <rect x="258.4" y="210.0" width="47.6" height="15.0" fill="white" />
     <text x="282.25" y="217.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FV-101</text>
-    <rect x="430.5" y="252.5" width="41.0" height="15.0" fill="white" />
-    <text x="451.0" y="260.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">V-101</text>
-    <rect x="162.4" y="165.5" width="47.6" height="15.0" fill="white" />
-    <text x="186.25" y="177.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">FE-101</text>
+    <rect x="406.5" y="252.5" width="41.0" height="15.0" fill="white" />
+    <text x="427.0" y="260.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">V-101</text>
+    <rect x="162.4" y="210.0" width="47.6" height="15.0" fill="white" />
+    <text x="186.25" y="217.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FE-101</text>
     <rect x="628.5" y="165.5" width="47.6" height="15.0" fill="white" />
     <text x="652.25" y="177.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">LV-101</text>
     <rect x="466.0" y="54.9" width="54.2" height="15.0" fill="white" />

@@ -72,6 +72,145 @@ def _slide(x: float, y: float, room: float, vertical: bool):
         yield (x, y + d) if vertical else (x + d, y)
 
 
+# --- the ink a halo would delete ---------------------------------------------
+# Every label on the sheet is written on an opaque rect, so wherever one lands it
+# erases whatever was drawn under it. Placement has to be told where the ink is,
+# and the ink is not just the symbols: it is every routed segment and every
+# impulse line too. A halo that deletes a length of somebody else's pipe leaves
+# a drawing that says two things which are not true -- that the line stops there,
+# and that the gap is where a reader may write -- and neither is visible to the
+# validator, since the topology it checks is untouched. So the lines are seeded
+# as occupied alongside the boxes, and what is left is a *placement* problem.
+
+
+class _Ink(NamedTuple):
+    """A drawn line, as the rectangle its stroke covers.
+
+    ``axis``/``at`` name the infinite line it lies on (``"h"`` at a ``y``,
+    ``"v"`` at an ``x``), which is how a label tells its own run from a line
+    that merely crosses it: breaking the run you are labelling is the whole
+    convention, and breaking the one beside it is a lie about that line.
+    """
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+    axis: str
+    at: float
+    kind: str  # "pipe" or "tap"
+
+    @property
+    def box(self) -> "tuple[float, float, float, float]":
+        """The covered rectangle, in the form every collision test here takes."""
+        return (self.x0, self.y0, self.x1, self.y1)
+
+
+def _tap_lines(fs):
+    """Every impulse line the sheet draws, as ``(tap point, balloon centre)``.
+
+    The line from a tap to the balloon reading it, and the rule for when there
+    is one at all: nothing is drawn where a stream already joins the two, or
+    where the element sits directly on the line (``offset=0``). Shared by the
+    drawing pass and by label placement, so a label cannot be placed against an
+    impulse line the renderer then declines to draw, or over one it does.
+    """
+    from pandid.layout.attach import is_attached
+
+    wired = {(id(s.source.owner), id(s.dest.owner)) for s in fs.streams}
+    out = []
+    for u in fs.units:
+        tap = getattr(u, "tap", None)
+        if not is_attached(u) or tap is None or u.frame is None:
+            continue
+        host = u.host
+        if (id(u), id(host)) in wired or (id(host), id(u)) in wired:
+            continue
+        centre = (u.frame.cx, u.frame.cy)
+        if abs(centre[0] - tap[0]) < 0.5 and abs(centre[1] - tap[1]) < 0.5:
+            continue
+        out.append((u, tap, centre))
+    return out
+
+
+def _ink(fs) -> "list[_Ink]":
+    """Every line the sheet draws, as the rectangle its stroke actually covers.
+
+    Padded by a whole stroke width. Half of that is the ink itself, drawn
+    centred on the path, and the other half is the margin that stops a halo from
+    shaving the edge of a line it only just reaches: a run clipped to nine tenths
+    of its weight reads as a fault in the drawing rather than as a line.
+
+    The paths come from :func:`~pandid.layout.attach.stream_path`, which is what
+    :meth:`SvgRenderer._draw_streams` draws, so what is dodged here is what
+    lands on the sheet.
+    """
+    from pandid.layout.attach import stream_path
+
+    out: list[_Ink] = []
+
+    def add(a, b, pad: float, kind: str) -> None:
+        (ax, ay), (bx, by) = a, b
+        if abs(ax - bx) < 0.5 and abs(ay - by) < 0.5:
+            return  # a zero-length hop between coincident points draws nothing
+        axis, at = ("v", (ax + bx) / 2) if abs(ax - bx) < abs(ay - by) else ("h", (ay + by) / 2)
+        out.append(_Ink(min(ax, bx) - pad, min(ay, by) - pad,
+                        max(ax, bx) + pad, max(ay, by) + pad, axis, at, kind))
+
+    for s in fs.streams:
+        pad = float(_SIGNAL_STROKE if s.kind in _SIGNAL_KINDS else _PROCESS_STROKE)
+        points = stream_path(s)
+        for a, b in zip(points, points[1:]):
+            add(a, b, pad, "pipe")
+    for _u, tap, centre in _tap_lines(fs):
+        add(tap, centre, float(_SIGNAL_STROKE), "tap")
+    return out
+
+
+def _meets(box, region) -> bool:
+    """Do two rectangles share any area? Touching edge to edge does not count,
+    since the padding a line already carries is what keeps a halo off it."""
+    return (box[2] > region[0] and box[0] < region[2]
+            and box[3] > region[1] and box[1] < region[3])
+
+
+def _erases(box, ink) -> "tuple[int, int]":
+    """What a halo at *box* would delete: impulse lines first, then pipe.
+
+    Ordered, because the two are not worth the same. An equipment tag written
+    over a pipe is a defensible drawing: the run is long, it is identified at
+    both ends, and a reader follows it past the break. An impulse line is the
+    only mark on the sheet saying *where* a transmitter measures, it is a couple
+    of centimetres long, and deleting a length of it deletes the statement. So a
+    tag steps off a tap line first and off a pipe second, and comparing these
+    tuples is what does the stepping.
+    """
+    taps = pipes = 0
+    for line in ink:
+        if _meets(box, line.box):
+            if line.kind == "tap":
+                taps += 1
+            else:
+                pipes += 1
+    return taps, pipes
+
+
+def _covering(box, occupied, limit: int) -> int:
+    """How many of *occupied* a halo at *box* would cover, counted to *limit*.
+
+    The search only ever needs to know whether a spot is worse than the best one
+    so far, so counting stops there. That is what keeps a label on a crowded
+    sheet, where nothing is clear and every anchor has to be scored, costing what
+    the old first-clear-wins scan cost.
+    """
+    n = 0
+    for p in occupied:
+        if _meets(box, p):
+            n += 1
+            if n >= limit:
+                break
+    return n
+
+
 def _label_anchors(cx: float, cy: float, span: float, hw: float, hh: float, vertical: bool):
     """Where a label of ``hw`` x ``hh`` may go on a run of ``span``, best first.
 
@@ -478,8 +617,14 @@ class SvgRenderer:
         lines.extend(self._defs(fs, arrows))
         unit_labels: list = []
         balloons: list = []
-        drawing = self._draw_units(fs, unit_labels, balloons)
-        drawing.extend(self._draw_streams(fs, jump_direction, unit_labels, arrows))
+        # Where every line on the sheet runs. Both label passes below write on an
+        # opaque halo and so have to be told, and this is the first point in the
+        # program where the answer exists: the routes are settled and the
+        # balloons have stopped moving, so the impulse lines are settled with
+        # them. See :func:`_ink`.
+        ink = _ink(fs)
+        drawing = self._draw_units(fs, unit_labels, balloons, ink)
+        drawing.extend(self._draw_streams(fs, jump_direction, unit_labels, arrows, ink))
         # Instrumentation goes on over the lines: an impulse line runs from the
         # tap to the balloon, and the balloon's opaque body then knocks out both
         # it and any process line an in-line element straddles.
@@ -927,7 +1072,7 @@ class SvgRenderer:
 
     # ------------------------------------------------------------------ units
 
-    def _draw_units(self, fs, label_items, balloons):
+    def _draw_units(self, fs, label_items, balloons, ink=()):
         lines = ['  <g id="units">']
         for u in fs.units:
             f = u.frame
@@ -976,21 +1121,23 @@ class SvgRenderer:
                 # A symbol that carries no tag is labelled nowhere. Only the
                 # pipe tee is such a symbol today: it is bare pipe, and an
                 # issued sheet writes nothing against a junction.
+                tag_box = None
                 if u.tag:
-                    label_items.append(
-                        self._unit_label_item(u, f, x, y, u_width, u_height, safe_name))
+                    item = self._tag_item(u, f, x, y, u_width, u_height, safe_name, ink)
+                    tag_box = _unit_label_box(item)
+                    label_items.append(item)
                 # A body that cannot carry the darkening says so in letters
                 # instead; see ISO 15519-1 §11.4.5 and _nc_label_item.
                 if closed_marking(u, self.registry) == "NC":
                     label_items.append(
-                        self._nc_label_item(u, f, x, y, u_width, u_height))
+                        self._nc_label_item(u, f, x, y, u_width, u_height, tag_box))
                 # Where an actuated valve goes when its air or power is lost.
                 # A separate question from the one above, in a separate corner;
                 # see ISA-5.1 Table 5.4.4 and _fail_label_item.
                 letters = fail_marking(u)
                 if letters:
                     label_items.append(
-                        self._fail_label_item(u, f, x, y, u_width, u_height, letters))
+                        self._fail_label_item(u, f, x, y, u_width, u_height, letters, tag_box))
         lines.append('  </g>')
         return lines
 
@@ -1005,23 +1152,14 @@ class SvgRenderer:
         Fine is the same fine as a signal stream: ISO 15519-2 Annex A.1.02 puts
         an instrument connection on the 0,25 rung, alongside the signal line and
         half the pipeline it taps. See :data:`_SIGNAL_STROKE`.
-        """
-        from pandid.layout.attach import is_attached
 
-        wired = {(id(s.source.owner), id(s.dest.owner)) for s in fs.streams}
+        Which lines there are is :func:`_tap_lines`' answer, since label
+        placement has to dodge exactly the ones this draws.
+        """
         out = []
-        for u in fs.units:
-            tap = getattr(u, "tap", None)
-            if not is_attached(u) or tap is None or u.frame is None:
-                continue
-            host = u.host
-            if (id(u), id(host)) in wired or (id(host), id(u)) in wired:
-                continue
-            tx, ty = tap
-            cx, cy = u.frame.cx, u.frame.cy
-            if abs(cx - tx) < 0.5 and abs(cy - ty) < 0.5:
-                continue
-            dash = ' stroke-dasharray="5,4"' if getattr(host, "kind", "") == "instrument" else ""
+        for u, (tx, ty), (cx, cy) in _tap_lines(fs):
+            dash = (' stroke-dasharray="5,4"'
+                    if getattr(u.host, "kind", "") == "instrument" else "")
             out.append(f'    <line x1="{_num(tx)}" y1="{_num(ty)}" x2="{_num(cx)}" '
                        f'y2="{_num(cy)}" stroke="black" stroke-width="{_SIGNAL_STROKE}"{dash} />')
         return ['  <g id="instrument_taps">'] + out + ['  </g>'] if out else []
@@ -1125,7 +1263,66 @@ class SvgRenderer:
         lpos = f.label_pos or "top"
         return (*self._label_place(lpos, x, y, u_width, u_height), lpos, safe_name)
 
-    def _nc_label_item(self, u, f, x, y, u_width, u_height):
+    def _tag_item(self, u, f, x, y, u_width, u_height, safe_name, ink):
+        """The equipment tag, stepped clear of ink already on the sheet.
+
+        :func:`~pandid.layout.coordinates.assign_labels` chose the side, from the
+        faces no nozzle leaves from, which is the whole of what is knowable while
+        layout runs. It is not the whole of the question. A face with no nozzle of
+        its own still has the line that passes it, and the impulse line running
+        from a tap on that line to the balloon reading it; the tag is drawn last
+        of everything, on an opaque halo, so it wins against both, and what it
+        wins is a hole in somebody else's line.
+
+        So the placement is settled again here, where the ink exists. The tag
+        first steps *along* the side it was given, which is the same move the
+        ``NC`` and fail-position letters make around it: a reader scans a sheet
+        by side, so a tag beside the symbol it names on the face layout chose is
+        worth more than a tidy centring. Only when the whole face is spoken for
+        does it try another free one. The first placement that deletes nothing
+        wins; where nothing is clear the least damaging wins, weighed by
+        :func:`_erases`, and a tie keeps the earlier answer, so a tag that has
+        nowhere better to go stays where layout put it.
+
+        A side the author named is left where they put it, as is one the symbol
+        fixes (an instrument balloon's ``center``), because neither is this
+        function's to overrule.
+        """
+        from pandid.layout.coordinates import free_label_sides
+
+        item = self._unit_label_item(u, f, x, y, u_width, u_height, safe_name)
+        box = _unit_label_box(item)
+        if box is None or not ink:
+            return item
+        if getattr(u, "label_pos", None) or self.registry.for_unit(u).label_pos:
+            return item
+        # Only ink near this unit can be under one of its tag's candidate spots,
+        # and testing the whole sheet against every one of them is what would
+        # make choosing between them expensive.
+        pad = max(u_width, u_height) + (box[2] - box[0])
+        near = [line for line in ink
+                if _meets(line.box, (x - pad, y - pad, x + u_width + pad, y + u_height + pad))]
+
+        best, damage = item, _erases(box, near)
+        sides = [item[4]] + [s for s in free_label_sides(u) if s != item[4]]
+        for side in sides:
+            if damage == (0, 0):
+                break
+            lx, ly, anchor, baseline = self._label_place(side, x, y, u_width, u_height)
+            # A tag steps along its face only as far as the symbol's own half
+            # width (or half height, on a side face). Past that it stops reading
+            # as this unit's tag and starts reading as the neighbour's.
+            edgewise = side in ("left", "right")
+            for sx, sy in _slide(lx, ly, (u_height if edgewise else u_width) / 2, edgewise):
+                spot = (sx, sy, anchor, baseline, side, safe_name)
+                cost = _erases(_unit_label_box(spot), near)
+                if cost < damage:
+                    best, damage = spot, cost
+                    if damage == (0, 0):
+                        break
+        return best
+
+    def _nc_label_item(self, u, f, x, y, u_width, u_height, tag_box=None):
         """The ``NC`` abbreviation, for a valve whose body cannot be darkened.
 
         **ISO 15519-1 §11.4.5** governs the letters: the state "may be indicated
@@ -1150,10 +1347,12 @@ class SvgRenderer:
         Where the equipment tag already reaches into that corner, the
         abbreviation steps past it rather than over it. Both are drawn on opaque
         halos in the same final pass, so the second one down would otherwise
-        erase the first.
+        erase the first. ``tag_box`` is where that tag actually landed, which is
+        not always the side layout picked (see :meth:`_tag_item`); it is resolved
+        from the frame when a caller has not already done so.
         """
         item = (*self._label_place("top_right", x, y, u_width, u_height), "top_right", "NC")
-        tag = _unit_label_box(self._unit_label_item(
+        tag = tag_box if tag_box is not None else _unit_label_box(self._unit_label_item(
             u, f, x, y, u_width, u_height, html.escape(u.tag)))
         nc = _unit_label_box(item)
         if tag is not None and nc is not None and (
@@ -1162,7 +1361,7 @@ class SvgRenderer:
             item = (lx + tag[2] - nc[0] + 6, ly, anchor, baseline, lpos, text)
         return item
 
-    def _fail_label_item(self, u, f, x, y, u_width, u_height, letters):
+    def _fail_label_item(self, u, f, x, y, u_width, u_height, letters, tag_box=None):
         """The fail position, in letters, beside the valve body.
 
         The letters are **ANSI/ISA-5.1-2009 Table 5.4.4** Method B, which **PIP
@@ -1197,7 +1396,9 @@ class SvgRenderer:
         the engine chooses freely, and does choose the right-hand side for a
         valve on a riser -- the letters step past it along that same side rather
         than over it. Both are drawn on opaque halos in the same final pass, so
-        the second one down would otherwise erase the first.
+        the second one down would otherwise erase the first. ``tag_box`` is where
+        that tag actually landed (see :meth:`_tag_item`), resolved from the frame
+        when a caller has not already done so.
 
         Nothing steps past a *neighbouring* unit, which is the one case to place
         around by hand. ``pin(mirrored="y")`` turns a valve's artwork over and
@@ -1212,7 +1413,7 @@ class SvgRenderer:
         upright = int(getattr(f, "orientation", 0) or 0) in (90, 270)
         lpos = "right" if upright else "bottom"
         item = (*self._label_place(lpos, x, y, u_width, u_height), lpos, letters)
-        tag = _unit_label_box(self._unit_label_item(
+        tag = tag_box if tag_box is not None else _unit_label_box(self._unit_label_item(
             u, f, x, y, u_width, u_height, html.escape(u.tag)))
         fail = _unit_label_box(item)
         if tag is not None and fail is not None and (
@@ -1273,7 +1474,7 @@ class SvgRenderer:
         dest = s.dest.owner
         return not self.registry.for_unit(dest).bare_run
 
-    def _draw_streams(self, fs, jump_direction, unit_labels, arrows=True):
+    def _draw_streams(self, fs, jump_direction, unit_labels, arrows=True, ink=()):
         from pandid.portgeom import port_point, unit_box
 
         stream_geoms, horizontals, verticals = [], [], []
@@ -1409,20 +1610,23 @@ class SvgRenderer:
         # turns the annotation on every vertical connecting line to read bottom
         # to top, left of the line, while boxing symbol designations flat.
         #
-        # Everything already on the sheet is seeded as occupied so a label slides
-        # clear of it: balloons and equipment tags are drawn over the lines, so a
-        # number parked under one would simply vanish, and a number over a symbol
-        # would take a bite out of it with its own halo. Two streams sharing a
-        # corridor sit only a few px apart, so their labels are held apart the
-        # same way, which is what a draftsman does.
+        # What is already on the sheet is seeded as occupied so a label slides
+        # clear of it. The boxes: balloons and equipment tags are drawn over the
+        # lines, so a number parked under one would simply vanish, and a number
+        # over a symbol would take a bite out of it with its own halo. The lines
+        # too, every routed segment and every impulse line (:func:`_ink`), since
+        # the halo is opaque and a number written across a passing run deletes a
+        # length of it. And each label as it lands, because two streams sharing a
+        # corridor sit only a few px apart, which is what a draftsman does.
+        #
+        # The single exception is the run the label names. Writing the number
+        # *in* the line is the convention, and the halo is what opens the gap it
+        # is written in, so a line collinear with the labelled segment is left
+        # out of that run's seeds below.
         placed: list[tuple[float, float, float, float]] = [
             unit_box(u, u.frame) for u in fs.units if u.frame is not None
         ]
         placed += [b for b in map(_unit_label_box, unit_labels) if b is not None]
-
-        def _clear(box):
-            return all(box[2] <= p[0] or box[0] >= p[2] or box[3] <= p[1] or box[1] >= p[3]
-                       for p in placed)
 
         for seg, name, color in label_items:
             (sx1, sy1), (sx2, sy2) = seg
@@ -1433,14 +1637,39 @@ class SvgRenderer:
             # Turned to follow the run, the halo measures hw along it, hh across.
             bw, bh = (hh, hw) if vertical else (hw, hh)
 
-            spot = None
+            # Everything the anchors below can reach: along the run as far as
+            # _label_anchors will slide the label, and across it as far as the
+            # outermost band beside the pipe. Seeds outside it can be dropped
+            # before the search rather than re-tested at every step of it.
+            along = (span + hw) / 2 + max(bw, bh) / 2
+            across = hh / 2 + _LABEL_GAP + 3 * hh + max(bw, bh) / 2
+            rx, ry = (across, along) if vertical else (along, across)
+            reach = (cx - rx, cy - ry, cx + rx, cy + ry)
+
+            axis, at = ("v", (sx1 + sx2) / 2) if vertical else ("h", (sy1 + sy2) / 2)
+            occupied = [p for p in placed if _meets(p, reach)]
+            occupied += [line.box for line in ink
+                         if not (line.axis == axis and abs(line.at - at) < 0.5)
+                         and _meets(line.box, reach)]
+
+            # Best first, and the first spot that covers nothing wins outright.
+            # Where nothing is clear -- a dozen-character line number in a
+            # crowded corridor -- the least damaging spot wins instead, and a tie
+            # keeps the earlier anchor. Since the anchors that sit *on* the pipe
+            # come first, that makes the label's own line the last resort, which
+            # is the right one: breaking the run you are naming is a convention a
+            # reader knows, and breaking the run beside it is a lie about that
+            # line. The old fallback was whichever anchor happened to be first,
+            # taken however much of the sheet it deleted.
+            spot, damage = None, None
             for ux, uy in _label_anchors(cx, cy, span, hw, hh, vertical):
                 box = (ux - bw / 2, uy - bh / 2, ux + bw / 2, uy + bh / 2)
-                if spot is None:
-                    spot = (ux, uy)  # first choice, kept if nothing is ever clear
-                if _clear(box):
-                    spot = (ux, uy)
-                    break
+                hits = _covering(box, occupied,
+                                 len(occupied) + 1 if damage is None else damage)
+                if damage is None or hits < damage:
+                    spot, damage = (ux, uy), hits
+                    if not hits:
+                        break
             tx, ty = spot
             placed.append((tx - bw / 2, ty - bh / 2, tx + bw / 2, ty + bh / 2))
             lines.append(f'    <rect x="{tx - bw / 2:.1f}" y="{ty - bh / 2:.1f}" '

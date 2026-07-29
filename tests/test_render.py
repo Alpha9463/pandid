@@ -1,13 +1,29 @@
+import html
 import re
 
+import pytest
+
 from pandid import Flowsheet, units as U
+from pandid.layout.attach import stream_path
+from pandid.streams import SIGNAL_KINDS
+
+from test_route_invariants import CORPUS
 
 # A stream-number label: its opaque halo, then the text it backs.
 _LABEL = re.compile(
     r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" height="([\d.]+)" fill="white" />\s*'
     r'(<text [^>]*font-size="10"[^>]*>)([^<]*)</text>'
 )
+# An equipment tag, the NC marking and the fail letters: the same halo, drawn at
+# the size a symbol's own lettering is drawn at.
+_TAG = re.compile(
+    r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" height="([\d.]+)" fill="white" />\s*'
+    r'<text [^>]*font-size="12"[^>]*>([^<]*)</text>'
+)
 _PROCESS_LINE = re.compile(r'<path d="([^"]+)" fill="none" stroke="[^"]*" stroke-width="2"')
+_TAP_LINE = re.compile(
+    r'<line x1="([-\d.]+)" y1="([-\d.]+)" x2="([-\d.]+)" y2="([-\d.]+)" stroke="black"'
+)
 
 
 def _stream_labels(svg):
@@ -221,3 +237,122 @@ def test_render_svg_generic_symbol_duplicate_ids(tmp_path):
     assert 'id="sym_unknown1"' in content
     assert 'id="sym_unknown2"' in content
     assert 'id="sym_generic"' not in content
+
+
+# --- no halo deletes a line that is not its own, over the whole corpus ---------
+# Every label on a sheet is written on an opaque rect and every one of them is
+# drawn after the lines, so a halo in the wrong place does not sit *over* a line,
+# it deletes a length of it and the drawing then says the run stops there. The
+# topology is untouched by that, so ``validate()`` has nothing to report and the
+# picture is the only witness -- which is why this is checked over every sheet
+# the repo ships rather than on a specimen built to fail.
+#
+# The one line a halo may cover is the run whose number is written in it. A break
+# in the line with the number in the break is the convention (ISO 15519-1
+# §7.2.5), and the halo is what opens the break. Anything else -- a second line,
+# a branch off its own line, the impulse line to a balloon -- is ink the label
+# had no business erasing, and an equipment tag, which names a *symbol* and no
+# run at all, may cover none of it.
+
+# Half the weight of each line, being how far its ink reaches either side of the
+# path it is drawn along. The renderer keeps a whole width clear (see
+# ``pandid.render.svg._ink``); this asks only that no ink was actually deleted.
+_INK_REACH = {"process": 1.0, "signal": 0.5}
+
+
+def _tag_labels(svg):
+    """``(halo box, text)`` for every equipment tag and marking on the sheet."""
+    tags = svg[svg.index('id="unit_labels"') :]
+    out = []
+    for x, y, w, h, text in _TAG.findall(tags):
+        x, y, w, h = float(x), float(y), float(w), float(h)
+        out.append(((x, y, x + w, y + h), html.unescape(text)))
+    return out
+
+
+def _tap_runs(svg):
+    """Every impulse line drawn, as ``((x1, y1), (x2, y2))``.
+
+    Read back out of the SVG rather than recomputed from the model, so what is
+    checked is the line the sheet actually carries.
+    """
+    if 'id="instrument_taps"' not in svg:
+        return []
+    taps = svg[svg.index('id="instrument_taps"') : svg.index('id="unit_labels"')]
+    return [((float(a), float(b)), (float(c), float(d))) for a, b, c, d in _TAP_LINE.findall(taps)]
+
+
+def _lines_drawn(fs, svg):
+    """``(name, run, reach)`` for every line on the sheet.
+
+    The streams come from :func:`~pandid.layout.attach.stream_path`, which is
+    the polyline the renderer draws and so the only place a name is attached to
+    a run; the impulse lines come from the SVG, and belong to no run.
+    """
+    out = []
+    for s in fs.streams:
+        reach = _INK_REACH["signal" if s.kind in SIGNAL_KINDS else "process"]
+        points = stream_path(s)
+        out += [(s.name, run, reach) for run in zip(points, points[1:])]
+    out += [(None, run, _INK_REACH["signal"]) for run in _tap_runs(svg)]
+    return out
+
+
+def _deletes(box, run, reach):
+    """Whether a halo at *box* would erase ink from *run*, drawn *reach* wide."""
+    (rx0, ry0), (rx1, ry1) = run
+    return (
+        box[2] > min(rx0, rx1) - reach
+        and box[0] < max(rx0, rx1) + reach
+        and box[3] > min(ry0, ry1) - reach
+        and box[1] < max(ry0, ry1) + reach
+    )
+
+
+def _is_own_run(box, upright, label, name, run):
+    """Whether *run* is the very line this label's number is written in.
+
+    Its own name, and lying along the halo's centreline: a label is turned to
+    follow the run it names, so the run it is written *in* passes lengthwise
+    through the middle of the halo. A branch off that same line crosses the halo
+    instead of running through it, and is somebody else's ink even when the two
+    share a line number, which on a P&ID a whole valve station does.
+    """
+    if name != label:
+        return False
+    (x1, y1), (x2, y2) = run
+    if upright:
+        return abs(x1 - x2) < 0.5 and abs((box[0] + box[2]) / 2 - x1) <= 1.0
+    return abs(y1 - y2) < 0.5 and abs((box[1] + box[3]) / 2 - y1) <= 1.0
+
+
+@pytest.fixture(scope="module")
+def drawn():
+    """Every shipped sheet, laid out, routed and rendered once, keyed by name."""
+    sheets = {}
+    for name, build in CORPUS.items():
+        fs = build()
+        fs.layout()
+        fs.route()
+        sheets[name] = (fs, fs.to_svg())
+    return sheets
+
+
+@pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
+def test_no_label_halo_deletes_a_line_that_is_not_its_own(drawn, name):
+    fs, svg = drawn[name]
+    lines = _lines_drawn(fs, svg)
+
+    erased = []
+    for box, tag, text in _stream_labels(svg):
+        label = html.unescape(text)
+        upright = "rotate(-90, " in tag  # a label on a riser is turned to follow it
+        for owner, run, reach in lines:
+            if _deletes(box, run, reach) and not _is_own_run(box, upright, label, owner, run):
+                erased.append(f"{label!r} halo deletes {owner or 'an impulse line'} at {run}")
+    for box, text in _tag_labels(svg):
+        for owner, run, reach in lines:
+            if _deletes(box, run, reach):
+                erased.append(f"tag {text!r} halo deletes {owner or 'an impulse line'} at {run}")
+
+    assert not erased, f"{name}: " + "; ".join(sorted(set(erased)))

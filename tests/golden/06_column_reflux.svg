@@ -64,8 +64,8 @@
     <text x="835.7" y="645.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S10</text>
   </g>
   <g id="unit_labels">
-    <rect x="329.5" y="238.0" width="41.0" height="15.0" fill="white" />
-    <text x="350.0" y="250" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">T-701</text>
+    <rect x="305.5" y="238.0" width="41.0" height="15.0" fill="white" />
+    <text x="326.0" y="250" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">T-701</text>
     <rect x="690.0" y="80.5" width="41.0" height="15.0" fill="white" />
     <text x="690" y="88.0" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">E-701</text>
     <rect x="761.6" y="183.5" width="41.0" height="15.0" fill="white" />

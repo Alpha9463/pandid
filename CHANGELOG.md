@@ -87,6 +87,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A label's opaque halo no longer deletes a line that is not its own. Every
+  label is written on a white rect and drawn after the lines, so one in the
+  wrong place does not sit *over* a line, it erases a length of it and the sheet
+  then says the run stops there. Placement seeded the symbols and the equipment
+  tags as occupied and **not one routed segment**, so a line number parked beside
+  its own run cut whatever pipe passed behind it, and an equipment tag, which is
+  drawn last of everything, cut the impulse line running from a tap to the
+  balloon reading it. Both now dodge the ink: every routed segment and every
+  impulse line is seeded, padded by a stroke width so a halo cannot shave a line
+  it merely touches, and the one line a halo may still cover is the run whose
+  number is written in it, a break in the line being the convention that puts it
+  there (ISO 15519-1 §7.2.5). Where a sheet leaves nothing clear, the least
+  damaging spot wins rather than whichever the search reached first, and because
+  the spots on the line come first, that makes the label's own run the last
+  resort instead of a neighbour's. An equipment tag steps *along* its face
+  first, the move the `NC` and fail-position letters already make around it, and
+  only then tries another free face; it gives way to an impulse line before a
+  pipe, since the impulse line is the only mark saying where a transmitter
+  measures. Four line numbers and one tag move on example 11, and one tag each
+  on 04 (two, with `FE-101`), 06 and 07, along with the goldens and gallery
+  images for those. `tests/test_render.py` pins the invariant over every sheet
+  the repo ships: no halo covers a line that is not the run it names.
 - A `Column`'s feed family is centred between its two duty arrows, so every feed
   lands on the trayed section however many there are. It was centred on 130 in
   the tower's 200-unit shell and spread over half of it, while the band it was
