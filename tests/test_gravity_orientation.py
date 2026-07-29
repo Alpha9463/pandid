@@ -29,8 +29,10 @@ def _sheet(unit, **pin):
     if pin:
         held.pin(**pin)
     inlet = "feed" if "feed" in held.ports else "inlet"
-    outlet = (
-        "liquid" if "liquid" in held.ports else "bottoms" if "bottoms" in held.ports else "outlet"
+    # Whatever the unit calls the draw gravity puts at its low point: a drum's
+    # liquid, a tower's bottoms, a mechanical separator's underflow.
+    outlet = next(
+        name for name in ("liquid", "bottoms", "underflow", "outlet") if name in held.ports
     )
     fs.connect(feed.outlet, held.port(inlet))
     fs.connect(held.port(outlet), prod.inlet)
@@ -145,6 +147,14 @@ GRAVITY_FIXED = {
     ("separator", "horizontal"),
     ("separator", "knockout"),
     ("separator", "scrubber"),
+    # the four mechanical separators, listed for the hopper rather than for what
+    # does the separating: a magnet sorts by magnetism and a precipitator by
+    # charge, and what fixes the attitude of all of them is the fall into the
+    # hopper the artwork draws
+    ("separator", "sifter"),
+    ("separator", "impact"),
+    ("separator", "permanent_magnet"),
+    ("separator", "electromagnetic"),
     # a free liquid surface -- ISO's 2061
     ("tank", "default"),
     ("tank", "conical"),

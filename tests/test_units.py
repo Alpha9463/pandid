@@ -200,6 +200,85 @@ def test_only_the_kettle_carries_the_bottoms_draw():
         plate.bottoms
 
 
+# Exactly what 0.1.0 shipped, in order. Written out here rather than read off
+# the class so the test compares against the release and not against itself.
+_FLASH_DRUM_NOZZLES = [
+    ("feed", "inlet", "feed"),
+    ("vapor", "outlet", "vapor"),
+    ("liquid", "outlet", "liquid"),
+]
+
+
+def _nozzles(unit):
+    """A unit's ports as ``(name, direction, role)``, in declaration order."""
+    return [(p.name, p.direction, p.role) for p in unit.ports.values()]
+
+
+@pytest.mark.parametrize(
+    "variant",
+    [
+        "default",
+        "horizontal",
+        "knockout",
+        "cyclone",
+        "gravity",
+        "scrubber",
+        "electrostatic",
+    ],
+)
+def test_every_separator_0_1_0_could_draw_keeps_the_nozzles_it_shipped_with(variant):
+    """Giving `Separator` per-variant nozzles must not move a single one of the
+    nozzles it already had. These seven are every variant the symbol registry
+    answered to at 0.1.0, so this list is the released API: the same names, in
+    the same order, with the same directions and roles."""
+    assert _nozzles(U.Separator("V-101", variant=variant)) == _FLASH_DRUM_NOZZLES
+
+
+@pytest.mark.parametrize("variant", ["sifter", "impact", "permanent_magnet", "electromagnetic"])
+def test_a_mechanical_separator_draws_an_overflow_and_an_underflow(variant):
+    """A sifter's two products are size fractions and a magnet's are a bulk
+    stream and the tramp metal pulled out of it. Neither is a vapour or a
+    liquid, so neither borrows a phase it does not have. All four stencils are
+    one body with a high draw and a low draw, which is what the pair names, and
+    it is what classification calls them anyway."""
+    sep = U.Separator("S-1", variant=variant)
+    assert _nozzles(sep) == [
+        ("feed", "inlet", "feed"),
+        ("overflow", "outlet", "process"),
+        ("underflow", "outlet", "process"),
+    ]
+    # And it does not also carry the drum's, which the symbol cannot place.
+    with pytest.raises(AttributeError, match="available ports"):
+        sep.vapor
+
+
+@pytest.mark.parametrize("variant", ["sifter", "impact", "permanent_magnet", "electromagnetic"])
+def test_a_mechanical_separators_nozzles_land_where_the_stencil_anchors_are(variant):
+    """The names are only true if the overflow really is the high draw and the
+    underflow the low one. All four share the electrostatic precipitator's body
+    anchor for anchor, so the map is the same three points on every one."""
+    from pandid.render.symbols import default_registry
+
+    symbol = default_registry.get("separator", variant)
+    assert (symbol.width, symbol.height) == (80.0, 120.0)
+    assert symbol.ports == {
+        "feed": (0.0, 12.0),
+        "overflow": (80.0, 12.0),
+        "underflow": (40.0, 120.0),
+    }
+    # The overflow is on the side wall level with the feed; the underflow is the
+    # hopper apex, the lowest point the artwork has.
+    assert symbol.ports["overflow"][1] == symbol.ports["feed"][1]
+    assert symbol.ports["underflow"][1] == symbol.height
+
+
+def test_a_separator_variant_nobody_declared_still_gets_the_flash_drums_nozzles():
+    """The port table falls back rather than guessing, exactly as the
+    exchanger's does. Whether the variant name is real at all is the symbol
+    registry's question, asked at render."""
+    assert _nozzles(U.Separator("V-9", variant="not_a_variant")) == _FLASH_DRUM_NOZZLES
+
+
 def test_mixer_variable_inlets():
     m = U.Mixer("M", n_inlets=3)
     assert set(m.ports) == {"in_1", "in_2", "in_3", "outlet"}

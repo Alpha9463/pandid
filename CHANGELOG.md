@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Four `Separator` variants that separate **mechanically** rather than into
+  phases: `sifter` (a screen deck), `impact` (a baffle), `permanent_magnet` and
+  `electromagnetic`. All four are one hopper-bottomed body apart from the
+  internal that names them, and all four join the symbols
+  ISO 15519-1 §11.4.2 forbids turning, listed for the hopper rather than for
+  what does the separating: a magnet sorts by magnetism, and what fixes its
+  attitude is the fall into the hopper the artwork draws.
+- `Separator`'s nozzles are per-variant, the way `HeatExchanger`'s already are,
+  because those four cannot use the flash drum's. A sifter's two draws are size
+  fractions and a magnetic separator's are a bulk stream and the tramp metal
+  pulled out of it; neither is a vapour or a liquid. They carry `feed`,
+  `overflow` and `underflow` in place of `feed` / `vapor` / `liquid`.
+
+  The pair names the two *positions* the artwork has — the anchors are the draw
+  high on the body wall and the draw on the hopper apex — rather than what
+  arrives on them, on the same principle the exchanger's `shell`/`tube` nozzles
+  follow, and it is the ordinary vocabulary of classification and solid-liquid
+  separation. Neither name says which of the two is the product, because that is
+  a fact about the service and not about the machine: the same screen is a
+  scalping screen and a sizing screen depending on what is wanted out of it.
+
+  Nothing already drawable changes. `Separator("V-101")` and all six of the
+  other variants 0.1.0 shipped keep `feed` / `vapor` / `liquid`, in that order,
+  with the same directions and roles, and no golden moves.
+
 ### Changed
 
 - `Separator(variant="default")` is drawn as the plain dished-head vertical
