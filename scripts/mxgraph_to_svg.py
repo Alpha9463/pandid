@@ -79,6 +79,17 @@ def _arc_to_path(x0, y0, rx, ry, phi_deg, fa, fs, x, y):
         return f"A {rx} {ry} {phi_deg} {fa} {fs} {x} {y}"
 
     phi = math.radians(phi_deg)
+    # _endpoint_to_center applies the spec's own radius correction (F.6.6):
+    # radii too small to span the chord are scaled up until they exactly span
+    # it, which is the case this branch is reached in. ``rxx, ryy`` are that
+    # true ellipse, the one the points below are computed from, so they are also
+    # the radii each sub-arc has to be *emitted* with. Restating the originals
+    # instead hands every sub-arc radii too small for its own, shorter chord,
+    # and the renderer corrects them again -- independently, and by a different
+    # factor per segment, so the halves bulge differently. The endpoints stay
+    # exact either way, which is why the ports and the bounding box are right
+    # and only the curve between them is wrong: on the 40-wide vessel shells the
+    # two halves of a dished head met in a cusp instead of a crown.
     cx, cy, rxx, ryy, th1, dth = _endpoint_to_center(x0, y0, rx, ry, phi, fa, fs, x, y)
     n = max(2, math.ceil(abs(dth) / (math.pi / 2)))
     cosp, sinp = math.cos(phi), math.sin(phi)
@@ -88,11 +99,17 @@ def _arc_to_path(x0, y0, rx, ry, phi_deg, fa, fs, x, y):
                 cy + rxx * math.cos(t) * sinp + ryy * math.sin(t) * cosp)
 
     seg = dth / n
+    # The other three parameters carry over unchanged, and are right to: every
+    # sub-arc rides the same ellipse (so the same ``phi_deg``) in the same
+    # direction (so the same sweep flag). The large-arc flag is the one that is
+    # genuinely per-segment, and ``n`` holds every segment to a quarter turn or
+    # less, so it is 0 for all of them -- stated as the general rule rather than
+    # the constant, so it stays true if ``n`` ever changes.
     large = 1 if abs(seg) > math.pi else 0
     parts = []
     for i in range(1, n + 1):
         ex, ey = (x, y) if i == n else pt(th1 + seg * i)
-        parts.append(f"A {round(rx, 4)} {round(ry, 4)} {phi_deg} {large} {fs} "
+        parts.append(f"A {round(rxx, 4)} {round(ryy, 4)} {phi_deg} {large} {fs} "
                      f"{round(ex, 4)} {round(ey, 4)}")
     return " ".join(parts)
 
