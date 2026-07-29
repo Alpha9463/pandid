@@ -39,6 +39,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Separator(variant="knockout")` draws the knock-out drum the default used to,
   demister pad and level gauge and all, at the size and with the nozzles it had.
 
+### Fixed
+
+- Examples 03, 04, 07 and 09 no longer dogleg into their in-line devices. Each
+  pinned its valves, orifice plate, strainer and sight glass by the **corner**
+  while the equipment around them put its nozzles on a different elevation, so
+  the router had to step into every device and back out of it: 18 short jogs
+  across the four sheets, most of them exactly half a valve height. They are now
+  placed with `pin(port=..., y=run_y)`, which asks the symbol where its own
+  nozzle sits, so no half-height is written down and no rescaling of the artwork
+  can leave a device off its run. No symbol moved; this is placement only. In 03
+  the feed row also sat 25 above `T-100`'s feed nozzle, because the offset it was
+  aligned to had gone stale, and the whole run now lands on the nozzle itself.
+  The goldens and the gallery images for those four move with them.
+
 ## [0.1.0] - 2026-07-28
 
 First public release. Nothing was published before it, so everything below is the

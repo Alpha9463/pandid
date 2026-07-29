@@ -10,6 +10,7 @@ of ISO 10628-2.
 from _bootstrap import out  # runs from the repo root or from examples/
 
 from pandid import Flowsheet, units
+from pandid.portgeom import port_offset
 
 def main():
     fs = Flowsheet("Distillation Train")
@@ -41,26 +42,27 @@ def main():
     recycle_valve = fs.add(units.Valve("FV-200"))
     
     # --- Pinned coordinates (Manual Grid) ---
+    # Pinned by nozzle, not by corner: pin(port=...) asks each symbol where its
+    # own nozzle sits, so a run stays straight whatever size the artwork is
+    # drawn at and no half-height is written down here.
     col_y = 420
-    mixer_y = col_y + 105 - 25  # align mixer outlet (y+25) with col feed (col_y+105)
-    feed_y = mixer_y - 10       # align feed outlet (y+25) with mixer in_1 (y+15)
-    valve_y = col_y + 105 - 15  # align valve ports (y+15) with col feed line
-    hx_y = col_y + 105 - 30     # align HX tube_in (y+30) with col feed line
-
-    # Row positions left-to-right
-    feed.pin(x=160, y=feed_y)
-    mixer.pin(x=290, y=mixer_y)
-    feed_valve.pin(x=410, y=valve_y)
-    preheater.pin(x=520, y=hx_y)
-
-    # Column 1
     col1.pin(x=690, y=col_y)
+
+    # Feed row, left-to-right, every device on the column's own feed elevation.
+    feed_run_y = col_y + port_offset(col1, "feed")[1]
+    mixer.pin(x=290).pin(port="outlet", y=feed_run_y)
+    # A boundary flag is pinned at the tip of its arrow, which is where its line
+    # reaches it, and that line lands on the mixer's upper inlet -- which sits
+    # above the outlet the run itself is pinned on.
+    feed.pin(port="outlet", x=210, y=mixer.pin_.y + port_offset(mixer, "in_1")[1])
+    feed_valve.pin(x=410, port="inlet", y=feed_run_y)
+    preheater.pin(x=520, port="tube_in", y=feed_run_y)
 
     # Overhead: HX above column, product to the right
     ovhd_y = col_y - 80         # overhead HX row
     c1_ovhd.pin(x=820, y=ovhd_y)
-    # HX tube_out is at ovhd_y + 30. Product inlet is at y + 25.
-    c1_prod.pin(x=980, y=ovhd_y + 5)
+    ovhd_run_y = ovhd_y + port_offset(c1_ovhd, "tube_out")[1]
+    c1_prod.pin(x=980, port="inlet", y=ovhd_run_y)
 
     # Bottoms: pump below column
     bot_y = col_y + 205 + 30    # below column bottom
@@ -71,14 +73,14 @@ def main():
 
     # Column 2 overhead
     c2_ovhd.pin(x=1230, y=ovhd_y)
-    c2_prod.pin(x=1390, y=ovhd_y + 5)
+    c2_prod.pin(x=1390, port="inlet", y=ovhd_run_y)
 
     # Column 2 bottoms
     pump2.pin(x=1230, y=bot_y)
     # Move splitter up to align with pump2 discharge routing
     splitter.pin(x=1360, y=bot_y - 100)
-    # Splitter out_1 is at bot_y - 85. Product inlet is at y + 25.
-    c2_bot.pin(x=1480, y=bot_y - 110)
+    c2_bot.pin(x=1480, port="inlet",
+               y=splitter.pin_.y + port_offset(splitter, "out_1")[1])
 
     # Recycle valve below the pump row (receives flow from the right)
     recycle_valve.pin(x=590, y=bot_y + 100, mirrored=True)

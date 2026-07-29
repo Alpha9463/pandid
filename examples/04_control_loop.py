@@ -31,6 +31,7 @@ order. The instrumentation below it is placed entirely by its hosts.
 from _bootstrap import out  # runs from the repo root or from examples/
 
 from pandid import Flowsheet, units
+from pandid.portgeom import port_offset
 
 
 def main():
@@ -41,18 +42,31 @@ def main():
     flow = fs.add_loop("F", 101)
     level = fs.add_loop("L", 101)
 
-    feed = fs.add(units.Feed("Feed")).pin(x=60, y=170)
-    fv = fs.add(units.Valve(flow.tag("FV"), variant="control")).pin(x=270, y=180)
-    drum = fs.add(units.Vessel("V-101", description="Surge Drum")).pin(x=420, y=145)
+    # The process runs at one elevation across the sheet, so every unit on it is
+    # pinned by the nozzle that has to land there: pin(port=...) asks the symbol
+    # where its own nozzle sits, and nothing here writes down half a valve body.
+    # A boundary flag is pinned at the tip of its arrow, which is where its line
+    # reaches it.
+    run_y = 195
+
+    feed = fs.add(units.Feed("Feed")).pin(port="outlet", x=110, y=run_y)
+    fv = fs.add(units.Valve(flow.tag("FV"), variant="control")).pin(
+        x=270, port="inlet", y=run_y)
+    drum = fs.add(units.Vessel("V-101", description="Surge Drum")).pin(
+        x=420, port="inlet", y=run_y)
     fe = fs.add(units.Fitting(flow.tag("FE"), variant="orifice",
-                              description="Feed Orifice Plate")).pin(x=180, y=180)
+                              description="Feed Orifice Plate")).pin(
+        x=180, port="inlet", y=run_y)
     # The actuator faces the controller under the drum, so its signal drops
     # straight in rather than climbing over the valve to reach a stem on top.
     lv = fs.add(units.Valve(level.tag("LV"), variant="control")).pin(
-        x=640, y=180, mirrored="y")
-    prod = fs.add(units.Product("Product")).pin(x=790, y=170)
-    # A PSV is tagged as plain text beside the symbol, not in a balloon.
-    psv = fs.add(units.Valve("PSV-101", variant="relief")).pin(x=441, y=55)
+        x=640, port="inlet", y=run_y, mirrored="y")
+    prod = fs.add(units.Product("Product")).pin(port="inlet", x=790, y=run_y)
+    # A PSV is tagged as plain text beside the symbol, not in a balloon. It
+    # stands over the drum's relief nozzle, so its inlet is pinned on that
+    # nozzle's x; how high it stands is a free choice and stays a corner.
+    psv = fs.add(units.Valve("PSV-101", variant="relief")).pin(y=55).pin(
+        port="inlet", x=420 + port_offset(drum, "vent")[0])
     flare = fs.add(units.Product("To Flare", reference="P&ID-902")).pin(x=630, y=5)
 
     fs.connect(feed.outlet, fe.inlet)
