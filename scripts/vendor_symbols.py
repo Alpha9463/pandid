@@ -673,12 +673,74 @@ KIND_MAP = {
     ("vessel", "jacketed"): ("vessels", "Vessel (Dished Ends, Heating-Cooling Jacket)",
                              {"inlet": ("W", 47.7), "outlet": ("E", 47.7),
                               "vent": ("N", 26.0)}),
+    # Insulated: the same vessel again, lagged rather than jacketed, and the
+    # closest thing in the set to a pure change of artwork. The insulation is
+    # drawn as a line down each side at x = 0 and x = 52 with the hatch ticks
+    # between it and the shell, which is exactly where the jacket's outer panel
+    # walls are: same 52 x 95.38 box, same shell at x 6..46, same heads. So it
+    # takes ``jacketed``'s port map to the decimal, and a sheet swapping one for
+    # the other does not move a run. Both process nozzles are on that outer
+    # line, which spans y 12.69..82.69 and so is under them at any box the unit
+    # is drawn at, and the vent is on the top head's crown at (26, 0).
+    ("vessel", "insulated"): ("vessels", "Vessel (Dished Ends, Thermal Insulation)",
+                              {"inlet": ("W", 47.7), "outlet": ("E", 47.7),
+                               "vent": ("N", 26.0)}),
+    # Electrically heated: the 40-wide shell "skirted" and "legs" are drawn
+    # from, at x 0..40 between heads that reach y = 0 and y = 95.38, with the
+    # resistor element hung on the OUTSIDE of the east wall at x 44..50. That
+    # element is the only thing widening the box to 50, and it is why this is
+    # the one vessel in the family whose nozzles are not its siblings' to the
+    # decimal.
+    #
+    # The inlet still is. Nothing is drawn on the west side, so the shell wall
+    # IS the box's west face there and the inlet keeps the family's 47.7.
+    #
+    # The outlet cannot. The element and its two leads occupy y 27.69..67.69 out
+    # to the box edge, so a nozzle at 47.7 has its run drawn straight through
+    # the heater; it drops to 77.7, on the clear shell below, which is a low
+    # draw-off and how a vessel with a heating element in its side wall is piped
+    # anyway. It is pinned to the shell at x = 40 rather than taken from the
+    # box's east face, on ``dished``'s reason: the ink out at x = 50 is the
+    # heater's own casing, and a process nozzle does not belong on it.
+    ("vessel", "electrical_heating"): (
+        "vessels", "Vessel (Dished Ends, Electrical Heating)",
+        {"inlet": ("W", 47.7), "outlet": ("AT", 40.0, 77.7), "vent": ("N", 20.0)}),
     # Skirted: the same 40-wide shell as "dished", standing on a skirt instead
     # of brackets. Nothing widens the box here, so the shell walls ARE the box's
     # west and east faces and the two process nozzles take them directly.
     ("vessel", "skirted"): ("vessels", "Vessel (Dished Ends, Skirts)",
                             {"inlet": ("W", 47.7), "outlet": ("E", 47.7),
                              "vent": ("N", 20.0)}),
+    # Legs: "skirted"'s vessel on a pair of legs. The two stencils draw the same
+    # shell and the same heads from the same path -- x 0..40, straight between
+    # y 7.69 and 87.69, heads out to y = 0 and 95.38 -- in the same 40 x 122.69
+    # box, and differ only in what stands under y = 87.69: two rects at x 0..8
+    # and 32..40 here, a pair of skirt lines there. Nothing a nozzle sits on
+    # moves, so this takes ``skirted``'s port map verbatim, which is what a
+    # change of variant is supposed to cost.
+    ("vessel", "legs"): ("vessels", "Vessel (Dished Ends, Legs)",
+                         {"inlet": ("W", 47.7), "outlet": ("E", 47.7),
+                          "vent": ("N", 20.0)}),
+    # Swaged: one vessel in two diameters, the narrow section on top of the wide
+    # one with a cone between them at y 40..50. It comes out at 50 x 97.5, in
+    # among ``jacketed``'s 52 x 95.38 and ``dished``'s 60 x 95.38 rather than
+    # standing out beside them.
+    #
+    # Both process nozzles go on the WIDE section, which is the one whose walls
+    # are the box's own west and east faces (x = 0 from y 50.25 to 85, x = 50
+    # from y 50 to 85); the narrow shell's walls are at x = 10 and x = 40,
+    # inboard of the box, and a pair placed up there would be the only nozzles
+    # in the family not on the box edge for no gain. 67 is that wide section's
+    # mid-height, so the two are level, as they are on every sibling.
+    #
+    # The vent is the top head's crown, at (25, 0). That head is a true
+    # semicircle rather than the family's flattened one: the stencil asks for
+    # r = 10 over a 30-wide chord, which SVG scales up to the r = 15 the chord
+    # needs, so the arc springs from y = 15 and its crown lands exactly on the
+    # box's top edge rather than a fraction under it.
+    ("vessel", "swaged"): ("vessels", "Vessel (Different Diameters)",
+                           {"inlet": ("W", 67.0), "outlet": ("E", 67.0),
+                            "vent": ("N", 25.0)}),
     # The third roof that rises inside its bounding box, and the same treatment
     # the dished and conical ones get above: the shell is open between x = 5 and
     # x = 95 at y = 0 (that gap is what the roof floats in), so an inlet on the
@@ -693,6 +755,80 @@ KIND_MAP = {
     # in the gap between them. Put it on the crown, as on the dished roof.
     ("tank", "sphere"):        ("vessels", "Storage Sphere",
                                 {"inlet": ("AT", 40.0, 5.0), "outlet": ("S", 40)}),
+    # Tanks that drain to a cone rather than to a floor. The four above vary the
+    # roof and all of them stand on a flat bottom; a hopper is what anything
+    # holding solids, a slurry or a settled phase is actually drawn with, and
+    # the family had none.
+    #
+    # The outlet goes on the cone's APEX, which is the same rule the roofs above
+    # follow at the other end: a cone touches the box's bottom edge at one point
+    # and curves away from it either side, so a nozzle anywhere else on that
+    # edge hangs in the air beside the drawing. It is the cheaper of the two to
+    # say, though, because that one point is the middle of the south face, so
+    # ("S", 50) lands on it and no ("AT", ...) is needed -- where a dished roof's
+    # crown is inboard of the top edge and has to be named outright.
+    #
+    # Flat roof, conical bottom: 100 x 100, on the family's 100-unit width. The
+    # roof is a plain line across y = 0 from x 0 to 100, so the inlet takes the
+    # north face directly, and the cone runs from y = 70 down to its apex at
+    # (50, 100).
+    ("tank", "conical_bottom"): ("vessels", "Tank (Conical Bottom)",
+                                 {"inlet": ("N", 50), "outlet": ("S", 50)}),
+    # A cone at each end: the silo or bin a tank holding solids is drawn as.
+    # Called ``conical_ends`` and not ``conical_roof_bottom`` for the reason
+    # ``vessel/dished`` is called that after "Vessel (Dished Ends, Brackets)":
+    # naming the pair of ends is how this file says both, and the alternative
+    # reads as easily as "the bottom of a conical roof" -- which is a different
+    # place on the drawing. ``conical`` already means the roof alone, so the
+    # three names line up: one cone on top, one underneath, or one at each end.
+    #
+    # 101 x 150, and the tallest thing in the family by half again. That is the
+    # shape and not the scale: it is 101 wide, which is the 100 every other tank
+    # here is drawn at, and the extra height is the two 30-unit cones over and
+    # under a shell that is itself only 20 taller than ``conical``'s. Squashing
+    # it to the family's height would draw shallower cones than the stencil
+    # author drew, and the cone angle is what the variant is about.
+    #
+    # Both nozzles sit at x = 51 rather than 50 because the drawing does: the
+    # stencil puts its shell walls at x = 1 and x = 101 in a box 101 wide, so
+    # the two apexes are on the SHELL's centreline, half a unit right of the
+    # box's, and a nozzle at 50 would be half a unit off the point of the cone.
+    ("tank", "conical_ends"): ("vessels", "Tank (Conical Roof and Bottom)",
+                               {"inlet": ("N", 51), "outlet": ("S", 51)}),
+    # Dished roof over a conical bottom: ``default``'s tank with the floor
+    # opened out into a cone, and it takes ``default``'s port map verbatim,
+    # character for character. The roof is the same arc drawn over the same
+    # 100-wide chord, so its crown is the same (50, 6.4) -- the stencil asks for
+    # r = 75 over a chord of 100, so the arc rises 75 - sqrt(75^2 - 50^2) = 19.1
+    # above the springing line at y = 25.46 and stops at 6.4, leaving the top
+    # 6.4 units of the box empty. The outlet's ("S", 50) resolves to
+    # the cone apex at (50, 125.46) where on ``default`` it resolved to the flat
+    # floor: same spec, same face, different ink, which is what a variant is.
+    ("tank", "dished_roof_conical_bottom"): (
+        "vessels", "Tank (Dished Roof, Conical Bottom)",
+        {"inlet": ("AT", 50.0, 6.4), "outlet": ("S", 50)}),
+    # Two more shapes in vessels.xml were weighed with those and left out, and
+    # both for the same reason: a nozzle a class has no name for is a nozzle
+    # that cannot be drawn.
+    #
+    #   "Tank (Boot)", and the covered and floating-roof tanks drawn with one --
+    #   the sump welded under one end that a settled water phase is drawn off
+    #   separately from the product. The boot IS the variant: a tank with one
+    #   drawn and piped like a tank without one says nothing the plain tank does
+    #   not, and Tank.PORTS is inlet/outlet, so there is no third draw to put on
+    #   it. Giving Tank one is a change to the public port signature and belongs
+    #   in its own change, not smuggled in with a batch of artwork.
+    #
+    #   "Vessel (Full-Tube Heating-Cooling Coil)" and its semi-tube sibling --
+    #   a 120 x 70 box holding a bare 100 x 70 rect, with the coil's four cut
+    #   tube ends drawn as circles beside it at (5, 25), (5, 55), (115, 15) and
+    #   (115, 45). Those four are
+    #   the only nozzles the shape draws and all four are the coil's, which
+    #   Vessel has no port for; inlet and outlet would land on plain casing
+    #   wall, which is what ``pump/peristaltic`` refuses on this same principle
+    #   (a drawn nozzle wins). There is nothing else to weigh against it either:
+    #   no head, no crown and no drawn level, so the vessel family's own reason
+    #   for not turning would have to be invented for it as well.
     # Reactor / separator styles. The straight wall spans y 7.69..87.69.
     ("reactor", "plain"):     ("vessels", "Reactor",
                                {"feed": ("SERIES", "W", 30, 14, 0.4),
@@ -1050,15 +1186,22 @@ GRAVITY_FIXED = {
     ("separator", "permanent_magnet"): "hopper bottom, separated fraction out of the apex",
     ("separator", "electromagnetic"):  "hopper bottom, separated fraction out of the apex",
     # ISO's other example, 2061: Open tank. Every variant holds a liquid with a
-    # free surface, fills at the roof and drains at the floor; the floating roof
-    # is drawn floating on that surface.
+    # free surface, fills at the roof and drains at the low point; the floating
+    # roof is drawn floating on that surface. On the three hopper-bottomed ones
+    # that low point is a cone, which is the same fall the hopper-bottomed
+    # separators above are listed for: turned, the cone is a roof and the tank
+    # holds nothing and drains nowhere.
     ("tank", "default"):        "dished roof over a free surface, draw at the floor",
     ("tank", "conical"):        "conical roof over a free surface, draw at the floor",
     ("tank", "floating_roof"):  "the roof floats on the liquid",
     ("tank", "sphere"):         "stands on legs, fills at the crown and drains at the bottom",
+    ("tank", "conical_bottom"): "flat roof over a free surface, drains to the cone apex",
+    ("tank", "conical_ends"):   "conical roof over a free surface, drains to the cone apex",
+    ("tank", "dished_roof_conical_bottom"):
+        "dished roof over a free surface, drains to the cone apex",
     # Holdup with a vapour space: every variant carries its vent on the top head
-    # and drains from the shell, and three of them draw the skirt, brackets or
-    # saddles they stand on. ``Vessel``'s own docstring already says this in
+    # and drains from the shell, and four of them draw the skirt, brackets, legs
+    # or saddles they stand on. ``Vessel``'s own docstring already says this in
     # prose, "the outlet still has to drain from the bottom whichever way the
     # artwork is spun", and ``horizontal`` is the variant that sentence points
     # at, which is ISO's recommended escape hatch: a new symbol drawn to the
@@ -1069,6 +1212,14 @@ GRAVITY_FIXED = {
     ("vessel", "horizontal"): "vent off the top, liquid out of the bottom",
     ("vessel", "jacketed"):   "vent on the top head, free surface below it",
     ("vessel", "skirted"):    "vent on the top head; stands on a skirt",
+    ("vessel", "legs"):       "vent on the top head; stands on legs",
+    ("vessel", "insulated"):  "vent on the top head, free surface below it",
+    ("vessel", "electrical_heating"): "vent on the top head, low draw-off from the shell",
+    # The swage is a second fact on top of the family's. A vessel drawn wide at
+    # the bottom and narrow at the top holds its inventory in the larger
+    # diameter and its vapour in the smaller one; turned, the two diameters are
+    # side by side and the drawing says nothing about either.
+    ("vessel", "swaged"):     "vent on the top head, and the larger diameter is the one below it",
     # A tower works because liquid runs down over the trays and vapour rises
     # through them: distillate leaves the top head, bottoms the bottom one, and
     # the packed variant draws the beds resting on their support grids.

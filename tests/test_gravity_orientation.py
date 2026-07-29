@@ -160,13 +160,23 @@ GRAVITY_FIXED = {
     ("tank", "conical"),
     ("tank", "floating_roof"),
     ("tank", "sphere"),
+    # ...and the three that drain to a cone rather than to a flat floor, which
+    # is the hopper the mechanical separators above are listed for: turned, the
+    # cone is a roof and the tank drains nowhere
+    ("tank", "conical_bottom"),
+    ("tank", "conical_ends"),
+    ("tank", "dished_roof_conical_bottom"),
     # holdup with a vapour space over it
     ("vessel", "default"),
     ("vessel", "dished"),
     ("vessel", "dome"),
+    ("vessel", "electrical_heating"),
     ("vessel", "horizontal"),
+    ("vessel", "insulated"),
     ("vessel", "jacketed"),
+    ("vessel", "legs"),
     ("vessel", "skirted"),
+    ("vessel", "swaged"),
     # liquid running down over trays or packing, vapour rising through it
     ("column", "default"),
     ("column", "packed"),

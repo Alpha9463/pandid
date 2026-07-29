@@ -768,8 +768,8 @@ is a visual style within it. The first name in each list is that kind's
 | `Pump` | `default` (centrifugal), `gear`, `screw`, `vacuum`, `peristaltic`, `submersible` |
 | `Compressor` | `default`, `liquid_ring`, `reciprocating`, `rotary` |
 | `HeatExchanger` | `default`, `shell_tube`, `straight_tubes`, `finned`, `plate`, `kettle`, `u_tube`, `hairpin`, `double_pipe`, `condenser`, `air_cooled`, `spiral`, `thin_film` |
-| `Vessel` | `default`, `dished`, `jacketed`, `skirted`, `dome`, `horizontal` |
-| `Tank` | `default` (dished roof), `conical`, `floating_roof`, `sphere` |
+| `Vessel` | `default`, `dished`, `jacketed`, `skirted`, `legs`, `insulated`, `electrical_heating`, `swaged`, `dome`, `horizontal`<br>`dished`, `skirted` and `legs` are one shell on brackets, a skirt or a pair of legs; `jacketed` and `insulated` are that shell clad, and offer the same nozzles in the same places, so swapping one for another moves no run. `swaged` is the vessel drawn in two diameters, the wider one below |
+| `Tank` | named for the roof: `default` (dished), `conical`, `floating_roof`, plus `sphere`<br>and for the bottom where it is a cone rather than a floor: `conical_bottom` (under a flat roof), `conical_ends` (a cone at each end), `dished_roof_conical_bottom`. On those three the `outlet` is on the cone's apex, which is where the tank actually drains |
 | `Separator` | into phases: `default` (plain vertical drum, the shell `Vessel` and `Column` share), `knockout` (that drum with a demister pad and a level gauge drawn in), `horizontal`, `cyclone`, `gravity`, `scrubber`, `electrostatic`<br>mechanically, by size, inertia or magnetism: `sifter`, `impact`, `permanent_magnet`, `electromagnetic`, which are one hopper-bottomed body apart from their internals and carry `overflow`/`underflow` in place of `vapor`/`liquid` |
 | `Reactor` | `default`, `plain` |
 | `Column` | `default` (plain shell), `packed` |
@@ -829,7 +829,16 @@ when the variant changes.
 
 `Vessel(variant="jacketed")` puts `inlet` and `outlet` on the jacket's outer
 wall rather than on the shell inside it, so the line stops where it meets the
-equipment instead of being drawn across the jacket.
+equipment instead of being drawn across the jacket. `insulated` is the same
+vessel lagged instead of jacketed and its cladding is drawn on the same two
+lines, so it carries the identical nozzles; `legs` likewise carries `skirted`'s.
+Swapping between any of those moves nothing on a sheet already drawn.
+
+`electrical_heating` is the one vessel that cannot. Its resistor element hangs
+on the outside of the east shell wall across the shell's mid-height, so the
+`outlet` drops to the clear wall below it rather than having its run drawn
+through the heater. Everything else about it is the family's: `inlet` on the
+west wall at mid-height, `vent` on the top head's crown.
 
 A primary flow element is a pair of faces on a line like any other in-line
 device, so it is a `Fitting` variant rather than a class of its own. `venturi`
@@ -1856,7 +1865,7 @@ names `variant="horizontal"` where it exists.
 Mirroring is left alone. §11.4.2 excepts *turning* only, and flipping a tank left
 to right to put its nozzles on the other side is a placement the clause permits.
 
-The 34 marked symbols, and what in each one's artwork only means one thing one
+The 41 marked symbols, and what in each one's artwork only means one thing one
 way up:
 
 | Symbols | Why |
@@ -1864,7 +1873,9 @@ way up:
 | `separator` `default` `cyclone` `electrostatic` `gravity` `horizontal` `knockout` `scrubber` | separation by density: `cyclone` **is** ISO's X 2618, `gravity` says so in its name, and the hopper-bottomed three collect out of an apex |
 | `separator` `sifter` `impact` `permanent_magnet` `electromagnetic` | listed for the hopper, not for what does the separating: a magnet sorts by magnetism and a sifter by size, and what fixes the attitude of all four is the fall into the hopper the artwork draws. Turned, the hopper is a roof |
 | `tank` `default` `conical` `floating_roof` `sphere` | ISO's 2061: a free liquid surface, filled at the roof and drained at the floor, with `floating_roof` drawn floating on it |
-| `vessel` `default` `dished` `dome` `horizontal` `jacketed` `skirted` | holdup with a vapour space: the vent is on the top head and the shell drains from the bottom |
+| `tank` `conical_bottom` `conical_ends` `dished_roof_conical_bottom` | the same, drained at a cone's apex instead of at a floor, which is the fall the hopper-bottomed separators above are listed for. Turned, the cone is a roof and the tank drains nowhere |
+| `vessel` `default` `dished` `dome` `horizontal` `jacketed` `skirted` `legs` `insulated` `electrical_heating` | holdup with a vapour space: the vent is on the top head and the shell drains from the bottom, and four of them draw the brackets, skirt, legs or saddles they stand on |
+| `vessel` `swaged` | the same, and one thing more: the vessel is drawn in two diameters with the larger below, so it is the bottom that holds the inventory. Turned, the two diameters are side by side and say nothing about either |
 | `column` `default` `packed`, `reactor` `default` `plain` | liquid running down over trays or packing while vapour rises, and an agitator hanging in from above |
 | `vent` `default` `breather` `exhaust_head`, `funnel` | open ends: what leaves rises, and an open end drawn pointing down is a drain |
 | `dryer` `spray` `fluidized_bed`, `filter` `gas` `gas_fixed_bed` `gas_belt` | solids that fall: an atomiser in the roof, a bed on its distributor plate, and the dust hopper each gas filter casing draws under its medium |
