@@ -307,7 +307,11 @@ def main():
     # diamond is the different symbol this sheet does not draw.
     fs.add_instrument("I", 2, on=xv, at="S", offset=26, variant="sis")
     fs.add_instrument("FI", 314, on=meter, at="S", offset=36)
-    fs.add_instrument("PI", 315, on=col, at="W", offset=52)
+    # The tower's feed enters the middle of its west wall, so a gauge branched
+    # straight out of that face (angle=90) stands on the feed line and the
+    # router steps the run around it. 45 takes the same tap up and out instead,
+    # into the clear between the feed run and the top of the shell.
+    fs.add_instrument("PI", 315, on=col, at="W", offset=52, angle=45)
     fs.add_instrument("TI", 325, on=cw_return, at=0.3, offset=55)
 
     # --- Loop 301: tower overhead pressure -------------------------------

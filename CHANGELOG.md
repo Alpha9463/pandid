@@ -52,6 +52,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A `Column`'s feed family is centred between its two duty arrows, so every feed
+  lands on the trayed section however many there are. It was centred on 130 in
+  the tower's 200-unit shell and spread over half of it, while the band it was
+  documented to stay inside is 65..145: the second feed of two came out at 147.5,
+  past `reboiler_duty`, the third of three at 165, and the fourth of four at 180,
+  below `boilup_in`. It is now centred on 105, the middle of that band, and
+  spread over 0.35 of the shell (70 units, two 35-unit pitches), which leaves the
+  outermost feeds on 70 and 140 with 5 units clear of each arrow. Both column
+  variants had it, `packed` restating the same numbers in its own 97-unit shell,
+  and both are fixed. One, two or three feeds keep the declared 35 pitch; a
+  fourth is where the run is squeezed into the band instead of running off it.
+  The single-feed nozzle moves 25 up as a result, so examples 03, 06, 10 and 11
+  move with it, along with the goldens for 03 and 06. `T-301`'s local pressure
+  gauge in 11 is branched off its west wall at 45 rather than square, since the
+  middle of that wall is now the feed.
 - Examples 03, 04, 07 and 09 no longer dogleg into their in-line devices. Each
   pinned its valves, orifice plate, strainer and sight glass by the **corner**
   while the equipment around them put its nozzles on a different elevation, so
