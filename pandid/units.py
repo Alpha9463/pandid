@@ -1379,6 +1379,18 @@ class Separator(Unit):
     separating bodies that are not drums at all, each with its own hopper or
     vortex.
 
+    ``"sifter"``, ``"impact"``, ``"permanent_magnet"`` and ``"electromagnetic"``
+    are the **mechanical** separators, which sort by size, inertia or magnetism
+    rather than into phases. Their products are neither a vapour nor a liquid, so
+    they do not borrow those names: the draws are ``overflow``, high on the body,
+    and ``underflow``, out of the apex. The pair names the two *positions* the
+    artwork draws, on the same principle as :class:`HeatExchanger`'s nozzles, and
+    it is the ordinary vocabulary of classification and solid-liquid separation.
+    Neither name says which of the two is the product, because that is a fact
+    about the service and not about the machine: a cyclone on a spray dryer
+    recovers its product from the underflow, and the identical cyclone on a vent
+    line throws that same catch away.
+
     Every variant is drawn one way up and reported as ``gravity-turned`` by
     :meth:`~pandid.flowsheet.Flowsheet.validate` if turned: vapour disengages
     off the top and liquid draws off the bottom, which is ISO 15519-1 §11.4.2's
@@ -1386,11 +1398,69 @@ class Separator(Unit):
     """
 
     kind = "separator"
-    PORTS = [
+    # Empty because which nozzles a separator has depends on its variant, and
+    # Unit.__init__ reads PORTS before a variant is in hand. _VARIANT_PORTS
+    # below is the declaration and __init__ lays it down, exactly as
+    # HeatExchanger does and for the same reason.
+    PORTS: list[tuple[str, str, str]] = []
+    # The flash drum, and the default: a vessel whose vapour and liquid
+    # products are worth naming. Every variant 0.1.0 could draw takes this set,
+    # unchanged in name, order, direction and role.
+    _PHASES = [
         ("feed", "inlet", "feed"),
         ("vapor", "outlet", "vapor"),
         ("liquid", "outlet", "liquid"),
     ]
+    # The mechanical separators. All four stencils are one body, anchor for
+    # anchor: a box with a hopper under it, the feed high on one wall (0, 12),
+    # one draw high on the opposite wall (80, 12) and one out of the apex
+    # (40, 120). A high draw and a low draw is the whole of what is true of all
+    # of them, so naming the two positions is the most the drawing supports --
+    # and it is what classification and solid-liquid separation call them
+    # anyway, on a hydrocyclone, a thickener or a classifier.
+    #
+    # ``process`` rather than ``vapor``/``liquid`` on both draws, because what
+    # leaves is dry dust from a precipitator, tramp metal from a magnet, or a
+    # screened size fraction, and the role vocabulary has no word that covers
+    # those. Saying ``liquid`` of a hopper full of dust is the bend this set
+    # exists to stop.
+    _OVER_AND_UNDER = [
+        ("feed", "inlet", "feed"),
+        ("overflow", "outlet", "process"),
+        ("underflow", "outlet", "process"),
+    ]
+    #: The nozzles each variant has, keyed by variant, defaulting to
+    #: :data:`_PHASES`.
+    #:
+    #: ``scrubber`` and ``venturi_scrubber`` are absent deliberately. A wet
+    #: scrubber's draws really are a cleaned gas and a dirty scrubbing liquid,
+    #: which is what :data:`_PHASES` already says; a scrubber cleans a gas
+    #: rather than classifying a solid, so it is not one of these.
+    #:
+    #: ``cyclone``, ``gravity`` and ``electrostatic`` are absent for a worse
+    #: reason. A settling chamber and a precipitator collect *dust*, and so does
+    #: a cyclone in the gas-solid service ISO 15519-1 draws it for; all three
+    #: call that catch ``liquid``, which is the bend this mechanism exists to
+    #: stop. They are left alone because 0.1.0 shipped those names and every
+    #: sheet drawn against them would break. Correcting them is a deliberate,
+    #: announced break and belongs in its own change, not smuggled in under a
+    #: new mechanism.
+    _VARIANT_PORTS = {
+        "sifter": _OVER_AND_UNDER,
+        "impact": _OVER_AND_UNDER,
+        "permanent_magnet": _OVER_AND_UNDER,
+        "electromagnetic": _OVER_AND_UNDER,
+    }
+
+    def __init__(self, name: str, variant: str = "default",
+                 width: float | None = None, height: float | None = None,
+                 label_pos: str | None = None, description: str = "",
+                 reference: str = ""):
+        super().__init__(name, variant=variant, width=width, height=height,
+                         label_pos=label_pos, description=description,
+                         reference=reference)
+        for spec in self._VARIANT_PORTS.get(variant, self._PHASES):
+            self._add_port(*spec)
 
 
 class Column(Unit):

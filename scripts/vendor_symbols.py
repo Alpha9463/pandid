@@ -729,6 +729,28 @@ KIND_MAP = {
                                 {"feed": "W", "vapor": "E", "liquid": "S"}),
     ("separator", "electrostatic"): ("separators", "Separator (Electrostatic Precipitator)",
                                      {"feed": "W", "vapor": "E", "liquid": "S"}),
+    # The mechanical separators, which sort by size, inertia or magnetism rather
+    # than into phases. All four are the same body as the two above, anchor for
+    # anchor: 80 x 120, W (0, 12) and E (80, 12) on the two side walls (which
+    # span y 0..80, so both are on ink at any box the unit is drawn at), and S
+    # on the hopper apex at (40, 120). Only the internals tell them apart: the
+    # sifter's screen deck, the impact separator's baffle down the centreline,
+    # and the magnet's coil or block low in the body.
+    #
+    # The port map follows from that and from nothing else. A high draw and a
+    # low draw is all the artwork commits to, so ``overflow`` and ``underflow``
+    # name the two positions and leave which of them is the product to the
+    # service, exactly as ``shell``/``tube`` leaves which side is the hot one to
+    # the operating case. Naming either for its contents would be guessing: the
+    # same drawing is a scalping screen and a sizing screen.
+    ("separator", "sifter"): ("separators", "Separator, Sifter",
+                              {"feed": "W", "overflow": "E", "underflow": "S"}),
+    ("separator", "impact"): ("separators", "Impact Separator",
+                              {"feed": "W", "overflow": "E", "underflow": "S"}),
+    ("separator", "permanent_magnet"): ("separators", "Separator (Permanent Magnet)",
+                                        {"feed": "W", "overflow": "E", "underflow": "S"}),
+    ("separator", "electromagnetic"): ("separators", "Separator (Electromagnetic)",
+                                       {"feed": "W", "overflow": "E", "underflow": "S"}),
     # Filter styles. Press Filter's own W/E anchors sit on opposite *corners* of
     # the box, so both faces are placed on the plate pack's mid-height instead.
     ("filter", "gas"):    ("filters", "Gas Filter (Bag, Candle, Cartridge)",
@@ -1018,6 +1040,15 @@ GRAVITY_FIXED = {
     ("separator", "horizontal"):    "vapour disengages off the top, liquid draws off the bottom",
     ("separator", "knockout"):      "demister on top, vapour up and liquid down",
     ("separator", "scrubber"):      "hopper bottom under a wash-liquid header",
+    # The four mechanical separators, listed for the reason ``electrostatic``
+    # already is rather than for what does the separating. A precipitator sorts
+    # by charge and a magnet by magnetism, and neither is gravity; what fixes
+    # the attitude in both is the hopper the artwork draws under them, and the
+    # fall into it. Turned, the hopper is a roof and nothing collects.
+    ("separator", "sifter"):           "screen deck over a hopper; the undersize falls through it",
+    ("separator", "impact"):           "hopper bottom under the baffle, collected phase out of the apex",
+    ("separator", "permanent_magnet"): "hopper bottom, separated fraction out of the apex",
+    ("separator", "electromagnetic"):  "hopper bottom, separated fraction out of the apex",
     # ISO's other example, 2061: Open tank. Every variant holds a liquid with a
     # free surface, fills at the roof and drains at the floor; the floating roof
     # is drawn floating on that surface.

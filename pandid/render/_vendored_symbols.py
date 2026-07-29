@@ -840,6 +840,42 @@ def register_vendored(registry):
         gravity_fixed=True,
     ), 'electrostatic')
 
+    # draw.io separators:Separator, Sifter (aspect=variable) -> separator/sifter
+    registry.register('separator', Symbol(
+        svg='<g id="sym_separator_sifter"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z M 25.0 8.0 L 55.0 8.0 M 42.83 7.95 L 49.23 11.82" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 55.0 6.0 L 55.0 10.0 L 60.0 8.0 Z M 50.32 10.14 L 48.13 13.5 L 53.42 14.55 Z" fill="#111" stroke="#111" stroke-width="2.0"/></g>',
+        width=80.0, height=120.0,
+        ports={'feed': (0.0, 12.0), 'overflow': (80.0, 12.0), 'underflow': (40.0, 120.0)},
+        # must not be turned: screen deck over a hopper; the undersize falls through it
+        gravity_fixed=True,
+    ), 'sifter')
+
+    # draw.io separators:Impact Separator (aspect=variable) -> separator/impact
+    registry.register('separator', Symbol(
+        svg='<g id="sym_separator_impact"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z M 40.0 0.0 L 40.0 80.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=80.0, height=120.0,
+        ports={'feed': (0.0, 12.0), 'overflow': (80.0, 12.0), 'underflow': (40.0, 120.0)},
+        # must not be turned: hopper bottom under the baffle, collected phase out of the apex
+        gravity_fixed=True,
+    ), 'impact')
+
+    # draw.io separators:Separator (Permanent Magnet) (aspect=variable) -> separator/permanent_magnet
+    registry.register('separator', Symbol(
+        svg='<g id="sym_separator_permanent_magnet"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 25.0 50.0 L 30.0 50.0 L 30.0 60.0 L 50.0 60.0 L 50.0 50.0 L 55.0 50.0 L 55.0 65.0 L 25.0 65.0 Z" fill="#111" stroke="#111" stroke-width="2.0"/></g>',
+        width=80.0, height=120.0,
+        ports={'feed': (0.0, 12.0), 'overflow': (80.0, 12.0), 'underflow': (40.0, 120.0)},
+        # must not be turned: hopper bottom, separated fraction out of the apex
+        gravity_fixed=True,
+    ), 'permanent_magnet')
+
+    # draw.io separators:Separator (Electromagnetic) (aspect=variable) -> separator/electromagnetic
+    registry.register('separator', Symbol(
+        svg='<g id="sym_separator_electromagnetic"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 10.0 65.0 L 19.0 65.0 A 7.0 7.0 0.0 0 1 26.0 58.0 A 7.0 7.0 0.0 0 1 33.0 65.0 A 7.0 7.0 0.0 0 1 40.0 58.0 A 7.0 7.0 0.0 0 1 47.0 65.0 A 7.0 7.0 0.0 0 1 54.0 58.0 A 7.0 7.0 0.0 0 1 61.0 65.0 L 70.0 65.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=80.0, height=120.0,
+        ports={'feed': (0.0, 12.0), 'overflow': (80.0, 12.0), 'underflow': (40.0, 120.0)},
+        # must not be turned: hopper bottom, separated fraction out of the apex
+        gravity_fixed=True,
+    ), 'electromagnetic')
+
     # draw.io filters:Gas Filter (Bag, Candle, Cartridge) (aspect=variable) -> filter/gas
     registry.register('filter', Symbol(
         svg='<g id="sym_filter_gas"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 20.0 L 50.0 20.0 M 0.0 70.0 L 25.0 99.5 L 50.0 70.0 M 0.0 40.0 L 15.0 40.0 L 15.0 60.0 L 35.0 60.0 L 35.0 40.0 L 50.0 40.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
