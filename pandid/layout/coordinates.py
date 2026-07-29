@@ -144,6 +144,31 @@ def assign_coordinates(fs: "Flowsheet") -> None:
 
 
 _DIR_OF_SIDE = {"top": "N", "bottom": "S", "left": "W", "right": "E"}
+#: Label sides in the order a sheet prefers them, best first.
+LABEL_SIDES = ("top", "bottom", "right", "left")
+
+
+def free_label_sides(u) -> list[str]:
+    """The sides of a unit's box no connected nozzle leaves from, best first.
+
+    Read off :mod:`pandid.portgeom`, so the faces this reports free are the faces
+    the router and the renderer will actually see empty. The renderer asks the
+    same question again once the sheet is routed, because a face free of nozzles
+    can still have a passing line or an impulse line across it, and neither of
+    those exists yet while layout runs. This is the half of the answer that does:
+    a nozzle is geometry, and geometry is settled here.
+    """
+    from pandid.portgeom import port_anchor
+
+    if u.frame is None:
+        return []
+    occupied = set()
+    for name, port in u.ports.items():
+        if port.stream is None:
+            continue
+        _, _, d = port_anchor(u, u.frame, name)
+        occupied.add(d)
+    return [side for side in LABEL_SIDES if _DIR_OF_SIDE[side] not in occupied]
 
 
 def assign_labels(fs: "Flowsheet") -> None:
@@ -154,7 +179,6 @@ def assign_labels(fs: "Flowsheet") -> None:
     leaving (say) a pump's top nozzle does not run through its label.
     """
     from pandid.render.symbols import default_registry
-    from pandid.portgeom import port_anchor
 
     for u in fs.units:
         if u.kind in ("feed", "product") or u.frame is None:
@@ -167,15 +191,5 @@ def assign_labels(fs: "Flowsheet") -> None:
         if sym.label_pos:
             u.frame.label_pos = sym.label_pos
             continue
-        occupied = set()
-        for name, port in u.ports.items():
-            if port.stream is None:
-                continue
-            _, _, d = port_anchor(u, u.frame, name)
-            occupied.add(d)
-        for side in ("top", "bottom", "right", "left"):
-            if _DIR_OF_SIDE[side] not in occupied:
-                u.frame.label_pos = side
-                break
-        else:
-            u.frame.label_pos = "top"
+        free = free_label_sides(u)
+        u.frame.label_pos = free[0] if free else "top"
