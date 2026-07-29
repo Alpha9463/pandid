@@ -248,10 +248,31 @@ KIND_MAP = {
     # the two duty arrows spaced between them.
     #
     # The feeds are a family: an extractive tower takes its solvent above the
-    # feed tray. They stay on the west wall, between the two duty arrows'
-    # heights, so however many there are none can reach the returns opposite.
+    # feed tray. They stay on the west wall, and every member of it, at every
+    # count, lands strictly between the two duty arrows' heights. Those two are
+    # the INNERMOST fixed nozzles on the wall opposite (65 and 145, against
+    # reflux_in's 35 and boilup_in's 175), so a band bounded by them is bounded
+    # by all four: no feed is drawn at the elevation of a return or of a duty
+    # arrow, however many feeds there are.
+    #
+    # The arithmetic. The band is 65..145, which is 80 units of the 200-unit
+    # shell centred on 105, so ``at`` is 105. (It was 130, the height the
+    # single-feed nozzle was drawn at before the family existed, and a family
+    # centred 25 below its own band runs off the bottom of it at the second
+    # feed.) The band's *width* is the widest whole number of pitches that fits
+    # inside it: 2 x 35 = 70, since 3 x 35 = 105 is more than the 80 there is.
+    # So extent = 70 / 200 = 0.35, and the outermost members land on
+    # 105 -+ 35 = 70 and 140. The (80 - 70) / 2 = 5 units left under each arrow
+    # are the point of not spending the whole band rather than a margin picked
+    # by eye: at extent 0.4 the outermost feeds land exactly ON 65 and 145,
+    # level with a duty arrow on the wall opposite, so the two leave the vessel
+    # at one elevation and read as one line drawn across it.
+    #
+    # For a reader: one, two or three feeds sit at the declared 35 pitch, and
+    # the fourth is where PortSeries begins squeezing the run into ``extent``
+    # rather than running it off the ends.
     ("column", "default"): ("vessels", "Pressurized Vessel",
-                            {"feed": ("SERIES", "W", 130, 35, 0.5),
+                            {"feed": ("SERIES", "W", 105, 35, 0.35),
                              "distillate": ("N", 50), "bottoms": ("S", 50),
                              "reflux_in": ("E", 35), "boilup_in": ("E", 175),
                              "condenser_duty": ("E", 65), "reboiler_duty": ("E", 145)}),
@@ -261,12 +282,19 @@ KIND_MAP = {
     #
     # Every nozzle is the default column's, restated in the tower's own 97-unit
     # shell: SCALE puts the shape in a 62 x 200 box, so 16.975 lands on 35,
-    # 31.525 on 65, 70.325 on 145, 84.875 on 175 and the feed family on 130 at a
-    # 35 pitch, the heights every column sheet is already drawn to. The two
+    # 31.525 on 65, 70.325 on 145, 84.875 on 175 and the feed family's centre
+    # 50.925 on 105, the heights every column sheet is already drawn to. The two
     # products take the head crowns at (7, 0) and (7, 97); everything else is on
     # the straight shell, which spans y 3.5..93.5 on both walls.
+    #
+    # The family's ``extent`` is a fraction of the face rather than a length, so
+    # it is the one number here that is NOT restated: 0.35 is the same 0.35 the
+    # default column declares, and it has to be, since both towers come out
+    # 200 tall and their duty arrows land on the same 65 and 145. The pitch and
+    # the centre do scale (16.975 -> 35, 50.925 -> 105), which is what puts this
+    # tower's feed band on exactly the default column's.
     ("column", "packed"): ("vessels", "Tower With Packing",
-                           {"feed": ("SERIES", "W", 63.05, 16.975, 0.5),
+                           {"feed": ("SERIES", "W", 50.925, 16.975, 0.35),
                             "distillate": ("N", 7), "bottoms": ("S", 7),
                             "reflux_in": ("E", 16.975), "boilup_in": ("E", 84.875),
                             "condenser_duty": ("E", 31.525),

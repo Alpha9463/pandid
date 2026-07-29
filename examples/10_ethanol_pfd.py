@@ -31,6 +31,7 @@ from _bootstrap import out  # runs from the repo root or from examples/
 
 from pandid import Flowsheet, units
 from pandid.document import Revision, TableBox, TitleBlock, equipment_list
+from pandid.portgeom import port_offset
 
 # --- Stream property table -------------------------------------------------
 # Rows render in first-seen key order, so every stream carries the same keys in
@@ -127,11 +128,15 @@ def main():
     # it uses, so half its width is the whole of the offset from a junction to
     # the corner it is pinned by.
     tee_w = 12.0
-    col_x, col_y, col_w, col_h = 430.0, 180.0, 110.0, 250.0
+    col_x, col_y, col_w = 430.0, 180.0, 110.0
     col.pin(x=col_x, y=col_y)
     col_axis = col_x + col_w / 2                    # distillate / bottoms line
-    col_feed_y = col_y + 0.65 * col_h               # feed nozzle, down the shell
-    col_reflux_y = col_y + 0.175 * col_h            # reflux return, up the shell
+    # Both elevations are asked of the symbol rather than measured off it: the
+    # feed is placed by a rule (Column takes n_feeds=) and so has no fixed
+    # fraction to write down at all, and a fraction copied out of the drawing is
+    # only true of the drawing it was copied from.
+    col_feed_y = col_y + port_offset(col, "feed")[1]       # feed, down the shell
+    col_reflux_y = col_y + port_offset(col, "reflux_in")[1]  # reflux, up the shell
 
     broth.pin(x=140, y=col_feed_y - 25)             # flag tip meets the feed nozzle
 

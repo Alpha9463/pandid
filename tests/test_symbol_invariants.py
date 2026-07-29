@@ -1008,14 +1008,16 @@ def test_series_members_lie_on_drawn_geometry(entry):
 
 
 def test_a_lone_member_lands_where_the_fixed_nozzle_did():
-    """One feed is the count every existing column sheet was drawn with, so the
+    """One feed is the count every existing reactor sheet was drawn with, so the
     family has to reproduce that nozzle exactly -- otherwise supporting a second
-    feed moves the first one on every drawing already issued."""
+    feed moves the first one on every drawing already issued.
+
+    The column is the one family this does not hold for, and the test below is
+    why: its pre-family nozzle was not somewhere its family could be centred."""
     from pandid import units as U
     from pandid.portgeom import _drawn_placements, resolve_size
 
     for unit, want in (
-        (U.Column("T"), (0.0, 130.0)),
         (U.Reactor("R"), (0.0, 48.2)),
         (U.Reactor("R", variant="plain"), (0.0, 30.0)),
     ):
@@ -1023,6 +1025,27 @@ def test_a_lone_member_lands_where_the_fixed_nozzle_did():
         placed = _drawn_placements(unit, "feed", w, h, 0, False, False)
         assert list(placed) == ["W"]
         assert placed["W"] == pytest.approx(want)
+
+
+def test_a_lone_column_feed_sits_at_the_centre_of_the_duty_band():
+    """The column bought the rule above and could not pay: its pre-family nozzle
+    was at y = 130, and 130 is not the centre of the band its feeds have to stay
+    inside (65..145, between the duty arrows).
+
+    Centring the family there put the second feed at 147.5, below the reboiler
+    duty arrow, so one of the two claims had to go. The band is the one that
+    says something about the equipment, while 130 was only ever the height a
+    single nozzle happened to be drawn at, so the lone feed moved the 25 up to
+    the centre and every column sheet moved with it."""
+    from pandid import units as U
+    from pandid.portgeom import _drawn_placements, resolve_size
+
+    for variant in default_registry.variants("column"):
+        unit = U.Column("T", variant=variant)
+        w, h = resolve_size(unit)
+        placed = _drawn_placements(unit, "feed", w, h, 0, False, False)
+        assert list(placed) == ["W"], f"column/{variant}"
+        assert placed["W"] == pytest.approx((0.0, 105.0)), f"column/{variant}"
 
 
 def test_a_feed_family_reaching_the_return_nozzles_is_caught():
@@ -1054,6 +1077,49 @@ def test_the_shipped_feed_families_reach_nothing_else():
         sym = default_registry.get(kind, variant)
         assert sym.port_series, f"{kind}/{variant} has no feed family"
         assert sym.coincident_ports() == [], f"{kind}/{variant}"
+
+
+@pytest.mark.parametrize("variant", default_registry.variants("column"))
+def test_every_column_feed_stays_between_the_duty_arrows(variant):
+    """A tower's feeds land between the two duty arrows at every count.
+
+    ``coincident_ports`` above compares a family's band against nozzles that
+    resolve to the same *point*, so it only ever reaches the face the family is
+    on. The feeds are on the west wall and every nozzle worth clearing is on the
+    east, which is why nothing said how far down the shell a feed could be
+    drawn, and why the shipped rule ran the second feed of two out below
+    ``reboiler_duty`` while the comment over it claimed the opposite.
+
+    The two duty arrows are the innermost fixed nozzles on the opposite wall
+    (65 and 145, against ``reflux_in``'s 35 and ``boilup_in``'s 175), so a feed
+    inside the band they bound is clear of all four: none is drawn at the
+    elevation of anything the tower returns to.
+
+    The band is read off the symbol rather than written down here, so the claim
+    follows the drawing, and each feed is resolved through ``portgeom`` on a
+    real ``Column`` rather than by re-deriving ``PortSeries``' arithmetic, which
+    would only prove this test agrees with itself.
+    """
+    from pandid import units as U
+    from pandid.portgeom import port_offset
+
+    sym = default_registry.get("column", variant)
+    lo, hi = sym.ports["condenser_duty"][1], sym.ports["reboiler_duty"][1]
+    assert lo < hi, f"column/{variant}: the duty arrows bound no band at all"
+    (family,) = sym.port_series
+    # Past three the run is squeezed into ``extent`` rather than pitched (see
+    # the KIND_MAP comment), so both regimes have to be walked: the defect was a
+    # band wider than the one the duty arrows bound, *and* centred below it.
+    for count in range(1, 13):
+        column = U.Column("T", variant=variant, n_feeds=count)
+        feeds = [name for name in column.ports if family.matches(name)]
+        assert len(feeds) == count, f"column/{variant} n_feeds={count}: {feeds}"
+        for name in feeds:
+            y = port_offset(column, name)[1]
+            assert lo < y < hi, (
+                f"column/{variant} {name} of {count} sits at y={y}, outside the "
+                f"({lo}, {hi}) band the duty arrows bound"
+            )
 
 
 def test_two_series_ports_land_where_the_symbol_used_to_draw_them():

@@ -261,7 +261,7 @@ def register_vendored(registry):
         ports={'distillate': (50.0, 0.0), 'bottoms': (50.0, 200.0), 'reflux_in': (100.0, 35.0), 'boilup_in': (100.0, 175.0), 'condenser_duty': (100.0, 65.0), 'reboiler_duty': (100.0, 145.0)},
         # must not be turned: distillate off the top, bottoms off the floor
         gravity_fixed=True,
-        port_series=(PortSeries('feed_', 'W', pitch=35.0, extent=0.5, at=130.0, singular='feed'),),
+        port_series=(PortSeries('feed_', 'W', pitch=35.0, extent=0.35, at=105.0, singular='feed'),),
     ), 'default')
 
     # draw.io vessels:Tower With Packing (aspect=variable) -> column/packed
@@ -271,7 +271,7 @@ def register_vendored(registry):
         ports={'distillate': (31.0, 0.0), 'bottoms': (31.0, 200.0), 'reflux_in': (62.0, 35.0), 'boilup_in': (62.0, 175.0), 'condenser_duty': (62.0, 65.0), 'reboiler_duty': (62.0, 145.0)},
         # must not be turned: packed beds rest on their support grids
         gravity_fixed=True,
-        port_series=(PortSeries('feed_', 'W', pitch=35.0, extent=0.5, at=130.0, singular='feed'),),
+        port_series=(PortSeries('feed_', 'W', pitch=35.0, extent=0.35, at=105.0, singular='feed'),),
     ), 'packed')
 
     # draw.io vessels:Mixing Reactor (aspect=variable) -> reactor/default

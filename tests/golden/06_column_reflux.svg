@@ -13,9 +13,9 @@
     <symbol id="sym_vessel_horizontal" viewBox="0 0 91.5 30.0" preserveAspectRatio="none" overflow="visible"><path d="M 5.77 30.0 L 85.77 30.0 A 5.0 13.0 0.0 0 0 91.5392 15.0 A 5.0 13.0 0.0 0 0 85.77 0.0 L 5.77 0.0 A 5.0 13.0 0.0 0 0 0.0008 15.0 A 5.0 13.0 0.0 0 0 5.77 30.0 Z M 5.77 0.0 L 5.77 30.0 M 85.77 0.0 L 85.77 30.0" fill="none" stroke="#111" stroke-width="2.0"/></symbol>
   </defs>
   <g id="units">
-    <polygon points="54.0,377 125,377 140,390 125,403 54.0,403" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="89.5" y="386" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Feed</text>
-    <text x="89.5" y="398" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PFD-100</text>
+    <polygon points="54.0,352.0 125,352.0 140,365.0 125,378.0 54.0,378.0" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="89.5" y="361.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Feed</text>
+    <text x="89.5" y="373.0" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PFD-100</text>
     <use href="#sym_column" x="300" y="260" width="100.0" height="200.0" />
     <use href="#sym_hex_straight_tubes" x="560" y="70" width="120" height="36" transform="translate(1240, 0) scale(-1, 1)" />
     <use href="#sym_vessel_horizontal" x="621.58" y="170" width="130" height="42" />
@@ -32,7 +32,7 @@
     <text x="935.5" y="653" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PFD-300</text>
   </g>
   <g id="streams">
-    <path d="M 140.0,390.0 L 300.0,390.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 140.0,365.0 L 300.0,365.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 350.0,260.0 L 350.0,45.0 L 590.0,45.0 L 590.0,70.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 650.0,106.0 L 650.0,170.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 699.7267759562842,170.0 L 699.7267759562842,125.0 L 880,125.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
@@ -42,8 +42,8 @@
     <path d="M 350.0,460.0 L 350.0,581.0 L 720.0655737704918,581.0 L 720.0655737704918,552.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 743.9344262295082,512.0 L 743.9344262295082,435.0 L 400.0,435.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 771.4754098360656,552.0 L 771.4754098360656,645.0 L 900,645.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <rect x="210.8" y="383.5" width="18.4" height="13.0" fill="white" />
-    <text x="220.0" y="390.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S1</text>
+    <rect x="210.8" y="358.5" width="18.4" height="13.0" fill="white" />
+    <text x="220.0" y="365.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S1</text>
     <rect x="460.8" y="38.5" width="18.4" height="13.0" fill="white" />
     <text x="470.0" y="45.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S2</text>
     <rect x="643.5" y="128.8" width="13.0" height="18.4" fill="white" />

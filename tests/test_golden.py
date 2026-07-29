@@ -282,7 +282,7 @@ def _column_reflux() -> Flowsheet:
 
     col_x, col_y = 300, 260
     col.pin(x=col_x, y=col_y)
-    feed.pin(x=90, y=col_y + 105)
+    feed.pin(x=90, y=col_y + port_offset(col, "feed")[1] - 25)
     cond_x, cond_y, cond_w = 560, 70, 120
     cond.pin(x=cond_x, y=cond_y, mirrored="x")
     cond_drain_x = cond_x + 0.75 * cond_w

@@ -16,6 +16,7 @@ numbering and labels) is automatic.
 from _bootstrap import out  # runs from the repo root or from examples/
 
 from pandid import Flowsheet, units
+from pandid.portgeom import port_offset
 
 
 def main():
@@ -56,7 +57,10 @@ def main():
     # has to climb back into the kettle's underside.
     col_x, col_y = 300, 260
     col.pin(x=col_x, y=col_y)
-    feed.pin(x=90, y=col_y + 105)            # flag tip y+25 meets the feed nozzle
+    # The tower's feed is placed by a rule rather than authored as a coordinate
+    # (Column takes n_feeds=), so the elevation is asked for rather than
+    # measured off the drawing. The flag's tip is 25 below where it is pinned.
+    feed.pin(x=90, y=col_y + port_offset(col, "feed")[1] - 25)
 
     # Condenser, mirrored so it drains towards the drum: vapour enters the top
     # shell nozzle at x + 0.25w, condensate leaves the bottom one at x + 0.75w.
