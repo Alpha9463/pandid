@@ -1389,6 +1389,159 @@ def test_save_and_restore_bracket_the_fill_colour():
 
 
 # ---------------------------------------------------------------------------
+# The curve a split arc draws.
+#
+# An arc whose chord is about its own diameter comes out visibly thick in
+# cairosvg, so the converter splits it into quarter-turn pieces. That split has
+# to be an identity on the shape: same ellipse, same two ends, more commands and
+# nothing else.
+#
+# It was not one. ``_endpoint_to_center`` applies the spec's radius correction
+# (SVG 1.1 F.6.6: radii too small to span their chord are scaled up until they
+# exactly span it), and the converter cut the pieces on that corrected ellipse
+# but labelled every one of them with the stencil's uncorrected radii. Each
+# piece was then too small for its own, shorter chord, so the reader corrected
+# it a second time -- separately, against a different chord, onto a different
+# ellipse per piece. The ends stayed exact, which is why every port, every crown
+# and every bounding box was right and nothing else in this file noticed: only
+# the curve *between* the ends was wrong. On the 40-wide vessel shells the two
+# halves of a dished head met in a cusp instead of an apex.
+#
+# The invariant below is the identity the split claims. It is checked here
+# rather than on the shipped SVG because a piece drawn on the wrong ellipse is
+# still a perfectly well-formed arc, and the ellipse it *should* have been cut
+# from cannot be recovered from it -- the two are only both in hand while the
+# stencil is being converted.
+# ---------------------------------------------------------------------------
+
+#: One emitted ``A``: rx, ry, x-axis-rotation, large-arc flag, sweep flag, x, y.
+_EMITTED_ARC = re.compile(rf"A ({_NUM}) ({_NUM}) ({_NUM}) ({_NUM}) ({_NUM}) ({_NUM}) ({_NUM})")
+
+#: How far a piece's ellipse may sit from the whole arc's, in stencil units.
+#: The pieces are written out to four decimal places and their centres are
+#: recovered from those, so this is that rounding and nothing else. The defect
+#: it replaced put a vessel head's centre 10 units out.
+_ARC_TOL = 1e-3
+
+#: Where each stencil path op leaves the pen. An <arc> is stated relative to
+#: wherever the previous op left it, so finding one means walking to it.
+_PEN_LANDS_AT = {
+    "move": ("x", "y"),
+    "line": ("x", "y"),
+    "quad": ("x2", "y2"),
+    "curve": ("x3", "y3"),
+}
+
+
+def _stencil_arcs() -> list[tuple[str, tuple]]:
+    """Every <arc> in every shape ``KIND_MAP`` draws, with the point it starts at.
+
+    Keyed by shape rather than by (kind, variant): several symbols share one
+    drawing, and converting it once per symbol would only convert it twice.
+    """
+    mx, vendor = _script("mxgraph_to_svg"), _script("vendor_symbols")
+    shapes = sorted({(stencil, shape) for stencil, shape, _ in vendor.KIND_MAP.values()})
+    index = {}
+    for stencil in sorted({stencil for stencil, _ in shapes}):
+        for name, el in vendor.shapes_in(vendor.STENCILS / f"{stencil}.xml"):
+            index[(stencil, name)] = vendor.patch_shape(stencil, name, el)
+    found: list[tuple[str, tuple]] = []
+    for key in shapes:
+        for section in ("background", "foreground"):
+            sec = index[key].find(section)
+            for path in sec if sec is not None else ():
+                if path.tag != "path":
+                    continue
+                x = y = sx = sy = 0.0
+                for op in path:
+                    if op.tag == "arc":
+                        ex, ey = mx._num(op, "x"), mx._num(op, "y")
+                        rx, ry = mx._num(op, "rx"), mx._num(op, "ry")
+                        # A degenerate radius is a straight line, and the
+                        # converter emits it verbatim rather than splitting it.
+                        # No stencil in the set has one; the guard is here so
+                        # that one added later fails the generator and not this.
+                        if min(abs(rx), abs(ry)) > 0:
+                            found.append(
+                                (
+                                    f"{key[0]}:{key[1]}",
+                                    (
+                                        x,
+                                        y,
+                                        rx,
+                                        ry,
+                                        mx._num(op, "x-axis-rotation"),
+                                        int(op.get("large-arc-flag", "0")),
+                                        int(op.get("sweep-flag", "0")),
+                                        ex,
+                                        ey,
+                                    ),
+                                )
+                            )
+                        x, y = ex, ey
+                    elif op.tag == "close":
+                        x, y = sx, sy
+                    elif op.tag in _PEN_LANDS_AT:
+                        ax, ay = _PEN_LANDS_AT[op.tag]
+                        x, y = mx._num(op, ax), mx._num(op, ay)
+                        if op.tag == "move":
+                            sx, sy = x, y
+    return found
+
+
+def _arc_ids(arcs: list[tuple[str, tuple]]) -> list[str]:
+    """``vessels:Vessel (Dome)#2`` -- the shape, and which of its arcs."""
+    seen: dict[str, int] = {}
+    ids = []
+    for shape, _ in arcs:
+        seen[shape] = seen.get(shape, 0) + 1
+        ids.append(f"{shape}#{seen[shape]}")
+    return ids
+
+
+_STENCIL_ARCS = _stencil_arcs()
+
+
+@pytest.mark.parametrize("shape,arc", _STENCIL_ARCS, ids=_arc_ids(_STENCIL_ARCS))
+def test_every_piece_of_a_split_arc_rides_the_ellipse_it_was_cut_from(shape, arc):
+    """One ellipse -- same centre, same radii -- for every piece and the whole.
+
+    Both sides go through the spec's own endpoint-to-centre conversion, which is
+    what a reader does with the numbers that end up in the file. So this
+    compares the ellipse the drawing will be *read* as against the one the
+    stencil asked for, rather than comparing the converter with itself.
+
+    The pieces have to chain end to end and land on the arc's own far end too:
+    pieces on the right ellipse that did not join up would be a different
+    drawing again. An arc the converter leaves whole is one piece and passes
+    this trivially, which is the point -- the claim is about the shape, and the
+    shape does not depend on how many commands it took.
+    """
+    mx = _script("mxgraph_to_svg")
+    x0, y0, rx, ry, phi_deg, fa, fs, x1, y1 = arc
+    want = mx._endpoint_to_center(x0, y0, rx, ry, math.radians(phi_deg), fa, fs, x1, y1)[:4]
+    pieces = _EMITTED_ARC.findall(mx._arc_to_path(x0, y0, rx, ry, phi_deg, fa, fs, x1, y1))
+    assert pieces, f"{shape}: the converter emitted no arc at all"
+    px, py = x0, y0
+    for i, (prx, pry, pphi, plaf, psf, ex, ey) in enumerate(pieces, start=1):
+        ex, ey = float(ex), float(ey)
+        got = mx._endpoint_to_center(
+            px, py, float(prx), float(pry), math.radians(float(pphi)), int(plaf), int(psf), ex, ey
+        )[:4]
+        assert got == pytest.approx(want, abs=_ARC_TOL), (
+            f"{shape}: piece {i} of {len(pieces)} is an arc of the ellipse centred "
+            f"({got[0]:.4f}, {got[1]:.4f}) with radii ({got[2]:.4f}, {got[3]:.4f}), but the "
+            f"arc it was cut from is centred ({want[0]:.4f}, {want[1]:.4f}) with radii "
+            f"({want[2]:.4f}, {want[3]:.4f})"
+        )
+        px, py = ex, ey
+    assert (px, py) == pytest.approx((x1, y1), abs=_ARC_TOL), (
+        f"{shape}: the pieces run from ({x0}, {y0}) to ({px}, {py}), not to the arc's "
+        f"own far end ({x1}, {y1})"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Corrections applied to the vendored stencils.
 # ---------------------------------------------------------------------------
 

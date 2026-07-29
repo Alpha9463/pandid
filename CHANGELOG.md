@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Curved equipment heads are drawn on the ellipse the stencil asked for. The
+  stencil converter splits an arc whose chord is about its own diameter into
+  quarter-turn pieces, because cairosvg strokes such an arc visibly thick. It
+  cut those pieces on the ellipse the SVG spec's radius correction gives
+  (§F.6.6: radii too small to span their chord are scaled up until they exactly
+  span it) but labelled each piece with the stencil's *uncorrected* radii, so
+  every piece was too small for its own, shorter chord and the reader corrected
+  it a second time — separately, against a different chord, onto a different
+  ellipse per piece.
+
+  The endpoints were computed from the true ellipse and stayed exact, which is
+  why this was only ever a curve defect: no nozzle, box or canvas dimension is
+  affected, and none moves here. Seventeen symbols are redrawn — `hex`/`kettle`,
+  `hex`/`hairpin`, `hex`/`u_tube`, `column`/`packed`, `reactor`/`default`,
+  `reactor`/`plain`, `separator`/`horizontal`, `separator`/`knockout`,
+  `vessel`/`horizontal` and the eight dished-end `vessel` variants. On the
+  40-wide vessel shells the two halves of a dished head met in a visible cusp
+  instead of a crown; on the rest the head was drawn shallower than the stencil
+  drew it. The `50 × 15` "Pressurized Vessel" family (`vessel`/`default`,
+  `column`/`default`, `separator`/`default`) and every `tank` variant already
+  spanned their chords and are byte-identical.
+
+  Goldens 01, 05, 06 and 08 move, and gallery images 01, 05, 06, 08, 10 and 11
+  with them. Every changed line is an `A` command's two radii inside a `<defs>`
+  `<symbol>`; nothing else in any of them differs.
+
 ### Added
 
 - Four more `Vessel` variants, vendored from the same draw.io stencil file the

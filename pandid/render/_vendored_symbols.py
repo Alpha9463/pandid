@@ -219,7 +219,7 @@ def register_vendored(registry):
 
     # draw.io heat_exchangers:Reboiler (aspect=variable) -> hex/kettle
     registry.register('hex', Symbol(
-        svg='<g id="sym_hex_kettle"><path d="M 4.5 15.0 L 16.5 15.0 L 16.5 30.0 L 4.5 30.0 A 3.0 5.0 0.0 0 1 0.0 22.5 A 3.0 5.0 0.0 0 1 4.5 15.0 M 19.5 15.0 L 26.5 15.0 L 41.5 0.0 L 86.5 0.0 A 5.0 15.0 0.0 0 1 91.5 15.0 A 5.0 15.0 0.0 0 1 86.5 30.0 L 19.5 30.0 Z M 4.5 15.0 L 4.5 30.0 M 41.5 0.0 L 41.5 30.0 M 86.5 0.0 L 86.5 30.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="16.5" y="12.0" width="3.0" height="21.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_hex_kettle"><path d="M 4.5 15.0 L 16.5 15.0 L 16.5 30.0 L 4.5 30.0 A 4.5 7.5 0.0 0 1 0.0 22.5 A 4.5 7.5 0.0 0 1 4.5 15.0 M 19.5 15.0 L 26.5 15.0 L 41.5 0.0 L 86.5 0.0 A 5.0 15.0 0.0 0 1 91.5 15.0 A 5.0 15.0 0.0 0 1 86.5 30.0 L 19.5 30.0 Z M 4.5 15.0 L 4.5 30.0 M 41.5 0.0 L 41.5 30.0 M 86.5 0.0 L 86.5 30.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="16.5" y="12.0" width="3.0" height="21.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=91.5, height=33.0,
         ports={'shell_in': (45.8, 30.0), 'shell_out': (64.0, 0.0), 'tube_in': (0.0, 22.5), 'tube_out': (91.5, 15.0), 'bottoms': (85.0, 30.0)},
     ), 'kettle')
@@ -266,7 +266,7 @@ def register_vendored(registry):
 
     # draw.io vessels:Tower With Packing (aspect=variable) -> column/packed
     registry.register('column', Symbol(
-        svg='<g id="sym_column_packed"><g transform="scale(4.428571428571429, 2.0618556701030926)"><path d="M 14.0 3.5 L 14.0 93.5 A 5.0 2.5 0.0 0 1 7.0 97.0 A 5.0 2.5 0.0 0 1 0.0 93.5 L 0.0 3.5 A 5.0 2.5 0.0 0 1 7.0 0.0 A 5.0 2.5 0.0 0 1 14.0 3.5 Z M 0.0 3.5 L 14.0 3.5 M 0.0 93.5 L 14.0 93.5 M 0.0 43.5 L 14.0 43.5 M 0.0 53.5 L 14.0 53.5 M 0.0 18.5 L 14.0 18.5 M 0.0 78.5 L 14.0 78.5 M 14.0 18.5 L 0.0 43.5 M 14.0 43.5 L 0.0 18.5 M 14.0 53.5 L 0.0 78.5 M 14.0 78.5 L 0.0 53.5" fill="none" stroke="#111" stroke-width="0.452"/></g></g>',
+        svg='<g id="sym_column_packed"><g transform="scale(4.428571428571429, 2.0618556701030926)"><path d="M 14.0 3.5 L 14.0 93.5 A 7.0 3.5 0.0 0 1 7.0 97.0 A 7.0 3.5 0.0 0 1 0.0 93.5 L 0.0 3.5 A 7.0 3.5 0.0 0 1 7.0 0.0 A 7.0 3.5 0.0 0 1 14.0 3.5 Z M 0.0 3.5 L 14.0 3.5 M 0.0 93.5 L 14.0 93.5 M 0.0 43.5 L 14.0 43.5 M 0.0 53.5 L 14.0 53.5 M 0.0 18.5 L 14.0 18.5 M 0.0 78.5 L 14.0 78.5 M 14.0 18.5 L 0.0 43.5 M 14.0 43.5 L 0.0 18.5 M 14.0 53.5 L 0.0 78.5 M 14.0 78.5 L 0.0 53.5" fill="none" stroke="#111" stroke-width="0.452"/></g></g>',
         width=62.0, height=200.0,
         ports={'distillate': (31.0, 0.0), 'bottoms': (31.0, 200.0), 'reflux_in': (62.0, 35.0), 'boilup_in': (62.0, 175.0), 'condenser_duty': (62.0, 65.0), 'reboiler_duty': (62.0, 145.0)},
         # must not be turned: packed beds rest on their support grids
@@ -276,7 +276,7 @@ def register_vendored(registry):
 
     # draw.io vessels:Mixing Reactor (aspect=variable) -> reactor/default
     registry.register('reactor', Symbol(
-        svg='<g id="sym_reactor"><path d="M 31.0 2.4 L 31.0 27.4 A 5.0 2.0 0.0 0 1 25.0 29.8 A 5.0 2.0 0.0 0 1 19.0 27.4 L 19.0 2.4 A 5.0 2.0 0.0 0 1 25.0 0.0 A 5.0 2.0 0.0 0 1 31.0 2.4 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 26.0 32.4 L 50.0 32.4 L 50.0 77.4 L 25.0 96.4 L 0.0 77.4 L 0.0 32.4 L 24.0 32.4 M 19.0 2.4 L 31.0 2.4 M 19.0 27.4 L 31.0 27.4 M 24.0 29.4 L 24.0 56.9 M 26.0 29.4 L 26.0 56.9 M 0.0 77.4 L 50.0 77.4" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="30.0" cy="57.4" rx="5.0" ry="1.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="20.0" cy="57.4" rx="5.0" ry="1.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_reactor"><path d="M 31.0 2.4 L 31.0 27.4 A 6.0 2.4 0.0 0 1 25.0 29.8 A 6.0 2.4 0.0 0 1 19.0 27.4 L 19.0 2.4 A 6.0 2.4 0.0 0 1 25.0 0.0 A 6.0 2.4 0.0 0 1 31.0 2.4 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 26.0 32.4 L 50.0 32.4 L 50.0 77.4 L 25.0 96.4 L 0.0 77.4 L 0.0 32.4 L 24.0 32.4 M 19.0 2.4 L 31.0 2.4 M 19.0 27.4 L 31.0 27.4 M 24.0 29.4 L 24.0 56.9 M 26.0 29.4 L 26.0 56.9 M 0.0 77.4 L 50.0 77.4" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="30.0" cy="57.4" rx="5.0" ry="1.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="20.0" cy="57.4" rx="5.0" ry="1.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=50.0, height=96.4,
         ports={'outlet': (25.0, 96.4), 'duty': (50.0, 48.2), 'vent': (40.0, 32.4)},
         # must not be turned: top-entering agitator over a dished bottom
@@ -295,7 +295,7 @@ def register_vendored(registry):
 
     # draw.io vessels:Knock-out Drum (aspect=variable) -> separator/knockout
     registry.register('separator', Symbol(
-        svg='<g id="sym_separator_knockout"><path d="M 40.0 7.69 L 40.0 87.69 A 13.0 5.0 0.0 0 1 20.0 95.3823 A 13.0 5.0 0.0 0 1 0.0 87.69 L 0.0 7.69 A 13.0 5.0 0.0 0 1 20.0 -0.0023 A 13.0 5.0 0.0 0 1 40.0 7.69 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69 M 0.0 17.69 L 40.0 17.69 M 0.0 27.69 L 40.0 27.69 M 0.0 17.69 L 10.0 27.69 L 20.0 17.69 L 30.0 27.69 L 40.0 17.69 M 48.0 34.69 L 48.0 52.69 M 51.0 34.69 L 51.0 52.69 M 0.0 27.69 L 10.0 17.69 L 20.0 27.69 L 30.0 17.69 L 40.0 27.69" fill="none" stroke="#111" stroke-width="2.0"/><rect x="40.0" y="37.5" width="8.0" height="12.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_separator_knockout"><path d="M 40.0 7.69 L 40.0 87.69 A 20.0 7.6923 0.0 0 1 20.0 95.3823 A 20.0 7.6923 0.0 0 1 0.0 87.69 L 0.0 7.69 A 20.0 7.6923 0.0 0 1 20.0 -0.0023 A 20.0 7.6923 0.0 0 1 40.0 7.69 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69 M 0.0 17.69 L 40.0 17.69 M 0.0 27.69 L 40.0 27.69 M 0.0 17.69 L 10.0 27.69 L 20.0 17.69 L 30.0 27.69 L 40.0 17.69 M 48.0 34.69 L 48.0 52.69 M 51.0 34.69 L 51.0 52.69 M 0.0 27.69 L 10.0 17.69 L 20.0 27.69 L 30.0 17.69 L 40.0 27.69" fill="none" stroke="#111" stroke-width="2.0"/><rect x="40.0" y="37.5" width="8.0" height="12.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=51.0, height=95.4,
         ports={'feed': (0.0, 55.0), 'vapor': (25.0, 0.0), 'liquid': (25.0, 95.4)},
         # must not be turned: demister on top, vapour up and liquid down
@@ -624,7 +624,7 @@ def register_vendored(registry):
 
     # draw.io heat_exchangers:U-Tube Heat Exchanger (aspect=variable) -> hex/u_tube
     registry.register('hex', Symbol(
-        svg='<g id="sym_hex_u_tube"><path d="M 15.0 24.0 L 15.0 30.0 L 0.0 30.0 L 0.0 0.0 L 15.0 0.0 L 15.0 6.0 L 85.0 6.0 A 6.0 8.0 0.0 0 1 91.75 15.0 A 6.0 8.0 0.0 0 1 85.0 24.0 L 15.0 24.0 Z M 15.0 6.0 L 15.0 24.0 M 0.0 15.0 L 15.0 15.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_hex_u_tube"><path d="M 15.0 24.0 L 15.0 30.0 L 0.0 30.0 L 0.0 0.0 L 15.0 0.0 L 15.0 6.0 L 85.0 6.0 A 6.75 9.0 0.0 0 1 91.75 15.0 A 6.75 9.0 0.0 0 1 85.0 24.0 L 15.0 24.0 Z M 15.0 6.0 L 15.0 24.0 M 0.0 15.0 L 15.0 15.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=91.8, height=30.0,
         ports={'tube_in': (0.0, 7.5), 'tube_out': (0.0, 22.5), 'shell_in': (45.9, 6.0), 'shell_out': (45.9, 24.0)},
     ), 'u_tube')
@@ -673,7 +673,7 @@ def register_vendored(registry):
 
     # draw.io heat_exchangers:Hairpin Exchanger (aspect=variable) -> hex/hairpin
     registry.register('hex', Symbol(
-        svg='<g id="sym_hex_hairpin"><path d="M 5.0 6.0 L 15.0 6.0 L 15.0 0.0 L 20.0 0.0 L 20.0 6.0 L 70.0 6.0 L 70.0 0.0 L 75.0 0.0 L 75.0 6.0 L 85.0 6.0 A 6.0 8.0 0.0 0 1 91.75 15.0 A 6.0 8.0 0.0 0 1 85.0 24.0 L 75.0 24.0 L 75.0 30.0 L 70.0 30.0 L 70.0 24.0 L 20.0 24.0 L 20.0 30.0 L 15.0 30.0 L 15.0 24.0 L 5.0 24.0 L 0.0 23.0 L 0.0 20.0 L 5.0 19.0 L 83.0 19.0 A 3.5 4.0 0.0 0 0 86.5 15.0 A 3.5 4.0 0.0 0 0 83.0 11.0 L 5.0 11.0 L 0.0 10.0 L 0.0 7.0 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 5.0 3.0 L 5.0 14.0 M 5.0 16.0 L 5.0 27.0 M 15.0 6.0 L 20.0 6.0 M 70.0 6.0 L 75.0 6.0 M 75.0 24.0 L 70.0 24.0 M 20.0 24.0 L 15.0 24.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 2.0 8.0 L 2.0 9.5 M 3.0 7.0 L 3.0 9.0 M 2.0 21.0 L 2.0 22.5 M 3.0 20.0 L 3.0 22.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_hex_hairpin"><path d="M 5.0 6.0 L 15.0 6.0 L 15.0 0.0 L 20.0 0.0 L 20.0 6.0 L 70.0 6.0 L 70.0 0.0 L 75.0 0.0 L 75.0 6.0 L 85.0 6.0 A 6.75 9.0 0.0 0 1 91.75 15.0 A 6.75 9.0 0.0 0 1 85.0 24.0 L 75.0 24.0 L 75.0 30.0 L 70.0 30.0 L 70.0 24.0 L 20.0 24.0 L 20.0 30.0 L 15.0 30.0 L 15.0 24.0 L 5.0 24.0 L 0.0 23.0 L 0.0 20.0 L 5.0 19.0 L 83.0 19.0 A 3.5 4.0 0.0 0 0 86.5 15.0 A 3.5 4.0 0.0 0 0 83.0 11.0 L 5.0 11.0 L 0.0 10.0 L 0.0 7.0 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 5.0 3.0 L 5.0 14.0 M 5.0 16.0 L 5.0 27.0 M 15.0 6.0 L 20.0 6.0 M 70.0 6.0 L 75.0 6.0 M 75.0 24.0 L 70.0 24.0 M 20.0 24.0 L 15.0 24.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 2.0 8.0 L 2.0 9.5 M 3.0 7.0 L 3.0 9.0 M 2.0 21.0 L 2.0 22.5 M 3.0 20.0 L 3.0 22.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=91.8, height=30.0,
         ports={'tube_in': (0.0, 8.5), 'tube_out': (0.0, 21.5), 'shell_in': (72.5, 0.0), 'shell_out': (17.5, 30.0)},
     ), 'hairpin')
@@ -722,7 +722,7 @@ def register_vendored(registry):
 
     # draw.io vessels:Vessel (Dished Ends, Brackets) (aspect=variable) -> vessel/dished
     registry.register('vessel', Symbol(
-        svg='<g id="sym_vessel_dished"><path d="M 50.0 7.69 L 50.0 87.69 A 13.0 5.0 0.0 0 1 30.0 95.3823 A 13.0 5.0 0.0 0 1 10.0 87.69 L 10.0 7.69 A 13.0 5.0 0.0 0 1 30.0 -0.0023 A 13.0 5.0 0.0 0 1 50.0 7.69 Z M 10.0 7.69 L 50.0 7.69 M 10.0 87.69 L 50.0 87.69 M 50.0 62.69 L 60.0 72.69 L 50.0 72.69 Z M 10.0 62.69 L 0.0 72.69 L 10.0 72.69 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_vessel_dished"><path d="M 50.0 7.69 L 50.0 87.69 A 20.0 7.6923 0.0 0 1 30.0 95.3823 A 20.0 7.6923 0.0 0 1 10.0 87.69 L 10.0 7.69 A 20.0 7.6923 0.0 0 1 30.0 -0.0023 A 20.0 7.6923 0.0 0 1 50.0 7.69 Z M 10.0 7.69 L 50.0 7.69 M 10.0 87.69 L 50.0 87.69 M 50.0 62.69 L 60.0 72.69 L 50.0 72.69 Z M 10.0 62.69 L 0.0 72.69 L 10.0 72.69 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=60.0, height=95.4,
         ports={'inlet': (10.0, 47.0), 'outlet': (50.0, 47.0), 'vent': (30.0, 0.0)},
         # must not be turned: vent on the top head; stands on brackets
@@ -731,7 +731,7 @@ def register_vendored(registry):
 
     # draw.io vessels:Vessel (Dome) (aspect=variable) -> vessel/dome
     registry.register('vessel', Symbol(
-        svg='<g id="sym_vessel_dome"><path d="M 87.69 14.93 A 5.0 13.0 179.97 0 1 95.3923 34.9272 A 5.0 13.0 179.97 0 1 87.71 54.93 L 7.71 54.97 A 5.0 13.0 179.97 0 1 0.0077 34.9728 A 5.0 13.0 179.97 0 1 7.69 14.97 L 52.69 14.94 L 52.68 4.94 A 10.0 5.0 179.97 0 1 62.6779 -0.065 A 10.0 5.0 179.97 0 1 72.68 4.93 L 72.69 14.93 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_vessel_dome"><path d="M 87.69 14.93 A 7.6923 20.0 179.97 0 1 95.3923 34.9272 A 7.6923 20.0 179.97 0 1 87.71 54.93 L 7.71 54.97 A 7.6923 20.0 179.97 0 1 0.0077 34.9728 A 7.6923 20.0 179.97 0 1 7.69 14.97 L 52.69 14.94 L 52.68 4.94 A 10.0 5.0 179.97 0 1 62.6779 -0.065 A 10.0 5.0 179.97 0 1 72.68 4.93 L 72.69 14.93 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=95.4, height=55.0,
         ports={'inlet': (0.0, 27.0), 'outlet': (95.4, 27.0), 'vent': (62.7, 0.0)},
         # must not be turned: the manway dome is on top
@@ -740,7 +740,7 @@ def register_vendored(registry):
 
     # draw.io vessels:Vessel (Dished Ends, Heating-Cooling Jacket) (aspect=variable) -> vessel/jacketed
     registry.register('vessel', Symbol(
-        svg='<g id="sym_vessel_jacketed"><path d="M 46.0 7.69 L 46.0 87.69 A 13.0 5.0 0.0 0 1 26.0 95.3823 A 13.0 5.0 0.0 0 1 6.0 87.69 L 6.0 7.69 A 13.0 5.0 0.0 0 1 26.0 -0.0023 A 13.0 5.0 0.0 0 1 46.0 7.69 Z M 6.0 7.69 L 46.0 7.69 M 6.0 87.69 L 46.0 87.69" fill="none" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="12.69" width="6.0" height="70.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="46.0" y="12.69" width="6.0" height="70.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_vessel_jacketed"><path d="M 46.0 7.69 L 46.0 87.69 A 20.0 7.6923 0.0 0 1 26.0 95.3823 A 20.0 7.6923 0.0 0 1 6.0 87.69 L 6.0 7.69 A 20.0 7.6923 0.0 0 1 26.0 -0.0023 A 20.0 7.6923 0.0 0 1 46.0 7.69 Z M 6.0 7.69 L 46.0 7.69 M 6.0 87.69 L 46.0 87.69" fill="none" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="12.69" width="6.0" height="70.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="46.0" y="12.69" width="6.0" height="70.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=52.0, height=95.4,
         ports={'inlet': (0.0, 47.7), 'outlet': (52.0, 47.7), 'vent': (26.0, 0.0)},
         # must not be turned: vent on the top head, free surface below it
@@ -749,7 +749,7 @@ def register_vendored(registry):
 
     # draw.io vessels:Vessel (Dished Ends, Thermal Insulation) (aspect=variable) -> vessel/insulated
     registry.register('vessel', Symbol(
-        svg='<g id="sym_vessel_insulated"><path d="M 46.0 7.69 L 46.0 87.69 A 13.0 5.0 0.0 0 1 26.0 95.3823 A 13.0 5.0 0.0 0 1 6.0 87.69 L 6.0 7.69 A 13.0 5.0 0.0 0 1 26.0 -0.0023 A 13.0 5.0 0.0 0 1 46.0 7.69 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 6.0 7.69 L 46.0 7.69 M 6.0 87.69 L 46.0 87.69 M 0.0 12.69 L 0.0 82.69 M 52.0 12.69 L 52.0 82.69 M 6.0 12.69 L 0.0 18.69 M 6.0 17.69 L 0.0 23.69 M 6.0 22.69 L 0.0 28.69 M 6.0 27.69 L 0.0 33.69 M 6.0 32.69 L 0.0 38.69 M 6.0 37.69 L 0.0 43.69 M 6.0 42.69 L 0.0 48.69 M 6.0 47.69 L 0.0 53.69 M 6.0 52.69 L 0.0 58.69 M 6.0 57.69 L 0.0 63.69 M 6.0 62.69 L 0.0 68.69 M 6.0 67.69 L 0.0 73.69 M 6.0 72.69 L 0.0 78.69 M 6.0 77.69 L 1.0 82.69 M 52.0 12.69 L 46.0 18.69 M 52.0 17.69 L 46.0 23.69 M 52.0 22.69 L 46.0 28.69 M 52.0 27.69 L 46.0 33.69 M 52.0 32.69 L 46.0 38.69 M 52.0 37.69 L 46.0 43.69 M 52.0 42.69 L 46.0 48.69 M 52.0 47.69 L 46.0 53.69 M 52.0 52.69 L 46.0 58.69 M 52.0 57.69 L 46.0 63.69 M 52.0 62.69 L 46.0 68.69 M 52.0 67.69 L 46.0 73.69 M 52.0 72.69 L 46.0 78.69 M 52.0 77.69 L 47.0 82.69" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_vessel_insulated"><path d="M 46.0 7.69 L 46.0 87.69 A 20.0 7.6923 0.0 0 1 26.0 95.3823 A 20.0 7.6923 0.0 0 1 6.0 87.69 L 6.0 7.69 A 20.0 7.6923 0.0 0 1 26.0 -0.0023 A 20.0 7.6923 0.0 0 1 46.0 7.69 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 6.0 7.69 L 46.0 7.69 M 6.0 87.69 L 46.0 87.69 M 0.0 12.69 L 0.0 82.69 M 52.0 12.69 L 52.0 82.69 M 6.0 12.69 L 0.0 18.69 M 6.0 17.69 L 0.0 23.69 M 6.0 22.69 L 0.0 28.69 M 6.0 27.69 L 0.0 33.69 M 6.0 32.69 L 0.0 38.69 M 6.0 37.69 L 0.0 43.69 M 6.0 42.69 L 0.0 48.69 M 6.0 47.69 L 0.0 53.69 M 6.0 52.69 L 0.0 58.69 M 6.0 57.69 L 0.0 63.69 M 6.0 62.69 L 0.0 68.69 M 6.0 67.69 L 0.0 73.69 M 6.0 72.69 L 0.0 78.69 M 6.0 77.69 L 1.0 82.69 M 52.0 12.69 L 46.0 18.69 M 52.0 17.69 L 46.0 23.69 M 52.0 22.69 L 46.0 28.69 M 52.0 27.69 L 46.0 33.69 M 52.0 32.69 L 46.0 38.69 M 52.0 37.69 L 46.0 43.69 M 52.0 42.69 L 46.0 48.69 M 52.0 47.69 L 46.0 53.69 M 52.0 52.69 L 46.0 58.69 M 52.0 57.69 L 46.0 63.69 M 52.0 62.69 L 46.0 68.69 M 52.0 67.69 L 46.0 73.69 M 52.0 72.69 L 46.0 78.69 M 52.0 77.69 L 47.0 82.69" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=52.0, height=95.4,
         ports={'inlet': (0.0, 47.7), 'outlet': (52.0, 47.7), 'vent': (26.0, 0.0)},
         # must not be turned: vent on the top head, free surface below it
@@ -758,7 +758,7 @@ def register_vendored(registry):
 
     # draw.io vessels:Vessel (Dished Ends, Electrical Heating) (aspect=variable) -> vessel/electrical_heating
     registry.register('vessel', Symbol(
-        svg='<g id="sym_vessel_electrical_heating"><path d="M 40.0 7.69 L 40.0 87.69 A 13.0 5.0 0.0 0 1 20.0 95.3823 A 13.0 5.0 0.0 0 1 0.0 87.69 L 0.0 7.69 A 13.0 5.0 0.0 0 1 20.0 -0.0023 A 13.0 5.0 0.0 0 1 40.0 7.69 Z M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69" fill="none" stroke="#111" stroke-width="2.0"/><rect x="44.0" y="37.69" width="6.0" height="20.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 47.0 27.69 L 47.0 37.69 M 47.0 57.69 L 47.0 67.69 M 44.0 42.69 L 50.0 42.69 M 44.0 47.69 L 50.0 47.69 M 44.0 52.69 L 50.0 52.69" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_vessel_electrical_heating"><path d="M 40.0 7.69 L 40.0 87.69 A 20.0 7.6923 0.0 0 1 20.0 95.3823 A 20.0 7.6923 0.0 0 1 0.0 87.69 L 0.0 7.69 A 20.0 7.6923 0.0 0 1 20.0 -0.0023 A 20.0 7.6923 0.0 0 1 40.0 7.69 Z M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69" fill="none" stroke="#111" stroke-width="2.0"/><rect x="44.0" y="37.69" width="6.0" height="20.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 47.0 27.69 L 47.0 37.69 M 47.0 57.69 L 47.0 67.69 M 44.0 42.69 L 50.0 42.69 M 44.0 47.69 L 50.0 47.69 M 44.0 52.69 L 50.0 52.69" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=50.0, height=95.4,
         ports={'inlet': (0.0, 47.7), 'outlet': (40.0, 77.7), 'vent': (20.0, 0.0)},
         # must not be turned: vent on the top head, low draw-off from the shell
@@ -767,7 +767,7 @@ def register_vendored(registry):
 
     # draw.io vessels:Vessel (Dished Ends, Skirts) (aspect=variable) -> vessel/skirted
     registry.register('vessel', Symbol(
-        svg='<g id="sym_vessel_skirted"><path d="M 40.0 7.69 L 40.0 87.69 A 13.0 5.0 0.0 0 1 20.0 95.3823 A 13.0 5.0 0.0 0 1 0.0 87.69 L 0.0 7.69 A 13.0 5.0 0.0 0 1 20.0 -0.0023 A 13.0 5.0 0.0 0 1 40.0 7.69 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69 M 0.0 87.69 L 0.0 122.69 L 8.0 122.69 M 40.0 87.69 L 40.0 122.69 L 32.0 122.69" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_vessel_skirted"><path d="M 40.0 7.69 L 40.0 87.69 A 20.0 7.6923 0.0 0 1 20.0 95.3823 A 20.0 7.6923 0.0 0 1 0.0 87.69 L 0.0 7.69 A 20.0 7.6923 0.0 0 1 20.0 -0.0023 A 20.0 7.6923 0.0 0 1 40.0 7.69 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69 M 0.0 87.69 L 0.0 122.69 L 8.0 122.69 M 40.0 87.69 L 40.0 122.69 L 32.0 122.69" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=40.0, height=122.7,
         ports={'inlet': (0.0, 47.7), 'outlet': (40.0, 47.7), 'vent': (20.0, 0.0)},
         # must not be turned: vent on the top head; stands on a skirt
@@ -776,7 +776,7 @@ def register_vendored(registry):
 
     # draw.io vessels:Vessel (Dished Ends, Legs) (aspect=variable) -> vessel/legs
     registry.register('vessel', Symbol(
-        svg='<g id="sym_vessel_legs"><rect x="0.0" y="87.69" width="8.0" height="35.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="32.0" y="87.69" width="8.0" height="35.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 40.0 7.69 L 40.0 87.69 A 13.0 5.0 0.0 0 1 20.0 95.3823 A 13.0 5.0 0.0 0 1 0.0 87.69 L 0.0 7.69 A 13.0 5.0 0.0 0 1 20.0 -0.0023 A 13.0 5.0 0.0 0 1 40.0 7.69 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_vessel_legs"><rect x="0.0" y="87.69" width="8.0" height="35.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="32.0" y="87.69" width="8.0" height="35.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 40.0 7.69 L 40.0 87.69 A 20.0 7.6923 0.0 0 1 20.0 95.3823 A 20.0 7.6923 0.0 0 1 0.0 87.69 L 0.0 7.69 A 20.0 7.6923 0.0 0 1 20.0 -0.0023 A 20.0 7.6923 0.0 0 1 40.0 7.69 Z" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=40.0, height=122.7,
         ports={'inlet': (0.0, 47.7), 'outlet': (40.0, 47.7), 'vent': (20.0, 0.0)},
         # must not be turned: vent on the top head; stands on legs
@@ -785,7 +785,7 @@ def register_vendored(registry):
 
     # draw.io vessels:Vessel (Different Diameters) (aspect=variable) -> vessel/swaged
     registry.register('vessel', Symbol(
-        svg='<g id="sym_vessel_swaged"><path d="M 10.0 15.0 A 10.0 10.0 0.0 0 1 25.0 0.0 A 10.0 10.0 0.0 0 1 40.0 15.0 L 40.0 40.0 L 50.0 50.0 L 50.0 85.0 A 20.0 10.0 0.0 0 1 25.0 97.5 A 20.0 10.0 0.0 0 1 0.0 85.0 L 0.0 50.25 L 10.0 40.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_vessel_swaged"><path d="M 10.0 15.0 A 15.0 15.0 0.0 0 1 25.0 0.0 A 15.0 15.0 0.0 0 1 40.0 15.0 L 40.0 40.0 L 50.0 50.0 L 50.0 85.0 A 25.0 12.5 0.0 0 1 25.0 97.5 A 25.0 12.5 0.0 0 1 0.0 85.0 L 0.0 50.25 L 10.0 40.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=50.0, height=97.5,
         ports={'inlet': (0.0, 67.0), 'outlet': (50.0, 67.0), 'vent': (25.0, 0.0)},
         # must not be turned: vent on the top head, and the larger diameter is the one below it
@@ -839,7 +839,7 @@ def register_vendored(registry):
 
     # draw.io vessels:Reactor (aspect=variable) -> reactor/plain
     registry.register('reactor', Symbol(
-        svg='<g id="sym_reactor_plain"><path d="M 40.0 7.69 L 40.0 87.69 A 13.0 5.0 0.0 0 1 20.0 95.3823 A 13.0 5.0 0.0 0 1 0.0 87.69 L 0.0 7.69 A 13.0 5.0 0.0 0 1 20.0 -0.0023 A 13.0 5.0 0.0 0 1 40.0 7.69 Z M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69 M 0.0 67.69 L 40.0 67.69 M 0.0 27.69 L 40.0 27.69 M 8.0 27.69 L 0.0 35.69 M 24.0 27.69 L 0.0 51.69 M 32.0 27.69 L 0.0 59.69 M 40.0 27.69 L 0.0 67.69 M 40.0 35.69 L 8.0 67.69 M 40.0 51.69 L 24.0 67.69 M 40.0 59.69 L 32.0 67.69 M 16.0 27.69 L 0.0 43.69 M 40.0 43.69 L 16.0 67.69" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_reactor_plain"><path d="M 40.0 7.69 L 40.0 87.69 A 20.0 7.6923 0.0 0 1 20.0 95.3823 A 20.0 7.6923 0.0 0 1 0.0 87.69 L 0.0 7.69 A 20.0 7.6923 0.0 0 1 20.0 -0.0023 A 20.0 7.6923 0.0 0 1 40.0 7.69 Z M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69 M 0.0 67.69 L 40.0 67.69 M 0.0 27.69 L 40.0 27.69 M 8.0 27.69 L 0.0 35.69 M 24.0 27.69 L 0.0 51.69 M 32.0 27.69 L 0.0 59.69 M 40.0 27.69 L 0.0 67.69 M 40.0 35.69 L 8.0 67.69 M 40.0 51.69 L 24.0 67.69 M 40.0 59.69 L 32.0 67.69 M 16.0 27.69 L 0.0 43.69 M 40.0 43.69 L 16.0 67.69" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=40.0, height=95.4,
         ports={'outlet': (20.0, 95.4), 'duty': (40.0, 47.0), 'vent': (30.0, 7.7)},
         # must not be turned: vent on the top head, outlet in the floor
@@ -849,7 +849,7 @@ def register_vendored(registry):
 
     # draw.io vessels:Drum or Condenser (aspect=variable) -> vessel/horizontal
     registry.register('vessel', Symbol(
-        svg='<g id="sym_vessel_horizontal"><path d="M 5.77 30.0 L 85.77 30.0 A 5.0 13.0 0.0 0 0 91.5392 15.0 A 5.0 13.0 0.0 0 0 85.77 0.0 L 5.77 0.0 A 5.0 13.0 0.0 0 0 0.0008 15.0 A 5.0 13.0 0.0 0 0 5.77 30.0 Z M 5.77 0.0 L 5.77 30.0 M 85.77 0.0 L 85.77 30.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_vessel_horizontal"><path d="M 5.77 30.0 L 85.77 30.0 A 5.7692 15.0 0.0 0 0 91.5392 15.0 A 5.7692 15.0 0.0 0 0 85.77 0.0 L 5.77 0.0 A 5.7692 15.0 0.0 0 0 0.0008 15.0 A 5.7692 15.0 0.0 0 0 5.77 30.0 Z M 5.77 0.0 L 5.77 30.0 M 85.77 0.0 L 85.77 30.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=91.5, height=30.0,
         ports={'inlet': (0.0, 15.0), 'outlet': (68.0, 30.0), 'vent': (55.0, 0.0)},
         # must not be turned: vent off the top, liquid out of the bottom
@@ -859,7 +859,7 @@ def register_vendored(registry):
 
     # draw.io vessels:Drum or Condenser (aspect=variable) -> separator/horizontal
     registry.register('separator', Symbol(
-        svg='<g id="sym_separator_horizontal"><path d="M 5.77 30.0 L 85.77 30.0 A 5.0 13.0 0.0 0 0 91.5392 15.0 A 5.0 13.0 0.0 0 0 85.77 0.0 L 5.77 0.0 A 5.0 13.0 0.0 0 0 0.0008 15.0 A 5.0 13.0 0.0 0 0 5.77 30.0 Z M 5.77 0.0 L 5.77 30.0 M 85.77 0.0 L 85.77 30.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_separator_horizontal"><path d="M 5.77 30.0 L 85.77 30.0 A 5.7692 15.0 0.0 0 0 91.5392 15.0 A 5.7692 15.0 0.0 0 0 85.77 0.0 L 5.77 0.0 A 5.7692 15.0 0.0 0 0 0.0008 15.0 A 5.7692 15.0 0.0 0 0 5.77 30.0 Z M 5.77 0.0 L 5.77 30.0 M 85.77 0.0 L 85.77 30.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=91.5, height=30.0,
         ports={'feed': (0.0, 15.0), 'vapor': (30.0, 0.0), 'liquid': (68.0, 30.0)},
         # must not be turned: vapour disengages off the top, liquid draws off the bottom
