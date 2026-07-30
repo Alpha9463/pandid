@@ -45,6 +45,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Lettering the renderer centres vertically is centred in the `.pdf` and `.png`
+  exports too. svglib maps `text-anchor` and nothing else about how a string
+  sets: `dominant-baseline` appears nowhere in it, so every `<text>` was drawn
+  with its *alphabetic baseline* on the `y` it was given, and anything centred
+  on a point came out about a quarter of its type size above that point. That is
+  every stream number, both lines inside every instrument balloon, and every
+  equipment tag not set above its unit — each of them struck on a white halo
+  drawn round the same centre, so the halo and the lettering in it came apart.
+  Measured on the raster, a stream number sat 2.7 px high in a 13 px halo, half
+  the height of its own ink; in a balloon the tag and loop number rode up
+  against the top of the circle with the gap below them. This arrived with the
+  backend change above and was missed because the fidelity comparison that
+  vetted it stripped `<text>` before comparing.
+
+  `pandid.render.export.flatten`, which exists to resolve exactly this — it
+  already stands in for the `<use>` and `marker-end` the backend drops — now
+  resolves the alignment as well, working the offset out from the drawing face's
+  own ascent and descent (ReportLab's, which are the metrics the backend letters
+  with) and folding it into the text's `y`, so what svglib is handed is the
+  plain baseline it does read. Because the shift is a fraction of the font size
+  it is written in the same units as the text it moves, and a symbol's own
+  lettering is shifted by the placement that scales the symbol.
+
+  The values the renderer emits are `middle`, on everything it centres, and
+  `baseline`, on a label set above a unit, whose `y` is a baseline already;
+  `auto`, `alphabetic` and `central` resolve alongside them. Any other value —
+  `hanging` is the likeliest — is refused rather than placed on a guess, the way
+  an unsupported construct already is, since a browser reads that one out of a
+  font's own baseline table and ReportLab's base-14 metrics do not carry it.
+
+  The `.svg` output is untouched and no golden moves: the SVG was right, and
+  this is what makes the exports agree with it.
+
 - A unit given a `width`/`height` of its own is drawn at the sheet's line
   weight. It was not, and the error was the whole of the resize: a symbol's
   weights are compensated once, at generation time, for the scale its artwork is
