@@ -233,7 +233,7 @@
     <symbol id="sym_splitter" viewBox="0 0 50.0 50.0" overflow="visible"><polygon points="0,25 50,0 50,50" fill="none" stroke="black" stroke-width="2"/></symbol>
     <symbol id="sym_valve_control" viewBox="0 0 24.5 15.0" overflow="visible"><g transform="scale(0.25)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="none" stroke="#111" stroke-width="8.0"/><path d="M 29.0 18.0 A 25.0 25.0 0.0 0 1 69.0 18.0" fill="none" stroke="#111" stroke-width="8.0"/></g></symbol>
     <symbol id="sym_vent" viewBox="0 0 20.0 35.0" overflow="visible"><g transform="scale(0.25)"><path d="M 40.0 40.0 L 40.0 140.0 M 0.0 40.0 L 40.0 0.0 L 80.0 40.0" fill="none" stroke="#111" stroke-width="8.0"/></g></symbol>
-    <symbol id="sym_vessel_horizontal" viewBox="0 0 91.5 30.0" preserveAspectRatio="none" overflow="visible"><path d="M 5.77 30.0 L 85.77 30.0 A 5.7692 15.0 0.0 0 0 91.5392 15.0 A 5.7692 15.0 0.0 0 0 85.77 0.0 L 5.77 0.0 A 5.7692 15.0 0.0 0 0 0.0008 15.0 A 5.7692 15.0 0.0 0 0 5.77 30.0 Z M 5.77 0.0 L 5.77 30.0 M 85.77 0.0 L 85.77 30.0" fill="none" stroke="#111" stroke-width="2.0"/></symbol>
+    <symbol id="sym_vessel_horizontal_s150x48" viewBox="0 0 91.5 30.0" preserveAspectRatio="none" overflow="visible"><path d="M 5.77 30.0 L 85.77 30.0 A 5.7692 15.0 0.0 0 0 91.5392 15.0 A 5.7692 15.0 0.0 0 0 85.77 0.0 L 5.77 0.0 A 5.7692 15.0 0.0 0 0 0.0008 15.0 A 5.7692 15.0 0.0 0 0 5.77 30.0 Z M 5.77 0.0 L 5.77 30.0 M 85.77 0.0 L 85.77 30.0" fill="none" stroke="#111" stroke-width="1.23491"/></symbol>
   </defs>
   <g id="units">
     <polygon points="-26.0,910.5 85,910.5 100,923.5 85,936.5 -26.0,936.5" fill="transparent" stroke="black" stroke-width="2" />
@@ -247,7 +247,7 @@
     <use href="#sym_pump" x="576" y="893.5" width="70.0" height="67.0" />
     <use href="#sym_splitter" x="746" y="878.5" width="50.0" height="50.0" />
     <use href="#sym_valve_control" x="896" y="886" width="24.5" height="15.0" />
-    <use href="#sym_vessel_horizontal" x="896" y="1028" width="150" height="48" />
+    <use href="#sym_vessel_horizontal_s150x48" x="896" y="1028" width="150" height="48" />
     <use href="#sym_vent" x="1146" y="906" width="20.0" height="35.0" />
     <use href="#sym_valve_control" x="1146" y="1083.5" width="24.5" height="15.0" transform="translate(0, 2182) scale(1, -1)" />
     <polygon points="1270.5,1078.0 1357.5,1078.0 1372.5,1091.0 1357.5,1104.0 1270.5,1104.0" fill="transparent" stroke="black" stroke-width="2" />

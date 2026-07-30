@@ -262,6 +262,20 @@ def _xform_tag(rot: int, mirror_x: bool, mirror_y: bool) -> str:
     return "_t" + (f"r{rot}" if rot else "") + ("x" if mirror_x else "") + ("y" if mirror_y else "")
 
 
+def _placed_box(u) -> "tuple[float, float] | None":
+    """The box a unit's artwork is drawn into, in the symbol's own attitude.
+
+    A quarter turn swaps the box the drawing is laid into and then turns the
+    result back onto the frame, so the artwork never sees the swap; every
+    question about how a placement scales a symbol is asked in these terms.
+    """
+    f = getattr(u, "frame", None)
+    if f is None:
+        return None
+    rot = int(getattr(f, "orientation", 0) or 0)
+    return (f.h, f.w) if rot in (90, 270) else (f.w, f.h)
+
+
 def _reshapes(sym, u) -> bool:
     """True when a unit's box is a different shape from its symbol's own.
 
@@ -271,16 +285,105 @@ def _reshapes(sym, u) -> bool:
     both may land on any others. A quarter turn swaps the box, and swaps the
     symbol with it, so it never reshapes anything by itself.
     """
-    f = getattr(u, "frame", None)
-    if f is None:
+    box = _placed_box(u)
+    if box is None:
         return False
-    rot = int(getattr(f, "orientation", 0) or 0)
-    bw, bh = (f.h, f.w) if rot in (90, 270) else (f.w, f.h)
+    bw, bh = box
     # Cross-multiplied, so a zero dimension cannot divide. A box that matches is
     # copied from the symbol's own size and matches to the bit; the tolerance is
     # only there so arithmetic on a size the author computed cannot claim a
     # reshaping that is not one.
     return not math.isclose(sym.width * bh, sym.height * bw, rel_tol=1e-9)
+
+
+# --- the pen a placement draws with ------------------------------------------
+# A symbol's line weights are compensated once, at generation time:
+# scripts/vendor_symbols.py bakes stroke_width = 2/sx inside the scale group it
+# wraps the artwork in, so a valve drawn under scale(0.25) carries an 8.0 and
+# lands on the sheet's 2.0. That is right for exactly one box -- the symbol's
+# own. A <use> resizes the <symbol>'s viewport, and a viewport scales the ink as
+# readily as the geometry, so the same valve placed in a box twice its own draws
+# at 4.0, and nothing anywhere scales it back. The compensation is therefore
+# half an answer, and this is the other half: divide the baked weight back out
+# by whatever the placement multiplied it by, which is what makes a resized
+# unit's <defs> entry per placed *size* rather than per (kind, variant).
+
+
+def _placement_scale(sym, u) -> "tuple[float, float]":
+    """What a unit's ``<use>`` box scales its symbol's artwork by, per axis."""
+    box = _placed_box(u)
+    if box is None or not (sym.width and sym.height):
+        return (1.0, 1.0)
+    return (box[0] / sym.width, box[1] / sym.height)
+
+
+def _pen_scale(sym, u) -> float:
+    """The single factor a placement multiplies a symbol's line weights by.
+
+    One factor and not two, because ``stroke-width`` is one number. SVG strokes
+    a path by sweeping a *circular* pen along it, and a viewport that scales the
+    axes differently sweeps an elliptical one: under ``preserveAspectRatio``
+    ``"none"`` a vertical line comes out at ``sx`` and a horizontal one at
+    ``sy``, and no width written on the element can undo a difference that
+    depends on the direction the element runs in. The two constructs that can
+    are both refused here: ``vector-effect="non-scaling-stroke"`` is dropped in
+    silence by the PDF backend (see ``pandid.render.export``), which would leave
+    the SVG right and every exported sheet wrong, and re-emitting the artwork's
+    coordinates at the placed size rewrites every number in the drawing to move
+    nothing.
+
+    So a placement that reshapes takes the geometric mean. It is the factor that
+    leaves the pen's area the pen's area, it splits what is left evenly either
+    side of the intended weight rather than piling it onto one axis, and it is
+    *exact* the moment the two axes agree -- which is every placement that
+    resizes a unit without also reshaping it, and every one that reshapes a
+    symbol which may not be stretched, since that one keeps its aspect and is
+    centred at the smaller of the two scales.
+
+    The residual is the aspect change the placement itself asked for, and it is
+    bounded by it: a box 4% off the symbol's shape draws within 2% of weight.
+    """
+    kx, ky = _placement_scale(sym, u)
+    if sym.stretchable and _reshapes(sym, u):
+        return math.sqrt(kx * ky)
+    return min(kx, ky)
+
+
+def _size_tag(sym, u) -> str:
+    """Id suffix naming the box a placement had its symbol drawn for.
+
+    Empty for the great majority, which is the point: a unit left to size itself
+    lands on its symbol's own box at a scale of exactly 1, and goes on sharing
+    one definition with every other unit of its kind. Only a unit given a
+    ``width``/``height`` of its own costs the sheet a second entry.
+    """
+    if math.isclose(_pen_scale(sym, u), 1.0, rel_tol=1e-9):
+        return ""
+    box = _placed_box(u)
+    assert box is not None  # a scale of anything but 1 came from a box
+    return f"_s{_num(box[0])}x{_num(box[1])}"
+
+
+# Written on the element in every symbol here, hand-drawn and vendored alike;
+# nothing reaches a stroke through CSS, which is what lets this be a rewrite of
+# the emitted string rather than a parse of it.
+_STROKE_WIDTH = re.compile(r'stroke-width="([\d.]+)"')
+
+
+def _at_pen_scale(svg: str, scale: float) -> str:
+    """*svg* with every line weight in it divided by *scale*.
+
+    Every weight and not only the 2.0 outline: a symbol's own fine detail -- a
+    column's trays, an agitator, the location bar across a panel balloon -- is
+    drawn at a deliberate fraction of the sheet weight, the placement swells all
+    of them alike, and dividing all of them alike is what holds the ratio the
+    symbol's author drew. Six significant figures because the number is read
+    back as a weight and multiplied by the scale again on the way to the page.
+    """
+    if scale == 1.0:
+        return svg
+    return _STROKE_WIDTH.sub(
+        lambda m: f'stroke-width="{float(m.group(1)) / scale:.6g}"', svg)
 
 
 def _upright_text(svg: str, rot: int, mirror_x: bool, mirror_y: bool) -> str:
@@ -996,12 +1099,14 @@ class SvgRenderer:
 
         One definition per ``(kind, variant)``, plus a suffix for whatever else
         is baked into the definition rather than applied by the ``<use>``: the
-        size a built-to-measure symbol was drawn at, and the counter-rotation
-        that keeps a symbol's own lettering readable.
+        size a built-to-measure symbol was drawn at, the size a *resized* unit
+        had its line weights compensated for (see :func:`_pen_scale`), and the
+        counter-rotation that keeps a symbol's own lettering readable.
         """
         variant = getattr(u, 'variant', 'default')
+        sym = self.registry.for_unit(u)
         sym_id = f"sym_{u.kind}" if variant == "default" else f"sym_{u.kind}_{variant}"
-        sym_id += self.registry.for_unit(u).id_suffix
+        sym_id += sym.id_suffix + _size_tag(sym, u)
         return sym_id + _xform_tag(*self._text_xform(u))
 
     def _defs(self, fs, arrows=True):
@@ -1026,8 +1131,11 @@ class SvgRenderer:
         # transform in use, since the counter-transform that keeps the letters
         # readable is baked into the definition; a symbol built to measure needs
         # one per size, so the box it is placed in is the box it was drawn in and
-        # the scale factor stays exactly 1. Everything else (the great majority)
-        # still shares a single definition however it is placed.
+        # the scale factor stays exactly 1; and a symbol some unit *resized*
+        # needs one per placed size too, since the weight it is drawn at is
+        # compensated for that scale (see _pen_scale) and a definition cannot
+        # carry two. Everything else (the great majority) still shares a single
+        # definition however it is placed.
         used: dict[tuple, tuple] = {}
         # Definitions some placement asks to fill a box of another shape. A
         # <symbol> scales its viewBox to fit and centres what is left over, so a
@@ -1043,13 +1151,14 @@ class SvgRenderer:
                 continue
             sym = self.registry.for_unit(u)
             xform = self._text_xform(u)
-            key = (u.kind, getattr(u, 'variant', 'default'), sym.id_suffix) + xform
-            used[key] = (self._sym_id(u), sym, *xform)
+            pen = _pen_scale(sym, u)
+            key = (u.kind, getattr(u, 'variant', 'default'), sym.id_suffix, pen) + xform
+            used[key] = (self._sym_id(u), sym, pen, *xform)
             if sym.stretchable and _reshapes(sym, u):
                 stretched.add(key)
         for key in sorted(used):
-            sym_id, sym, rot, mirror_x, mirror_y = used[key]
-            svg_str = _upright_text(sym.svg, rot, mirror_x, mirror_y)
+            sym_id, sym, pen, rot, mirror_x, mirror_y = used[key]
+            svg_str = _upright_text(_at_pen_scale(sym.svg, pen), rot, mirror_x, mirror_y)
             if svg_str.startswith('<g'):
                 inner = svg_str[svg_str.find('>') + 1:svg_str.rfind('</g>')]
                 # preserveAspectRatio: stated only where a placement reshapes the

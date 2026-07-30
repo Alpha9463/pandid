@@ -45,6 +45,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A unit given a `width`/`height` of its own is drawn at the sheet's line
+  weight. It was not, and the error was the whole of the resize: a symbol's
+  weights are compensated once, at generation time, for the scale its artwork is
+  drawn at — `scripts/vendor_symbols.py` bakes `2/sx` inside the scale group, so
+  a valve's `8.0` lands on `2.0` under `scale(0.25)` — and the `<use>` then
+  scales the `<symbol>`'s viewport, ink and all, with nothing scaling it back.
+  The `90 × 140` surge vessel of `examples/07` and `09` drew its shell at `2.9`,
+  `08`'s `150 × 48` reflux drum at `3.28`, and the `40 × 68` relief valve fixed
+  in [#152](https://github.com/Alpha9463/pandid/issues/152) at `5.8`, where it
+  merged into a blob. Every other line on those sheets is drawn at `2.0`.
+  ([#153](https://github.com/Alpha9463/pandid/issues/153))
+
+  A placement that resizes its symbol now gets a `<defs>` entry of its own, with
+  every weight in it divided by the scale the box applies — the same arrangement
+  a built-to-measure symbol already had, and it costs one entry per *resized*
+  unit, 28 bytes across the nine golden sheets. Nothing else about the drawing
+  moves: goldens 06, 07, 08 and 09 differ from their predecessors in symbol ids
+  and `stroke-width` values and in nothing else, and a unit left to size itself
+  renders byte-identically.
+
+  A box that also *reshapes* the artwork is corrected as far as SVG allows.
+  Stroking sweeps a circular pen, a viewport that scales the axes differently
+  sweeps an elliptical one, and no `stroke-width` — one number — can undo a
+  weight that depends on the direction the line runs in. The compensation is
+  therefore the geometric mean, which holds the pen's area to the circle's and
+  is exact the moment the two axes agree; what is left is the aspect change the
+  box itself asked for, which on the sheets above is under 4%, and
+  `tests/test_line_weight.py` bounds it there.
+
 - The three valve symbols drawn off `valves.xml`'s own module come out at the
   size the rest of the family is drawn at. `SCALE["valve"] = 0.25` is calibrated
   to that file's ~98-unit module — it is what puts a Gate Valve's `98 × 60`
