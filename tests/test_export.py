@@ -1,14 +1,18 @@
 """PDF/PNG export: the flattening that stands between the SVG and the backend.
 
-The backend does not implement `<use>` of a `<symbol>` or `marker-end`, and
-drops both without saying so, which draws every unit at the wrong size and
-loses every flow arrow. `pandid.render.export.flatten` resolves them into plain
-geometry first. These tests hold that resolution to the SVG viewport rules, and
-hold the renderer to emitting nothing else the backend would quietly discard.
+The backend does not implement `<use>` of a `<symbol>`, `marker-end` or
+`dominant-baseline`, and drops all three without saying so, which draws every
+unit at the wrong size, loses every flow arrow, and sets every vertically
+centred label a quarter of its type size clear of the halo it is centred on.
+`pandid.render.export.flatten` resolves them into plain geometry and plain
+coordinates first. These tests hold that resolution to the SVG viewport and
+alignment rules, and hold the renderer to emitting nothing else the backend
+would quietly discard.
 """
 
 import base64
 import importlib.util
+import io
 import math
 import re
 import zlib
@@ -182,6 +186,102 @@ def test_a_construct_the_backend_cannot_draw_is_refused_rather_than_dropped():
     assert "clip-path" in str(excinfo.value)
 
 
+# --- how a string sets --------------------------------------------------------
+
+# Half the ascent/descent box of Helvetica, the face svglib resolves pandid's
+# font-family="sans-serif" onto: how far below a centred point that string's
+# alphabetic baseline belongs, per unit of font size. Written out rather than
+# imported from the module under test, so the arithmetic is stated twice.
+_MIDDLE = (0.718 - 0.207) / 2
+
+
+def _label(baseline: str, size: str = "12") -> str:
+    return (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+        f'<text x="50" y="50" font-family="sans-serif" font-size="{size}" '
+        f'text-anchor="middle" dominant-baseline="{baseline}">S1</text></svg>'
+    )
+
+
+def _text_y(flat: str) -> float:
+    return float(re.search(r'<text[^>]*\by="(-?[\d.]+)"', flat).group(1))
+
+
+@pytest.mark.parametrize("size", ["12", "10"])
+def test_a_vertically_centred_label_is_handed_the_baseline_it_meant(size):
+    # The renderer centres a stream number, a balloon tag and most equipment
+    # labels on the point it struck the white halo round. The backend maps
+    # text-anchor and nothing else about alignment, so left alone it puts the
+    # *baseline* on that point and the lettering ends up clear of its own halo.
+    # The alphabetic baseline belongs half the ascent/descent box lower, and the
+    # shift is a fraction of the size the string is set in, not a constant.
+    flat = export.flatten(_label("middle", size))
+    assert "dominant-baseline" not in flat
+    assert _text_y(flat) == pytest.approx(50 + _MIDDLE * float(size))
+
+
+@pytest.mark.parametrize("baseline", ["baseline", "auto", "alphabetic"])
+def test_a_label_already_set_on_its_baseline_does_not_move(baseline):
+    # What pandid writes above a unit, where the y it computed is a baseline
+    # already. "baseline" is not one of the SVG keywords and a browser reads it
+    # as "auto"; all three have to come out of here as the same drawing, and as
+    # a drawing identical to the one with no attribute at all.
+    flat = export.flatten(_label(baseline))
+    assert "dominant-baseline" not in flat
+    assert _text_y(flat) == pytest.approx(50)
+
+
+def test_a_baseline_the_backend_cannot_place_is_refused_rather_than_drawn_wrong():
+    # `hanging` is the value a renderer is next likeliest to reach for, and a
+    # browser reads it out of the font's own baseline table, which ReportLab's
+    # base-14 metrics do not carry. Guessing it would put the text somewhere
+    # near right and say nothing, which is the failure this module exists to
+    # turn into a loud one.
+    with pytest.raises(RuntimeError) as excinfo:
+        export.flatten(_label("hanging"))
+    assert "hanging" in str(excinfo.value)
+
+
+def test_a_baseline_inherited_from_an_ancestor_is_refused_too():
+    # dominant-baseline inherits, so a <g> carrying one moves every string
+    # below it. Nothing here resolves that, and the backend would not either.
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+        '<g dominant-baseline="middle"><text x="50" y="50" font-size="12">S1</text></g></svg>'
+    )
+    with pytest.raises(RuntimeError) as excinfo:
+        export.flatten(svg)
+    assert "dominant-baseline" in str(excinfo.value)
+
+
+def test_a_symbol_shifts_its_own_lettering_by_its_own_size():
+    # The shift is applied after the <use> expansion and in the symbol's units,
+    # so the placement scales it with everything else it scales. Applied in the
+    # sheet's units instead, a symbol drawn at four times its definition would
+    # have its lettering nudged a quarter as far as its own artwork moved.
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+        '<defs><symbol id="s" viewBox="0 0 10 10" preserveAspectRatio="none">'
+        '<text x="5" y="5" font-family="sans-serif" font-size="4" '
+        'dominant-baseline="middle">M</text></symbol></defs>'
+        '<use href="#s" x="0" y="0" width="40" height="40" />'
+        "</svg>"
+    )
+    flat = export.flatten(svg)
+    assert _text_y(flat) == pytest.approx(5 + _MIDDLE * 4)
+    assert _matrix(re.search(r'<g transform="([^"]*)"', flat).group(1))[3] == pytest.approx(4)
+
+
+@pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
+def test_the_written_out_metrics_are_the_ones_the_backend_will_draw_with():
+    # export.py carries Helvetica's numbers so that flatten() answers the same
+    # on a machine with no pdf extra to ask. This is what keeps the two agreeing.
+    from reportlab.pdfbase import pdfmetrics
+
+    for bold, face in export._FACES.items():
+        assert pdfmetrics.getAscentDescent(face, 1.0) == pytest.approx(export._HELVETICA_EM), bold
+
+
 # --- the files that come out --------------------------------------------------
 
 
@@ -210,6 +310,48 @@ def test_the_exported_pdf_draws_the_sheet_rather_than_a_picture_of_it(tmp_path):
     assert b"/Subtype /Image" not in body  # no page-sized picture of the drawing
     assert b"/BaseFont /Helvetica" in body  # and its lettering is still lettering
     assert b" l\n" in _page_content(body) or b" re\n" in _page_content(body)
+
+
+_HALOED = re.compile(
+    r'<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)" fill="white" />\s*'
+    r'<text x="[\d.]+" y="[\d.]+"[^>]*dominant-baseline="middle"[^>]*>([^<]+)</text>'
+)
+
+
+@pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
+def test_a_centred_label_is_rasterised_in_the_middle_of_its_own_halo():
+    # Measured rather than eyeballed, and measured on the pixels, so it covers
+    # the whole path down to the raster instead of one rewrite in the middle of
+    # it. The renderer strikes the halo and sets the text from a single centre,
+    # so the ink is concentric with the box around it or the alignment was
+    # dropped on the way: unresolved, this lettering sat 2.7 px high in a 13 px
+    # halo, half the height of the ink itself. The pixel and a half of slack is
+    # the gap between the x-height middle the attribute names and the middle of
+    # an all-capitals ink box, about 0.1 em, which is in the SVG as much as here.
+    from PIL import Image
+
+    # The sheet with the most stream numbers on it, and they are capitals and
+    # figures throughout: no descender to pull the ink box down off the letters.
+    svg = (GOLDEN_DIR / "03_distillation_train.svg").read_text(encoding="utf-8")
+    vx, vy, vw, _ = (float(v) for v in re.search(r'viewBox="([^"]+)"', svg).group(1).split())
+    im = Image.open(io.BytesIO(export.to_png(svg))).convert("L")
+    px = im.width / vw  # a PNG pixel per user unit, as _PX_PER_PT arranges
+
+    measured = 0
+    for rx, ry, rw, rh, text in _HALOED.findall(svg):
+        rx, ry, rw, rh = (float(v) for v in (rx, ry, rw, rh))
+        if rh > rw:  # a number turned to run up a vertical line
+            continue
+        top, bottom = (ry - vy) * px, (ry + rh - vy) * px
+        # Inside the halo, so the strokes it was struck over cannot be read as
+        # this label's ink, and thresholded so antialiasing is not either.
+        box = (int((rx - vx) * px) + 1, int(top) + 1, int((rx + rw - vx) * px), int(bottom))
+        ink = im.crop(box).point(lambda v: 255 if v < 128 else 0).getbbox()
+        assert ink, f"{text!r} drew no ink inside its own halo"
+        off = box[1] + (ink[1] + ink[3]) / 2 - (top + bottom) / 2
+        assert abs(off) < 1.5, f"{text!r} sits {off:+.2f} px off the middle of its halo"
+        measured += 1
+    assert measured >= 4, "no haloed label was measured, so this checked nothing"
 
 
 @pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")

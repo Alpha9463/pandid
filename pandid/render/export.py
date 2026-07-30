@@ -22,7 +22,7 @@ does not care which interpreter it lands on.
 
 The catch, and the reason for the first half of this file: svglib does not
 implement all of SVG, and what it does not implement it *skips silently*.
-Rendering the gallery sheets through it against a cairosvg reference, two gaps
+Rendering the gallery sheets through it against a cairosvg reference, three gaps
 change the meaning of the drawing:
 
 - ``<use>`` of a ``<symbol>`` ignores the width/height on the reference and the
@@ -32,12 +32,21 @@ change the meaning of the drawing:
   lines stopped in mid-air, several units short of their nozzles.
 - ``marker-end`` is ignored outright, so on a PFD every flow arrow disappears.
   On a process flow diagram the arrowhead *is* the flow direction.
+- ``dominant-baseline`` is ignored too, so a string the renderer centred on a
+  point is drawn with its *baseline* there and rides about a quarter of its own
+  type size high of where it belongs. Stream numbers, balloon tags and most
+  equipment labels are centred that way onto a white halo struck round the same
+  point, so the halo and the lettering inside it came apart: 2.7 px of a 13 px
+  halo, on the two sheet elements a reader reads first. The comparison that
+  found the other two did not find this one, having stripped ``<text>`` before
+  comparing.
 
-Both are mechanical to resolve, and pandid wrote the SVG so it knows exactly
-what shapes they take. :func:`flatten` resolves them into plain geometry before
-svglib sees any of it, and :func:`_reject_unsupported` then refuses to export at
-all if the renderer has grown some *other* construct this file does not know
-about, so the next gap is a loud failure rather than a quietly wrong drawing.
+All three are mechanical to resolve, and pandid wrote the SVG so it knows
+exactly what shapes they take. :func:`flatten` resolves them into plain geometry
+and plain coordinates before svglib sees any of it, and
+:func:`_reject_unsupported` then refuses to export at all if the renderer has
+grown some *other* construct this file does not know about, so the next gap is a
+loud failure rather than a quietly wrong drawing.
 
 The ``.svg`` output itself is untouched: flattening happens on the way to the
 PDF and nowhere else.
@@ -84,6 +93,11 @@ _UNSUPPORTED_ATTRS = {
     "clip-path": "a clip-path reference",
     "mask": "a mask reference",
     "filter": "a filter reference",
+    # _resolve_baselines() takes this off every <text> it can place, so what is
+    # left is one on an ancestor, inherited by whatever text is below it: a
+    # shift this file has not applied and svglib will not either.
+    "dominant-baseline": "a dominant-baseline away from the <text> it sets",
+    "alignment-baseline": "an alignment-baseline",
 }
 
 # Absolute path commands and how many numbers each takes. pandid emits only
@@ -235,6 +249,114 @@ def _rewrite(parent: ET.Element, symbols: dict, markers: dict) -> None:
     parent[:] = rewritten
 
 
+# ------------------------------------------------------------------- baselines
+#
+# svglib maps ``text-anchor`` and nothing else about how a string sets: search it
+# for ``dominant-baseline`` and there is no match, so every ``<text>`` is drawn
+# with its alphabetic baseline on the ``y`` it was given, whatever the file asked
+# for. The attribute is alignment rather than geometry, but the geometry it
+# stands for is a fixed fraction of the font size, so honouring it here is
+# arithmetic on ``y``: work out where the baseline has to go and hand the backend
+# the plain one it does read. Written in the same user units the font size is in,
+# that shift rides through whatever transform is above it -- a symbol placed at a
+# third of its size shifts its lettering by a third as much, which is what the
+# same file does in a browser.
+
+# Where each value puts the alphabetic baseline relative to the anchored point,
+# in ascent and descent: ``shift = wa * ascent + wd * descent``, descent being
+# negative. Anything not here is refused rather than guessed at: ``hanging``, the
+# one a renderer is next likeliest to reach for, is a baseline a browser reads
+# out of the font and ReportLab's base-14 metrics do not carry, so placing it
+# would be the quiet wrongness this module exists to prevent.
+_BASELINES = {
+    # The value names the baseline svglib already draws on, so there is nothing
+    # to do but take the attribute off. "baseline" is not one of the SVG 1.1
+    # keywords and a browser falls back to "auto" for it, which is this;
+    # pandid emits it above a unit, where the y it computed is a baseline.
+    "auto": (0.0, 0.0),
+    "alphabetic": (0.0, 0.0),
+    "baseline": (0.0, 0.0),
+    # ``middle`` is half the *x-height* above the alphabetic baseline and
+    # ``central`` the middle of the ascent/descent box, and only the second can
+    # be answered from what ReportLab holds for a base-14 face: there is no
+    # x-height in it. cairosvg, the backend this one replaced, made the same
+    # substitution and said so in a comment of its own. For Helvetica it is
+    # 0.2555 em against a true 0.2615 em: 0.006 em, which is 0.07 px on a
+    # sheet's 12 px lettering and below what any plate size can resolve.
+    "middle": (0.5, 0.5),
+    "central": (0.5, 0.5),
+}
+
+# The face the backend will draw with. pandid writes font-family="sans-serif" on
+# every string it draws, and svglib resolves that generic family onto ReportLab's
+# base 14 -- the ``/BaseFont /Helvetica`` an exported PDF carries.
+_FACES = {False: "Helvetica", True: "Helvetica-Bold"}
+# ...and that face's ascent and descent in ems, for a machine without the
+# optional extra: flatten() is checked against every golden sheet whether or not
+# the backend is installed to draw one, and must not answer differently for its
+# absence. A test holds these to what pdfmetrics says where both are present.
+_HELVETICA_EM = (0.718, -0.207)
+
+
+def _ascent_descent(bold: bool) -> tuple[float, float]:
+    """The drawing face's ascent and descent, as fractions of its em."""
+    try:
+        from reportlab.pdfbase import pdfmetrics
+    except ImportError:
+        return _HELVETICA_EM
+    # Asking pdfmetrics is asking the backend the same question it answers for
+    # itself when it draws, rather than a constant that is right for one face.
+    ascent, descent = pdfmetrics.getAscentDescent(_FACES[bold], 1.0)
+    return float(ascent), float(descent)
+
+
+def _font_size(el: ET.Element, inherited: float | None) -> float | None:
+    """The size *el* is set in, in user units, or the one it inherits."""
+    raw = (el.get("font-size") or "").strip().removesuffix("px")
+    if not raw:
+        return inherited
+    try:
+        return float(raw)
+    except ValueError:  # an em, a percentage, a keyword: not resolvable here
+        raise RuntimeError(f"font-size={el.get('font-size')!r} is not a user-unit length") from None
+
+
+def _set_baseline(text: ET.Element, size: float | None) -> None:
+    """One ``<text>``'s ``dominant-baseline`` folded into its ``y``."""
+    value = (text.attrib.pop("dominant-baseline", None) or "").strip()
+    if not value:
+        return
+    if value not in _BASELINES:
+        raise RuntimeError(
+            f"the PDF/PNG backend cannot draw dominant-baseline={value!r}, and would have "
+            f"placed the text by its baseline instead. pandid.render.export needs to learn it."
+        )
+    if size is None:
+        raise RuntimeError(
+            f"dominant-baseline={value!r} moves the text by a fraction of its font size, "
+            f"and this <text> sets none and inherits none"
+        )
+    wa, wd = _BASELINES[value]
+    ascent, descent = _ascent_descent((text.get("font-weight") or "").strip() == "bold")
+    shift = (wa * ascent + wd * descent) * size
+    if shift:
+        text.set("y", _num(float(text.get("y") or 0) + shift))
+
+
+def _resolve_baselines(el: ET.Element, size: float | None = None) -> None:
+    """Fold every ``dominant-baseline`` below *el* into the ``y`` it stands for."""
+    size = _font_size(el, size)
+    if _local(el.tag) == "text":
+        # And no further down: a ``<tspan>`` is not something pandid writes, and
+        # one wearing a baseline of its own would need a ``y`` of its own to
+        # move. Left for _reject_unsupported, which refuses the attribute
+        # wherever it is still set by the time it looks.
+        _set_baseline(el, size)
+        return
+    for child in el:
+        _resolve_baselines(child, size)
+
+
 def _reject_unsupported(root: ET.Element) -> None:
     for el in root.iter():
         name = _local(el.tag)
@@ -253,7 +375,7 @@ def _reject_unsupported(root: ET.Element) -> None:
 
 
 def flatten(svg: str) -> str:
-    """*svg* with ``<use>`` and ``marker-end`` resolved into plain geometry.
+    """*svg* with ``<use>``, ``marker-end`` and ``dominant-baseline`` resolved.
 
     The drawing is unchanged; only the way it is written down is. Anything the
     PDF backend would have dropped without saying so raises instead.
@@ -264,6 +386,10 @@ def flatten(svg: str) -> str:
     symbols = {el.get("id", ""): el for el in root.iter(_tag("symbol"))}
     markers = {el.get("id", ""): el for el in root.iter(_tag("marker"))}
     _rewrite(root, symbols, markers)
+    # After the expansion, so that a symbol's own lettering -- the "M" on a motor
+    # operator -- is placed in the units the symbol is drawn in and then scaled
+    # by whatever placed it, rather than in the sheet's.
+    _resolve_baselines(root)
     # <defs> now holds only definitions that have been copied to where they were
     # used. Dropping it is what makes the check below meaningful.
     for defs in root.findall(_tag("defs")):
