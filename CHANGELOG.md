@@ -80,6 +80,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Lettering in the `.pdf` and `.png` exports is drawn at the size the sheet sets
+  it in. It came out at three quarters of that. svglib converts a length to
+  points twice on the way to a glyph and once on the way to a line: it
+  multiplies `font-size` by the 0.75 of px to pt to set the drawn size, and then
+  scales the group holding the whole drawing by that same 0.75 to take user
+  units to the page's points, so a string is drawn inside a transform that has
+  already made the conversion its own size carries. Geometry took the factor
+  once and landed right. Measured against a rule of the same declared length in
+  the same document, a 100-unit capital drew a cap height 0.752 of the 0.718 em
+  Helvetica declares while the rule drew 1.000 of its length — that is every
+  stream number, line number, balloon tag, equipment tag, title-block row,
+  legend entry and note on every exported sheet, three-quarter size. It arrived
+  with the backend change above and was missed for the reason the centring below
+  was: the fidelity comparison that vetted that change stripped `<text>` before
+  comparing.
+
+  `pandid.render.export` corrects it on the ReportLab drawing, after svglib has
+  built it and before the page is written, so nothing but the type size moves
+  and the geometry svglib gets right is not touched. The correction is
+  *measured* rather than written down: a probe declaring a square and a capital
+  at one size states what the backend draws a glyph at against what it draws a
+  line of the same length at, and the ratio between the two is applied to every
+  string. On an svglib that has stopped converting twice it reads 1.0 and
+  nothing is applied.
+
+  Nothing collides at true size, because the room was always reserved for it:
+  the layout engine and the title block measure text at its declared size, and
+  the `.svg` has always drawn it there. On `11_ethanol_pid` no two labels' ink
+  boxes touch, every haloed label is still inside its own halo, and the tightest
+  balloon tag clears the circle by 4.5 units. The vertical centring below
+  composes with this — its shift is a fraction of the font size, and the font
+  size is now the one the file states — and its residual, the gap between the
+  x-height middle `middle` names and the middle of an all-capitals ink box, is
+  now the full 0.1 em it is in a browser instead of three quarters of it.
+
+  The `.svg` output is untouched and no golden moves.
+
 - Lettering the renderer centres vertically is centred in the `.pdf` and `.png`
   exports too. svglib maps `text-anchor` and nothing else about how a string
   sets: `dominant-baseline` appears nowhere in it, so every `<text>` was drawn

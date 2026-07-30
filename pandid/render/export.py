@@ -48,13 +48,22 @@ and plain coordinates before svglib sees any of it, and
 grown some *other* construct this file does not know about, so the next gap is a
 loud failure rather than a quietly wrong drawing.
 
-The ``.svg`` output itself is untouched: flattening happens on the way to the
-PDF and nowhere else.
+The fourth gap is not a construct svglib skips but one it applies twice, so no
+rewriting of the SVG can state it away: it converts ``font-size`` from px to pt
+*and* scales the drawing that string sits in from px to pt, and lettering comes
+out at three quarters of the size the file asked for while geometry beside it
+comes out right. :func:`_type_scale` measures that ratio and :func:`to_pdf`
+corrects it on the drawing, after svglib has built it and before ReportLab draws
+it. The second half of this file is that.
+
+The ``.svg`` output itself is untouched: both the flattening and the correction
+happen on the way to the PDF and nowhere else.
 """
 
 from __future__ import annotations
 
 import copy
+import functools
 import io
 import math
 import re
@@ -411,6 +420,93 @@ def _require(module: str, package: str, ext: str):
         ) from e
 
 
+# ------------------------------------------------------------------- type size
+#
+# svglib turns a length into points twice on the way to a glyph and once on the
+# way to a line. ``convertLengthToPt`` multiplies ``font-size`` by its px-to-pt
+# 0.75 to set the ReportLab ``String``'s ``fontSize``, and the group holding the
+# whole drawing is then scaled by that same 0.75 to take the sheet's user units
+# to the page's points -- so every string is drawn inside a transform that has
+# already made the conversion its own size carries. Geometry takes the factor
+# once and lands right; lettering lands at three quarters of what was asked for.
+# Measured against a rule of the same declared length in the same document, a
+# 100-unit capital drew a cap height 0.752 of the 0.718 em Helvetica declares
+# while the rule drew 1.000 of its length: every stream number, line number,
+# balloon tag, equipment tag, title-block row, legend entry and note on every
+# exported sheet, at three-quarter size, and _set_baseline()'s shift -- worked
+# out as a fraction of the size the *file* states -- moving lettering that was
+# never drawn that big. The .svg goes nowhere near svglib and is unaffected.
+#
+# One multiplier on every ``String`` puts it back, and the multiplier is measured
+# rather than written down, for the reason _ascent_descent() asks pdfmetrics
+# instead of carrying a constant: the backend is the authority on what the
+# backend does. _TYPE_PROBE declares a square and a capital at one size, so
+# whatever svg2rlg makes of it states what a glyph is drawn at against what a
+# line of the same length is, and the ratio between them is the whole correction.
+# On an svglib that has stopped converting twice it reads 1.0 and nothing is
+# applied, which is the difference between this ageing into a no-op and it ageing
+# into lettering four thirds too big with nothing to say so.
+_TYPE_PROBE = (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" '
+    'viewBox="0 0 100 100">'
+    '<rect x="0" y="0" width="100" height="100" />'
+    '<text x="0" y="100" font-family="sans-serif" font-size="100">H</text>'
+    "</svg>"
+)
+
+
+def _leaves(node, scale: float = 1.0):
+    """Every drawn shape below *node*, with the scale it will be drawn at.
+
+    A group's transform applies to its children rather than to itself, and both
+    of the things weighed against each other here are heights, so the y term of
+    that transform is the whole of what either of them needs from it.
+    """
+    contents = getattr(node, "contents", None)
+    if contents is None:
+        yield node, scale
+        return
+    for child in contents:
+        yield from _leaves(child, scale * abs(node.transform[3]))
+
+
+@functools.cache
+def _type_scale() -> float:
+    """What svglib's idea of a string's size is out by, as a factor.
+
+    One on a backend that sizes type the way it sizes everything else, and four
+    thirds on one that has taken the px-to-pt conversion twice.
+    """
+    svglib = _require("svglib.svglib", "svglib", ".pdf")
+    drawing = svglib.svg2rlg(io.BytesIO(_TYPE_PROBE.encode("utf-8")))
+    # svg2rlg returns None rather than raising on a parse it cannot make sense
+    # of, which the count below reports as the nothing it is.
+    leaves = list(_leaves(drawing)) if drawing is not None else []
+    rule = [scale * shape.height for shape, scale in leaves if hasattr(shape, "height")]
+    letter = [scale * shape.fontSize for shape, scale in leaves if hasattr(shape, "fontSize")]
+    if len(rule) != 1 or len(letter) != 1:
+        raise RuntimeError(
+            f"the PDF backend drew the type probe as {len(rule)} rules and {len(letter)} "
+            f"strings rather than one of each, so the size it sets type at cannot be "
+            f"measured against the size it draws a line at. pandid.render.export needs "
+            f"to learn what it does now."
+        )
+    return rule[0] / letter[0]
+
+
+def _rescale_type(drawing, factor: float) -> None:
+    """Draw every string in *drawing* at *factor* times the size svglib set it.
+
+    Nothing but ``fontSize`` moves, so no geometry can follow it. What a
+    ``text-anchor`` of ``middle`` or ``end`` shifts a string by is worked out
+    from that same ``fontSize`` when ReportLab draws it, so a centred label is
+    re-centred on the new size rather than left hanging off the old one.
+    """
+    for shape, _ in _leaves(drawing):
+        if hasattr(shape, "fontSize"):
+            shape.fontSize *= factor
+
+
 def to_pdf(svg: str) -> bytes:
     """*svg* as a one-page PDF, drawn as vectors at the sheet's physical size."""
     svglib = _require("svglib.svglib", "svglib", ".pdf")
@@ -418,6 +514,7 @@ def to_pdf(svg: str) -> bytes:
     drawing = svglib.svg2rlg(io.BytesIO(flatten(svg).encode("utf-8")))
     if drawing is None:  # svglib returns None rather than raising on a bad parse
         raise RuntimeError("the PDF backend could not read the rendered SVG")
+    _rescale_type(drawing, _type_scale())
     return renderPDF.drawToString(drawing)
 
 
