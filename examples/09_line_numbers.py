@@ -39,7 +39,7 @@ def main():
                             description="Discharge Control Valve"))
     surge = fs.add(units.Vessel("V-101", width=90, height=140,
                                 description="Surge Vessel"))
-    psv = fs.add(units.Valve("PSV-101", variant="psv", width=40, height=68,
+    psv = fs.add(units.Valve("PSV-101", variant="psv",
                              description="Vessel Relief Valve"))
     flare = fs.add(units.Product("To Flare", reference="PFD-900"))
     prod = fs.add(units.Product("To Unit 200", reference="PFD-200"))
