@@ -185,9 +185,10 @@ render(path: str | Path, *, show_stream_table=False, border=None,
        jump_direction="vertical", check=True) -> None
 ```
 Writes the drawing. The format comes from the extension: `.svg` (or no
-extension) is pure Python; `.pdf` and `.png` need the optional `cairosvg`
-backend and raise `ImportError` without it. Any other extension raises
-`ValueError`.
+extension) is pure Python; `.pdf` and `.png` need the optional `pdf` extra
+(`pip install 'pandid[pdf]'`) and raise `ImportError` naming the missing package
+without it. Any other extension raises `ValueError`. The PDF is vector, drawn at
+the sheet's physical size, and the PNG is rasterised from that same PDF.
 
 ```text
 show() -> None                   # render to a temp file and open a browser
@@ -2132,7 +2133,7 @@ Valve  default  angle  ball  butterfly  butterfly_pneumatic  check  control  gat
 | `0` | the command did what it was asked |
 | `1` | the flowsheet was rejected: the spec could not be read or understood, validation found an error, or the engine refused the request (an unknown page size, an output extension it cannot write, a page too small for its own furniture) |
 | `2` | the command line was wrong: an unknown flag, a missing argument, an option value the CLI checks itself |
-| `3` | an optional extra the request needs is not installed: PyYAML for a YAML spec, cairosvg for `.pdf` / `.png` |
+| `3` | an optional extra the request needs is not installed: PyYAML for a YAML spec, the `pdf` extra for `.pdf` / `.png` |
 
 Every failure is one line on stderr, beginning `error: `, carrying the engine's
 own message. A traceback out of the CLI is a bug in the engine, not a bad spec.

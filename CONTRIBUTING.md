@@ -9,13 +9,21 @@ Python 3.10+ (CI tests 3.10 – 3.14). From a checkout:
 
 ```bash
 pip install -e '.[dev]'          # pytest, ruff, mypy
-pip install -e '.[dev,pdf]'      # ...plus cairosvg, if you need PDF/PNG export
+pip install -e '.[dev,pdf]'      # ...plus the export backend, for PDF/PNG output
 ```
 
 The package has **zero runtime dependencies** and must stay that way: `pandid/` may
-import only the Python standard library. `cairosvg` is optional and is imported
-lazily inside `Flowsheet.render()`, only when the output path ends in `.pdf` or
-`.png`.
+import only the Python standard library. The `pdf` extra is optional and is
+imported lazily inside `pandid/render/export.py`, only when the output path ends
+in `.pdf` or `.png`.
+
+Everything in that extra has to arrive as a *wheel* on Windows, Linux and macOS
+for every Python the classifiers claim. That is not a preference: it is the bug
+`[pdf]` was rebuilt to fix. The old backend, cairosvg, reaches libcairo through
+cairocffi, which `dlopen`s a shared library no wheel ships, so `pip install
+'pandid[pdf]'` reported success and the first export died in the *import* with
+`OSError: no library called "cairo-2" was found`. Read the `pandid/render/export.py`
+docstring before changing that dependency list.
 
 Optionally install the commit hooks, which mirror the CI lint gates:
 

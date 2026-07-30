@@ -54,7 +54,13 @@ Changelog = "https://github.com/Alpha9463/pandid/blob/main/CHANGELOG.md"
 Issues = "https://github.com/Alpha9463/pandid/issues"
 
 [project.optional-dependencies]
-pdf = ["cairosvg>=2.5"]   # enables PDF/PNG export via fs.render("x.pdf")
+# PDF/PNG export via fs.render("x.pdf"). Every one of these is imported directly
+# by pandid.render.export, and every one arrives as a wheel on Windows, Linux and
+# macOS for 3.10 through 3.14: svglib and reportlab are pure Python, and
+# pypdfium2 is tagged py3-none-<platform>, so it carries PDFium with it and does
+# not wait for a new interpreter to be built for. That is the whole point of the
+# list -- see the module docstring for the binary cairosvg could not bring.
+pdf = ["svglib>=2.0", "reportlab>=4.4.3", "pypdfium2>=4", "pillow>=9"]
 yaml = ["PyYAML>=6"]      # enables Flowsheet.from_yaml(); from_dict/from_json need nothing
 dev = ["pytest>=7", "ruff==0.15.14", "mypy>=1.8", "PyYAML>=6"]
 

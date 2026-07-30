@@ -73,8 +73,9 @@ def _sheet_mm(svg: str) -> "tuple[float, float] | None":
 def _pdf_page_pt(pdf: bytes) -> tuple[float, float]:
     """The page size a PDF declares, in points, from its first ``/MediaBox``.
 
-    cairosvg writes the page object into a compressed object stream, so the box
-    has to be inflated out of one rather than read from the file directly.
+    A writer is free to put the page object inside a compressed object stream,
+    so the box is looked for in the inflated streams as well as in the file
+    itself rather than only where the current backend happens to put it.
     """
     bodies = [pdf]
     for m in re.finditer(rb"/Type\s*/ObjStm.*?stream\r?\n", pdf, re.S):
@@ -130,11 +131,22 @@ def test_render_svg_writes_file_and_returns_none(tmp_path):
 
 def test_pdf_hint_names_the_distribution_on_pypi(tmp_path, monkeypatch):
     # `pandid` on PyPI is an unrelated project; the distribution is `pandid`.
-    monkeypatch.setitem(sys.modules, "cairosvg", None)  # makes `import cairosvg` fail
+    monkeypatch.setitem(sys.modules, "svglib.svglib", None)  # makes the import fail
     with pytest.raises(ImportError) as excinfo:
         _fs().render(str(tmp_path / "d.pdf"))
     message = str(excinfo.value)
-    assert "cairosvg" in message
+    assert "svglib" in message
+    assert "pip install 'pandid[pdf]'" in message
+
+
+def test_png_hint_names_the_rasteriser_that_is_missing(tmp_path, monkeypatch):
+    # Four packages carry the extra, so the hint has to say which one is absent
+    # rather than send the reader to reinstall all of them and guess.
+    monkeypatch.setitem(sys.modules, "pypdfium2", None)
+    with pytest.raises(ImportError) as excinfo:
+        _fs().render(str(tmp_path / "d.png"))
+    message = str(excinfo.value)
+    assert "pypdfium2" in message
     assert "pip install 'pandid[pdf]'" in message
 
 
@@ -409,7 +421,7 @@ def test_page_size_reaches_render_as_well_as_to_svg(tmp_path):
 def test_exported_pdf_lands_on_a_page_of_exactly_that_size(tmp_path, name, mm):
     # The end of the line for page_size: what a printer is handed. A sheet that
     # is A3 only if the reader happens to call a user unit 1/96 inch is not A3.
-    pytest.importorskip("cairosvg")
+    pytest.importorskip("svglib")
     out = tmp_path / "sheet.pdf"
     _fs().render(str(out), page_size=name, border="zone", diagram="p&id")
     width_pt, height_pt = _pdf_page_pt(out.read_bytes())
