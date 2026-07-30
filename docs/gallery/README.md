@@ -12,8 +12,8 @@ for f in examples/[0-9]*.py; do python "$f"; done
 ```
 
 Each script writes its SVG next to itself in `examples/` (gitignored); the
-gallery copies are those files, with the PNGs rasterized from them by
-`cairosvg` at `output_width=1600`. Note that `03` leaves its `TitleBlock.date`
+gallery copies are those files, with the PNGs rasterized from them at
+`output_width=1600`. Note that `03` leaves its `TitleBlock.date`
 blank, so the renderer stamps the current date and that image changes whenever
 it is regenerated.
 

@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `pip install 'pandid[pdf]'` now gives a working PDF and PNG export on a
+  machine that has nothing else installed. It did not before: the extra pulled
+  in cairosvg, which reaches libcairo through cairocffi, which `dlopen`s a
+  shared library that no wheel on PyPI ships. The install therefore reported
+  success and the first `fs.render("x.pdf")` died in the *import* with
+  `OSError: no library called "cairo-2" was found`, unless the machine happened
+  to have GTK or something else carrying cairo — which is why it worked on some
+  developer machines and on no fresh one. On Windows the fix was a manual GTK
+  install. ([#141](https://github.com/Alpha9463/pandid/issues/141))
+
+  The extra is now svglib and ReportLab, which are pure Python, with pypdfium2
+  rasterising the PDF for `.png`; pypdfium2 is tagged `py3-none-<platform>`, so
+  it carries PDFium with it and needs no rebuild for a new interpreter. All four
+  packages resolve to wheels on Windows, Linux and macOS for 3.10 through 3.14.
+
+  Both formats survive, and the PDF is still vector: paths and real text, not a
+  picture of the drawing. What changed is the typeface. cairosvg asked the
+  system for `sans-serif` and got DejaVu Sans on a Linux box and Arial on a
+  Windows one; ReportLab draws Helvetica from the PDF base 14, so the lettering
+  is now the same everywhere and embeds no font. Geometry is unchanged: with
+  every `<text>` removed, the new backend and cairosvg rasterise
+  `04_control_loop`, `10_ethanol_pfd` and `11_ethanol_pid` to *pixel-identical*
+  images.
+
+  Getting there needed one thing on this side. svglib implements neither `<use>`
+  of a `<symbol>` nor `marker-end`, and skips both silently: every unit came out
+  at its intrinsic size instead of the size layout gave it, with its process
+  lines stopping short of the nozzles, and every flow arrow on a PFD vanished.
+  `pandid.render.export.flatten` resolves both into plain geometry before the
+  backend sees the file, and refuses to export at all if the renderer ever emits
+  some *other* construct the backend would quietly drop. The `.svg` output is
+  untouched — flattening happens on the way to the PDF and nowhere else, and no
+  golden moves.
+
 ### Fixed
 
 - Curved equipment heads are drawn on the ellipse the stencil asked for. The

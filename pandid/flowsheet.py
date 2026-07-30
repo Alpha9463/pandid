@@ -854,8 +854,9 @@ class Flowsheet:
         The output format is inferred from the file extension:
 
         - ``.svg``: pure-Python, always available.
-        - ``.pdf`` / ``.png``: require the optional ``cairosvg`` backend
-          (``pip install 'pandid[pdf]'``).
+        - ``.pdf`` / ``.png``: require the optional export backend
+          (``pip install 'pandid[pdf]'``), which ships as wheels and needs no
+          system libraries. See :mod:`pandid.render.export`.
 
         Args:
             path: Output file path; its extension selects the format.
@@ -877,18 +878,9 @@ class Flowsheet:
         if ext in ("", ".svg"):
             Path(path).write_text(svg, encoding="utf-8")
         elif ext in (".pdf", ".png"):
-            try:
-                import cairosvg
-            except ImportError as e:
-                raise ImportError(
-                    f"Exporting {ext} requires the optional cairosvg backend. "
-                    "Install it with: pip install 'pandid[pdf]'"
-                ) from e
-            data = svg.encode("utf-8")
-            if ext == ".pdf":
-                cairosvg.svg2pdf(bytestring=data, write_to=str(path))
-            else:
-                cairosvg.svg2png(bytestring=data, write_to=str(path))
+            from pandid.render import export
+            data = export.to_pdf(svg) if ext == ".pdf" else export.to_png(svg)
+            Path(path).write_bytes(data)
         else:
             raise ValueError(
                 f"Unsupported output format {ext!r}; use .svg, .pdf, or .png"

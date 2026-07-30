@@ -19,9 +19,14 @@ annotations straight out of the wheel.
 
 ```bash
 pip install pandid
-pip install 'pandid[pdf]'    # optional PDF/PNG export backend (cairosvg)
+pip install 'pandid[pdf]'    # optional PDF/PNG export backend (wheels only)
 pip install 'pandid[yaml]'   # optional YAML spec reader (Flowsheet.from_yaml)
 ```
+
+The `pdf` extra is wheels the whole way down (svglib, ReportLab, pypdfium2,
+Pillow), so it needs no system libraries, no package manager and no compiler on
+Windows, Linux or macOS. `.svg` needs none of it: the engine itself has zero
+runtime dependencies.
 
 From a checkout, `pip install -e '.[dev]'` adds pytest, ruff and mypy.
 

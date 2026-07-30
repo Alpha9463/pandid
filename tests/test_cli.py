@@ -255,12 +255,12 @@ def test_the_yaml_extra_is_named_when_pyyaml_is_missing(tmp_path, monkeypatch, c
     assert "pip install 'pandid[yaml]'" in err
 
 
-def test_the_pdf_extra_is_named_when_cairosvg_is_missing(tmp_path, monkeypatch, capsys):
-    monkeypatch.setitem(sys.modules, "cairosvg", None)  # makes `import cairosvg` fail
+def test_the_pdf_extra_is_named_when_the_backend_is_missing(tmp_path, monkeypatch, capsys):
+    monkeypatch.setitem(sys.modules, "svglib.svglib", None)  # makes the import fail
     spec = _spec_file(tmp_path)
     assert main(["draw", str(spec), "-o", str(tmp_path / "plant.pdf")]) == EXIT_MISSING_DEPENDENCY
     err = capsys.readouterr().err
-    assert "cairosvg" in err
+    assert "svglib" in err
     assert "pip install 'pandid[pdf]'" in err
 
 

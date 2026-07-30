@@ -62,8 +62,13 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install
+        # The pdf extra is installed here, and installed --only-binary, on every
+        # interpreter in the matrix. That is the gate on issue #141: the extra
+        # has to arrive as wheels and work with no system packages, so a member
+        # that has to be built from source, or that has no wheel for a Python
+        # this project claims, fails CI rather than the first user to try it.
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install --only-binary=:all: -e ".[dev,pdf]"
       - name: pytest
         run: pytest -q

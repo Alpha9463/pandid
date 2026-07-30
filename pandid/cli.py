@@ -22,7 +22,7 @@ things that can go wrong rather than all reporting 1:
 ``2`` the command line was wrong: an unknown flag, a missing argument, an
       option value this module checks itself
 ``3`` an optional extra the request needs is not installed (PyYAML to read a
-      YAML spec, cairosvg to write a PDF or a PNG)
+      YAML spec, the ``pdf`` extra to write a PDF or a PNG)
 ===== ======================================================================
 """
 
@@ -282,8 +282,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     except _Failure as e:
         return _fail(str(e), e.code)
     except ImportError as e:
-        # PyYAML and cairosvg are the two optional extras, and both of these
-        # messages already name the one to install.
+        # PyYAML and the pdf extra are the two optional installs, and both of
+        # these messages already name the package to install and the extra.
         return _fail(str(e), EXIT_MISSING_DEPENDENCY)
     except ValueError as e:
         # SpecError is a ValueError, and so is every refusal from the engine.
