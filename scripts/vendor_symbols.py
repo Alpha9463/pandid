@@ -48,8 +48,10 @@ KIND_MAP = {
     # symbol's own extent, at the point the operator would be mounted on. A
     # coordinate inboard of that edge draws the signal ending inside the body,
     # since the router steers to the edge and the renderer draws to the
-    # coordinate. Coordinates are in the stencil's own space, which
-    # SCALE["valve"] = 0.25 then quarters.
+    # coordinate. Coordinates are in the stencil's own space, which SCALE then
+    # reduces: by the kind's own 0.25 for everything drawn on valves.xml's
+    # ~98-unit module, and by a factor of its own for the three shapes that are
+    # not on it (``psv``, ``relief``, ``butterfly_pneumatic``); see SCALE.
     ("valve", "default"):   ("valves", "Gate Valve",        {"inlet": "W", "outlet": "E",
                              "actuator": ("N", 49.0)}),
     ("valve", "gate"):      ("valves", "Gate Valve",        {"inlet": "W", "outlet": "E",
@@ -1317,8 +1319,59 @@ HALF_SCALE_FITTINGS = (
     "blind",
 )
 
+# Three shapes in valves.xml are not on that file's ~98-unit module, so the
+# kind's 0.25 draws them undersized: Safety PSV 1 is 55.5 x 94.5, Relief PRV
+# 40 x 59 and Pneumatic Operated Butterfly Valve 60 x 80, coming out at 13.9,
+# 10.0 and 15.0 units of length against everyone else's 24.5. Each therefore
+# takes its own factor below.
+#
+# What "the same size as the rest of the family" means is NOT the box, because
+# these are upright devices and the box holds whatever rides above the body: a
+# spring bonnet, a diaphragm dome, an operator. Forcing them into a gate valve's
+# landscape 24.5 x 15.0 would shrink the part that carries the flow to make room
+# for the part that does not.
+#
+# It is the SEAT. Every valve body in valves.xml is the same pair of triangles,
+# 60 units across the run with a 49-unit apex, and 0.25 draws that pair 15.0
+# across and 12.25 along wherever it appears. Gate Valve sets them base to base
+# and comes out 24.5 x 15.0; Angle folds them into an L (its own path is
+# (0,79)-(30,30)-(79,0)-(79,60)-(30,30)-(60,79), which is that triangle twice)
+# and comes out 19.8 x 19.8 at the very same 0.25. So an upright valve is sized
+# by drawing ITS seat at 15.0 across the run, and the bonnet above it is extra
+# height rather than a reason to shrink the seat.
+#
+# Safety PSV 1 draws exactly that pair, at 0.7 of the size: the inlet leg is
+# (0,94.5)-(21,60)-(42,94.5), a 42-wide base under a 34.5 apex, and the outlet
+# leg is the same triangle turned a quarter. 15.0 / 42 restores it, putting the
+# base on the family's 15.0 and the apex on 12.3 against the family's 12.25. It
+# comes out 19.8 x 33.8, whose lower 19.8 x 19.8 is valve/angle's box to the
+# decimal -- the same quarter-turn body, with 14 units of spring bonnet on top.
+# One factor and not a pair: the three spring strokes and both seat faces are
+# diagonals, which a non-uniform factor would tilt, and the compensated stroke
+# is taken from sx alone so they would also land off 2px. That is the reason the
+# valve family takes a single factor at all (see the paragraph above).
+#
+# Relief PRV has no seat to measure: it is a 40-wide semicircular bonnet on a
+# stem, piped S to N, so across-the-run is that bonnet and 15.0 / 40 is the same
+# statement. It comes out 15.0 x 22.1 -- a gate valve's 15.0 across the run,
+# and 22.1 along it where a gate valve is 24.5, the difference being that this
+# one spends its length on a stem rather than on a bowtie. Uniform again,
+# because the bonnet is a true semicircle and a pair would draw it as a half
+# ellipse. The check that a bonnet is a bonnet across the three: this shape and
+# the butterfly draw the identical 40 x 20 semicircle, and come out 15.0 x 7.5
+# and 16.3 x 7.5.
+#
+# Pneumatic Operated Butterfly Valve is the one that does need the pair. Its
+# body is a plain rect, x 0..60 and y 40..80, at 3:2 where the family's bowtie
+# is 98:60, so a single factor cannot put the body on 24.5 x 15.0 and the run on
+# the family's height at once. (24.5/60, 15.0/40) does both: a 24.5 x 15.0 body
+# in a 24.5 x 30.0 box, with the W/E anchors at y = 0.75 landing 7.5 above the
+# bottom, which is where every other straight-through valve carries the line.
+# Uniform at 24.5/60 would leave the run 8.2 up and still off the family's run.
 SCALE = {"valve": 0.25, "fitting": 0.25,
          "vent": 0.25, "funnel": 0.25,
+         ("valve", "psv"): 15.0 / 42, ("valve", "relief"): 15.0 / 40,
+         ("valve", "butterfly_pneumatic"): (24.5 / 60, 15.0 / 40),
          **{("fitting", variant): 0.5 for variant in HALF_SCALE_FITTINGS},
          # ...and the two open ends taken from the same 50-unit file.
          ("vent", "exhaust_head"): 0.5, ("vent", "breather"): 0.5,

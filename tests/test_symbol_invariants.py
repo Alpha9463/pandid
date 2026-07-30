@@ -1923,27 +1923,19 @@ _OFF_THE_RUN_BY_DESIGN = {
     ),
 }
 
-#: Not a difference: a defect, recorded rather than fixed. Fixing it moves ink
-#: on every sheet that draws one, which is a rendering change and a second
+#: Not a difference: a defect, recorded rather than fixed. Fixing one moves ink
+#: on every sheet that draws it, which is a rendering change and a second
 #: concern; this file's job is to say the defect is there and to fail the moment
 #: it stops being.
-_OFF_THE_RUN_BY_DEFECT = {
-    "butterfly_pneumatic": (
-        "Every other straight-through valve shape in valves.xml is drawn on that "
-        "file's ~98-unit module (98, or 98.5 for the check and 100 for the "
-        "knife). 'Pneumatic Operated Butterfly Valve' alone is 60 x 80, and its "
-        "body is the rect x 0..60, y 40..80 rather than a 98 x 60 bowtie. "
-        "SCALE['valve'] = 0.25 is applied to all of them alike and nothing "
-        "rescales this one, so it comes out in a 15.0 x 20.0 box with a "
-        "15.0 x 10.0 body against everyone else's 24.5 x 15.0: 61% of the "
-        "length, and a run 5.0 above the bottom instead of 7.5. Its nozzles sit "
-        "at the centre of the body it is drawn with, so the port map is right "
-        "and the scale is wrong. The fix is a ('valve', 'butterfly_pneumatic') "
-        "entry in SCALE -- (24.5/60, 15.0/40), the non-uniform form the packed "
-        "column already uses -- which draws it 24.5 x 30.0 with a 24.5 x 15.0 "
-        "body and puts the run back on 7.5."
-    ),
-}
+#:
+#: Empty, and left in place rather than folded away, because emptiness is the
+#: statement: there is no straight-through valve today whose run is off the
+#: family's height for a reason nobody is prepared to defend. It held exactly
+#: one entry, ``butterfly_pneumatic``, drawn 15.0 x 20.0 from an undersized
+#: stencil and carrying its run 5.0 above the bottom of its box instead of 7.5.
+#: That is fixed, in SCALE, and the rule it was evidence for is now asserted
+#: forwards under "Valves drawn off valves.xml's own module" below.
+_OFF_THE_RUN_BY_DEFECT: dict[str, str] = {}
 
 _OFF_THE_RUN = {**_OFF_THE_RUN_BY_DESIGN, **_OFF_THE_RUN_BY_DEFECT}
 
@@ -2063,37 +2055,166 @@ def test_the_three_way_carries_the_run_at_the_familys_height_from_the_top():
         assert sym.ports[name][1] == pytest.approx(_VALVE_RUN_HEIGHT, abs=_VALVE_RUN_TOL)
 
 
-def test_the_pneumatic_butterfly_is_off_the_run_because_its_stencil_is_undersized():
-    """The defect's cause, so the entry in ``_OFF_THE_RUN_BY_DEFECT`` cannot rot
-    into a name nobody can account for -- and so that adding the SCALE entry
-    that fixes it fails here too, rather than leaving a stale exception behind.
+# ---------------------------------------------------------------------------
+# Valves drawn off valves.xml's own module.
+#
+# The rule the pneumatic butterfly's defect was evidence for, said forwards.
+# ``SCALE["valve"] = 0.25`` is one number applied to a whole stencil file, and
+# it is calibrated to that file's ~98-unit module: it is what puts a Gate
+# Valve's 98 x 60 bowtie in the 24.5 x 15.0 box the reference sheet is cut to.
+# A shape drawn on any OTHER module therefore comes out at the wrong weight
+# unless something makes up the difference, and "wrong weight" is not a matter
+# of taste: an undersized body carries its nozzles with it, which is how the
+# butterfly ended up drawing its run 5.0 above the bottom of its box instead of
+# the family's 7.5.
+#
+# What the difference is measured in is the BODY, not the box. These are upright
+# devices and the box holds whatever rides above the body -- a spring bonnet, a
+# diaphragm dome -- so a rule stated about boxes would shrink the part that
+# carries the flow to make room for the part that does not. ``angle`` is the
+# case that settles it, and it is in ``_ON_THE_MODULE_BY_FOLDING`` below.
+# ---------------------------------------------------------------------------
 
-    Nothing here is a second opinion about the drawing: it reads the stencil the
-    generator read and the factor the generator applied.
+#: The shapes off the module that carry a ``(kind, variant)`` factor of their
+#: own, as ``variant: (stencil box, emitted box, why)``. Both boxes are written
+#: down so the entry says what the factor buys and not merely that there is one.
+_OFF_THE_MODULE = {
+    "psv": (
+        (55.5, 94.5),
+        (19.8, 33.8),
+        "Safety PSV 1 draws the family's own seat at 0.7 of its size: the inlet "
+        "leg is (0,94.5)-(21,60)-(42,94.5), a 42-wide base under a 34.5 apex, "
+        "where every valve on the module has a 60-wide base under a 49 apex. "
+        "15.0 / 42 restores it, putting the base on the 15.0 a gate valve's is "
+        "drawn at. The lower 19.8 x 19.8 of the box it comes out in is exactly "
+        "valve/angle's whole box -- the same quarter-turn body -- with 14 units "
+        "of spring bonnet above it.",
+    ),
+    "relief": (
+        (40.0, 59.0),
+        (15.0, 22.1),
+        "Relief PRV has no seat to measure: it is a 40-wide semicircular bonnet "
+        "on a stem, piped S to N, so across-the-run is that bonnet and "
+        "15.0 / 40 is the same statement. 15.0 across the run is a gate valve's "
+        "15.0 across the run; the 22.1 along it against a gate valve's 24.5 is "
+        "this one spending its length on a stem rather than on a bowtie.",
+    ),
+    "butterfly_pneumatic": (
+        (60.0, 80.0),
+        (24.5, 30.0),
+        "Pneumatic Operated Butterfly Valve is the one that needs the "
+        "non-uniform form. Its body is the plain rect x 0..60, y 40..80, at 3:2 "
+        "where the family's bowtie is 98:60, so no single factor puts the body "
+        "on 24.5 x 15.0 and the run on the family's height at once. "
+        "(24.5/60, 15.0/40) does both. At the kind's bare 0.25 it came out "
+        "15.0 x 20.0 -- 61% of a gate valve's length, with its run 5.0 up.",
+    ),
+}
+
+#: A box off the module is not the same thing as a drawing off it, and this is
+#: the shape that says so. Angle is 79 x 79 rather than 98 x 60, but its path is
+#: (0,79)-(30,30)-(79,0)-(79,60)-(30,30)-(60,79): the family's own triangle,
+#: 60-wide base under a 49 apex, drawn twice and folded into an L instead of set
+#: base to base. Its seat is therefore already the family's, 0.25 draws it at
+#: exactly the 15.0 x 12.25 a gate valve's is drawn at, and a factor of its own
+#: would make this the one valve on the sheet with an oversized body.
+_ON_THE_MODULE_BY_FOLDING = {
+    "angle": "79 x 79, but drawn from the family's own 60 x 49 triangle twice",
+}
+
+#: The one left. Bleeder Valve 1 is 25 x 75 and its bowtie is 25 across by 40
+#: along, against the family's 60 by 49, so 0.25 draws valve/bleed 6.2 x 18.8:
+#: a body 6.2 across the run where a gate valve's is 15.0. It is the same class
+#: of defect as the three above and wants the same kind of entry, but it is a
+#: different device -- the small drain tapped off a header, piped N to S -- and
+#: fixing it moves every sheet that draws one. Recorded here rather than folded
+#: in, on ``_OFF_THE_RUN_BY_DEFECT``'s own principle: a defect this file names
+#: is one the next reader can find, and the test below fails the moment it is
+#: fixed rather than leaving this note behind as a lie.
+_STILL_UNDERSIZED = {
+    "bleed": "Bleeder Valve 1 is 25 x 75; its bowtie is 25 across where the family's is 60",
+}
+
+
+def _valve_stencil_boxes():
+    """Every valve variant's stencil box, read from valves.xml itself.
+
+    The generator's own map and the generator's own stencil, so this is not a
+    second opinion about the drawing: it is what ``vendor_symbols`` read.
     """
     vendor = _script("vendor_symbols")
     shapes = {
         variant: shape
-        for (kind, variant), (_, shape, _) in vendor.KIND_MAP.items()
-        if kind == "valve"
+        for (kind, variant), (stencil, shape, _) in vendor.KIND_MAP.items()
+        if kind == "valve" and stencil == "valves"
     }
     boxes = {
         name: (float(el.get("w")), float(el.get("h")))
         for name, el in vendor.shapes_in(vendor.STENCILS / "valves.xml")
         if name in set(shapes.values())
     }
-    assert boxes[shapes["butterfly_pneumatic"]] == (60.0, 80.0)
-    others = [
-        boxes[shapes[variant]][0]
-        for variant in _STRAIGHT_VALVES
-        if variant != "butterfly_pneumatic"
-    ]
-    assert min(others) >= 98.0, "the ~98-unit module every other valve is drawn on"
-    # ...and nothing makes up the difference: it takes the kind's own factor.
-    assert vendor.scale_for("valve", "butterfly_pneumatic") == vendor.scale_for("valve", "gate")
-    # ...so it is drawn short, which is the whole of why its run is low.
+    return vendor, {variant: boxes[shape] for variant, shape in shapes.items()}
+
+
+@pytest.mark.parametrize("variant", sorted(_OFF_THE_MODULE))
+def test_a_valve_off_the_stencils_module_is_rescaled_onto_the_familys_size(variant):
+    """A shape off the module carries a factor of its own, and the factor lands
+    it on the family's size.
+
+    Both halves matter. Without the first, the entry above is a claim about a
+    stencil nobody checks against the stencil; without the second, a factor
+    could be any number at all and the symbol would still be the wrong size.
+    """
+    stencil_box, emitted, why = _OFF_THE_MODULE[variant]
+    vendor, boxes = _valve_stencil_boxes()
+    assert boxes[variant] == stencil_box, why
+    assert vendor.scale_for("valve", variant) != vendor.scale_for("valve", "gate"), (
+        f"valve/{variant} is drawn on a {stencil_box[0]} x {stencil_box[1]} module "
+        f"and takes the kind's bare factor, so it is drawn undersized: {why}"
+    )
+    sym = default_registry.get("valve", variant)
+    assert (sym.width, sym.height) == emitted, why
+
+
+def test_exactly_the_valves_named_above_are_drawn_off_the_stencils_module():
+    """Nothing joins or leaves the three dicts silently.
+
+    The counterpart of the parametrized rule, which can only speak for the
+    variants it is given. A shape off the module that appears in none of them is
+    a valve quietly drawn at the wrong weight, which is the whole defect.
+    """
+    _, boxes = _valve_stencil_boxes()
+    # Width alone, because the module is a LENGTH: every shape on it is 98 wide
+    # (the check valve's 98.5 and the knife's 100 are the same length to within
+    # the drawing's own resolution), while its height is 60 plus whatever
+    # operator the stencil draws above the body -- 79 for a diaphragm dome, 89
+    # for a motor box. A height test would call every actuated valve an outlier.
+    off = {variant for variant, (w, _h) in boxes.items() if w < 98.0}
+    assert off == set(_OFF_THE_MODULE) | set(_ON_THE_MODULE_BY_FOLDING) | set(_STILL_UNDERSIZED)
+    assert set(_OFF_THE_MODULE) & set(_STILL_UNDERSIZED) == set(), (
+        "a variant cannot be both rescaled and still waiting to be"
+    )
+    reasons = [entry[2] for entry in _OFF_THE_MODULE.values()]
+    reasons += [*_ON_THE_MODULE_BY_FOLDING.values(), *_STILL_UNDERSIZED.values()]
+    assert all(reasons), "an exception without a reason is a list of names"
+
+
+def test_the_pneumatic_butterfly_is_back_on_the_run_because_it_is_rescaled():
+    """The successor to the record of its defect: the same shape, the same two
+    measurements, now saying it is fixed and saying what fixed it.
+
+    ``test_a_straight_through_valve_carries_the_run_at_one_height`` already
+    holds it to the family's height, since it is no longer excused from that
+    rule. What it cannot say is *why* the run moved back, so dropping the SCALE
+    entry would fail there with nothing pointing at the cause.
+    """
+    vendor = _script("vendor_symbols")
+    assert vendor.scale_for("valve", "butterfly_pneumatic") == (24.5 / 60, 15.0 / 40)
     sym = default_registry.get("valve", "butterfly_pneumatic")
     plain = default_registry.get("valve", "gate")
-    assert (sym.width, sym.height) == (15.0, 20.0)
-    assert sym.width < plain.width
-    assert _ink_below_the_run(sym) < _ink_below_the_run(plain)
+    # Its body is the rect the stencil draws at x 0..60, y 40..80: the lower half
+    # of the box, and now exactly the box a gate valve is drawn in.
+    assert (sym.width, sym.height / 2) == (plain.width, plain.height)
+    assert "butterfly_pneumatic" not in _OFF_THE_RUN
+    assert sym.height - sym.ports["inlet"][1] == _VALVE_RUN_HEIGHT
+    assert _ink_below_the_run(sym) == pytest.approx(_ink_below_the_run(plain))

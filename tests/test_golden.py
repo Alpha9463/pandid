@@ -319,11 +319,7 @@ def _metering_skid() -> Flowsheet:
     )
     fv = fs.add(units.Valve("FV-101", variant="motor", description="Motor-Operated Throttle Valve"))
     surge = fs.add(units.Vessel("V-101", width=90, height=140, description="Surge Vessel"))
-    psv = fs.add(
-        units.Valve(
-            "PSV-101", variant="psv", width=40, height=68, description="Vessel Relief Valve"
-        )
-    )
+    psv = fs.add(units.Valve("PSV-101", variant="psv", description="Vessel Relief Valve"))
     flare = fs.add(units.Product("To Flare", reference="PFD-900"))
     glass = fs.add(units.Fitting("SG-101", variant="sight_glass", description="Sight Glass"))
     prod = fs.add(units.Product("To Unit 200", reference="PFD-200"))
@@ -397,11 +393,7 @@ def _line_numbers() -> Flowsheet:
     pump = fs.add(units.Pump("P-101", description="Transfer Pump"))
     fv = fs.add(units.Valve("FV-101", variant="control", description="Discharge Control Valve"))
     surge = fs.add(units.Vessel("V-101", width=90, height=140, description="Surge Vessel"))
-    psv = fs.add(
-        units.Valve(
-            "PSV-101", variant="psv", width=40, height=68, description="Vessel Relief Valve"
-        )
-    )
+    psv = fs.add(units.Valve("PSV-101", variant="psv", description="Vessel Relief Valve"))
     flare = fs.add(units.Product("To Flare", reference="PFD-900"))
     prod = fs.add(units.Product("To Unit 200", reference="PFD-200"))
 
