@@ -272,6 +272,82 @@ def test_a_symbol_shifts_its_own_lettering_by_its_own_size():
     assert _matrix(re.search(r'<g transform="([^"]*)"', flat).group(1))[3] == pytest.approx(4)
 
 
+# --- and how big it is set ----------------------------------------------------
+
+# Every distinct font-size the renderer puts on a sheet, read off the goldens
+# rather than listed here: the sizes are spread over svg.py and furniture.py and
+# a new one arrives whenever a new sheet element does, so a list would be a list
+# that goes stale. Today it is ten of them, 6.5 through 18.
+_SIZES = sorted(
+    {
+        float(s)
+        for name in GOLDENS
+        for s in re.findall(
+            r'font-size="([\d.]+)"', (GOLDEN_DIR / name).read_text(encoding="utf-8")
+        )
+    }
+)
+
+# Helvetica's cap height, the fraction of the font size a capital with no
+# descender measures from its baseline. Written out rather than imported, so the
+# number the drawing is held to is stated independently of the drawing.
+_CAP_HEIGHT = 0.718
+
+
+def _rule_and_capitals(size: float) -> str:
+    """A capital at *size*, twice, beside a rule declared exactly *size* long."""
+    s = size
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{4.5 * s:g}" height="{2.5 * s:g}" '
+        f'viewBox="0 0 {4.5 * s:g} {2.5 * s:g}">'
+        f'<rect x="0" y="0" width="{4.5 * s:g}" height="{2.5 * s:g}" fill="white" />'
+        f'<rect x="{0.25 * s:g}" y="{s:g}" width="{0.5 * s:g}" height="{s:g}" />'
+        f'<text x="{1.5 * s:g}" y="{2 * s:g}" font-family="sans-serif" font-size="{s:g}">H</text>'
+        f'<text x="{3 * s:g}" y="{2 * s:g}" font-family="sans-serif" font-size="{s:g}" '
+        f'font-weight="bold">H</text>'
+        "</svg>"
+    )
+
+
+def _ink_height(im, px: float, x0: float, x1: float) -> float:
+    """The height of the ink between *x0* and *x1*, back in user units."""
+    band = im.crop((round(x0 * px), 0, round(x1 * px), im.height))
+    box = band.point(lambda v: 255 if v < 128 else 0).getbbox()
+    assert box, "nothing was drawn in this band"
+    return (box[3] - box[1]) / px
+
+
+@pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
+@pytest.mark.parametrize("size", _SIZES)
+def test_lettering_is_drawn_at_the_size_the_file_asks_for(size):
+    # The backend converts font-size from px to pt and then scales the drawing
+    # the string sits in from px to pt as well, so the size took the 0.75 twice
+    # and the geometry beside it took it once: every label on every exported
+    # sheet came out at three quarters, measurably and only in the PDF and PNG.
+    # A cap height is what makes that checkable without a golden image. The face
+    # declares one as a fraction of the font size, so a capital and a rule of the
+    # same declared length in the same document must draw in that ratio, whatever
+    # the page size, the raster scale or the units in between -- and the rule is
+    # measured too, because a fix that moved both would satisfy neither.
+    from PIL import Image
+
+    # Rasterised so a capital is about 170 device px tall whatever size it is set
+    # at, which reads its ink box to well inside a percent even for the 6.5 the
+    # title block's rows are set in.
+    im = Image.open(io.BytesIO(export.to_png(_rule_and_capitals(size), scale=320 / size)))
+    im = im.convert("L")
+    px = im.width / (4.5 * size)
+
+    rule = _ink_height(im, px, 0, 1.25 * size)
+    assert rule == pytest.approx(size, rel=0.01), f"the {size:g} rule drew {rule:.3f}"
+    for x0, x1, weight in ((1.25, 2.75, "regular"), (2.75, 4.5, "bold")):
+        cap = _ink_height(im, px, x0 * size, x1 * size)
+        assert cap / size == pytest.approx(_CAP_HEIGHT, abs=0.02), (
+            f"a {weight} capital set in {size:g} drew a cap height of {cap:.3f}, "
+            f"{cap / size:.3f} of its size against the {_CAP_HEIGHT} the face declares"
+        )
+
+
 @pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
 def test_the_written_out_metrics_are_the_ones_the_backend_will_draw_with():
     # export.py carries Helvetica's numbers so that flatten() answers the same
@@ -314,32 +390,43 @@ def test_the_exported_pdf_draws_the_sheet_rather_than_a_picture_of_it(tmp_path):
 
 _HALOED = re.compile(
     r'<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)" fill="white" />\s*'
-    r'<text x="[\d.]+" y="[\d.]+"[^>]*dominant-baseline="middle"[^>]*>([^<]+)</text>'
+    r'<text x="[\d.]+" y="[\d.]+"[^>]*font-size="([\d.]+)"[^>]*'
+    r'dominant-baseline="middle"[^>]*>([^<]+)</text>'
 )
 
 
 @pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
-def test_a_centred_label_is_rasterised_in_the_middle_of_its_own_halo():
+def test_a_centred_label_is_rasterised_where_its_alignment_puts_it_in_its_halo():
     # Measured rather than eyeballed, and measured on the pixels, so it covers
     # the whole path down to the raster instead of one rewrite in the middle of
     # it. The renderer strikes the halo and sets the text from a single centre,
-    # so the ink is concentric with the box around it or the alignment was
-    # dropped on the way: unresolved, this lettering sat 2.7 px high in a 13 px
-    # halo, half the height of the ink itself. The pixel and a half of slack is
-    # the gap between the x-height middle the attribute names and the middle of
-    # an all-capitals ink box, about 0.1 em, which is in the SVG as much as here.
+    # and dropping the alignment put this lettering 2.7 px high in a 13 px halo,
+    # half the height of the ink itself.
+    #
+    # Where it belongs is a stated distance from the middle rather than the middle:
+    # `middle` puts the alphabetic baseline half the ascent/descent box below the
+    # centre, and an all-capitals string's ink reaches a cap height above that
+    # baseline, so the ink box sits about 0.10 em high of centre and is meant to.
+    # That is what a browser draws as well. While the backend set every string at
+    # three quarters of its size those 0.10 em were 0.10 em of nine-tenths of
+    # nothing, and asking only for ink within 1.5 px of the halo's middle passed
+    # on the accident; the same labels at true size are 1.0 to 1.2 px high of it.
+    # So this states the offset instead of hoping it is zero, which holds the
+    # alignment and the type size at once and to half a pixel rather than three.
     from PIL import Image
 
     # The sheet with the most stream numbers on it, and they are capitals and
     # figures throughout: no descender to pull the ink box down off the letters.
     svg = (GOLDEN_DIR / "03_distillation_train.svg").read_text(encoding="utf-8")
     vx, vy, vw, _ = (float(v) for v in re.search(r'viewBox="([^"]+)"', svg).group(1).split())
-    im = Image.open(io.BytesIO(export.to_png(svg))).convert("L")
-    px = im.width / vw  # a PNG pixel per user unit, as _PX_PER_PT arranges
+    # Two device pixels per user unit, so an ink box reads to a quarter of one and
+    # the tolerance below is a statement about the drawing, not about the raster.
+    im = Image.open(io.BytesIO(export.to_png(svg, scale=2 * export._PX_PER_PT))).convert("L")
+    px = im.width / vw
 
     measured = 0
-    for rx, ry, rw, rh, text in _HALOED.findall(svg):
-        rx, ry, rw, rh = (float(v) for v in (rx, ry, rw, rh))
+    for rx, ry, rw, rh, size, text in _HALOED.findall(svg):
+        rx, ry, rw, rh, size = (float(v) for v in (rx, ry, rw, rh, size))
         if rh > rw:  # a number turned to run up a vertical line
             continue
         top, bottom = (ry - vy) * px, (ry + rh - vy) * px
@@ -348,8 +435,12 @@ def test_a_centred_label_is_rasterised_in_the_middle_of_its_own_halo():
         box = (int((rx - vx) * px) + 1, int(top) + 1, int((rx + rw - vx) * px), int(bottom))
         ink = im.crop(box).point(lambda v: 255 if v < 128 else 0).getbbox()
         assert ink, f"{text!r} drew no ink inside its own halo"
-        off = box[1] + (ink[1] + ink[3]) / 2 - (top + bottom) / 2
-        assert abs(off) < 1.5, f"{text!r} sits {off:+.2f} px off the middle of its halo"
+        off = (box[1] + (ink[1] + ink[3]) / 2 - (top + bottom) / 2) / px
+        want = (_MIDDLE - _CAP_HEIGHT / 2) * size
+        assert abs(off - want) < 0.5, (
+            f"{text!r} sits {off:+.2f} px off the middle of its halo, where its "
+            f"{size:g} type and the alignment it was given put it {want:+.2f}"
+        )
         measured += 1
     assert measured >= 4, "no haloed label was measured, so this checked nothing"
 
