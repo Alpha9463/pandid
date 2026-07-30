@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Unit.VARIANTS` and `Unit.VARIANT_ALIASES`. A subclass may now name the
+  drawings it owns, and is refused any other **when it is constructed** rather
+  than at the first layout or render.
+  ([#145](https://github.com/Alpha9463/pandid/issues/145))
+
+  Nothing shipped moves. Every class in the port table leaves `VARIANTS` empty,
+  which is how a class says it owns its whole kind, and the check is inert for
+  it: `Separator(variant="cyclone")`, `HeatExchanger(variant="kettle")` and
+  every other `Kind(variant=…)` builds exactly the nozzles it always did, and a
+  variant nothing is registered under is still refused where it always was, by
+  `SymbolRegistry.get` when the artwork is asked for. That path is not replaced;
+  a class that owns a whole kind has no list to check against, because only the
+  registry knows what artwork exists.
+
+  What the attribute buys is the class that owns *some* of a kind's drawings.
+  Such a class can say that a variant naming another device is wrong, and say it
+  on the line that asks for it, listing the ones it does draw, suggesting a near
+  miss, and ending with the low-level form — `Separator(variant='sifter')` —
+  so that a refusal is a redirection rather than a dead end.
+
+  `VARIANT_ALIASES` renames a variant class-locally. What is stored is the
+  **registry's** spelling, since that is what `SymbolRegistry.for_unit` and
+  `pandid.portgeom` read to find the artwork, so `to_dict()` writes the registry
+  name and not the rename. List both spellings in `VARIANTS`, class-local first,
+  where that round trip matters.
+
+  `HeatExchanger` and `Separator` add their per-variant nozzles through a new
+  `_variant_ports` classmethod, which returns nothing on a subclass that
+  declares its own `PORTS`. Both add those nozzles after `super().__init__()`
+  has laid down `PORTS`, so without it a subclass declaring its whole nozzle
+  list and inheriting either constructor added `shell_in` twice and raised
+  `"already has a port named 'shell_in'"`.
+
 ### Changed
 
 - `pip install 'pandid[pdf]'` now gives a working PDF and PNG export on a
