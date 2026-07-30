@@ -45,6 +45,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The three valve symbols drawn off `valves.xml`'s own module come out at the
+  size the rest of the family is drawn at. `SCALE["valve"] = 0.25` is calibrated
+  to that file's ~98-unit module — it is what puts a Gate Valve's `98 × 60`
+  bowtie in the `24.5 × 15.0` box the reference sheet is cut to — and three
+  shapes are not on it, with nothing making up the difference. `valve`/`psv`
+  shipped `13.9 × 23.6`, `valve`/`relief` `10.0 × 14.8` and
+  `valve`/`butterfly_pneumatic` `15.0 × 20.0`: 57%, 41% and 61% of a gate
+  valve's length. A PSV's spring hatching closed into a solid wedge, a relief
+  PRV's bonnet into a dot, and the butterfly carried its run 5.0 above the
+  bottom of its box where every other straight-through valve carries it at 7.5.
+  This has been so since 0.1.0 and is not a regression.
+
+  What the family is drawn to is not its box — these are upright devices, and
+  the box holds whatever rides above the body — it is the *seat*. Every valve
+  body in `valves.xml` is the same pair of triangles, 60 across the run under a
+  49 apex, drawn `15.0 × 12.25` at 0.25; Gate Valve sets them base to base and
+  Angle folds them into an L, both at that one factor. Each of the three now
+  takes a factor that puts its own body on that: `15.0/42` → `19.8 × 33.8` for
+  the PSV, whose lower `19.8 × 19.8` is `valve`/`angle`'s box exactly, with the
+  spring bonnet above it; `15.0/40` → `15.0 × 22.1` for the relief PRV;
+  `(24.5/60, 15.0/40)` → `24.5 × 30.0` for the butterfly, a `24.5 × 15.0` body
+  with its run back on 7.5.
+
+  A sheet that sized its PSV by hand to compensate should drop the override:
+  `examples/07_metering_skid.py` and `examples/09_line_numbers.py` did, and
+  their `width=40, height=68` is gone. Goldens 04, 07 and 09 move, and the
+  gallery images with them; nothing in any of them changes but the two symbol
+  definitions, the two placements, and the lines and labels that follow them.
+
 - Curved equipment heads are drawn on the ellipse the stencil asked for. The
   stencil converter splits an arc whose chord is about its own diameter into
   quarter-turn pieces, because cairosvg strokes such an arc visibly thick. It
