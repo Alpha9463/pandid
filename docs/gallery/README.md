@@ -11,11 +11,18 @@ copy their output:
 for f in examples/[0-9]*.py; do python "$f"; done
 ```
 
-Each script writes its SVG next to itself in `examples/` (gitignored); the
-gallery copies are those files, with the PNGs rasterized from them at
-`output_width=1600`. Note that `03` leaves its `TitleBlock.date`
-blank, so the renderer stamps the current date and that image changes whenever
-it is regenerated.
+Each script writes its SVG next to itself in `examples/` (gitignored) under a
+name of its own, so copying one in is also a rename: `distillation_train.svg`
+becomes `03_distillation_train.svg`. Every copy takes the name of the script
+that wrote it, except `01_ammonia_loop.py`, which writes `ammonia_auto.svg`.
+
+The PNGs are rasterized from those same SVGs at 1600 px wide, through
+`pandid.render.export` (the `[pdf]` extra). Rasterize the *committed* SVG rather
+than a fresh one, so each sheet and its PNG always show the same drawing.
+
+Note that `03` and `08` leave their `TitleBlock.date` blank, so the renderer
+stamps the current date. Regenerating those two SVGs moves that date and nothing
+else; leave them alone unless the sheet itself has changed.
 
 ---
 
