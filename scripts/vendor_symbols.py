@@ -997,7 +997,7 @@ KIND_MAP = {
 # (kind, variant) through ``SymbolRegistry.register_closed``, so the name a user
 # writes stays the name of the device.
 #
-# Both shapes go through the same port map and the same SCALE, and build()
+# Both shapes go through the same port map and the same SCALE, and render()
 # refuses to emit a pair whose boxes, nozzles or aspect disagree: two positions
 # of one device must differ in ink and in nothing else, or declaring the
 # position would move a line already drawn.
@@ -1031,7 +1031,7 @@ CLOSED_SHAPES = {
 # <foreground>, written in the stencil's own drawing language and converted by
 # the same converter as the rest of the shape. Provenance therefore stays in
 # this file beside KIND_MAP, and a re-vendor cannot quietly drop the fix,
-# because a shape a patch cannot find stops the generator (see build()).
+# because a shape a patch cannot find stops the generator (see render()).
 #
 # This is not a way to draw something the stencil set lacks. A symbol nothing
 # upstream draws is a hand-drawn primitive and belongs in symbols.py, under the
@@ -1413,7 +1413,7 @@ def drawing(el, kind, variant, port_map, sx, sy):
     Returns ``(inner, w, h, ports, menu, series, aspect)``: the artwork, and
     everything a :class:`~pandid.render.symbols.Symbol` is built from except its
     id. Split out so the two states of a device (see :data:`CLOSED_SHAPES`) go
-    through exactly the same arithmetic, which is what lets :func:`build` insist
+    through exactly the same arithmetic, which is what lets :func:`render` insist
     afterwards that the pair differs in ink and in nothing else.
     """
     # Emit a heavier stroke on scaled symbols so it renders at 2px after the
@@ -1458,7 +1458,15 @@ def drawing(el, kind, variant, port_map, sx, sy):
     return inner, w, h, ports, menu, series, aspect
 
 
-def build():
+def render() -> str:
+    """The whole generated module, as a string, writing nothing.
+
+    Separate from :func:`main` so a test can regenerate the library in memory and
+    compare it against the committed ``_vendored_symbols.py``. That file is
+    regenerated wholesale, so a hand edit to it is lost the next time anyone runs
+    the generator and the drawing silently reverts; nothing but that comparison
+    notices, since a stale generated file still imports and still draws.
+    """
     # Index every shape once, correcting the ones STENCIL_PATCHES names.
     index = {}
     for stencil in {m[0] for m in KIND_MAP.values()}:
@@ -1575,10 +1583,17 @@ def build():
                 f"    ), {variant!r})",
                 "",
             ]
-    OUT.write_text("\n".join(lines), encoding="utf-8")
+    # "\n" and not os.linesep: this is the string the test compares against the
+    # committed file, which it reads back in text mode. Both ends therefore speak
+    # LF whatever the checkout does with line endings on the way to disk.
+    return "\n".join(lines)
+
+
+def main():
+    OUT.write_text(render(), encoding="utf-8")
     print(f"wrote {OUT} ({len(KIND_MAP)} symbols, "
           f"{len(CLOSED_SHAPES)} of them in two positions)")
 
 
 if __name__ == "__main__":
-    build()
+    main()
