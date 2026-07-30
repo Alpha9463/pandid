@@ -8,40 +8,48 @@ its :attr:`~pandid.units.Unit.VARIANTS` is saying the opposite -- that the rest
 belong to some other device -- and this suite is the contract that mechanism
 owes its two audiences.
 
-The first is **every sheet already drawn**. The shipped classes name no variants,
-so the check is inert for them, and the sweep at the top of this module holds
-every class against every variant the registry has for its kind to say so.
+The first is **every sheet already drawn**. The classes in :mod:`pandid.units`
+name no variants, so the check is inert for them, and the sweep at the top of
+this module holds every one of them against every variant the registry has for
+its kind to say so.
 
-The second is the **generated per-variant classes** that come next: a class body
-with a ``PORTS`` list and nothing else, inheriting its base's ``__init__``. That
-is what ``_variant_ports`` exists for, and the throwaway subclasses below are
-that shape written by hand, so the base is proved to support them before a
-generator emits one.
+The second is the **generated per-variant classes** of :mod:`pandid.devices`: a
+class body with a ``PORTS`` list and nothing else, inheriting its base's
+``__init__``. That is what ``_variant_ports`` exists for, and the throwaway
+subclasses below are that shape written by hand, so the mechanism is exercised
+here in isolation from the generator that now emits forty-odd of them.
+``tests/test_devices.py`` is where the emitted ones are held to it.
 """
 
 import pytest
 
-from pandid import Flowsheet, units
+from pandid import Flowsheet, devices, units
 from pandid.render.symbols import default_registry
 
 
 def _unit_classes():
-    """Every ``Unit`` subclass the package defines, transitively.
+    """Every ``Unit`` subclass :mod:`pandid.units` itself defines.
 
-    Filtered to ``pandid``'s own modules, so the fixtures further down this file
-    -- and any other test module that subclasses ``Unit`` -- are not swept up as
-    if they were shipped API. Copied from ``tests/test_port_annotations.py``
-    rather than shared, because the two suites ask different questions of the
-    same list and neither should be able to narrow the other's.
+    That module and no other, which is what the compatibility sweeps below are
+    about: they say that a class shipped before the device layer existed still
+    accepts every variant of its kind, and a generated device class deliberately
+    does not -- refusing a drawing another device owns is the whole of what it
+    is for. Sweeping both together would be asking one question of two
+    populations and getting the answer of neither.
+
+    Test fixtures are excluded by the same rule, since this file and
+    ``tests/test_custom_units.py`` both subclass ``Unit`` and pytest has already
+    imported them by the time this runs.
     """
     found: dict[type, None] = {}
     pending = [units.Unit]
     while pending:
         cls = pending.pop()
-        if cls in found or not cls.__module__.startswith("pandid."):
+        if cls in found:
             continue
-        found[cls] = None
         pending.extend(cls.__subclasses__())
+        if cls.__module__ == units.__name__:
+            found[cls] = None
     return list(found)
 
 
@@ -66,17 +74,27 @@ _CASE_IDS = [f"{cls.__name__}-{variant}" for cls, variant in _shipped_cases()]
 # ---------------------------------------------------------------------------
 
 
-def test_no_shipped_class_names_its_variants():
+def test_no_class_in_units_names_its_variants():
     """The check is inert for everything in the port table, and this is why.
 
     Stated once, directly, because every other compatibility claim in this file
     follows from it: a class with an empty ``VARIANTS`` never reaches the raise,
-    so ``Separator(variant="cyclone")`` runs the code it always ran. When the
-    generated classes land, this test is the one that has to be rewritten
-    deliberately rather than the sweep quietly changing meaning.
+    so ``Separator(variant="cyclone")`` runs the code it always ran.
     """
     named = {cls.__name__: cls.VARIANTS for cls in _unit_classes() if cls.VARIANTS}
     assert named == {}
+
+
+def test_every_generated_class_names_its_variants():
+    """...and the other half, which is what the mechanism was built for.
+
+    A device class that named none would claim its base's whole kind, so
+    ``Cyclone(variant="sifter")`` would draw a screen under a cyclone's name and
+    nothing would say so until someone read the sheet. The two halves are
+    written as a pair so neither can be quietly dropped.
+    """
+    silent = [name for name in devices.__all__ if not getattr(devices, name).VARIANTS]
+    assert silent == []
 
 
 @pytest.mark.parametrize(("cls", "variant"), _shipped_cases(), ids=_CASE_IDS)

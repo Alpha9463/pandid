@@ -30,6 +30,20 @@ def _sym(unit: "Unit"):
     return default_registry.for_unit(unit)
 
 
+def _anchor(unit: "Unit", port_name: str) -> str:
+    """The name the unit's *symbol* anchors ``port_name`` under.
+
+    Almost always the port's own name: a symbol is authored against the class
+    that draws it, so the two vocabularies are one. A class that renames a
+    nozzle its drawing already ships under says so in
+    :attr:`pandid.units.Unit.PORT_ANCHORS`, and this is the single place the
+    rename is applied -- everything here that asks the artwork about a port asks
+    through it, so a renamed nozzle lands on the ink the original does rather
+    than on the box-centre fallback a name the symbol never heard of gets.
+    """
+    return type(unit).PORT_ANCHORS.get(port_name, port_name)
+
+
 def _xform(frame) -> tuple[int, bool, bool]:
     """Read (orientation, mirror_x, mirror_y) off a Frame or _Slot."""
     return (int(getattr(frame, "orientation", 0) or 0),
@@ -146,14 +160,15 @@ def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
     the *circle*, whatever the box around it is shaped like.
     """
     sym = _sym(unit)
-    menu = (getattr(sym, "port_faces", None) or {}).get(port_name)
+    anchor = _anchor(unit, port_name)
+    menu = (getattr(sym, "port_faces", None) or {}).get(anchor)
     if menu:
         coords = list(menu.values())
     elif (placed := _series_point(unit, sym, port_name)) is not None:
         coords = [placed]
     else:
         # A port the symbol does not anchor falls back to the centre of the box.
-        coords = [sym.ports.get(port_name, (sym.width / 2, sym.height / 2))]
+        coords = [sym.ports.get(anchor, (sym.width / 2, sym.height / 2))]
     out: dict[str, tuple[float, float]] = {}
     for px, py in coords:
         if unit.kind in ("feed", "product"):
@@ -198,7 +213,8 @@ def is_anchored(unit: "Unit", port_name: str) -> bool:
     placement, and callers that police collisions have to tell the two apart.
     """
     sym = _sym(unit)
-    return port_name in sym.ports or _series_point(unit, sym, port_name) is not None
+    return (_anchor(unit, port_name) in sym.ports
+            or _series_point(unit, sym, port_name) is not None)
 
 
 def unit_box(unit: "Unit", frame) -> tuple[float, float, float, float]:
