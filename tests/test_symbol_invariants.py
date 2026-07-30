@@ -1270,14 +1270,14 @@ def test_a_kind_with_no_symbols_at_all_still_draws_a_generic_box():
 
 
 # ---------------------------------------------------------------------------
-# Where stretchability comes from.
+# The generated file, against the generator that emits it.
 #
-# A draw.io stencil declares whether its shape may be reshaped, and scripts/
-# carries that declaration into ``Symbol.stretchable``. Every shape KIND_MAP
-# names happens to be a "variable" one, so nothing in the shipped registry
-# exercises the other half of the reader -- which is exactly why it is exercised
-# here, and why the claim that leaves the generated file free of the keyword is
-# written down rather than left to be rediscovered.
+# ``_vendored_symbols.py`` is written wholesale by scripts/vendor_symbols.py and
+# its own docstring says not to edit it, but nothing enforced that: a stale or
+# hand-edited copy still imports, still draws, and still passes every check
+# above, because every check above measures the registry rather than the mapping
+# the registry was built from. Regenerating in memory and comparing is what turns
+# "do not edit by hand" from a request into a rule.
 # ---------------------------------------------------------------------------
 
 
@@ -1295,6 +1295,80 @@ def _script(name: str):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _clip(line: str, column: int, width: int = 90) -> str:
+    """``line`` windowed on ``column``, for a file whose ``svg=`` lines run to
+    thousands of characters. Printing one of those whole shows the reader
+    nothing; the neighbourhood of the character the two files part company on is
+    the part that identifies the edit."""
+    if len(line) <= 2 * width:
+        return line
+    lo, hi = max(0, column - width), min(len(line), column + width)
+    return ("..." if lo else "") + line[lo:hi] + ("..." if hi < len(line) else "")
+
+
+def _generator_diff(committed: str, generated: str, context: int = 2) -> str:
+    """First divergence with a little context -- not a 95KB dump.
+
+    The inequality of two 950-line files says nothing on its own, and the whole
+    diff of a regenerated library is unreadable, so this is the first line they
+    disagree on and a couple either side: enough to recognise one's own edit.
+    """
+    old, new = committed.split("\n"), generated.split("\n")
+    total = max(len(old), len(new))
+    row = next((i for i, (a, b) in enumerate(zip(old, new)) if a != b), min(len(old), len(new)))
+    a = old[row] if row < len(old) else ""
+    b = new[row] if row < len(new) else ""
+    column = next((i for i, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b)))
+    out = [f"first divergence at line {row + 1} of {total}, column {column + 1}:"]
+    for k in range(max(0, row - context), min(total, row + context + 1)):
+        mark = ">>" if k == row else "  "
+        for label, lines in (("committed", old), ("regenerated", new)):
+            text = _clip(lines[k], column) if k < len(lines) else "<no line>"
+            out.append(f"{mark} [{k + 1}] {label}: {text}")
+    return "\n".join(out)
+
+
+def test_the_generated_symbols_match_the_generator():
+    """A hand edit to _vendored_symbols.py is lost the next time anyone runs the
+    generator, and the drawing silently reverts. Say so here instead."""
+    vendor = _script("vendor_symbols")
+    # ``vendor.OUT`` rather than the path written out a second time here, so the
+    # two things compared are exactly the two the generator relates: what it
+    # emits, and where it puts it. Whether the interpreter imported *this*
+    # checkout's copy is not this test's business -- every check above measures
+    # the registry that import produced, so a run against some other installed
+    # copy is already measuring the wrong library throughout.
+    #
+    # Text mode at both ends, so this compares lines and not line endings:
+    # read_text() folds a CRLF working tree back to "\n", which is what render()
+    # joins with, and a ``text=auto`` .gitattributes could not turn it red.
+    committed = vendor.OUT.read_text(encoding="utf-8")
+    generated = vendor.render()
+    if generated != committed:
+        pytest.fail(
+            f"{vendor.OUT.name} is not what scripts/vendor_symbols.py emits today.\n"
+            "It is regenerated wholesale, so a hand edit to it is lost the next time\n"
+            "anyone runs the generator, and the drawing silently reverts. Change the\n"
+            "KIND_MAP entry (or the stencil patch) that produces it, then run\n\n"
+            "    python scripts/vendor_symbols.py\n\n"
+            "and commit the regenerated file with the change that caused it.\n\n"
+            + _generator_diff(committed, generated),
+            pytrace=False,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Where stretchability comes from.
+#
+# A draw.io stencil declares whether its shape may be reshaped, and scripts/
+# carries that declaration into ``Symbol.stretchable``. Every shape KIND_MAP
+# names happens to be a "variable" one, so nothing in the shipped registry
+# exercises the other half of the reader -- which is exactly why it is exercised
+# here, and why the claim that leaves the generated file free of the keyword is
+# written down rather than left to be rediscovered.
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(

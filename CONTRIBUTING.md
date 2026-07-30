@@ -107,7 +107,10 @@ To add or change an equipment symbol:
    registered `(kind, variant)` in a labelled grid with a red dot on each port
    anchor. It is a dev tool, not part of the package.
 4. Commit the regenerated `_vendored_symbols.py` with your `KIND_MAP` change,
-   never one without the other.
+   never one without the other. `test_the_generated_symbols_match_the_generator`
+   regenerates the library in memory (`vendor_symbols.render()`, which writes
+   nothing) and compares it against the committed file, so one without the other
+   is a red suite rather than a symbol that quietly reverts on the next run.
 
 The shape's `aspect` comes across with it, as `Symbol.stretchable`. The stencil
 author has already answered whether the drawing may be reshaped to fill a box of
