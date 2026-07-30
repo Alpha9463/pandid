@@ -80,6 +80,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The four symbol families the generator *reproportions* are drawn with a pen
+  centred on the sheet's line weight, instead of one exact along a single axis
+  and adrift along the other.
+  ([#158](https://github.com/Alpha9463/pandid/issues/158))
+
+  `scripts/vendor_symbols.py` compensates a symbol's line weights once, for the
+  scale its artwork is drawn at, by baking a heavier `stroke-width` inside the
+  scale group it wraps that artwork in. The divisor was `sx` — a single axis.
+  For the 138 families whose `SCALE` entry is a uniform factor there is nothing
+  to choose between the two and it was right. For the four whose entry is an
+  uneven `(sx, sy)` pair it drew a slightly elliptical pen at **every** box,
+  including the symbol's own: `vessel/default` and `separator/default`
+  `(0.62, 0.5)` put their shell walls on 2.0 and their heads on 1.61,
+  `valve/butterfly_pneumatic` `(24.5/60, 15.0/40)` on 2.0 and 1.84, and
+  `column/packed` `(62/14, 200/97)` on 2.0 and 0.93 — the packed tower's bed
+  grids and packing at under half the weight of the shell they sit in.
+
+  It is the geometric mean `sqrt(sx*sy)` now, which is what #153 arrived at for
+  the same problem one level down, at the placement, and is stated here in the
+  same terms rather than as a second vocabulary for one idea: a single
+  `stroke-width` cannot express a direction-dependent pen without moving
+  geometry, so hold the pen's *area* and split what is left evenly either side
+  of the sheet weight. It is exact the moment the two axes agree, which is why
+  the other 138 families come out byte-identical.
+
+  What moves is four `stroke-width` values: 3.226 → 3.592 on the vessel and the
+  flash drum, 4.898 → 5.111 on the pneumatic butterfly valve, 0.452 → 0.662 on
+  the packed tower. Drawn, that is a vessel's walls going 2.00 → 2.23 and its
+  heads 1.61 → 1.80, and the packed tower's shell walls 2.00 → 2.93 with its
+  grids 0.93 → 1.36. The tower is the one visible change and the one whose axes
+  were furthest apart; its worst stroke goes from 2.15x off the sheet weight to
+  1.47x, and it is the shell walls that now carry part of the error rather than
+  the internals carrying all of it. Five golden sheets move by one
+  `stroke-width` value each and by nothing else: blanking every `stroke-width`
+  leaves all nine byte-identical to their predecessors, so no geometry, port,
+  canvas dimension, label or route moved.
+
+  `tests/test_line_weight.py` gains the check that says so, over every symbol in
+  the registry, hand-drawn and vendored alike: the outline pen a definition
+  declares has the sheet's line weight as its geometric mean. Nothing already
+  there could see this, because every other check in that file measures a
+  placement against the definition it draws from, and both sides of that
+  comparison come from the same symbol.
+
 - Lettering in the `.pdf` and `.png` exports is drawn at the size the sheet sets
   it in. It came out at three quarters of that. svglib converts a length to
   points twice on the way to a glyph and once on the way to a line: it

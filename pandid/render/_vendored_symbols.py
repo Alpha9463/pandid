@@ -156,7 +156,7 @@ def register_vendored(registry):
 
     # draw.io valves:Pneumatic Operated Butterfly Valve (aspect=variable) -> valve/butterfly_pneumatic
     registry.register('valve', Symbol(
-        svg='<g id="sym_valve_butterfly_pneumatic"><g transform="scale(0.4083333333333333, 0.375)"><rect x="0.0" y="40.0" width="60.0" height="40.0" fill="none" stroke="#111" stroke-width="4.898"/><path d="M 30.0 20.0 L 30.0 52.0 M 10.0 20.0 A 20.0 20.0 0.0 0 1 30.0 0.0 A 20.0 20.0 0.0 0 1 50.0 20.0 Z M 5.0 75.0 L 55.0 45.0" fill="none" stroke="#111" stroke-width="4.898"/><ellipse cx="30.0" cy="60.0" rx="4.0" ry="4.0" fill="none" stroke="#111" stroke-width="4.898"/></g></g>',
+        svg='<g id="sym_valve_butterfly_pneumatic"><g transform="scale(0.4083333333333333, 0.375)"><rect x="0.0" y="40.0" width="60.0" height="40.0" fill="none" stroke="#111" stroke-width="5.111"/><path d="M 30.0 20.0 L 30.0 52.0 M 10.0 20.0 A 20.0 20.0 0.0 0 1 30.0 0.0 A 20.0 20.0 0.0 0 1 50.0 20.0 Z M 5.0 75.0 L 55.0 45.0" fill="none" stroke="#111" stroke-width="5.111"/><ellipse cx="30.0" cy="60.0" rx="4.0" ry="4.0" fill="none" stroke="#111" stroke-width="5.111"/></g></g>',
         width=24.5, height=30.0,
         ports={'inlet': (0.0, 22.5), 'outlet': (24.5, 22.5), 'actuator': (12.2, 0.0)},
     ), 'butterfly_pneumatic')
@@ -247,7 +247,7 @@ def register_vendored(registry):
 
     # draw.io vessels:Pressurized Vessel (aspect=variable) -> vessel/default
     registry.register('vessel', Symbol(
-        svg='<g id="sym_vessel"><g transform="scale(0.62, 0.5)"><path d="M 0.0 15.0 A 50.0 15.0 0.0 0 1 50.0 0.0 A 50.0 15.0 0.0 0 1 100.0 15.0 L 100.0 185.0 A 50.0 15.0 0.0 0 1 50.0 200.0 A 50.0 15.0 0.0 0 1 0.0 185.0 Z" fill="none" stroke="#111" stroke-width="3.226"/></g></g>',
+        svg='<g id="sym_vessel"><g transform="scale(0.62, 0.5)"><path d="M 0.0 15.0 A 50.0 15.0 0.0 0 1 50.0 0.0 A 50.0 15.0 0.0 0 1 100.0 15.0 L 100.0 185.0 A 50.0 15.0 0.0 0 1 50.0 200.0 A 50.0 15.0 0.0 0 1 0.0 185.0 Z" fill="none" stroke="#111" stroke-width="3.592"/></g></g>',
         width=62.0, height=100.0,
         ports={'inlet': (0.0, 50.0), 'outlet': (62.0, 50.0), 'vent': (31.0, 0.0)},
         # must not be turned: vent on the top head, free surface below it
@@ -266,7 +266,7 @@ def register_vendored(registry):
 
     # draw.io vessels:Tower With Packing (aspect=variable) -> column/packed
     registry.register('column', Symbol(
-        svg='<g id="sym_column_packed"><g transform="scale(4.428571428571429, 2.0618556701030926)"><path d="M 14.0 3.5 L 14.0 93.5 A 7.0 3.5 0.0 0 1 7.0 97.0 A 7.0 3.5 0.0 0 1 0.0 93.5 L 0.0 3.5 A 7.0 3.5 0.0 0 1 7.0 0.0 A 7.0 3.5 0.0 0 1 14.0 3.5 Z M 0.0 3.5 L 14.0 3.5 M 0.0 93.5 L 14.0 93.5 M 0.0 43.5 L 14.0 43.5 M 0.0 53.5 L 14.0 53.5 M 0.0 18.5 L 14.0 18.5 M 0.0 78.5 L 14.0 78.5 M 14.0 18.5 L 0.0 43.5 M 14.0 43.5 L 0.0 18.5 M 14.0 53.5 L 0.0 78.5 M 14.0 78.5 L 0.0 53.5" fill="none" stroke="#111" stroke-width="0.452"/></g></g>',
+        svg='<g id="sym_column_packed"><g transform="scale(4.428571428571429, 2.0618556701030926)"><path d="M 14.0 3.5 L 14.0 93.5 A 7.0 3.5 0.0 0 1 7.0 97.0 A 7.0 3.5 0.0 0 1 0.0 93.5 L 0.0 3.5 A 7.0 3.5 0.0 0 1 7.0 0.0 A 7.0 3.5 0.0 0 1 14.0 3.5 Z M 0.0 3.5 L 14.0 3.5 M 0.0 93.5 L 14.0 93.5 M 0.0 43.5 L 14.0 43.5 M 0.0 53.5 L 14.0 53.5 M 0.0 18.5 L 14.0 18.5 M 0.0 78.5 L 14.0 78.5 M 14.0 18.5 L 0.0 43.5 M 14.0 43.5 L 0.0 18.5 M 14.0 53.5 L 0.0 78.5 M 14.0 78.5 L 0.0 53.5" fill="none" stroke="#111" stroke-width="0.662"/></g></g>',
         width=62.0, height=200.0,
         ports={'distillate': (31.0, 0.0), 'bottoms': (31.0, 200.0), 'reflux_in': (62.0, 35.0), 'boilup_in': (62.0, 175.0), 'condenser_duty': (62.0, 65.0), 'reboiler_duty': (62.0, 145.0)},
         # must not be turned: packed beds rest on their support grids
@@ -286,7 +286,7 @@ def register_vendored(registry):
 
     # draw.io vessels:Pressurized Vessel (aspect=variable) -> separator/default
     registry.register('separator', Symbol(
-        svg='<g id="sym_separator"><g transform="scale(0.62, 0.5)"><path d="M 0.0 15.0 A 50.0 15.0 0.0 0 1 50.0 0.0 A 50.0 15.0 0.0 0 1 100.0 15.0 L 100.0 185.0 A 50.0 15.0 0.0 0 1 50.0 200.0 A 50.0 15.0 0.0 0 1 0.0 185.0 Z" fill="none" stroke="#111" stroke-width="3.226"/></g></g>',
+        svg='<g id="sym_separator"><g transform="scale(0.62, 0.5)"><path d="M 0.0 15.0 A 50.0 15.0 0.0 0 1 50.0 0.0 A 50.0 15.0 0.0 0 1 100.0 15.0 L 100.0 185.0 A 50.0 15.0 0.0 0 1 50.0 200.0 A 50.0 15.0 0.0 0 1 0.0 185.0 Z" fill="none" stroke="#111" stroke-width="3.592"/></g></g>',
         width=62.0, height=100.0,
         ports={'feed': (0.0, 50.0), 'vapor': (31.0, 0.0), 'liquid': (31.0, 100.0)},
         # must not be turned: vapour disengages off the top, liquid draws off the bottom

@@ -146,10 +146,13 @@ def authored_pens(sym):
 
     Read through the artwork's internal scale group, so this is the weight the
     symbol draws at in the box it was drawn for -- 2.0 for an outline, whatever
-    finer weight the author chose for a detail line, and the pair the four
-    families ``scripts/vendor_symbols.py`` reproportions unevenly come out at
-    (its compensation divides by ``sx`` alone, which is a statement about the
-    stencil scale and not about the placement this file is checking).
+    finer weight the author chose for a detail line, and a *pair* for the four
+    families ``scripts/vendor_symbols.py`` reproportions unevenly, whose scale
+    group strokes with an elliptical pen the generator can centre on the sheet
+    weight but not round out. That is a statement about the stencil scale and
+    not about the placement this file is checking, so it is the fixed point a
+    placement is measured against here, and it is pinned in its own right by
+    :func:`test_every_symbol_declares_a_pen_centred_on_the_sheet_weight`.
     """
     root = ET.fromstring(f'<svg xmlns="http://www.w3.org/2000/svg">{sym.svg}</svg>')
     out = []
@@ -208,6 +211,55 @@ def check_symbol_weights(fs, svg):
                 )
         checked += 1
     assert checked, "no unit was checked"
+
+
+# --- the pen a symbol declares ------------------------------------------------
+
+
+def test_every_symbol_declares_a_pen_centred_on_the_sheet_weight():
+    """The weight the *definitions* are drawn at, which nothing above can see.
+
+    Every check above measures a placement against the definition it draws
+    from, so a definition drawn at the wrong weight passes all of them: both
+    sides of that comparison come from the same symbol. What the definitions
+    are drawn at is settled a level further up, by
+    ``scripts/vendor_symbols.py``, which bakes a compensated ``stroke-width``
+    inside the scale group it wraps each stencil's artwork in.
+
+    That compensation divided by ``sx`` alone until #158. Under a uniform
+    factor there is nothing to choose and the outline landed exactly on the
+    sheet weight; under the four uneven pairs ``SCALE`` reproportions it put
+    the vertical strokes on that weight and left the horizontal ones at
+    ``sy/sx`` of it -- the packed tower's bed grids at 0.93 against its own
+    shell walls' 2.0, a pen a third short of the sheet's by area. It is the
+    geometric mean now, so the sheet weight is the *middle* of every pen in the
+    library rather than one edge of four of them.
+
+    Round wherever it can be, which is every hand-drawn symbol and 138 of the
+    142 vendored families. It cannot be for the other four, since one
+    ``stroke-width`` cannot express a weight that depends on the direction the
+    line runs in; there the two axes straddle the sheet weight by
+    ``sqrt(sx/sy)`` each way, which is what this measures and what dividing by
+    one axis did not do.
+    """
+    checked = 0
+    for (kind, variant), sym in sorted(default_registry._symbols.items()):
+        pens = authored_pens(sym)
+        assert pens, f"{kind}/{variant} declares no stroke at all"
+        # The outline is the heaviest pen by AREA, not by long axis: an uneven
+        # pair's ellipse is longer on one axis than the round pen it stands in
+        # for, and ordering on that would pick a detail line over an outline
+        # the moment one was drawn under a wide enough pair.
+        lo, hi = max(pens, key=lambda pen: pen[0] * pen[1])
+        # The tolerance is the generator's own rounding: it emits the divided
+        # weight to three decimals, and the packed tower's 0.662 is the
+        # smallest number that lands on, so a part in a thousand there.
+        assert math.isclose(math.sqrt(lo * hi), float(_PROCESS_STROKE), rel_tol=2e-3), (
+            f"{kind}/{variant}: its outline is drawn at {lo:.4g} by {hi:.4g}, a pen "
+            f"of mean {math.sqrt(lo * hi):.4g} against the sheet's {_PROCESS_STROKE}"
+        )
+        checked += 1
+    assert checked > 100, f"only {checked} symbols were walked; the registry is bigger"
 
 
 # --- the golden corpus --------------------------------------------------------
