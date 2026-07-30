@@ -12,6 +12,7 @@ This module is also the public ``units`` namespace: ``from pandid import units``
 
 from __future__ import annotations
 
+from difflib import get_close_matches
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from pandid.geometry import Frame, Pin, _Slot
@@ -63,6 +64,42 @@ class Unit:
     #: instead, as :class:`Mixer` does.
     PORTS: list[tuple[str, str, str]] = []
 
+    #: The drawings this class owns, class-local name first. Empty on a base
+    #: class that owns its whole kind, which is checked at render as it always
+    #: has been: an empty tuple says "every variant the registry has for this
+    #: kind is mine", and the registry is the only thing that knows the list.
+    #:
+    #: A class that names some of them is saying the opposite, that the rest
+    #: belong to another device, and it refuses them at construction. That is
+    #: the difference the check buys: a variant naming a device this class is
+    #: not fails on the line that asks for it, rather than surviving as far as
+    #: the first layout or render and being refused there by
+    #: :meth:`pandid.render.symbols.SymbolRegistry.get`.
+    #:
+    #: ``variant`` defaults to ``"default"``, so a class that names its variants
+    #: and leaves that one out refuses to be built by name alone. A class whose
+    #: own drawing is what naming it should ask for therefore lists ``"default"``
+    #: and aliases it (``VARIANT_ALIASES = {"default": "cyclone"}``), which needs
+    #: no second mechanism and no ``__init__`` of its own.
+    VARIANTS: tuple[str, ...] = ()
+    #: class-local variant name -> the registry's, where a class renames one.
+    #:
+    #: ``self.variant`` stores the *result*, so what a unit carries is the
+    #: **registry's** spelling.
+    #: :meth:`pandid.render.symbols.SymbolRegistry.for_unit` and
+    #: :mod:`pandid.portgeom` read that attribute to find the artwork, and a
+    #: name only one class knows would find none. The rename is therefore a
+    #: spelling the constructor accepts, not a second name the rest of the
+    #: package has to learn.
+    #:
+    #: The visible consequence is that :meth:`pandid.flowsheet.Flowsheet.to_dict`
+    #: writes the registry name and not the class-local one, so a sheet written
+    #: out and read back has lost the rename. Where that round trip matters,
+    #: list **both** spellings in :attr:`VARIANTS`, class-local first: the alias
+    #: then makes them two names for one drawing, and the spec the class wrote
+    #: is a spec it accepts.
+    VARIANT_ALIASES: dict[str, str] = {}
+
     #: The layout engine's solver scratch, seeded from :attr:`pin_` at the start
     #: of every run by ``pandid.layout._seed_slots`` and read by nothing outside
     #: that package. Declared rather than initialised in ``__init__`` because a
@@ -98,11 +135,62 @@ class Unit:
                 return list(klass.__dict__["PORTS"])
         return []
 
+    @classmethod
+    def _generic_class(cls) -> type["Unit"] | None:
+        """The ancestor that owns this class's whole kind, ``None`` if none does.
+
+        An empty :attr:`VARIANTS` is what "owns the whole kind" means, so the
+        search is for the nearest ancestor that declares none and is still the
+        same equipment type. That class draws every variant the registry has, so
+        it is the escape hatch a refused variant has to name.
+
+        The kind has to match. A class of your own that subclasses :class:`Unit`
+        directly and names its variants has no such ancestor: ``Unit`` itself
+        draws a generic box under ``kind = "unit"``, and offering it as the
+        low-level form would send an author somewhere their artwork is not.
+        """
+        for klass in cls.__mro__:
+            if issubclass(klass, Unit) and not klass.VARIANTS and klass.kind == cls.kind:
+                return klass
+        return None
+
+    @classmethod
+    def _unknown_variant(cls, name: str, variant: str) -> ValueError:
+        """The error a class raises for a drawing it does not own.
+
+        Returned rather than raised, the way
+        :func:`pandid.portgeom.unreachable_face` is, so the traceback starts at
+        the constructor the author called.
+
+        It ends by naming the low-level form because refusing a variant is only
+        half an answer. The drawing exists and is in the catalogue; some other
+        class owns it, and the base class that owns the whole kind draws every
+        one of them. A message that stopped at "not one of mine" would leave an
+        author holding a symbol they can see and no call that reaches it.
+        """
+        close = get_close_matches(variant, cls.VARIANTS, n=1, cutoff=0.6)
+        suggestion = f" (did you mean {close[0]!r}?)" if close else ""
+        generic = cls._generic_class()
+        escape = "" if generic is None else (
+            f" The generic form is {generic.__name__}(variant={variant!r}), which "
+            f"takes any variant registered for a {cls.kind}."
+        )
+        return ValueError(
+            f"{name}: {cls.__name__} draws "
+            f"{', '.join(repr(v) for v in cls.VARIANTS)}, not {variant!r}{suggestion}. "
+            f"A different device is a different class, so {variant!r} belongs to "
+            f"whichever class draws it.{escape}"
+        )
+
     def __init__(self, name: str, variant: str = "default", width: float | None = None, height: float | None = None, label_pos: str | None = None, description: str = "", reference: str = ""):
         if not name:
             raise ValueError("Unit name cannot be empty")
         self.name = name
-        self.variant = variant
+        if self.VARIANTS and variant not in self.VARIANTS:
+            raise self._unknown_variant(name, variant)
+        # The registry's spelling, never the class-local one: see
+        # :attr:`VARIANT_ALIASES` for what reads this and what it costs.
+        self.variant = self.VARIANT_ALIASES.get(variant, variant)
         self.width = width
         self.height = height
         self.label_pos = label_pos
@@ -1402,6 +1490,24 @@ class HeatExchanger(Unit):
         "thin_film": _side_ports("jacket", "product"),
     }
 
+    @classmethod
+    def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
+        """The nozzles a *variant* adds. Empty on a class that declares its own.
+
+        ``__init__`` lays these down *after* ``super().__init__()`` has laid down
+        :attr:`~Unit.PORTS`, so a subclass that declares its whole nozzle list
+        and inherits this constructor would add ``shell_in`` a second time and
+        be refused by :meth:`~Unit._add_port`. Asking here, once, is what lets a
+        per-variant subclass be a class body and nothing else: no ``__init__``
+        of its own, and no copy of the loop below per generated class.
+
+        The base is unaffected, and that is the whole compatibility argument:
+        :attr:`PORTS` is ``[]`` here, so :meth:`~Unit._declared_ports` answers
+        empty and every ``HeatExchanger(variant=...)`` gets exactly the nozzles
+        it always did.
+        """
+        return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._SHELL_AND_TUBE)
+
     def __init__(self, name: str, variant: str = "default",
                  width: float | None = None, height: float | None = None,
                  label_pos: str | None = None, description: str = "",
@@ -1409,7 +1515,10 @@ class HeatExchanger(Unit):
         super().__init__(name, variant=variant, width=width, height=height,
                          label_pos=label_pos, description=description,
                          reference=reference)
-        for spec in self._VARIANT_PORTS.get(variant, self._SHELL_AND_TUBE):
+        # ``self.variant``, not the argument: _VARIANT_PORTS is keyed the way
+        # the registry spells a variant, and that is what the constructor stored
+        # once :attr:`~Unit.VARIANT_ALIASES` had its say.
+        for spec in self._variant_ports(self.variant):
             self._add_port(*spec)
 
 
@@ -1612,6 +1721,17 @@ class Separator(Unit):
         "electromagnetic": _OVER_AND_UNDER,
     }
 
+    @classmethod
+    def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
+        """The nozzles a *variant* adds. Empty on a class that declares its own.
+
+        The same one line :meth:`HeatExchanger._variant_ports` is, for the same
+        reason and with the same compatibility argument: :attr:`PORTS` is ``[]``
+        here, so the base still lays down :data:`_PHASES` or the mechanical
+        separators' pair exactly as it did.
+        """
+        return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._PHASES)
+
     def __init__(self, name: str, variant: str = "default",
                  width: float | None = None, height: float | None = None,
                  label_pos: str | None = None, description: str = "",
@@ -1619,7 +1739,8 @@ class Separator(Unit):
         super().__init__(name, variant=variant, width=width, height=height,
                          label_pos=label_pos, description=description,
                          reference=reference)
-        for spec in self._VARIANT_PORTS.get(variant, self._PHASES):
+        # ``self.variant`` rather than the argument, as HeatExchanger explains.
+        for spec in self._variant_ports(self.variant):
             self._add_port(*spec)
 
 

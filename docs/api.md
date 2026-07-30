@@ -301,7 +301,10 @@ Unit(name, variant="default", width=None, height=None,
   [Building the topology](#building-the-topology)).
 - `variant` is the visual style within the class (see below). A name that kind
   has no symbol for raises `ValueError` listing the ones it does, at the first
-  layout or render.
+  layout or render. A class that names its own `VARIANTS` refuses at
+  construction instead; no class below does, so every `Kind(variant=…)` in this
+  page is checked when the sheet is drawn. See
+  [Narrowing a class to its variants](#narrowing-a-class-to-its-variants).
 - `width` / `height` override the symbol's intrinsic size. They are taken as the
   *final* box, so a rotated unit gets exactly what you asked for.
 - `label_pos` is `"top"`, `"bottom"`, `"left"`, `"right"` or `"center"`. Left
@@ -2315,6 +2318,55 @@ fs.add(Crystalliser("CR-102", variant="forced_circulation"))
 `default_registry.variants("crystalliser")` lists what is registered, `default`
 first. A variant name nothing was registered under raises `ValueError` at the
 first layout or render, naming the ones that were.
+
+### Narrowing a class to its variants
+
+That check is the registry's, and it is the right one while a class owns every
+drawing of its kind: only the registry knows what artwork exists, so only the
+registry can say a name is not among it.
+
+A class that owns *some* of a kind's drawings knows more than that, and says so
+with `VARIANTS`:
+
+```python
+class ForcedCirculation(Crystalliser):
+    # "default" is listed and aliased, so naming the class alone asks for this
+    # class's drawing rather than for the kind's plain one. A class that leaves
+    # it out refuses to be built by name at all, since `variant` defaults to
+    # "default" and a variant not in the list is a variant this class refuses.
+    VARIANTS = ("default", "forced_circulation")
+    VARIANT_ALIASES = {"default": "forced_circulation"}
+
+ForcedCirculation("CR-102").variant                # 'forced_circulation'
+ForcedCirculation("CR-102", variant="draft_tube")  # ValueError, naming the low-level form
+```
+
+An empty `VARIANTS` — what every shipped class has — means "this class owns its
+whole kind", and the check is skipped entirely. A non-empty one is a statement
+that the rest of the kind's drawings belong to some other device, and the
+constructor refuses them there and then, listing the ones this class does draw,
+suggesting a near miss, and ending by naming the nearest ancestor that owns the
+whole kind: a refused variant is still a drawing that exists, and
+`Crystalliser(variant="draft_tube")` is how to reach it.
+
+`VARIANT_ALIASES` maps a class-local variant name onto the registry's, for a
+class that would rather spell one its own way:
+
+```python
+class Screen(Separator):
+    VARIANTS = ("screen", "sifter")
+    VARIANT_ALIASES = {"screen": "sifter"}
+
+Screen("S-101", variant="screen").variant     # 'sifter'
+```
+
+**`unit.variant` stores the registry's spelling**, because that is the attribute
+the symbol lookup and `pandid.portgeom` read to find the artwork. A rename is
+therefore a spelling the constructor accepts, and not a second name the rest of
+the package learns — so `fs.to_dict()` writes `sifter`, and a sheet written out
+and read back has lost the rename. Listing both spellings in `VARIANTS`,
+class-local first, is what keeps the file the class wrote a file the class
+accepts.
 
 ### No symbol at all
 
