@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.streams import Stream
-    from pandid.units import Unit
+    from pandid.units import Instrument, Unit
 
 Point = tuple[float, float]
 
@@ -95,7 +95,7 @@ def _along(points: list[Point], fraction: float) -> tuple[Point, Point]:
     return points[-1], (1.0, 0.0)
 
 
-def _anchor(inst: "Unit") -> tuple[Point, Point] | None:
+def _anchor(inst: "Instrument") -> tuple[Point, Point] | None:
     """The tap point and the reference direction the branch angle is measured from.
 
     On a stream that reference is the flow direction; on a unit face it is the
@@ -106,6 +106,10 @@ def _anchor(inst: "Unit") -> tuple[Point, Point] | None:
     from pandid.streams import Stream
 
     host = inst.host
+    # Not one of the guard clauses below: those answer "not placeable yet", and
+    # a balloon with no host at all is one place_attached never offers, since it
+    # only sweeps what is_attached() has already said yes to.
+    assert host is not None
     if isinstance(host, Stream):
         points = stream_path(host)
         if len(points) < 2:

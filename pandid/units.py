@@ -3,16 +3,18 @@
 Each Unit subclass declares its named ports via the class attribute ``PORTS``
 (a list of ``(name, direction, role)`` tuples), or, for variable-port units,
 by adding ports in ``__init__``. Ports are exposed both as a ``ports`` dict and as
-attributes (e.g. ``pump.suction``).
+attributes (e.g. ``pump.suction``), and each subclass annotates those attributes
+(``suction: Port``) so an editor and a type checker can see them; see
+:class:`Unit` for why the annotation is a declaration rather than a second copy.
 
 This module is also the public ``units`` namespace: ``from pandid import units``.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
-from pandid.geometry import Frame, Pin
+from pandid.geometry import Frame, Pin, _Slot
 from pandid.ports import Port
 
 if TYPE_CHECKING:
@@ -42,6 +44,13 @@ _FACE_OF_SIDE = {"top": "N", "bottom": "S", "left": "W", "right": "E"}
 # double as the default the way ``None`` does for the pinned axes.
 _UNCHANGED: Any = object()
 
+# What the chainable placement methods hand back: the very class they were
+# called on, not the base. ``fs.add(units.HeatExchanger("E-1")).pin(x=210)`` is
+# how a manually placed sheet is written, so a plain ``-> Unit`` would throw the
+# subclass away mid-chain and with it the nozzle declarations below.
+_UnitT = TypeVar("_UnitT", bound="Unit")
+
+
 class Unit:
     #: The equipment type this unit is drawn as: the key the symbol registry is
     #: looked up by, and the tag a spec's ``kind:`` names. One per class.
@@ -53,6 +62,28 @@ class Unit:
     #: whose nozzle count the caller decides adds its ports in ``__init__``
     #: instead, as :class:`Mixer` does.
     PORTS: list[tuple[str, str, str]] = []
+
+    #: The layout engine's solver scratch, seeded from :attr:`pin_` at the start
+    #: of every run by ``pandid.layout._seed_slots`` and read by nothing outside
+    #: that package. Declared rather than initialised in ``__init__`` because a
+    #: unit that has never been laid out genuinely does not have one, which is
+    #: what the engine's own ``assert u._slot is not None`` lines are checking.
+    _slot: _Slot | None
+
+    # Every subclass below writes its nozzle names out a second time, as bare
+    # class annotations (``suction: Port``) beside the ``PORTS`` list that
+    # builds them. The ports themselves are still built by ``_add_port``, whose
+    # ``setattr`` no type checker can follow, so before the annotations existed
+    # ``pump.suction`` was invisible to mypy and to editor completion even
+    # though the package ships ``py.typed``, and a misspelled nozzle was found
+    # only when the sheet was drawn.
+    #
+    # An annotation with no assignment binds nothing: it lands in the class's
+    # ``__annotations__`` and nowhere else, so nothing about construction, the
+    # ``ports`` dict or the drawn sheet changes. That is what makes this a
+    # *declaration* of what ``PORTS`` produces rather than a second
+    # implementation of it, and ``tests/test_port_annotations.py`` holds the two
+    # halves to each other in both directions so they cannot drift apart.
 
     @classmethod
     def _declared_ports(cls) -> list[tuple[str, str, str]]:
@@ -142,7 +173,7 @@ class Unit:
             self.flowsheet.renumber_streams()
 
     def pin(
-        self,
+        self: _UnitT,
         *,
         col: int | None = None,
         row: int | None = None,
@@ -151,7 +182,7 @@ class Unit:
         orientation: float = _UNCHANGED,
         mirrored: bool | str = _UNCHANGED,
         port: str | None = None,
-    ) -> "Unit":
+    ) -> _UnitT:
         """Pin the unit to a specific layout grid cell or exact pixel coordinate.
 
         Records *intent* only. The layout engine reads it and resolves the final
@@ -236,7 +267,7 @@ class Unit:
         if y is not None:
             candidate.y = y - dy
 
-    def nozzle(self, port_name: str, face: str) -> "Unit":
+    def nozzle(self: _UnitT, port_name: str, face: str) -> _UnitT:
         """Pipe a port from a named face of the unit *as drawn*.
 
         Many vessels can be piped from more than one side, and the layout engine
@@ -307,17 +338,34 @@ class Unit:
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.name!r})"
 
-    def __getattr__(self, name: str):
-        # Only invoked when normal lookup fails. Attribute access (reactor.feed)
-        # is the primary way to reach ports, so give typos a helpful message
-        # listing the real ports instead of a bare AttributeError.
-        ports = self.__dict__.get("ports")
-        if ports is not None and not name.startswith("_"):
-            raise AttributeError(
-                f"{type(self).__name__} {self.__dict__.get('name', '?')!r} has no "
-                f"attribute or port {name!r}; available ports: {sorted(ports)}"
-            )
-        raise AttributeError(name)
+    # Defined for the interpreter and hidden from type checkers, which is the
+    # only thing ``TYPE_CHECKING`` is false for: mypy reads a class that has a
+    # ``__getattr__`` as having whatever attribute it is asked for, so leaving
+    # it visible would answer every ``sep.liqid`` with ``Any`` and the
+    # annotations above would buy a better hover and nothing else. Under the
+    # guard the static answer is the same one this method gives, moved earlier:
+    # a nozzle no class declares is an error before the sheet is ever drawn.
+    #
+    # Nothing moves at runtime. ``TYPE_CHECKING`` is False when Python runs, so
+    # the method is defined exactly where and as it always was, and a typo still
+    # raises the message below. The cost is the families no annotation can spell
+    # (see :class:`Mixer`) and the variant nozzles that are not on the base
+    # class (see :class:`Separator`), which a checker now refuses; both are
+    # answered by the generated subclasses of the follow-up change.
+    if not TYPE_CHECKING:
+
+        def __getattr__(self, name: str) -> Any:
+            # Only invoked when normal lookup fails. Attribute access
+            # (reactor.feed) is the primary way to reach ports, so give typos a
+            # helpful message listing the real ports instead of a bare
+            # AttributeError.
+            ports = self.__dict__.get("ports")
+            if ports is not None and not name.startswith("_"):
+                raise AttributeError(
+                    f"{type(self).__name__} {self.__dict__.get('name', '?')!r} has no "
+                    f"attribute or port {name!r}; available ports: {sorted(ports)}"
+                )
+            raise AttributeError(name)
 
 
 # ---------------------------------------------------------------------------
@@ -397,6 +445,8 @@ class Feed(_Boundary):
     :meth:`_Boundary.repeats`.
     """
 
+    outlet: Port
+
     kind = "feed"
     PORTS = [("outlet", "outlet", "feed")]
 
@@ -409,6 +459,8 @@ class Product(_Boundary):
     and is labelled the same way each time. See :meth:`_Boundary.repeats`.
     """
 
+    inlet: Port
+
     kind = "product"
     PORTS = [("inlet", "inlet", "product")]
 
@@ -416,12 +468,18 @@ class Product(_Boundary):
 class Pump(Unit):
     """Centrifugal or positive-displacement pump."""
 
+    suction: Port
+    discharge: Port
+
     kind = "pump"
     PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
 
 
 class Compressor(Unit):
     """Gas compressor."""
+
+    suction: Port
+    discharge: Port
 
     kind = "compressor"
     PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
@@ -532,6 +590,10 @@ class Valve(_NormallyPositioned):
 
     ``fail`` is a **different question** and is described on :attr:`fail`.
     """
+
+    inlet: Port
+    outlet: Port
+    actuator: Port
 
     kind = "valve"
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process"),
@@ -665,6 +727,10 @@ class Vessel(Unit):
     splitting phases and you want to name the vapour and liquid products.
     """
 
+    inlet: Port
+    outlet: Port
+    vent: Port
+
     kind = "vessel"
     PORTS = [
         ("inlet", "inlet", "process"),
@@ -677,12 +743,18 @@ class Tank(Unit):
     """Storage tank. Variants: ``"default"`` (dished roof), ``"conical"``,
     ``"floating_roof"``, ``"sphere"``."""
 
+    inlet: Port
+    outlet: Port
+
     kind = "tank"
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
 
 class Blower(Unit):
     """Fan or blower."""
+
+    suction: Port
+    discharge: Port
 
     kind = "blower"
     PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
@@ -733,6 +805,9 @@ class Reducer(Unit):
     ``pin(mirrored="y")`` turns the body top-to-bottom while both nozzles stay
     on the faces the run enters and leaves by.
     """
+
+    inlet: Port
+    outlet: Port
 
     kind = "reducer"
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
@@ -826,6 +901,13 @@ class Tee(Unit):
     piping class changes there.
     """
 
+    inlet: Port
+    outlet: Port
+    # Added in ``__init__`` rather than declared in ``PORTS``, because which way
+    # it runs is the ``branch=`` argument. Every tee has one either way, so the
+    # attribute is as fixed as the run's two, and only its direction is not.
+    branch: Port
+
     kind = "tee"
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
@@ -918,6 +1000,9 @@ class Fitting(_NormallyPositioned):
     a strainer has no position, and a position nothing draws is worse than none.
     """
 
+    inlet: Port
+    outlet: Port
+
     kind = "fitting"
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
@@ -942,6 +1027,10 @@ class Ejector(Unit):
     ``discharge`` leaves the diffuser.
     """
 
+    motive: Port
+    suction: Port
+    discharge: Port
+
     kind = "ejector"
     PORTS = [("motive", "inlet", "utility"), ("suction", "inlet", "process"),
              ("discharge", "outlet", "process")]
@@ -958,6 +1047,8 @@ class Vent(Unit):
     conservation vent). All three carry the one connection, piped from below.
     """
 
+    inlet: Port
+
     kind = "vent"
     PORTS = [("inlet", "inlet", "vapor")]
 
@@ -969,12 +1060,18 @@ class Funnel(Unit):
     the process connection, so its single port is an *outlet*.
     """
 
+    outlet: Port
+
     kind = "funnel"
     PORTS = [("outlet", "outlet", "feed")]
 
 
 class Furnace(Unit):
     """Fired heater / furnace (process stream heated by burning fuel)."""
+
+    inlet: Port
+    outlet: Port
+    fuel: Port
 
     kind = "furnace"
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process"),
@@ -984,6 +1081,9 @@ class Furnace(Unit):
 class Turbine(Unit):
     """Steam/gas turbine or expander."""
 
+    inlet: Port
+    outlet: Port
+
     kind = "turbine"
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
@@ -991,12 +1091,18 @@ class Turbine(Unit):
 class Filter(Unit):
     """Filter (liquid or gas)."""
 
+    inlet: Port
+    outlet: Port
+
     kind = "filter"
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
 
 class Dryer(Unit):
     """Dryer (removes moisture from a feed solid/slurry)."""
+
+    feed: Port
+    product: Port
 
     kind = "dryer"
     PORTS = [("feed", "inlet", "feed"), ("product", "outlet", "process")]
@@ -1017,6 +1123,9 @@ class Conveyor(Unit):
     ``discharge`` is the head end, where the belt throws off; it can be taken
     from the underside too, for the chute that catches what comes over.
     """
+
+    feed: Port
+    discharge: Port
 
     kind = "conveyor"
     PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
@@ -1102,6 +1211,10 @@ class Instrument(Unit):
     A balloon that measures something belongs *on* what it measures: see
     :meth:`attach` (and :meth:`pandid.flowsheet.Flowsheet.add_instrument`).
     """
+
+    pv: Port
+    sig_in: Port
+    sig_out: Port
 
     kind = "instrument"
     PORTS = [("pv", "inlet", "signal"), ("sig_in", "inlet", "signal"),
@@ -1255,6 +1368,20 @@ class HeatExchanger(Unit):
     sump line.
     """
 
+    # The shell-and-tube nozzles, and only those: they are what an exchanger
+    # asked for by name has, since ``_VARIANT_PORTS`` below defaults to
+    # ``_SHELL_AND_TUBE``. The other variants' nozzles (``bottoms`` on a kettle,
+    # ``side_a_in`` on a plate, ``air_in`` on an air cooler) are deliberately
+    # absent. Declaring them here would say that *every* HeatExchanger has a
+    # ``bottoms``, which is false for all but one variant and would make a real
+    # mistake type-check clean. They belong on a per-variant subclass, which is
+    # the follow-up change this annotation layer is the foundation for; until
+    # then a variant nozzle is reached by ``hx.port("bottoms")``.
+    shell_in: Port
+    shell_out: Port
+    tube_in: Port
+    tube_out: Port
+
     kind = "hex"
     # Empty because which nozzles an exchanger has depends on its variant, and
     # Unit.__init__ reads PORTS before a variant is in hand. _VARIANT_PORTS
@@ -1293,6 +1420,10 @@ class Heater(Unit):
     it, on the same principle as :class:`HeatExchanger`'s nozzles.
     """
 
+    inlet: Port
+    outlet: Port
+    utility_in: Port
+
     kind = "heater"
     PORTS = [
         ("inlet", "inlet", "process"),
@@ -1307,6 +1438,10 @@ class Cooler(Unit):
     ``utility_out`` is the cooling medium's connection, the counterpart of
     :class:`Heater`'s ``utility_in``.
     """
+
+    inlet: Port
+    outlet: Port
+    utility_out: Port
 
     kind = "cooler"
     PORTS = [
@@ -1337,6 +1472,17 @@ class Reactor(Unit):
     gives the vessel more than one charge nozzle: ``feed_1`` ... ``feed_n``,
     spread down the shell top to bottom, in place of the single ``feed``.
     """
+
+    outlet: Port
+    vent: Port
+    duty: Port
+    # The single-feed vessel's charge nozzle. ``n_feeds > 1`` spells it
+    # ``feed_1`` ... ``feed_n`` instead, a family whose size is the caller's, so
+    # there is no finite set of names to declare and no annotation that could
+    # stand for them; see :class:`Mixer`. ``feed`` itself is not one of that
+    # family, it is what a reactor asked for by name has, so it is declared like
+    # any other fixed nozzle.
+    feed: Port
 
     kind = "reactor"
     PORTS = [
@@ -1396,6 +1542,20 @@ class Separator(Unit):
     off the top and liquid draws off the bottom, which is ISO 15519-1 §11.4.2's
     exception for symbols where gravity is a functionality.
     """
+
+    # The phase draws, and only those: ``_VARIANT_PORTS`` below defaults to
+    # ``_PHASES``, so they are what a separator asked for by name has.
+    # ``overflow`` and ``underflow`` are deliberately absent. Four of the
+    # variants have them *instead of* ``vapor`` and ``liquid``, never as well
+    # as, so declaring all four here would tell a checker that a plain flash
+    # drum has an ``overflow``, which is exactly the mistake the mechanical
+    # separators exist to keep out of the vocabulary. They belong on a
+    # per-variant subclass, which is the follow-up change this annotation layer
+    # is the foundation for; until then a mechanical separator's draws are
+    # reached by ``sep.port("overflow")``.
+    feed: Port
+    vapor: Port
+    liquid: Port
 
     kind = "separator"
     # Empty because which nozzles a separator has depends on its variant, and
@@ -1479,6 +1639,17 @@ class Column(Unit):
     the single-feed column keeps the plain ``feed``.
     """
 
+    distillate: Port
+    bottoms: Port
+    reflux_in: Port
+    boilup_in: Port
+    reboiler_duty: Port
+    condenser_duty: Port
+    # The single-feed tower's nozzle; ``n_feeds > 1`` replaces it with the
+    # ``feed_1`` ... ``feed_n`` family, which cannot be declared. See
+    # :class:`Reactor`, which spells the same rule, and :class:`Mixer`.
+    feed: Port
+
     kind = "column"
     PORTS = [
         ("distillate", "outlet", "vapor"),
@@ -1513,6 +1684,19 @@ class Mixer(Unit):
     simply meet in the piping, the fitting is a :class:`Tee`.
     """
 
+    # The one nozzle every mixer has. The inlets are ``in_1`` ... ``in_n`` and
+    # ``n`` is the caller's, chosen per instance at construction, so the set of
+    # attribute names is a property of the *object* and not of the class. A
+    # class annotation is a statement about every instance, and there is no
+    # finite list here to make one from: declaring ``in_1: Port`` and
+    # ``in_2: Port`` would be right for the default and wrong for
+    # ``Mixer("M", n_inlets=5)`` in one direction and for ``n_inlets=1`` in the
+    # other. Not even a generated subclass fixes it, because the count is not
+    # in the type; the numbered nozzles stay reachable by ``mixer.port("in_3")``
+    # and through the ``ports`` dict. ``tests/test_port_annotations.py`` exempts
+    # exactly this family, and names it.
+    outlet: Port
+
     kind = "mixer"
 
     def __init__(self, name: str, n_inlets: int = 2, variant: str = "default", width: float | None = None, height: float | None = None, description: str = "", reference: str = ""):
@@ -1531,6 +1715,11 @@ class Splitter(Unit):
     drain, a vent or a sample point is not that: it is a line branching, and
     the fitting that branches it is a :class:`Tee`.
     """
+
+    # The one nozzle every splitter has; ``out_1`` ... ``out_n`` are the
+    # caller's count and cannot be declared, for the reason :class:`Mixer`
+    # gives at length.
+    inlet: Port
 
     kind = "splitter"
 
