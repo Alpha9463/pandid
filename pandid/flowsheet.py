@@ -7,7 +7,7 @@ which validates the connection and enforces the one-stream-per-port rule.
 from __future__ import annotations
 from pathlib import Path
 from string import Formatter
-from typing import Callable, TYPE_CHECKING
+from typing import Callable, TYPE_CHECKING, TypeVar
 
 from pandid.stations import (
     DEFAULT_BYPASS_RISE,
@@ -111,6 +111,14 @@ def _check_signal_pairing(src: "Port", dst: "Port", kind: str) -> None:
         )
 
 
+# What :meth:`Flowsheet.add` hands back: the very class it was given, not the
+# base. ``fs.add(units.Pump("P-101"))`` is how every sheet is written, so a
+# plain ``-> Unit`` would throw the subclass away at the one call each unit
+# passes through, and with it the nozzle declarations
+# :mod:`pandid.units` makes (``pump.suction``).
+_UnitT = TypeVar("_UnitT", bound="Unit")
+
+
 class Flowsheet:
     """A process flow diagram's topology: units, streams, and components."""
 
@@ -163,7 +171,7 @@ class Flowsheet:
         self.annotations.append(annotation)
         return annotation
 
-    def add(self, unit: "Unit") -> "Unit":
+    def add(self, unit: _UnitT) -> _UnitT:
         """Register a unit on this flowsheet. Returns the unit for chaining.
 
         A tag names one item, so a tag already on the sheet is refused. The

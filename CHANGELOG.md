@@ -37,6 +37,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Every unit class declares its nozzles as class annotations (`suction: Port`),
+  so `pump.suction`, `sep.feed` and `hx.shell_in` are attributes a type checker
+  and an editor can see. They were built by `_add_port`'s `setattr`, which
+  neither can follow, so the package shipped `py.typed` while every nozzle on it
+  read as `Any` and a misspelled one was found only when the sheet was drawn.
+
+  The annotations bind nothing: an annotation with no value lands in the class's
+  `__annotations__` and nowhere else, so construction, the `ports` dict and the
+  drawn sheet are untouched and no golden moves.
+  `tests/test_port_annotations.py` walks every `Unit` subclass in the package,
+  builds one, and checks the declarations against the ports in both directions,
+  so the two spellings of one fact cannot drift.
+
+  Two things had to go with them, because annotations alone check nothing.
+
+  `Unit.__getattr__` is now hidden from type checkers and from them only
+  (`if not TYPE_CHECKING:`; the method is defined exactly as before when Python
+  runs, and a typo still raises the same message, byte for byte). mypy reads a
+  class that has one as having whatever attribute it is asked for, so leaving it
+  visible would have answered every `sep.liqid` with `Any` and the declarations
+  would have bought a better hover and nothing else.
+
+  `Flowsheet.add`, `Unit.pin` and `Unit.nozzle` now return the class they were
+  given rather than the base `Unit`. Every sheet is written
+  `p = fs.add(units.Pump("P-101"))`, and `-> Unit` threw the subclass away at
+  the one call each unit passes through, so `p.suction` resolved through the
+  base class and no declaration on `Pump` was ever consulted. Nothing changes at
+  runtime: all three already returned the object handed to them.
+
+  **A nozzle no class declares is therefore a type error now**, which is the
+  point, and it reaches two things besides typos: the numbered families a count
+  decides (`Mixer`'s `in_1` ... `in_n`, `Splitter`'s `out_1` ... `out_n`) and
+  the nozzles only some variants carry (`HeatExchanger`'s `bottoms`,
+  `Separator`'s `overflow`). Both keep working at runtime and through
+  `unit.port(name)`, and the second is what a per-variant subclass will answer.
+
 - Four more `Vessel` variants, vendored from the same draw.io stencil file the
   rest of the family comes from: `legs` (the shell standing on a pair of legs),
   `insulated` (lagged, with the insulation hatched down both walls),

@@ -932,8 +932,9 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
         # written. There is no default to leave out here: an undeclared valve
         # is one the sheet says nothing about, not one that fails somewhere in
         # particular.
-        if getattr(unit, "fail", ""):
-            entry["fail"] = unit.fail
+        fail = getattr(unit, "fail", "")
+        if fail:
+            entry["fail"] = fail
     elif isinstance(unit, _Boundary):
         # Only when set: a flag standing for one line leaving the sheet is the
         # ordinary case, and it is what a flag without the word already means.
