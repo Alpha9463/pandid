@@ -330,10 +330,31 @@ def main():
     pic301 = fs.add_instrument("PIC", 301, on=st301.control, at="N", variant="shared",
                                offset=cv3011_top - balloon_row_y)
     pic301.nozzle("sig_out", "S")
-    pah = fs.add_instrument("PAH", 301, on=pic301, at="E", offset=46)
-    pal = fs.add_instrument("PAL", 301, on=pah, at="E", offset=46)
-    fs.add_instrument("I", 1, on=pal, at="E", offset=40, variant="sis")
-    fs.connect(pt301.sig_out, pic301.sig_in, kind="electric")
+    # Both alarms read the controller, so both hang off it, each on a face of
+    # its own and each a dead end. Chained one behind the other they would state
+    # that PIC-301 feeds PAH-301 and PAH-301 feeds PAL-301: one run of line
+    # carrying a control function and two alarm functions between three symbols.
+    # ISO 15519-2 §6.2 is the rule against it -- "Signal lines representing
+    # functions inside the PCI symbol ... and signal lines representing
+    # functions outside the PCI symbol ... shall be drawn separate between the
+    # PCI symbols" -- and §7.2.4 says the same from the junction's side:
+    # "Signal lines for different types of control functions should not be
+    # joined." Figure 17 b) draws it: every function's line leaves the balloon
+    # on its own. Both faces here are forced, since the measurement arrives from
+    # PT-301 in the west and the output leaves south onto the valve stem, so
+    # what is left is the east and the clear sheet above the row.
+    fs.add_instrument("PAH", 301, on=pic301, at="E", offset=46, variant="shared")
+    fs.add_instrument("PAL", 301, on=pic301, at="N", offset=46, variant="shared")
+    # The trip is teed off the *measurement*, which is where the issued sheet
+    # takes all four of its own and where ISO 15519-2 Figure 17 b) puts one: the
+    # SLL line leaves the measurement point, not the controller's output. An
+    # alarm is the wrong host twice over, since it would draw the alarm as
+    # driving the trip, and an alarm that acts is lettered S or Z and not A
+    # (Table 2 note 9). It branches *above* the row, which is the one side free:
+    # the station's bypass leg runs 40 px below the row and HV-301C's body
+    # starts 32 px below it, so a square hung downward lands on both.
+    measured = fs.connect(pt301.sig_out, pic301.sig_in, kind="electric")
+    fs.add_instrument("I", 1, on=measured, at=0.35, offset=40, angle=90, variant="sis")
     fs.connect(pic301.sig_out, st301.control.actuator, kind="pneumatic")
 
     # --- Loops 302/303: tower top temperature cascaded onto reflux flow ---
@@ -359,13 +380,28 @@ def main():
     fs.connect(fic303.sig_out, st303.control.actuator, kind="pneumatic")
 
     # --- Loop 304: reflux drum level on the distillate valve --------------
+    # Four lines reach this controller -- the measurement, the output and the
+    # two alarms -- so it needs four faces, and the transmitter's own row cannot
+    # give four: the cooling-water return crosses 49 px above it, and a balloon
+    # is 44 of those, leaving 5 px for the stub that would have to reach it. So
+    # the faceplate comes off the row and is mounted on the valve it drives, the
+    # way PIC-301 is and the way the issued sheet mounts FIC-305 over this very
+    # station, in the clear band between that header and CV-305's bypass leg.
+    # The measurement then arrives from the north, the output drops south onto
+    # the actuator, and the two alarms fan east and west.
     lt304 = fs.add_instrument("LT", 304, on=drum, at="E", offset=60)
-    lic304 = fs.add_instrument("LIC", 304, on=lt304, at="E", offset=66, variant="shared")
+    lic304_row_y = 403.0
+    cv305_top = dist_y - port_offset(st305.control, "inlet")[1]
+    lic304 = fs.add_instrument("LIC", 304, on=st305.control, at="N", variant="shared",
+                               offset=cv305_top - lic304_row_y)
+    lic304.nozzle("sig_in", "N")
     lic304.nozzle("sig_out", "S")
-    lah = fs.add_instrument("LAH", 304, on=lic304, at="E", offset=46)
-    lal = fs.add_instrument("LAL", 304, on=lah, at="E", offset=46)
-    fs.add_instrument("I", 1, on=lal, at="E", offset=40, variant="sis")
-    fs.connect(lt304.sig_out, lic304.sig_in, kind="electric")
+    fs.add_instrument("LAH", 304, on=lic304, at="W", offset=46, variant="shared")
+    fs.add_instrument("LAL", 304, on=lic304, at="E", offset=46, variant="shared")
+    # Teed off the measurement, as in loop 301 above. angle=-90 branches south
+    # off the run east from LT-304, into the gap the alarm row leaves.
+    level = fs.connect(lt304.sig_out, lic304.sig_in, kind="electric")
+    fs.add_instrument("I", 1, on=level, at=0.3, offset=40, angle=-90, variant="sis")
     fs.connect(lic304.sig_out, st305.control.actuator, kind="pneumatic")
 
     # --- Loop 307: reboiler return temperature on the steam valve ---------
