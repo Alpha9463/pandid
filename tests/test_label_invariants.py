@@ -1,6 +1,6 @@
 """What a line number on a drawn sheet has to be, over the whole shipped corpus.
 
-**A line number is adjacent to the line it names, or carries a leader to it.**
+**A line number is written along the line it names, or carries a leader to it.**
 
 That is BS ISO 15519-1:2010 §7.2.5, on the reference designation of a
 connection, and both halves of it are *shall*: "They shall be oriented along or
@@ -13,19 +13,33 @@ Nothing asserted it. The placement search walked outward from the pipe until it
 found paper nothing else had claimed and wrote the number there, however far out
 that turned out to be, with nothing joining it to its line -- and on
 ``11_ethanol_pid`` three numbers ended up 30 units of blank paper from their own
-run, close against a vessel, a valve tag and a reboiler shell respectively, each
-reading as an annotation of the thing it was nearest (issue #155 item 4). The
-avoidance was working; the outcome defeated its purpose, and every test passed.
+run, close against a vessel, a valve tag and a reboiler shell respectively
+(issue #155 item 4). The avoidance was working; the outcome defeated its
+purpose, and every test passed.
+
+*Along* is measured as overlap and not as a gap, which is the second thing this
+file has been wrong about. The first version of these checks read "adjacent" as
+a distance across the paper and asserted a cap on it, and that cap was
+answering a question no reader asks. ``FB-306-100-160-SS`` on 11 stands two
+bands off its own run and is not in the least ambiguous, because the run goes
+the whole length of the number and out past both ends; it was given a leader for
+being far away, and the leader is what put a second reading on the sheet, since
+it lands under one half of a number that was already sitting over its line.
+What decides it is whether the line is *there*, beside the words: a caption is
+attached by lying against the thing it captions, and a string that has run out
+past the end of its own line is lying against something else instead.
 
 The checks read the drawn SVG rather than the placement code, because what the
 clause is about is what a reader sees. Each label's halo, its text and the
 leader that may follow are picked out of the ``streams`` group in document
 order, and measured against the polyline its own line is drawn as.
 
-Adjacency is measured to the nearest **parallel** segment of the labelled line,
-which is the one the label lies along: a number written across a line's
-horizontal run is not made adjacent by a vertical stub of the same line passing
-somewhere near its end.
+The run measured against is the whole straight length of the labelled line the
+label lies along, not one drawn segment of it: an in-line valve splits a
+straight run of pipe into three pieces and a reader sees one line. It has to be
+parallel to the label, too, since a number written along a horizontal run is not
+made to lie along anything by a vertical stub of the same line passing near its
+end.
 
 §6.4 governs the leader itself, and its three checks are here too: the leader
 lands *on* the line it names, it is oblique, and it cuts nothing. Oblique
@@ -50,7 +64,7 @@ import pytest
 from pandid import Flowsheet, units as U
 from pandid.layout.attach import stream_path
 from pandid.portgeom import unit_box
-from pandid.render.svg import _crosses, _ink, _label_reach, _LABEL_GAP, _SIGNAL_KINDS
+from pandid.render.svg import _along, _crosses, _ink, _SIGNAL_KINDS
 
 from test_golden import SCENARIOS
 
@@ -112,10 +126,12 @@ def _crowded_number() -> "tuple[Flowsheet, dict]":
 
     The corpus is the real evidence, but it is also free to change: a sheet is
     edited, a number finds room beside its line, and the leader checks below go
-    quiet while still passing. This one is arranged so that cannot happen. The
-    drum is 25 units under a short vertical drop carrying a fifteen-character
-    line number, so the number is three times the length of the run it names and
-    every band beside that run is either the drum or the exchanger above it.
+    quiet while still passing. This one is arranged so that cannot happen, and
+    arranged on the thing that decides it rather than on the crowding around it.
+    The drum sits 25 units under a short vertical drop carrying a fifteen-
+    character line number, so the number is three times the length of the run it
+    names: wherever it is written, two thirds of it has no line beside it, and no
+    amount of clear paper anywhere on the sheet can change that.
     """
     fs = Flowsheet("crowded", line_numbering_scheme="{service}-{sequence}-{size}-{spec}")
     feed = fs.add(U.Feed("F"))
@@ -225,6 +241,30 @@ def _parallel(segs, turned):
     return out
 
 
+def _runs(segs, turned):
+    """The straight lengths of line a label could be written along, as spans.
+
+    Segments parallel to the label are grouped by the infinite line they lie on
+    and their extents merged, so a run broken into three pieces by an in-line
+    valve is one run again -- which is what it looks like on paper. Returned in
+    the label's own coordinate: ``y`` where the label is turned, ``x`` where it
+    is not.
+    """
+    lines: dict = {}
+    for (ax, ay), (bx, by) in _parallel(segs, turned):
+        at = round(ax if turned else ay, 1)
+        lo, hi = (min(ay, by), max(ay, by)) if turned else (min(ax, bx), max(ax, bx))
+        got = lines.get(at)
+        lines[at] = (min(lo, got[0]), max(hi, got[1])) if got else (lo, hi)
+    return list(lines.values())
+
+
+def _alongness(box, turned, runs) -> float:
+    """The longest fraction of a label that has one of *runs* beside it."""
+    a, b = (box[1], box[3]) if turned else (box[0], box[2])
+    return max((min(b, hi) - max(a, lo) for lo, hi in runs), default=0.0) / (b - a)
+
+
 @pytest.fixture(scope="module")
 def sheets():
     """Every sheet in the corpus, rendered once, as (flowsheet, labels)."""
@@ -236,24 +276,20 @@ def sheets():
     return out
 
 
-# --- §7.2.5: adjacent, or led ------------------------------------------------
+# --- §7.2.5: along, or led ---------------------------------------------------
 
 
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
-def test_a_line_number_is_adjacent_to_its_line_or_carries_a_leader(sheets, name):
+def test_a_line_number_is_written_along_its_line_or_carries_a_leader(sheets, name):
     fs, labels = sheets[name]
     segs = _drawn_segments(fs)
-    # The stand-off a label may be written at without a leader, measured as the
-    # clear paper between its halo and the line: _label_reach is to the halo's
-    # centre, and half the halo is not blank paper.
-    reach = _label_reach(13.0) - 13.0 / 2
     adrift = []
     for label in labels:
-        mine = _parallel(segs.get(label.name, []), label.turned)
-        assert mine, f"{name}: {label.name} lies along no segment of its own line"
-        gap = min(_gap(label.box, seg) for seg in mine)
-        if gap > reach + TOL and label.leader is None:
-            adrift.append(f"{label.name} is {gap:.1f} from its line with no leader")
+        runs = _runs(segs.get(label.name, []), label.turned)
+        assert runs, f"{name}: {label.name} lies along no run of its own line"
+        share = _alongness(label.box, label.turned, runs)
+        if share <= 0.5 and label.leader is None:
+            adrift.append(f"{label.name} has its own line beside {share:.0%} of it and no leader")
     assert not adrift, f"{name}: " + "; ".join(adrift)
 
 
@@ -345,19 +381,92 @@ def test_the_corpus_still_draws_a_leader(sheets):
     assert sum(drawn.values()) >= 2, drawn
 
 
-def test_the_cap_is_the_stand_off_one_band_out(sheets):
-    """The cap is derived, not chosen, and this is where the derivation is
-    pinned: one label height of blank paper beyond the gap a label beside its
-    run is written at. Change it and this fails, which is the point -- it is a
-    judgement about what reads, and it should not move silently."""
-    assert _label_reach(13.0) == 13.0 / 2 + _LABEL_GAP + 13.0
-    assert _label_reach(13.0) - 13.0 / 2 == _LABEL_GAP + 13.0
+def test_along_is_more_than_half_the_words_and_nothing_about_the_gap():
+    """Where the line falls, stated on the function itself rather than inferred
+    from a sheet. It is a judgement about what reads and it should not move
+    silently; and the second half of it -- that the stand-off across the paper
+    is not part of the question -- is the whole of what changed."""
+    box = (0.0, 100.0, 100.0, 113.0)  # a hundred units of upright label
+    assert _along(box, False, 0.0, 51.0)
+    assert not _along(box, False, 0.0, 50.0)
+    assert not _along(box, False, 60.0, 400.0)  # 40 alongside, out of 100
+    assert _along(box, False, -400.0, 400.0)  # a run running past both ends
+
+    # The same label a whole sheet away from its run, and still along it.
+    assert _along((0.0, 900.0, 100.0, 913.0), False, -400.0, 400.0)
+
+    # Turned, the length that has to be covered is the halo's height.
+    assert _along((100.0, 0.0, 113.0, 100.0), True, 0.0, 51.0)
+    assert not _along((100.0, 0.0, 113.0, 100.0), True, 0.0, 50.0)
 
 
-def test_the_p_and_id_still_needs_three_leaders(sheets):
+def test_a_leader_is_drawn_only_where_the_line_is_not_beside_the_words(sheets):
+    """The other half of the rule, which the check above cannot state: a number
+    with its own run beside most of it does not get a leader *as well*.
+
+    Both directions matter, and the corpus is the evidence for the line falling
+    where it does. Of 108 numbers on the twelve shipped sheets only three have
+    their own run beside less than the whole of them, and they part into two
+    groups with a wide gap between: ``3"-P-1005-A1A`` on 09 at 77 % and
+    ``FB-301-200-160-SS`` on 11 at 74 % read as their own line's unaided, and
+    ``AE-304-150-80-SS`` on 11 at 32 % -- sixteen characters naming a thirty-unit
+    stub, two thirds of it lying against a reflux drum -- does not.
+    """
+    over, under = [], []
+    for name, (fs, labels) in sheets.items():
+        segs = _drawn_segments(fs)
+        for label in labels:
+            runs = _runs(segs.get(label.name, []), label.turned)
+            share = _alongness(label.box, label.turned, runs)
+            if share > 0.5 and label.leader is not None:
+                over.append(f"{name}/{label.name} at {share:.0%}")
+            if share <= 0.5 and label.leader is None:
+                under.append(f"{name}/{label.name} at {share:.0%}")
+    assert not over, "led although written along its line: " + "; ".join(over)
+    assert not under, "not written along its line and not led: " + "; ".join(under)
+
+
+def test_the_p_and_id_needs_exactly_one_leader(sheets):
     """The sheet the defect was reported on. Named here so a change that quietly
     stops drawing them, or starts drawing a dozen, is a red suite rather than a
-    silent regression in the drawing."""
+    silent regression in the drawing.
+
+    One, and not the three it used to draw. ``FB-301`` and ``FB-306`` both sit
+    over the run they name, along its whole length; leading them said there was
+    a question about which line they belonged to when there was not, and pointed
+    the answer at one end of a number that spans the run.
+    """
     _fs, labels = sheets["11_ethanol_pid"]
     led = sorted(lab.name for lab in labels if lab.leader)
-    assert led == ["AE-304-150-80-SS", "FB-301-200-160-SS", "FB-306-100-160-SS"]
+    assert led == ["AE-304-150-80-SS"]
+
+
+def test_a_leader_leaves_the_lettering_and_not_the_paper_beside_it(sheets):
+    """A halo is measured at 6,2 per character plus padding, so its corners are
+    blank paper -- more of it the more hyphens the number has, and a line number
+    is mostly hyphens. A tail on a corner starts past the end of the last letter
+    with a gap between the two, and a mark that does not touch the words does
+    not attach them to anything. ``AE-304-150-80-SS`` was led from the top
+    corner of a rotated halo for exactly that reason.
+
+    Half the halo's thickness in from each end is what :func:`_leader` insets
+    by; asserted here as a fraction of the halo so it is a statement about the
+    drawing rather than a copy of the constant.
+    """
+    off_the_words = []
+    for name, (_fs, labels) in sheets.items():
+        for label in labels:
+            if label.leader is None:
+                continue
+            (x0, y0), _end = label.leader
+            box = label.box
+            # The tail sits on the face nearest the run and somewhere along the
+            # other axis; that along-axis coordinate is the one that has to be
+            # on the lettering rather than on the halo's padding.
+            at, lo, hi = (y0, box[1], box[3]) if label.turned else (x0, box[0], box[2])
+            keep = min(13.0 / 2, (hi - lo) / 4)
+            if not (lo + keep - TOL <= at <= hi - keep + TOL):
+                off_the_words.append(
+                    f"{name}/{label.name} leaves at {at:.1f} of {lo:.1f}..{hi:.1f}"
+                )
+    assert not off_the_words, "; ".join(off_the_words)
