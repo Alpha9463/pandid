@@ -603,6 +603,34 @@ for port in rx.ports_on("N"):
     fs.connect(recycle.outlet, port)
 ```
 
+`order_on()` is its writer. It sets the order the connections on one face are
+drawn in, first to last along it, and it takes the ports `ports_on()` hands back:
+
+```python
+loop = fs.add(units.Block("Synthesis Loop", inputs=["W", "S"], outputs=["E", "S"]))
+loop.order_on("S", [loop.out_2, loop.in_2])    # purge west, recycle east
+loop.order_on("S", loop.ports_on("S")[::-1])   # ...or just turn the wall round
+```
+
+Both `in_2` and `out_2` are on the south wall, and a block draws a face's
+connections in the order they were declared — inputs before outputs — which is
+not always the order the sheet wants. This is the only thing that says otherwise:
+`nozzle()` chooses the *side*, and re-declaring a connection onto the side it is
+already on leaves it exactly where it was.
+
+Name **every** connection on the face. The call is a statement of the drawing
+rather than a nudge at it, so a list that leaves one unplaced is refused, as is
+one naming a connection that is on another face — move it with `nozzle()` first.
+First is the low end of the face on the box's own axes: west on a north or south
+face, north on a west or east one. A mirrored block therefore draws that same
+first member on the right of the sheet, exactly as the face itself follows the
+box.
+
+[`examples/12_block_flow_diagram.py`](../examples/12_block_flow_diagram.py) is
+the sheet it was added for: a recycle returning from the right into a south wall
+whose other connection is a purge has to enter on the right, or it runs the width
+of the sheet to reach back past the purge's drop.
+
 `inputs=` / `outputs=` stay the constructor's names — "the inputs are on these
 faces" is what the argument says.
 
@@ -2440,6 +2468,16 @@ for `Fitting`'s `blind`, and `fail` (`open` / `closed` / `last` / `drift_open` /
 maps a port to the face it leaves from **as drawn**, so a mirrored or turned unit
 takes the face the reader sees. It is an override: without it the engine picks
 the face itself, and the top-level `auto_faces: false` is how you stop it.
+
+A `Block` also takes `port_order`, mapping a face to every connection on it in
+the order they are drawn along it — [`order_on()`](#block-the-block-flow-diagram)
+written down. `to_dict()` writes it only for a face that is not in declaration
+order, so an ordinary block's entry is unchanged.
+
+```yaml
+- {kind: Block, name: Synthesis Loop, inputs: [W, S], outputs: [E, S],
+   port_order: {S: [out_2, in_2]}}
+```
 
 ### The `loops` section
 

@@ -2324,7 +2324,13 @@ class Block(Unit):
         return self
 
     def ports_on(self, face: str) -> tuple[Port, ...]:
-        """The connections on one side of the box, in port order.
+        """The connections on one side of the box, in the order they are drawn.
+
+        Along the face, first to last, in the direction :meth:`order_on`
+        describes: the west end of a north or south face, the north end of a
+        west or east one. Until :meth:`order_on` is called that is the order the
+        connections were declared in, inputs before outputs, so the two readings
+        coincide on a block nobody has reordered.
 
         The lookup :meth:`face` does not do. A block is the one unit whose
         nozzles are grouped by side rather than named for what they are, so
@@ -2343,6 +2349,167 @@ class Block(Unit):
         """
         wanted = _block_face(face, self.name)
         return tuple(self.ports[name] for name, on in self._faces.items() if on == wanted)
+
+    # The writer beside ``ports_on``'s reader, and the four decisions in it.
+    #
+    # **Why there is one at all.** A face carrying both an input and an output
+    # draws every input before every output, because ``_faces`` is filled
+    # inputs-first in ``__init__`` and ``block_symbol`` groups it in insertion
+    # order. That is a defensible *default* -- something has to be first, and
+    # "as declared" is the only answer that does not invent a rule -- but it was
+    # the only order obtainable, which made a common BFD drawing inexpressible:
+    # a recycle returning from the right into a face whose other member is a
+    # purge has to enter on the right, or it reaches across the purge's drop to
+    # get to its own nozzle. Issue #192, and ``examples/12`` is the sheet.
+    #
+    # **Why a method and not a constructor argument.** The obvious alternative
+    # was to say it where the faces are said, ``inputs=["W", ("S", 1)]``, and it
+    # fails on three counts. The declaration's whole vocabulary is *which side*,
+    # and an index along the side is a fact about the drawing, so the tuple form
+    # puts two unrelated kinds of thing in one list and gives ``inputs=`` the
+    # type ``Sequence[str | tuple[str, int]]`` -- which a reader must now
+    # destructure to answer "which face is in_2 on". The index also counts from
+    # a base that does not exist yet: at the moment ``inputs=`` is read the
+    # outputs have not been declared, so ``("S", 1)`` is an index into a face
+    # whose membership is still being decided, and adding an output later
+    # silently re-seats it. And at construction time there are no
+    # :class:`~pandid.ports.Port` objects yet -- the constructor is what makes
+    # them -- so a constructor-side ordering can only name connections as
+    # strings. That last one is decisive: see below.
+    #
+    # **Why it takes the ports and not their names.** ``ports_on`` returned
+    # names until 0.1.1 and was changed to return ports precisely so a caller
+    # would stop round-tripping out to a string and back through ``port()``; a
+    # writer put beside it that took the strings back would undo that decision
+    # from the other side. Taking ports also makes the reversal of a face one
+    # expression -- ``b.order_on("S", b.ports_on("S")[::-1])`` -- because the
+    # writer accepts exactly what the reader hands back, which is the property
+    # that makes a reader/writer pair worth having. And this package ships
+    # ``py.typed``: ``Sequence[Port]`` is checked where the author writes it,
+    # while a ``Sequence[str]`` is a runtime error at best and, for a typo that
+    # happens to name another connection, a quietly wrong drawing. Naming the
+    # attribute (``b.out_2``) is the spelling on a sheet; ``b.port("out_2")``
+    # and ``b.outlets[1]`` are the two that a type checker can also follow, for
+    # the reason :class:`Unit`'s hidden ``__getattr__`` gives.
+    #
+    # **Why the whole face, every time.** Two cheaper shapes were considered.
+    # ``nozzle("in_2", "S", at=1)`` reuses a call the author already knows, but
+    # ``at`` is an index into the destination face's membership *at the moment
+    # of the call*, so two ``nozzle`` calls onto one face give different
+    # drawings in different orders, and an author who adds a connection a year
+    # later finds the old ``at=1`` now means something else. It is also a
+    # block-only argument hung on the one method whose contract this class
+    # already spends a docstring separating from ``Unit.nozzle``'s. A partial
+    # list (``order_on("S", [out_2])``, "put this one first") needs a stated
+    # rule for the members it does not name, which is a second rule to remember
+    # for the sake of a shorter call. Naming every connection on the face is a
+    # total statement: it is idempotent, it is order-independent with respect to
+    # the calls around it, it reads as the drawing it produces, and the error
+    # for an incomplete one can print the current order for the author to copy
+    # and edit. One obvious way.
+    def order_on(self, face: str, ports: "Sequence[Port]") -> "Block":
+        """Set the order the connections on one side of the box are drawn in.
+
+        ``ports`` is **every** connection on ``face``, first to last along it.
+
+        .. code-block:: python
+
+            loop = fs.add(units.Block("Synthesis Loop", inputs=["W", "S"], outputs=["E", "S"]))
+            loop.order_on("S", [loop.out_2, loop.in_2])   # purge west, recycle east
+
+        Both ``in_2`` and ``out_2`` are on the south wall, and a block draws
+        the connections on a face in the order they were declared -- so inputs
+        before outputs, which is not always the order the sheet wants. This is
+        what says otherwise, and it is the only thing that does: :meth:`nozzle`
+        chooses the *side* and re-declaring a connection onto the side it is
+        already on leaves it exactly where it was.
+
+        **First is the low end of the face, on the box's own axes.** West on a
+        north or south face, north on a west or east one -- the direction
+        :attr:`inlets` is numbered in and the direction
+        :func:`~pandid.render.symbols.spread` lays a family out in. It is the
+        box's own order and not the reader's, exactly as the face itself is
+        (:meth:`nozzle` says why at length): a :meth:`pin` that mirrors the
+        block draws the same first member on the *right* of the sheet, because
+        a mirror moves the box and everything on it.
+
+        Takes the ports themselves, so the reversal of a face is
+        ``b.order_on("S", b.ports_on("S")[::-1])`` -- this is
+        :meth:`ports_on`'s writer, and it accepts what that hands back.
+
+        A connection :meth:`nozzle` moves onto the face *afterwards* takes its
+        place in declaration order rather than joining the end, because
+        ``nozzle`` changes which side a connection is on and says nothing about
+        where along it. Order the face once it has the members it is going to
+        have, and the call names all of them, which is the point of it.
+
+        Raises :class:`ValueError` for a connection that is not on ``face``, one
+        named twice, one belonging to another unit, or a list that leaves any of
+        the face's connections unplaced, and leaves the block untouched when it
+        does. Naming every one is what keeps the call a statement of the drawing
+        rather than a nudge whose result depends on what it was nudging.
+        """
+        wanted = _block_face(face, self.name)
+        on_face = [name for name, on in self._faces.items() if on == wanted]
+        named: list[str] = []
+        for port in ports:
+            if not isinstance(port, Port):
+                raise TypeError(
+                    f"{self.name}: order_on() takes the connections themselves and "
+                    f"not their names, so a checker can see a typo -- "
+                    f"order_on({wanted!r}, [b.out_2, b.in_2]), or b.outlets[1] / "
+                    f"b.port('out_2') where the attribute cannot be named. "
+                    f"Got {port!r}."
+                )
+            if self.ports.get(port.name) is not port:
+                raise ValueError(
+                    f"{self.name}: {port.name!r} is a connection of "
+                    f"{port.owner.name!r}, not of this block, so it is not on any "
+                    f"face of it. order_on() orders one block's own wall; "
+                    f"the {wanted} face carries "
+                    f"{', '.join(on_face) if on_face else 'nothing'}."
+                )
+            if self._faces[port.name] != wanted:
+                raise ValueError(
+                    f"{self.name}: {port.name!r} is on the "
+                    f"{self._faces[port.name]} face, not the {wanted}. order_on() "
+                    f"orders what is already on a side; move it first with "
+                    f"nozzle({port.name!r}, {wanted!r})."
+                )
+            if port.name in named:
+                raise ValueError(
+                    f"{self.name}: order_on({wanted!r}, ...) names {port.name!r} "
+                    f"twice, so it asks for one connection in two places. Name "
+                    f"each of the {wanted} face's connections once: "
+                    f"{', '.join(on_face)}."
+                )
+            named.append(port.name)
+        missing = [name for name in on_face if name not in named]
+        if missing:
+            raise ValueError(
+                f"{self.name}: order_on({wanted!r}, ...) names {len(named)} of the "
+                f"{len(on_face)} connections on the {wanted} face and leaves "
+                f"{', '.join(missing)} unplaced. Name every one, first to last "
+                f"along the face; it currently carries {', '.join(on_face)}."
+            )
+        # Rewritten in place rather than recorded beside ``_faces``, because the
+        # dict's order *is* the drawn order -- ``block_symbol`` groups its
+        # argument by face and spreads each group by index -- and a second
+        # record of where a connection sits is the thing this class keeps saying
+        # it will not have. Walking the old dict and swapping in the new
+        # sequence as each member of this face comes round leaves every other
+        # face's members exactly where they were, so reordering the south does
+        # not perturb the north.
+        #
+        # No ``_check_box()``: this moves connections within a face and changes
+        # no face's count, so the box that held them a moment ago still does.
+        # It is the one mutator here that cannot make the block undrawable.
+        replacement = iter(named)
+        self._faces = {
+            (next(replacement) if on == wanted else name): on
+            for name, on in self._faces.items()
+        }
+        return self
 
     def symbol(self) -> "Symbol":
         """This block's drawing, built to its connections.

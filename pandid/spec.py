@@ -321,6 +321,14 @@ _KIND_FACES = {
     "inputs": ("Block",),
     "outputs": ("Block",),
 }
+# The order along a face, keyed the same way and separate from the two above
+# because it is not a constructor argument: ``Block.order_on`` takes the ports,
+# which do not exist until the block does. Written only where a face's order is
+# not the order its connections were declared in, so an ordinary block's entry
+# is exactly what it was; see ``_write_unit``.
+_KIND_ORDER = {
+    "port_order": ("Block",),
+}
 # Flags only some classes carry. ``header`` says a boundary flag stands for a
 # utility service tapped wherever it is wanted rather than for one line leaving
 # the sheet, which is what lets it be drawn more than once; equipment is drawn
@@ -428,7 +436,7 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
 
     allowed = set(_UNIT_KEYS)
     for key, owners in {**_VARIABLE_PORTS, **_KIND_SIZES, **_KIND_TEXT,
-                        **_KIND_FLAGS, **_KIND_FACES}.items():
+                        **_KIND_FLAGS, **_KIND_FACES, **_KIND_ORDER}.items():
         # By inheritance, not by name: the tables above name the class that
         # *declares* the argument, and a ControlValve is a Valve, so it takes
         # ``fail`` for exactly the reason its base does. Matching on the name
@@ -469,6 +477,12 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
         raise _fail_from(e, where) from None
 
     _read_common(fs, unit, data, where)
+    # After ``_read_common``, because ``port_faces`` in there is what decides
+    # which face a connection is on and this orders what is on one. Only a
+    # Block can carry the key -- the gate above refuses it on anything else --
+    # so the isinstance is what tells a type checker so, not a second guard.
+    if "port_order" in data and isinstance(unit, unit_types.Block):
+        _read_port_order(unit, data["port_order"], f"{where}.port_order")
     return unit
 
 
@@ -568,6 +582,18 @@ def _read_port_faces(unit: Unit, entry: Any, where: str) -> None:
             unit.nozzle(port_name, _text(face, f"{where}.{port_name}"))
         except ValueError as e:
             raise _fail_from(e, f"{where}.{port_name}") from None
+
+
+def _read_port_order(unit: "unit_types.Block", entry: Any, where: str) -> None:
+    """``port_order: {S: [out_2, in_2]}`` -- one ``order_on`` call per face."""
+    for face, names in _mapping(entry, where).items():
+        at = f"{where}.{face}"
+        ports = [_find_port(unit, name, at)
+                 for name in _sequence(names, at)]
+        try:
+            unit.order_on(_text(face, at), ports)
+        except ValueError as e:
+            raise _fail_from(e, at) from None
 
 
 def _find_port(unit: Unit, name: Any, where: str) -> Port:
@@ -969,6 +995,24 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
             ("outputs", unit.output_faces, unit.DEFAULT_OUTPUT_FACE),
         ):
             entry[key] = len(faces) if all(f == default for f in faces) else list(faces)
+        # And the order along a face where it is not the declared one. The two
+        # keys above carry a face per connection but not the sequence the face
+        # is drawn in, because they are two lists and the face interleaves them
+        # -- so a block whose ``order_on`` put an output before an input would
+        # otherwise be written back out drawn the other way round, which is the
+        # one thing a round trip may not do. Absent from every block nobody
+        # reordered, which is all of them until somebody does.
+        declared = [port.name for port in (*unit.inlets, *unit.outlets)]
+        port_order = {
+            face: [port.name for port in unit.ports_on(face)]
+            for face in ("N", "S", "E", "W")
+        }
+        port_order = {
+            face: order for face, order in port_order.items()
+            if order != [name for name in declared if name in order]
+        }
+        if port_order:
+            entry["port_order"] = port_order
     elif isinstance(unit, unit_types.Mixer):
         entry["n_inlets"] = len(unit.inlets)
     elif isinstance(unit, unit_types.Splitter):

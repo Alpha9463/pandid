@@ -1278,6 +1278,7 @@ def _block_flow_diagram() -> Flowsheet:
     synthesis = fs.add(units.Block("Synthesis Loop", inputs=["W", "S"], outputs=["E", "S"])).pin(
         x=830, y=340
     )
+    synthesis.order_on("S", [synthesis.out_2, synthesis.in_2])
     refrigeration = fs.add(units.Block("Refrigeration", inputs=1, outputs=["E", "S"])).pin(
         x=1080, y=340
     )
@@ -1286,7 +1287,7 @@ def _block_flow_diagram() -> Flowsheet:
     steam = fs.add(units.Feed("Steam")).pin(x=330, y=180)
     co2 = fs.add(units.Product("CO2 to Urea")).pin(x=560, y=170)
     ammonia = fs.add(units.Product("Liquid NH3")).pin(x=1300, y=355)
-    purge = fs.add(units.Product("Purge Gas")).pin(x=975, y=440)
+    purge = fs.add(units.Product("Purge Gas")).pin(x=975, y=490)
     fs.connect(natural_gas.outlet, reforming.in_1)
     fs.connect(air.outlet, reforming.in_2)
     fs.connect(steam.outlet, reforming.in_3)

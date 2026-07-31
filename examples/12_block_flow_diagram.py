@@ -24,14 +24,16 @@ said so.
 bottom of the section that produces it, along a channel below the row of boxes,
 and back into the bottom of the section that takes it, crossing nothing.
 
-The purge flag is the one thing on this sheet whose position is not free, and it
-is pinned close under the loop for a reason. A block draws every input on a face
-before every output on it, and cannot be told otherwise (issue #192), so the
-recycle's inlet lands to the *left* of the purge's outlet on the loop's south
-wall -- while the recycle itself arrives from the right, off Refrigeration.
-Turning the purge aside above the recycle's channel is what keeps the two apart.
-Drop that flag to the bottom of the sheet instead and the recycle has to hop
-over the purge.
+**Where a connection sits along a wall**, which `order_on` is the only way to
+say. The synthesis loop's south wall carries two of them, the recycle arriving
+and the purge leaving, and a block draws the connections on a face in the order
+they were declared -- inputs first, so the recycle would land to the *left* of
+the purge. The recycle comes from Refrigeration, on the right, so that is the
+wrong way round: it would have to run the width of the sheet and reach back past
+the purge's drop to find its own nozzle. One line puts the two in the order the
+drawing wants, and the recycle then returns in a short channel between the last
+two boxes.
+
 
 **Why it is pinned.** The layout engine ranks units by process flow order and
 does not yet know that a connection on the north face wants its source *above*
@@ -60,21 +62,25 @@ def main():
     synthesis = fs.add(
         units.Block("Synthesis Loop", inputs=["W", "S"], outputs=["E", "S"])
     ).pin(x=830, y=340)
+    # Purge west, recycle east along the loop's south wall. Declaration order
+    # would put the recycle first, and it arrives from Refrigeration on the
+    # right; this enters it on the side nearer its source. See the note above.
+    synthesis.order_on("S", [synthesis.out_2, synthesis.in_2])
     refrigeration = fs.add(
         units.Block("Refrigeration", inputs=1, outputs=["E", "S"])
     ).pin(x=1080, y=340)
 
     # --- Where the sheet ends --------------------------------------------
     # The two above the row feed the reformer's north wall; the two below take
-    # what the loop rejects. The purge flag sits in the gap between the last two
-    # boxes rather than at the foot of the sheet, so its line turns aside before
-    # it reaches the recycle's channel; see the note at the top.
+    # what the loop rejects. The purge flag hangs under the loop, clear of the
+    # recycle's channel; with the loop's south wall in the order above there is
+    # nothing else it has to dodge.
     natural_gas = fs.add(units.Feed("Natural Gas")).pin(x=60, y=355)
     air = fs.add(units.Feed("Air")).pin(x=180, y=180)
     steam = fs.add(units.Feed("Steam")).pin(x=330, y=180)
     co2 = fs.add(units.Product("CO2 to Urea")).pin(x=560, y=170)
     ammonia = fs.add(units.Product("Liquid NH3")).pin(x=1300, y=355)
-    purge = fs.add(units.Product("Purge Gas")).pin(x=975, y=440)
+    purge = fs.add(units.Product("Purge Gas")).pin(x=975, y=490)
 
     # --- The streams -----------------------------------------------------
     # A BFD numbers its streams and says nothing else about them; the flow
