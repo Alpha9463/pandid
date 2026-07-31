@@ -118,8 +118,11 @@ def main():
     # Both alarms read the controller, so both hang off it. Chaining one to the
     # other would draw the low alarm as though the high alarm fed it.
     #
-    # Each takes a *face* at the default angle, so its impulse line leaves the
-    # balloon radially and lands square on the next one. BS ISO 15519-1 §12.1
+    # Each takes a *face* at the default angle, so its signal line leaves the
+    # balloon radially and lands square on the next one. The impulse line on
+    # this loop is V-101's, up to LT-101: a balloon hung off another balloon
+    # carries a measurement and not a fluid, so everything above the
+    # transmitter is signal. BS ISO 15519-1 §12.1
     # requires a functional connection to run horizontally or vertically, and
     # §12.4 requires the junctions to be at right angles; these are ISO 15519-2
     # §5.1.1 functional connection lines, so the rule is theirs too. A branch
