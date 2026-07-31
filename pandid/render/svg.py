@@ -1272,10 +1272,22 @@ class SvgRenderer:
     def _draw_taps(self, fs):
         """Impulse lines: the fine line from a tap point to the balloon reading it.
 
-        A process tap is a solid fine line; a balloon hung off another balloon
-        (an interlock under its controller) is an internal loop connection and
-        is drawn dashed. Nothing is drawn where a stream already joins the two,
-        or where the element sits directly on the line (``offset=0``).
+        A tap on the *process* is a solid fine line, because that is what it is:
+        a length of impulse tubing standing between the pipe and the element.
+        Anything else the balloon can hang on carries a measurement rather than
+        a fluid and is drawn dashed -- a balloon hung off another balloon (an
+        interlock under its controller), and equally a balloon teed off a
+        **signal line**, which is how the issued sheet draws a trip: not on a
+        face of the balloon it acts for, but branched at a right angle off the
+        line that carries the command. Nothing is drawn where a stream already
+        joins the two, or where the element sits directly on the line
+        (``offset=0``).
+
+        The host's ``kind`` is what separates the two, and a stream host answers
+        with its stream kind -- ``"electric"``, ``"material"`` -- so the signal
+        kinds have to be named here alongside ``"instrument"``. Reading only the
+        latter drew a branch off a signal line solid, which on this sheet means
+        impulse tubing on a pipe: the wrong statement about the wrong medium.
 
         Fine is the same fine as a signal stream: ISO 15519-2 Annex A.1.02 puts
         an instrument connection on the 0,25 rung, alongside the signal line and
@@ -1286,8 +1298,9 @@ class SvgRenderer:
         """
         out = []
         for u, (tx, ty), (cx, cy) in _tap_lines(fs):
+            host_kind = getattr(u.host, "kind", "")
             dash = (' stroke-dasharray="5,4"'
-                    if getattr(u.host, "kind", "") == "instrument" else "")
+                    if host_kind == "instrument" or host_kind in _SIGNAL_KINDS else "")
             out.append(f'    <line x1="{_num(tx)}" y1="{_num(ty)}" x2="{_num(cx)}" '
                        f'y2="{_num(cy)}" stroke="black" stroke-width="{_SIGNAL_STROKE}"{dash} />')
         return ['  <g id="instrument_taps">'] + out + ['  </g>'] if out else []
