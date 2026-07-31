@@ -25,9 +25,49 @@ What a P&ID adds over the PFD of the same unit:
   cascaded onto the reflux flow controller. Every controller and alarm is a
   shared-display balloon, a circle in a square, because they are functions of
   the DCS and not devices standing in the field;
-- the interlock square repeats. ``Instrument(variant="sis")`` is the one
-  symbol allowed to carry its tag more than once, because a trip is a single
-  logic function drawn everywhere it acts.
+- the trip square repeats. ``Instrument(variant="sis")`` is the one symbol
+  allowed to carry its tag more than once, because a trip is a single logic
+  function drawn everywhere it acts, and ``Z-2`` is drawn twice: at
+  ``PT-318``, the transmitter that initiates it, and on ``XV-301``, the valve
+  it closes.
+
+Three ways this sheet goes past ``professional_examples/P&ID_301.pdf``, the
+course exemplar it is modelled on, rather than reproducing it.
+
+**The trips are lettered by what they do.** A function that *acts* is lettered
+``S`` or ``Z`` and never ``A`` -- ISO 15519-2 Table 2 note 9: "If control
+functions S and Z at time of action also trigger an alarm/message, then the A
+shall not be used in addition to the in front letter codes S or Z." The
+exemplar uses ``A`` with ``H``/``L`` and never ``S`` or ``Z`` anywhere, which
+is why its interlock squares say nothing about what they do. The squares here
+are tagged ``Z``: Table 2's "switching (open-loop) safety/protection
+relevant", whose note 10 names what realizes it -- "A control function to be
+realized by a safety instrumented function according to IEC 61511-1 ..." --
+and CHEE4001 p.12's succeeding-letter list, ``Z  TRIP``. ``I``, which the
+squares carried, is that same table's *indicating*, which is the one thing a
+trip does not do. The alarm balloons keep ``A``, because they annunciate and
+do not act.
+
+**The safety function has its own transmitter.** ``PT-318`` taps the tower
+overhead at a point of its own and drives ``Z-2`` alone, and ``PT-301`` drives
+the pressure loop alone, so the sheet shows two measurement points where the
+exemplar branches one. This is engineering practice rather than a drawing
+rule, and it is given as such: CHEE4001 p.20, "While a safety trip can be
+incorporated into a control loop, the safe operation of such a system will be
+dependent on the reliability of the control equipment. For potentially
+hazardous situations it is better practice to specify a separate trip system."
+The other three trips read the transmitter their own controller reads, which
+is what the exemplar does with all five of its own, so a reader has both
+arrangements on one sheet to compare.
+
+**High above low.** ISO 15519-2 §5.1.3 Figure 8 fixes the quadrants
+information outside a symbol goes in: c, the upper one, is "indication of high
+output/input functions" and d, the lower one, is the low. So ``PAH-301`` and
+``LAH-304`` stand above their controllers and ``PAL-301`` and ``LAL-304``
+beside them, which is as close to the figure as balloons on the four faces of
+a symbol reach: the face below each controller is its output to the valve and
+cannot be given away. The exemplar flips the pair between loops -- 301 and 304
+write L over H, 302 writes H over L -- so only its 302 is the right way up.
 
 Drawing the alarms as balloons at all is a **known deviation**. ISO 15519-2
 §5.2.5 is a *shall*: "Letter code combinations with modifiers H and L shall be
@@ -56,7 +96,7 @@ its own way rather than being renamed apart:
 - a **tee** carries no tag at all, being bulk piping bought by the line, so
   the branches around the valve stations put nothing on the drawing and nothing
   in the equipment list;
-- and the **interlock square**, as above.
+- and the **trip square**, as above.
 
 Every in-line device is placed with ``pin(port=...)``, which asks the symbol
 where its own nozzle sits rather than repeating a measured offset, so the runs
@@ -316,7 +356,16 @@ def main():
     # diamond-in-square of ANSI/ISA-5.1-2009 Table 5.1.1 column B, named
     # outright rather than through the ``logic`` spelling of it, because a plain
     # diamond is the different symbol this sheet does not draw.
-    fs.add_instrument("I", 2, on=xv, at="S", offset=26, variant="sis")
+    #
+    # ``Z`` and not ``I``: this square shuts the feed valve, and a function that
+    # acts is lettered S or Z (ISO 15519-2 Table 2 note 9, and its note 10 for
+    # the safety-relevant one). ``I`` is that table's *indicating*, which is the
+    # one thing a trip does not do. The drawn square still shows the number
+    # alone -- ``_draw_instrument_tag`` gives a diamond its number and no
+    # letters, and a 40-unit diamond has room for two figures -- so the letter
+    # code lives in the tag and in the notes box until #137/#169 give a balloon
+    # its letter-code string.
+    fs.add_instrument("Z", 2, on=xv, at="S", offset=26, variant="sis")
     fs.add_instrument("FI", 314, on=meter, at="S", offset=36)
     # The gauge reads the tower's feed nozzle, but it is hung on the run rather
     # than on the wall. A unit host taps a *face midpoint*, and the tower's feed
@@ -354,20 +403,34 @@ def main():
     # on its own. Both faces here are forced, since the measurement arrives from
     # PT-301 in the west and the output leaves south onto the valve stem, so
     # what is left is the east and the clear sheet above the row.
-    fs.add_instrument("PAH", 301, on=pic301, at="E", offset=46, variant="shared")
-    fs.add_instrument("PAL", 301, on=pic301, at="N", offset=46, variant="shared")
-    # The trip is teed off the *measurement*, which is where the issued sheet
-    # takes all five of its own: loops 301, 304 and 306 off their
-    # transmitter-to-controller runs, 322 off the two stubs downstream of
-    # LI-322, 323 off the TI-323 trunk. An alarm is the wrong host twice over,
-    # since it would draw the alarm as driving the trip, and an alarm that acts
-    # is lettered S or Z and not A (ISO 15519-2 Table 2 note 9). It branches
-    # *above* the row, which is the one side free:
-    # the station's bypass leg runs 40 px below the row and HV-301C's body
-    # starts 32 px below it, so a square hung downward lands on both.
-    measured = fs.connect(pt301.sig_out, pic301.sig_in, kind="electric")
-    fs.add_instrument("I", 1, on=measured, at=0.35, offset=40, angle=90, variant="sis")
+    #
+    # Which of the two each alarm gets is not free. ISO 15519-2 §5.1.3 puts
+    # high functions in Figure 8's quadrant c and low in quadrant d, and the
+    # figure draws c directly over d, so the high one takes the north face and
+    # the low one what is left. LIC-304 below is arranged the same way, which is
+    # the half of Figure 8 a sheet with four faces per symbol can keep.
+    fs.add_instrument("PAH", 301, on=pic301, at="N", offset=46, variant="shared")
+    fs.add_instrument("PAL", 301, on=pic301, at="E", offset=46, variant="shared")
+    fs.connect(pt301.sig_out, pic301.sig_in, kind="electric")
     fs.connect(pic301.sig_out, st301.control.actuator, kind="pneumatic")
+
+    # --- The high pressure trip, on a measurement of its own ---------------
+    # PT-318 taps the overhead run west of PT-301 and reads it for the trip and
+    # for nothing else, so the tower's pressure is measured twice and the trip
+    # does not depend on the loop it is there to back up. The issued sheet, and
+    # every other trip on this one, reads the BPCS measurement instead; both
+    # are drawn here so the difference can be read off one sheet. This is
+    # engineering practice and not a drawing rule -- CHEE4001 p.20, "For
+    # potentially hazardous situations it is better practice to specify a
+    # separate trip system" -- so it is the reason given, rather than a clause
+    # number the standards on disk do not carry.
+    #
+    # The square hangs on a face of the transmitter, which is how LT-306's and
+    # TT-307's trips are drawn further down: a trip belongs on the measurement
+    # point, and a transmitter *is* one.
+    pt318 = fs.add_instrument("PT", 318, on=vapour, at=0.55,
+                              offset=overhead_y - balloon_row_y)
+    fs.add_instrument("Z", 2, on=pt318, at="N", offset=40, variant="sis")
 
     # --- Loops 302/303: tower top temperature cascaded onto reflux flow ---
     # Tapped low on the riser, below the cooling-water header that crosses it.
@@ -399,21 +462,32 @@ def main():
     # the faceplate comes off the row and is mounted on the valve it drives, the
     # way PIC-301 is and the way the issued sheet mounts FIC-305 over this very
     # station, in the clear band between that header and CV-305's bypass leg.
-    # The measurement then arrives from the north, the output drops south onto
-    # the actuator, and the two alarms fan east and west.
+    #
+    # Which face takes which line then falls out of Figure 8, as in loop 301.
+    # The high alarm has to stand over the controller, so the north face is
+    # spent on it and the measurement comes in from the west instead: LT-304 is
+    # up and to the left, and the run reaches the west face by dropping short of
+    # the balloon rather than over it. The output still leaves south onto the
+    # actuator and the low alarm takes the east.
     lt304 = fs.add_instrument("LT", 304, on=drum, at="E", offset=60)
     lic304_row_y = 403.0
     cv305_top = dist_y - port_offset(st305.control, "inlet")[1]
     lic304 = fs.add_instrument("LIC", 304, on=st305.control, at="N", variant="shared",
                                offset=cv305_top - lic304_row_y)
-    lic304.nozzle("sig_in", "N")
+    lic304.nozzle("sig_in", "W")
     lic304.nozzle("sig_out", "S")
-    fs.add_instrument("LAH", 304, on=lic304, at="W", offset=46, variant="shared")
+    fs.add_instrument("LAH", 304, on=lic304, at="N", offset=46, variant="shared")
     fs.add_instrument("LAL", 304, on=lic304, at="E", offset=46, variant="shared")
-    # Teed off the measurement, as in loop 301 above. angle=-90 branches south
-    # off the run east from LT-304, into the gap the alarm row leaves.
+    # Teed off the measurement, which is what the issued sheet does with all
+    # five of its own trips: loops 301, 304 and 306 off their
+    # transmitter-to-controller runs, 322 off the two stubs downstream of
+    # LI-322, 323 off the TI-323 trunk. An alarm is the wrong host twice over,
+    # since it would draw the alarm as driving the trip, and an alarm that acts
+    # is lettered S or Z and not A. angle=-90 branches west off the drop the
+    # run makes on its way to the west face, into the band left clear between
+    # LT-304's row above and LIC-304's own row below.
     level = fs.connect(lt304.sig_out, lic304.sig_in, kind="electric")
-    fs.add_instrument("I", 1, on=level, at=0.3, offset=40, angle=-90, variant="sis")
+    fs.add_instrument("Z", 1, on=level, at=0.6, offset=40, angle=-90, variant="sis")
     fs.connect(lic304.sig_out, st305.control.actuator, kind="pneumatic")
 
     # --- Loop 307: reboiler return temperature on the steam valve ---------
@@ -421,8 +495,15 @@ def main():
     tic307 = fs.add_instrument("TIC", 307, on=tt307, at="W", offset=96,
                                variant="shared")
     tic307.nozzle("sig_out", "S")
-    fs.add_instrument("I", 1, on=tic307, at="W", offset=40, variant="sis")
     fs.add_instrument("TI", 321, on=boilup, at=0.05, offset=70, angle=-90)
+    # On TT-307, not on TIC-307. A trip hung on the controller reads what the
+    # controller last asked the valve for, so it stops working the moment the
+    # loop is put on manual, which is the state it most needs to work in. The
+    # transmitter is the measurement point, so the square goes on it, which is
+    # how LT-306's trip is drawn at the bottom of this sheet. North is the free
+    # face: TIC-307 is west, the impulse line leaves east for the tower sump,
+    # and TIC-307's output crosses the band to the south.
+    fs.add_instrument("Z", 1, on=tt307, at="N", offset=40, variant="sis")
     fs.connect(tt307.sig_out, tic307.sig_in, kind="electric")
     fs.connect(tic307.sig_out, st308.control.actuator, kind="pneumatic")
 
@@ -430,7 +511,9 @@ def main():
     lt306 = fs.add_instrument("LT", 306, on=reb, at="S", offset=68)
     lic306 = fs.add_instrument("LIC", 306, on=lt306, at="E", offset=56, variant="shared")
     lic306.nozzle("sig_out", "E")
-    fs.add_instrument("I", 1, on=lt306, at="W", offset=44, variant="sis")
+    # LT-306 is itself the measurement point, so the square hangs on it rather
+    # than on a run, which is where the issued sheet's own loop-306 trip goes.
+    fs.add_instrument("Z", 1, on=lt306, at="W", offset=44, variant="sis")
     fs.connect(lt306.sig_out, lic306.sig_in, kind="electric")
     fs.connect(lic306.sig_out, cv306.actuator, kind="pneumatic")
 
@@ -463,13 +546,23 @@ def main():
               ("RB-301", "U-tube Kettle Reboiler")],
         align="top-right",
     ))
+    # General notes, and general is why they are not numbered. A number in a
+    # notes box is a *flag* note: CHEE4001 p.5 draws it as a boxed "NOTE X" on
+    # the line it applies to, and recommends it for keeping a sheet
+    # uncongested. There is no flag primitive -- ``notes()`` builds the box and
+    # nothing puts a reference on a line -- so a numbered list here would be
+    # five references to nothing, which is what this box used to be: it was
+    # copied off the issued sheet, where every one of its five notes is flagged
+    # on the drawing, and landed on a sheet that flags none of them. What is
+    # left is what a general note is for: the conventions a reader needs to
+    # read the sheet, each true of something drawn on it.
     fs.add_annotation(notes([
-        "Sampling Point",
-        "Electromagnetic Flow Meter",
-        "Reflux Drum Startup Fill Point",
-        "Vent",
-        "Distillation Tower Flush Line",
-    ], align="bottom-left"))
+        "Diamond in square: safety instrumented system logic, code Z.",
+        "One trip is one tag, drawn at every point the trip acts.",
+        "Z-2: high pressure trip. PT-318 is its own measurement point.",
+        "Z-1: process shutdown logic, reading three measurements.",
+        "Alarms are lettered A and trips S or Z; H is drawn above L.",
+    ], title="GENERAL NOTES", numbered=False, align="bottom-left"))
     # A darkened valve body is not an ISA-5.1 symbol, since the standard hands
     # manual valve depiction to the piping group, so clauses 2.8.1(b)(1) and
     # 5.2.5 of ISA-5.1 make declaring it here mandatory rather than optional.
