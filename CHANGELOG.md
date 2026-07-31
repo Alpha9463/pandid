@@ -9,6 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`Block.order_on()`: where a connection sits along the face it is on.**
+  ([#192](https://github.com/Alpha9463/pandid/issues/192))
+
+  A block's face said which wall a connection was on and nothing about where
+  along it, and a wall carrying both kinds drew every input before every
+  output — so the ordinary BFD recycle, entering on the side nearer the section
+  that produced it, could not be drawn.
+
+  ```python
+  loop = fs.add(units.Block("Synthesis Loop", inputs=["W", "S"], outputs=["E", "S"]))
+  loop.order_on("S", [loop.out_2, loop.in_2])    # purge west, recycle east
+  loop.order_on("S", loop.ports_on("S")[::-1])   # ...or just turn the wall round
+  ```
+
+  It is `ports_on()`'s writer and takes what that hands back: the ports, not
+  their names, so a typo is a type error rather than a quietly wrong drawing.
+  Name every connection on the face — the call is a statement of the drawing,
+  not a nudge at it, and one that leaves a connection unplaced is refused, as is
+  one naming a connection on another face. First is the low end of the face on
+  the box's own axes, west on a north or south face and north on a west or east
+  one, so a mirrored block draws that first member on the right of the sheet,
+  exactly as the face itself follows the box.
+
+  Nothing changes for a block that does not call it: the drawn order is still
+  the declared one. `to_dict()` writes a reordered face as `port_order` and
+  omits the key otherwise.
+
+  `examples/12_block_flow_diagram.py` uses it, and its recycle stops running the
+  width of the sheet to reach back past the purge: 481 drawing units to 281.
+
 - **A variable-port family is now a typed sequence.**
   ([#175](https://github.com/Alpha9463/pandid/issues/175))
 

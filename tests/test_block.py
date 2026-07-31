@@ -497,6 +497,263 @@ def test_the_layout_engine_never_moves_a_connection_off_its_declared_face():
 
 
 # ---------------------------------------------------------------------------
+# order_on(): where a connection sits *along* the face it is on.
+#
+# The face says which wall; this says where on it. Without it a face carrying
+# both kinds draws every input before every output, because ``_faces`` is filled
+# inputs-first and ``block_symbol`` groups it in insertion order -- which made
+# the ordinary BFD recycle (in on the side nearer its source) inexpressible.
+# Issue #192; ``examples/12_block_flow_diagram.py`` is the sheet.
+# ---------------------------------------------------------------------------
+
+
+def _along(block, face):
+    """Where each connection on ``face`` sits along it, in the drawn order."""
+    sym = block.symbol()
+    axis = 1 if face in ("W", "E") else 0
+    return [(p.name, sym.ports[p.name][axis]) for p in block.ports_on(face)]
+
+
+def test_the_declared_order_is_inputs_then_outputs_until_something_says_otherwise():
+    """The default this exists to override, pinned so the override has a job."""
+    b = units.Block("B", inputs=["W", "S"], outputs=["E", "S"])
+    assert [name for name, _ in _along(b, "S")] == ["in_2", "out_2"]
+
+
+def test_order_on_puts_the_connections_along_the_face_in_the_order_given():
+    b = units.Block("B", inputs=["W", "S"], outputs=["E", "S"])
+    assert b.order_on("S", [b.out_2, b.in_2]) is b  # chains, like pin() and nozzle()
+    placed = _along(b, "S")
+    assert [name for name, _ in placed] == ["out_2", "in_2"]
+    # ...and it is the *drawing* that moved, not just the bookkeeping: first is
+    # the low end of the face, and the two are still a full pitch apart.
+    assert placed[0][1] < placed[1][1]
+    assert placed[1][1] - placed[0][1] == pytest.approx(BLOCK_PITCH)
+
+
+def test_order_on_is_ports_ons_writer_and_takes_what_it_hands_back():
+    """The pair is worth having only if the two speak one currency, which is why
+    this takes ports: reversing a wall is then one expression."""
+    b = units.Block("B", inputs=["S", "S"], outputs=["S"])
+    b.order_on("S", b.ports_on("S")[::-1])
+    assert [p.name for p in b.ports_on("S")] == ["out_1", "in_2", "in_1"]
+    assert [name for name, _ in _along(b, "S")] == ["out_1", "in_2", "in_1"]
+
+
+@pytest.mark.parametrize("face", FACES)
+def test_the_order_runs_the_way_the_family_is_numbered_on_every_face(face):
+    """West first on N/S, north first on W/E -- the direction ``spread`` lays a
+    family out in, so an ordered face reads like a declared one."""
+    b = units.Block("B", inputs=[face, face], outputs=[face])
+    b.order_on(face, [b.out_1, b.in_2, b.in_1])
+    placed = _along(b, face)
+    assert [name for name, _ in placed] == ["out_1", "in_2", "in_1"]
+    assert [t for _, t in placed] == sorted(t for _, t in placed)
+
+
+def test_three_or_more_on_a_face_are_placed_exactly_as_named():
+    b = units.Block("B", inputs=["N", "N"], outputs=["N", "N"])
+    b.order_on("N", [b.out_2, b.in_1, b.out_1, b.in_2])
+    assert [name for name, _ in _along(b, "N")] == ["out_2", "in_1", "out_1", "in_2"]
+
+
+def test_ordering_one_face_leaves_every_other_face_where_it_was():
+    b = units.Block("B", inputs=["N", "S", "N"], outputs=["S", "N"])
+    before = _along(b, "N")
+    b.order_on("S", [b.out_1, b.in_2])
+    assert _along(b, "N") == before
+
+
+def test_the_order_is_the_boxs_own_and_a_mirror_moves_the_box_with_it():
+    """The same contract the face itself has: ``order_on`` is a declaration, so
+    it cannot be about a ``pin()`` that has not happened. A mirrored block draws
+    the first member on the *right* of the sheet, and that is not a bug in the
+    ordering -- it is the mirror doing what ``Block`` says a mirror does."""
+    fs = Flowsheet("mirrored")
+    b = fs.add(units.Block("B", inputs=["W", "S"], outputs=["E", "S"])).pin(x=400, y=300)
+    b.order_on("S", [b.out_2, b.in_2])
+    fs.layout()
+    upright = {name: port_point(b, b.frame, name)[0] for name in ("out_2", "in_2")}
+    assert upright["out_2"] < upright["in_2"]
+
+    b.pin(mirrored=True)
+    fs.layout()
+    flipped = {name: port_point(b, b.frame, name)[0] for name in ("out_2", "in_2")}
+    assert flipped["out_2"] > flipped["in_2"]
+    # The declaration is untouched by the transform, which is what lets the two
+    # be set in either order.
+    assert [p.name for p in b.ports_on("S")] == ["out_2", "in_2"]
+
+
+def test_the_order_survives_a_quarter_turn_onto_the_faces_it_draws_across():
+    """A turn draws the south wall up the sheet's east side; the order the box
+    declared is still the order along it."""
+    fs = Flowsheet("turned")
+    b = fs.add(units.Block("B", inputs=["S", "S"], outputs=["N"])).pin(x=400, y=300, orientation=90)
+    b.order_on("S", [b.in_2, b.in_1])
+    fs.layout()
+    assert port_faces(b, "in_1") == ["W"]
+    first, second = (port_point(b, b.frame, n)[1] for n in ("in_2", "in_1"))
+    assert first < second
+
+
+def test_a_connection_moved_onto_an_ordered_face_lands_in_declaration_order():
+    """``nozzle`` says which side and nothing about where along it, so a late
+    arrival takes its declared place rather than joining the end. Documented
+    rather than special-cased: order the face once it has its members."""
+    b = units.Block("B", inputs=["W", "S"], outputs=["E", "S"])
+    b.order_on("S", [b.out_2, b.in_2])
+    b.nozzle("in_1", "S")
+    assert [p.name for p in b.ports_on("S")] == ["in_1", "out_2", "in_2"]
+    b.order_on("S", [b.out_2, b.in_2, b.in_1])  # ...and saying so again is the fix
+    assert [p.name for p in b.ports_on("S")] == ["out_2", "in_2", "in_1"]
+
+
+def test_two_blocks_of_one_shape_ordered_differently_are_drawn_differently():
+    """The symbol is cached on the faces tuple, which the order is part of, and
+    the ``<defs>`` entry is keyed on the box -- so the two share one rectangle
+    and keep their own nozzles, which is what both of those are for."""
+    fs = Flowsheet("twins")
+    a = fs.add(units.Block("A", inputs=["W", "S"], outputs=["E", "S"])).pin(x=200, y=200)
+    b = fs.add(units.Block("B", inputs=["W", "S"], outputs=["E", "S"])).pin(x=600, y=200)
+    b.order_on("S", [b.out_2, b.in_2])
+    fs.layout()
+    assert a.symbol().id_suffix == b.symbol().id_suffix
+    assert fs.to_svg().count('<symbol id="sym_block_120x80"') == 1
+    a_in, a_out = (port_point(a, a.frame, n)[0] for n in ("in_2", "out_2"))
+    b_in, b_out = (port_point(b, b.frame, n)[0] for n in ("in_2", "out_2"))
+    assert a_in < a_out and b_in > b_out
+
+
+def test_a_face_ordered_twice_takes_the_last_word():
+    """Idempotent and total, so the result does not depend on what came before."""
+    b = units.Block("B", inputs=["S", "S"], outputs=["S"])
+    b.order_on("S", [b.out_1, b.in_1, b.in_2])
+    b.order_on("S", [b.in_2, b.out_1, b.in_1])
+    assert [p.name for p in b.ports_on("S")] == ["in_2", "out_1", "in_1"]
+
+
+# --- what it refuses, and what each refusal tells the author to do -----------
+
+
+def test_naming_only_some_of_a_face_is_refused_and_prints_the_face_to_copy():
+    b = units.Block("B", inputs=["S", "S"], outputs=["S"])
+    with pytest.raises(ValueError, match=r"names 1 of the 3 .*leaves in_2, out_1 unplaced"):
+        b.order_on("S", [b.in_1])
+    assert [p.name for p in b.ports_on("S")] == ["in_1", "in_2", "out_1"]
+
+
+def test_naming_one_connection_twice_is_refused():
+    b = units.Block("B", inputs=["S"], outputs=["S"])
+    with pytest.raises(ValueError, match="names 'in_1' twice"):
+        b.order_on("S", [b.in_1, b.in_1])
+
+
+def test_a_connection_on_another_face_names_the_nozzle_call_that_moves_it():
+    b = units.Block("B", inputs=["W", "S"], outputs=["S"])
+    with pytest.raises(ValueError, match=r"nozzle\('in_1', 'S'\)"):
+        b.order_on("S", [b.in_1, b.in_2, b.out_1])
+
+
+def test_another_units_port_is_refused_by_identity_and_not_by_name():
+    """Both blocks have an ``in_1``; matching on the name would have quietly
+    ordered this one's by the other one's port object."""
+    b = units.Block("B", inputs=["S"], outputs=["S"])
+    other = units.Block("Other", inputs=["S"], outputs=["S"])
+    with pytest.raises(ValueError, match="is a connection of 'Other'"):
+        b.order_on("S", [other.in_1, b.out_1])
+
+
+def test_the_names_are_refused_and_the_message_points_at_the_ports():
+    """A ``Sequence[Port]`` is what a checker can see through; strings are the
+    spelling this API exists not to go back to."""
+    b = units.Block("B", inputs=["S"], outputs=["S"])
+    with pytest.raises(TypeError, match="takes the connections themselves"):
+        b.order_on("S", ["out_1", "in_1"])
+
+
+def test_order_on_still_refuses_a_face_that_is_not_one():
+    b = units.Block("B", inputs=["S"], outputs=["S"])
+    with pytest.raises(ValueError, match="is not a face"):
+        b.order_on("sideways", [b.in_1, b.out_1])
+
+
+def test_a_refused_ordering_leaves_the_drawing_exactly_as_it_was():
+    b = units.Block("B", inputs=["S", "S"], outputs=["S"])
+    before = _along(b, "S")
+    for bad in ([b.in_2], [b.in_1, b.in_1, b.in_1], ["in_1", "in_2", "out_1"]):
+        with pytest.raises((ValueError, TypeError)):
+            b.order_on("S", bad)
+    assert _along(b, "S") == before
+
+
+def test_an_empty_face_has_nothing_to_order_and_says_so_by_doing_nothing():
+    """``ports_on`` answers an empty face with ``()``; its writer takes ``()``."""
+    b = units.Block("B", inputs=["W"], outputs=["E"])
+    assert b.order_on("N", []) is b
+    assert b.ports_on("N") == ()
+
+
+def test_ordering_a_face_cannot_make_a_block_undrawable():
+    """The one mutator that never re-checks the box, because it changes no
+    face's count -- the box that held the run a moment ago still does."""
+    b = units.Block("B", inputs=3, outputs=1, width=200, height=block_span(3))
+    b.order_on("W", [b.in_3, b.in_1, b.in_2])
+    assert [p.name for p in b.ports_on("W")] == ["in_3", "in_1", "in_2"]
+
+
+# --- and it is written down, so a sheet read back is the sheet drawn ---------
+
+
+def test_an_ordered_face_round_trips_through_a_spec():
+    from pandid.spec import from_dict, to_dict
+
+    fs = Flowsheet("bfd")
+    b = fs.add(units.Block("Loop", inputs=["W", "S"], outputs=["E", "S"]))
+    b.order_on("S", [b.out_2, b.in_2])
+    spec = to_dict(fs)
+    (entry,) = [u for u in spec["units"] if u["kind"] == "Block"]
+    assert entry["port_order"] == {"S": ["out_2", "in_2"]}
+
+    read = from_dict(spec)
+    assert [p.name for p in read.units[0].ports_on("S")] == ["out_2", "in_2"]
+    assert to_dict(read) == spec
+
+
+def test_a_block_nobody_reordered_writes_no_order_at_all():
+    """The key is absent from every sheet until somebody asks for it, so an
+    ordinary block's entry reads the way a hand-written one would."""
+    from pandid.spec import to_dict
+
+    fs = Flowsheet("bfd")
+    fs.add(units.Block("Loop", inputs=["W", "S"], outputs=["E", "S"]))
+    (entry,) = [u for u in to_dict(fs)["units"] if u["kind"] == "Block"]
+    assert "port_order" not in entry
+
+
+def test_only_a_block_takes_an_order_and_a_bad_one_names_the_face():
+    from pandid.spec import SpecError, from_dict
+
+    with pytest.raises(SpecError, match="only a Block takes 'port_order'"):
+        from_dict({"name": "s", "units": [{"kind": "Pump", "name": "P-1", "port_order": {}}]})
+    with pytest.raises(SpecError, match=r"port_order.S"):
+        from_dict(
+            {
+                "name": "s",
+                "units": [
+                    {
+                        "kind": "Block",
+                        "name": "B",
+                        "inputs": ["S"],
+                        "outputs": ["S"],
+                        "port_order": {"S": ["in_1"]},
+                    }
+                ],
+            }
+        )
+
+
+# ---------------------------------------------------------------------------
 # The spreading rule is shared, not reimplemented.
 # ---------------------------------------------------------------------------
 
