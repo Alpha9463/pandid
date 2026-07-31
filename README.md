@@ -5,7 +5,7 @@ flowsheet, in pure Python with no runtime dependencies.
 
 [![Distillation train](https://raw.githubusercontent.com/Alpha9463/pandid/main/docs/gallery/03_distillation_train.png)](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md)
 
-<sub>[`examples/03_distillation_train.py`](https://github.com/Alpha9463/pandid/blob/main/examples/03_distillation_train.py). See the [gallery](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md) for all eleven.</sub>
+<sub>[`examples/03_distillation_train.py`](https://github.com/Alpha9463/pandid/blob/main/examples/03_distillation_train.py). See the [gallery](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md) for all twelve.</sub>
 
 You describe what connects to what. The engine lays out the equipment, routes
 every stream, and draws industry-standard symbols. The name is how "P&ID" is
@@ -128,7 +128,7 @@ and what each claim does not cover.
 
 | Where | What |
 |---|---|
-| [Example gallery](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md) | all eleven examples rendered, with what each one demonstrates |
+| [Example gallery](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md) | all twelve examples rendered, with what each one demonstrates |
 | [API reference](https://github.com/Alpha9463/pandid/blob/main/docs/api.md) | every public class, port and option, verified against the source |
 | [Contributing](https://github.com/Alpha9463/pandid/blob/main/CONTRIBUTING.md) | setup, the four gates, and the conventions that are easy to get wrong |
 | [Changelog](https://github.com/Alpha9463/pandid/blob/main/CHANGELOG.md) | what is in this release |
@@ -204,7 +204,7 @@ spec. See the
 ## Examples
 
 Runnable scripts in [`examples/`](https://github.com/Alpha9463/pandid/tree/main/examples),
-each usable from the repo root or from `examples/` itself. All eleven are
+each usable from the repo root or from `examples/` itself. All twelve are
 rendered in the
 [gallery](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md).
 
