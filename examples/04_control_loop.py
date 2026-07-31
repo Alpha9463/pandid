@@ -9,8 +9,14 @@ anchored to a host with ``add_instrument(..., on=...)``:
   an in-line primary element sitting on the line), and ``angle=`` which way it
   branches, measured from the flow direction, so a re-route cannot spin it.
 - ``on=`` a **unit** mounts the balloon on equipment, ``at=`` naming the face.
-- Alarms are ordinary balloons on their controller's loop; the interlock is the
-  ``"logic"`` square hung under it on a dashed line.
+- Alarms are ordinary balloons fanned off their controller's loop, each one a
+  dead end; the interlock is the ``"logic"`` square teed off the *measurement*
+  signal line on a dashed line of its own.
+
+Each loop is three symbols and not two, because a control-room balloon has no
+process connection of its own: an element or a tap, a transmitter reading it,
+and the controller reading the transmitter. ``FE-101 -> FT-101 -> FIC-101`` on
+the flow, ``V-101 -> LT-101 -> LIC-101`` on the level.
 
 ``fs.add_loop(variable, number)`` declares the loop the number belongs to, and
 each member is tagged from it: a balloon by passing the loop where the number
@@ -82,8 +88,18 @@ def main():
     # the controller sits off to one side driving the control valve. The
     # element carries the loop's tag, so the balloon above it is the
     # transmitter rather than a second FE.
+    #
+    # A controller is a *circle in a square*, ``variant="shared"``, and never
+    # the bare circle of ``"panel"``. In ISA-5.1 the square means shared display
+    # and shared control -- a point in the DCS -- which is what a control-room
+    # faceplate is; CHEE4001 p.13 rules out the alternative, "A circle on its
+    # own represents an instrument that gives a measurement or readout. It has
+    # no controlling function." The location bar ``"panel"`` adds says where the
+    # thing lives, not what it does, so an FIC drawn that way is a sheet
+    # asserting that its controller does not control. Nine of the ten
+    # controllers on the issued reference sheet are squared.
     ft = fs.add_instrument("FT", flow, on=fe, at="N", offset=62)
-    fic = fs.add_instrument("FIC", flow, on=ft, at="N", offset=125, angle=35, variant="panel")
+    fic = fs.add_instrument("FIC", flow, on=ft, at="N", offset=125, angle=35, variant="shared")
     # The controller lands almost directly above the valve it drives, so take
     # its output off the bottom of the balloon: on the default east face the
     # signal leaves away from the valve and has to double back to reach it.
@@ -91,9 +107,14 @@ def main():
     fs.connect(ft.sig_out, fic.sig_in, kind="electric")
     fs.connect(fic.sig_out, fv.actuator, kind="pneumatic")
 
-    # Level loop: controller mounted on the drum, its alarm pair alongside on
-    # the same loop, interlock square hung underneath.
-    lic = fs.add_instrument("LIC", level, on=drum, at="S", offset=90, variant="panel")
+    # Level loop: the transmitter is mounted on the drum and the controller
+    # reads *it*, which is the same three parts as the flow loop above. The
+    # drum-to-LT line is impulse tubing and draws solid; the LT-to-LIC line is a
+    # measurement and draws dashed. Running the drum straight into the
+    # controller instead would give a control-room faceplate a process tap of
+    # its own and leave the loop with no measurement signal to trip from.
+    lt = fs.add_instrument("LT", level, on=drum, at="S", offset=70)
+    lic = fs.add_instrument("LIC", level, on=lt, at="S", offset=95, variant="shared")
     # Both alarms read the controller, so both hang off it. Chaining one to the
     # other would draw the low alarm as though the high alarm fed it.
     #
@@ -105,29 +126,43 @@ def main():
     # taken at any other angle from a *circle* also has to leave along a tangent,
     # which draws a line grazing the balloon instead of meeting it.
     #
-    # Which face each one gets is forced. The controller's own impulse line
-    # arrives from the drum into the north, and its output leaves to the east
-    # towards LV-101: put a balloon on that east face and its tap and the output
-    # are drawn one on top of the other as far as the output's first corner. So
-    # the controller has two faces to give, and they go to the two alarms.
-    fs.add_instrument("LAH", level, on=lic, at="W", offset=78)
-    fs.add_instrument("LAL", level, on=lic, at="S", offset=78)
+    # Which face each one gets is forced. The measurement arrives from LT-101
+    # into the north and the output leaves to the east towards LV-101: put a
+    # balloon on that east face and its tap and the output are drawn one on top
+    # of the other as far as the output's first corner. So the controller has
+    # two faces to give, and they go to the two alarms.
+    #
+    # Both are squared like the controller, because the square is the DCS point
+    # and not a claim that the alarm acts: an alarm that acts is lettered S or Z
+    # and not A, as below. The reference sheet squares the three alarms it draws
+    # as balloons the same way (LAH-322, LAL-322, TAH-323).
+    fs.add_instrument("LAH", level, on=lic, at="W", offset=78, variant="shared")
+    fs.add_instrument("LAL", level, on=lic, at="S", offset=78, variant="shared")
 
-    # The interlock takes no face at all: it is teed off the *signal line*, which
-    # is what the issued sheet does with every trip on it. Hanging it on an alarm
-    # instead would draw the alarm as driving it, and an alarm that acts is
-    # lettered S or Z rather than A -- ISO 15519-2 Table 2 note 9: "Shall only be
-    # used for separate alarm control functions. If control functions S and Z at
-    # time of action also trigger an alarm/message, then the A shall not be used
-    # in addition to the in front letter codes S or Z." An LAL with an output is
-    # a mis-lettered LSL. §7.2.4 is the same rule from the line's end: "Signal
-    # lines for different types of control functions should not be joined."
+    # The interlock takes no face at all: it is teed off the *measurement*
+    # signal line, which is what the issued sheet does with every trip on it --
+    # loops 301, 304 and 306 off their PT->PIC and LT->LIC runs, 322 off the two
+    # stubs downstream of LI-322, 323 off the TI-323 trunk, five out of five on
+    # the measurement side. A plant trips on the level it reads and not on what
+    # the controller happened to ask the valve for, and a trip taken off the
+    # output stops working the moment the loop is put on manual.
+    #
+    # Hanging it on an alarm instead would draw the alarm as driving it, and an
+    # alarm that acts is lettered S or Z rather than A -- ISO 15519-2 Table 2
+    # note 9: "Shall only be used for separate alarm control functions. If
+    # control functions S and Z at time of action also trigger an alarm/message,
+    # then the A shall not be used in addition to the in front letter codes S or
+    # Z." An LAL with an output is a mis-lettered LSL. §7.2.4 is the same rule
+    # from the line's end: "Signal lines for different types of control
+    # functions should not be joined."
     #
     # ``on=`` a stream measures ``at=`` along its *routed* path, so the square
-    # rides the output wherever the router puts it, and the default angle=90
-    # branches perpendicular to a run that is already orthogonal.
-    trip = fs.connect(lic.sig_out, lv.actuator, kind="electric")
-    fs.add_instrument("I", 1, on=trip, at=0.25, offset=44, angle=-90, variant="logic")
+    # rides the measurement wherever the router puts it, and angle=90 branches
+    # perpendicular to a run that is already orthogonal: east off a line running
+    # south, which is the side LAH-101 is not on.
+    measurement = fs.connect(lt.sig_out, lic.sig_in, kind="electric")
+    fs.add_instrument("I", 1, on=measurement, at=0.5, offset=44, angle=90, variant="logic")
+    fs.connect(lic.sig_out, lv.actuator, kind="electric")
 
     fs.render(out("control_loop.svg"))
     print("Generated control_loop.svg")

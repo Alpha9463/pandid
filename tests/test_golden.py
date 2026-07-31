@@ -215,24 +215,31 @@ def _control_loop() -> Flowsheet:
     fs.connect(drum.vent, psv.inlet)
     fs.connect(psv.outlet, flare.inlet)
 
+    # Both controllers are circle-in-square, ISA-5.1's shared display and shared
+    # control; the bare circle of "panel" says the instrument only reads.
     ft = fs.add_instrument("FT", flow, on=fe, at="N", offset=62)
-    fic = fs.add_instrument("FIC", flow, on=ft, at="N", offset=125, angle=35, variant="panel")
+    fic = fs.add_instrument("FIC", flow, on=ft, at="N", offset=125, angle=35, variant="shared")
     fic.nozzle("sig_out", "S")
     fs.connect(ft.sig_out, fic.sig_in, kind="electric")
     fs.connect(fic.sig_out, fv.actuator, kind="pneumatic")
 
-    lic = fs.add_instrument("LIC", level, on=drum, at="S", offset=90, variant="panel")
-    # One face each, at the default angle, so every impulse line runs square:
+    # Element -> transmitter -> controller on the level as well as on the flow:
+    # the impulse line off the drum reaches LT-101 and the controller reads it.
+    lt = fs.add_instrument("LT", level, on=drum, at="S", offset=70)
+    lic = fs.add_instrument("LIC", level, on=lt, at="S", offset=95, variant="shared")
+    # One face each, at the default angle, so every impulse line runs square,
+    # and squared like the controller because the square is the DCS point:
     # see the comment on the same four balloons in examples/04_control_loop.py.
-    fs.add_instrument("LAH", level, on=lic, at="W", offset=78)
-    fs.add_instrument("LAL", level, on=lic, at="S", offset=78)
+    fs.add_instrument("LAH", level, on=lic, at="W", offset=78, variant="shared")
+    fs.add_instrument("LAL", level, on=lic, at="S", offset=78, variant="shared")
     # In no loop and with no measured variable: a repeatable logic function
-    # takes a literal number, and has to keep being able to. Teed off the signal
-    # line rather than off a balloon face, which is also the fixture that keeps
-    # a stream-hosted tap in the golden corpus -- it is drawn dashed, and the
-    # two process taps above it are not.
-    trip = fs.connect(lic.sig_out, lv.actuator, kind="electric")
-    fs.add_instrument("I", 1, on=trip, at=0.25, offset=44, angle=-90, variant="logic")
+    # takes a literal number, and has to keep being able to. Teed off the
+    # measurement signal line rather than off a balloon face, which is also the
+    # fixture that keeps a stream-hosted tap in the golden corpus -- it is drawn
+    # dashed, and the two process taps above it are not.
+    measurement = fs.connect(lt.sig_out, lic.sig_in, kind="electric")
+    fs.add_instrument("I", 1, on=measurement, at=0.5, offset=44, angle=90, variant="logic")
+    fs.connect(lic.sig_out, lv.actuator, kind="electric")
     return fs
 
 
