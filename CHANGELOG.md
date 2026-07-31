@@ -136,6 +136,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   list and inheriting either constructor added `shell_in` twice and raised
   `"already has a port named 'shell_in'"`.
 
+- **`validate()` reports `nozzles-crowded`:** two nozzles on one face of a unit
+  pitched tighter than the arrowheads they carry.
+  ([#155](https://github.com/Alpha9463/pandid/issues/155))
+
+  A PFD ends every process line in a 12px filled triangle, and that triangle is
+  as wide across the run as it is long, so a port family spread down one face
+  can be pitched closer than the heads it has to carry: `10_ethanol_pfd`'s M-301
+  takes two feeds 14.5px apart and the two heads merge into one double-headed
+  blob, which says one nozzle where the flowsheet has two. Nothing errored, the
+  connectivity was right and every nozzle was on its ink, which is what made it
+  worth a finding.
+
+  The floor is `pandid.render.svg.MIN_NOZZLE_PITCH`, 2.5× the `ARROWHEAD` the
+  renderer draws rather than a number chosen beside it, so redrawing the head
+  moves the floor with it. The message names the box that would fix it
+  (`M-301.height = 207`) and the alternative, which is fewer nozzles on that
+  face.
+
+  Only nozzles that actually wear a head are counted, and both of a pair. A
+  stream *leaving* takes its head at the far end, so a splitter's two outlets at
+  the same 20px pitch stay silent and read as two bare lines; so do signal lines
+  and runs ending at a tee, neither of which is drawn with a head.
+
+  Six units across the shipped examples are reported (`01`/M-101, `03`/M-100,
+  `05`/M-201, `08`/M-201, `10`/M-301 and M-302). Rendering is unchanged and no
+  golden moves.
+
 ### Changed
 
 - A spec may now name any of the new device classes (`kind: Cyclone`, or its

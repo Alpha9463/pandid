@@ -316,6 +316,104 @@ def test_a_vertical_drop_is_a_runs_length_and_not_a_miss():
     assert _off_elevation(fs) == []
 
 
+# --- nozzles crowded under their own arrowheads -------------------------------
+
+
+def _crowded(fs):
+    return [i for i in fs.validate() if i.code == "nozzles-crowded"]
+
+
+def _fed_mixer(n_inlets=2, **box):
+    """A mixer taking its feeds on one face, which is where this defect lives.
+
+    The mixer symbol is 50px tall and spreads its inlet series 20px apart in its
+    own coordinates, so at the default size two feeds land 20px apart: two 12px
+    arrowheads with 8px of paper between them. ``box`` is what an author would
+    type to give them room.
+    """
+    fs = Flowsheet("crowded")
+    mix = fs.add(U.Mixer("M-1", n_inlets=n_inlets, **box))
+    for i in range(1, n_inlets + 1):
+        fs.connect(fs.add(U.Feed(f"F{i}")).outlet, mix.ports[f"in_{i}"])
+    fs.connect(mix.outlet, fs.add(U.Product("P")).inlet)
+    fs.layout()
+    return fs, mix
+
+
+def test_two_nozzles_inside_their_own_arrowheads_are_reported():
+    fs, _ = _fed_mixer()
+    issues = _crowded(fs)
+    assert [i.severity for i in issues] == ["warning"]
+    assert "M-1.in_1 and M-1.in_2 are 20.0px apart on M-1's W face" in issues[0].message
+    assert "30px two 12px arrowheads" in issues[0].message
+    # The finding is only worth making if it also says what to do about it, the
+    # way run-off-elevation names the pin.
+    assert "M-1.height = 75" in issues[0].message
+
+
+def test_the_box_the_message_names_is_the_cure():
+    """Typing the message's own suggestion back in has to silence it, or the
+    advice is wrong. 75 is the 50px box scaled by the 30/20 it fell short by."""
+    fs, _ = _fed_mixer(height=75)
+    assert _crowded(fs) == []
+
+
+def test_a_comfortable_pitch_says_nothing():
+    """The same two nozzles in a box with room for them. Nothing about the
+    topology changed, so the finding is about the drawing and only the drawing."""
+    fs, _ = _fed_mixer(height=120)
+    assert _crowded(fs) == []
+
+
+def test_a_third_nozzle_on_one_face_is_still_one_finding():
+    """Three heads on one face is one crowded face with one thing to do about
+    it, so it is said once -- the way letter-sequence says a repeated tag once.
+    Squeezed into the same 50px box the three land 17.5px apart."""
+    fs, _ = _fed_mixer(n_inlets=3)
+    issues = _crowded(fs)
+    assert len(issues) == 1
+    assert "M-1.in_1 and M-1.in_2 are 17.5px apart" in issues[0].message
+    assert "the tightest of the 3 it carries there" in issues[0].message
+
+
+def test_nozzles_that_carry_no_arrowhead_are_not_crowded():
+    """A splitter's outlets sit at exactly the pitch a mixer's inlets are
+    reported at, and the sheet reads them without trouble: a stream *leaving*
+    takes its head at the far end of the branch, so the face carries two bare
+    2px lines rather than two 12px triangles. One pitch, two drawings, and only
+    the one with the heads on it is a drawing that misleads."""
+    fs = Flowsheet("splitter")
+    sp = fs.add(U.Splitter("SP-1", n_outlets=2))
+    fs.connect(fs.add(U.Feed("F")).outlet, sp.inlet)
+    for i in (1, 2):
+        fs.connect(sp.ports[f"out_{i}"], fs.add(U.Product(f"P{i}")).inlet)
+    fs.layout()
+    from pandid.portgeom import port_point
+
+    ys = [port_point(sp, sp.frame, f"out_{i}")[1] for i in (1, 2)]
+    assert abs(ys[1] - ys[0]) == 20.0  # the pitch the mixer above is reported at
+    assert _crowded(fs) == []
+
+
+def test_the_floor_is_the_arrowhead_the_renderer_actually_draws():
+    """Not a number this module picked. The marker on the sheet and the
+    threshold the report is measured against are one constant, so redrawing the
+    head moves the floor with it rather than leaving the two to drift apart."""
+    import re
+
+    from pandid.render.svg import ARROWHEAD, MIN_NOZZLE_PITCH
+
+    fs, _ = _fed_mixer()
+    drawn = re.search(
+        r'<marker id="arrow_[^"]*"[^>]*markerWidth="([\d.]+)" '
+        r'markerHeight="([\d.]+)"',
+        fs.to_svg(),
+    )
+    assert drawn is not None
+    assert [float(v) for v in drawn.groups()] == [ARROWHEAD, ARROWHEAD]
+    assert MIN_NOZZLE_PITCH == 2.5 * ARROWHEAD
+
+
 def _unit_classes():
     """Every built-in Unit subclass, keyed by the ``kind`` its symbols answer to."""
     from pandid import units as unit_types

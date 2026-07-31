@@ -189,10 +189,34 @@ def _off_elevation(su, sp, du, dp) -> tuple[float, float, bool] | None:
     return (offset, span, sh <= dh) if offset < span else None
 
 
+def _crowded(heads: list[tuple[float, str]], floor: float
+             ) -> tuple[float, str, str] | None:
+    """The tightest adjacent pair of arrowheads on one face, if any is too tight.
+
+    *heads* is every nozzle on the face that wears one, as ``(position along the
+    face, port name)``. Answers ``(pitch, nearer port, further port)``.
+
+    Adjacent pairs only: a face carrying three heads is crowded by whichever two
+    are closest, and the pair either side of them is a different distance about
+    the same crowding. One finding per face for the same reason ``letter-sequence``
+    makes one per tag -- what an author does about it (a bigger box, or a nozzle
+    moved off the face) is one action, so saying it twice is saying it twice.
+
+    A pair under ``_TOL`` is left alone. Two nozzles on one point are already
+    ``coincident-ports``, and that is the stronger and truer thing to say about
+    them: they are not two heads too close to tell apart, they are one place two
+    streams both end.
+    """
+    order = sorted(heads)
+    pairs = sorted((b[0] - a[0], a[1], b[1]) for a, b in zip(order, order[1:]))
+    return next((p for p in pairs if _TOL < p[0] < floor), None)
+
+
 def validate(fs: "Flowsheet") -> list["Issue"]:
     """Return all validation issues for the flowsheet (errors first)."""
     from pandid.layout.attach import MAX_PLACEMENT_PASSES
     from pandid.portgeom import is_anchored, port_point, resolve_port, unit_box
+    from pandid.render.svg import ARROWHEAD, MIN_NOZZLE_PITCH, wears_arrowhead
     from pandid.render.symbols import default_registry
     from pandid.streams import SIGNAL_KINDS
     from pandid.units import Instrument
@@ -339,6 +363,67 @@ def validate(fs: "Flowsheet") -> list["Issue"]:
                     + ("" if anchored else "; the symbol anchors no nozzle for one "
                        "of them, so both fall back to the centre of the box"))
                 (errors if anchored else warnings).append(issue)
+
+        # Soft: nozzles on one face pitched tighter than the arrowheads they
+        # carry. A PFD ends every process line in a filled triangle
+        # (:data:`pandid.render.svg.ARROWHEAD`), and the triangle is as wide
+        # across the run as it is long, so two of them on one face at a pitch of
+        # 14.5 have 2.5px of paper between them and read as one double-headed
+        # blob: the drawing says one nozzle where the topology has two. Nothing
+        # errors, every nozzle is on its own ink and the connectivity is right.
+        # Silently wrong, which is what this module is for.
+        #
+        # *Both* nozzles of a pair have to wear a head, and that is where the
+        # check earns its narrowness rather than measuring every connection on
+        # the face. A splitter takes its heads at the far ends of its branches,
+        # so its outlet face carries two bare 2px lines: 05_reactor_recycle
+        # draws SP-201's pair 20px apart and they read as two lines without
+        # trouble, while M-201's two inlets on the same sheet at the same 20px
+        # are two filled triangles with 8px between them. One number, two
+        # drawings, and only the one with the heads on it misleads.
+        #
+        # The cure is the box, so the message does the arithmetic rather than
+        # leaving the author to, the way ``run-off-elevation`` names the pin.
+        # The drawn pitch is linear in the extent of the box across the face: a
+        # symbol that may be reshaped maps its nozzles onto the box, and both
+        # terms of the ``min()`` a :class:`~pandid.render.symbols.PortSeries`
+        # spreads its members by are measured along that same face. So the
+        # extent that clears the floor is the one the unit has, scaled by how
+        # far short it fell. A symbol that keeps its aspect instead is centred
+        # rather than stretched and would not answer to that arithmetic; none
+        # reaches here, because the only ports one carries are an instrument
+        # balloon's and a signal line wears no head.
+        for u in fs.units:
+            heads: dict[str, list[tuple[float, str]]] = {}
+            for name, port in u.ports.items():
+                s = port.stream
+                # The head is the path's ``marker-end``, so it lands on the
+                # nozzle the stream arrives at and on no other.
+                if s is None or s.dest is not port:
+                    continue
+                if not wears_arrowhead(s, default_registry):
+                    continue
+                at = resolve_port(u, u.frame, name)
+                along = at.point[1] if at.face in ("E", "W") else at.point[0]
+                heads.setdefault(at.face, []).append((along, name))
+            for face, on_face in heads.items():
+                tight = _crowded(on_face, MIN_NOZZLE_PITCH)
+                if tight is None:
+                    continue
+                pitch, first, second = tight
+                across, dim = ((u.frame.h, "height") if face in ("E", "W")
+                               else (u.frame.w, "width"))
+                room = math.ceil(across * MIN_NOZZLE_PITCH / pitch)
+                crowd = (f", the tightest of the {len(on_face)} it carries there"
+                         if len(on_face) > 2 else "")
+                warnings.append(Issue(
+                    "warning", "nozzles-crowded",
+                    f"{u.name}.{first} and {u.name}.{second} are {pitch:.1f}px apart "
+                    f"on {u.name}'s {face} face{crowd} -- closer than the "
+                    f"{MIN_NOZZLE_PITCH:.0f}px two {ARROWHEAD:.0f}px arrowheads need "
+                    f"to read as two connections rather than as one double-headed "
+                    f"blob. Give the unit a box with room for them, "
+                    f"{u.name}.{dim} = {room}, or fewer nozzles on the {face} face"))
 
         # Soft: a route passing through a unit body it does not connect to,
         # and grossly indirect routes.

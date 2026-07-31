@@ -1856,6 +1856,7 @@ and `message`.
 | `letter-sequence` | warning | a tag spells its control-function letters out of the order ISO 15519-2:2015 §5.2.4 requires (I, R, C, S, M, Z, A), so `FCI` where `FIC` was meant. One finding per tag, and the message names the tag it would have been |
 | `gravity-turned` | warning | a unit whose symbol's function depends on gravity has been given a quarter turn, which ISO 15519-1:2010 §11.4.2 excepts from the general permission to turn. One finding per unit; see [Symbols that must not be turned](#symbols-that-must-not-be-turned) |
 | `run-off-elevation` | warning | two connected nozzles on one horizontal run are *almost* level, missing by less than the shorter symbol is tall, so the line steps into a device and back out; see [Runs at one elevation](#runs-at-one-elevation) |
+| `nozzles-crowded` | warning | two nozzles on one face are pitched closer than the arrowheads they carry, so the two heads read as one; one finding per face, and the message names the box that would fix it. See [Nozzles and the arrowheads they carry](#nozzles-and-the-arrowheads-they-carry) |
 | `route-not-settled` | warning | routing and instrument placement never agreed and `route()` ran out of passes; see [Routing and instrument placement](#routing-and-instrument-placement) |
 
 Errors raise from `to_svg()`/`render()` unless you pass `check=False`. Warnings
@@ -1892,6 +1893,54 @@ where the difference in `y` is the length of the drop rather than a miss; signal
 lines, which carry a measurement and have no elevation; sheets with no pinned
 elevation to have got wrong; and the eccentric reducer, whose two ends sit on
 different centrelines because that is the whole point of the fitting.
+
+### Nozzles and the arrowheads they carry
+
+A PFD ends every process line in a filled triangle, `pandid.render.svg.ARROWHEAD`
+= 12 units long and, because the marker's square viewBox maps onto a square
+viewport, exactly as much *across* the run. Two of them side by side on one face
+therefore need room: at a pitch of 12 they touch, and below about twice that the
+pair reads as a single double-headed blob rather than as two connections.
+
+That is easy to reach without noticing, because a port family is spread across
+whatever face it has. A `Mixer` is drawn in a 50-unit box and spaces its inlets
+20 apart, so two feeds land 20 apart with 8 units of paper between two 12-unit
+triangles; three are squeezed to 17.5:
+
+```python
+mix = fs.add(units.Mixer("M-1", n_inlets=2))
+fs.to_svg()
+[w.message for w in fs.warnings]
+# ["M-1.in_1 and M-1.in_2 are 20.0px apart on M-1's W face -- closer than the
+#   30px two 12px arrowheads need to read as two connections rather than as one
+#   double-headed blob. Give the unit a box with room for them,
+#   M-1.height = 75, or fewer nozzles on the W face"]
+```
+
+The floor is `pandid.render.svg.MIN_NOZZLE_PITCH`, **2.5× the arrowhead the
+renderer actually draws**, so redrawing the head moves the floor with it. The
+cure is the box, and the message does the arithmetic: the drawn pitch is
+proportional to the extent of the box across the face, so
+
+```python
+mix = fs.add(units.Mixer("M-1", n_inlets=2, height=75))   # nozzles 30 apart
+```
+
+is silent. So is putting fewer nozzles on that face — by piping fewer of them,
+or, where the symbol offers the port a second placement, by moving one with
+[`nozzle()`](#nozzle). A port placed by a series has only the one the series
+gives it, so for a `Mixer` the box is the answer.
+
+Only nozzles that actually **wear a head** are counted, and both of a pair. The
+head is the path's `marker-end`, so it lands on the nozzle a stream *arrives*
+at: a `Splitter`'s two outlets sit at the same 20 apart and read perfectly well,
+because each of those heads is drawn at the far end of its branch and the face
+carries two bare 2-unit lines. Signal lines wear no head on either drawing, and
+neither does a run ending at a `Tee`, which is bare pipe.
+
+One finding per face, not per pair: three crowded nozzles are one crowded face
+with one thing to do about it. A pair on the same *point* is the stronger
+`coincident-ports` finding instead.
 
 ### Routing and instrument placement
 

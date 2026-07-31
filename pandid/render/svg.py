@@ -49,12 +49,69 @@ _DIAMOND_BALLOONS = {"sis", "logic", "interlock"}
 _PROCESS_STROKE = 2
 _SIGNAL_STROKE = 1
 
+# --- the arrowhead a PFD draws ------------------------------------------------
+# The size of the marker :meth:`SvgRenderer._defs` defines, written once because
+# more than the marker measures itself against it. ``markerUnits="userSpaceOnUse"``
+# holds it off the stroke width, and the marker's 10x10 viewBox maps onto the
+# whole of the square, so the filled triangle is this long *along* the run and
+# exactly as much *across* it. A fixed page size scales the drawing group the
+# marker is referenced from, which scales the head with everything else, so a
+# distance compared against it means the same thing on an A3 sheet as on one
+# fitted to the drawing.
+ARROWHEAD = 12.0
+
+#: The closest two nozzles on one face may be pitched and still read as two
+#: connections rather than as one.
+#:
+#: Two heads side by side leave ``pitch - ARROWHEAD`` of white between two
+#: filled triangles: they touch at 12, and 2.5x the head leaves 18, an arrowhead
+#: and a half of clear paper at any size the sheet is printed. The multiplier is
+#: issue #155's, and this repo's own sheets say it is not the load-bearing part
+#: of the number: the pitches that carry two heads across all eleven examples
+#: are 14.5, 17.5 and 20 (on four sheets), and the next one up is 140, so every
+#: multiplier from 1.7x to 11x reports the same set. What has to be right is
+#: that the floor comes off the artwork rather than off a preference, so a
+#: redrawn arrowhead takes it along.
+#:
+#: Read by :func:`pandid.validate.validate`, which reports a unit whose drawn
+#: nozzles fall inside it (``nozzles-crowded``), and by anything sizing a box to
+#: the nozzles it has to carry.
+MIN_NOZZLE_PITCH = 2.5 * ARROWHEAD
+
+
+def wears_arrowhead(stream, registry) -> bool:
+    """Would this stream wear an arrowhead at its far end?
+
+    Two things say no. A signal line never carried one on either drawing. And a
+    stream that ends at a symbol drawn as bare pipe has not arrived anywhere: a
+    tee is a point on a line where the line divides, and the run carries
+    straight on past it, so a head there reads as flow stopping in the middle of
+    an unbroken run. The question is about the artwork rather than about the
+    class, so it is the symbol that answers it (see ``Symbol.bare_run``): every
+    in-line device that draws a body, a valve or a reducer or a fitting, gives
+    the head something to land against and keeps it.
+
+    The head goes on the ``marker-end`` of the path, so it lands on the nozzle
+    the stream *arrives* at and nowhere else. A stream leaving a junction is
+    untouched: it gets its head at its own destination, which is wherever the
+    branch or the run actually ends.
+
+    Module-level, and taking the registry rather than reading one, because the
+    validator asks the same question with no renderer in hand -- and asking it
+    twice is how the sheet and the report come to disagree about which nozzles
+    carry a head.
+    """
+    if stream.kind in _SIGNAL_KINDS:
+        return False
+    return not registry.for_unit(stream.dest.owner).bare_run
+
+
 # --- stream-label placement -------------------------------------------------
 # A stream label is written on an opaque halo, so it can only sit *on* the pipe
-# where the run is long enough to leave pipe showing at each end: the 12px
-# arrowhead a PFD draws, plus enough line either side that the run still reads
-# as one line rather than two stubs. Anything shorter is written beside the pipe
-# instead, which is what a sheet does with a line number a dozen characters long.
+# where the run is long enough to leave pipe showing at each end: the ARROWHEAD
+# a PFD draws, plus enough line either side that the run still reads as one line
+# rather than two stubs. Anything shorter is written beside the pipe instead,
+# which is what a sheet does with a line number a dozen characters long.
 _LABEL_CLEAR = 20.0
 # Gap from the pipe to the near edge of a label written beside it.
 _LABEL_GAP = 4.0
@@ -1565,25 +1622,14 @@ class SvgRenderer:
     # ------------------------------------------------------------------ streams
 
     def _tipped(self, s, arrows: bool) -> bool:
-        """Does this stream wear an arrowhead at its far end?
+        """Does *this drawing* put an arrowhead on the end of this stream?
 
-        Three things say no. A P&ID draws none at all (``arrows``). A signal
-        line never carried one on either drawing. And a stream that ends at a
-        symbol drawn as bare pipe has not arrived anywhere: a tee is a point on
-        a line where the line divides, and the run carries straight on past it,
-        so a head there reads as flow stopping in the middle of an unbroken
-        run. The question is about the artwork rather than about the class, so
-        it is the symbol that answers it (see ``Symbol.bare_run``): every
-        in-line device that draws a body, a valve or a reducer or a fitting,
-        gives the head something to land against and keeps it.
-
-        A stream *leaving* a junction is untouched. It gets its head at its own
-        destination, which is wherever the branch or the run actually ends.
+        :func:`wears_arrowhead` and one thing more: a P&ID draws no heads at
+        all, so ``arrows`` is false for the whole sheet. That part is a property
+        of the render rather than of the stream, which is why it lives here and
+        the rest lives where a caller with no renderer can reach it.
         """
-        if not arrows or s.kind in _SIGNAL_KINDS:
-            return False
-        dest = s.dest.owner
-        return not self.registry.for_unit(dest).bare_run
+        return arrows and wears_arrowhead(s, self.registry)
 
     def _draw_streams(self, fs, jump_direction, unit_labels, arrows=True, ink=()):
         from pandid.portgeom import port_point, unit_box
