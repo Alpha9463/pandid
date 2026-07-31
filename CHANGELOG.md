@@ -94,6 +94,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so outright rather than leaving it to be met by surprise.
   ([#138](https://github.com/Alpha9463/pandid/issues/138))
 
+- **`docs/api.md` lists the equipment classes.** An *Equipment classes* table
+  beside the port table, one row per class with its `kind`, its base and only
+  the nozzles that differ from that base, and the *Variants* table restructured
+  from "kind → every drawing of it" to "class → the drawings it owns", which is
+  where a class-local spelling — `DustCollector(variant="belt")` for
+  `filter/gas_belt` — becomes visible. Both tables are held to the live registry
+  by a test, so a drawing nobody documented fails the suite the way one nobody
+  classified already fails the generator.
+  ([#147](https://github.com/Alpha9463/pandid/issues/147))
+
 - `Unit.PORT_ANCHORS`: nozzle name → the name the symbol anchors it under, for a
   class that renames one of its drawing's nozzles. Without it a renamed nozzle
   asks the artwork for an anchor it does not have and is given the fallback, the
