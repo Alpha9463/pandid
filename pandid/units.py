@@ -100,6 +100,29 @@ class Unit:
     #: is a spec it accepts.
     VARIANT_ALIASES: dict[str, str] = {}
 
+    #: nozzle name -> the name the *symbol* anchors it under, where a class
+    #: calls one of its drawing's nozzles something else.
+    #:
+    #: A symbol's ``ports`` dict is keyed by name, so a class that renames a
+    #: nozzle would otherwise ask the artwork for an anchor it does not have and
+    #: be given the fallback, the centre of the box: two renamed draws then land
+    #: on one point and their streams stack. Naming the anchor here is what lets
+    #: a class rename a nozzle without the drawing having to be redrawn or the
+    #: name it already ships under having to change.
+    #:
+    #: Declaring both names on the *symbol* is not the alternative it looks
+    #: like. Two names at one coordinate is exactly what
+    #: :meth:`pandid.render.symbols.Symbol.coincident_ports` reports, and it
+    #: reports it because a symbol cannot tell a rename from two nozzles drawn
+    #: on top of each other. So the rename is a fact about the class, and it
+    #: lives on the class.
+    #:
+    #: The cost is deliberate and permanent: one drawing then answers to two
+    #: nozzle vocabularies depending on which class was constructed. See
+    #: :mod:`pandid.devices`, which is where that happens and where it is
+    #: argued.
+    PORT_ANCHORS: dict[str, str] = {}
+
     #: The layout engine's solver scratch, seeded from :attr:`pin_` at the start
     #: of every run by ``pandid.layout._seed_slots`` and read by nothing outside
     #: that package. Declared rather than initialised in ``__init__`` because a

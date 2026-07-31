@@ -8,22 +8,32 @@ package defines, builds one, and checks the two halves against each other in
 both directions.
 
 Found rather than listed, so a class added tomorrow is covered without anyone
-remembering to come here. The exemptions are named, and there are only two
-kinds, both argued at the class they apply to:
+remembering to come here. The exemptions are named, and there are only three
+kinds, each argued at the class or the module it applies to:
 
 - the **numbered families** (``Mixer``'s ``in_1`` ... ``in_n`` and ``Splitter``'s
   ``out_1`` ... ``out_n``), whose size is the caller's, so there is no finite
   set of names a class annotation could stand for;
 - the **variant nozzles** (``HeatExchanger``'s ``bottoms``, ``Separator``'s
   ``overflow``), which belong to some variants and not others, so declaring them
-  on the base class would tell a checker something false about every other one.
+  on the base class would tell a checker something false about every other one;
+- the **superseded nozzles** of :mod:`pandid.devices`, where a generated class
+  replaces its base's whole nozzle list. ``PlateExchanger`` has lettered sides
+  and no shell, and ``CheckValve`` has no actuator, but both inherit the
+  annotation their base wrote. Python has no way to un-declare one:
+  ``__annotations__`` is merged down the MRO and there is no "delete", and
+  re-annotating the name with something narrower is an incompatible override.
+  So the phantom check answers for the annotations a class *writes*, and
+  :func:`test_only_these_classes_supersede_a_declaration` is what keeps that
+  from spreading past the twelve classes it is true of.
 """
 
+import inspect
 import re
 
 import pytest
 
-from pandid import units
+from pandid import devices, units
 from pandid.ports import Port
 
 # A nozzle whose name ends in an underscore and a number is one of a family
@@ -72,6 +82,43 @@ def _annotated(cls):
     return {name for name, hint in typing.get_type_hints(cls).items() if hint is Port}
 
 
+def _superseded(cls):
+    """Annotations ``cls`` inherits for nozzles its own ``PORTS`` replaced.
+
+    A class that declares ``PORTS`` replaces its base's list outright, which is
+    what :meth:`~pandid.units.Unit._declared_ports` means by "the nearest
+    declaration is the whole list". The base's *annotations* do not go with it,
+    because nothing in Python removes an inherited one -- so these are the names
+    a checker still resolves and a runtime lookup no longer finds.
+
+    Read off the class's *own* annotations rather than ``get_type_hints``, which
+    merges the MRO; that is what tells "written here" from "inherited", and it
+    is why the exemption cannot leak to a class that simply forgot to declare a
+    nozzle it builds.
+    """
+    if "PORTS" not in vars(cls):
+        return set()
+    return _annotated(cls) - _own_annotated(cls) - _built(cls)
+
+
+def _own_annotations(cls):
+    """The annotations written in ``cls``'s own body, resolved.
+
+    ``inspect.get_annotations`` and not ``cls.__dict__["__annotations__"]``,
+    because where a class keeps them is a 3.10-through-3.14 difference and this
+    package supports all five: PEP 649 made them lazy in 3.14, so the dict holds
+    an ``__annotate_func__`` until something asks. This asks. It is also the one
+    reader that answers for a single class rather than for the whole MRO, which
+    is the distinction the exemption above turns on.
+    """
+    return inspect.get_annotations(cls, eval_str=True)
+
+
+def _own_annotated(cls):
+    """The nozzle names ``cls`` declares in its own body."""
+    return {name for name, hint in _own_annotations(cls).items() if hint is Port}
+
+
 def _built(cls):
     """The nozzle names one default instance of ``cls`` actually has.
 
@@ -109,7 +156,7 @@ def test_every_annotation_is_a_port_that_is_built(cls):
     of the class, and mypy would then wave through a sheet that raises the
     moment it is drawn.
     """
-    phantom = _annotated(cls) - _built(cls)
+    phantom = _annotated(cls) - _built(cls) - _superseded(cls)
     assert not phantom, (
         f"{cls.__name__} declares {sorted(phantom)}, which a default "
         f"{cls.__name__} does not have; a nozzle only some variants carry "
@@ -127,6 +174,55 @@ def test_only_the_named_families_are_exempt():
     """
     variable = {cls for cls in _unit_classes() if any(_NUMBERED.search(p) for p in _built(cls))}
     assert variable == _VARIABLE_PORT_CLASSES
+
+
+def test_only_these_classes_supersede_a_declaration():
+    """The generated classes whose base annotates a nozzle they do not build.
+
+    Listed rather than counted, because each one is a checker resolving an
+    attribute that raises at runtime, and that is the cost of the layer stated
+    outright. Two shapes of it, and no others:
+
+    - the six separators that draw off ``overflow``/``underflow`` where
+      ``Separator`` annotates ``vapor``/``liquid``;
+    - the four exchangers whose sides are not a shell and tubes, plus
+      ``CheckValve``, which has no actuator to declare.
+
+    A name appearing here that is not one of those is a nozzle somebody dropped,
+    not a vocabulary somebody replaced.
+    """
+    superseded = {
+        cls.__name__: sorted(_superseded(cls)) for cls in _unit_classes() if _superseded(cls)
+    }
+    assert superseded == {
+        "Cyclone": ["liquid", "vapor"],
+        "GravitySeparator": ["liquid", "vapor"],
+        "ElectrostaticPrecipitator": ["liquid", "vapor"],
+        "Screen": ["liquid", "vapor"],
+        "ImpactSeparator": ["liquid", "vapor"],
+        "MagneticSeparator": ["liquid", "vapor"],
+        "AirCooledExchanger": ["shell_in", "shell_out"],
+        "PlateExchanger": ["shell_in", "shell_out", "tube_in", "tube_out"],
+        "SpiralExchanger": ["shell_in", "shell_out", "tube_in", "tube_out"],
+        "ThinFilmEvaporator": ["shell_in", "shell_out", "tube_in", "tube_out"],
+        "CheckValve": ["actuator"],
+    }
+
+
+def test_every_generated_class_writes_its_own_nozzle_declarations():
+    """The direction the exemption above must not weaken.
+
+    A generated class declares ``PORTS``, so the phantom check stops asking
+    about what it inherited -- which would be a hole if it were also allowed to
+    inherit the annotations for the nozzles it *does* build. It is not: every
+    one of them is written in the class body, which is what makes the emitted
+    file readable as the declaration it is.
+    """
+    for name in devices.__all__:
+        cls = getattr(devices, name)
+        assert {port for port, _, _ in cls.PORTS} <= _own_annotated(cls), (
+            f"{name} builds nozzles it does not declare in its own body"
+        )
 
 
 @pytest.mark.parametrize(

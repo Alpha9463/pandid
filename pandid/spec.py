@@ -71,6 +71,7 @@ from difflib import get_close_matches
 from pathlib import Path
 from typing import Any
 
+from pandid import devices as device_types
 from pandid import units as unit_types
 from pandid.components import Component
 from pandid.document import Annotation, Revision, TableBox, TitleBlock, equipment_list, legend, notes
@@ -189,17 +190,34 @@ def _snake(name: str) -> str:
     return "".join(out)
 
 
+# Every class a spec may name, which is both layers: the ``kind`` + ``variant``
+# classes of :mod:`pandid.units` and the per-device classes generated into
+# :mod:`pandid.devices`. Both are needed, and for opposite directions --
+# ``_resolve_kind`` reads a spec that names ``Cyclone``, and ``_write_unit``
+# writes ``type(unit).__name__``, so a sheet built from device classes would
+# have failed to serialize at all if only ``units`` were here.
 _CLASSES: dict[str, type[Unit]] = {
     name: getattr(unit_types, name) for name in unit_types.__all__ if name != "Unit"
 }
+_CLASSES.update({name: getattr(device_types, name) for name in device_types.__all__})
 
 # A spec is hand-written, so accept every name the reader might reasonably use:
-# the class name from the README (``HeatExchanger``), its snake_case spelling,
-# and the internal ``Unit.kind`` tag (``hex``).
+# the class name from the README (``HeatExchanger``), and its snake_case
+# spelling.
 _ALIASES: dict[str, str] = {}
 for _name, _cls in _CLASSES.items():
-    for _alias in (_name, _snake(_name), _cls.kind):
+    for _alias in (_name, _snake(_name)):
         _ALIASES[_alias.lower()] = _name
+# ...and the internal ``Unit.kind`` tag (``hex``), which is a *different* kind of
+# alias: it names a kind rather than a class, and the class it has to resolve to
+# is the one that owns the whole kind. Built from ``units`` alone for that
+# reason. Fifteen device classes carry ``kind == "pump"``, so folding them in
+# above would make ``kind: pump`` mean whichever of them iterated last -- and
+# the answer would move about as classes were added, which is the worst kind of
+# quiet.
+for _name in unit_types.__all__:
+    if _name != "Unit":
+        _ALIASES[_CLASSES[_name].kind.lower()] = _name
 
 
 def _resolve_kind(value: Any, where: str) -> type[Unit]:
@@ -363,6 +381,15 @@ def _read_component(entry: Any, where: str) -> Component:
     )
 
 
+def _takes(cls: type[Unit], owners: tuple[str, ...]) -> bool:
+    """Whether ``cls`` is one of the classes that carries a keyed argument.
+
+    The tables above name the class the argument is declared on; a subclass
+    inherits the constructor and so inherits the argument.
+    """
+    return any(issubclass(cls, _CLASSES[owner]) for owner in owners)
+
+
 def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
     data = _mapping(entry, where)
     if "kind" not in data:
@@ -378,7 +405,12 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
     allowed = set(_UNIT_KEYS)
     for key, owners in {**_VARIABLE_PORTS, **_KIND_SIZES, **_KIND_TEXT,
                         **_KIND_FLAGS}.items():
-        if cls.__name__ in owners:
+        # By inheritance, not by name: the tables above name the class that
+        # *declares* the argument, and a ControlValve is a Valve, so it takes
+        # ``fail`` for exactly the reason its base does. Matching on the name
+        # would have refused every device class the argument its own constructor
+        # accepts, which is a spec refusing to read back what it wrote.
+        if _takes(cls, owners):
             allowed.add(key)
         elif key in data:
             takers = " or ".join(f"a {owner}" for owner in owners)

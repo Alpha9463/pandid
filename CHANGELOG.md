@@ -9,6 +9,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`pandid.devices`: 42 equipment classes over the `kind` + `variant` model.**
+  ([#146](https://github.com/Alpha9463/pandid/issues/146))
+
+  `devices.Cyclone("S-1")`, `devices.KettleReboiler("E-101")`,
+  `devices.CentrifugalPump("P-101")`. Every name is re-exported from the
+  package, so `pandid.Cyclone` and `pandid.devices.Cyclone` are one class, and
+  every one of them is a subclass of the `pandid.units` class that owns its
+  kind — a `GearPump` *is* a `Pump`, so nothing that asks `isinstance` changes.
+
+  Two things it buys. An engineer looking for a cyclone finds `Cyclone` rather
+  than having to know it is spelled `Separator(variant="cyclone")`; and the
+  nozzles are declared on the class, so `fs.add(devices.Cyclone("S-1")).underflow`
+  resolves to a `Port` under mypy and `.underflw` is an error before the sheet
+  is drawn.
+
+  The split follows one rule: **a class is what the equipment is, `variant=` is
+  how it is drawn.** A variant becomes a class when it names a distinct
+  scheduled item; it stays a variant when it names a support, a roof, a
+  cladding, an attitude, a drawn internal, a certification rating or a body
+  style. So a gate valve and a ball valve are one class and two variants, while
+  a check valve is a class of its own — it has no actuator, which is a fact
+  about the device rather than about its picture. That is why the valves split
+  six ways on behaviour rather than twenty-three ways on body.
+
+  Nothing shipped moves. All 156 registered `(kind, variant)` pairs build the
+  same nozzles, store the same `unit.variant` and resolve to the same
+  coordinates as before; `Separator(variant="cyclone")` stays supported
+  indefinitely and is still the only way to reach the ninety-one drawings that
+  get no class of their own.
+
+  The module is **generated** by `scripts/gen_devices.py`, which refuses to run
+  unless every registered `(kind, variant)` is claimed exactly once — by a
+  class, or by an explicit entry saying which class's style it is. Vendor a new
+  stencil and the generator stops until someone has said what the equipment
+  *is*, which is the one question a symbol table cannot answer for itself.
+
+- **`Cyclone`, `GravitySeparator` and `ElectrostaticPrecipitator` call their
+  draws `overflow` and `underflow`.** All three collect *dust*, and the drawings
+  have called the catch `liquid` since 0.1.0; the new classes correct it while
+  `Separator(variant="cyclone")` keeps `vapor`/`liquid` **permanently**, because
+  every sheet drawn against 0.1.0 depends on it. The accepted, permanent cost is
+  that one drawing then answers to two nozzle vocabularies depending on which
+  class you constructed. See the `pandid.devices` module docstring, which says
+  so outright rather than leaving it to be met by surprise.
+  ([#138](https://github.com/Alpha9463/pandid/issues/138))
+
+- `Unit.PORT_ANCHORS`: nozzle name → the name the symbol anchors it under, for a
+  class that renames one of its drawing's nozzles. Without it a renamed nozzle
+  asks the artwork for an anchor it does not have and is given the fallback, the
+  centre of the box, so two renamed draws land on one point and their streams
+  stack. Declaring both names on the *symbol* is not the alternative it looks
+  like: two names at one coordinate is exactly what `Symbol.coincident_ports()`
+  reports, because a symbol cannot tell a rename from two nozzles drawn on top
+  of each other. So the rename is a fact about the class and lives on the class.
+
 - `Unit.VARIANTS` and `Unit.VARIANT_ALIASES`. A subclass may now name the
   drawings it owns, and is refused any other **when it is constructed** rather
   than at the first layout or render.
@@ -43,6 +98,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `"already has a port named 'shell_in'"`.
 
 ### Changed
+
+- A spec may now name any of the new device classes (`kind: Cyclone`, or its
+  snake_case spelling), and `to_dict()` can write one out — it could not before,
+  since `pandid.spec` built its class table from `pandid.units` alone and
+  refused anything else on the way out. The internal `kind` tag (`kind: pump`)
+  still names the class that owns the whole kind, deliberately: fifteen device
+  classes carry `kind == "pump"`, so folding both layers into that alias would
+  have made `pump` mean whichever of them iterated last, and the answer would
+  have moved about as classes were added. Arguments keyed to a class
+  (`normal_position`, `fail`, `n_feeds`, `large_end`, …) are now matched by
+  inheritance rather than by class name, so a `ControlValve` takes `fail:` for
+  exactly the reason its base does.
+  ([#146](https://github.com/Alpha9463/pandid/issues/146))
 
 - `pip install 'pandid[pdf]'` now gives a working PDF and PNG export on a
   machine that has nothing else installed. It did not before: the extra pulled
