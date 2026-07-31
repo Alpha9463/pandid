@@ -1024,7 +1024,8 @@ class SvgRenderer:
     def render(self, fs: "Flowsheet", *, jump_direction: str = "vertical",
                show_stream_table: bool = False,
                border: "str | None" = None, diagram: "str | None" = None,
-               page_size: "str | None" = None, **opts) -> str:
+               page_size: "str | None" = None, debug: "bool | float" = False,
+               **opts) -> str:
         """Render the flowsheet to SVG.
 
         Parameters
@@ -1047,8 +1048,17 @@ class SvgRenderer:
             drawn at exactly that size, with the furniture docked to the sheet edges
             and the drawing fitted into what they leave. ``None`` (the default) sizes
             the sheet to the drawing instead.
+        debug : bool | float
+            Draw the coordinate overlay under the diagram: a ruled grid carrying
+            its own coordinates, every unit's ``pin()`` anchor and every port.
+            ``True`` rules it at the default spacing and a number sets that
+            spacing. Off by default. See :mod:`pandid.render.debug`.
         """
         from pandid.portgeom import unit_box
+        from pandid.render import debug as _debug
+        # Resolved first, so a spacing the overlay cannot draw is refused before
+        # anything is drawn rather than after a whole sheet has been built.
+        grid = _debug.resolve_spacing(debug)
         border, diagram = _resolve_sheet(border, diagram)
         arrows = draws_arrowheads(diagram)
         sheet = _page(page_size)
@@ -1161,7 +1171,19 @@ class SvgRenderer:
         # balloons have stopped moving, so the impulse lines are settled with
         # them. See :func:`_ink`.
         ink = _ink(fs)
-        drawing = self._draw_units(fs, unit_labels, balloons, ink)
+        drawing: list[str] = []
+        # First, so every piece of the sheet's own ink -- and every opaque label
+        # halo -- paints over it. It is scaffolding for the author and must not
+        # come between the reader and the drawing. It is inside the fitted group
+        # for the opposite reason: the numbers it writes have to be the ones
+        # ``pin()`` takes, and a fixed page scales that group, so the overlay is
+        # told the scale and holds its lettering to a constant size on paper
+        # while leaving its geometry in drawing units.
+        if grid is not None:
+            drawing.extend(_debug.overlay(
+                fs, (dx0, dy0, dx1, dy1), grid,
+                _fit_scale(dx1 - dx0, dy1 - dy0, free) if free is not None else 1.0))
+        drawing.extend(self._draw_units(fs, unit_labels, balloons, ink))
         drawing.extend(self._draw_streams(fs, jump_direction, unit_labels, arrows, ink))
         # Instrumentation goes on over the lines: an impulse line runs from the
         # tap to the balloon, and the balloon's opaque body then knocks out both

@@ -48,16 +48,19 @@ axis and routes every stream. The compressor discharge back to the mixer is
 detected as the recycle and carried across the top of the sheet, and the streams
 are numbered `S1`…`S7` in creation order.
 
-## 02 · Manual layout
+## 02 · Manual layout, with the coordinate overlay
 
 [`examples/02_manual_layout.py`](../../examples/02_manual_layout.py) ·
 [SVG](02_manual_layout.svg)
 
 ![Manual layout](02_manual_layout.png)
 
-The two pixel-level escape hatches. Every unit is `pin(x=…, y=…)`ed, with the
-port heights matched so three of the four runs come out dead straight. The
-fourth uses `via([...])` to force the stream down, along and back up, an
+The pixel-level escape hatches, drawn with `debug=True`. The red grid, the red
+crosses on every `pin(x=, y=)` corner and the blue dots on every port are the
+overlay, not the drawing; it is off by default. The two trains are the same
+geometry said two ways — the top pinned by the corner, the bottom pinned by the
+nozzle onto one elevation — and the overlay is what shows the difference. The
+last run uses `via([...])` to force the stream down, along and back up, an
 explicit detour the auto-router would never choose but honours verbatim.
 
 ## 03 · Distillation train

@@ -110,6 +110,7 @@ def _draw(args: argparse.Namespace) -> int:
         diagram=args.diagram,
         show_stream_table=args.stream_table,
         jump_direction=args.jump_direction,
+        debug=args.debug if args.debug is not None else False,
     )
     sheet = f"{args.page_size.upper()}, " if args.page_size else ""
     print(
@@ -245,6 +246,17 @@ def _build_parser() -> argparse.ArgumentParser:
     draw.add_argument(
         "--jump-direction", choices=("vertical", "horizontal"), default="vertical",
         help="which of two crossing lines gets the semicircle hop (default: vertical)",
+    )
+    # Every other render option is reachable from here, and a debugging view is
+    # if anything more use from a shell than from a script: it is the thing you
+    # switch on for one render, look at, and switch off again. ``nargs="?"``
+    # gives that the shortest spelling there is -- ``--debug`` alone for the
+    # default grid, ``--debug 100`` to change it -- and the two land on the same
+    # bool-or-number the API takes.
+    draw.add_argument(
+        "--debug", nargs="?", type=float, const=True, default=None, metavar="SPACING",
+        help="draw the coordinate overlay under the diagram: the grid, every pin() anchor "
+             "and every port. Optionally takes the grid spacing in drawing units",
     )
     draw.set_defaults(run=_draw)
 

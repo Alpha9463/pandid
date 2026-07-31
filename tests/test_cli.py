@@ -128,6 +128,25 @@ def test_draw_options_reach_the_renderer(tmp_path, capsys):
     assert "(A3, 4 units, 3 streams)" in capsys.readouterr().out
 
 
+def test_draw_leaves_the_debug_overlay_off_unless_it_is_asked_for(tmp_path):
+    out = tmp_path / "plain.svg"
+    assert main(["draw", str(_spec_file(tmp_path)), "-o", str(out)]) == EXIT_OK
+    assert out.read_text(encoding="utf-8") == Flowsheet.from_dict(SPEC).to_svg()
+
+
+@pytest.mark.parametrize(
+    "flag, debug",
+    [(["--debug"], True), (["--debug", "100"], 100.0)],
+    ids=["bare", "with-spacing"],
+)
+def test_draw_debug_takes_a_spacing_or_none(tmp_path, flag, debug):
+    """``--debug`` alone is the default grid; ``--debug 100`` sets the pitch."""
+    out = tmp_path / "sheet.svg"
+    argv = ["draw", str(_spec_file(tmp_path)), "-o", str(out), *flag]
+    assert main(argv) == EXIT_OK
+    assert out.read_text(encoding="utf-8") == Flowsheet.from_dict(SPEC).to_svg(debug=debug)
+
+
 def test_draw_says_how_many_warnings_the_drawing_carries(tmp_path, capsys):
     out = tmp_path / "d.svg"
     assert main(["draw", str(_spec_file(tmp_path, DETOUR)), "-o", str(out)]) == EXIT_OK

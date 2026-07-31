@@ -12,16 +12,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **A sheet regenerated on this version is not the sheet 0.1.0 drew.** Symbol
 geometry, stroke weights, label and line-number placement and the whole PDF/PNG
 export backend all moved, so the same flowsheet renders to different bytes and
-nothing in your code raises, warns or otherwise says so. Of the eleven sheets
-0.1.0 shipped, ten are redrawn and only `02_manual_layout` is byte for byte what
-it was; every `.png` differs, `02`'s included, since the raster backend and its
-resolution both changed. If a drawing has been issued, diff it before reissuing
-it.
+nothing in your code raises, warns or otherwise says so. All eleven sheets 0.1.0
+shipped are redrawn, and every `.png` with them, the raster backend and its
+resolution having both changed. If a drawing has been issued, diff it before
+reissuing it.
 
 Nothing was removed or renamed. Everything below is an addition, or a correction
 to what was drawn.
 
 ### Added
+
+- **`debug=`: the coordinate system, drawn on the sheet.**
+
+  Placement is absolute and neither of the two points it is written against is
+  drawn, so `pin(x=270, y=180)` (a corner) and `pin(port="inlet", y=195)` (a
+  nozzle) are easy to confuse. `to_svg(debug=True)` and `render(..., debug=True)`
+  draw them.
+
+  ```python
+  fs.render("draft.svg", debug=True)   # default 50-unit grid
+  fs.render("draft.svg", debug=100)    # ...or set the spacing
+  ```
+
+  A faded red grid carrying its own coordinates, a red cross on the point every
+  `pin(x=, y=)` sets, a blue dot on every port, and each of them labelled with
+  the name and the numbers the API takes. Drawn in drawing coordinates and under
+  the diagram, so the numbers on the sheet are the numbers to type back in and
+  nothing on the sheet is obscured. Works on `.svg`, `.pdf` and `.png`, and on a
+  fixed `page_size`, where the lettering holds its size on paper while the grid
+  stays on the drawing's own numbers. `pandid draw --debug [SPACING]` is the
+  same switch.
+
+  Off by default, and off is byte for byte the sheet that was drawn before it
+  existed. It is scaffolding, not drawing: nothing issued should carry it.
+  `examples/02_manual_layout.py` is drawn with it on, and now pins one train by
+  the corner and the other by the nozzle so the overlay has the difference to
+  show. It does not replace [#154](https://github.com/Alpha9463/pandid/issues/154),
+  which is about not having to compute the coordinates at all; this is about
+  reading the ones you did.
 
 - **`Block.order_on()`: where a connection sits along the face it is on.**
   ([#192](https://github.com/Alpha9463/pandid/issues/192))

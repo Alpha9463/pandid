@@ -17,6 +17,14 @@ conveyor, off-page connectors, a utilities summary and a sectioned stream table.
 will move whenever the sheet improves; that is the price of pinning what the
 README points at.
 
+`02_manual_layout` is the one fixture drawn with the coordinate overlay on
+(`debug=True`), matching the example it comes from. It is therefore what pins
+the overlay: the grid, the coordinates written on it, the anchor markers and the
+port markers all land in that file, so a change to any of them shows up as a
+drawing rather than as an arithmetic claim. Every other fixture draws with it
+off, which is what holds the rest of the corpus to being byte for byte what it
+was before the feature existed.
+
 `12_block_flow_diagram` is the block flow diagram, the one scenario a level
 above the PFD and the only one with process connections on the north and south
 faces. It is also the only sheet whose boxes size *themselves*: nothing in it
