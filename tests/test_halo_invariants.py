@@ -52,9 +52,15 @@ def _halos(svg: str) -> "list[tuple[float, float, float, float]]":
     the two label groups are what is left.
     """
     body = svg.split("</defs>", 1)[1]
-    return [(float(m.group(1)), float(m.group(2)),
-             float(m.group(1)) + float(m.group(3)),
-             float(m.group(2)) + float(m.group(4))) for m in _HALO.finditer(body)]
+    return [
+        (
+            float(m.group(1)),
+            float(m.group(2)),
+            float(m.group(1)) + float(m.group(3)),
+            float(m.group(2)) + float(m.group(4)),
+        )
+        for m in _HALO.finditer(body)
+    ]
 
 
 def _overlaps(a, b) -> bool:
