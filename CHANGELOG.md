@@ -32,17 +32,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `for p in m.inlets` checks, and a computed count works.
 
   The tuple is indexed from zero while the nozzles are numbered from one, so
-  `inlets[0]` is `in_1`; nothing re-bases it, and `enumerate(m.inlets, start=1)`
-  or the name (`m.in_3`) is how the number is recovered. A one-feed `Column`
-  still spells its nozzle `feed`, and `feeds` is the one-tuple holding it.
+  `inlets[0]` is `in_1`; nothing re-bases it. `enumerate(m.inlets, start=1)`
+  gives the number and the port together, and `m.port("in_3")` reaches one by
+  its number — it is the only 1-based route a type checker can follow, since
+  `m.in_1` still resolves to nothing under mypy and always has. A one-feed
+  `Column` still spells its nozzle `feed`, and `feeds` is the one-tuple holding
+  it.
 
   Purely additive: `m.in_1`, `m.port("in_3")` and the `ports` dict are
-  untouched. `Block`'s face accessors are renamed to `input_faces` /
-  `output_faces` in the same change — `b.inputs` returned `['W', 'W', 'N']`,
-  compass letters rather than the connections the name promises — leaving
-  `inlets`/`outlets` for the ports. `Block` is unreleased, so nothing that
-  shipped is affected, and the constructor keeps `inputs=`/`outputs=`, where
-  "the inputs are on these faces" is what the argument says.
+  untouched.
+
+  `Block`'s accessors are renamed in the same change, so each is named for what
+  it returns. `inputs`/`outputs` become `input_faces`/`output_faces` — they
+  returned `['W', 'W', 'N']`, compass letters rather than the connections the
+  name promises — leaving `inlets`/`outlets` for the ports; and `ports_on(face)`
+  now returns the **ports** rather than their names, so "connect whatever is on
+  the north" no longer means `[b.port(n) for n in b.ports_on("N")]`, a round
+  trip through the very dict the families exist to spare. All four are tuples.
+  `Block` is unreleased, so nothing that shipped is affected, and the
+  constructor keeps `inputs=`/`outputs=`, where "the inputs are on these faces"
+  is what the argument says.
 
 - **`units.Block`: the block flow diagram.**
   ([#164](https://github.com/Alpha9463/pandid/issues/164))

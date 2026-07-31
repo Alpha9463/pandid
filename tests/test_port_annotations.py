@@ -288,6 +288,16 @@ def test_a_declared_family_is_this_unit_s_own_ports_in_order(cls):
     is the order the nozzles were declared in -- which is the order the artwork
     spreads them down the face, so a family out of order would draw a sheet
     whose second inlet is the third one on the shell.
+
+    **Soundness, not completeness.** Everything asserted here is of the form
+    "what is in the tuple belongs there", so a family that fell *behind* the
+    ports -- a nozzle added to ``__init__`` and not to the tuple -- passes this
+    and is caught by :func:`test_every_port_built_is_annotated` instead, where
+    it shows up as a port with no declaration of any kind. That check builds at
+    the default arity only, so
+    ``tests/test_units.py::test_a_family_is_every_numbered_nozzle_at_a_count_nothing_defaults_to``
+    is what says the same thing at a count nothing defaults to. Three tests, and
+    it is worth knowing which one holds which half.
     """
     unit = cls("X-1")
     order = list(unit.ports)

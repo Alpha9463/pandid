@@ -447,8 +447,10 @@ Two things worth knowing.
 **The tuple is indexed from zero while the nozzles are numbered from one**, so
 `inlets[0]` is `in_1`. Nothing re-bases it — a sequence that indexed from one
 would be the only one in the language, and would cost `[-1]`, slicing and every
-`zip`. Where the number is what you want it is already a name (`m.in_3`,
-`m.port("in_3")`), and `enumerate(m.inlets, start=1)` gives both at once.
+`zip`. Where the number is what you want, `m.port("in_3")` asks for it and is
+the only 1-based route a type checker can follow; `m.in_3` answers at run time
+and always has, but it is the one spelling mypy cannot see (below).
+`enumerate(m.inlets, start=1)` gives the number and the port together.
 
 **A one-feed `Column` or `Reactor` names its lone nozzle `feed`, and `feeds` is
 the one-tuple holding it.** The sequence is the general form and the singular
@@ -459,8 +461,14 @@ This is also the only shape a type checker can be told about. The count is a
 runtime value and Python has no integer generic, so no annotation names `in_1` …
 `in_n`; a generated class per arity would type `Mixer("M", n_inlets=3)` and miss
 `Mixer("M", n_inlets=len(feeds))`, which is the call a sheet built from data
-actually writes. `mixer.inlets[0]` resolves to `Port` under mypy;
-`mixer.in_1` still does not, and is reached by name at runtime as it always was.
+actually writes. `mixer.inlets[0]` resolves to `Port` under mypy.
+
+`mixer.in_1` does not, and never has: `Unit.__getattr__` is hidden from type
+checkers on purpose, so a nozzle no class declares is an error before the sheet
+is drawn rather than an `Any` that resolves to anything. It still works when
+Python runs, and every sheet written against it is unaffected — but in code you
+type-check, reach a numbered nozzle through the family or through
+`port("in_3")`.
 
 ### Equipment classes
 
@@ -574,17 +582,25 @@ authored with, while a block's rectangle is built from its own declaration.
 
 ```python
 rx.nozzle("out_2", "S")          # send one product out of the bottom
-rx.face("out_2")                 # -> "S"       which side of the box
-rx.ports_on("N")                 # -> ["in_3"]  what is on that side
+rx.face("out_2")                 # -> "S"              which side of the box
+rx.ports_on("N")                 # -> (Port in_3,)     what is on that side
 ```
 
 The connections and the sides they are on are two different accessors, each
-named for what it returns:
+named for what it returns, and each a tuple:
 
 ```python
 rx.inlets                        # -> (Port in_1, Port in_2, Port in_3)
-rx.input_faces                   # -> ['W', 'W', 'N']
+rx.input_faces                   # -> ('W', 'W', 'N')
 rx.outlets, rx.output_faces      # ...and the same pair for the outputs
+```
+
+`ports_on()` returns ports too, so "connect whatever is on the north" is one
+step:
+
+```python
+for port in rx.ports_on("N"):
+    fs.connect(recycle.outlet, port)
 ```
 
 `inputs=` / `outputs=` stay the constructor's names — "the inputs are on these

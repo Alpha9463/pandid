@@ -1881,10 +1881,18 @@ class Mixer(Unit):
     # ``m.inlets[0]`` is ``in_1``, and ``m.inlets[3]`` is ``in_4``. Nothing here
     # re-bases it. A sequence that indexed from one would be the only one in the
     # language, and buying the arithmetic back would cost ``[-1]``, slicing and
-    # every ``zip`` and ``enumerate`` a reader already knows how to use. Where
-    # the number is what is wanted, it is already a name -- ``m.in_3``,
-    # ``m.port("in_3")`` -- and ``enumerate(m.inlets, start=1)`` gives both at
-    # once. ``Port.name`` carries it too, so nothing has to count.
+    # every ``zip`` and ``enumerate`` a reader already knows how to use.
+    #
+    # Where the number is what is wanted, ``m.port("in_3")`` is the way to ask
+    # for it: it is the *only* 1-based route a checker can follow. ``m.in_3``
+    # answers at run time and always has, but the ``__getattr__`` above is
+    # hidden from type checkers, so mypy reads it as an error and an ``Any`` --
+    # which makes it the wrong thing to point checked code at, whatever it does
+    # when Python runs. ``enumerate(m.inlets, start=1)`` gives the number and
+    # the port together, and ``Port.name`` carries the number too, so nothing
+    # has to count. A fourth spelling (an ``m.inlet(3)``) was not added: it
+    # would be a new name for what ``port()`` already does, and ``port()``
+    # raises a message naming the nozzles that do exist.
     inlets: tuple[Port, ...]
     # The one nozzle every mixer has, declared like any other fixed one.
     outlet: Port
@@ -2219,23 +2227,30 @@ class Block(Unit):
         return self
 
     @property
-    def input_faces(self) -> list[str]:
+    def input_faces(self) -> tuple[str, ...]:
         """The face each input leaves from, in ``in_1`` ... ``in_n`` order.
 
-        Compass letters and not connections: ``['W', 'W', 'N']``.
+        Compass letters and not connections: ``('W', 'W', 'N')``.
         :attr:`inlets` is the ports, which is what the pair was called before
         0.1.1 -- ``b.inputs`` returned the sides, and any reader of that name
         expects the things themselves. ``Block`` had not been released, so the
         rename is free here and would have been a break a version later. The
         constructor argument keeps its name: ``inputs=['W', 'W', 'N']`` reads
         as "the inputs are on these faces", which is what it means.
+
+        A tuple, like :attr:`inlets` beside it. Every one of these four is a
+        *derived view* of :attr:`_faces` and ``ports``, and handing back a list
+        invites a caller to append to something that is not the record --
+        :meth:`nozzle` is what moves a connection. Immutable is the right
+        default for all four, and one type across the set is what stops a reader
+        having to remember which two are which.
         """
-        return [self._faces[port.name] for port in self.inlets]
+        return tuple(self._faces[port.name] for port in self.inlets)
 
     @property
-    def output_faces(self) -> list[str]:
+    def output_faces(self) -> tuple[str, ...]:
         """The face each output leaves from, in ``out_1`` ... ``out_m`` order."""
-        return [self._faces[port.name] for port in self.outlets]
+        return tuple(self._faces[port.name] for port in self.outlets)
 
     def face(self, port_name: str) -> str:
         """Which side of the **box** ``port_name`` is on.
@@ -2308,7 +2323,7 @@ class Block(Unit):
             raise
         return self
 
-    def ports_on(self, face: str) -> list[str]:
+    def ports_on(self, face: str) -> tuple[Port, ...]:
         """The connections on one side of the box, in port order.
 
         The lookup :meth:`face` does not do. A block is the one unit whose
@@ -2316,9 +2331,18 @@ class Block(Unit):
         "what comes in on the north" is a question a caller has, and answering it
         by filtering :attr:`_faces` in three places is how the three answers come
         to disagree.
+
+        The **ports**, and a tuple, so this is a third way of asking for a family
+        and not a different kind of answer. It returned names before 0.1.1,
+        which put a caller through ``[b.port(n) for n in b.ports_on("N")]`` --
+        a round trip out to a string and back through the very dict
+        :attr:`inlets` and :attr:`outlets` exist to spare them, under a name
+        that says "ports". Renamed here rather than deferred because
+        :attr:`input_faces` is renamed for exactly that reason and ``Block`` is
+        one unreleased class: the free window closes on both at the same moment.
         """
         wanted = _block_face(face, self.name)
-        return [name for name, on in self._faces.items() if on == wanted]
+        return tuple(self.ports[name] for name, on in self._faces.items() if on == wanted)
 
     def symbol(self) -> "Symbol":
         """This block's drawing, built to its connections.

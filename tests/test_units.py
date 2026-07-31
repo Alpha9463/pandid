@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from pandid.units import Unit
 from pandid.ports import Port
@@ -366,6 +368,34 @@ def test_one_feed_is_the_one_tuple_holding_the_singular_nozzle():
     for one in (U.Column("T-101"), U.Reactor("R-101")):
         assert [p.name for p in one.feeds] == ["feed"]
         assert one.feeds[0] is one.feed
+
+
+@pytest.mark.parametrize(
+    ("build", "families"),
+    [
+        (lambda: U.Mixer("M", n_inlets=5), ["inlets"]),
+        (lambda: U.Splitter("S", n_outlets=5), ["outlets"]),
+        (lambda: U.Column("T", n_feeds=5), ["feeds"]),
+        (lambda: U.Reactor("R", n_feeds=5), ["feeds"]),
+        (lambda: U.Block("B", inputs=5, outputs=4), ["inlets", "outlets"]),
+    ],
+)
+def test_a_family_is_every_numbered_nozzle_at_a_count_nothing_defaults_to(build, families):
+    """Completeness, at an arity no default construction reaches.
+
+    ``tests/test_port_annotations.py`` is what holds a family to the ports the
+    class builds, and it builds one unit of each class with no arguments -- so a
+    family that fell behind only at ``n_inlets=5`` would pass it untouched.
+    This is the check that closes that: at five, every numbered nozzle in
+    ``ports`` is in a family and every family member is a numbered nozzle, so a
+    port added to the constructor without being added to the tuple has nowhere
+    left to hide.
+    """
+    unit = build()
+    numbered = {name for name in unit.ports if re.search(r"_\d+$", name)}
+    in_families = {port.name for family in families for port in getattr(unit, family)}
+    assert in_families == numbered
+    assert sum(len(getattr(unit, family)) for family in families) == len(numbered)
 
 
 def test_a_multi_feed_towers_family_is_its_numbered_nozzles_top_to_bottom():
