@@ -285,7 +285,9 @@ size it needed and the widest piece of furniture that needed it.
 
 ## Units and ports
 
-Every unit type is reached through the `units` namespace. Ports are exposed both
+Every unit type is reached through the `units` namespace, and the
+[equipment classes](#equipment-classes) over them through `devices`. Ports are
+exposed both
 as `unit.ports["name"]` and as attributes (`pump.suction`). An unknown attribute
 raises `AttributeError` listing the real ports, and `unit.port("name")` raises
 `KeyError` the same way. A type of your own is
@@ -302,9 +304,10 @@ Unit(name, variant="default", width=None, height=None,
 - `variant` is the visual style within the class (see below). A name that kind
   has no symbol for raises `ValueError` listing the ones it does, at the first
   layout or render. A class that names its own `VARIANTS` refuses at
-  construction instead; no class below does, so every `Kind(variant=…)` in this
-  page is checked when the sheet is drawn. See
-  [Narrowing a class to its variants](#narrowing-a-class-to-its-variants).
+  construction instead; no class in the port table does, so every
+  `Kind(variant=…)` in this page is checked when the sheet is drawn, while every
+  [equipment class](#equipment-classes) is checked on the line that builds it.
+  See [Narrowing a class to its variants](#narrowing-a-class-to-its-variants).
 - `width` / `height` override the symbol's intrinsic size. They are taken as the
   *final* box, so a rotated unit gets exactly what you asked for.
 - `label_pos` is `"top"`, `"bottom"`, `"left"`, `"right"` or `"center"`. Left
@@ -415,6 +418,87 @@ tower = units.Column("T-302", n_feeds=2, description="Extractive Column")
 fs.connect(solvent.outlet, tower.feed_1)   # solvent enters above...
 fs.connect(feed.outlet, tower.feed_2)      # ...the feed tray
 ```
+
+### Equipment classes
+
+**A class is what the equipment *is*; `variant=` is how it is *drawn*.**
+`pandid.devices` is one class per device the registry draws, re-exported from the
+package, and each is a subclass of the `units` class that owns its kind: a
+`GearPump` *is* a `Pump`.
+
+```python
+from pandid import devices
+
+sep = devices.Cyclone("S-101")   # units.Separator(variant="cyclone"), by the name it goes by
+sep.variant                      # 'cyclone'
+sep.underflow                    # the dust draw, and a Port a type checker can resolve
+```
+
+`Kind(variant=…)` stays the low-level form, and is the only way to reach the
+ninety-odd drawings that get no class of their own. A class stores the
+**registry's** spelling of its variant and not its own, so `to_dict()` writes
+`variant: cyclone` rather than the class-local `default`, and the file reads
+back. [Variants](#variants) lists the drawings each class owns.
+
+The last column is where a class's nozzles differ from its base's: `+` one the
+base has not, `-` one it drops. The bases are in the [Port table](#port-table).
+
+| Class | `kind` | Base | Ports that differ |
+|---|---|---|---|
+| `CentrifugalPump` | `pump` | `Pump` | |
+| `GearPump` | `pump` | `Pump` | |
+| `ScrewPump` | `pump` | `Pump` | |
+| `PeristalticPump` | `pump` | `Pump` | |
+| `SubmersiblePump` | `pump` | `Pump` | |
+| `VacuumPump` | `pump` | `Pump` | |
+| `CentrifugalCompressor` | `compressor` | `Compressor` | |
+| `ReciprocatingCompressor` | `compressor` | `Compressor` | |
+| `RotaryCompressor` | `compressor` | `Compressor` | |
+| `LiquidRingCompressor` | `compressor` | `Compressor` | |
+| `ShellAndTubeExchanger` | `hex` | `HeatExchanger` | |
+| `DoublePipeExchanger` | `hex` | `HeatExchanger` | |
+| `KettleReboiler` | `hex` | `HeatExchanger` | `+bottoms` |
+| `Condenser` | `hex` | `HeatExchanger` | |
+| `AirCooledExchanger` | `hex` | `HeatExchanger` | `+air_in` `+air_out` `-shell_in` `-shell_out` |
+| `PlateExchanger` | `hex` | `HeatExchanger` | `+side_a_in` `+side_a_out` `+side_b_in` `+side_b_out` `-shell_in` `-shell_out` `-tube_in` `-tube_out` |
+| `SpiralExchanger` | `hex` | `HeatExchanger` | `+side_a_in` `+side_a_out` `+side_b_in` `+side_b_out` `-shell_in` `-shell_out` `-tube_in` `-tube_out` |
+| `ThinFilmEvaporator` | `hex` | `HeatExchanger` | `+jacket_in` `+jacket_out` `+product_in` `+product_out` `-shell_in` `-shell_out` `-tube_in` `-tube_out` |
+| `Cyclone` | `separator` | `Separator` | `+overflow` `+underflow` `-vapor` `-liquid` |
+| `GravitySeparator` | `separator` | `Separator` | `+overflow` `+underflow` `-vapor` `-liquid` |
+| `ElectrostaticPrecipitator` | `separator` | `Separator` | `+overflow` `+underflow` `-vapor` `-liquid` |
+| `Screen` | `separator` | `Separator` | `+overflow` `+underflow` `-vapor` `-liquid` |
+| `ImpactSeparator` | `separator` | `Separator` | `+overflow` `+underflow` `-vapor` `-liquid` |
+| `MagneticSeparator` | `separator` | `Separator` | `+overflow` `+underflow` `-vapor` `-liquid` |
+| `Scrubber` | `separator` | `Separator` | |
+| `KnockoutDrum` | `separator` | `Separator` | |
+| `DustCollector` | `filter` | `Filter` | |
+| `RotaryDrumFilter` | `filter` | `Filter` | |
+| `FilterPress` | `filter` | `Filter` | |
+| `IonExchanger` | `filter` | `Filter` | |
+| `RotaryDryer` | `dryer` | `Dryer` | |
+| `FluidizedBedDryer` | `dryer` | `Dryer` | |
+| `SprayDryer` | `dryer` | `Dryer` | |
+| `ControlValve` | `valve` | `Valve` | |
+| `SolenoidValve` | `valve` | `Valve` | |
+| `ReliefValve` | `valve` | `Valve` | |
+| `PressureRegulator` | `valve` | `Valve` | |
+| `MotorOperatedValve` | `valve` | `Valve` | |
+| `CheckValve` | `valve` | `Valve` | `-actuator` |
+| `SpectacleBlind` | `fitting` | `Fitting` | |
+| `FlowElement` | `fitting` | `Fitting` | |
+| `StirredTankReactor` | `reactor` | `Reactor` | |
+
+Three of them do something the name does not say:
+
+- `KettleReboiler` adds `bottoms`, the draw at the weir end of the shell. It is
+  the only class in the library that adds a nozzle.
+- `CheckValve` drops `actuator`. The flow works it, so there is no operator for
+  a signal to land on.
+- `Cyclone`, `GravitySeparator` and `ElectrostaticPrecipitator` collect *dust*,
+  and name their draws `overflow` and `underflow` for it, while
+  `Separator(variant="cyclone")` keeps `vapor`/`liquid` **permanently** for the
+  sheets already drawn against it. One drawing, two nozzle vocabularies, and
+  which you get depends on which class you built.
 
 ### `Block`: the block flow diagram
 
@@ -839,28 +923,68 @@ differs between them.
 
 ### Variants
 
-A **class** is a functional equipment type, defined by its ports. A **variant**
-is a visual style within it. The first name in each list is that kind's
-`default`, with the shape it draws in brackets.
+A **variant** is how a device is drawn. Each row below is a class and the
+drawings it owns; where a class spells one its own way that spelling is in
+brackets — `DustCollector(variant="belt")` is `filter`'s `gas_belt` — and the
+first listed is what the class draws when it is built by name alone.
+`Kind(variant=…)` reaches any drawing, whether or not a class of its own owns it.
 
-| Class | Variants |
-|---|---|
-| `Pump` | `default` (centrifugal), `gear`, `screw`, `vacuum`, `peristaltic`, `submersible` |
-| `Compressor` | `default`, `liquid_ring`, `reciprocating`, `rotary` |
-| `HeatExchanger` | `default`, `shell_tube`, `straight_tubes`, `finned`, `plate`, `kettle`, `u_tube`, `hairpin`, `double_pipe`, `condenser`, `air_cooled`, `spiral`, `thin_film` |
-| `Vessel` | `default`, `dished`, `jacketed`, `skirted`, `legs`, `insulated`, `electrical_heating`, `swaged`, `dome`, `horizontal`<br>`dished`, `skirted` and `legs` are one shell on brackets, a skirt or a pair of legs; `jacketed` and `insulated` are that shell clad, and offer the same nozzles in the same places, so swapping one for another moves no run. `swaged` is the vessel drawn in two diameters, the wider one below |
-| `Tank` | named for the roof: `default` (dished), `conical`, `floating_roof`, plus `sphere`<br>and for the bottom where it is a cone rather than a floor: `conical_bottom` (under a flat roof), `conical_ends` (a cone at each end), `dished_roof_conical_bottom`. On those three the `outlet` is on the cone's apex, which is where the tank actually drains |
-| `Separator` | into phases: `default` (plain vertical drum, the shell `Vessel` and `Column` share), `knockout` (that drum with a demister pad and a level gauge drawn in), `horizontal`, `cyclone`, `gravity`, `scrubber`, `electrostatic`<br>mechanically, by size, inertia or magnetism: `sifter`, `impact`, `permanent_magnet`, `electromagnetic`, which are one hopper-bottomed body apart from their internals and carry `overflow`/`underflow` in place of `vapor`/`liquid` |
-| `Reactor` | `default`, `plain` |
-| `Column` | `default` (plain shell), `packed` |
-| `Filter` | liquid: `default` (bag/candle/cartridge), `fixed_bed`, `belt`, `press`, `rotary`, `rotary_scraper`, `ion_exchange`<br>gas: `gas` (bag/candle/cartridge), `gas_fixed_bed`, `gas_belt`, each drawn with the dust hopper that makes it one of the [symbols that must not be turned](#symbols-that-must-not-be-turned) |
-| `Dryer` | `default`, `fluidized_bed`, `spray` |
-| `Valve` | bodies: `default` (gate), `gate`, `globe`, `ball`, `butterfly`, `check`, `needle`, `three_way`, `control`, `plug`, `pinch`, `angle`, `psv`, `relief`, `bleed`<br>with a drawn operator: `motor`, `solenoid`, `hydraulic`, `pneumatic`, `manual`, `knife`, `butterfly_pneumatic`, `regulator`<br>which of them take a [`normal_position`](#normally-closed-valves) and which a [`fail`](#fail-position) are two different lists |
-| `Fitting` | devices: `default` (flanged connection), `flange`, `strainer`, `strainer_cone`, `strainer_y`, `strainer_basket`, `strainer_duplex`, `orifice`, `rotameter`, `rupture_disc`, `sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `bellows`, `blind` (spectacle blind, and the one variant with a [`normal_position`](#spectacle-blinds)), `damper`, `spool`, `static_mixer`, `hose`, `coupling`, `clamped_coupling`, `flame_arrestor`, `flame_arrestor_explosion_proof`, `flame_arrestor_detonation_proof`, `flame_arrestor_fire_resistant`<br>primary flow elements: `venturi`, `flow_nozzle`, `coriolis`, `vortex`, `ultrasonic`, `turbine_meter`, `positive_displacement`, `v_cone`, `wedge`, `target`, `pitot`, `averaging_pitot` |
-| `Reducer` | `default` (the concentric trapezoid), `concentric`, `eccentric`, plus `large_end`, which points the cone |
-| `Vent` | `default` (stack with a weather cap), `exhaust_head`, `breather` |
-| `Instrument` | `default` (field balloon), `panel`, `aux`, `shared`, `computer`, `sis` (diamond in a square, also spelled `logic`), `interlock` (plain diamond) |
-| `Heater`, `Cooler`, `Furnace`, `Turbine`, `Blower`, `Ejector`, `Funnel`, `Conveyor`, `Mixer`, `Splitter`, `Tee`, `Block`, `Feed`, `Product` | `default` only |
+| Class | `kind` | Drawings it owns |
+|---|---|---|
+| `CentrifugalPump` | `pump` | `default` |
+| `GearPump` | `pump` | `gear` (as `default`) |
+| `ScrewPump` | `pump` | `screw` (as `default`) |
+| `PeristalticPump` | `pump` | `peristaltic` (as `default`) |
+| `SubmersiblePump` | `pump` | `submersible` (as `default`) |
+| `VacuumPump` | `pump` | `vacuum` (as `default`) |
+| `CentrifugalCompressor` | `compressor` | `default` |
+| `ReciprocatingCompressor` | `compressor` | `reciprocating` (as `default`) |
+| `RotaryCompressor` | `compressor` | `rotary` (as `default`) |
+| `LiquidRingCompressor` | `compressor` | `liquid_ring` (as `default`) |
+| `ShellAndTubeExchanger` | `hex` | `default`, `shell_tube`, `u_tube`, `straight_tubes`, `finned`, `hairpin` |
+| `DoublePipeExchanger` | `hex` | `double_pipe` (as `default`) |
+| `KettleReboiler` | `hex` | `kettle` (as `default`) |
+| `Condenser` | `hex` | `condenser` (as `default`) |
+| `AirCooledExchanger` | `hex` | `air_cooled` (as `default`) |
+| `PlateExchanger` | `hex` | `plate` (as `default`) |
+| `SpiralExchanger` | `hex` | `spiral` (as `default`) |
+| `ThinFilmEvaporator` | `hex` | `thin_film` (as `default`) |
+| `Cyclone` | `separator` | `cyclone` (as `default`) |
+| `GravitySeparator` | `separator` | `gravity` (as `default`) |
+| `ElectrostaticPrecipitator` | `separator` | `electrostatic` (as `default`) |
+| `Screen` | `separator` | `sifter` (as `default`) |
+| `ImpactSeparator` | `separator` | `impact` (as `default`) |
+| `MagneticSeparator` | `separator` | `permanent_magnet` (as `default`), `electromagnetic` |
+| `Scrubber` | `separator` | `scrubber` (as `default`) |
+| `KnockoutDrum` | `separator` | `knockout` (as `default`) |
+| `Separator` | `separator` | `default` (the plain vertical drum, the shell `Vessel` and `Column` share), `horizontal` (the same drum lying down) |
+| `DustCollector` | `filter` | `gas` (as `default`), `gas_fixed_bed` (as `fixed_bed`), `gas_belt` (as `belt`) |
+| `RotaryDrumFilter` | `filter` | `rotary` (as `default`), `rotary_scraper` (as `scraper`) |
+| `FilterPress` | `filter` | `press` (as `default`) |
+| `IonExchanger` | `filter` | `ion_exchange` (as `default`) |
+| `Filter` | `filter` | `default` (bag/candle/cartridge), `fixed_bed`, `belt`. `DustCollector`'s three are the gas equivalents, each drawn with the dust hopper that makes it one of the [symbols that must not be turned](#symbols-that-must-not-be-turned) |
+| `RotaryDryer` | `dryer` | `default` |
+| `FluidizedBedDryer` | `dryer` | `fluidized_bed` (as `default`) |
+| `SprayDryer` | `dryer` | `spray` (as `default`) |
+| `ControlValve` | `valve` | `control` (as `default`), `pneumatic`, `butterfly_pneumatic` |
+| `SolenoidValve` | `valve` | `solenoid` (as `default`) |
+| `ReliefValve` | `valve` | `relief` (as `default`), `psv` |
+| `PressureRegulator` | `valve` | `regulator` (as `default`) |
+| `MotorOperatedValve` | `valve` | `motor` (as `default`) |
+| `CheckValve` | `valve` | `check` (as `default`) |
+| `Valve` | `valve` | bodies: `default` (gate), `gate`, `globe`, `ball`, `butterfly`, `needle`, `three_way`, `plug`, `pinch`, `angle`, `bleed`<br>with a drawn operator: `hydraulic`, `manual`, `knife`<br>which of them take a [`normal_position`](#normally-closed-valves) and which a [`fail`](#fail-position) are two different lists |
+| `SpectacleBlind` | `fitting` | `blind` (as `default`) |
+| `FlowElement` | `fitting` | `venturi` (as `default`), `flow_nozzle`, `coriolis`, `vortex`, `ultrasonic`, `turbine_meter`, `positive_displacement`, `v_cone`, `wedge`, `target`, `pitot`, `averaging_pitot` |
+| `Fitting` | `fitting` | `default` (flanged connection), `flange`, `strainer`, `strainer_cone`, `strainer_y`, `strainer_basket`, `strainer_duplex`, `orifice`, `rotameter`, `rupture_disc`, `sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `bellows`, `damper`, `spool`, `static_mixer`, `hose`, `coupling`, `clamped_coupling`, `flame_arrestor`, `flame_arrestor_explosion_proof`, `flame_arrestor_detonation_proof`, `flame_arrestor_fire_resistant` |
+| `StirredTankReactor` | `reactor` | `default` |
+| `Reactor` | `reactor` | `plain` (the same charge vessel without the agitator) |
+| `Vessel` | `vessel` | `default`, `dished`, `jacketed`, `skirted`, `legs`, `insulated`, `electrical_heating`, `swaged`, `dome`, `horizontal`<br>`dished`, `skirted` and `legs` are one shell on brackets, a skirt or a pair of legs; `jacketed` and `insulated` are that shell clad, and offer the same nozzles in the same places, so swapping one for another moves no run. `swaged` is the vessel drawn in two diameters, the wider one below |
+| `Tank` | `tank` | named for the roof: `default` (dished), `conical`, `floating_roof`, plus `sphere`<br>and for the bottom where it is a cone rather than a floor: `conical_bottom` (under a flat roof), `conical_ends` (a cone at each end), `dished_roof_conical_bottom`. On those three the `outlet` is on the cone's apex, which is where the tank actually drains |
+| `Column` | `column` | `default` (plain shell), `packed` |
+| `Reducer` | `reducer` | `default` (the concentric trapezoid), `concentric`, `eccentric`, plus `large_end`, which points the cone |
+| `Vent` | `vent` | `default` (stack with a weather cap), `exhaust_head`, `breather` |
+| `Instrument` | `instrument` | `default` (field balloon), `panel`, `aux`, `shared`, `computer`, `sis` (diamond in a square, also spelled `logic`), `interlock` (plain diamond) |
+| `Heater`, `Cooler`, `Furnace`, `Turbine`, `Blower`, `Ejector`, `Funnel`, `Conveyor`, `Mixer`, `Splitter`, `Tee`, `Block`, `Feed`, `Product` | each its own | `default` only |
 
 `HeatExchanger(variant="kettle")` carries a fifth nozzle, `bottoms`. It is the
 draw at the weir end of the shell, where what does not boil leaves as the
@@ -2160,7 +2284,9 @@ annotations:
 ### The `units` section
 
 `kind` (required) is the equipment class, in any spelling you would reasonably
-write: `HeatExchanger`, `heat_exchanger` or `hex`. `name` (required) is the tag.
+write: `HeatExchanger`, `heat_exchanger` or `hex`, and an
+[equipment class](#equipment-classes) by name (`Cyclone`, `kettle_reboiler`),
+which is what `to_dict()` writes for one. `name` (required) is the tag.
 Then `variant`, `description` (feeds the equipment list), `reference` (a boundary
 flag's off-page drawing), explicit `width`/`height`, `label_pos`, `new_line_number`
 (break the stream or line number at this inline item), `n_inlets` / `n_outlets`
@@ -2511,8 +2637,9 @@ ForcedCirculation("CR-102").variant                # 'forced_circulation'
 ForcedCirculation("CR-102", variant="draft_tube")  # ValueError, naming the low-level form
 ```
 
-An empty `VARIANTS` — what every shipped class has — means "this class owns its
-whole kind", and the check is skipped entirely. A non-empty one is a statement
+An empty `VARIANTS` — what every class in the port table has, and no
+[equipment class](#equipment-classes) — means "this class owns its whole kind",
+and the check is skipped entirely. A non-empty one is a statement
 that the rest of the kind's drawings belong to some other device, and the
 constructor refuses them there and then, listing the ones this class does draw,
 suggesting a near miss, and ending by naming the nearest ancestor that owns the

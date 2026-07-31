@@ -1,6 +1,6 @@
 """``pandid.devices``: the generated equipment classes, and what they promise.
 
-Four promises, and this file is each of them:
+Five promises, and this file is each of them:
 
 1. the committed module is what the generator emits today, so a hand edit to it
    is caught rather than lost the next time anyone runs the script;
@@ -10,7 +10,10 @@ Four promises, and this file is each of them:
    visible to a type checker;
 4. a sheet built from device classes round-trips through ``to_dict`` /
    ``from_dict``, which is where the four quiet integration edges in
-   ``pandid.spec`` show up.
+   ``pandid.spec`` show up;
+5. the two tables in ``docs/api.md`` still say what the registry says. A class
+   nobody documented is a class nobody finds, which is the whole reason this
+   layer exists.
 
 The compatibility half -- that the 156 shipped ``(kind, variant)`` pairs still
 build and draw exactly what they always did -- is ``tests/test_variants.py``,
@@ -20,6 +23,7 @@ which sweeps the base classes and only the base classes.
 import functools
 import importlib.util
 import pathlib
+import re
 import typing
 
 import pytest
@@ -396,3 +400,83 @@ def test_every_device_draws(cls):
     sheet = Flowsheet(cls.__name__)
     sheet.add(cls("X-1"))
     assert "<svg" in sheet.to_svg()
+
+
+# ---------------------------------------------------------------------------
+# The two tables in docs/api.md
+# ---------------------------------------------------------------------------
+
+DOCS = pathlib.Path(__file__).resolve().parent.parent / "docs" / "api.md"
+VARIANT = re.compile(r"`([a-z0-9_]+)`")
+CLASS = re.compile(r"`([A-Z]\w+)`")
+LOCAL_SPELLING = re.compile(r"\(as `[^`]+`\)")
+
+
+def _table(heading):
+    """The first markdown table under ``### heading``, as rows of stripped cells."""
+    section = DOCS.read_text(encoding="utf-8").split(f"\n### {heading}\n", 1)[1]
+    rows = []
+    for line in section.splitlines():
+        if line.startswith("|"):
+            rows.append([cell.strip() for cell in line.strip().strip("|").split("|")])
+        elif rows:
+            break
+    return [row for row in rows[1:] if not row[0].startswith("---")]
+
+
+def _drawings(cell, kind):
+    """The registered variants a row's last cell names.
+
+    Class-local spellings are struck first, since ``DustCollector`` accepting
+    ``belt`` for ``filter/gas_belt`` is not a claim on ``filter/belt``, which is
+    a drawing of its own. Everything else backticked and not registered --
+    ``normal_position``, ``large_end`` -- is prose, and drops out against the
+    registry.
+    """
+    named = set(VARIANT.findall(LOCAL_SPELLING.sub("", cell)))
+    return named & set(default_registry.variants(kind))
+
+
+def test_the_equipment_class_table_matches_the_classes():
+    """Generated here from the classes themselves, so the table cannot drift.
+
+    A class the docs do not list is a class nobody finds by reading them, and
+    the four columns are exactly what a reader is looking for: the name, the
+    drawing's kind, what it inherits, and the nozzles it does not.
+    """
+    expected = []
+    for cls in DEVICE_CLASSES:
+        base = cls.__mro__[1]
+        mine, theirs = list(cls("X-1").ports), list(base("X-1").ports)
+        differs = [f"`+{name}`" for name in mine if name not in theirs]
+        differs += [f"`-{name}`" for name in theirs if name not in mine]
+        expected.append(
+            [f"`{cls.__name__}`", f"`{cls.kind}`", f"`{base.__name__}`", " ".join(differs)]
+        )
+    assert _table("Equipment classes") == expected
+
+
+def test_the_variants_table_gives_every_drawing_exactly_one_owner():
+    """The other half: which class each of the 157 drawings is reached by name as.
+
+    The same accounting ``scripts/gen_devices.py`` refuses to run without, kept
+    against the page rather than against the module, so vendoring a stencil
+    fails here too until the docs say whose it is.
+    """
+    owner = {}
+    for row in _table("Variants"):
+        names = CLASS.findall(row[0])
+        classes = [getattr(devices, name, None) or getattr(units, name) for name in names]
+        if len(classes) == 1:
+            assert row[1] == f"`{classes[0].kind}`", f"{names[0]}: wrong kind in the docs"
+        for cls in classes:
+            for variant in _drawings(row[2], cls.kind):
+                assert (cls.kind, variant) not in owner, (
+                    f"{cls.kind}/{variant} is claimed by both "
+                    f"{owner[(cls.kind, variant)]} and {cls.__name__}"
+                )
+                owner[(cls.kind, variant)] = cls.__name__
+    assert set(owner) == set(default_registry._symbols)
+    for cls in DEVICE_CLASSES:
+        listed = {variant for (_, variant), name in owner.items() if name == cls.__name__}
+        assert listed == {cls.VARIANT_ALIASES.get(v, v) for v in cls.VARIANTS}

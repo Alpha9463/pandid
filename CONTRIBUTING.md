@@ -66,6 +66,8 @@ written by the layout engine), which is what makes `layout()` idempotent.
 `scripts/vendor_symbols.py` generates the symbol library into
 `pandid/render/_vendored_symbols.py`, converting mxGraph stencil XML to SVG via
 `scripts/mxgraph_to_svg.py`. `scripts/symbol_sheet.py` renders a catalogue.
+`scripts/gen_devices.py` generates the equipment classes into `pandid/devices.py`
+from the registry those symbols are in.
 
 ---
 
@@ -111,6 +113,15 @@ To add or change an equipment symbol:
    regenerates the library in memory (`vendor_symbols.render()`, which writes
    nothing) and compares it against the committed file, so one without the other
    is a red suite rather than a symbol that quietly reverts on the next run.
+5. Say what the new drawing **is**. `pandid/devices.py` is generated too, by
+   `scripts/gen_devices.py`, which refuses to run until every registered
+   `(kind, variant)` is claimed exactly once: by a class in `DEVICES` and `OWNS`,
+   or by a `STAYS_ON_BASE` entry giving the word from the rule — a support, a
+   roof, a cladding, an attitude, a drawn internal, a certification rating, a
+   body style — that makes it a style rather than a device. Regenerate with
+   `python scripts/gen_devices.py` and commit that file too; one test holds it
+   to its generator, and another holds `docs/api.md`'s two class tables to the
+   registry.
 
 The shape's `aspect` comes across with it, as `Symbol.stretchable`. The stencil
 author has already answered whether the drawing may be reshaped to fill a box of
