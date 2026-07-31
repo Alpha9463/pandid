@@ -131,7 +131,7 @@ def _distillation_train() -> Flowsheet:
 
     col2.pin(x=1260, y=col_y)
     ovhd_run_y = col_y - 160
-    drum_y = col_y - 75
+    drum_y = col_y - 105
     tee_y = col_y - 5
     bot_y = col_y + 225
     pump_y = bot_y + 85
@@ -229,6 +229,7 @@ def _distillation_train() -> Flowsheet:
             Revision("B", "2026-07-01", "Issued for design", "AA", "JS", "RL"),
             Revision("C", "2026-07-12", "Added FV-200 recycle loop", "AA", "JS", "RL"),
             Revision("D", "2026-07-28", "Reflux and reboiler added", "AA", "JS", "RL"),
+            Revision("E", "2026-08-01", "Reflux drums raised", "AA", "JS", "RL"),
         ],
     )
     fs.add_annotation(equipment_list(fs, align="top-right"))

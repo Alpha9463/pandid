@@ -86,7 +86,7 @@ def main():
     # it by its own nozzle.
     col2.pin(x=1260, y=col_y)
     ovhd_run_y = col_y - 160    # condenser row, clear above both towers
-    drum_y = col_y - 75         # reflux drum, hung under the condenser it drains
+    drum_y = col_y - 105        # reflux drum, hung under the condenser it drains
     tee_y = col_y - 5           # where each drum's draw parts into two lines
     bot_y = col_y + 225         # kettle reboiler row, below both towers
     pump_y = bot_y + 85         # pump suctions, on the run the weir draw falls to
@@ -110,6 +110,19 @@ def main():
     # than from the head the engine would otherwise reach for: condensate falls
     # onto a receiver, and nozzle() is how that convention gets stated instead
     # of being left to wherever the peer happened to land.
+    #
+    # How far below is the elevation that lets the drum feed the tower without a
+    # pump: reflux and distillate both run on the head between the drum's liquid
+    # level and what they discharge to, which is why neither reference PFD nor
+    # the P&ID of this same service draws a pump under a reflux drum, and a drum
+    # drawn low is that head drawn away. The 195 units between the condenser's
+    # nozzle row and reflux_in used to be spent 85 on the condenser's drain and
+    # 22 on the drum's draw -- two runs doing the same job and carrying the same
+    # kind of label -- and 22 is short for the one that also has to show the
+    # reflux parting from the distillate, because a Tee draws the junction and
+    # no symbol, so the pipe either side of it is the only thing saying one is
+    # there. At 55 and 52 the two drops are the same run, and the parting sits
+    # more than the drum's own height clear of it rather than against it.
     c1_drum.nozzle("inlet", "N").pin(
         port="inlet", x=c1_ovhd.pin_.x + port_offset(c1_ovhd, "tube_out")[0] + 60, y=drum_y)
     c2_drum.nozzle("inlet", "N").pin(
@@ -209,6 +222,8 @@ def main():
             Revision("B", "2026-07-01", "Issued for design", "AA", "JS", "RL"),
             Revision("C", "2026-07-12", "Added FV-200 recycle loop", "AA", "JS", "RL"),
             Revision("D", "2026-07-28", "Reflux and reboiler added",
+                     "AA", "JS", "RL"),
+            Revision("E", "2026-08-01", "Reflux drums raised",
                      "AA", "JS", "RL"),
         ],
     )
