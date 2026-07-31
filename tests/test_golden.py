@@ -77,10 +77,32 @@ def _distillation_train() -> Flowsheet:
     preheater = fs.add(units.HeatExchanger("E-100", description="Feed Preheater"))
     col1 = fs.add(units.Column("T-100", description="Light Ends Column"))
     c1_ovhd = fs.add(units.HeatExchanger("E-101", description="T-100 Overhead Condenser"))
+    c1_drum = fs.add(
+        units.Vessel(
+            "V-101", variant="horizontal", width=130, height=42, description="T-100 Reflux Drum"
+        )
+    )
+    c1_tee = fs.add(units.Tee())
+    c1_reb = fs.add(
+        units.HeatExchanger(
+            "E-102", variant="kettle", width=120, height=44, description="T-100 Kettle Reboiler"
+        )
+    )
     c1_prod = fs.add(units.Product("Light Product", reference="PFD-1002"))
     pump1 = fs.add(units.Pump("P-100A/B", description="T-100 Bottoms Pump"))
     col2 = fs.add(units.Column("T-200", description="Product Column"))
     c2_ovhd = fs.add(units.HeatExchanger("E-201", description="T-200 Overhead Condenser"))
+    c2_drum = fs.add(
+        units.Vessel(
+            "V-201", variant="horizontal", width=130, height=42, description="T-200 Reflux Drum"
+        )
+    )
+    c2_tee = fs.add(units.Tee())
+    c2_reb = fs.add(
+        units.HeatExchanger(
+            "E-202", variant="kettle", width=120, height=44, description="T-200 Kettle Reboiler"
+        )
+    )
     c2_prod = fs.add(units.Product("Med Product", reference="PFD-1002"))
     pump2 = fs.add(units.Pump("P-200A/B", description="T-200 Bottoms Pump"))
     splitter = fs.add(units.Splitter("SP-200", n_outlets=2, description="Bottoms Splitter"))
@@ -96,32 +118,71 @@ def _distillation_train() -> Flowsheet:
     feed_valve.pin(x=410, port="inlet", y=feed_run_y)
     preheater.pin(x=520, port="tube_in", y=feed_run_y)
 
-    ovhd_y = col_y - 80
-    c1_ovhd.pin(x=820, y=ovhd_y)
-    ovhd_run_y = ovhd_y + port_offset(c1_ovhd, "tube_out")[1]
-    c1_prod.pin(x=980, port="inlet", y=ovhd_run_y)
-    bot_y = col_y + 205 + 30
-    pump1.pin(x=820, y=bot_y)
-    col2.pin(x=1100, y=col_y)
-    c2_ovhd.pin(x=1230, y=ovhd_y)
-    c2_prod.pin(x=1390, port="inlet", y=ovhd_run_y)
-    pump2.pin(x=1230, y=bot_y)
-    splitter.pin(x=1360, y=bot_y - 100)
-    c2_bot.pin(x=1480, port="inlet", y=splitter.pin_.y + port_offset(splitter, "out_1")[1])
-    recycle_valve.pin(x=590, y=bot_y + 100, mirrored=True)
+    col2.pin(x=1260, y=col_y)
+    ovhd_run_y = col_y - 160
+    drum_y = col_y - 75
+    tee_y = col_y - 5
+    bot_y = col_y + 225
+    pump_y = bot_y + 85
+
+    c1_axis = col1.pin_.x + port_offset(col1, "distillate")[0]
+    c2_axis = col2.pin_.x + port_offset(col2, "distillate")[0]
+
+    c1_ovhd.pin(x=c1_axis + 80, port="tube_in", y=ovhd_run_y)
+    c2_ovhd.pin(x=c2_axis + 80, port="tube_in", y=ovhd_run_y)
+
+    c1_drum.nozzle("inlet", "N").pin(
+        port="inlet", x=c1_ovhd.pin_.x + port_offset(c1_ovhd, "tube_out")[0] + 60, y=drum_y
+    )
+    c2_drum.nozzle("inlet", "N").pin(
+        port="inlet", x=c2_ovhd.pin_.x + port_offset(c2_ovhd, "tube_out")[0] + 60, y=drum_y
+    )
+
+    for tee, drum, prod, prod_x in (
+        (c1_tee, c1_drum, c1_prod, 1070),
+        (c2_tee, c2_drum, c2_prod, 1640),
+    ):
+        tee.pin(orientation=90, mirrored="y")
+        tee.pin(port="inlet", x=drum.pin_.x + port_offset(drum, "outlet")[0])
+        tee.pin(port="branch", y=tee_y)
+        prod.pin(x=prod_x, port="inlet", y=tee_y)
+
+    c1_reb.pin(x=c1_axis + 90, y=bot_y)
+    c2_reb.pin(x=c2_axis + 90, y=bot_y)
+    pump1.pin(x=1010, port="suction", y=pump_y)
+    pump2.pin(x=1580, port="suction", y=pump_y)
+
+    splitter.pin(x=1710, y=bot_y - 40)
+    c2_bot.pin(x=1830, port="inlet", y=splitter.pin_.y + port_offset(splitter, "out_1")[1])
+    recycle_valve.pin(x=590, y=pump_y + 110, mirrored=True)
 
     fs.connect(feed.outlet, mixer.in_1)
     fs.connect(mixer.outlet, feed_valve.inlet)
     fs.connect(feed_valve.outlet, preheater.tube_in)
     fs.connect(preheater.tube_out, col1.feed)
+
     fs.connect(col1.distillate, c1_ovhd.tube_in)
-    fs.connect(c1_ovhd.tube_out, c1_prod.inlet)
-    fs.connect(col1.bottoms, pump1.suction)
+    fs.connect(c1_ovhd.tube_out, c1_drum.inlet)
+    fs.connect(c1_drum.outlet, c1_tee.inlet)
+    fs.connect(c1_tee.outlet, col1.reflux_in, draw_as_recycle=True)
+    fs.connect(c1_tee.branch, c1_prod.inlet)
+
+    fs.connect(col1.bottoms, c1_reb.shell_in)
+    fs.connect(c1_reb.shell_out, col1.boilup_in, draw_as_recycle=True)
+    fs.connect(c1_reb.bottoms, pump1.suction)
     fs.connect(pump1.discharge, col2.feed)
+
     fs.connect(col2.distillate, c2_ovhd.tube_in)
-    fs.connect(c2_ovhd.tube_out, c2_prod.inlet)
-    fs.connect(col2.bottoms, pump2.suction)
+    fs.connect(c2_ovhd.tube_out, c2_drum.inlet)
+    fs.connect(c2_drum.outlet, c2_tee.inlet)
+    fs.connect(c2_tee.outlet, col2.reflux_in, draw_as_recycle=True)
+    fs.connect(c2_tee.branch, c2_prod.inlet)
+
+    fs.connect(col2.bottoms, c2_reb.shell_in)
+    fs.connect(c2_reb.shell_out, col2.boilup_in, draw_as_recycle=True)
+    fs.connect(c2_reb.bottoms, pump2.suction)
     fs.connect(pump2.discharge, splitter.inlet)
+
     fs.connect(splitter.out_1, c2_bot.inlet)
     fs.connect(splitter.out_2, recycle_valve.inlet)
     fs.connect(recycle_valve.outlet, mixer.in_2, draw_as_recycle=True)
@@ -156,6 +217,7 @@ def _distillation_train() -> Flowsheet:
             Revision("A", "2026-06-01", "Issued for internal review", "AA"),
             Revision("B", "2026-07-01", "Issued for design", "AA", "JS", "RL"),
             Revision("C", "2026-07-12", "Added FV-200 recycle loop", "AA", "JS", "RL"),
+            Revision("D", "2026-07-28", "Reflux and reboiler added", "AA", "JS", "RL"),
         ],
     )
     fs.add_annotation(equipment_list(fs, align="top-right"))
