@@ -291,26 +291,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   outright — it excepts *turning* only, and only for symbols where gravity is a
   functionality — and what a reader asks for by flipping a condenser is its
   nozzles on the other side. So `Symbol.directional` marks the drawing and the
-  renderer holds it still under the flip while the nozzles still move: the
-  reflection is undone inside the `<defs>` entry and the `<use>` reapplies it,
-  which is exactly what `svg.py::_upright_text` already does to keep a symbol's
-  own lettering readable. The two cancel exactly, because a reflection is
-  axis-aligned and so commutes with the per-axis scaling that fits the artwork
-  into its box.
+  renderer holds it still under the flip while the nozzles still move: the flip
+  is undone inside the `<defs>` entry and the `<use>` reapplies it, which is
+  exactly what `svg.py::_upright_text` already does to keep a symbol's own
+  lettering readable. The two cancel exactly, because an axis flip commutes with
+  the per-axis scaling that fits the artwork into its box.
 
-  A **turn** is deliberately left alone: a rotation is a rigid motion and
-  carries an arrow to a turned copy of the same statement, where a reflection
-  swaps its head for its tail. So a directional symbol still shares one
-  definition across all four turns and takes a second only when it is flipped.
+  **Which placements reverse a mark, and which carry it**, is `_reflections`'
+  answer, and it is *not* "mirrors reverse, turns carry":
+
+  | placement | the mark |
+  |---|---|
+  | `mirrored="x"` / `"y"` / `"xy"` | reversed — undone |
+  | `orientation=180` | reversed — undone. A half turn **is** `mirrored="xy"`, the two flips composed, and it lands the head exactly where the sibling symbol draws it |
+  | `orientation=90` / `270` | carried — left alone. A quarter turn puts the head on the *other* diagonal, which no upright drawing of either symbol occupies, and turns the box with it |
+
+  A quarter turn with a mirror on it still has its mirror half undone. That
+  split is also the arithmetic one: an axis flip cancels exactly inside the
+  definition, a quarter turn cannot on a box that is not square. So a
+  directional symbol takes four `<defs>` entries across all sixteen placements.
 
   Three symbols are marked — `heater/default`, `cooler/default` and
   `hex/condenser`, which is the same drawing as the cooler — with the reasons
   recorded beside `DIRECTIONAL` in `scripts/vendor_symbols.py`, next to the
-  `GRAVITY_FIXED` table it is modelled on. Declaring it asks one thing of the
-  artwork, since it decouples the ink from the nozzles: every port has to stay
-  on drawn ink under either flip, which
-  `test_a_directional_symbols_ports_stay_on_ink_under_a_flip` holds every
-  symbol that declares it to.
+  `GRAVITY_FIXED` table it is modelled on. Declaring it asks two things of the
+  artwork. It decouples the ink from the nozzles, so every port has to stay on
+  drawn ink under any flip; and the whole drawing is held still, so it must
+  carry no lettering of its own, which the generator refuses and the invariant
+  suite checks. `test_a_directional_symbols_arrow_survives_every_placement`
+  sweeps all sixteen placements, since both halves of this defect shipped for
+  the same reason — nothing on any sheet placed a directional symbol that way.
 
   **No golden moves**, because no golden scenario flips one; `10_ethanol_pfd`
   changes by two lines of SVG, the definition and the `<use>` that names it, and

@@ -2292,9 +2292,9 @@ That is not a reason to refuse the flip. §11.4.2 permits mirroring outright, an
 what a reader asks for by flipping a condenser is its *nozzles* on the other side
 — `examples/10_ethanol_pfd` flips one so the tower overhead rises into the shell
 inlet dead straight. So `Symbol.directional` marks the drawing instead, and the
-renderer holds it still under the flip while the nozzles move: the reflection is
-undone inside the `<defs>` entry and the `<use>` reapplies it, exactly as a
-symbol's own lettering is kept readable under a transform.
+renderer holds it still under the flip while the nozzles move: the flip is undone
+inside the `<defs>` entry and the `<use>` reapplies it, exactly as a symbol's own
+lettering is kept readable under a transform.
 
 ```python
 cond = fs.add(units.HeatExchanger("E-301", variant="condenser"))
@@ -2307,12 +2307,25 @@ marked symbols are `heater/default`, `cooler/default` and `hex/condenser`, which
 is the same drawing as `cooler/default`; the reasons are recorded beside
 `DIRECTIONAL` in `scripts/vendor_symbols.py`.
 
-A **turn** is left alone, and is a different question: a rotation is a rigid
-motion and carries an arrow to a turned copy of the same statement, where a
-reflection swaps its head for its tail. The one place that is not the whole story
-is `orientation=180` on these two, which lands the head at the other end without
-reflecting anything, and which the circle-and-zigzag around it is symmetric
-enough not to give away.
+#### Which placements reverse a mark, and which carry it
+
+The eight placements a unit may take are the symmetries of a square, and they
+split in two:
+
+| placement | the mark | why |
+|---|---|---|
+| `mirrored="x"`, `mirrored="y"`, `mirrored="xy"` | **reversed** — undone | an axis flip lands the head at the other end of the mark, on a drawing the reader still sees the same way up |
+| `orientation=180` | **reversed** — undone | a half turn *is* `mirrored="xy"`: the two flips composed. It is not a turn as far as the mark is concerned, and it puts the head exactly where the sibling symbol draws it |
+| `orientation=90`, `orientation=270` | **carried** — left alone | a quarter turn puts the head on the *other* diagonal, which no upright drawing of either symbol occupies, and turns the box with it: what the reader sees is a symbol that has plainly been turned |
+
+A quarter turn combined with a mirror still has its mirror half undone; only the
+quarter turn itself is carried. That split is also the arithmetic one, which is
+not a coincidence: an axis flip commutes with the per-axis scaling that fits a
+symbol into its box and so cancels exactly inside the definition, while a quarter
+turn does not, and on a box that is not square it cannot. `_reflections` in
+`pandid/render/svg.py` is where it is worked out, and a directional symbol
+therefore takes **four** `<defs>` entries across all sixteen placements rather
+than sixteen.
 
 ---
 

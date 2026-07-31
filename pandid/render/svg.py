@@ -472,6 +472,35 @@ def _upright_text(svg: str, rot: int, mirror_x: bool, mirror_y: bool) -> str:
     return _SYMBOL_TEXT.sub(wrap, svg)
 
 
+def _reflections(rot: int, mirror_x: bool, mirror_y: bool) -> "tuple[bool, bool]":
+    """A placement's *reflection content*, as the pair of axis flips it is.
+
+    The eight placements a unit may take are the symmetries of a square, and
+    they split in two for this purpose. Four of them leave the axes alone --
+    the identity, the two mirrors, and the **half turn, which is exactly the
+    two mirrors composed** -- so every one of them is some combination of
+    ``scale(-1, 1)`` and ``scale(1, -1)`` about the box's centre, which is what
+    this returns. The other four swap the axes: the quarter turns, and each of
+    them with a mirror on top.
+
+    That split is the one a directional mark cares about, and it is the same
+    split the arithmetic cares about, which is not a coincidence. An axis flip
+    commutes with the per-axis scaling that fits a symbol into its box, so it
+    can be cancelled exactly inside the definition; a quarter turn does not,
+    and on a box that is not square it cannot be. And an axis flip is what
+    lands a mark somewhere else on a drawing the reader still sees the same way
+    up -- which is how a cooler comes to be drawn as a heater -- where a
+    quarter turn turns the box with it and what the reader sees is a symbol
+    that has plainly been turned.
+
+    So ``orientation=180`` is not a turn as far as the mark is concerned. It is
+    both mirrors at once, and it reverses the arrow exactly as either of them
+    would: it was the half of this that shipped un-handled.
+    """
+    half = rot == 180
+    return (mirror_x != half, mirror_y != half)
+
+
 def _upright_artwork(svg: str, w: float, h: float,
                      mirror_x: bool, mirror_y: bool) -> str:
     """Keep a symbol's *directional* drawing saying the same thing under a flip.
@@ -485,15 +514,20 @@ def _upright_artwork(svg: str, w: float, h: float,
     shell inlet underneath, so the overhead rises into it dead straight -- and
     the ports move under the placement transform however this leaves the ink.
 
-    So the reflection is undone inside the definition, about the symbol's own
-    centre lines, and the ``<use>`` reapplies it: the two cancel exactly, and
-    the drawing lands where it was drawn while the nozzles go where the flip
-    puts them. Exactly, because a reflection is axis-aligned and so commutes
-    with the per-axis scaling that fits the artwork into its box; that is also
-    why the quarter turn is *not* undone here, and it is why it should not be.
-    A turn is a rigid motion and carries an arrow to a turned copy of the same
-    statement, where a reflection swaps its head for its tail and states the
-    reverse. See :attr:`pandid.render.symbols.Symbol.directional`.
+    So the flip is undone inside the definition, about the symbol's own centre
+    lines, and the ``<use>`` reapplies it: the two cancel exactly, and the
+    drawing lands where it was drawn while the nozzles go where the flip puts
+    them. Exactly, because an axis flip commutes with the per-axis scaling that
+    fits the artwork into its box.
+
+    *mirror_x* and *mirror_y* are the placement's whole reflection content and
+    not only what the caller spelled ``mirrored=``: a half turn is both flips
+    composed and reverses the mark just as either one does, so it arrives here
+    as both. :func:`_reflections` is where that is worked out, and is also where
+    the quarter turn is left alone, which it should be -- a quarter turn takes
+    the mark onto ground no upright drawing of either symbol occupies, and turns
+    the box with it, so what a reader sees is a turned symbol rather than a
+    different one. See :attr:`pandid.render.symbols.Symbol.directional`.
 
     Only the whole drawing, never part of it: on the one family that declares
     this, the artwork *is* the statement, drawn as a circle with the zigzag and
@@ -1194,26 +1228,32 @@ class SvgRenderer:
         Two things in a drawing belong to the *drawing* rather than to the
         attitude the equipment is installed in, and so have to survive the
         placement: its own lettering, which stays readable
-        (:func:`_upright_text`), and a directional mark, whose sense a
-        reflection reverses (:func:`_upright_artwork`). Each is undone inside
-        the definition and reapplied by the ``<use>``.
+        (:func:`_upright_text`), and a directional mark, which an axis flip
+        reverses (:func:`_upright_artwork`). Each is undone inside the
+        definition and reapplied by the ``<use>``.
 
         The identity for every symbol with neither -- the great majority -- so
         those keep sharing one definition and one id no matter how they are
-        placed. A symbol with only a directional mark reports no turn, since a
-        turn does not reverse one and undoing it here would not cancel: it keeps
-        sharing one definition across all four turns and needs a second only
-        when it is flipped.
+        placed.
+
+        A directional symbol reports its placement's *reflection content*
+        instead of the placement, since that is the whole of what it bakes in:
+        a half turn arrives as both flips (:func:`_reflections`), and a quarter
+        turn as none, so ``orientation=90`` on an unflipped one still shares the
+        single definition the sheet had before and the four placements that flip
+        it share three more between them.
         """
         sym = self.registry.for_unit(u)
         f = getattr(u, "frame", None)
         if f is None:
             return (0, False, False)
-        lettered = "<text" in sym.svg
-        if not (lettered or sym.directional):
-            return (0, False, False)
-        return (int(getattr(f, "orientation", 0) or 0) if lettered else 0,
-                bool(f.mirrored), bool(getattr(f, "mirror_y", False)))
+        rot = int(getattr(f, "orientation", 0) or 0)
+        mirror_x, mirror_y = bool(f.mirrored), bool(getattr(f, "mirror_y", False))
+        if "<text" in sym.svg:
+            return (rot, mirror_x, mirror_y)
+        if sym.directional:
+            return (0, *_reflections(rot, mirror_x, mirror_y))
+        return (0, False, False)
 
     def _sym_id(self, u) -> str:
         """The ``<defs>`` id a unit's ``<use>`` points at.
@@ -1282,17 +1322,17 @@ class SvgRenderer:
                 stretched.add(key)
         for key in sorted(used):
             sym_id, sym, pen, rot, mirror_x, mirror_y = used[key]
-            # A directional symbol's whole drawing is held still under the flip,
-            # so the flip never reaches its lettering either and the residual a
-            # glyph has to undo is the turn alone. No symbol is both today; the
-            # two would compose wrongly rather than not at all, so they are made
-            # to compose here rather than left to be discovered.
-            svg_str = _upright_text(_at_pen_scale(sym.svg, pen), rot,
-                                    mirror_x and not sym.directional,
-                                    mirror_y and not sym.directional)
+            # Either, never both. A directional symbol's *whole* drawing is held
+            # still, lettering included, so a glyph inside one would need the
+            # residual of the two rather than its own counter-transform. No
+            # symbol carries both, and
+            # test_a_directional_symbol_carries_no_lettering_of_its_own says so
+            # over the registry rather than leaving this branch to be trusted.
             if sym.directional:
-                svg_str = _upright_artwork(svg_str, sym.width, sym.height,
-                                           mirror_x, mirror_y)
+                svg_str = _upright_artwork(_at_pen_scale(sym.svg, pen),
+                                           sym.width, sym.height, mirror_x, mirror_y)
+            else:
+                svg_str = _upright_text(_at_pen_scale(sym.svg, pen), rot, mirror_x, mirror_y)
             if svg_str.startswith('<g'):
                 inner = svg_str[svg_str.find('>') + 1:svg_str.rfind('</g>')]
                 # preserveAspectRatio: stated only where a placement reshapes the

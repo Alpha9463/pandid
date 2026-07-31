@@ -379,11 +379,41 @@ def test_lettered_symbols_get_one_definition_per_transform():
 # statement is drawn from the tail of the diagonal to its head, so it is the
 # *heading* that has to survive, and the heading is the linear part of whatever
 # the sheet finally applies to the artwork.
+#
+# Swept over the whole of the placement group and not over the flips alone. The
+# eight placements a unit may take split in two, and the split is what the rule
+# is:
+#
+#   reversed, and so undone   mirrored="x" / "y" / "xy", and orientation=180,
+#                             which is exactly the two mirrors composed
+#   carried, and so left      orientation=90 / 270, whose mirror part is still
+#                             undone on its own
+#
+# The mirror half of that shipped un-handled until example 10 flipped a
+# condenser, and the half-turn half shipped un-handled until this sweep, for the
+# same reason both times: nothing placed a directional symbol that way. Which is
+# why the sweep is over all sixteen combinations rather than over the ones some
+# sheet happens to use.
 # ---------------------------------------------------------------------------
 
 #: (0, 80) -> (80, 0) as the cooler stencil draws it: up and to the right on a
 #: y-down canvas. Read as a direction, so the length does not matter.
 _DUTY_HEADING = (1.0, -1.0)
+#: The heater's own, which is the same diagonal walked the other way -- the
+#: whole of the difference between the two drawings.
+_HEATER_HEADING = (-1.0, 1.0)
+
+
+def _unit_vector(dx: float, dy: float) -> tuple[float, float]:
+    scale = math.hypot(dx, dy)
+    return (dx / scale, dy / scale)
+
+
+def _turned(dx: float, dy: float, degrees: float) -> tuple[float, float]:
+    """A direction turned clockwise as drawn, i.e. on a y-down canvas -- which
+    is what ``rotate()`` does to it, and the convention ``_linear`` composes in."""
+    t = math.radians(degrees)
+    return _unit_vector(dx * math.cos(t) - dy * math.sin(t), dx * math.sin(t) + dy * math.cos(t))
 
 
 def _drawn_heading(svg: str, sym_id_prefix: str, dx: float, dy: float):
@@ -399,26 +429,61 @@ def _drawn_heading(svg: str, sym_id_prefix: str, dx: float, dy: float):
     assert body, f"no <symbol> defining {use.group(1)}"
     baked = re.search(r'<g transform="([^"]*)">', body.group(0))
     a, b, c, d = _linear(" ".join([use.group(2) or "", baked.group(1) if baked else ""]))
-    hx, hy = a * dx + c * dy, b * dx + d * dy
-    scale = math.hypot(hx, hy)
-    return (hx / scale, hy / scale)
+    return _unit_vector(a * dx + c * dy, b * dx + d * dy)
 
 
+@pytest.mark.parametrize("rot", [0, 90, 180, 270])
 @pytest.mark.parametrize("mirror", [False, "x", "y", "xy"])
-def test_a_directional_symbols_arrow_survives_a_flip(mirror):
-    """The duty arrow points the way its author drew it however it is flipped.
+def test_a_directional_symbols_arrow_survives_every_placement(rot, mirror):
+    """The duty arrow is never drawn reversed, at any of the eight placements.
 
     Reported as ``E-201`` on ``05_reactor_recycle`` pointing up and right while
     ``E-301`` on ``10_ethanol_pfd`` -- the same stencil, flipped for a nozzle
     reason -- pointed down and right: one stencil, two opposite statements about
     which way the heat goes.
+
+    A reflection is undone, so the arrow comes out exactly as drawn. A quarter
+    turn is carried, so it comes out turned by exactly that quarter and no more:
+    the reader sees a symbol that has been turned, which no upright drawing of
+    either symbol could be confused with. ``orientation=180`` is in the first
+    group and not the second -- it is the two mirrors composed, and would
+    otherwise put the head at the far end of the same diagonal, where the
+    *heater* draws it.
     """
     fs = Flowsheet("duty")
-    fs.add(units.Cooler("E-1")).pin(x=200, y=200, mirrored=mirror)
+    fs.add(units.Cooler("E-1")).pin(x=200, y=200, orientation=rot, mirrored=mirror)
     fs.layout()
     got = _drawn_heading(fs.to_svg(check=False), "sym_cooler", *_DUTY_HEADING)
-    want = math.hypot(*_DUTY_HEADING)
-    assert got == pytest.approx((_DUTY_HEADING[0] / want, _DUTY_HEADING[1] / want))
+    # 180 is a reflection pair, not a turn: only a quarter turn is carried.
+    assert got == pytest.approx(_turned(*_DUTY_HEADING, 0 if rot in (0, 180) else rot))
+
+
+def test_a_quarter_turned_cooler_is_not_the_heater_turned_the_other_way():
+    """The claim that lets a quarter turn through, stated as the drawing.
+
+    A half turn had to be undone because the rest of the artwork is symmetric
+    under it, so the head at the far end of the diagonal is indistinguishable
+    from the sibling symbol drawn upright. A quarter turn puts the head on the
+    *other* diagonal, which no upright drawing of either symbol occupies -- so
+    the drawing reads as turned rather than as the other equipment. If that ever
+    stops being true, the quarter turn has to be undone too, and this is what
+    says so.
+    """
+    fs = Flowsheet("turned")
+    fs.add(units.Cooler("E-1")).pin(x=200, y=200, orientation=90)
+    fs.add(units.Heater("E-2")).pin(x=600, y=200)
+    fs.layout()
+    svg = fs.to_svg(check=False)
+    cooler = _drawn_heading(svg, "sym_cooler", *_DUTY_HEADING)
+    heater = _drawn_heading(svg, "sym_heater", *_HEATER_HEADING)
+    # The heater walks the same diagonal the other way, which is the whole of
+    # what makes it the other symbol -- and is what a half turn would have
+    # turned the cooler into.
+    assert heater == pytest.approx(_turned(*_DUTY_HEADING, 180))
+    # The quarter-turned cooler is on neither end of that diagonal: the cross
+    # product with it is 1 for a perpendicular direction and 0 for a parallel
+    # one, either way round.
+    assert abs(cooler[0] * heater[1] - cooler[1] * heater[0]) > 0.5
 
 
 def test_a_flipped_directional_symbol_still_moves_its_nozzles():
@@ -428,31 +493,41 @@ def test_a_flipped_directional_symbol_still_moves_its_nozzles():
     why ``10_ethanol_pfd`` flips its condenser, so the overhead rises into the
     shell inlet dead straight -- so the nozzles have to move even though the ink
     does not. Without this, "the arrow no longer reverses" would be satisfied by
-    ignoring ``mirrored=`` altogether.
+    ignoring ``mirrored=`` altogether. The half turn is checked with them, since
+    it is now handled as a flip and could be neutered the same way.
     """
     from pandid.portgeom import port_point
 
     fs = Flowsheet("nozzles")
     upright = fs.add(units.Cooler("E-1")).pin(x=200, y=200)
     flipped = fs.add(units.Cooler("E-2")).pin(x=500, y=200, mirrored="y")
+    turned = fs.add(units.Cooler("E-3")).pin(x=800, y=200, orientation=180)
     fs.layout()
-    # utility_out is drawn on the crown; flipped, it has to be underneath.
+    # utility_out is drawn on the crown; flipped or turned over, it is underneath.
     assert port_point(upright, upright.frame, "utility_out")[1] < upright.frame.cy
     assert port_point(flipped, flipped.frame, "utility_out")[1] > flipped.frame.cy
+    assert port_point(turned, turned.frame, "utility_out")[1] > turned.frame.cy
 
 
-def test_a_directional_symbol_takes_one_definition_per_flip_and_one_per_turn():
-    """A flip is baked into the definition and a turn is not, so the four turns
-    of an unflipped cooler still share the one entry the sheet had before."""
+def test_a_directional_symbol_takes_one_definition_per_reflection():
+    """Four definitions over all sixteen placements, keyed by reflection alone.
+
+    A quarter turn bakes in nothing, so an unflipped cooler at any of the four
+    turns still shares the single entry the sheet had before; a half turn bakes
+    in both flips, so it shares with ``mirrored="xy"``; and the two single
+    mirrors take one each.
+    """
     fs = Flowsheet("defs")
     for i, rot in enumerate((0, 90, 180, 270)):
-        fs.add(units.Cooler(f"E-{i}")).pin(x=200 + 200 * i, y=100, orientation=rot)
-    fs.add(units.Cooler("E-x")).pin(x=200, y=400, mirrored="x")
-    fs.add(units.Cooler("E-y")).pin(x=500, y=400, mirrored="y")
+        for j, mirror in enumerate((False, "x", "y", "xy")):
+            fs.add(units.Cooler(f"E-{i}{j}")).pin(
+                x=200 + 220 * i, y=200 + 220 * j, orientation=rot, mirrored=mirror
+            )
     fs.layout()
     svg = fs.to_svg(check=False)
     assert sorted(set(re.findall(r'<symbol id="(sym_cooler[^"]*)"', svg))) == [
         "sym_cooler",
         "sym_cooler_tx",
+        "sym_cooler_txy",
         "sym_cooler_ty",
     ]

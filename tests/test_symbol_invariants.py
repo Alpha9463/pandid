@@ -645,6 +645,10 @@ def test_a_directional_symbols_ports_stay_on_ink_under_a_flip(entry):
     if not sym.directional:
         pytest.skip("not a directional symbol; its artwork flips with its ports")
     segments = _collect_segments(sym.svg)
+    # All three, and not the two the caller can spell: a half turn arrives as
+    # both flips at once (pandid.render.svg._reflections), so (True, True) is a
+    # placement an author reaches by writing orientation=180 as readily as by
+    # writing mirrored="xy".
     for mirror_x, mirror_y in ((True, False), (False, True), (True, True)):
         for name, (x, y) in sym.ports.items():
             if (kind, name) in _SIGNAL_PORTS:
@@ -657,6 +661,27 @@ def test_a_directional_symbols_ports_stay_on_ink_under_a_flip(entry):
                 f"{d:.1f}u from the nearest stroke of the artwork that is held "
                 f"still under that flip (tolerance {GEOM_TOL})"
             )
+
+
+@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
+def test_a_directional_symbol_carries_no_lettering_of_its_own(entry):
+    """The other thing declaring ``directional`` asks of the artwork.
+
+    A directional drawing is held still *as a whole*, so the counter-transform
+    that keeps a symbol's own lettering readable has nothing left to do and, if
+    it ran anyway, would counter-transform each glyph a second time. The
+    renderer therefore picks one of the two rather than composing them, and this
+    is what keeps that branch honest. ``scripts/vendor_symbols.py`` refuses the
+    combination at generation time; this covers the hand-drawn symbols too.
+    """
+    (kind, variant), sym = entry
+    if not sym.directional:
+        pytest.skip("not a directional symbol")
+    assert "<text" not in sym.svg, (
+        f"{kind}/{variant} declares directional and carries lettering: the "
+        f"renderer holds its whole drawing still and cannot also counter-"
+        f"transform a glyph inside it"
+    )
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)

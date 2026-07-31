@@ -1256,10 +1256,11 @@ GRAVITY_FIXED = {
     ("filter", "gas_belt"):      "dust hopper under the belt",
 }
 
-# Symbols whose artwork states a *direction of flow* that a mirror would
-# reverse. See ``Symbol.directional``: the flip still moves the nozzles, and the
+# Symbols whose artwork states a *direction of flow* that an axis flip would
+# reverse -- either mirror, and the half turn that is the two of them composed.
+# See ``Symbol.directional``: the placement still moves the nozzles, and the
 # renderer holds the drawing still under it rather than drawing the statement
-# backwards.
+# backwards. A quarter turn is carried rather than reversed and is left alone.
 #
 # One family, drawn from two stencils that differ in nothing else. "Heater" and
 # "Condenser" are the same circle and the same zigzag on the same diagonal, and
@@ -1680,10 +1681,20 @@ def render() -> str:
             if (kind, variant) in GRAVITY_FIXED:
                 lines.append(f"        # must not be turned: {GRAVITY_FIXED[(kind, variant)]}")
                 lines.append("        gravity_fixed=True,")
-            # The artwork says which way something goes, and a mirror says the
-            # reverse of it. The reason travels with the keyword for the same
-            # reason the turning one does.
+            # The artwork says which way something goes, and an axis flip says
+            # the reverse of it. The reason travels with the keyword for the
+            # same reason the turning one does.
             if (kind, variant) in DIRECTIONAL:
+                # The renderer holds the *whole* drawing still under a flip, so
+                # a glyph inside one would be counter-transformed twice over.
+                # Caught here rather than in the renderer, which has no way to
+                # report it by the time it is drawing.
+                if "<text" in inner:
+                    raise SystemExit(
+                        f"{kind}/{variant} is DIRECTIONAL and carries lettering; "
+                        f"the renderer holds a directional drawing still as a whole "
+                        f"and cannot also counter-transform a glyph inside it"
+                    )
                 lines.append(f"        # must not be flipped: {DIRECTIONAL[(kind, variant)]}")
                 lines.append("        directional=True,")
             if menu:
