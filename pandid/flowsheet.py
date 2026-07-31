@@ -794,15 +794,24 @@ class Flowsheet:
             if s.auto_named:
                 s.name = next_name([s])
 
-    def validate(self) -> list:
+    def validate(self, *, diagram: str | None = None) -> list:
         """Return validation issues for the flowsheet (errors first, then warnings).
 
         See :mod:`pandid.validate`. Errors are contradictions the engine cannot
         honor (overlapping pins, off-sheet coords); warnings are imperfections
         (a route crossing a unit body, a large detour).
+
+        ``diagram`` names the drawing the findings are about, in the spelling
+        :meth:`to_svg` takes it: ``"pfd"`` (the default) or ``"p&id"``. Almost
+        nothing here depends on it, since a flowsheet is a flowsheet either way.
+        One finding does: a P&ID draws no arrowheads, so nozzles pitched inside
+        the head they would carry on a PFD are not a defect on a sheet that
+        draws no head to crowd. ``render()`` passes the drawing it is making, so
+        the warnings left on ``fs.warnings`` are about the sheet that came out.
         """
+        from pandid.render.svg import draws_arrowheads
         from pandid.validate import validate as _validate
-        return _validate(self)
+        return _validate(self, arrows=draws_arrowheads(diagram))
 
     def to_svg(self, *, show_stream_table: bool = False,
                border: str | None = None,
@@ -838,7 +847,7 @@ class Flowsheet:
             self.route()
         self.renumber_streams()
         if check:
-            issues = self.validate()
+            issues = self.validate(diagram=diagram)
             self.warnings = [i for i in issues if i.severity == "warning"]
             errors = [i for i in issues if i.severity == "error"]
             if errors:

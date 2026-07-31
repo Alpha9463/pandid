@@ -136,6 +136,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   list and inheriting either constructor added `shell_in` twice and raised
   `"already has a port named 'shell_in'"`.
 
+- **`validate()` reports `nozzles-crowded`:** two nozzles on one face of a unit
+  pitched so close that the arrowheads they carry leave less paper between them
+  than a drawing standard allows between any two parallel lines.
+  ([#155](https://github.com/Alpha9463/pandid/issues/155))
+
+  A PFD ends every process line in a 12px filled triangle, and that triangle is
+  as wide across the run as it is long, so two of them on one face at pitch `p`
+  leave exactly `p − 12` of paper. A port family spread down a short face closes
+  that strip: `10_ethanol_pfd`'s M-301 takes two feeds 14.5px apart, leaving
+  2.5px — 0.51 mm on the A3 sheet it is issued at, under the 0,7 mm ISO 128-20
+  will not go below at any line weight. Nothing errored, the connectivity was
+  right and every nozzle was on its ink, which is what made it worth a finding.
+
+  The floor is `pandid.render.symbols.MIN_NOZZLE_PITCH`, the `ARROWHEAD` the
+  renderer actually draws plus `MIN_HEAD_CLEARANCE` — **ISO 128-20:1996 §4.4**'s
+  minimum space between parallel lines, twice the 2px weight the sheet draws
+  those lines at. Both come off the artwork rather than off a preference, and
+  tests read the head back out of a rendered marker and the clearance back off
+  the renderer's own line weight, so neither can drift. The message quotes the
+  white it measured and names the box that would fix it
+  (`M-301.height = 111`).
+
+  Only nozzles that actually wear a head are counted, and both of a pair. A
+  stream *leaving* takes its head at the far end, so a splitter's outlets read
+  as two bare 2px lines however tightly they are pitched; so do signal lines and
+  runs ending at a tee. **A P&ID draws no heads at all**, so the finding is not
+  made for one: `validate(diagram=…)` takes the drawing it is answering about,
+  and `render()` passes the one it is making.
+
+  One unit across the shipped examples is reported, `10_ethanol_pfd`'s M-301.
+  Rendering is unchanged and no golden moves.
+
 ### Changed
 
 - A spec may now name any of the new device classes (`kind: Cyclone`, or its

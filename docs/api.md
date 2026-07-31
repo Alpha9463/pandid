@@ -1844,6 +1844,12 @@ for i in issues:
 `Issue` is a frozen dataclass with `severity` (`"error"` / `"warning"`), `code`
 and `message`.
 
+`validate(diagram=…)` takes the drawing the findings are about, spelled as
+[`to_svg()`](#rendering) takes it. Almost nothing depends on it — a flowsheet is
+a flowsheet either way — but `nozzles-crowded` is about arrowheads, and a P&ID
+draws none. It defaults to `"pfd"`; `render()` passes whichever drawing it is
+making, so the warnings left on `fs.warnings` are about the sheet that came out.
+
 | Code | Severity | Meaning |
 |---|---|---|
 | `pin-not-finite` | error | a pinned `x`/`y` is not a finite number |
@@ -1856,6 +1862,7 @@ and `message`.
 | `letter-sequence` | warning | a tag spells its control-function letters out of the order ISO 15519-2:2015 §5.2.4 requires (I, R, C, S, M, Z, A), so `FCI` where `FIC` was meant. One finding per tag, and the message names the tag it would have been |
 | `gravity-turned` | warning | a unit whose symbol's function depends on gravity has been given a quarter turn, which ISO 15519-1:2010 §11.4.2 excepts from the general permission to turn. One finding per unit; see [Symbols that must not be turned](#symbols-that-must-not-be-turned) |
 | `run-off-elevation` | warning | two connected nozzles on one horizontal run are *almost* level, missing by less than the shorter symbol is tall, so the line steps into a device and back out; see [Runs at one elevation](#runs-at-one-elevation) |
+| `nozzles-crowded` | warning | two nozzles on one face both wear an arrowhead and are pitched closer than ISO 128-20 lets two parallel lines come, so the strip of paper between the heads is too thin to survive reproduction. One finding per face, and the message names the box that would fix it. Not made for a P&ID, which draws no heads. See [Nozzles and the arrowheads they carry](#nozzles-and-the-arrowheads-they-carry) |
 | `route-not-settled` | warning | routing and instrument placement never agreed and `route()` ran out of passes; see [Routing and instrument placement](#routing-and-instrument-placement) |
 
 Errors raise from `to_svg()`/`render()` unless you pass `check=False`. Warnings
@@ -1892,6 +1899,74 @@ where the difference in `y` is the length of the drop rather than a miss; signal
 lines, which carry a measurement and have no elevation; sheets with no pinned
 elevation to have got wrong; and the eccentric reducer, whose two ends sit on
 different centrelines because that is the whole point of the fitting.
+
+### Nozzles and the arrowheads they carry
+
+A PFD ends every process line in a filled triangle,
+`pandid.render.symbols.ARROWHEAD` = 12 units long and, because the marker's
+square viewBox maps onto a square viewport, exactly as much *across* the run. Two
+of them side by side on one face therefore leave `pitch − 12` of paper between
+two solid shapes, and **ISO 128-20:1996 §4.4** says how thin that strip may get:
+the space between parallel lines shall be at least twice the width of the widest
+line. The sheet draws its process lines 2 units wide, so the clearance is
+`MIN_HEAD_CLEARANCE` = 4 and the floor is `MIN_NOZZLE_PITCH` = 16.
+
+A port family is spread across whatever face it has, so a short box closes that
+strip without anyone noticing. A `Mixer` is drawn in a 50-unit box and spaces its
+inlets 20 apart; give it a 35-unit box and the same two nozzles land 14 apart,
+with 2 units of paper between two 12-unit triangles:
+
+```python
+mix = fs.add(units.Mixer("M-1", n_inlets=2, height=35))
+fs.connect(fs.add(units.Feed("F1")).outlet, mix.in_1)
+fs.connect(fs.add(units.Feed("F2")).outlet, mix.in_2)
+fs.connect(mix.outlet, fs.add(units.Product("P")).inlet)
+fs.to_svg()
+[w.message for w in fs.warnings]
+# ["M-1.in_1 and M-1.in_2 are 14.0px apart on M-1's W face, which leaves 2.0px
+#   of paper between two 12px arrowheads -- under the 4px ISO 128-20:1996 4.4
+#   asks between parallel lines, twice the weight this sheet draws them at.
+#   Give the unit a box with room for them, M-1.height = 40"]
+```
+
+The rule is stated as the **clearance**, not as a multiple of the head, and the
+difference matters: at the default 20 pitch those same two heads have 8 units of
+paper between them — four line-widths — and read without effort, so nothing is
+reported. Only one unit on the eleven shipped examples is inside the floor.
+
+The cure is the box, and the message does the arithmetic: the drawn pitch is
+proportional to the extent of the box across the face, so
+
+```python
+mix = fs.add(units.Mixer("M-1", n_inlets=2, height=40))   # nozzles 16 apart
+```
+
+is silent. Where the symbol offers the port a second placement the message also
+names moving it with [`nozzle()`](#nozzle); a port placed by a series has only
+the face the series gives it, so for a `Mixer` the box is the whole answer.
+On a fixed [`page_size`](#rendering) a taller unit is a taller drawing, and the
+drawing is fitted into what the furniture leaves — so check the title block's
+scale note, which is what growing a box costs.
+
+Only nozzles that actually **wear a head** are counted, and both of a pair. The
+head is the path's `marker-end`, so it lands on the nozzle a stream *arrives*
+at: a `Splitter`'s two outlets in that same 35-unit box sit 14 apart and read
+perfectly well, because each of those heads is drawn at the far end of its
+branch and the face carries two bare 2-unit lines. Signal lines wear no head on
+either drawing, and neither does a run ending at a `Tee`, which is bare pipe.
+
+**A P&ID draws no arrowheads at all**, so there is nothing there to crowd and the
+finding is not made. `fs.validate()` answers for a PFD, which is what `to_svg()`
+draws by default; pass the drawing you mean to get the findings that are about
+it, which is what `render()` does for you:
+
+```python
+fs.validate(diagram="p&id")     # no nozzles-crowded: the sheet draws no heads
+```
+
+One finding per face, not per pair: three crowded nozzles are one crowded face
+with one thing to do about it. A pair on the same *point* is the stronger
+`coincident-ports` finding instead.
 
 ### Routing and instrument placement
 

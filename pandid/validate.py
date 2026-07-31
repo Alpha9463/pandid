@@ -189,11 +189,46 @@ def _off_elevation(su, sp, du, dp) -> tuple[float, float, bool] | None:
     return (offset, span, sh <= dh) if offset < span else None
 
 
-def validate(fs: "Flowsheet") -> list["Issue"]:
-    """Return all validation issues for the flowsheet (errors first)."""
+def _crowded(heads: list[tuple[float, str]], floor: float
+             ) -> tuple[float, str, str] | None:
+    """The tightest adjacent pair of arrowheads on one face, if any is too tight.
+
+    *heads* is every nozzle on the face that wears one, as ``(position along the
+    face, port name)``. Answers ``(pitch, nearer port, further port)``.
+
+    Adjacent pairs only: a face carrying three heads is crowded by whichever two
+    are closest, and the pair either side of them is a different distance about
+    the same crowding. One finding per face for the same reason ``letter-sequence``
+    makes one per tag -- what an author does about it (a bigger box, or a nozzle
+    moved off the face) is one action, so saying it twice is saying it twice.
+
+    A pair under ``_TOL`` is left alone. Two nozzles on one point are already
+    ``coincident-ports``, and that is the stronger and truer thing to say about
+    them: they are not two heads too close to tell apart, they are one place two
+    streams both end.
+    """
+    order = sorted(heads)
+    pairs = sorted((b[0] - a[0], a[1], b[1]) for a, b in zip(order, order[1:]))
+    return next((p for p in pairs if _TOL < p[0] < floor), None)
+
+
+def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
+    """Return all validation issues for the flowsheet (errors first).
+
+    ``arrows`` says whether the drawing being checked puts an arrowhead on the
+    end of a process line, which a PFD does and a P&ID does not. It is the one
+    thing here that is a property of the *render* rather than of the flowsheet,
+    and it is taken as a boolean rather than as a diagram name so that the
+    spelling of that name stays a single question, asked in
+    :func:`pandid.render.svg.draws_arrowheads`.
+    :meth:`pandid.flowsheet.Flowsheet.validate` is the caller that resolves it.
+    """
     from pandid.layout.attach import MAX_PLACEMENT_PASSES
-    from pandid.portgeom import is_anchored, port_point, resolve_port, unit_box
-    from pandid.render.symbols import default_registry
+    from pandid.portgeom import (is_anchored, port_faces, port_point,
+                                 resolve_port, unit_box)
+    from pandid.render.symbols import (ARROWHEAD, MIN_HEAD_CLEARANCE,
+                                       MIN_NOZZLE_PITCH, default_registry,
+                                       wears_arrowhead)
     from pandid.streams import SIGNAL_KINDS
     from pandid.units import Instrument
 
@@ -339,6 +374,96 @@ def validate(fs: "Flowsheet") -> list["Issue"]:
                     + ("" if anchored else "; the symbol anchors no nozzle for one "
                        "of them, so both fall back to the centre of the box"))
                 (errors if anchored else warnings).append(issue)
+
+        # Soft: nozzles on one face pitched closer than the arrowheads they
+        # carry can be told apart at. A PFD ends every process line in a filled
+        # triangle (:data:`pandid.render.symbols.ARROWHEAD`) that is as wide
+        # across the run as it is long, so two of them on one face at pitch p
+        # leave exactly ``p - ARROWHEAD`` of paper between two solid shapes.
+        # Below MIN_HEAD_CLEARANCE that white is thinner than ISO 128-20 allows
+        # between any two parallel lines, and the pair stops surviving the
+        # reproduction a drawing is made to survive. Nothing errors, every
+        # nozzle is on its own ink and the connectivity is right, which is what
+        # made the whole class invisible.
+        #
+        # The floor is a *clearance*, not a multiple of the head, and that is
+        # the correction that matters: 10_ethanol_pfd's M-301 leaves 2.5px and
+        # is a defect, while the same corpus's mixers at a 20px pitch leave 8px
+        # -- four line-widths, which a reader resolves without effort. A rule
+        # phrased as "2.5x the head" reports both and is wrong about the second;
+        # phrased as the white between them, measured against the weight the
+        # sheet draws its own lines at, it is something a reader can check.
+        #
+        # *Both* nozzles of a pair have to wear a head, and that is where the
+        # check earns its narrowness rather than measuring every connection on
+        # the face. A splitter takes its heads at the far ends of its branches,
+        # so its outlet face carries bare 2px lines however tightly they are
+        # pitched, and two lines that thin need nothing like the room two solid
+        # triangles do.
+        #
+        # The cure is the box, so the message does the arithmetic rather than
+        # leaving the author to, the way ``run-off-elevation`` names the pin.
+        # The drawn pitch is linear in the extent of the box across the face: a
+        # symbol that may be reshaped maps its nozzles onto the box, and both
+        # terms of the ``min()`` a :class:`~pandid.render.symbols.PortSeries`
+        # spreads its members by are measured along that same face. So the
+        # extent that clears the floor is the one the unit has, scaled by how
+        # far short it fell. A symbol that keeps its aspect instead is centred
+        # rather than stretched and would not answer to that arithmetic; none
+        # reaches here, because the only ports one carries are an instrument
+        # balloon's and a signal line wears no head.
+        #
+        # Moving a nozzle is offered only where the symbol actually has another
+        # face for it. Every case this fires on today is placed by a port
+        # series, and a series declares one face, so advice to move one would be
+        # advice that raises when taken.
+        for u in fs.units if arrows else ():
+            heads: dict[str, list[tuple[float, str]]] = {}
+            for name, port in u.ports.items():
+                s = port.stream
+                # The head is the path's ``marker-end``, so it lands on the
+                # nozzle the stream arrives at and on no other.
+                if s is None or s.dest is not port:
+                    continue
+                if not wears_arrowhead(s, default_registry):
+                    continue
+                at = resolve_port(u, u.frame, name)
+                along = at.point[1] if at.face in ("E", "W") else at.point[0]
+                heads.setdefault(at.face, []).append((along, name))
+            for face, on_face in heads.items():
+                tight = _crowded(on_face, MIN_NOZZLE_PITCH)
+                if tight is None:
+                    continue
+                pitch, first, second = tight
+                across, dim = ((u.frame.h, "height") if face in ("E", "W")
+                               else (u.frame.w, "width"))
+                room = math.ceil(across * MIN_NOZZLE_PITCH / pitch)
+                crowd = (f", the tightest of the {len(on_face)} it carries there"
+                         if len(on_face) > 2 else "")
+                # Two heads at this pitch either leave a strip of paper too thin
+                # to read or have run into each other. Both are the same finding
+                # and neither is described by the other's sentence, so the
+                # measurement is worded for the one that happened rather than
+                # quoting a clearance of "-0.3px".
+                gap = pitch - ARROWHEAD
+                measured = (
+                    f"which leaves {gap:.1f}px of paper between two "
+                    f"{ARROWHEAD:.0f}px arrowheads -- under the "
+                    f"{MIN_HEAD_CLEARANCE:.0f}px ISO 128-20:1996 4.4 asks between "
+                    f"parallel lines, twice the weight this sheet draws them at"
+                    if gap > 0 else
+                    f"which overlaps two {ARROWHEAD:.0f}px arrowheads by "
+                    f"{-gap:.1f}px, so the two heads are drawn over each other")
+                # Only where the artwork really offers somewhere else to put it.
+                movable = [n for n in (first, second)
+                           if len(port_faces(u, n, u.frame)) > 1]
+                elsewhere = (f", or move {u.name}.{movable[0]} onto another face "
+                             f"with nozzle()" if movable else "")
+                warnings.append(Issue(
+                    "warning", "nozzles-crowded",
+                    f"{u.name}.{first} and {u.name}.{second} are {pitch:.1f}px apart "
+                    f"on {u.name}'s {face} face{crowd}, {measured}. Give the unit a "
+                    f"box with room for them, {u.name}.{dim} = {room}{elsewhere}"))
 
         # Soft: a route passing through a unit body it does not connect to,
         # and grossly indirect routes.

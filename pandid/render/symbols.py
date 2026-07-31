@@ -40,6 +40,7 @@ from difflib import get_close_matches
 from functools import lru_cache
 
 from pandid.portgeom import outward_dir
+from pandid.streams import SIGNAL_KINDS
 
 # Two placements closer together than this are the same point as far as a reader
 # (and a stream endpoint) is concerned.
@@ -49,13 +50,80 @@ _COINCIDENT = 0.5
 #: units. The renderer emits it as the ``markerWidth``/``markerHeight`` of its
 #: ``<marker>`` (:meth:`pandid.render.svg.SvgRenderer._defs`) at
 #: ``markerUnits="userSpaceOnUse"``, so this is the head's real size on the
-#: sheet and not a ratio to a stroke.
+#: sheet and not a ratio to a stroke; the marker's viewBox is square and fills
+#: it, so the filled triangle is this long *along* the run and exactly as much
+#: *across* it.
 #:
-#: It lives here, with the drawn dimensions, because it is one: another drawn
-#: dimension is derived from it (:data:`BLOCK_PITCH`), and a nozzle pitch
-#: measured against a constant somebody has to remember to keep in step with the
-#: renderer is the defect that measurement exists to prevent.
+#: It lives here, with the drawn dimensions, because it is one: other drawn
+#: dimensions are derived from it (:data:`MIN_NOZZLE_PITCH`, which is the least
+#: two heads may be pitched at, and :data:`BLOCK_PITCH`, which is what a block
+#: chooses), and a nozzle pitch measured against a constant somebody has to
+#: remember to keep in step with the renderer is the defect that measurement
+#: exists to prevent.
 ARROWHEAD = 12.0
+
+#: The white a drawing has to leave between two arrowheads side by side on one
+#: face, in drawing units.
+#:
+#: **ISO 128-20:1996 §4.4**, *Spacing between lines*: the space between parallel
+#: lines shall be at least twice the width of the widest line, and never less
+#: than 0,7 mm. Two heads on one face are two parallel filled shapes, so the
+#: clearance is twice the weight the sheet draws its process lines at
+#: (``pandid.render.svg._PROCESS_STROKE``, 2 units, itself ISO 15519-1 §6.2's).
+#: ``tests/test_validate.py`` asserts the two stay in step rather than leaving
+#: this 4 to be kept in line by hand.
+#:
+#: Stated in drawing units against the drawing's own line weight, so it says the
+#: same thing at whatever scale the sheet is issued: a page fit scales the heads,
+#: the pitch and the line weight together. That is the same footing the line
+#: weights are already on, and holding any of them at a *physical* width is
+#: ISO 15519-1 §11.1.3's separate problem.
+MIN_HEAD_CLEARANCE = 2 * 2.0
+
+#: The closest two nozzles that both wear an arrowhead may be pitched on one
+#: face: the head, plus the clearance a reader needs beside it.
+#:
+#: Two heads at pitch ``p`` leave ``p - ARROWHEAD`` of paper, so this is where
+#: that white runs out. Reported by :func:`pandid.validate.validate` as
+#: ``nozzles-crowded``.
+#:
+#: It is a *floor*, not a target, which is why :data:`BLOCK_PITCH` is a separate
+#: and larger number rather than this one: a symbol choosing the pitch for a
+#: family of nozzles should clear the floor with room to spare, since sitting on
+#: a minimum leaves a drawing that is right only until somebody makes the box
+#: slightly shorter. ``tests/test_validate.py`` holds the two in that order.
+MIN_NOZZLE_PITCH = ARROWHEAD + MIN_HEAD_CLEARANCE
+
+
+def wears_arrowhead(stream, registry) -> bool:
+    """Would this stream wear an arrowhead at its far end?
+
+    Two things say no. A signal line never carried one on either drawing. And a
+    stream that ends at a symbol drawn as bare pipe has not arrived anywhere: a
+    tee is a point on a line where the line divides, and the run carries
+    straight on past it, so a head there reads as flow stopping in the middle of
+    an unbroken run. The question is about the artwork rather than about the
+    class, so it is the symbol that answers it (see :attr:`Symbol.bare_run`):
+    every in-line device that draws a body, a valve or a reducer or a fitting,
+    gives the head something to land against and keeps it.
+
+    The head goes on the ``marker-end`` of the path, so it lands on the nozzle
+    the stream *arrives* at and nowhere else. A stream leaving a junction is
+    untouched: it gets its head at its own destination, which is wherever the
+    branch or the run actually ends.
+
+    A third thing says no and is not asked here: a P&ID draws no heads at all.
+    That is a property of the render rather than of the stream, so it is the
+    caller's (``SvgRenderer._tipped``'s ``arrows``, and ``validate``'s).
+
+    Here rather than in the renderer, and taking the registry rather than
+    reaching for one, because the validator asks the same question with no
+    renderer in hand -- and asking it twice is how the sheet and the report come
+    to disagree about which nozzles carry a head.
+    """
+    if stream.kind in SIGNAL_KINDS:
+        return False
+    return not registry.for_unit(stream.dest.owner).bare_run
 
 
 def spread(index: int, count: int, along: float, pitch: float,

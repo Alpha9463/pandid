@@ -7,7 +7,8 @@ import re
 from datetime import datetime
 
 from pandid.render import furniture as F
-from pandid.render.symbols import ARROWHEAD, closed_marking, fail_marking
+from pandid.render.symbols import (ARROWHEAD, closed_marking, fail_marking,
+                                   wears_arrowhead)
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
 from pandid.validate import Issue
 
@@ -51,10 +52,10 @@ _SIGNAL_STROKE = 1
 
 # --- stream-label placement -------------------------------------------------
 # A stream label is written on an opaque halo, so it can only sit *on* the pipe
-# where the run is long enough to leave pipe showing at each end: the 12px
-# arrowhead a PFD draws, plus enough line either side that the run still reads
-# as one line rather than two stubs. Anything shorter is written beside the pipe
-# instead, which is what a sheet does with a line number a dozen characters long.
+# where the run is long enough to leave pipe showing at each end: the ARROWHEAD
+# a PFD draws, plus enough line either side that the run still reads as one line
+# rather than two stubs. Anything shorter is written beside the pipe instead,
+# which is what a sheet does with a line number a dozen characters long.
 _LABEL_CLEAR = 20.0
 # Gap from the pipe to the near edge of a label written beside it.
 _LABEL_GAP = 4.0
@@ -521,6 +522,26 @@ def _resolve_sheet(border: "str | None", diagram: "str | None") -> "tuple[str, s
     return border, kind
 
 
+def draws_arrowheads(diagram: "str | None") -> bool:
+    """Does a drawing of this kind put a head on the end of a process line?
+
+    ANSI/ISA-5.1 draws process piping on a P&ID as plain line: flow direction is
+    read off the equipment and off the line list, so an arrowhead at the end of
+    every run is a PFD convention, where showing where the material goes is the
+    whole job of the line.
+
+    Public, and asked rather than open-coded, because two callers need the
+    answer and only one of them is the renderer.
+    :func:`pandid.validate.validate` reports nozzles pitched inside the heads
+    they carry, and on a sheet that draws none there are no heads to be inside
+    of -- a finding about ink the drawing does not contain is a false one however
+    well the geometry is measured. Takes the argument in the spelling
+    :meth:`pandid.flowsheet.Flowsheet.to_svg` takes it, since that is where a
+    caller's answer comes from.
+    """
+    return _resolve_sheet(None, diagram)[1] != "p&id"
+
+
 def _fit_scale(dw: float, dh: float, free) -> float:
     """The uniform scale that puts a ``dw`` x ``dh`` drawing inside *free*.
 
@@ -612,11 +633,7 @@ class SvgRenderer:
         """
         from pandid.portgeom import unit_box
         border, diagram = _resolve_sheet(border, diagram)
-        # ANSI/ISA-5.1 draws process piping on a P&ID as plain line. Flow
-        # direction is read off the equipment and off the line list, so an
-        # arrowhead at the end of every run is a PFD convention, where showing
-        # where the material goes is the whole job of the line.
-        arrows = diagram != "p&id"
+        arrows = draws_arrowheads(diagram)
         sheet = _page(page_size)
 
         # 1. Diagram bounding box: union of every unit's drawn box and every
@@ -1565,25 +1582,14 @@ class SvgRenderer:
     # ------------------------------------------------------------------ streams
 
     def _tipped(self, s, arrows: bool) -> bool:
-        """Does this stream wear an arrowhead at its far end?
+        """Does *this drawing* put an arrowhead on the end of this stream?
 
-        Three things say no. A P&ID draws none at all (``arrows``). A signal
-        line never carried one on either drawing. And a stream that ends at a
-        symbol drawn as bare pipe has not arrived anywhere: a tee is a point on
-        a line where the line divides, and the run carries straight on past it,
-        so a head there reads as flow stopping in the middle of an unbroken
-        run. The question is about the artwork rather than about the class, so
-        it is the symbol that answers it (see ``Symbol.bare_run``): every
-        in-line device that draws a body, a valve or a reducer or a fitting,
-        gives the head something to land against and keeps it.
-
-        A stream *leaving* a junction is untouched. It gets its head at its own
-        destination, which is wherever the branch or the run actually ends.
+        :func:`wears_arrowhead` and one thing more: a P&ID draws no heads at
+        all, so ``arrows`` is false for the whole sheet. That part is a property
+        of the render rather than of the stream, which is why it lives here and
+        the rest lives where a caller with no renderer can reach it.
         """
-        if not arrows or s.kind in _SIGNAL_KINDS:
-            return False
-        dest = s.dest.owner
-        return not self.registry.for_unit(dest).bare_run
+        return arrows and wears_arrowhead(s, self.registry)
 
     def _draw_streams(self, fs, jump_direction, unit_labels, arrows=True, ink=()):
         from pandid.portgeom import port_point, unit_box
