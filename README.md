@@ -3,9 +3,9 @@
 Generate publication-quality P&IDs and process flow diagrams from a topological
 flowsheet, in pure Python with no runtime dependencies.
 
-[![Distillation train](https://raw.githubusercontent.com/Alpha9463/pandid/main/docs/gallery/03_distillation_train.png)](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md)
+[![Ethanol purification P&ID](https://raw.githubusercontent.com/Alpha9463/pandid/main/docs/gallery/11_ethanol_pid.png)](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md)
 
-<sub>[`examples/03_distillation_train.py`](https://github.com/Alpha9463/pandid/blob/main/examples/03_distillation_train.py). See the [gallery](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md) for all twelve.</sub>
+<sub>[`examples/11_ethanol_pid.py`](https://github.com/Alpha9463/pandid/blob/main/examples/11_ethanol_pid.py): instrumentation, five control loops, hand-isolated valve stations, line numbers, a zone-ruled A3 frame, a title block and a general-notes box. See the [gallery](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md) for all twelve.</sub>
 
 You describe what connects to what. The engine lays out the equipment, routes
 every stream, and draws industry-standard symbols. The name is how "P&ID" is
