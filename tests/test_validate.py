@@ -366,7 +366,10 @@ def test_a_default_mixer_is_not_a_finding():
     clearance rather than as a multiple of the head. Two heads 20px apart leave
     8px of paper, four times the weight the sheet draws a process line at, and a
     reader resolves them without effort. A floor that reported this would fire
-    on four of the eleven shipped examples and be wrong about all four."""
+    on five of the twelve shipped examples -- 01, 03, 05 and 10 carry a mixer at
+    this same 20px pitch, and 08's takes three feeds 17.5px apart -- and be
+    wrong about all five: the tightest of them still leaves 5.5px of paper, over
+    the 4px ISO 128-20:1996 4.4 asks for."""
     fs, _ = _fed_mixer()
     assert _crowded(fs) == []
 
