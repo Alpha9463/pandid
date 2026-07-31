@@ -9,6 +9,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A variable-port family is now a typed sequence.**
+  ([#175](https://github.com/Alpha9463/pandid/issues/175))
+
+  `Mixer.inlets`, `Splitter.outlets`, `Block.inlets`/`outlets` and
+  `Column`/`Reactor.feeds` are `tuple[Port, ...]` in declaration order: the
+  ports themselves, so `m.inlets[0] is m.in_1`.
+
+  ```python
+  mixer = fs.add(units.Mixer("M-101", n_inlets=len(headers)))
+  for header, inlet in zip(headers, mixer.inlets):
+      fs.connect(header.outlet, inlet)
+  ```
+
+  Iterating a family meant `m.port(f"in_{i}")` and a hand-rolled loop, and none
+  of it was visible to a type checker. It could not be: the count is chosen at
+  construction, and Python has no integer generic, so no annotation spells
+  `in_1` … `in_n`. A generated class per arity would have typed
+  `Mixer("M", n_inlets=3)` and missed `Mixer("M", n_inlets=len(feeds))`, which
+  is the call a sheet built from a stream table actually writes. The arity is
+  still not in the type — it cannot be — but `m.inlets[0]` is a `Port` to mypy,
+  `for p in m.inlets` checks, and a computed count works.
+
+  The tuple is indexed from zero while the nozzles are numbered from one, so
+  `inlets[0]` is `in_1`; nothing re-bases it. `enumerate(m.inlets, start=1)`
+  gives the number and the port together, and `m.port("in_3")` reaches one by
+  its number — it is the only 1-based route a type checker can follow, since
+  `m.in_1` still resolves to nothing under mypy and always has. A one-feed
+  `Column` still spells its nozzle `feed`, and `feeds` is the one-tuple holding
+  it.
+
+  Purely additive: `m.in_1`, `m.port("in_3")` and the `ports` dict are
+  untouched.
+
+  `Block`'s accessors are renamed in the same change, so each is named for what
+  it returns. `inputs`/`outputs` become `input_faces`/`output_faces` — they
+  returned `['W', 'W', 'N']`, compass letters rather than the connections the
+  name promises — leaving `inlets`/`outlets` for the ports; and `ports_on(face)`
+  now returns the **ports** rather than their names, so "connect whatever is on
+  the north" no longer means `[b.port(n) for n in b.ports_on("N")]`, a round
+  trip through the very dict the families exist to spare. All four are tuples.
+  `Block` is unreleased, so nothing that shipped is affected, and the
+  constructor keeps `inputs=`/`outputs=`, where "the inputs are on these faces"
+  is what the argument says.
+
 - **`units.Block`: the block flow diagram.**
   ([#164](https://github.com/Alpha9463/pandid/issues/164))
 
