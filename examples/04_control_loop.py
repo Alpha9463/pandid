@@ -96,9 +96,25 @@ def main():
     lic = fs.add_instrument("LIC", level, on=drum, at="S", offset=90, variant="panel")
     # Both alarms read the controller, so both hang off it. Chaining one to the
     # other would draw the low alarm as though the high alarm fed it.
-    fs.add_instrument("LAH", level, on=lic, at="W", offset=78, angle=62)
-    fs.add_instrument("LAL", level, on=lic, at="W", offset=78, angle=118)
-    fs.add_instrument("I", 1, on=lic, at="S", offset=44, variant="logic")
+    #
+    # Each takes a *face* at the default angle, so its impulse line leaves the
+    # balloon radially and lands square on the next one. BS ISO 15519-1 §12.1
+    # requires a functional connection to run horizontally or vertically, and
+    # §12.4 requires the junctions to be at right angles; these are ISO 15519-2
+    # §5.1.1 functional connection lines, so the rule is theirs too. A branch
+    # taken at any other angle from a *circle* also has to leave along a tangent,
+    # which draws a line grazing the balloon instead of meeting it.
+    #
+    # Which face each one gets is forced. The controller's own impulse line
+    # arrives from the drum into the north, and its output leaves to the east
+    # towards LV-101: put a balloon on that east face and its tap and the output
+    # are drawn one on top of the other as far as the output's first corner. So
+    # the controller has two faces to give, and the interlock hangs under the low
+    # alarm, which is where a level trip is read from anyway. That is the same
+    # arrangement example 11 draws, where the square hangs off the end of the row.
+    fs.add_instrument("LAH", level, on=lic, at="W", offset=78)
+    lal = fs.add_instrument("LAL", level, on=lic, at="S", offset=78)
+    fs.add_instrument("I", 1, on=lal, at="S", offset=44, variant="logic")
     fs.connect(lic.sig_out, lv.actuator, kind="electric")
 
     fs.render(out("control_loop.svg"))

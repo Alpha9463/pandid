@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="956" height="526" viewBox="-25.0 -50.0 956.0 526.0">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="956" height="626" viewBox="-25.0 -50.0 956.0 626.0">
   <!-- Background -->
-  <rect x="-25.0" y="-50.0" width="956.0" height="526.0" fill="white" />
+  <rect x="-25.0" y="-50.0" width="956.0" height="626.0" fill="white" />
   <defs>
     <marker id="arrow_black" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="black" />
@@ -55,9 +55,9 @@
   <g id="instrument_taps">
     <line x1="186.25" y1="187.5" x2="186.25" y2="125.5" stroke="black" stroke-width="1" />
     <line x1="451" y1="245" x2="451" y2="335" stroke="black" stroke-width="1" />
-    <line x1="429" y1="335" x2="360.13" y2="298.38" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
-    <line x1="429" y1="335" x2="360.13" y2="371.62" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
-    <line x1="451" y1="357" x2="451" y2="401" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
+    <line x1="429" y1="335" x2="351" y2="335" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
+    <line x1="451" y1="357" x2="451" y2="435" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
+    <line x1="451" y1="457" x2="451" y2="501" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
   </g>
   <g id="instruments">
     <use href="#sym_instrument" x="164.25" y="103.5" width="44.0" height="44.0" />
@@ -69,14 +69,14 @@
     <use href="#sym_instrument_panel" x="429" y="313" width="44.0" height="44.0" />
     <text x="451.0" y="325.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">LIC</text>
     <text x="451.0" y="346.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">101</text>
-    <use href="#sym_instrument" x="338.13" y="276.38" width="44.0" height="44.0" />
-    <text x="360.1300877570037" y="294.38121810270053" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">LAH</text>
-    <text x="360.1300877570037" y="308.38121810270053" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">101</text>
-    <use href="#sym_instrument" x="338.13" y="349.62" width="44.0" height="44.0" />
-    <text x="360.1300877570037" y="367.61878189729947" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">LAL</text>
-    <text x="360.1300877570037" y="381.61878189729947" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">101</text>
-    <use href="#sym_instrument_logic" x="431" y="381" width="40.0" height="40.0" />
-    <text x="451.0" y="408.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">1</text>
+    <use href="#sym_instrument" x="329" y="313" width="44.0" height="44.0" />
+    <text x="351.0" y="331.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">LAH</text>
+    <text x="351.0" y="345.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">101</text>
+    <use href="#sym_instrument" x="429" y="413" width="44.0" height="44.0" />
+    <text x="451.0" y="431.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">LAL</text>
+    <text x="451.0" y="445.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">101</text>
+    <use href="#sym_instrument_logic" x="431" y="481" width="40.0" height="40.0" />
+    <text x="451.0" y="508.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">1</text>
   </g>
   <g id="unit_labels">
     <rect x="258.4" y="210.0" width="47.6" height="15.0" fill="white" />

@@ -222,11 +222,13 @@ def _control_loop() -> Flowsheet:
     fs.connect(fic.sig_out, fv.actuator, kind="pneumatic")
 
     lic = fs.add_instrument("LIC", level, on=drum, at="S", offset=90, variant="panel")
-    fs.add_instrument("LAH", level, on=lic, at="W", offset=78, angle=62)
-    fs.add_instrument("LAL", level, on=lic, at="W", offset=78, angle=118)
+    # One face each, at the default angle, so every impulse line runs square:
+    # see the comment on the same three balloons in examples/04_control_loop.py.
+    fs.add_instrument("LAH", level, on=lic, at="W", offset=78)
+    lal = fs.add_instrument("LAL", level, on=lic, at="S", offset=78)
     # In no loop and with no measured variable: a repeatable logic function
     # takes a literal number, and has to keep being able to.
-    fs.add_instrument("I", 1, on=lic, at="S", offset=44, variant="logic")
+    fs.add_instrument("I", 1, on=lal, at="S", offset=44, variant="logic")
     fs.connect(lic.sig_out, lv.actuator, kind="electric")
     return fs
 

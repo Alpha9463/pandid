@@ -219,6 +219,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **An instrument's impulse line is orthogonal, and a test says so.** Three
+  shipped taps were drawn on the diagonal.
+  ([#155](https://github.com/Alpha9463/pandid/issues/155))
+
+  **ISO 15519-1 §12.1**: *"Connecting lines shall be oriented horizontally or
+  vertically, except in those cases where oblique lines improve the clarity of
+  the diagram"*, and **§12.4**: *"Joining of connecting lines shall be shown
+  meeting or intersecting at right angles"* — no exception clause on the second.
+  §12.1 names *"conductors, functional connections"* alongside pipelines,
+  **ISO 15519-2 §6.1** puts Part 1's rules in force on a P&ID and its **§5.1.1**
+  calls an instrument's process tap a *"functional connection line"*, so the rule
+  is the tap's and not only the pipe's. The issued reference sheet
+  `professional_examples/P&ID_301.pdf` draws 47 dashed signal segments, every one
+  exactly horizontal or vertical.
+
+  `test_nothing_is_drawn_diagonally` had asserted this over `fs.streams` since
+  #71, and its module docstring said outright that it *"knows nothing about
+  instrument attachment, which is the point"*. A tap is drawn by
+  `SvgRenderer._draw_taps` and not by the stream pass, so the one line on the
+  sheet that says *where* an instrument measures was the one exempt from the
+  rule the file is named for. It now sweeps `_tap_lines` as well — the
+  renderer's own answer to which taps are drawn at all — and went red on four
+  sloping taps: `04_control_loop`'s `LAH-101` and `LAL-101` (`angle=62`/`118`),
+  `11_ethanol_pid`'s `PI-315` (`angle=45`), and the `PIC-101` of this file's own
+  synthetic fixture.
+
+  The `angle=` default is already 90, straight out of the face, so all four were
+  author choices and all four are re-routed rather than exempted. Example 04's
+  level cluster is the one that moves visibly: the controller's own impulse line
+  arrives at its north face and its output leaves to the east, so a balloon on
+  that east face has its tap drawn under the output for the 41px to the output's
+  first corner. The two faces left take the high alarm (west) and the low alarm
+  (south), and the interlock square hangs under the low alarm — the arrangement
+  example 11 already draws, where the square hangs off the end of the row. Every
+  one of the four fine lines around `LIC-101` now leaves a balloon radially and
+  lands square on the next, and the sheet grows 100px taller.
+
+  `11_ethanol_pid`'s `PI-315` reads the tower's feed nozzle, and a unit host taps
+  a *face midpoint*: the feed enters the middle of the west wall, so that midpoint
+  is the nozzle, and every orthogonal branch off it either runs down the feed line
+  or straddles the shell. The tap moves the few pixels back onto the run it
+  measures and the gauge stands over it, which is how `FI-314` beside it is
+  already drawn. One golden moves, `04_control_loop.svg`, by three tap lines,
+  three balloon placements and the canvas height, and by nothing else.
+
+  `_draw_taps` emits a single `<line>` and has no waypoint, so a balloon that is
+  not on its tap's own row or column *cannot* be drawn orthogonally, which is
+  what forced both of those re-placements. Filed as
+  [#170](https://github.com/Alpha9463/pandid/issues/170), with the related
+  observation that `_ink` already mis-models a sloping tap as an axis-aligned bar.
+
 - The four symbol families the generator *reproportions* are drawn with a pen
   centred on the sheet's line weight, instead of one exact along a single axis
   and adrift along the other.

@@ -16,9 +16,27 @@ sloping segment is never intentional. It is what stale geometry looks like on
 the sheet: the line leaves one port, follows a path aimed at where the other end
 used to be, and closes the gap with a diagonal.
 
-Both are cheap and neither knows anything about instrument attachment, which is
-the point. The defect they were written for (issue #71) was a routing pass whose
-result nothing re-checked.
+The convention is not a house style. BS ISO 15519-1:2010 §12.1: "Connecting
+lines shall be oriented horizontally or vertically, except in those cases where
+oblique lines improve the clarity of the diagram", and §12.4: "Joining of
+connecting lines shall be shown meeting or intersecting at right angles", with
+no exception clause on the second. §12.1 names "conductors, functional
+connections" alongside pipelines, BS ISO 15519-2:2015 §6.1 pulls Part 1's rules
+into force on a P&ID, and its §5.1.1 calls an instrument's process tap a
+"functional connection line" -- so the rule reaches the tap and not only the
+pipe. The issued reference sheet ``professional_examples/P&ID_301.pdf`` draws 47
+dashed signal segments, every one exactly horizontal or vertical, and no
+diagonal connector of any kind.
+
+So the second invariant sweeps the **impulse lines too**, and not just the
+streams. A tap is drawn by :meth:`SvgRenderer._draw_taps` rather than by the
+stream pass, and for as long as this file checked only ``fs.streams`` the line
+that says *where* an instrument measures was the one line on the sheet exempt
+from the rule the file is named for. Three shipped diagonals, and a fourth in
+this file's own fixture, is what that exemption was worth (issue #155).
+
+Both invariants are cheap. The defect they were written for (issue #71) was a
+routing pass whose result nothing re-checked.
 """
 
 import importlib.util
@@ -32,6 +50,7 @@ from pandid import Flowsheet, units
 from pandid.geometry import Route
 from pandid.layout.attach import MAX_PLACEMENT_PASSES, place_attached, stream_path
 from pandid.portgeom import port_anchor, port_point
+from pandid.render.svg import _tap_lines
 from pandid.routing import DefaultRouter
 
 from test_golden import SCENARIOS
@@ -56,6 +75,13 @@ def _crowded_taps() -> Flowsheet:
     Minimised from a randomised search: four units and two instruments is the
     smallest sheet found that needs more than the two fixed passes
     :meth:`Flowsheet.route` used to run.
+
+    Both branches are perpendicular, because this sheet is in the corpus the
+    diagonal invariant runs over and a fixture that cannot satisfy an invariant
+    it is checked against covers nothing. The controller was drawn at 45 degrees
+    and its ``offset`` is what paid for squaring it: 40 at 90 degrees settles in
+    two placements, and 30 is the nearest value searched that keeps the third
+    that :func:`test_two_placements_are_not_enough_for_a_crowded_sheet` pins.
     """
     fs = Flowsheet("Crowded Taps")
     feed = fs.add(units.Feed("F"))
@@ -66,7 +92,7 @@ def _crowded_taps() -> Flowsheet:
     transfer = fs.connect(drum.outlet, sep.feed)
     overhead = fs.connect(sep.vapor, prod.inlet)
     pt = fs.add_instrument("PT", 104, on=transfer, at=0.5, offset=60, angle=90)
-    pic = fs.add_instrument("PIC", 101, on=overhead, at=0.3, offset=40, angle=45)
+    pic = fs.add_instrument("PIC", 101, on=overhead, at=0.3, offset=30, angle=90)
     fs.connect(pt.sig_out, pic.sig_in, kind="electric")
     return fs
 
@@ -151,6 +177,14 @@ def test_nothing_is_drawn_diagonally(routed, name):
         for (x1, y1), (x2, y2) in zip(points, points[1:]):
             if abs(x1 - x2) > TOL and abs(y1 - y2) > TOL:
                 sloping.append(f"{s.name} runs ({x1:.0f}, {y1:.0f}) -> ({x2:.0f}, {y2:.0f})")
+    # The impulse line from a tap to the balloon reading it is drawn by a pass of
+    # its own, so it has to be swept by name or it is exempt. ``_tap_lines`` is
+    # the renderer's own answer to which taps are drawn at all -- it drops the
+    # ones a stream already joins and the ones sitting on the line at
+    # ``offset=0`` -- so what is checked here is exactly what lands on the sheet.
+    for inst, (x1, y1), (x2, y2) in _tap_lines(fs):
+        if abs(x1 - x2) > TOL and abs(y1 - y2) > TOL:
+            sloping.append(f"{inst.name}'s tap runs ({x1:.0f}, {y1:.0f}) -> ({x2:.0f}, {y2:.0f})")
     assert not sloping, f"{name}: " + "; ".join(sloping)
 
 
