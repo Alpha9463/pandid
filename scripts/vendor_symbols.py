@@ -25,6 +25,7 @@ mirrored data file.
 
 Run:  python scripts/vendor_symbols.py
 """
+import math
 import pathlib
 import xml.etree.ElementTree as ET
 
@@ -1264,9 +1265,18 @@ GRAVITY_FIXED = {
 # different size from the rest of its class. A value is one factor, or a pair
 # (sx, sy) for the cases where a symbol has to be *reproportioned* rather than
 # merely resized: the vessel, the flash drum and the column are all cut from one
-# stencil, and the first two are the short ones. That stroke compensation is
-# taken from sx, so the shell walls (the long strokes, and the ones a reader
-# takes the line weight from) are the pair that lands exactly on 2px.
+# stencil, and the first two are the short ones.
+#
+# An uneven pair is the one case where that compensation cannot be exact, since
+# it strokes the artwork with an elliptical pen (see ``drawing``). It divides by
+# sqrt(sx*sy), so nothing under such a pair lands ON 2px: a vertical stroke
+# comes out sqrt(sx/sy) heavy and a horizontal one the same factor light, about
+# a pen whose area is the sheet's. It used to divide by sx alone, which put the
+# vertical strokes exactly on 2px and left the horizontal ones at sy/sx of it --
+# a fifth light on the vessel and the flash drum, and under half on the packed
+# tower, where the bed grids read as a different sheet's ink from the shell they
+# sit in. Nothing here chooses which axis is the true one any more, because
+# there is no reading of a drawing on which one of them is.
 #
 # 0.25 is the inline family's factor, and it is measured rather than chosen. A
 # drawing unit is the CSS pixel, so an A3 sheet is 420 mm x 96/25.4 = 1587 units
@@ -1283,9 +1293,10 @@ GRAVITY_FIXED = {
 # It stays a single factor rather than an (sx, sy) pair even though the
 # reference's bowtie is 2:1 against the stencil's 98:60. Squashing the family to
 # match would draw the globe and ball seats as ovals and the check valve's
-# arrowhead askew, and the stroke compensation comes from sx alone, so the
-# diagonals would land off 2px. A valve one third taller than the reference's is
-# a smaller error than a valve whose internals are wrong.
+# arrowhead askew, and an uneven pair strokes with an elliptical pen no single
+# stroke-width can round out, so the diagonals would land off 2px whatever the
+# compensation divides by. A valve one third taller than the reference's is a
+# smaller error than a valve whose internals are wrong.
 #
 # Everything that shares a pipe with a valve takes the same factor, because they
 # share a line size: a strainer, an orifice plate or a sight glass left at the
@@ -1347,9 +1358,10 @@ HALF_SCALE_FITTINGS = (
 # comes out 19.8 x 33.8, whose lower 19.8 x 19.8 is valve/angle's box to the
 # decimal -- the same quarter-turn body, with 14 units of spring bonnet on top.
 # One factor and not a pair: the three spring strokes and both seat faces are
-# diagonals, which a non-uniform factor would tilt, and the compensated stroke
-# is taken from sx alone so they would also land off 2px. That is the reason the
-# valve family takes a single factor at all (see the paragraph above).
+# diagonals, which a non-uniform factor would tilt, and would stroke with a pen
+# no compensation can hold round, so they would also land off 2px. That is the
+# reason the valve family takes a single factor at all (see the paragraph
+# above).
 #
 # Relief PRV has no seat to measure: it is a 40-wide semicircular bonnet on a
 # stem, piped S to N, so across-the-run is that bonnet and 15.0 / 40 is the same
@@ -1411,11 +1423,12 @@ SCALE = {"valve": 0.25, "fitting": 0.25,
          #
          # The width is the drum's, not the column's, and that is the smaller of
          # two evils. Stretching to 100 would take the dished heads to 14:1
-         # (flat lips rather than domes) and, since the stroke compensation
-         # comes from sx, would draw the bed grids and the packing at under a
-         # third of the shell's line weight. At 62 the heads are 8.6:1, which is
-         # where vessel/default's already are, and the internals are within
-         # about half the shell weight.
+         # (flat lips rather than domes) and would draw the bed grids and the
+         # packing at under a third of the shell's line weight -- the ratio
+         # between a horizontal stroke and a vertical one is sy/sx whatever the
+         # compensation divides by, so widening the box widens that gap. At 62
+         # the heads are 8.6:1, which is where vessel/default's already are, and
+         # the internals are within about half the shell weight.
          ("column", "packed"): (62 / 14, 200 / 97)}
 
 
@@ -1471,7 +1484,18 @@ def drawing(el, kind, variant, port_map, sx, sy):
     """
     # Emit a heavier stroke on scaled symbols so it renders at 2px after the
     # scale transform (2px matches streams + hand-drawn symbols exactly).
-    inner, w, h, constraints, aspect = convert_shape(el, stroke_width=round(2.0 / sx, 3))
+    #
+    # The divisor is the geometric mean of the two factors, which is
+    # ``pandid.render.svg._pen_scale``'s answer to the same question one level
+    # down, arrived at for the same reason: stroking sweeps a *circular* pen,
+    # and a group that scales the axes differently sweeps an elliptical one, so
+    # the rendered weight depends on the direction the line runs in and no
+    # ``stroke-width`` -- one number -- can undo that. sqrt(sx*sy) holds the
+    # pen's area to the circle's, splits what is left evenly either side of 2px
+    # rather than piling it onto one axis, and is exact the moment the two
+    # factors agree, which is every family but the four SCALE reproportions.
+    inner, w, h, constraints, aspect = convert_shape(
+        el, stroke_width=round(2.0 / math.sqrt(sx * sy), 3))
     # A port spec may be a LIST: the first entry is the default placement and
     # the rest are alternate faces the user can move that port to, keyed by
     # the edge each one names.

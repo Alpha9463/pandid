@@ -298,12 +298,13 @@ def _reshapes(sym, u) -> bool:
 
 # --- the pen a placement draws with ------------------------------------------
 # A symbol's line weights are compensated once, at generation time:
-# scripts/vendor_symbols.py bakes stroke_width = 2/sx inside the scale group it
-# wraps the artwork in, so a valve drawn under scale(0.25) carries an 8.0 and
-# lands on the sheet's 2.0. That is right for exactly one box -- the symbol's
-# own. A <use> resizes the <symbol>'s viewport, and a viewport scales the ink as
-# readily as the geometry, so the same valve placed in a box twice its own draws
-# at 4.0, and nothing anywhere scales it back. The compensation is therefore
+# scripts/vendor_symbols.py bakes stroke_width = 2/sqrt(sx*sy) inside the scale
+# group it wraps the artwork in -- the same geometric mean _pen_scale below
+# takes, for the same reason -- so a valve drawn under scale(0.25) carries an
+# 8.0 and lands on the sheet's 2.0. That is right for exactly one box -- the
+# symbol's own. A <use> resizes the <symbol>'s viewport, and a viewport scales
+# the ink as readily as the geometry, so the same valve placed in a box twice
+# its own draws at 4.0, and nothing scales it back. The compensation is therefore
 # half an answer, and this is the other half: divide the baked weight back out
 # by whatever the placement multiplied it by, which is what makes a resized
 # unit's <defs> entry per placed *size* rather than per (kind, variant).
