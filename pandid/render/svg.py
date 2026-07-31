@@ -165,14 +165,14 @@ def _impulse(inst) -> bool:
     from a drum to any of those; see :data:`_FIELD_BALLOONS`.
 
     Reading the host alone, which is what this used to do, answered a question
-    about the *host* and drew the answer as though it were about the line. Four
+    about the *host* and drew the answer as though it were about the line. Three
     of the shipped sheets state something untrue because of it, every one of
     them solid where the line carries no fluid: 11's feed trip square is drawn
-    as impulse tubing off a solenoid valve while three identical squares
-    elsewhere on that sheet are dashed, and 04's, 07's and 08's control-room
-    level controllers, declared ``on`` a vessel for placement only, are drawn
-    piped to it. The host is a piece of plant in all four, and in none of them
-    is the line.
+    as impulse tubing off a solenoid valve while four identical squares
+    elsewhere on that sheet are dashed, and 07's and 08's control-room level
+    controllers, declared ``on`` a vessel for placement only, are drawn piped to
+    it. The host is a piece of plant in all three, and in none of them is the
+    line.
     """
     host = getattr(inst, "host", None)
     host_kind = getattr(host, "kind", "")
@@ -1440,7 +1440,7 @@ class SvgRenderer:
         Which of the two it is, is a question about the line and is asked of
         both its ends: see :func:`_impulse`. It is emphatically *not* a question
         about the host's class, which is what this used to read, and answering
-        the wrong question drew a signal as pipe on four of the shipped sheets.
+        the wrong question drew a signal as pipe on three of the shipped sheets.
 
         Fine is the same fine as a signal stream: ISO 15519-2 Annex A.1.02 puts
         an instrument connection on the 0,25 rung, alongside the signal line and

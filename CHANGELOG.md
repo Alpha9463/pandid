@@ -333,10 +333,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `_draw_taps` chose solid when the host was a unit and dashed when it was a
   balloon, which answers a question about the *host* and draws the answer as
   though it were about the line. On `11_ethanol_pid` the trip square hung on the
-  feed's solenoid valve came out **solid** while three identical squares hung on
-  balloons came out dashed: one logic function, drawn as impulse tubing in one
-  place and as a signal in three. On `08_from_data`, `04_control_loop` and
-  `07_metering_skid` a control-room controller declared `on` a vessel *for
+  feed's solenoid valve came out **solid** while four identical squares hung on
+  balloons and signal lines came out dashed: one logic function, drawn as
+  impulse tubing in one place and as a signal in four. On `07_metering_skid` and
+  `08_from_data` a control-room controller declared `on` a vessel *for
   placement* was drawn as a length of pipe running from the drum to a DCS
   faceplate.
 
@@ -352,9 +352,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   off a signal line is dashed because a signal line holds a command, which is
   the same half of the same rule.
 
-  **Three goldens move**, by one attribute on one line each and nothing else:
-  `04`, `07` and `08`, all of them the panel controller above. Every process tap
-  on every sheet stays solid. `docs/gallery/` is deliberately not regenerated.
+  **Two goldens move**, by one attribute on one line each and nothing else:
+  `07` and `08`, both of them the panel controller above. Every process tap on
+  every sheet stays solid — including `04`'s `LT-101` and `08`'s `LT-201`, the
+  two field transmitters that really are piped to their drum. `docs/gallery/` is
+  deliberately not regenerated.
 
 - **An instrument's impulse line is orthogonal, and a test says so.** Three
   shipped taps were drawn on the diagonal.
