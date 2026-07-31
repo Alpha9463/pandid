@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-01
+
+**A sheet regenerated on this version is not the sheet 0.1.0 drew.** Symbol
+geometry, stroke weights, label and line-number placement and the whole PDF/PNG
+export backend all moved, so the same flowsheet renders to different bytes and
+nothing in your code raises, warns or otherwise says so. Of the eleven sheets
+0.1.0 shipped, ten are redrawn and only `02_manual_layout` is byte for byte what
+it was; every `.png` differs, `02`'s included, since the raster backend and its
+resolution both changed. If a drawing has been issued, diff it before reissuing
+it.
+
+Nothing was removed or renamed. Everything below is an addition, or a correction
+to what was drawn.
+
 ### Added
 
 - **`Block.order_on()`: where a connection sits along the face it is on.**
@@ -252,7 +266,146 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   One unit across the shipped examples is reported, `10_ethanol_pfd`'s M-301.
   Rendering is unchanged and no golden moves.
 
+
+- Every unit class declares its nozzles as class annotations (`suction: Port`),
+  so `pump.suction`, `sep.feed` and `hx.shell_in` are attributes a type checker
+  and an editor can see. They were built by `_add_port`'s `setattr`, which
+  neither can follow, so the package shipped `py.typed` while every nozzle on it
+  read as `Any` and a misspelled one was found only when the sheet was drawn.
+
+  The annotations bind nothing: an annotation with no value lands in the class's
+  `__annotations__` and nowhere else, so construction, the `ports` dict and the
+  drawn sheet are untouched and no golden moves.
+  `tests/test_port_annotations.py` walks every `Unit` subclass in the package,
+  builds one, and checks the declarations against the ports in both directions,
+  so the two spellings of one fact cannot drift.
+
+  Two things had to go with them, because annotations alone check nothing.
+
+  `Unit.__getattr__` is now hidden from type checkers and from them only
+  (`if not TYPE_CHECKING:`; the method is defined exactly as before when Python
+  runs, and a typo still raises the same message, byte for byte). mypy reads a
+  class that has one as having whatever attribute it is asked for, so leaving it
+  visible would have answered every `sep.liqid` with `Any` and the declarations
+  would have bought a better hover and nothing else.
+
+  `Flowsheet.add`, `Unit.pin` and `Unit.nozzle` now return the class they were
+  given rather than the base `Unit`. Every sheet is written
+  `p = fs.add(units.Pump("P-101"))`, and `-> Unit` threw the subclass away at
+  the one call each unit passes through, so `p.suction` resolved through the
+  base class and no declaration on `Pump` was ever consulted. Nothing changes at
+  runtime: all three already returned the object handed to them.
+
+  **A nozzle no class declares is therefore a type error now**, which is the
+  point, and it reaches two things besides typos: the numbered families a count
+  decides (`Mixer`'s `in_1` ... `in_n`, `Splitter`'s `out_1` ... `out_n`) and
+  the nozzles only some variants carry (`HeatExchanger`'s `bottoms`,
+  `Separator`'s `overflow`). Both keep working at runtime and through
+  `unit.port(name)`, and the second is what a per-variant subclass will answer.
+
+- Four more `Vessel` variants, vendored from the same draw.io stencil file the
+  rest of the family comes from: `legs` (the shell standing on a pair of legs),
+  `insulated` (lagged, with the insulation hatched down both walls),
+  `electrical_heating` (a resistor element on the shell wall) and `swaged` (one
+  vessel in two diameters, the larger below).
+
+  Three of them are a change of artwork and nothing else. `legs` is
+  `skirted`'s shell and heads to the unit, in `skirted`'s 40 × 122.7 box, and
+  takes its nozzles verbatim; `insulated` is `jacketed`'s, in `jacketed`'s
+  52 × 95.4 box, with the cladding drawn on the same two lines the jacket
+  panels' outer walls are on. Swapping between any of them moves nothing on a
+  sheet already drawn.
+
+  `electrical_heating` is the exception and says so: the element occupies the
+  east shell wall across the shell's mid-height, so its `outlet` drops to the
+  clear wall below rather than having its run drawn through the heater.
+
+- Three more `Tank` variants, for the tanks that drain to a cone rather than to
+  a floor: `conical_bottom` (flat roof), `conical_ends` (a cone at each end) and
+  `dished_roof_conical_bottom`. The last takes `default`'s port map verbatim —
+  the roof is the same arc over the same chord, so the `inlet` is on the same
+  crown, and `outlet` resolves to the cone's apex where on `default` it resolved
+  to the flat floor.
+
+  All seven join the symbols ISO 15519-1 §11.4.2 forbids turning, taking the
+  count to 41. The vessels for the family's own reason (a vent on the top head
+  over a free surface), and the three cone-bottomed tanks for the fall into the
+  cone, which is what the hopper-bottomed separators are already listed for:
+  turned, the cone is a roof and the tank drains nowhere.
+
+  Nothing already drawable changes. The regenerated symbol file is purely
+  additive, 63 lines added and none removed, and no golden moves.
+
+- Four `Separator` variants that separate **mechanically** rather than into
+  phases: `sifter` (a screen deck), `impact` (a baffle), `permanent_magnet` and
+  `electromagnetic`. All four are one hopper-bottomed body apart from the
+  internal that names them, and all four join the symbols
+  ISO 15519-1 §11.4.2 forbids turning, listed for the hopper rather than for
+  what does the separating: a magnet sorts by magnetism, and what fixes its
+  attitude is the fall into the hopper the artwork draws.
+- `Separator`'s nozzles are per-variant, the way `HeatExchanger`'s already are,
+  because those four cannot use the flash drum's. A sifter's two draws are size
+  fractions and a magnetic separator's are a bulk stream and the tramp metal
+  pulled out of it; neither is a vapour or a liquid. They carry `feed`,
+  `overflow` and `underflow` in place of `feed` / `vapor` / `liquid`.
+
+  The pair names the two *positions* the artwork has — the anchors are the draw
+  high on the body wall and the draw on the hopper apex — rather than what
+  arrives on them, on the same principle the exchanger's `shell`/`tube` nozzles
+  follow, and it is the ordinary vocabulary of classification and solid-liquid
+  separation. Neither name says which of the two is the product, because that is
+  a fact about the service and not about the machine: the same screen is a
+  scalping screen and a sizing screen depending on what is wanted out of it.
+
+  Nothing already drawable changes. `Separator("V-101")` and all six of the
+  other variants 0.1.0 shipped keep `feed` / `vapor` / `liquid`, in that order,
+  with the same directions and roles, and no golden moves.
+
+
+- Five `Filter` variants, naming the medium the casing is drawn around:
+  `fixed_bed` and `gas_fixed_bed` (a granular bed between two retention
+  screens), `belt` and `gas_belt` (a cloth running between two rollers), and
+  `rotary_scraper` (the rotary drum of `rotary` with the knife that lifts the
+  cake off it). Each is piped `inlet` west and `outlet` east at mid-height, as
+  the rest of the family is, so swapping one filter for another is a change of
+  artwork and not of piping. `Filter`'s ports are unchanged.
+- `gas_fixed_bed` and `gas_belt` join `filter/gas` among the symbols
+  ISO 15519-1 §11.4.2 forbids turning. Each draws a dust hopper under its
+  medium, which is where what the medium sheds is collected; `fixed_bed` and
+  `belt` draw the same medium with no hopper, are driven by pressure drop
+  across it, and stay turnable.
+- `validate()` reports `run-off-elevation`: two connected nozzles on one
+  horizontal run that are *almost* level, missing by less than the shorter of
+  the two symbols is tall. A unit is pinned by its top-left corner and each
+  symbol carries its nozzles where its artwork puts them, so pinning a row to
+  convenient corner-`y` values silently puts the nozzles on different
+  elevations and the router draws a step into each device and back out. Nothing
+  errored and no nozzle left its ink, which is what made it worth a finding.
+  The message names the cure, `pin(port=…, y=…)`. A large deliberate step, a
+  vertical run, a signal line, a sheet with no pinned elevation, and the
+  eccentric reducer (whose two ends sit on different centrelines on purpose)
+  are all silent. Rendering is unchanged and no golden moves.
+- `Separator(variant="knockout")` draws the knock-out drum the default used to,
+  demister pad and level gauge and all, at the size and with the nozzles it had.
+- Python 3.14 is supported and tested. The trove classifier is declared and
+  CI runs the suite on 3.14 alongside 3.10 to 3.13. The floor is unchanged
+  at 3.10: this widens the supported range at the top and nothing else. No
+  package code had to change to get there, since `pandid/` imports only the
+  standard library and none of what it imports is touched by 3.14's
+  removals; the suite passes unchanged and no golden moves. The optional
+  `pdf` extra installs on 3.14 too, as its own entry below records.
+
 ### Changed
+
+- **`README.md` leads with `11_ethanol_pid`**, the P&ID, rather than
+  `03_distillation_train`, and names what it shows: instrumentation, five
+  control loops, hand-isolated valve stations, line numbers, a zone-ruled A3
+  frame, a title block and a general-notes box. `10_ethanol_pfd` and
+  `11_ethanol_pid` also gain goldens. They were the densest and most-shown
+  sheets and the only two with no regression protection, so every change made to
+  them went in unguarded; both fixtures come out byte for byte equal to what the
+  example scripts draw, and reproduce under `PYTHONHASHSEED` 12345, 999 and
+  4242.
 
 - **`docs/gallery/` is regenerated, and a check now holds it to the examples.**
   ([#180](https://github.com/Alpha9463/pandid/issues/180))
@@ -328,37 +481,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   untouched — flattening happens on the way to the PDF and nowhere else, and no
   golden moves.
 
+
+- `Separator(variant="default")` is drawn as the plain dished-head vertical
+  cylinder, the same draw.io stencil `Vessel` and `Column` already share, and is
+  reproportioned to the 62 x 100 box `Vessel` comes out at rather than the
+  column's 100 x 200. It was the "Knock-out Drum", which draws a level gauge and
+  a demister pad into the equipment artwork: the gauge is drawn a second time as
+  soon as a real level instrument is added, and `Separator` is the generic flash
+  drum, which does not necessarily have a mesh pad. `vessel`/`horizontal` and
+  `separator`/`horizontal` were already one stencil under two sets of nozzle
+  names, so this makes the upright pair consistent with the lying one. Its
+  nozzles are unchanged in name and role: `feed` on the west shell wall at
+  mid-height, `vapor` and `liquid` on the two head crowns. Examples 01 and 05
+  move, and so do the goldens for them.
+
 ### Fixed
 
-- **A line number that cannot be written beside its line now carries a leader
-  to it.** ([#155](https://github.com/Alpha9463/pandid/issues/155))
+- **A line number with no run beside the words now carries a leader to it.**
+  ([#155](https://github.com/Alpha9463/pandid/issues/155))
 
   Label placement walked outward from the pipe — 10,5 units, then 23,5, then
   36,5 — until it found paper nothing else had claimed, and wrote the number
-  there with nothing joining it to its line. On `11_ethanol_pid` three numbers
-  ended up at the outermost band, 30 units of blank paper from their own run and
-  hard against something else: `AE-304-150-80-SS` 1,6 units off D-301's shell
-  and 27 below the lower end of the 30-unit stub it names, `FB-301-200-160-SS`
-  standing directly over XV-301's tag and reading as a second line of it, and
-  `FB-306-100-160-SS` 5,3 off RB-301's shell. Each read as an annotation of the
-  thing it was nearest. The avoidance was working; the outcome defeated its
-  purpose, and `validate()` had nothing to say about any of it.
+  there with nothing joining it to its line. On `11_ethanol_pid`,
+  `AE-304-150-80-SS` ended up 1,6 units off D-301's shell and 27 below the lower
+  end of the 30-unit stub it names, so it read as an annotation of the drum. The
+  avoidance was working; the outcome defeated its purpose, and `validate()` had
+  nothing to say about it.
 
   **ISO 15519-1 §7.2.5** is two *shall*s, and the second names the escape from
   the first: "They shall be oriented along or adjacent to the relevant
   connecting lines. If it is not possible to place the reference designation
   adjacent to the connecting line, it shall be shown elsewhere in the content
-  area with a leader line to the actual connecting line." So the perpendicular
-  stand-off is now capped at what "adjacent" can mean — one label height of
-  blank paper beyond the gap a label beside its run is already written at — and
-  a label placed past that cap is joined to its run by a leader.
+  area with a leader line to the actual connecting line." A number the first
+  *shall* cannot be met for is now joined to its run by a leader.
 
-  The cap is derived rather than picked, in the label's own metric so it scales
-  with the lettering, and it is where the sheets stop reading: at 4 and at 17
-  units of gap a number reads as its own line's (`AE-302`, `AE-303`, `AE-305`
-  and `HPS-308` all sit at 17, each with a hand valve of its own station
-  beneath it, and none is in doubt), and at 30 all three instances on the sheet
-  read as somebody else's.
+  What decides it is whether the line is *there*, beside the words — not how far
+  across the paper the number sits. A caption is attached by lying against the
+  thing it captions, and a string that has run out past the end of its own line
+  is lying against something else. So more than half the number must have its
+  own run alongside it, measured against the whole straight length of that run
+  rather than one drawn piece of it, since an in-line valve splits a run into
+  three pieces and a reader sees one line. Of the 108 numbers on the twelve
+  shipped sheets, three have their run beside less than the whole of them, and
+  they part into two groups with a wide gap between: `3"-P-1005-A1A` on 09 at
+  77 % and `FB-301-200-160-SS` on 11 at 74 % read as their own line's unaided;
+  `AE-304-150-80-SS` at 32 % does not.
 
   The leader follows **§6.4**: it terminates "with an arrowhead if it ends on
   the outline of an object or a connection", it is drawn at the signal weight
@@ -369,19 +536,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rather than at either end of it, since a run's ends are where it meets the
   equipment it serves.
 
-  A leader is new ink, so it is scored like the label: it leaves the halo by
-  whichever of three routes cuts least, and if it would run through the vessel
-  the label stepped around, the search takes a different spot instead. The
-  leader is then seeded as occupied like everything else, so no later halo
-  deletes the one mark saying which line the number belongs to.
+  A leader is new ink, so it is scored like the label. Its tail is swept along
+  the near face of the halo, inset from the corners by half the halo's own
+  thickness, and scored on what it cuts, then how near 45° it lands, then how
+  near the middle of the words it starts — a halo is measured at 6,2 per
+  character plus padding, which over-measures a string as hyphen-heavy as a line
+  number, so a tail fired from a bare corner would not touch the words it is
+  there to attach. If the leader would run through the vessel the label stepped
+  around, the search takes a different spot instead, and the leader is then
+  seeded as occupied like everything else, so no later halo deletes the one mark
+  saying which line the number belongs to.
 
   `tests/test_label_invariants.py` pins the property nothing asserted:
-  **a line number is adjacent to the line it names, or carries a leader to it**,
-  read back off the drawn SVG over the golden corpus, both ethanol sheets and a
-  fixture built to need a leader whatever happens to the shipped ones.
+  **a line number is written along the line it names, or carries a leader to
+  it**, read back off the drawn SVG over the golden corpus, both ethanol sheets
+  and a fixture built to need a leader whatever happens to the shipped ones.
 
-  Three leaders appear, all on `11_ethanol_pid`. No golden moves, and
-  `10_ethanol_pfd` renders byte for byte as before.
+  One leader is drawn, on `11_ethanol_pid`. No other sheet carries one and none
+  moves for this.
+
+- **A label's halo no longer paints out the symbol underneath it.**
+
+  Every tag and every line number is written on an opaque white plate, emitted
+  after the artwork, so wherever it lands it deletes what was there. Neither
+  placement pass had ever been told a graphical symbol was on the paper: the
+  equipment tag stepped clear of pipe and impulse lines, the line number stepped
+  clear of those and of the tags, and a balloon or a square was invisible to
+  both. On `11_ethanol_pid`, the sheet the README leads with, D-301's tag ate a
+  quadrant of LT-304's balloon and broke its circle in two places, and
+  HV-301C's ate the left edge of PIC-301's square. The whole suite passed.
+
+  A symbol is not a worse kind of line. A line broken by a halo is still that
+  line and a reader reads across the gap, which is the whole reason writing a
+  number *in* its run is a convention; a symbol broken by a halo has stopped
+  being the symbol, since its outline is what identifies it. So both passes are
+  given the symbols, and both **rank** a symbol above everything else they
+  weigh rather than counting it as one more box. Ranking rather than counting is
+  what stops the fix from moving the defect: with symbols merely counted,
+  D-301's tag stepped off LT-304 onto the one clear strip of paper in that
+  corner and displaced `AE-304-150-80-SS` into a stripe through C-301's tube
+  bundle.
+
+  That left `AE-304` with no clear spot among its 276 candidates, so the search
+  may now walk one band further out, six to seven. It is a bound and not a
+  judgement — a clear band wins outright and the bands are walked inward-out —
+  and seven is where the answer settles rather than where it first appears,
+  since at 8, 10 and 12 that label lands in the same place.
+
+  `tests/test_halo_invariants.py` states the invariant over the whole corpus and
+  fails on both of the original defects. Two tags and one line number move on
+  `11_ethanol_pid`; no other sheet moves.
+
+- **`examples/12_block_flow_diagram`'s ammonia recycle runs under the row.** It
+  left Refrigeration's west face at mid-height, dropped, ran left and came back
+  into the Synthesis Loop's south face straight across the purge, needing a line
+  hop to say so. A BFD runs a recycle one below the row, from the section that
+  produces it to the section that takes it, crossing nothing. One declaration
+  changes, `outputs=["E", "W"]` to `["E", "S"]`, and the purge flag moves into
+  the gap between the last two boxes: crossings 1 → 0, hop arcs 1 → 0, measured
+  segment against segment.
+
+- **`examples/11_ethanol_pid` letters its trips `Z`, not `I`.** ISO 15519-2
+  Table 2 gives `Z` for switching, open-loop, safety or protection relevant, and
+  `I` for *indicating*, the one thing a trip does not do. Table 2 note 9 is the
+  other half: an alarm that acts is `S` or `Z` and does not additionally take
+  `A`. The high and low alarms are placed to §5.1.3 Figure 8's quadrants, and
+  `PT-318` is a second transmitter on its own tap, so the trip reads a
+  measurement independent of the pressure loop and one safety function is drawn
+  end to end. The sheet's general notes are rewritten to match. Lettering only:
+  a diamond is drawn with its number and never its letters, so no sheet moves.
+
+- **`examples/03_distillation_train` draws its towers as columns.** `T-100` and
+  `T-200` each had a single overhead product, no reflux drum, no reboiler and no
+  internal returns, and two towers arranged that way are not columns. Both now
+  carry what `06_column_reflux` and `10_ethanol_pfd` already draw: the overhead
+  rises into its condenser, which drains into a reflux drum (`V-101` / `V-201`)
+  whose single draw parts at a `Tee` into reflux and distillate, and the sump
+  drains into a kettle reboiler (`E-102` / `E-202`) whose boilup returns to the
+  tower, so `P-100A/B` takes the *net* bottoms. Both loops close on the column
+  through `reflux_in` and `boilup_in`, so neither is modelled as a recycle. A
+  `Tee` rather than a `Splitter` at the reflux parting, for the reason
+  `10_ethanol_pfd` has one there: a junction in the piping is not an item
+  somebody buys. This is the largest sheet movement in the release.
 
 - **A flipped condenser no longer reverses its heat-flow arrow.**
   ([#155](https://github.com/Alpha9463/pandid/issues/155))
@@ -467,6 +703,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every sheet stays solid — including `04`'s `LT-101` and `08`'s `LT-201`, the
   two field transmitters that really are piped to their drum. `docs/gallery/` is
   deliberately not regenerated.
+
+- **Examples 04 and 11 stopped drawing loops the standards forbid.** `04`'s
+  level loop had no transmitter: `V-101` ran a solid process impulse line
+  straight into `LIC-101`, drawing a control-room faceplate with a process tap
+  of its own, and with no measurement signal in the loop the interlock had to
+  tee off the controller's *output*. `LT-101` now stands between them and the
+  trip tees off that measurement, which is what ISO 15519-2 Figure 17 b) draws.
+  Both files drew controllers as bare `variant="panel"` circles — a circle on
+  its own has no controlling function — and use `variant="shared"` now. `11`'s
+  alarms were chained controller → high → low → SIS, against ISO 15519-2 §6.2,
+  §7.2.4 and Table 2 note 9; both pairs now fan off their controller onto faces
+  of their own, every one a dead end, and both SIS squares sit on a measurement
+  signal line. `LIC-304` moves off its row onto the valve it strokes, a fourth
+  face not fitting under the cooling-water return. Eight of 123 resolved
+  entries change on `11` and 7 of 22 on `04`; `validate()` is clean on both,
+  before and after.
 
 - **An instrument's impulse line is orthogonal, and a test says so.** Three
   shipped taps were drawn on the diagonal.
@@ -738,154 +990,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with them. Every changed line is an `A` command's two radii inside a `<defs>`
   `<symbol>`; nothing else in any of them differs.
 
-### Added
-
-- Every unit class declares its nozzles as class annotations (`suction: Port`),
-  so `pump.suction`, `sep.feed` and `hx.shell_in` are attributes a type checker
-  and an editor can see. They were built by `_add_port`'s `setattr`, which
-  neither can follow, so the package shipped `py.typed` while every nozzle on it
-  read as `Any` and a misspelled one was found only when the sheet was drawn.
-
-  The annotations bind nothing: an annotation with no value lands in the class's
-  `__annotations__` and nowhere else, so construction, the `ports` dict and the
-  drawn sheet are untouched and no golden moves.
-  `tests/test_port_annotations.py` walks every `Unit` subclass in the package,
-  builds one, and checks the declarations against the ports in both directions,
-  so the two spellings of one fact cannot drift.
-
-  Two things had to go with them, because annotations alone check nothing.
-
-  `Unit.__getattr__` is now hidden from type checkers and from them only
-  (`if not TYPE_CHECKING:`; the method is defined exactly as before when Python
-  runs, and a typo still raises the same message, byte for byte). mypy reads a
-  class that has one as having whatever attribute it is asked for, so leaving it
-  visible would have answered every `sep.liqid` with `Any` and the declarations
-  would have bought a better hover and nothing else.
-
-  `Flowsheet.add`, `Unit.pin` and `Unit.nozzle` now return the class they were
-  given rather than the base `Unit`. Every sheet is written
-  `p = fs.add(units.Pump("P-101"))`, and `-> Unit` threw the subclass away at
-  the one call each unit passes through, so `p.suction` resolved through the
-  base class and no declaration on `Pump` was ever consulted. Nothing changes at
-  runtime: all three already returned the object handed to them.
-
-  **A nozzle no class declares is therefore a type error now**, which is the
-  point, and it reaches two things besides typos: the numbered families a count
-  decides (`Mixer`'s `in_1` ... `in_n`, `Splitter`'s `out_1` ... `out_n`) and
-  the nozzles only some variants carry (`HeatExchanger`'s `bottoms`,
-  `Separator`'s `overflow`). Both keep working at runtime and through
-  `unit.port(name)`, and the second is what a per-variant subclass will answer.
-
-- Four more `Vessel` variants, vendored from the same draw.io stencil file the
-  rest of the family comes from: `legs` (the shell standing on a pair of legs),
-  `insulated` (lagged, with the insulation hatched down both walls),
-  `electrical_heating` (a resistor element on the shell wall) and `swaged` (one
-  vessel in two diameters, the larger below).
-
-  Three of them are a change of artwork and nothing else. `legs` is
-  `skirted`'s shell and heads to the unit, in `skirted`'s 40 × 122.7 box, and
-  takes its nozzles verbatim; `insulated` is `jacketed`'s, in `jacketed`'s
-  52 × 95.4 box, with the cladding drawn on the same two lines the jacket
-  panels' outer walls are on. Swapping between any of them moves nothing on a
-  sheet already drawn.
-
-  `electrical_heating` is the exception and says so: the element occupies the
-  east shell wall across the shell's mid-height, so its `outlet` drops to the
-  clear wall below rather than having its run drawn through the heater.
-
-- Three more `Tank` variants, for the tanks that drain to a cone rather than to
-  a floor: `conical_bottom` (flat roof), `conical_ends` (a cone at each end) and
-  `dished_roof_conical_bottom`. The last takes `default`'s port map verbatim —
-  the roof is the same arc over the same chord, so the `inlet` is on the same
-  crown, and `outlet` resolves to the cone's apex where on `default` it resolved
-  to the flat floor.
-
-  All seven join the symbols ISO 15519-1 §11.4.2 forbids turning, taking the
-  count to 41. The vessels for the family's own reason (a vent on the top head
-  over a free surface), and the three cone-bottomed tanks for the fall into the
-  cone, which is what the hopper-bottomed separators are already listed for:
-  turned, the cone is a roof and the tank drains nowhere.
-
-  Nothing already drawable changes. The regenerated symbol file is purely
-  additive, 63 lines added and none removed, and no golden moves.
-
-- Four `Separator` variants that separate **mechanically** rather than into
-  phases: `sifter` (a screen deck), `impact` (a baffle), `permanent_magnet` and
-  `electromagnetic`. All four are one hopper-bottomed body apart from the
-  internal that names them, and all four join the symbols
-  ISO 15519-1 §11.4.2 forbids turning, listed for the hopper rather than for
-  what does the separating: a magnet sorts by magnetism, and what fixes its
-  attitude is the fall into the hopper the artwork draws.
-- `Separator`'s nozzles are per-variant, the way `HeatExchanger`'s already are,
-  because those four cannot use the flash drum's. A sifter's two draws are size
-  fractions and a magnetic separator's are a bulk stream and the tramp metal
-  pulled out of it; neither is a vapour or a liquid. They carry `feed`,
-  `overflow` and `underflow` in place of `feed` / `vapor` / `liquid`.
-
-  The pair names the two *positions* the artwork has — the anchors are the draw
-  high on the body wall and the draw on the hopper apex — rather than what
-  arrives on them, on the same principle the exchanger's `shell`/`tube` nozzles
-  follow, and it is the ordinary vocabulary of classification and solid-liquid
-  separation. Neither name says which of the two is the product, because that is
-  a fact about the service and not about the machine: the same screen is a
-  scalping screen and a sizing screen depending on what is wanted out of it.
-
-  Nothing already drawable changes. `Separator("V-101")` and all six of the
-  other variants 0.1.0 shipped keep `feed` / `vapor` / `liquid`, in that order,
-  with the same directions and roles, and no golden moves.
-
-### Changed
-
-- `Separator(variant="default")` is drawn as the plain dished-head vertical
-  cylinder, the same draw.io stencil `Vessel` and `Column` already share, and is
-  reproportioned to the 62 x 100 box `Vessel` comes out at rather than the
-  column's 100 x 200. It was the "Knock-out Drum", which draws a level gauge and
-  a demister pad into the equipment artwork: the gauge is drawn a second time as
-  soon as a real level instrument is added, and `Separator` is the generic flash
-  drum, which does not necessarily have a mesh pad. `vessel`/`horizontal` and
-  `separator`/`horizontal` were already one stencil under two sets of nozzle
-  names, so this makes the upright pair consistent with the lying one. Its
-  nozzles are unchanged in name and role: `feed` on the west shell wall at
-  mid-height, `vapor` and `liquid` on the two head crowns. Examples 01 and 05
-  move, and so do the goldens for them.
-
-### Added
-
-- Five `Filter` variants, naming the medium the casing is drawn around:
-  `fixed_bed` and `gas_fixed_bed` (a granular bed between two retention
-  screens), `belt` and `gas_belt` (a cloth running between two rollers), and
-  `rotary_scraper` (the rotary drum of `rotary` with the knife that lifts the
-  cake off it). Each is piped `inlet` west and `outlet` east at mid-height, as
-  the rest of the family is, so swapping one filter for another is a change of
-  artwork and not of piping. `Filter`'s ports are unchanged.
-- `gas_fixed_bed` and `gas_belt` join `filter/gas` among the symbols
-  ISO 15519-1 §11.4.2 forbids turning. Each draws a dust hopper under its
-  medium, which is where what the medium sheds is collected; `fixed_bed` and
-  `belt` draw the same medium with no hopper, are driven by pressure drop
-  across it, and stay turnable.
-- `validate()` reports `run-off-elevation`: two connected nozzles on one
-  horizontal run that are *almost* level, missing by less than the shorter of
-  the two symbols is tall. A unit is pinned by its top-left corner and each
-  symbol carries its nozzles where its artwork puts them, so pinning a row to
-  convenient corner-`y` values silently puts the nozzles on different
-  elevations and the router draws a step into each device and back out. Nothing
-  errored and no nozzle left its ink, which is what made it worth a finding.
-  The message names the cure, `pin(port=…, y=…)`. A large deliberate step, a
-  vertical run, a signal line, a sheet with no pinned elevation, and the
-  eccentric reducer (whose two ends sit on different centrelines on purpose)
-  are all silent. Rendering is unchanged and no golden moves.
-- `Separator(variant="knockout")` draws the knock-out drum the default used to,
-  demister pad and level gauge and all, at the size and with the nozzles it had.
-- Python 3.14 is supported and tested. The trove classifier is declared and
-  CI runs the suite on 3.14 alongside 3.10 to 3.13. The floor is unchanged
-  at 3.10: this widens the supported range at the top and nothing else. No
-  package code had to change to get there, since `pandid/` imports only the
-  standard library and none of what it imports is touched by 3.14's
-  removals; the suite passes unchanged and no golden moves. The optional
-  `pdf` extra works on 3.14 too, `cairosvg` and its C-extension dependency
-  `cffi` both resolving to wheels rather than a source build.
-
-### Fixed
 
 - A label's opaque halo no longer deletes a line that is not its own. Every
   label is written on a white rect and drawn after the lines, so one in the
@@ -1084,4 +1188,5 @@ top of that grant, naming Atlassian products and marketplace distribution and
 excluding diagram output; `NOTICE` reproduces it in full, lists exactly which
 files fall under which licence, and both texts ship in the distribution.
 
+[0.1.1]: https://github.com/Alpha9463/pandid/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Alpha9463/pandid/releases/tag/v0.1.0

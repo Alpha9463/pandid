@@ -2189,7 +2189,8 @@ fs.to_svg()
 The rule is stated as the **clearance**, not as a multiple of the head, and the
 difference matters: at the default 20 pitch those same two heads have 8 units of
 paper between them — four line-widths — and read without effort, so nothing is
-reported. Only one unit on the eleven shipped examples is inside the floor.
+reported. Only one unit on the twelve shipped examples is inside the floor:
+`10_ethanol_pfd`'s `M-301`, whose two feeds land 14.5px apart.
 
 The cure is the box, and the message does the arithmetic: the drawn pitch is
 proportional to the extent of the box across the face, so

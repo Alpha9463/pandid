@@ -310,7 +310,7 @@ second copy to forget. To cut a release, bump `__version__`, move the CHANGELOG
 `[Unreleased]` heading to the new number, merge, then push the matching tag.
 
 ```bash
-git tag v0.1.0 && git push origin v0.1.0
+git tag v0.1.1 && git push origin v0.1.1
 ```
 
 `.github/workflows/release.yml` takes it from there. It re-runs the four gates
