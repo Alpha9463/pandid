@@ -353,6 +353,7 @@ Each entry is `port` *(direction / role)*.
 | `Instrument` | `instrument` | `pv` *(in/signal)*, `sig_in` *(in/signal)*, `sig_out` *(out/signal)* |
 | `Mixer` | `mixer` | `in_1` … `in_n` *(in)*, `outlet` *(out)* |
 | `Splitter` | `splitter` | `inlet` *(in)*, `out_1` … `out_n` *(out)* |
+| `Block` | `block` | `in_1` … `in_n` *(in)*, `out_1` … `out_m` *(out)* |
 
 Variable-port constructors take their count first:
 
@@ -414,6 +415,81 @@ tower = units.Column("T-302", n_feeds=2, description="Extractive Column")
 fs.connect(solvent.outlet, tower.feed_1)   # solvent enters above...
 fs.connect(feed.outlet, tower.feed_2)      # ...the feed tray
 ```
+
+### `Block`: the block flow diagram
+
+A BFD sits a level above the PFD: one labelled box per plant section, the
+streams between them named, and nothing inside them drawn. `Block` is the only
+symbol on such a sheet.
+
+```text
+units.Block(name, inputs=1, outputs=1, variant="default", width=None,
+            height=None, label_pos=None, description="")
+```
+
+`inputs` and `outputs` are **one face per connection**, in order. A plain count
+is the shorthand for the common case, west in and east out:
+
+```python
+rx = fs.add(units.Block("Reaction", inputs=["W", "W", "N"], outputs=["E", "S"]))
+fs.connect(feed.outlet, rx.in_1)        # west
+fs.connect(recycle.out_1, rx.in_3)      # north
+fs.connect(rx.out_2, drain.inlet)       # south
+
+units.Block("Compression", inputs=2, outputs=1)   # both inputs west, output east
+```
+
+The nozzles are `in_1` … `in_n` and `out_1` … `out_m`, numbered across the whole
+family rather than per face, so moving a connection to another side does not
+rename it. `nozzle()` does exactly that, and on a block it always succeeds:
+every other symbol is artwork drawn in advance and only offers the faces it was
+authored with, while a block's rectangle is built from its own declaration.
+
+```python
+rx.nozzle("out_2", "S")          # send one product out of the bottom
+rx.face("out_2")                 # -> "S"       which side of the box
+rx.ports_on("N")                 # -> ["in_3"]  what is on that side
+```
+
+> **Pin a block flow diagram.** The layout engine ranks units by process flow
+> order and does not yet know that a connection on the north face wants its
+> source *above* it ([#168](https://github.com/Alpha9463/pandid/issues/168)), so
+> a BFD left to lay itself out sends those streams up and over the sheet — long
+> climbs, runs closer together than the pitch the block keeps at the nozzle, and
+> line jumps where there should be none. Pinned output is what
+> [`examples/12_block_flow_diagram.py`](../examples/12_block_flow_diagram.py)
+> shows, and it is what a BFD wants anyway: the reader is meant to see the plant
+> in a row.
+
+**A face names the box's own side, not the reader's.** This is the one place
+`Block` departs from [`nozzle()`](#nozzle), which everywhere else takes the
+compass point on the *finished sheet*. It has to: the face here is the
+declaration the drawing is built from, and a declaration cannot be about a
+`pin()` that has not happened yet. So a turn or a mirror moves the box and every
+connection with it, and `"N"` on a block turned a quarter is drawn on the east.
+`face()` answers about the box; `portgeom.port_faces()` answers about the sheet.
+
+**The box sizes itself to what it carries.** A block flow diagram's box is
+precisely the thing that gathers many streams, so the height follows the west
+and east counts and the width follows the north and south ones, at a pitch of
+2.5 arrowheads — the least that still reads as two lines arriving rather than
+one blob. Eight inputs on one wall make a *taller block*, not eight crushed
+nozzles. The width also clears the name, which a BFD letters inside the box.
+
+`width`/`height` still win where they are given, and a box too small to draw the
+connections at that pitch is refused rather than drawn crushed — wherever it is
+asked for: the constructor, a later assignment, `nozzle()` and `pin()`, the last
+because a quarter turn draws the box's upright faces *across* the sheet and can
+put a run on the shorter axis. A refused call leaves the block as it was.
+
+A width given also wins over the name, which then hangs out of both ends of the
+box. Every label here is written on an opaque halo, so an overhanging one
+**erases whatever is drawn beside it** rather than merely looking untidy. Leave
+`width` off and it cannot happen.
+
+A block is **not** scheduled: `equipment_list()` skips it, because a box
+standing for a whole section is not a purchasable item. `include=` still takes
+one by name, for a block index.
 
 `Conveyor` takes a `length` instead of a `width`:
 
@@ -784,7 +860,7 @@ is a visual style within it. The first name in each list is that kind's
 | `Reducer` | `default` (the concentric trapezoid), `concentric`, `eccentric`, plus `large_end`, which points the cone |
 | `Vent` | `default` (stack with a weather cap), `exhaust_head`, `breather` |
 | `Instrument` | `default` (field balloon), `panel`, `aux`, `shared`, `computer`, `sis` (diamond in a square, also spelled `logic`), `interlock` (plain diamond) |
-| `Heater`, `Cooler`, `Furnace`, `Turbine`, `Blower`, `Ejector`, `Funnel`, `Conveyor`, `Mixer`, `Splitter`, `Tee`, `Feed`, `Product` | `default` only |
+| `Heater`, `Cooler`, `Furnace`, `Turbine`, `Blower`, `Ejector`, `Funnel`, `Conveyor`, `Mixer`, `Splitter`, `Tee`, `Block`, `Feed`, `Product` | `default` only |
 
 `HeatExchanger(variant="kettle")` carries a fifth nozzle, `bottoms`. It is the
 draw at the weir end of the shell, where what does not boil leaves as the

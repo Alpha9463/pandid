@@ -11,9 +11,11 @@ Found rather than listed, so a class added tomorrow is covered without anyone
 remembering to come here. The exemptions are named, and there are only three
 kinds, each argued at the class or the module it applies to:
 
-- the **numbered families** (``Mixer``'s ``in_1`` ... ``in_n`` and ``Splitter``'s
-  ``out_1`` ... ``out_n``), whose size is the caller's, so there is no finite
-  set of names a class annotation could stand for;
+- the **numbered families** (``Mixer``'s ``in_1`` ... ``in_n``, ``Splitter``'s
+  ``out_1`` ... ``out_n``, and both of ``Block``'s), whose size is the caller's,
+  so there is no finite set of names a class annotation could stand for.
+  ``Block`` is the one class with *nothing* left over to declare, since every
+  connection it has is one of the two families;
 - the **variant nozzles** (``HeatExchanger``'s ``bottoms``, ``Separator``'s
   ``overflow``), which belong to some variants and not others, so declaring them
   on the base class would tell a checker something false about every other one;
@@ -47,7 +49,13 @@ _NUMBERED = re.compile(r"_\d+$")
 # The classes whose default construction produces a numbered family. Column and
 # Reactor are absent on purpose: they default to one feed, which is spelled
 # ``feed`` and is therefore declared like any other fixed nozzle.
-_VARIABLE_PORT_CLASSES = {units.Mixer, units.Splitter}
+#
+# ``Block`` joins the list deliberately rather than by slipping past the
+# name-shaped exemption: a block flow diagram's box has no nozzle every block
+# has, so *all* of its connections are numbered and it declares no annotations
+# at all. Its own class comment argues that; this is the second half of the
+# decision, and the reason a fourth entry has to be added by hand.
+_VARIABLE_PORT_CLASSES = {units.Mixer, units.Splitter, units.Block}
 
 
 def _unit_classes():

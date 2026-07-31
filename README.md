@@ -221,6 +221,7 @@ rendered in the
 | `09_line_numbers.py` | full line numbers carried through in-line fittings and broken at two spec breaks |
 | `10_ethanol_pfd.py` | a whole issue-ready sheet on a real A3 page, with six off-page connectors, equipment list, utilities summary and sectioned stream table |
 | `11_ethanol_pid.py` | a whole issued P&ID on a fixed A3 sheet: line numbers on every line, hand-isolated control valve stations, five loops, and a repeated interlock square |
+| `12_block_flow_diagram.py` | the drawing a level above the PFD: one `Block` per plant section, connections on all four sides, every box sized to its own name and nozzles |
 
 ## Contributing
 

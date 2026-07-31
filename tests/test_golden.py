@@ -457,6 +457,39 @@ def _line_numbers() -> Flowsheet:
     return fs
 
 
+def _block_flow_diagram() -> Flowsheet:
+    fs = Flowsheet("Ammonia Plant - Block Flow Diagram")
+    reforming = fs.add(units.Block("Reforming", inputs=["W", "N", "N"], outputs=["E"])).pin(
+        x=260, y=340
+    )
+    shift = fs.add(units.Block("Shift & CO2 Removal", inputs=1, outputs=["E", "N"])).pin(
+        x=520, y=340
+    )
+    synthesis = fs.add(units.Block("Synthesis Loop", inputs=["W", "S"], outputs=["E", "S"])).pin(
+        x=830, y=340
+    )
+    refrigeration = fs.add(units.Block("Refrigeration", inputs=1, outputs=["E", "W"])).pin(
+        x=1080, y=340
+    )
+    natural_gas = fs.add(units.Feed("Natural Gas")).pin(x=60, y=355)
+    air = fs.add(units.Feed("Air")).pin(x=180, y=180)
+    steam = fs.add(units.Feed("Steam")).pin(x=330, y=180)
+    co2 = fs.add(units.Product("CO2 to Urea")).pin(x=560, y=170)
+    ammonia = fs.add(units.Product("Liquid NH3")).pin(x=1300, y=355)
+    purge = fs.add(units.Product("Purge Gas")).pin(x=1000, y=560)
+    fs.connect(natural_gas.outlet, reforming.in_1)
+    fs.connect(air.outlet, reforming.in_2)
+    fs.connect(steam.outlet, reforming.in_3)
+    fs.connect(reforming.out_1, shift.in_1)
+    fs.connect(shift.out_2, co2.inlet)
+    fs.connect(shift.out_1, synthesis.in_1)
+    fs.connect(synthesis.out_1, refrigeration.in_1)
+    fs.connect(refrigeration.out_1, ammonia.inlet)
+    fs.connect(refrigeration.out_2, synthesis.in_2)
+    fs.connect(synthesis.out_2, purge.inlet)
+    return fs
+
+
 SCENARIOS = {
     "01_ammonia_loop": (_ammonia_loop, {}),
     "02_manual_layout": (_manual_layout, {}),
@@ -473,6 +506,13 @@ SCENARIOS = {
         _line_numbers,
         {"show_stream_table": True, "border": "zone", "diagram": "p&id"},
     ),
+    # 12 is the block flow diagram, the one drawing a level above the PFD and
+    # the only scenario with process connections on the north and south faces.
+    # It is what guards the sizing rule as a *drawing* rather than as an
+    # arithmetic claim: the boxes here are as wide as their own names and as
+    # tall as their walls need, so a change to the pitch, the minimum box or the
+    # label allowance moves this file and nothing else.
+    "12_block_flow_diagram": (_block_flow_diagram, {}),
 }
 
 

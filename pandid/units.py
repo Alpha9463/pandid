@@ -12,6 +12,8 @@ This module is also the public ``units`` namespace: ``from pandid import units``
 
 from __future__ import annotations
 
+from collections import Counter
+from collections.abc import Sequence
 from difflib import get_close_matches
 from typing import TYPE_CHECKING, Any, TypeVar
 
@@ -20,6 +22,7 @@ from pandid.ports import Port
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
+    from pandid.render.symbols import Symbol
     from pandid.streams import Stream
 
 __all__ = [
@@ -27,7 +30,7 @@ __all__ = [
     "Feed", "Product", "Pump", "Compressor", "Blower", "Valve", "Vessel", "Tank",
     "HeatExchanger", "Heater", "Cooler", "Reactor", "Separator", "Column",
     "Mixer", "Splitter", "Tee", "Reducer", "Fitting", "Ejector", "Vent", "Funnel",
-    "Furnace", "Turbine", "Filter", "Dryer", "Conveyor", "Instrument",
+    "Furnace", "Turbine", "Filter", "Dryer", "Conveyor", "Instrument", "Block",
 ]
 
 # "signal" is the odd one out: every other role names something that flows in a
@@ -1874,3 +1877,425 @@ class Splitter(Unit):
         self._add_port("inlet", "inlet", "process")
         for i in range(1, n_outlets + 1):
             self._add_port(f"out_{i}", "outlet", "process")
+
+
+def _block_faces(spec: "int | Sequence[str]", default: str, owner: str,
+                 argument: str) -> list[str]:
+    """Read a :class:`Block`'s ``inputs=``/``outputs=`` into one face per port.
+
+    A plain count is the common case spelled short: ``inputs=3`` is three
+    connections on the face a reader expects them on, which is the west for a
+    feed and the east for a product, exactly as the rest of the library defaults.
+    A sequence names the face of each one in order, which is what a block flow
+    diagram actually needs -- a section takes its charge from the left and its
+    recycle from above, and both are inputs.
+    """
+    if isinstance(spec, bool) or not isinstance(spec, (int, Sequence)) or isinstance(spec, str):
+        # A bare string is the trap worth naming: ``inputs="W"`` looks like one
+        # connection on the west and is a sequence of one character, so it would
+        # otherwise be read as exactly that and quietly work until the day
+        # somebody writes ``inputs="WN"``.
+        raise ValueError(
+            f"{owner}: {argument}= is a count ({argument}=3) or one face per "
+            f"connection ({argument}=['W', 'W', 'N']), got {spec!r}"
+        )
+    if isinstance(spec, int):
+        if spec < 0:
+            raise ValueError(f"{owner}: {argument}= cannot be negative, got {spec}")
+        return [default] * spec
+    return [_block_face(face, owner) for face in spec]
+
+
+def _block_face(face: object, owner: str) -> str:
+    """One face name, in the vocabulary :meth:`Unit.nozzle` already takes.
+
+    The compass point on the finished sheet, or the ``top``/``bottom``/``left``/
+    ``right`` spelling ``label_pos`` uses, so a sheet needs one word for "the
+    top of this block" whether it is declaring a connection or moving one.
+
+    One sentence for both ways of getting it wrong, because they are the same
+    mistake: the constructor and :meth:`Block.nozzle` both come through here.
+    """
+    resolved = (_FACE_OF_SIDE.get(face.strip().lower(), face.strip().upper())
+                if isinstance(face, str) else None)
+    if resolved not in ("N", "S", "E", "W"):
+        raise ValueError(
+            f"{owner}: {face!r} is not a face; a connection is on the 'N', 'S', "
+            f"'E' or 'W' of the box (or the 'top'/'bottom'/'left'/'right' spelling)"
+        )
+    return resolved
+
+
+class Block(Unit):
+    """A block flow diagram's box: a labelled rectangle standing for a section.
+
+    The BFD is the drawing a level above the PFD, and this is the only symbol on
+    it. One box is a whole plant section -- *Reaction*, *Compression*, *Product
+    Recovery* -- with the streams between them named and nothing inside them
+    drawn. That is why it carries no equipment vocabulary: it has no suction, no
+    bottoms and no vent, because it is not a machine. It has connections, and
+    the only thing the drawing says about one is which side of the box it is on.
+
+    .. code-block:: python
+
+        rx = fs.add(units.Block("Reaction", inputs=["W", "W", "N"], outputs=["E", "S"]))
+        fs.connect(feed.outlet, rx.in_1)      # west
+        fs.connect(recycle.out_1, rx.in_3)    # north
+        fs.connect(rx.out_2, drain.inlet)     # south
+
+    ``inputs`` and ``outputs`` are **one face per connection**, in order, and a
+    plain count is the shorthand for the common case: ``inputs=3`` is three on
+    the west, ``outputs=2`` two on the east. The nozzles are ``in_1`` ...
+    ``in_n`` and ``out_1`` ... ``out_m`` in that order, numbered across the whole
+    family rather than per face.
+
+    **Pin a block flow diagram.** The layout engine ranks units by flow order
+    and has no notion that a connection on the north wants its source *above*,
+    so a BFD left to lay itself out routes those streams up and over the sheet:
+    long climbs, runs closer together than the pitch this class is careful to
+    keep at the nozzle, and line jumps where there should be none. That is a gap
+    in :mod:`pandid.layout` rather than in this class -- issue #168 -- but a
+    block is what makes north and south connections ordinary, so it is what
+    meets the gap first. ``examples/12_block_flow_diagram.py`` is a worked,
+    pinned sheet to start from.
+
+    **A face names the box's own side, not the reader's.** ``"N"`` is the top of
+    the block as declared; a :meth:`pin` that turns or mirrors it moves the box
+    and every connection with it, so that same connection is drawn on the east
+    of a block turned a quarter. This is where :meth:`nozzle` differs from
+    :meth:`Unit.nozzle`, which takes the compass point on the finished sheet,
+    and :meth:`nozzle` says why. :func:`pandid.portgeom.port_faces` is what
+    answers about the finished sheet.
+
+    **Why the face is declared and not named into the port.** The alternative
+    was ``in_w_1`` / ``in_n_1``, one numbered family per face, which is what a
+    :class:`~pandid.render.symbols.PortSeries` could have placed without any new
+    machinery. It was rejected because it puts a *placement* inside an
+    *identity*: nowhere else in this library does the name of a thing record
+    where it was drawn -- :meth:`~Unit.pin` and :meth:`~Unit.nozzle` are both
+    separate from the name for exactly that reason -- and a connection moved to
+    another face would have had to be renamed, breaking every line that referred
+    to it. The cost of the choice is real and is paid in
+    :func:`~pandid.render.symbols.block_symbol`: one series cannot produce
+    ``in_3`` on a face its ``in_1`` is not on, so the symbol authors an anchor
+    per connection instead, and only the *spreading rule*
+    (:func:`~pandid.render.symbols.spread`) is shared with the series.
+
+    **The box sizes itself to what it carries.** A block flow diagram's box is
+    precisely the thing that gathers many streams, and a family squeezed to fit
+    a fixed box draws arrowheads that touch and read as one blob. So the height
+    follows the west and east counts and the width follows the north and south
+    ones, at a pitch derived from the arrowhead the renderer actually draws
+    (:data:`~pandid.render.symbols.BLOCK_PITCH`): eight inputs on one wall make a
+    *taller block*, not eight crushed nozzles. The width also clears the name,
+    which a BFD letters inside the box.
+
+    ``width``/``height`` still win where they are given, as everywhere else, and
+    a box too small to draw the connections at that pitch is **refused** rather
+    than drawn crushed -- the same answer :class:`Conveyor` gives a belt run its
+    rollers do not fit in, and refused wherever it is asked for: the
+    constructor, a later assignment, :meth:`nozzle` and :meth:`pin`, the last of
+    which is where a quarter turn can put a run on the shorter axis.
+
+    A width the author gave also wins over the name, which then hangs out of
+    both ends of the box. The name is written on an opaque halo, as every label
+    here is, so an overhanging one **erases whatever is drawn beside it** rather
+    than merely looking untidy. Leave ``width`` off and it cannot happen.
+
+    **Variants**: none. A block is a block, and there is nothing about a section
+    of plant for a second drawing to say.
+    """
+
+    # No nozzle annotations, and unlike :class:`Mixer` not even one. Every
+    # connection a block has is one of the two numbered families, whose size is
+    # the caller's and chosen per instance, so the set of attribute names is a
+    # property of the *object*: ``in_1: Port`` would be right for a block with
+    # an input and wrong for ``Block("B", inputs=0, outputs=2)``, which is a
+    # legitimate thing to draw at the edge of a sheet. Mixer's comment argues
+    # the general case at length; the difference here is only that a block has
+    # no fixed nozzle left over to declare, since a section of plant has no
+    # connection every section has.
+    #
+    # ``tests/test_port_annotations.py`` exempts the numbered families by the
+    # shape of the name and pins the classes that may take the exemption in
+    # ``_VARIABLE_PORT_CLASSES``; this class is named there, deliberately, so
+    # adding a third is a decision somebody makes rather than one that happens.
+
+    kind = "block"
+
+    #: The face a connection is put on when the author gives a count rather than
+    #: a list. West in and east on out, which is the direction the rest of the
+    #: library draws a sheet in and the direction a reader scans one.
+    DEFAULT_INPUT_FACE = "W"
+    DEFAULT_OUTPUT_FACE = "E"
+
+    # Class-level backing for the two properties below, so ``Unit.__init__``'s
+    # ``self.width = width`` has somewhere to land before this class has built
+    # anything of its own.
+    _width: float | None = None
+    _height: float | None = None
+
+    def __init__(self, name: str, inputs: "int | Sequence[str]" = 1,
+                 outputs: "int | Sequence[str]" = 1, variant: str = "default",
+                 width: float | None = None, height: float | None = None,
+                 label_pos: str | None = None, description: str = "",
+                 reference: str = ""):
+        in_faces = _block_faces(inputs, self.DEFAULT_INPUT_FACE, name, "inputs")
+        out_faces = _block_faces(outputs, self.DEFAULT_OUTPUT_FACE, name, "outputs")
+        if not in_faces and not out_faces:
+            raise ValueError(
+                f"{name}: a block with no connections is a rectangle with a word "
+                f"in it, which nothing can be routed to. Give it at least one "
+                f"inputs= or outputs=."
+            )
+        super().__init__(name, variant=variant, width=width, height=height,
+                         label_pos=label_pos, description=description,
+                         reference=reference)
+        #: connection name -> the face it leaves from, in port order. The single
+        #: authority: the symbol is built from it, so there is no second place a
+        #: face could be recorded and disagree.
+        self._faces: dict[str, str] = {}
+        for i, face in enumerate(in_faces, start=1):
+            self._add_port(f"in_{i}", "inlet", "process")
+            self._faces[f"in_{i}"] = face
+        for i, face in enumerate(out_faces, start=1):
+            self._add_port(f"out_{i}", "outlet", "process")
+            self._faces[f"out_{i}"] = face
+        # Check the drawing now, so a box that cannot hold the connections is
+        # refused on the line that asked for it rather than at the first render.
+        self._check_box()
+
+    @property
+    def width(self) -> float | None:
+        """The drawn box's width, or ``None`` to size it to the connections.
+
+        A property, unlike every other unit's plain attribute, for the reason
+        :attr:`Conveyor.length` is one: the size and the drawing are the same
+        question here, so a size the drawing cannot be made at has to be refused
+        where it is set. Assigning one that crushes a run of connections raises
+        and leaves the block at the size it had.
+        """
+        return self._width
+
+    @width.setter
+    def width(self, value: float | None) -> None:
+        self._resize("_width", value)
+
+    @property
+    def height(self) -> float | None:
+        """The drawn box's height, or ``None`` to size it to the connections."""
+        return self._height
+
+    @height.setter
+    def height(self, value: float | None) -> None:
+        self._resize("_height", value)
+
+    def _resize(self, attr: str, value: float | None) -> None:
+        """Take a new box dimension, or refuse it and leave the old one."""
+        was = getattr(self, attr)
+        setattr(self, attr, value)
+        # ``Unit.__init__`` sets both of these before this class has declared a
+        # connection, and a block with no connections has nothing to crush. The
+        # constructor checks once at the end, when there is something to check.
+        if "_faces" not in self.__dict__:
+            return
+        try:
+            self._check_box()
+        except ValueError:
+            setattr(self, attr, was)
+            raise
+
+    def pin(
+        self,
+        *,
+        col: int | None = None,
+        row: int | None = None,
+        x: float | None = None,
+        y: float | None = None,
+        orientation: float = _UNCHANGED,
+        mirrored: bool | str = _UNCHANGED,
+        port: str | None = None,
+    ) -> "Block":
+        """Place the block, re-checking that the placement can still draw it.
+
+        A quarter turn draws the box's upright faces across the sheet, so a
+        placement is one of the two things that decide whether a run of
+        connections still has room; the other is the size, which
+        :attr:`width` guards. :meth:`Unit.pin` already re-checks a ``nozzle()``
+        choice for the same reason -- a transform can outrun a guard that only
+        ran at construction.
+
+        Raises :class:`ValueError` and leaves the previous placement in place,
+        rather than turning the block into something that cannot be drawn.
+        """
+        was = self.pin_
+        super().pin(col=col, row=row, x=x, y=y, orientation=orientation,
+                    mirrored=mirrored, port=port)
+        try:
+            self._check_box()
+        except ValueError:
+            self.pin_ = was
+            raise
+        return self
+
+    @property
+    def inputs(self) -> list[str]:
+        """The face each input leaves from, in ``in_1`` ... ``in_n`` order."""
+        return [face for name, face in self._faces.items() if name.startswith("in_")]
+
+    @property
+    def outputs(self) -> list[str]:
+        """The face each output leaves from, in ``out_1`` ... ``out_m`` order."""
+        return [face for name, face in self._faces.items() if name.startswith("out_")]
+
+    def face(self, port_name: str) -> str:
+        """Which side of the **box** ``port_name`` is on.
+
+        Not necessarily the side of the *sheet*: a :meth:`pin` that turns or
+        mirrors the block moves the box and everything on it, so a connection
+        declared ``"N"`` on a block turned a quarter is drawn on the east.
+        :func:`pandid.portgeom.port_faces` is the one that answers about the
+        finished sheet, and it is what a caller asking "which way does this
+        stream leave" wants.
+        """
+        try:
+            return self._faces[port_name]
+        except KeyError:
+            raise KeyError(
+                f"Block {self.name!r} has no connection named {port_name!r}; "
+                f"available: {sorted(self.ports)}"
+            ) from None
+
+    def nozzle(self, port_name: str, face: str) -> "Block":
+        """Move a connection to another side of the box.
+
+        It differs from :meth:`Unit.nozzle` in two ways, and both are worth
+        stating because the base method's contract is the opposite of this one
+        on the first of them.
+
+        **``face`` names the box's own side, not the reader's.**
+        :meth:`Unit.nozzle` takes the compass point on the finished sheet, so a
+        mirrored pump's ``"W"`` is the west the reader sees. It can afford to,
+        because it picks between placements a symbol authored in advance and can
+        map the reader's face back onto one of them. Here the face *is* the
+        declaration the drawing is built from, and a declaration cannot be about
+        a transform that has not been applied yet -- :meth:`pin` may come after
+        this call, and may come twice. So a block's connections are declared on
+        the box, and a turn or a mirror moves the box and everything on it:
+        ``"N"`` on a block turned a quarter is drawn on the east. Ask
+        :func:`pandid.portgeom.port_faces` what a connection comes out of on the
+        finished sheet; it reports correctly for a block, as it does for
+        everything else.
+
+        **It always succeeds.** Every other symbol is artwork drawn in advance,
+        so a nozzle may only be moved to a face the drawing anchored one on, and
+        a column's bottoms draw offers exactly one because gravity does. A block
+        is a rectangle built from its own declaration, so moving a connection is
+        *changing that declaration* and redrawing, and every side is a side the
+        box has.
+
+        It therefore writes :attr:`_faces` and not ``Unit._port_faces``: the
+        latter is an override of a placement the symbol authored, and here there
+        is nothing to override -- the declaration is the placement. Keeping one
+        record is what stops a block from carrying two answers about one nozzle,
+        and it is what makes ``to_dict`` able to write the block back out as the
+        constructor call that would rebuild it.
+
+        Raises :class:`ValueError` if the move would squeeze the connections on
+        the destination side closer than the pitch the placed box leaves room
+        for, and leaves the block untouched when it does.
+        """
+        if port_name not in self.ports:
+            raise KeyError(
+                f"Block {self.name!r} has no port {port_name!r}; "
+                f"available ports: {sorted(self.ports)}"
+            )
+        was = self._faces[port_name]
+        self._faces[port_name] = _block_face(face, self.name)
+        try:
+            self._check_box()
+        except ValueError:
+            self._faces[port_name] = was
+            raise
+        return self
+
+    def ports_on(self, face: str) -> list[str]:
+        """The connections on one side of the box, in port order.
+
+        The lookup :meth:`face` does not do. A block is the one unit whose
+        nozzles are grouped by side rather than named for what they are, so
+        "what comes in on the north" is a question a caller has, and answering it
+        by filtering :attr:`_faces` in three places is how the three answers come
+        to disagree.
+        """
+        wanted = _block_face(face, self.name)
+        return [name for name, on in self._faces.items() if on == wanted]
+
+    def symbol(self) -> "Symbol":
+        """This block's drawing, built to its connections.
+
+        The one place a block's artwork comes from, called by
+        :meth:`~pandid.render.symbols.SymbolRegistry.for_unit` on every port
+        resolution. It only *builds*: the check that the box can hold what was
+        built is :meth:`_check_box`, which has to ask
+        :func:`~pandid.portgeom.resolve_size` what the placed box is, and
+        ``resolve_size`` asks the registry for this symbol. Checking here would
+        close that loop.
+        """
+        from pandid.render.symbols import block_symbol
+
+        # The name widens the box only where the author left the width open;
+        # see block_symbol(). Asking for it with a width already given would
+        # make the drawing depend on the tag for no visible reason, and would
+        # cost every block its own <defs> entry.
+        return block_symbol(tuple(self._faces.items()),
+                            "" if self.width is not None else self.tag)
+
+    def _check_box(self, placed=None) -> None:
+        """Raise unless the placed box can draw the connections at the pitch.
+
+        Measured against the box the drawing really lands in
+        (:func:`~pandid.portgeom.resolve_size`), *including the quarter turn*,
+        which is the whole reason this is not a pair of comparisons against
+        ``width`` and ``height``. A turn swaps which axis of the box a face's run
+        is drawn along while ``resolve_size`` takes an explicit ``width``/
+        ``height`` as the final box and does not swap it, so a run that fits the
+        height standing up is squeezed into the width lying down. Five inlets in
+        a 60 x 150 box turned a quarter came out 12 apart -- exactly one
+        arrowhead, five heads touching -- which is the defect this exists to
+        prevent, stated about the wrong axis.
+
+        The comparison is against the box the block *sized itself to* rather
+        than against the bare run, because the artwork is stretched into
+        whatever box it is given: halving the box halves the drawn pitch with
+        it, whatever the run alone would have fitted in. An auto-sized block is
+        safe at every placement by construction, since ``resolve_size`` swaps
+        the symbol's own axes with the turn and the two are then equal.
+
+        ``placed`` is the placement to answer for, defaulting to the unit's own;
+        :meth:`pin` passes its candidate, for the reason :meth:`Unit.pin` checks
+        a ``nozzle()`` choice against one -- answering about the committed
+        placement answers for the sheet this call is replacing.
+        """
+        from pandid.portgeom import resolve_size
+        from pandid.render.symbols import block_box_too_small
+
+        sym = self.symbol()
+        if placed is None:
+            placed = self.pin_
+        w, h = resolve_size(self, placed)
+        turned = int(getattr(placed, "orientation", 0) or 0) in (90, 270)
+        for face, count in Counter(self._faces.values()).items():
+            # One connection on a face has no spacing to crush, so only a run of
+            # them is measured.
+            if count < 2:
+                continue
+            upright = face in ("W", "E")
+            along = sym.height if upright else sym.width
+            # A quarter turn lays the symbol's upright faces across the box and
+            # stands its horizontal ones up, so which box axis a run is drawn
+            # along is the two questions XOR'd.
+            drawn, axis = (w, "width") if upright == turned else (h, "height")
+            if drawn < along - 1e-9:
+                raise block_box_too_small(self.name, face, count, axis, drawn,
+                                          along, turned=turned)

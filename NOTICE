@@ -91,6 +91,7 @@ is one: the seat of valves.xml "Globe Valve", which upstream ships as a copy of
 its "Ball Valve".
 
 Feed/Product boundary markers, the instrument balloons, the variable-port Mixer
-and Splitter symbols, and the pipe tee are original geometric primitives and
-fall under section 1. The draw.io library draws no bare junction, and the tee is
-two straight line segments.
+and Splitter symbols, the pipe tee and the block flow diagram's box are original
+geometric primitives and fall under section 1. The draw.io library draws no bare
+junction, and the tee is two straight line segments; it draws no block either,
+being a set of equipment, and a block is one rectangle.

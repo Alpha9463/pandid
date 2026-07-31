@@ -1,12 +1,20 @@
 # Golden SVG fixtures
 
 One `.svg` per fixed scenario exercised by `tests/test_golden.py`: the first
-nine examples' flowsheets (`01_ammonia_loop` .. `09_line_numbers`), where
-`03_distillation_train`, `08_from_data` and `09_line_numbers` also cover
-`border="zone"` with the stream table and equipment-list / notes / legend
-furniture. `08_from_data` is built through `Flowsheet.from_dict`, so it also
-pins the declarative spec format's rendered output, and `09_line_numbers` pins
-a sheet whose lines are identified by line number rather than stream number.
+nine examples' flowsheets (`01_ammonia_loop` .. `09_line_numbers`), plus
+`12_block_flow_diagram`. `03_distillation_train`, `08_from_data` and
+`09_line_numbers` also cover `border="zone"` with the stream table and
+equipment-list / notes / legend furniture. `08_from_data` is built through
+`Flowsheet.from_dict`, so it also pins the declarative spec format's rendered
+output, and `09_line_numbers` pins a sheet whose lines are identified by line
+number rather than stream number.
+
+`12_block_flow_diagram` is the block flow diagram, the one scenario a level
+above the PFD and the only one with process connections on the north and south
+faces. It is also the only sheet whose boxes size *themselves*: nothing in it
+carries a `width` or a `height`, so it is what turns the nozzle pitch, the
+minimum box and the label allowance into a drawing that can be looked at rather
+than an arithmetic claim in a unit test.
 
 The flowsheets are rebuilt inline in `test_golden.py` rather than by running
 `examples/*.py` directly: those scripts write into `examples/` (a side

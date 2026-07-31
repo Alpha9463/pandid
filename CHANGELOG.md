@@ -9,6 +9,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`units.Block`: the block flow diagram.**
+  ([#164](https://github.com/Alpha9463/pandid/issues/164))
+
+  A BFD sits a level above the PFD: one labelled box per plant section, the
+  streams between them named, nothing inside them drawn. There was no way to
+  draw one, because `unit/default` is a 60x60 box with no ports on it.
+
+  ```python
+  rx = fs.add(units.Block("Reaction", inputs=["W", "W", "N"], outputs=["E", "S"]))
+  fs.connect(recycle.out_1, rx.in_3)     # in on the north face
+  rx.nozzle("out_2", "S")                # ...and out of the bottom
+  ```
+
+  `inputs` and `outputs` are one face per connection, in order, with a plain
+  count as the shorthand for the common case (west in, east out). The nozzles
+  are `in_1` … `in_n` and `out_1` … `out_m`, numbered across the whole family
+  rather than per face, so moving one to another side never renames it.
+
+  **The box sizes itself to what it carries.** A BFD box is precisely the thing
+  that gathers many streams, and squeezing eight of them into the height a
+  one-inlet block was drawn at makes arrowheads that touch and read as one blob.
+  So the height follows the west and east counts and the width follows the north
+  and south ones, at a pitch measured off the arrowhead the renderer actually
+  draws. Eight inputs on one wall make a taller block. `width`/`height` still
+  win where they are given, and a box too small for the connections is refused
+  rather than drawn crushed, the way a `Conveyor` refuses a belt run its rollers
+  do not fit in — including where a `pin()` turn is what makes it too small.
+
+  **Pin a block flow diagram** until [#168](https://github.com/Alpha9463/pandid/issues/168)
+  is fixed. The layout engine ranks units by process flow order and does not yet
+  know that a connection on the north face wants its source *above* it, so a BFD
+  left to lay itself out sends those streams up and over the sheet.
+  `examples/12_block_flow_diagram.py` is a worked, pinned sheet, and
+  `docs/api.md` says the same.
+
+  A block is not scheduled equipment: `equipment_list()` skips it, because a box
+  standing for a whole section is not a purchasable item. It declares no
+  variants and gets no `pandid.devices` subclass — a block is a block.
+
 - **`pandid.devices`: 42 equipment classes over the `kind` + `variant` model.**
   ([#146](https://github.com/Alpha9463/pandid/issues/146))
 
