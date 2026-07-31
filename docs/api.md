@@ -338,8 +338,8 @@ Each entry is `port` *(direction / role)*.
 | `Vessel` | `vessel` | `inlet` *(in)*, `outlet` *(out)*, `vent` *(out/vapor)* |
 | `Tank` | `tank` | `inlet` *(in)*, `outlet` *(out)* |
 | `Separator` | `separator` | `feed` *(in)*, `vapor` *(out/vapor)*, `liquid` *(out/liquid)*. The four mechanical variants sort by size, inertia or magnetism rather than into phases, and name the two draws their artwork actually has: `feed` *(in/feed)*, `overflow` *(out)*, `underflow` *(out)*; see [Variants](#variants) |
-| `Column` | `column` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*, `reflux_in` *(in/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*, `condenser_duty` *(out/energy)* |
-| `Reactor` | `reactor` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `outlet` *(out)*, `vent` *(out/vapor)*, `duty` *(in/energy)* |
+| `Column` | `column` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*, `reflux_in` *(in/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*, `condenser_duty` *(out/energy)*; the feeds are [`feeds`](#the-family-as-a-sequence) |
+| `Reactor` | `reactor` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `outlet` *(out)*, `vent` *(out/vapor)*, `duty` *(in/energy)*; the feeds are [`feeds`](#the-family-as-a-sequence) |
 | `HeatExchanger` | `hex` | `shell_in`, `shell_out`, `tube_in`, `tube_out`; `kettle` adds `bottoms` *(out/liquid)*. Four variants name their sides differently; see [Variants](#variants) |
 | `Heater` | `heater` | `inlet` *(in)*, `outlet` *(out)*, `utility_in` *(in/energy)* |
 | `Cooler` | `cooler` | `inlet` *(in)*, `outlet` *(out)*, `utility_out` *(out/energy)* |
@@ -354,9 +354,9 @@ Each entry is `port` *(direction / role)*.
 | `Vent` | `vent` | `inlet` *(in/vapor)* |
 | `Funnel` | `funnel` | `outlet` *(out/feed)* |
 | `Instrument` | `instrument` | `pv` *(in/signal)*, `sig_in` *(in/signal)*, `sig_out` *(out/signal)* |
-| `Mixer` | `mixer` | `in_1` … `in_n` *(in)*, `outlet` *(out)* |
-| `Splitter` | `splitter` | `inlet` *(in)*, `out_1` … `out_n` *(out)* |
-| `Block` | `block` | `in_1` … `in_n` *(in)*, `out_1` … `out_m` *(out)* |
+| `Mixer` | `mixer` | `in_1` … `in_n` *(in)*, `outlet` *(out)*; the family is [`inlets`](#the-family-as-a-sequence) |
+| `Splitter` | `splitter` | `inlet` *(in)*, `out_1` … `out_n` *(out)*; the family is [`outlets`](#the-family-as-a-sequence) |
+| `Block` | `block` | `in_1` … `in_n` *(in)*, `out_1` … `out_m` *(out)*; the families are [`inlets`/`outlets`](#the-family-as-a-sequence) |
 
 Variable-port constructors take their count first:
 
@@ -418,6 +418,49 @@ tower = units.Column("T-302", n_feeds=2, description="Extractive Column")
 fs.connect(solvent.outlet, tower.feed_1)   # solvent enters above...
 fs.connect(feed.outlet, tower.feed_2)      # ...the feed tray
 ```
+
+### The family as a sequence
+
+Each of those counts also has an accessor for the **whole family**, a
+`tuple[Port, ...]` in declaration order:
+
+| class | accessor | the nozzles it holds |
+| --- | --- | --- |
+| `Mixer` | `inlets` | `in_1` … `in_n` |
+| `Splitter` | `outlets` | `out_1` … `out_n` |
+| `Block` | `inlets`, `outlets` | `in_1` … `in_n`, `out_1` … `out_m` |
+| `Column` | `feeds` | `feed`, or `feed_1` … `feed_n` |
+| `Reactor` | `feeds` | `feed`, or `feed_1` … `feed_n` |
+
+```python
+mixer = fs.add(units.Mixer("M-101", n_inlets=len(headers)))
+for header, inlet in zip(headers, mixer.inlets):
+    fs.connect(header.outlet, inlet)
+```
+
+It is the ports themselves, not their names and not copies, so
+`mixer.inlets[0] is mixer.in_1`. The numbered attributes, `port("in_3")` and the
+`ports` dict are all unchanged.
+
+Two things worth knowing.
+
+**The tuple is indexed from zero while the nozzles are numbered from one**, so
+`inlets[0]` is `in_1`. Nothing re-bases it — a sequence that indexed from one
+would be the only one in the language, and would cost `[-1]`, slicing and every
+`zip`. Where the number is what you want it is already a name (`m.in_3`,
+`m.port("in_3")`), and `enumerate(m.inlets, start=1)` gives both at once.
+
+**A one-feed `Column` or `Reactor` names its lone nozzle `feed`, and `feeds` is
+the one-tuple holding it.** The sequence is the general form and the singular
+name stays, so code written against `feeds` reads a one-feed tower and a
+three-feed tower the same way.
+
+This is also the only shape a type checker can be told about. The count is a
+runtime value and Python has no integer generic, so no annotation names `in_1` …
+`in_n`; a generated class per arity would type `Mixer("M", n_inlets=3)` and miss
+`Mixer("M", n_inlets=len(feeds))`, which is the call a sheet built from data
+actually writes. `mixer.inlets[0]` resolves to `Port` under mypy;
+`mixer.in_1` still does not, and is reached by name at runtime as it always was.
 
 ### Equipment classes
 
@@ -534,6 +577,18 @@ rx.nozzle("out_2", "S")          # send one product out of the bottom
 rx.face("out_2")                 # -> "S"       which side of the box
 rx.ports_on("N")                 # -> ["in_3"]  what is on that side
 ```
+
+The connections and the sides they are on are two different accessors, each
+named for what it returns:
+
+```python
+rx.inlets                        # -> (Port in_1, Port in_2, Port in_3)
+rx.input_faces                   # -> ['W', 'W', 'N']
+rx.outlets, rx.output_faces      # ...and the same pair for the outputs
+```
+
+`inputs=` / `outputs=` stay the constructor's names — "the inputs are on these
+faces" is what the argument says.
 
 > **Pin a block flow diagram.** The layout engine ranks units by process flow
 > order and does not yet know that a connection on the north face wants its

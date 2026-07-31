@@ -11,11 +11,19 @@ Found rather than listed, so a class added tomorrow is covered without anyone
 remembering to come here. The exemptions are named, and there are only three
 kinds, each argued at the class or the module it applies to:
 
-- the **numbered families** (``Mixer``'s ``in_1`` ... ``in_n``, ``Splitter``'s
-  ``out_1`` ... ``out_n``, and both of ``Block``'s), whose size is the caller's,
-  so there is no finite set of names a class annotation could stand for.
-  ``Block`` is the one class with *nothing* left over to declare, since every
-  connection it has is one of the two families;
+- the **numbered members** of a variable-sized family (``Mixer``'s ``in_1`` ...
+  ``in_n``, ``Splitter``'s ``out_1`` ... ``out_n``, both of ``Block``'s, and the
+  ``feed_1`` ... ``feed_n`` a second feed spells a ``Column`` or ``Reactor``
+  with), whose count is the caller's, so there is no finite set of names a class
+  annotation could stand for one at a time.
+
+  It is *only* the members. The family itself is perfectly declarable as a
+  sequence -- ``inlets: tuple[Port, ...]`` -- and every one of the five is
+  declared, so the exemption is "this nozzle is reachable through a family the
+  class declares" and not "this nozzle has a number on the end". A class cannot
+  take it by naming a port ``thing_2``, and cannot use a family to get out of
+  declaring a fixed nozzle: :func:`test_a_family_only_excuses_a_numbered_nozzle`
+  is the ceiling and :func:`test_only_these_classes_declare_a_family` the floor;
 - the **variant nozzles** (``HeatExchanger``'s ``bottoms``, ``Separator``'s
   ``overflow``), which belong to some variants and not others, so declaring them
   on the base class would tell a checker something false about every other one;
@@ -38,24 +46,54 @@ import pytest
 from pandid import devices, units
 from pandid.ports import Port
 
-# A nozzle whose name ends in an underscore and a number is one of a family
-# sized at construction (Mixer(n_inlets=...), Splitter(n_outlets=...),
+# A nozzle whose name ends in an underscore and a number is one member of a
+# family sized at construction (Mixer(n_inlets=...), Splitter(n_outlets=...),
 # Column/Reactor(n_feeds=...)). A class annotation is a statement about every
 # instance of the class and the count is not in the type, so no annotation can
-# cover them. They are exempt from the first half of the invariant and only
-# from that half; test_only_the_named_families_are_exempt pins who may use it.
+# name one. This is the *ceiling* on what a declared family may excuse, not the
+# exemption itself: the exemption is membership, and it is checked by asking the
+# family. See test_a_family_only_excuses_a_numbered_nozzle.
 _NUMBERED = re.compile(r"_\d+$")
 
-# The classes whose default construction produces a numbered family. Column and
-# Reactor are absent on purpose: they default to one feed, which is spelled
-# ``feed`` and is therefore declared like any other fixed nozzle.
+
+def _is_family(hint):
+    """Whether ``hint`` is ``tuple[Port, ...]``, however this Python spells it.
+
+    ``tuple[Port, ...]`` and nothing looser is what a family is declared as: a
+    ``Sequence[Port]`` would let a class hand back a live view that changed
+    under the caller, and the point of the declaration is that it is the ports,
+    in order, as they are.
+
+    Compared by origin and arguments rather than by ``==`` against the alias,
+    because two readers evaluate these strings -- ``typing.get_type_hints`` and
+    ``inspect.get_annotations`` -- across five Python versions, and this is what
+    keeps the answer the same if either ever normalises ``tuple[...]`` into
+    ``typing.Tuple[...]`` on the way out.
+    """
+    import typing
+
+    return typing.get_origin(hint) is tuple and typing.get_args(hint) == (Port, Ellipsis)
+
+
+# Every class that declares one, and what it calls it. Written down rather than
+# derived so that adding a sixth is a deliberate act with this comment to read
+# first, exactly as the old class-level list was.
 #
-# ``Block`` joins the list deliberately rather than by slipping past the
-# name-shaped exemption: a block flow diagram's box has no nozzle every block
-# has, so *all* of its connections are numbered and it declares no annotations
-# at all. Its own class comment argues that; this is the second half of the
-# decision, and the reason a fourth entry has to be added by hand.
-_VARIABLE_PORT_CLASSES = {units.Mixer, units.Splitter, units.Block}
+# ``Column`` and ``Reactor`` are here where they were absent from the list this
+# replaces: they default to *one* feed, spelled ``feed`` and declared like any
+# other fixed nozzle, but ``feeds`` is the one-tuple holding it and the same
+# accessor once ``n_feeds`` spells the family ``feed_1`` ... ``feed_n``. The
+# sequence is the general form and the singular name stays.
+#
+# ``Block`` declares two and nothing else, since a block flow diagram's box has
+# no nozzle every block has: *all* of its connections are one of the families.
+_DECLARED_FAMILIES = {
+    units.Mixer: {"inlets"},
+    units.Splitter: {"outlets"},
+    units.Block: {"inlets", "outlets"},
+    units.Column: {"feeds"},
+    units.Reactor: {"feeds"},
+}
 
 
 def _unit_classes():
@@ -127,6 +165,35 @@ def _own_annotated(cls):
     return {name for name, hint in _own_annotations(cls).items() if hint is Port}
 
 
+def _families(cls):
+    """The family accessors ``cls`` declares, its own and its bases'."""
+    import typing
+
+    return {name for name, hint in typing.get_type_hints(cls).items() if _is_family(hint)}
+
+
+def _own_families(cls):
+    """The family accessors written in ``cls``'s own body.
+
+    The MRO is not wanted here: ``devices.StirredTankReactor`` inherits
+    ``Reactor``'s ``feeds`` and its ``__init__`` builds one, which is right and
+    is not a sixth declaration. Only a class that writes the annotation has
+    decided anything.
+    """
+    return {name for name, hint in _own_annotations(cls).items() if _is_family(hint)}
+
+
+def _family_members(cls):
+    """The nozzle names one default instance reaches through its families.
+
+    Built rather than matched against a naming rule, for the reason the classes
+    build the tuples that way: asking the object is the only reader that cannot
+    disagree with the constructor about who is in the family.
+    """
+    unit = cls("X-1")
+    return {port.name for name in _families(cls) for port in getattr(unit, name)}
+
+
 def _built(cls):
     """The nozzle names one default instance of ``cls`` actually has.
 
@@ -146,11 +213,35 @@ def test_every_port_built_is_annotated(cls):
     The direction that catches the omission: someone adds a nozzle to ``PORTS``
     and the attribute stays invisible to mypy, which is the state this whole
     layer exists to leave behind.
+
+    Two ways to be seen, and the second is the narrow exemption the module
+    docstring describes: the nozzle is declared by name, or it is a member of a
+    family the class declares as ``tuple[Port, ...]``. Nothing else counts, so a
+    numbered name on its own no longer buys silence.
     """
-    missing = {name for name in _built(cls) - _annotated(cls) if not _NUMBERED.search(name)}
+    missing = _built(cls) - _annotated(cls) - _family_members(cls)
     assert not missing, (
         f"{cls.__name__} builds {sorted(missing)} but does not declare "
         f"them; add `{sorted(missing)[0]}: Port` to the class body"
+    )
+
+
+@pytest.mark.parametrize("cls", _unit_classes(), ids=lambda c: c.__name__)
+def test_a_family_only_excuses_a_numbered_nozzle(cls):
+    """A family is not a way out of declaring a fixed nozzle.
+
+    The ceiling on the exemption above. ``inlets: tuple[Port, ...]`` covers
+    ``in_1`` ... ``in_n``, whose count is the caller's and which therefore have
+    no annotation available to them; a nozzle every instance has does have one,
+    and putting it in a family instead would hide it from an editor's completion
+    behind a subscript. ``Column``'s ``feed`` is the case worth stating: it is
+    in ``feeds`` *and* declared by name, because a one-feed tower really has it.
+    """
+    undeclared = {name for name in _built(cls) - _annotated(cls) if not _NUMBERED.search(name)}
+    assert not undeclared, (
+        f"{cls.__name__} reaches {sorted(undeclared)} only through a family, but "
+        f"a nozzle whose name is not the caller's can be declared; add "
+        f"`{sorted(undeclared)[0]}: Port` to the class body as well"
     )
 
 
@@ -172,16 +263,44 @@ def test_every_annotation_is_a_port_that_is_built(cls):
     )
 
 
-def test_only_the_named_families_are_exempt():
-    """Nobody else may quietly take the numbered-family exemption.
+def test_only_these_classes_declare_a_family():
+    """Nobody else may quietly grow a variable-sized nozzle family.
 
-    The exemption above is keyed on the *shape* of a name, so a new class with
-    numbered nozzles would slip through the first test without anyone deciding
-    that it should. Naming the two classes that have them makes adding a third
-    a deliberate act with this docstring to read first.
+    The floor under the exemption. A family is what lets numbered nozzles exist
+    at all here, so a new class with them has to declare one, and naming the
+    five that do makes adding a sixth a deliberate act with the module docstring
+    to read first. Keyed on the annotation a class *writes*, so a generated
+    subclass inheriting ``Reactor``'s ``feeds`` is not a sixth decision.
     """
-    variable = {cls for cls in _unit_classes() if any(_NUMBERED.search(p) for p in _built(cls))}
-    assert variable == _VARIABLE_PORT_CLASSES
+    declared = {cls: _own_families(cls) for cls in _unit_classes() if _own_families(cls)}
+    assert declared == _DECLARED_FAMILIES
+
+
+@pytest.mark.parametrize(
+    "cls", sorted(_DECLARED_FAMILIES, key=lambda c: c.__name__), ids=lambda c: c.__name__
+)
+def test_a_declared_family_is_this_unit_s_own_ports_in_order(cls):
+    """The other direction, and the one the declaration would otherwise lie in.
+
+    ``inlets: tuple[Port, ...]`` is a promise about three separate things, and a
+    checker can see none of them: that the attribute exists at all, that what is
+    in it are this unit's ports rather than copies or names, and that the order
+    is the order the nozzles were declared in -- which is the order the artwork
+    spreads them down the face, so a family out of order would draw a sheet
+    whose second inlet is the third one on the shell.
+    """
+    unit = cls("X-1")
+    order = list(unit.ports)
+    for name in _DECLARED_FAMILIES[cls]:
+        family = getattr(unit, name)
+        assert isinstance(family, tuple), f"{cls.__name__}.{name} is not a tuple"
+        assert all(port is unit.ports[port.name] for port in family), (
+            f"{cls.__name__}.{name} holds something other than this unit's own ports"
+        )
+        members = {id(port) for port in family}
+        assert [port.name for port in family] == [
+            n for n in order if id(unit.ports[n]) in members
+        ], f"{cls.__name__}.{name} is not in declaration order"
 
 
 def test_only_these_classes_supersede_a_declaration():
@@ -263,6 +382,11 @@ def test_annotations_bind_nothing(cls):
     and a unit that failed to build one would silently answer with another
     unit's nozzle. Nothing about construction or the drawn sheet may change
     because of this layer, and this is the line that says so.
+
+    The families are held to the same rule, and a shared default would be worse
+    there: ``inlets = ()`` on the class is a plausible-looking mistake that
+    makes a mixer whose ``__init__`` never ran answer "no inlets" instead of
+    raising.
     """
-    bound = {name for name in _annotated(cls) if name in vars(cls)}
+    bound = {name for name in _annotated(cls) | _families(cls) if name in vars(cls)}
     assert not bound, f"{cls.__name__} assigns {sorted(bound)} instead of only annotating"

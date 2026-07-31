@@ -965,20 +965,19 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
         # blocks are written; a block that puts one input on the north is only
         # describable as the list, so it is written as one.
         for key, faces, default in (
-            ("inputs", unit.inputs, unit.DEFAULT_INPUT_FACE),
-            ("outputs", unit.outputs, unit.DEFAULT_OUTPUT_FACE),
+            ("inputs", unit.input_faces, unit.DEFAULT_INPUT_FACE),
+            ("outputs", unit.output_faces, unit.DEFAULT_OUTPUT_FACE),
         ):
             entry[key] = len(faces) if all(f == default for f in faces) else list(faces)
     elif isinstance(unit, unit_types.Mixer):
-        entry["n_inlets"] = sum(1 for p in unit.ports if p.startswith("in_"))
+        entry["n_inlets"] = len(unit.inlets)
     elif isinstance(unit, unit_types.Splitter):
-        entry["n_outlets"] = sum(1 for p in unit.ports if p.startswith("out_"))
+        entry["n_outlets"] = len(unit.outlets)
     elif isinstance(unit, (unit_types.Column, unit_types.Reactor)):
         # A single feed is the class's own shape and spells its nozzle `feed`,
         # so writing the count would be writing the default down.
-        feeds = sum(1 for p in unit.ports if p.startswith("feed_"))
-        if feeds:
-            entry["n_feeds"] = feeds
+        if len(unit.feeds) > 1:
+            entry["n_feeds"] = len(unit.feeds)
     elif isinstance(unit, unit_types.Tee):
         # Only a returning tee. A takeoff is the ordinary case and is what a
         # tee without the word already is.

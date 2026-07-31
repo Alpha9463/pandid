@@ -7,6 +7,13 @@ attributes (e.g. ``pump.suction``), and each subclass annotates those attributes
 (``suction: Port``) so an editor and a type checker can see them; see
 :class:`Unit` for why the annotation is a declaration rather than a second copy.
 
+A unit whose nozzle count the caller chooses has no finite set of names to
+declare, so it declares the *family* instead: ``mixer.inlets``,
+``splitter.outlets``, ``block.inlets``/``outlets`` and
+``column``/``reactor.feeds`` are ``tuple[Port, ...]`` in declaration order, and
+:class:`Mixer` is where that choice is argued. The numbered attributes
+(``mixer.in_3``) and ``port("in_3")`` are unchanged.
+
 This module is also the public ``units`` namespace: ``from pandid import units``.
 """
 
@@ -462,10 +469,12 @@ class Unit:
     #
     # Nothing moves at runtime. ``TYPE_CHECKING`` is False when Python runs, so
     # the method is defined exactly where and as it always was, and a typo still
-    # raises the message below. The cost is the families no annotation can spell
-    # (see :class:`Mixer`) and the variant nozzles that are not on the base
-    # class (see :class:`Separator`), which a checker now refuses; both are
-    # answered by the generated subclasses of the follow-up change.
+    # raises the message below. The cost is the numbered members no annotation
+    # can name one at a time (``mixer.in_3``; the family itself is declared, see
+    # :class:`Mixer`) and the variant nozzles that are not on the base class
+    # (see :class:`Separator`), which a checker refuses. The first is answered
+    # by iterating the family or by ``port("in_3")``, the second by the
+    # generated subclasses of the follow-up change.
     if not TYPE_CHECKING:
 
         def __getattr__(self, name: str) -> Any:
@@ -1594,6 +1603,10 @@ def _feed_names(n_feeds: int, owner: str) -> list[str]:
     The symbol declares the same rule as a
     :class:`~pandid.render.symbols.PortSeries`, which is what spreads the family
     down the shell.
+
+    The spelling is the only thing the count changes: ``unit.feeds`` is the
+    family either way, a one-tuple where this returns ``["feed"]``, so a caller
+    that iterates never has to ask which it got.
     """
     if n_feeds < 1:
         raise ValueError(f"{owner} requires at least 1 feed, got {n_feeds}")
@@ -1611,12 +1624,19 @@ class Reactor(Unit):
     outlet: Port
     vent: Port
     duty: Port
+    # Every charge nozzle, in declaration order and so top to bottom down the
+    # shell. Whether they are spelled ``feed`` or ``feed_1`` ... ``feed_n`` is
+    # the count's business (see :func:`_feed_names`), and this is the one
+    # accessor that reads the same either way: a single-feed vessel's ``feeds``
+    # is the one-tuple holding its ``feed``. The sequence is the general form,
+    # and the singular name stays.
+    feeds: tuple[Port, ...]
     # The single-feed vessel's charge nozzle. ``n_feeds > 1`` spells it
     # ``feed_1`` ... ``feed_n`` instead, a family whose size is the caller's, so
     # there is no finite set of names to declare and no annotation that could
-    # stand for them; see :class:`Mixer`. ``feed`` itself is not one of that
-    # family, it is what a reactor asked for by name has, so it is declared like
-    # any other fixed nozzle.
+    # stand for them one at a time; see :class:`Mixer`. ``feed`` itself is not
+    # one of that family, it is what a reactor asked for by name has, so it is
+    # declared like any other fixed nozzle as well as being in ``feeds``.
     feed: Port
 
     kind = "reactor"
@@ -1634,8 +1654,7 @@ class Reactor(Unit):
         super().__init__(name, variant=variant, width=width, height=height,
                          label_pos=label_pos, description=description,
                          reference=reference)
-        for feed in names:
-            self._add_port(feed, "inlet", "feed")
+        self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
 
 
 class Separator(Unit):
@@ -1792,9 +1811,13 @@ class Column(Unit):
     boilup_in: Port
     reboiler_duty: Port
     condenser_duty: Port
+    # Every feed nozzle, in declaration order and so highest first, whatever the
+    # count spelled them. See :class:`Reactor`, which carries the same pair for
+    # the same reason.
+    feeds: tuple[Port, ...]
     # The single-feed tower's nozzle; ``n_feeds > 1`` replaces it with the
-    # ``feed_1`` ... ``feed_n`` family, which cannot be declared. See
-    # :class:`Reactor`, which spells the same rule, and :class:`Mixer`.
+    # ``feed_1`` ... ``feed_n`` family, which cannot be declared a member at a
+    # time. See :class:`Reactor`, which spells the same rule, and :class:`Mixer`.
     feed: Port
 
     kind = "column"
@@ -1815,8 +1838,7 @@ class Column(Unit):
         super().__init__(name, variant=variant, width=width, height=height,
                          label_pos=label_pos, description=description,
                          reference=reference)
-        for feed in names:
-            self._add_port(feed, "inlet", "feed")
+        self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
 
 
 # ---------------------------------------------------------------------------
@@ -1831,17 +1853,40 @@ class Mixer(Unit):
     simply meet in the piping, the fitting is a :class:`Tee`.
     """
 
-    # The one nozzle every mixer has. The inlets are ``in_1`` ... ``in_n`` and
-    # ``n`` is the caller's, chosen per instance at construction, so the set of
-    # attribute names is a property of the *object* and not of the class. A
-    # class annotation is a statement about every instance, and there is no
-    # finite list here to make one from: declaring ``in_1: Port`` and
-    # ``in_2: Port`` would be right for the default and wrong for
-    # ``Mixer("M", n_inlets=5)`` in one direction and for ``n_inlets=1`` in the
-    # other. Not even a generated subclass fixes it, because the count is not
-    # in the type; the numbered nozzles stay reachable by ``mixer.port("in_3")``
-    # and through the ``ports`` dict. ``tests/test_port_annotations.py`` exempts
-    # exactly this family, and names it.
+    # Every inlet, in declaration order, and the canonical statement of why a
+    # variable-port family is declared as a *sequence* rather than a member at a
+    # time. The four other families refer here rather than restate it.
+    #
+    # The nozzles are ``in_1`` ... ``in_n`` and ``n`` is the caller's, chosen per
+    # instance at construction, so the set of attribute names is a property of
+    # the *object* and not of the class. A class annotation is a statement about
+    # every instance, and there is no finite list here to make one from:
+    # declaring ``in_1: Port`` and ``in_2: Port`` would be right for the default
+    # and wrong for ``Mixer("M", n_inlets=5)`` in one direction and for
+    # ``n_inlets=1`` in the other. Python has no integer generic, so no
+    # ``Literal`` spells the set either, and a generated class per arity -- a
+    # ``Mixer3`` declaring ``in_1`` ... ``in_3``, which this package could emit,
+    # since it already generates classes -- misses the case that matters:
+    # ``Mixer("M-1", n_inlets=len(feeds))`` is not a literal, so every overload
+    # misses it. It would type the easy call and abandon the real one.
+    #
+    # The *family* is declarable, and is the whole of what a checker can be told
+    # here. ``inlets`` holds the same ``Port`` objects ``in_1`` ... ``in_n`` are
+    # bound to, so ``m.inlets[0]`` is a ``Port``, ``for p in m.inlets`` checks,
+    # and ``len(m.inlets)`` is honest. The arity is still not in the type and
+    # cannot be; a computed count works, which is what the per-arity classes
+    # could not deliver.
+    #
+    # **Indexed from zero while the nozzles are numbered from one**:
+    # ``m.inlets[0]`` is ``in_1``, and ``m.inlets[3]`` is ``in_4``. Nothing here
+    # re-bases it. A sequence that indexed from one would be the only one in the
+    # language, and buying the arithmetic back would cost ``[-1]``, slicing and
+    # every ``zip`` and ``enumerate`` a reader already knows how to use. Where
+    # the number is what is wanted, it is already a name -- ``m.in_3``,
+    # ``m.port("in_3")`` -- and ``enumerate(m.inlets, start=1)`` gives both at
+    # once. ``Port.name`` carries it too, so nothing has to count.
+    inlets: tuple[Port, ...]
+    # The one nozzle every mixer has, declared like any other fixed one.
     outlet: Port
 
     kind = "mixer"
@@ -1850,8 +1895,13 @@ class Mixer(Unit):
         if n_inlets < 1:
             raise ValueError(f"Mixer requires at least 1 inlet, got {n_inlets}")
         super().__init__(name, variant=variant, width=width, height=height, description=description, reference=reference)
-        for i in range(1, n_inlets + 1):
-            self._add_port(f"in_{i}", "inlet", "process")
+        # Built from what the loop that creates the family hands back, rather
+        # than by matching ``in_`` against the ``ports`` dict afterwards: a
+        # second reader would be the naming rule written down twice, and the
+        # two spellings of one fact are what this file keeps saying not to do.
+        self.inlets = tuple(
+            self._add_port(f"in_{i}", "inlet", "process") for i in range(1, n_inlets + 1)
+        )
         self._add_port("outlet", "outlet", "process")
 
 
@@ -1863,10 +1913,13 @@ class Splitter(Unit):
     the fitting that branches it is a :class:`Tee`.
     """
 
-    # The one nozzle every splitter has; ``out_1`` ... ``out_n`` are the
-    # caller's count and cannot be declared, for the reason :class:`Mixer`
-    # gives at length.
+    # The one nozzle every splitter has.
     inlet: Port
+    # Every outlet, in declaration order. ``out_1`` ... ``out_n`` are the
+    # caller's count and no annotation can name them one at a time; the family
+    # is what is declared, for the reason :class:`Mixer` gives at length, and it
+    # is zero-based there for the reason given there too.
+    outlets: tuple[Port, ...]
 
     kind = "splitter"
 
@@ -1875,8 +1928,9 @@ class Splitter(Unit):
             raise ValueError(f"Splitter requires at least 1 outlet, got {n_outlets}")
         super().__init__(name, variant=variant, width=width, height=height, description=description, reference=reference)
         self._add_port("inlet", "inlet", "process")
-        for i in range(1, n_outlets + 1):
-            self._add_port(f"out_{i}", "outlet", "process")
+        self.outlets = tuple(
+            self._add_port(f"out_{i}", "outlet", "process") for i in range(1, n_outlets + 1)
+        )
 
 
 def _block_faces(spec: "int | Sequence[str]", default: str, owner: str,
@@ -1949,6 +2003,12 @@ class Block(Unit):
     ``in_n`` and ``out_1`` ... ``out_m`` in that order, numbered across the whole
     family rather than per face.
 
+    Those two arguments are named for what they *declare*, and the accessors are
+    named for what they *return*: :attr:`inlets` and :attr:`outlets` are the
+    connections, :attr:`input_faces` and :attr:`output_faces` the sides they are
+    on. The constructor keeps ``inputs=``/``outputs=`` because "the inputs are
+    on these faces" is what the argument says.
+
     **Pin a block flow diagram.** The layout engine ranks units by flow order
     and has no notion that a connection on the north wants its source *above*,
     so a BFD left to lay itself out routes those streams up and over the sheet:
@@ -2006,9 +2066,9 @@ class Block(Unit):
     of plant for a second drawing to say.
     """
 
-    # No nozzle annotations, and unlike :class:`Mixer` not even one. Every
-    # connection a block has is one of the two numbered families, whose size is
-    # the caller's and chosen per instance, so the set of attribute names is a
+    # No *individual* nozzle annotation, and unlike :class:`Mixer` not even one.
+    # Every connection a block has is one of the two families, whose size is the
+    # caller's and chosen per instance, so the set of attribute names is a
     # property of the *object*: ``in_1: Port`` would be right for a block with
     # an input and wrong for ``Block("B", inputs=0, outputs=2)``, which is a
     # legitimate thing to draw at the edge of a sheet. Mixer's comment argues
@@ -2016,10 +2076,16 @@ class Block(Unit):
     # no fixed nozzle left over to declare, since a section of plant has no
     # connection every section has.
     #
-    # ``tests/test_port_annotations.py`` exempts the numbered families by the
-    # shape of the name and pins the classes that may take the exemption in
-    # ``_VARIABLE_PORT_CLASSES``; this class is named there, deliberately, so
-    # adding a third is a decision somebody makes rather than one that happens.
+    # So both of these are families and neither is empty of meaning: a block is
+    # the one class whose *whole* connection list is declared as sequences, and
+    # ``for inlet in rx.inlets`` is how a BFD is read. Either may be the
+    # empty tuple, which is what ``inputs=0`` draws at the edge of a sheet.
+    #
+    # ``tests/test_port_annotations.py`` pins the five classes that declare a
+    # family in ``_DECLARED_FAMILIES``, so adding a sixth is a decision somebody
+    # makes rather than one that happens.
+    inlets: tuple[Port, ...]
+    outlets: tuple[Port, ...]
 
     kind = "block"
 
@@ -2055,15 +2121,29 @@ class Block(Unit):
         #: authority: the symbol is built from it, so there is no second place a
         #: face could be recorded and disagree.
         self._faces: dict[str, str] = {}
-        for i, face in enumerate(in_faces, start=1):
-            self._add_port(f"in_{i}", "inlet", "process")
-            self._faces[f"in_{i}"] = face
-        for i, face in enumerate(out_faces, start=1):
-            self._add_port(f"out_{i}", "outlet", "process")
-            self._faces[f"out_{i}"] = face
+        self.inlets = tuple(self._add_connection(f"in_{i}", "inlet", face)
+                            for i, face in enumerate(in_faces, start=1))
+        self.outlets = tuple(self._add_connection(f"out_{i}", "outlet", face)
+                             for i, face in enumerate(out_faces, start=1))
         # Check the drawing now, so a box that cannot hold the connections is
         # refused on the line that asked for it rather than at the first render.
         self._check_box()
+
+    def _add_connection(self, name: str, direction: str, face: str) -> Port:
+        """One connection: the nozzle, and the side of the box it leaves from.
+
+        The two are laid down together because they are one declaration -- a
+        block's connection *is* a name and a face, and nothing else -- so there
+        is no window in which :attr:`_faces` and ``ports`` disagree, and the
+        family tuples above are what this hands back rather than a second scan
+        of the dict looking for names shaped like ``in_1``.
+
+        The nozzle first, so a name :meth:`~Unit._add_port` refuses cannot leave
+        a face recorded for a connection that does not exist.
+        """
+        port = self._add_port(name, direction, "process")
+        self._faces[name] = face
+        return port
 
     @property
     def width(self) -> float | None:
@@ -2139,14 +2219,23 @@ class Block(Unit):
         return self
 
     @property
-    def inputs(self) -> list[str]:
-        """The face each input leaves from, in ``in_1`` ... ``in_n`` order."""
-        return [face for name, face in self._faces.items() if name.startswith("in_")]
+    def input_faces(self) -> list[str]:
+        """The face each input leaves from, in ``in_1`` ... ``in_n`` order.
+
+        Compass letters and not connections: ``['W', 'W', 'N']``.
+        :attr:`inlets` is the ports, which is what the pair was called before
+        0.1.1 -- ``b.inputs`` returned the sides, and any reader of that name
+        expects the things themselves. ``Block`` had not been released, so the
+        rename is free here and would have been a break a version later. The
+        constructor argument keeps its name: ``inputs=['W', 'W', 'N']`` reads
+        as "the inputs are on these faces", which is what it means.
+        """
+        return [self._faces[port.name] for port in self.inlets]
 
     @property
-    def outputs(self) -> list[str]:
+    def output_faces(self) -> list[str]:
         """The face each output leaves from, in ``out_1`` ... ``out_m`` order."""
-        return [face for name, face in self._faces.items() if name.startswith("out_")]
+        return [self._faces[port.name] for port in self.outlets]
 
     def face(self, port_name: str) -> str:
         """Which side of the **box** ``port_name`` is on.

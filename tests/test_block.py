@@ -58,8 +58,8 @@ def test_a_block_asked_for_by_name_is_one_line_through_a_box():
     """The archetype: a section with a feed on the left and a product on the right."""
     b = units.Block("Reaction")
     assert list(b.ports) == ["in_1", "out_1"]
-    assert b.inputs == ["W"]
-    assert b.outputs == ["E"]
+    assert b.input_faces == ["W"]
+    assert b.output_faces == ["E"]
     assert b.in_1.direction == "inlet"
     assert b.out_1.direction == "outlet"
 
@@ -67,14 +67,14 @@ def test_a_block_asked_for_by_name_is_one_line_through_a_box():
 def test_a_count_puts_every_connection_on_the_face_its_kind_defaults_to():
     b = units.Block("Reaction", inputs=3, outputs=2)
     assert list(b.ports) == ["in_1", "in_2", "in_3", "out_1", "out_2"]
-    assert b.inputs == ["W", "W", "W"]
-    assert b.outputs == ["E", "E"]
+    assert b.input_faces == ["W", "W", "W"]
+    assert b.output_faces == ["E", "E"]
 
 
 def test_a_face_list_names_one_face_per_connection_in_order():
     b = units.Block("Reaction", inputs=["W", "W", "N"], outputs=["E", "S"])
-    assert b.inputs == ["W", "W", "N"]
-    assert b.outputs == ["E", "S"]
+    assert b.input_faces == ["W", "W", "N"]
+    assert b.output_faces == ["E", "S"]
     assert b.face("in_3") == "N"
     assert b.face("out_2") == "S"
 
@@ -82,14 +82,14 @@ def test_a_face_list_names_one_face_per_connection_in_order():
 def test_the_face_takes_every_spelling_nozzle_takes():
     """One vocabulary for "the top of this block", whichever call states it."""
     b = units.Block("B", inputs=["top", "bottom", "left", "right"], outputs=["n", "s"])
-    assert b.inputs == ["N", "S", "W", "E"]
-    assert b.outputs == ["N", "S"]
+    assert b.input_faces == ["N", "S", "W", "E"]
+    assert b.output_faces == ["N", "S"]
 
 
 def test_a_block_may_be_all_source_or_all_sink():
     """A section at the edge of a sheet, drawn with nothing arriving at it."""
-    assert units.Block("Import", inputs=0, outputs=2).inputs == []
-    assert units.Block("Export", inputs=2, outputs=0).outputs == []
+    assert units.Block("Import", inputs=0, outputs=2).input_faces == []
+    assert units.Block("Export", inputs=2, outputs=0).output_faces == []
 
 
 def test_a_block_with_no_connections_at_all_is_refused():
@@ -108,6 +108,44 @@ def test_a_declaration_that_is_neither_a_count_nor_faces_is_refused(bad):
 def test_a_negative_count_is_refused():
     with pytest.raises(ValueError, match="cannot be negative"):
         units.Block("B", inputs=-1)
+
+
+def test_the_connections_and_the_faces_they_are_on_are_two_different_accessors():
+    """``inlets`` is the ports; ``input_faces`` is the compass letters.
+
+    The rename this pair exists for. ``b.inputs`` returned ``['W', 'W', 'N']``,
+    and any reader of that name expects the connections themselves. ``Block``
+    was unreleased, so the two are now named for what they return, and the
+    constructor keeps ``inputs=`` because "the inputs are on these faces" is
+    what the argument says.
+    """
+    b = units.Block("Reaction", inputs=["W", "W", "N"], outputs=["E", "S"])
+    assert [p.name for p in b.inlets] == ["in_1", "in_2", "in_3"]
+    assert [p.name for p in b.outlets] == ["out_1", "out_2"]
+    assert b.input_faces == ["W", "W", "N"]
+    assert b.output_faces == ["E", "S"]
+    assert b.inlets[2] is b.in_3
+    assert all(p is b.ports[p.name] for p in (*b.inlets, *b.outlets))
+
+
+def test_a_moved_connection_keeps_its_place_in_the_family_and_changes_its_face():
+    """Two accessors, one record. ``nozzle()`` rewrites the declaration, so the
+    face moves and the family does not: the whole reason a block's connections
+    are numbered across the family rather than per face is that moving one never
+    renames it."""
+    b = units.Block("B", inputs=1, outputs=2).nozzle("out_2", "S")
+    assert [p.name for p in b.outlets] == ["out_1", "out_2"]
+    assert b.output_faces == ["E", "S"]
+
+
+def test_a_block_with_nothing_arriving_has_an_empty_inlet_family():
+    """``()`` and not ``None``: a section at the edge of a sheet is a legitimate
+    thing to draw, and a caller iterating its inlets should get no iterations
+    rather than a ``TypeError``."""
+    edge = units.Block("Import", inputs=0, outputs=2)
+    assert edge.inlets == ()
+    assert [p.name for p in edge.outlets] == ["out_1", "out_2"]
+    assert list(edge.inlets) == []
 
 
 def test_a_block_declares_no_variants_and_owns_its_whole_kind():
@@ -404,7 +442,7 @@ def test_nozzle_keeps_one_record_of_where_a_connection_is():
     Two records would be two answers about one nozzle."""
     b = units.Block("B", inputs=1, outputs=1).nozzle("out_1", "top")
     assert b._port_faces == {}
-    assert b.outputs == ["N"]
+    assert b.output_faces == ["N"]
 
 
 def test_nozzle_still_refuses_a_face_that_is_not_one():
@@ -492,8 +530,8 @@ def test_a_block_round_trips_through_a_spec():
 
     read = from_dict(spec)
     got = [u for u in read.units if isinstance(u, units.Block)][0]
-    assert got.inputs == b.inputs
-    assert got.outputs == b.outputs
+    assert got.input_faces == b.input_faces
+    assert got.output_faces == b.output_faces
     assert list(got.ports) == list(b.ports)
     assert to_dict(read) == spec
 
@@ -518,8 +556,8 @@ def test_a_source_only_block_survives_the_round_trip():
     fs = Flowsheet("bfd")
     fs.add(units.Block("Import", inputs=0, outputs=["S", "E"]))
     read = from_dict(to_dict(fs))
-    assert read.units[0].inputs == []
-    assert read.units[0].outputs == ["S", "E"]
+    assert read.units[0].input_faces == []
+    assert read.units[0].output_faces == ["S", "E"]
 
 
 def test_a_spec_writes_the_bare_count_where_every_face_is_the_default():
@@ -532,7 +570,7 @@ def test_a_spec_writes_the_bare_count_where_every_face_is_the_default():
     (entry,) = [u for u in to_dict(fs)["units"] if u["kind"] == "Block"]
     assert entry["inputs"] == 3
     assert entry["outputs"] == 1
-    assert from_dict(to_dict(fs)).units[0].inputs == ["W", "W", "W"]
+    assert from_dict(to_dict(fs)).units[0].input_faces == ["W", "W", "W"]
 
 
 def test_a_spec_may_name_the_faces_as_a_count_or_a_list():
@@ -544,8 +582,8 @@ def test_a_spec_may_name_the_faces_as_a_count_or_a_list():
             "units": [{"kind": "Block", "name": "R", "inputs": ["N", "W"], "outputs": 2}],
         }
     )
-    assert fs.units[0].inputs == ["N", "W"]
-    assert fs.units[0].outputs == ["E", "E"]
+    assert fs.units[0].input_faces == ["N", "W"]
+    assert fs.units[0].output_faces == ["E", "E"]
 
 
 def test_a_spec_refuses_connection_faces_on_anything_but_a_block():

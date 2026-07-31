@@ -292,6 +292,92 @@ def test_splitter_variable_outlets():
     assert s.out_3.direction == "outlet"
 
 
+# ---------------------------------------------------------------------------
+# The families, as sequences. A count chosen at construction cannot be in the
+# type, so the *family* is what a class can declare; see units.Mixer.
+# ---------------------------------------------------------------------------
+
+
+def test_a_family_holds_the_very_ports_the_numbered_names_are_bound_to():
+    """Not copies, and not names: the same objects, in declaration order.
+
+    Copies would be a second set of nozzles that a `connect()` writing a stream
+    onto one of them would leave the other half of the sheet ignorant of.
+    """
+    m = U.Mixer("M", n_inlets=3)
+    assert [p.name for p in m.inlets] == ["in_1", "in_2", "in_3"]
+    assert m.inlets[0] is m.in_1
+    assert m.inlets[2] is m.port("in_3")
+    assert all(p is m.ports[p.name] for p in m.inlets)
+
+
+def test_a_family_is_indexed_from_zero_while_its_nozzles_are_numbered_from_one():
+    """The off-by-one worth writing down, because it is the one a reader trips on.
+
+    `inlets` is an ordinary Python sequence and nothing re-bases it, so
+    `inlets[0]` is `in_1`. Where the number is wanted it is already a name, and
+    `enumerate(..., start=1)` is what recovers both at once.
+    """
+    m = U.Mixer("M", n_inlets=4)
+    assert m.inlets[0] is m.in_1
+    assert m.inlets[3] is m.in_4
+    assert [(i, p.name) for i, p in enumerate(m.inlets, start=1)] == [
+        (1, "in_1"),
+        (2, "in_2"),
+        (3, "in_3"),
+        (4, "in_4"),
+    ]
+
+
+def test_a_family_holds_only_its_own_side():
+    """A mixer's outlet is not an inlet, and a splitter's inlet is not an outlet.
+
+    Worth a line because both spellings are one character apart from a member of
+    the other family (`inlet` beside `in_1`, `outlet` beside `out_1`), which is
+    exactly the sort of near-miss a prefix match gets wrong.
+    """
+    m = U.Mixer("M", n_inlets=2)
+    assert m.outlet not in m.inlets
+    s = U.Splitter("S", n_outlets=2)
+    assert s.inlet not in s.outlets
+    assert [p.name for p in s.outlets] == ["out_1", "out_2"]
+
+
+def test_a_count_worked_out_at_run_time_is_the_case_the_family_exists_for():
+    """`n_inlets=len(...)` is the call a per-arity class could never have typed.
+
+    A literal count is the easy half; a count read off the data is what a sheet
+    built from a stream table actually writes, and it is why the family is a
+    sequence rather than one class per arity.
+    """
+    streams = ["S-101", "S-102", "S-103", "S-104"]
+    m = U.Mixer("M-1", n_inlets=len(streams))
+    assert len(m.inlets) == len(streams)
+    assert [p.direction for p in m.inlets] == ["inlet"] * 4
+
+
+def test_one_feed_is_the_one_tuple_holding_the_singular_nozzle():
+    """The sequence is the general form; the singular name is not a special case.
+
+    A one-feed tower spells its nozzle `feed`, and `feeds` is that nozzle in a
+    tuple, so code written against the family reads a one-feed column and a
+    three-feed column the same way and neither has to know which it got.
+    """
+    for one in (U.Column("T-101"), U.Reactor("R-101")):
+        assert [p.name for p in one.feeds] == ["feed"]
+        assert one.feeds[0] is one.feed
+
+
+def test_a_multi_feed_towers_family_is_its_numbered_nozzles_top_to_bottom():
+    col = U.Column("T-302", n_feeds=3)
+    assert [p.name for p in col.feeds] == ["feed_1", "feed_2", "feed_3"]
+    assert col.feeds[0] is col.feed_1
+    # The other inlets are not charge nozzles, whatever their direction says.
+    assert col.reflux_in not in col.feeds
+    assert col.boilup_in not in col.feeds
+    assert [p.name for p in U.Reactor("R-201", n_feeds=2).feeds] == ["feed_1", "feed_2"]
+
+
 def test_tank_is_its_own_kind():
     # Tank draws its own storage-tank symbol; it is not a Vessel alias.
     assert U.Tank is not U.Vessel
