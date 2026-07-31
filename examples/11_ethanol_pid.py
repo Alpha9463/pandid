@@ -29,6 +29,17 @@ What a P&ID adds over the PFD of the same unit:
   symbol allowed to carry its tag more than once, because a trip is a single
   logic function drawn everywhere it acts.
 
+Drawing the alarms as balloons at all is a **known deviation**. ISO 15519-2
+§5.2.5 is a *shall*: "Letter code combinations with modifiers H and L shall be
+represented outside the PCI symbol." Figure 11 draws one ``PIC`` balloon with
+``SHH / AH / AL / SLL`` beside it as a plain text column, and the reference
+sheet writes its alarms that way on every controller loop that has one:
+PIC-301, TIC-302, LIC-304, LIC-306, TIC-312. ``pandid`` cannot yet annotate a
+balloon with a letter code string, so the balloon form stands until #137 and
+#169 land. Squaring them is right given that it draws them: the three alarms
+the reference does put in balloons, all on loops with no controller, are
+circles in squares too.
+
 Four of the control valves are drawn as the **station** each one is installed
 in, and each station is one call: ``fs.add_valve_station()`` builds the two
 isolation valves, the two drains, the bypass and its normally closed throttling
@@ -346,11 +357,12 @@ def main():
     fs.add_instrument("PAH", 301, on=pic301, at="E", offset=46, variant="shared")
     fs.add_instrument("PAL", 301, on=pic301, at="N", offset=46, variant="shared")
     # The trip is teed off the *measurement*, which is where the issued sheet
-    # takes all four of its own and where ISO 15519-2 Figure 17 b) puts one: the
-    # SLL line leaves the measurement point, not the controller's output. An
-    # alarm is the wrong host twice over, since it would draw the alarm as
-    # driving the trip, and an alarm that acts is lettered S or Z and not A
-    # (Table 2 note 9). It branches *above* the row, which is the one side free:
+    # takes all five of its own: loops 301, 304 and 306 off their
+    # transmitter-to-controller runs, 322 off the two stubs downstream of
+    # LI-322, 323 off the TI-323 trunk. An alarm is the wrong host twice over,
+    # since it would draw the alarm as driving the trip, and an alarm that acts
+    # is lettered S or Z and not A (ISO 15519-2 Table 2 note 9). It branches
+    # *above* the row, which is the one side free:
     # the station's bypass leg runs 40 px below the row and HV-301C's body
     # starts 32 px below it, so a square hung downward lands on both.
     measured = fs.connect(pt301.sig_out, pic301.sig_in, kind="electric")

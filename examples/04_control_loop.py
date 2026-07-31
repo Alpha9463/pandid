@@ -90,13 +90,14 @@ def main():
     # transmitter rather than a second FE.
     #
     # A controller is a *circle in a square*, ``variant="shared"``, and never
-    # the bare circle of ``"panel"``. CHEE4001 p.13 reads the two shapes apart:
-    # "A circle on its own represents an instrument that gives a measurement or
-    # readout. It has no controlling function. A circle within a square shows
-    # that the instrument has some controlling function." The location bar
-    # ``"panel"`` adds says where the thing lives, not what it does, so an FIC
-    # drawn that way is a sheet asserting that its controller does not control.
-    # Nine of the ten controllers on the issued reference sheet are squared.
+    # the bare circle of ``"panel"``. In ISA-5.1 the square means shared display
+    # and shared control -- a point in the DCS -- which is what a control-room
+    # faceplate is; CHEE4001 p.13 rules out the alternative, "A circle on its
+    # own represents an instrument that gives a measurement or readout. It has
+    # no controlling function." The location bar ``"panel"`` adds says where the
+    # thing lives, not what it does, so an FIC drawn that way is a sheet
+    # asserting that its controller does not control. Nine of the ten
+    # controllers on the issued reference sheet are squared.
     ft = fs.add_instrument("FT", flow, on=fe, at="N", offset=62)
     fic = fs.add_instrument("FIC", flow, on=ft, at="N", offset=125, angle=35, variant="shared")
     # The controller lands almost directly above the valve it drives, so take
@@ -130,19 +131,21 @@ def main():
     # balloon on that east face and its tap and the output are drawn one on top
     # of the other as far as the output's first corner. So the controller has
     # two faces to give, and they go to the two alarms.
-    fs.add_instrument("LAH", level, on=lic, at="W", offset=78)
-    fs.add_instrument("LAL", level, on=lic, at="S", offset=78)
+    #
+    # Both are squared like the controller, because the square is the DCS point
+    # and not a claim that the alarm acts: an alarm that acts is lettered S or Z
+    # and not A, as below. The reference sheet squares the three alarms it draws
+    # as balloons the same way (LAH-322, LAL-322, TAH-323).
+    fs.add_instrument("LAH", level, on=lic, at="W", offset=78, variant="shared")
+    fs.add_instrument("LAL", level, on=lic, at="S", offset=78, variant="shared")
 
     # The interlock takes no face at all: it is teed off the *measurement*
     # signal line, which is what the issued sheet does with every trip on it --
-    # loops 301 and 304 off PT->PIC and LT->LIC, 322 off the two stubs
-    # downstream of LI-322, 323 off the TI-323 trunk, four out of four on the
-    # measurement side. ISO 15519-2 Figure 17 b) draws the same arrangement:
-    # the line for the switching function SLL leaves the *measurement point's*
-    # letter code string, not the controller's command to its valve. A plant
-    # trips on the level it reads and not on what the controller happened to
-    # ask the valve for, and a trip taken off the output stops working the
-    # moment the loop is put on manual.
+    # loops 301, 304 and 306 off their PT->PIC and LT->LIC runs, 322 off the two
+    # stubs downstream of LI-322, 323 off the TI-323 trunk, five out of five on
+    # the measurement side. A plant trips on the level it reads and not on what
+    # the controller happened to ask the valve for, and a trip taken off the
+    # output stops working the moment the loop is put on manual.
     #
     # Hanging it on an alarm instead would draw the alarm as driving it, and an
     # alarm that acts is lettered S or Z rather than A -- ISO 15519-2 Table 2
