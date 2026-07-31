@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1528" height="550" viewBox="-63.0 115.0 1528.0 550.0">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1528" height="470" viewBox="-63.0 115.0 1528.0 470.0">
   <!-- Background -->
-  <rect x="-63.0" y="115.0" width="1528.0" height="550.0" fill="white" />
+  <rect x="-63.0" y="115.0" width="1528.0" height="470.0" fill="white" />
   <defs>
     <marker id="arrow_black" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="black" />
@@ -26,8 +26,8 @@
     <text x="611.5" y="195" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CO2 to Urea</text>
     <polygon points="1300,370 1395.0,370 1410.0,380 1395.0,390 1300,390" fill="transparent" stroke="black" stroke-width="2" />
     <text x="1347.5" y="380" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Liquid NH3</text>
-    <polygon points="1000,575 1087.0,575 1102.0,585 1087.0,595 1000,595" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="1043.5" y="585" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Purge Gas</text>
+    <polygon points="975,455 1062.0,455 1077.0,465 1062.0,475 975,475" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="1018.5" y="465" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Purge Gas</text>
   </g>
   <g id="streams">
     <path d="M 110.0,380.0 L 260.0,380.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
@@ -36,10 +36,10 @@
     <path d="M 380.0,380.0 L 520.0,380.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 611.0,340.0 L 611.0,235.0 L 535.0,235.0 L 535.0,195.0 L 560,195.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 702.0,380.0 L 830.0,380.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 972.0,380.0 L 1055.0,380.0 L 1055.0,365.0 L 1080.0,365.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 972.0,380.0 L 1080.0,380.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1214.0,380.0 L 1300,380.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1080.0,395.0 L 975.0,395.0 L 975.0,445.0 L 886.0,445.0 L 886.0,420.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 916.0,420.0 L 916.0,440.0 A 5 5 0 0 1 916.0,450.0 L 916.0,585.0 L 1000,585.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1147.0,420.0 L 1147.0,530.0 L 886.0,530.0 L 886.0,420.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 916.0,420.0 L 916.0,465.0 L 975,465.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <rect x="175.8" y="373.5" width="18.4" height="13.0" fill="white" />
     <text x="185.0" y="380.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S1</text>
     <rect x="268.5" y="250.8" width="13.0" height="18.4" fill="white" />
@@ -52,14 +52,14 @@
     <text x="611.0" y="287.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 611.0, 287.5)">S5</text>
     <rect x="756.8" y="373.5" width="18.4" height="13.0" fill="white" />
     <text x="766.0" y="380.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S6</text>
-    <rect x="1004.3" y="373.5" width="18.4" height="13.0" fill="white" />
-    <text x="1013.5" y="380.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S7</text>
+    <rect x="1016.8" y="373.5" width="18.4" height="13.0" fill="white" />
+    <text x="1026.0" y="380.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S7</text>
     <rect x="1247.8" y="373.5" width="18.4" height="13.0" fill="white" />
     <text x="1257.0" y="380.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S8</text>
-    <rect x="1018.3" y="388.5" width="18.4" height="13.0" fill="white" />
-    <text x="1027.5" y="395.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S9</text>
-    <rect x="909.5" y="490.2" width="13.0" height="24.6" fill="white" />
-    <text x="916.0" y="502.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 916.0, 502.5)">S10</text>
+    <rect x="1007.3" y="523.5" width="18.4" height="13.0" fill="white" />
+    <text x="1016.5" y="530.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S9</text>
+    <rect x="933.2" y="448.0" width="24.6" height="13.0" fill="white" />
+    <text x="945.5" y="454.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S10</text>
   </g>
   <g id="unit_labels">
     <text x="320.0" y="380.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Reforming</text>

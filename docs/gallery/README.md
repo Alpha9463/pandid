@@ -257,9 +257,15 @@ streams between them numbered, and nothing inside them drawn. `units.Block` is
 the only symbol on the sheet, and it is the one that connects on all four sides
 — `inputs=["W", "N", "N"]` puts air and steam into the reformer from *above*
 while the gas comes in from the left, the CO2 leaves the top of the removal
-section, and the synthesis loop takes its recycle back in from below. A plain
-count is the shorthand for the usual case: `inputs=1` is one connection on the
-west. Nothing here carries a `width` or a `height`; each box is as wide as its
+section, and the refrigeration section sends its recycle out of the *bottom* for
+the synthesis loop to take back in from below. A plain count is the shorthand
+for the usual case: `inputs=1` is one connection on the west. The recycle is
+drawn the way a BFD draws one — under the row, from the section that produces it
+back to the section that takes it, crossing nothing — which is why the purge
+flag is pinned close under the loop rather than at the foot of the sheet: a
+block draws every input on a face before every output on it (issue #192), so the
+purge has to turn aside above the recycle's channel or the two would cross.
+Nothing here carries a `width` or a `height`; each box is as wide as its
 own name and as tall as the connections on its walls need, spread at a pitch
 that keeps two arrowheads apart, which is why `Shift & CO2 Removal` comes out
 wider than `Reforming`. It is pinned because the layout engine ranks by process
