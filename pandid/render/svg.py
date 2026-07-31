@@ -78,7 +78,19 @@ _LABEL_STEP = 6.0
 # _label_reach below each one costs a leader line, so the walk is free to go
 # further than it used to in search of paper that is actually clear, instead of
 # settling for the least damaging spot within three bands.
-_LABEL_BANDS = 6
+#
+# It is a bound on the search and not a judgement about what reads: a clear band
+# wins outright and the bands are walked inward-out, so the number only ever
+# matters to a label whose nearer bands are all spoken for. Six left exactly one
+# such label on the shipped corpus with nowhere at all to go -- AE-304 on
+# ``11_ethanol_pid``, a sixteen-character number naming a thirty-unit stub
+# wedged between a condenser and a reflux drum, whose 276 candidate spots all
+# covered something once a halo stopped being allowed to break a symbol
+# (:func:`_covering`). Its first clear band is the seventh. Seven is where the
+# answer settles rather than merely where it first appears: at 8, 10 and 12
+# bands that label lands in the same place, because the walk stops at the first
+# clear band and there is nothing past it to find.
+_LABEL_BANDS = 7
 
 
 def _label_reach(hh: float) -> float:
@@ -258,17 +270,33 @@ def _meets(box, region) -> bool:
             and box[3] > region[1] and box[1] < region[3])
 
 
-def _erases(box, ink) -> "tuple[int, int]":
-    """What a halo at *box* would delete: impulse lines first, then pipe.
+def _erases(box, ink, symbols=()) -> "tuple[int, int, int]":
+    """What a halo at *box* would delete: symbols, then impulse lines, then pipe.
 
-    Ordered, because the two are not worth the same. An equipment tag written
+    Ordered, because the three are not worth the same. An equipment tag written
     over a pipe is a defensible drawing: the run is long, it is identified at
     both ends, and a reader follows it past the break. An impulse line is the
     only mark on the sheet saying *where* a transmitter measures, it is a couple
-    of centimetres long, and deleting a length of it deletes the statement. So a
-    tag steps off a tap line first and off a pipe second, and comparing these
-    tuples is what does the stepping.
+    of centimetres long, and deleting a length of it deletes the statement.
+
+    A **graphical symbol** is worse than either, and is first for that reason.
+    A line broken by a halo is still that line: the reader reads across the gap,
+    which is the whole reason writing a number *in* a run is a convention at
+    all. A symbol broken by a halo has stopped being the symbol. Its outline is
+    what identifies it -- ISO 15519-2 draws an instrument as a circle and a
+    shared display as a circle in a square, and the difference between them is
+    the outline -- so a bite out of a balloon does not obscure information, it
+    replaces one symbol with a shape that is not in the standard, and a reader
+    is entitled to read that as a fault in the drawing rather than as a tag
+    sitting on top. On ``11_ethanol_pid`` D-301's tag ate the upper-left of
+    LT-304's balloon and HV-301C's ate the left edge of PIC-301's square, both
+    of them because nothing in this cost function had ever been told a symbol
+    was there.
+
+    Comparing these tuples is what does the stepping, so the order above is the
+    order a tag gives things up in.
     """
+    hits = sum(1 for b in symbols if _meets(box, b))
     taps = pipes = 0
     for line in ink:
         if _meets(box, line.box):
@@ -276,24 +304,36 @@ def _erases(box, ink) -> "tuple[int, int]":
                 taps += 1
             else:
                 pipes += 1
-    return taps, pipes
+    return hits, taps, pipes
 
 
-def _covering(box, occupied, limit: int) -> int:
-    """How many of *occupied* a halo at *box* would cover, counted to *limit*.
+def _covering(box, occupied, symbols=(), limit=None) -> "tuple[int, int]":
+    """What a halo at *box* would cover: graphical symbols, then everything else.
 
-    The search only ever needs to know whether a spot is worse than the best one
-    so far, so counting stops there. That is what keeps a label on a crowded
-    sheet, where nothing is clear and every anchor has to be scored, costing what
-    the old first-clear-wins scan cost.
+    Two numbers and not one, for the reason :func:`_erases` orders its three:
+    a line, a tag or another number broken by a halo is still itself, and a
+    reader reads across the gap -- writing the number *in* the run is a
+    convention precisely because that reading works. A symbol broken by a halo
+    has stopped being the symbol, since its outline is what identifies it, so
+    covering one is not a worse version of covering a line but a different and
+    heavier kind of damage. Counting them together let a label a whole band
+    closer to its own run buy that place with a stripe out of a heat
+    exchanger's tube bundle, and win, because one box is one box.
+
+    Counting of the second kind stops once the pair is already worse than
+    *limit*, the best score so far, because the search only ever needs to know
+    whether a spot is worse than the one it is holding. That is what keeps a
+    label on a crowded sheet, where nothing is clear and every anchor has to be
+    scored, costing what the old first-clear-wins scan cost.
     """
+    hits = sum(1 for b in symbols if _meets(box, b))
     n = 0
     for p in occupied:
         if _meets(box, p):
             n += 1
-            if n >= limit:
+            if limit is not None and (hits, n) > limit:
                 break
-    return n
+    return hits, n
 
 
 def _label_anchors(cx: float, cy: float, span: float, hw: float, hh: float, vertical: bool):
@@ -1547,7 +1587,13 @@ class SvgRenderer:
     # ------------------------------------------------------------------ units
 
     def _draw_units(self, fs, label_items, balloons, ink=()):
+        from pandid.portgeom import unit_box
+
         lines = ['  <g id="units">']
+        # Every symbol on the sheet, paired with the unit that drew it, so a tag
+        # can step off somebody else's artwork the way it already steps off
+        # somebody else's line. Built once: it is the same list for every tag.
+        symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
         for u in fs.units:
             f = u.frame
             out = balloons if u.kind == "instrument" else lines
@@ -1597,7 +1643,8 @@ class SvgRenderer:
                 # issued sheet writes nothing against a junction.
                 tag_box = None
                 if u.tag:
-                    item = self._tag_item(u, f, x, y, u_width, u_height, safe_name, ink)
+                    item = self._tag_item(u, f, x, y, u_width, u_height, safe_name,
+                                          ink, symbols)
                     tag_box = _unit_label_box(item)
                     label_items.append(item)
                 # A body that cannot carry the darkening says so in letters
@@ -1746,16 +1793,23 @@ class SvgRenderer:
         lpos = f.label_pos or "top"
         return (*self._label_place(lpos, x, y, u_width, u_height), lpos, safe_name)
 
-    def _tag_item(self, u, f, x, y, u_width, u_height, safe_name, ink):
-        """The equipment tag, stepped clear of ink already on the sheet.
+    def _tag_item(self, u, f, x, y, u_width, u_height, safe_name, ink, symbols=()):
+        """The equipment tag, stepped clear of what is already on the sheet.
 
         :func:`~pandid.layout.coordinates.assign_labels` chose the side, from the
         faces no nozzle leaves from, which is the whole of what is knowable while
         layout runs. It is not the whole of the question. A face with no nozzle of
-        its own still has the line that passes it, and the impulse line running
-        from a tap on that line to the balloon reading it; the tag is drawn last
-        of everything, on an opaque halo, so it wins against both, and what it
-        wins is a hole in somebody else's line.
+        its own still has the line that passes it, the impulse line running from
+        a tap on that line to the balloon reading it, and the balloon itself; the
+        tag is drawn last of everything, on an opaque halo, so it wins against
+        all three, and what it wins is a hole in somebody else's drawing.
+
+        *symbols* is every other unit's box, because a free face is not free
+        paper: a nozzle is the only thing layout can see, and a balloon parked
+        just off the face is invisible to it. Both halos that were eating a
+        symbol on ``11_ethanol_pid`` were on a face layout was right to call
+        free -- D-301's right face carries no nozzle, and LT-304 hangs off the
+        end of the impulse line that leaves it.
 
         So the placement is settled again here, where the ink exists. The tag
         first steps *along* the side it was given, which is the same move the
@@ -1775,21 +1829,27 @@ class SvgRenderer:
 
         item = self._unit_label_item(u, f, x, y, u_width, u_height, safe_name)
         box = _unit_label_box(item)
-        if box is None or not ink:
+        if box is None or not (ink or symbols):
             return item
         if getattr(u, "label_pos", None) or self.registry.for_unit(u).label_pos:
             return item
-        # Only ink near this unit can be under one of its tag's candidate spots,
-        # and testing the whole sheet against every one of them is what would
-        # make choosing between them expensive.
+        # Only what is near this unit can be under one of its tag's candidate
+        # spots, and testing the whole sheet against every one of them is what
+        # would make choosing between them expensive.
         pad = max(u_width, u_height) + (box[2] - box[0])
-        near = [line for line in ink
-                if _meets(line.box, (x - pad, y - pad, x + u_width + pad, y + u_height + pad))]
+        window = (x - pad, y - pad, x + u_width + pad, y + u_height + pad)
+        near = [line for line in ink if _meets(line.box, window)]
+        # This unit's own box is not among them: a tag is placed a fixed clear
+        # distance off its own symbol and never lands on it, and counting it
+        # would make every spot equally bad and so make the search choose
+        # nothing.
+        others = [b for v, b in symbols if v is not u and _meets(b, window)]
 
-        best, damage = item, _erases(box, near)
+        clear = (0, 0, 0)
+        best, damage = item, _erases(box, near, others)
         sides = [item[4]] + [s for s in free_label_sides(u) if s != item[4]]
         for side in sides:
-            if damage == (0, 0):
+            if damage == clear:
                 break
             lx, ly, anchor, baseline = self._label_place(side, x, y, u_width, u_height)
             # A tag steps along its face only as far as the symbol's own half
@@ -1798,10 +1858,10 @@ class SvgRenderer:
             edgewise = side in ("left", "right")
             for sx, sy in _slide(lx, ly, (u_height if edgewise else u_width) / 2, edgewise):
                 spot = (sx, sy, anchor, baseline, side, safe_name)
-                cost = _erases(_unit_label_box(spot), near)
+                cost = _erases(_unit_label_box(spot), near, others)
                 if cost < damage:
                     best, damage = spot, cost
-                    if damage == (0, 0):
+                    if damage == clear:
                         break
         return best
 
@@ -2083,22 +2143,26 @@ class SvgRenderer:
         # to top, left of the line, while boxing symbol designations flat.
         #
         # What is already on the sheet is seeded as occupied so a label slides
-        # clear of it. The boxes: balloons and equipment tags are drawn over the
-        # lines, so a number parked under one would simply vanish, and a number
-        # over a symbol would take a bite out of it with its own halo. The lines
-        # too, every routed segment and every impulse line (:func:`_ink`), since
-        # the halo is opaque and a number written across a passing run deletes a
-        # length of it. And each label as it lands, because two streams sharing a
-        # corridor sit only a few px apart, which is what a draftsman does.
+        # clear of it. The symbols are kept apart from the rest, because they
+        # are the one thing on the sheet a halo may not break: see
+        # :func:`_covering`. The other boxes: equipment tags are drawn over the
+        # lines, so a number parked under one would simply vanish, and each
+        # label as it lands, because two streams sharing a corridor sit only a
+        # few px apart, which is what a draftsman does. The lines too, every
+        # routed segment and every impulse line (:func:`_ink`), since the halo
+        # is opaque and a number written across a passing run deletes a length
+        # of it.
         #
         # The single exception is the run the label names. Writing the number
         # *in* the line is the convention, and the halo is what opens the gap it
         # is written in, so a line collinear with the labelled segment is left
         # out of that run's seeds below.
-        placed: list[tuple[float, float, float, float]] = [
+        symbols: list[tuple[float, float, float, float]] = [
             unit_box(u, u.frame) for u in fs.units if u.frame is not None
         ]
-        placed += [b for b in map(_unit_label_box, unit_labels) if b is not None]
+        placed: list[tuple[float, float, float, float]] = [
+            b for b in map(_unit_label_box, unit_labels) if b is not None
+        ]
 
         for seg, name, color in label_items:
             (sx1, sy1), (sx2, sy2) = seg
@@ -2119,10 +2183,14 @@ class SvgRenderer:
             window = (cx - rx, cy - ry, cx + rx, cy + ry)
 
             axis, at = ("v", (sx1 + sx2) / 2) if vertical else ("h", (sy1 + sy2) / 2)
+            near_symbols = [p for p in symbols if _meets(p, window)]
             occupied = [p for p in placed if _meets(p, window)]
             occupied += [line.box for line in ink
                          if not (line.axis == axis and abs(line.at - at) < 0.5)
                          and _meets(line.box, window)]
+            # A leader is ink like any other and has to dodge the same things
+            # the halo does, symbols included, so it is scored against the lot.
+            everything = near_symbols + occupied
 
             # Best first, and the first spot that covers nothing wins outright.
             # Where nothing is clear -- a dozen-character line number in a
@@ -2142,20 +2210,21 @@ class SvgRenderer:
             # against that vessel, and the halo machinery this search is built on
             # exists precisely so a label does not delete somebody else's line.
             # A clear spot within reach still wins outright, since it scores
-            # (0, 0) and the anchors are generated near-first.
+            # all zeros and the anchors are generated near-first.
             reach = _label_reach(hh)
+            clear = (0, 0, 0)
             spot, damage, leader = None, None, None
             for ux, uy, off in _label_anchors(cx, cy, span, hw, hh, vertical):
                 box = (ux - bw / 2, uy - bh / 2, ux + bw / 2, uy + bh / 2)
-                hits = _covering(box, occupied,
-                                 len(occupied) + 1 if damage is None else damage[0] + 1)
-                if damage is not None and hits > damage[0]:
+                hits = _covering(box, occupied, near_symbols,
+                                 None if damage is None else damage[:2])
+                if damage is not None and hits > damage[:2]:
                     continue
-                lead, cut = _leader(box, seg, occupied) if off > reach else (None, 0)
-                cost = (hits, cut)
+                lead, cut = _leader(box, seg, everything) if off > reach else (None, 0)
+                cost = (*hits, cut)
                 if damage is None or cost < damage:
                     spot, damage, leader = (ux, uy), cost, lead
-                    if cost == (0, 0):
+                    if cost == clear:
                         break
             tx, ty = spot
             placed.append((tx - bw / 2, ty - bh / 2, tx + bw / 2, ty + bh / 2))

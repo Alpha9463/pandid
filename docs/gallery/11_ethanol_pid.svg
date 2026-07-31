@@ -384,10 +384,10 @@
     <text x="225.0" y="368.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">FB-301-200-160-SS</text>
     <line x1="225.0" y1="375.0" x2="233.3" y2="405.0" stroke="black" stroke-width="1" />
     <path d="M 233.3,405.0 L 228.8,400.0 L 234.6,398.4 Z" fill="black" />
-    <rect x="999.5" y="254.4" width="13.0" height="105.2" fill="white" />
-    <text x="1006.0" y="307.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1006.0, 307.0)">AE-304-150-80-SS</text>
-    <line x1="1012.5" y1="254.4" x2="1042.5" y2="270.0" stroke="black" stroke-width="1" />
-    <path d="M 1042.5,270.0 L 1035.8,269.9 L 1038.6,264.6 Z" fill="black" />
+    <rect x="947.5" y="236.4" width="13.0" height="105.2" fill="white" />
+    <text x="954.0" y="289.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 954.0, 289.0)">AE-304-150-80-SS</text>
+    <line x1="960.5" y1="289.0" x2="1042.5" y2="260.0" stroke="black" stroke-width="1" />
+    <path d="M 1042.5,260.0 L 1037.8,264.8 L 1035.8,259.2 Z" fill="black" />
     <rect x="204.3" y="234.0" width="111.4" height="13.0" fill="white" />
     <text x="260.0" y="240.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">CWS-311-150-40-CS</text>
     <rect x="1284.3" y="223.5" width="111.4" height="13.0" fill="white" />
@@ -512,8 +512,8 @@
     <text x="520.0" y="400.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">T-301</text>
     <rect x="1054.5" y="188.0" width="41.0" height="15.0" fill="white" />
     <text x="1075.0" y="200.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">C-301</text>
-    <rect x="1154.1" y="281.5" width="41.0" height="15.0" fill="white" />
-    <text x="1154.0846994535518" y="289.0" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">D-301</text>
+    <rect x="963.1" y="293.5" width="41.0" height="15.0" fill="white" />
+    <text x="1004.0846994535519" y="301.0" font-family="sans-serif" font-size="12" text-anchor="end" dominant-baseline="middle">D-301</text>
     <rect x="746.2" y="558.0" width="47.6" height="15.0" fill="white" />
     <text x="770.0" y="570" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">RB-301</text>
     <rect x="1141.2" y="698.0" width="47.6" height="15.0" fill="white" />
@@ -538,8 +538,8 @@
     <text x="731.75" y="112.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HV-301A</text>
     <rect x="982.6" y="100.5" width="54.2" height="15.0" fill="white" />
     <text x="1009.75" y="112.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HV-301B</text>
-    <rect x="795.1" y="55.5" width="54.2" height="15.0" fill="white" />
-    <text x="822.25" y="67.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HV-301C</text>
+    <rect x="789.1" y="55.5" width="54.2" height="15.0" fill="white" />
+    <text x="816.25" y="67.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HV-301C</text>
     <rect x="752.9" y="198.0" width="54.2" height="15.0" fill="white" />
     <text x="780.0" y="205.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">HV-301D</text>
     <rect x="934.4" y="198.0" width="54.2" height="15.0" fill="white" />
