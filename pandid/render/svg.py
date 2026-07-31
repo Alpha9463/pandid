@@ -7,7 +7,8 @@ import re
 from datetime import datetime
 
 from pandid.render import furniture as F
-from pandid.render.symbols import ARROWHEAD, closed_marking, fail_marking
+from pandid.render.symbols import (ARROWHEAD, closed_marking, fail_marking,
+                                   wears_arrowhead)
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
 from pandid.validate import Issue
 
@@ -48,63 +49,6 @@ _DIAMOND_BALLOONS = {"sis", "logic", "interlock"}
 # holding them at a physical width is ISO 15519-1 §11.1.3's separate problem.
 _PROCESS_STROKE = 2
 _SIGNAL_STROKE = 1
-
-# --- the arrowhead a PFD draws ------------------------------------------------
-# The size of the marker :meth:`SvgRenderer._defs` defines, written once because
-# more than the marker measures itself against it. ``markerUnits="userSpaceOnUse"``
-# holds it off the stroke width, and the marker's 10x10 viewBox maps onto the
-# whole of the square, so the filled triangle is this long *along* the run and
-# exactly as much *across* it. A fixed page size scales the drawing group the
-# marker is referenced from, which scales the head with everything else, so a
-# distance compared against it means the same thing on an A3 sheet as on one
-# fitted to the drawing.
-ARROWHEAD = 12.0
-
-#: The closest two nozzles on one face may be pitched and still read as two
-#: connections rather than as one.
-#:
-#: Two heads side by side leave ``pitch - ARROWHEAD`` of white between two
-#: filled triangles: they touch at 12, and 2.5x the head leaves 18, an arrowhead
-#: and a half of clear paper at any size the sheet is printed. The multiplier is
-#: issue #155's, and this repo's own sheets say it is not the load-bearing part
-#: of the number: the pitches that carry two heads across all eleven examples
-#: are 14.5, 17.5 and 20 (on four sheets), and the next one up is 140, so every
-#: multiplier from 1.7x to 11x reports the same set. What has to be right is
-#: that the floor comes off the artwork rather than off a preference, so a
-#: redrawn arrowhead takes it along.
-#:
-#: Read by :func:`pandid.validate.validate`, which reports a unit whose drawn
-#: nozzles fall inside it (``nozzles-crowded``), and by anything sizing a box to
-#: the nozzles it has to carry.
-MIN_NOZZLE_PITCH = 2.5 * ARROWHEAD
-
-
-def wears_arrowhead(stream, registry) -> bool:
-    """Would this stream wear an arrowhead at its far end?
-
-    Two things say no. A signal line never carried one on either drawing. And a
-    stream that ends at a symbol drawn as bare pipe has not arrived anywhere: a
-    tee is a point on a line where the line divides, and the run carries
-    straight on past it, so a head there reads as flow stopping in the middle of
-    an unbroken run. The question is about the artwork rather than about the
-    class, so it is the symbol that answers it (see ``Symbol.bare_run``): every
-    in-line device that draws a body, a valve or a reducer or a fitting, gives
-    the head something to land against and keeps it.
-
-    The head goes on the ``marker-end`` of the path, so it lands on the nozzle
-    the stream *arrives* at and nowhere else. A stream leaving a junction is
-    untouched: it gets its head at its own destination, which is wherever the
-    branch or the run actually ends.
-
-    Module-level, and taking the registry rather than reading one, because the
-    validator asks the same question with no renderer in hand -- and asking it
-    twice is how the sheet and the report come to disagree about which nozzles
-    carry a head.
-    """
-    if stream.kind in _SIGNAL_KINDS:
-        return False
-    return not registry.for_unit(stream.dest.owner).bare_run
-
 
 # --- stream-label placement -------------------------------------------------
 # A stream label is written on an opaque halo, so it can only sit *on* the pipe
@@ -578,6 +522,26 @@ def _resolve_sheet(border: "str | None", diagram: "str | None") -> "tuple[str, s
     return border, kind
 
 
+def draws_arrowheads(diagram: "str | None") -> bool:
+    """Does a drawing of this kind put a head on the end of a process line?
+
+    ANSI/ISA-5.1 draws process piping on a P&ID as plain line: flow direction is
+    read off the equipment and off the line list, so an arrowhead at the end of
+    every run is a PFD convention, where showing where the material goes is the
+    whole job of the line.
+
+    Public, and asked rather than open-coded, because two callers need the
+    answer and only one of them is the renderer.
+    :func:`pandid.validate.validate` reports nozzles pitched inside the heads
+    they carry, and on a sheet that draws none there are no heads to be inside
+    of -- a finding about ink the drawing does not contain is a false one however
+    well the geometry is measured. Takes the argument in the spelling
+    :meth:`pandid.flowsheet.Flowsheet.to_svg` takes it, since that is where a
+    caller's answer comes from.
+    """
+    return _resolve_sheet(None, diagram)[1] != "p&id"
+
+
 def _fit_scale(dw: float, dh: float, free) -> float:
     """The uniform scale that puts a ``dw`` x ``dh`` drawing inside *free*.
 
@@ -669,11 +633,7 @@ class SvgRenderer:
         """
         from pandid.portgeom import unit_box
         border, diagram = _resolve_sheet(border, diagram)
-        # ANSI/ISA-5.1 draws process piping on a P&ID as plain line. Flow
-        # direction is read off the equipment and off the line list, so an
-        # arrowhead at the end of every run is a PFD convention, where showing
-        # where the material goes is the whole job of the line.
-        arrows = diagram != "p&id"
+        arrows = draws_arrowheads(diagram)
         sheet = _page(page_size)
 
         # 1. Diagram bounding box: union of every unit's drawn box and every

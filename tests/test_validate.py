@@ -319,17 +319,18 @@ def test_a_vertical_drop_is_a_runs_length_and_not_a_miss():
 # --- nozzles crowded under their own arrowheads -------------------------------
 
 
-def _crowded(fs):
-    return [i for i in fs.validate() if i.code == "nozzles-crowded"]
+def _crowded(fs, **kw):
+    return [i for i in fs.validate(**kw) if i.code == "nozzles-crowded"]
 
 
 def _fed_mixer(n_inlets=2, **box):
     """A mixer taking its feeds on one face, which is where this defect lives.
 
     The mixer symbol is 50px tall and spreads its inlet series 20px apart in its
-    own coordinates, so at the default size two feeds land 20px apart: two 12px
-    arrowheads with 8px of paper between them. ``box`` is what an author would
-    type to give them room.
+    own coordinates, and the drawn pitch is that scaled by the box: at the
+    default size two feeds land 20px apart, which is 8px of paper between two
+    12px arrowheads and perfectly legible. ``height=35`` is the same two nozzles
+    in the short box an author gave them, 14px apart with 2px between the heads.
     """
     fs = Flowsheet("crowded")
     mix = fs.add(U.Mixer("M-1", n_inlets=n_inlets, **box))
@@ -340,68 +341,101 @@ def _fed_mixer(n_inlets=2, **box):
     return fs, mix
 
 
-def test_two_nozzles_inside_their_own_arrowheads_are_reported():
-    fs, _ = _fed_mixer()
+def test_two_heads_without_the_paper_between_them_are_reported():
+    fs, _ = _fed_mixer(height=35)
     issues = _crowded(fs)
     assert [i.severity for i in issues] == ["warning"]
-    assert "M-1.in_1 and M-1.in_2 are 20.0px apart on M-1's W face" in issues[0].message
-    assert "30px two 12px arrowheads" in issues[0].message
+    assert "M-1.in_1 and M-1.in_2 are 14.0px apart on M-1's W face" in issues[0].message
+    # The measurement a reader can check: the white, against the standard.
+    assert "leaves 2.0px of paper between two 12px arrowheads" in issues[0].message
+    assert "4px ISO 128-20:1996 4.4" in issues[0].message
     # The finding is only worth making if it also says what to do about it, the
     # way run-off-elevation names the pin.
-    assert "M-1.height = 75" in issues[0].message
+    assert "M-1.height = 40" in issues[0].message
 
 
 def test_the_box_the_message_names_is_the_cure():
     """Typing the message's own suggestion back in has to silence it, or the
-    advice is wrong. 75 is the 50px box scaled by the 30/20 it fell short by."""
-    fs, _ = _fed_mixer(height=75)
+    advice is wrong. 40 is the 35px box scaled by the 16/14 it fell short by."""
+    fs, _ = _fed_mixer(height=40)
     assert _crowded(fs) == []
 
 
-def test_a_comfortable_pitch_says_nothing():
-    """The same two nozzles in a box with room for them. Nothing about the
-    topology changed, so the finding is about the drawing and only the drawing."""
-    fs, _ = _fed_mixer(height=120)
+def test_a_default_mixer_is_not_a_finding():
+    """The pitch this check must *not* report, and the reason it is stated as a
+    clearance rather than as a multiple of the head. Two heads 20px apart leave
+    8px of paper, four times the weight the sheet draws a process line at, and a
+    reader resolves them without effort. A floor that reported this would fire
+    on four of the eleven shipped examples and be wrong about all four."""
+    fs, _ = _fed_mixer()
     assert _crowded(fs) == []
+
+
+def test_overlapping_heads_are_worded_as_the_overlap_they_are():
+    """Four inlets squeezed onto a 50px face land 11.7px apart, so the heads are
+    not merely close: they are drawn over each other. Quoting a clearance of
+    "-0.3px" would be arithmetic rather than a description."""
+    fs, _ = _fed_mixer(n_inlets=4)
+    issues = _crowded(fs)
+    assert len(issues) == 1
+    assert "overlaps two 12px arrowheads by 0.3px" in issues[0].message
+    assert "the tightest of the 4 it carries there" in issues[0].message
 
 
 def test_a_third_nozzle_on_one_face_is_still_one_finding():
     """Three heads on one face is one crowded face with one thing to do about
-    it, so it is said once -- the way letter-sequence says a repeated tag once.
-    Squeezed into the same 50px box the three land 17.5px apart."""
-    fs, _ = _fed_mixer(n_inlets=3)
+    it, so it is said once -- the way letter-sequence says a repeated tag once."""
+    fs, _ = _fed_mixer(n_inlets=3, height=35)
     issues = _crowded(fs)
     assert len(issues) == 1
-    assert "M-1.in_1 and M-1.in_2 are 17.5px apart" in issues[0].message
     assert "the tightest of the 3 it carries there" in issues[0].message
 
 
 def test_nozzles_that_carry_no_arrowhead_are_not_crowded():
-    """A splitter's outlets sit at exactly the pitch a mixer's inlets are
-    reported at, and the sheet reads them without trouble: a stream *leaving*
-    takes its head at the far end of the branch, so the face carries two bare
-    2px lines rather than two 12px triangles. One pitch, two drawings, and only
-    the one with the heads on it is a drawing that misleads."""
+    """A splitter's outlets in the same short box sit at the same 14px pitch a
+    mixer's inlets are reported at, and the sheet reads them without trouble: a
+    stream *leaving* takes its head at the far end of the branch, so the face
+    carries two bare 2px lines rather than two 12px triangles. One pitch, two
+    drawings, and only the one with the heads on it is a drawing that misleads."""
+    from pandid.portgeom import port_point
+
     fs = Flowsheet("splitter")
-    sp = fs.add(U.Splitter("SP-1", n_outlets=2))
+    sp = fs.add(U.Splitter("SP-1", n_outlets=2, height=35))
     fs.connect(fs.add(U.Feed("F")).outlet, sp.inlet)
     for i in (1, 2):
         fs.connect(sp.ports[f"out_{i}"], fs.add(U.Product(f"P{i}")).inlet)
     fs.layout()
-    from pandid.portgeom import port_point
-
     ys = [port_point(sp, sp.frame, f"out_{i}")[1] for i in (1, 2)]
-    assert abs(ys[1] - ys[0]) == 20.0  # the pitch the mixer above is reported at
+    assert abs(ys[1] - ys[0]) == 14.0  # the pitch the mixer above is reported at
     assert _crowded(fs) == []
 
 
+def test_a_p_and_id_draws_no_head_to_be_crowded_by():
+    """The finding is about ink, and a P&ID draws none of it: ANSI/ISA-5.1 puts
+    no arrowhead on process piping, so nozzles inside a head that is not there
+    are not a defect. Reporting one would be advice to make a unit 50% taller to
+    fix a drawing that is already right."""
+    fs, _ = _fed_mixer(height=35)
+    assert len(_crowded(fs, diagram="pfd")) == 1  # the same sheet as a PFD
+    assert _crowded(fs, diagram="p&id") == []
+    assert _crowded(fs, diagram="pid") == []  # the other spelling
+    # ...and the warnings a render leaves behind are about the sheet it drew.
+    fs.to_svg(diagram="p&id")
+    assert [w for w in fs.warnings if w.code == "nozzles-crowded"] == []
+    assert "marker-end" not in fs.to_svg(diagram="p&id")
+    fs.to_svg()
+    assert len([w for w in fs.warnings if w.code == "nozzles-crowded"]) == 1
+
+
 def test_the_floor_is_the_arrowhead_the_renderer_actually_draws():
-    """Not a number this module picked. The marker on the sheet and the
-    threshold the report is measured against are one constant, so redrawing the
-    head moves the floor with it rather than leaving the two to drift apart."""
+    """Not a number this module picked. The head the marker is drawn at, the
+    clearance beside it and the weight the clearance is twice of are all read
+    back off the sheet or off the renderer, so redrawing any of them moves the
+    floor rather than leaving the two to drift apart."""
     import re
 
-    from pandid.render.svg import ARROWHEAD, MIN_NOZZLE_PITCH
+    from pandid.render.svg import _PROCESS_STROKE
+    from pandid.render.symbols import ARROWHEAD, MIN_HEAD_CLEARANCE, MIN_NOZZLE_PITCH
 
     fs, _ = _fed_mixer()
     drawn = re.search(
@@ -411,7 +445,39 @@ def test_the_floor_is_the_arrowhead_the_renderer_actually_draws():
     )
     assert drawn is not None
     assert [float(v) for v in drawn.groups()] == [ARROWHEAD, ARROWHEAD]
-    assert MIN_NOZZLE_PITCH == 2.5 * ARROWHEAD
+    # ISO 128-20:1996 4.4: at least twice the width of the widest line.
+    assert MIN_HEAD_CLEARANCE == 2 * _PROCESS_STROKE
+    assert MIN_NOZZLE_PITCH == ARROWHEAD + MIN_HEAD_CLEARANCE
+
+
+def test_the_pitch_a_block_chooses_clears_the_floor_this_check_enforces():
+    """The two arrowhead-derived pitches say different things and are separate
+    names for that reason: ``MIN_NOZZLE_PITCH`` is where a drawing becomes wrong,
+    ``BLOCK_PITCH`` is what a symbol free to size itself picks. A target has to
+    clear its own floor, and a block flow diagram is the case that gathers the
+    most streams onto one face, so it is the one that would find out first.
+
+    Asserted rather than assumed: the two are edited by different concerns, and
+    lowering either without looking at the other is exactly the change that
+    would ship a symbol whose own nozzles this check then reports.
+    """
+    from pandid.render.symbols import BLOCK_PITCH, MIN_NOZZLE_PITCH
+
+    assert BLOCK_PITCH >= MIN_NOZZLE_PITCH
+
+
+def test_a_block_gathering_streams_onto_one_face_is_not_crowded():
+    """The same claim on a drawn sheet rather than on the constants. A block is
+    the first unit for which N/S process connections are ordinary, and it sizes
+    itself to its nozzles, so a crowded one would mean the two rules disagree."""
+    fs = Flowsheet("bfd")
+    block = fs.add(U.Block("U-100", inputs=["W"] * 4 + ["N"] * 3, outputs=["E"] * 2 + ["S"] * 2))
+    for i in range(1, 8):
+        fs.connect(fs.add(U.Feed(f"F{i}")).outlet, block.ports[f"in_{i}"])
+    for i in range(1, 5):
+        fs.connect(block.ports[f"out_{i}"], fs.add(U.Product(f"P{i}")).inlet)
+    fs.layout()
+    assert _crowded(fs) == []
 
 
 def _unit_classes():
