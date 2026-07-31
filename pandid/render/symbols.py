@@ -306,6 +306,45 @@ class Symbol:
     # paragraph recommends -- "a new symbol should be created to the actual
     # orientation" -- is already here as a variant (``vessel/horizontal``).
     gravity_fixed: bool = False
+    # Does the artwork state a *direction* that an axis flip would reverse? The
+    # heater and the cooler are one stencil pair -- the same circle and the same
+    # zigzag -- distinguished by nothing but which end of the diagonal wears the
+    # arrowhead, so a flip does not draw a flipped cooler: it draws the other
+    # symbol, and says the opposite thing about which way the heat goes.
+    #
+    # Which placements reverse it, and which merely carry it, is
+    # :func:`pandid.render.svg._reflections`' answer, and the line falls between
+    # the four placements that leave the axes alone and the four that swap them:
+    #
+    #   reversed   mirrored="x", mirrored="y", mirrored="xy", orientation=180
+    #   carried    orientation=90, orientation=270 (with or without a mirror,
+    #              whose part is undone on its own)
+    #
+    # ``orientation=180`` belongs in the first list and not the second: a half
+    # turn is exactly the two mirrors composed, and it puts the head at the far
+    # end of the diagonal, which is where the sibling symbol draws it. A quarter
+    # turn puts it on the *other* diagonal, where no upright drawing of either
+    # symbol has it, and turns the box with it, so what the reader sees is a
+    # symbol that has plainly been turned rather than a different one.
+    #
+    # ISO 15519-1 §11.4.2 permits mirroring "in order to fit into the actual
+    # layout of the diagram" and excepts *turning* only, so the flip is not the
+    # thing to refuse; what a reader asks for by flipping a condenser is its
+    # nozzles on the other side. So the placement still moves the nozzles and
+    # the renderer holds the drawing still under it, exactly as it already holds
+    # a symbol's own lettering upright (:func:`pandid.render.svg._upright_text`).
+    #
+    # Declaring it costs the symbol a ``<defs>`` entry per reflection (three,
+    # shared across all eight placements), and asks two things of the artwork.
+    # It has to survive being held still while its nozzles move, i.e. every port
+    # has to stay on ink under any flip -- true of the three that declare it,
+    # whose drawing is a circle with everything else laid through its centre --
+    # and it must carry no lettering of its own, since the whole drawing is held
+    # still and a glyph inside it would need the residual of the two rather than
+    # its own counter-transform. ``tests/test_symbol_invariants`` holds any later
+    # one to both. The vendored symbols take it from DIRECTIONAL in
+    # ``scripts/vendor_symbols.py``, which records the reason per family.
+    directional: bool = False
 
     def __post_init__(self) -> None:
         declared = {name: dict(faces) for name, faces in self.port_faces.items()}

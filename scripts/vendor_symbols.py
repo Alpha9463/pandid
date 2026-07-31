@@ -1256,6 +1256,33 @@ GRAVITY_FIXED = {
     ("filter", "gas_belt"):      "dust hopper under the belt",
 }
 
+# Symbols whose artwork states a *direction of flow* that an axis flip would
+# reverse -- either mirror, and the half turn that is the two of them composed.
+# See ``Symbol.directional``: the placement still moves the nozzles, and the
+# renderer holds the drawing still under it rather than drawing the statement
+# backwards. A quarter turn is carried rather than reversed and is left alone.
+#
+# One family, drawn from two stencils that differ in nothing else. "Heater" and
+# "Condenser" are the same circle and the same zigzag on the same diagonal, and
+# which of the two a reader is looking at is *only* which end of that diagonal
+# carries the arrowhead. Flip either and the head lands at the far end, which is
+# where the other one draws it, so the sheet says heat is added where it is
+# removed. Nothing else vendored here has a mark of that kind: every other
+# arrowhead in the set (a separator's falling solids, a conveyor's belt) points
+# the way gravity or the run does, and those symbols are held one way up by
+# ``GRAVITY_FIXED`` or are built to their run instead.
+#
+# The reason is carried into the generated file, since that is where a reader
+# meets the keyword.
+DIRECTIONAL = {
+    ("heater", "default"): "the arrowhead on the diagonal is the whole of what "
+                           "makes this a heater and not a cooler",
+    ("cooler", "default"): "the arrowhead on the diagonal is the whole of what "
+                           "makes this a cooler and not a heater",
+    ("hex", "condenser"):  "the same drawing as cooler/default, and the same "
+                           "arrowhead carrying the same statement",
+}
+
 
 # draw.io draws inline devices oversized; scale them to read as small devices
 # (the converter is handed a matching heavier stroke, so the line still lands at
@@ -1574,6 +1601,15 @@ def render() -> str:
             "GRAVITY_FIXED names symbols KIND_MAP does not draw: "
             + ", ".join(f"{kind}/{variant}" for kind, variant in orphans)
         )
+    # ...and the same again for the arrow that must not be flipped: a rule for a
+    # symbol nothing draws is a rule that never fires, which reads on the page
+    # as an arrow that has been cleared to reverse.
+    orphans = sorted(key for key in DIRECTIONAL if key not in KIND_MAP)
+    if orphans:
+        raise SystemExit(
+            "DIRECTIONAL names symbols KIND_MAP does not draw: "
+            + ", ".join(f"{kind}/{variant}" for kind, variant in orphans)
+        )
 
     imports = "PortSeries, Symbol" if any(
         is_series(spec) for _, _, port_map in KIND_MAP.values() for spec in port_map.values()
@@ -1645,6 +1681,22 @@ def render() -> str:
             if (kind, variant) in GRAVITY_FIXED:
                 lines.append(f"        # must not be turned: {GRAVITY_FIXED[(kind, variant)]}")
                 lines.append("        gravity_fixed=True,")
+            # The artwork says which way something goes, and an axis flip says
+            # the reverse of it. The reason travels with the keyword for the
+            # same reason the turning one does.
+            if (kind, variant) in DIRECTIONAL:
+                # The renderer holds the *whole* drawing still under a flip, so
+                # a glyph inside one would be counter-transformed twice over.
+                # Caught here rather than in the renderer, which has no way to
+                # report it by the time it is drawing.
+                if "<text" in inner:
+                    raise SystemExit(
+                        f"{kind}/{variant} is DIRECTIONAL and carries lettering; "
+                        f"the renderer holds a directional drawing still as a whole "
+                        f"and cannot also counter-transform a glyph inside it"
+                    )
+                lines.append(f"        # must not be flipped: {DIRECTIONAL[(kind, variant)]}")
+                lines.append("        directional=True,")
             if menu:
                 lines.append(f"        port_faces={menu!r},")
             # A family is named after the port it replaces: one member keeps

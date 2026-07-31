@@ -273,6 +273,91 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A flipped condenser no longer reverses its heat-flow arrow.**
+  ([#155](https://github.com/Alpha9463/pandid/issues/155))
+
+  draw.io's `Heater` and `Condenser` are one stencil pair: the same circle, the
+  same zigzag, the same diagonal, and *only* which end of that diagonal wears
+  the arrowhead tells the two apart. `examples/10_ethanol_pfd` pins its
+  condenser `mirrored="y"` for a nozzle reason — so the tower overhead rises
+  into the shell inlet dead straight — and the flip put the head at the far end.
+  `E-201` on `05_reactor_recycle`, the same stencil unflipped, pointed up and
+  to the right; `E-301` pointed down and to the right. One drawing, two opposite
+  statements about which way the heat goes. The flip also landed the duty
+  arrowhead about 15 units from the process inlet's arrowhead, so the two read
+  as competing process connections into one corner.
+
+  Not fixed by refusing the flip. **ISO 15519-1 §11.4.2** permits mirroring
+  outright — it excepts *turning* only, and only for symbols where gravity is a
+  functionality — and what a reader asks for by flipping a condenser is its
+  nozzles on the other side. So `Symbol.directional` marks the drawing and the
+  renderer holds it still under the flip while the nozzles still move: the flip
+  is undone inside the `<defs>` entry and the `<use>` reapplies it, which is
+  exactly what `svg.py::_upright_text` already does to keep a symbol's own
+  lettering readable. The two cancel exactly, because an axis flip commutes with
+  the per-axis scaling that fits the artwork into its box.
+
+  **Which placements reverse a mark, and which carry it**, is `_reflections`'
+  answer, and it is *not* "mirrors reverse, turns carry":
+
+  | placement | the mark |
+  |---|---|
+  | `mirrored="x"` / `"y"` / `"xy"` | reversed — undone |
+  | `orientation=180` | reversed — undone. A half turn **is** `mirrored="xy"`, the two flips composed, and it lands the head exactly where the sibling symbol draws it |
+  | `orientation=90` / `270` | carried — left alone. A quarter turn puts the head on the *other* diagonal, which no upright drawing of either symbol occupies, and turns the box with it |
+
+  A quarter turn with a mirror on it still has its mirror half undone. That
+  split is also the arithmetic one: an axis flip cancels exactly inside the
+  definition, a quarter turn cannot on a box that is not square. So a
+  directional symbol takes four `<defs>` entries across all sixteen placements.
+
+  Three symbols are marked — `heater/default`, `cooler/default` and
+  `hex/condenser`, which is the same drawing as the cooler — with the reasons
+  recorded beside `DIRECTIONAL` in `scripts/vendor_symbols.py`, next to the
+  `GRAVITY_FIXED` table it is modelled on. Declaring it asks two things of the
+  artwork. It decouples the ink from the nozzles, so every port has to stay on
+  drawn ink under any flip; and the whole drawing is held still, so it must
+  carry no lettering of its own, which the generator refuses and the invariant
+  suite checks. `test_a_directional_symbols_arrow_survives_every_placement`
+  sweeps all sixteen placements, since both halves of this defect shipped for
+  the same reason — nothing on any sheet placed a directional symbol that way.
+
+  **No golden moves**, because no golden scenario flips one; `10_ethanol_pfd`
+  changes by two lines of SVG, the definition and the `<use>` that names it, and
+  nothing on the sheet is repositioned. `docs/gallery/` is deliberately not
+  regenerated.
+
+- **An instrument's link is drawn as the line it is, not as the class of what it
+  hangs on.** ([#155](https://github.com/Alpha9463/pandid/issues/155))
+
+  `_draw_taps` chose solid when the host was a unit and dashed when it was a
+  balloon, which answers a question about the *host* and draws the answer as
+  though it were about the line. On `11_ethanol_pid` the trip square hung on the
+  feed's solenoid valve came out **solid** while four identical squares hung on
+  balloons and signal lines came out dashed: one logic function, drawn as
+  impulse tubing in one place and as a signal in four. On `07_metering_skid` and
+  `08_from_data` a control-room controller declared `on` a vessel *for
+  placement* was drawn as a length of pipe running from the drum to a DCS
+  faceplate.
+
+  The style is a statement about the line, so both its ends are now asked, and
+  it is solid only where both answer. An impulse line is a piece of pipe: it
+  needs process fluid at one end — a process stream or a unit that is not itself
+  a balloon — and a device out in the plant at the other. Only ISA-5.1's bare
+  circle is that device. Every other balloon is a location or function symbol
+  saying the function is in a panel, in the shared display, in a computer or in
+  a logic solver, and no tubing runs from a drum to any of those.
+
+  It subsumes rather than extends the signal-line case added in #171: a tap teed
+  off a signal line is dashed because a signal line holds a command, which is
+  the same half of the same rule.
+
+  **Two goldens move**, by one attribute on one line each and nothing else:
+  `07` and `08`, both of them the panel controller above. Every process tap on
+  every sheet stays solid — including `04`'s `LT-101` and `08`'s `LT-201`, the
+  two field transmitters that really are piped to their drum. `docs/gallery/` is
+  deliberately not regenerated.
+
 - **An instrument's impulse line is orthogonal, and a test says so.** Three
   shipped taps were drawn on the diagonal.
   ([#155](https://github.com/Alpha9463/pandid/issues/155))

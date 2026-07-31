@@ -26,6 +26,18 @@ _BARRED_BALLOONS = {"panel", "aux"}
 # items 3-5): they carry the interlock number alone, and it has to sit where the
 # sloping sides leave room for it rather than in the middle of the box.
 _DIAMOND_BALLOONS = {"sis", "logic", "interlock"}
+# Variants that stand for a device out on the plant. Every ISA-5.1 balloon but
+# the bare circle is a *location or function* symbol and says outright that the
+# function is somewhere else: a bar across it puts it in a panel (Table 5.1.1
+# rows 2-5), a square around it in the shared display (column B), a hexagon in a
+# computer (column C) and a diamond in a logic solver (column D and Table 5.1.2).
+# Only a thing in the field can have process fluid piped to it, which is what
+# decides whether the line reaching it is impulse tubing; see :func:`_impulse`.
+#
+# Named positively so a location symbol added later is out rather than in. A
+# dashed line claims the less of the two, and the drawing that is wrong the
+# quieter way is the one to default to.
+_FIELD_BALLOONS = {"default"}
 
 # --- line weights ------------------------------------------------------------
 # ISO 15519 draws a process diagram in two weights, and the ratio between them
@@ -131,6 +143,42 @@ def _tap_lines(fs):
             continue
         out.append((u, tap, centre))
     return out
+
+
+def _impulse(inst) -> bool:
+    """Is the line between *inst* and its host a length of impulse tubing?
+
+    The question is about the **edge**, not about the class of either thing on
+    the end of it. An impulse line is a piece of pipe: it exists only where
+    there is process fluid at one end and something out in the plant to pipe it
+    to at the other. So both ends are asked, and each answers out of a fact the
+    model already states.
+
+    *The host end* carries fluid unless it carries a measurement instead: a
+    balloon holds nothing at all, and a signal line holds a command. Everything
+    else a balloon may hang on -- a process line, a vessel, an exchanger, an
+    in-line element -- is full of the fluid the reading is taken from.
+
+    *The balloon end* can receive it only where the balloon is a device in the
+    field. Every other ISA-5.1 balloon is a symbol for a function in a panel, in
+    the shared display, in a computer or in a logic solver, and no tubing runs
+    from a drum to any of those; see :data:`_FIELD_BALLOONS`.
+
+    Reading the host alone, which is what this used to do, answered a question
+    about the *host* and drew the answer as though it were about the line. Three
+    of the shipped sheets state something untrue because of it, every one of
+    them solid where the line carries no fluid: 11's feed trip square is drawn
+    as impulse tubing off a solenoid valve while four identical squares
+    elsewhere on that sheet are dashed, and 07's and 08's control-room level
+    controllers, declared ``on`` a vessel for placement only, are drawn piped to
+    it. The host is a piece of plant in all three, and in none of them is the
+    line.
+    """
+    host = getattr(inst, "host", None)
+    host_kind = getattr(host, "kind", "")
+    holds_fluid = (host is not None and host_kind != "instrument"
+                   and host_kind not in _SIGNAL_KINDS)
+    return holds_fluid and getattr(inst, "variant", "default") in _FIELD_BALLOONS
 
 
 def _ink(fs) -> "list[_Ink]":
@@ -422,6 +470,81 @@ def _upright_text(svg: str, rot: int, mirror_x: bool, mirror_y: bool) -> str:
         return f'<g transform="{" ".join(ops)}">{match.group(0)}</g>'
 
     return _SYMBOL_TEXT.sub(wrap, svg)
+
+
+def _reflections(rot: int, mirror_x: bool, mirror_y: bool) -> "tuple[bool, bool]":
+    """A placement's *reflection content*, as the pair of axis flips it is.
+
+    The eight placements a unit may take are the symmetries of a square, and
+    they split in two for this purpose. Four of them leave the axes alone --
+    the identity, the two mirrors, and the **half turn, which is exactly the
+    two mirrors composed** -- so every one of them is some combination of
+    ``scale(-1, 1)`` and ``scale(1, -1)`` about the box's centre, which is what
+    this returns. The other four swap the axes: the quarter turns, and each of
+    them with a mirror on top.
+
+    That split is the one a directional mark cares about, and it is the same
+    split the arithmetic cares about, which is not a coincidence. An axis flip
+    commutes with the per-axis scaling that fits a symbol into its box, so it
+    can be cancelled exactly inside the definition; a quarter turn does not,
+    and on a box that is not square it cannot be. And an axis flip is what
+    lands a mark somewhere else on a drawing the reader still sees the same way
+    up -- which is how a cooler comes to be drawn as a heater -- where a
+    quarter turn turns the box with it and what the reader sees is a symbol
+    that has plainly been turned.
+
+    So ``orientation=180`` is not a turn as far as the mark is concerned. It is
+    both mirrors at once, and it reverses the arrow exactly as either of them
+    would: it was the half of this that shipped un-handled.
+    """
+    half = rot == 180
+    return (mirror_x != half, mirror_y != half)
+
+
+def _upright_artwork(svg: str, w: float, h: float,
+                     mirror_x: bool, mirror_y: bool) -> str:
+    """Keep a symbol's *directional* drawing saying the same thing under a flip.
+
+    The lettering problem one level out. A cooler is the heater's circle and the
+    heater's zigzag with the arrowhead moved to the other end of the diagonal,
+    and nothing else tells the two apart, so a flipped cooler is not a cooler
+    drawn the other way round: it is the heater, drawn where the author asked
+    for a cooler. What the flip was asked for is the *nozzles* on the other side
+    -- the reason ``examples/10_ethanol_pfd`` flips one is to put the condenser's
+    shell inlet underneath, so the overhead rises into it dead straight -- and
+    the ports move under the placement transform however this leaves the ink.
+
+    So the flip is undone inside the definition, about the symbol's own centre
+    lines, and the ``<use>`` reapplies it: the two cancel exactly, and the
+    drawing lands where it was drawn while the nozzles go where the flip puts
+    them. Exactly, because an axis flip commutes with the per-axis scaling that
+    fits the artwork into its box.
+
+    *mirror_x* and *mirror_y* are the placement's whole reflection content and
+    not only what the caller spelled ``mirrored=``: a half turn is both flips
+    composed and reverses the mark just as either one does, so it arrives here
+    as both. :func:`_reflections` is where that is worked out, and is also where
+    the quarter turn is left alone, which it should be -- a quarter turn takes
+    the mark onto ground no upright drawing of either symbol occupies, and turns
+    the box with it, so what a reader sees is a turned symbol rather than a
+    different one. See :attr:`pandid.render.symbols.Symbol.directional`.
+
+    Only the whole drawing, never part of it: on the one family that declares
+    this, the artwork *is* the statement, drawn as a circle with the zigzag and
+    the arrow both on its centre. Held still it stays exactly as vendored, which
+    is the drawing the check in ``tests/test_symbol_invariants`` measures the
+    flipped nozzles against.
+    """
+    if not (mirror_x or mirror_y) or not svg.startswith("<g"):
+        return svg
+    ops = []
+    if mirror_x:
+        ops.append(f"translate({_num(w)}, 0) scale(-1, 1)")
+    if mirror_y:
+        ops.append(f"translate(0, {_num(h)}) scale(1, -1)")
+    head, inner = svg[:svg.find(">") + 1], svg[svg.find(">") + 1:svg.rfind("</g>")]
+    return f'{head}<g transform="{" ".join(ops)}">{inner}</g></g>'
+
 
 # Standard page sizes in millimetres, landscape, straight from ISO 216. Held in
 # millimetres because that is what the sizes are defined in: deriving each one
@@ -1099,18 +1222,38 @@ class SvgRenderer:
 
     # ------------------------------------------------------------------ defs
 
-    def _text_xform(self, u) -> tuple[int, bool, bool]:
+    def _baked_xform(self, u) -> tuple[int, bool, bool]:
         """The placement transform a unit's symbol definition must bake in.
 
-        The identity for every symbol without lettering of its own, so those
-        keep sharing one definition and one id no matter how they are placed.
+        Two things in a drawing belong to the *drawing* rather than to the
+        attitude the equipment is installed in, and so have to survive the
+        placement: its own lettering, which stays readable
+        (:func:`_upright_text`), and a directional mark, which an axis flip
+        reverses (:func:`_upright_artwork`). Each is undone inside the
+        definition and reapplied by the ``<use>``.
+
+        The identity for every symbol with neither -- the great majority -- so
+        those keep sharing one definition and one id no matter how they are
+        placed.
+
+        A directional symbol reports its placement's *reflection content*
+        instead of the placement, since that is the whole of what it bakes in:
+        a half turn arrives as both flips (:func:`_reflections`), and a quarter
+        turn as none, so ``orientation=90`` on an unflipped one still shares the
+        single definition the sheet had before and the four placements that flip
+        it share three more between them.
         """
         sym = self.registry.for_unit(u)
         f = getattr(u, "frame", None)
-        if f is None or "<text" not in sym.svg:
+        if f is None:
             return (0, False, False)
-        return (int(getattr(f, "orientation", 0) or 0),
-                bool(f.mirrored), bool(getattr(f, "mirror_y", False)))
+        rot = int(getattr(f, "orientation", 0) or 0)
+        mirror_x, mirror_y = bool(f.mirrored), bool(getattr(f, "mirror_y", False))
+        if "<text" in sym.svg:
+            return (rot, mirror_x, mirror_y)
+        if sym.directional:
+            return (0, *_reflections(rot, mirror_x, mirror_y))
+        return (0, False, False)
 
     def _sym_id(self, u) -> str:
         """The ``<defs>`` id a unit's ``<use>`` points at.
@@ -1119,13 +1262,14 @@ class SvgRenderer:
         is baked into the definition rather than applied by the ``<use>``: the
         size a built-to-measure symbol was drawn at, the size a *resized* unit
         had its line weights compensated for (see :func:`_pen_scale`), and the
-        counter-rotation that keeps a symbol's own lettering readable.
+        counter-transform that keeps a symbol's own lettering readable or its
+        direction arrow pointing the way it was drawn.
         """
         variant = getattr(u, 'variant', 'default')
         sym = self.registry.for_unit(u)
         sym_id = f"sym_{u.kind}" if variant == "default" else f"sym_{u.kind}_{variant}"
         sym_id += sym.id_suffix + _size_tag(sym, u)
-        return sym_id + _xform_tag(*self._text_xform(u))
+        return sym_id + _xform_tag(*self._baked_xform(u))
 
     def _defs(self, fs, arrows=True):
         lines = []
@@ -1146,9 +1290,10 @@ class SvgRenderer:
             lines.append(f'      <path d="M 0 0 L 10 5 L 0 10 z" fill="{c}" />')
             lines.append('    </marker>')
 
-        # A symbol carrying its own lettering needs one definition per placement
-        # transform in use, since the counter-transform that keeps the letters
-        # readable is baked into the definition; a symbol built to measure needs
+        # A symbol carrying its own lettering, or a directional mark, needs one
+        # definition per placement transform in use, since the counter-transform
+        # that keeps the letters readable and the arrow pointing the way it was
+        # drawn is baked into the definition; a symbol built to measure needs
         # one per size, so the box it is placed in is the box it was drawn in and
         # the scale factor stays exactly 1; and a symbol some unit *resized*
         # needs one per placed size too, since the weight it is drawn at is
@@ -1169,7 +1314,7 @@ class SvgRenderer:
             if u.kind in ("feed", "product"):
                 continue
             sym = self.registry.for_unit(u)
-            xform = self._text_xform(u)
+            xform = self._baked_xform(u)
             pen = _pen_scale(sym, u)
             key = (u.kind, getattr(u, 'variant', 'default'), sym.id_suffix, pen) + xform
             used[key] = (self._sym_id(u), sym, pen, *xform)
@@ -1177,7 +1322,17 @@ class SvgRenderer:
                 stretched.add(key)
         for key in sorted(used):
             sym_id, sym, pen, rot, mirror_x, mirror_y = used[key]
-            svg_str = _upright_text(_at_pen_scale(sym.svg, pen), rot, mirror_x, mirror_y)
+            # Either, never both. A directional symbol's *whole* drawing is held
+            # still, lettering included, so a glyph inside one would need the
+            # residual of the two rather than its own counter-transform. No
+            # symbol carries both, and
+            # test_a_directional_symbol_carries_no_lettering_of_its_own says so
+            # over the registry rather than leaving this branch to be trusted.
+            if sym.directional:
+                svg_str = _upright_artwork(_at_pen_scale(sym.svg, pen),
+                                           sym.width, sym.height, mirror_x, mirror_y)
+            else:
+                svg_str = _upright_text(_at_pen_scale(sym.svg, pen), rot, mirror_x, mirror_y)
             if svg_str.startswith('<g'):
                 inner = svg_str[svg_str.find('>') + 1:svg_str.rfind('</g>')]
                 # preserveAspectRatio: stated only where a placement reshapes the
@@ -1270,24 +1425,22 @@ class SvgRenderer:
         return lines
 
     def _draw_taps(self, fs):
-        """Impulse lines: the fine line from a tap point to the balloon reading it.
+        """The fine line from a tap point to the balloon reading it.
 
-        A tap on the *process* is a solid fine line, because that is what it is:
-        a length of impulse tubing standing between the pipe and the element.
-        Anything else the balloon can hang on carries a measurement rather than
-        a fluid and is drawn dashed -- a balloon hung off another balloon (an
-        interlock under its controller), and equally a balloon teed off a
-        **signal line**, which is how the issued sheet draws a trip: not on a
-        face of the balloon it acts for, but branched at a right angle off the
-        line that carries the command. Nothing is drawn where a stream already
-        joins the two, or where the element sits directly on the line
-        (``offset=0``).
+        Solid where the line is an **impulse line**, because that is what it is:
+        a length of tubing standing between the pipe and the element, full of
+        the fluid the reading is taken from. Dashed everywhere else, where what
+        the line carries is a measurement or a command -- a balloon hung off
+        another balloon (an interlock under its controller), a balloon teed off
+        a **signal line**, which is how the issued sheet draws a trip, and a
+        trip square hung on the valve it strokes. Nothing is drawn at all where
+        a stream already joins the two, or where the element sits directly on
+        the line (``offset=0``).
 
-        The host's ``kind`` is what separates the two, and a stream host answers
-        with its stream kind -- ``"electric"``, ``"material"`` -- so the signal
-        kinds have to be named here alongside ``"instrument"``. Reading only the
-        latter drew a branch off a signal line solid, which on this sheet means
-        impulse tubing on a pipe: the wrong statement about the wrong medium.
+        Which of the two it is, is a question about the line and is asked of
+        both its ends: see :func:`_impulse`. It is emphatically *not* a question
+        about the host's class, which is what this used to read, and answering
+        the wrong question drew a signal as pipe on three of the shipped sheets.
 
         Fine is the same fine as a signal stream: ISO 15519-2 Annex A.1.02 puts
         an instrument connection on the 0,25 rung, alongside the signal line and
@@ -1298,9 +1451,7 @@ class SvgRenderer:
         """
         out = []
         for u, (tx, ty), (cx, cy) in _tap_lines(fs):
-            host_kind = getattr(u.host, "kind", "")
-            dash = (' stroke-dasharray="5,4"'
-                    if host_kind == "instrument" or host_kind in _SIGNAL_KINDS else "")
+            dash = "" if _impulse(u) else ' stroke-dasharray="5,4"'
             out.append(f'    <line x1="{_num(tx)}" y1="{_num(ty)}" x2="{_num(cx)}" '
                        f'y2="{_num(cy)}" stroke="black" stroke-width="{_SIGNAL_STROKE}"{dash} />')
         return ['  <g id="instrument_taps">'] + out + ['  </g>'] if out else []

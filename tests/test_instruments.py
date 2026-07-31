@@ -395,6 +395,133 @@ def test_interlock_hangs_off_its_controller_on_a_dashed_line():
     assert any("stroke-dasharray" not in ln for ln in taps)  # process tap -> solid
 
 
+# --- what decides an impulse line from a functional connection ---------------
+#
+# The style of the line between a balloon and its host is a statement about the
+# *line*: solid says a length of tubing with process fluid in it, dashed says a
+# measurement or a command. It used to be chosen by the host's class alone --
+# solid off a unit, dashed off a balloon -- which answers a different question,
+# and drew a trip square hung on a valve as though the valve were piped to it
+# while three identical squares elsewhere on the same sheet were dashed.
+#
+# So the table below is written as a matrix rather than as a list of the cases
+# that were wrong: each half of the edge is varied against the other, and the
+# expected style is derived from the two rather than from either.
+
+
+def _tap_styles(fs) -> dict:
+    """``{balloon name: "solid" | "dashed"}`` for every tap line on the sheet."""
+    import re
+
+    body = fs.to_svg().split('<g id="instrument_taps">', 1)
+    if len(body) == 1:
+        return {}
+    from pandid.render.svg import _tap_lines
+
+    lines = re.findall(r"<line [^>]*/>", body[1].split("</g>", 1)[0])
+    assert len(lines) == len(_tap_lines(fs))
+    return {
+        u.name: ("dashed" if "stroke-dasharray" in ln else "solid")
+        for (u, _, _), ln in zip(_tap_lines(fs), lines)
+    }
+
+
+@pytest.mark.parametrize(
+    "variant,style",
+    [
+        # A bare balloon is ISA-5.1's field-mounted device, and a device in the
+        # field is the only thing a length of impulse tubing can reach.
+        ("default", "solid"),
+        # Everything else is a location or function symbol, and says outright that
+        # the function is not out on the plant: a bar across the balloon puts it in
+        # a panel, a square around it in the shared display, a hexagon in a computer
+        # and a diamond in a logic solver. No tubing runs from a drum to any of
+        # those, whatever the drum is.
+        ("panel", "dashed"),
+        ("aux", "dashed"),
+        ("shared", "dashed"),
+        ("computer", "dashed"),
+        ("sis", "dashed"),
+        ("logic", "dashed"),
+        ("interlock", "dashed"),
+    ],
+)
+def test_link_style_follows_the_balloon_not_only_its_host(variant, style):
+    """One host, every balloon: the host cannot be what decides it.
+
+    The vessel is the same piece of plant in all eight, and full of the same
+    fluid. What changes is whether there is anything at the other end of the
+    line for that fluid to reach.
+    """
+    fs = Flowsheet("what is on the end of it")
+    drum = fs.add(U.Vessel("V-101")).pin(x=200, y=200)
+    fs.add_instrument("LX", 101, on=drum, at="E", offset=80, variant=variant)
+    fs.route()
+    assert _tap_styles(fs) == {"LX-101": style}
+
+
+@pytest.mark.parametrize(
+    "host,style",
+    [
+        # A pipe and a vessel are both full of the fluid the reading is taken from.
+        ("stream", "solid"),
+        ("vessel", "solid"),
+        # A valve is too -- and this is the case the host's class got wrong. What
+        # makes the line off it a signal is the *square*, not the valve.
+        ("valve", "solid"),
+        # A balloon holds nothing, and a signal line holds a command.
+        ("instrument", "dashed"),
+        ("signal", "dashed"),
+    ],
+)
+def test_link_style_follows_the_host_not_only_its_balloon(host, style):
+    """One field balloon, every host: the balloon cannot be what decides it
+    either. Both ends are asked, and the line is tubing only if both answer."""
+    fs = Flowsheet("what it comes off")
+    feed = fs.add(U.Feed("Feed")).pin(x=60, y=170)
+    drum = fs.add(U.Vessel("V-101")).pin(x=400, y=140)
+    line = fs.connect(feed.outlet, drum.inlet)
+    hosts = {"stream": lambda: (line, {"at": 0.5}), "vessel": lambda: (drum, {"at": "S"})}
+    if host == "valve":
+        valve = fs.add(U.Valve("XV-1", variant="solenoid")).pin(x=200, y=300)
+        hosts["valve"] = lambda: (valve, {"at": "S"})
+    elif host in ("instrument", "signal"):
+        lt = fs.add_instrument("LT", 101, on=drum, at="E", offset=70)
+        lic = fs.add_instrument("LIC", 101, on=lt, at="E", offset=70, variant="shared")
+        signal = fs.connect(lt.sig_out, lic.sig_in, kind="electric")
+        hosts["instrument"] = lambda: (lt, {"at": "N"})
+        hosts["signal"] = lambda: (signal, {"at": 0.5})
+    on, where = hosts[host]()
+    fs.add_instrument("PX", 1, on=on, offset=70, variant="default", **where)
+    fs.route()
+    assert _tap_styles(fs)["PX-1"] == style
+
+
+def test_the_trip_square_on_a_valve_is_drawn_as_the_signal_it_is():
+    """The defect as reported, from ``examples/11_ethanol_pid``.
+
+    Five trip squares on that sheet, one logic function, and the four hung on
+    balloons were dashed while the one hung on the feed's solenoid valve was
+    solid -- so the sheet drew the same command as tubing in one place and as a
+    signal in four. A trip is a signal wherever it acts.
+    """
+    fs = Flowsheet("one function, five drawings")
+    feed = fs.add(U.Feed("Feed")).pin(x=60, y=170)
+    xv = fs.add(U.Valve("XV-301", variant="solenoid")).pin(x=250, port="inlet", y=195)
+    prod = fs.add(U.Product("Product")).pin(x=520, y=170)
+    fs.connect(feed.outlet, xv.inlet)
+    fs.connect(xv.outlet, prod.inlet)
+    ti = fs.add_instrument("TI", 325, on=xv, at="N", offset=44)
+    fs.add_instrument("I", 2, on=xv, at="S", offset=44, variant="sis")
+    fs.add_instrument("I", 2, on=ti, at="E", offset=44, variant="sis")
+    fs.route()
+    styles = _tap_styles(fs)
+    assert styles["I-2"] == styles["I-2 (2)"] == "dashed"
+    # ...and the gauge reading the same valve is still tubing, so this is not
+    # the whole sheet quietly going dashed.
+    assert styles["TI-325"] == "solid"
+
+
 def test_balloon_signal_ports_reach_every_face():
     """A balloon is a circle: a signal can meet it anywhere, so its connections
     have no face of their own and every one of them offers all four."""
