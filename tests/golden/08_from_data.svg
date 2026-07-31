@@ -290,7 +290,7 @@
   </g>
   <g id="instrument_taps">
     <line x1="971" y1="1076" x2="971" y2="1134" stroke="black" stroke-width="1" />
-    <line x1="971" y1="1076" x2="971" y2="1216" stroke="black" stroke-width="1" />
+    <line x1="971" y1="1076" x2="971" y2="1216" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
   </g>
   <g id="instruments">
     <use href="#sym_instrument" x="949" y="1112" width="44.0" height="44.0" />

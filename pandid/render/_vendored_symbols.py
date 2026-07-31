@@ -229,6 +229,8 @@ def register_vendored(registry):
         svg='<g id="sym_heater"><ellipse cx="40.0" cy="40.0" rx="30.0" ry="30.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 10.0 40.0 L 20.0 40.0 L 30.0 25.0 L 50.0 55.0 L 60.0 40.0 L 70.0 40.0 M 80.0 0.0 L 0.0 80.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 4.5 70.0 L 0.0 80.0 L 10.0 75.5 L 5.0 75.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=80.0,
         ports={'inlet': (9.9, 40.0), 'outlet': (70.1, 40.0), 'utility_in': (40.0, 70.1)},
+        # must not be flipped: the arrowhead on the diagonal is the whole of what makes this a heater and not a cooler
+        directional=True,
     ), 'default')
 
     # draw.io heat_exchangers:Condenser (aspect=variable) -> cooler/default
@@ -236,6 +238,8 @@ def register_vendored(registry):
         svg='<g id="sym_cooler"><ellipse cx="40.0" cy="40.0" rx="30.0" ry="30.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 10.0 40.0 L 20.0 40.0 L 30.0 25.0 L 50.0 55.0 L 60.0 40.0 L 70.0 40.0 M 80.0 0.0 L 0.0 80.0 M 70.0 4.5 L 80.0 0.0 L 75.5 10.0 L 75.0 5.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=80.0,
         ports={'inlet': (9.9, 40.0), 'outlet': (70.1, 40.0), 'utility_out': (40.0, 9.9)},
+        # must not be flipped: the arrowhead on the diagonal is the whole of what makes this a cooler and not a heater
+        directional=True,
     ), 'default')
 
     # draw.io heat_exchangers:Heat Exchanger (Spiral) (aspect=variable) -> hex/spiral
@@ -641,6 +645,8 @@ def register_vendored(registry):
         svg='<g id="sym_hex_condenser"><ellipse cx="40.0" cy="40.0" rx="30.0" ry="30.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 10.0 40.0 L 20.0 40.0 L 30.0 25.0 L 50.0 55.0 L 60.0 40.0 L 70.0 40.0 M 80.0 0.0 L 0.0 80.0 M 70.0 4.5 L 80.0 0.0 L 75.5 10.0 L 75.0 5.0 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=80.0,
         ports={'tube_in': (9.9, 40.0), 'tube_out': (70.1, 40.0), 'shell_in': (40.0, 9.9), 'shell_out': (40.0, 70.1)},
+        # must not be flipped: the same drawing as cooler/default, and the same arrowhead carrying the same statement
+        directional=True,
     ), 'condenser')
 
     # draw.io heat_exchangers:Heat Exchanger (Plate) (aspect=variable) -> hex/plate

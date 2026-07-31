@@ -306,6 +306,31 @@ class Symbol:
     # paragraph recommends -- "a new symbol should be created to the actual
     # orientation" -- is already here as a variant (``vessel/horizontal``).
     gravity_fixed: bool = False
+    # Does the artwork state a *direction* that a reflection would reverse? The
+    # heater and the cooler are one stencil pair -- the same circle and the same
+    # zigzag -- distinguished by nothing but which end of the diagonal wears the
+    # arrowhead, so a flip does not draw a flipped cooler: it draws the other
+    # symbol, and says the opposite thing about which way the heat goes.
+    #
+    # ISO 15519-1 §11.4.2 permits mirroring "in order to fit into the actual
+    # layout of the diagram" and excepts *turning* only, so the flip is not the
+    # thing to refuse; what a reader asks for by flipping a condenser is its
+    # nozzles on the other side. So the placement still moves the nozzles and
+    # the renderer holds the drawing still under it, exactly as it already holds
+    # a symbol's own lettering upright (:func:`pandid.render.svg._upright_text`).
+    # A turn is left alone: it is a rigid motion and carries an arrow to a
+    # turned copy of the same statement, where a reflection swaps its head for
+    # its tail.
+    #
+    # Declaring it costs the symbol a ``<defs>`` entry per flip, and asks one
+    # thing of the artwork: it has to survive being held still while its nozzles
+    # move, i.e. every port has to stay on ink under either flip. That is true
+    # of the three that declare it, whose drawing is a circle with everything
+    # else drawn through its centre, and
+    # ``tests/test_symbol_invariants.test_a_directional_symbols_ports_stay_on_ink_under_a_flip``
+    # holds any later one to it. The vendored symbols take it from DIRECTIONAL
+    # in ``scripts/vendor_symbols.py``, which records the reason per family.
+    directional: bool = False
 
     def __post_init__(self) -> None:
         declared = {name: dict(faces) for name, faces in self.port_faces.items()}

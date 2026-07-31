@@ -620,6 +620,46 @@ def test_ports_land_on_drawn_ink_at_any_box_shape(entry, odd_box_sheets):
 
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
+def test_a_directional_symbols_ports_stay_on_ink_under_a_flip(entry):
+    """What a symbol has to be able to do before it may declare ``directional``.
+
+    A directional symbol's *drawing* is held still under a flip -- otherwise the
+    flip draws the arrow backwards, which on the heater/cooler pair is the other
+    symbol -- while its *nozzles* still move, because moving them is what the
+    flip was asked for. That is a decoupling, and it is the exact decoupling
+    CONTRIBUTING §4 records as having actually happened once: a mirror the
+    renderer applied and the geometry did not, drawing every stream detached
+    from its nozzle.
+
+    Here it is deliberate, and it is only safe where the artwork under the moved
+    nozzle is the same artwork that was under the original -- which is true of
+    the three that declare it, whose drawing is a circle with everything else
+    laid through its centre. So the flipped port is measured against the
+    *unflipped* strokes, which is what the sheet actually draws.
+
+    Every other symbol skips: nothing holds their ink still, so their ports
+    travel with it and ``test_ports_land_on_drawn_ink_at_any_box_shape`` is the
+    check that applies.
+    """
+    (kind, variant), sym = entry
+    if not sym.directional:
+        pytest.skip("not a directional symbol; its artwork flips with its ports")
+    segments = _collect_segments(sym.svg)
+    for mirror_x, mirror_y in ((True, False), (False, True), (True, True)):
+        for name, (x, y) in sym.ports.items():
+            if (kind, name) in _SIGNAL_PORTS:
+                continue
+            flipped = (sym.width - x if mirror_x else x, sym.height - y if mirror_y else y)
+            d = _nearest_distance(flipped, segments)
+            assert d <= GEOM_TOL, (
+                f"{kind}/{variant} declares directional, but flipped "
+                f"(x={mirror_x}, y={mirror_y}) its port {name!r} lands at {flipped}, "
+                f"{d:.1f}u from the nearest stroke of the artwork that is held "
+                f"still under that flip (tolerance {GEOM_TOL})"
+            )
+
+
+@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_signal_ports_stay_on_the_outline_at_any_box_shape(entry, odd_box_sheets):
     """The odd-box counterpart of the outline rule, and the balloons' own case.
 

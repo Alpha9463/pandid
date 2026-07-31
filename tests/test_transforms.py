@@ -367,3 +367,92 @@ def test_lettered_symbols_get_one_definition_per_transform():
         "sym_valve_motor_ty",
     ]
     assert re.findall(r'<symbol id="(sym_valve_control[^"]*)"', svg) == ["sym_valve_control"]
+
+
+# ---------------------------------------------------------------------------
+# A symbol's own *direction* under a placement transform.
+#
+# The lettering problem one level out, and the same answer. A cooler is the
+# heater's circle and the heater's zigzag with the arrowhead moved to the other
+# end of the diagonal, and nothing else tells the two apart -- so a flipped
+# cooler is not a cooler drawn the other way round, it is the heater. The
+# statement is drawn from the tail of the diagonal to its head, so it is the
+# *heading* that has to survive, and the heading is the linear part of whatever
+# the sheet finally applies to the artwork.
+# ---------------------------------------------------------------------------
+
+#: (0, 80) -> (80, 0) as the cooler stencil draws it: up and to the right on a
+#: y-down canvas. Read as a direction, so the length does not matter.
+_DUTY_HEADING = (1.0, -1.0)
+
+
+def _drawn_heading(svg: str, sym_id_prefix: str, dx: float, dy: float):
+    """A direction authored in symbol space, as the sheet finally draws it.
+
+    The ``<use>``'s transform composed onto whatever the definition bakes in,
+    which is the whole journey for a direction: the viewBox fit in between is a
+    positive scale on each axis and so cannot turn or reflect one.
+    """
+    use = re.search(rf'<use href="#({sym_id_prefix}[^"]*)"[^>]*?(?:transform="([^"]*)")?\s*/>', svg)
+    assert use, f"no <use> for {sym_id_prefix}"
+    body = re.search(rf'<symbol id="{use.group(1)}".*?</symbol>', svg, re.S)
+    assert body, f"no <symbol> defining {use.group(1)}"
+    baked = re.search(r'<g transform="([^"]*)">', body.group(0))
+    a, b, c, d = _linear(" ".join([use.group(2) or "", baked.group(1) if baked else ""]))
+    hx, hy = a * dx + c * dy, b * dx + d * dy
+    scale = math.hypot(hx, hy)
+    return (hx / scale, hy / scale)
+
+
+@pytest.mark.parametrize("mirror", [False, "x", "y", "xy"])
+def test_a_directional_symbols_arrow_survives_a_flip(mirror):
+    """The duty arrow points the way its author drew it however it is flipped.
+
+    Reported as ``E-201`` on ``05_reactor_recycle`` pointing up and right while
+    ``E-301`` on ``10_ethanol_pfd`` -- the same stencil, flipped for a nozzle
+    reason -- pointed down and right: one stencil, two opposite statements about
+    which way the heat goes.
+    """
+    fs = Flowsheet("duty")
+    fs.add(units.Cooler("E-1")).pin(x=200, y=200, mirrored=mirror)
+    fs.layout()
+    got = _drawn_heading(fs.to_svg(check=False), "sym_cooler", *_DUTY_HEADING)
+    want = math.hypot(*_DUTY_HEADING)
+    assert got == pytest.approx((_DUTY_HEADING[0] / want, _DUTY_HEADING[1] / want))
+
+
+def test_a_flipped_directional_symbol_still_moves_its_nozzles():
+    """Holding the drawing still must not quietly cancel the flip.
+
+    A flip is asked for to put the nozzles on the other side -- which is exactly
+    why ``10_ethanol_pfd`` flips its condenser, so the overhead rises into the
+    shell inlet dead straight -- so the nozzles have to move even though the ink
+    does not. Without this, "the arrow no longer reverses" would be satisfied by
+    ignoring ``mirrored=`` altogether.
+    """
+    from pandid.portgeom import port_point
+
+    fs = Flowsheet("nozzles")
+    upright = fs.add(units.Cooler("E-1")).pin(x=200, y=200)
+    flipped = fs.add(units.Cooler("E-2")).pin(x=500, y=200, mirrored="y")
+    fs.layout()
+    # utility_out is drawn on the crown; flipped, it has to be underneath.
+    assert port_point(upright, upright.frame, "utility_out")[1] < upright.frame.cy
+    assert port_point(flipped, flipped.frame, "utility_out")[1] > flipped.frame.cy
+
+
+def test_a_directional_symbol_takes_one_definition_per_flip_and_one_per_turn():
+    """A flip is baked into the definition and a turn is not, so the four turns
+    of an unflipped cooler still share the one entry the sheet had before."""
+    fs = Flowsheet("defs")
+    for i, rot in enumerate((0, 90, 180, 270)):
+        fs.add(units.Cooler(f"E-{i}")).pin(x=200 + 200 * i, y=100, orientation=rot)
+    fs.add(units.Cooler("E-x")).pin(x=200, y=400, mirrored="x")
+    fs.add(units.Cooler("E-y")).pin(x=500, y=400, mirrored="y")
+    fs.layout()
+    svg = fs.to_svg(check=False)
+    assert sorted(set(re.findall(r'<symbol id="(sym_cooler[^"]*)"', svg))) == [
+        "sym_cooler",
+        "sym_cooler_tx",
+        "sym_cooler_ty",
+    ]

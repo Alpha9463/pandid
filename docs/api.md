@@ -1739,12 +1739,27 @@ instrument.attach(on, *, at=None, offset=45.0, angle=90.0) -> Instrument
   the flow, so a re-route cannot spin the tap. On a unit host the reference is
   the face's tangent, so `90` again points straight out.
 
-An impulse line is drawn from the tap to the balloon: a fine solid line to a
-process host, because that is what it is, a length of impulse tubing between the
-pipe and the element. It is **dashed** where the host carries a measurement
-rather than a fluid — a balloon hung off another balloon, and a balloon teed off
-a **signal line**, which is how a trip is drawn: not on a face of the balloon it
-acts for, but branched at a right angle off the line carrying the command.
+A fine line is drawn from the tap to the balloon, and whether it is solid or
+dashed is a statement about **that line**, asked of both its ends rather than of
+the host alone. Solid says an impulse line, which is a piece of pipe: a length
+of tubing between the process and the element, with the fluid the reading is
+taken from inside it. That needs process fluid at one end and a device out in
+the plant at the other, so it is drawn solid only where
+
+- the host carries fluid — a process line, a vessel, an exchanger, an in-line
+  element — rather than a measurement, which is what a balloon and a signal line
+  carry; **and**
+- the balloon is ISA-5.1's field-mounted one, the bare circle. Every other
+  balloon is a location or function symbol saying the function is in a panel
+  (`"panel"`, `"aux"`), in the shared display (`"shared"`), in a computer
+  (`"computer"`) or in a logic solver (`"sis"`/`"logic"`/`"interlock"`), and no
+  tubing runs from a drum to any of those.
+
+Everything else is **dashed**: a balloon hung off another balloon, a balloon teed
+off a **signal line** — which is how a trip is drawn, not on a face of the
+balloon it acts for but branched at a right angle off the line carrying the
+command — a trip square hung on the valve it strokes, and a control-room
+controller declared `on` a vessel to place it.
 
 ```python
 trip = fs.connect(lic.sig_out, lv.actuator, kind="electric")
@@ -2233,6 +2248,10 @@ names `variant="horizontal"` where it exists.
 
 Mirroring is left alone. §11.4.2 excepts *turning* only, and flipping a tank left
 to right to put its nozzles on the other side is a placement the clause permits.
+What a flip may not do is reverse an arrow the artwork carries — see
+[Symbols whose artwork points somewhere](#symbols-whose-artwork-points-somewhere)
+below, which is handled by drawing rather than by refusing, for exactly the
+reason this paragraph gives.
 
 The 41 marked symbols, and what in each one's artwork only means one thing one
 way up:
@@ -2260,6 +2279,40 @@ rests on its support the way every piece of plant rests on the ground, and that
 is not the test. The reasons are recorded beside `GRAVITY_FIXED` in
 `scripts/vendor_symbols.py`, which is where the flag is set for the vendored
 symbols.
+
+### Symbols whose artwork points somewhere
+
+`Heater` and `Cooler` are one stencil pair. The same circle, the same zigzag, the
+same diagonal — and which of the two you are looking at is *only* which end of
+that diagonal carries the arrowhead: heat added, or heat removed. Flip either and
+the head lands at the far end, where the other one draws it, so the sheet says
+heat is added where it is removed.
+
+That is not a reason to refuse the flip. §11.4.2 permits mirroring outright, and
+what a reader asks for by flipping a condenser is its *nozzles* on the other side
+— `examples/10_ethanol_pfd` flips one so the tower overhead rises into the shell
+inlet dead straight. So `Symbol.directional` marks the drawing instead, and the
+renderer holds it still under the flip while the nozzles move: the reflection is
+undone inside the `<defs>` entry and the `<use>` reapplies it, exactly as a
+symbol's own lettering is kept readable under a transform.
+
+```python
+cond = fs.add(units.HeatExchanger("E-301", variant="condenser"))
+cond.pin(x=430, y=56, mirrored="y")   # shell inlet underneath; arrow unchanged
+```
+
+Nothing is warned about and nothing is refused: the flip does what it was asked
+to do and the arrow goes on saying what the stencil's author drew. The three
+marked symbols are `heater/default`, `cooler/default` and `hex/condenser`, which
+is the same drawing as `cooler/default`; the reasons are recorded beside
+`DIRECTIONAL` in `scripts/vendor_symbols.py`.
+
+A **turn** is left alone, and is a different question: a rotation is a rigid
+motion and carries an arrow to a turned copy of the same statement, where a
+reflection swaps its head for its tail. The one place that is not the whole story
+is `orientation=180` on these two, which lands the head at the other end without
+reflecting anything, and which the circle-and-zigzag around it is symmetric
+enough not to give away.
 
 ---
 
