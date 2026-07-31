@@ -10,14 +10,28 @@ Two things it shows that no other example can.
 **Connections on all four sides.** `inputs=` and `outputs=` are one face per
 connection, in order, so air and steam enter the reformer from *above* while the
 gas comes in from the left, the CO2 leaves the top of the removal section, and
-the synthesis loop takes its recycle back in from *below*. A plain count is the
-shorthand for the usual case: `inputs=1` is one connection on the west.
+the refrigeration section sends its recycle out of the *bottom* for the synthesis
+loop to take back in from below. A plain count is the shorthand for the usual
+case: `inputs=1` is one connection on the west.
 
 **The box sizes itself.** Nothing here carries a `width` or a `height`. Each box
 is as wide as its own name and as tall as the connections on its walls need,
 spread at a pitch that keeps two arrowheads from touching. `Shift & CO2 Removal`
 comes out wider than `Reforming` because its name is longer, not because anyone
 said so.
+
+**The recycle runs under the row**, which is how a BFD draws one: out of the
+bottom of the section that produces it, along a channel below the row of boxes,
+and back into the bottom of the section that takes it, crossing nothing.
+
+The purge flag is the one thing on this sheet whose position is not free, and it
+is pinned close under the loop for a reason. A block draws every input on a face
+before every output on it, and cannot be told otherwise (issue #192), so the
+recycle's inlet lands to the *left* of the purge's outlet on the loop's south
+wall -- while the recycle itself arrives from the right, off Refrigeration.
+Turning the purge aside above the recycle's channel is what keeps the two apart.
+Drop that flag to the bottom of the sheet instead and the recycle has to hop
+over the purge.
 
 **Why it is pinned.** The layout engine ranks units by process flow order and
 does not yet know that a connection on the north face wants its source *above*
@@ -47,18 +61,20 @@ def main():
         units.Block("Synthesis Loop", inputs=["W", "S"], outputs=["E", "S"])
     ).pin(x=830, y=340)
     refrigeration = fs.add(
-        units.Block("Refrigeration", inputs=1, outputs=["E", "W"])
+        units.Block("Refrigeration", inputs=1, outputs=["E", "S"])
     ).pin(x=1080, y=340)
 
     # --- Where the sheet ends --------------------------------------------
     # The two above the row feed the reformer's north wall; the two below take
-    # what the loop rejects.
+    # what the loop rejects. The purge flag sits in the gap between the last two
+    # boxes rather than at the foot of the sheet, so its line turns aside before
+    # it reaches the recycle's channel; see the note at the top.
     natural_gas = fs.add(units.Feed("Natural Gas")).pin(x=60, y=355)
     air = fs.add(units.Feed("Air")).pin(x=180, y=180)
     steam = fs.add(units.Feed("Steam")).pin(x=330, y=180)
     co2 = fs.add(units.Product("CO2 to Urea")).pin(x=560, y=170)
     ammonia = fs.add(units.Product("Liquid NH3")).pin(x=1300, y=355)
-    purge = fs.add(units.Product("Purge Gas")).pin(x=1000, y=560)
+    purge = fs.add(units.Product("Purge Gas")).pin(x=975, y=440)
 
     # --- The streams -----------------------------------------------------
     # A BFD numbers its streams and says nothing else about them; the flow
@@ -71,7 +87,7 @@ def main():
     fs.connect(shift.out_1, synthesis.in_1)
     fs.connect(synthesis.out_1, refrigeration.in_1)
     fs.connect(refrigeration.out_1, ammonia.inlet)
-    fs.connect(refrigeration.out_2, synthesis.in_2)      # recycle, in from below
+    fs.connect(refrigeration.out_2, synthesis.in_2)      # recycle, bottom to bottom
     fs.connect(synthesis.out_2, purge.inlet)
 
     fs.render(out("block_flow_diagram.svg"))
