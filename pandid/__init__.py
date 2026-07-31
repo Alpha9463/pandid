@@ -14,7 +14,7 @@ of its names is re-exported here, so ``pandid.Cyclone`` and
 # time (`[tool.hatch.version]`), so the distribution metadata cannot disagree
 # with what `import pandid` reports, and a source checkout reports the same string
 # without the package having to be installed.
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from pandid.components import Component
 from pandid.flowsheet import Flowsheet
