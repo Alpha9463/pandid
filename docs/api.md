@@ -447,8 +447,27 @@ authored with, while a block's rectangle is built from its own declaration.
 
 ```python
 rx.nozzle("out_2", "S")          # send one product out of the bottom
-rx.face("out_2")                 # -> "S"
+rx.face("out_2")                 # -> "S"       which side of the box
+rx.ports_on("N")                 # -> ["in_3"]  what is on that side
 ```
+
+> **Pin a block flow diagram.** The layout engine ranks units by process flow
+> order and does not yet know that a connection on the north face wants its
+> source *above* it ([#168](https://github.com/Alpha9463/pandid/issues/168)), so
+> a BFD left to lay itself out sends those streams up and over the sheet — long
+> climbs, runs closer together than the pitch the block keeps at the nozzle, and
+> line jumps where there should be none. Pinned output is what
+> [`examples/12_block_flow_diagram.py`](../examples/12_block_flow_diagram.py)
+> shows, and it is what a BFD wants anyway: the reader is meant to see the plant
+> in a row.
+
+**A face names the box's own side, not the reader's.** This is the one place
+`Block` departs from [`nozzle()`](#nozzle), which everywhere else takes the
+compass point on the *finished sheet*. It has to: the face here is the
+declaration the drawing is built from, and a declaration cannot be about a
+`pin()` that has not happened yet. So a turn or a mirror moves the box and every
+connection with it, and `"N"` on a block turned a quarter is drawn on the east.
+`face()` answers about the box; `portgeom.port_faces()` answers about the sheet.
 
 **The box sizes itself to what it carries.** A block flow diagram's box is
 precisely the thing that gathers many streams, so the height follows the west
@@ -458,8 +477,15 @@ one blob. Eight inputs on one wall make a *taller block*, not eight crushed
 nozzles. The width also clears the name, which a BFD letters inside the box.
 
 `width`/`height` still win where they are given, and a box too small to draw the
-connections at that pitch is refused rather than drawn crushed. A width given
-also wins over the name, which then overflows the box.
+connections at that pitch is refused rather than drawn crushed — wherever it is
+asked for: the constructor, a later assignment, `nozzle()` and `pin()`, the last
+because a quarter turn draws the box's upright faces *across* the sheet and can
+put a run on the shorter axis. A refused call leaves the block as it was.
+
+A width given also wins over the name, which then hangs out of both ends of the
+box. Every label here is written on an opaque halo, so an overhanging one
+**erases whatever is drawn beside it** rather than merely looking untidy. Leave
+`width` off and it cannot happen.
 
 A block is **not** scheduled: `equipment_list()` skips it, because a box
 standing for a whole section is not a purchasable item. `include=` still takes

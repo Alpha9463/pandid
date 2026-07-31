@@ -35,7 +35,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   draws. Eight inputs on one wall make a taller block. `width`/`height` still
   win where they are given, and a box too small for the connections is refused
   rather than drawn crushed, the way a `Conveyor` refuses a belt run its rollers
-  do not fit in.
+  do not fit in — including where a `pin()` turn is what makes it too small.
+
+  **Pin a block flow diagram** until [#168](https://github.com/Alpha9463/pandid/issues/168)
+  is fixed. The layout engine ranks units by process flow order and does not yet
+  know that a connection on the north face wants its source *above* it, so a BFD
+  left to lay itself out sends those streams up and over the sheet.
+  `examples/12_block_flow_diagram.py` is a worked, pinned sheet, and
+  `docs/api.md` says the same.
 
   A block is not scheduled equipment: `equipment_list()` skips it, because a box
   standing for a whole section is not a purchasable item. It declares no

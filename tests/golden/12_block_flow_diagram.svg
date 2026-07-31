@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1528" height="550" viewBox="-63.0 115.0 1528.0 550.0">
+  <!-- Background -->
+  <rect x="-63.0" y="115.0" width="1528.0" height="550.0" fill="white" />
+  <defs>
+    <marker id="arrow_black" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="black" />
+    </marker>
+    <symbol id="sym_block_120x80" viewBox="0 0 120.0 80.0" overflow="visible"><rect x="0" y="0" width="120" height="80" fill="none" stroke="black" stroke-width="2"/></symbol>
+    <symbol id="sym_block_134x80" viewBox="0 0 134.0 80.0" overflow="visible"><rect x="0" y="0" width="134" height="80" fill="none" stroke="black" stroke-width="2"/></symbol>
+    <symbol id="sym_block_142x80" viewBox="0 0 142.0 80.0" overflow="visible"><rect x="0" y="0" width="142" height="80" fill="none" stroke="black" stroke-width="2"/></symbol>
+    <symbol id="sym_block_182x80" viewBox="0 0 182.0 80.0" overflow="visible"><rect x="0" y="0" width="182" height="80" fill="none" stroke="black" stroke-width="2"/></symbol>
+  </defs>
+  <g id="units">
+    <use href="#sym_block_120x80" x="260" y="340" width="120.0" height="80.0" />
+    <use href="#sym_block_182x80" x="520" y="340" width="182.0" height="80.0" />
+    <use href="#sym_block_142x80" x="830" y="340" width="142.0" height="80.0" />
+    <use href="#sym_block_134x80" x="1080" y="340" width="134.0" height="80.0" />
+    <polygon points="-8.0,370 95,370 110,380 95,390 -8.0,390" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="43.5" y="380" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Natural Gas</text>
+    <polygon points="150.0,195 215,195 230,205 215,215 150.0,215" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="182.5" y="205" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Air</text>
+    <polygon points="300.0,195 365,195 380,205 365,215 300.0,215" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="332.5" y="205" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Steam</text>
+    <polygon points="560,185 663.0,185 678.0,195 663.0,205 560,205" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="611.5" y="195" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CO2 to Urea</text>
+    <polygon points="1300,370 1395.0,370 1410.0,380 1395.0,390 1300,390" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="1347.5" y="380" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Liquid NH3</text>
+    <polygon points="1000,575 1087.0,575 1102.0,585 1087.0,595 1000,595" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="1043.5" y="585" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Purge Gas</text>
+  </g>
+  <g id="streams">
+    <path d="M 110.0,380.0 L 260.0,380.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 230.0,205.0 L 275.0,205.0 L 275.0,315.0 L 305.0,315.0 L 305.0,340.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 380.0,205.0 L 405.0,205.0 L 405.0,315.0 L 335.0,315.0 L 335.0,340.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 380.0,380.0 L 520.0,380.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 611.0,340.0 L 611.0,235.0 L 535.0,235.0 L 535.0,195.0 L 560,195.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 702.0,380.0 L 830.0,380.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 972.0,380.0 L 1055.0,380.0 L 1055.0,365.0 L 1080.0,365.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1214.0,380.0 L 1300,380.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1080.0,395.0 L 975.0,395.0 L 975.0,445.0 L 886.0,445.0 L 886.0,420.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 916.0,420.0 L 916.0,440.0 A 5 5 0 0 1 916.0,450.0 L 916.0,585.0 L 1000,585.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <rect x="175.8" y="373.5" width="18.4" height="13.0" fill="white" />
+    <text x="185.0" y="380.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S1</text>
+    <rect x="268.5" y="250.8" width="13.0" height="18.4" fill="white" />
+    <text x="275.0" y="260.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 275.0, 260.0)">S2</text>
+    <rect x="398.5" y="250.8" width="13.0" height="18.4" fill="white" />
+    <text x="405.0" y="260.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 405.0, 260.0)">S3</text>
+    <rect x="440.8" y="373.5" width="18.4" height="13.0" fill="white" />
+    <text x="450.0" y="380.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S4</text>
+    <rect x="604.5" y="278.3" width="13.0" height="18.4" fill="white" />
+    <text x="611.0" y="287.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 611.0, 287.5)">S5</text>
+    <rect x="756.8" y="373.5" width="18.4" height="13.0" fill="white" />
+    <text x="766.0" y="380.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S6</text>
+    <rect x="1004.3" y="373.5" width="18.4" height="13.0" fill="white" />
+    <text x="1013.5" y="380.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S7</text>
+    <rect x="1247.8" y="373.5" width="18.4" height="13.0" fill="white" />
+    <text x="1257.0" y="380.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S8</text>
+    <rect x="1018.3" y="388.5" width="18.4" height="13.0" fill="white" />
+    <text x="1027.5" y="395.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S9</text>
+    <rect x="909.5" y="490.2" width="13.0" height="24.6" fill="white" />
+    <text x="916.0" y="502.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 916.0, 502.5)">S10</text>
+  </g>
+  <g id="unit_labels">
+    <text x="320.0" y="380.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Reforming</text>
+    <text x="611.0" y="380.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Shift &amp; CO2 Removal</text>
+    <text x="901.0" y="380.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Synthesis Loop</text>
+    <text x="1147.0" y="380.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Refrigeration</text>
+  </g>
+</svg>

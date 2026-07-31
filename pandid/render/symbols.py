@@ -518,21 +518,30 @@ def block_span(count: int) -> float:
     return BLOCK_PITCH * count
 
 
-def block_box_too_small(owner: str, face: str, count: int,
-                        axis: str, given: float, needed: float) -> ValueError:
+def block_box_too_small(owner: str, face: str, count: int, axis: str,
+                        given: float, needed: float,
+                        turned: bool = False) -> ValueError:
     """The error for a box too small to draw a block's nozzles legibly.
 
-    Built here so the message :class:`pandid.units.Block` raises up front and
-    the one :meth:`pandid.units.Block.symbol` raises later are the same sentence
-    about the same rule, exactly as :func:`conveyor_too_short` is.
+    Built here so every call that can produce it -- the constructor,
+    :meth:`pandid.units.Block.nozzle`, :meth:`pandid.units.Block.pin` and a
+    later assignment to ``width`` -- raises the same sentence about the same
+    rule, exactly as :func:`conveyor_too_short` is.
+
+    ``turned`` names the case worth spelling out, because otherwise the message
+    is about an axis the author never mentioned: a quarter turn draws the box's
+    upright faces across the sheet, so the run that was measured against the
+    height is now measured against the width.
     """
+    spun = (f" The block is turned a quarter, so its {face} face is drawn along "
+            f"the box's {axis}." if turned else "")
     return ValueError(
         f"{owner}: {count} connections on the {face} face are drawn "
         f"{BLOCK_PITCH:g} apart, which is what keeps two {ARROWHEAD:g}-unit "
-        f"arrowheads from touching, and the block sized itself to {axis}="
-        f"{needed:g} to hold them. {axis}={given:g} squeezes the same run into "
+        f"arrowheads from touching, and the block sized itself to {needed:g} to "
+        f"hold them.{spun} {axis}={given:g} squeezes the same run into "
         f"{given / needed:.0%} of that. Give at least {axis}={needed:g}, or leave "
-        f"{axis}= off and the block sizes itself to its connections."
+        f"width/height off and the block sizes itself to its connections."
     )
 
 

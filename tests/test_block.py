@@ -234,13 +234,51 @@ def test_one_connection_on_a_face_has_no_spacing_to_crush():
         units.Block("B", width=box[0], height=box[1])
 
 
-def test_a_box_shrunk_after_construction_still_refuses_rather_than_crushing():
-    """``width`` is a plain attribute, so the constructor cannot be the only
-    guard -- the same double guard ``Conveyor.length`` has."""
+def test_a_box_shrunk_after_construction_is_refused_where_it_is_set():
+    """The size and the drawing are one question here, so ``width``/``height``
+    are properties and a size the drawing cannot be made at is refused on the
+    assignment -- the guard ``Conveyor.length`` has, for the same reason."""
     b = units.Block("B", inputs=4)
-    b.height = 60
     with pytest.raises(ValueError, match="4 connections on the W face"):
-        b.symbol()
+        b.height = 60
+    assert b.height is None
+
+
+@pytest.mark.parametrize("box", [(60.0, 150.0), (120.0, 150.0)])
+def test_a_quarter_turn_cannot_smuggle_a_crushed_run_past_the_guard(box):
+    """The reported hole, and the reason the check goes through ``resolve_size``
+    rather than comparing ``width``/``height`` in symbol axes.
+
+    A turn draws the box's upright faces *across* the sheet while an explicit
+    width/height stays the final box, so five inlets that fit the 150 height
+    standing up were squeezed into the 60 width lying down: 12 apart, exactly
+    one arrowhead, five heads touching."""
+    b = units.Block("R", inputs=5, outputs=1, width=box[0], height=box[1])
+    with pytest.raises(ValueError, match="turned a quarter"):
+        b.pin(x=1000, y=140, orientation=90)
+    assert b.pin_ is None  # ...and the refused placement was not committed
+
+
+@pytest.mark.parametrize("placement", [{}, {"orientation": 90}, {"orientation": 270}])
+@pytest.mark.parametrize("mirror", [{}, {"mirrored": "x"}, {"mirrored": "y"}])
+def test_an_auto_sized_block_keeps_its_pitch_at_every_placement(placement, mirror):
+    """Safe by construction, and this is what says so: ``resolve_size`` swaps
+    the symbol's own axes with the turn, so the box and the artwork are the same
+    shape however the block is placed."""
+    fs = Flowsheet("turned")
+    b = fs.add(units.Block("R", inputs=5, outputs=1)).pin(x=400, y=400, **placement, **mirror)
+    fs.layout()
+    points = [port_point(b, b.frame, f"in_{i}") for i in range(1, 6)]
+    gaps = [math.dist(a, c) for a, c in zip(points, points[1:])]
+    assert all(gap == pytest.approx(BLOCK_PITCH) for gap in gaps)
+
+
+def test_a_turn_that_still_fits_is_allowed():
+    """The guard is about the pitch, not about turning: a square-enough box
+    holds the run either way up."""
+    b = units.Block("R", inputs=5, outputs=1, width=200, height=200)
+    b.pin(x=100, y=100, orientation=90)
+    assert b.pin_.orientation == 90
 
 
 # ---------------------------------------------------------------------------
@@ -303,6 +341,25 @@ def test_no_two_connections_ever_land_on_one_point():
             sym = units.Block("B", inputs=faces, outputs=outs).symbol()
             assert sym.coincident_ports() == [], f"inputs={faces} outputs={outs}"
             assert len(set(sym.ports.values())) == n + m
+
+
+def test_a_declared_face_is_the_boxs_own_side_and_a_turn_moves_it():
+    """The documented divergence from ``Unit.nozzle``, pinned so it stays
+    documented: ``face()`` answers about the box and ``port_faces()`` about the
+    sheet, and a turned block is where the two part company."""
+    fs = Flowsheet("turned")
+    b = fs.add(units.Block("B", inputs=["N"], outputs=["E"])).pin(x=200, y=200, orientation=90)
+    assert b.face("in_1") == "N"  # the side of the box it was declared on...
+    assert port_faces(b, "in_1") == ["E"]  # ...and the side of the sheet drawn
+
+
+def test_ports_on_answers_the_lookup_face_does_not():
+    b = units.Block("B", inputs=["W", "N", "W"], outputs=["N"])
+    assert b.ports_on("W") == ["in_1", "in_3"]
+    assert b.ports_on("top") == ["in_2", "out_1"]
+    assert b.ports_on("S") == []
+    with pytest.raises(ValueError, match="is not a face"):
+        b.ports_on("sideways")
 
 
 def test_a_connection_is_offered_the_one_face_it_was_declared_with():
