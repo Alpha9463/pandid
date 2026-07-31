@@ -85,8 +85,8 @@ def main():
     # them, so each row is named once here and every device on it is pinned to
     # it by its own nozzle.
     col2.pin(x=1260, y=col_y)
-    ovhd_run_y = col_y - 160    # condenser row, clear above both towers
-    drum_y = col_y - 75         # reflux drum, hung under the condenser it drains
+    ovhd_run_y = col_y - 130    # where each tower's overhead enters its condenser
+    drum_y = col_y - 105        # reflux drum, hung under the condenser it drains
     tee_y = col_y - 5           # where each drum's draw parts into two lines
     bot_y = col_y + 225         # kettle reboiler row, below both towers
     pump_y = bot_y + 85         # pump suctions, on the run the weir draw falls to
@@ -100,20 +100,43 @@ def main():
     c1_axis = col1.pin_.x + port_offset(col1, "distillate")[0]
     c2_axis = col2.pin_.x + port_offset(col2, "distillate")[0]
 
-    # Overhead: condenser up and to the right, so the tower's overhead leaves
-    # the crown, rises and turns once into it. The process takes the exchanger's
-    # W-E pair, which is its tube side.
-    c1_ovhd.pin(x=c1_axis + 80, port="tube_in", y=ovhd_run_y)
-    c2_ovhd.pin(x=c2_axis + 80, port="tube_in", y=ovhd_run_y)
+    # Overhead: condenser over its own tower on the same axis and flipped top to
+    # bottom, so the crown's vapour rises into its underside dead straight and
+    # the condensate leaves the crown of the exchanger, which is the arrangement
+    # both reference PFDs draw and the one 10_ethanol_pfd already copies.
+    #
+    # The vapour is on the shell and the cooling water on the tubes -- the
+    # opposite hand to the bottoms cooler 10_ethanol_pfd draws with this same
+    # symbol, and the same rule arriving at it. The fouling stream goes tube
+    # side, where a bundle can be rodded out; off a tower bottom that is the
+    # process, but under a total condenser the process is clean overhead vapour
+    # and the cooling water is what scales, so here the water takes the W-E pair
+    # and the vapour the shell's N-S one. Both reference PFDs pipe all three of
+    # their condensers exactly so, water straight across the symbol and vapour
+    # up through it. Shell side is also the larger flow area, and an overhead is
+    # where that matters most: pressure dropped at the crown is pressure the
+    # whole tower has to be run against.
+    c1_ovhd.pin(mirrored="y").pin(x=c1_axis, port="shell_in", y=ovhd_run_y)
+    c2_ovhd.pin(mirrored="y").pin(x=c2_axis, port="shell_in", y=ovhd_run_y)
 
-    # Drum hung below the condenser it drains, and piped from the top rather
-    # than from the head the engine would otherwise reach for: condensate falls
-    # onto a receiver, and nozzle() is how that convention gets stated instead
-    # of being left to wherever the peer happened to land.
-    c1_drum.nozzle("inlet", "N").pin(
-        port="inlet", x=c1_ovhd.pin_.x + port_offset(c1_ovhd, "tube_out")[0] + 60, y=drum_y)
-    c2_drum.nozzle("inlet", "N").pin(
-        port="inlet", x=c2_ovhd.pin_.x + port_offset(c2_ovhd, "tube_out")[0] + 60, y=drum_y)
+    # Drum standing clear to the east of its tower, so the condensate leaves the
+    # condenser's crown, runs over the top and drops onto it, and piped from the
+    # top rather than from the head the engine would otherwise reach for:
+    # condensate falls onto a receiver, and nozzle() is how that convention gets
+    # stated instead of being left to wherever the peer happened to land.
+    #
+    # The elevation is the one that lets the drum feed the tower without a pump.
+    # Reflux and distillate both run on the head between the drum's liquid level
+    # and what they discharge to, which is why neither reference PFD nor the
+    # P&ID of this same service draws a pump under a reflux drum, and a drum
+    # drawn low is that head drawn away. It buys the take-off its room as well:
+    # the draw used to reach the tee in 22 units, and a Tee draws the junction
+    # and no symbol, so the length of pipe either side of it is the only thing
+    # saying one is there. At 52 the draw runs longer than the drum is tall and
+    # the reflux parts from the distillate well clear of the drum's underside,
+    # rather than against it.
+    c1_drum.nozzle("inlet", "N").pin(port="inlet", x=c1_axis + 200, y=drum_y)
+    c2_drum.nozzle("inlet", "N").pin(port="inlet", x=c2_axis + 200, y=drum_y)
 
     # Each tee sits on its drum's draw. The quarter turn puts the run down the
     # page and the flip puts the branch out east, so the reflux carries straight
@@ -153,8 +176,8 @@ def main():
     # T-100's overhead circuit, then its reboiler circuit. The tee is inline, so
     # the drum's draw and the reflux leg it runs into carry one number and only
     # the distillate branch takes one of its own.
-    fs.connect(col1.distillate, c1_ovhd.tube_in)
-    fs.connect(c1_ovhd.tube_out, c1_drum.inlet)
+    fs.connect(col1.distillate, c1_ovhd.shell_in)
+    fs.connect(c1_ovhd.shell_out, c1_drum.inlet)
     fs.connect(c1_drum.outlet, c1_tee.inlet)
     fs.connect(c1_tee.outlet, col1.reflux_in, draw_as_recycle=True)
     fs.connect(c1_tee.branch, c1_prod.inlet)
@@ -164,8 +187,8 @@ def main():
     fs.connect(c1_reb.bottoms, pump1.suction)                       # over the weir
     fs.connect(pump1.discharge, col2.feed)
 
-    fs.connect(col2.distillate, c2_ovhd.tube_in)
-    fs.connect(c2_ovhd.tube_out, c2_drum.inlet)
+    fs.connect(col2.distillate, c2_ovhd.shell_in)
+    fs.connect(c2_ovhd.shell_out, c2_drum.inlet)
     fs.connect(c2_drum.outlet, c2_tee.inlet)
     fs.connect(c2_tee.outlet, col2.reflux_in, draw_as_recycle=True)
     fs.connect(c2_tee.branch, c2_prod.inlet)
@@ -209,6 +232,8 @@ def main():
             Revision("B", "2026-07-01", "Issued for design", "AA", "JS", "RL"),
             Revision("C", "2026-07-12", "Added FV-200 recycle loop", "AA", "JS", "RL"),
             Revision("D", "2026-07-28", "Reflux and reboiler added",
+                     "AA", "JS", "RL"),
+            Revision("E", "2026-08-01", "Reflux drums raised",
                      "AA", "JS", "RL"),
         ],
     )

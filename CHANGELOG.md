@@ -606,6 +606,31 @@ to what was drawn.
   end to end. The sheet's general notes are rewritten to match. Lettering only:
   a diamond is drawn with its number and never its letters, so no sheet moves.
 
+- **`examples/03_distillation_train` pipes its overheads the way the reference
+  sheets pipe theirs.** ([#186](https://github.com/Alpha9463/pandid/issues/186))
+
+  The overhead vapour ran into each condenser's *tube* side. Both reference PFDs
+  put cooling water straight across the tubes of all three of their condensers
+  and take the vapour up through the shell, which is the fouling rule reaching
+  the other answer: the stream that scales goes tube side where a bundle can be
+  rodded out, and under a total condenser that is the water, not the process.
+  `06_column_reflux` and `10_ethanol_pfd` were already drawn so; only this sheet
+  was not, and its comment argued the wrong hand. `E-101` and `E-201` now take
+  `shell_in`/`shell_out`, stand on their own towers' axes and are flipped top to
+  bottom, so each overhead rises into the underside of its condenser dead
+  straight rather than turning into a side nozzle, and the condensate leaves the
+  crown, runs over the top and drops onto the drum.
+
+  `V-101` and `V-201` are raised 30 units. A reflux drum feeds reflux *and*
+  distillate on the head beneath it, which is why no reference sheet pumps one
+  and the P&ID of this same service draws both legs off the one draw through
+  control valves and nothing else; drawn low, that head is drawn away. It left
+  the take-off no room either: 22 units of draw between the drum and a `Tee`,
+  and a `Tee` draws the junction and no symbol, so the pipe either side of it is
+  all that says one is there. At 52 the draw runs longer than the drum is tall
+  and the reflux parts from the distillate clear of the drum's underside. No
+  stream is added, so the table stays 21 columns wide.
+
 - **`examples/03_distillation_train` draws its towers as columns.** `T-100` and
   `T-200` each had a single overhead product, no reflux drum, no reboiler and no
   internal returns, and two towers arranged that way are not columns. Both now
