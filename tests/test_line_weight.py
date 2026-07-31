@@ -4,8 +4,10 @@ A sheet is drawn in two weights and the ratio between them is what tells a
 reader the process from the instrumentation (ISO 15519-1 §6.2; see
 ``pandid.render.svg._PROCESS_STROKE``). Every check here is therefore about the
 *drawn* weight: what a stroke measures after every viewport and transform
-between it and the page has been applied, which is not what its ``stroke-width``
-attribute says.
+between it and the drawing has been applied, which is not what its
+``stroke-width`` attribute says. The one transform left out is the fit a fixed
+``page_size`` puts the whole drawing under, since it moves every pen together
+and so says nothing about any of them; ``_walk`` is where that is done.
 
 The difference is where #153 lived. A symbol's weights are compensated once, at
 generation time, for the scale its artwork is drawn at; a ``<use>`` then scales
@@ -116,6 +118,20 @@ def _walk(el, m, symbols, out, where):
         if tag in ("defs", "symbol", "marker"):
             continue  # a definition is ink only where a <use> puts it
         cm = _mul(m, _linear(child.get("transform", "")))
+        if tag == "g" and child.get("id") == "drawing":
+            # A sheet given a fixed ``page_size`` fits its whole drawing into
+            # what the furniture leaves, under one uniform scale
+            # (``SvgRenderer._fit``). That moves every pen on the drawing
+            # together, so it changes what a stroke measures against the page
+            # and nothing about what the weights say to each other -- which is
+            # the whole of what a line weight is. It is left out here, so the
+            # weights below are the ones the drawing is drawn in and the
+            # invariant reads the same on the A3 sheets as on the rest.
+            lo, hi = _pen_axes(_linear(child.get("transform", "")))
+            assert math.isclose(lo, hi, rel_tol=1e-9), (
+                f"the page fit is not a uniform scale: {lo:.4g} by {hi:.4g}"
+            )
+            cm = m
         if tag == "use":
             ref = (child.get("href") or child.get(f"{_NS}href", ""))[1:]
             sym = symbols[ref]
