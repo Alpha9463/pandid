@@ -74,6 +74,42 @@ _LABEL_GAP = 4.0
 # Search step along the run. Fine, because a label only has to clear whatever it
 # landed on rather than jump a whole label width.
 _LABEL_STEP = 6.0
+# How many bands of sideways stand-off the search may walk through. Beyond
+# _label_reach below each one costs a leader line, so the walk is free to go
+# further than it used to in search of paper that is actually clear, instead of
+# settling for the least damaging spot within three bands.
+_LABEL_BANDS = 6
+
+
+def _label_reach(hh: float) -> float:
+    """The furthest from its run a label may be written and still be *adjacent*.
+
+    ISO 15519-1 §7.2.5, on the reference designation of a connection: "They
+    shall be oriented along or adjacent to the relevant connecting lines. If it
+    is not possible to place the reference designation adjacent to the
+    connecting line, it shall be shown elsewhere in the content area with a
+    leader line to the actual connecting line. See also 6.4."
+
+    Two *shall*s, and the second names the only escape from the first, so this
+    function is where "adjacent" stops and :func:`_leader` takes over.
+
+    The number is derived from what the stand-off *is*: blank paper between the
+    halo and the line, ``_LABEL_GAP + n * hh`` of it at the n'th band, that the
+    reader has to cross to attach the number to the line. The cap is one label
+    height of it -- a gap the size of the thing being attached -- which puts the
+    label's centre at ``hh / 2 + _LABEL_GAP + hh``.
+
+    Measured on ``11_ethanol_pid``, the densest sheet shipped. At 4 units of gap
+    (band 0) and at 17 (band 1) the number reads as its own line's: AE-302,
+    AE-303, AE-305 and HPS-308 all sit at 17 with a hand valve of their own
+    station beneath them, and not one of them is in doubt. At 30 (band 2) all
+    three instances read as something else's -- AE-304 stands 30 off its own
+    stub and 1,6 off D-301's shell, FB-301 stacks over XV-301's tag as though it
+    were a second line of it, and FB-306 stands 5,3 off RB-301's. So the cap
+    falls between 17 and 30 of gap, and is written in the label's own metric
+    rather than as a number measured off one sheet.
+    """
+    return hh / 2 + _LABEL_GAP + hh
 
 
 def _slide(x: float, y: float, room: float, vertical: bool):
@@ -263,6 +299,10 @@ def _covering(box, occupied, limit: int) -> int:
 def _label_anchors(cx: float, cy: float, span: float, hw: float, hh: float, vertical: bool):
     """Where a label of ``hw`` x ``hh`` may go on a run of ``span``, best first.
 
+    Yields ``(x, y, off)``: the anchor, and the perpendicular stand-off from the
+    run that put it there, which is what :func:`_label_reach` is compared
+    against and so what decides whether the label needs a leader.
+
     On the pipe only while the run can still show clear line at each end; then
     beside it (above a horizontal run, left of a vertical one), then the far
     side, then further out. Each of those is slid along the run in turn, so the
@@ -278,13 +318,164 @@ def _label_anchors(cx: float, cy: float, span: float, hw: float, hh: float, vert
     further, since past that it stops reading as this line's number.
     """
     if span >= hw + 2 * _LABEL_CLEAR:
-        yield from _slide(cx, cy, (span - hw) / 2 - _LABEL_CLEAR, vertical)
-    for out in range(3):
+        for x, y in _slide(cx, cy, (span - hw) / 2 - _LABEL_CLEAR, vertical):
+            yield x, y, 0.0
+    for out in range(_LABEL_BANDS):
         off = hh / 2 + _LABEL_GAP + out * hh
         for side in (-1.0, 1.0):
             ax = cx + side * off if vertical else cx
             ay = cy if vertical else cy + side * off
-            yield from _slide(ax, ay, (span + hw) / 2, vertical)
+            for x, y in _slide(ax, ay, (span + hw) / 2, vertical):
+                yield x, y, off
+
+
+# --- the leader that stands in for adjacency ----------------------------------
+# ISO 15519-1 §6.4, on how a leader ends: "Leader lines shall terminate: with a
+# dot if it terminates within an object; with an arrowhead if it ends on the
+# outline of an object or a connection; with an oblique stroke if it ends at
+# several parallel connections." A line number's leader ends on a connection, so
+# it wears an arrowhead, and Figure 4 c) -- the case drawn for exactly that --
+# draws the leader itself *oblique*, running down onto a plain horizontal
+# connecting line with the text carried at its upper end.
+#
+# Oblique is not an oversight there and is not a licence taken here. §12.1 holds
+# "the connecting lines representing pipelines, mechanical links, conductors,
+# functional connections, etc." to horizontal or vertical, and a leader is none
+# of those: it carries no fluid, no signal and no mechanical link, and says only
+# *this text belongs to that line*. The slope is what keeps it from being read
+# as a connection at all, which is why tests/test_route_invariants.py sweeps
+# streams and impulse lines and not this.
+#
+# The arrowhead is drawn on a P&ID too, where no process line carries one. That
+# is not an inconsistency: a flow arrowhead is a statement about direction, and
+# a P&ID reads direction off the line list instead, whereas this one is §6.4's
+# *termination symbol* and says only where the leader ends.
+
+# The head is half the sheet's flow arrowhead, because a leader is drawn at half
+# the weight of a process line: §6.4 hands the leader itself to ISO 128-22,
+# where it is a narrow line, and a terminator heavier than the line it ends
+# would read as the weightier of the two. Same proportions as the flow head,
+# whose marker is 12 long and 12 wide, so the two are one drawing at two sizes
+# rather than two different arrowheads.
+_LEADER_HEAD = ARROWHEAD * _SIGNAL_STROKE / _PROCESS_STROKE
+
+
+def _crosses(start, end, region) -> bool:
+    """Does the segment *start* -> *end* pass through the rectangle *region*?
+
+    Liang-Barsky, and strict at the ends for the same reason :func:`_meets` is:
+    a leader that grazes the edge of a box is not cutting through it, and the
+    padding a line already carries is what keeps ink off it.
+    """
+    (x0, y0), (x1, y1) = start, end
+    dx, dy = x1 - x0, y1 - y0
+    t0, t1 = 0.0, 1.0
+    for p, q in ((-dx, x0 - region[0]), (dx, region[2] - x0),
+                 (-dy, y0 - region[1]), (dy, region[3] - y0)):
+        if p == 0:
+            if q < 0:
+                return False   # parallel to this pair of edges, and outside them
+        else:
+            r = q / p
+            if p < 0:
+                if r > t1:
+                    return False
+                t0 = max(t0, r)
+            elif r < t0:
+                return False
+            else:
+                t1 = min(t1, r)
+    return t0 < t1
+
+
+def _cutting(leader, occupied, limit: int) -> int:
+    """How many of *occupied* a leader would cut through, counted to *limit*.
+
+    A leader is new ink on a sheet that was already too crowded to write the
+    number beside its line, so it has to be scored the way the label itself is:
+    one that runs through the vessel the label stepped around has moved the
+    problem rather than solved it.
+    """
+    n = 0
+    for p in occupied:
+        if _crosses(leader[0], leader[1], p):
+            n += 1
+            if n >= limit:
+                break
+    return n
+
+
+def _leader(box, seg, occupied) -> "tuple[tuple, int]":
+    """How a label's halo at *box* is joined to the run *seg* names.
+
+    Returns ``((start, end), crossings)``: the leader, the end being the point
+    on the run the arrowhead lands on, and how many of *occupied* it cuts
+    through.
+
+    Every candidate leaves the halo's **near face** and lands 45 degrees away
+    along the run -- the slope Figure 4 draws -- on whichever side leaves more
+    run to aim at. Leaving from the label rather than aiming at a fixed point on
+    the run is what makes a leader *move* when the search slides the label
+    along; pinned to the run instead, every anchor in a band produced the same
+    leader and a congested gap had exactly one answer.
+
+    Three starts are offered along that face -- its middle and its two corners --
+    and the one that cuts least wins. The corners are not decoration. The strip
+    of paper directly between a label and its run is, by construction, occupied:
+    it is *why* the label was pushed out this far. A leader dropping straight
+    out of the middle of the near face is aimed into precisely that congestion,
+    and leaving from an end takes it around instead. Figure 4 draws it that way
+    too, the leader leaving the end of the reference line the text sits on.
+
+    The landing point is kept off the ends of the run, because a run's ends are
+    where it meets the equipment it serves and a head landing there points at
+    the vessel as readily as at the pipe -- which is the very reading this whole
+    clause exists to prevent. The clearance is ``_LABEL_CLEAR``, the length of
+    run this module already requires to be showing past a mark for the run to
+    still read as one line, or a third of the run where the run is too short to
+    give that much. Where that clamp bites the leader comes in shallower than 45
+    degrees; it stays oblique, which is all the slope has to be.
+    """
+    (sx1, sy1), (sx2, sy2) = seg
+    vertical = abs(sx2 - sx1) < abs(sy2 - sy1)
+    # Everything below is in the run's own frame -- *u* along it, *v* across --
+    # so one piece of arithmetic serves a horizontal run and a vertical one.
+    lo, hi = ((min(sy1, sy2), max(sy1, sy2)) if vertical
+              else (min(sx1, sx2), max(sx1, sx2)))
+    at = (sx1 + sx2) / 2 if vertical else (sy1 + sy2) / 2
+    u0, u1 = (box[1], box[3]) if vertical else (box[0], box[2])
+    v0, v1 = (box[0], box[2]) if vertical else (box[1], box[3])
+    v = v0 if abs(v0 - at) < abs(v1 - at) else v1
+    gap = abs(v - at)
+    inset = min(_LABEL_CLEAR, (hi - lo) / 3)
+    near, far = lo + inset, hi - inset
+
+    def route(s: float):
+        """The leader leaving the near face at *s*, landing 45 degrees along."""
+        u = max((min(max(s + d * gap, near), far) for d in (1.0, -1.0)),
+                key=lambda c: abs(c - s))
+        return ((v, s), (at, u)) if vertical else ((s, v), (u, at))
+
+    first = route((u0 + u1) / 2)
+    best, damage = first, _cutting(first, occupied, len(occupied) + 1)
+    for s in (u0, u1):
+        if not damage:
+            break
+        cut = _cutting(route(s), occupied, damage)
+        if cut < damage:
+            best, damage = route(s), cut
+    return best, damage
+
+
+def _arrowhead(start, end) -> str:
+    """Path data for the filled head that terminates a leader at *end*."""
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    length = math.hypot(dx, dy) or 1.0
+    ux, uy = dx / length, dy / length
+    bx, by = end[0] - ux * _LEADER_HEAD, end[1] - uy * _LEADER_HEAD
+    px, py = -uy * _LEADER_HEAD / 2, ux * _LEADER_HEAD / 2
+    return (f"M {end[0]:.1f},{end[1]:.1f} L {bx + px:.1f},{by + py:.1f} "
+            f"L {bx - px:.1f},{by - py:.1f} Z")
 
 
 def _unit_label_box(item) -> "tuple[float, float, float, float] | None":
@@ -1923,15 +2114,15 @@ class SvgRenderer:
             # outermost band beside the pipe. Seeds outside it can be dropped
             # before the search rather than re-tested at every step of it.
             along = (span + hw) / 2 + max(bw, bh) / 2
-            across = hh / 2 + _LABEL_GAP + 3 * hh + max(bw, bh) / 2
+            across = hh / 2 + _LABEL_GAP + _LABEL_BANDS * hh + max(bw, bh) / 2
             rx, ry = (across, along) if vertical else (along, across)
-            reach = (cx - rx, cy - ry, cx + rx, cy + ry)
+            window = (cx - rx, cy - ry, cx + rx, cy + ry)
 
             axis, at = ("v", (sx1 + sx2) / 2) if vertical else ("h", (sy1 + sy2) / 2)
-            occupied = [p for p in placed if _meets(p, reach)]
+            occupied = [p for p in placed if _meets(p, window)]
             occupied += [line.box for line in ink
                          if not (line.axis == axis and abs(line.at - at) < 0.5)
-                         and _meets(line.box, reach)]
+                         and _meets(line.box, window)]
 
             # Best first, and the first spot that covers nothing wins outright.
             # Where nothing is clear -- a dozen-character line number in a
@@ -1942,14 +2133,29 @@ class SvgRenderer:
             # reader knows, and breaking the run beside it is a lie about that
             # line. The old fallback was whichever anchor happened to be first,
             # taken however much of the sheet it deleted.
-            spot, damage = None, None
-            for ux, uy in _label_anchors(cx, cy, span, hw, hh, vertical):
+            #
+            # Past :func:`_label_reach` the label is no longer adjacent to its
+            # own run, so it stops being placeable on its own terms and carries a
+            # leader instead (ISO 15519-1 §7.2.5). The leader's own crossings are
+            # the second half of the score: new ink drawn through the vessel the
+            # label stepped around is not an improvement on the label sitting
+            # against that vessel, and the halo machinery this search is built on
+            # exists precisely so a label does not delete somebody else's line.
+            # A clear spot within reach still wins outright, since it scores
+            # (0, 0) and the anchors are generated near-first.
+            reach = _label_reach(hh)
+            spot, damage, leader = None, None, None
+            for ux, uy, off in _label_anchors(cx, cy, span, hw, hh, vertical):
                 box = (ux - bw / 2, uy - bh / 2, ux + bw / 2, uy + bh / 2)
                 hits = _covering(box, occupied,
-                                 len(occupied) + 1 if damage is None else damage)
-                if damage is None or hits < damage:
-                    spot, damage = (ux, uy), hits
-                    if not hits:
+                                 len(occupied) + 1 if damage is None else damage[0] + 1)
+                if damage is not None and hits > damage[0]:
+                    continue
+                lead, cut = _leader(box, seg, occupied) if off > reach else (None, 0)
+                cost = (hits, cut)
+                if damage is None or cost < damage:
+                    spot, damage, leader = (ux, uy), cost, lead
+                    if cost == (0, 0):
                         break
             tx, ty = spot
             placed.append((tx - bw / 2, ty - bh / 2, tx + bw / 2, ty + bh / 2))
@@ -1961,5 +2167,20 @@ class SvgRenderer:
                 f'text-anchor="middle" dominant-baseline="middle" '
                 f'fill="{color}"{turn}>{html.escape(name)}</text>'
             )
+            if leader is not None:
+                (ax0, ay0), (ax1, ay1) = leader
+                # Drawn in the label's own colour, since it is part of the label
+                # and not a line of its own, and seeded as occupied so the next
+                # label's halo cannot delete it. The seed is the leader's
+                # bounding box rather than the stroke, which is generous for a
+                # sloping line -- but a leader is rare, and the alternative is a
+                # halo landing on the one mark that says which line this number
+                # belongs to.
+                lines.append(f'    <line x1="{ax0:.1f}" y1="{ay0:.1f}" '
+                             f'x2="{ax1:.1f}" y2="{ay1:.1f}" '
+                             f'stroke="{color}" stroke-width="{_SIGNAL_STROKE}" />')
+                lines.append(f'    <path d="{_arrowhead(*leader)}" fill="{color}" />')
+                placed.append((min(ax0, ax1), min(ay0, ay1),
+                               max(ax0, ax1), max(ay0, ay1)))
         lines.append('  </g>')
         return lines
