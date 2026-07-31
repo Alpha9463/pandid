@@ -12,6 +12,7 @@ This module is also the public ``units`` namespace: ``from pandid import units``
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from difflib import get_close_matches
 from typing import TYPE_CHECKING, Any, TypeVar
 
@@ -20,6 +21,7 @@ from pandid.ports import Port
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
+    from pandid.render.symbols import Symbol
     from pandid.streams import Stream
 
 __all__ = [
@@ -27,7 +29,7 @@ __all__ = [
     "Feed", "Product", "Pump", "Compressor", "Blower", "Valve", "Vessel", "Tank",
     "HeatExchanger", "Heater", "Cooler", "Reactor", "Separator", "Column",
     "Mixer", "Splitter", "Tee", "Reducer", "Fitting", "Ejector", "Vent", "Funnel",
-    "Furnace", "Turbine", "Filter", "Dryer", "Conveyor", "Instrument",
+    "Furnace", "Turbine", "Filter", "Dryer", "Conveyor", "Instrument", "Block",
 ]
 
 # "signal" is the odd one out: every other role names something that flows in a
@@ -1874,3 +1876,252 @@ class Splitter(Unit):
         self._add_port("inlet", "inlet", "process")
         for i in range(1, n_outlets + 1):
             self._add_port(f"out_{i}", "outlet", "process")
+
+
+def _block_faces(spec: "int | Sequence[str]", default: str, owner: str,
+                 argument: str) -> list[str]:
+    """Read a :class:`Block`'s ``inputs=``/``outputs=`` into one face per port.
+
+    A plain count is the common case spelled short: ``inputs=3`` is three
+    connections on the face a reader expects them on, which is the west for a
+    feed and the east for a product, exactly as the rest of the library defaults.
+    A sequence names the face of each one in order, which is what a block flow
+    diagram actually needs -- a section takes its charge from the left and its
+    recycle from above, and both are inputs.
+    """
+    if isinstance(spec, bool) or not isinstance(spec, (int, Sequence)) or isinstance(spec, str):
+        # A bare string is the trap worth naming: ``inputs="W"`` looks like one
+        # connection on the west and is a sequence of one character, so it would
+        # otherwise be read as exactly that and quietly work until the day
+        # somebody writes ``inputs="WN"``.
+        raise ValueError(
+            f"{owner}: {argument}= is a count ({argument}=3) or one face per "
+            f"connection ({argument}=['W', 'W', 'N']), got {spec!r}"
+        )
+    if isinstance(spec, int):
+        if spec < 0:
+            raise ValueError(f"{owner}: {argument}= cannot be negative, got {spec}")
+        return [default] * spec
+    return [_block_face(face, owner) for face in spec]
+
+
+def _block_face(face: object, owner: str) -> str:
+    """One face name, in the vocabulary :meth:`Unit.nozzle` already takes.
+
+    The compass point on the finished sheet, or the ``top``/``bottom``/``left``/
+    ``right`` spelling ``label_pos`` uses, so a sheet needs one word for "the
+    top of this block" whether it is declaring a connection or moving one.
+
+    One sentence for both ways of getting it wrong, because they are the same
+    mistake: the constructor and :meth:`Block.nozzle` both come through here.
+    """
+    resolved = (_FACE_OF_SIDE.get(face.strip().lower(), face.strip().upper())
+                if isinstance(face, str) else None)
+    if resolved not in ("N", "S", "E", "W"):
+        raise ValueError(
+            f"{owner}: {face!r} is not a face; a connection is on the 'N', 'S', "
+            f"'E' or 'W' of the box (or the 'top'/'bottom'/'left'/'right' spelling)"
+        )
+    return resolved
+
+
+class Block(Unit):
+    """A block flow diagram's box: a labelled rectangle standing for a section.
+
+    The BFD is the drawing a level above the PFD, and this is the only symbol on
+    it. One box is a whole plant section -- *Reaction*, *Compression*, *Product
+    Recovery* -- with the streams between them named and nothing inside them
+    drawn. That is why it carries no equipment vocabulary: it has no suction, no
+    bottoms and no vent, because it is not a machine. It has connections, and
+    the only thing the drawing says about one is which side of the box it is on.
+
+    .. code-block:: python
+
+        rx = fs.add(units.Block("Reaction", inputs=["W", "W", "N"], outputs=["E", "S"]))
+        fs.connect(feed.outlet, rx.in_1)      # west
+        fs.connect(recycle.out_1, rx.in_3)    # north
+        fs.connect(rx.out_2, drain.inlet)     # south
+
+    ``inputs`` and ``outputs`` are **one face per connection**, in order, and a
+    plain count is the shorthand for the common case: ``inputs=3`` is three on
+    the west, ``outputs=2`` two on the east. The nozzles are ``in_1`` ...
+    ``in_n`` and ``out_1`` ... ``out_m`` in that order, numbered across the whole
+    family rather than per face.
+
+    **Why the face is declared and not named into the port.** The alternative
+    was ``in_w_1`` / ``in_n_1``, one numbered family per face, which is what a
+    :class:`~pandid.render.symbols.PortSeries` could have placed without any new
+    machinery. It was rejected because it puts a *placement* inside an
+    *identity*: nowhere else in this library does the name of a thing record
+    where it was drawn -- :meth:`~Unit.pin` and :meth:`~Unit.nozzle` are both
+    separate from the name for exactly that reason -- and a connection moved to
+    another face would have had to be renamed, breaking every line that referred
+    to it. The cost of the choice is real and is paid in
+    :func:`~pandid.render.symbols.block_symbol`: one series cannot produce
+    ``in_3`` on a face its ``in_1`` is not on, so the symbol authors an anchor
+    per connection instead, and only the *spreading rule*
+    (:func:`~pandid.render.symbols.spread`) is shared with the series.
+
+    **The box sizes itself to what it carries.** A block flow diagram's box is
+    precisely the thing that gathers many streams, and a family squeezed to fit
+    a fixed box draws arrowheads that touch and read as one blob. So the height
+    follows the west and east counts and the width follows the north and south
+    ones, at a pitch derived from the arrowhead the renderer actually draws
+    (:data:`~pandid.render.symbols.BLOCK_PITCH`): eight inputs on one wall make a
+    *taller block*, not eight crushed nozzles. The width also clears the name,
+    which a BFD letters inside the box.
+
+    ``width``/``height`` still win where they are given, as everywhere else, and
+    a box too small to draw the connections at that pitch is **refused** rather
+    than drawn crushed -- the same answer :class:`Conveyor` gives a belt run its
+    rollers do not fit in. A width the author gave also wins over the name,
+    which then simply overflows the box.
+
+    **Variants**: none. A block is a block, and there is nothing about a section
+    of plant for a second drawing to say.
+    """
+
+    # No nozzle annotations, and unlike :class:`Mixer` not even one. Every
+    # connection a block has is one of the two numbered families, whose size is
+    # the caller's and chosen per instance, so the set of attribute names is a
+    # property of the *object*: ``in_1: Port`` would be right for a block with
+    # an input and wrong for ``Block("B", inputs=0, outputs=2)``, which is a
+    # legitimate thing to draw at the edge of a sheet. Mixer's comment argues
+    # the general case at length; the difference here is only that a block has
+    # no fixed nozzle left over to declare, since a section of plant has no
+    # connection every section has.
+    #
+    # ``tests/test_port_annotations.py`` exempts the numbered families by the
+    # shape of the name and pins the classes that may take the exemption in
+    # ``_VARIABLE_PORT_CLASSES``; this class is named there, deliberately, so
+    # adding a third is a decision somebody makes rather than one that happens.
+
+    kind = "block"
+
+    #: The face a connection is put on when the author gives a count rather than
+    #: a list. West in and east on out, which is the direction the rest of the
+    #: library draws a sheet in and the direction a reader scans one.
+    DEFAULT_INPUT_FACE = "W"
+    DEFAULT_OUTPUT_FACE = "E"
+
+    def __init__(self, name: str, inputs: "int | Sequence[str]" = 1,
+                 outputs: "int | Sequence[str]" = 1, variant: str = "default",
+                 width: float | None = None, height: float | None = None,
+                 label_pos: str | None = None, description: str = "",
+                 reference: str = ""):
+        in_faces = _block_faces(inputs, self.DEFAULT_INPUT_FACE, name, "inputs")
+        out_faces = _block_faces(outputs, self.DEFAULT_OUTPUT_FACE, name, "outputs")
+        if not in_faces and not out_faces:
+            raise ValueError(
+                f"{name}: a block with no connections is a rectangle with a word "
+                f"in it, which nothing can be routed to. Give it at least one "
+                f"inputs= or outputs=."
+            )
+        super().__init__(name, variant=variant, width=width, height=height,
+                         label_pos=label_pos, description=description,
+                         reference=reference)
+        #: connection name -> the face it leaves from, in port order. The single
+        #: authority: the symbol is built from it, so there is no second place a
+        #: face could be recorded and disagree.
+        self._faces: dict[str, str] = {}
+        for i, face in enumerate(in_faces, start=1):
+            self._add_port(f"in_{i}", "inlet", "process")
+            self._faces[f"in_{i}"] = face
+        for i, face in enumerate(out_faces, start=1):
+            self._add_port(f"out_{i}", "outlet", "process")
+            self._faces[f"out_{i}"] = face
+        # Build the drawing now, so a box that cannot hold the connections is
+        # refused on the line that asked for it rather than at the first render.
+        self.symbol()
+
+    @property
+    def inputs(self) -> list[str]:
+        """The face each input leaves from, in ``in_1`` ... ``in_n`` order."""
+        return [face for name, face in self._faces.items() if name.startswith("in_")]
+
+    @property
+    def outputs(self) -> list[str]:
+        """The face each output leaves from, in ``out_1`` ... ``out_m`` order."""
+        return [face for name, face in self._faces.items() if name.startswith("out_")]
+
+    def face(self, port_name: str) -> str:
+        """The face ``port_name`` is piped from, as drawn."""
+        try:
+            return self._faces[port_name]
+        except KeyError:
+            raise KeyError(
+                f"Block {self.name!r} has no connection named {port_name!r}; "
+                f"available: {sorted(self.ports)}"
+            ) from None
+
+    def nozzle(self, port_name: str, face: str) -> "Block":
+        """Move a connection to another face of the box.
+
+        The same call, and the same meaning, as :meth:`Unit.nozzle` everywhere
+        else: pipe this port from the face a reader sees. What differs is that it
+        can always be honoured. Every other symbol is artwork drawn in advance,
+        so a nozzle may only be moved to a face the drawing anchored one on, and
+        a column's bottoms draw offers exactly one because gravity does. A block
+        is a rectangle built from its own declaration, so moving a connection is
+        *changing that declaration* and redrawing, and every face is a face the
+        box has.
+
+        It therefore writes :attr:`_faces` and not ``Unit._port_faces``: the
+        latter is an override of a placement the symbol authored, and here there
+        is nothing to override -- the declaration is the placement. Keeping one
+        record is what stops a block from carrying two answers about one nozzle,
+        and it is what makes ``to_dict`` able to write the block back out as the
+        constructor call that would rebuild it.
+
+        Raises :class:`ValueError` if the move would squeeze the connections on
+        the destination face closer than the pitch an explicit ``width``/
+        ``height`` leaves room for, and leaves the block untouched when it does.
+        """
+        if port_name not in self.ports:
+            raise KeyError(
+                f"Block {self.name!r} has no port {port_name!r}; "
+                f"available ports: {sorted(self.ports)}"
+            )
+        was = self._faces[port_name]
+        self._faces[port_name] = _block_face(face, self.name)
+        try:
+            self.symbol()
+        except ValueError:
+            self._faces[port_name] = was
+            raise
+        return self
+
+    def symbol(self) -> "Symbol":
+        """This block's drawing, built to its connections and checked against its box.
+
+        The one place a block's artwork comes from, called by
+        :meth:`~pandid.render.symbols.SymbolRegistry.for_unit` on every port
+        resolution and by the constructor once. The box check lives here rather
+        than only in ``__init__`` for the reason :class:`Conveyor`'s does: the
+        size is a plain attribute, so an author who sets ``block.width = 40``
+        after the fact would otherwise get a crushed drawing instead of the
+        sentence saying why it cannot be drawn.
+        """
+        from pandid.render.symbols import block_box_too_small, block_symbol
+
+        # The name widens the box only where the author left the width open;
+        # see block_symbol(). Asking for it with a width already given would
+        # make the drawing depend on the tag for no visible reason, and would
+        # cost every block its own <defs> entry.
+        sym = block_symbol(tuple(self._faces.items()),
+                           "" if self.width is not None else self.tag)
+        for face, axis, given, natural in (
+            ("W", "height", self.height, sym.height),
+            ("E", "height", self.height, sym.height),
+            ("N", "width", self.width, sym.width),
+            ("S", "width", self.width, sym.width),
+        ):
+            count = sum(1 for f in self._faces.values() if f == face)
+            # One connection on a face has no spacing to crush, so only a run of
+            # them is measured. The comparison is against the box the block
+            # *sized itself to* and not against the bare run, because the artwork
+            # is stretched into whatever box it is given: halving the box halves
+            # the drawn pitch with it, whatever the run would have fitted in.
+            if count > 1 and given is not None and given < natural - 1e-9:
+                raise block_box_too_small(self.name, face, count, axis, given, natural)
+        return sym

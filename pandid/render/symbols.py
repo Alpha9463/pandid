@@ -13,10 +13,13 @@ Sources:
   registered last (overriding the hand-drawn defaults of the same kind). See the
   repo ``NOTICE`` for attribution.
 - **Hand-drawn primitives**: Feed/Product boundary markers, the variable-port
-  Mixer and Splitter, and the pipe tee.
+  Mixer and Splitter, the pipe tee, and the block flow diagram's box.
 - **Built to size (draw.io-derived, Apache-2.0)**: the belt conveyor. Adapted
   from a stencil but drawn here rather than generated, because a fixed path
   cannot stretch; see :func:`conveyor_symbol` and the repo ``NOTICE``.
+- **Built to fit (original)**: the block flow diagram's box, whose nozzles are a
+  per-face count the symbol cannot know until it has the unit, and whose box is
+  sized to hold them; see :func:`block_symbol`.
 
 Authoring conventions (hand-drawn symbols)
 ------------------------------------------
@@ -41,6 +44,53 @@ from pandid.portgeom import outward_dir
 # Two placements closer together than this are the same point as far as a reader
 # (and a stream endpoint) is concerned.
 _COINCIDENT = 0.5
+
+#: Side of the arrowhead a PFD draws at the end of a process line, in drawing
+#: units. The renderer emits it as the ``markerWidth``/``markerHeight`` of its
+#: ``<marker>`` (:meth:`pandid.render.svg.SvgRenderer._defs`) at
+#: ``markerUnits="userSpaceOnUse"``, so this is the head's real size on the
+#: sheet and not a ratio to a stroke.
+#:
+#: It lives here, with the drawn dimensions, because it is one: another drawn
+#: dimension is derived from it (:data:`BLOCK_PITCH`), and a nozzle pitch
+#: measured against a constant somebody has to remember to keep in step with the
+#: renderer is the defect that measurement exists to prevent.
+ARROWHEAD = 12.0
+
+
+def spread(index: int, count: int, along: float, pitch: float,
+           extent: float, at: float | None = None) -> float:
+    """Where member ``index`` of ``count`` sits along a face ``along`` long.
+
+    The library's one rule for spacing a family of like nozzles down a face, so
+    a mixer's inlets, a column's feeds and a block's connections are all spread
+    the same way and the drawing is consistent between them.
+
+    Members sit ``pitch`` apart, centred on ``at`` (the middle of the face when
+    it is ``None``). Past the point where that spacing would run them off the
+    ends the whole run is squeezed into ``extent`` of the face instead, so the
+    count a symbol was drawn for lands exactly where a fixed nozzle would and
+    one more does not shove the others aside to find room.
+
+    :class:`PortSeries` is the declarative form of this, for a symbol that can
+    name its family with one rule. :func:`block_symbol` calls it directly,
+    because a block's family is split across up to four faces and one series
+    cannot span two of them; see :class:`pandid.units.Block`.
+    """
+    centre = along / 2 if at is None else at
+    span = min(pitch * (count - 1), extent * along)
+    return centre if count < 2 else centre - span / 2 + span * index / (count - 1)
+
+
+def _on_face(face: str, t: float, width: float, height: float) -> tuple[float, float]:
+    """The symbol-space point ``t`` along ``face`` of a ``width`` x ``height`` box.
+
+    ``t`` runs top-to-bottom on the two upright faces and left-to-right on the
+    two horizontal ones, which is the direction :func:`spread` lays a family out
+    in and the direction a reader numbers nozzles in.
+    """
+    return {"W": (0.0, t), "E": (width, t),
+            "N": (t, 0.0), "S": (t, height)}[face]
 
 
 @dataclass(frozen=True)
@@ -84,11 +134,8 @@ class PortSeries:
                   width: float, height: float) -> tuple[float, float]:
         """Symbol-space coordinate of member ``index`` of ``count`` (0-based)."""
         along = height if self.face in ("W", "E") else width
-        centre = along / 2 if self.at is None else self.at
-        span = min(self.pitch * (count - 1), self.extent * along)
-        t = centre if count < 2 else centre - span / 2 + span * index / (count - 1)
-        return {"W": (0.0, t), "E": (width, t),
-                "N": (t, 0.0), "S": (t, height)}[self.face]
+        t = spread(index, count, along, self.pitch, self.extent, self.at)
+        return _on_face(self.face, t, width, height)
 
     def reach(self, width: float, height: float) -> tuple[float, float, float]:
         """Where members can land: ``(face_coordinate, lo, hi)`` along the face.
@@ -413,10 +460,168 @@ def conveyor_symbol(length: float = CONVEYOR_LENGTH) -> Symbol:
     )
 
 
+# ---------------------------------------------------------------------------
+# The block flow diagram's box.
+#
+# An original primitive, not a stencil: a BFD block is a plain rectangle with a
+# name in it, and there is no stencil to vendor because a rectangle is not
+# artwork anyone holds a copyright in. The draw.io P&ID set has no such shape
+# either -- it is a set of *equipment*, and a block is not a piece of equipment.
+# It is a whole plant section stood in for by one box, which is what makes the
+# BFD a level above the PFD rather than a simplified one. See NOTICE section 1,
+# beside the Mixer, the Splitter and the pipe tee.
+#
+# Unlike those three, its nozzles cannot be authored in advance. A Mixer's are a
+# PortSeries: one rule, one face, spread by count. A block's connections are
+# split across up to four faces with a count on each, so one series cannot place
+# them and the symbol has to be built once the unit is in hand -- the same
+# mechanism the conveyor uses above, for a different reason. That is also what
+# lets the box size itself to what it carries; see :func:`block_symbol`.
+# ---------------------------------------------------------------------------
+
+#: How far apart a block spreads the connections on one face.
+#:
+#: Derived from the arrowhead rather than chosen: two nozzles pitched closer
+#: than about two and a half heads apart draw two arrows whose tips touch, and
+#: at print size the pair reads as one double-headed blob rather than as two
+#: lines arriving. That is the defect reported against ``10_ethanol_pfd``'s
+#: M-301, whose two feeds are 14.5 apart carrying 12-unit heads. 2.5 leaves a
+#: head's worth of white between them, which is the least that still reads as
+#: two.
+#:
+#: A block is far more exposed to it than a mixer, because gathering many
+#: streams is precisely what a block flow diagram's box is for.
+BLOCK_PITCH = 2.5 * ARROWHEAD
+
+#: The smallest box a block is drawn in, whatever it carries. Big enough to hold
+#: a short name at the 12pt the renderer letters a tag in, and to read as a
+#: section of plant rather than as an in-line fitting.
+BLOCK_MIN_WIDTH = 120.0
+BLOCK_MIN_HEIGHT = 80.0
+
+#: Drawn width of one character of a tag, at the renderer's 12pt sans-serif,
+#: plus the padding either side of it. The same rule and the same numbers
+#: :func:`pandid.portgeom.resolve_size` sizes a boundary flag's label by; a
+#: block letters its name inside the box, so the box has to be at least that
+#: wide or the name hangs out of both ends of it.
+_LABEL_EM = 8.0
+_LABEL_PAD = 30.0
+
+
+def block_span(count: int) -> float:
+    """The least length of face ``count`` connections can be drawn on.
+
+    ``count`` nozzles at :data:`BLOCK_PITCH` apart, with half a pitch of margin
+    at each end so the outermost one is not drawn into a corner. This is what a
+    block grows to fit rather than squeezing.
+    """
+    return BLOCK_PITCH * count
+
+
+def block_box_too_small(owner: str, face: str, count: int,
+                        axis: str, given: float, needed: float) -> ValueError:
+    """The error for a box too small to draw a block's nozzles legibly.
+
+    Built here so the message :class:`pandid.units.Block` raises up front and
+    the one :meth:`pandid.units.Block.symbol` raises later are the same sentence
+    about the same rule, exactly as :func:`conveyor_too_short` is.
+    """
+    return ValueError(
+        f"{owner}: {count} connections on the {face} face are drawn "
+        f"{BLOCK_PITCH:g} apart, which is what keeps two {ARROWHEAD:g}-unit "
+        f"arrowheads from touching, and the block sized itself to {axis}="
+        f"{needed:g} to hold them. {axis}={given:g} squeezes the same run into "
+        f"{given / needed:.0%} of that. Give at least {axis}={needed:g}, or leave "
+        f"{axis}= off and the block sizes itself to its connections."
+    )
+
+
+#: The order the faces are visited in when a block's box is measured and its
+#: nozzles are laid out. Fixed, so a block's drawing does not depend on the
+#: order its connections happened to be declared in.
+_BLOCK_FACES = ("W", "E", "N", "S")
+
+
+@lru_cache(maxsize=None)
+def block_symbol(faces: tuple[tuple[str, str], ...], label: str = "") -> Symbol:
+    """A block flow diagram's box, with a nozzle per declared connection.
+
+    ``faces`` is ``((port_name, face), ...)`` in the unit's own port order.
+    Both it and the box that has to hold it come off the unit, which is why this
+    is built rather than registered: the count on each face is the author's.
+
+    **The box grows to fit rather than crushing the spacing.** Each face is made
+    at least :func:`block_span` long for the connections on it, so eight inputs
+    on the west wall make a taller block instead of eight nozzles squeezed into
+    the height a one-inlet block was drawn at. That is the opposite of what
+    :func:`spread` does when it runs out of room, and deliberately: a mixer's
+    triangle is a piece of plant drawn at the size a mixer is drawn at, while a
+    block is a box whose size means nothing at all, so there is nothing here to
+    trade against legibility.
+
+    ``label`` is the tag lettered inside the box, and widens it enough to hold
+    the letters. It is passed **empty by a unit that was given a ``width`` of
+    its own**: an explicit width is the author's answer to the same question and
+    wins outright, as :func:`pandid.portgeom.resolve_size` has it, so a name
+    longer than the box the author asked for simply overflows it. That is also
+    what keeps one port layout to one drawing whatever the block is called,
+    which is what lets a block be measured against the registered symbol the way
+    every other kind is.
+
+    Every nozzle sits on the rectangle's own outline, so every one of them is on
+    drawn ink on whichever face it was put on, at any count and in a box of any
+    shape. There is no menu: a block's connection has exactly the face it was
+    declared with, and :meth:`pandid.units.Block.nozzle` moves it by *changing
+    the declaration* and rebuilding this drawing, rather than by choosing
+    between placements authored in advance.
+
+    Cached, because port resolution asks for a unit's symbol on every call.
+    """
+    on: dict[str, list[str]] = {face: [] for face in _BLOCK_FACES}
+    for port_name, face in faces:
+        on[face].append(port_name)
+    width = max(BLOCK_MIN_WIDTH, _LABEL_EM * len(label) + _LABEL_PAD,
+                block_span(len(on["N"])), block_span(len(on["S"])))
+    height = max(BLOCK_MIN_HEIGHT, block_span(len(on["W"])), block_span(len(on["E"])))
+    ports: dict[str, tuple[float, float]] = {}
+    for face in _BLOCK_FACES:
+        members = on[face]
+        along = height if face in ("W", "E") else width
+        for i, port_name in enumerate(members):
+            # extent=1.0, because the box was just made long enough for the run
+            # at full pitch, so the squeeze never engages. The only way to reach
+            # it is to hand the block a smaller box than it sized itself to, and
+            # Block refuses that outright rather than drawing it.
+            t = spread(i, len(members), along, BLOCK_PITCH, 1.0)
+            ports[port_name] = _on_face(face, t, width, height)
+    svg = (
+        f'<g id="sym_block">'
+        f'<rect x="0" y="0" width="{width:g}" height="{height:g}" fill="none" '
+        f'stroke="black" stroke-width="2"/>'
+        f'</g>'
+    )
+    return Symbol(
+        svg=svg, width=width, height=height, ports=ports,
+        # A BFD writes the section's name inside its box. Saying so on the
+        # symbol is what stops the label being hung off a side and what stops
+        # the router standing lines off to clear one that is not there.
+        label_pos="center",
+        # The artwork is built to the box, so each distinct box is its own
+        # <defs> entry -- the conveyor's rule, for the same reason: a symbol
+        # made to measure cannot share a definition with one made to another.
+        id_suffix=f"_{width:g}x{height:g}",
+    )
+
+
 # Kinds whose artwork is built to a size the *unit* carries, rather than drawn
 # once and scaled into whatever box it lands in. Uneven scaling is what turns a
-# conveyor's rollers into ellipses, so its drawing has to be made to measure.
-_BUILT_TO_SIZE = {"conveyor": lambda unit: conveyor_symbol(unit.length)}
+# conveyor's rollers into ellipses, so its drawing has to be made to measure; a
+# block's nozzles are a per-face count the symbol cannot know until it has the
+# unit, so its drawing has to be made to *fit*.
+_BUILT_TO_SIZE = {
+    "conveyor": lambda unit: conveyor_symbol(unit.length),
+    "block": lambda unit: unit.symbol(),
+}
 
 
 # ---------------------------------------------------------------------------
@@ -1104,6 +1309,17 @@ class SymbolRegistry:
             # to land against: the run divides and carries on.
             bare_run=True,
         ))
+
+        # ====================================================================
+        # Block flow diagram box: a plain labelled rectangle.
+        #
+        # Registered at the shape a Block asked for by name is drawn in -- one
+        # connection in on the west, one out on the east -- which is what the
+        # registry answers for a (kind, variant) and what the symbol sheet and
+        # the invariant suite measure. A block with any other set of connections
+        # gets its own drawing from for_unit(); see block_symbol().
+        # ====================================================================
+        self.register("block", block_symbol((("in_1", "W"), ("out_1", "E"))))
 
         # ====================================================================
         # Splitter: standard triangle with point on left, flat on right

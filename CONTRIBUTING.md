@@ -123,14 +123,17 @@ the keyword. Do not set it by hand on one: change the stencil mapping, or say so
 in `symbols.py` if the symbol is hand-drawn.
 
 Only a handful of symbols are hand-drawn in `pandid/render/symbols.py`: the
-Feed/Product boundary flags, the variable-port Mixer and Splitter, and the
-ISA-5.1 instrument balloons. Those are original primitives, not stencils. New
-*equipment* should come from the stencils, so the sheet stays visually
+Feed/Product boundary flags, the variable-port Mixer and Splitter, the ISA-5.1
+instrument balloons, the pipe tee and the block flow diagram's box. Those are
+original primitives, not stencils, and the last two are there because the
+stencil set draws neither: it is a set of *equipment*, and neither a bare
+junction nor a box standing for a whole plant section is a piece of equipment.
+New *equipment* should come from the stencils, so the sheet stays visually
 consistent and `NOTICE` remains the whole attribution story.
 
 ### Symbols that have to stretch
 
-There is a third case, and today it has one member. The generator emits one
+There is a third case, and today it has two members. The generator emits one
 fixed-size `Symbol` per shape, and a fixed drawing lands in whatever box its
 unit is given: reshaped to fill it, or held to its own proportions and centred
 in it. Some artwork survives neither. Stretching a belt conveyor draws its
@@ -153,6 +156,13 @@ It is still stencil-derived and still Apache-2.0. Adapting one means:
    mapping table stays the place provenance is looked up;
 3. name it and its file in `NOTICE` section 2. It is not an original primitive
    and does not belong in the section 1 paragraph that lists those.
+
+The second member is not stencil-derived and is built to *fit* rather than to a
+size the author gives: the block flow diagram's box, whose connections are a
+per-face count only the unit knows, and whose box grows so a run of them keeps a
+legible pitch instead of being squeezed. It is an original primitive, so steps 2
+and 3 do not apply to it; `pandid.units.Block.symbol` is where its drawing comes
+from, and `pandid.render.symbols.block_symbol` builds it.
 
 Do not reach for this to avoid vendoring. A symbol with a fixed size goes
 through `KIND_MAP` like everything else.

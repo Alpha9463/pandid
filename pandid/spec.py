@@ -161,6 +161,21 @@ def _flag(value: Any, where: str) -> bool:
     return value
 
 
+def _faces(value: Any, where: str) -> int | list[str]:
+    """A connection count, or one face per connection.
+
+    Both spellings are handed straight to the class, which owns the vocabulary
+    and the error message for a face that is not one; this only settles that the
+    spec said a whole number or a list of words. A bare string is refused here
+    rather than passed on, because YAML makes ``inputs: W`` far too easy to
+    write and a string is a sequence of one-character faces that would read as
+    exactly what was meant right up until somebody wrote ``inputs: WN``.
+    """
+    if isinstance(value, bool) or isinstance(value, int):
+        return _integer(value, where)
+    return [_text(face, f"{where}[{i}]") for i, face in enumerate(_sequence(value, where))]
+
+
 def _component(value: Any, where: str) -> str | float:
     """A line-number component: text such as ``6"``, or the number an unquoted
     metric size (``size: 150``) parses as."""
@@ -297,6 +312,15 @@ _KIND_TEXT = {
     # sizes.
     "large_end": ("Reducer",),
 }
+# Connection faces, keyed the same way. A block declares which side of its box
+# each connection is on, and the argument is either a count (all on the face
+# that kind of connection defaults to) or one face per connection. Nothing else
+# has the question: every other symbol is artwork drawn in advance, so where its
+# nozzles are is a fact about the drawing rather than something a sheet states.
+_KIND_FACES = {
+    "inputs": ("Block",),
+    "outputs": ("Block",),
+}
 # Flags only some classes carry. ``header`` says a boundary flag stands for a
 # utility service tapped wherever it is wanted rather than for one line leaving
 # the sheet, which is what lets it be drawn more than once; equipment is drawn
@@ -404,7 +428,7 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
 
     allowed = set(_UNIT_KEYS)
     for key, owners in {**_VARIABLE_PORTS, **_KIND_SIZES, **_KIND_TEXT,
-                        **_KIND_FLAGS}.items():
+                        **_KIND_FLAGS, **_KIND_FACES}.items():
         # By inheritance, not by name: the tables above name the class that
         # *declares* the argument, and a ControlValve is a Valve, so it takes
         # ``fail`` for exactly the reason its base does. Matching on the name
@@ -436,6 +460,9 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
     for key in _KIND_FLAGS:
         if key in data:
             kwargs[key] = _flag(data[key], f"{where}.{key}")
+    for key in _KIND_FACES:
+        if key in data:
+            kwargs[key] = _faces(data[key], f"{where}.{key}")
     try:
         unit = cls(name, **kwargs)
     except ValueError as e:
@@ -931,7 +958,18 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
     # the junction is addressed by.
     entry: dict[str, Any] = {"kind": kind, "name": unit.tag or unit.name}
     _write_common(unit, entry)
-    if isinstance(unit, unit_types.Mixer):
+    if isinstance(unit, unit_types.Block):
+        # The faces, which carry the count with them. Written as the bare count
+        # where every connection is on the face that kind of connection defaults
+        # to, which is the shorthand the constructor takes and the way most
+        # blocks are written; a block that puts one input on the north is only
+        # describable as the list, so it is written as one.
+        for key, faces, default in (
+            ("inputs", unit.inputs, unit.DEFAULT_INPUT_FACE),
+            ("outputs", unit.outputs, unit.DEFAULT_OUTPUT_FACE),
+        ):
+            entry[key] = len(faces) if all(f == default for f in faces) else list(faces)
+    elif isinstance(unit, unit_types.Mixer):
         entry["n_inlets"] = sum(1 for p in unit.ports if p.startswith("in_"))
     elif isinstance(unit, unit_types.Splitter):
         entry["n_outlets"] = sum(1 for p in unit.ports if p.startswith("out_"))

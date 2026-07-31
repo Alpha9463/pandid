@@ -286,11 +286,22 @@ _MAJOR_EQUIPMENT = frozenset({
     "filter", "furnace", "heater", "hex", "pump", "reactor", "separator",
     "tank", "turbine", "vessel",
 })
+# ``block`` is deliberately absent, and it is the clearest case of the rule this
+# set encodes. An equipment list schedules *items*: things bought once, tagged
+# once and carried on one row with a datasheet behind it. A block flow diagram's
+# box is the opposite of an item -- it stands for a whole section of plant, whose
+# equipment list is a document of its own with dozens of rows on it -- so
+# scheduling one would put a line in the schedule saying that "Reaction" is a
+# thing somebody purchases. A BFD does not carry an equipment list at all, which
+# is most of what makes it a BFD. ``include=`` still takes a block by name, the
+# way it takes a valve, for the author who wants a block *index* rather than an
+# equipment list.
 
 # What each kind is called in words. ``kind`` is a lookup key, so a schedule
 # that falls back to it reads ``('E-101', 'Hex')``, the source code quoted at
 # the reader in place of the equipment description an engineer would write.
 _KIND_LABELS = {
+    "block": "Process Block",
     "blower": "Blower",
     "column": "Column",
     "compressor": "Compressor",

@@ -555,6 +555,7 @@ PORT_ANCHORS = {
 STAYS_ON_BASE = {
     # The base classes' own drawings. A class already exists; naming it twice
     # would be the layer's first duplicate.
+    ("block", "default"): "Block's own drawing",
     ("blower", "default"): "Blower's own drawing",
     ("conveyor", "default"): "Conveyor's own drawing",
     ("cooler", "default"): "Cooler's own drawing",
