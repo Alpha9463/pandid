@@ -273,6 +273,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A line number that cannot be written beside its line now carries a leader
+  to it.** ([#155](https://github.com/Alpha9463/pandid/issues/155))
+
+  Label placement walked outward from the pipe — 10,5 units, then 23,5, then
+  36,5 — until it found paper nothing else had claimed, and wrote the number
+  there with nothing joining it to its line. On `11_ethanol_pid` three numbers
+  ended up at the outermost band, 30 units of blank paper from their own run and
+  hard against something else: `AE-304-150-80-SS` 1,6 units off D-301's shell
+  and 27 below the lower end of the 30-unit stub it names, `FB-301-200-160-SS`
+  standing directly over XV-301's tag and reading as a second line of it, and
+  `FB-306-100-160-SS` 5,3 off RB-301's shell. Each read as an annotation of the
+  thing it was nearest. The avoidance was working; the outcome defeated its
+  purpose, and `validate()` had nothing to say about any of it.
+
+  **ISO 15519-1 §7.2.5** is two *shall*s, and the second names the escape from
+  the first: "They shall be oriented along or adjacent to the relevant
+  connecting lines. If it is not possible to place the reference designation
+  adjacent to the connecting line, it shall be shown elsewhere in the content
+  area with a leader line to the actual connecting line." So the perpendicular
+  stand-off is now capped at what "adjacent" can mean — one label height of
+  blank paper beyond the gap a label beside its run is already written at — and
+  a label placed past that cap is joined to its run by a leader.
+
+  The cap is derived rather than picked, in the label's own metric so it scales
+  with the lettering, and it is where the sheets stop reading: at 4 and at 17
+  units of gap a number reads as its own line's (`AE-302`, `AE-303`, `AE-305`
+  and `HPS-308` all sit at 17, each with a hand valve of its own station
+  beneath it, and none is in doubt), and at 30 all three instances on the sheet
+  read as somebody else's.
+
+  The leader follows **§6.4**: it terminates "with an arrowhead if it ends on
+  the outline of an object or a connection", it is drawn at the signal weight
+  with a head to match, and it is **oblique**, which is what Figure 4 c) draws
+  for this exact case and what keeps it from being read as a connection — §12.1
+  holds pipelines, conductors and functional connections to horizontal or
+  vertical, and a leader is none of those. The head lands on the run itself
+  rather than at either end of it, since a run's ends are where it meets the
+  equipment it serves.
+
+  A leader is new ink, so it is scored like the label: it leaves the halo by
+  whichever of three routes cuts least, and if it would run through the vessel
+  the label stepped around, the search takes a different spot instead. The
+  leader is then seeded as occupied like everything else, so no later halo
+  deletes the one mark saying which line the number belongs to.
+
+  `tests/test_label_invariants.py` pins the property nothing asserted:
+  **a line number is adjacent to the line it names, or carries a leader to it**,
+  read back off the drawn SVG over the golden corpus, both ethanol sheets and a
+  fixture built to need a leader whatever happens to the shipped ones.
+
+  Three leaders appear, all on `11_ethanol_pid`. No golden moves, and
+  `10_ethanol_pfd` renders byte for byte as before.
+
 - **A flipped condenser no longer reverses its heat-flow arrow.**
   ([#155](https://github.com/Alpha9463/pandid/issues/155))
 
