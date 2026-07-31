@@ -1,13 +1,16 @@
-"""Golden-file SVG regression over a fixed corpus: the first nine examples'
-flowsheets, three of which (03, 08 and 09) also exercise ``border="zone"`` with
-the stream table and sheet furniture (title block, equipment list, notes,
-legend).
+"""Golden-file SVG regression over a fixed corpus: one scenario per example.
+
+Five of them (03, 08, 09, 10 and 11) draw the zone-ruled border and the sheet
+furniture -- title block, equipment list, notes, legend -- with a stream table
+on all but 11. 09 and 11 are the two issued as P&IDs, and 10 and 11 the two on
+a fixed A3 page.
 
 The flowsheets are rebuilt here rather than by importing examples/*.py: those
 scripts render straight to a file under examples/ (a side effect a test suite
 shouldn't have), and 03's and 08's TitleBlocks leave ``date`` empty, which
 SvgRenderer fills in with ``datetime.now()`` -- fine for a real render, but it
-would make the golden change every day. Every other input is copied verbatim
+would make the golden change every day. 10's and 11's title blocks state their
+own dates, so those two need no pinning. Every other input is copied verbatim
 from the matching example script; for 08, whose example *is* data, the copied
 input is its spec mapping. See tests/golden/README.md for how to regenerate.
 """
@@ -18,8 +21,16 @@ from pathlib import Path
 import pytest
 
 from pandid import Flowsheet, units
-from pandid.document import Revision, TitleBlock, equipment_list, legend, notes
-from pandid.portgeom import port_offset
+from pandid.document import (
+    Annotation,
+    Revision,
+    TableBox,
+    TitleBlock,
+    equipment_list,
+    legend,
+    notes,
+)
+from pandid.portgeom import port_offset, resolve_size
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
 UPDATE = os.environ.get("PANDID_UPDATE_GOLDEN") == "1"
@@ -531,6 +542,731 @@ def _line_numbers() -> Flowsheet:
     return fs
 
 
+_PFD_PROPERTY_ROWS = (
+    "Temperature (C)",
+    "Pressure (bar)",
+    "Vapour Fraction",
+    "Total Flow (kg/s)",
+    "Ethanol",
+    "Water",
+    "CO2",
+    "Biosolids",
+    "Monosaccharides",
+    "SO4",
+    "MEG",
+    "Flocculant",
+)
+
+# Rows render in first-seen key order, so every stream carries the same keys in
+# the same order. An empty value renders as "-".
+_PFD_PROPERTIES = {
+    "S-301": (
+        "35",
+        "1",
+        "0",
+        "38.93",
+        "0.047",
+        "0.887",
+        "3.08E-05",
+        "0.060",
+        "3.73E-03",
+        "2.00E-03",
+        "",
+        "",
+    ),
+    "S-303": ("25", "1", "0", "0.0088", "", "", "", "", "", "", "", "1.000"),
+    "S-304": ("25", "1", "0", "0.167", "", "1.000", "", "", "", "", "", ""),
+    "S-305": ("68", "1", "0", "2.01", "0.916", "0.084", "5.96E-04", "", "", "", "", ""),
+    "S-306": (
+        "100",
+        "1",
+        "0.044",
+        "36.93",
+        "trace",
+        "0.930",
+        "",
+        "0.064",
+        "3.93E-03",
+        "2.11E-03",
+        "",
+        "",
+    ),
+    "S-307": (
+        "35",
+        "1",
+        "0",
+        "36.93",
+        "trace",
+        "0.930",
+        "",
+        "0.064",
+        "3.93E-03",
+        "2.11E-03",
+        "",
+        "",
+    ),
+    "S-308": ("25", "1", "0", "0.175", "", "0.950", "", "", "", "", "", "0.050"),
+    "S-309": (
+        "35",
+        "1",
+        "0",
+        "37.10",
+        "trace",
+        "0.930",
+        "",
+        "0.063",
+        "3.91E-03",
+        "2.10E-03",
+        "",
+        "2.36E-04",
+    ),
+    "S-310": (
+        "35",
+        "1",
+        "0",
+        "34.30",
+        "trace",
+        "0.990",
+        "",
+        "3.86E-03",
+        "4.16E-03",
+        "2.23E-03",
+        "",
+        "1.28E-05",
+    ),
+    "S-501": (
+        "35",
+        "1",
+        "0",
+        "2.80",
+        "",
+        "0.199",
+        "",
+        "0.797",
+        "8.35E-04",
+        "4.49E-04",
+        "",
+        "0.003",
+    ),
+}
+
+
+def _ethanol_pfd() -> Flowsheet:
+    """Example 10 -- a whole issue-ready PFD on a fixed A3 page.
+
+    The title block states its own date, so unlike 03 and 08 there is nothing
+    here to pin: the sheet renders the same today as it did at issue.
+    """
+    fs = Flowsheet("Ethanol Purification A300")
+
+    broth = fs.add(units.Feed("Fermentation Broth", reference="PFD-201"))
+    floc = fs.add(units.Feed("Flocculant", reference="PCD-301"))
+    water = fs.add(units.Feed("RO Water", reference="PCD-301"))
+
+    col = fs.add(
+        units.Column("T-301", width=110, height=250, label_pos="center", description="Beer Column")
+    )
+    cond = fs.add(
+        units.HeatExchanger(
+            "E-301",
+            variant="condenser",
+            width=64,
+            height=64,
+            description="T-301 Overhead Condenser",
+        )
+    )
+    drum = fs.add(
+        units.Vessel(
+            "V-301", variant="horizontal", width=110, height=36, description="T-301 Reflux Drum"
+        )
+    )
+    # Where the drum's single draw parts into reflux and distillate: one fluid,
+    # two destinations, so a junction in the piping and not a piece of plant. A
+    # tee is drawn as nothing at all and carries no tag, so it puts nothing on
+    # the drawing and no row in the equipment list.
+    refl = fs.add(units.Tee())
+    reb = fs.add(
+        units.HeatExchanger(
+            "E-302", variant="kettle", width=120, height=44, description="T-301 Kettle Reboiler"
+        )
+    )
+    hx = fs.add(
+        units.HeatExchanger(
+            "HX-301",
+            variant="straight_tubes",
+            width=150,
+            height=45,
+            description="Beer Column Bottoms Cooling",
+        )
+    )
+    mix1 = fs.add(
+        units.Reactor(
+            "M-301", n_feeds=2, width=80, height=100, description="Flocculant Activation Mixer Tank"
+        )
+    )
+    mix2 = fs.add(units.Mixer("M-302", n_inlets=2, description="Beer Flocculant Mixer Tank"))
+    press = fs.add(
+        units.Filter(
+            "F-301",
+            variant="press",
+            width=120,
+            height=60,
+            description="Membrane Pressure Filter Press",
+        )
+    )
+    # The press's discharge parts the same way, but the size and the service
+    # both change across it, so this one breaks the run's line number.
+    disch = fs.add(units.Tee())
+    disch.new_line_number = True
+    belt = fs.add(units.Conveyor("BC-301", length=120, description="Filter Cake Conveyor Belt"))
+    belt.nozzle("feed", "N")  # cake is dropped onto the belt, not piped
+
+    ethanol = fs.add(units.Product("Azeotropic Ethanol", reference="PFD-302"))
+    effluent = fs.add(units.Product("Wastewater", reference="PCD-302"))
+    cake = fs.add(units.Product("Biomass Filter Cake", reference="PFD-501"))
+
+    # Equipment is positioned by nozzle, not by its top-left corner. A tee is a
+    # 12-unit square with a port on the middle of each face it uses, so half its
+    # width is the whole of the offset from a junction to the corner it is
+    # pinned by.
+    tee_w = 12.0
+    col_x, col_y, col_w = 430.0, 180.0, 110.0
+    col.pin(x=col_x, y=col_y)
+    col_axis = col_x + col_w / 2  # distillate / bottoms line
+    col_feed_y = col_y + port_offset(col, "feed")[1]
+    col_reflux_y = col_y + port_offset(col, "reflux_in")[1]
+
+    broth.pin(x=140, y=col_feed_y - 25)  # flag tip meets the feed nozzle
+
+    cond_w = 64.0
+    cond.pin(x=col_axis - cond_w / 2, y=56, mirrored="y")
+
+    drum_x, drum_y, drum_w = 700.0, 100.0, 110.0
+    drum.pin(x=drum_x, y=drum_y)
+    drum_draw_x = drum_x + (68 / 91.5) * drum_w  # liquid draw down the shell
+    refl.pin(x=drum_draw_x - tee_w / 2, y=col_reflux_y - tee_w / 2, orientation=90)
+    ethanol.pin(x=1330, y=250)
+
+    reb.pin(x=640, y=420)
+
+    hx_y, hx_h = 510.0, 45.0
+    hx.pin(x=900, y=hx_y)
+    hx_axis_y = hx_y + hx_h / 2  # the dewatering train runs on it
+
+    mix1_y, mix1_h = 620.0, 100.0
+    mix1.pin(x=560, y=mix1_y)
+    floc.pin(x=140, y=545)  # every flag tip on one line
+    water.pin(x=140, y=mix1_y + 0.573 * mix1_h - 25)
+
+    mix2.pin(x=1120, y=hx_axis_y - 15)  # in_1 level with the cooler
+    press_h = 60.0
+    press.pin(x=1250, y=hx_axis_y - 20)
+    press_out_y = hx_axis_y - 20 + press_h / 2  # discharge, mid-shell
+    disch.pin(x=1400, y=press_out_y - tee_w / 2)
+    effluent.pin(x=1540, y=press_out_y - 25)  # flag tip on the filtrate leg
+    belt_y, belt_tail = 715.0, 10.0  # tail nozzle, in from the end
+    belt.pin(x=disch.pin_.x + tee_w / 2 - belt_tail, y=belt_y)
+    cake.pin(x=1546, y=belt_y + belt_tail - 25)
+
+    # Declared in stream-number order, which is the order the table reads. The
+    # overhead and the reboiler circuit are each one service, so every segment
+    # of one carries the same number; a number is drawn once, on the first
+    # segment declared, so each group starts with the run it belongs on.
+    fs.connect(broth.outlet, col.feed, name="S-301")
+    fs.connect(floc.outlet, mix1.feed_1, name="S-303")
+    fs.connect(water.outlet, mix1.feed_2, name="S-304")
+
+    fs.connect(refl.outlet, ethanol.inlet, name="S-305")
+    fs.connect(col.distillate, cond.shell_in, name="S-305")
+    fs.connect(cond.shell_out, drum.inlet, name="S-305")
+    fs.connect(drum.outlet, refl.inlet, name="S-305")
+    fs.connect(refl.branch, col.reflux_in, name="S-305", draw_as_recycle=True)
+
+    fs.connect(col.bottoms, reb.shell_in, name="S-306")
+    fs.connect(reb.shell_out, col.boilup_in, name="S-306", draw_as_recycle=True)
+    fs.connect(reb.bottoms, hx.tube_in, name="S-306")
+
+    fs.connect(hx.tube_out, mix2.in_1, name="S-307")
+    fs.connect(mix1.outlet, mix2.in_2, name="S-308")
+
+    fs.connect(mix2.outlet, press.inlet, name="S-309")
+    fs.connect(press.outlet, disch.inlet, name="S-309")
+    fs.connect(disch.outlet, effluent.inlet, name="S-310")
+    fs.connect(disch.branch, belt.feed, name="S-501")
+    fs.connect(belt.discharge, cake.inlet, name="S-501")
+
+    for s in fs.streams:
+        values = _PFD_PROPERTIES.get(s.name)
+        if values is not None:
+            s.properties = dict(zip(_PFD_PROPERTY_ROWS, values))
+    fs.stream_table_sections = [("Ethanol", "Mass Fraction")]
+
+    fs.title_block = TitleBlock(
+        title="Ethanol Purification",
+        subtitle="A300 Process Flow Diagram 1",
+        drawing_number="PFD-301",
+        company="PANDID",
+        status="ISSUED FOR REVIEW",
+        sheet="1",
+        of_sheets="1",
+        date="30/08/25",
+        drawn_by="AA",
+        checked_by="RG",
+        approved_by="HVL",
+        revisions=[
+            Revision("A", "30/07/25", "Issued for internal review", "AA"),
+            Revision("B", "20/08/25", "Flocculation package added", "AA"),
+            Revision("C", "30/08/25", "Issued For Review", "AA", "RG", "HVL"),
+        ],
+    )
+
+    # The list is named row by row: the two junctions are tees, bulk piping
+    # bought by the line, and carry no tag to schedule.
+    fs.add_annotation(
+        equipment_list(
+            fs,
+            align="top",
+            include=[
+                "T-301",
+                "E-301",
+                "V-301",
+                "E-302",
+                "HX-301",
+                "M-301",
+                "M-302",
+                "F-301",
+                "BC-301",
+            ],
+        )
+    )
+    fs.add_annotation(
+        TableBox(
+            title="UTILITIES SUMMARY",
+            headers=["Utility", "Unit No.", "Duty (kW)", "Flow (kg/s)", "T_in", "T_out"],
+            rows=[
+                ["Cold Water", "HX-301", "-13161", "630.7", "25 C", "30 C"],
+                ["Cold Water", "E-301", "-5645", "270.5", "25 C", "30 C"],
+                ["High Pressure Steam", "E-302", "19112", "11.116", "250 C", "249 C"],
+            ],
+            col_align=["l", "l", "r", "r", "c", "c"],
+            align="bottom-right",
+        )
+    )
+    return fs
+
+
+def _ethanol_pid() -> Flowsheet:
+    """Example 11 -- the P&ID of 10's unit, and the densest sheet in the repo.
+
+    Its title block states its own date too, so nothing here is pinned either.
+    """
+    fs = Flowsheet(
+        "Ethanol Purification A300",
+        line_numbering_scheme="{service}-{sequence}-{size}-{schedule}-{spec}",
+        line_number_start=301,
+    )
+
+    col = fs.add(units.Column("T-301", label_pos="center", description="Beer Column"))
+    cond = fs.add(
+        units.HeatExchanger(
+            "C-301",
+            variant="straight_tubes",
+            width=130,
+            height=40,
+            description="Overhead Condenser",
+        )
+    )
+    drum = fs.add(
+        units.Vessel("D-301", variant="horizontal", width=130, height=42, description="Reflux Drum")
+    )
+    reb = fs.add(
+        units.HeatExchanger(
+            "RB-301", variant="kettle", width=140, height=50, description="U-tube Kettle Reboiler"
+        )
+    )
+    cooler = fs.add(
+        units.HeatExchanger(
+            "HX-301",
+            variant="straight_tubes",
+            width=130,
+            height=40,
+            description="Beer Bottoms Cooler",
+        )
+    )
+
+    # The cooling water and the steam are utility headers, not lines leaving the
+    # sheet once, so both tie-ins on each carry the one tag the legend explains.
+    fb_feed = fs.add(units.Feed("Fermentation Broth", reference="P&ID-201"))
+    cws_cond = fs.add(units.Feed("CWSH", header=True))
+    cwr_cond = fs.add(units.Product("CWRH", header=True))
+    cws_cool = fs.add(units.Feed("CWSH", header=True))
+    cwr_cool = fs.add(units.Product("CWRH", header=True))
+    steam = fs.add(units.Feed("HPSSH", header=True))
+    condensate = fs.add(units.Product("HPSRH", header=True))
+    ae_prod = fs.add(units.Product("Azeotropic Ethanol", reference="PFD-302"))
+    bottoms_prod = fs.add(units.Product("Cooled Bottoms", reference="F-301"))
+
+    xv = fs.add(units.Valve("XV-301", variant="solenoid", description="Feed Trip Valve"))
+    meter = fs.add(units.Fitting("FE-313", variant="rotameter", description="Feed Flow Element"))
+    cv306 = fs.add(units.Valve("CV-306", variant="control", description="Bottoms Control Valve"))
+    nrv306 = fs.add(units.Valve("NRV-306", variant="check", description="Bottoms Non-Return Valve"))
+    hv311 = fs.add(units.Valve("HV-311", description="C-301 Cooling Water Block Valve"))
+    hv315 = fs.add(units.Valve("HV-315", description="HX-301 Cooling Water Block Valve"))
+    fe303 = fs.add(
+        units.Fitting(
+            "FE-303", variant="venturi", label_pos="bottom", description="Reflux Flow Element"
+        )
+    )
+    # The size steps down 100 -> 40 across it, so the run's number breaks here.
+    t_draw = fs.add(units.Tee())
+    t_draw.new_line_number = True
+
+    # Pinned by nozzle, not by corner: every device is placed with pin(port=...),
+    # which asks the symbol where its own nozzle sits, so no rescaling of the
+    # artwork can leave a valve off its run.
+    col_x, col_y = 470.0, 300.0
+    col.pin(x=col_x, y=col_y)
+    col_axis = col_x + resolve_size(col)[0] / 2
+    feed_y = col_y + port_offset(col, "feed")[1]
+    boilup_y = col_y + port_offset(col, "boilup_in")[1]
+
+    fb_feed.pin(port="outlet", x=200, y=feed_y)
+    xv.pin(mirrored="y").pin(port="inlet", x=250, y=feed_y)
+    meter.pin(port="inlet", x=350, y=feed_y)
+
+    overhead_y = 130.0
+    cond_x, cond_y = 1010.0, 210.0
+    cond.pin(x=cond_x, y=cond_y)
+    cond_shell_in_x = cond_x + port_offset(cond, "shell_in")[0]
+    cw_cond_y = cond_y + port_offset(cond, "tube_in")[1]
+    st301 = fs.add_valve_station(
+        "CV-301-1",
+        x=677.5,
+        y=overhead_y,
+        number=301,
+        bypass_over="reduction",
+        description="Overhead",
+        service="AE",
+        sequence=302,
+        size=300,
+        schedule=80,
+        spec="SS",
+    )
+    cws_cond.pin(port="outlet", x=200, y=cw_cond_y)
+    hv311.pin(port="inlet", x=320, y=cw_cond_y)
+    cwr_cond.pin(port="inlet", x=1540, y=cw_cond_y)
+
+    # The inlet is authored on more than one face and the top one is named here,
+    # so the nozzle the drum is positioned by is the one the condensate arrives
+    # at, and the run from the condenser's drain is a straight drop.
+    drum.nozzle("inlet", "N")
+    drum_x = cond_x + port_offset(cond, "shell_out")[0] - port_offset(drum, "inlet")[0]
+    drum.pin(x=drum_x, y=280)
+    drum_draw_x = drum_x + port_offset(drum, "outlet")[0]
+
+    reflux_run_y = 440.0
+    st303 = fs.add_valve_station(
+        "CV-303",
+        x=672.5,
+        y=reflux_run_y,
+        mirrored=True,
+        bypass_over="reduction",
+        description="Reflux",
+        service="AE",
+        sequence=303,
+        size=80,
+        schedule=80,
+        spec="SS",
+    )
+    fe303.pin(mirrored=True).pin(port="outlet", x=617.5, y=reflux_run_y)
+
+    t_draw.pin(orientation=90)
+    t_draw.pin(port="inlet", x=drum_draw_x).pin(port="branch", y=reflux_run_y)
+
+    dist_y = 510.0
+    st305 = fs.add_valve_station(
+        "CV-305",
+        x=1147,
+        y=dist_y,
+        gap=26,
+        bypass_over="reduction",
+        description="Distillate",
+        service="AE",
+        sequence=305,
+        size=40,
+        schedule=80,
+        spec="SS",
+    )
+    ae_prod.pin(port="inlet", x=1540, y=dist_y)
+
+    reb.pin(x=700, y=580)
+    steam_y = 580 + port_offset(reb, "tube_in")[1]
+    steam.pin(port="outlet", x=200, y=steam_y)
+    st308 = fs.add_valve_station(
+        "CV-308",
+        x=217.5,
+        y=steam_y,
+        bypass_over="downstream_isolation",
+        description="Steam",
+        service="HPS",
+        sequence=308,
+        size=100,
+        schedule=80,
+        spec="CS",
+    )
+    condensate.pin(port="inlet", x=1540, y=580 + port_offset(reb, "tube_out")[1])
+
+    bottoms_y = 660.0
+    cv306.pin(mirrored="y").pin(port="inlet", x=900, y=bottoms_y)
+    nrv306.pin(port="inlet", x=1000, y=bottoms_y)
+    cooler.pin(x=1100, y=720)
+    cooler_shell_in_x = 1100 + port_offset(cooler, "shell_in")[0]
+    cooler_shell_out_x = 1100 + port_offset(cooler, "shell_out")[0]
+    cw_cool_y = 720 + port_offset(cooler, "tube_in")[1]
+    cooled_y = 805.0
+    cws_cool.pin(port="outlet", x=200, y=cw_cool_y)
+    hv315.pin(port="inlet", x=320, y=cw_cool_y)
+    cwr_cool.pin(port="inlet", x=1540, y=cw_cool_y)
+    bottoms_prod.pin(port="inlet", x=1540, y=cooled_y)
+
+    # A station is one line, and so are its bypass and its drains, so all three
+    # branches take the station's number and only the run carries it.
+    fs.connect(
+        fb_feed.outlet, xv.inlet, service="FB", sequence=301, size=200, schedule=160, spec="SS"
+    )
+    fs.connect(xv.outlet, meter.inlet)
+    col_feed = fs.connect(meter.outlet, col.feed)
+
+    # A line that carries a balloon is routed by hand with via(): an attached
+    # instrument hangs off the *routed* path, so a line the router is free to
+    # re-bend carries its instrumentation somewhere else with it.
+    vapour = fs.connect(
+        col.distillate, st301.inlet, service="AE", sequence=302, size=300, schedule=80, spec="SS"
+    ).via([(col_axis, overhead_y)])
+    fs.connect(st301.outlet, cond.shell_in).via([(cond_shell_in_x, overhead_y)])
+
+    fs.connect(
+        cond.shell_out, drum.inlet, service="AE", sequence=304, size=150, schedule=80, spec="SS"
+    )
+    fs.connect(
+        cws_cond.outlet, hv311.inlet, service="CWS", sequence=311, size=150, schedule=40, spec="CS"
+    )
+    fs.connect(hv311.outlet, cond.tube_in)
+    cw_return = fs.connect(
+        cond.tube_out, cwr_cond.inlet, service="CWR", sequence=312, size=150, schedule=40, spec="CS"
+    ).via([(1300, cw_cond_y)])
+
+    fs.connect(
+        drum.outlet, t_draw.inlet, service="AE", sequence=309, size=100, schedule=80, spec="SS"
+    )
+    fs.connect(
+        t_draw.branch, st303.inlet, service="AE", sequence=303, size=80, schedule=80, spec="SS"
+    )
+    fs.connect(st303.outlet, fe303.inlet)
+    fs.connect(fe303.outlet, col.reflux_in, draw_as_recycle=True)
+
+    fs.connect(
+        t_draw.outlet, st305.inlet, service="AE", sequence=305, size=40, schedule=80, spec="SS"
+    )
+    fs.connect(st305.outlet, ae_prod.inlet)
+
+    sump_x = 700 + port_offset(reb, "shell_in")[0]
+    boilup_x = 700 + port_offset(reb, "shell_out")[0]
+    sump = fs.connect(
+        col.bottoms, reb.shell_in, service="FB", sequence=307, size=250, schedule=160, spec="SS"
+    ).via([(col_axis, 655), (sump_x, 655)])
+    boilup = fs.connect(
+        reb.shell_out,
+        col.boilup_in,
+        service="FB",
+        sequence=310,
+        size=300,
+        schedule=160,
+        spec="SS",
+        draw_as_recycle=True,
+    ).via([(boilup_x, 535), (595, 535), (595, boilup_y)])
+    fs.connect(
+        steam.outlet, st308.inlet, service="HPS", sequence=308, size=100, schedule=80, spec="CS"
+    )
+    fs.connect(st308.outlet, reb.tube_in)
+    fs.connect(
+        reb.tube_out, condensate.inlet, service="HPR", sequence=317, size=80, schedule=80, spec="CS"
+    )
+
+    fs.connect(
+        reb.bottoms, cv306.inlet, service="FB", sequence=306, size=100, schedule=160, spec="SS"
+    )
+    fs.connect(cv306.outlet, nrv306.inlet)
+    fs.connect(nrv306.outlet, cooler.shell_in).via([(cooler_shell_in_x, bottoms_y)])
+    fs.connect(
+        cooler.shell_out,
+        bottoms_prod.inlet,
+        service="FB",
+        sequence=314,
+        size=100,
+        schedule=160,
+        spec="SS",
+    ).via([(cooler_shell_out_x, cooled_y)])
+    fs.connect(
+        cws_cool.outlet, hv315.inlet, service="CWS", sequence=315, size=100, schedule=40, spec="CS"
+    )
+    fs.connect(hv315.outlet, cooler.tube_in)
+    fs.connect(
+        cooler.tube_out,
+        cwr_cool.inlet,
+        service="CWR",
+        sequence=316,
+        size=100,
+        schedule=40,
+        spec="CS",
+    )
+
+    # The trip square is logic rather than a device, so it is drawn at each place
+    # the trip acts and carries the same tag every time. Z, not I: a function
+    # that acts is lettered S or Z.
+    fs.add_instrument("Z", 2, on=xv, at="S", offset=26, variant="sis")
+    fs.add_instrument("FI", 314, on=meter, at="S", offset=36)
+    fs.add_instrument("PI", 315, on=col_feed, at=0.45, offset=58)
+    fs.add_instrument("TI", 325, on=cw_return, at=0.3, offset=55)
+
+    # Loop 301: tower overhead pressure. The faceplate is mounted on the valve it
+    # drives, so its output drops straight onto the actuator. Both alarms read
+    # the controller and each takes a face of its own, high above low.
+    balloon_row_y = 45.0
+    cv3011_top = overhead_y - port_offset(st301.control, "inlet")[1]
+    pt301 = fs.add_instrument("PT", 301, on=vapour, at=0.75, offset=overhead_y - balloon_row_y)
+    pic301 = fs.add_instrument(
+        "PIC", 301, on=st301.control, at="N", variant="shared", offset=cv3011_top - balloon_row_y
+    )
+    pic301.nozzle("sig_out", "S")
+    fs.add_instrument("PAH", 301, on=pic301, at="N", offset=46, variant="shared")
+    fs.add_instrument("PAL", 301, on=pic301, at="E", offset=46, variant="shared")
+    fs.connect(pt301.sig_out, pic301.sig_in, kind="electric")
+    fs.connect(pic301.sig_out, st301.control.actuator, kind="pneumatic")
+
+    # The high pressure trip, on a measurement of its own: PT-318 taps the
+    # overhead west of PT-301 and drives Z-2 alone.
+    pt318 = fs.add_instrument("PT", 318, on=vapour, at=0.55, offset=overhead_y - balloon_row_y)
+    fs.add_instrument("Z", 2, on=pt318, at="N", offset=40, variant="sis")
+
+    # Loops 302/303: tower top temperature cascaded onto the reflux flow. A
+    # cascade sets a setpoint, so it lands on the flow controller's pv.
+    tt302 = fs.add_instrument("TT", 302, on=vapour, at=0.13, offset=80, angle=-90)
+    tic302 = fs.add_instrument("TIC", 302, on=tt302, at="E", offset=78, variant="shared")
+    tic302.nozzle("sig_out", "S")
+    fs.connect(tt302.sig_out, tic302.sig_in, kind="electric")
+
+    ft303 = fs.add_instrument("FT", 303, on=fe303, at="N", offset=90)
+    fic303 = fs.add_instrument("FIC", 303, on=ft303, at="E", offset=70, variant="shared")
+    fic303.nozzle("sig_out", "E")  # the valve it strokes stands below and right
+    fs.connect(ft303.sig_out, fic303.pv, kind="electric")
+    fs.connect(tic302.sig_out, fic303.sig_in, kind="software")
+    fs.connect(fic303.sig_out, st303.control.actuator, kind="pneumatic")
+
+    # Loop 304: reflux drum level on the distillate valve. Four lines reach this
+    # controller, so it needs four faces: the high alarm takes the north, the
+    # measurement comes in from the west, the output leaves south onto the
+    # actuator and the low alarm takes the east.
+    lt304 = fs.add_instrument("LT", 304, on=drum, at="E", offset=60)
+    lic304_row_y = 403.0
+    cv305_top = dist_y - port_offset(st305.control, "inlet")[1]
+    lic304 = fs.add_instrument(
+        "LIC", 304, on=st305.control, at="N", variant="shared", offset=cv305_top - lic304_row_y
+    )
+    lic304.nozzle("sig_in", "W")
+    lic304.nozzle("sig_out", "S")
+    fs.add_instrument("LAH", 304, on=lic304, at="N", offset=46, variant="shared")
+    fs.add_instrument("LAL", 304, on=lic304, at="E", offset=46, variant="shared")
+    # Teed off the measurement rather than hung on an alarm: an alarm host would
+    # draw the alarm as driving the trip.
+    level = fs.connect(lt304.sig_out, lic304.sig_in, kind="electric")
+    fs.add_instrument("Z", 1, on=level, at=0.6, offset=40, angle=-90, variant="sis")
+    fs.connect(lic304.sig_out, st305.control.actuator, kind="pneumatic")
+
+    # Loop 307: reboiler return temperature on the steam valve. The trip goes on
+    # the transmitter, which keeps working when the loop is put on manual.
+    tt307 = fs.add_instrument("TT", 307, on=sump, at=0.05, offset=85, angle=-90)
+    tic307 = fs.add_instrument("TIC", 307, on=tt307, at="W", offset=96, variant="shared")
+    tic307.nozzle("sig_out", "S")
+    fs.add_instrument("TI", 321, on=boilup, at=0.05, offset=70, angle=-90)
+    fs.add_instrument("Z", 1, on=tt307, at="N", offset=40, variant="sis")
+    fs.connect(tt307.sig_out, tic307.sig_in, kind="electric")
+    fs.connect(tic307.sig_out, st308.control.actuator, kind="pneumatic")
+
+    # Loop 306: kettle level on the bottoms draw.
+    lt306 = fs.add_instrument("LT", 306, on=reb, at="S", offset=68)
+    lic306 = fs.add_instrument("LIC", 306, on=lt306, at="E", offset=56, variant="shared")
+    lic306.nozzle("sig_out", "E")
+    fs.add_instrument("Z", 1, on=lt306, at="W", offset=44, variant="sis")
+    fs.connect(lt306.sig_out, lic306.sig_in, kind="electric")
+    fs.connect(lic306.sig_out, cv306.actuator, kind="pneumatic")
+
+    fs.title_block = TitleBlock(
+        title="Ethanol Purification",
+        subtitle="A300 Process & Instrumentation Diagram 1",
+        drawing_number="P&ID-301",
+        company="PANDID",
+        status="ISSUED FOR REVIEW",
+        sheet="1",
+        of_sheets="1",
+        date="30/10/25",
+        drawn_by="AA",
+        checked_by="RG",
+        approved_by="HVL",
+        revisions=[
+            Revision("A", "11/10/25", "Issued for internal review", "AA"),
+            Revision("B", "25/10/25", "Issued For Review", "AA", "RG", "HVL"),
+        ],
+    )
+
+    # Written out rather than generated, so the rows keep the order the issued
+    # sheet schedules them in.
+    fs.add_annotation(
+        Annotation(
+            title="EQUIPMENT LIST",
+            rows=[
+                ("D-301", "Reflux Drum"),
+                ("T-301", "Beer Column"),
+                ("HX-301", "Beer Bottoms Cooler"),
+                ("C-301", "Overhead Condenser"),
+                ("RB-301", "U-tube Kettle Reboiler"),
+            ],
+            align="top-right",
+        )
+    )
+    fs.add_annotation(
+        notes(
+            [
+                "Diamond in square: safety instrumented system logic, code Z.",
+                "One trip is one tag, drawn at every point the trip acts.",
+                "Z-2: high pressure trip. PT-318 is its own measurement point.",
+                "Z-1: process shutdown logic, reading three measurements.",
+                "Alarms are lettered A and trips S or Z; H is drawn above L.",
+            ],
+            title="GENERAL NOTES",
+            numbered=False,
+            align="bottom-left",
+        )
+    )
+    fs.add_annotation(
+        legend(
+            {
+                "SS": "Stainless Steel 316L",
+                "CS": "Carbon Steel A106-B",
+                "AE": "Azeotropic Ethanol",
+                "FB": "Fermentation Broth",
+                "CWSH": "Cooling Water Supply Header",
+                "CWRH": "Cooling Water Return Header",
+                "HPSSH": "High Pressure Steam Supply Header",
+                "HPSRH": "High Pressure Steam Return Header",
+                "NC": "Normally Closed (darkened valve body)",
+            },
+            align="top-left",
+        )
+    )
+    return fs
+
+
 def _block_flow_diagram() -> Flowsheet:
     fs = Flowsheet("Ammonia Plant - Block Flow Diagram")
     reforming = fs.add(units.Block("Reforming", inputs=["W", "N", "N"], outputs=["E"])).pin(
@@ -580,6 +1316,17 @@ SCENARIOS = {
         _line_numbers,
         {"show_stream_table": True, "border": "zone", "diagram": "p&id"},
     ),
+    # 10 and 11 are the two flagship sheets: the same unit as a PFD and as the
+    # P&ID of it, both on a fixed A3 page, and between them the widest coverage
+    # in the corpus -- valve stations, five control loops, a repeated interlock
+    # square, utility headers, a conveyor, off-page connectors, a utilities
+    # summary and a sectioned stream table. Both state their own title-block
+    # date, so neither needs the pinning 03 and 08 do.
+    "10_ethanol_pfd": (
+        _ethanol_pfd,
+        {"show_stream_table": True, "border": "zone", "page_size": "A3"},
+    ),
+    "11_ethanol_pid": (_ethanol_pid, {"border": "zone", "page_size": "A3", "diagram": "p&id"}),
     # 12 is the block flow diagram, the one drawing a level above the PFD and
     # the only scenario with process connections on the north and south faces.
     # It is what guards the sizing rule as a *drawing* rather than as an
