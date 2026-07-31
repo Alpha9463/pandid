@@ -1,28 +1,37 @@
 # Example gallery
 
 Every script in [`examples/`](../../examples) rendered to SVG and PNG. The PNG is
-shown inline (raster, 1600 px wide); the SVG beside each heading is the real
+shown inline (raster, 2400 px wide); the SVG beside each heading is the real
 output: vector, searchable text, and what `fs.render("…svg")` actually writes.
 
-These are **generated, not hand-drawn**. To rebuild them, run the examples and
-copy their output:
+These are **generated, not hand-drawn**. One command rebuilds all of them:
 
 ```bash
-for f in examples/[0-9]*.py; do python "$f"; done
+python scripts/gallery.py
 ```
 
-Each script writes its SVG next to itself in `examples/` (gitignored) under a
-name of its own, so copying one in is also a rename: `distillation_train.svg`
-becomes `03_distillation_train.svg`. Every copy takes the name of the script
-that wrote it, except `01_ammonia_loop.py`, which writes `ammonia_auto.svg`.
+`tests/test_gallery.py` renders every example and compares, so a sheet left
+stale fails the suite instead of sitting on `main` showing a drawing the package
+has stopped producing.
 
-The PNGs are rasterized from those same SVGs at 1600 px wide, through
-`pandid.render.export` (the `[pdf]` extra). Rasterize the *committed* SVG rather
-than a fresh one, so each sheet and its PNG always show the same drawing.
+The generator imports each example with `Flowsheet.render` stubbed, taking the
+flowsheet the script built rather than the file it writes, and draws it under
+the example's own stem — so there is no copy and no rename to get wrong. Run an
+example yourself and it still writes its own name into `examples/` (gitignored):
+`03_distillation_train.py` writes `distillation_train.svg`, and
+`01_ammonia_loop.py` writes `ammonia_auto.svg`.
 
-Note that `03` and `08` leave their `TitleBlock.date` blank, so the renderer
-stamps the current date. Regenerating those two SVGs moves that date and nothing
-else; leave them alone unless the sheet itself has changed.
+The PNGs are rasterized from the *committed* SVGs, through
+`pandid.render.export` (the `[pdf]` extra), so each sheet and its raster always
+show the same drawing. The 2400 px width is measured rather than chosen: at
+1600 px the 7.5-unit lettering in the title block's revision rows lands mid-grey
+rather than black, and 2400 is where it reaches the paper and stops improving.
+The comment on `WIDTH` in `scripts/gallery.py` has the numbers.
+
+`03` and `08` leave their `TitleBlock.date` blank, which the renderer fills in
+with today's. The generator fills it first, with the newest revision's date —
+the date the sheet is issued at, taken from its own revision history — so a
+regenerated gallery does not carry a date that moves every day.
 
 ---
 
@@ -235,3 +244,25 @@ at all four places the trip acts. `via()` pins the routes of the lines that carr
 balloons, since an attached instrument hangs off the *routed* path and would move
 with a line the router was free to re-bend. Nothing on the sheet is pinned by a
 measured nozzle offset: `pin(port=…)` asks each symbol where its own nozzle sits.
+
+## 12 · Block flow diagram
+
+[`examples/12_block_flow_diagram.py`](../../examples/12_block_flow_diagram.py) ·
+[SVG](12_block_flow_diagram.svg)
+
+![Block flow diagram](12_block_flow_diagram.png)
+
+The drawing a level above the PFD: one labelled box per plant section, the
+streams between them numbered, and nothing inside them drawn. `units.Block` is
+the only symbol on the sheet, and it is the one that connects on all four sides
+— `inputs=["W", "N", "N"]` puts air and steam into the reformer from *above*
+while the gas comes in from the left, the CO2 leaves the top of the removal
+section, and the synthesis loop takes its recycle back in from below. A plain
+count is the shorthand for the usual case: `inputs=1` is one connection on the
+west. Nothing here carries a `width` or a `height`; each box is as wide as its
+own name and as tall as the connections on its walls need, spread at a pitch
+that keeps two arrowheads apart, which is why `Shift & CO2 Removal` comes out
+wider than `Reforming`. It is pinned because the layout engine ranks by process
+flow order and does not yet read a north-face connection as wanting its source
+above it (issue #168) — and a BFD is the drawing most worth pinning anyway,
+since the reader is meant to see the plant in a row.

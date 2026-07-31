@@ -224,6 +224,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`docs/gallery/` is regenerated, and a check now holds it to the examples.**
+  ([#180](https://github.com/Alpha9463/pandid/issues/180))
+
+  The gallery had drifted and nothing noticed: `04_control_loop.svg` sat on
+  `main` through a dozen rendering PRs showing a sheet 526 units tall with an
+  instrument panel on it and no LT-101, a drawing the package had stopped
+  producing. Each of those PRs was right to defer the re-rasterise; what was
+  missing was anything that saw it had not happened. All twelve sheets are
+  rebuilt, `12_block_flow_diagram` joins the page, and `tests/test_gallery.py`
+  renders every example and compares — the guard `_vendored_symbols.py` got in
+  #150 and `docs/api.md` in #179, for the last generated artefact without one.
+
+  `scripts/gallery.py` is the one command that rebuilds it. It imports each
+  example with `Flowsheet.render` stubbed, so there is no output file to copy
+  and no rename to get wrong, and it refuses to run unless `pandid` was imported
+  from the checkout — `examples/_bootstrap.py` prepends the repo root only when
+  `pandid` is not already importable, so on a machine with a release installed
+  the examples otherwise render against *that*. It also fills a blank
+  `TitleBlock.date` with the newest revision's date before rendering, so `03`
+  and `08` no longer carry a date that moves every day.
+
+  The PNGs are now 2400 px wide rather than 1600. The width is measured: in a
+  crop of one title-block revision row's description cell, the darkest pixel of
+  the 7,5-unit lettering runs 50–65 of 255 at 1600 px and 0–29 at 2400, and the
+  inked fraction of the cell stops climbing there. Twelve rasters weigh 1,65 MiB
+  at 2400 against 1,00 at 1600 and 2,15 at 3000.
+
 - A spec may now name any of the new device classes (`kind: Cyclone`, or its
   snake_case spelling), and `to_dict()` can write one out — it could not before,
   since `pandid.spec` built its class table from `pandid.units` alone and
