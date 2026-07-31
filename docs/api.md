@@ -1545,7 +1545,26 @@ instrument.attach(on, *, at=None, offset=45.0, angle=90.0) -> Instrument
   the face's tangent, so `90` again points straight out.
 
 An impulse line is drawn from the tap to the balloon: a fine solid line to a
-process host, dashed where a balloon hangs off another balloon. Attached
+process host, because that is what it is, a length of impulse tubing between the
+pipe and the element. It is **dashed** where the host carries a measurement
+rather than a fluid — a balloon hung off another balloon, and a balloon teed off
+a **signal line**, which is how a trip is drawn: not on a face of the balloon it
+acts for, but branched at a right angle off the line carrying the command.
+
+```python
+trip = fs.connect(lic.sig_out, lv.actuator, kind="electric")
+fs.add_instrument("I", 1, on=trip, at=0.25, offset=44, angle=-90, variant="logic")
+```
+
+Hanging the square on an alarm instead would draw the alarm as driving it, and an
+alarm that acts is lettered `S` or `Z` rather than `A`. **ISO 15519-2 Table 2**
+note 9: *"Shall only be used for separate alarm control functions. If control
+functions S and Z at time of action also trigger an alarm/message, then the A
+shall not be used in addition to the in front letter codes S or Z."* **§7.2.4**
+is the same rule seen from the line: *"Signal lines for different types of
+control functions should not be joined."*
+
+Attached
 balloons take no part in layout ranking and are drawn over the lines, so neither
 an in-line element nor a stream number is lost underneath one. Balloons chain,
 so an alarm on a controller on a transmitter resolves in order.

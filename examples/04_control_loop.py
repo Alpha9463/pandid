@@ -96,10 +96,38 @@ def main():
     lic = fs.add_instrument("LIC", level, on=drum, at="S", offset=90, variant="panel")
     # Both alarms read the controller, so both hang off it. Chaining one to the
     # other would draw the low alarm as though the high alarm fed it.
-    fs.add_instrument("LAH", level, on=lic, at="W", offset=78, angle=62)
-    fs.add_instrument("LAL", level, on=lic, at="W", offset=78, angle=118)
-    fs.add_instrument("I", 1, on=lic, at="S", offset=44, variant="logic")
-    fs.connect(lic.sig_out, lv.actuator, kind="electric")
+    #
+    # Each takes a *face* at the default angle, so its impulse line leaves the
+    # balloon radially and lands square on the next one. BS ISO 15519-1 §12.1
+    # requires a functional connection to run horizontally or vertically, and
+    # §12.4 requires the junctions to be at right angles; these are ISO 15519-2
+    # §5.1.1 functional connection lines, so the rule is theirs too. A branch
+    # taken at any other angle from a *circle* also has to leave along a tangent,
+    # which draws a line grazing the balloon instead of meeting it.
+    #
+    # Which face each one gets is forced. The controller's own impulse line
+    # arrives from the drum into the north, and its output leaves to the east
+    # towards LV-101: put a balloon on that east face and its tap and the output
+    # are drawn one on top of the other as far as the output's first corner. So
+    # the controller has two faces to give, and they go to the two alarms.
+    fs.add_instrument("LAH", level, on=lic, at="W", offset=78)
+    fs.add_instrument("LAL", level, on=lic, at="S", offset=78)
+
+    # The interlock takes no face at all: it is teed off the *signal line*, which
+    # is what the issued sheet does with every trip on it. Hanging it on an alarm
+    # instead would draw the alarm as driving it, and an alarm that acts is
+    # lettered S or Z rather than A -- ISO 15519-2 Table 2 note 9: "Shall only be
+    # used for separate alarm control functions. If control functions S and Z at
+    # time of action also trigger an alarm/message, then the A shall not be used
+    # in addition to the in front letter codes S or Z." An LAL with an output is
+    # a mis-lettered LSL. §7.2.4 is the same rule from the line's end: "Signal
+    # lines for different types of control functions should not be joined."
+    #
+    # ``on=`` a stream measures ``at=`` along its *routed* path, so the square
+    # rides the output wherever the router puts it, and the default angle=90
+    # branches perpendicular to a run that is already orthogonal.
+    trip = fs.connect(lic.sig_out, lv.actuator, kind="electric")
+    fs.add_instrument("I", 1, on=trip, at=0.25, offset=44, angle=-90, variant="logic")
 
     fs.render(out("control_loop.svg"))
     print("Generated control_loop.svg")

@@ -239,7 +239,7 @@ def main():
     fs.connect(fb_feed.outlet, xv.inlet, service="FB", sequence=301, size=200,
                schedule=160, spec="SS")
     fs.connect(xv.outlet, meter.inlet)
-    fs.connect(meter.outlet, col.feed)
+    col_feed = fs.connect(meter.outlet, col.feed)
 
     # A line that carries a balloon is routed by hand with via(). An attached
     # instrument hangs off the *routed* path, so a line the router is free to
@@ -307,11 +307,15 @@ def main():
     # diamond is the different symbol this sheet does not draw.
     fs.add_instrument("I", 2, on=xv, at="S", offset=26, variant="sis")
     fs.add_instrument("FI", 314, on=meter, at="S", offset=36)
-    # The tower's feed enters the middle of its west wall, so a gauge branched
-    # straight out of that face (angle=90) stands on the feed line and the
-    # router steps the run around it. 45 takes the same tap up and out instead,
-    # into the clear between the feed run and the top of the shell.
-    fs.add_instrument("PI", 315, on=col, at="W", offset=52, angle=45)
+    # The gauge reads the tower's feed nozzle, but it is hung on the run rather
+    # than on the wall. A unit host taps a *face midpoint*, and the tower's feed
+    # enters the middle of its west wall, so that midpoint is the nozzle itself:
+    # every orthogonal branch off it either runs down the feed line (west) or
+    # straddles the shell (north/south), and the sheet used to reach the clear
+    # space above the run with a 45 degree line instead. BS ISO 15519-1 §12.1
+    # does not allow that for a functional connection, so the tap moves the few
+    # pixels back onto the run it measures and stands the balloon over it.
+    fs.add_instrument("PI", 315, on=col_feed, at=0.45, offset=58)
     fs.add_instrument("TI", 325, on=cw_return, at=0.3, offset=55)
 
     # --- Loop 301: tower overhead pressure -------------------------------
