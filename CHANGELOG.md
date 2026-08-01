@@ -9,6 +9,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Control loops number themselves.** `add_loop("F")` with the number left out
+  takes the next one from a single per-sheet counter, started by
+  `Flowsheet(loop_number_start=…)` and allocated at the `add_loop()` line, so
+  declaration order is allocation order. Typed and allocated numbers mix on one
+  sheet; a loop is still the `(variable, number)` pair, so `F-101` and `L-101`
+  remain two loops.
+
+  One series across measured variables, not a counter per variable, because that
+  is what a sheet draws: `P&ID_301` runs `P-301`, `T-302`, `F-303`, `L-304`,
+  `F-305`, `L-306`, `T-307`, `F-308`, and its notes block says "Note that
+  instrument number are unique to this drawing". The counter is naive — no
+  reservation list, no skipping, no collision search — because nothing outside
+  the loop set spends a loop number: a final control element takes its loop's,
+  CHEE4001 p.11 numbering a flow loop's element, transmitter, controller and
+  valve all 504 under the p.13 rule that "A loop number is assigned to each
+  group of components required to perform the desired function of the monitor or
+  control scheme". Where the counter does reach a number typed by hand for the
+  same variable, `add_loop()` raises at that line rather than silently skipping
+  or duplicating.
+
+  This does not weaken "a loop number is allocated once and never renumbered";
+  it is where the once happens. That rule is about a number which has *left* the
+  drawing for a DCS, and nothing leaves a draft. `to_dict()` is the freeze: it
+  writes every loop's number as a literal, allocated or typed, so a sheet read
+  back from its spec is nailed down. The argument is made in full in
+  `pandid/loops.py`.
+
+- **`Flowsheet(stream_number_start=…)`.** Where `S{n}` starts counting (default
+  `1`, which is what it always did). A sheet numbering `S100` upward previously
+  had to supply a whole callable naming scheme to move a number by 99. It is not
+  `line_number_start`, which moves the `sequence` component of a *line* number,
+  the `1001` inside `6"-P-1001-A1A`; a sheet can want one and not the other.
+
+- **`loop_number_start` and `stream_number_start` in the spec**, alongside
+  `line_number_start`, and a `loops:` entry may now leave its `number` out to
+  allocate. `to_dict()` writes each key only when it differs from its default,
+  so a spec written before this release and one written after are the same file.
+
 - **A deprecation mechanism: one declaration, a warning and a `validate()`
   finding.** `pandid.deprecation.Deprecation` names a retired spelling, the
   spelling that replaces it and the release the old one stops working in. Its

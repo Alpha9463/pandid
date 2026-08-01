@@ -21,9 +21,11 @@ pandid.__version__          # the installed version, e.g. "0.0.1"
 ```text
 Flowsheet(name: str, *,
           stream_naming_scheme: str | Callable[[int], str] = "S{n}",
+          stream_number_start: int = 1,
           line_numbering_scheme: str | Callable[[Stream], str]
               = "{size}-{service}-{sequence}-{spec}",
           line_number_start: int = 1001,
+          loop_number_start: int = 1,
           valve_station_tag_scheme: str | Callable[[str, str], str]
               = "{letters}-{number}{suffix}",
           auto_faces: bool = True)
@@ -33,12 +35,24 @@ The container and the single source of truth for connectivity.
 
 - `stream_naming_scheme` is either a format string taking `{n}` (default
   `"S{n}"` → `S1`, `S2`, …) or a callable `int -> str`. Keyword-only.
+- `stream_number_start` sets the `{n}` the first stream gets (default `1`, so
+  the first stream is `S1`; `100` gives `S100`, `S101`, …). Keyword-only.
 - `line_numbering_scheme` is either a format string taking the line-number
   components (`{size}`, `{schedule}`, `{service}`, `{sequence}`, `{spec}`,
   `{insulation}`) or a callable `Stream -> str`, for a site whose convention is
   spelled some other way. Keyword-only. See [Line numbers](#line-numbers).
 - `line_number_start` sets where the automatic sequence begins (default `1001`,
   so the first line is `…-1001-…`). Keyword-only.
+- `loop_number_start` sets the number the first `add_loop()` with no number of
+  its own takes (default `1`). Keyword-only. See
+  [Control loops](#control-loops).
+
+`stream_number_start` and `line_number_start` are two different numbers on two
+different labels. `stream_number_start` moves the whole stream number, the `S1`
+a PFD draws in a flag and a stream table keys its columns on.
+`line_number_start` moves the `sequence` **component** of a line number, the
+`1001` inside `6"-P-1001-A1A`. A sheet may want one and not the other, so
+neither stands in for the other.
 - `valve_station_tag_scheme` spells a valve station's members out of its control
   valve's tag: a format string taking `{letters}`, `{number}`, `{suffix}`,
   `{role}` and `{control}`, or a callable `(role, control_tag) -> str`.
@@ -151,7 +165,7 @@ Registers an `Annotation` or `TableBox` (see [Sheet furniture](#sheet-furniture)
 ```text
 add_instrument(type, number="", *, on=None, at=None,
                offset=45.0, angle=90.0, variant="default", **kwargs) -> Instrument
-add_loop(variable: str, number: str | int) -> Loop
+add_loop(variable: str, number: str | int | None = None) -> Loop
 add_valve_station(tag: str, **kwargs) -> ValveStation
 ```
 See [Instrumentation](#instrumentation), [Control loops](#control-loops) and
@@ -1499,7 +1513,9 @@ The author supplies all but `sequence`, which auto-numbering fills from
 `line_number_start` (default `1001`); set it yourself to tie into a line that
 already exists on someone else's list. A component left unset drops out, and so
 does the text introducing it, so a line with no spec issued yet reads
-`6"-P-1001` rather than `6"-P-1001-`.
+`6"-P-1001` rather than `6"-P-1001-`. `line_number_start` moves this component
+only; the number a stream with no line number is drawn with is moved by
+[`stream_number_start`](#flowsheet).
 
 The list is deliberately fixed. A component the engine cannot name is a
 component the line list cannot be checked against, and a site wanting a fact of
@@ -1631,7 +1647,7 @@ fy  = fs.add_instrument("FY", 101, variant="computer")    # computing relay
 ### Control loops
 
 ```text
-fs.add_loop(variable: str, number: str | int) -> Loop
+fs.add_loop(variable: str, number: str | int | None = None) -> Loop
 loop.tag(letters: str) -> str
 loop.variable   # the measured-variable letter, upper-cased
 loop.number     # the loop number, as text
@@ -1684,6 +1700,41 @@ six loops and leaves ten balloons on literal numbers.
 Loops serialize to an optional `loops:` section of the spec and round-trip
 through it; a sheet that declares none writes no section, so its spec is
 unchanged. See [Declaring a flowsheet as data](#declaring-a-flowsheet-as-data).
+
+#### Automatic loop numbers
+
+Leave the number out and the sheet allocates the next one, counting from
+`loop_number_start`. On a draft, where the numbers and the count of loops are
+both still moving, that is one thing fewer to retype each time a loop is
+inserted.
+
+```python
+fs = Flowsheet("Ethanol Purification A300", loop_number_start=301)
+press = fs.add_loop("P")        # P-301
+temp  = fs.add_loop("T")        # T-302
+flow  = fs.add_loop("F")        # F-303
+```
+
+- **One series for the sheet**, not one per measured variable: the numbers climb
+  through whichever variable comes next, which is what `P&ID_301` draws —
+  `P-301`, `T-302`, `F-303`, `L-304`, `F-305`, `L-306`, `T-307`, `F-308`. A loop
+  is still the `(variable, number)` pair, so `add_loop("F", 101)` beside
+  `add_loop("L", 101)` remains two loops.
+- **Allocated at the `add_loop()` line**, so the numbers run down the page in the
+  order the page declares them. A loop declared and never tagged still spends
+  its number; a declaration that raises spends nothing.
+- **Allocated and typed numbers mix.** A typed number reserves nothing and the
+  counter skips nothing, so a sheet that types `F-316` and then allocates takes
+  the series' next number, not 317. Should the counter reach a number already
+  typed for the same variable, `add_loop()` raises at that line and names
+  `loop_number_start` as the way clear.
+- **A loop of one member is a legitimate use.** CHEE4001 p.13 assigns a number
+  to "each group of components required to perform the desired function of the
+  monitor or control scheme", and a group of one is a group — which is what the
+  tail of `P&ID_301` is: `FE-313`, `PI-316`, `TI-319`, `LI-322`.
+- **`to_dict()` freezes the sheet.** Every loop's number is written out as a
+  literal, allocated or typed, so reading the spec back gives the numbers nailed
+  down. Auto-numbering is the draft; the spec is the issue.
 
 ### Valve stations
 
@@ -2448,8 +2499,10 @@ nothing, and asking for YAML without PyYAML installed says exactly that.
 ```yaml
 name: Feed Metering Skid          # the only required field
 stream_naming_scheme: "S{n}"
+stream_number_start: 1            # the S1 a flag draws
 line_numbering_scheme: "{size}-{service}-{sequence}-{spec}"
-line_number_start: 1001
+line_number_start: 1001           # the 1001 inside 6"-P-1001-A1A
+loop_number_start: 1              # where a loop with no number counts from
 components: [Water, {name: Ethanol, formula: C2H6O}]
 
 units:
@@ -2549,6 +2602,10 @@ Declared control loops, `{variable: F, number: 303}`, matching
 [`add_loop()`](#control-loops). Members carry their whole tag, so the section
 only records that the loop exists; a sheet that declares none writes no section
 at all.
+
+`number` is optional and omitting it allocates from `loop_number_start`, exactly
+as omitting the argument to `add_loop()` does. `to_dict()` always writes a
+literal, so a spec this package wrote reads back frozen.
 
 ### The `instruments` section
 
