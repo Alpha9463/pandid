@@ -10,8 +10,9 @@ sheet is dense in symbols the reactor-and-column examples never reach for.
 **It is a P&ID, and it has to be.** Almost everything this sheet exists to draw
 is line hardware, and ISO 15519-2 puts line hardware on one diagram type and
 not the other. Its Table 4, the process flow diagram, allows "general graphical
-symbols for process equipment, valve actuators" and never names a valve, a
-reducer or a fitting anywhere in either of its columns. Its Table 5, the
+symbols for process equipment, valve actuators, PCI symbols" and never names a
+valve *body*, a reducer or a fitting in either of its columns -- all three of
+its mentions of the word are of an actuator. Its Table 5, the
 process and instrumentation diagram, opens its *basic* information with
 "specific graphical symbols for process equipment incl. prime movers ...,
 valves incl. actuators, connections, etc." and its additional information with
@@ -230,7 +231,15 @@ def main():
     vru_out = fs.add(units.Product("Vapour Recovery Unit", reference="P&ID-609"))
 
     # --- In-line: motor spirit -------------------------------------------
-    xv601 = fs.add(units.Valve("XV-601", variant="solenoid", description="MS Receipt Trip Valve"))
+    # Both receipt valves fail closed, and both say so in the notes rather than
+    # on the valve. fail="closed" is the drawn form and was tried first: it puts
+    # an FC under the valve body, which is the same face the trip square hangs
+    # on, and the mark's halo then deletes the impulse line joining the two. The
+    # square is the more important of the pair -- it is the whole of what Z-1
+    # claims -- so the mark comes off and the words go in the notes box, which is
+    # what a notes box is for.
+    xv601 = fs.add(units.Valve("XV-601", variant="solenoid",
+                               description="MS Receipt Trip Valve"))
     xv602 = fs.add(units.Valve("XV-602", variant="solenoid",
                                description="Ethanol Receipt Trip Valve"))
     hv601 = fs.add(units.Valve("HV-601", variant="gate", description="TK-601 Root Valve"))
@@ -501,9 +510,10 @@ def main():
     # else, which CHEE4001 p.13 still calls a loop: "a group of components
     # required to perform the desired function of the monitor or control scheme".
     #
-    # The alarms those indicators carry are not drawn. ISO 15519-2 5.2.5 requires
-    # a letter code with an H or L modifier to be written outside the PCI symbol
-    # as a code string, and pandid cannot yet annotate a balloon that way; the
+    # The alarms those indicators carry are not drawn. ISO 15519-2 5.2.5 is a
+    # shall -- "Letter code combinations with modifiers H and L shall be
+    # represented outside the PCI symbol" -- and pandid cannot yet write a code
+    # string beside a balloon, which is what that asks for; the
     # same deviation is argued at length in examples/11_ethanol_pid.py, and this
     # sheet takes the other branch of it -- leaving them off rather than drawing
     # them as balloons -- because the protection that matters here is the trip
@@ -629,6 +639,7 @@ def main():
         "FA-601 is deflagration rated; FA-602, on the rack return, is detonation",
         "rated. VT-601 is the vapour system's only opening to atmosphere.",
         "SB-601 gives TK-602 positive isolation from the blend header.",
+        "XV-601 and XV-602 fail closed.",
     ], title="GENERAL NOTES", numbered=False, align="bottom-left"))
     fs.add_annotation(legend({
         "MS": "Motor Spirit",

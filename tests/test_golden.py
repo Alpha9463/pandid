@@ -1692,6 +1692,7 @@ def _tank_farm() -> Flowsheet:
                 "FA-601 is deflagration rated; FA-602, on the rack return, is detonation",
                 "rated. VT-601 is the vapour system's only opening to atmosphere.",
                 "SB-601 gives TK-602 positive isolation from the blend header.",
+                "XV-601 and XV-602 fail closed.",
             ],
             title="GENERAL NOTES",
             numbered=False,

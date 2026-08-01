@@ -96,16 +96,17 @@
     <text x="1369.6" y="133.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Motor Spirit Transfer Pump</text>
     <text x="1320.6" y="151.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">P-602</text>
     <text x="1369.6" y="151.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Ethanol Blend Pump</text>
-    <rect x="24.0" y="941.5" width="455.4" height="157.0" fill="white" stroke="black" stroke-width="1.5"/>
-    <text x="251.7" y="958.5" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">GENERAL NOTES</text>
-    <line x1="24.0" y1="964.5" x2="479.4" y2="964.5" stroke="black" stroke-width="1"/>
-    <text x="33.0" y="978.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Diamond in square: safety instrumented system logic, code Z.</text>
-    <text x="33.0" y="996.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Z-1: receipt shutdown on tank high-high level. One trip, drawn at each</text>
-    <text x="33.0" y="1014.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">point it acts: both level switches and both receipt valves.</text>
-    <text x="33.0" y="1032.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">LSHH-611/612 are independent of the gauging transmitters they back up.</text>
-    <text x="33.0" y="1050.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">FA-601 is deflagration rated; FA-602, on the rack return, is detonation</text>
-    <text x="33.0" y="1068.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">rated. VT-601 is the vapour system&#x27;s only opening to atmosphere.</text>
-    <text x="33.0" y="1086.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">SB-601 gives TK-602 positive isolation from the blend header.</text>
+    <rect x="24.0" y="923.5" width="455.4" height="175.0" fill="white" stroke="black" stroke-width="1.5"/>
+    <text x="251.7" y="940.5" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">GENERAL NOTES</text>
+    <line x1="24.0" y1="946.5" x2="479.4" y2="946.5" stroke="black" stroke-width="1"/>
+    <text x="33.0" y="960.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Diamond in square: safety instrumented system logic, code Z.</text>
+    <text x="33.0" y="978.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Z-1: receipt shutdown on tank high-high level. One trip, drawn at each</text>
+    <text x="33.0" y="996.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">point it acts: both level switches and both receipt valves.</text>
+    <text x="33.0" y="1014.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">LSHH-611/612 are independent of the gauging transmitters they back up.</text>
+    <text x="33.0" y="1032.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">FA-601 is deflagration rated; FA-602, on the rack return, is detonation</text>
+    <text x="33.0" y="1050.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">rated. VT-601 is the vapour system&#x27;s only opening to atmosphere.</text>
+    <text x="33.0" y="1068.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">SB-601 gives TK-602 positive isolation from the blend header.</text>
+    <text x="33.0" y="1086.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">XV-601 and XV-602 fail closed.</text>
     <rect x="911.4" y="1018.5" width="652.0" height="80.0" fill="white" stroke="black" stroke-width="2"/>
     <line x1="1211.4" y1="1018.5" x2="1211.4" y2="1098.5" stroke="black" stroke-width="1.5"/>
     <line x1="1311.4" y1="1018.5" x2="1311.4" y2="1098.5" stroke="black" stroke-width="1.5"/>
@@ -145,7 +146,7 @@
     <text x="1316.4" y="1093.5" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">P&amp;ID-601</text>
     <line x1="1407.2" y1="1072.9" x2="1407.2" y2="1098.5" stroke="black" stroke-width="0.5"/>
     <text x="1412.2" y="1080.9" font-family="sans-serif" font-size="6.5" text-anchor="start" fill="#666">SCALE</text>
-    <text x="1412.2" y="1093.5" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">1:1.16</text>
+    <text x="1412.2" y="1093.5" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">1:1.19</text>
     <line x1="1460.1" y1="1072.9" x2="1460.1" y2="1098.5" stroke="black" stroke-width="0.5"/>
     <text x="1465.1" y="1080.9" font-family="sans-serif" font-size="6.5" text-anchor="start" fill="#666">DATE</text>
     <text x="1465.1" y="1093.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">12/12/25</text>
@@ -184,7 +185,7 @@
     <symbol id="sym_vent_breather" viewBox="0 0 25.0 15.0" overflow="visible"><g transform="scale(0.5)"><rect x="0.0" y="0.0" width="50.0" height="20.0" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 25.0 20.0 L 25.0 30.0 M 0.0 0.0 L 25.0 20.0 L 50.0 0.0 M 0.0 20.0 L 25.0 0.0 L 50.0 20.0" fill="none" stroke="#111" stroke-width="4.0"/></g></symbol>
     <symbol id="sym_vessel_legs_s60x120" viewBox="0 0 40.0 122.7" preserveAspectRatio="none" overflow="visible"><rect x="0.0" y="87.69" width="8.0" height="35.0" fill="none" stroke="#111" stroke-width="1.65126"/><rect x="32.0" y="87.69" width="8.0" height="35.0" fill="none" stroke="#111" stroke-width="1.65126"/><path d="M 40.0 7.69 L 40.0 87.69 A 20.0 7.6923 0.0 0 1 20.0 95.3823 A 20.0 7.6923 0.0 0 1 0.0 87.69 L 0.0 7.69 A 20.0 7.6923 0.0 0 1 20.0 -0.0023 A 20.0 7.6923 0.0 0 1 40.0 7.69 Z" fill="none" stroke="#111" stroke-width="1.65126"/><path d="M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69" fill="none" stroke="#111" stroke-width="1.65126"/></symbol>
   </defs>
-  <g id="drawing" transform="translate(26.11, 185.49) scale(0.860533)">
+  <g id="drawing" transform="translate(45.61, 186.03) scale(0.838671)">
   <g id="units">
     <use href="#sym_tank_floating_roof_s190x140" x="360" y="215" width="190" height="140" />
     <use href="#sym_tank_s180x150" x="680" y="205" width="180" height="150" />
