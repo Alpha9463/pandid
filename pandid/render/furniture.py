@@ -454,21 +454,49 @@ def sheet_rect(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BA
     return ix - band, iy - band, iw + 2 * band, ih + 2 * band
 
 
-def zone_frame(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BAND
-               ) -> tuple[list[str], tuple[float, float, float, float]]:
-    """Draw the drawing frame (inner rect) plus the sheet border (outer rect)
-    with zone letters/numbers ruled in the band between them.
+#: The size the zone letters and numerals are lettered at, and the drop from the
+#: middle of the band to their baseline.
+ZONE_TYPE, _ZONE_BASE = 9, 3
 
-    (``ix``, ``iy``, ``iw``, ``ih``) is the inner drawing rectangle. Returns the
-    SVG fragments and the outer sheet rectangle (x, y, w, h).
+
+class Zoned(NamedTuple):
+    """The zone-ruled border, as geometry rather than as ink.
+
+    ``outer`` and ``inner`` are the sheet border and the drawing frame, each
+    ``(x, y, w, h)``. ``parts`` is everything ruled in the band between them, in
+    the order the sheet draws it: ``("rule", x1, y1, x2, y2)`` for a tick, and
+    ``("label", x, y, text)`` for a letter or a numeral, stated at the point the
+    glyph is *centred* on. The SVG sets a label ``text-anchor="middle"`` and
+    drops the baseline by :data:`_ZONE_BASE`, which is that same point said the
+    way SVG says it.
+
+    One list rather than two, and in drawing order, because
+    :func:`zone_frame` strokes it straight through: two lists would have to be
+    re-interleaved to put the ink back where it was, and the sheet's own file is
+    the thing that must not move.
+    """
+    outer: tuple[float, float, float, float]
+    inner: tuple[float, float, float, float]
+    parts: list[tuple]
+
+
+def zone_layout(ix: float, iy: float, iw: float, ih: float,
+                band: float = ZONE_BAND) -> Zoned:
+    """Where every part of the zone-ruled border goes.
+
+    The geometry of :func:`zone_frame`, with the drawing taken out of it, so the
+    draw.io exporter rules the same border rather than a second opinion about
+    one -- the same split :func:`dock` and
+    :func:`~pandid.render.svg.stream_polyline` are already on the far side of.
+
+    The field counts are the sheet's own and are chosen from its size (a zone
+    about 165 units across, four to twelve columns and three to eight rows). They
+    are *not* ISO 5457's fixed 50 mm pitch; see the note above :data:`ZONE_BAND`.
     """
     ox, oy, ow, oh = sheet_rect(ix, iy, iw, ih, band)
     cols = max(4, min(12, round(iw / 165)))
     rows = max(3, min(8, round(ih / 165)))
-    L = [f'<rect x="{ox:.1f}" y="{oy:.1f}" width="{ow:.1f}" height="{oh:.1f}" '
-         f'fill="none" stroke="black" stroke-width="1"/>',
-         f'<rect x="{ix:.1f}" y="{iy:.1f}" width="{iw:.1f}" height="{ih:.1f}" '
-         f'fill="none" stroke="black" stroke-width="2"/>']
+    parts: list[tuple] = []
     letters = string.ascii_uppercase
     # columns: numbers 1..cols, right→left, on the top and bottom bands
     for c in range(cols):
@@ -476,21 +504,48 @@ def zone_frame(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BA
         x1 = ix + iw * (c + 1) / cols
         num = str(cols - c)
         if c:
-            L.append(f'<line x1="{x0:.1f}" y1="{oy:.1f}" x2="{x0:.1f}" y2="{iy:.1f}" stroke="black" stroke-width="0.75"/>')
-            L.append(f'<line x1="{x0:.1f}" y1="{iy + ih:.1f}" x2="{x0:.1f}" y2="{oy + oh:.1f}" stroke="black" stroke-width="0.75"/>')
-        L.append(_text((x0 + x1) / 2, oy + band / 2 + 3, num, 9, anchor="middle", bold=True))
-        L.append(_text((x0 + x1) / 2, oy + oh - band / 2 + 3, num, 9, anchor="middle", bold=True))
+            parts.append(("rule", x0, oy, x0, iy))
+            parts.append(("rule", x0, iy + ih, x0, oy + oh))
+        parts.append(("label", (x0 + x1) / 2, oy + band / 2, num))
+        parts.append(("label", (x0 + x1) / 2, oy + oh - band / 2, num))
     # rows: letters A.. bottom→top, on the left and right bands
     for r in range(rows):
         y0 = iy + ih * r / rows
         y1 = iy + ih * (r + 1) / rows
         letter = letters[rows - 1 - r]
         if r:
-            L.append(f'<line x1="{ox:.1f}" y1="{y0:.1f}" x2="{ix:.1f}" y2="{y0:.1f}" stroke="black" stroke-width="0.75"/>')
-            L.append(f'<line x1="{ix + iw:.1f}" y1="{y0:.1f}" x2="{ox + ow:.1f}" y2="{y0:.1f}" stroke="black" stroke-width="0.75"/>')
-        L.append(_text(ox + band / 2, (y0 + y1) / 2 + 3, letter, 9, anchor="middle", bold=True))
-        L.append(_text(ox + ow - band / 2, (y0 + y1) / 2 + 3, letter, 9, anchor="middle", bold=True))
-    return L, (ox, oy, ow, oh)
+            parts.append(("rule", ox, y0, ix, y0))
+            parts.append(("rule", ix + iw, y0, ox + ow, y0))
+        parts.append(("label", ox + band / 2, (y0 + y1) / 2, letter))
+        parts.append(("label", ox + ow - band / 2, (y0 + y1) / 2, letter))
+    return Zoned((ox, oy, ow, oh), (ix, iy, iw, ih), parts)
+
+
+def zone_frame(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BAND
+               ) -> tuple[list[str], tuple[float, float, float, float]]:
+    """Draw the drawing frame (inner rect) plus the sheet border (outer rect)
+    with zone letters/numbers ruled in the band between them.
+
+    (``ix``, ``iy``, ``iw``, ``ih``) is the inner drawing rectangle. Returns the
+    SVG fragments and the outer sheet rectangle (x, y, w, h). The geometry is
+    :func:`zone_layout`'s; this strokes it.
+    """
+    z = zone_layout(ix, iy, iw, ih, band)
+    ox, oy, ow, oh = z.outer
+    L = [f'<rect x="{ox:.1f}" y="{oy:.1f}" width="{ow:.1f}" height="{oh:.1f}" '
+         f'fill="none" stroke="black" stroke-width="1"/>',
+         f'<rect x="{ix:.1f}" y="{iy:.1f}" width="{iw:.1f}" height="{ih:.1f}" '
+         f'fill="none" stroke="black" stroke-width="2"/>']
+    for part in z.parts:
+        if part[0] == "rule":
+            _, x1, y1, x2, y2 = part
+            L.append(f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" '
+                     f'stroke="black" stroke-width="0.75"/>')
+        else:
+            _, lx, ly, text = part
+            L.append(_text(lx, ly + _ZONE_BASE, text, ZONE_TYPE,
+                           anchor="middle", bold=True))
+    return L, z.outer
 
 
 # ---------------------------------------------------------------------------

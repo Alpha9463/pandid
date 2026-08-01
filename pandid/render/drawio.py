@@ -152,7 +152,7 @@ from typing import NamedTuple, TYPE_CHECKING
 from pandid.portgeom import port_point, unit_box
 from pandid.render import furniture as F
 from pandid.render import svg as _svg
-from pandid.render.svg import (_DIAMOND_BALLOONS, _SIGNAL_DASH, _PROCESS_STROKE,
+from pandid.render.svg import (_DIAMOND_BALLOONS, _furniture_name, _too_small, _SIGNAL_DASH, _PROCESS_STROKE,
                                _SIGNAL_STROKE, _TAP_DASH, boundary_flag,
                                draws_arrowheads, impulse_tap, stream_polyline,
                                tap_lines)
@@ -200,6 +200,42 @@ _LINE_INK = "#000000"
 #: table read the other way. The identity is absent: a cell with no ``direction``
 #: is already upright, and saying so would only make every style longer.
 _DIRECTION = {90: "south", 180: "west", 270: "north"}
+
+
+class _Fit(NamedTuple):
+    """Where the drawing sits on the paper, and how big.
+
+    A page size makes the export a *sheet*: the furniture docks to the paper and
+    the drawing is fitted into whatever the bands leave, which is
+    :meth:`SvgRenderer.render`'s ``<g id="drawing" transform="translate(...)
+    scale(...)">`` and nothing more. Every coordinate that belongs to the
+    **drawing** goes through this on the way out; every coordinate that belongs
+    to the **sheet** -- the furniture, the border -- does not, because the sheet
+    is already in page units. That is the same division the SVG makes by putting
+    one of them inside the group and the other outside it.
+
+    Without a page there is no fitting to do and this is the identity, which is
+    why the unpaged export is unchanged to the last coordinate.
+    """
+    scale: float
+    dx: float
+    dy: float
+
+    @classmethod
+    def identity(cls) -> "_Fit":
+        return cls(1.0, 0.0, 0.0)
+
+    def at(self, x: float, y: float) -> "tuple[float, float]":
+        return (self.dx + self.scale * x, self.dy + self.scale * y)
+
+    def box(self, b) -> "tuple[float, float, float, float]":
+        return (*self.at(b[0], b[1]), *self.at(b[2], b[3]))
+
+    def length(self, v: float) -> float:
+        """A distance, which scales but does not translate: a stroke width, a
+        mark's size. The SVG's transform scales these too, being a transform on
+        the group rather than on each coordinate in it."""
+        return self.scale * v
 
 
 class _Approximation(NamedTuple):
@@ -421,29 +457,49 @@ class DrawioRenderer:
 
     # ------------------------------------------------------------------ document
 
-    def render(self, fs: "Flowsheet", *, diagram: "str | None" = None, **opts) -> str:
+    def render(self, fs: "Flowsheet", *, diagram: "str | None" = None,
+               page_size: "str | None" = None, border: "str | None" = None,
+               **opts) -> str:
         """Render the flowsheet to a draw.io document.
 
         ``diagram`` says which drawing this is, in the spelling
         :meth:`~pandid.flowsheet.Flowsheet.to_svg` takes it: a P&ID draws its
         process lines without arrowheads and so exports them without one.
 
-        Nothing else about the sheet is an option here. The SVG renderer's page
-        size, border, stream table, jump direction and debug overlay are all
-        statements about a *sheet*, and what this produces is a model on an
-        unbounded canvas that its reader will re-lay out by hand; refusing them
-        is :meth:`~pandid.flowsheet.Flowsheet.render`'s job, which is where a
-        caller can be told rather than ignored.
+        ``page_size`` puts the model on **paper**. Without it the drawing is
+        exported at its own coordinates on an unbounded canvas, which is what a
+        model is; with it the file carries the page draw.io is to rule, the
+        furniture docks to that page rather than to the drawing's own bounds,
+        and the drawing is fitted into what the furniture leaves -- the same
+        three things :meth:`SvgRenderer.render` does with the same argument, so
+        the two open at the same size on the same paper.
+
+        ``border`` rules that page. ``"zone"`` draws the frame, the sheet edge
+        and the lettered band between them; ``"none"`` leaves the page's own
+        edge to be the paper's, which is what the sheet does too -- an unruled
+        sheet draws no rectangle, it just stops.
+
+        The stream table, jump direction and debug overlay remain refused. A
+        stream table is furniture this exporter has no measurement for, draw.io
+        decides its own line jumps, and the overlay is scaffolding for whoever
+        is writing a placement rather than part of the drawing.
         """
+        from pandid.render.svg import _page, _resolve_sheet
+
         arrows = draws_arrowheads(diagram)
         for u in fs.units:
             if u.frame is None:
                 raise ValueError(f"Unit '{u.name}' lacks a frame even after layout was run.")
+        border, _diagram = _resolve_sheet(border, diagram)
+        sheet = _page(page_size)
 
         body: list[str] = []
         # Sheet furniture first: a later cell draws over an earlier one, and the
-        # boxes are behind the drawing on the sheet.
-        body.extend(self._furniture(fs))
+        # boxes are behind the drawing on the sheet. The border is behind even
+        # those, which is the order _place_furniture splices it in at.
+        furniture, frame, fit = self._furniture(fs, sheet)
+        body.extend(self._border(frame, border))
+        body.extend(furniture)
         # Then equipment, then the runs between it, then the balloons -- which is
         # the SVG renderer's own order, and it is that order for the same reason:
         # a balloon's opaque body knocks out the line an in-line element
@@ -456,15 +512,28 @@ class DrawioRenderer:
         # order and draw.io lets a user send an edge behind the shapes it joins.
         balloons: list[str] = []
         for i, u in enumerate(fs.units):
-            (balloons if u.kind == "instrument" else body).extend(self._vertex(u, i))
-        body.extend(self._edges(fs, arrows))
+            (balloons if u.kind == "instrument" else body).extend(
+                self._vertex(u, i, fit))
+        body.extend(self._edges(fs, arrows, fit))
         # Instrumentation goes on over the lines, as it does on the sheet: the
         # tap runs from the plant to the balloon and the balloon's opaque body
         # then knocks out both it and any process line an in-line element
         # straddles. Same three passes, same order, same reason.
-        body.extend(self._taps(fs))
+        body.extend(self._taps(fs, fit))
         body.extend(balloons)
 
+        # page="1" only where there is paper. Without a page size the drawing is
+        # sized to itself, exactly as to_svg() is, and there is nothing for
+        # draw.io to rule page breaks across; stating a page then would draw
+        # break lines through a sheet that was never laid out to fit them. With
+        # one, the page *is* the sheet, and pageWidth/pageHeight are in the same
+        # drawing units everything else here is, which is what makes an A3 page
+        # 1587 by 1123 rather than 420 by 297.
+        if sheet is None:
+            paper = 'page="0" pageScale="1"'
+        else:
+            paper = (f'page="1" pageScale="1" pageWidth="{_num(sheet.width)}" '
+                     f'pageHeight="{_num(sheet.height)}"')
         # A stable page id, so exporting the same flowsheet twice gives the same
         # file. draw.io generates a random one; a random one here would make
         # every re-export a diff of one line that means nothing.
@@ -473,12 +542,8 @@ class DrawioRenderer:
             '<?xml version="1.0" encoding="UTF-8"?>',
             '<mxfile host="pandid" agent="pandid" type="device">',
             f'  <diagram id="pandid-{page}" name={_attr(fs.name)}>',
-            # page="0": the drawing is sized to itself, exactly as to_svg() does
-            # without a page_size, so there is no paper for draw.io to rule page
-            # breaks across. Stating a page here would draw break lines through
-            # a sheet that was never laid out to fit them.
             '    <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" '
-            'tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" '
+            f'tooltips="1" connect="1" arrows="1" fold="1" {paper} '
             'math="0" shadow="0">',
             '      <root>',
             '        <mxCell id="0" />',
@@ -723,10 +788,10 @@ class DrawioRenderer:
             return boundary_flag(u, u.frame).box
         return unit_box(u, u.frame)
 
-    def _vertex(self, u, index: int) -> list[str]:
+    def _vertex(self, u, index: int, fit: "_Fit") -> list[str]:
         """One unit, as a draw.io vertex."""
         sym = self.registry.for_unit(u)
-        x0, y0, x1, y1 = self._cell_box(u)
+        x0, y0, x1, y1 = fit.box(self._cell_box(u))
         placement, _, _ = self._placement(u, sym)
         text, label_keys = self._label(u)
         style = ";".join(["html=1", *self._shape(u, sym), *label_keys, *placement]) + ";"
@@ -818,7 +883,7 @@ class DrawioRenderer:
                      f"{prefix}Dx=0", f"{prefix}Dy=0", f"{prefix}Perimeter=0"]
         return keys
 
-    def _edges(self, fs, arrows: bool) -> list[str]:
+    def _edges(self, fs, arrows: bool, fit: "_Fit") -> list[str]:
         """Every stream, as a draw.io edge between the two ports it joins."""
         index = {id(u): i for i, u in enumerate(fs.units)}
         labelled: set = set()
@@ -846,7 +911,7 @@ class DrawioRenderer:
                 # A signal is drawn at half the weight of the pipe it reads, and
                 # the pair is the sheet's whole line-weight vocabulary; see the
                 # note on _PROCESS_STROKE in pandid.render.svg.
-                f"strokeWidth={_SIGNAL_STROKE if signal else _PROCESS_STROKE}",
+                f"strokeWidth={fit.length(_SIGNAL_STROKE if signal else _PROCESS_STROKE):g}",
             ]
             keys += _dash(s.dasharray or _SIGNAL_DASH.get(s.kind, ""))
             if arrows and wears_arrowhead(s, self.registry):
@@ -876,8 +941,8 @@ class DrawioRenderer:
             if waypoints:
                 geometry = ['          <mxGeometry relative="1" as="geometry">',
                             '            <Array as="points">',
-                            *(f'              <mxPoint x="{_num(px)}" y="{_num(py)}" />'
-                              for px, py in waypoints),
+                            *(f'              <mxPoint x="{_num(fx)}" y="{_num(fy)}" />'
+                              for fx, fy in (fit.at(px, py) for px, py in waypoints)),
                             '            </Array>',
                             '          </mxGeometry>']
             else:
@@ -890,10 +955,10 @@ class DrawioRenderer:
                 '        </mxCell>',
             ]
             if s.kind == "pneumatic":
-                out += _hatches(f"s{n}", points, s.color or _LINE_INK)
+                out += _hatches(f"s{n}", points, s.color or _LINE_INK, fit)
         return out
 
-    def _taps(self, fs) -> list[str]:
+    def _taps(self, fs, fit: "_Fit") -> list[str]:
         """Every instrument connection, as a draw.io edge.
 
         The line from a tap to the balloon reading it. It is not a stream and so
@@ -957,7 +1022,7 @@ class DrawioRenderer:
                 # ISO 15519-2 Annex A.1.02 puts an instrument connection on the
                 # 0,25 rung, alongside the signal line and half the pipeline it
                 # taps. See _SIGNAL_STROKE in pandid.render.svg.
-                f"strokeWidth={_SIGNAL_STROKE}",
+                f"strokeWidth={fit.length(_SIGNAL_STROKE):g}",
             ]
             if not impulse_tap(inst):
                 keys += _dash(_TAP_DASH)
@@ -967,8 +1032,8 @@ class DrawioRenderer:
             style = ";".join(keys) + ";"
             terminals = f' source="{self._id(source)}"' if source is not None else ""
             geometry = ['          <mxGeometry relative="1" as="geometry">',
-                        f'            <mxPoint x="{_num(tap[0])}" y="{_num(tap[1])}" '
-                        f'as="sourcePoint" />',
+                        f'            <mxPoint x="{_num(fit.at(*tap)[0])}" '
+                        f'y="{_num(fit.at(*tap)[1])}" as="sourcePoint" />',
                         '          </mxGeometry>'] if source is None else [
                 '          <mxGeometry relative="1" as="geometry" />']
             out += [
@@ -1005,7 +1070,7 @@ class DrawioRenderer:
                     x1, y1 = max(x1, px), max(y1, py)
         return (x0, y0, x1, y1)
 
-    def _furniture(self, fs) -> list[str]:
+    def _furniture(self, fs, sheet=None):
         """Title block, annotations and table boxes, docked where the sheet docks
         them and ruled as the tables they are.
 
@@ -1048,13 +1113,65 @@ class DrawioRenderer:
             w, h = (F.measure_table(a) if isinstance(a, TableBox)
                     else F.measure_annotation(a))
             items.append((a, a.align, w, h))
-        if not items:
-            return []
 
-        placed, _frame, _free = F.dock(items, self._drawing_box(fs))
+        inner = self._drawing_box(fs)
+        placed, frame, free = F.dock(
+            items, inner, sheet=sheet,
+            too_small=lambda need_w, need_h, culprit: _too_small(
+                sheet, need_w, need_h, _furniture_name(culprit) if culprit else ""))
+        # A fixed page fits the drawing into whatever the bands leave, at the
+        # ratio the title strip's scale cell reports. Without one there is no
+        # fitting: the drawing keeps its own coordinates and the frame was grown
+        # around it.
+        fit = _Fit.identity() if free is None else _Fit(
+            *_fitted(inner, free))
         out: list[str] = []
         for n, (obj, x, y, w, h) in enumerate(placed):
             out += self._furniture_cell(f"f{n}", obj, x, y, w, h)
+        return out, frame, fit
+
+    @staticmethod
+    def _border(frame, border: str) -> list[str]:
+        """The zone-ruled drawing frame, as cells.
+
+        Only where the sheet rules one. An unruled sheet draws no rectangle at
+        all -- ``_place_furniture`` takes ``sheet_rect`` for the canvas bounds
+        and strokes nothing -- so an unruled export draws none either, and what
+        the reader sees as the edge of the paper is the page draw.io is now told
+        to rule. Inventing a rectangle here would put ink on the sheet that the
+        rendered one does not have.
+
+        The geometry is :func:`pandid.render.furniture.zone_layout`'s, so the
+        band is divided into the same fields, lettered the same way round.
+
+        A caveat worth the author knowing, and it is why this was argued about
+        rather than just added: a zone grid is an **address space**.
+        ISO 15519-1 Clause 9 uses it for "reference to a document, to a sheet of
+        a document, or to a column, a row or a zone on a sheet", and
+        :attr:`pandid.units._Boundary.reference` is where this library writes
+        such addresses. On paper they hold because the sheet holds. In an
+        editable model they do not: drag a column two hundred units left and it
+        is in a different zone from the one every reference on the sheet names,
+        while the grid still looks authoritative. So what is exported here is a
+        **snapshot of the grid at export time**, true of the drawing as it left
+        pandid and no longer true of it once the reader has moved anything.
+        """
+        if border != "zone":
+            return []
+        ix, iy, iw, ih = frame
+        z = F.zone_layout(ix, iy, iw, ih)
+        ox, oy, ow, oh = z.outer
+        rect = ("rounded=0;whiteSpace=wrap;html=1;fillColor=none;movable=1;"
+                f"strokeColor={_LINE_INK};")
+        out = _rect("z-sheet", ox, oy, ow, oh, rect + "strokeWidth=1;")
+        out += _rect("z-frame", ix, iy, iw, ih, rect + "strokeWidth=2;")
+        for n, part in enumerate(z.parts):
+            if part[0] == "rule":
+                _, x1, y1, x2, y2 = part
+                out += _segment(f"z{n}", x1, y1, x2, y2, _LINE_INK, 0.75)
+            else:
+                _, lx, ly, text = part
+                out += _label(f"z{n}", lx, ly, text, F.ZONE_TYPE)
         return out
 
     def _furniture_cell(self, cid: str, obj, x, y, w, h) -> list[str]:
@@ -1207,7 +1324,7 @@ _HATCH_ANGLE = -59.04
 _HATCH_LEN = 11.66
 
 
-def _hatches(edge_id: str, points, ink: str) -> list[str]:
+def _hatches(edge_id: str, points, ink: str, fit: "_Fit") -> list[str]:
     """The double cross-hatch that marks a pneumatic line, hung on its edge.
 
     ISO 15519-2 §6.2 (document page 14) is what makes this worth the trouble
@@ -1267,7 +1384,8 @@ def _hatches(edge_id: str, points, ink: str) -> list[str]:
     if total <= 0:
         return []
 
-    half = _HATCH_LEN / 2
+    length = fit.length(_HATCH_LEN)
+    half = length / 2
     out: list[str] = []
     for n, mark in enumerate(pneumatic_marks(points)):
         # mxGeometry.x runs -1 at the source end to +1 at the target end, by arc
@@ -1277,15 +1395,16 @@ def _hatches(edge_id: str, points, ink: str) -> list[str]:
         horiz = mark.horizontal
         angle = _HATCH_ANGLE if horiz else _HATCH_ANGLE + 90.0
         style = (f"shape=line;rotation={angle:g};strokeColor={ink};"
-                 f"strokeWidth={_SIGNAL_STROKE:g};fillColor={_NO_FILL};html=1;"
+                 f"strokeWidth={fit.length(_SIGNAL_STROKE):g};fillColor={_NO_FILL};html=1;"
                  "resizable=0;movable=1;")
         for k, off in enumerate(_svg.HATCH_ALONG):
-            dx, dy = (off, 0.0) if horiz else (0.0, off)
+            step = fit.length(off)
+            dx, dy = (step, 0.0) if horiz else (0.0, step)
             out += [
                 f'        <mxCell id="{edge_id}h{n}{k}" value="" style={_attr(style)} '
                 f'vertex="1" connectable="0" parent="{edge_id}">',
                 f'          <mxGeometry x="{_fraction(rel)}" y="0" '
-                f'width="{_num(_HATCH_LEN)}" height="{_num(_HATCH_LEN)}" '
+                f'width="{_num(length)}" height="{_num(length)}" '
                 'relative="1" as="geometry">',
                 f'            <mxPoint x="{_num(dx - half)}" y="{_num(dy - half)}" '
                 'as="offset" />',
@@ -1532,6 +1651,80 @@ def _text_box(cid: str, title: str, rows, x, y, w, h) -> list[str]:
         f'style={_attr(style)} vertex="1" parent="1">',
         f'          <mxGeometry x="{_num(x)}" y="{_num(y)}" '
         f'width="{_num(w)}" height="{_num(h)}" as="geometry" />',
+        '        </mxCell>',
+    ]
+
+
+def _fitted(inner, free) -> "tuple[float, float, float]":
+    """The scale and offset that centre the drawing in the region left for it.
+
+    :func:`pandid.render.svg._fit_scale` for the ratio and
+    :meth:`SvgRenderer._fit` for the centring, said as three numbers instead of
+    as an SVG transform string. Deriving the ratio here would be a second
+    opinion about how big the drawing comes out, and the title strip's scale
+    cell reports the first one.
+    """
+    from pandid.render.svg import _fit_scale
+
+    dx0, dy0, dx1, dy1 = inner
+    fx, fy, fw, fh = free
+    dw, dh = dx1 - dx0, dy1 - dy0
+    s = _fit_scale(dw, dh, free)
+    return (s, fx + (fw - s * dw) / 2 - s * dx0, fy + (fh - s * dh) / 2 - s * dy0)
+
+
+def _rect(cid: str, x, y, w, h, style: str) -> list[str]:
+    """A bare rectangle, for the two the drawing frame is built from."""
+    return [
+        f'        <mxCell id="{cid}" value="" style={_attr(style)} '
+        f'vertex="1" parent="1">',
+        f'          <mxGeometry x="{_num(x)}" y="{_num(y)}" width="{_num(w)}" '
+        f'height="{_num(h)}" as="geometry" />',
+        '        </mxCell>',
+    ]
+
+
+def _segment(cid: str, x1, y1, x2, y2, ink: str, weight: float) -> list[str]:
+    """A plain ruled line between two fixed points.
+
+    An edge rather than a vertex, because that is what a line joining two points
+    is in this format, and an edge with both terminals stated as points and
+    neither as a cell is how draw.io itself writes a free-standing rule.
+    """
+    style = (f"edgeStyle=none;rounded=0;html=1;endArrow=none;startArrow=none;"
+             f"strokeColor={ink};strokeWidth={weight:g};movable=1;")
+    return [
+        f'        <mxCell id="{cid}" value="" style={_attr(style)} '
+        f'edge="1" parent="1">',
+        '          <mxGeometry relative="1" as="geometry">',
+        f'            <mxPoint x="{_num(x1)}" y="{_num(y1)}" as="sourcePoint" />',
+        f'            <mxPoint x="{_num(x2)}" y="{_num(y2)}" as="targetPoint" />',
+        '          </mxGeometry>',
+        '        </mxCell>',
+    ]
+
+
+#: Half the box a zone letter is centred in. The glyph is placed by its centre
+#: and a draw.io label is centred in its cell, so the cell is drawn around the
+#: point rather than from it.
+_LABEL_HALF = 8.0
+
+
+def _label(cid: str, cx, cy, text: str, size: float) -> list[str]:
+    """One piece of lettering, centred on a point: a zone's letter or numeral.
+
+    ``text`` with no stroke and no fill, which is draw.io's own way of writing a
+    caption that is lettering and not a box.
+    """
+    style = ("text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;"
+             f"align=center;verticalAlign=middle;fontStyle=1;fontSize={size:g};"
+             f"fontColor={_LINE_INK};")
+    return [
+        f'        <mxCell id="{cid}" value={_attr(text)} style={_attr(style)} '
+        f'vertex="1" parent="1">',
+        f'          <mxGeometry x="{_num(cx - _LABEL_HALF)}" '
+        f'y="{_num(cy - _LABEL_HALF)}" width="{_num(2 * _LABEL_HALF)}" '
+        f'height="{_num(2 * _LABEL_HALF)}" as="geometry" />',
         '        </mxCell>',
     ]
 

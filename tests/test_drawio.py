@@ -1174,17 +1174,156 @@ def test_the_furniture_docks_where_the_sheet_docks_it():
     "option,value",
     [
         ("show_stream_table", True),
-        ("border", "zone"),
-        ("page_size", "A3"),
         ("jump_direction", "horizontal"),
         ("debug", True),
     ],
 )
 def test_render_refuses_a_sheet_option_it_cannot_honour(tmp_path, sample, option, value):
     """Accepting and ignoring these would tell the caller something false about
-    the file they now hold."""
+    the file they now hold. ``page_size`` and ``border`` are no longer among
+    them; see the two tests below."""
     with pytest.raises(ValueError, match=option):
         sample.render(tmp_path / "sheet.drawio", **{option: value})
+
+
+@pytest.mark.parametrize("option,value", [("page_size", "A3"), ("border", "zone")])
+def test_render_honours_the_sheet_options_it_can(tmp_path, sample, option, value):
+    out = tmp_path / "sheet.drawio"
+    sample.render(out, **{option: value})
+    assert out.read_text(encoding="utf-8") == sample.to_drawio(**{option: value})
+
+
+def test_a_page_size_is_the_paper_the_file_opens_on():
+    """The defect: a sheet drawn A3 opened on draw.io's default page. The page
+    is stated in the drawing units everything else here is stated in, which is
+    what makes A3 1587 by 1123 rather than 420 by 297."""
+    from pandid.render.svg import _page
+
+    fs = Flowsheet("paper")
+    fs.add(units.Pump("P-101")).pin(x=100, y=100)
+    fs.layout()
+    model = ET.fromstring(fs.to_drawio(page_size="A3", check=False)).find("diagram/mxGraphModel")
+    sheet = _page("A3")
+    assert model.get("page") == "1"
+    assert float(model.get("pageWidth")) == pytest.approx(sheet.width, abs=0.01)
+    assert float(model.get("pageHeight")) == pytest.approx(sheet.height, abs=0.01)
+    # ...and without one there is no paper to rule, so none is claimed.
+    plain = ET.fromstring(fs.to_drawio(check=False)).find("diagram/mxGraphModel")
+    assert plain.get("page") == "0"
+    assert plain.get("pageWidth") is None
+
+
+def test_a_paged_drawing_is_fitted_onto_its_paper():
+    """A page that the drawing spills off is not the paper it was drawn for.
+    Held against ``svg._fit_scale`` and the region the dock leaves, which is
+    what the SVG places the drawing at, rather than against a remembered
+    number."""
+    from pandid.render import furniture as F
+    from pandid.render.svg import _fit_scale, _page
+
+    fs = Flowsheet("fitted")
+    a = fs.add(units.Tank("T-1"))
+    b = fs.add(units.Tank("T-2"))
+    a.pin(x=0, y=0)
+    b.pin(x=3000, y=1600)
+    fs.connect(a.outlet, b.inlet)
+    fs.route()
+
+    sheet = _page("A3")
+    inner = DrawioRenderer()._drawing_box(fs)
+    _placed, _frame, free = F.dock([], inner, sheet=sheet)
+    scale = _fit_scale(inner[2] - inner[0], inner[3] - inner[1], free)
+    assert scale < 1.0, "the fixture stopped needing to be shrunk"
+
+    cells = _cells(fs, page_size="A3", check=False)
+    for i, u in enumerate(fs.units):
+        x0, y0, x1, y1 = cell_box(u)
+        geo = cells[f"u{i}"].find("mxGeometry")
+        assert float(geo.get("width")) == pytest.approx(scale * (x1 - x0), abs=0.01)
+    # ...and every cell lands inside the paper it was fitted to.
+    for cell in cells.values():
+        geo = cell.find("mxGeometry")
+        if geo is None or geo.get("x") is None or cell.get("edge") == "1":
+            continue
+        assert -1 <= float(geo.get("x")) <= sheet.width
+        assert -1 <= float(geo.get("y")) <= sheet.height
+
+
+def test_a_zone_border_rules_the_same_frame_the_sheet_rules():
+    """Held against ``furniture.zone_layout`` -- the geometry the SVG strokes --
+    so the exported band is divided into the same fields, lettered the same way
+    round."""
+    from pandid.render import furniture as F
+
+    fs = Flowsheet("ruled")
+    fs.add(units.Pump("P-101")).pin(x=100, y=100)
+    fs.layout()
+    cells = _cells(fs, page_size="A3", border="zone", check=False)
+    values = {c.get("value") for c in cells.values()}
+
+    _placed, frame, _free = F.dock([], DrawioRenderer()._drawing_box(fs),
+                                   sheet=__import__("pandid.render.svg",
+                                                    fromlist=["x"])._page("A3"))
+    z = F.zone_layout(*frame)
+    assert {t for _k, *_r, t in
+            [p for p in z.parts if p[0] == "label"]} <= values, "a zone lost its letter"
+    rules = [p for p in z.parts if p[0] == "rule"]
+    ruled = [c for c in cells.values() if (c.get("id") or "").startswith("z")
+             and c.get("edge") == "1"]
+    assert len(ruled) == len(rules)
+    # The two rectangles the frame is: the sheet edge and the drawing frame.
+    ix, iy, iw, ih = z.inner
+    geo = cells["z-frame"].find("mxGeometry")
+    assert (float(geo.get("x")), float(geo.get("y"))) == pytest.approx((ix, iy), abs=0.01)
+    assert (float(geo.get("width")), float(geo.get("height"))) == pytest.approx(
+        (iw, ih), abs=0.01)
+    ox, oy, ow, oh = z.outer
+    geo = cells["z-sheet"].find("mxGeometry")
+    assert (float(geo.get("x")), float(geo.get("y"))) == pytest.approx((ox, oy), abs=0.01)
+
+
+def test_every_example_exported_on_its_own_paper_lands_on_it():
+    """Each sheet exported with the page size and border it is *drawn* with,
+    which is what ``drawio-samples/`` carries and what the reader opens. A page
+    the drawing hangs off is not the paper it was drawn for."""
+    from pandid.render.svg import _page
+
+    for stem in SHEETS:
+        _lands_on_its_paper(stem, _page)
+
+
+def _lands_on_its_paper(stem, _page):
+    fs, kwargs = gallery.flowsheet(stem)
+    fs.to_svg(**kwargs)
+    sheet = _page(kwargs.get("page_size"))
+    doc = fs.to_drawio(diagram=kwargs.get("diagram"),
+                       page_size=kwargs.get("page_size"),
+                       border=kwargs.get("border"))
+    root = ET.fromstring(doc)
+    if sheet is None:
+        assert root.find("diagram/mxGraphModel").get("page") == "0"
+        return
+    for cell in root.iter("mxCell"):
+        geo = cell.find("mxGeometry")
+        if geo is None or cell.get("edge") == "1" or geo.get("x") is None:
+            continue
+        if cell.get("parent") not in (None, "1"):
+            continue  # a table row or cell, measured inside its own container
+        x, y = float(geo.get("x")), float(geo.get("y"))
+        w, h = float(geo.get("width") or 0), float(geo.get("height") or 0)
+        assert -1 <= x and x + w <= sheet.width + 1, f"{cell.get('id')} runs off the page"
+        assert -1 <= y and y + h <= sheet.height + 1, f"{cell.get('id')} runs off the page"
+
+
+def test_an_unruled_sheet_draws_no_frame():
+    """The sheet draws no rectangle for ``border="none"`` -- it takes the region
+    for the canvas and strokes nothing -- so neither does the export. What the
+    reader sees as the paper's edge is the page draw.io is now told to rule."""
+    fs = Flowsheet("plain")
+    fs.add(units.Pump("P-101")).pin(x=100, y=100)
+    fs.layout()
+    cells = _cells(fs, page_size="A3", check=False)
+    assert not [i for i in cells if i.startswith("z")]
 
 
 def test_render_writes_the_document_to_a_drawio_path(tmp_path, sample):
