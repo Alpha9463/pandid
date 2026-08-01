@@ -515,6 +515,13 @@ The run keeps one stream or line number straight through a tee, as it does
 through a valve or a reducer, and each branch takes one of its own;
 `new_line_number` breaks the run's number at the junction.
 
+That is the rule for a tee that *divides*, where both legs are the same fluid.
+A `branch="inlet"` joins a second material to the run, so what leaves is not
+what arrived, and carrying the number through would write a flow on the line
+that the line does not have. End the number there and start another;
+[`examples/13_mineral_dewatering.py`](../examples/13_mineral_dewatering.py)
+does that at all five of its junctions.
+
 Every port gets a nozzle of its own on the face its family owns, whatever the
 count. They sit a fixed pitch apart, 20 px on a mixer or splitter, or are
 squeezed into a band of that face once there are too many for that. The count

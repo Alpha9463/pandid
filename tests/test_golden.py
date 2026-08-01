@@ -1320,6 +1320,293 @@ def _block_flow_diagram() -> Flowsheet:
     return fs
 
 
+_MD_PROPERTY_ROWS = (
+    "Temperature (C)",
+    "Pressure (bara)",
+    "Total Flow (t/h)",
+    "Solids (% w/w)",
+    "Water",
+    "Concentrate",
+    "Tramp Metal",
+    "Flocculant",
+    "Air / Flue Gas",
+    "Fuel Gas",
+)
+
+_MD_PROPERTIES = {
+    "S-401": ("28", "1.4", "224.0", "28.0", "0.720", "0.2800", "2.2E-05", "", "", ""),
+    "S-402": ("20", "3.0", "0.630", "", "1.000", "", "", "", "", ""),
+    "S-403": ("20", "1.0", "0.002", "100.0", "", "", "", "1.000", "", ""),
+    "S-404": ("20", "1.0", "0.632", "0.32", "0.997", "", "", "3.2E-03", "", ""),
+    "S-405": ("20", "2.0", "0.632", "0.32", "0.997", "", "", "3.2E-03", "", ""),
+    "S-406": ("28", "1.2", "224.63", "27.9", "0.721", "0.2792", "2.2E-05", "8.9E-06", "", ""),
+    "S-407": ("28", "1.0", "120.1", "0.01", "1.000", "1.0E-04", "", "", "", ""),
+    "S-408": ("28", "1.2", "104.5", "60.0", "0.400", "0.5998", "4.8E-05", "1.9E-05", "", ""),
+    "S-409": ("28", "2.5", "104.5", "60.0", "0.400", "0.5998", "4.8E-05", "1.9E-05", "", ""),
+    "S-410": ("28", "1.0", "35.6", "0.10", "0.999", "1.0E-03", "", "5.6E-05", "", ""),
+    "S-411": ("28", "1.0", "68.9", "91.0", "0.090", "0.9099", "7.3E-05", "", "", ""),
+    "S-412": ("15", "1.0", "30.5", "", "", "", "", "", "1.000", ""),
+    "S-413": ("15", "2.0", "0.43", "", "", "", "", "", "", "1.000"),
+    "S-414": ("650", "0.99", "30.93", "", "0.031", "", "", "", "0.969", ""),
+    # No temperature. The cake and the burner gas arrive at the breeching and
+    # start drying in the same instant, so there is no equilibrium the two
+    # reach and nothing an adiabatic mixing sum would be true of. A dryer
+    # datasheet quotes the two inlets it has -- 650 C of gas onto 28 C of cake
+    # -- and so does this table, one column each side of this one.
+    "S-415": ("", "0.98", "99.83", "62.8", "0.072", "0.6280", "5.0E-05", "", "0.300", ""),
+    "S-416": ("115", "0.98", "99.83", "62.8", "0.072", "0.6280", "5.0E-05", "", "0.300", ""),
+    "S-417": ("115", "0.97", "37.03", "0.35", "0.187", "3.5E-03", "", "", "0.809", ""),
+    "S-418": ("28", "3.0", "41.5", "", "1.000", "", "", "", "", ""),
+    "S-419": ("62", "0.96", "78.53", "0.17", "0.616", "1.7E-03", "", "", "0.382", ""),
+    "S-420": ("62", "1.0", "35.08", "", "0.146", "trace", "", "", "0.854", ""),
+    "S-421": ("62", "1.0", "43.45", "0.30", "0.997", "3.0E-03", "", "", "", ""),
+    "S-422": ("110", "1.0", "62.80", "99.5", "0.005", "0.9949", "8.0E-05", "", "", ""),
+    "S-423": ("110", "1.0", "62.79", "99.5", "0.005", "0.995", "", "", "", ""),
+    "S-424": ("110", "1.0", "0.005", "100.0", "", "", "1.000", "", "", ""),
+}
+
+
+def _mineral_dewatering() -> Flowsheet:
+    """Example 13 -- the solids circuit, and the only sheet that is not a fluids plant.
+
+    A concentrate slurry thickened, filtered, dried and cleaned of tramp iron. It
+    states its own title-block date, so like 10, 11 and 14 there is nothing here to
+    pin, and it is the widest fixture in the corpus: twenty-four streams side by
+    side is more than an A3 page carries beside a utilities summary, so unlike
+    those three it is sized to its drawing rather than to a page. That makes it the
+    one fixture whose *furniture* rather than whose diagram sets the sheet width.
+
+    Its four ``branch="inlet"`` tees are what it adds that nothing else in the
+    corpus has: junctions where a second stream *joins* a run rather than leaving
+    it. It is also the only fixture drawing a dryer, a furnace, a blower or a
+    funnel.
+    """
+    fs = Flowsheet("Mineral Concentrate Dewatering A400")
+
+    water = fs.add(units.Feed("Raw Water", reference="PCD-402"))
+    funnel = fs.add(units.Funnel("FN-401", description="Flocculant Charging Funnel"))
+    charge = fs.add(units.Tee(branch="inlet"))
+    tank = fs.add(
+        units.Tank("TK-401", variant="conical_bottom", description="Flocculant Make-up Tank")
+    )
+    dose = fs.add(units.Pump("P-402", variant="peristaltic", description="Flocculant Dosing Pump"))
+
+    concentrate = fs.add(units.Feed("Flotation Concentrate", reference="PFD-302"))
+    floc = fs.add(units.Tee(branch="inlet"))
+    thickener = fs.add(
+        units.Separator("TH-401", variant="gravity", description="Concentrate Thickener")
+    )
+    overflow = fs.add(units.Product("Recovered Water", reference="PCD-402"))
+
+    underflow_pump = fs.add(
+        units.Pump("P-401", variant="screw", description="Thickener Underflow Pump")
+    )
+    suction_red = fs.add(
+        units.Reducer("RD-401", variant="eccentric", description="P-401 Suction Reducer")
+    )
+    disch_red = fs.add(
+        units.Reducer(
+            "RD-402",
+            variant="concentric",
+            large_end="outlet",
+            description="P-401 Discharge Expander",
+        )
+    )
+    belt_filter = fs.add(
+        units.Filter(
+            "FL-401", variant="belt", width=60, height=110, description="Concentrate Belt Filter"
+        )
+    )
+    cake_tee = fs.add(units.Tee())
+    filtrate = fs.add(units.Product("Filtrate", reference="PCD-402"))
+    conveyor = fs.add(units.Conveyor("CV-401", length=150, description="Filter Cake Conveyor"))
+    conveyor.nozzle("feed", "N")
+
+    air = fs.add(units.Feed("Ambient Air"))
+    gas = fs.add(units.Feed("Natural Gas", reference="PCD-403"))
+    heater = fs.add(units.Furnace("FH-401", description="Dryer Air Heater"))
+    breeching = fs.add(units.Tee(branch="inlet"))
+    dryer = fs.add(units.Dryer("DR-401", description="Concentrate Rotary Dryer"))
+
+    cyclone = fs.add(
+        units.Separator("CY-401", variant="cyclone", description="Product Recovery Cyclone")
+    )
+    scrub_water = fs.add(units.Feed("Scrubbing Water", reference="PCD-402"))
+    scrub_tee = fs.add(units.Tee(branch="inlet"))
+    scrubber = fs.add(
+        units.Separator("SC-401", variant="scrubber", description="Dryer Exhaust Scrubber")
+    )
+    effluent = fs.add(units.Product("Scrubber Effluent", reference="PCD-402"))
+    fan = fs.add(units.Blower("BL-401", description="Dryer Exhaust Fan"))
+    stack = fs.add(
+        units.Vent(
+            "VE-401", variant="exhaust_head", width=45, height=36, description="Dryer Exhaust Head"
+        )
+    )
+
+    magnet = fs.add(
+        units.Separator(
+            "MS-401", variant="permanent_magnet", description="Product Magnetic Separator"
+        )
+    )
+    product = fs.add(units.Product("Dry Concentrate", reference="PFD-402"))
+    tramp = fs.add(units.Product("Tramp Metal"))
+
+    tee_w = 12.0
+    feed_y = 140.0  # the concentrate feed line
+    water_y = 230.0  # the make-up water line, below it
+    dose_x = 336.0  # the flocculant riser
+
+    concentrate.pin(port="outlet", x=90, y=feed_y)
+    water.pin(port="outlet", x=90, y=water_y)
+
+    charge.pin(mirrored="y").pin(port="inlet", x=130, y=water_y)
+    funnel.pin(port="outlet", x=charge.pin_.x + tee_w / 2, y=water_y - 20)
+
+    tank.pin(port="inlet", x=200, y=260)
+    dose.pin(port="discharge", x=dose_x, y=430)
+
+    floc.pin(port="branch", x=dose_x, y=feed_y + tee_w / 2)
+    thickener.pin(port="feed", x=380, y=feed_y)
+    overflow.pin(port="inlet", x=520, y=feed_y)  # dead level off the launder
+
+    suction_y = 330.0
+    underflow_pump.pin(port="suction", x=520.7, y=suction_y)
+    suction_red.pin(port="outlet", x=478, y=suction_y)
+    disch_red.pin(port="inlet", x=624, y=suction_y)
+    belt_filter.pin(port="inlet", x=670, y=suction_y)
+
+    cake_tee.pin(port="inlet", x=740, y=suction_y)
+    filtrate.pin(port="inlet", x=770, y=560)
+
+    belt_y, dryer_y = 480.0, 490.0
+    conveyor.pin(port="feed", x=cake_tee.pin_.x + tee_w + 38, y=belt_y)
+    breeching.pin(port="inlet", x=950, y=dryer_y)
+    dryer.pin(port="feed", x=1000, y=dryer_y)
+
+    heater.pin(port="inlet", x=860, y=654.5)
+    air.pin(port="outlet", x=790, y=654.5)  # clear of the burner wall
+    gas.pin(port="outlet", x=750, y=740)
+    hot_gas_x = breeching.pin_.x + tee_w / 2
+
+    cyclone.pin(port="feed", x=1180, y=322)
+    scrub_tee.pin(mirrored="y").pin(port="inlet", x=1255, y=132)
+    scrub_water.pin(port="outlet", x=1180, y=85)
+    scrubber.pin(port="feed", x=1300, y=132)
+    effluent.pin(port="inlet", x=1400, y=280)
+    fan.pin(port="suction", x=1440, y=132)
+    stack.pin(port="inlet", x=fan.pin_.x + port_offset(fan, "discharge")[0], y=60)
+
+    magnet.pin(port="feed", x=1300, y=532)
+    product.pin(port="inlet", x=1430, y=532)
+    tramp.pin(port="inlet", x=1430, y=680)
+
+    fs.connect(concentrate.outlet, floc.inlet, name="S-401")
+
+    fs.connect(water.outlet, charge.inlet, name="S-402")
+    fs.connect(funnel.outlet, charge.branch, name="S-403")
+    fs.connect(charge.outlet, tank.inlet, name="S-404")
+
+    fs.connect(tank.outlet, dose.suction, name="S-405")
+    fs.connect(dose.discharge, floc.branch, name="S-405")
+    fs.connect(floc.outlet, thickener.feed, name="S-406")
+
+    fs.connect(thickener.port("vapor"), overflow.inlet, name="S-407")
+
+    fs.connect(thickener.port("liquid"), suction_red.inlet, name="S-408").via([(420, 332.4)])
+    fs.connect(suction_red.outlet, underflow_pump.suction, name="S-408")
+
+    fs.connect(underflow_pump.discharge, disch_red.inlet, name="S-409")
+    fs.connect(disch_red.outlet, belt_filter.inlet, name="S-409")
+    fs.connect(belt_filter.outlet, cake_tee.inlet, name="S-409")
+
+    fs.connect(cake_tee.branch, filtrate.inlet, name="S-410")
+
+    fs.connect(cake_tee.outlet, conveyor.feed, name="S-411")
+    fs.connect(conveyor.discharge, breeching.inlet, name="S-411")
+
+    fs.connect(air.outlet, heater.inlet, name="S-412")
+    fs.connect(gas.outlet, heater.fuel, name="S-413").via([(900, 740)])
+    fs.connect(heater.outlet, breeching.branch, name="S-414").via([(hot_gas_x, 654.5 + 25)])
+
+    fs.connect(breeching.outlet, dryer.feed, name="S-415")
+    fs.connect(dryer.product, cyclone.feed, name="S-416")
+
+    fs.connect(cyclone.port("vapor"), scrub_tee.inlet, name="S-417")
+    fs.connect(scrub_water.outlet, scrub_tee.branch, name="S-418")
+    fs.connect(scrub_tee.outlet, scrubber.feed, name="S-419")
+
+    fs.connect(scrubber.port("vapor"), fan.suction, name="S-420")
+    fs.connect(fan.discharge, stack.inlet, name="S-420")
+    fs.connect(scrubber.port("liquid"), effluent.inlet, name="S-421")
+
+    fs.connect(cyclone.port("liquid"), magnet.feed, name="S-422")
+    fs.connect(magnet.port("overflow"), product.inlet, name="S-423")
+    fs.connect(magnet.port("underflow"), tramp.inlet, name="S-424")
+
+    for s in fs.streams:
+        values = _MD_PROPERTIES.get(s.name)
+        if values is not None:
+            s.properties = dict(zip(_MD_PROPERTY_ROWS, values))
+    fs.stream_table_sections = [("Water", "Mass Fraction")]
+
+    fs.title_block = TitleBlock(
+        title="Mineral Dewatering",
+        subtitle="A400 Process Flow Diagram 1",
+        drawing_number="PFD-401",
+        company="PANDID",
+        status="ISSUED FOR REVIEW",
+        sheet="1",
+        of_sheets="1",
+        date="12/09/25",
+        drawn_by="AA",
+        checked_by="RG",
+        approved_by="HVL",
+        revisions=[
+            Revision("A", "22/08/25", "Issued for internal review", "AA"),
+            Revision("B", "05/09/25", "Dryer exhaust scrubber added", "AA"),
+            Revision("C", "12/09/25", "Issued For Review", "AA", "RG", "HVL"),
+        ],
+    )
+
+    fs.add_annotation(
+        equipment_list(
+            fs,
+            align="top",
+            include=[
+                "TK-401",
+                "P-402",
+                "TH-401",
+                "P-401",
+                "FL-401",
+                "CV-401",
+                "FH-401",
+                "DR-401",
+                "CY-401",
+                "MS-401",
+                "SC-401",
+                "BL-401",
+            ],
+        )
+    )
+    fs.add_annotation(
+        TableBox(
+            title="UTILITIES SUMMARY",
+            headers=["Utility", "Unit No.", "Duty (kW)", "Flow (kg/s)", "T_in", "T_out"],
+            rows=[
+                ["Natural Gas", "FH-401", "5972", "0.119", "15 C", "-"],
+                ["Ambient Air", "FH-401", "-", "8.47", "15 C", "650 C"],
+                ["Raw Water", "TK-401", "-", "0.175", "20 C", "-"],
+                ["Scrubbing Water", "SC-401", "-1638", "11.53", "28 C", "62 C"],
+            ],
+            col_align=["l", "l", "r", "r", "c", "c"],
+            align="bottom-right",
+        )
+    )
+
+    return fs
+
+
 def _tank_farm() -> Flowsheet:
     """Example 14 -- a bulk liquid storage tank farm and its road loading rack.
 
@@ -1758,6 +2045,17 @@ SCENARIOS = {
     # tall as their walls need, so a change to the pitch, the minimum box or the
     # label allowance moves this file and nothing else.
     "12_block_flow_diagram": (_block_flow_diagram, {}),
+    # 13 is the solids circuit: a mineral concentrate thickened, filtered, dried and
+    # magnetically cleaned. It is the only scenario drawing a dryer, a furnace, a
+    # blower or a funnel, the only one with a tee that *combines* rather than
+    # splits, and the widest stream table in the corpus. It states its own
+    # title-block date, so nothing here is pinned; it takes no ``page_size``, so it
+    # is also what guards a stream table wider than the drawing it belongs to, on a
+    # sheet sized to fit them both.
+    "13_mineral_dewatering": (
+        _mineral_dewatering,
+        {"show_stream_table": True, "border": "zone"},
+    ),
     # 14 is the tank farm: three storage vessels, the transfer system that draws
     # them down and the rack that loads road tankers off it. It is the third A3
     # P&ID and the one that pins the storage, containment and line-fitting
