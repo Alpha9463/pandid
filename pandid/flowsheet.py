@@ -1070,6 +1070,52 @@ class Flowsheet:
             jump_direction=jump_direction, debug=debug
         )
 
+    def to_drawio(self, *, diagram: str | None = None, check: bool = True) -> str:
+        """Render the flowsheet to a draw.io (``.drawio``) document string,
+        running ``layout()`` and ``route()`` first if they have not been run yet.
+
+        The drawing comes out as a *model* rather than a picture: every unit is a
+        draw.io shape and every stream an edge between two of its connection
+        points, so an author can open it in draw.io / diagrams.net and move
+        blocks and lines by hand. It is also the route to Visio, which draw.io
+        exports natively.
+
+        The equipment symbols are draw.io's own P&ID stencils (see ``NOTICE``),
+        so the file *references* them rather than carrying a tracing: what opens
+        is a native, editable shape. The fifteen symbols this library draws
+        itself -- the instrument balloons, the junctions, the off-page flags, the
+        conveyor -- have no draw.io stencil behind them and are approximated with
+        draw.io's built-in shapes; :mod:`pandid.render.drawio` names each one and
+        what the approximation loses.
+
+        ``diagram`` says which drawing this is, exactly as :meth:`to_svg` takes
+        it: a P&ID exports its process lines without arrowheads. ``check``
+        validates first, on the same terms.
+
+        Sheet furniture (the title block and any annotation boxes) exports as
+        labelled boxes stacked below the drawing, at neither the size nor the
+        dock position the sheet rules them at. What a sheet *is* -- its page
+        size, its border, its stream table -- has no counterpart in a model on an
+        unbounded canvas, and :meth:`render` refuses those options for a
+        ``.drawio`` path rather than accepting and ignoring them.
+        """
+        if any(u.frame is None for u in self.units):
+            self.layout()
+        if any(s.route is None for s in self.streams):
+            self.route()
+        self.renumber_streams()
+        if check:
+            issues = self.validate(diagram=diagram)
+            self.warnings = [i for i in issues if i.severity == "warning"]
+            errors = [i for i in issues if i.severity == "error"]
+            if errors:
+                raise ValueError(
+                    "Flowsheet validation failed:\n"
+                    + "\n".join(f"  {e}" for e in errors)
+                )
+        from pandid.render.drawio import DrawioRenderer
+        return DrawioRenderer().render(self, diagram=diagram)
+
     def render(self, path: str | Path, *, show_stream_table: bool = False,
                border: str | None = None,
                diagram: str | None = None, page_size: str | None = None,
@@ -1083,6 +1129,8 @@ class Flowsheet:
         - ``.pdf`` / ``.png``: require the optional export backend
           (``pip install 'pandid[pdf]'``), which ships as wheels and needs no
           system libraries. See :mod:`pandid.render.export`.
+        - ``.drawio``: the editable draw.io / diagrams.net model, and through
+          draw.io's own exporter the way to Visio. See :meth:`to_drawio`.
 
         Args:
             path: Output file path; its extension selects the format.
@@ -1098,12 +1146,40 @@ class Flowsheet:
                 spacing, a number to set it. Off by default.
             check: Validate first; errors raise, warnings collect on ``warnings``.
         """
+        ext = Path(path).suffix.lower()
+        if ext == ".drawio":
+            # A .drawio file is a model on an unbounded canvas, not a sheet, so
+            # the options that describe a sheet have nothing to land on. Refused
+            # rather than ignored: a caller who asked for A3 and a zone border
+            # and got neither has been told something false about the file they
+            # now hold. Named one by one, since the fix is to drop that argument.
+            sheet_only = [
+                name for name, given, default in (
+                    ("show_stream_table", show_stream_table, False),
+                    ("border", border, None),
+                    ("page_size", page_size, None),
+                    ("jump_direction", jump_direction, "vertical"),
+                    ("debug", debug, False),
+                ) if given != default
+            ]
+            if sheet_only:
+                raise ValueError(
+                    f"{', '.join(sheet_only)} describe(s) a drawing sheet, and a "
+                    f".drawio file is an editable model on an unbounded canvas "
+                    f"rather than a sheet: there is no paper for a page size or a "
+                    f"border to rule, no sheet furniture to dock a stream table "
+                    f"to, and draw.io decides its own line jumps. Render the "
+                    f"sheet to .svg/.pdf/.png, or drop these arguments"
+                )
+            Path(path).write_text(
+                self.to_drawio(diagram=diagram, check=check), encoding="utf-8")
+            return
+
         svg = self.to_svg(
             show_stream_table=show_stream_table, border=border,
             diagram=diagram, page_size=page_size, jump_direction=jump_direction,
             debug=debug, check=check,
         )
-        ext = Path(path).suffix.lower()
         if ext in ("", ".svg"):
             Path(path).write_text(svg, encoding="utf-8")
         elif ext in (".pdf", ".png"):
@@ -1112,7 +1188,7 @@ class Flowsheet:
             Path(path).write_bytes(data)
         else:
             raise ValueError(
-                f"Unsupported output format {ext!r}; use .svg, .pdf, or .png"
+                f"Unsupported output format {ext!r}; use .svg, .pdf, .png, or .drawio"
             )
 
     def _repr_svg_(self) -> str:

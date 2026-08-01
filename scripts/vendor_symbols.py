@@ -33,7 +33,7 @@ import sys
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
-from mxgraph_to_svg import shapes_in, convert_shape  # noqa: E402
+from mxgraph_to_svg import shapes_in, convert_shape, stencil_namespace  # noqa: E402
 from pandid.portgeom import outward_dir  # noqa: E402  (the one place a face is derived)
 
 STENCILS = HERE / "vendor_data" / "drawio"
@@ -1469,6 +1469,46 @@ def scale_for(kind, variant):
     return (float(s), float(s)) if isinstance(s, (int, float)) else (float(s[0]), float(s[1]))
 
 
+def drawio_shape_key(namespace, shape_name):
+    """The key draw.io's own stencil registry files one shape under.
+
+    mxGraph builds it out of the two names the stencil file already carries:
+    ``mxStencilRegistry.parseStencilSet`` takes the package off the root
+    element, the shape's own name off the ``<shape>``, replaces the spaces in
+    the shape's name with underscores and lowercases the pair. So
+    ``mxGraph.pid.valves`` and ``Gate Valve`` make
+    ``mxgraph.pid.valves.gate_valve``, which is what a ``shape=`` in a draw.io
+    style has to say to reach the very drawing this generator converted.
+
+    Reproducing the rule is the whole point: a guessed key is not merely wrong,
+    it fails *quietly*. draw.io answers an unresolvable ``shape=`` with its
+    default rectangle, so the file still opens, the equipment is still all
+    there, and every symbol on the sheet has become a box. Deriving the key from
+    the same two strings the artwork was converted from is what makes the export
+    wrong loudly or not at all.
+
+    Only spaces become underscores; the punctuation upstream puts in a shape
+    name survives ("Tank (Dished Roof)", "Y-Type Strainer", "Rotary Drum Drier,
+    Tumbling Drier"), and it has to, since draw.io does an exact dictionary
+    lookup on the key it built by the same rule. A **dot** is the one character
+    that cannot survive, and is refused rather than passed through: draw.io
+    finds the *file* to load by splitting the key on dots and treating all but
+    the last part as a path (``mxStencilRegistry.getBasenameForStencil``), so a
+    dot inside the shape's own name moves that boundary and sends draw.io
+    looking for a stencil file that was never there. No shape in the vendored
+    set has one today; this is here so that the day one arrives the generator
+    stops instead of emitting a reference nothing can resolve.
+    """
+    if "." in shape_name:
+        raise SystemExit(
+            f"shape name {shape_name!r} in {namespace} contains a dot. draw.io "
+            f"splits a shape key on dots to find the stencil file to load, so a "
+            f"dot in the shape's own name would send it looking for the wrong "
+            f"file and the reference would resolve to nothing."
+        )
+    return f"{namespace}.{shape_name.replace(' ', '_')}".lower()
+
+
 def is_series(spec):
     """True for a port spec declaring a *family* rather than one nozzle."""
     return isinstance(spec, tuple) and spec[0] == "SERIES"
@@ -1571,9 +1611,13 @@ def render() -> str:
     the generator and the drawing silently reverts; nothing but that comparison
     notices, since a stale generated file still imports and still draws.
     """
-    # Index every shape once, correcting the ones STENCIL_PATCHES names.
+    # Index every shape once, correcting the ones STENCIL_PATCHES names, and
+    # note the package each file declares, which is what its shapes are filed
+    # under at the draw.io end. See :func:`drawio_shape_key`.
     index = {}
+    namespaces = {}
     for stencil in {m[0] for m in KIND_MAP.values()}:
+        namespaces[stencil] = stencil_namespace(STENCILS / f"{stencil}.xml")
         for name, el in shapes_in(STENCILS / f"{stencil}.xml"):
             index[(stencil, name)] = patch_shape(stencil, name, el)
     # A patch that matches nothing is a fix that has silently stopped being
@@ -1666,6 +1710,14 @@ def render() -> str:
                 f"        svg={svg!r},",
                 f"        width={w}, height={h},",
                 f"        ports={ports!r},",
+                # The stencil this drawing came from, named the way draw.io's
+                # own registry names it, so an export can hand the reader back
+                # the shape rather than a tracing of it. Emitted for every
+                # symbol here and for none of the hand-drawn ones, which is
+                # exactly the distinction: a symbol that carries this has a
+                # draw.io shape behind it and one that does not, does not.
+                f"        drawio_shape="
+                f"{drawio_shape_key(namespaces[stencil], shape_name)!r},",
             ]
             if suffix:
                 # A second drawing of one (kind, variant) needs a <defs> entry of

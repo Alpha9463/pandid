@@ -51,9 +51,9 @@ fs.render("flash.svg")        # layout and routing run automatically
 ```
 
 No coordinates anywhere. `render()` infers the format from the extension
-(`.svg`, or `.pdf`/`.png` with the optional backend). `fs.to_svg()` returns the
-SVG string, `fs.show()` opens it in a browser, and a flowsheet renders inline in
-Jupyter.
+(`.svg`, `.pdf`/`.png` with the optional backend, or `.drawio` to keep editing by
+hand). `fs.to_svg()` returns the SVG string, `fs.show()` opens it in a browser,
+and a flowsheet renders inline in Jupyter.
 
 ## What it does
 
@@ -89,6 +89,10 @@ Jupyter.
   covering all of the above, so an equipment list and a stream table go straight
   to a drawing. Validated, not interpreted: a typo names the entry and lists
   what would have worked.
+- **Hand it to draw.io.** `fs.render("sheet.drawio")` writes an editable
+  diagrams.net model, not a picture: the equipment symbols *are* draw.io's own
+  P&ID stencils, so the file references them and what opens is a native shape
+  you can drag. draw.io exports `.vsdx`, so it is also the way to Visio.
 - **A command line.** `pandid draw plant.yaml -o plant.pdf` for the drawing,
   `pandid validate` for a check a build script can gate on, `pandid symbols` for
   what can be drawn.

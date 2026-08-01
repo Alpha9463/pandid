@@ -345,6 +345,32 @@ class Symbol:
     # one to both. The vendored symbols take it from DIRECTIONAL in
     # ``scripts/vendor_symbols.py``, which records the reason per family.
     directional: bool = False
+    # The draw.io stencil this artwork was converted from, under the key
+    # draw.io's own registry files it: ``"mxgraph.pid.valves.gate_valve"``.
+    # Empty for a symbol drawn here rather than vendored.
+    #
+    # This is not decoration. The symbols in this library *are* draw.io's P&ID
+    # stencils (see NOTICE), so an export to draw.io does not have to trace
+    # anything: it can name the shape and hand the reader back a native,
+    # editable one. What makes that safe is that the key is derived from the two
+    # names in the stencil file itself, by draw.io's own rule, at the moment the
+    # artwork is converted -- see ``drawio_shape_key`` in
+    # ``scripts/vendor_symbols.py``. A key written down by hand would go on
+    # naming a shape after a re-vendor renamed it, and draw.io answers a key it
+    # cannot resolve with a plain rectangle rather than an error, so the sheet
+    # would quietly stop being a P&ID. :mod:`pandid.render.drawio` reads it, and
+    # nothing else does; the SVG renderer draws the converted geometry as before.
+    drawio_shape: str = ""
+    # How a *derived* symbol differs from the stencil ``drawio_shape`` names, for
+    # the two derivations this module makes. Neither is a stencil of its own, so
+    # the reference alone would draw the shape it was derived from: a fitting
+    # turned end for end (:func:`expander`) draws its stencil mirrored, and a
+    # normally closed valve (:func:`darkened`) draws it with its body filled.
+    # Stated as what they are rather than as draw.io style text, so this module
+    # keeps saying what the drawing *is* and the exporter keeps deciding how to
+    # spell it.
+    drawio_flip_h: bool = False
+    drawio_fill: str = ""
 
     def __post_init__(self) -> None:
         declared = {name: dict(faces) for name, faces in self.port_faces.items()}
@@ -974,6 +1000,11 @@ def darkened(sym: Symbol) -> Symbol:
         label_pos=sym.label_pos, id_suffix=sym.id_suffix + "_nc",
         stretchable=sym.stretchable, bare_run=sym.bare_run,
         gravity_fixed=sym.gravity_fixed,
+        # Same stencil, filled. The fill is what the derivation *is*, so it
+        # travels with the reference; a reference on its own would name the open
+        # valve and draw a line that is shut as one that is not.
+        drawio_shape=sym.drawio_shape, drawio_flip_h=sym.drawio_flip_h,
+        drawio_fill=_BODY_INK,
     )
 
 
@@ -1053,6 +1084,12 @@ def expander(sym: Symbol) -> Symbol:
         label_pos=sym.label_pos, id_suffix=sym.id_suffix + "_exp",
         stretchable=sym.stretchable, bare_run=sym.bare_run,
         gravity_fixed=sym.gravity_fixed,
+        # Same stencil, mirrored -- which is the whole of the derivation, and
+        # the whole of what has to travel with the reference. Left off, an
+        # export would name the reduction and draw a run narrowing where the
+        # sheet opens it out.
+        drawio_shape=sym.drawio_shape, drawio_fill=sym.drawio_fill,
+        drawio_flip_h=not sym.drawio_flip_h,
     )
 
 

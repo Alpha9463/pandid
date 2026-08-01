@@ -118,14 +118,19 @@ def _stamp(fs: Flowsheet) -> None:
         tb.date = tb.revisions[-1].date
 
 
-def render(stem: str) -> str:
-    """The SVG *stem*'s example draws, canonicalised, without running its output.
+def flowsheet(stem: str) -> "tuple[Flowsheet, dict]":
+    """The flowsheet *stem*'s example builds, and the options it draws it with.
 
     The example is imported rather than executed as a subprocess, with
     ``Flowsheet.render`` replaced for the duration so the one call at the end of
     it hands over the flowsheet and its keyword arguments instead of writing a
     file. ``01`` renders at import and the rest behind ``main()``; both shapes
     end in that same call, so both are caught the same way.
+
+    Separate from :func:`render` so a caller that wants the *model* the example
+    builds -- and not the sheet it draws -- has one, without a second copy of
+    the capture. ``tests/test_drawio.py`` is that caller: a draw.io export is
+    made from a flowsheet and has no SVG anywhere in it.
     """
     caught: list[tuple[Flowsheet, dict]] = []
     original = Flowsheet.render
@@ -152,6 +157,12 @@ def render(stem: str) -> str:
         )
     fs, kwargs = caught[0]
     _stamp(fs)
+    return fs, kwargs
+
+
+def render(stem: str) -> str:
+    """The SVG *stem*'s example draws, canonicalised, without running its output."""
+    fs, kwargs = flowsheet(stem)
     return normalize(fs.to_svg(**kwargs))
 
 

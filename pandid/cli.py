@@ -222,8 +222,9 @@ def _build_parser() -> argparse.ArgumentParser:
     draw.add_argument("spec", type=Path, metavar="SPEC", help="the spec file (.yaml, .yml, .json)")
     draw.add_argument(
         "-o", "--output", type=Path, metavar="OUT",
-        help="where to write it; the extension picks the format (.svg, or .pdf/.png with the "
-             "pdf extra). Default: the spec's name with .svg",
+        help="where to write it; the extension picks the format (.svg, .pdf/.png with the "
+             "pdf extra, or .drawio for an editable draw.io model). Default: the spec's "
+             "name with .svg",
     )
     draw.add_argument(
         "--page-size", metavar="SIZE",

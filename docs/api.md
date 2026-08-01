@@ -211,6 +211,12 @@ run. With `check=True`, validation errors raise `ValueError` and warnings land
 on `fs.warnings`.
 
 ```text
+to_drawio(*, diagram: str | None = None, check: bool = True) -> str
+```
+Returns a draw.io / diagrams.net document, on the same terms. See
+[Editing the sheet by hand](#editing-the-sheet-by-hand).
+
+```text
 render(path: str | Path, *, show_stream_table=False, border=None,
        diagram=None, page_size=None,
        jump_direction="vertical", debug=False, check=True) -> None
@@ -218,8 +224,9 @@ render(path: str | Path, *, show_stream_table=False, border=None,
 Writes the drawing. The format comes from the extension: `.svg` (or no
 extension) is pure Python; `.pdf` and `.png` need the optional `pdf` extra
 (`pip install 'pandid[pdf]'`) and raise `ImportError` naming the missing package
-without it. Any other extension raises `ValueError`. The PDF is vector, drawn at
-the sheet's physical size, and the PNG is rasterised from that same PDF.
+without it; `.drawio` writes the editable draw.io document. Any other extension
+raises `ValueError`. The PDF is vector, drawn at the sheet's physical size, and
+the PNG is rasterised from that same PDF.
 
 ```text
 show() -> None                   # render to a temp file and open a browser
@@ -343,6 +350,50 @@ A drawing too big for the page is scaled down uniformly to fit, never clipped,
 and never enlarged when it is already smaller. A page too small for the
 furniture itself (a wide stream table on A4, say) raises `ValueError` naming the
 size it needed and the widest piece of furniture that needed it.
+
+### Editing the sheet by hand
+
+`.drawio` writes the drawing as an editable draw.io / diagrams.net model rather
+than a picture of one: every unit is a shape and every stream an edge between two
+of its connection points, so blocks and lines can be moved by hand. draw.io
+exports `.vsdx`, so this is also the way to Visio.
+
+```python
+fs.render("sheet.drawio")          # or: text = fs.to_drawio()
+```
+
+The equipment symbols *are* draw.io's own P&ID stencils (see `NOTICE`), so the
+file references them and what opens is a native, editable shape. The fifteen
+symbols `pandid` draws itself have no draw.io stencil behind them and are
+approximated with draw.io's built-in shapes:
+
+| Drawn here | Exported as | What it loses |
+|---|---|---|
+| instrument balloon | a circle | nothing |
+| panel / auxiliary balloon | a circle | the bar across it, which is what puts the instrument in a panel |
+| shared-display balloon | a circle | the square around it |
+| computer balloon | a hexagon | nothing |
+| SIS / logic balloon | a diamond | the square around it |
+| interlock balloon | a diamond | nothing |
+| mixer | a triangle | nothing |
+| splitter | a mirrored triangle | nothing |
+| pipe tee | a line | the branch stub |
+| feed / product flag | a rectangle | the arrow point; the tag and the off-page reference are kept |
+| conveyor | a rectangle | the belt and its rollers |
+| block | a rectangle | nothing |
+
+Four things a sheet has that a model does not: the semicircle a crossing line
+hops with, the cross-hatching on a pneumatic signal line, the fine tap line from
+a process line to the balloon reading it, and the searched placement (and
+leaders) of the stream numbers, which become plain edge labels. The title block
+and any annotation boxes export as labelled boxes stacked below the drawing,
+carrying every field but at neither the size nor the dock position the sheet
+rules them at.
+
+`page_size`, `border`, `show_stream_table`, `jump_direction` and `debug` all
+describe a *sheet*. A `.drawio` file is a model on an unbounded canvas, so
+`render()` raises `ValueError` naming them rather than accepting and ignoring
+them.
 
 ---
 
