@@ -53,6 +53,15 @@ cannot fail to resolve the way a stencil key could. Sheet furniture is docked
 where the sheet docks it and ruled as the tables it is
 (:meth:`DrawioRenderer._furniture`). Nothing on the sheet is silently absent.
 
+**A model, or a sheet.** Given ``page_size`` this stops being a drawing on an
+unbounded canvas and becomes paper: the file states the page, the furniture
+docks to it rather than to the drawing's own bounds, and the drawing is fitted
+into what the furniture leaves, all through the same
+:func:`~pandid.render.furniture.dock` and :func:`~pandid.render.svg._fit_scale`
+the rendered sheet uses. ``border="zone"`` then rules that page. Without a page
+size none of it happens and the drawing keeps its own coordinates, which is what
+makes an exported model a model. See :class:`_Fit`.
+
 Three pieces of sheet *detail* have no draw.io construct at all, and simply are
 not drawn: the semicircle a crossing line hops with, since draw.io decides its
 own jumps; the searched placement of a stream number, and the leader it gets
@@ -71,6 +80,13 @@ inferred from behaviour, because none of it can be checked here: nothing in this
 repository opens a ``.drawio`` file. Each item says where it came from, so the
 next person editing this file argues with the source instead of re-deriving it.
 Line numbers drift; the function names do not.
+
+Three of these were open questions when they were written down, and a reader has
+since opened ``11_ethanol_pid.drawio`` and confirmed all three: the pneumatic
+hatch marks land on their runs, the tables render as editable grids, and an
+``offPageConnector`` under a ``direction`` puts the pennant's tip the way round
+the arithmetic below says it does. They are recorded as settled rather than
+deleted, since the reasoning is what the next change has to hold against.
 
 * **A shape reference that misses fails silently, and there is no log.**
   ``mxCellRenderer.createShape`` asks ``mxStencilRegistry.getStencil`` first and

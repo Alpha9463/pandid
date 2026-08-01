@@ -229,6 +229,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`to_drawio` takes `page_size` and `border`, and the export is a sheet when
+  it is given them.** A drawing made `page_size="A3"` opened on draw.io's
+  default page with no frame around it. The file now states the page for draw.io
+  to rule, docks the furniture to that page rather than to the drawing's own
+  bounds, fits the drawing into what the furniture leaves, and rules the
+  zone-ruled border on it — all through the `furniture.dock`, `svg._fit_scale`
+  and new `furniture.zone_layout` the rendered sheet uses, so the two open at
+  the same size on the same paper. Omit `page_size` and nothing changes: the
+  drawing keeps its own coordinates on an unbounded canvas.
+
+  One caveat, now in `to_drawio`'s docstring: a zone grid is an address space
+  (ISO 15519-1 Clause 9) that `Feed.reference` writes into, and it holds only
+  while the sheet does. What is exported is a **snapshot of the grid**, true of
+  the drawing as it left pandid and not after the model has been edited.
+
+- **draw.io tables no longer clip their own contents.** Columns were given
+  proportional shares of the box instead of their measured widths, and were then
+  drawn at draw.io's default 12 having been measured at 11, so `HPSSH` came out
+  `HPSS` and `APP'D` came out `APP'`. Columns are now measured with
+  `furniture.text_width` at the size each table states it is drawn at. The title
+  block's eleven fields, stretched to fill an eighty-unit strip, were rows 5.6
+  units tall that drew no text at all; both halves are ruled at their own row
+  height, bottom-aligned, and the dock is told the height they need.
+
+- **A pipe tee draws no ink of its own, and the pipes close the junction.** The
+  cell showed a stub sticking out of the run. Every stream meeting a tee now
+  lands on the box centre, so the three legs draw the meeting themselves —
+  flush by construction, with each leg still straight. The cell stays, invisible,
+  so dragging the junction takes its pipes with it.
+
 - **The `.drawio` export draws the instrument connections.** An instrument
   mounted with `add_instrument(..., on=…)` gets a tap line, which is not a
   stream and so was not among the edges the export walked: all twenty of
