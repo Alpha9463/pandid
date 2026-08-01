@@ -121,8 +121,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the CHEE4001 guidelines oblige a connection point to carry a line. Nothing
   rendered moves: `tests/golden/` and `docs/gallery/` are byte for byte what
   they were, checked by hashing a fresh render against the committed files.
+- **An instrument takes several signal connections, on any face.** A balloon had
+  exactly one `sig_in` and one `sig_out`, so a controller could drive one final
+  element and a measurement could feed one balloon. `sig_in` and `sig_out` are
+  now **pools**: a second line off one is another connection rather than an
+  error, minted as `sig_out_2`, `sig_out_3` and placed on whichever face suits
+  where its peer is.
+
+  ```python
+  fs.connect(pic301.sig_out, cv1.actuator, kind="pneumatic")   # 0-95%
+  fs.connect(pic301.sig_out, cv2.actuator, kind="pneumatic")   # 95-100%
+  ```
+
+  That is `P&ID-301`'s own loop 301, which this package could not draw. Two
+  other things it could not draw come with it: a measurement feeding a high and
+  a low alarm on separate lines, which ISO 15519-2 §6.2 (p. 14) requires be
+  "drawn separate between the PCI symbols", and an alarm that takes an input and
+  an output because it participates in a trip.
+
+  On a **signal line** either end may now be the unit instead of one of its
+  connections, and the engine picks: `fs.connect(ft305, fic305, kind="electric")`.
+  Process piping still names its nozzle, because which nozzle a pipe runs to is
+  the whole question.
+
+  `pv` stays singular — an instrument taps one process point — and so does
+  `Valve.actuator`: split range is one actuator per valve with the controller
+  holding two outputs.
 
 ### Changed
+
+- **`direction` is a rule about process nozzles.** Fluid enters a nozzle or
+  leaves it, so `connect()` refuses a pipe drawn the other way, exactly as
+  before. A signal connection has no such fact to be right about — the same
+  alarm terminal is fed on one sheet and trips from it on another — so it is no
+  longer held to the field. Which end of its line a signal port took is read off
+  `Stream.source`/`Stream.dest`, which is exact because a port holds at most one
+  stream. Nothing that used to work stops working; calls that used to raise now
+  draw.
+
+  Every sheet in `tests/golden/` and `docs/gallery/` is byte for byte what it
+  was, checked by hashing a fresh render of all twelve examples in both corpora
+  against the committed files.
+
 
 - **`examples/11_ethanol_pid` declares its control loops.** The README's lead
   sheet typed a literal number on all 26 of its balloons. Six of them are

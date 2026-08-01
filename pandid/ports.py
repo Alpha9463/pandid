@@ -8,6 +8,15 @@ renderer and layout engine consume.
 The role "signal" is the one that also decides what may be connected: a signal
 port carries a signal line and a process port carries fluid, and
 `Flowsheet.connect()` will not mix them.
+
+`direction` is a rule about process nozzles only. Fluid enters a nozzle or
+leaves it, so a pipe drawn the other way is wrong about the plant and
+`Flowsheet.connect()` refuses it. A signal connection has no such fact to be
+right about -- the same alarm terminal is fed on one sheet and trips from it on
+another -- so it is not held to the field, and which end of its line it took is
+read off `Stream.source`/`Stream.dest`, which is exact because a port holds at
+most one stream. On a signal port the field records which pool the connection
+came from and nothing more; see `pandid.units.Instrument`.
 """
 
 from __future__ import annotations

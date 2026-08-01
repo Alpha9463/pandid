@@ -40,8 +40,14 @@ def _anchor(unit: "Unit", port_name: str) -> str:
     rename is applied -- everything here that asks the artwork about a port asks
     through it, so a renamed nozzle lands on the ink the original does rather
     than on the box-centre fallback a name the symbol never heard of gets.
+
+    Asked of the *unit* rather than read off its class, because the one class
+    whose nozzle names are not all known when it is written
+    (:class:`~pandid.units.Instrument`, which mints a signal connection per
+    line) has to answer by rule instead of from a dict. See
+    :meth:`pandid.units.Unit._symbol_anchor`.
     """
-    return type(unit).PORT_ANCHORS.get(port_name, port_name)
+    return unit._symbol_anchor(port_name)
 
 
 def _xform(frame) -> tuple[int, bool, bool]:
