@@ -25,6 +25,15 @@ drawing rather than as an arithmetic claim. Every other fixture draws with it
 off, which is what holds the rest of the corpus to being byte for byte what it
 was before the feature existed.
 
+`14_tank_farm` is the tank farm, the third sheet drawn at `page_size="A3"` and
+the one that pins the storage, containment and line-fitting families: a floating
+roof, a fixed roof and a sphere, a conservation vent with its flame arrestor, a
+detonation-rated arrestor in the vapour return, a spectacle blind, a compensator,
+both strainer bodies and the eccentric/concentric reducer pair around one pump.
+It is also the only scenario whose loop numbers are *allocated* rather than
+typed, so it is what holds `add_loop`'s counter to a drawing rather than to an
+arithmetic claim in a unit test.
+
 `12_block_flow_diagram` is the block flow diagram, the one scenario a level
 above the PFD and the only one with process connections on the north and south
 faces. It is also the only sheet whose boxes size *themselves*: nothing in it

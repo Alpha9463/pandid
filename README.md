@@ -5,7 +5,7 @@ flowsheet, in pure Python with no runtime dependencies.
 
 [![Ethanol purification P&ID](https://raw.githubusercontent.com/Alpha9463/pandid/main/docs/gallery/11_ethanol_pid.png)](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md)
 
-<sub>[`examples/11_ethanol_pid.py`](https://github.com/Alpha9463/pandid/blob/main/examples/11_ethanol_pid.py): instrumentation, five control loops, hand-isolated valve stations, line numbers, a zone-ruled A3 frame, a title block and a general-notes box. See the [gallery](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md) for all twelve.</sub>
+<sub>[`examples/11_ethanol_pid.py`](https://github.com/Alpha9463/pandid/blob/main/examples/11_ethanol_pid.py): instrumentation, five control loops, hand-isolated valve stations, line numbers, a zone-ruled A3 frame, a title block and a general-notes box. See the [gallery](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md) for the rest.</sub>
 
 You describe what connects to what. The engine lays out the equipment, routes
 every stream, and draws industry-standard symbols. The name is how "P&ID" is
@@ -132,7 +132,7 @@ and what each claim does not cover.
 
 | Where | What |
 |---|---|
-| [Example gallery](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md) | all twelve examples rendered, with what each one demonstrates |
+| [Example gallery](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md) | every example rendered, with what each one demonstrates |
 | [API reference](https://github.com/Alpha9463/pandid/blob/main/docs/api.md) | every public class, port and option, verified against the source |
 | [Contributing](https://github.com/Alpha9463/pandid/blob/main/CONTRIBUTING.md) | setup, the four gates, and the conventions that are easy to get wrong |
 | [Changelog](https://github.com/Alpha9463/pandid/blob/main/CHANGELOG.md) | what is in this release |
@@ -208,7 +208,7 @@ spec. See the
 ## Examples
 
 Runnable scripts in [`examples/`](https://github.com/Alpha9463/pandid/tree/main/examples),
-each usable from the repo root or from `examples/` itself. All twelve are
+each usable from the repo root or from `examples/` itself. Every one is
 rendered in the
 [gallery](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md).
 
@@ -226,6 +226,7 @@ rendered in the
 | `10_ethanol_pfd.py` | a whole issue-ready sheet on a real A3 page, with six off-page connectors, equipment list, utilities summary and sectioned stream table |
 | `11_ethanol_pid.py` | a whole issued P&ID on a fixed A3 sheet: line numbers on every line, hand-isolated control valve stations, five loops, and a repeated interlock square |
 | `12_block_flow_diagram.py` | the drawing a level above the PFD: one `Block` per plant section, connections on all four sides, every box sized to its own name and nozzles |
+| `14_tank_farm.py` | a bulk liquid storage terminal: floating-roof, fixed-roof and pressure storage, a loading rack, a vapour system with its flame arrestors, and loop numbers allocated rather than typed |
 
 ## Contributing
 
