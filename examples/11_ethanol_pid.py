@@ -31,6 +31,16 @@ What a P&ID adds over the PFD of the same unit:
   ``PT-318``, the transmitter that initiates it, and on ``XV-301``, the valve
   it closes.
 
+``fs.add_loop(variable, number)`` declares each of the six loops and every
+member is tagged from the handle it returns, so a loop number is typed once:
+a balloon by passing the loop where the number would go, a primary or final
+element through ``loop.tag(...)``. The letters stay on the member and the loop
+checks the first of them at the call site, so a ``TT`` hung on a flow loop
+fails at the line that wrote it rather than arriving as a mis-lettered balloon.
+What is in no loop keeps a literal number, which is what the four standalone
+indicators, the transmitter that serves only the trip, and the trip squares --
+which have no measured variable at all -- all do.
+
 Three ways this sheet goes past ``professional_examples/P&ID_301.pdf``, the
 course exemplar it is modelled on, rather than reproducing it.
 
@@ -121,6 +131,32 @@ def main():
         line_number_start=301,
     )
 
+    # --- Control loops ---------------------------------------------------
+    # Six loops close on this sheet, and each number is declared once here
+    # instead of being typed again on every balloon that carries it. Six is
+    # what CHEE4001 p.13 counts -- "A loop number is assigned to each group of
+    # components required to perform the desired function of the monitor or
+    # control scheme" -- so the number belongs to the *group*, and a balloon in
+    # no group is in no loop.
+    #
+    # A loop is also the measured variable and the number *together*: 301 is a
+    # pressure loop, 306 a level one, and the 301 on line FB-301-200-160-SS, on
+    # XV-301 and in the CV-301-1 station's suffix is neither of those nor any
+    # other loop. A loop owns its own pair, so nothing on this sheet may be
+    # recovered as a loop by reading numbers off the drawing.
+    #
+    # Each member still types its own functional letters and the handle checks
+    # the first of them where it is written, so a TT put on a flow loop raises
+    # at that line. That redundancy is the whole mechanism: a loop that
+    # *supplied* the letter would have every balloon agreeing by construction,
+    # and an FIC reading a TT would become unrepresentable rather than caught.
+    press301 = fs.add_loop("P", 301)    # tower overhead pressure
+    temp302 = fs.add_loop("T", 302)     # tower top temperature, the cascade master
+    flow303 = fs.add_loop("F", 303)     # reflux flow, its slave
+    level304 = fs.add_loop("L", 304)    # reflux drum level
+    level306 = fs.add_loop("L", 306)    # kettle level
+    temp307 = fs.add_loop("T", 307)     # reboiler return temperature
+
     # --- Equipment -------------------------------------------------------
     # The tag is set inside the shell, since the overhead leaves the top centre
     # and a tag written above the tower would be written across that riser.
@@ -153,7 +189,16 @@ def main():
                             description="Feed Trip Valve"))
     meter = fs.add(units.Fitting("FE-313", variant="rotameter",
                                  description="Feed Flow Element"))
-    cv306 = fs.add(units.Valve("CV-306", variant="control",
+    # Loop 306's final control element, and the sheet numbers it from the loop,
+    # so it is tagged through the handle. loop.tag() composes without checking
+    # the first letter and cannot check it: a final element is not tagged from
+    # the measured variable, and its number need not match its loop's either.
+    # This sheet has both -- LIC-304 strokes CV-305 and TIC-307 strokes CV-308,
+    # and PIC-301's valve is CV-301-1, a tag no loop handle spells -- so those
+    # three type their tags and only the signal edge into the actuator says
+    # which loop they close. The check valve behind this one is in no loop at
+    # all and types its own.
+    cv306 = fs.add(units.Valve(level306.tag("CV"), variant="control",
                                description="Bottoms Control Valve"))
     nrv306 = fs.add(units.Valve("NRV-306", variant="check",
                                 description="Bottoms Non-Return Valve"))
@@ -164,8 +209,10 @@ def main():
     # The reflux flow element sits in the run itself: the balloon beside it
     # reads the element, it is not the element. Its tag is written under the run
     # because its transmitter stands over it, and an impulse line drawn up
-    # through the tag would be knocked out by the tag's own halo.
-    fe303 = fs.add(units.Fitting("FE-303", variant="venturi", label_pos="bottom",
+    # through the tag would be knocked out by the tag's own halo. It is loop
+    # 303's primary element, so its number comes from the loop like the rest of
+    # 303's; being a Fitting rather than a balloon, it joins through tag().
+    fe303 = fs.add(units.Fitting(flow303.tag("FE"), variant="venturi", label_pos="bottom",
                                  description="Reflux Flow Element"))
     # The size steps down 100 -> 40 across it, so the run's number breaks here.
     t_draw = fs.add(units.Tee())
@@ -227,7 +274,7 @@ def main():
     # whether the station is in service or bypassed.
     reflux_run_y = 440.0
     st303 = fs.add_valve_station(
-        "CV-303", x=672.5, y=reflux_run_y, mirrored=True, bypass_over="reduction",
+        flow303.tag("CV"), x=672.5, y=reflux_run_y, mirrored=True, bypass_over="reduction",
         description="Reflux", service="AE", sequence=303, size=80, schedule=80, spec="SS")
     fe303.pin(mirrored=True).pin(port="outlet", x=617.5, y=reflux_run_y)
 
@@ -365,6 +412,14 @@ def main():
     # letters, and a 40-unit diamond has room for two figures -- so the letter
     # code lives in the tag and in the notes box until #137/#169 give a balloon
     # its letter-code string.
+    #
+    # The square takes a literal number and not a loop handle, and so do the
+    # three indicators below it. A loop is a measured variable and a number,
+    # and Z is neither: it is what the function *does*, so there is no variable
+    # for a loop to be declared on. The indicators have a variable and no loop
+    # -- each is one local reading with no transmitter under it and no
+    # controller over it, so a handle would hold a number for a set of one and
+    # have no second letter to check.
     fs.add_instrument("Z", 2, on=xv, at="S", offset=26, variant="sis")
     fs.add_instrument("FI", 314, on=meter, at="S", offset=36)
     # The gauge reads the tower's feed nozzle, but it is hung on the run rather
@@ -385,9 +440,9 @@ def main():
     # overhead run, which is what makes the measurement line straight too.
     balloon_row_y = 45.0
     cv3011_top = overhead_y - port_offset(st301.control, "inlet")[1]
-    pt301 = fs.add_instrument("PT", 301, on=vapour, at=0.75,
+    pt301 = fs.add_instrument("PT", press301, on=vapour, at=0.75,
                               offset=overhead_y - balloon_row_y)
-    pic301 = fs.add_instrument("PIC", 301, on=st301.control, at="N", variant="shared",
+    pic301 = fs.add_instrument("PIC", press301, on=st301.control, at="N", variant="shared",
                                offset=cv3011_top - balloon_row_y)
     pic301.nozzle("sig_out", "S")
     # Both alarms read the controller, so both hang off it, each on a face of
@@ -409,8 +464,8 @@ def main():
     # figure draws c directly over d, so the high one takes the north face and
     # the low one what is left. LIC-304 below is arranged the same way, which is
     # the half of Figure 8 a sheet with four faces per symbol can keep.
-    fs.add_instrument("PAH", 301, on=pic301, at="N", offset=46, variant="shared")
-    fs.add_instrument("PAL", 301, on=pic301, at="E", offset=46, variant="shared")
+    fs.add_instrument("PAH", press301, on=pic301, at="N", offset=46, variant="shared")
+    fs.add_instrument("PAL", press301, on=pic301, at="E", offset=46, variant="shared")
     fs.connect(pt301.sig_out, pic301.sig_in, kind="electric")
     fs.connect(pic301.sig_out, st301.control.actuator, kind="pneumatic")
 
@@ -428,14 +483,24 @@ def main():
     # The square hangs on a face of the transmitter, which is how LT-306's and
     # TT-307's trips are drawn further down: a trip belongs on the measurement
     # point, and a transmitter *is* one.
+    #
+    # 318 is typed, and this is the one literal on the sheet that has to be
+    # argued rather than assumed: it is a transmitter and not an indicator, and
+    # a transmitter usually has a loop around it. This one does not. Nothing is
+    # tagged PIC-318, PAH-318 or PV-318 -- what it drives is Z-2, which carries
+    # the trip's number and not this one -- so P-318 would be a loop of exactly
+    # one balloon: the number would be typed once either way and there would be
+    # no second member whose letter the handle could check. What 318 names here
+    # is a measurement point, and declaring it would put a loop in fs.loops
+    # that the drawing does not contain.
     pt318 = fs.add_instrument("PT", 318, on=vapour, at=0.55,
                               offset=overhead_y - balloon_row_y)
     fs.add_instrument("Z", 2, on=pt318, at="N", offset=40, variant="sis")
 
     # --- Loops 302/303: tower top temperature cascaded onto reflux flow ---
     # Tapped low on the riser, below the cooling-water header that crosses it.
-    tt302 = fs.add_instrument("TT", 302, on=vapour, at=0.13, offset=80, angle=-90)
-    tic302 = fs.add_instrument("TIC", 302, on=tt302, at="E", offset=78, variant="shared")
+    tt302 = fs.add_instrument("TT", temp302, on=vapour, at=0.13, offset=80, angle=-90)
+    tic302 = fs.add_instrument("TIC", temp302, on=tt302, at="E", offset=78, variant="shared")
     tic302.nozzle("sig_out", "S")
     fs.connect(tt302.sig_out, tic302.sig_in, kind="electric")
 
@@ -445,11 +510,15 @@ def main():
     # lines that reach them come from: CV-303's actuator is on the crown of the
     # valve, so the output drops onto it, and the cascade comes down from
     # TIC-302 without having to cross the run to find them.
-    ft303 = fs.add_instrument("FT", 303, on=fe303, at="N", offset=90)
-    fic303 = fs.add_instrument("FIC", 303, on=ft303, at="E", offset=70, variant="shared")
+    ft303 = fs.add_instrument("FT", flow303, on=fe303, at="N", offset=90)
+    fic303 = fs.add_instrument("FIC", flow303, on=ft303, at="E", offset=70, variant="shared")
     fic303.nozzle("sig_out", "E")   # the valve it strokes stands below and right
     # The measurement lands on the flow controller's pv and the temperature
     # controller sets it: a cascade sets a setpoint, it does not stroke a valve.
+    # A cascade is also two loops and never one, whatever the numbers say: the
+    # master measures temperature and the slave flow, so a single handle could
+    # not have taken both TIC-302 and FIC-303 and would have raised on the
+    # second of them.
     fs.connect(ft303.sig_out, fic303.pv, kind="electric")
     fs.connect(tic302.sig_out, fic303.sig_in, kind="software")
     fs.connect(fic303.sig_out, st303.control.actuator, kind="pneumatic")
@@ -469,15 +538,15 @@ def main():
     # up and to the left, and the run reaches the west face by dropping short of
     # the balloon rather than over it. The output still leaves south onto the
     # actuator and the low alarm takes the east.
-    lt304 = fs.add_instrument("LT", 304, on=drum, at="E", offset=60)
+    lt304 = fs.add_instrument("LT", level304, on=drum, at="E", offset=60)
     lic304_row_y = 403.0
     cv305_top = dist_y - port_offset(st305.control, "inlet")[1]
-    lic304 = fs.add_instrument("LIC", 304, on=st305.control, at="N", variant="shared",
+    lic304 = fs.add_instrument("LIC", level304, on=st305.control, at="N", variant="shared",
                                offset=cv305_top - lic304_row_y)
     lic304.nozzle("sig_in", "W")
     lic304.nozzle("sig_out", "S")
-    fs.add_instrument("LAH", 304, on=lic304, at="N", offset=46, variant="shared")
-    fs.add_instrument("LAL", 304, on=lic304, at="E", offset=46, variant="shared")
+    fs.add_instrument("LAH", level304, on=lic304, at="N", offset=46, variant="shared")
+    fs.add_instrument("LAL", level304, on=lic304, at="E", offset=46, variant="shared")
     # Teed off the measurement, which is what the issued sheet does with all
     # five of its own trips: loops 301, 304 and 306 off their
     # transmitter-to-controller runs, 322 off the two stubs downstream of
@@ -491,8 +560,8 @@ def main():
     fs.connect(lic304.sig_out, st305.control.actuator, kind="pneumatic")
 
     # --- Loop 307: reboiler return temperature on the steam valve ---------
-    tt307 = fs.add_instrument("TT", 307, on=sump, at=0.05, offset=85, angle=-90)
-    tic307 = fs.add_instrument("TIC", 307, on=tt307, at="W", offset=96,
+    tt307 = fs.add_instrument("TT", temp307, on=sump, at=0.05, offset=85, angle=-90)
+    tic307 = fs.add_instrument("TIC", temp307, on=tt307, at="W", offset=96,
                                variant="shared")
     tic307.nozzle("sig_out", "S")
     fs.add_instrument("TI", 321, on=boilup, at=0.05, offset=70, angle=-90)
@@ -508,8 +577,8 @@ def main():
     fs.connect(tic307.sig_out, st308.control.actuator, kind="pneumatic")
 
     # --- Loop 306: kettle level on the bottoms draw -----------------------
-    lt306 = fs.add_instrument("LT", 306, on=reb, at="S", offset=68)
-    lic306 = fs.add_instrument("LIC", 306, on=lt306, at="E", offset=56, variant="shared")
+    lt306 = fs.add_instrument("LT", level306, on=reb, at="S", offset=68)
+    lic306 = fs.add_instrument("LIC", level306, on=lt306, at="E", offset=56, variant="shared")
     lic306.nozzle("sig_out", "E")
     # LT-306 is itself the measurement point, so the square hangs on it rather
     # than on a run, which is where the issued sheet's own loop-306 trip goes.

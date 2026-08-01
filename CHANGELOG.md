@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`examples/11_ethanol_pid` declares its control loops.** The README's lead
+  sheet typed a literal number on all 26 of its balloons. Six of them are
+  groups — CHEE4001 p.13, "A loop number is assigned to each group of components
+  required to perform the desired function of the monitor or control scheme" —
+  so `P-301`, `T-302`, `F-303`, `L-304`, `L-306` and `T-307` are declared with
+  `add_loop()`, and their sixteen balloons, the reflux venturi `FE-303` and the
+  two control valves the sheet numbers from a loop are tagged from the handle.
+  A loop number is now typed once per loop instead of once per balloon, and
+  `add_instrument` checks each member's first letter against its loop's measured
+  variable at the line that writes it.
+
+  The other ten keep literal numbers, which is what they should do. `FI-314`,
+  `PI-315`, `TI-321` and `TI-325` are single local readings with no transmitter
+  under them and no controller over them. `PT-318` serves the trip and only the
+  trip, so `P-318` would be a loop of one member: the number is typed once
+  either way and there is no second letter to check. The five `Z` squares have
+  no measured variable at all, `Z` being what the function does rather than what
+  it reads. `CV-301-1`, `CV-305` and `CV-308` type their tags too, a final
+  element's number not tracking its loop.
+
+  Refactor only. Every tag is the string it was, so
+  `tests/golden/11_ethanol_pid.svg` and `docs/gallery/11_ethanol_pid.{svg,png}`
+  are byte for byte what they were — checked by hashing a fresh render against
+  the committed files, not by the suite going green. Running the measured-
+  variable check over the densest sheet in the corpus for the first time
+  rejected nothing: every balloon's first letter already agreed with its loop.
+
 ## [0.1.1] - 2026-08-01
 
 **A sheet regenerated on this version is not the sheet 0.1.0 drew.** Symbol

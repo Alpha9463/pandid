@@ -864,6 +864,17 @@ def _ethanol_pid() -> Flowsheet:
         line_number_start=301,
     )
 
+    # Six loops, each number declared once. A loop is the measured variable and
+    # the number together, so the 301 on line FB-301 and in CV-301-1's suffix is
+    # not the pressure loop; and the balloons in no loop -- the indicators, the
+    # trip's own transmitter and the Z squares -- keep literal numbers.
+    press301 = fs.add_loop("P", 301)
+    temp302 = fs.add_loop("T", 302)
+    flow303 = fs.add_loop("F", 303)
+    level304 = fs.add_loop("L", 304)
+    level306 = fs.add_loop("L", 306)
+    temp307 = fs.add_loop("T", 307)
+
     col = fs.add(units.Column("T-301", label_pos="center", description="Beer Column"))
     cond = fs.add(
         units.HeatExchanger(
@@ -906,13 +917,18 @@ def _ethanol_pid() -> Flowsheet:
 
     xv = fs.add(units.Valve("XV-301", variant="solenoid", description="Feed Trip Valve"))
     meter = fs.add(units.Fitting("FE-313", variant="rotameter", description="Feed Flow Element"))
-    cv306 = fs.add(units.Valve("CV-306", variant="control", description="Bottoms Control Valve"))
+    cv306 = fs.add(
+        units.Valve(level306.tag("CV"), variant="control", description="Bottoms Control Valve")
+    )
     nrv306 = fs.add(units.Valve("NRV-306", variant="check", description="Bottoms Non-Return Valve"))
     hv311 = fs.add(units.Valve("HV-311", description="C-301 Cooling Water Block Valve"))
     hv315 = fs.add(units.Valve("HV-315", description="HX-301 Cooling Water Block Valve"))
     fe303 = fs.add(
         units.Fitting(
-            "FE-303", variant="venturi", label_pos="bottom", description="Reflux Flow Element"
+            flow303.tag("FE"),
+            variant="venturi",
+            label_pos="bottom",
+            description="Reflux Flow Element",
         )
     )
     # The size steps down 100 -> 40 across it, so the run's number breaks here.
@@ -964,7 +980,7 @@ def _ethanol_pid() -> Flowsheet:
 
     reflux_run_y = 440.0
     st303 = fs.add_valve_station(
-        "CV-303",
+        flow303.tag("CV"),
         x=672.5,
         y=reflux_run_y,
         mirrored=True,
@@ -1132,13 +1148,18 @@ def _ethanol_pid() -> Flowsheet:
     # the controller and each takes a face of its own, high above low.
     balloon_row_y = 45.0
     cv3011_top = overhead_y - port_offset(st301.control, "inlet")[1]
-    pt301 = fs.add_instrument("PT", 301, on=vapour, at=0.75, offset=overhead_y - balloon_row_y)
+    pt301 = fs.add_instrument("PT", press301, on=vapour, at=0.75, offset=overhead_y - balloon_row_y)
     pic301 = fs.add_instrument(
-        "PIC", 301, on=st301.control, at="N", variant="shared", offset=cv3011_top - balloon_row_y
+        "PIC",
+        press301,
+        on=st301.control,
+        at="N",
+        variant="shared",
+        offset=cv3011_top - balloon_row_y,
     )
     pic301.nozzle("sig_out", "S")
-    fs.add_instrument("PAH", 301, on=pic301, at="N", offset=46, variant="shared")
-    fs.add_instrument("PAL", 301, on=pic301, at="E", offset=46, variant="shared")
+    fs.add_instrument("PAH", press301, on=pic301, at="N", offset=46, variant="shared")
+    fs.add_instrument("PAL", press301, on=pic301, at="E", offset=46, variant="shared")
     fs.connect(pt301.sig_out, pic301.sig_in, kind="electric")
     fs.connect(pic301.sig_out, st301.control.actuator, kind="pneumatic")
 
@@ -1149,13 +1170,13 @@ def _ethanol_pid() -> Flowsheet:
 
     # Loops 302/303: tower top temperature cascaded onto the reflux flow. A
     # cascade sets a setpoint, so it lands on the flow controller's pv.
-    tt302 = fs.add_instrument("TT", 302, on=vapour, at=0.13, offset=80, angle=-90)
-    tic302 = fs.add_instrument("TIC", 302, on=tt302, at="E", offset=78, variant="shared")
+    tt302 = fs.add_instrument("TT", temp302, on=vapour, at=0.13, offset=80, angle=-90)
+    tic302 = fs.add_instrument("TIC", temp302, on=tt302, at="E", offset=78, variant="shared")
     tic302.nozzle("sig_out", "S")
     fs.connect(tt302.sig_out, tic302.sig_in, kind="electric")
 
-    ft303 = fs.add_instrument("FT", 303, on=fe303, at="N", offset=90)
-    fic303 = fs.add_instrument("FIC", 303, on=ft303, at="E", offset=70, variant="shared")
+    ft303 = fs.add_instrument("FT", flow303, on=fe303, at="N", offset=90)
+    fic303 = fs.add_instrument("FIC", flow303, on=ft303, at="E", offset=70, variant="shared")
     fic303.nozzle("sig_out", "E")  # the valve it strokes stands below and right
     fs.connect(ft303.sig_out, fic303.pv, kind="electric")
     fs.connect(tic302.sig_out, fic303.sig_in, kind="software")
@@ -1165,16 +1186,16 @@ def _ethanol_pid() -> Flowsheet:
     # controller, so it needs four faces: the high alarm takes the north, the
     # measurement comes in from the west, the output leaves south onto the
     # actuator and the low alarm takes the east.
-    lt304 = fs.add_instrument("LT", 304, on=drum, at="E", offset=60)
+    lt304 = fs.add_instrument("LT", level304, on=drum, at="E", offset=60)
     lic304_row_y = 403.0
     cv305_top = dist_y - port_offset(st305.control, "inlet")[1]
     lic304 = fs.add_instrument(
-        "LIC", 304, on=st305.control, at="N", variant="shared", offset=cv305_top - lic304_row_y
+        "LIC", level304, on=st305.control, at="N", variant="shared", offset=cv305_top - lic304_row_y
     )
     lic304.nozzle("sig_in", "W")
     lic304.nozzle("sig_out", "S")
-    fs.add_instrument("LAH", 304, on=lic304, at="N", offset=46, variant="shared")
-    fs.add_instrument("LAL", 304, on=lic304, at="E", offset=46, variant="shared")
+    fs.add_instrument("LAH", level304, on=lic304, at="N", offset=46, variant="shared")
+    fs.add_instrument("LAL", level304, on=lic304, at="E", offset=46, variant="shared")
     # Teed off the measurement rather than hung on an alarm: an alarm host would
     # draw the alarm as driving the trip.
     level = fs.connect(lt304.sig_out, lic304.sig_in, kind="electric")
@@ -1183,8 +1204,8 @@ def _ethanol_pid() -> Flowsheet:
 
     # Loop 307: reboiler return temperature on the steam valve. The trip goes on
     # the transmitter, which keeps working when the loop is put on manual.
-    tt307 = fs.add_instrument("TT", 307, on=sump, at=0.05, offset=85, angle=-90)
-    tic307 = fs.add_instrument("TIC", 307, on=tt307, at="W", offset=96, variant="shared")
+    tt307 = fs.add_instrument("TT", temp307, on=sump, at=0.05, offset=85, angle=-90)
+    tic307 = fs.add_instrument("TIC", temp307, on=tt307, at="W", offset=96, variant="shared")
     tic307.nozzle("sig_out", "S")
     fs.add_instrument("TI", 321, on=boilup, at=0.05, offset=70, angle=-90)
     fs.add_instrument("Z", 1, on=tt307, at="N", offset=40, variant="sis")
@@ -1192,8 +1213,8 @@ def _ethanol_pid() -> Flowsheet:
     fs.connect(tic307.sig_out, st308.control.actuator, kind="pneumatic")
 
     # Loop 306: kettle level on the bottoms draw.
-    lt306 = fs.add_instrument("LT", 306, on=reb, at="S", offset=68)
-    lic306 = fs.add_instrument("LIC", 306, on=lt306, at="E", offset=56, variant="shared")
+    lt306 = fs.add_instrument("LT", level306, on=reb, at="S", offset=68)
+    lic306 = fs.add_instrument("LIC", level306, on=lt306, at="E", offset=56, variant="shared")
     lic306.nozzle("sig_out", "E")
     fs.add_instrument("Z", 1, on=lt306, at="W", offset=44, variant="sis")
     fs.connect(lt306.sig_out, lic306.sig_in, kind="electric")
