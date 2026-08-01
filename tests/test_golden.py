@@ -1500,7 +1500,7 @@ def _tank_farm() -> Flowsheet:
     nrv601.pin(port="inlet", x=875, y=ms_disch_y)
 
     hv603.pin(port="inlet", x=785, y=eth_run_y)
-    sb601.pin(port="inlet", x=832, y=eth_run_y)
+    sb601.pin(port="inlet", x=845, y=eth_run_y)
     t_rec.pin(port="inlet", x=870, y=eth_run_y)
     st602.pin(port="inlet", x=896, y=eth_run_y)
     p602.pin(port="suction", x=940, y=eth_run_y)
@@ -1512,9 +1512,9 @@ def _tank_farm() -> Flowsheet:
     rec_branch_x = t_rec.pin_.x + port_offset(t_rec, "branch")[0]
     psv602.pin(port="inlet", x=rec_branch_x, y=psv_run_y)
 
-    hv605.pin(port="inlet", x=1190, y=lpg_run_y)
-    pcv606.pin(port="inlet", x=1255, y=lpg_run_y)
-    hv608.pin(port="inlet", x=1340, y=lpg_run_y)
+    hv605.pin(port="inlet", x=1250, y=lpg_run_y)
+    pcv606.pin(port="inlet", x=1310, y=lpg_run_y)
+    hv608.pin(port="inlet", x=1390, y=lpg_run_y)
     lpg_out.pin(port="inlet", x=1560, y=lpg_run_y)
 
     blend_y = ms_disch_y

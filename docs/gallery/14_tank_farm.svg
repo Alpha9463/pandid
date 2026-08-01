@@ -222,7 +222,7 @@
     <use href="#sym_reducer_concentric_exp" x="795" y="638.8" width="12.5" height="12.5" />
     <use href="#sym_valve_check" x="874.3" y="637.2" width="24.6" height="15.5" />
     <use href="#sym_valve_gate" x="785" y="502.5" width="24.5" height="15.0" />
-    <use href="#sym_fitting_blind" x="832" y="495" width="10.0" height="40.0" />
+    <use href="#sym_fitting_blind" x="845" y="495" width="10.0" height="40.0" />
     <use href="#sym_tee" x="870" y="504" width="12.0" height="12.0" />
     <use href="#sym_fitting_strainer_y" x="896" y="505.1" width="25.0" height="17.0" />
     <use href="#sym_tee" x="1060" y="504" width="12.0" height="12.0" />
@@ -230,9 +230,9 @@
     <use href="#sym_fitting_coriolis" x="1080" y="497.5" width="25.0" height="25.0" />
     <use href="#sym_valve_control" x="1140" y="502.5" width="24.5" height="15.0" />
     <use href="#sym_valve_check" x="1179.3" y="502.2" width="24.6" height="15.5" />
-    <use href="#sym_valve_gate" x="1190" y="382.5" width="24.5" height="15.0" />
-    <use href="#sym_valve_regulator" x="1255" y="373.9" width="24.5" height="23.5" />
-    <use href="#sym_valve_ball" x="1340" y="382.5" width="24.5" height="15.0" />
+    <use href="#sym_valve_gate" x="1250" y="382.5" width="24.5" height="15.0" />
+    <use href="#sym_valve_regulator" x="1310" y="373.9" width="24.5" height="23.5" />
+    <use href="#sym_valve_ball" x="1390" y="382.5" width="24.5" height="15.0" />
     <use href="#sym_tee" x="1220" y="639" width="12.0" height="12.0" transform="translate(0, 1290) scale(1, -1)" />
     <use href="#sym_fitting_positive_displacement" x="1340" y="637.5" width="25.0" height="15.0" />
     <use href="#sym_valve_control" x="1400" y="637.5" width="24.5" height="15.0" />
@@ -258,8 +258,8 @@
     <path d="M 807.5,645.0 L 875.0,645.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 898.9,645.0 L 1220.0,645.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 770.0,355.0 L 770.0,510.0 L 785.0,510.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 809.5,510.0 L 832.0,510.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 842.0,510.0 L 870.0,510.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 809.5,510.0 L 845.0,510.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 855.0,510.0 L 870.0,510.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 882.0,510.0 L 896.0,510.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 921.0,510.0 L 940.0,510.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 988.0,510.0 L 1060.0,510.0" fill="none" stroke="black" stroke-width="2" />
@@ -269,10 +269,10 @@
     <path d="M 1203.8999999999999,510.0 L 1226.0,510.0 L 1226.0,639.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1066.0,516.0 L 1066.0,600.0 L 876.0,600.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 876.0,577.9 L 876.0,516.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1160.0,365.0 L 1160.0,390.0 L 1190.0,390.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1214.5,390.0 L 1255.0,390.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1279.5,390.0 L 1340.0,390.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1364.5,390.0 L 1560.0,390.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1160.0,365.0 L 1160.0,390.0 L 1250.0,390.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1274.5,390.0 L 1310.0,390.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1334.5,390.0 L 1390.0,390.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1414.5,390.0 L 1560.0,390.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1232.0,645.0 L 1340.0,645.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1365.0,645.0 L 1400.0,645.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1424.5,645.0 L 1460.0,645.0" fill="none" stroke="black" stroke-width="2" />
@@ -313,10 +313,8 @@
     <text x="1006.0" y="559.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">ETH-607-80-40-SS</text>
     <rect x="948.4" y="583.0" width="105.2" height="13.0" fill="white" />
     <text x="1001.0" y="589.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">ETH-613-40-40-SS</text>
-    <rect x="1068.4" y="394.0" width="105.2" height="13.0" fill="white" />
-    <text x="1121.0" y="400.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">LPG-608-80-80-CS</text>
-    <line x1="1167.1" y1="394.0" x2="1171.1" y2="390.0" stroke="black" stroke-width="1" />
-    <path d="M 1171.1,390.0 L 1169.0,396.4 L 1164.7,392.1 Z" fill="black" />
+    <rect x="1140.4" y="394.0" width="105.2" height="13.0" fill="white" />
+    <text x="1193.0" y="400.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">LPG-608-80-80-CS</text>
     <rect x="1230.3" y="615.0" width="111.4" height="13.0" fill="white" />
     <text x="1286.0" y="621.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">E10-609-200-40-CS</text>
     <rect x="1019.3" y="768.5" width="111.4" height="13.0" fill="white" />
@@ -418,8 +416,8 @@
     <text x="886.5999999999999" y="627.2" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">NRV-601</text>
     <rect x="773.5" y="480.5" width="47.6" height="15.0" fill="white" />
     <text x="797.25" y="492.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HV-603</text>
-    <rect x="813.2" y="473.0" width="47.6" height="15.0" fill="white" />
-    <text x="837.0" y="485.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">SB-601</text>
+    <rect x="826.2" y="473.0" width="47.6" height="15.0" fill="white" />
+    <text x="850.0" y="485.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">SB-601</text>
     <rect x="884.7" y="483.1" width="47.6" height="15.0" fill="white" />
     <text x="908.5" y="495.1" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">ST-602</text>
     <rect x="893.5" y="581.4" width="54.2" height="15.0" fill="white" />
@@ -430,12 +428,12 @@
     <text x="1152.25" y="532.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CV-605</text>
     <rect x="1176.5" y="480.2" width="54.2" height="15.0" fill="white" />
     <text x="1203.6" y="492.2" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">NRV-602</text>
-    <rect x="1178.5" y="405.0" width="47.6" height="15.0" fill="white" />
-    <text x="1202.25" y="412.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">HV-605</text>
-    <rect x="1240.2" y="351.9" width="54.2" height="15.0" fill="white" />
-    <text x="1267.25" y="363.9" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">PCV-606</text>
-    <rect x="1328.5" y="360.5" width="47.6" height="15.0" fill="white" />
-    <text x="1352.25" y="372.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HV-608</text>
+    <rect x="1238.5" y="360.5" width="47.6" height="15.0" fill="white" />
+    <text x="1262.25" y="372.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HV-605</text>
+    <rect x="1295.2" y="351.9" width="54.2" height="15.0" fill="white" />
+    <text x="1322.25" y="363.9" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">PCV-606</text>
+    <rect x="1378.5" y="360.5" width="47.6" height="15.0" fill="white" />
+    <text x="1402.25" y="372.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HV-608</text>
     <rect x="1328.7" y="660.0" width="47.6" height="15.0" fill="white" />
     <text x="1352.5" y="667.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FE-604</text>
     <rect x="1388.5" y="660.0" width="47.6" height="15.0" fill="white" />
