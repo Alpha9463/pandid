@@ -32,7 +32,7 @@ _DIAMOND_BALLOONS = {"sis", "logic", "interlock"}
 # rows 2-5), a square around it in the shared display (column B), a hexagon in a
 # computer (column C) and a diamond in a logic solver (column D and Table 5.1.2).
 # Only a thing in the field can have process fluid piped to it, which is what
-# decides whether the line reaching it is impulse tubing; see :func:`_impulse`.
+# decides whether the line reaching it is impulse tubing; see :func:`impulse_tap`.
 #
 # Named positively so a location symbol added later is out rather than in. A
 # dashed line claims the less of the two, and the drawing that is wrong the
@@ -70,6 +70,12 @@ _SIGNAL_STROKE = 1
 #: an electric signal look like".
 _SIGNAL_DASH = {"electric": "7,4", "data": "9,3,2,3", "software": "9,3,2,3",
                 "capillary": "3,3"}
+
+#: The dash a tap line is drawn with where what it carries is a measurement or a
+#: command rather than process fluid; an impulse line is solid. See
+#: :meth:`SvgRenderer._draw_taps` and :func:`impulse_tap`. Here beside the signal
+#: dashes and for the same reason: the export writes this one too.
+_TAP_DASH = "5,4"
 
 # --- stream-label placement -------------------------------------------------
 # A stream label is written on an opaque halo, so it can only sit *on* the pipe
@@ -187,14 +193,21 @@ class _Ink(NamedTuple):
         return (self.x0, self.y0, self.x1, self.y1)
 
 
-def _tap_lines(fs):
-    """Every impulse line the sheet draws, as ``(tap point, balloon centre)``.
+def tap_lines(fs):
+    """Every impulse line the sheet draws, as ``(instrument, tap point, balloon
+    centre)``.
 
     The line from a tap to the balloon reading it, and the rule for when there
     is one at all: nothing is drawn where a stream already joins the two, or
     where the element sits directly on the line (``offset=0``). Shared by the
     drawing pass and by label placement, so a label cannot be placed against an
     impulse line the renderer then declines to draw, or over one it does.
+
+    Shared with the draw.io exporter for the reason :func:`stream_polyline` is:
+    these are the only lines on a P&ID that are not streams, so an exporter that
+    walked ``fs.streams`` alone dropped every one of them and left all 26 of
+    ``11_ethanol_pid``'s balloons floating unconnected. There is one derivation
+    of where a tap line runs, and this is it.
     """
     from pandid.layout.attach import is_attached
 
@@ -214,7 +227,7 @@ def _tap_lines(fs):
     return out
 
 
-def _impulse(inst) -> bool:
+def impulse_tap(inst) -> bool:
     """Is the line between *inst* and its host a length of impulse tubing?
 
     The question is about the **edge**, not about the class of either thing on
@@ -279,7 +292,7 @@ def _ink(fs) -> "list[_Ink]":
         points = stream_path(s)
         for a, b in zip(points, points[1:]):
             add(a, b, pad, "pipe")
-    for _u, tap, centre in _tap_lines(fs):
+    for _u, tap, centre in tap_lines(fs):
         add(tap, centre, float(_SIGNAL_STROKE), "tap")
     return out
 
@@ -615,6 +628,126 @@ def stream_polyline(s) -> "list[tuple[float, float]]":
         simplified.append(p_curr)
     simplified.append(points[-1])
     return simplified
+
+
+#: How deep the point of an off-page flag is cut back from the end of its
+#: rectangle, and how far the pennant is inset inside the flag's box, top and
+#: bottom -- less where an off-page reference has to be written under the tag,
+#: since two lines need a taller flag than one.
+FLAG_POINT = 15
+_FLAG_INSET, _FLAG_INSET_REF = 15, 12
+
+
+class Pennant(NamedTuple):
+    """The off-page flag a Feed or a Product is drawn as.
+
+    ``box`` is the rectangle the pennant occupies, ``point`` how deep its point
+    is cut back from the end, and ``east`` which end that point is on.
+    """
+    box: tuple[float, float, float, float]
+    point: float
+    east: bool
+
+
+def boundary_flag(u, frame) -> Pennant:
+    """The pennant an off-page flag is drawn as.
+
+    A rectangle with one end drawn to a point at mid-height, pointing the way
+    the stream runs: east out of a Feed, east into a Product, and west for
+    either where the placement mirrors it. The point is where the line meets
+    the flag on a Feed and the blunt end is where it meets a Product, which is
+    why both point the same way.
+
+    Two things about the rectangle are worth having written down once rather
+    than measured twice. It spans the *whole* of :func:`~pandid.portgeom.unit_box`
+    horizontally -- a Feed's box extends left from its port, which is the one
+    place in the library where that is true -- and it is inset top and bottom,
+    so the flag is 26 units of a 50-unit box and not the box. An exporter that
+    took the box for the drawing would draw a flag twice the height the sheet
+    rules it at.
+
+    Nothing here reads ``header``: a utility header flag is the same pennant as
+    an off-page reference, drawn at each tap of the service, and what tells the
+    two apart on a sheet is the label rather than the outline.
+
+    Shared with the draw.io exporter, for the reason :func:`stream_polyline` is.
+
+    The horizontal extent is :func:`~pandid.portgeom.unit_box`'s and is written
+    out again rather than read from it, for one reason and no other: this
+    function's arithmetic is what the sheet's polygon is *formatted from*, and
+    ``unit_box``'s ``50.0`` would write a whole-number coordinate as ``100.0``
+    where the sheet has always written ``100``. The two agree on the number,
+    which ``test_a_flag_is_drawn_across_its_own_box`` pins over every placement.
+    """
+    inset = _FLAG_INSET_REF if (getattr(u, "reference", "") or "") else _FLAG_INSET
+    if u.kind == "feed" and not frame.mirrored:
+        x0, x1 = frame.x + 50 - frame.w, frame.x + 50
+    else:
+        x0, x1 = frame.x, frame.x + frame.w
+    return Pennant((x0, frame.y + inset, x1, frame.y + (50 - inset)),
+                   FLAG_POINT, not frame.mirrored)
+
+
+#: Where the two strokes of a pneumatic double cross-hatch sit *along* the run,
+#: relative to the mark's own point, and how far each reaches across it. The
+#: stroke leans: 6 units along by 10 across, which is what makes it a slash
+#: rather than a tick and what tells a pneumatic line from anything drawn with a
+#: perpendicular mark.
+HATCH_ALONG = (-2.5, 1.5)
+HATCH_ARM = (3.0, 5.0)
+
+
+class Hatch(NamedTuple):
+    """One double cross-hatch on a pneumatic line.
+
+    ``along`` is how far down the line the mark sits, by the same Euclidean arc
+    length ``mxGraphView.getPoint`` measures a relative child of an edge by. It
+    is here rather than being recovered from ``(x, y)`` because a point cannot
+    always be found again: an orthogonal route that doubles back passes through
+    the same neighbourhood twice, and a mark on the second pass matched against
+    the first would be hung on the wrong part of the line.
+    """
+    x: float
+    y: float
+    horizontal: bool
+    along: float
+
+
+def pneumatic_marks(points) -> "list[Hatch]":
+    """Every double cross-hatch a pneumatic line is marked with.
+
+    ISA-5.1 draws a pneumatic signal as a *solid* line marked with double
+    cross-hatches, so the hatch is the only thing telling it apart from process
+    piping. One mark per 45px alone leaves a short run (a transducer to the
+    actuator right beneath it) with none at all, reading as plain pipe. Any
+    segment with room for a mark gets at least one; longer segments keep the
+    45px spacing.
+
+    Shared with the draw.io exporter, which has no way to stroke a mark across a
+    line and hangs one on the edge instead, at these points. A second rule for
+    where the hatches fall would put the export's marks somewhere the sheet's
+    are not, which for a mark that is the *whole* of what identifies the line is
+    worse than a mark in a slightly different style.
+    """
+    out: list[Hatch] = []
+    walked = 0.0
+    for i in range(len(points) - 1):
+        (px1, py1), (px2, py2) = points[i], points[i + 1]
+        # Manhattan for the spacing rule, which is what the sheet has always
+        # counted marks by and what keeps this byte for byte the drawing it was;
+        # Euclidean for the distance, which is the one mxGraph measures a mark's
+        # place on an edge in. The two are the same number on an orthogonal
+        # segment and differ only on the sloping leg a nozzle sometimes needs.
+        seglen = abs(px2 - px1) + abs(py2 - py1)
+        span = math.hypot(px2 - px1, py2 - py1)
+        n = int(seglen // 45) or (1 if seglen >= 16 else 0)
+        horiz = abs(py1 - py2) < 0.1
+        for k in range(1, n + 1):
+            t = k / (n + 1)
+            out.append(Hatch(px1 + (px2 - px1) * t, py1 + (py2 - py1) * t,
+                             horiz, walked + span * t))
+        walked += span
+    return out
 
 
 def _arrowhead(start, end) -> str:
@@ -1294,12 +1427,18 @@ class SvgRenderer:
         Given a *sheet*, the frame is instead the fixed page inset by the border,
         and the drawing is fitted into the region the bands leave.
 
+        The band arithmetic itself is :func:`pandid.render.furniture.dock`'s,
+        which is a statement about a *sheet* rather than about SVG and is shared
+        with the draw.io exporter for that reason. What is left here is the
+        drawing: measure each box, hand the measurements to the dock, and stroke
+        whatever comes back where it says.
+
         Returns the outer canvas rect ``(x, y, w, h)`` and that free region
         ``(x, y, w, h)``, or ``None`` when the frame was grown to the drawing.
         """
-        from pandid.document import TitleBlock, TableBox, _ALIGN
+        from pandid.document import TitleBlock, TableBox
 
-        INNER, GAP, SEP, OUT = 26.0, 14.0, 18.0, 8.0
+        OUT = F.OUTER_MARGIN
 
         def measure(a):
             return F.measure_table(a) if isinstance(a, TableBox) else F.measure_annotation(a)
@@ -1318,98 +1457,24 @@ class SvgRenderer:
         date = tb.date or datetime.now().strftime("%Y-%m-%d")
         name = tb.title or fs.name
 
-        cols: dict[str, list] = {k: [] for k in _ALIGN}
-        positioned: list = []
-        for a in getattr(fs, "annotations", []) or []:
-            w, h = measure(a)
-            if a.position is not None:
-                positioned.append((a, a.position[0], a.position[1], w, h))
-            else:
-                cols[a.align].append((a, w, h))
+        items = [(a, a.align, *measure(a))
+                 for a in getattr(fs, "annotations", []) or []]
         if strip:
-            cols["bottom-right"].append((TITLE, ts_w, ts_h))
+            items.append((TITLE, "bottom-right", ts_w, ts_h))
         if st_layout:
-            cols["bottom-left"].append((STREAM, st_layout["w"], st_layout["h"]))
+            items.append((STREAM, "bottom-left", st_layout["w"], st_layout["h"]))
 
-        def stack_h(items):
-            return sum(h for _, _, h in items) + GAP * max(0, len(items) - 1)
-
-        def stack_w(items):
-            return max((w for _, w, _ in items), default=0.0)
-
-        def biggest(dim: int) -> str:
-            """Name the largest piece of furniture on the sheet along ``dim``
-            (1 = width, 2 = height), for an error that has to say which piece
-            will not fit rather than that something will not."""
-            items = [it for col in cols.values() for it in col]
-            if not items:
-                return ""
-            return _furniture_name(max(items, key=lambda it: it[dim])[0])
-
-        # --- band thicknesses -------------------------------------------------
-        top_h = max(stack_h(cols["top-left"]), stack_h(cols["top"]),
-                    stack_h(cols["top-right"]))
-        bottom_h = max(stack_h(cols["bottom-left"]), stack_h(cols["bottom"]),
-                       stack_h(cols["bottom-right"]))
-        left_w, right_w = stack_w(cols["left"]), stack_w(cols["right"])
-
-        def row_w(lk, ck, rk):
-            lw, cw, rw = stack_w(cols[lk]), stack_w(cols[ck]), stack_w(cols[rk])
-            side = (lw + SEP + rw) if (lw and rw) else max(lw, rw)
-            return max(side, cw)
-
-        band_w = max(row_w("top-left", "top", "top-right"),
-                     row_w("bottom-left", "bottom", "bottom-right"))
-
-        # --- frame rectangle --------------------------------------------------
-        if sheet is not None:
-            # A named page fixes the frame: the sheet inset by the zone band and
-            # the margin outside it, so the border rules to the sheet edges and
-            # the zone count does not drift with the drawing.
-            edge = OUT + F.ZONE_BAND
-            need_w = max(band_w, left_w + right_w + 2 * INNER)
-            need_h = max(top_h + bottom_h + 2 * INNER,
-                         stack_h(cols["left"]), stack_h(cols["right"]))
-            too_wide = need_w >= sheet.width - 2 * edge
-            if too_wide or need_h >= sheet.height - 2 * edge:
-                raise _too_small(sheet, need_w + 2 * edge, need_h + 2 * edge,
-                                 biggest(1 if too_wide else 2))
-            ix, iy = edge, edge
-            ixr, iyb = sheet.width - edge, sheet.height - edge
-        else:
-            ix = dx0 - INNER - left_w
-            iy = dy0 - INNER - top_h
-            ixr = dx1 + INNER + right_w
-            iyb = dy1 + INNER + bottom_h
-            extra = band_w - (ixr - ix)
-            if extra > 0:  # a wide band forces the frame wider than the drawing
-                ix -= extra / 2      # widen symmetrically → drawing stays centred
-                ixr += extra / 2
-            extra = max(stack_h(cols["left"]), stack_h(cols["right"])) - (iyb - iy)
-            if extra > 0:
-                iy -= extra / 2
-                iyb += extra / 2
-        iw, ih = ixr - ix, iyb - iy
-
-        # The bands are measured, so the region left for the drawing is settled
-        # and so is the ratio it will be placed at: the number the title strip's
-        # scale cell reports. A frame grown to the drawing has no fixed page and
-        # so no scale to state.
-        free = None if sheet is None else (
-            ix + left_w + INNER, iy + top_h + INNER,
-            iw - left_w - right_w - 2 * INNER, ih - top_h - bottom_h - 2 * INNER)
+        placed, (ix, iy, iw, ih), free = F.dock(
+            items, (dx0, dy0, dx1, dy1), sheet=sheet,
+            too_small=lambda need_w, need_h, culprit: _too_small(
+                sheet, need_w, need_h, _furniture_name(culprit) if culprit else ""))
+        # The scale cell reports the ratio the drawing was actually placed at,
+        # which the dock has just settled. A frame grown to the drawing has no
+        # fixed page and so no scale to state.
         fit = "" if free is None else _scale_text(
             _fit_scale(dx1 - dx0, dy1 - dy0, free))
 
-        # --- place each column flush to the frame -----------------------------
-        def x_for(mode, w, m):
-            if mode == "l":
-                return ix + m
-            if mode == "r":
-                return ixr - m - w
-            return ix + (iw - w) / 2  # centred on the frame
-
-        def place(obj, x, y, w, h):
+        for obj, x, y, w, h in placed:
             if obj is TITLE:
                 furniture.extend(
                     F.draw_title_strip(tb, name, date, x + w, y + h, fit_scale=fit,
@@ -1418,50 +1483,6 @@ class SvgRenderer:
                 furniture.extend(self._draw_stream_table(st_layout, x, y))
             else:
                 draw_box(obj, x, y)
-
-        def draw_top(items, mode):     # flush to the top edge, grow downward
-            y = iy
-            for obj, w, h in items:
-                m = getattr(obj, "margin", 0.0)
-                place(obj, x_for(mode, w, m), y + m, w, h)
-                y += m + h + GAP
-
-        def draw_bottom(items, mode):  # flush to the bottom edge, grow upward
-            y = iyb
-            for obj, w, h in reversed(items):
-                m = getattr(obj, "margin", 0.0)
-                top = y - m - h
-                place(obj, x_for(mode, w, m), top, w, h)
-                y = top - GAP
-
-        def draw_side(items, mode):    # flush to a side edge, vertically centred
-            y = (iy + iyb) / 2 - stack_h(items) / 2
-            for obj, w, h in items:
-                m = getattr(obj, "margin", 0.0)
-                place(obj, x_for(mode, w, m), y, w, h)
-                y += h + GAP
-
-        draw_top(cols["top-left"], "l")
-        draw_top(cols["top"], "c")
-        draw_top(cols["top-right"], "r")
-        draw_bottom(cols["bottom-left"], "l")
-        draw_bottom(cols["bottom"], "c")
-        draw_bottom(cols["bottom-right"], "r")
-        draw_side(cols["left"], "l")
-        draw_side(cols["right"], "r")
-        cy = (iy + iyb) / 2 - stack_h(cols["center"]) / 2  # dead-centre overlay
-        for obj, w, h in cols["center"]:
-            place(obj, ix + (iw - w) / 2, cy, w, h)
-            cy += h + GAP
-
-        # --- hand-placed boxes; expand the frame to keep them inside ----------
-        for a, px, py, w, h in positioned:
-            draw_box(a, px, py)
-            if sheet is not None:  # the page is fixed; absolute means absolute
-                continue
-            ix, iy = min(ix, px - INNER), min(iy, py - INNER)
-            ixr, iyb = max(ixr, px + w + INNER), max(iyb, py + h + INNER)
-        iw, ih = ixr - ix, iyb - iy
 
         # --- border around the frame, then the sheet edge ---------------------
         if border == "zone":
@@ -1828,7 +1849,7 @@ class SvgRenderer:
         the line (``offset=0``).
 
         Which of the two it is, is a question about the line and is asked of
-        both its ends: see :func:`_impulse`. It is emphatically *not* a question
+        both its ends: see :func:`impulse_tap`. It is emphatically *not* a question
         about the host's class, which is what this used to read, and answering
         the wrong question drew a signal as pipe on three of the shipped sheets.
 
@@ -1836,12 +1857,12 @@ class SvgRenderer:
         an instrument connection on the 0,25 rung, alongside the signal line and
         half the pipeline it taps. See :data:`_SIGNAL_STROKE`.
 
-        Which lines there are is :func:`_tap_lines`' answer, since label
+        Which lines there are is :func:`tap_lines`' answer, since label
         placement has to dodge exactly the ones this draws.
         """
         out = []
-        for u, (tx, ty), (cx, cy) in _tap_lines(fs):
-            dash = "" if _impulse(u) else ' stroke-dasharray="5,4"'
+        for u, (tx, ty), (cx, cy) in tap_lines(fs):
+            dash = "" if impulse_tap(u) else f' stroke-dasharray="{_TAP_DASH}"'
             out.append(f'    <line x1="{_num(tx)}" y1="{_num(ty)}" x2="{_num(cx)}" '
                        f'y2="{_num(cy)}" stroke="black" stroke-width="{_SIGNAL_STROKE}"{dash} />')
         return ['  <g id="instrument_taps">'] + out + ['  </g>'] if out else []
@@ -1849,24 +1870,20 @@ class SvgRenderer:
     def _draw_boundary(self, u, f, x, y, safe_name):
         """Feed / Product off-page connector flag, with an optional second line
         referencing the drawing the stream comes from / goes to."""
-        label_w = f.w
         ref = getattr(u, "reference", "") or ""
-        if u.kind == "feed":
-            if f.mirrored:
-                px0, px1, px2 = x + label_w, x + 15, x
-                tx = x + 15 + (label_w - 15) / 2
-            else:
-                px0, px1, px2 = x + 50 - label_w, x + 50 - 15, x + 50
-                tx = px0 + (label_w - 15) / 2
-        else:  # product
-            if f.mirrored:
-                px0, px1, px2 = x + label_w, x + 15, x
-                tx = x + 15 + (label_w - 15) / 2
-            else:
-                px0, px1, px2 = x, x + label_w - 15, x + label_w
-                tx = px0 + (label_w - 15) / 2
-        # slightly taller flag so two lines of text fit, centered on the port (y+25)
-        top, bot = (y + 12, y + 38) if ref else (y + 15, y + 35)
+        # The pennant's own geometry, which the draw.io exporter reads too; see
+        # :func:`boundary_flag`. Slightly taller where an off-page reference has
+        # to fit under the tag, and centred on the port either way (y + 25).
+        (bx0, top, bx1, bot), depth, east = boundary_flag(u, f)
+        label_w = f.w
+        # The tag goes in the flat part of the flag, not in the whole of it: the
+        # point is not paper a word can be written across.
+        if east:
+            px0, px1, px2 = bx0, bx1 - depth, bx1
+            tx = px0 + (label_w - depth) / 2
+        else:
+            px0, px1, px2 = bx1, bx0 + depth, bx0
+            tx = bx0 + depth + (label_w - depth) / 2
         points = f"{px0},{top} {px1},{top} {px2},{y + 25} {px1},{bot} {px0},{bot}"
         out = [f'    <polygon points="{points}" fill="transparent" stroke="black" stroke-width="2" />']
         if ref:
@@ -2246,35 +2263,20 @@ class SvgRenderer:
             )
 
             if s.kind == "pneumatic":
-                for i in range(len(points) - 1):
-                    (px1, py1), (px2, py2) = points[i], points[i + 1]
-                    seglen = abs(px2 - px1) + abs(py2 - py1)
-                    # ISA-5.1 draws a pneumatic signal as a *solid* line marked
-                    # with double cross-hatches, so the hatch is the only thing
-                    # telling it apart from process piping. One mark per 45px
-                    # alone leaves a short run (a transducer to the actuator
-                    # right beneath it) with none at all, reading as plain pipe.
-                    # Any segment with room for a mark gets at least one; longer
-                    # segments keep the 45px spacing.
-                    #
-                    # The mark is drawn at the weight of the line it marks. A
-                    # supplementary symbol on a connection is a graphical symbol
-                    # (ISO 15519-2 Annex A.1.09, pneumatic type 433A), and
-                    # ISO 15519-1 §11.1.3 puts a graphical symbol at 0,1 M, the
-                    # same rung the signal line itself sits on. A hatch heavier
-                    # than its own line would read as the weightier of the two.
-                    n = int(seglen // 45) or (1 if seglen >= 16 else 0)
-                    horiz = abs(py1 - py2) < 0.1
-                    for k in range(1, n + 1):
-                        t = k / (n + 1)
-                        mx, my = px1 + (px2 - px1) * t, py1 + (py2 - py1) * t
-                        for off in (-2.5, 1.5):
-                            if horiz:
-                                lines.append(f'    <line x1="{mx+off-3:.1f}" y1="{my+5:.1f}" '
-                                             f'x2="{mx+off+3:.1f}" y2="{my-5:.1f}" stroke="{color}" stroke-width="{_SIGNAL_STROKE}" />')
-                            else:
-                                lines.append(f'    <line x1="{mx-5:.1f}" y1="{my+off-3:.1f}" '
-                                             f'x2="{mx+5:.1f}" y2="{my+off+3:.1f}" stroke="{color}" stroke-width="{_SIGNAL_STROKE}" />')
+                # The mark is drawn at the weight of the line it marks. A
+                # supplementary symbol on a connection is a graphical symbol
+                # (ISO 15519-2 Annex A.1.09, pneumatic type 433A), and
+                # ISO 15519-1 §11.1.3 puts a graphical symbol at 0,1 M, the
+                # same rung the signal line itself sits on. A hatch heavier
+                # than its own line would read as the weightier of the two.
+                for mx, my, horiz, _at in pneumatic_marks(points):
+                    for off in HATCH_ALONG:
+                        if horiz:
+                            lines.append(f'    <line x1="{mx+off-3:.1f}" y1="{my+5:.1f}" '
+                                         f'x2="{mx+off+3:.1f}" y2="{my-5:.1f}" stroke="{color}" stroke-width="{_SIGNAL_STROKE}" />')
+                        else:
+                            lines.append(f'    <line x1="{mx-5:.1f}" y1="{my+off-3:.1f}" '
+                                         f'x2="{mx+5:.1f}" y2="{my+off+3:.1f}" stroke="{color}" stroke-width="{_SIGNAL_STROKE}" />')
 
         # Final pass: stream-number labels, each on a white halo so it reads
         # cleanly over any line that crosses beneath it.

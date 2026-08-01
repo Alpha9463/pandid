@@ -50,7 +50,7 @@ from pandid import Flowsheet, units
 from pandid.geometry import Route
 from pandid.layout.attach import MAX_PLACEMENT_PASSES, place_attached, stream_path
 from pandid.portgeom import port_anchor, port_point
-from pandid.render.svg import _tap_lines
+from pandid.render.svg import tap_lines
 from pandid.routing import DefaultRouter
 
 from test_golden import SCENARIOS
@@ -178,11 +178,11 @@ def test_nothing_is_drawn_diagonally(routed, name):
             if abs(x1 - x2) > TOL and abs(y1 - y2) > TOL:
                 sloping.append(f"{s.name} runs ({x1:.0f}, {y1:.0f}) -> ({x2:.0f}, {y2:.0f})")
     # The impulse line from a tap to the balloon reading it is drawn by a pass of
-    # its own, so it has to be swept by name or it is exempt. ``_tap_lines`` is
+    # its own, so it has to be swept by name or it is exempt. ``tap_lines`` is
     # the renderer's own answer to which taps are drawn at all -- it drops the
     # ones a stream already joins and the ones sitting on the line at
     # ``offset=0`` -- so what is checked here is exactly what lands on the sheet.
-    for inst, (x1, y1), (x2, y2) in _tap_lines(fs):
+    for inst, (x1, y1), (x2, y2) in tap_lines(fs):
         if abs(x1 - x2) > TOL and abs(y1 - y2) > TOL:
             sloping.append(f"{inst.name}'s tap runs ({x1:.0f}, {y1:.0f}) -> ({x2:.0f}, {y2:.0f})")
     assert not sloping, f"{name}: " + "; ".join(sloping)
