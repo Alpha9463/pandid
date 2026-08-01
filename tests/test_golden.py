@@ -130,8 +130,8 @@ def _distillation_train() -> Flowsheet:
     preheater.pin(x=520, port="tube_in", y=feed_run_y)
 
     col2.pin(x=1260, y=col_y)
-    ovhd_run_y = col_y - 160
-    drum_y = col_y - 75
+    ovhd_run_y = col_y - 130
+    drum_y = col_y - 105
     tee_y = col_y - 5
     bot_y = col_y + 225
     pump_y = bot_y + 85
@@ -139,15 +139,11 @@ def _distillation_train() -> Flowsheet:
     c1_axis = col1.pin_.x + port_offset(col1, "distillate")[0]
     c2_axis = col2.pin_.x + port_offset(col2, "distillate")[0]
 
-    c1_ovhd.pin(x=c1_axis + 80, port="tube_in", y=ovhd_run_y)
-    c2_ovhd.pin(x=c2_axis + 80, port="tube_in", y=ovhd_run_y)
+    c1_ovhd.pin(mirrored="y").pin(x=c1_axis, port="shell_in", y=ovhd_run_y)
+    c2_ovhd.pin(mirrored="y").pin(x=c2_axis, port="shell_in", y=ovhd_run_y)
 
-    c1_drum.nozzle("inlet", "N").pin(
-        port="inlet", x=c1_ovhd.pin_.x + port_offset(c1_ovhd, "tube_out")[0] + 60, y=drum_y
-    )
-    c2_drum.nozzle("inlet", "N").pin(
-        port="inlet", x=c2_ovhd.pin_.x + port_offset(c2_ovhd, "tube_out")[0] + 60, y=drum_y
-    )
+    c1_drum.nozzle("inlet", "N").pin(port="inlet", x=c1_axis + 200, y=drum_y)
+    c2_drum.nozzle("inlet", "N").pin(port="inlet", x=c2_axis + 200, y=drum_y)
 
     for tee, drum, prod, prod_x in (
         (c1_tee, c1_drum, c1_prod, 1070),
@@ -172,8 +168,8 @@ def _distillation_train() -> Flowsheet:
     fs.connect(feed_valve.outlet, preheater.tube_in)
     fs.connect(preheater.tube_out, col1.feed)
 
-    fs.connect(col1.distillate, c1_ovhd.tube_in)
-    fs.connect(c1_ovhd.tube_out, c1_drum.inlet)
+    fs.connect(col1.distillate, c1_ovhd.shell_in)
+    fs.connect(c1_ovhd.shell_out, c1_drum.inlet)
     fs.connect(c1_drum.outlet, c1_tee.inlet)
     fs.connect(c1_tee.outlet, col1.reflux_in, draw_as_recycle=True)
     fs.connect(c1_tee.branch, c1_prod.inlet)
@@ -183,8 +179,8 @@ def _distillation_train() -> Flowsheet:
     fs.connect(c1_reb.bottoms, pump1.suction)
     fs.connect(pump1.discharge, col2.feed)
 
-    fs.connect(col2.distillate, c2_ovhd.tube_in)
-    fs.connect(c2_ovhd.tube_out, c2_drum.inlet)
+    fs.connect(col2.distillate, c2_ovhd.shell_in)
+    fs.connect(c2_ovhd.shell_out, c2_drum.inlet)
     fs.connect(c2_drum.outlet, c2_tee.inlet)
     fs.connect(c2_tee.outlet, col2.reflux_in, draw_as_recycle=True)
     fs.connect(c2_tee.branch, c2_prod.inlet)
@@ -229,6 +225,7 @@ def _distillation_train() -> Flowsheet:
             Revision("B", "2026-07-01", "Issued for design", "AA", "JS", "RL"),
             Revision("C", "2026-07-12", "Added FV-200 recycle loop", "AA", "JS", "RL"),
             Revision("D", "2026-07-28", "Reflux and reboiler added", "AA", "JS", "RL"),
+            Revision("E", "2026-08-01", "Reflux drums raised", "AA", "JS", "RL"),
         ],
     )
     fs.add_annotation(equipment_list(fs, align="top-right"))
