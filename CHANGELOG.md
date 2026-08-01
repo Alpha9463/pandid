@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Export a sheet as a `.drawio` file.** `fs.to_drawio()`, and `.drawio` on
+  `fs.render()`, write the drawing as an editable draw.io / diagrams.net model:
+  every unit is a shape, every stream an edge between two of its connection
+  points. draw.io exports `.vsdx` natively, so this is also the route to Visio.
+
+  It references draw.io's shapes rather than emitting a tracing of them, which
+  is only possible because the symbols in this library *are* draw.io's P&ID
+  stencils (`NOTICE`). The key each one is filed under is derived from the
+  package on the stencil file's root element and the shape's own name, by
+  mxGraph's own rule, at the moment the artwork is converted — read out of the
+  XML and never written down, so a re-vendor cannot leave a reference naming a
+  shape that no longer exists. draw.io answers an unresolvable reference with a
+  plain rectangle and no error, so `tests/test_drawio.py` walks all 143 drawings
+  the registry can produce and holds every reference against the vendored
+  stencils, and checks every box, waypoint and connection point against what the
+  SVG renderer computes for the same sheet.
+
+  The fifteen symbols drawn here rather than vendored have no draw.io stencil
+  and are approximated with draw.io's *built-in* shapes, which cannot fail to
+  resolve: a balloon is a circle, a computer balloon a hexagon, an interlock a
+  diamond, a mixer a triangle, a tee a line, and the rest rectangles. Each
+  approximation names what it loses, and so do the four sheet details a model
+  has no room for — line jumps, pneumatic hatching, instrument tap lines and
+  searched label placement. Sheet furniture exports as labelled boxes below the
+  drawing. `docs/api.md` tabulates the lot.
+
+  **Not yet confirmed in draw.io.** The document is checked structurally and
+  geometrically here; nothing in the suite opens it.
+
+  Nothing about the SVG changes: `tests/golden/` and `docs/gallery/` are byte
+  for byte what they were, checked by regenerating both from a fresh render.
+
 ### Changed
 
 - **`examples/11_ethanol_pid` declares its control loops.** The README's lead

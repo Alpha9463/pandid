@@ -78,6 +78,15 @@ scripts/vendor_symbols.py. Port anchor positions are taken from each stencil's
 named <constraint> connections (or re-derived on the bounding-box edge) for
 this project's routing model.
 
+The same generated file carries, per symbol, the key draw.io's own stencil
+registry files that shape under -- "mxgraph.pid.valves.gate_valve" and so on --
+built from the package named on the stencil file's root element and the shape's
+own name, by the rule in mxGraph's mxStencilRegistry. Those keys are read off
+the Apache-2.0 stencils and so are covered by this section along with the
+geometry beside them. pandid/render/drawio.py writes them into an exported
+.drawio file, which is a diagram output: a reader who opens one is drawing with
+draw.io's stencils in draw.io, and nothing of the artwork is redistributed.
+
 The files under scripts/vendor_data/drawio/ are unmodified copies of the
 upstream stencils. Where a shape is drawn wrongly upstream, the correction is
 applied on the way through instead, from STENCIL_PATCHES in

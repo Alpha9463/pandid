@@ -62,6 +62,15 @@ _FIELD_BALLOONS = {"default"}
 _PROCESS_STROKE = 2
 _SIGNAL_STROKE = 1
 
+#: The dash a signal line is drawn with, per kind. A pneumatic line is absent
+#: because it is drawn *solid* and marked with cross-hatches instead, and a
+#: capillary's short dash is its own; the rest are the conventional ones. Held
+#: at module scope rather than inside the draw pass because the draw.io export
+#: has to write the same line: two tables of dashes is two answers to "what does
+#: an electric signal look like".
+_SIGNAL_DASH = {"electric": "7,4", "data": "9,3,2,3", "software": "9,3,2,3",
+                "capillary": "3,3"}
+
 # --- stream-label placement -------------------------------------------------
 # A stream label is written on an opaque halo, so it can only sit *on* the pipe
 # where the run is long enough to leave pipe showing at each end: the ARROWHEAD
@@ -568,6 +577,44 @@ def _leader(box, seg, occupied) -> "tuple[tuple, int]":
         if rank < score:
             best, score = lead, rank
     return best, score[0]
+
+
+def stream_polyline(s) -> "list[tuple[float, float]]":
+    """Every point one stream's line is drawn through, both ends included.
+
+    The route's waypoints are the middle of the answer and not the whole of it:
+    a route runs between two *anchors* on the units' bounding boxes, and what
+    gets drawn runs between the two nozzles those anchors stand for, which is
+    where a reader sees the pipe meet the equipment. So the ends come from
+    :func:`~pandid.portgeom.port_point` and the waypoints go in between.
+
+    Collinear middle points are dropped. The router emits a point per grid step
+    it turned at, and three points on one straight length are one segment drawn
+    in three pieces: harmless as ink, but not as *structure* -- every consumer
+    downstream of this asks how long a segment is (the stream label picks the
+    longest to write itself in, and a draw.io edge carries one waypoint per real
+    turn), and a run chopped into pieces answers wrongly.
+
+    Lifted out of the SVG renderer so the draw.io exporter draws the same line
+    rather than a second opinion about it. Two derivations of one polyline is
+    exactly the drift that would leave an exported sheet a few pixels off the
+    rendered one with nothing to say which was right.
+    """
+    from pandid.portgeom import port_point
+
+    src_u, dst_u = s.source.owner, s.dest.owner
+    start = port_point(src_u, src_u.frame, s.source.name)
+    end = port_point(dst_u, dst_u.frame, s.dest.name)
+    points = [start] + list(s.route.waypoints if s.route and s.route.waypoints else []) + [end]
+
+    simplified = [points[0]]
+    for i in range(1, len(points) - 1):
+        p_prev, p_curr, p_next = simplified[-1], points[i], points[i + 1]
+        if (p_prev[0] == p_curr[0] == p_next[0]) or (p_prev[1] == p_curr[1] == p_next[1]):
+            continue
+        simplified.append(p_curr)
+    simplified.append(points[-1])
+    return simplified
 
 
 def _arrowhead(start, end) -> str:
@@ -2122,23 +2169,11 @@ class SvgRenderer:
         :func:`pandid.render.debug.overlay`. Left ``None`` nothing is collected
         and nothing about the render changes.
         """
-        from pandid.portgeom import port_point, unit_box
+        from pandid.portgeom import unit_box
 
         stream_geoms, horizontals, verticals = [], [], []
         for s in fs.streams:
-            src_u, dst_u = s.source.owner, s.dest.owner
-            sx, sy = port_point(src_u, src_u.frame, s.source.name)
-            dx, dy = port_point(dst_u, dst_u.frame, s.dest.name)
-            points = [(sx, sy)] + (s.route.waypoints if s.route and s.route.waypoints else []) + [(dx, dy)]
-
-            simplified = [points[0]]
-            for i in range(1, len(points) - 1):
-                p_prev, p_curr, p_next = simplified[-1], points[i], points[i + 1]
-                if (p_prev[0] == p_curr[0] == p_next[0]) or (p_prev[1] == p_curr[1] == p_next[1]):
-                    continue
-                simplified.append(p_curr)
-            simplified.append(points[-1])
-            points = simplified
+            points = stream_polyline(s)
             stream_geoms.append((s, points))
             for i in range(len(points) - 1):
                 x1, y1 = points[i]
@@ -2151,8 +2186,6 @@ class SvgRenderer:
         lines = ['  <g id="streams">']
         labeled_names: set = set()
         label_items: list = []   # (tx, ty, name, color); drawn last, over every line
-        _SIGNAL_DASH = {"electric": "7,4", "data": "9,3,2,3", "software": "9,3,2,3",
-                        "capillary": "3,3"}
         for s, points in stream_geoms:
             color = s.color or "black"
             marker_id = f'arrow_{color.replace("#", "").replace(" ", "_")}'

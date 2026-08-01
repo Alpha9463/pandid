@@ -318,3 +318,33 @@ def shapes_in(xml_path):
     root = ET.fromstring(open(xml_path, encoding="utf-8").read())
     for sh in root.findall("shape"):
         yield sh.get("name", "?"), sh
+
+
+def stencil_namespace(xml_path):
+    """The package draw.io files this stencil set's shapes under.
+
+    The set names itself on its own root element -- ``valves.xml`` opens
+    ``<shapes name="mxGraph.pid.valves">`` -- and that name is half of the key
+    draw.io's stencil registry answers to, the shape's own name being the other
+    half. Read here rather than written down anywhere, because a stencil file
+    that were re-vendored under a different package would then rename its shapes
+    with it, and a hard-coded package would go on naming shapes that no longer
+    exist. The failure that would cause is silent at the far end: draw.io falls
+    back to a plain rectangle for a name it cannot resolve, so the export would
+    still open and would simply have stopped being a P&ID.
+
+    The case is not normalised here. draw.io lowercases the whole key when it
+    registers a shape, and this library's own copies are inconsistent about it
+    (thirteen files say ``mxGraph.pid.*`` and ``agitators.xml`` says
+    ``mxgraph.pid.*``), so the fold belongs with the key that is built out of
+    this, not with the reading of it.
+    """
+    root = ET.fromstring(open(xml_path, encoding="utf-8").read())
+    name = root.get("name")
+    if not name:
+        raise ValueError(
+            f"{xml_path}: the stencil set names no package on its root element, "
+            f"so there is nothing to file its shapes under. draw.io reads that "
+            f"name off <shapes name=...> and keys every shape in the file by it."
+        )
+    return name
