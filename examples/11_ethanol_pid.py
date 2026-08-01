@@ -560,11 +560,14 @@ def main():
     # issued one: there LIC-304 sets the setpoint of FIC-305, and FIC-305 --
     # reading FT-305 off FE-305 -- strokes CV-305. The valve carries 305 because
     # it belongs to that slave loop, not because a final element takes a number
-    # of its own. Drawing the cascade needs a second signal into FIC-305 on top
-    # of its measurement, which is the connection an Instrument cannot yet take
-    # (see the sig_in/sig_out pool); until it can, the master is wired to the
-    # valve and the number is left as the issued sheet writes it. The same
-    # shortening is taken on TIC-307/CV-308 below.
+    # of its own. Nothing in the library stands in the way of the full cascade:
+    # loop 303 above is one, and its slave spends all three of an Instrument's
+    # ports at once -- pv for the measurement, sig_in for the master's setpoint,
+    # sig_out for the valve -- which is exactly what FIC-305 would need. What
+    # this sheet leaves out is loops 305 and 308 themselves, balloons and
+    # elements and all, so the master is wired to the valve and the valve keeps
+    # the number the issued sheet gives it. The same shortening is taken on
+    # TIC-307/CV-308 below.
     fs.connect(lic304.sig_out, st305.control.actuator, kind="pneumatic")
 
     # --- Loop 307: reboiler return temperature on the steam valve ---------
