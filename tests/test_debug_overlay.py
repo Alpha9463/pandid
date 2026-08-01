@@ -1,14 +1,19 @@
-"""``debug=``: the coordinate overlay, and the two things that make it safe.
+"""``debug=``: the coordinate overlay, and the three things that make it safe.
 
 The overlay exists so an author can read a placement off the sheet and type it
-back into ``pin()``. Two properties decide whether it does that or actively
-misleads, and both are checked here rather than left to the golden sheet:
+back into ``pin()``. Three properties decide whether it does that or actively
+misleads, and all three are checked here rather than left to the golden sheet:
 
 **The numbers are drawing coordinates.** A sheet with a fixed ``page_size``
 puts the whole drawing under a uniform fit scale, and an overlay drawn outside
 that group -- or drawn in page units inside it -- would write numbers that are
 not the ones ``pin()`` takes. Getting this wrong makes the feature worse than
 absent: it would teach the wrong coordinate system and be believed.
+
+**The numbers can be read, and belong to something.** The overlay is drawn
+under the sheet, so a label written where a halo lands is a label that is not
+there. One written clear of every halo but two nozzles away from its own is
+worse still. See the last two sections.
 
 **Off leaves no trace.** ``tests/test_golden.py`` compares the corpus byte for
 byte, and every scenario but ``02`` draws with the overlay off; that is the real
@@ -24,6 +29,9 @@ import pytest
 from pandid import Flowsheet, units as U
 from pandid.render import debug as D
 from pandid.render.export import flatten
+
+from test_halo_invariants import _halos, _overlaps
+from test_label_invariants import CORPUS, _RENDER_OPTS
 
 SVG = "{http://www.w3.org/2000/svg}"
 
@@ -290,3 +298,163 @@ def test_a_feed_flag_is_drawn_left_of_the_point_that_pins_it():
     assert any(x < 60 and x + w > 60 for x, w in boxes), (
         "the feed's outline should straddle the point that pinned it"
     )
+
+
+# ---------------------------------------------------------------------------
+# ...and the words can be read once they are there
+# ---------------------------------------------------------------------------
+#
+# The overlay is drawn *under* the sheet, so every opaque white halo the
+# renderer lays down paints over it, and #200 placed the port labels without
+# ever asking where those halos were. On this module's own sheet the E-1 tag's
+# halo took the leading "s" off "shell_in 240,100"; over the corpus it took a
+# bite out of 174 of the 830 labels the overlay writes, and 313 of them were
+# written on top of one another. Both are one defect -- placement that has not
+# been told what is already on the paper -- and the fix is one placement pass,
+# run against the finished sheet. See :mod:`pandid.render.debug`.
+
+
+def _placed(svg: str) -> "list[tuple[tuple[float, float, float, float], str]]":
+    """Every overlay label on a rendered sheet, as the paper it covers.
+
+    The axis coordinates are left out: they are not placed, they name a grid
+    line and go where it is, so they are an obstacle to the rest rather than one
+    of them.
+    """
+    out = []
+    for t in _group(svg).iter(f"{SVG}text"):
+        if t.get("fill") == D._NUMBER:
+            continue
+        lead = 1.0 if t.get("text-anchor") == "start" else -1.0
+        out.append(
+            (
+                D._box(
+                    float(t.get("x")),
+                    float(t.get("y")),
+                    t.text or "",
+                    float(t.get("font-size")),
+                    lead,
+                ),
+                t.text or "",
+            )
+        )
+    return out
+
+
+def test_a_port_label_is_not_written_under_the_unit_tags_halo():
+    """The defect, named: ``shell_in`` against ``E-1``'s opaque tag plate.
+
+    Both want the paper just above the exchanger's top-left corner, the tag is
+    drawn last and on white, and the overlay is drawn first -- so the tag won and
+    the port label lost its first character to it.
+    """
+    svg = _sheet().to_svg(debug=True)
+    halos = _halos(svg)
+    shell_in = [b for b, text in _placed(svg) if text.startswith("shell_in")]
+    assert shell_in, "the exchanger's shell_in port is not labelled at all"
+    for box in shell_in:
+        assert not [h for h in halos if _overlaps(box, h)], (
+            "shell_in is written under an opaque halo and loses characters to it"
+        )
+
+
+#: How many labels a sheet is allowed to leave sitting under something. Zero
+#: everywhere the drawing has room, which is eleven of the thirteen sheets
+#: swept; the two below are where it genuinely runs out.
+#:
+#: ``11_ethanol_pid`` writes 364 labels on a forty-unit P&ID whose markers are
+#: twenty units apart and whose labels are sixty units long, so some of them
+#: have nowhere at all to go: 35 do not come out clear, against 313 before.
+#: ``12_block_flow_diagram`` names its blocks in words rather than in tags, so
+#: two of its labels are longer than the block they belong to. Both carry
+#: headroom, because the point of the numbers is to catch a placement that has
+#: stopped working rather than to pin the corpus to what it draws today.
+_CROWDED = {"11_ethanol_pid": 50, "12_block_flow_diagram": 4}
+
+
+@pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
+def test_the_overlay_writes_where_the_sheet_left_it_room(name):
+    """No overlay label under a halo, and no two of them on top of each other.
+
+    One sweep for both, because they are one defect: a label that has not been
+    told where the plates and the other labels are lands on whichever it meets
+    first. The obstacles are read out of the drawn SVG rather than off the
+    placement code, for the reason ``test_halo_invariants`` reads them there --
+    what the invariant is about is what lands on the paper.
+    """
+    fs, kwargs = CORPUS[name]()
+    svg = fs.to_svg(**{k: v for k, v in kwargs.items() if k in _RENDER_OPTS}, debug=True)
+    halos, labels = _halos(svg), _placed(svg)
+    buried = [
+        text
+        for i, (box, text) in enumerate(labels)
+        if any(_overlaps(box, h) for h in halos)
+        or any(_overlaps(box, other) for j, (other, _) in enumerate(labels) if j != i)
+    ]
+    assert len(buried) <= _CROWDED.get(name, 0), (
+        f"{name}: {len(buried)} of {len(labels)} overlay labels are written under a "
+        f"halo or over another label, e.g. {buried[:5]}"
+    )
+
+
+def test_a_label_that_had_to_move_is_joined_to_the_marker_it_names():
+    """Letting the words walk is only safe because of this line.
+
+    A coordinate that has stepped clear of a halo has also stepped away from its
+    own dot, and on a crowded sheet the next dot along is nearer. A label read
+    against the wrong nozzle is worse than one that cannot be read at all,
+    because it is a number that gets typed into ``pin()``. So anything written
+    more than a couple of lines from its marker carries a hairline back to it.
+    """
+    svg = _sheet().to_svg(debug=True)
+    g = _group(svg)
+    (shell_in,) = [b for b, text in _placed(svg) if text.startswith("shell_in")]
+    dots = {(float(c.get("cx")), float(c.get("cy"))) for c in g.iter(f"{SVG}circle")}
+    assert (240.0, 300.0) in dots
+    # That nozzle is at the middle of the box's top edge, which is exactly where
+    # the renderer centres the unit's own tag, so this is a label that has to
+    # move -- and having moved, it has to say where it came from.
+    assert shell_in[0] > 240.0 + 2 * D._MARK_SIZE
+    assert [
+        ln
+        for ln in g.iter(f"{SVG}line")
+        if ln.get("stroke") == D._PORT
+        and (float(ln.get("x1")), float(ln.get("y1"))) == (240.0, 300.0)
+    ], "a port label written clear of its own dot is not joined back to it"
+
+
+def test_a_label_still_against_its_own_marker_is_left_alone():
+    """The other half of that rule. A tether saying what the eye already had is
+    clutter, so one is drawn only where the words have actually gone somewhere."""
+    fs = Flowsheet("plain")
+    feed = fs.add(U.Feed("F-1")).pin(x=60, y=105)
+    prod = fs.add(U.Product("P-1")).pin(x=430, y=105)
+    fs.connect(feed.outlet, prod.inlet)
+    g = _group(fs.to_svg(debug=True))
+    assert [b for b, text in _placed(fs.to_svg(debug=True)) if text.startswith("outlet")]
+    assert not [ln for ln in g.iter(f"{SVG}line") if ln.get("stroke") == D._PORT], (
+        "a label sitting against its own dot was given a tether anyway"
+    )
+
+
+# ---------------------------------------------------------------------------
+# ...without the sheet underneath moving a hair
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
+def test_the_drawing_is_the_same_drawing_with_the_overlay_lifted_off(name):
+    """Cut the ``<g id="debug">`` group out and what is left is the plain sheet.
+
+    Stronger than "off is off", and it is exactly what the placement above put
+    at risk. The labels are now worked out *after* the drawing exists, so the
+    renderer builds the sheet and splices the overlay onto the head of the list
+    afterwards; get that splice wrong and the overlay reorders the drawing
+    itself. No golden would catch it, because every golden is drawn with the
+    overlay off.
+    """
+    fs, kwargs = CORPUS[name]()
+    opts = {k: v for k, v in kwargs.items() if k in _RENDER_OPTS}
+    marked = fs.to_svg(**opts, debug=True)
+    head, rest = marked.split('  <g id="debug">', 1)
+    assert head + rest.split("  </g>\n", 1)[1] == fs.to_svg(**opts)

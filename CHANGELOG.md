@@ -38,10 +38,12 @@ to what was drawn.
   `pin(x=, y=)` sets, a blue dot on every port, and each of them labelled with
   the name and the numbers the API takes. Drawn in drawing coordinates and under
   the diagram, so the numbers on the sheet are the numbers to type back in and
-  nothing on the sheet is obscured. Works on `.svg`, `.pdf` and `.png`, and on a
-  fixed `page_size`, where the lettering holds its size on paper while the grid
-  stays on the drawing's own numbers. `pandid draw --debug [SPACING]` is the
-  same switch.
+  nothing on the sheet is obscured. Each label is placed against the finished
+  drawing, stepping clear of its lettering and of the other labels, and carries
+  a fine line back to its own marker where it had to go far to find room. Works
+  on `.svg`, `.pdf` and `.png`, and on a fixed `page_size`, where the lettering
+  holds its size on paper while the grid stays on the drawing's own numbers.
+  `pandid draw --debug [SPACING]` is the same switch.
 
   Off by default, and off is byte for byte the sheet that was drawn before it
   existed. It is scaffolding, not drawing: nothing issued should carry it.
