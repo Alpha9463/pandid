@@ -11,6 +11,12 @@ Separates two kinds of problems:
   fatal.
 
 Geometric checks need resolved frames, so they are skipped until layout has run.
+
+Most findings are made by inspecting the finished flowsheet. Two are not, and
+are collected from where an earlier phase parked them: ``route-not-settled``,
+which only ``route()`` can know, and ``deprecated``, which only the deprecated
+call itself can know, since using a retired spelling leaves no trace in the
+topology or the geometry. See :mod:`pandid.deprecation`.
 """
 
 from __future__ import annotations
@@ -223,6 +229,7 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     :func:`pandid.render.svg.draws_arrowheads`.
     :meth:`pandid.flowsheet.Flowsheet.validate` is the caller that resolves it.
     """
+    from pandid.deprecation import findings as deprecation_findings
     from pandid.layout.attach import MAX_PLACEMENT_PASSES
     from pandid.portgeom import (is_anchored, port_faces, port_point,
                                  resolve_port, unit_box)
@@ -234,6 +241,15 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
 
     errors: list[Issue] = []
     warnings: list[Issue] = []
+
+    # --- deprecated API (recorded at the call, not recomputed here) ---
+    # First, and the only finding here that is not about the drawing: the sheet
+    # is correct and will stay correct until the release named in the message
+    # deletes the spelling it was written with, at which point the script stops
+    # running. Nothing later in this function could detect it, because a
+    # deprecated call leaves no trace in the geometry -- which is why
+    # :mod:`pandid.deprecation` records it as it happens and this reads it back.
+    warnings.extend(deprecation_findings(fs))
 
     # --- routing settled? (reported by route(), not recomputed here) ---
     # Placing an instrument moves an obstacle and routing around an obstacle

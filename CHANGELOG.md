@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A deprecation mechanism: one declaration, a warning and a `validate()`
+  finding.** `pandid.deprecation.Deprecation` names a retired spelling, the
+  spelling that replaces it and the release the old one stops working in. Its
+  `warn()` emits a standard `DeprecationWarning` *and* records a `deprecated`
+  finding, from one sentence built once, so the two cannot come to say different
+  things. Both are needed: Python hides `DeprecationWarning` by default outside
+  `__main__`, and `fs.validate()` is what an author is told to run and what an
+  agent is told to check, so either signal alone is one nobody sees.
+
+  The finding rides on the object the call was made on, because a deprecated
+  call happens at construction while `validate()` runs after layout — a unit
+  built before `fs.add()` has no flowsheet to record against, so it carries the
+  finding itself and `validate()` collects from the sheet and everything the
+  sheet holds. That is the shape `fs.warnings` and `fs.route_converged` already
+  have: a fact settled in an earlier phase, parked on an object, read out later.
+  A call with no pandid object in scope at all files against the process and is
+  then reported by every `validate()` in it, which over-reports rather than
+  drops.
+
+  The policy is now in `CONTRIBUTING.md` instead of in anyone's head: a
+  deprecation lives for one release, announced under `### Deprecated` and
+  deleted under `### Removed` in the next, and `tests/test_deprecation.py` fails
+  if any declaration names a release that has already shipped.
+
+  Nothing is deprecated yet. `Valve(variant="control")`, the dry separators'
+  catch and the `pin()` default are the customers and are changes of their own.
+  The mechanism draws nothing, so `tests/golden/` and `docs/gallery/` are byte
+  for byte what they were — checked by hashing a fresh render against the
+  committed files, not by the suite going green.
+
 ### Changed
 
 - **`examples/11_ethanol_pid` declares its control loops.** The README's lead
