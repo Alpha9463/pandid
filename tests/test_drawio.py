@@ -431,21 +431,61 @@ def test_a_flag_is_drawn_across_its_own_box():
             assert uy0 < by0 < by1 < uy1
 
 
-def test_a_tee_draws_the_run_in_the_pipes_own_ink():
-    """A tee is bare pipe. The two streams meeting at one stop at its nozzles on
-    the box edges, so the twelve units between them are covered by the tee's own
-    mark and by nothing else -- an invisible tee would open a gap in the run.
-    What it must not be is a *lighter, thinner* rule than the pipes it joins,
-    which is what ``#111`` at draw.io's default weight drew."""
+def test_a_tee_draws_no_ink_of_its_own():
+    """The pipes draw the junction. A `line` drew a mark the width of the whole
+    box, which the branch met at the box *edge* -- a stub jutting out of the
+    pipe -- and hiding the cell without moving the pipes left a twelve-unit gap
+    between the two nozzles instead. The cell stays, so the three edges have
+    something to hold on to, and draws nothing."""
     fs = Flowsheet("tee")
     tee = fs.add(units.Tee("TEE"))
     tee.pin(x=100, y=100)
     fs.layout()
-    style = _style(_cells(fs, check=False)["u0"])
-    assert style["shape"] == "line"
-    assert style["strokeColor"] == "#000000"
-    assert style["strokeWidth"] == "2"
-    assert style.get("value", "") == ""
+    cell = _cells(fs, check=False)["u0"]
+    style = _style(cell)
+    assert "shape" not in style
+    assert style["strokeColor"] == "none"
+    assert style["fillColor"] == "none"
+    assert (cell.get("value") or "") == ""
+    # Still a cell, so the pipes stay attached to it when it is dragged.
+    assert cell.get("vertex") == "1"
+    assert cell.find("mxGeometry") is not None
+
+
+def test_three_runs_meeting_at_a_tee_close_on_one_point():
+    """Flush by construction rather than by measurement: every leg ends on the
+    box centre, so there is no gap to leave and no overshoot to trim. And each
+    leg stays straight, because a tee's nozzles are the midpoints of three faces
+    and the centre is on the axis of all three."""
+    fs = Flowsheet("junction")
+    header = fs.add(units.Feed("HDR"))
+    tee = fs.add(units.Tee("TEE"))
+    sink = fs.add(units.Product("OUT"))
+    drop = fs.add(units.Tank("T-1"))
+    header.pin(x=0, y=200)
+    tee.pin(x=400, y=200)
+    sink.pin(x=800, y=200)
+    drop.pin(x=350, y=500)
+    fs.connect(header.outlet, tee.inlet)
+    fs.connect(tee.outlet, sink.inlet)
+    fs.connect(tee.branch, drop.inlet)
+    fs.route()
+
+    cells = _cells(fs, check=False)
+    at = {i: _style(c) for i, c in cells.items()}
+    x0, y0, x1, y1 = cell_box(tee)
+    centre = ((x0 + x1) / 2, (y0 + y1) / 2)
+    legs = 0
+    for n, s in enumerate(fs.streams):
+        style = _style(cells[f"s{n}"])
+        for prefix, port in (("exit", s.source), ("entry", s.dest)):
+            if port.owner is not tee:
+                continue
+            legs += 1
+            landed = _drawio_connection_point(tee, at[f"u{fs.units.index(tee)}"],
+                                              style, prefix)
+            assert landed == pytest.approx(centre, abs=0.01)
+    assert legs == 3, "the fixture stopped exercising a three-way junction"
 
 
 def test_a_pneumatic_line_is_marked_where_the_sheet_marks_it():
@@ -567,6 +607,20 @@ def test_an_edges_waypoints_are_the_line_the_renderer_draws(sample):
         )
         for (ex, ey), (dx, dy) in zip(emitted, drawn[1:-1]):
             assert (ex, ey) == pytest.approx((dx, dy), abs=0.01)
+
+
+def stream_end(port) -> tuple[float, float]:
+    """Where a stream's line is expected to stop at this port.
+
+    The drawn nozzle everywhere except a tee, which has no body: the pipes are
+    carried on to the junction's centre so the three of them draw the meeting
+    themselves. See ``_APPROXIMATIONS[("tee", "default")]``.
+    """
+    unit = port.owner
+    if unit.kind == "tee":
+        x0, y0, x1, y1 = cell_box(unit)
+        return ((x0 + x1) / 2, (y0 + y1) / 2)
+    return port_point(unit, unit.frame, port.name)
 
 
 def cell_box(unit) -> tuple[float, float, float, float]:
@@ -1104,6 +1158,4 @@ def test_every_example_exports_a_document_that_matches_its_sheet(stem):
         style = _style(cells[f"s{n}"])
         for prefix, port in (("exit", s.source), ("entry", s.dest)):
             landed = _drawio_connection_point(port.owner, at[id(port.owner)], style, prefix)
-            assert landed == pytest.approx(
-                port_point(port.owner, port.owner.frame, port.name), abs=0.01
-            )
+            assert landed == pytest.approx(stream_end(port), abs=0.01)

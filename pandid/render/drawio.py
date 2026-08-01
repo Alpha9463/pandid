@@ -177,6 +177,16 @@ _INK = "#111"
 #: said back.
 _NO_FILL = "none"
 
+#: No ink at all. The same word, and it works for the same reason: draw.io's
+#: ``mxStylesheet.getCellStyle`` *deletes* a key whose value is exactly ``none``
+#: rather than setting it, so the cell inherits neither the style's colour nor
+#: the stylesheet default's, and ``mxShape.configureCanvas`` strokes nothing.
+#: A cell drawn in it keeps its geometry and stays selectable and connectable,
+#: which is the whole point of using it for a junction that draws no ink of its
+#: own; ``shape=none`` is the trap next door, since deleting *that* key falls
+#: back to the default vertex and draws a plain rectangle.
+_NO_STROKE = "none"
+
 #: The ink a *line* is drawn in, which is not quite the ink a symbol is drawn in:
 #: the SVG renderer strokes a stream ``black`` and a converted stencil ``#111``,
 #: and this is the first of those, written the way a draw.io style writes a
@@ -276,23 +286,30 @@ _APPROXIMATIONS = {
     # that triangle flipped.
     ("mixer", "default"): _Approximation("triangle", ""),
     ("splitter", "default"): _Approximation("triangle", "", flip_h=True),
-    # Bare pipe: two segments meeting, with no body at all. mxGraph's `line`
-    # (mxLine.paintVertexShape) strokes the box's horizontal centreline from
-    # edge to edge, and `direction=north|south` turns that into the vertical
-    # one, so it draws the *run* through the junction exactly -- which is what
-    # the run needs, because the two streams meeting here stop at the tee's own
-    # nozzles on the box edges and nothing else covers the twelve units between
-    # them. There is no built-in that draws the six-unit branch stub as well, so
-    # the stub is what goes.
+    # Bare pipe: three runs meeting, with no body at all. **The pipes draw the
+    # junction and the cell draws nothing**, which is the only arrangement that
+    # is both gapless and stub-free.
     #
-    # Black at the pipeline's weight, not the stencil hairline this file draws
-    # equipment in: `sym_tee` is `stroke="black" stroke-width="2"`, and the
-    # #111-at-weight-1 rule the export used to draw here was a visibly lighter,
-    # thinner line bridging two heavier ones -- a junction that read as a stray
-    # rule rather than as pipe.
-    ("tee", "default"): _Approximation(
-        "line", "the branch stub; the run through the junction is drawn",
-        stroke=_LINE_INK, weight=_PROCESS_STROKE),
+    # Two wrong answers were tried first and each fixed half of it. A `line`
+    # strokes the box's centreline, which is the run -- but it is a mark the
+    # length of the whole box, and the branch arrives at the box *edge*, so the
+    # sheet showed a stub jutting out of the pipe. Hiding the cell instead left
+    # the twelve units between the two nozzles covered by nothing, opening a gap
+    # at every junction.
+    #
+    # What closes both is moving the *pipes*: :meth:`DrawioRenderer._constraint`
+    # lands every stream that meets a tee on the box **centre** rather than on
+    # its nozzle. Three edges ending on one point is a junction that is flush by
+    # construction rather than by measurement -- there is no tolerance to get
+    # wrong -- and each leg is collinear with its own approach, since a tee's
+    # nozzles are the midpoints of three faces and the centre is on the axis of
+    # all three. Nothing is lost, so nothing is listed.
+    #
+    # The cell stays, invisible, and that is deliberate: it is what the three
+    # edges are *attached* to, so a reader who drags the junction takes all
+    # three pipes with it. Emitting no cell would leave three floating
+    # endpoints that come apart the moment one of them is moved.
+    ("tee", "default"): _Approximation(None, "", stroke=_NO_STROKE),
     # An off-page flag is a rectangle with one end drawn to a point, and
     # `offPageConnector` is that polygon exactly -- five points, flat back, no
     # notch (drawio Shapes.js, OffPageConnectorShape.redrawPath). It points
@@ -769,6 +786,21 @@ class DrawioRenderer:
         distinction :func:`pandid.portgeom.resolve_port` keeps between a port's
         point and its routing anchor.
         """
+        if u.kind == "tee":
+            # A junction, not a nozzle. A tee has no body: it exists so three
+            # runs can meet, and on the sheet the meeting is drawn by the tee's
+            # own twelve-unit mark rather than by the pipes, which stop at the
+            # box edge. draw.io has no built-in that draws that mark without
+            # also drawing a stub out the side, so the pipes are carried the
+            # last six units in instead and the cell draws nothing.
+            #
+            # The centre, so all three legs end on one point: flush by
+            # construction, with no tolerance to get wrong. Each leg stays
+            # straight, because a tee's three nozzles are face midpoints and the
+            # centre is on the axis of all three -- the only thing that changes
+            # is where the pipe stops, not which way it runs.
+            x0, y0, x1, y1 = self._cell_box(u)
+            return self._fraction(u, sym, ((x0 + x1) / 2, (y0 + y1) / 2))
         return self._fraction(u, sym, port_point(u, u.frame, port_name))
 
     @staticmethod
