@@ -22,8 +22,10 @@ The format::
 
     name: Feed Metering Skid          # required; everything else is optional
     stream_naming_scheme: "S{n}"
+    stream_number_start: 1            # the S1 a flag draws
     line_numbering_scheme: "{size}-{service}-{sequence}-{spec}"
-    line_number_start: 1001
+    line_number_start: 1001           # the 1001 inside 6"-P-1001-A1A
+    loop_number_start: 101            # where a loop with no number counts from
     auto_faces: true                  # engine picks each movable port's face
     components: [{name: Water, formula: H2O}]
 
@@ -38,6 +40,7 @@ The format::
 
     loops:
       - {variable: L, number: 101}     # declared loops; a loop draws nothing
+      - {variable: F}                  # no number: takes the sheet's next one
 
     instruments:
       - {type: LIC, number: 101, variant: panel,
@@ -78,6 +81,8 @@ from pandid.document import Annotation, Revision, TableBox, TitleBlock, equipmen
 from pandid.flowsheet import (
     DEFAULT_LINE_NUMBER_START,
     DEFAULT_LINE_NUMBERING_SCHEME,
+    DEFAULT_LOOP_NUMBER_START,
+    DEFAULT_STREAM_NUMBER_START,
     Flowsheet,
 )
 from pandid.loops import Loop
@@ -256,7 +261,8 @@ def _resolve_kind(value: Any, where: str) -> type[Unit]:
 # ---------------------------------------------------------------------------
 
 _TOP_KEYS = {
-    "name", "stream_naming_scheme", "line_numbering_scheme", "line_number_start",
+    "name", "stream_naming_scheme", "stream_number_start",
+    "line_numbering_scheme", "line_number_start", "loop_number_start",
     "auto_faces", "components", "units", "loops",
     "instruments", "streams", "stream_table_sections", "title_block", "annotations",
 }
@@ -354,13 +360,17 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
         raise SpecError(f"{where} needs a 'name' (the flowsheet's title)")
 
     scheme = data.get("stream_naming_scheme", "S{n}")
+    stream_start = data.get("stream_number_start", DEFAULT_STREAM_NUMBER_START)
     line_scheme = data.get("line_numbering_scheme", DEFAULT_LINE_NUMBERING_SCHEME)
     start = data.get("line_number_start", DEFAULT_LINE_NUMBER_START)
+    loop_start = data.get("loop_number_start", DEFAULT_LOOP_NUMBER_START)
     fs = Flowsheet(
         _text(data["name"], f"{where}: 'name'"),
         stream_naming_scheme=_text(scheme, f"{where}: 'stream_naming_scheme'"),
+        stream_number_start=_integer(stream_start, f"{where}: 'stream_number_start'"),
         line_numbering_scheme=_text(line_scheme, f"{where}: 'line_numbering_scheme'"),
         line_number_start=_integer(start, f"{where}: 'line_number_start'"),
+        loop_number_start=_integer(loop_start, f"{where}: 'loop_number_start'"),
         auto_faces=_flag(data.get("auto_faces", True), f"{where}: 'auto_faces'"),
     )
 
@@ -493,17 +503,26 @@ def _read_loop(fs: Flowsheet, entry: Any, where: str) -> Loop:
     loop was declared. The rule a loop enforces, that a balloon's first letter
     is the loop's measured variable, is checked where the letters are typed, and
     in a spec they are typed once, on the instrument itself.
+
+    ``number`` is optional and omitting it allocates, exactly as omitting the
+    argument to :meth:`~pandid.flowsheet.Flowsheet.add_loop` does. The spec is
+    the same declaration in another language and a hand-written one is drafted
+    the same way, so ``loop_number_start`` would be unreachable from a file if
+    the number stayed compulsory here. It does not cost the round trip anything:
+    :func:`to_dict` writes every loop's number out as a literal, so a spec this
+    module *wrote* never leaves one to be allocated and reads back frozen.
     """
     data = _mapping(entry, where)
     _check_keys(data, _LOOP_KEYS, where)
-    for key in ("variable", "number"):
-        if key not in data:
-            raise SpecError(
-                f"{where} needs a {key!r}: a loop is its measured variable and its "
-                "number together, e.g. {variable: F, number: 303} for loop F-303"
-            )
-    number = data["number"]
-    if not isinstance(number, (str, int)) or isinstance(number, bool):
+    if "variable" not in data:
+        raise SpecError(
+            f"{where} needs a 'variable': a loop is identified by what it measures "
+            "and its number together, e.g. {variable: F, number: 303} for loop F-303. "
+            "The number may be left out to take the sheet's next one; the variable "
+            "may not, because nothing else on the sheet knows what this loop measures"
+        )
+    number = data.get("number")
+    if number is not None and (not isinstance(number, (str, int)) or isinstance(number, bool)):
         raise SpecError(f"{where}.number must be a loop number or text, got {number!r}")
     try:
         return fs.add_loop(_text(data["variable"], f"{where}.variable"), number)
@@ -901,10 +920,23 @@ def to_dict(fs: Flowsheet) -> dict:
     spec: dict[str, Any] = {"name": fs.name}
     if fs.stream_naming_scheme != "S{n}":
         spec["stream_naming_scheme"] = fs.stream_naming_scheme
+    if fs.stream_number_start != DEFAULT_STREAM_NUMBER_START:
+        spec["stream_number_start"] = fs.stream_number_start
     if fs.line_numbering_scheme != DEFAULT_LINE_NUMBERING_SCHEME:
         spec["line_numbering_scheme"] = fs.line_numbering_scheme
     if fs.line_number_start != DEFAULT_LINE_NUMBER_START:
         spec["line_number_start"] = fs.line_number_start
+    # Written even though every loop below carries a literal number, so nothing
+    # in the file needs it to read back the sheet it came from. It is the one
+    # setting here that survives its own output: a spec is edited, and the loop
+    # someone adds by hand tomorrow should land in the series this sheet is
+    # numbered in rather than at 1. Its neighbours above are load-bearing for a
+    # different reason -- an auto-derived line `sequence` is engine output and
+    # is not written at all (see `_write_stream`), so `line_number_start` is the
+    # only record of it. A loop number is not engine output, and that asymmetry
+    # is the whole of what freezing a draft means.
+    if fs.loop_number_start != DEFAULT_LOOP_NUMBER_START:
+        spec["loop_number_start"] = fs.loop_number_start
     if not fs.auto_faces:
         spec["auto_faces"] = False
     if fs.components:

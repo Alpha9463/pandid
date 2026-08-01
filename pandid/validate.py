@@ -7,10 +7,16 @@ Separates two kinds of problems:
   rather than emit a silently-wrong drawing.
 - **warnings**: the drawing is valid but imperfect (a stream crosses a unit
   body, a route detours excessively, a tag spells its letters in an order no
-  standard uses). Collected on ``fs.warnings`` for the caller to inspect; never
-  fatal.
+  standard uses, a nozzle a count asked for has no line on it). Collected on
+  ``fs.warnings`` for the caller to inspect; never fatal.
 
 Geometric checks need resolved frames, so they are skipped until layout has run.
+
+Most findings are made by inspecting the finished flowsheet. Two are not, and
+are collected from where an earlier phase parked them: ``route-not-settled``,
+which only ``route()`` can know, and ``deprecated``, which only the deprecated
+call itself can know, since using a retired spelling leaves no trace in the
+topology or the geometry. See :mod:`pandid.deprecation`.
 """
 
 from __future__ import annotations
@@ -114,6 +120,51 @@ def _in_sequence(letters: str) -> str:
         next(ordered) if c.upper() in CONTROL_FUNCTION_SEQUENCE else c
         for c in letters[1:]
     )
+
+
+def _family_stem(port_name: str) -> str | None:
+    """The family ``port_name`` is a numbered member of, or None if it is fixed.
+
+    ``in_3`` answers ``"in"``; ``inlet``, ``sig_in`` and ``tube_out`` answer
+    None, because a trailing word is not a number and a nozzle without a number
+    is one the class declares outright.
+
+    This is the one rule ``nozzle-unconnected`` turns on, so it is worth saying
+    what it is reading. A numbered nozzle exists **because a count was written
+    down**, and five classes build one: ``Mixer(n_inlets=4)``,
+    ``Splitter(n_outlets=3)``, ``Column(n_feeds=2)``, ``Reactor(n_feeds=2)`` and
+    ``Block(inputs=["W", "W", "N"])`` -- the five
+    ``tests/test_port_annotations._DECLARED_FAMILIES`` pins. Each spells its
+    family the same way: a stem, an underscore, and a 1-based index. Nothing
+    else in the package numbers a port.
+
+    Read off the **unit's own port list** rather than off the symbol's
+    :class:`~pandid.render.symbols.PortSeries`, which is the other place this
+    naming rule is written and the tempting authority to borrow. Two reasons,
+    and the second is the one that decides it. A series is the *symbol's*
+    placement rule -- where to put member ``i`` of ``n`` along a face -- and
+    what is being asked here is a question about identity, which is the unit's.
+    And :class:`~pandid.units.Block` has no series at all: its family is split
+    across up to four faces and one series cannot produce an ``in_3`` on a face
+    its ``in_1`` is not on, so ``block_symbol`` authors an anchor per
+    connection. A block's ``in_2`` is as much a counted nozzle as a mixer's, and
+    a check that asked the symbol would be silent on the one class whose
+    *entire* connection list is a counted family.
+
+    A family of one is still a family. ``Mixer(n_inlets=1)`` and
+    ``Block(inputs=1)`` both write a count down and both spell the result
+    ``in_1``; the singular spelling is what says a nozzle was *not* counted, and
+    it is why a one-feed column's ``feed`` is silent here. That column declares
+    ``feed`` as a class annotation beside ``distillate`` and ``bottoms``, which
+    is the same thing this function is reading, said in the other direction.
+    """
+    stem, sep, index = port_name.rpartition("_")
+    return stem if sep and stem and index.isdigit() else None
+
+
+def _and(names: list[str]) -> str:
+    """``"a"``, ``"a and b"``, ``"a, b and c"`` -- the join a sentence needs."""
+    return " and ".join(filter(None, [", ".join(names[:-1]), *names[-1:]]))
 
 
 def _seg_crosses_box(x1, y1, x2, y2, box) -> bool:
@@ -223,6 +274,7 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     :func:`pandid.render.svg.draws_arrowheads`.
     :meth:`pandid.flowsheet.Flowsheet.validate` is the caller that resolves it.
     """
+    from pandid.deprecation import findings as deprecation_findings
     from pandid.layout.attach import MAX_PLACEMENT_PASSES
     from pandid.portgeom import (is_anchored, port_faces, port_point,
                                  resolve_port, unit_box)
@@ -234,6 +286,15 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
 
     errors: list[Issue] = []
     warnings: list[Issue] = []
+
+    # --- deprecated API (recorded at the call, not recomputed here) ---
+    # First, and the only finding here that is not about the drawing: the sheet
+    # is correct and will stay correct until the release named in the message
+    # deletes the spelling it was written with, at which point the script stops
+    # running. Nothing later in this function could detect it, because a
+    # deprecated call leaves no trace in the geometry -- which is why
+    # :mod:`pandid.deprecation` records it as it happens and this reads it back.
+    warnings.extend(deprecation_findings(fs))
 
     # --- routing settled? (reported by route(), not recomputed here) ---
     # Placing an instrument moves an obstacle and routing around an obstacle
@@ -332,6 +393,116 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             "warning", "letter-sequence",
             f"{u.tag} spells its control functions {u.type!r}; ISO 15519-2:2015 5.2.4 "
             f"orders them {sequence}, so this tag reads {ordered!r}"))
+
+    # --- a counted nozzle with no line on it (no frames required) ---
+    # The sheet draws a unit taking four streams and shows three, so it asserts
+    # a stream that does not exist. Nothing raises, every line lands on ink, and
+    # the connectivity of everything that *is* drawn is right, which is the same
+    # thing that made ``nozzles-crowded`` invisible for as long as it was.
+    #
+    # **What counts as unconnected is the whole of this finding**, and the
+    # narrowness is not caution, it is the measurement. Over the twelve shipped
+    # examples 167 ports carry no stream. Every one of them is legitimate:
+    #
+    #   112  a signal connection -- 36 balloon ``pv``, 32 valve ``actuator``,
+    #        27 ``sig_in``, 17 ``sig_out``
+    #    26  the other side of a heat exchanger, drawn with only its process
+    #        side piped, which is what a PFD does with a utility service
+    #    14  a duty: two per column, one per reactor, a cooler's ``utility_out``
+    #     8  a station drain valve's outlet -- "a drain runs down to a funnel on
+    #        the floor, which is not on this sheet, so the leg ends at the
+    #        valve", in ``Flowsheet.add_valve_station``'s own words
+    #     7  a vessel's or a reactor's ``vent``
+    #
+    # A rule reading "an unconnected port" reports all 167. A rule reading "an
+    # unconnected *process* port" still reports 34 of them, because a drain to a
+    # funnel off the sheet and an exchanger's dry shell side are both process
+    # connections a drawing is right to leave open. Every one of those 167 is a
+    # nozzle its **class** declares, offered to every instance whether the sheet
+    # uses it or not, and choosing not to pipe one is a drawing decision.
+    #
+    # A **numbered** nozzle is not offered, it is *asked for*. ``n_inlets=4`` is
+    # a number the author wrote, and the four nozzles exist only because of it,
+    # so one of them carrying nothing is that number not being met -- which is
+    # exactly the defect issue #183 came from, a loop over ``(1, 2, 3)`` wiring
+    # ``in_2``, ``in_3`` and ``in_4``. Zero of the 167 is one, so this fires on
+    # none of the twelve.
+    #
+    # It is visible on the paper as well as in the model, which is what makes it
+    # a finding rather than a lint. A family is spread evenly across its face
+    # for however many members it has, connected or not: a default mixer with
+    # ``n_inlets=4`` and three lines on it draws them 11.7px apart around a
+    # 17.5px hole where ``in_1`` is, instead of the three 17.5px apart that
+    # ``n_inlets=3`` would have given. So the missing nozzle does not merely
+    # fail to draw -- it moves every line that *is* drawn off the position it
+    # should have had, and leaves a gap a reader takes for a line left off.
+    #
+    # One finding per family, not per member. Two dangling inlets on one mixer
+    # is one wrong count with one thing to do about it, the same reason
+    # ``letter-sequence`` says a repeated tag once and ``nozzles-crowded``
+    # reports a face rather than a pair.
+    #
+    # **No standard is cited, and that is a finding of its own.** ISO 15519-1's
+    # clause 12, *Connections*, was read through looking for one: it legislates
+    # how a connecting line is drawn -- orientation (12.1), width (12.2),
+    # bundles (12.3), joints and intersections (12.4, 12.5), off-sheet
+    # references (12.6) -- and never that a symbol's connection point must have
+    # one on it. Neither the term "nozzle" nor "connection point" appears in the
+    # standard at all; clause 8, *Port designations*, governs only where a
+    # port's text label goes. ISO 15519-2 is measurement and control throughout,
+    # and the CHEE4001 guidelines ask on p.1 that "the location of nozzles
+    # [be] shown (NX)", which is the opposite requirement. So this belongs with
+    # ``run-off-elevation`` and ``route-detour`` rather than with
+    # ``gravity-turned``: it is the drawing contradicting *its own declaration*,
+    # which needs no external authority and gets none invented for it.
+    for u in fs.units:
+        families: dict[str, list[str]] = {}
+        for name in u.ports:
+            stem = _family_stem(name)
+            if stem is not None:
+                families.setdefault(stem, []).append(name)
+        for stem, members in families.items():
+            # **Process nozzles only**, which is the scope issue #183 sets and
+            # the scope this keeps. A signal connection is a different question
+            # and a harder one: a balloon's ``pv`` is bare on 36 of the 167
+            # because an instrument may be *placed* against its equipment rather
+            # than drawn tapped off a line, and an actuator with no output on it
+            # is a hand valve. Neither is answered by counting, so neither is
+            # answered here. No shipped class numbers a signal port, so today
+            # this only holds the door for a class that might.
+            if any(u.ports[n].role == "signal" for n in members):
+                continue
+            members.sort(key=lambda member: int(member.rpartition("_")[2]))
+            loose = [m for m in members if u.ports[m].stream is None]
+            if not loose:
+                continue
+            n, piped = len(members), len(members) - len(loose)
+            # ``in_1..in_4`` only where the run really is 1 to n. A family with
+            # a number missing out of the middle of it is not reachable from any
+            # constructor here, but it is from a hand-written ``PORTS`` list,
+            # and ``in_1..in_7`` said of four nozzles would be the message
+            # inventing three.
+            run = [f"{stem}_{i}" for i in range(1, n + 1)]
+            named = (f"{members[0]}..{members[-1]}" if n > 2 and members == run
+                     else _and(members))
+            # Name the whole run and the arithmetic over it, so the author can
+            # see at once which of the two things happened: a line they meant to
+            # draw and did not, or a nozzle they never wanted. The finding
+            # cannot tell those apart -- only the author knows -- so it offers
+            # both cures rather than guessing, which is where it differs from
+            # ``nozzles-crowded``, whose cure is a single number.
+            it = "it" if len(loose) == 1 else "them"
+            cure = (f"Connect {it}, or build {u.name} with the {piped} it uses."
+                    if piped else
+                    f"Connect {it}: nothing is piped to {u.name} at all.")
+            warnings.append(Issue(
+                "warning", "nozzle-unconnected",
+                f"{_and([f'{u.name}.{m}' for m in loose])} "
+                f"{'carries' if len(loose) == 1 else 'carry'} no stream. "
+                f"{u.name} was built with {n} numbered "
+                f"nozzle{'' if n == 1 else 's'}, {named}, and {piped} of them "
+                f"{'is' if piped == 1 else 'are'} piped, so the sheet asserts "
+                f"{n} connections and draws {piped}. {cure}"))
 
     # --- geometric checks (need resolved frames) ---
     if fs.units and all(u.frame is not None for u in fs.units):

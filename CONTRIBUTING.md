@@ -302,6 +302,61 @@ commit its two files in the same PR, add a section for it to
 `docs/gallery/README.md`, and consider adding the scenario to
 `tests/test_golden.py`.
 
+## Deprecating an API
+
+When a call turns out to be the wrong shape, fix the shape and retire the old
+one. Don't keep a wrong API alive for compatibility.
+
+**A deprecation lives for one release.** Deprecated in 0.1.2, deleted in 0.1.3.
+That is the whole window, and it is short on purpose: two spellings of one thing
+are two things to test, to document, and to keep drawing the same sheet.
+
+Declare it as a module constant beside the code that honours it:
+
+```python
+from pandid.deprecation import Deprecation
+
+RETIRED = Deprecation(
+    what="Valve(variant='control')",    # the call an author types today
+    instead="Valve(variant='globe')",   # the call they type instead
+    removed_in="0.1.3",                 # the release after this one
+)
+
+
+class Valve(Unit):
+    def __init__(self, name, variant="default", **kwargs):
+        ...
+        if variant == "control":
+            RETIRED.warn(self, where=name)
+```
+
+That one call emits both signals: a standard `DeprecationWarning`, and a
+`deprecated` finding on `fs.validate()`. Both are the same sentence, built once,
+so they cannot drift apart. Python hides `DeprecationWarning` by default outside
+`__main__`, and `fs.validate()` is what an author is actually told to run, so
+neither signal is enough on its own.
+
+Pass the object the author is holding — the unit under construction, the stream,
+the flowsheet — as the carrier. It is what gets the finding from the call site to
+`validate()`, which runs much later. `warn()` with no carrier is the fallback for
+a call with no pandid object in scope, and costs a finding reported by every
+`validate()` in the process; `pandid/deprecation.py` argues that trade, and is
+worth reading before you reach for it.
+
+In the same PR:
+
+- CHANGELOG gets a `### Deprecated` entry under `[Unreleased]`, naming what to
+  type instead;
+- `docs/api.md` documents the replacement, not the old spelling.
+
+In the PR that deletes it, one release later:
+
+- the declaration and every `warn()` call for it go;
+- CHANGELOG gets a `### Removed` entry.
+
+`tests/test_deprecation.py` fails if any declaration names a `removed_in` that
+has already shipped, so a deprecation cannot quietly outlive its release.
+
 ## Releasing
 
 The version is written in exactly one place, `pandid/__init__.py`. `pyproject.toml`

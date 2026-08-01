@@ -9,6 +9,119 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Control loops number themselves.** `add_loop("F")` with the number left out
+  takes the next one from a single per-sheet counter, started by
+  `Flowsheet(loop_number_start=…)` (default `101`) and allocated at the
+  `add_loop()` line, so declaration order is allocation order. Typed and
+  allocated numbers mix on one sheet; a loop is still the `(variable, number)`
+  pair, so `F-101` and `L-101` remain two loops.
+
+  The default is a three-digit unit-100 number rather than a bare 1, for the
+  reason `line_number_start` is 1001: what comes out is an engineering document,
+  and `FIC-1` is not a tag anyone writes on a P&ID, while `FIC-101` is an
+  ordinary unit-100 loop. Both sheets in the corpus that number loops use three
+  digits — `examples/04_control_loop` runs the 100 series and
+  `examples/11_ethanol_pid` the 300 — because a loop series belongs to a plant
+  area, so an author still has to say which area their sheet is either way. All
+  the default decides is what the drawing reads like until they do.
+
+  One series across measured variables, not a counter per variable, because that
+  is what a sheet draws: `P&ID_301` runs `P-301`, `T-302`, `F-303`, `L-304`,
+  `F-305`, `L-306`, `T-307`, `F-308`, and its notes block says "Note that
+  instrument number are unique to this drawing". The counter is naive — no
+  reservation list, no skipping, no collision search — because nothing outside
+  the loop set spends a loop number: a final control element takes its loop's,
+  CHEE4001 p.11 numbering a flow loop's element, transmitter, controller and
+  valve all 504 under the p.13 rule that "A loop number is assigned to each
+  group of components required to perform the desired function of the monitor or
+  control scheme". Where the counter does reach a number typed by hand for the
+  same variable, `add_loop()` raises at that line rather than silently skipping
+  or duplicating.
+
+  This does not weaken "a loop number is allocated once and never renumbered";
+  it is where the once happens. That rule is about a number which has *left* the
+  drawing for a DCS, and nothing leaves a draft. `to_dict()` is the freeze: it
+  writes every loop's number as a literal, allocated or typed, so a sheet read
+  back from its spec is nailed down. The argument is made in full in
+  `pandid/loops.py`.
+
+- **`Flowsheet(stream_number_start=…)`.** Where `S{n}` starts counting (default
+  `1`, which is what it always did). A sheet numbering `S100` upward previously
+  had to supply a whole callable naming scheme to move a number by 99. It is not
+  `line_number_start`, which moves the `sequence` component of a *line* number,
+  the `1001` inside `6"-P-1001-A1A`; a sheet can want one and not the other.
+
+- **`loop_number_start` and `stream_number_start` in the spec**, alongside
+  `line_number_start`, and a `loops:` entry may now leave its `number` out to
+  allocate. `to_dict()` writes each key only when it differs from its default,
+  so a spec written before this release and one written after are the same file.
+
+- **A deprecation mechanism: one declaration, a warning and a `validate()`
+  finding.** `pandid.deprecation.Deprecation` names a retired spelling, the
+  spelling that replaces it and the release the old one stops working in. Its
+  `warn()` emits a standard `DeprecationWarning` *and* records a `deprecated`
+  finding, from one sentence built once, so the two cannot come to say different
+  things. Both are needed: Python hides `DeprecationWarning` by default outside
+  `__main__`, and `fs.validate()` is what an author is told to run and what an
+  agent is told to check, so either signal alone is one nobody sees.
+
+  The finding rides on the object the call was made on, because a deprecated
+  call happens at construction while `validate()` runs after layout — a unit
+  built before `fs.add()` has no flowsheet to record against, so it carries the
+  finding itself and `validate()` collects from the sheet and everything the
+  sheet holds. That is the shape `fs.warnings` and `fs.route_converged` already
+  have: a fact settled in an earlier phase, parked on an object, read out later.
+  A call with no pandid object in scope at all files against the process and is
+  then reported by every `validate()` in it, which over-reports rather than
+  drops.
+
+  The policy is now in `CONTRIBUTING.md` instead of in anyone's head: a
+  deprecation lives for one release, announced under `### Deprecated` and
+  deleted under `### Removed` in the next, and `tests/test_deprecation.py` fails
+  if any declaration names a release that has already shipped.
+
+  Nothing is deprecated yet. `Valve(variant="control")`, the dry separators'
+  catch and the `pin()` default are the customers and are changes of their own.
+  The mechanism draws nothing, so `tests/golden/` and `docs/gallery/` are byte
+  for byte what they were — checked by hashing a fresh render against the
+  committed files, not by the suite going green.
+- **`validate()` reports `nozzle-unconnected`:** a nozzle a *count* asked for
+  that carries no stream. `Mixer("M-101", n_inlets=4)` with three inlets piped
+  drew a complete, plausible sheet and returned no findings at all, so the
+  drawing asserted a stream that did not exist — issue #183, from the off-by-one
+  a user writes coming from `m.inlets` being indexed from zero while the nozzles
+  are numbered from one.
+
+  Deciding what counts as unconnected is the whole of the change. Over the
+  twelve shipped examples 167 ports carry no stream and every one is legitimate:
+  112 signal connections, 26 heat-exchanger utility sides, 14 duties, 8 station
+  drain outlets ("a drain runs down to a funnel on the floor, which is not on
+  this sheet") and 7 vents. All 167 are nozzles a *class* declares, offered to
+  every instance whether the sheet uses one or not. A **numbered** nozzle is not
+  offered but asked for — `n_inlets=`, `n_outlets=`, `n_feeds=`, `inputs=`,
+  `outputs=` are the five arguments that make one — so a bare member of such a
+  family is a number the author wrote down that the drawing did not meet. Zero
+  of the 167 is one, and the rule is silent on all twelve while still inspecting
+  35 counted nozzles across seven of them.
+
+  It is visible on the paper as well as in the model: a family is spread evenly
+  across its face for every member it has, wired or not, so that four-inlet
+  mixer draws its three lines 11.7px apart around a 17.5px hole rather than the
+  17.5px apart `n_inlets=3` would have given them. The message names both cures,
+  since the finding cannot tell a line left off from a nozzle never wanted.
+
+  Scoped to **process** nozzles, as the issue asks. Signal connections are a
+  different question — an instrument may be placed against its equipment rather
+  than tapped off a line — and counting does not settle it. The singular
+  spelling of a family is silent for the same reason the fixed nozzles are: a
+  one-feed column's nozzle is `feed`, not `feed_1`, and no count produced it.
+
+  No standard is cited. ISO 15519-1 §12, *Connections*, was read for one and
+  governs only how a connecting line is drawn; neither it nor ISO 15519-2 nor
+  the CHEE4001 guidelines oblige a connection point to carry a line. Nothing
+  rendered moves: `tests/golden/` and `docs/gallery/` are byte for byte what
+  they were, checked by hashing a fresh render against the committed files.
+
 - **Export a sheet as a `.drawio` file.** `fs.to_drawio()`, and `.drawio` on
   `fs.render()`, write the drawing as an editable draw.io / diagrams.net model:
   every unit is a shape, every stream an edge between two of its connection

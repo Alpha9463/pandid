@@ -33,6 +33,30 @@ engine output and :meth:`~pandid.flowsheet.Flowsheet.renumber_streams` re-derive
 it on every ``connect()``; a loop number is author intent that leaves the
 drawing and lands in a DCS database, on a valve nameplate and in a
 cause-and-effect chart, so the engine never rewrites one.
+
+That argument is about a number which has *left*, and nothing leaves a draft.
+Before the sheet is issued there is a stage where the numbers and the count of
+loops are both still moving, and typing a literal at every ``add_loop`` is the
+churn that stage is made of: add a loop near the top of a sheet whose series
+runs in reading order and every number below it is retyped by hand, on a
+drawing whose whole point is that a number is typed once. So the number may be
+left out -- ``fs.add_loop("F")`` -- and the sheet allocates the next one from a
+single counter running across measured variables.
+
+Allocation does not weaken "allocate once"; it is where the once happens. The
+counter runs at *declaration*, so the number is fixed by the line that declares
+the loop exactly as a typed one is, and from that instant it is the loop's
+number and nothing re-derives it: not a render, not a ``connect()``, not
+another ``add_loop`` further down the file. What is deferred is only who types
+the digits, and only until the draft settles.
+
+The freeze is :meth:`~pandid.flowsheet.Flowsheet.to_dict`, which writes
+``loops: [{variable, number}]`` with the number spelled out, allocated or
+typed, because by then the distinction has stopped existing -- it is just the
+loop's number. Reading that spec back gives a sheet whose numbers are nailed
+down and whose counter is untouched, which is what an issued sheet is, and the
+DCS argument above governs from there on. Auto-numbering is the draft stage;
+``to_dict()`` is the issue.
 """
 
 from __future__ import annotations
@@ -42,7 +66,11 @@ class Loop:
     """One control loop: a measured-variable letter and a number.
 
     Built by :meth:`~pandid.flowsheet.Flowsheet.add_loop` rather than directly,
-    so the sheet it belongs to is the thing that refuses a duplicate.
+    so the sheet it belongs to is the thing that refuses a duplicate. The number
+    is required *here* and optional there for the same reason: a series belongs
+    to a sheet, so the sheet is the only thing that can say what comes next. By
+    the time a loop exists it has a number, and nothing downstream can tell, or
+    needs to tell, whether it was typed or counted.
     """
 
     def __init__(self, variable: str, number: str | int):
@@ -57,7 +85,9 @@ class Loop:
         if not number:
             raise ValueError(
                 "a loop needs a number: it is what the loop's members share and what "
-                "leaves the drawing for the DCS, so the engine never invents one"
+                "leaves the drawing for the DCS. Omit it entirely -- add_loop('F') -- "
+                "and the sheet allocates its next one; an empty string asks for a loop "
+                "whose members share nothing, which is not the same request"
             )
         self.variable = variable.upper()
         self.number = number

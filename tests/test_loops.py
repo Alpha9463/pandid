@@ -59,6 +59,137 @@ def test_a_loop_takes_a_single_letter_and_a_number():
         fs.add_loop("F", "")
 
 
+# --- automatic numbering ------------------------------------------------------
+
+
+def test_an_omitted_number_takes_the_sheets_next_one():
+    fs = Flowsheet("draft", loop_number_start=301)
+    assert [fs.add_loop(v).name for v in ("P", "T", "F")] == ["P-301", "T-302", "F-303"]
+
+
+def test_the_counter_is_one_series_across_measured_variables():
+    """P&ID_301 runs P-301, T-302, F-303, L-304, F-305, L-306, T-307, F-308.
+
+    One series climbing through whichever variable came next, not a counter per
+    variable -- which would have put F-301, T-301 and L-301 on one sheet.
+    """
+    fs = Flowsheet("A300", loop_number_start=301)
+    names = [fs.add_loop(v).name for v in ("P", "T", "F", "L", "F", "L", "T", "F")]
+    assert names == ["P-301", "T-302", "F-303", "L-304", "F-305", "L-306", "T-307", "F-308"]
+
+
+def test_the_series_starts_at_a_unit_100_number_by_default():
+    """101, not 1, for the reason ``line_number_start`` is 1001: ``FIC-1`` is
+    not a tag anyone writes on a P&ID, and the sheet has to be showable before
+    the author has said which plant area it is.
+    """
+    fs = Flowsheet("plain")
+    assert [fs.add_loop("F").name for _ in range(3)] == ["F-101", "F-102", "F-103"]
+
+
+def test_allocation_order_is_declaration_order():
+    """Eagerly, at the ``add_loop`` line, not at render or on first use.
+
+    A loop that is declared and then never tagged still spends its number, which
+    is what makes the file readable: the numbers run down the page in the order
+    the page declares them.
+    """
+    fs, line = _sheet()
+    first = fs.add_loop("F")
+    unused = fs.add_loop("L")  # declared, never tagged, still spends 102
+    third = fs.add_loop("T")
+    fs.add_instrument("TT", third, on=line, at=0.5, offset=60)
+    fs.to_svg()
+    assert [loop.number for loop in (first, unused, third)] == ["101", "102", "103"]
+
+
+def test_allocated_and_typed_numbers_mix_on_one_sheet():
+    """The typed ones do not move the counter and the counter does not skip them."""
+    fs = Flowsheet("mixed", loop_number_start=301)
+    assert fs.add_loop("P").name == "P-301"
+    assert fs.add_loop("F", 316).name == "F-316"  # typed: reserves nothing
+    assert fs.add_loop("T").name == "T-302"  # the series carries straight on
+    assert fs.add_loop("L").name == "L-303"
+
+
+def test_a_one_member_loop_is_a_legitimate_use():
+    """CHEE4001 p.13 numbers "each group of components", and a group of one is a
+    group: the tail of P&ID_301 (FE-313, PI-316, TI-319, LI-322) is loops of one.
+    """
+    fs, line = _sheet()
+    lone = fs.add_loop("P")
+    pi = fs.add_instrument("PI", lone, on=line, at=0.3, offset=50)
+    assert (lone.name, pi.name) == ("P-101", "PI-101")
+
+
+def test_an_allocated_number_that_lands_on_a_typed_one_raises_at_that_line():
+    """No reservation list, so the counter can walk onto a number typed by hand.
+
+    It is not resolved silently in either direction: stepping over the typed
+    number would put a hole in the series nothing asked for, and taking it would
+    mint a second F-102.
+    """
+    fs = Flowsheet("collision")
+    fs.add_loop("F", 102)
+    fs.add_loop("F")  # F-101
+    with pytest.raises(ValueError) as excinfo:
+        fs.add_loop("F")  # would be F-102
+    message = str(excinfo.value)
+    assert "loop F-102 took 102, the next number in this sheet's series" in message
+    assert "loop_number_start" in message  # names the way out
+    # and nothing was declared, so the sheet still holds two loops
+    assert [loop.name for loop in fs.loops] == ["F-102", "F-101"]
+
+
+def test_a_refused_declaration_burns_no_number():
+    fs = Flowsheet("refused", loop_number_start=301)
+    assert fs.add_loop("P").name == "P-301"
+    with pytest.raises(ValueError, match="single ISA letter"):
+        fs.add_loop("FIC")
+    assert fs.add_loop("T").name == "T-302"  # the bad letter cost nothing
+
+
+def test_a_number_that_is_already_free_of_the_series_never_collides():
+    """The reason the naive counter is safe: nothing outside ``fs.loops`` spends
+    a loop number. A final control element takes its loop's -- CHEE4001 p.11
+    numbers a flow loop's element, transmitter, controller and valve all 504 --
+    so tagging one consumes nothing the counter could later hand out.
+    """
+    fs = Flowsheet("elements", loop_number_start=504)
+    flow = fs.add_loop("F")
+    cv = fs.add(U.Valve(flow.tag("CV"), variant="control"))
+    fe = fs.add(U.Fitting(flow.tag("FE"), variant="venturi"))
+    assert (cv.name, fe.name) == ("CV-504", "FE-504")
+    assert fs.add_loop("T").name == "T-505"  # the valve reserved nothing
+
+
+def test_an_allocated_number_is_never_rewritten_afterwards():
+    """Allocation is where "allocate once" happens, not an exception to it."""
+    fs, line = _sheet()
+    loop = fs.add_loop("F", None)
+    ft = fs.add_instrument("FT", loop, on=line, at=0.5, offset=60)
+    cv = fs.add(U.Valve(loop.tag("CV"), variant="control")).pin(x=300, y=300)
+    vent = fs.add(U.Product("Vent")).pin(x=520, y=300)
+    fs.connect(cv.outlet, vent.inlet)
+    fs.add_loop("L")  # a later declaration does not renumber an earlier one
+    fs.to_svg()
+    assert (loop.number, ft.name, cv.name) == ("101", "FT-101", "CV-101")
+
+
+def test_moving_the_start_moves_the_numbers_still_to_come():
+    """The start stays the authoritative setting after construction too.
+
+    The counter is the start plus what has been handed out, so moving the start
+    moves everything still to come and un-spends nothing: the ``F-101`` below is
+    already on the sheet and no longer the start's business.
+    """
+    fs = Flowsheet("moved")
+    assert fs.add_loop("F").name == "F-101"
+    fs.loop_number_start = 301
+    assert fs.add_loop("T").name == "T-302"
+    assert fs.add_loop("L").name == "L-303"
+
+
 def test_the_number_is_allocated_once_and_never_renumbered():
     """A loop number leaves the drawing for the DCS, unlike a stream number.
 
@@ -275,13 +406,63 @@ def test_a_sheet_with_no_loops_writes_no_loops_section():
     assert "loops" not in fs.to_dict()
 
 
-def test_a_loop_entry_needs_both_halves_of_its_identity():
+def test_a_loop_entry_needs_the_variable_it_measures():
+    """The number may be left out; the variable may not.
+
+    Nothing else in the file records what a loop measures -- its members carry
+    their own letters and are checked *against* it -- so an entry with only a
+    number declares nothing.
+    """
     from pandid import SpecError
 
-    with pytest.raises(SpecError, match=r"loops\[0\] needs a 'number'"):
-        Flowsheet.from_dict({"name": "T", "loops": [{"variable": "F"}]})
     with pytest.raises(SpecError, match=r"loops\[0\] needs a 'variable'"):
         Flowsheet.from_dict({"name": "T", "loops": [{"number": 303}]})
+
+
+def test_a_spec_loop_with_no_number_takes_the_sheets_next_one():
+    fs = Flowsheet.from_dict(
+        {
+            "name": "A300",
+            "loop_number_start": 301,
+            "loops": [{"variable": "P"}, {"variable": "T"}, {"variable": "F", "number": 316}],
+        }
+    )
+    assert [loop.name for loop in fs.loops] == ["P-301", "T-302", "F-316"]
+
+
+def test_an_auto_numbered_sheet_freezes_when_it_is_written_out():
+    """``to_dict()`` is the issue: every loop's number goes out as a literal,
+    allocated or typed, so reading the spec back gives the sheet nailed down.
+    """
+    fs = Flowsheet("draft", loop_number_start=301)
+    fs.add_loop("P")
+    fs.add_loop("T")
+    fs.add_loop("F", 316)
+
+    spec = fs.to_dict()
+    assert spec["loops"] == [
+        {"variable": "P", "number": "301"},
+        {"variable": "T", "number": "302"},
+        {"variable": "F", "number": "316"},
+    ]
+    assert spec["loop_number_start"] == 301  # kept, for the loop added by hand tomorrow
+
+    rebuilt = Flowsheet.from_dict(spec)
+    assert [loop.name for loop in rebuilt.loops] == ["P-301", "T-302", "F-316"]
+    assert rebuilt.to_dict() == spec  # and again, unmoved
+
+
+def test_a_default_loop_number_start_writes_no_key():
+    fs = Flowsheet("plain")
+    fs.add_loop("F", 101)
+    assert "loop_number_start" not in fs.to_dict()
+
+
+def test_a_loop_number_of_the_wrong_type_names_the_entry():
+    from pandid import SpecError
+
+    with pytest.raises(SpecError, match=r"loops\[0\]\.number must be a loop number or text"):
+        Flowsheet.from_dict({"name": "T", "loops": [{"variable": "F", "number": True}]})
 
 
 def test_a_duplicate_loop_in_a_spec_names_the_entry():

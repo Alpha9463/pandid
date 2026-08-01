@@ -21,9 +21,11 @@ pandid.__version__          # the installed version, e.g. "0.0.1"
 ```text
 Flowsheet(name: str, *,
           stream_naming_scheme: str | Callable[[int], str] = "S{n}",
+          stream_number_start: int = 1,
           line_numbering_scheme: str | Callable[[Stream], str]
               = "{size}-{service}-{sequence}-{spec}",
           line_number_start: int = 1001,
+          loop_number_start: int = 101,
           valve_station_tag_scheme: str | Callable[[str, str], str]
               = "{letters}-{number}{suffix}",
           auto_faces: bool = True)
@@ -33,12 +35,24 @@ The container and the single source of truth for connectivity.
 
 - `stream_naming_scheme` is either a format string taking `{n}` (default
   `"S{n}"` → `S1`, `S2`, …) or a callable `int -> str`. Keyword-only.
+- `stream_number_start` sets the `{n}` the first stream gets (default `1`, so
+  the first stream is `S1`; `100` gives `S100`, `S101`, …). Keyword-only.
 - `line_numbering_scheme` is either a format string taking the line-number
   components (`{size}`, `{schedule}`, `{service}`, `{sequence}`, `{spec}`,
   `{insulation}`) or a callable `Stream -> str`, for a site whose convention is
   spelled some other way. Keyword-only. See [Line numbers](#line-numbers).
 - `line_number_start` sets where the automatic sequence begins (default `1001`,
   so the first line is `…-1001-…`). Keyword-only.
+- `loop_number_start` sets the number the first `add_loop()` with no number of
+  its own takes (default `101`, so the first loop is `F-101`). Keyword-only. See
+  [Control loops](#control-loops).
+
+`stream_number_start` and `line_number_start` are two different numbers on two
+different labels. `stream_number_start` moves the whole stream number, the `S1`
+a PFD draws in a flag and a stream table keys its columns on.
+`line_number_start` moves the `sequence` **component** of a line number, the
+`1001` inside `6"-P-1001-A1A`. A sheet may want one and not the other, so
+neither stands in for the other.
 - `valve_station_tag_scheme` spells a valve station's members out of its control
   valve's tag: a format string taking `{letters}`, `{number}`, `{suffix}`,
   `{role}` and `{control}`, or a callable `(role, control_tag) -> str`.
@@ -151,7 +165,7 @@ Registers an `Annotation` or `TableBox` (see [Sheet furniture](#sheet-furniture)
 ```text
 add_instrument(type, number="", *, on=None, at=None,
                offset=45.0, angle=90.0, variant="default", **kwargs) -> Instrument
-add_loop(variable: str, number: str | int) -> Loop
+add_loop(variable: str, number: str | int | None = None) -> Loop
 add_valve_station(tag: str, **kwargs) -> ValveStation
 ```
 See [Instrumentation](#instrumentation), [Control loops](#control-loops) and
@@ -1550,7 +1564,9 @@ The author supplies all but `sequence`, which auto-numbering fills from
 `line_number_start` (default `1001`); set it yourself to tie into a line that
 already exists on someone else's list. A component left unset drops out, and so
 does the text introducing it, so a line with no spec issued yet reads
-`6"-P-1001` rather than `6"-P-1001-`.
+`6"-P-1001` rather than `6"-P-1001-`. `line_number_start` moves this component
+only; the number a stream with no line number is drawn with is moved by
+[`stream_number_start`](#flowsheet).
 
 The list is deliberately fixed. A component the engine cannot name is a
 component the line list cannot be checked against, and a site wanting a fact of
@@ -1682,7 +1698,7 @@ fy  = fs.add_instrument("FY", 101, variant="computer")    # computing relay
 ### Control loops
 
 ```text
-fs.add_loop(variable: str, number: str | int) -> Loop
+fs.add_loop(variable: str, number: str | int | None = None) -> Loop
 loop.tag(letters: str) -> str
 loop.variable   # the measured-variable letter, upper-cased
 loop.number     # the loop number, as text
@@ -1735,6 +1751,43 @@ six loops and leaves ten balloons on literal numbers.
 Loops serialize to an optional `loops:` section of the spec and round-trip
 through it; a sheet that declares none writes no section, so its spec is
 unchanged. See [Declaring a flowsheet as data](#declaring-a-flowsheet-as-data).
+
+#### Automatic loop numbers
+
+Leave the number out and the sheet allocates the next one, counting from
+`loop_number_start` (default `101`). On a draft, where the numbers and the count
+of loops are both still moving, that is one thing fewer to retype each time a
+loop is inserted. A loop series belongs to a plant area, so set the start to the
+area this sheet draws; the default is a plausible unit-100 series to draw with
+until you do.
+
+```python
+fs = Flowsheet("Ethanol Purification A300", loop_number_start=301)
+press = fs.add_loop("P")        # P-301
+temp  = fs.add_loop("T")        # T-302
+flow  = fs.add_loop("F")        # F-303
+```
+
+- **One series for the sheet**, not one per measured variable: the numbers climb
+  through whichever variable comes next, which is what `P&ID_301` draws —
+  `P-301`, `T-302`, `F-303`, `L-304`, `F-305`, `L-306`, `T-307`, `F-308`. A loop
+  is still the `(variable, number)` pair, so `add_loop("F", 101)` beside
+  `add_loop("L", 101)` remains two loops.
+- **Allocated at the `add_loop()` line**, so the numbers run down the page in the
+  order the page declares them. A loop declared and never tagged still spends
+  its number; a declaration that raises spends nothing.
+- **Allocated and typed numbers mix.** A typed number reserves nothing and the
+  counter skips nothing, so a sheet that types `F-316` and then allocates takes
+  the series' next number, not 317. Should the counter reach a number already
+  typed for the same variable, `add_loop()` raises at that line and names
+  `loop_number_start` as the way clear.
+- **A loop of one member is a legitimate use.** CHEE4001 p.13 assigns a number
+  to "each group of components required to perform the desired function of the
+  monitor or control scheme", and a group of one is a group — which is what the
+  tail of `P&ID_301` is: `FE-313`, `PI-316`, `TI-319`, `LI-322`.
+- **`to_dict()` freezes the sheet.** Every loop's number is written out as a
+  literal, allocated or typed, so reading the spec back gives the numbers nailed
+  down. Auto-numbering is the draft; the spec is the issue.
 
 ### Valve stations
 
@@ -2210,11 +2263,36 @@ making, so the warnings left on `fs.warnings` are about the sheet that came out.
 | `gravity-turned` | warning | a unit whose symbol's function depends on gravity has been given a quarter turn, which ISO 15519-1:2010 §11.4.2 excepts from the general permission to turn. One finding per unit; see [Symbols that must not be turned](#symbols-that-must-not-be-turned) |
 | `run-off-elevation` | warning | two connected nozzles on one horizontal run are *almost* level, missing by less than the shorter symbol is tall, so the line steps into a device and back out; see [Runs at one elevation](#runs-at-one-elevation) |
 | `nozzles-crowded` | warning | two nozzles on one face both wear an arrowhead and are pitched closer than ISO 128-20 lets two parallel lines come, so the strip of paper between the heads is too thin to survive reproduction. One finding per face, and the message names the box that would fix it. Not made for a P&ID, which draws no heads. See [Nozzles and the arrowheads they carry](#nozzles-and-the-arrowheads-they-carry) |
+| `nozzle-unconnected` | warning | a nozzle whose existence a count asked for (`n_inlets=`, `n_outlets=`, `n_feeds=`, `inputs=`, `outputs=`) carries no stream, so the sheet asserts a connection that is not drawn. One finding per family; only counted nozzles, and only process ones. See [Nozzles nothing is piped to](#nozzles-nothing-is-piped-to) |
 | `route-not-settled` | warning | routing and instrument placement never agreed and `route()` ran out of passes; see [Routing and instrument placement](#routing-and-instrument-placement) |
+| `deprecated` | warning | the sheet was built with a spelling that is being retired. The message names the replacement and the release the old one stops working in; see [Deprecated API](#deprecated-api) |
 
 Errors raise from `to_svg()`/`render()` unless you pass `check=False`. Warnings
 never raise, and collect on `fs.warnings` after each render. Geometric checks
 need resolved frames, so they are skipped before layout has run.
+
+### Deprecated API
+
+A retired spelling gives two signals: a standard `DeprecationWarning`, and a
+`deprecated` finding from `validate()`. Python hides `DeprecationWarning` by
+default outside `__main__`, so the finding is the one you can rely on seeing.
+Both are built from one declaration and always read the same:
+
+```text
+[warning] deprecated: P-101: Pump(cooled=True) is deprecated and is removed in pandid 0.1.3; use Pump(jacket='cooling')
+```
+
+A deprecation lives for one release. It works throughout the release that
+announces it and is deleted in the next, so the message always names a release
+that has not shipped yet. The CHANGELOG lists it under `### Deprecated` when it
+is announced and under `### Removed` when it goes. Nothing is deprecated today;
+the line above is the shape, not a real call.
+
+The finding rides on the object the call was made on, so a unit deprecated
+during construction is reported even though it was not on a flowsheet yet. A
+unit that is never added is never reported — `validate()` answers for the
+drawing. A deprecated call with no flowsheet, unit or stream in scope has
+nothing to ride on and is reported by every `validate()` in that process.
 
 ### Runs at one elevation
 
@@ -2315,6 +2393,54 @@ fs.validate(diagram="p&id")     # no nozzles-crowded: the sheet draws no heads
 One finding per face, not per pair: three crowded nozzles are one crowded face
 with one thing to do about it. A pair on the same *point* is the stronger
 `coincident-ports` finding instead.
+
+### Nozzles nothing is piped to
+
+A unit whose nozzle count you choose has exactly the nozzles you asked for. Ask
+for four and pipe three, and the sheet draws a mixer that combines four streams
+and shows three lines going into it:
+
+```python
+mix = fs.add(units.Mixer("M-101", n_inlets=4))
+for i in (1, 2, 3):                       # meaning in_1, in_2, in_3
+    fs.connect(fs.add(units.Feed(f"F-{i}")).outlet, mix.inlets[i])
+```
+
+`inlets` is indexed from zero and the nozzles are numbered from one, so that
+wires `in_2`, `in_3` and `in_4` and leaves `in_1` bare. `validate()` reports it:
+
+```
+M-101.in_1 carries no stream. M-101 was built with 4 numbered nozzles,
+in_1..in_4, and 3 of them are piped, so the sheet asserts 4 connections and
+draws 3. Connect it, or build M-101 with the 3 it uses.
+```
+
+Both cures, because only you know which was meant: a line you left off, or a
+nozzle you never wanted. It costs more than a missing line, too — a family is
+spread evenly across its face for **every** member it has, wired or not, so the
+three lines that are drawn land 11.7 apart around a hole where `in_1` is,
+instead of the 17.5 apart that `n_inlets=3` would have given them.
+
+**Only counted nozzles.** A `vent`, a `duty`, an exchanger's other side, a drain
+valve's outlet — every fixed nozzle a class declares is offered to every
+instance whether the sheet uses it or not, and leaving one open is a drawing
+decision. Across the twelve examples in `examples/` 167 ports carry no stream
+and every one of them is one of those: 112 signal connections, 26 exchanger
+utility sides, 14 duties, 8 station drain outlets and 7 vents. None is reported.
+What is reported is a *count that went unmet*, which is why the singular
+spelling is silent too — a one-feed column's nozzle is called `feed`, not
+`feed_1`, and no number was ever written down for it.
+
+**Only process nozzles.** Signal connections are a different question: an
+instrument may be placed against its equipment rather than drawn tapped off a
+line, and a valve with nothing on its `actuator` is a hand valve. Counting does
+not settle either, so this finding does not try.
+
+No standard is cited because none is on point. ISO 15519-1 §12, *Connections*,
+legislates how a connecting line is drawn — orientation, width, joints,
+intersections, off-sheet references — and never that a connection point must
+have one on it. This is the drawing disagreeing with its own declaration, which
+needs no outside authority.
 
 ### Routing and instrument placement
 
@@ -2475,8 +2601,10 @@ nothing, and asking for YAML without PyYAML installed says exactly that.
 ```yaml
 name: Feed Metering Skid          # the only required field
 stream_naming_scheme: "S{n}"
+stream_number_start: 1            # the S1 a flag draws
 line_numbering_scheme: "{size}-{service}-{sequence}-{spec}"
-line_number_start: 1001
+line_number_start: 1001           # the 1001 inside 6"-P-1001-A1A
+loop_number_start: 101            # where a loop with no number counts from
 components: [Water, {name: Ethanol, formula: C2H6O}]
 
 units:
@@ -2576,6 +2704,10 @@ Declared control loops, `{variable: F, number: 303}`, matching
 [`add_loop()`](#control-loops). Members carry their whole tag, so the section
 only records that the loop exists; a sheet that declares none writes no section
 at all.
+
+`number` is optional and omitting it allocates from `loop_number_start`, exactly
+as omitting the argument to `add_loop()` does. `to_dict()` always writes a
+literal, so a spec this package wrote reads back frozen.
 
 ### The `instruments` section
 
