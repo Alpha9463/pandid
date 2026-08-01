@@ -42,8 +42,13 @@ from pandid import units
 from pandid.flowsheet import Flowsheet
 from pandid.portgeom import port_point, unit_box
 from pandid.render.drawio import _APPROXIMATIONS, DrawioRenderer
-from pandid.render.svg import (boundary_flag, impulse_tap, pneumatic_marks,
-                               stream_polyline, tap_lines)
+from pandid.render.svg import (
+    boundary_flag,
+    impulse_tap,
+    pneumatic_marks,
+    stream_polyline,
+    tap_lines,
+)
 from pandid.render.symbols import Symbol, default_registry, expander
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -356,11 +361,9 @@ def test_every_instrument_connection_is_exported_as_an_edge(sample):
     root = _model(sample)
     drawn = tap_lines(sample)
     assert drawn, "the fixture stopped exercising tap lines"
-    taps = {c.get("id"): c for c in root.findall("mxCell")
-            if (c.get("id") or "").startswith("t")}
+    taps = {c.get("id"): c for c in root.findall("mxCell") if (c.get("id") or "").startswith("t")}
     assert len(taps) == len(drawn)
-    at = {i: _style(c) for i, c in
-          {c.get("id"): c for c in root.findall("mxCell")}.items()}
+    at = {i: _style(c) for i, c in {c.get("id"): c for c in root.findall("mxCell")}.items()}
     for n, (inst, tap, centre) in enumerate(drawn):
         style = _style(taps[f"t{n}"])
         # Solid to the process, dashed to the control system: §5.1.1's two
@@ -368,18 +371,17 @@ def test_every_instrument_connection_is_exported_as_an_edge(sample):
         assert ("dashed" in style) != impulse_tap(inst)
         # The balloon end lands on the balloon's centre, which is where the
         # sheet runs the line to.
-        landed = _drawio_connection_point(
-            inst, at[taps[f"t{n}"].get("target")], style, "entry")
+        landed = _drawio_connection_point(inst, at[taps[f"t{n}"].get("target")], style, "entry")
         assert landed == pytest.approx(centre, abs=0.01)
         source = taps[f"t{n}"].get("source")
         if source is None:
             point = taps[f"t{n}"].find('mxGeometry/mxPoint[@as="sourcePoint"]')
-            assert (float(point.get("x")), float(point.get("y"))) == pytest.approx(
-                tap, abs=0.01)
+            assert (float(point.get("x")), float(point.get("y"))) == pytest.approx(tap, abs=0.01)
         else:
             host = inst.host
-            assert _drawio_connection_point(
-                host, at[source], style, "exit") == pytest.approx(tap, abs=0.01)
+            assert _drawio_connection_point(host, at[source], style, "exit") == pytest.approx(
+                tap, abs=0.01
+            )
 
 
 def test_an_off_page_flag_is_a_pennant_with_its_tag_inside_it():
@@ -411,8 +413,12 @@ def test_a_flag_is_drawn_across_its_own_box():
     """``boundary_flag`` writes the horizontal extent out again rather than
     reading ``unit_box``, so that whole-number coordinates keep the spelling the
     sheet has always given them. The two must still agree on the number."""
-    for cls, mirrored in ((units.Feed, False), (units.Feed, True),
-                          (units.Product, False), (units.Product, True)):
+    for cls, mirrored in (
+        (units.Feed, False),
+        (units.Feed, True),
+        (units.Product, False),
+        (units.Product, True),
+    ):
         for reference in ("", "PFD-302"):
             fs = Flowsheet("extent")
             flag = fs.add(cls("X", reference=reference))
@@ -471,8 +477,7 @@ def test_a_pneumatic_line_is_marked_where_the_sheet_marks_it():
         offset = geo.find('mxPoint[@as="offset"]')
         assert offset is not None
         half = float(geo.get("width")) / 2
-        assert abs(float(offset.get("x")) + half) <= 3 or \
-               abs(float(offset.get("y")) + half) <= 3
+        assert abs(float(offset.get("x")) + half) <= 3 or abs(float(offset.get("y")) + half) <= 3
     # ...and the line itself stays solid, which is what a pneumatic line is.
     assert "dashed" not in _style(cells["s0"])
 
@@ -912,13 +917,14 @@ def test_a_table_rules_rows_and_cells_that_add_up_to_it():
                 # first time the reader touches the table.
                 alt = cgeo.find("mxRectangle")
                 assert alt is not None and alt.get("as") == "alternateBounds"
-                assert float(alt.get("width")) == pytest.approx(
-                    float(cgeo.get("width")), abs=0.01)
+                assert float(alt.get("width")) == pytest.approx(float(cgeo.get("width")), abs=0.01)
             assert x == pytest.approx(width, abs=0.01), (
-                f"{row.get('id')}'s cells span {x} of a {width} row")
+                f"{row.get('id')}'s cells span {x} of a {width} row"
+            )
             top += rh
         assert top == pytest.approx(height, abs=0.01), (
-            f"{tid}'s rows span {top} of a {height} table")
+            f"{tid}'s rows span {top} of a {height} table"
+        )
 
 
 @pytest.mark.parametrize("nrows", range(1, 13))
@@ -936,9 +942,11 @@ def test_a_tables_parts_add_up_at_the_precision_they_are_written_at(nrows):
 
     fs = Flowsheet(f"rows{nrows}")
     fs.add(units.Pump("P-101")).pin(x=100, y=100)
-    fs.annotations.append(Annotation(
-        title="SCHEDULE", align="top-right",
-        rows=[(f"T-{i}", "Tank") for i in range(nrows)]))
+    fs.annotations.append(
+        Annotation(
+            title="SCHEDULE", align="top-right", rows=[(f"T-{i}", "Tank") for i in range(nrows)]
+        )
+    )
     fs.layout()
     cells = _cells(fs, check=False)
     table = next(c for c in cells.values() if "shape=table;" in (c.get("style") or ""))
@@ -950,14 +958,12 @@ def test_a_tables_parts_add_up_at_the_precision_they_are_written_at(nrows):
     start = Decimal(_style(table).get("startSize", "0"))
     rows = [c for c in cells.values() if c.get("parent") == table.get("id")]
     assert len(rows) == nrows
-    spanned = start + sum(
-        (Decimal(r.find("mxGeometry").get("height")) for r in rows), Decimal(0))
+    spanned = start + sum((Decimal(r.find("mxGeometry").get("height")) for r in rows), Decimal(0))
     assert spanned == height, f"{nrows} rows span {spanned} of a {height} table"
     for row in rows:
         width = Decimal(row.find("mxGeometry").get("width"))
         cs = [c for c in cells.values() if c.get("parent") == row.get("id")]
-        assert sum((Decimal(c.find("mxGeometry").get("width")) for c in cs),
-                   Decimal(0)) == width
+        assert sum((Decimal(c.find("mxGeometry").get("width")) for c in cs), Decimal(0)) == width
 
 
 def test_a_columnar_box_is_a_table_and_a_prose_box_is_not():
@@ -969,10 +975,12 @@ def test_a_columnar_box_is_a_table_and_a_prose_box_is_not():
     fs = Flowsheet("boxes")
     pump = fs.add(units.Pump("P-101"))
     pump.pin(x=100, y=100)
-    fs.annotations.append(Annotation(title="LEGEND", align="top-left",
-                                     rows=[("SS", "316L"), ("CS", "A106")]))
-    fs.annotations.append(Annotation(title="NOTES", align="top-right",
-                                     rows=["All lines slope to drain."]))
+    fs.annotations.append(
+        Annotation(title="LEGEND", align="top-left", rows=[("SS", "316L"), ("CS", "A106")])
+    )
+    fs.annotations.append(
+        Annotation(title="NOTES", align="top-right", rows=["All lines slope to drain."])
+    )
     fs.layout()
     cells = _cells(fs, check=False)
     styles = {c.get("id"): _style(c) for c in cells.values()}
@@ -1001,7 +1009,8 @@ def test_the_furniture_docks_where_the_sheet_docks_it():
 
     box = DrawioRenderer()._drawing_box(fs)
     placed, _frame, _free = F.dock(
-        [(a, a.align, *F.measure_annotation(a)) for a in fs.annotations], box)
+        [(a, a.align, *F.measure_annotation(a)) for a in fs.annotations], box
+    )
     at = {id(obj): (x, y) for obj, x, y, _w, _h in placed}
     cells = _cells(fs, check=False)
     for annotation in (left, right):
