@@ -50,6 +50,8 @@ def main():
 
     # --- In-line: motor spirit -------------------------------------------
     xv601 = fs.add(units.Valve("XV-601", variant="solenoid", description="MS Receipt Trip Valve"))
+    xv602 = fs.add(units.Valve("XV-602", variant="solenoid",
+                               description="Ethanol Receipt Trip Valve"))
     hv601 = fs.add(units.Valve("HV-601", variant="gate", description="TK-601 Root Valve"))
     ej601 = fs.add(units.Fitting("EJ-601", variant="expansion_joint",
                                  description="TK-601 Nozzle Compensator"))
@@ -83,6 +85,7 @@ def main():
 
     # --- In-line: the loading rack ---------------------------------------
     t_blend = fs.add(units.Tee(branch="inlet"))
+    t_blend.new_line_number = True
     fe604 = fs.add(units.Fitting(load_flow.tag("FE"), variant="positive_displacement",
                                  label_pos="bottom", description="Loading Meter"))
     cv604 = fs.add(units.Valve(load_flow.tag("CV"), variant="control",
@@ -110,10 +113,11 @@ def main():
     lpg_fill_x = 1090 + port_offset(v603, "inlet")[0]
     lpg_draw_x = 1090 + port_offset(v603, "outlet")[0]
 
-    ms_recv_y, eth_recv_y, lpg_recv_y = 175.0, 115.0, 55.0
+    ms_recv_y, eth_recv_y, lpg_recv_y = 170.0, 110.0, 50.0
     ms_in.pin(port="outlet", x=200, y=ms_recv_y)
     xv601.pin(port="inlet", x=250, y=ms_recv_y)
     eth_in.pin(port="outlet", x=200, y=eth_recv_y)
+    xv602.pin(port="inlet", x=500, y=eth_recv_y)
     lpg_in.pin(port="outlet", x=200, y=lpg_recv_y)
 
     lpg_run_y, eth_run_y, ms_run_y = 390.0, 510.0, 665.0
@@ -170,8 +174,9 @@ def main():
     fs.connect(ms_in.outlet, xv601.inlet, service="MS", sequence=601, size=200,
                schedule=40, spec="CS")
     fs.connect(xv601.outlet, tk601.inlet).via([(ms_fill_x, ms_recv_y)])
-    fs.connect(eth_in.outlet, tk602.inlet, service="ETH", sequence=602, size=150,
-               schedule=40, spec="SS").via([(eth_fill_x, eth_recv_y)])
+    fs.connect(eth_in.outlet, xv602.inlet, service="ETH", sequence=602, size=150,
+               schedule=40, spec="SS")
+    fs.connect(xv602.outlet, tk602.inlet).via([(eth_fill_x, eth_recv_y)])
     fs.connect(lpg_in.outlet, v603.inlet, service="LPG", sequence=603, size=100,
                schedule=80, spec="CS").via([(lpg_fill_x, lpg_recv_y)])
 
@@ -228,12 +233,15 @@ def main():
     # --- Instruments -----------------------------------------------------
     lt601 = fs.add_instrument("LT", ms_level, on=tk601, at="W", offset=40)
     fs.add_instrument("LI", ms_level, on=lt601, at="S", offset=50, variant="shared")
-    lsh611 = fs.add_instrument("LSHH", 611, on=tk601, at="E", offset=40)
-    fs.add_instrument("Z", 1, on=lsh611, at="N", offset=40, variant="sis")
-    fs.add_instrument("Z", 1, on=xv601, at="S", offset=26, variant="sis")
-
-    lt602 = fs.add_instrument("LT", eth_level, on=tk602, at="E", offset=40)
+    lt602 = fs.add_instrument("LT", eth_level, on=tk602, at="W", offset=32)
     fs.add_instrument("LI", eth_level, on=lt602, at="S", offset=50, variant="shared")
+
+    lsh611 = fs.add_instrument("LSHH", 611, on=tk601, at="E", offset=32)
+    lsh612 = fs.add_instrument("LSHH", 612, on=tk602, at="E", offset=40)
+    fs.add_instrument("Z", 1, on=lsh611, at="N", offset=40, variant="sis")
+    fs.add_instrument("Z", 1, on=lsh612, at="N", offset=40, variant="sis")
+    fs.add_instrument("Z", 1, on=xv601, at="S", offset=26, variant="sis")
+    fs.add_instrument("Z", 1, on=xv602, at="S", offset=26, variant="sis")
 
     pt603 = fs.add_instrument("PT", lpg_press, on=v603, at="E", offset=30)
     fs.add_instrument("PI", lpg_press, on=pt603, at="N", offset=40, variant="shared")
