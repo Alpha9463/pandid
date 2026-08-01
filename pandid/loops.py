@@ -19,9 +19,9 @@ than detected, and the check would have nothing left to check.
 
 :meth:`Loop.tag` is the route in for everything that is not a balloon, and it
 composes without checking. A primary element and a final control element are
-part of the loop, but a final element is not tagged from the measured variable
-and its number need not match its loop's either, so there is nothing about
-``CV-303`` a first-letter rule could hold true.
+both part of the loop and both carry its number, but a final element is not
+tagged from the measured variable, so there is nothing about ``CV-303``'s
+letters a first-letter rule could hold true.
 
 A loop is identified by the **pair**, not by the number. ``FIC-101`` and
 ``LIC-101`` are two loops on one sheet, which is the ordinary convention and
@@ -80,14 +80,23 @@ class Loop:
         :meth:`~pandid.flowsheet.Flowsheet.add_instrument`, and the returned
         string is an ordinary tag, so every unit class joins on the same terms.
 
-        The measured-variable check is *not* applied here, and cannot be. It is
-        the check :meth:`~pandid.flowsheet.Flowsheet.add_instrument` makes,
-        because it is a rule about a **functional letter string**: an
-        instrument's first letter is what it measures. A final control element
-        is not tagged that way. The reference sheet spells every control valve
-        ``CV-...`` whatever it strokes, and its ``LIC-304`` drives ``CV-305``, so
-        neither the letters nor the number of a final element track its loop.
-        What establishes that membership is the signal edge into the actuator.
+        The measured-variable check is *not* applied here, and cannot be for a
+        final element. It is the check
+        :meth:`~pandid.flowsheet.Flowsheet.add_instrument` makes, because it is
+        a rule about a **functional letter string**: an instrument's first
+        letter is what it measures. A final control element is not tagged that
+        way. The reference sheet spells every control valve ``CV-...`` whatever
+        it strokes -- ``LIC-306`` drives ``CV-306`` and ``PIC-301`` drives
+        ``CV-301-1`` -- so a final element's letters do not track its loop.
+
+        Its **number** does, and that is the half this supplies. CHEE4001 p.11
+        labels the control valve of a flow loop ``Loop No.`` alongside the
+        element, the transmitter and the controller, all four numbered 504, and
+        p.13 gives the rule they follow: "A loop number is assigned to each
+        group of components required to perform the desired function of the
+        monitor or control scheme." The valve is in the group. So the number is
+        what membership is written with, and the signal edge into the actuator
+        is what it is drawn with.
         """
         letters = letters.strip()
         if not letters:

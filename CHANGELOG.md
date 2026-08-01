@@ -26,8 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   trip, so `P-318` would be a loop of one member: the number is typed once
   either way and there is no second letter to check. The five `Z` squares have
   no measured variable at all, `Z` being what the function does rather than what
-  it reads. `CV-301-1`, `CV-305` and `CV-308` type their tags too, a final
-  element's number not tracking its loop.
+  it reads. `CV-301-1`, `CV-305` and `CV-308` type their tags too, for reasons
+  of their own: `CV-301-1` is one of PIC-301's two split-range valves and its
+  suffix is a station member index no loop handle spells, while `CV-305` and
+  `CV-308` belong to loops 305 and 308 — the slave halves of two cascades this
+  sheet draws in short, wiring each master straight to the valve. A final
+  element's number does track its loop; only its letters do not.
 
   Refactor only. Every tag is the string it was, so
   `tests/golden/11_ethanol_pid.svg` and `docs/gallery/11_ethanol_pid.{svg,png}`
@@ -35,6 +39,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the committed files, not by the suite going green. Running the measured-
   variable check over the densest sheet in the corpus for the first time
   rejected nothing: every balloon's first letter already agreed with its loop.
+
+### Fixed
+
+- **Documentation: a final control element does take its loop's number.** 0.1.1
+  shipped the opposite claim in `pandid/loops.py`, `docs/api.md` and
+  `tests/test_loops.py` — that neither the letters nor the number of a final
+  element track its loop — and cited `LIC-304` driving `CV-305` on the reference
+  sheet as the evidence. The reading was wrong. That sheet carries `FE-305`,
+  `FT-305` and `FIC-305`: 304 is a level-to-flow cascade whose slave is loop
+  305, and `CV-305` is loop 305's own final element. `TIC-307`/`FIC-308`/
+  `CV-308` is the same arrangement. The sheet settles it without either
+  cascade — `LIC-306` strokes `CV-306` and `TIC-312` strokes `CV-312` — and
+  CHEE4001 p.11 labels a flow loop's control valve `Loop No.` alongside its
+  element, transmitter and controller, all four numbered 504, under p.13's rule
+  that one number is assigned to each group of components a control scheme
+  needs. The valve is in the group.
+
+  What does not track is the **letters**: the sheet spells every control valve
+  `CV-`, whatever it strokes, so `loop.tag()` still composes without checking a
+  first letter. No behaviour changes — `tag()` supplied the loop's number before
+  and supplies it now — but the reason it is right is the reverse of the one
+  recorded, and the wrong reason was about to be built on.
 
 ## [0.1.1] - 2026-08-01
 

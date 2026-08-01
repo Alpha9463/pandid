@@ -94,10 +94,11 @@ def test_loop_tag_hands_a_tag_to_any_unit_class():
 
 
 def test_loop_tag_does_not_hold_a_final_element_to_the_measured_variable():
-    """``CV-303`` is on the F loop, and ``LIC-304`` on the reference sheet
-    strokes ``CV-305``: neither the letters nor the number of a final control
-    element track the loop it closes. What says it is a member is the signal
-    edge into its actuator, so ``tag()`` composes and does not judge.
+    """The reference sheet spells every control valve ``CV-``, whatever it
+    strokes, so a final element's letters do not track the loop it closes and
+    there is nothing for a first-letter rule to hold true. Its number does
+    track -- ``LIC-306`` there strokes ``CV-306`` -- which is why ``tag()``
+    supplies the number and judges nothing else.
     """
     fs = Flowsheet("final elements")
     assert fs.add_loop("F", 303).tag("CV") == "CV-303"

@@ -1667,8 +1667,10 @@ six loops and leaves ten balloons on literal numbers.
 - **`loop.tag(letters)`** returns a tag string, so a `Fitting`, a `Valve` or any
   other class joins on the same terms. It composes and does not check the first
   letter: a final control element is not tagged from the measured variable, and
-  its number need not match its loop's either. What establishes that membership
-  is the signal edge into the actuator.
+  a sheet spelling every control valve `CV-` gives `tag()` nothing to check. Its
+  number is another matter and does come from the loop, which is the half `tag()`
+  supplies — CHEE4001 p.13 assigns one number to the whole group of components a
+  control scheme needs, and the valve is in the group.
 - **A loop is a namespace, not a unit.** It has no frame and no ports, is never
   in `fs.units`, draws nothing and reaches no equipment list.
 - **A loop number is allocated once and never renumbered**, unlike a stream
