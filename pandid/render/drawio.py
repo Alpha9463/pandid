@@ -1043,7 +1043,7 @@ class DrawioRenderer:
         items: list = []
         if fs.title_block is not None:
             items.append((fs.title_block, "bottom-right",
-                          *F.measure_title_strip(fs.title_block)))
+                          *_strip_size(fs.title_block)))
         for a in getattr(fs, "annotations", []) or []:
             w, h = (F.measure_table(a) if isinstance(a, TableBox)
                     else F.measure_annotation(a))
@@ -1066,18 +1066,28 @@ class DrawioRenderer:
         title = getattr(obj, "title", "") or ""
         if isinstance(obj, TableBox):
             size, _ncol, col_w, _row_h = F._table_layout(obj)
+            # A TableBox rules its own columns, and _table_layout's widths
+            # already carry that ruling's padding and sum to the measured box.
             return _table(cid, title, [str(c) for c in obj.headers],
                           [[str(c) for c in row] for row in obj.rows],
-                          x, y, w, h, col_w, (size + 10) if title else 0.0)
+                          x, y, w, h, col_w, (size + 10) if title else 0.0,
+                          font=size, col_keys=_ALIGN_KEYS(obj.col_align, len(col_w)))
         rows = list(getattr(obj, "rows", []) or [])
         if any(isinstance(r, (tuple, list)) for r in rows):
             # Columnar: an equipment schedule, a legend, a numbered note list.
-            # Ruled at the column stops the sheet rules them at, since the box
-            # was measured against those and is being drawn at that width.
-            _size, _row_h, title_h, col_w = F._ann_layout(obj)
+            # The columns are measured off their own text at the size they will
+            # be drawn at, not shared out in proportion; see :func:`columns`.
+            size, _row_h, title_h, _col_w = F._ann_layout(obj)
             grid = [[str(c) for c in r] if isinstance(r, (tuple, list)) else [str(r)]
                     for r in rows]
-            return _table(cid, title, [], grid, x, y, w, h, col_w, title_h)
+            ncol = max(len(r) for r in grid)
+            return _table(cid, title, [], grid, x, y, w, h,
+                          columns(grid, [size] * ncol, w), title_h, font=size,
+                          # Left, as the sheet sets a row, with the first column
+                          # bold where there is more than one -- draw_annotation's
+                          # own rule.
+                          col_keys=["align=left;spacingLeft=4;fontStyle=1;"]
+                          + ["align=left;spacingLeft=4;"] * (ncol - 1))
         # Not tabular: a titled box of free-form lines, which is what it is on
         # the sheet too. Anything docked that is neither an Annotation nor a
         # TableBox lands here as well, on the two things every box has -- a title
@@ -1121,21 +1131,48 @@ class DrawioRenderer:
           and labelled.
 
         What is lost, and is worth a reader knowing: the merged geometry above,
-        the sheet count's corner placement, and the grey field captions the
-        sheet sets at 6,5 against values at 11. What is kept: every value, the
-        revision history in order, and a grid the reader can edit.
+        the sheet count's corner placement, and the title band's own size, since
+        a title is a field row here like any other rather than a heading set
+        across the strip. What is kept: every value, the revision history in
+        order at the sheet's own column widths, the caption/value type sizes,
+        and a grid the reader can edit.
+
+        **Both tables are ruled at their own row height and bottom-aligned**,
+        rather than being stretched to fill the docked rectangle. Filling it was
+        what produced the row of empty rules a reader saw: eleven fields shared
+        between eighty units are rows 5.6 units tall, and 11-point type in a
+        5.6-unit row draws nothing at all. So the field table is as tall as its
+        fields need and reaches *up* from the strip's bottom edge, which is the
+        edge the sheet rules its own last band on and the one worth holding
+        still.
         """
-        heading, fields, revisions = _title_block_fields(block)
+        _heading, fields, revisions = _title_block_fields(block)
         # The strip's own division: the revision grid takes the left _REV_W of
         # it and the company cell and information block share the rest, which is
         # where draw_title_strip() rules its two vertical lines.
         rev_w = min(F._REV_W, w)
-        band = 18.0 if heading else 0.0
-        out = _table(f"{cid}-rev", "REVISIONS", [c[0] for c in F._REV_COLS], revisions,
-                     x, y, rev_w, h, [c[1] for c in F._REV_COLS], band,
-                     header_last=True)
-        out += _table(f"{cid}-id", heading, [], fields,
-                      x + rev_w, y, w - rev_w, h, [1.0, 2.0], band)
+        row_h = F._REV_ROW
+        # No heading on either: the title and subtitle are field rows below, and
+        # a heading would say them twice -- once in a band too narrow to hold
+        # the sheet's own title, which is what overflowed.
+        rev_h = row_h * (len(revisions) + 1)
+        id_h = row_h * max(len(fields), 1)
+        out = _table(f"{cid}-rev", "", [c[0] for c in F._REV_COLS], revisions,
+                     x, y + h - rev_h, rev_w, rev_h,
+                     [c[1] for c in F._REV_COLS], header_last=True,
+                     font=_STRIP_FONT, row_h=row_h,
+                     col_keys=["align=left;spacingLeft=3;"] * len(F._REV_COLS))
+        # The caption column is measured and drawn at the size the sheet sets a
+        # caption at, and the value column at the size it sets a value; a column
+        # measured at one size and drawn at another is the whole of defect 9.
+        id_w = w - rev_w
+        widths = columns(fields, [_STRIP_FONT, _STRIP_VALUE], id_w, bold_first=False)
+        out += _table(f"{cid}-id", "", [], fields,
+                      x + rev_w, y + h - id_h, id_w, id_h, widths,
+                      font=_STRIP_VALUE, row_h=row_h,
+                      col_keys=[f"align=left;spacingLeft=3;fontSize={_STRIP_FONT:g};"
+                                f"fontColor={_CAPTION_INK};",
+                                "align=left;spacingLeft=3;fontStyle=1;"])
         return out
 
 
@@ -1328,15 +1365,96 @@ def _distribute(weights, total: float) -> list[float]:
     return out
 
 
-def _table(cid: str, title: str, headers, rows, x, y, w, h, weights,
-           start: float = 0.0, *, header_last: bool = False) -> list[str]:
+#: Clearance between a cell's rule and the text in it, both sides together.
+#: mxGraph insets a label by ``mxConstants.LABEL_INSET`` (3) at each end before
+#: it starts drawing, and a word that ends exactly on its own rule reads as
+#: touching it, so a column is cut this much wider than the text it holds.
+_CELL_PAD = 8.0
+
+#: How a :class:`~pandid.document.TableBox`'s per-column ``l``/``c``/``r``
+#: alignment is said in a draw.io style. The sheet's own default is centred
+#: (``draw_table``), so a column that says nothing gets nothing said about it.
+_ALIGN_KEY = {"l": "align=left;spacingLeft=4;", "r": "align=right;spacingRight=4;",
+              "c": "align=center;"}
+
+#: The two type sizes the title strip is set in: ``draw_title_strip`` letters a
+#: revision cell and a field caption at 7,5 and 6,5 and sets a value at 11. The
+#: caption size is rounded to the revision size so the two tables' rows line up,
+#: and the grey is the caption colour the strip uses to hold a caption back from
+#: the value beside it.
+_STRIP_FONT, _STRIP_VALUE = 7.5, 11.0
+_CAPTION_INK = "#666666"
+
+
+def _ALIGN_KEYS(col_align, ncol: int) -> list[str]:
+    align = list(col_align or [])
+    return [_ALIGN_KEY.get(align[c] if c < len(align) else "c", "align=center;")
+            for c in range(ncol)]
+
+
+def columns(rows, sizes, total: float, bold_first: bool = True) -> list[float]:
+    """Column widths for a grid, measured off the text rather than shared out.
+
+    The defect this replaced: the columns were given *proportional* shares of
+    the box, so a narrow column beside a wide one got a narrow share of a box
+    that was only just wide enough -- and the legend's first column, holding
+    ``HPSSH`` beside ``High Pressure Steam Supply Header``, came out too narrow
+    for its own five letters and clipped them to ``HPSS``. A share of the total
+    is not a measurement of anything.
+
+    So every column is measured at :func:`pandid.render.furniture.text_width`,
+    which is what the SVG renderer rules its own columns with, plus the
+    clearance a cell needs. Slack goes to the **last** column, which is the one
+    holding prose and the one that can use it; a shortfall is shared out in
+    proportion, since a box too narrow for its own contents has to clip
+    somewhere and the sheet clips it too.
+
+    ``sizes`` is the font size per column, because a title block sets its field
+    captions smaller than its values and a column has to be measured at the size
+    it will be *drawn* at.
+    """
+    from pandid.render.furniture import text_width
+
+    ncol = max((len(r) for r in rows), default=1)
+    need = []
+    for c in range(ncol):
+        size = sizes[c] if c < len(sizes) else (sizes[-1] if sizes else 11.0)
+        bold = bold_first and c == 0
+        widest = max((text_width(r[c], size, bold) for r in rows if c < len(r)),
+                     default=0.0)
+        need.append(widest + _CELL_PAD)
+    span = sum(need)
+    if span <= 0:
+        return _distribute([1.0] * ncol, total)
+    if span > total:  # cannot fit; clip in proportion, as the sheet does
+        return _distribute(need, total)
+    out = _distribute(need[:-1] + [need[-1] + (total - span)], total)
+    return out
+
+
+def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
+           start: float = 0.0, *, header_last: bool = False,
+           font: float = 11.0, col_keys=(), row_h: "float | None" = None
+           ) -> list[str]:
     """A ruled grid, as draw.io's own table: container, rows, cells.
 
-    ``weights`` are the relative column widths, which come from the same
-    measurement the SVG renderer rules its columns at, so the exported table has
-    the sheet's own proportions. ``start`` is the height of the title band, which
-    is a table container's swimlane head and carries the box's title; a box with
-    no title is given ``startSize=0`` and no band.
+    ``widths`` are absolute column widths and must sum to ``w``; they come from
+    :func:`columns`, or from the sheet's own ruling where it has one (a revision
+    strip is ruled at fixed widths and this reproduces them). ``start`` is the
+    height of the title band, which is a table container's swimlane head and
+    carries the box's title; a box with no title is given ``startSize=0`` and no
+    band at all.
+
+    ``font`` is the size the cells are *drawn* at, and it is stated rather than
+    left to draw.io because draw.io's default is 12 while every box on the sheet
+    measures its own text at its ``font_size``. A column measured at 11 and
+    drawn at 12 is a column three-quarters of a letter too narrow, which is what
+    clipped ``APP'D`` to ``APP'`` in the revision strip.
+
+    ``row_h`` rules every row at that height and lets the table be as tall as
+    its rows come to; the default fills ``h`` instead. Eleven title-block fields
+    stretched to fill an eighty-unit strip are rows 5.6 units tall, which draw
+    no text at all and read as a grid of empty rules.
 
     ``header_last`` puts the heading row at the foot, which is where a revision
     history has it: the newest revision sits against the heading and the older
@@ -1350,16 +1468,20 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, weights,
     # Every dimension is rounded to the precision it is written at *before* the
     # rows and cells are cut out of it, so the parts add up to the whole as
     # written rather than as computed. See :func:`_distribute`.
-    w, h, start = round(float(w), 2), round(float(h), 2), round(float(start), 2)
-    widths = _distribute(list(weights)[:ncol] or [1.0] * ncol, w)
+    w, start = round(float(w), 2), round(float(start), 2)
+    if row_h is not None and body:
+        h = round(start + row_h * len(body), 2)
+    else:
+        h = round(float(h), 2)
+    widths = _distribute(list(widths)[:ncol] or [1.0] * ncol, w)
     if len(widths) < ncol:
         widths = _distribute([1.0] * ncol, w)
     heights = _distribute([1.0] * len(body), h - start) if body else []
 
+    shape = _TABLE_SHAPE + f"startSize={_num(start)};fontSize={font:g};"
     out = [
         f'        <mxCell id="{cid}" value={_attr(title)} '
-        f'style={_attr(_TABLE_SHAPE + f"startSize={_num(start)};")} '
-        f'vertex="1" parent="1">',
+        f'style={_attr(shape)} vertex="1" parent="1">',
         f'          <mxGeometry x="{_num(x)}" y="{_num(y)}" width="{_num(w)}" '
         f'height="{_num(h)}" as="geometry" />',
         '        </mxCell>',
@@ -1378,9 +1500,11 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, weights,
         cx = 0.0
         for c in range(ncol):
             value = str(cells[c]) if c < len(cells) else ""
+            extra = col_keys[c] if c < len(col_keys) else ""
             out += [
                 f'        <mxCell id="{cid}-r{r}-c{c}" value={_attr(value)} '
-                f'style={_attr(_TABLE_CELL + head)} vertex="1" parent="{cid}-r{r}">',
+                f'style={_attr(_TABLE_CELL + head + extra)} vertex="1" '
+                f'parent="{cid}-r{r}">',
                 f'          <mxGeometry x="{_num(cx)}" width="{_num(widths[c])}" '
                 f'height="{_num(rh)}" as="geometry">',
                 f'            <mxRectangle width="{_num(widths[c])}" '
@@ -1410,6 +1534,23 @@ def _text_box(cid: str, title: str, rows, x, y, w, h) -> list[str]:
         f'width="{_num(w)}" height="{_num(h)}" as="geometry" />',
         '        </mxCell>',
     ]
+
+
+def _strip_size(block) -> "tuple[float, float]":
+    """How much room the exported title strip actually needs.
+
+    The width is the sheet's own (``measure_title_strip``), since the strip is
+    ruled into the same two columns. The **height** is not: the sheet merges its
+    information block into four bands of unequal depth and a draw.io table
+    cannot, so the fields come out as one row each and the block is as tall as it
+    has fields. Measuring that here, rather than handing the dock the sheet's
+    80-unit strip and then drawing 154 units of table into it, is what keeps the
+    bottom band wide enough to hold what lands in it -- otherwise the strip grows
+    up out of its own band and over the foot of the drawing.
+    """
+    _heading, fields, revisions = _title_block_fields(block)
+    return (F.measure_title_strip(block)[0],
+            F._REV_ROW * max(len(revisions) + 1, len(fields), 1))
 
 
 def _title_block_fields(block) -> "tuple[str, list[list[str]], list[list[str]]]":

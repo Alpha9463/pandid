@@ -919,7 +919,7 @@ def test_a_title_block_exports_as_the_two_tables_it_is():
     present, each in a cell of its own."""
     cells = _cells(_titled(), check=False)
     values = {c.get("value") for c in cells.values()}
-    assert "REVISIONS" in values, "the revision grid lost its heading"
+    assert {"REV", "DATE", "DESCRIPTION"} <= values, "the revision grid lost its headings"
     assert {"A", "2026-01-02", "Issued"} <= values, "a revision row was flattened"
     assert {"A-301", "Acme", "Ethanol Purification"} <= values, "a field was dropped"
     # ...and each of those is its own cell, not a run of <br>-separated text.
@@ -1018,6 +1018,100 @@ def test_a_tables_parts_add_up_at_the_precision_they_are_written_at(nrows):
         width = Decimal(row.find("mxGeometry").get("width"))
         cs = [c for c in cells.values() if c.get("parent") == row.get("id")]
         assert sum((Decimal(c.find("mxGeometry").get("width")) for c in cs), Decimal(0)) == width
+
+
+def _clipped(cells) -> list[str]:
+    """Every table cell whose text is wider than the column it is drawn in.
+
+    Measured with ``furniture.text_width`` -- the estimate the SVG rules its own
+    columns by -- at the size the cell states it will be *drawn* at, which is the
+    pair that has to agree. A column measured at one size and drawn at another is
+    the whole of this defect.
+    """
+    from pandid.render.furniture import text_width
+
+    out = []
+    for cell in cells.values():
+        style = _style(cell)
+        if style.get("shape") != "partialRectangle":
+            continue
+        value = cell.get("value") or ""
+        if not value:
+            continue
+        row = cells[cell.get("parent")]
+        size = float(_style(row).get("fontSize")
+                     or style.get("fontSize")
+                     or _style(cells[row.get("parent")]).get("fontSize", 12))
+        size = float(style.get("fontSize", size))
+        bold = style.get("fontStyle") == "1"
+        width = float(cell.find("mxGeometry").get("width"))
+        if text_width(value, size, bold) > width:
+            out.append(f"{cell.get('id')} {value!r} needs "
+                       f"{text_width(value, size, bold):.1f} of {width:.1f}")
+    return out
+
+
+def test_no_table_cell_is_narrower_than_the_text_in_it():
+    """`HPSSH` came out `HPSS` and `APP'D` came out `APP'`. Columns were given a
+    proportional share of the box instead of their own measured width, and were
+    then drawn at draw.io's default 12 while having been measured at 11."""
+    for stem in SHEETS:
+        fs, kwargs = gallery.flowsheet(stem)
+        fs.to_svg(**kwargs)
+        cells = {c.get("id"): c for c in
+                 ET.fromstring(fs.to_drawio(diagram=kwargs.get("diagram"))).iter("mxCell")}
+        clipped = _clipped(cells)
+        assert not clipped, f"{stem}: " + "; ".join(clipped)
+
+
+def test_a_table_states_the_size_its_columns_were_measured_at():
+    """draw.io's default is 12 and every box on the sheet measures its own text
+    at its ``font_size``. Leaving the size unsaid is what made the measurement
+    and the drawing disagree."""
+    from pandid.document import Annotation
+
+    fs = Flowsheet("sized")
+    fs.add(units.Pump("P-101")).pin(x=100, y=100)
+    fs.annotations.append(Annotation(title="LEGEND", align="top-left",
+                                     font_size=9.0, rows=[("SS", "316L")]))
+    fs.layout()
+    cells = _cells(fs, check=False)
+    table = next(c for c in cells.values() if "shape=table;" in (c.get("style") or ""))
+    assert _style(table)["fontSize"] == "9"
+
+
+def test_the_title_block_rules_rows_deep_enough_to_draw_text_in():
+    """Eleven fields shared between an eighty-unit strip are rows 5.6 units
+    tall, and 11-point type in a 5.6-unit row draws nothing: the reader saw a
+    stack of empty rules. The block is as tall as its fields need instead, and
+    the dock is told so, or it grows up over the foot of the drawing."""
+    from pandid.render.drawio import _strip_size
+
+    fs = _titled()
+    cells = _cells(fs, check=False)
+    rows = [c for c in cells.values() if _style(c).get("shape") == "tableRow"]
+    assert rows
+    for row in rows:
+        height = float(row.find("mxGeometry").get("height"))
+        assert height >= 11.0, f"{row.get('id')} is {height} units tall"
+    # ...and the strip claims the room it actually uses, so the dock reserves it.
+    _w, h = _strip_size(fs.title_block)
+    tables = [c for c in cells.values() if "shape=table;" in (c.get("style") or "")]
+    assert max(float(t.find("mxGeometry").get("height")) for t in tables) <= h + 0.01
+
+
+def test_both_halves_of_the_title_strip_sit_on_one_bottom_line():
+    """The strip's bottom edge is where the sheet rules its last band, and it is
+    the edge worth holding still when the two tables come out different
+    heights."""
+    cells = _cells(_titled(), check=False)
+    feet = set()
+    for c in cells.values():
+        if "shape=table;" not in (c.get("style") or ""):
+            continue
+        geo = c.find("mxGeometry")
+        feet.add(round(float(geo.get("y")) + float(geo.get("height")), 2))
+    assert len(feet) == 1, f"the two tables end at {sorted(feet)}"
 
 
 def test_a_columnar_box_is_a_table_and_a_prose_box_is_not():
