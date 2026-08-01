@@ -96,13 +96,18 @@ def _every_drawing() -> list[tuple[str, str, Symbol]]:
     resolved for the first and not the third would draw two of the three
     correctly, which is the kind of gap an exhaustive walk exists to close.
     """
-    out = [(kind, variant, sym)
-           for (kind, variant), sym in sorted(default_registry._symbols.items())]
-    out += [(kind, f"{variant} [closed]", sym)
-            for (kind, variant), sym in sorted(default_registry._closed.items())]
-    out += [(kind, f"{variant} [expander]", expander(sym))
-            for (kind, variant), sym in sorted(default_registry._symbols.items())
-            if kind == "reducer"]
+    out = [
+        (kind, variant, sym) for (kind, variant), sym in sorted(default_registry._symbols.items())
+    ]
+    out += [
+        (kind, f"{variant} [closed]", sym)
+        for (kind, variant), sym in sorted(default_registry._closed.items())
+    ]
+    out += [
+        (kind, f"{variant} [expander]", expander(sym))
+        for (kind, variant), sym in sorted(default_registry._symbols.items())
+        if kind == "reducer"
+    ]
     return out
 
 
@@ -243,10 +248,9 @@ def test_an_exported_sheet_references_only_shapes_that_resolve(every_symbol_shee
     for cell in doc.iter("mxCell"):
         for key in cell.get("style", "").split(";"):
             if key.startswith("shape="):
-                shapes.add(key[len("shape="):])
+                shapes.add(key[len("shape=") :])
     assert shapes, "no shape references at all -- the sheet exported as blank boxes"
-    unresolved = sorted(s for s in shapes
-                        if s not in STENCIL_KEYS and s not in _BUILTIN_SHAPES)
+    unresolved = sorted(s for s in shapes if s not in STENCIL_KEYS and s not in _BUILTIN_SHAPES)
     assert not unresolved, f"unresolvable shape references: {unresolved}"
 
 
@@ -363,18 +367,19 @@ def test_an_edges_waypoints_are_the_line_the_renderer_draws(sample):
     for n, s in enumerate(sample.streams):
         drawn = stream_polyline(s)
         array = cells[f"s{n}"].find("mxGeometry/Array")
-        emitted = ([(float(p.get("x")), float(p.get("y")))
-                    for p in array.findall("mxPoint")] if array is not None else [])
+        emitted = (
+            [(float(p.get("x")), float(p.get("y"))) for p in array.findall("mxPoint")]
+            if array is not None
+            else []
+        )
         assert len(emitted) == len(drawn) - 2, (
-            f"{s.name}: {len(emitted)} waypoints for a line drawn through "
-            f"{len(drawn)} points"
+            f"{s.name}: {len(emitted)} waypoints for a line drawn through {len(drawn)} points"
         )
         for (ex, ey), (dx, dy) in zip(emitted, drawn[1:-1]):
             assert (ex, ey) == pytest.approx((dx, dy), abs=0.01)
 
 
-def _drawio_connection_point(unit, vertex: dict, edge: dict,
-                             prefix: str) -> tuple[float, float]:
+def _drawio_connection_point(unit, vertex: dict, edge: dict, prefix: str) -> tuple[float, float]:
     """Where draw.io lands one of these fixed connection points.
 
     This file's model of ``mxGraph.getConnectionPoint``. It reads the two style
@@ -430,8 +435,7 @@ def test_a_connection_point_resolves_back_onto_its_nozzle(orientation, mirrored)
     for n, s in enumerate(fs.streams):
         style = _style(cells[f"s{n}"])
         for prefix, port in (("exit", s.source), ("entry", s.dest)):
-            landed = _drawio_connection_point(port.owner, at[id(port.owner)],
-                                              style, prefix)
+            landed = _drawio_connection_point(port.owner, at[id(port.owner)], style, prefix)
             drawn = port_point(port.owner, port.owner.frame, port.name)
             assert landed == pytest.approx(drawn, abs=0.01), (
                 f"{port.owner.name}.{port.name} at orientation={orientation} "
@@ -455,8 +459,9 @@ def _one_unit(unit, **pin) -> dict[str, str]:
     return _style(_cells(fs, check=False)["u0"])
 
 
-@pytest.mark.parametrize("orientation,direction",
-                         [(0, None), (90, "south"), (180, "west"), (270, "north")])
+@pytest.mark.parametrize(
+    "orientation,direction", [(0, None), (90, "south"), (180, "west"), (270, "north")]
+)
 def test_a_quarter_turn_exports_as_the_direction_it_turns_to(orientation, direction):
     """pandid turns clockwise; draw.io names where the shape's east ended up."""
     style = _one_unit(units.Pump("P-1"), x=100, y=100, orientation=orientation)
@@ -474,12 +479,10 @@ def test_a_directional_symbol_is_never_flipped():
     moves only its nozzles, and the export has to say the same thing -- the
     nozzles are stated as coordinates, so nothing is lost by leaving the shape
     alone."""
-    directional = [(k, v) for (k, v), s in default_registry._symbols.items()
-                   if s.directional]
+    directional = [(k, v) for (k, v), s in default_registry._symbols.items() if s.directional]
     assert directional, "no directional symbol left to check this against"
     for kind, variant in directional:
-        cls = next(getattr(units, n) for n in units.__all__
-                   if getattr(units, n).kind == kind)
+        cls = next(getattr(units, n) for n in units.__all__ if getattr(units, n).kind == kind)
         style = _one_unit(cls("X-1", variant=variant), x=100, y=100, mirrored="xy")
         assert "flipH" not in style and "flipV" not in style, (
             f"{kind}/{variant} states a direction in its artwork and was exported flipped"
@@ -489,8 +492,7 @@ def test_a_directional_symbol_is_never_flipped():
 def test_a_normally_closed_valve_exports_its_body_filled():
     """The darkening is what says the line is shut; a reference alone would name
     the open valve."""
-    style = _one_unit(units.Valve("HV-1", variant="gate", normal_position="closed"),
-                      x=100, y=100)
+    style = _one_unit(units.Valve("HV-1", variant="gate", normal_position="closed"), x=100, y=100)
     assert style["shape"] == "mxgraph.pid.valves.gate_valve"
     assert style["fillColor"] == "#111"
 
@@ -537,8 +539,7 @@ def test_a_mirrored_expander_is_the_reducer_drawn_as_vendored():
     run entering from the other end, which the connection points say and the
     shape does not.
     """
-    style = _one_unit(units.Reducer("R-1", large_end="outlet"), x=100, y=100,
-                      mirrored=True)
+    style = _one_unit(units.Reducer("R-1", large_end="outlet"), x=100, y=100, mirrored=True)
     assert "flipH" not in style
 
 
@@ -615,8 +616,11 @@ def test_a_signal_line_is_dashed_and_drawn_at_half_the_weight_of_pipe(sample):
 def test_a_pfd_exports_arrowheads_and_a_p_and_id_does_not(sample):
     pfd = _cells(sample, diagram="pfd")
     pid = _cells(sample, diagram="p&id")
-    heads = [_style(pfd[f"s{n}"]).get("endArrow") for n, s in enumerate(sample.streams)
-             if s.kind == "material"]
+    heads = [
+        _style(pfd[f"s{n}"]).get("endArrow")
+        for n, s in enumerate(sample.streams)
+        if s.kind == "material"
+    ]
     assert "block" in heads, "a PFD draws the flow direction with an arrowhead"
     for n, s in enumerate(sample.streams):
         assert _style(pid[f"s{n}"])["endArrow"] == "none"
@@ -645,8 +649,11 @@ def test_a_title_block_exports_as_a_box_carrying_its_fields():
     pump = fs.add(units.Pump("P-101"))
     pump.pin(x=100, y=100)
     fs.title_block = TitleBlock(
-        title="Ethanol Purification", drawing_number="A-301", client="Acme",
-        revisions=[Revision(rev="A", date="2026-01-02", description="Issued")])
+        title="Ethanol Purification",
+        drawing_number="A-301",
+        client="Acme",
+        revisions=[Revision(rev="A", date="2026-01-02", description="Issued")],
+    )
     fs.layout()
     cells = _cells(fs, check=False)
     box = cells["f0"]
@@ -656,10 +663,16 @@ def test_a_title_block_exports_as_a_box_carrying_its_fields():
     assert box.get("vertex") == "1"
 
 
-@pytest.mark.parametrize("option,value", [
-    ("show_stream_table", True), ("border", "zone"), ("page_size", "A3"),
-    ("jump_direction", "horizontal"), ("debug", True),
-])
+@pytest.mark.parametrize(
+    "option,value",
+    [
+        ("show_stream_table", True),
+        ("border", "zone"),
+        ("page_size", "A3"),
+        ("jump_direction", "horizontal"),
+        ("debug", True),
+    ],
+)
 def test_render_refuses_a_sheet_option_it_cannot_honour(tmp_path, sample, option, value):
     """Accepting and ignoring these would tell the caller something false about
     the file they now hold."""
@@ -702,7 +715,7 @@ def test_every_example_exports_a_document_that_matches_its_sheet(stem):
     """Twelve real sheets: parsed back, with every box, waypoint and shape
     reference held against the drawing the same flowsheet renders."""
     fs, kwargs = gallery.flowsheet(stem)
-    fs.to_svg(**kwargs)   # settle layout and routing exactly as the sheet does
+    fs.to_svg(**kwargs)  # settle layout and routing exactly as the sheet does
     root = ET.fromstring(fs.to_drawio(diagram=kwargs.get("diagram")))
     cells = {cell.get("id"): cell for cell in root.iter("mxCell")}
 
@@ -721,14 +734,17 @@ def test_every_example_exports_a_document_that_matches_its_sheet(stem):
     for n, s in enumerate(fs.streams):
         drawn = stream_polyline(s)
         array = cells[f"s{n}"].find("mxGeometry/Array")
-        emitted = ([(float(p.get("x")), float(p.get("y")))
-                    for p in array.findall("mxPoint")] if array is not None else [])
+        emitted = (
+            [(float(p.get("x")), float(p.get("y"))) for p in array.findall("mxPoint")]
+            if array is not None
+            else []
+        )
         assert len(emitted) == len(drawn) - 2, f"{stem}: {s.name} lost a turn"
         for point, expected in zip(emitted, drawn[1:-1]):
             assert point == pytest.approx(expected, abs=0.01), f"{stem}: {s.name}"
         style = _style(cells[f"s{n}"])
         for prefix, port in (("exit", s.source), ("entry", s.dest)):
-            landed = _drawio_connection_point(port.owner, at[id(port.owner)],
-                                              style, prefix)
+            landed = _drawio_connection_point(port.owner, at[id(port.owner)], style, prefix)
             assert landed == pytest.approx(
-                port_point(port.owner, port.owner.frame, port.name), abs=0.01)
+                port_point(port.owner, port.owner.frame, port.name), abs=0.01
+            )
