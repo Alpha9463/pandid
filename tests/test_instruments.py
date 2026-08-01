@@ -416,13 +416,13 @@ def _tap_styles(fs) -> dict:
     body = fs.to_svg().split('<g id="instrument_taps">', 1)
     if len(body) == 1:
         return {}
-    from pandid.render.svg import _tap_lines
+    from pandid.render.svg import tap_lines
 
     lines = re.findall(r"<line [^>]*/>", body[1].split("</g>", 1)[0])
-    assert len(lines) == len(_tap_lines(fs))
+    assert len(lines) == len(tap_lines(fs))
     return {
         u.name: ("dashed" if "stroke-dasharray" in ln else "solid")
-        for (u, _, _), ln in zip(_tap_lines(fs), lines)
+        for (u, _, _), ln in zip(tap_lines(fs), lines)
     }
 
 

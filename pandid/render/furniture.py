@@ -7,6 +7,11 @@ measures each piece, places it at a sheet corner, unions the result to size the
 canvas, then draws it; none of the geometry logic lives in the giant render
 method.
 
+:func:`dock` is the placement itself, and it is *not* SVG: it takes measured
+boxes and answers the rectangle the sheet gives each one. It lives here rather
+than inside the renderer because two backends now ask the question. See its
+docstring.
+
 Coordinates are absolute SVG user units. Boxes are drawn from a top-left origin;
 the title strip is drawn from a bottom-right corner (its natural anchor).
 """
@@ -15,7 +20,7 @@ from __future__ import annotations
 
 import html
 import string
-from typing import Callable
+from typing import Callable, NamedTuple
 
 # Rough advance width of the sans-serif the renderer uses, as a fraction of the
 # font size. Slightly generous so auto-sized boxes never clip their text.
@@ -486,3 +491,203 @@ def zone_frame(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BA
         L.append(_text(ox + band / 2, (y0 + y1) / 2 + 3, letter, 9, anchor="middle", bold=True))
         L.append(_text(ox + ow - band / 2, (y0 + y1) / 2 + 3, letter, 9, anchor="middle", bold=True))
     return L, (ox, oy, ow, oh)
+
+
+# ---------------------------------------------------------------------------
+# The sheet dock: which rectangle each piece of furniture is given
+# ---------------------------------------------------------------------------
+
+# Clearance between the drawing and the frame it is framed by; between two boxes
+# stacked in one corner; and between a left-hand and a right-hand stack sharing
+# a band. The last is what stops a wide equipment list and a wide legend being
+# ruled as though they could be laid end to end.
+INNER, GAP, SEP = 26.0, 14.0, 18.0
+
+#: Margin outside the sheet border. A fixed page insets its frame by this plus
+#: the zone band, so the border rules to the paper edge whether or not the zones
+#: are lettered.
+OUTER_MARGIN = 8.0
+
+
+class Docked(NamedTuple):
+    """One piece of furniture and the rectangle the sheet gives it."""
+    obj: object
+    x: float
+    y: float
+    w: float
+    h: float
+
+
+def dock(items, inner, *, sheet=None, too_small=None):
+    """Where each piece of sheet furniture lands, and the frame it lands on.
+
+    **This is the placement, and nothing here draws.** It was inside
+    ``SvgRenderer._place_furniture``, which measured, placed and drew in one
+    pass, so the draw.io exporter -- which has the same boxes to place and no
+    SVG to draw them into -- had no way to ask the question and invented an
+    answer instead: it stacked the title block, the equipment list, the notes
+    and the legend in a column down the left of the drawing while the sheet
+    docks them to four different corners. That is the same failure
+    :func:`~pandid.render.svg.stream_polyline` was lifted out of the renderer to
+    prevent, one level up: two derivations of one placement is the drift that
+    leaves an exported sheet's furniture somewhere the rendered sheet never put
+    it.
+
+    Nothing about the arithmetic is SVG's. A box is measured from its own text
+    (:func:`measure_annotation`, :func:`measure_table`, and
+    :func:`measure_title_strip`, all of which are already pure), grouped into an
+    edge *band* by its ``align``, and placed flush against the frame edge that
+    band names. The frame either grows out of the drawing far enough to hold the
+    bands, or -- given a *sheet* -- is the fixed page inset by the border, with
+    the drawing fitted into whatever the bands leave.
+
+    ``items`` are ``(obj, align, w, h)``. ``obj`` is opaque: its ``margin`` and
+    ``position`` are read off it where it has them, so a caller may pass a
+    sentinel for a piece of furniture that is not one of the caller's objects
+    (the title strip, the stream table) and have the band maths size the frame
+    around it too. ``inner`` is the drawing's own bounding box
+    ``(x0, y0, x1, y1)``.
+
+    ``sheet`` is a fixed page, or None to grow the frame to the drawing.
+    ``too_small`` is called with ``(need_w, need_h, culprit)`` when a fixed page
+    cannot hold its own furniture and must return the exception to raise; the
+    caller supplies it because naming ``culprit`` in words is the caller's
+    vocabulary, not this module's.
+
+    Returns ``(placed, frame, free)``: the list of :class:`Docked` rectangles in
+    the order the sheet draws them, the frame rectangle ``(x, y, w, h)``, and
+    the region a fixed page leaves for the drawing (None when the frame was
+    grown to the drawing, which needs no fitting).
+    """
+    from pandid.document import _ALIGN
+
+    dx0, dy0, dx1, dy1 = inner
+    cols: dict[str, list] = {k: [] for k in _ALIGN}
+    positioned: list = []
+    for obj, align, w, h in items:
+        position = getattr(obj, "position", None)
+        if position is not None:
+            positioned.append((obj, position[0], position[1], w, h))
+        else:
+            cols[align].append((obj, w, h))
+
+    def stack_h(entries):
+        return sum(h for _, _, h in entries) + GAP * max(0, len(entries) - 1)
+
+    def stack_w(entries):
+        return max((w for _, w, _ in entries), default=0.0)
+
+    def biggest(dim: int):
+        """The largest piece of furniture along ``dim`` (1 = width, 2 = height),
+        for an error that has to say which piece will not fit rather than that
+        something will not."""
+        entries = [it for col in cols.values() for it in col]
+        return max(entries, key=lambda it: it[dim])[0] if entries else None
+
+    # --- band thicknesses -------------------------------------------------
+    top_h = max(stack_h(cols["top-left"]), stack_h(cols["top"]),
+                stack_h(cols["top-right"]))
+    bottom_h = max(stack_h(cols["bottom-left"]), stack_h(cols["bottom"]),
+                   stack_h(cols["bottom-right"]))
+    left_w, right_w = stack_w(cols["left"]), stack_w(cols["right"])
+
+    def row_w(lk, ck, rk):
+        lw, cw, rw = stack_w(cols[lk]), stack_w(cols[ck]), stack_w(cols[rk])
+        side = (lw + SEP + rw) if (lw and rw) else max(lw, rw)
+        return max(side, cw)
+
+    band_w = max(row_w("top-left", "top", "top-right"),
+                 row_w("bottom-left", "bottom", "bottom-right"))
+
+    # --- frame rectangle --------------------------------------------------
+    if sheet is not None:
+        # A named page fixes the frame: the sheet inset by the zone band and
+        # the margin outside it, so the border rules to the sheet edges and
+        # the zone count does not drift with the drawing.
+        edge = OUTER_MARGIN + ZONE_BAND
+        need_w = max(band_w, left_w + right_w + 2 * INNER)
+        need_h = max(top_h + bottom_h + 2 * INNER,
+                     stack_h(cols["left"]), stack_h(cols["right"]))
+        too_wide = need_w >= sheet.width - 2 * edge
+        if too_wide or need_h >= sheet.height - 2 * edge:
+            raise too_small(need_w + 2 * edge, need_h + 2 * edge,
+                            biggest(1 if too_wide else 2))
+        ix, iy = edge, edge
+        ixr, iyb = sheet.width - edge, sheet.height - edge
+    else:
+        ix = dx0 - INNER - left_w
+        iy = dy0 - INNER - top_h
+        ixr = dx1 + INNER + right_w
+        iyb = dy1 + INNER + bottom_h
+        extra = band_w - (ixr - ix)
+        if extra > 0:  # a wide band forces the frame wider than the drawing
+            ix -= extra / 2      # widen symmetrically → drawing stays centred
+            ixr += extra / 2
+        extra = max(stack_h(cols["left"]), stack_h(cols["right"])) - (iyb - iy)
+        if extra > 0:
+            iy -= extra / 2
+            iyb += extra / 2
+    iw, ih = ixr - ix, iyb - iy
+
+    # The bands are measured, so the region left for the drawing is settled and
+    # so is the ratio it will be placed at. A frame grown to the drawing has no
+    # fixed page and so nothing to fit into.
+    free = None if sheet is None else (
+        ix + left_w + INNER, iy + top_h + INNER,
+        iw - left_w - right_w - 2 * INNER, ih - top_h - bottom_h - 2 * INNER)
+
+    # --- place each column flush to the frame -----------------------------
+    placed: list[Docked] = []
+
+    def x_for(mode, w, m):
+        if mode == "l":
+            return ix + m
+        if mode == "r":
+            return ixr - m - w
+        return ix + (iw - w) / 2  # centred on the frame
+
+    def put_top(entries, mode):     # flush to the top edge, grow downward
+        y = iy
+        for obj, w, h in entries:
+            m = getattr(obj, "margin", 0.0)
+            placed.append(Docked(obj, x_for(mode, w, m), y + m, w, h))
+            y += m + h + GAP
+
+    def put_bottom(entries, mode):  # flush to the bottom edge, grow upward
+        y = iyb
+        for obj, w, h in reversed(entries):
+            m = getattr(obj, "margin", 0.0)
+            top = y - m - h
+            placed.append(Docked(obj, x_for(mode, w, m), top, w, h))
+            y = top - GAP
+
+    def put_side(entries, mode):    # flush to a side edge, vertically centred
+        y = (iy + iyb) / 2 - stack_h(entries) / 2
+        for obj, w, h in entries:
+            m = getattr(obj, "margin", 0.0)
+            placed.append(Docked(obj, x_for(mode, w, m), y, w, h))
+            y += h + GAP
+
+    put_top(cols["top-left"], "l")
+    put_top(cols["top"], "c")
+    put_top(cols["top-right"], "r")
+    put_bottom(cols["bottom-left"], "l")
+    put_bottom(cols["bottom"], "c")
+    put_bottom(cols["bottom-right"], "r")
+    put_side(cols["left"], "l")
+    put_side(cols["right"], "r")
+    cy = (iy + iyb) / 2 - stack_h(cols["center"]) / 2  # dead-centre overlay
+    for obj, w, h in cols["center"]:
+        placed.append(Docked(obj, ix + (iw - w) / 2, cy, w, h))
+        cy += h + GAP
+
+    # --- hand-placed boxes; expand the frame to keep them inside ----------
+    for obj, px, py, w, h in positioned:
+        placed.append(Docked(obj, px, py, w, h))
+        if sheet is not None:  # the page is fixed; absolute means absolute
+            continue
+        ix, iy = min(ix, px - INNER), min(iy, py - INNER)
+        ixr, iyb = max(ixr, px + w + INNER), max(iyb, py + h + INNER)
+    iw, ih = ixr - ix, iyb - iy
+
+    return placed, (ix, iy, iw, ih), free
