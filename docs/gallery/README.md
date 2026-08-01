@@ -275,3 +275,33 @@ wider than `Reforming`. It is pinned because the layout engine ranks by process
 flow order and does not yet read a north-face connection as wanting its source
 above it (issue #168) — and a BFD is the drawing most worth pinning anyway,
 since the reader is meant to see the plant in a row.
+
+## 14 · Tank farm and road loading
+
+[`examples/14_tank_farm.py`](../../examples/14_tank_farm.py) ·
+[SVG](14_tank_farm.svg)
+
+![Tank farm and road loading](14_tank_farm.png)
+
+A bulk liquid storage terminal: three storage vessels, the transfer system that
+draws them down, the rack that loads road tankers off it and the vapour system
+that takes back what the loading displaces. Nothing on it is heated, cooled or
+reacted, so it is the sheet that draws containment and line hardware — the
+families the reactor-and-column examples never reach for. The three roofs are
+three different answers to vapour pressure: an external floating roof over motor
+spirit, which deletes the vapour space rather than managing it; a fixed dished
+roof over denatured ethanol, kept because a floating roof's rim seal is open to
+weather and ethanol takes the rainwater into the product; and a sphere for
+butane, which at ambient is a liquid only under its own pressure, and which
+therefore needs no pump — `PCV-606`, a self-contained regulator, lets it down
+instead. `V-604`'s crown carries the sheet's one opening to atmosphere and both
+flame arrestors answer to it: `FA-601` stands *between* the conservation vent and
+the drum, because an arrestor has to be on the ignition side of what it protects,
+and `FA-602` is detonation rated where `FA-601` is not, because the rack return
+gives a deflagration the length of pipe it needs to accelerate in. `RD-601` and
+`RD-602` are the eccentric/concentric pair around one pump — flat on top into the
+suction so no vapour pocket forms under the crown of the line, symmetric out of
+the discharge where the line is pumped full and there is none to trap. Every loop
+number here is *allocated*: `add_loop("L")` is written without a number and the
+sheet counts out L-601, L-602, P-603, F-604, F-605 in declaration order, which no
+other sheet in the gallery demonstrates.

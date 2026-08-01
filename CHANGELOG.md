@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`examples/14_tank_farm.py`**: a bulk liquid storage terminal, drawn as a
+  P&ID on a fixed A3 sheet. Three storage vessels and the reason each is the
+  vessel it is -- a floating roof over motor spirit, a fixed roof over ethanol
+  that a floating roof would put rainwater into, a sphere for butane, which at
+  ambient is a liquid only under its own pressure and therefore leaves through a
+  let-down regulator rather than a pump. Around them the transfer system, the
+  road loading rack, and the vapour system that takes back what loading
+  displaces, with a conservation vent, a deflagration arrestor between that vent
+  and the drum it protects, and a detonation-rated one in the rack return where
+  the run is long enough for a deflagration to accelerate.
+
+  It is the sheet that draws the storage, containment and line-fitting families.
+  Before it the gallery drew 39 of the 157 registered `(kind, variant)` symbols;
+  it adds 21 more that nothing had ever drawn, taking the gallery to 60 --
+  `tank/floating_roof`, `tank/default`, `tank/sphere`, `vessel/legs`,
+  `vent/breather`, `pump/gear`, `reducer/eccentric`, `reducer/concentric`,
+  `valve/gate`, `valve/ball`, `valve/butterfly`, `valve/regulator`,
+  `fitting/flame_arrestor`, `fitting/flame_arrestor_detonation_proof`,
+  `fitting/blind`, `fitting/expansion_joint`, `fitting/strainer_basket`,
+  `fitting/strainer_y`, `fitting/hose`, `fitting/positive_displacement` and
+  `fitting/coriolis`. It is also the first sheet whose loop numbers are
+  *allocated* rather than typed: `add_loop("L")` is written without a number and
+  the sheet counts out L-601, L-602, P-603, F-604, F-605 in declaration order.
+
 - **Control loops number themselves.** `add_loop("F")` with the number left out
   takes the next one from a single per-sheet counter, started by
   `Flowsheet(loop_number_start=…)` (default `101`) and allocated at the

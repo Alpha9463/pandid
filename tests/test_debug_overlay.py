@@ -366,10 +366,14 @@ def test_a_port_label_is_not_written_under_the_unit_tags_halo():
 #: twenty units apart and whose labels are sixty units long, so some of them
 #: have nowhere at all to go: 35 do not come out clear, against 313 before.
 #: ``12_block_flow_diagram`` names its blocks in words rather than in tags, so
-#: two of its labels are longer than the block they belong to. Both carry
+#: two of its labels are longer than the block they belong to.
+#: ``14_tank_farm`` mounts two faceplates on the crown of the valve each one
+#: strokes, which is what puts a controller's output on the actuator without a
+#: line crossing the run; the balloon's marker and the valve's then sit a
+#: nozzle's height apart and the two overlay labels meet. All three carry
 #: headroom, because the point of the numbers is to catch a placement that has
 #: stopped working rather than to pin the corpus to what it draws today.
-_CROWDED = {"11_ethanol_pid": 50, "12_block_flow_diagram": 4}
+_CROWDED = {"11_ethanol_pid": 50, "12_block_flow_diagram": 4, "14_tank_farm": 6}
 
 
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
