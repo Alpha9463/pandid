@@ -482,8 +482,7 @@ def test_three_runs_meeting_at_a_tee_close_on_one_point():
             if port.owner is not tee:
                 continue
             legs += 1
-            landed = _drawio_connection_point(tee, at[f"u{fs.units.index(tee)}"],
-                                              style, prefix)
+            landed = _drawio_connection_point(tee, at[f"u{fs.units.index(tee)}"], style, prefix)
             assert landed == pytest.approx(centre, abs=0.01)
     assert legs == 3, "the fixture stopped exercising a three-way junction"
 
@@ -1039,15 +1038,19 @@ def _clipped(cells) -> list[str]:
         if not value:
             continue
         row = cells[cell.get("parent")]
-        size = float(_style(row).get("fontSize")
-                     or style.get("fontSize")
-                     or _style(cells[row.get("parent")]).get("fontSize", 12))
+        size = float(
+            _style(row).get("fontSize")
+            or style.get("fontSize")
+            or _style(cells[row.get("parent")]).get("fontSize", 12)
+        )
         size = float(style.get("fontSize", size))
         bold = style.get("fontStyle") == "1"
         width = float(cell.find("mxGeometry").get("width"))
         if text_width(value, size, bold) > width:
-            out.append(f"{cell.get('id')} {value!r} needs "
-                       f"{text_width(value, size, bold):.1f} of {width:.1f}")
+            out.append(
+                f"{cell.get('id')} {value!r} needs "
+                f"{text_width(value, size, bold):.1f} of {width:.1f}"
+            )
     return out
 
 
@@ -1058,8 +1061,10 @@ def test_no_table_cell_is_narrower_than_the_text_in_it():
     for stem in SHEETS:
         fs, kwargs = gallery.flowsheet(stem)
         fs.to_svg(**kwargs)
-        cells = {c.get("id"): c for c in
-                 ET.fromstring(fs.to_drawio(diagram=kwargs.get("diagram"))).iter("mxCell")}
+        cells = {
+            c.get("id"): c
+            for c in ET.fromstring(fs.to_drawio(diagram=kwargs.get("diagram"))).iter("mxCell")
+        }
         clipped = _clipped(cells)
         assert not clipped, f"{stem}: " + "; ".join(clipped)
 
@@ -1072,8 +1077,9 @@ def test_a_table_states_the_size_its_columns_were_measured_at():
 
     fs = Flowsheet("sized")
     fs.add(units.Pump("P-101")).pin(x=100, y=100)
-    fs.annotations.append(Annotation(title="LEGEND", align="top-left",
-                                     font_size=9.0, rows=[("SS", "316L")]))
+    fs.annotations.append(
+        Annotation(title="LEGEND", align="top-left", font_size=9.0, rows=[("SS", "316L")])
+    )
     fs.layout()
     cells = _cells(fs, check=False)
     table = next(c for c in cells.values() if "shape=table;" in (c.get("style") or ""))
@@ -1261,22 +1267,25 @@ def test_a_zone_border_rules_the_same_frame_the_sheet_rules():
     cells = _cells(fs, page_size="A3", border="zone", check=False)
     values = {c.get("value") for c in cells.values()}
 
-    _placed, frame, _free = F.dock([], DrawioRenderer()._drawing_box(fs),
-                                   sheet=__import__("pandid.render.svg",
-                                                    fromlist=["x"])._page("A3"))
+    _placed, frame, _free = F.dock(
+        [],
+        DrawioRenderer()._drawing_box(fs),
+        sheet=__import__("pandid.render.svg", fromlist=["x"])._page("A3"),
+    )
     z = F.zone_layout(*frame)
-    assert {t for _k, *_r, t in
-            [p for p in z.parts if p[0] == "label"]} <= values, "a zone lost its letter"
+    assert {t for _k, *_r, t in [p for p in z.parts if p[0] == "label"]} <= values, (
+        "a zone lost its letter"
+    )
     rules = [p for p in z.parts if p[0] == "rule"]
-    ruled = [c for c in cells.values() if (c.get("id") or "").startswith("z")
-             and c.get("edge") == "1"]
+    ruled = [
+        c for c in cells.values() if (c.get("id") or "").startswith("z") and c.get("edge") == "1"
+    ]
     assert len(ruled) == len(rules)
     # The two rectangles the frame is: the sheet edge and the drawing frame.
     ix, iy, iw, ih = z.inner
     geo = cells["z-frame"].find("mxGeometry")
     assert (float(geo.get("x")), float(geo.get("y"))) == pytest.approx((ix, iy), abs=0.01)
-    assert (float(geo.get("width")), float(geo.get("height"))) == pytest.approx(
-        (iw, ih), abs=0.01)
+    assert (float(geo.get("width")), float(geo.get("height"))) == pytest.approx((iw, ih), abs=0.01)
     ox, oy, ow, oh = z.outer
     geo = cells["z-sheet"].find("mxGeometry")
     assert (float(geo.get("x")), float(geo.get("y"))) == pytest.approx((ox, oy), abs=0.01)
@@ -1296,9 +1305,11 @@ def _lands_on_its_paper(stem, _page):
     fs, kwargs = gallery.flowsheet(stem)
     fs.to_svg(**kwargs)
     sheet = _page(kwargs.get("page_size"))
-    doc = fs.to_drawio(diagram=kwargs.get("diagram"),
-                       page_size=kwargs.get("page_size"),
-                       border=kwargs.get("border"))
+    doc = fs.to_drawio(
+        diagram=kwargs.get("diagram"),
+        page_size=kwargs.get("page_size"),
+        border=kwargs.get("border"),
+    )
     root = ET.fromstring(doc)
     if sheet is None:
         assert root.find("diagram/mxGraphModel").get("page") == "0"
