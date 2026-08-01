@@ -192,12 +192,11 @@ def main():
     # Loop 306's final control element, and the sheet numbers it from the loop,
     # so it is tagged through the handle. loop.tag() composes without checking
     # the first letter and cannot check it: a final element is not tagged from
-    # the measured variable, and its number need not match its loop's either.
-    # This sheet has both -- LIC-304 strokes CV-305 and TIC-307 strokes CV-308,
-    # and PIC-301's valve is CV-301-1, a tag no loop handle spells -- so those
-    # three type their tags and only the signal edge into the actuator says
-    # which loop they close. The check valve behind this one is in no loop at
-    # all and types its own.
+    # the measured variable. Its number is another matter and does track the
+    # loop -- LIC-306 strokes CV-306 here, and on the issued sheet PIC-301
+    # strokes CV-301-1 and CV-301-2 on split range -- which is exactly the half
+    # tag() supplies. The check valve behind this one is in no loop at all and
+    # types its own.
     cv306 = fs.add(units.Valve(level306.tag("CV"), variant="control",
                                description="Bottoms Control Valve"))
     nrv306 = fs.add(units.Valve("NRV-306", variant="check",
@@ -557,6 +556,15 @@ def main():
     # LT-304's row above and LIC-304's own row below.
     level = fs.connect(lt304.sig_out, lic304.sig_in, kind="electric")
     fs.add_instrument("Z", 1, on=level, at=0.6, offset=40, angle=-90, variant="sis")
+    # Straight onto the actuator, which is where this sheet stops short of the
+    # issued one: there LIC-304 sets the setpoint of FIC-305, and FIC-305 --
+    # reading FT-305 off FE-305 -- strokes CV-305. The valve carries 305 because
+    # it belongs to that slave loop, not because a final element takes a number
+    # of its own. Drawing the cascade needs a second signal into FIC-305 on top
+    # of its measurement, which is the connection an Instrument cannot yet take
+    # (see the sig_in/sig_out pool); until it can, the master is wired to the
+    # valve and the number is left as the issued sheet writes it. The same
+    # shortening is taken on TIC-307/CV-308 below.
     fs.connect(lic304.sig_out, st305.control.actuator, kind="pneumatic")
 
     # --- Loop 307: reboiler return temperature on the steam valve ---------
@@ -574,6 +582,8 @@ def main():
     # and TIC-307's output crosses the band to the south.
     fs.add_instrument("Z", 1, on=tt307, at="N", offset=40, variant="sis")
     fs.connect(tt307.sig_out, tic307.sig_in, kind="electric")
+    # As at loop 304: the issued sheet puts FIC-308 between this controller and
+    # the valve, reading FT-308 off FE-308, and CV-308 is that loop's element.
     fs.connect(tic307.sig_out, st308.control.actuator, kind="pneumatic")
 
     # --- Loop 306: kettle level on the bottoms draw -----------------------
