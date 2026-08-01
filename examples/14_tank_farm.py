@@ -89,7 +89,6 @@ def main():
                                description="Loading Rate Valve"))
     hv604 = fs.add(units.Valve("HV-604", variant="ball", description="E10 Loading Arm Valve"))
     hs601 = fs.add(units.Fitting("HS-601", variant="hose", description="E10 Loading Hose"))
-    hv609 = fs.add(units.Valve("HV-609", variant="angle", description="E10 Coupler Valve"))
 
     # --- In-line: the vapour system --------------------------------------
     fa602 = fs.add(units.Fitting("FA-602", variant="flame_arrestor_detonation_proof",
@@ -102,14 +101,14 @@ def main():
     # --- Placement -------------------------------------------------------
     tk601.pin(x=360, y=215)
     tk602.pin(x=680, y=205)
-    v603.pin(x=990, y=180)
+    v603.pin(x=1090, y=180)
 
     ms_fill_x = 360 + port_offset(tk601, "inlet")[0]
     ms_draw_x = 360 + port_offset(tk601, "outlet")[0]
     eth_fill_x = 680 + port_offset(tk602, "inlet")[0]
     eth_draw_x = 680 + port_offset(tk602, "outlet")[0]
-    lpg_fill_x = 990 + port_offset(v603, "inlet")[0]
-    lpg_draw_x = 990 + port_offset(v603, "outlet")[0]
+    lpg_fill_x = 1090 + port_offset(v603, "inlet")[0]
+    lpg_draw_x = 1090 + port_offset(v603, "outlet")[0]
 
     ms_recv_y, eth_recv_y, lpg_recv_y = 175.0, 115.0, 55.0
     ms_in.pin(port="outlet", x=200, y=ms_recv_y)
@@ -127,7 +126,7 @@ def main():
     p601.pin(port="suction", x=705, y=ms_run_y)
     ms_disch_y = ms_run_y + port_offset(p601, "discharge")[1] - port_offset(p601, "suction")[1]
     rd602.pin(port="inlet", x=795, y=ms_disch_y)
-    nrv601.pin(port="inlet", x=835, y=ms_disch_y)
+    nrv601.pin(port="inlet", x=875, y=ms_disch_y)
 
     hv603.pin(port="inlet", x=800, y=eth_run_y)
     sb601.pin(port="inlet", x=850, y=eth_run_y)
@@ -140,11 +139,11 @@ def main():
     nrv602.pin(port="inlet", x=1148, y=eth_run_y)
     psv_branch_x = t_psv.pin_.x + port_offset(t_psv, "branch")[0]
     rec_branch_x = t_rec.pin_.x + port_offset(t_rec, "branch")[0]
-    psv602.pin(orientation=180).pin(port="inlet", x=psv_branch_x, y=psv_run_y - 34)
+    psv602.pin(port="inlet", x=rec_branch_x, y=psv_run_y)
 
-    hv605.pin(port="inlet", x=1090, y=lpg_run_y)
-    pcv606.pin(port="inlet", x=1155, y=lpg_run_y)
-    hv608.pin(port="inlet", x=1240, y=lpg_run_y)
+    hv605.pin(port="inlet", x=1190, y=lpg_run_y)
+    pcv606.pin(port="inlet", x=1255, y=lpg_run_y)
+    hv608.pin(port="inlet", x=1340, y=lpg_run_y)
     lpg_out.pin(port="inlet", x=1540, y=lpg_run_y)
 
     blend_y = ms_disch_y
@@ -153,13 +152,11 @@ def main():
     fe604.pin(port="inlet", x=1215, y=blend_y)
     cv604.pin(port="inlet", x=1275, y=blend_y)
     hv604.pin(port="inlet", x=1340, y=blend_y)
-    hs601.pin(port="inlet", x=1390, y=blend_y)
-    hv609.pin(orientation=90).pin(port="inlet", x=1460, y=blend_y)
-    coupler_x = hv609.pin_.x + port_offset(hv609, "outlet")[0]
-    e10_out.pin(port="inlet", x=1540, y=730)
+    hs601.pin(port="inlet", x=1420, y=blend_y)
+    e10_out.pin(port="inlet", x=1540, y=blend_y)
 
     vap_y = 775.0
-    vap_in.pin(port="outlet", x=1540, y=vap_y)
+    vap_in.pin(mirrored=True).pin(port="outlet", x=1540, y=vap_y)
     hv607.pin(mirrored=True).pin(port="inlet", x=590, y=vap_y)
     fa602.pin(mirrored=True).pin(port="inlet", x=490, y=vap_y)
     v604.pin(mirrored=True).pin(port="inlet", x=405, y=vap_y)
@@ -167,7 +164,7 @@ def main():
     vent_y = v604.pin_.y + port_offset(v604, "vent")[1]
     fa601.pin(orientation=270).pin(port="inlet", x=vent_x, y=vent_y - 22)
     vt601.pin(port="inlet", x=vent_x, y=vent_y - 68)
-    vru_out.pin(port="inlet", x=140, y=vap_y)
+    vru_out.pin(mirrored=True).pin(port="inlet", x=335, y=vap_y)
 
     # --- Process lines ---------------------------------------------------
     fs.connect(ms_in.outlet, xv601.inlet, service="MS", sequence=601, size=200,
@@ -201,9 +198,9 @@ def main():
     fs.connect(fe605.outlet, cv605.inlet)
     fs.connect(cv605.outlet, nrv602.inlet)
     fs.connect(nrv602.outlet, t_blend.branch).via([(blend_branch_x, eth_run_y)])
-    fs.connect(t_psv.branch, psv602.inlet)
-    fs.connect(psv602.outlet, t_rec.branch).via(
-        [(psv_branch_x, psv_run_y), (rec_branch_x, psv_run_y)])
+    fs.connect(t_psv.branch, psv602.inlet, service="ETH", sequence=613, size=40,
+               schedule=40, spec="SS").via([(psv_branch_x, psv_run_y)])
+    fs.connect(psv602.outlet, t_rec.branch)
 
     fs.connect(v603.outlet, hv605.inlet, service="LPG", sequence=608, size=80,
                schedule=80, spec="CS").via([(lpg_draw_x, lpg_run_y)])
@@ -216,14 +213,14 @@ def main():
     fs.connect(fe604.outlet, cv604.inlet)
     fs.connect(cv604.outlet, hv604.inlet)
     fs.connect(hv604.outlet, hs601.inlet)
-    fs.connect(hs601.outlet, hv609.inlet)
-    fs.connect(hv609.outlet, e10_out.inlet).via([(coupler_x, 730)])
+    fs.connect(hs601.outlet, e10_out.inlet)
 
     fs.connect(vap_in.outlet, hv607.inlet, service="VAP", sequence=610, size=150,
                schedule=40, spec="CS")
     fs.connect(hv607.outlet, fa602.inlet)
     fs.connect(fa602.outlet, v604.inlet)
-    fs.connect(v604.outlet, vru_out.inlet)
+    fs.connect(v604.outlet, vru_out.inlet, service="VAP", sequence=612, size=150,
+               schedule=40, spec="CS")
     fs.connect(v604.vent, fa601.inlet, service="VAP", sequence=611, size=150,
                schedule=40, spec="CS")
     fs.connect(fa601.outlet, vt601.inlet)
@@ -258,12 +255,12 @@ def main():
                                offset=cv605_top - balloon_row_y)
     fic605.nozzle("sig_out", "S")
     fs.connect(ft605.sig_out, fic605.pv, kind="electric")
-    fs.connect(fic604.sig_out, fic605.sig_in, kind="software")
+    fs.connect(fic604.sig_out, fic605.sig_in, kind="software").via([(1200, balloon_row_y)])
     fs.connect(fic605.sig_out, cv605.actuator, kind="pneumatic")
 
     # --- Sheet furniture -------------------------------------------------
     fs.title_block = TitleBlock(
-        title="Product Storage and Loading",
+        title="Tank Farm and Loading",
         subtitle="A600 Process & Instrumentation Diagram 1",
         drawing_number="P&ID-601",
         company="PANDID",
