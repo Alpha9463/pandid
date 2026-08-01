@@ -1172,19 +1172,17 @@ class SvgRenderer:
         # them. See :func:`_ink`.
         ink = _ink(fs)
         drawing: list[str] = []
-        # First, so every piece of the sheet's own ink -- and every opaque label
-        # halo -- paints over it. It is scaffolding for the author and must not
-        # come between the reader and the drawing. It is inside the fitted group
-        # for the opposite reason: the numbers it writes have to be the ones
-        # ``pin()`` takes, and a fixed page scales that group, so the overlay is
-        # told the scale and holds its lettering to a constant size on paper
-        # while leaving its geometry in drawing units.
-        if grid is not None:
-            drawing.extend(_debug.overlay(
-                fs, (dx0, dy0, dx1, dy1), grid,
-                _fit_scale(dx1 - dx0, dy1 - dy0, free) if free is not None else 1.0))
+        # Every opaque white plate the sheet lays down, collected only when the
+        # overlay is going to be drawn. The overlay is emitted *under* the
+        # drawing, so a plate is the one thing on the sheet that can delete it
+        # outright, and the only way for it to step clear is to be told where
+        # they landed. Nothing here changes what is drawn: with ``debug`` off
+        # the list is ``None`` and not one of these boxes is computed.
+        plates: "list[tuple[float, float, float, float]] | None" = (
+            [] if grid is not None else None)
         drawing.extend(self._draw_units(fs, unit_labels, balloons, ink))
-        drawing.extend(self._draw_streams(fs, jump_direction, unit_labels, arrows, ink))
+        drawing.extend(self._draw_streams(fs, jump_direction, unit_labels, arrows, ink,
+                                          plates))
         # Instrumentation goes on over the lines: an impulse line runs from the
         # tap to the balloon, and the balloon's opaque body then knocks out both
         # it and any process line an in-line element straddles.
@@ -1195,6 +1193,28 @@ class SvgRenderer:
             drawing.append('  </g>')
         # Equipment tags go on last, haloed, so no stream line strikes through them.
         drawing.extend(self._draw_unit_labels(unit_labels))
+
+        # Placed last and drawn first. The overlay must sit *under* every piece
+        # of the sheet's own ink -- it is scaffolding for the author and must
+        # not come between the reader and the drawing -- but it can only choose
+        # paper the sheet has left clear if it is worked out once the sheet
+        # exists. Those two are not in conflict; they are the same requirement
+        # read from both ends, and the only thing standing between them was the
+        # order this function happened to build its list in. Splicing the result
+        # onto the head is what keeps the drawing order the overlay's whole
+        # safety argument rests on.
+        #
+        # It goes inside the fitted group for a separate reason: the numbers it
+        # writes have to be the ones ``pin()`` takes, and a fixed page scales
+        # that group, so the overlay is told the scale and holds its lettering
+        # to a constant size on paper while leaving its geometry in drawing
+        # units.
+        if grid is not None:
+            assert plates is not None
+            drawing[:0] = _debug.overlay(
+                fs, (dx0, dy0, dx1, dy1), grid,
+                _fit_scale(dx1 - dx0, dy1 - dy0, free) if free is not None else 1.0,
+                plates=plates, ink=[line.box for line in ink])
 
         if free is None:
             lines.extend(drawing)
@@ -2091,7 +2111,17 @@ class SvgRenderer:
         """
         return arrows and wears_arrowhead(s, self.registry)
 
-    def _draw_streams(self, fs, jump_direction, unit_labels, arrows=True, ink=()):
+    def _draw_streams(self, fs, jump_direction, unit_labels, arrows=True, ink=(),
+                      plates=None):
+        """Draw every run, and the line numbers written on and beside them.
+
+        ``plates`` is an out-parameter, filled -- when a caller supplies a list
+        -- with every opaque white rectangle this pass and the equipment-tag
+        pass between them put on the sheet. Only the debugging overlay asks for
+        it, and it asks because it is drawn *underneath* all of them: see
+        :func:`pandid.render.debug.overlay`. Left ``None`` nothing is collected
+        and nothing about the render changes.
+        """
         from pandid.portgeom import port_point, unit_box
 
         stream_geoms, horizontals, verticals = [], [], []
@@ -2352,5 +2382,11 @@ class SvgRenderer:
                 lines.append(f'    <path d="{_arrowhead(*leader)}" fill="{color}" />')
                 placed.append((min(ax0, ax1), min(ay0, ay1),
                                max(ax0, ax1), max(ay0, ay1)))
+        # ``placed`` is now every opaque plate the sheet's two label passes lay
+        # down: the equipment tags it was seeded with, each line number, and
+        # each leader. That is exactly the set the overlay has to dodge, and
+        # this is the only point in the program where it exists.
+        if plates is not None:
+            plates.extend(placed)
         lines.append('  </g>')
         return lines
