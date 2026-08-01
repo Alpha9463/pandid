@@ -45,11 +45,19 @@ DEFAULT_LINE_NUMBER_START = 1001
 DEFAULT_STREAM_NUMBER_START = 1
 
 #: Where :meth:`Flowsheet.add_loop` starts counting when it is left to allocate.
-#: One, and not the 1001 its line-number neighbour uses, because a loop series
-#: has no cross-site starting convention to inherit: it is the plant area's, so
-#: a 300-area sheet says ``loop_number_start=301`` and a sheet with no areas at
-#: all is happier reading 1, 2, 3 than 1001, 1002, 1003.
-DEFAULT_LOOP_NUMBER_START = 1
+#: A three-digit unit-100 number rather than a bare 1, for the reason
+#: :data:`DEFAULT_LINE_NUMBER_START` is 1001 and not 1: what comes out of here
+#: is an engineering document, and ``FIC-1`` is not a tag anyone writes on a
+#: P&ID. Both sheets in the corpus that number loops use three digits --
+#: :file:`examples/04_control_loop.py` runs the 100 series and
+#: :file:`examples/11_ethanol_pid.py` the 300 -- because the series belongs to a
+#: plant area, so an author still has to say which area this sheet is, exactly
+#: as they do for a line sequence. All the default decides is what the drawing
+#: reads like until they do, and a plausible ``FIC-101`` beats a ``FIC-1`` a
+#: reviewer would stop on as broken. A bare 1 would be the louder prompt to set
+#: it deliberately, which is a real argument and the one this loses to: it buys
+#: that prompt by making every draft sheet unshowable in the meantime.
+DEFAULT_LOOP_NUMBER_START = 101
 
 
 def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream) -> str:

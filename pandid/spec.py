@@ -25,7 +25,7 @@ The format::
     stream_number_start: 1            # the S1 a flag draws
     line_numbering_scheme: "{size}-{service}-{sequence}-{spec}"
     line_number_start: 1001           # the 1001 inside 6"-P-1001-A1A
-    loop_number_start: 1              # where a loop with no number counts from
+    loop_number_start: 101            # where a loop with no number counts from
     auto_faces: true                  # engine picks each movable port's face
     components: [{name: Water, formula: H2O}]
 

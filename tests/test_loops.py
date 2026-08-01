@@ -78,9 +78,13 @@ def test_the_counter_is_one_series_across_measured_variables():
     assert names == ["P-301", "T-302", "F-303", "L-304", "F-305", "L-306", "T-307", "F-308"]
 
 
-def test_the_series_starts_at_one_by_default():
+def test_the_series_starts_at_a_unit_100_number_by_default():
+    """101, not 1, for the reason ``line_number_start`` is 1001: ``FIC-1`` is
+    not a tag anyone writes on a P&ID, and the sheet has to be showable before
+    the author has said which plant area it is.
+    """
     fs = Flowsheet("plain")
-    assert [fs.add_loop("F").name for _ in range(3)] == ["F-1", "F-2", "F-3"]
+    assert [fs.add_loop("F").name for _ in range(3)] == ["F-101", "F-102", "F-103"]
 
 
 def test_allocation_order_is_declaration_order():
@@ -92,11 +96,11 @@ def test_allocation_order_is_declaration_order():
     """
     fs, line = _sheet()
     first = fs.add_loop("F")
-    unused = fs.add_loop("L")  # declared, never tagged, still spends 2
+    unused = fs.add_loop("L")  # declared, never tagged, still spends 102
     third = fs.add_loop("T")
     fs.add_instrument("TT", third, on=line, at=0.5, offset=60)
     fs.to_svg()
-    assert [loop.number for loop in (first, unused, third)] == ["1", "2", "3"]
+    assert [loop.number for loop in (first, unused, third)] == ["101", "102", "103"]
 
 
 def test_allocated_and_typed_numbers_mix_on_one_sheet():
@@ -115,7 +119,7 @@ def test_a_one_member_loop_is_a_legitimate_use():
     fs, line = _sheet()
     lone = fs.add_loop("P")
     pi = fs.add_instrument("PI", lone, on=line, at=0.3, offset=50)
-    assert (lone.name, pi.name) == ("P-1", "PI-1")
+    assert (lone.name, pi.name) == ("P-101", "PI-101")
 
 
 def test_an_allocated_number_that_lands_on_a_typed_one_raises_at_that_line():
@@ -123,18 +127,18 @@ def test_an_allocated_number_that_lands_on_a_typed_one_raises_at_that_line():
 
     It is not resolved silently in either direction: stepping over the typed
     number would put a hole in the series nothing asked for, and taking it would
-    mint a second F-2.
+    mint a second F-102.
     """
     fs = Flowsheet("collision")
-    fs.add_loop("F", 2)
-    fs.add_loop("F")  # F-1
+    fs.add_loop("F", 102)
+    fs.add_loop("F")  # F-101
     with pytest.raises(ValueError) as excinfo:
-        fs.add_loop("F")  # would be F-2
+        fs.add_loop("F")  # would be F-102
     message = str(excinfo.value)
-    assert "loop F-2 took 2, the next number in this sheet's series" in message
+    assert "loop F-102 took 102, the next number in this sheet's series" in message
     assert "loop_number_start" in message  # names the way out
     # and nothing was declared, so the sheet still holds two loops
-    assert [loop.name for loop in fs.loops] == ["F-2", "F-1"]
+    assert [loop.name for loop in fs.loops] == ["F-102", "F-101"]
 
 
 def test_a_refused_declaration_burns_no_number():
@@ -169,18 +173,18 @@ def test_an_allocated_number_is_never_rewritten_afterwards():
     fs.connect(cv.outlet, vent.inlet)
     fs.add_loop("L")  # a later declaration does not renumber an earlier one
     fs.to_svg()
-    assert (loop.number, ft.name, cv.name) == ("1", "FT-1", "CV-1")
+    assert (loop.number, ft.name, cv.name) == ("101", "FT-101", "CV-101")
 
 
 def test_moving_the_start_moves_the_numbers_still_to_come():
     """The start stays the authoritative setting after construction too.
 
     The counter is the start plus what has been handed out, so moving the start
-    moves everything still to come and un-spends nothing: the ``F-1`` below is
+    moves everything still to come and un-spends nothing: the ``F-101`` below is
     already on the sheet and no longer the start's business.
     """
     fs = Flowsheet("moved")
-    assert fs.add_loop("F").name == "F-1"
+    assert fs.add_loop("F").name == "F-101"
     fs.loop_number_start = 301
     assert fs.add_loop("T").name == "T-302"
     assert fs.add_loop("L").name == "L-303"

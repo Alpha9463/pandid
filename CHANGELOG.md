@@ -11,10 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Control loops number themselves.** `add_loop("F")` with the number left out
   takes the next one from a single per-sheet counter, started by
-  `Flowsheet(loop_number_start=…)` and allocated at the `add_loop()` line, so
-  declaration order is allocation order. Typed and allocated numbers mix on one
-  sheet; a loop is still the `(variable, number)` pair, so `F-101` and `L-101`
-  remain two loops.
+  `Flowsheet(loop_number_start=…)` (default `101`) and allocated at the
+  `add_loop()` line, so declaration order is allocation order. Typed and
+  allocated numbers mix on one sheet; a loop is still the `(variable, number)`
+  pair, so `F-101` and `L-101` remain two loops.
+
+  The default is a three-digit unit-100 number rather than a bare 1, for the
+  reason `line_number_start` is 1001: what comes out is an engineering document,
+  and `FIC-1` is not a tag anyone writes on a P&ID, while `FIC-101` is an
+  ordinary unit-100 loop. Both sheets in the corpus that number loops use three
+  digits — `examples/04_control_loop` runs the 100 series and
+  `examples/11_ethanol_pid` the 300 — because a loop series belongs to a plant
+  area, so an author still has to say which area their sheet is either way. All
+  the default decides is what the drawing reads like until they do.
 
   One series across measured variables, not a counter per variable, because that
   is what a sheet draws: `P&ID_301` runs `P-301`, `T-302`, `F-303`, `L-304`,

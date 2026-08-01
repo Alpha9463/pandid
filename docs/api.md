@@ -25,7 +25,7 @@ Flowsheet(name: str, *,
           line_numbering_scheme: str | Callable[[Stream], str]
               = "{size}-{service}-{sequence}-{spec}",
           line_number_start: int = 1001,
-          loop_number_start: int = 1,
+          loop_number_start: int = 101,
           valve_station_tag_scheme: str | Callable[[str, str], str]
               = "{letters}-{number}{suffix}",
           auto_faces: bool = True)
@@ -44,7 +44,7 @@ The container and the single source of truth for connectivity.
 - `line_number_start` sets where the automatic sequence begins (default `1001`,
   so the first line is `…-1001-…`). Keyword-only.
 - `loop_number_start` sets the number the first `add_loop()` with no number of
-  its own takes (default `1`). Keyword-only. See
+  its own takes (default `101`, so the first loop is `F-101`). Keyword-only. See
   [Control loops](#control-loops).
 
 `stream_number_start` and `line_number_start` are two different numbers on two
@@ -1704,9 +1704,11 @@ unchanged. See [Declaring a flowsheet as data](#declaring-a-flowsheet-as-data).
 #### Automatic loop numbers
 
 Leave the number out and the sheet allocates the next one, counting from
-`loop_number_start`. On a draft, where the numbers and the count of loops are
-both still moving, that is one thing fewer to retype each time a loop is
-inserted.
+`loop_number_start` (default `101`). On a draft, where the numbers and the count
+of loops are both still moving, that is one thing fewer to retype each time a
+loop is inserted. A loop series belongs to a plant area, so set the start to the
+area this sheet draws; the default is a plausible unit-100 series to draw with
+until you do.
 
 ```python
 fs = Flowsheet("Ethanol Purification A300", loop_number_start=301)
@@ -2502,7 +2504,7 @@ stream_naming_scheme: "S{n}"
 stream_number_start: 1            # the S1 a flag draws
 line_numbering_scheme: "{size}-{service}-{sequence}-{spec}"
 line_number_start: 1001           # the 1001 inside 6"-P-1001-A1A
-loop_number_start: 1              # where a loop with no number counts from
+loop_number_start: 101            # where a loop with no number counts from
 components: [Water, {name: Ethanol, formula: C2H6O}]
 
 units:
