@@ -1092,12 +1092,15 @@ class Flowsheet:
         it: a P&ID exports its process lines without arrowheads. ``check``
         validates first, on the same terms.
 
-        Sheet furniture (the title block and any annotation boxes) exports as
-        labelled boxes stacked below the drawing, at neither the size nor the
-        dock position the sheet rules them at. What a sheet *is* -- its page
-        size, its border, its stream table -- has no counterpart in a model on an
-        unbounded canvas, and :meth:`render` refuses those options for a
-        ``.drawio`` path rather than accepting and ignoring them.
+        Sheet furniture (the title block and any annotation boxes) is docked to
+        the corners of the drawing by the same arithmetic the sheet docks it
+        with, and anything columnar -- an equipment list, a legend, a numbered
+        note list, a :class:`~pandid.document.TableBox` -- comes out as a real
+        draw.io table with rows and cells rather than as one block of text. What
+        a sheet *is* -- its page size, its border, its stream table -- has no
+        counterpart in a model on an unbounded canvas, and :meth:`render`
+        refuses those options for a ``.drawio`` path rather than accepting and
+        ignoring them.
         """
         if any(u.frame is None for u in self.units):
             self.layout()
@@ -1153,6 +1156,28 @@ class Flowsheet:
             # rather than ignored: a caller who asked for A3 and a zone border
             # and got neither has been told something false about the file they
             # now hold. Named one by one, since the fix is to drop that argument.
+            #
+            # ``border`` is the one worth arguing, because the furniture *is*
+            # docked now and a frame therefore exists to rule. It still raises.
+            # A zone grid is not decoration around a drawing; ISO 15519-1
+            # Clause 9 is explicit about what it is for -- "For reference to a
+            # document, to a sheet of a document, or to a column, a row or a
+            # zone on a sheet, the grid reference system described in 5.1.2
+            # shall be used" -- and §5.1.2 defines a zone as the cross-section
+            # of a lettered row and a numbered column. So a ruled border is an
+            # address space, and Feed.reference is where this library already
+            # writes addresses into it (``4334/.B3``, Table 2). Addresses only
+            # hold while the sheet does. The whole point of the .drawio export
+            # is a model the reader re-lays out by hand, and the first column
+            # they drag two hundred units left is in a different zone from the
+            # one every reference on the sheet says it is in -- and the file
+            # would still look authoritative. A stale grid is worse than no
+            # grid, so the export has none and says so.
+            #
+            # The furniture is a different case and that is why it is not an
+            # inconsistency: a docked box states a *relation* to a corner, which
+            # survives the reader moving things, and no reference anywhere
+            # points at it.
             sheet_only = [
                 name for name, given, default in (
                     ("show_stream_table", show_stream_table, False),

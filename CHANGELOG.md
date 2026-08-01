@@ -229,6 +229,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The `.drawio` export draws the instrument connections.** An instrument
+  mounted with `add_instrument(..., on=…)` gets a tap line, which is not a
+  stream and so was not among the edges the export walked: all twenty of
+  `examples/11_ethanol_pid`'s balloons came out floating free of the plant.
+  ISO 15519-2 §5.1.1 does not leave that open — the PCI symbol *shall* be
+  connected to the process system with a solid line and to the control system
+  with a solid or dashed one — so an export without them is not a P&ID. Each is
+  now an edge, pinned to the balloon and, where the host is a piece of plant,
+  to the host, so it stays attached when either is dragged. `tap_lines()` and
+  `impulse_tap()` moved to module scope in `pandid.render.svg` and both backends
+  read them, so there is one answer to where a tap runs and whether it is solid.
+
+- **A pneumatic signal line is marked as one.** It exported solid and thin,
+  which told it apart from a process line by weight alone and from an electric
+  one by nothing. The double cross-hatch (ISO 15519-2 Annex A.1.09, type 433A)
+  now goes out as a pair of `line` cells parented to the edge, at the points
+  `pneumatic_marks()` puts them, so they ride the line when it is re-routed.
+  ISO 15519-2 §6.2 sanctions the mark where most of the diagram's signal lines
+  are electric, which is `examples/11`'s case. Two departures from the sheet:
+  a mark keeps the angle it was exported at if the line is later re-routed
+  through a turn (mxGraph does not orient a shape to an edge), and the pair is
+  two cells rather than one glyph.
+
+- **Sheet furniture docks where the sheet docks it.** The title block, equipment
+  list, notes and legend were stacked in a column down the left of the drawing
+  at x=26 while the drawing ran out to x=1540. The band arithmetic that places
+  them came out of `SvgRenderer._place_furniture` into
+  `pandid.render.furniture.dock()`, which is a statement about a sheet rather
+  than about SVG, and both backends now call it. A `.drawio` file has no paper,
+  so the frame is grown around the drawing rather than being a page — on a sheet
+  rendered at `page_size="A3"` the corners are the drawing's corners, not the
+  page's.
+
+- **The equipment list, notes, legend and title block are ruled tables.** Each
+  was a single `value` with `<br>` runs in a plain rectangle. Anything columnar
+  now exports as a draw.io table (`shape=table` with `childLayout=tableLayout`,
+  row and cell children), which opens as an editable grid. The title strip goes
+  out as two tables — the six-column revision history, heading row at the foot
+  where the sheet rules it, and the identification fields as label/value rows.
+  Its merged geometry does not survive: the sheet spans a title across the strip
+  and rules the drawing number, scale, date and revision as four cells on one
+  line, and a table row gives every cell the same height. A box whose rows are
+  plain sentences stays a box, since ruling one column into a grid would invent
+  structure the author did not write.
+
+- **An off-page flag is a pennant with its tag inside it.** `Feed` and `Product`
+  exported as an unlabelled rectangle with the label placed *above* it.
+  draw.io's `offPageConnector` is the sheet's polygon exactly — five points,
+  flat back, one end drawn to a point — turned a quarter to point along the
+  flow, and the tag and off-page reference now sit in the flag as they do on the
+  sheet. The cell is the pennant rather than the unit box, which the flag is
+  drawn inset inside. `step`, the obvious candidate, cuts a chevron notch into
+  the flag's back that no setting removes.
+
+- **A pipe tee is drawn in the pipe's own ink.** It exported at the stencil
+  hairline `#111` and draw.io's default weight, so the twelve units of run
+  through every junction were a visibly lighter, thinner rule bridging two
+  heavier pipes. It is black at the pipeline's weight, which is what
+  `sym_tee` is.
+
+- **Two more the export got wrong without anything on a sheet showing it**, both
+  read out of mxGraph's source rather than seen. A dash pattern is multiplied by
+  the stroke width unless `fixDash=1`, so a pattern given to a stream through
+  `dasharray` came out at twice its length on a process line; every dashed edge
+  now carries the flag. And draw.io ships two anchor-point algorithms that
+  disagree for a north or south `direction` — the newer one swaps the bounds'
+  width and height whatever `anchorPointDirection` says — so a cell that states
+  a `direction` now also states `legacyAnchorPoints=1` and stops depending on
+  which is the default.
+
 - **Documentation: a final control element does take its loop's number.** 0.1.1
   shipped the opposite claim in `pandid/loops.py`, `docs/api.md` and
   `tests/test_loops.py` — that neither the letters nor the number of a final
