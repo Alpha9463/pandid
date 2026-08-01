@@ -2160,10 +2160,34 @@ making, so the warnings left on `fs.warnings` are about the sheet that came out.
 | `run-off-elevation` | warning | two connected nozzles on one horizontal run are *almost* level, missing by less than the shorter symbol is tall, so the line steps into a device and back out; see [Runs at one elevation](#runs-at-one-elevation) |
 | `nozzles-crowded` | warning | two nozzles on one face both wear an arrowhead and are pitched closer than ISO 128-20 lets two parallel lines come, so the strip of paper between the heads is too thin to survive reproduction. One finding per face, and the message names the box that would fix it. Not made for a P&ID, which draws no heads. See [Nozzles and the arrowheads they carry](#nozzles-and-the-arrowheads-they-carry) |
 | `route-not-settled` | warning | routing and instrument placement never agreed and `route()` ran out of passes; see [Routing and instrument placement](#routing-and-instrument-placement) |
+| `deprecated` | warning | the sheet was built with a spelling that is being retired. The message names the replacement and the release the old one stops working in; see [Deprecated API](#deprecated-api) |
 
 Errors raise from `to_svg()`/`render()` unless you pass `check=False`. Warnings
 never raise, and collect on `fs.warnings` after each render. Geometric checks
 need resolved frames, so they are skipped before layout has run.
+
+### Deprecated API
+
+A retired spelling gives two signals: a standard `DeprecationWarning`, and a
+`deprecated` finding from `validate()`. Python hides `DeprecationWarning` by
+default outside `__main__`, so the finding is the one you can rely on seeing.
+Both are built from one declaration and always read the same:
+
+```text
+[warning] deprecated: P-101: Pump(cooled=True) is deprecated and is removed in pandid 0.1.3; use Pump(jacket='cooling')
+```
+
+A deprecation lives for one release. It works throughout the release that
+announces it and is deleted in the next, so the message always names a release
+that has not shipped yet. The CHANGELOG lists it under `### Deprecated` when it
+is announced and under `### Removed` when it goes. Nothing is deprecated today;
+the line above is the shape, not a real call.
+
+The finding rides on the object the call was made on, so a unit deprecated
+during construction is reported even though it was not on a flowsheet yet. A
+unit that is never added is never reported — `validate()` answers for the
+drawing. A deprecated call with no flowsheet, unit or stream in scope has
+nothing to ride on and is reported by every `validate()` in that process.
 
 ### Runs at one elevation
 
