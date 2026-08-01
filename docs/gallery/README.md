@@ -276,6 +276,42 @@ flow order and does not yet read a north-face connection as wanting its source
 above it (issue #168) — and a BFD is the drawing most worth pinning anyway,
 since the reader is meant to see the plant in a row.
 
+## 13 · Mineral concentrate dewatering
+
+[`examples/13_mineral_dewatering.py`](../../examples/13_mineral_dewatering.py) ·
+[SVG](13_mineral_dewatering.svg)
+
+![Mineral concentrate dewatering PFD](13_mineral_dewatering.png)
+
+The first sheet here that is not a fluids plant. A flotation concentrate is
+thickened in `TH-401`, dewatered on the vacuum belt filter `FL-401`, dropped as
+cake onto `CV-401`, dried in the direct-fired rotary drum `DR-401`, recovered
+out of its own drying gas by the cyclone `CY-401` and cleaned of tramp steel by
+the magnet `MS-401`; the spent gas is scrubbed in `SC-401` and pulled to the
+stack `VE-401` by the induced-draught fan `BL-401`. It brings thirteen
+`(kind, variant)` symbols into the gallery that were registered and never
+drawn — a thickener, a cyclone, a scrubber, a magnetic separator, a belt
+filter, a rotary dryer, a furnace, a fan, a conical-bottom tank, a charging
+funnel, an exhaust head, a hose pump and a progressing-cavity pump — and it is
+the first sheet to build a `Blower`, a `Dryer`, a `Funnel` or a `Furnace` at
+all.
+
+It is a **PFD**, on the model of `professional_examples/PFD_301.pdf`: an
+equipment list, a sectioned stream table, a utilities summary, and not one
+instrument balloon. Four of its five junctions are `Tee(branch="inlet")`s where
+a second stream *joins* a run — flocculant into the thickener feed, powder into
+the make-up water, burner gas into the dryer's breeching, water into the
+scrubber's throat — which is the reverse of the takeoff tees `10` draws and the
+only place in the gallery either is shown. Every tee ends a stream number, so
+all twenty-four columns of the table are true of the line they name and the
+sheet's total-flow balance closes to 0.04 t/h.
+
+Where `10`, `11` and `14` are pinned to A3, this one takes no `page_size` at
+all, as `03` and `08` do: twenty-four streams side by side is wider than A3
+carries beside a utilities summary, so the sheet is sized to its drawing. It is
+the only sheet in the gallery whose *furniture* rather than whose diagram sets
+that width.
+
 ## 14 · Tank farm and road loading
 
 [`examples/14_tank_farm.py`](../../examples/14_tank_farm.py) ·
