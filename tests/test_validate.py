@@ -624,9 +624,10 @@ def test_every_counted_family_answers_to_the_naming_rule(build, stem, size):
 
 
 def test_nothing_shipped_leaves_a_counted_nozzle_open():
-    """The acceptance test, over the drawings this package stands behind. 35
-    counted nozzles across seven of the twelve, and every one of them piped --
-    so the rule is exercised by the corpus rather than merely silent on it."""
+    """The acceptance test, over the drawings this package stands behind. 36
+    counted nozzles across eight of the shipped sheets, and every one of them
+    piped -- so the rule is exercised by the corpus rather than merely silent on
+    it. The thirty-sixth is ``14_tank_farm``'s two-inlet blend tee."""
     from tests.test_golden import SCENARIOS
 
     offenders, counted = [], 0
@@ -636,7 +637,7 @@ def test_nothing_shipped_leaves_a_counted_nozzle_open():
         counted += sum(_family_members(u) for u in fs.units)
         offenders += [f"{name}: {w.message}" for w in fs.warnings if w.code == "nozzle-unconnected"]
     assert offenders == []
-    assert counted == 35
+    assert counted == 36
 
 
 def _family_members(unit):

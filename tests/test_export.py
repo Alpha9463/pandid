@@ -445,6 +445,32 @@ def test_a_centred_label_is_rasterised_where_its_alignment_puts_it_in_its_halo()
     assert measured >= 4, "no haloed label was measured, so this checked nothing"
 
 
+def _strings_on_the_paper(svg: str) -> int:
+    """How many strings the sheet asks a renderer to draw.
+
+    Not the number of ``<text>`` elements, which is what this counted until a
+    sheet drew a *lettered symbol* twice. The S inside a solenoid valve's box is
+    part of the artwork: ``SvgRenderer`` defines that artwork once under
+    ``<defs>`` and instantiates it with a ``<use>`` per valve, so one element in
+    the file is two strings on the paper. ``14_tank_farm`` has two solenoid
+    valves -- a receipt trip valve on each of its two atmospheric tanks -- and
+    is the first sheet in the corpus where the two numbers part company.
+
+    So a symbol's lettering counts once per reference to it and everything
+    outside a symbol counts once, which is what a PDF's ``Tj`` operators are a
+    count of. Counting elements instead would have let a symbol's letter go
+    missing on its second and every later instance without failing anything.
+    """
+    text = r"<text\b[^>]*>(.*?)</text>"
+    total = 0
+    for match in re.finditer(r'<symbol id="([^"]+)".*?</symbol>', svg, re.S):
+        lettering = len([t for t in re.findall(text, match.group(0), re.S) if t.strip()])
+        if lettering:
+            total += lettering * len(re.findall(rf'href="#{re.escape(match.group(1))}"', svg))
+    body = re.sub(r"<symbol\b.*?</symbol>", "", svg, flags=re.S)
+    return total + len([t for t in re.findall(text, body, re.S) if t.strip()])
+
+
 @pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
 @pytest.mark.parametrize("name", GOLDENS)
 def test_every_label_on_the_sheet_reaches_the_page(name):
@@ -452,6 +478,5 @@ def test_every_label_on_the_sheet_reaches_the_page(name):
     # a tag that does not print is the most expensive one: on a P&ID the
     # lettering is the content. Counted rather than eyeballed, per sheet.
     svg = (GOLDEN_DIR / name).read_text(encoding="utf-8")
-    written = len([t for t in re.findall(r"<text\b[^>]*>(.*?)</text>", svg, re.S) if t.strip()])
     drawn = len(re.findall(rb"\) Tj", _page_content(export.to_pdf(svg))))
-    assert drawn == written
+    assert drawn == _strings_on_the_paper(svg)

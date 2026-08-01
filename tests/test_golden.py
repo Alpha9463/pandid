@@ -1499,15 +1499,15 @@ def _tank_farm() -> Flowsheet:
     rd602.pin(port="inlet", x=795, y=ms_disch_y)
     nrv601.pin(port="inlet", x=875, y=ms_disch_y)
 
-    hv603.pin(port="inlet", x=800, y=eth_run_y)
-    sb601.pin(port="inlet", x=850, y=eth_run_y)
-    t_rec.pin(port="inlet", x=890, y=eth_run_y)
-    st602.pin(port="inlet", x=918, y=eth_run_y)
-    p602.pin(port="suction", x=965, y=eth_run_y)
-    t_psv.pin(port="inlet", x=1025, y=eth_run_y)
-    fe605.pin(port="inlet", x=1045, y=eth_run_y)
-    cv605.pin(port="inlet", x=1105, y=eth_run_y)
-    nrv602.pin(port="inlet", x=1148, y=eth_run_y)
+    hv603.pin(port="inlet", x=785, y=eth_run_y)
+    sb601.pin(port="inlet", x=832, y=eth_run_y)
+    t_rec.pin(port="inlet", x=870, y=eth_run_y)
+    st602.pin(port="inlet", x=896, y=eth_run_y)
+    p602.pin(port="suction", x=940, y=eth_run_y)
+    t_psv.pin(port="inlet", x=1060, y=eth_run_y)
+    fe605.pin(port="inlet", x=1080, y=eth_run_y)
+    cv605.pin(port="inlet", x=1140, y=eth_run_y)
+    nrv602.pin(port="inlet", x=1180, y=eth_run_y)
     psv_branch_x = t_psv.pin_.x + port_offset(t_psv, "branch")[0]
     rec_branch_x = t_rec.pin_.x + port_offset(t_rec, "branch")[0]
     psv602.pin(port="inlet", x=rec_branch_x, y=psv_run_y)
@@ -1515,19 +1515,19 @@ def _tank_farm() -> Flowsheet:
     hv605.pin(port="inlet", x=1190, y=lpg_run_y)
     pcv606.pin(port="inlet", x=1255, y=lpg_run_y)
     hv608.pin(port="inlet", x=1340, y=lpg_run_y)
-    lpg_out.pin(port="inlet", x=1540, y=lpg_run_y)
+    lpg_out.pin(port="inlet", x=1560, y=lpg_run_y)
 
     blend_y = ms_disch_y
-    t_blend.pin(mirrored="y").pin(port="inlet", x=1180, y=blend_y)
+    t_blend.pin(mirrored="y").pin(port="inlet", x=1220, y=blend_y)
     blend_branch_x = t_blend.pin_.x + port_offset(t_blend, "branch")[0]
-    fe604.pin(port="inlet", x=1215, y=blend_y)
-    cv604.pin(port="inlet", x=1275, y=blend_y)
-    hv604.pin(port="inlet", x=1340, y=blend_y)
-    hs601.pin(port="inlet", x=1420, y=blend_y)
-    e10_out.pin(port="inlet", x=1540, y=blend_y)
+    fe604.pin(port="inlet", x=1340, y=blend_y)
+    cv604.pin(port="inlet", x=1400, y=blend_y)
+    hv604.pin(port="inlet", x=1460, y=blend_y)
+    hs601.pin(port="inlet", x=1505, y=blend_y)
+    e10_out.pin(port="inlet", x=1560, y=blend_y)
 
     vap_y = 775.0
-    vap_in.pin(mirrored=True).pin(port="outlet", x=1540, y=vap_y)
+    vap_in.pin(mirrored=True).pin(port="outlet", x=1560, y=vap_y)
     hv607.pin(mirrored=True).pin(port="inlet", x=590, y=vap_y)
     fa602.pin(mirrored=True).pin(port="inlet", x=490, y=vap_y)
     v604.pin(mirrored=True).pin(port="inlet", x=405, y=vap_y)
@@ -1624,8 +1624,8 @@ def _tank_farm() -> Flowsheet:
     pt603 = fs.add_instrument("PT", lpg_press, on=v603, at="E", offset=30)
     fs.add_instrument("PI", lpg_press, on=pt603, at="N", offset=40, variant="shared")
 
-    cv604_axis = 1275 + port_offset(cv604, "actuator")[0]
-    cv605_axis = 1105 + port_offset(cv605, "actuator")[0]
+    cv604_axis = 1400 + resolve_size(cv604)[0] / 2
+    cv605_axis = 1140 + resolve_size(cv605)[0] / 2
     fe604_top = blend_y - port_offset(fe604, "inlet")[1]
     cv604_top = blend_y - port_offset(cv604, "inlet")[1]
     fe605_top = eth_run_y - port_offset(fe605, "inlet")[1]
