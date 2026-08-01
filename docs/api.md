@@ -1652,6 +1652,10 @@ cv  = fs.add(units.Valve(loop.tag("CV"), variant="control"))
 fs.connect(fic.sig_out, cv.actuator, kind="pneumatic")
 ```
 
+That is loop 303 of
+[`examples/11_ethanol_pid.py`](../examples/11_ethanol_pid.py), which declares
+six loops and leaves ten balloons on literal numbers.
+
 - **A loop is `(variable, number)`.** `add_loop("F", 101)` and
   `add_loop("L", 101)` are two loops on one sheet. Declaring the same pair twice
   raises; `variable` must be a single letter and `number` must be non-empty.
