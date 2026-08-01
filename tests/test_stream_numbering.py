@@ -126,6 +126,65 @@ def test_signal_line_does_not_take_a_process_number():
     assert sig.name == "S2"  # last in the sequence, so it shares no name
 
 
+# --- stream_number_start ------------------------------------------------------
+
+
+def _two_streams(**kwargs):
+    """Feed -> pump -> product: a pump breaks the number, so two of them."""
+    fs = Flowsheet("start", **kwargs)
+    f = fs.add(U.Feed("F"))
+    p = fs.add(U.Pump("P-1"))
+    prod = fs.add(U.Product("P"))
+    return fs, [fs.connect(f.outlet, p.suction), fs.connect(p.discharge, prod.inlet)]
+
+
+def test_stream_number_start_moves_the_whole_series():
+    fs, streams = _two_streams(stream_number_start=100)
+    assert [s.name for s in streams] == ["S100", "S101"]
+    fs.to_svg()
+    assert [s.name for s in streams] == ["S100", "S101"]  # and rendering did not move them
+
+
+def test_stream_number_start_defaults_to_one():
+    _, streams = _two_streams()
+    assert [s.name for s in streams] == ["S1", "S2"]
+
+
+def test_stream_number_start_reaches_a_callable_scheme_too():
+    """The offset is on the number, not inside the format string, so the two
+    spellings of a naming scheme are handed the same ``n``."""
+    fs, streams = _two_streams(stream_naming_scheme=lambda n: f"S{n:03d}", stream_number_start=100)
+    assert [s.name for s in streams] == ["S100", "S101"]
+
+
+def test_stream_number_start_is_not_the_line_sequence():
+    """Two numbers on two lists: ``stream_number_start`` moves the ``S1`` a flag
+    draws, ``line_number_start`` the ``1001`` inside ``6"-P-1001``. A sheet can
+    move one and leave the other, so neither stands in for the other.
+    """
+    fs = Flowsheet("both", stream_number_start=100, line_number_start=301)
+    f = fs.add(U.Feed("F"))
+    p = fs.add(U.Pump("P-1"))
+    prod = fs.add(U.Product("Prod"))
+    plain = fs.connect(f.outlet, p.suction)
+    numbered = fs.connect(p.discharge, prod.inlet, size='6"', service="P", spec="A1A")
+    assert plain.name == "S100"  # the stream series
+    assert numbered.name == '6"-P-302-A1A'  # the line series, second group
+
+
+def test_stream_number_start_round_trips_through_a_spec():
+    fs, _ = _two_streams(stream_number_start=100)
+    spec = fs.to_dict()
+    assert spec["stream_number_start"] == 100
+    rebuilt = Flowsheet.from_dict(spec)
+    assert rebuilt.stream_number_start == 100
+    assert [s.name for s in rebuilt.streams] == ["S100", "S101"]
+
+
+def test_a_default_stream_number_start_writes_no_key():
+    assert "stream_number_start" not in Flowsheet("plain").to_dict()
+
+
 def test_signals_unnumbered_and_no_arrow():
     fs = Flowsheet("s")
     a = fs.add(U.Instrument("FT-1"))

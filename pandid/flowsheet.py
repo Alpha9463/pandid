@@ -38,6 +38,27 @@ DEFAULT_LINE_NUMBERING_SCHEME = "{size}-{service}-{sequence}-{spec}"
 #: 1001 rather than 1 out of the box.
 DEFAULT_LINE_NUMBER_START = 1001
 
+#: Where ``S{n}`` starts counting. One, because that is the number the engine
+#: has always begun at and every shipped example draws ``S1`` first; the
+#: setting only names what was already true, so a sheet that says nothing is
+#: numbered exactly as it was.
+DEFAULT_STREAM_NUMBER_START = 1
+
+#: Where :meth:`Flowsheet.add_loop` starts counting when it is left to allocate.
+#: A three-digit unit-100 number rather than a bare 1, for the reason
+#: :data:`DEFAULT_LINE_NUMBER_START` is 1001 and not 1: what comes out of here
+#: is an engineering document, and ``FIC-1`` is not a tag anyone writes on a
+#: P&ID. Both sheets in the corpus that number loops use three digits --
+#: :file:`examples/04_control_loop.py` runs the 100 series and
+#: :file:`examples/11_ethanol_pid.py` the 300 -- because the series belongs to a
+#: plant area, so an author still has to say which area this sheet is, exactly
+#: as they do for a line sequence. All the default decides is what the drawing
+#: reads like until they do, and a plausible ``FIC-101`` beats a ``FIC-1`` a
+#: reviewer would stop on as broken. A bare 1 would be the louder prompt to set
+#: it deliberately, which is a real argument and the one this loses to: it buys
+#: that prompt by making every draft sheet unshowable in the meantime.
+DEFAULT_LOOP_NUMBER_START = 101
+
 
 def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream) -> str:
     """Assemble one stream's line number from the components the author set.
@@ -125,16 +146,40 @@ class Flowsheet:
     def __init__(
         self, name: str, *,
         stream_naming_scheme: str | Callable[[int], str] = "S{n}",
+        stream_number_start: int = DEFAULT_STREAM_NUMBER_START,
         line_numbering_scheme: str | Callable[[Stream], str] = DEFAULT_LINE_NUMBERING_SCHEME,
         line_number_start: int = DEFAULT_LINE_NUMBER_START,
+        loop_number_start: int = DEFAULT_LOOP_NUMBER_START,
         valve_station_tag_scheme: "str | Callable[[str, str], str]" = (
             DEFAULT_VALVE_STATION_TAG_SCHEME),
         auto_faces: bool = True,
     ):
         self.name = name
         self.stream_naming_scheme = stream_naming_scheme
+        # The ``{n}`` in ``stream_naming_scheme``, offset. Its neighbour below
+        # is a different number on a different label and the two are worth
+        # keeping apart: `line_number_start` moves the ``sequence`` *component*
+        # of a LINE number, the ``1001`` inside ``6"-P-1001-A1A``, which is a
+        # piping identity a line list is kept in; this moves the whole of a
+        # STREAM number, the ``S1`` a PFD draws in a flag and a stream table
+        # keys its columns on. A sheet can want one and not the other -- a PFD
+        # numbering S100 upward carries no line numbers at all -- so neither
+        # can stand in for the other. Until this existed the only way to reach
+        # the offset was to hand ``stream_naming_scheme`` a callable, which is
+        # a whole naming convention supplied to move a number by 99.
+        self.stream_number_start = stream_number_start
         self.line_numbering_scheme = line_numbering_scheme
         self.line_number_start = line_number_start
+        # Where `add_loop()` starts counting when the author leaves the number
+        # to it. See that method for why the counter is one series for the
+        # sheet and why it is naive.
+        self.loop_number_start = loop_number_start
+        # How many numbers `add_loop()` has handed out. That plus the start is
+        # the whole of the counter, kept as two fields rather than one running
+        # total so the start stays the authoritative setting: it is what
+        # `to_dict()` writes and what an author moves, and a total seeded from
+        # it at construction would quietly ignore a later move.
+        self._loops_allocated = 0
         # How a valve station spells its members' tags out of its control
         # valve's. A drawing office convention, like the two schemes above, so
         # it is set here for a whole sheet and overridable per station.
@@ -236,13 +281,28 @@ class Flowsheet:
             n += 1
         return f"{tag} ({n})"
 
-    def add_loop(self, variable: str, number: str | int) -> "Loop":
+    def add_loop(self, variable: str, number: str | int | None = None) -> "Loop":
         """Declare a control loop and return the handle its members are tagged from.
 
         ``variable`` is the ISA measured-variable letter (``"F"``, ``"L"``,
         ``"T"``) and ``number`` the loop number. A loop is identified by the
         **pair**: ``add_loop("F", 101)`` and ``add_loop("L", 101)`` are two
         loops on one sheet, which is what most sheets draw.
+
+        Leave ``number`` out and the sheet allocates the next one, counting from
+        ``loop_number_start``, so a draft that is still gaining and losing loops
+        is not also retyping numbers::
+
+            fs = Flowsheet("A300", loop_number_start=301)
+            press = fs.add_loop("P")   # P-301
+            temp = fs.add_loop("T")    # T-302
+            flow = fs.add_loop("F")    # F-303
+
+        One series for the sheet, climbing through whichever measured variable
+        was declared next, and allocation happens here, at the declaration, so
+        the order the numbers come out in is the order the file reads in.
+        Allocated and typed numbers mix freely; :meth:`to_dict` writes both as
+        literals, which is what freezes a draft.
 
         The loop replaces the number, not the letters. Each member still types
         its own functional letters and the loop checks the first of them, so a
@@ -260,15 +320,57 @@ class Flowsheet:
         correct as they stand.
 
         Unlike a stream number, a loop number allocates once and is never
-        rewritten: it leaves the drawing for the DCS.
+        rewritten afterwards, however it was arrived at: it leaves the drawing
+        for the DCS. See :mod:`pandid.loops`.
         """
         from pandid.loops import Loop
 
+        # ONE series for the sheet, not one counter per measured variable.
+        # P&ID_301 runs P-301, T-302, F-303, L-304, F-305, L-306, T-307, F-308,
+        # F-311, T-312: a single series climbing through whichever variable came
+        # next, and the sheet's own notes block says "Note that instrument
+        # number are unique to this drawing". A counter per variable would put
+        # F-301, T-301 and L-301 on one sheet the moment three variables were
+        # declared. That is legal -- a loop is the pair, and `add_loop("F", 101)`
+        # beside `add_loop("L", 101)` is still two loops here -- but it is not
+        # what the reference draws, and it costs the number the one job it does
+        # in a control room, which is to be short for the loop: "loop 304" stops
+        # naming a loop the moment three of them answer to it.
+        #
+        # And it is a NAIVE counter: no reservation list, no skipping past
+        # numbers already typed, no collision search. Nothing outside `loops`
+        # spends a number for it to dodge. A final control element takes its
+        # loop's number rather than one of its own -- CHEE4001 p.11 numbers a
+        # flow loop's element, transmitter, controller and valve all 504, and
+        # p.13 gives the rule: "A loop number is assigned to each group of
+        # components required to perform the desired function of the monitor or
+        # control scheme" -- so the group is the thing that consumes a number,
+        # and the loop set is the list of groups. Even the single-member groups:
+        # the tail of P&ID_301 (FE-313, PI-316, TI-319, LI-322) is loops of one
+        # by that rule, so a lone indicator is a legitimate `add_loop`.
+        allocated = number is None
+        if number is None:  # the same test twice, so the narrowing survives to Loop()
+            number = self.loop_number_start + self._loops_allocated
         loop = Loop(variable, number)
         clash = next((existing for existing in self.loops
                       if (existing.variable, existing.number) == (loop.variable, loop.number)),
                      None)
         if clash is not None:
+            # The one thing a naive counter can walk into: a number typed by
+            # hand, on this variable, in the stretch the counter is climbing
+            # through. It is not resolved silently in either direction --
+            # stepping over the typed number would put a hole in the series
+            # nothing asked for, and taking it would mint a second F-303 -- so
+            # the sheet says which two numbers met, at the line that did it.
+            if allocated:
+                raise ValueError(
+                    f"loop {loop.name} took {number}, the next number in this sheet's "
+                    f"series, and {loop.name} is already declared. The counter counts; it "
+                    f"does not read the numbers you typed and step over them, because "
+                    f"only you know where those sit. Either type this loop's number too, "
+                    f"or start the series clear of them with "
+                    f"Flowsheet(loop_number_start=...)"
+                )
             raise ValueError(
                 f"loop {loop.name} is already declared on this flowsheet. A loop is "
                 f"identified by its measured variable and its number together, so two "
@@ -276,6 +378,11 @@ class Flowsheet:
                 f"add_loop() returned. Two loops may share a number if they measure "
                 f"different variables (F-101 and L-101)"
             )
+        # After every raise above, so a rejected declaration burns nothing: a
+        # bad letter or a clash leaves the next `add_loop()` the number this one
+        # was reaching for.
+        if allocated:
+            self._loops_allocated += 1
         self.loops.append(loop)
         return loop
 
@@ -759,7 +866,12 @@ class Flowsheet:
             """Take the next number for one group of segments sharing a name."""
             nonlocal n
             n += 1
+            # One count, two starts. `n` is the group's place in the sequence
+            # and both numbers are read off it, each from its own offset,
+            # because a line sequence and a stream number are different labels
+            # on different lists (see `stream_number_start` in `__init__`).
             sequence = str(self.line_number_start + n - 1)
+            number = self.stream_number_start + n - 1
             for s in group:
                 # A sequence the author put there outranks the one numbering
                 # would assign, however often numbering re-runs.
@@ -768,9 +880,14 @@ class Flowsheet:
             carrier = next((s for s in group if s.has_line_number), None)
             if carrier is not None:
                 return _format_line_number(self.line_numbering_scheme, carrier)
-            return (self.stream_naming_scheme(n)
+            # The offset is applied to the number, not inside the format
+            # string, so a callable scheme is handed the same ``n`` a format
+            # string interpolates. Sending the raw count to one and the offset
+            # count to the other would make `stream_number_start` do nothing on
+            # exactly the sheets that had been reaching for it by hand.
+            return (self.stream_naming_scheme(number)
                     if callable(self.stream_naming_scheme)
-                    else self.stream_naming_scheme.format(n=n))
+                    else self.stream_naming_scheme.format(n=number))
 
         segments: dict = {}
         for i, s in enumerate(material):
