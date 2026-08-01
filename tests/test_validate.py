@@ -316,6 +316,335 @@ def test_a_vertical_drop_is_a_runs_length_and_not_a_miss():
     assert _off_elevation(fs) == []
 
 
+# --- a counted nozzle with no line on it --------------------------------------
+
+
+def _unpiped(fs, **kw):
+    return [i for i in fs.validate(**kw) if i.code == "nozzle-unconnected"]
+
+
+def _mixer(n_inlets, wired):
+    """A mixer built for *n_inlets* with only *wired* of them piped."""
+    fs = Flowsheet("unpiped")
+    mix = fs.add(U.Mixer("M-101", n_inlets=n_inlets))
+    for i in wired:
+        fs.connect(fs.add(U.Feed(f"F-{i}")).outlet, mix.ports[f"in_{i}"])
+    fs.connect(mix.outlet, fs.add(U.Product("P")).inlet)
+    return fs, mix
+
+
+def test_the_off_by_one_that_started_this():
+    """Issue #183, written the way the user wrote it: ``m.inlets`` is indexed
+    from zero and the nozzles are numbered from one, so a loop over ``(1, 2, 3)``
+    meaning ``in_1``, ``in_2``, ``in_3`` wires ``in_2``, ``in_3`` and ``in_4``.
+    Before this finding the sheet drew, nothing raised and ``validate()`` was
+    empty."""
+    fs = Flowsheet("183")
+    mix = fs.add(U.Mixer("M-101", n_inlets=4))
+    for i in (1, 2, 3):
+        fs.connect(fs.add(U.Feed(f"F-{i}")).outlet, mix.inlets[i])
+    fs.connect(mix.outlet, fs.add(U.Product("P")).inlet)
+    issues = _unpiped(fs)
+    assert [i.severity for i in issues] == ["warning"]
+    assert "M-101.in_1 carries no stream" in issues[0].message
+    # The arithmetic, so the author can see which of the two things happened.
+    assert "built with 4 numbered nozzles, in_1..in_4, and 3 of them are piped" in issues[0].message
+    assert "asserts 4 connections and draws 3" in issues[0].message
+    # Both cures, because the finding cannot tell which was meant.
+    assert "Connect it, or build M-101 with the 3 it uses." in issues[0].message
+
+
+def test_wiring_the_nozzle_is_the_cure():
+    """Doing what the message says has to silence it, or the advice is wrong."""
+    assert _unpiped(_mixer(4, (1, 2, 3, 4))[0]) == []
+
+
+def test_the_other_cure_is_the_count():
+    """The second half of the same sentence: a mixer built for the three it
+    uses is the same sheet with nothing left over to report."""
+    assert _unpiped(_mixer(3, (1, 2, 3))[0]) == []
+
+
+def test_it_is_reported_before_layout_has_run():
+    """A connectivity fact needs no frames, and the call in the issue is a bare
+    ``fs.validate()`` on a flowsheet nobody has laid out. Reporting it only
+    after a render would answer a different question from the one asked."""
+    fs, mix = _mixer(4, (2, 3, 4))
+    assert all(u.frame is None for u in fs.units)
+    assert len(_unpiped(fs)) == 1
+    fs.layout()
+    assert len(_unpiped(fs)) == 1  # and the same one afterwards
+
+
+def test_two_loose_nozzles_on_one_unit_are_one_finding():
+    """One wrong count with one thing to do about it, said once -- the way
+    ``letter-sequence`` says a repeated tag once and ``nozzles-crowded``
+    reports a face rather than each pair on it."""
+    fs, _ = _mixer(4, (2, 3))
+    issues = _unpiped(fs)
+    assert len(issues) == 1
+    assert "M-101.in_1 and M-101.in_4 carry no stream" in issues[0].message
+    assert "Connect them, or build M-101 with the 2 it uses." in issues[0].message
+
+
+def test_a_family_with_nothing_on_it_is_not_offered_a_count():
+    """Telling an author to build M-101 with the 0 it uses is not advice. A
+    mixer nothing is piped to has a different problem from a mixer that is one
+    line short, so the sentence changes rather than doing the arithmetic and
+    reading a zero out of it."""
+    fs, _ = _mixer(2, ())
+    issues = _unpiped(fs)
+    assert len(issues) == 1
+    assert "0 of them are piped" in issues[0].message
+    assert "Connect them: nothing is piped to M-101 at all." in issues[0].message
+
+
+def test_a_splitter_counts_its_outlets_the_same_way():
+    fs = Flowsheet("split")
+    sp = fs.add(U.Splitter("SP-1", n_outlets=3))
+    fs.connect(fs.add(U.Feed("F")).outlet, sp.inlet)
+    for i in (1, 2):
+        fs.connect(sp.ports[f"out_{i}"], fs.add(U.Product(f"P{i}")).inlet)
+    issues = _unpiped(fs)
+    assert len(issues) == 1
+    assert "SP-1.out_3 carries no stream" in issues[0].message
+
+
+def test_a_block_is_caught_though_its_symbol_has_no_series():
+    """The reason the check reads the *unit's* ports and not the symbol's
+    :class:`PortSeries`. A block's family is split across up to four faces and
+    one series cannot put ``in_3`` on a face its ``in_1`` is not on, so
+    ``block_symbol`` authors an anchor per connection and there is no series to
+    ask. A block's ``in_2`` is a counted nozzle all the same, and a block is the
+    one class whose *entire* connection list is counted."""
+    from pandid.render.symbols import default_registry
+
+    fs = Flowsheet("bfd")
+    blk = fs.add(U.Block("Reaction", inputs=["W", "W", "N"], outputs=2))
+    fs.connect(fs.add(U.Feed("F")).outlet, blk.in_1)
+    fs.connect(blk.out_1, fs.add(U.Product("P")).inlet)
+    assert default_registry.for_unit(blk).port_series == ()  # nothing to borrow
+    issues = _unpiped(fs)
+    assert len(issues) == 2  # one per family, not one per unit
+    assert "Reaction.in_2 and Reaction.in_3 carry no stream" in issues[0].message
+    assert "Reaction.out_2 carries no stream" in issues[1].message
+
+
+def test_a_column_counts_its_feeds():
+    fs = Flowsheet("col")
+    col = fs.add(U.Column("T-1", n_feeds=3))
+    fs.connect(fs.add(U.Feed("F")).outlet, col.feeds[0])
+    fs.connect(col.distillate, fs.add(U.Product("D")).inlet)
+    fs.connect(col.bottoms, fs.add(U.Product("B")).inlet)
+    issues = _unpiped(fs)
+    assert len(issues) == 1
+    assert "T-1.feed_2 and T-1.feed_3 carry no stream" in issues[0].message
+    assert "feed_1..feed_3, and 1 of them is piped" in issues[0].message
+
+
+def test_the_singular_spelling_of_a_family_is_not_counted():
+    """A one-feed column's nozzle is called ``feed`` and not ``feed_1``, and
+    that spelling is the whole difference: it is declared as a class annotation
+    beside ``distillate`` and ``bottoms``, like any other fixed nozzle, and no
+    count was ever written down for it. ``n_feeds`` is what spells the family,
+    and only then is there a number to have failed to meet."""
+    fs = Flowsheet("col1")
+    col = fs.add(U.Column("T-2"))
+    fs.connect(col.distillate, fs.add(U.Product("D")).inlet)
+    fs.connect(col.bottoms, fs.add(U.Product("B")).inlet)
+    assert "feed" in col.ports and "feed_1" not in col.ports
+    assert _unpiped(fs) == []
+
+
+def test_a_family_of_one_is_still_a_family():
+    """``n_inlets=1`` is a count somebody wrote, and the nozzle it produces is
+    spelled ``in_1``. The singular exemption above is about the *name*, which is
+    what records whether a count was asked for, and not about the arity."""
+    fs, _ = _mixer(1, ())
+    issues = _unpiped(fs)
+    assert len(issues) == 1
+    assert "built with 1 numbered nozzle, in_1" in issues[0].message
+
+
+def test_a_family_with_a_number_missing_is_listed_and_not_ranged():
+    """No constructor here can build one, but a hand-written ``PORTS`` list can,
+    and ``in_1..in_7`` said of four nozzles would be the message inventing three
+    the unit does not have. The range is only used where the run really is 1 to
+    n; anything else is named member by member."""
+
+    class Odd(U.Unit):
+        kind = "unit"
+        PORTS = [
+            ("in_1", "inlet", "process"),
+            ("in_2", "inlet", "process"),
+            ("in_4", "inlet", "process"),
+            ("in_7", "inlet", "process"),
+        ]
+
+    fs = Flowsheet("ragged")
+    fs.add(Odd("X-1"))
+    message = _unpiped(fs)[0].message
+    assert "4 numbered nozzles, in_1, in_2, in_4 and in_7" in message
+    assert ".." not in message
+
+
+def test_a_spec_built_sheet_is_checked_too():
+    """``08_from_data`` builds its mixer from a mapping, and ``n_inlets`` is a
+    spec field like any other, so a count written in YAML is a count this reads."""
+    from pandid.spec import from_dict
+
+    fs = from_dict(
+        {
+            "name": "spec",
+            "units": [
+                {"kind": "Mixer", "name": "M-1", "n_inlets": 3},
+                {"kind": "Feed", "name": "F1"},
+                {"kind": "Product", "name": "P1"},
+            ],
+            "streams": [
+                {"from": ["F1", "outlet"], "to": ["M-1", "in_1"]},
+                {"from": ["M-1", "outlet"], "to": ["P1", "inlet"]},
+            ],
+        }
+    )
+    assert "M-1.in_2 and M-1.in_3 carry no stream" in _unpiped(fs)[0].message
+    # ...and it survives the round trip, since to_dict() writes the count back.
+    assert [i.code for i in from_dict(fs.to_dict()).validate()] == ["nozzle-unconnected"]
+
+
+@pytest.mark.parametrize(
+    "build,bare",
+    [
+        # The false positives, one per family, taken from what the twelve shipped
+        # examples actually leave open. Each is a nozzle its *class* declares --
+        # offered to every instance whether a sheet uses it or not -- so leaving it
+        # open is a drawing decision and not a count that went unmet.
+        (lambda fs: fs.add(U.HeatExchanger("E-1")), "tube_in"),  # 26 of them
+        (lambda fs: fs.add(U.Reactor("R-1")), "duty"),  # a duty
+        (lambda fs: fs.add(U.Reactor("R-1")), "vent"),  # an off-gas
+        (lambda fs: fs.add(U.Vessel("V-1")), "vent"),
+        (lambda fs: fs.add(U.Column("T-1")), "reboiler_duty"),
+        (lambda fs: fs.add(U.Valve("HV-1")), "outlet"),  # a drain leg
+        (lambda fs: fs.add(U.Separator("S-1")), "vapor"),
+        (lambda fs: fs.add(U.Ejector("EJ-1")), "motive"),
+    ],
+)
+def test_a_nozzle_the_class_declares_is_never_counted(build, bare):
+    """167 ports carry no stream across the twelve shipped examples and every
+    one of them is one of these. The drain valve is the plainest: "a drain runs
+    down to a funnel on the floor, which is not on this sheet, so the leg ends
+    at the valve", in ``add_valve_station``'s own words, and its outlet is bare
+    eight times on ``11_ethanol_pid`` alone."""
+    fs = Flowsheet("declared")
+    unit = build(fs)
+    assert unit.ports[bare].stream is None
+    assert _unpiped(fs) == []
+
+
+def test_a_numbered_signal_family_is_out_of_scope():
+    """Signal ports are a different question and this finding does not answer
+    it. A balloon's ``pv`` is bare on 36 of those 167 because an instrument may
+    be *placed* against its equipment rather than drawn tapped off a line, and
+    an actuator with nothing on it is a hand valve; neither is settled by
+    counting. No shipped class numbers a signal port, so the scope is stated
+    against a unit of the kind ``docs/api.md`` tells a user to write."""
+
+    class Marshalling(U.Unit):
+        kind = "marshalling"
+        PORTS = [
+            ("sig_1", "inlet", "signal"),
+            ("sig_2", "inlet", "signal"),
+            ("in_1", "inlet", "process"),
+            ("in_2", "inlet", "process"),
+        ]
+
+    fs = Flowsheet("signals")
+    box = fs.add(Marshalling("JB-1"))
+    fs.connect(fs.add(U.Feed("F")).outlet, box.port("in_1"))
+    # Two counted families on one unit, both a nozzle short. Only the process
+    # one is reported, and the signal pair is not so much as named.
+    issues = _unpiped(fs)
+    assert len(issues) == 1
+    assert "JB-1.in_2 carries no stream" in issues[0].message
+    assert "sig_" not in issues[0].message
+
+
+@pytest.mark.parametrize(
+    "name,stem",
+    [
+        ("in_1", "in"),
+        ("in_12", "in"),
+        ("out_3", "out"),
+        ("feed_2", "feed"),
+        ("inlet", None),
+        ("outlet", None),
+        ("sig_in", None),
+        ("sig_out", None),
+        ("tube_in", None),
+        ("shell_out", None),
+        ("feed", None),
+        ("pv", None),
+        ("reboiler_duty", None),
+        ("normally_closed", None),
+        ("_1", None),
+    ],
+)
+def test_what_the_naming_rule_reads(name, stem):
+    """The one rule the finding turns on, held to the nozzle names the package
+    really ships. ``tube_in`` and ``sig_out`` are the pair worth pinning: both
+    end in a word after an underscore, and a rule that split on the underscore
+    without asking for digits would count them."""
+    from pandid.validate import _family_stem
+
+    assert _family_stem(name) == stem
+
+
+@pytest.mark.parametrize(
+    "build,stem,size",
+    [
+        (lambda: U.Mixer("M", n_inlets=4), "in", 4),
+        (lambda: U.Splitter("S", n_outlets=3), "out", 3),
+        (lambda: U.Column("T", n_feeds=2), "feed", 2),
+        (lambda: U.Reactor("R", n_feeds=5), "feed", 5),
+        (lambda: U.Block("B", inputs=["W", "N", "N"], outputs=1), "in", 3),
+        (lambda: U.Block("B", inputs=1, outputs=2), "out", 2),
+    ],
+)
+def test_every_counted_family_answers_to_the_naming_rule(build, stem, size):
+    """The five classes ``tests/test_port_annotations._DECLARED_FAMILIES`` pins,
+    against the rule this finding reads them with. A sixth class that numbered
+    its nozzles some other way would be invisible here, so the tie is made
+    rather than assumed -- the same reason the ``OFFSET_BY_DESIGN`` sweep
+    measures the geometry instead of taking the exemption on faith."""
+    from pandid.validate import _family_stem
+
+    unit = build()
+    members = [n for n in unit.ports if _family_stem(n) == stem]
+    assert len(members) == size
+
+
+def test_nothing_shipped_leaves_a_counted_nozzle_open():
+    """The acceptance test, over the drawings this package stands behind. 35
+    counted nozzles across seven of the twelve, and every one of them piped --
+    so the rule is exercised by the corpus rather than merely silent on it."""
+    from tests.test_golden import SCENARIOS
+
+    offenders, counted = [], 0
+    for name, (build, kwargs) in SCENARIOS.items():
+        fs = build()
+        fs.to_svg(**kwargs)
+        counted += sum(_family_members(u) for u in fs.units)
+        offenders += [f"{name}: {w.message}" for w in fs.warnings if w.code == "nozzle-unconnected"]
+    assert offenders == []
+    assert counted == 35
+
+
+def _family_members(unit):
+    from pandid.validate import _family_stem
+
+    return sum(_family_stem(n) is not None for n in unit.ports)
+
+
 # --- nozzles crowded under their own arrowheads -------------------------------
 
 

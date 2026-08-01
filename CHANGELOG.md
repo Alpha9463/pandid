@@ -85,6 +85,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The mechanism draws nothing, so `tests/golden/` and `docs/gallery/` are byte
   for byte what they were — checked by hashing a fresh render against the
   committed files, not by the suite going green.
+- **`validate()` reports `nozzle-unconnected`:** a nozzle a *count* asked for
+  that carries no stream. `Mixer("M-101", n_inlets=4)` with three inlets piped
+  drew a complete, plausible sheet and returned no findings at all, so the
+  drawing asserted a stream that did not exist — issue #183, from the off-by-one
+  a user writes coming from `m.inlets` being indexed from zero while the nozzles
+  are numbered from one.
+
+  Deciding what counts as unconnected is the whole of the change. Over the
+  twelve shipped examples 167 ports carry no stream and every one is legitimate:
+  112 signal connections, 26 heat-exchanger utility sides, 14 duties, 8 station
+  drain outlets ("a drain runs down to a funnel on the floor, which is not on
+  this sheet") and 7 vents. All 167 are nozzles a *class* declares, offered to
+  every instance whether the sheet uses one or not. A **numbered** nozzle is not
+  offered but asked for — `n_inlets=`, `n_outlets=`, `n_feeds=`, `inputs=`,
+  `outputs=` are the five arguments that make one — so a bare member of such a
+  family is a number the author wrote down that the drawing did not meet. Zero
+  of the 167 is one, and the rule is silent on all twelve while still inspecting
+  35 counted nozzles across seven of them.
+
+  It is visible on the paper as well as in the model: a family is spread evenly
+  across its face for every member it has, wired or not, so that four-inlet
+  mixer draws its three lines 11.7px apart around a 17.5px hole rather than the
+  17.5px apart `n_inlets=3` would have given them. The message names both cures,
+  since the finding cannot tell a line left off from a nozzle never wanted.
+
+  Scoped to **process** nozzles, as the issue asks. Signal connections are a
+  different question — an instrument may be placed against its equipment rather
+  than tapped off a line — and counting does not settle it. The singular
+  spelling of a family is silent for the same reason the fixed nozzles are: a
+  one-feed column's nozzle is `feed`, not `feed_1`, and no count produced it.
+
+  No standard is cited. ISO 15519-1 §12, *Connections*, was read for one and
+  governs only how a connecting line is drawn; neither it nor ISO 15519-2 nor
+  the CHEE4001 guidelines oblige a connection point to carry a line. Nothing
+  rendered moves: `tests/golden/` and `docs/gallery/` are byte for byte what
+  they were, checked by hashing a fresh render against the committed files.
 
 ### Changed
 

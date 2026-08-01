@@ -2212,6 +2212,7 @@ making, so the warnings left on `fs.warnings` are about the sheet that came out.
 | `gravity-turned` | warning | a unit whose symbol's function depends on gravity has been given a quarter turn, which ISO 15519-1:2010 §11.4.2 excepts from the general permission to turn. One finding per unit; see [Symbols that must not be turned](#symbols-that-must-not-be-turned) |
 | `run-off-elevation` | warning | two connected nozzles on one horizontal run are *almost* level, missing by less than the shorter symbol is tall, so the line steps into a device and back out; see [Runs at one elevation](#runs-at-one-elevation) |
 | `nozzles-crowded` | warning | two nozzles on one face both wear an arrowhead and are pitched closer than ISO 128-20 lets two parallel lines come, so the strip of paper between the heads is too thin to survive reproduction. One finding per face, and the message names the box that would fix it. Not made for a P&ID, which draws no heads. See [Nozzles and the arrowheads they carry](#nozzles-and-the-arrowheads-they-carry) |
+| `nozzle-unconnected` | warning | a nozzle whose existence a count asked for (`n_inlets=`, `n_outlets=`, `n_feeds=`, `inputs=`, `outputs=`) carries no stream, so the sheet asserts a connection that is not drawn. One finding per family; only counted nozzles, and only process ones. See [Nozzles nothing is piped to](#nozzles-nothing-is-piped-to) |
 | `route-not-settled` | warning | routing and instrument placement never agreed and `route()` ran out of passes; see [Routing and instrument placement](#routing-and-instrument-placement) |
 | `deprecated` | warning | the sheet was built with a spelling that is being retired. The message names the replacement and the release the old one stops working in; see [Deprecated API](#deprecated-api) |
 
@@ -2341,6 +2342,54 @@ fs.validate(diagram="p&id")     # no nozzles-crowded: the sheet draws no heads
 One finding per face, not per pair: three crowded nozzles are one crowded face
 with one thing to do about it. A pair on the same *point* is the stronger
 `coincident-ports` finding instead.
+
+### Nozzles nothing is piped to
+
+A unit whose nozzle count you choose has exactly the nozzles you asked for. Ask
+for four and pipe three, and the sheet draws a mixer that combines four streams
+and shows three lines going into it:
+
+```python
+mix = fs.add(units.Mixer("M-101", n_inlets=4))
+for i in (1, 2, 3):                       # meaning in_1, in_2, in_3
+    fs.connect(fs.add(units.Feed(f"F-{i}")).outlet, mix.inlets[i])
+```
+
+`inlets` is indexed from zero and the nozzles are numbered from one, so that
+wires `in_2`, `in_3` and `in_4` and leaves `in_1` bare. `validate()` reports it:
+
+```
+M-101.in_1 carries no stream. M-101 was built with 4 numbered nozzles,
+in_1..in_4, and 3 of them are piped, so the sheet asserts 4 connections and
+draws 3. Connect it, or build M-101 with the 3 it uses.
+```
+
+Both cures, because only you know which was meant: a line you left off, or a
+nozzle you never wanted. It costs more than a missing line, too — a family is
+spread evenly across its face for **every** member it has, wired or not, so the
+three lines that are drawn land 11.7 apart around a hole where `in_1` is,
+instead of the 17.5 apart that `n_inlets=3` would have given them.
+
+**Only counted nozzles.** A `vent`, a `duty`, an exchanger's other side, a drain
+valve's outlet — every fixed nozzle a class declares is offered to every
+instance whether the sheet uses it or not, and leaving one open is a drawing
+decision. Across the twelve examples in `examples/` 167 ports carry no stream
+and every one of them is one of those: 112 signal connections, 26 exchanger
+utility sides, 14 duties, 8 station drain outlets and 7 vents. None is reported.
+What is reported is a *count that went unmet*, which is why the singular
+spelling is silent too — a one-feed column's nozzle is called `feed`, not
+`feed_1`, and no number was ever written down for it.
+
+**Only process nozzles.** Signal connections are a different question: an
+instrument may be placed against its equipment rather than drawn tapped off a
+line, and a valve with nothing on its `actuator` is a hand valve. Counting does
+not settle either, so this finding does not try.
+
+No standard is cited because none is on point. ISO 15519-1 §12, *Connections*,
+legislates how a connecting line is drawn — orientation, width, joints,
+intersections, off-sheet references — and never that a connection point must
+have one on it. This is the drawing disagreeing with its own declaration, which
+needs no outside authority.
 
 ### Routing and instrument placement
 
