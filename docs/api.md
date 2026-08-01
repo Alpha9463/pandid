@@ -173,6 +173,7 @@ to_svg(*, show_stream_table: bool = False,
        diagram: str | None = None,
        page_size: str | None = None,
        jump_direction: str = "vertical",
+       debug: bool | float = False,
        check: bool = True) -> str
 ```
 Returns the SVG string, running `layout()` and `route()` first if they have not
@@ -182,7 +183,7 @@ on `fs.warnings`.
 ```text
 render(path: str | Path, *, show_stream_table=False, border=None,
        diagram=None, page_size=None,
-       jump_direction="vertical", check=True) -> None
+       jump_direction="vertical", debug=False, check=True) -> None
 ```
 Writes the drawing. The format comes from the extension: `.svg` (or no
 extension) is pure Python; `.pdf` and `.png` need the optional `pdf` extra
@@ -205,6 +206,38 @@ _repr_svg_() -> str              # Jupyter renders a flowsheet inline
 | `check` | `bool` | run `validate()` first; errors raise, warnings collect |
 | `page_size` | `None`, `"A4"`, `"A3"`, `"A2"`, `"A1"`, `"A0"` | `None` (the default) sizes the sheet to the drawing; a name draws a sheet of exactly that size |
 | `jump_direction` | `"vertical"`, `"horizontal"` | which of two crossing lines gets the semicircle hop |
+| `debug` | `False` (the default), `True`, a number | draws the [coordinate overlay](#the-coordinate-overlay). `True` uses a 50-unit grid; a number sets the spacing |
+
+### The coordinate overlay
+
+`debug=True` draws the coordinate system on the sheet, so the numbers
+[`pin()`](#pin) takes can be read off the drawing instead of worked out:
+
+```python
+fs.render("draft.svg", debug=True)   # or debug=100 to set the grid spacing
+```
+
+It draws four things, all in red and blue and all *under* the diagram, so
+nothing on the sheet is obscured:
+
+- a faded dashed grid, with the coordinate written along the top and left edges;
+- a red cross on every unit's **top-left corner**, the point `pin(x=, y=)` sets,
+  labelled with the tag and that pair of numbers;
+- a blue dot on every **port**, labelled with the name `pin(port=…)` and
+  `connect()` take and the coordinate it is at;
+- a faint outline of each unit's drawn box.
+
+Red for corners and blue for ports, because [confusing the two](#pinport) is the
+mistake the overlay exists to catch.
+
+The numbers are drawing coordinates on any sheet, including one with a fixed
+`page_size` — that is what makes them safe to type back into `pin()`. The
+lettering is sized to the paper, so it stays readable when a page fits the
+drawing down. `.svg`, `.pdf` and `.png` all carry it.
+
+It is scaffolding for whoever is writing the placement, not part of the drawing.
+Off by default; leave it off on anything issued.
+`examples/02_manual_layout.py` is drawn with it on.
 
 ### Which drawing this is
 
@@ -2568,6 +2601,7 @@ under the same name with `.svg`.
 | `--diagram 'p&id'` | `diagram="p&id"` |
 | `--stream-table` | `show_stream_table=True` |
 | `--jump-direction horizontal` | `jump_direction="horizontal"` |
+| `--debug`, `--debug 100` | `debug=True`, `debug=100` |
 
 One line on stdout says what was drawn, and any warnings the sheet carries are
 counted on stderr, since the drawing was still made:

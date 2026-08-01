@@ -816,7 +816,8 @@ class Flowsheet:
     def to_svg(self, *, show_stream_table: bool = False,
                border: str | None = None,
                diagram: str | None = None, page_size: str | None = None,
-               jump_direction: str = "vertical", check: bool = True) -> str:
+               jump_direction: str = "vertical", debug: bool | float = False,
+               check: bool = True) -> str:
         """Render the flowsheet to an SVG string, running ``layout()`` and
         ``route()`` first if they have not been run yet.
 
@@ -837,6 +838,13 @@ class Flowsheet:
         leaves; omit it to size the sheet to the drawing instead.
         ``jump_direction`` selects which of two crossing lines gets the
         semicircle hop: ``"vertical"`` or ``"horizontal"``.
+
+        ``debug`` draws the coordinate overlay under the diagram, which is
+        scaffolding for whoever is writing the placement rather than part of the
+        drawing: a ruled grid carrying its own coordinates, a marker on the point
+        every ``pin(x=, y=)`` sets, and a marker on every port. ``True`` rules
+        the grid at its default 50-unit spacing and a number sets that spacing.
+        Off by default, and no sheet issued to anyone should have it on.
 
         When ``check`` is true, validation runs first: any *error* raises
         :class:`ValueError`, and *warnings* are collected on ``self.warnings``.
@@ -859,13 +867,14 @@ class Flowsheet:
         return SvgRenderer().render(
             self, show_stream_table=show_stream_table,
             border=border, diagram=diagram, page_size=page_size,
-            jump_direction=jump_direction
+            jump_direction=jump_direction, debug=debug
         )
 
     def render(self, path: str | Path, *, show_stream_table: bool = False,
                border: str | None = None,
                diagram: str | None = None, page_size: str | None = None,
-               jump_direction: str = "vertical", check: bool = True) -> None:
+               jump_direction: str = "vertical", debug: bool | float = False,
+               check: bool = True) -> None:
         """Render the flowsheet and write it to *path*.
 
         The output format is inferred from the file extension:
@@ -884,12 +893,15 @@ class Flowsheet:
             page_size: Draw on a sheet of exactly this standard size, e.g.
                 ``"A3"``; omit to size the sheet to the drawing.
             jump_direction: Which crossing lines hop, ``"vertical"`` or ``"horizontal"``.
+            debug: Draw the coordinate overlay under the diagram: the grid, every
+                ``pin()`` anchor and every port. ``True`` for the default
+                spacing, a number to set it. Off by default.
             check: Validate first; errors raise, warnings collect on ``warnings``.
         """
         svg = self.to_svg(
             show_stream_table=show_stream_table, border=border,
             diagram=diagram, page_size=page_size, jump_direction=jump_direction,
-            check=check,
+            debug=debug, check=check,
         )
         ext = Path(path).suffix.lower()
         if ext in ("", ".svg"):

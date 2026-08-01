@@ -211,7 +211,7 @@ rendered in the
 | Script | Demonstrates |
 |---|---|
 | `01_ammonia_loop.py` | fully automatic layout, layering, recycle detection |
-| `02_manual_layout.py` | `pin()` and `.via()` overrides |
+| `02_manual_layout.py` | `pin()` by the corner and by the nozzle, `.via()` overrides, and the `debug=True` coordinate overlay |
 | `03_distillation_train.py` | two-column train, recycle, stream table, title block with revision history, equipment list / notes / legend |
 | `04_control_loop.py` | ISA balloons attached to the line and to equipment, alarms, an interlock, a PSV, and both loops closing on a valve actuator |
 | `05_reactor_recycle.py` | automatic recycle and purge split, straightened process spine |
