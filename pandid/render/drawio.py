@@ -53,6 +53,15 @@ cannot fail to resolve the way a stencil key could. Sheet furniture is docked
 where the sheet docks it and ruled as the tables it is
 (:meth:`DrawioRenderer._furniture`). Nothing on the sheet is silently absent.
 
+**A model, or a sheet.** Given ``page_size`` this stops being a drawing on an
+unbounded canvas and becomes paper: the file states the page, the furniture
+docks to it rather than to the drawing's own bounds, and the drawing is fitted
+into what the furniture leaves, all through the same
+:func:`~pandid.render.furniture.dock` and :func:`~pandid.render.svg._fit_scale`
+the rendered sheet uses. ``border="zone"`` then rules that page. Without a page
+size none of it happens and the drawing keeps its own coordinates, which is what
+makes an exported model a model. See :class:`_Fit`.
+
 Three pieces of sheet *detail* have no draw.io construct at all, and simply are
 not drawn: the semicircle a crossing line hops with, since draw.io decides its
 own jumps; the searched placement of a stream number, and the leader it gets
@@ -71,6 +80,13 @@ inferred from behaviour, because none of it can be checked here: nothing in this
 repository opens a ``.drawio`` file. Each item says where it came from, so the
 next person editing this file argues with the source instead of re-deriving it.
 Line numbers drift; the function names do not.
+
+Three of these were open questions when they were written down, and a reader has
+since opened ``11_ethanol_pid.drawio`` and confirmed all three: the pneumatic
+hatch marks land on their runs, the tables render as editable grids, and an
+``offPageConnector`` under a ``direction`` puts the pennant's tip the way round
+the arithmetic below says it does. They are recorded as settled rather than
+deleted, since the reasoning is what the next change has to hold against.
 
 * **A shape reference that misses fails silently, and there is no log.**
   ``mxCellRenderer.createShape`` asks ``mxStencilRegistry.getStencil`` first and
@@ -152,7 +168,7 @@ from typing import NamedTuple, TYPE_CHECKING
 from pandid.portgeom import port_point, unit_box
 from pandid.render import furniture as F
 from pandid.render import svg as _svg
-from pandid.render.svg import (_DIAMOND_BALLOONS, _SIGNAL_DASH, _PROCESS_STROKE,
+from pandid.render.svg import (_DIAMOND_BALLOONS, _furniture_name, _too_small, _SIGNAL_DASH, _PROCESS_STROKE,
                                _SIGNAL_STROKE, _TAP_DASH, boundary_flag,
                                draws_arrowheads, impulse_tap, stream_polyline,
                                tap_lines)
@@ -177,6 +193,16 @@ _INK = "#111"
 #: said back.
 _NO_FILL = "none"
 
+#: No ink at all. The same word, and it works for the same reason: draw.io's
+#: ``mxStylesheet.getCellStyle`` *deletes* a key whose value is exactly ``none``
+#: rather than setting it, so the cell inherits neither the style's colour nor
+#: the stylesheet default's, and ``mxShape.configureCanvas`` strokes nothing.
+#: A cell drawn in it keeps its geometry and stays selectable and connectable,
+#: which is the whole point of using it for a junction that draws no ink of its
+#: own; ``shape=none`` is the trap next door, since deleting *that* key falls
+#: back to the default vertex and draws a plain rectangle.
+_NO_STROKE = "none"
+
 #: The ink a *line* is drawn in, which is not quite the ink a symbol is drawn in:
 #: the SVG renderer strokes a stream ``black`` and a converted stencil ``#111``,
 #: and this is the first of those, written the way a draw.io style writes a
@@ -190,6 +216,42 @@ _LINE_INK = "#000000"
 #: table read the other way. The identity is absent: a cell with no ``direction``
 #: is already upright, and saying so would only make every style longer.
 _DIRECTION = {90: "south", 180: "west", 270: "north"}
+
+
+class _Fit(NamedTuple):
+    """Where the drawing sits on the paper, and how big.
+
+    A page size makes the export a *sheet*: the furniture docks to the paper and
+    the drawing is fitted into whatever the bands leave, which is
+    :meth:`SvgRenderer.render`'s ``<g id="drawing" transform="translate(...)
+    scale(...)">`` and nothing more. Every coordinate that belongs to the
+    **drawing** goes through this on the way out; every coordinate that belongs
+    to the **sheet** -- the furniture, the border -- does not, because the sheet
+    is already in page units. That is the same division the SVG makes by putting
+    one of them inside the group and the other outside it.
+
+    Without a page there is no fitting to do and this is the identity, which is
+    why the unpaged export is unchanged to the last coordinate.
+    """
+    scale: float
+    dx: float
+    dy: float
+
+    @classmethod
+    def identity(cls) -> "_Fit":
+        return cls(1.0, 0.0, 0.0)
+
+    def at(self, x: float, y: float) -> "tuple[float, float]":
+        return (self.dx + self.scale * x, self.dy + self.scale * y)
+
+    def box(self, b) -> "tuple[float, float, float, float]":
+        return (*self.at(b[0], b[1]), *self.at(b[2], b[3]))
+
+    def length(self, v: float) -> float:
+        """A distance, which scales but does not translate: a stroke width, a
+        mark's size. The SVG's transform scales these too, being a transform on
+        the group rather than on each coordinate in it."""
+        return self.scale * v
 
 
 class _Approximation(NamedTuple):
@@ -276,23 +338,30 @@ _APPROXIMATIONS = {
     # that triangle flipped.
     ("mixer", "default"): _Approximation("triangle", ""),
     ("splitter", "default"): _Approximation("triangle", "", flip_h=True),
-    # Bare pipe: two segments meeting, with no body at all. mxGraph's `line`
-    # (mxLine.paintVertexShape) strokes the box's horizontal centreline from
-    # edge to edge, and `direction=north|south` turns that into the vertical
-    # one, so it draws the *run* through the junction exactly -- which is what
-    # the run needs, because the two streams meeting here stop at the tee's own
-    # nozzles on the box edges and nothing else covers the twelve units between
-    # them. There is no built-in that draws the six-unit branch stub as well, so
-    # the stub is what goes.
+    # Bare pipe: three runs meeting, with no body at all. **The pipes draw the
+    # junction and the cell draws nothing**, which is the only arrangement that
+    # is both gapless and stub-free.
     #
-    # Black at the pipeline's weight, not the stencil hairline this file draws
-    # equipment in: `sym_tee` is `stroke="black" stroke-width="2"`, and the
-    # #111-at-weight-1 rule the export used to draw here was a visibly lighter,
-    # thinner line bridging two heavier ones -- a junction that read as a stray
-    # rule rather than as pipe.
-    ("tee", "default"): _Approximation(
-        "line", "the branch stub; the run through the junction is drawn",
-        stroke=_LINE_INK, weight=_PROCESS_STROKE),
+    # Two wrong answers were tried first and each fixed half of it. A `line`
+    # strokes the box's centreline, which is the run -- but it is a mark the
+    # length of the whole box, and the branch arrives at the box *edge*, so the
+    # sheet showed a stub jutting out of the pipe. Hiding the cell instead left
+    # the twelve units between the two nozzles covered by nothing, opening a gap
+    # at every junction.
+    #
+    # What closes both is moving the *pipes*: :meth:`DrawioRenderer._constraint`
+    # lands every stream that meets a tee on the box **centre** rather than on
+    # its nozzle. Three edges ending on one point is a junction that is flush by
+    # construction rather than by measurement -- there is no tolerance to get
+    # wrong -- and each leg is collinear with its own approach, since a tee's
+    # nozzles are the midpoints of three faces and the centre is on the axis of
+    # all three. Nothing is lost, so nothing is listed.
+    #
+    # The cell stays, invisible, and that is deliberate: it is what the three
+    # edges are *attached* to, so a reader who drags the junction takes all
+    # three pipes with it. Emitting no cell would leave three floating
+    # endpoints that come apart the moment one of them is moved.
+    ("tee", "default"): _Approximation(None, "", stroke=_NO_STROKE),
     # An off-page flag is a rectangle with one end drawn to a point, and
     # `offPageConnector` is that polygon exactly -- five points, flat back, no
     # notch (drawio Shapes.js, OffPageConnectorShape.redrawPath). It points
@@ -404,29 +473,49 @@ class DrawioRenderer:
 
     # ------------------------------------------------------------------ document
 
-    def render(self, fs: "Flowsheet", *, diagram: "str | None" = None, **opts) -> str:
+    def render(self, fs: "Flowsheet", *, diagram: "str | None" = None,
+               page_size: "str | None" = None, border: "str | None" = None,
+               **opts) -> str:
         """Render the flowsheet to a draw.io document.
 
         ``diagram`` says which drawing this is, in the spelling
         :meth:`~pandid.flowsheet.Flowsheet.to_svg` takes it: a P&ID draws its
         process lines without arrowheads and so exports them without one.
 
-        Nothing else about the sheet is an option here. The SVG renderer's page
-        size, border, stream table, jump direction and debug overlay are all
-        statements about a *sheet*, and what this produces is a model on an
-        unbounded canvas that its reader will re-lay out by hand; refusing them
-        is :meth:`~pandid.flowsheet.Flowsheet.render`'s job, which is where a
-        caller can be told rather than ignored.
+        ``page_size`` puts the model on **paper**. Without it the drawing is
+        exported at its own coordinates on an unbounded canvas, which is what a
+        model is; with it the file carries the page draw.io is to rule, the
+        furniture docks to that page rather than to the drawing's own bounds,
+        and the drawing is fitted into what the furniture leaves -- the same
+        three things :meth:`SvgRenderer.render` does with the same argument, so
+        the two open at the same size on the same paper.
+
+        ``border`` rules that page. ``"zone"`` draws the frame, the sheet edge
+        and the lettered band between them; ``"none"`` leaves the page's own
+        edge to be the paper's, which is what the sheet does too -- an unruled
+        sheet draws no rectangle, it just stops.
+
+        The stream table, jump direction and debug overlay remain refused. A
+        stream table is furniture this exporter has no measurement for, draw.io
+        decides its own line jumps, and the overlay is scaffolding for whoever
+        is writing a placement rather than part of the drawing.
         """
+        from pandid.render.svg import _page, _resolve_sheet
+
         arrows = draws_arrowheads(diagram)
         for u in fs.units:
             if u.frame is None:
                 raise ValueError(f"Unit '{u.name}' lacks a frame even after layout was run.")
+        border, _diagram = _resolve_sheet(border, diagram)
+        sheet = _page(page_size)
 
         body: list[str] = []
         # Sheet furniture first: a later cell draws over an earlier one, and the
-        # boxes are behind the drawing on the sheet.
-        body.extend(self._furniture(fs))
+        # boxes are behind the drawing on the sheet. The border is behind even
+        # those, which is the order _place_furniture splices it in at.
+        furniture, frame, fit = self._furniture(fs, sheet)
+        body.extend(self._border(frame, border))
+        body.extend(furniture)
         # Then equipment, then the runs between it, then the balloons -- which is
         # the SVG renderer's own order, and it is that order for the same reason:
         # a balloon's opaque body knocks out the line an in-line element
@@ -439,15 +528,28 @@ class DrawioRenderer:
         # order and draw.io lets a user send an edge behind the shapes it joins.
         balloons: list[str] = []
         for i, u in enumerate(fs.units):
-            (balloons if u.kind == "instrument" else body).extend(self._vertex(u, i))
-        body.extend(self._edges(fs, arrows))
+            (balloons if u.kind == "instrument" else body).extend(
+                self._vertex(u, i, fit))
+        body.extend(self._edges(fs, arrows, fit))
         # Instrumentation goes on over the lines, as it does on the sheet: the
         # tap runs from the plant to the balloon and the balloon's opaque body
         # then knocks out both it and any process line an in-line element
         # straddles. Same three passes, same order, same reason.
-        body.extend(self._taps(fs))
+        body.extend(self._taps(fs, fit))
         body.extend(balloons)
 
+        # page="1" only where there is paper. Without a page size the drawing is
+        # sized to itself, exactly as to_svg() is, and there is nothing for
+        # draw.io to rule page breaks across; stating a page then would draw
+        # break lines through a sheet that was never laid out to fit them. With
+        # one, the page *is* the sheet, and pageWidth/pageHeight are in the same
+        # drawing units everything else here is, which is what makes an A3 page
+        # 1587 by 1123 rather than 420 by 297.
+        if sheet is None:
+            paper = 'page="0" pageScale="1"'
+        else:
+            paper = (f'page="1" pageScale="1" pageWidth="{_num(sheet.width)}" '
+                     f'pageHeight="{_num(sheet.height)}"')
         # A stable page id, so exporting the same flowsheet twice gives the same
         # file. draw.io generates a random one; a random one here would make
         # every re-export a diff of one line that means nothing.
@@ -456,12 +558,8 @@ class DrawioRenderer:
             '<?xml version="1.0" encoding="UTF-8"?>',
             '<mxfile host="pandid" agent="pandid" type="device">',
             f'  <diagram id="pandid-{page}" name={_attr(fs.name)}>',
-            # page="0": the drawing is sized to itself, exactly as to_svg() does
-            # without a page_size, so there is no paper for draw.io to rule page
-            # breaks across. Stating a page here would draw break lines through
-            # a sheet that was never laid out to fit them.
             '    <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" '
-            'tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" '
+            f'tooltips="1" connect="1" arrows="1" fold="1" {paper} '
             'math="0" shadow="0">',
             '      <root>',
             '        <mxCell id="0" />',
@@ -706,10 +804,10 @@ class DrawioRenderer:
             return boundary_flag(u, u.frame).box
         return unit_box(u, u.frame)
 
-    def _vertex(self, u, index: int) -> list[str]:
+    def _vertex(self, u, index: int, fit: "_Fit") -> list[str]:
         """One unit, as a draw.io vertex."""
         sym = self.registry.for_unit(u)
-        x0, y0, x1, y1 = self._cell_box(u)
+        x0, y0, x1, y1 = fit.box(self._cell_box(u))
         placement, _, _ = self._placement(u, sym)
         text, label_keys = self._label(u)
         style = ";".join(["html=1", *self._shape(u, sym), *label_keys, *placement]) + ";"
@@ -769,6 +867,21 @@ class DrawioRenderer:
         distinction :func:`pandid.portgeom.resolve_port` keeps between a port's
         point and its routing anchor.
         """
+        if u.kind == "tee":
+            # A junction, not a nozzle. A tee has no body: it exists so three
+            # runs can meet, and on the sheet the meeting is drawn by the tee's
+            # own twelve-unit mark rather than by the pipes, which stop at the
+            # box edge. draw.io has no built-in that draws that mark without
+            # also drawing a stub out the side, so the pipes are carried the
+            # last six units in instead and the cell draws nothing.
+            #
+            # The centre, so all three legs end on one point: flush by
+            # construction, with no tolerance to get wrong. Each leg stays
+            # straight, because a tee's three nozzles are face midpoints and the
+            # centre is on the axis of all three -- the only thing that changes
+            # is where the pipe stops, not which way it runs.
+            x0, y0, x1, y1 = self._cell_box(u)
+            return self._fraction(u, sym, ((x0 + x1) / 2, (y0 + y1) / 2))
         return self._fraction(u, sym, port_point(u, u.frame, port_name))
 
     @staticmethod
@@ -786,7 +899,7 @@ class DrawioRenderer:
                      f"{prefix}Dx=0", f"{prefix}Dy=0", f"{prefix}Perimeter=0"]
         return keys
 
-    def _edges(self, fs, arrows: bool) -> list[str]:
+    def _edges(self, fs, arrows: bool, fit: "_Fit") -> list[str]:
         """Every stream, as a draw.io edge between the two ports it joins."""
         index = {id(u): i for i, u in enumerate(fs.units)}
         labelled: set = set()
@@ -814,7 +927,7 @@ class DrawioRenderer:
                 # A signal is drawn at half the weight of the pipe it reads, and
                 # the pair is the sheet's whole line-weight vocabulary; see the
                 # note on _PROCESS_STROKE in pandid.render.svg.
-                f"strokeWidth={_SIGNAL_STROKE if signal else _PROCESS_STROKE}",
+                f"strokeWidth={fit.length(_SIGNAL_STROKE if signal else _PROCESS_STROKE):g}",
             ]
             keys += _dash(s.dasharray or _SIGNAL_DASH.get(s.kind, ""))
             if arrows and wears_arrowhead(s, self.registry):
@@ -844,8 +957,8 @@ class DrawioRenderer:
             if waypoints:
                 geometry = ['          <mxGeometry relative="1" as="geometry">',
                             '            <Array as="points">',
-                            *(f'              <mxPoint x="{_num(px)}" y="{_num(py)}" />'
-                              for px, py in waypoints),
+                            *(f'              <mxPoint x="{_num(fx)}" y="{_num(fy)}" />'
+                              for fx, fy in (fit.at(px, py) for px, py in waypoints)),
                             '            </Array>',
                             '          </mxGeometry>']
             else:
@@ -858,10 +971,10 @@ class DrawioRenderer:
                 '        </mxCell>',
             ]
             if s.kind == "pneumatic":
-                out += _hatches(f"s{n}", points, s.color or _LINE_INK)
+                out += _hatches(f"s{n}", points, s.color or _LINE_INK, fit)
         return out
 
-    def _taps(self, fs) -> list[str]:
+    def _taps(self, fs, fit: "_Fit") -> list[str]:
         """Every instrument connection, as a draw.io edge.
 
         The line from a tap to the balloon reading it. It is not a stream and so
@@ -925,7 +1038,7 @@ class DrawioRenderer:
                 # ISO 15519-2 Annex A.1.02 puts an instrument connection on the
                 # 0,25 rung, alongside the signal line and half the pipeline it
                 # taps. See _SIGNAL_STROKE in pandid.render.svg.
-                f"strokeWidth={_SIGNAL_STROKE}",
+                f"strokeWidth={fit.length(_SIGNAL_STROKE):g}",
             ]
             if not impulse_tap(inst):
                 keys += _dash(_TAP_DASH)
@@ -935,8 +1048,8 @@ class DrawioRenderer:
             style = ";".join(keys) + ";"
             terminals = f' source="{self._id(source)}"' if source is not None else ""
             geometry = ['          <mxGeometry relative="1" as="geometry">',
-                        f'            <mxPoint x="{_num(tap[0])}" y="{_num(tap[1])}" '
-                        f'as="sourcePoint" />',
+                        f'            <mxPoint x="{_num(fit.at(*tap)[0])}" '
+                        f'y="{_num(fit.at(*tap)[1])}" as="sourcePoint" />',
                         '          </mxGeometry>'] if source is None else [
                 '          <mxGeometry relative="1" as="geometry" />']
             out += [
@@ -973,7 +1086,7 @@ class DrawioRenderer:
                     x1, y1 = max(x1, px), max(y1, py)
         return (x0, y0, x1, y1)
 
-    def _furniture(self, fs) -> list[str]:
+    def _furniture(self, fs, sheet=None):
         """Title block, annotations and table boxes, docked where the sheet docks
         them and ruled as the tables they are.
 
@@ -1011,18 +1124,70 @@ class DrawioRenderer:
         items: list = []
         if fs.title_block is not None:
             items.append((fs.title_block, "bottom-right",
-                          *F.measure_title_strip(fs.title_block)))
+                          *_strip_size(fs.title_block)))
         for a in getattr(fs, "annotations", []) or []:
             w, h = (F.measure_table(a) if isinstance(a, TableBox)
                     else F.measure_annotation(a))
             items.append((a, a.align, w, h))
-        if not items:
-            return []
 
-        placed, _frame, _free = F.dock(items, self._drawing_box(fs))
+        inner = self._drawing_box(fs)
+        placed, frame, free = F.dock(
+            items, inner, sheet=sheet,
+            too_small=lambda need_w, need_h, culprit: _too_small(
+                sheet, need_w, need_h, _furniture_name(culprit) if culprit else ""))
+        # A fixed page fits the drawing into whatever the bands leave, at the
+        # ratio the title strip's scale cell reports. Without one there is no
+        # fitting: the drawing keeps its own coordinates and the frame was grown
+        # around it.
+        fit = _Fit.identity() if free is None else _Fit(
+            *_fitted(inner, free))
         out: list[str] = []
         for n, (obj, x, y, w, h) in enumerate(placed):
             out += self._furniture_cell(f"f{n}", obj, x, y, w, h)
+        return out, frame, fit
+
+    @staticmethod
+    def _border(frame, border: str) -> list[str]:
+        """The zone-ruled drawing frame, as cells.
+
+        Only where the sheet rules one. An unruled sheet draws no rectangle at
+        all -- ``_place_furniture`` takes ``sheet_rect`` for the canvas bounds
+        and strokes nothing -- so an unruled export draws none either, and what
+        the reader sees as the edge of the paper is the page draw.io is now told
+        to rule. Inventing a rectangle here would put ink on the sheet that the
+        rendered one does not have.
+
+        The geometry is :func:`pandid.render.furniture.zone_layout`'s, so the
+        band is divided into the same fields, lettered the same way round.
+
+        A caveat worth the author knowing, and it is why this was argued about
+        rather than just added: a zone grid is an **address space**.
+        ISO 15519-1 Clause 9 uses it for "reference to a document, to a sheet of
+        a document, or to a column, a row or a zone on a sheet", and
+        :attr:`pandid.units._Boundary.reference` is where this library writes
+        such addresses. On paper they hold because the sheet holds. In an
+        editable model they do not: drag a column two hundred units left and it
+        is in a different zone from the one every reference on the sheet names,
+        while the grid still looks authoritative. So what is exported here is a
+        **snapshot of the grid at export time**, true of the drawing as it left
+        pandid and no longer true of it once the reader has moved anything.
+        """
+        if border != "zone":
+            return []
+        ix, iy, iw, ih = frame
+        z = F.zone_layout(ix, iy, iw, ih)
+        ox, oy, ow, oh = z.outer
+        rect = ("rounded=0;whiteSpace=wrap;html=1;fillColor=none;movable=1;"
+                f"strokeColor={_LINE_INK};")
+        out = _rect("z-sheet", ox, oy, ow, oh, rect + "strokeWidth=1;")
+        out += _rect("z-frame", ix, iy, iw, ih, rect + "strokeWidth=2;")
+        for n, part in enumerate(z.parts):
+            if part[0] == "rule":
+                _, x1, y1, x2, y2 = part
+                out += _segment(f"z{n}", x1, y1, x2, y2, _LINE_INK, 0.75)
+            else:
+                _, lx, ly, text = part
+                out += _label(f"z{n}", lx, ly, text, F.ZONE_TYPE)
         return out
 
     def _furniture_cell(self, cid: str, obj, x, y, w, h) -> list[str]:
@@ -1034,18 +1199,28 @@ class DrawioRenderer:
         title = getattr(obj, "title", "") or ""
         if isinstance(obj, TableBox):
             size, _ncol, col_w, _row_h = F._table_layout(obj)
+            # A TableBox rules its own columns, and _table_layout's widths
+            # already carry that ruling's padding and sum to the measured box.
             return _table(cid, title, [str(c) for c in obj.headers],
                           [[str(c) for c in row] for row in obj.rows],
-                          x, y, w, h, col_w, (size + 10) if title else 0.0)
+                          x, y, w, h, col_w, (size + 10) if title else 0.0,
+                          font=size, col_keys=_ALIGN_KEYS(obj.col_align, len(col_w)))
         rows = list(getattr(obj, "rows", []) or [])
         if any(isinstance(r, (tuple, list)) for r in rows):
             # Columnar: an equipment schedule, a legend, a numbered note list.
-            # Ruled at the column stops the sheet rules them at, since the box
-            # was measured against those and is being drawn at that width.
-            _size, _row_h, title_h, col_w = F._ann_layout(obj)
+            # The columns are measured off their own text at the size they will
+            # be drawn at, not shared out in proportion; see :func:`columns`.
+            size, _row_h, title_h, _col_w = F._ann_layout(obj)
             grid = [[str(c) for c in r] if isinstance(r, (tuple, list)) else [str(r)]
                     for r in rows]
-            return _table(cid, title, [], grid, x, y, w, h, col_w, title_h)
+            ncol = max(len(r) for r in grid)
+            return _table(cid, title, [], grid, x, y, w, h,
+                          columns(grid, [size] * ncol, w), title_h, font=size,
+                          # Left, as the sheet sets a row, with the first column
+                          # bold where there is more than one -- draw_annotation's
+                          # own rule.
+                          col_keys=["align=left;spacingLeft=4;fontStyle=1;"]
+                          + ["align=left;spacingLeft=4;"] * (ncol - 1))
         # Not tabular: a titled box of free-form lines, which is what it is on
         # the sheet too. Anything docked that is neither an Annotation nor a
         # TableBox lands here as well, on the two things every box has -- a title
@@ -1089,21 +1264,48 @@ class DrawioRenderer:
           and labelled.
 
         What is lost, and is worth a reader knowing: the merged geometry above,
-        the sheet count's corner placement, and the grey field captions the
-        sheet sets at 6,5 against values at 11. What is kept: every value, the
-        revision history in order, and a grid the reader can edit.
+        the sheet count's corner placement, and the title band's own size, since
+        a title is a field row here like any other rather than a heading set
+        across the strip. What is kept: every value, the revision history in
+        order at the sheet's own column widths, the caption/value type sizes,
+        and a grid the reader can edit.
+
+        **Both tables are ruled at their own row height and bottom-aligned**,
+        rather than being stretched to fill the docked rectangle. Filling it was
+        what produced the row of empty rules a reader saw: eleven fields shared
+        between eighty units are rows 5.6 units tall, and 11-point type in a
+        5.6-unit row draws nothing at all. So the field table is as tall as its
+        fields need and reaches *up* from the strip's bottom edge, which is the
+        edge the sheet rules its own last band on and the one worth holding
+        still.
         """
-        heading, fields, revisions = _title_block_fields(block)
+        _heading, fields, revisions = _title_block_fields(block)
         # The strip's own division: the revision grid takes the left _REV_W of
         # it and the company cell and information block share the rest, which is
         # where draw_title_strip() rules its two vertical lines.
         rev_w = min(F._REV_W, w)
-        band = 18.0 if heading else 0.0
-        out = _table(f"{cid}-rev", "REVISIONS", [c[0] for c in F._REV_COLS], revisions,
-                     x, y, rev_w, h, [c[1] for c in F._REV_COLS], band,
-                     header_last=True)
-        out += _table(f"{cid}-id", heading, [], fields,
-                      x + rev_w, y, w - rev_w, h, [1.0, 2.0], band)
+        row_h = F._REV_ROW
+        # No heading on either: the title and subtitle are field rows below, and
+        # a heading would say them twice -- once in a band too narrow to hold
+        # the sheet's own title, which is what overflowed.
+        rev_h = row_h * (len(revisions) + 1)
+        id_h = row_h * max(len(fields), 1)
+        out = _table(f"{cid}-rev", "", [c[0] for c in F._REV_COLS], revisions,
+                     x, y + h - rev_h, rev_w, rev_h,
+                     [c[1] for c in F._REV_COLS], header_last=True,
+                     font=_STRIP_FONT, row_h=row_h,
+                     col_keys=["align=left;spacingLeft=3;"] * len(F._REV_COLS))
+        # The caption column is measured and drawn at the size the sheet sets a
+        # caption at, and the value column at the size it sets a value; a column
+        # measured at one size and drawn at another is the whole of defect 9.
+        id_w = w - rev_w
+        widths = columns(fields, [_STRIP_FONT, _STRIP_VALUE], id_w, bold_first=False)
+        out += _table(f"{cid}-id", "", [], fields,
+                      x + rev_w, y + h - id_h, id_w, id_h, widths,
+                      font=_STRIP_VALUE, row_h=row_h,
+                      col_keys=[f"align=left;spacingLeft=3;fontSize={_STRIP_FONT:g};"
+                                f"fontColor={_CAPTION_INK};",
+                                "align=left;spacingLeft=3;fontStyle=1;"])
         return out
 
 
@@ -1138,7 +1340,7 @@ _HATCH_ANGLE = -59.04
 _HATCH_LEN = 11.66
 
 
-def _hatches(edge_id: str, points, ink: str) -> list[str]:
+def _hatches(edge_id: str, points, ink: str, fit: "_Fit") -> list[str]:
     """The double cross-hatch that marks a pneumatic line, hung on its edge.
 
     ISO 15519-2 §6.2 (document page 14) is what makes this worth the trouble
@@ -1198,7 +1400,8 @@ def _hatches(edge_id: str, points, ink: str) -> list[str]:
     if total <= 0:
         return []
 
-    half = _HATCH_LEN / 2
+    length = fit.length(_HATCH_LEN)
+    half = length / 2
     out: list[str] = []
     for n, mark in enumerate(pneumatic_marks(points)):
         # mxGeometry.x runs -1 at the source end to +1 at the target end, by arc
@@ -1208,15 +1411,16 @@ def _hatches(edge_id: str, points, ink: str) -> list[str]:
         horiz = mark.horizontal
         angle = _HATCH_ANGLE if horiz else _HATCH_ANGLE + 90.0
         style = (f"shape=line;rotation={angle:g};strokeColor={ink};"
-                 f"strokeWidth={_SIGNAL_STROKE:g};fillColor={_NO_FILL};html=1;"
+                 f"strokeWidth={fit.length(_SIGNAL_STROKE):g};fillColor={_NO_FILL};html=1;"
                  "resizable=0;movable=1;")
         for k, off in enumerate(_svg.HATCH_ALONG):
-            dx, dy = (off, 0.0) if horiz else (0.0, off)
+            step = fit.length(off)
+            dx, dy = (step, 0.0) if horiz else (0.0, step)
             out += [
                 f'        <mxCell id="{edge_id}h{n}{k}" value="" style={_attr(style)} '
                 f'vertex="1" connectable="0" parent="{edge_id}">',
                 f'          <mxGeometry x="{_fraction(rel)}" y="0" '
-                f'width="{_num(_HATCH_LEN)}" height="{_num(_HATCH_LEN)}" '
+                f'width="{_num(length)}" height="{_num(length)}" '
                 'relative="1" as="geometry">',
                 f'            <mxPoint x="{_num(dx - half)}" y="{_num(dy - half)}" '
                 'as="offset" />',
@@ -1296,15 +1500,96 @@ def _distribute(weights, total: float) -> list[float]:
     return out
 
 
-def _table(cid: str, title: str, headers, rows, x, y, w, h, weights,
-           start: float = 0.0, *, header_last: bool = False) -> list[str]:
+#: Clearance between a cell's rule and the text in it, both sides together.
+#: mxGraph insets a label by ``mxConstants.LABEL_INSET`` (3) at each end before
+#: it starts drawing, and a word that ends exactly on its own rule reads as
+#: touching it, so a column is cut this much wider than the text it holds.
+_CELL_PAD = 8.0
+
+#: How a :class:`~pandid.document.TableBox`'s per-column ``l``/``c``/``r``
+#: alignment is said in a draw.io style. The sheet's own default is centred
+#: (``draw_table``), so a column that says nothing gets nothing said about it.
+_ALIGN_KEY = {"l": "align=left;spacingLeft=4;", "r": "align=right;spacingRight=4;",
+              "c": "align=center;"}
+
+#: The two type sizes the title strip is set in: ``draw_title_strip`` letters a
+#: revision cell and a field caption at 7,5 and 6,5 and sets a value at 11. The
+#: caption size is rounded to the revision size so the two tables' rows line up,
+#: and the grey is the caption colour the strip uses to hold a caption back from
+#: the value beside it.
+_STRIP_FONT, _STRIP_VALUE = 7.5, 11.0
+_CAPTION_INK = "#666666"
+
+
+def _ALIGN_KEYS(col_align, ncol: int) -> list[str]:
+    align = list(col_align or [])
+    return [_ALIGN_KEY.get(align[c] if c < len(align) else "c", "align=center;")
+            for c in range(ncol)]
+
+
+def columns(rows, sizes, total: float, bold_first: bool = True) -> list[float]:
+    """Column widths for a grid, measured off the text rather than shared out.
+
+    The defect this replaced: the columns were given *proportional* shares of
+    the box, so a narrow column beside a wide one got a narrow share of a box
+    that was only just wide enough -- and the legend's first column, holding
+    ``HPSSH`` beside ``High Pressure Steam Supply Header``, came out too narrow
+    for its own five letters and clipped them to ``HPSS``. A share of the total
+    is not a measurement of anything.
+
+    So every column is measured at :func:`pandid.render.furniture.text_width`,
+    which is what the SVG renderer rules its own columns with, plus the
+    clearance a cell needs. Slack goes to the **last** column, which is the one
+    holding prose and the one that can use it; a shortfall is shared out in
+    proportion, since a box too narrow for its own contents has to clip
+    somewhere and the sheet clips it too.
+
+    ``sizes`` is the font size per column, because a title block sets its field
+    captions smaller than its values and a column has to be measured at the size
+    it will be *drawn* at.
+    """
+    from pandid.render.furniture import text_width
+
+    ncol = max((len(r) for r in rows), default=1)
+    need = []
+    for c in range(ncol):
+        size = sizes[c] if c < len(sizes) else (sizes[-1] if sizes else 11.0)
+        bold = bold_first and c == 0
+        widest = max((text_width(r[c], size, bold) for r in rows if c < len(r)),
+                     default=0.0)
+        need.append(widest + _CELL_PAD)
+    span = sum(need)
+    if span <= 0:
+        return _distribute([1.0] * ncol, total)
+    if span > total:  # cannot fit; clip in proportion, as the sheet does
+        return _distribute(need, total)
+    out = _distribute(need[:-1] + [need[-1] + (total - span)], total)
+    return out
+
+
+def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
+           start: float = 0.0, *, header_last: bool = False,
+           font: float = 11.0, col_keys=(), row_h: "float | None" = None
+           ) -> list[str]:
     """A ruled grid, as draw.io's own table: container, rows, cells.
 
-    ``weights`` are the relative column widths, which come from the same
-    measurement the SVG renderer rules its columns at, so the exported table has
-    the sheet's own proportions. ``start`` is the height of the title band, which
-    is a table container's swimlane head and carries the box's title; a box with
-    no title is given ``startSize=0`` and no band.
+    ``widths`` are absolute column widths and must sum to ``w``; they come from
+    :func:`columns`, or from the sheet's own ruling where it has one (a revision
+    strip is ruled at fixed widths and this reproduces them). ``start`` is the
+    height of the title band, which is a table container's swimlane head and
+    carries the box's title; a box with no title is given ``startSize=0`` and no
+    band at all.
+
+    ``font`` is the size the cells are *drawn* at, and it is stated rather than
+    left to draw.io because draw.io's default is 12 while every box on the sheet
+    measures its own text at its ``font_size``. A column measured at 11 and
+    drawn at 12 is a column three-quarters of a letter too narrow, which is what
+    clipped ``APP'D`` to ``APP'`` in the revision strip.
+
+    ``row_h`` rules every row at that height and lets the table be as tall as
+    its rows come to; the default fills ``h`` instead. Eleven title-block fields
+    stretched to fill an eighty-unit strip are rows 5.6 units tall, which draw
+    no text at all and read as a grid of empty rules.
 
     ``header_last`` puts the heading row at the foot, which is where a revision
     history has it: the newest revision sits against the heading and the older
@@ -1318,16 +1603,20 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, weights,
     # Every dimension is rounded to the precision it is written at *before* the
     # rows and cells are cut out of it, so the parts add up to the whole as
     # written rather than as computed. See :func:`_distribute`.
-    w, h, start = round(float(w), 2), round(float(h), 2), round(float(start), 2)
-    widths = _distribute(list(weights)[:ncol] or [1.0] * ncol, w)
+    w, start = round(float(w), 2), round(float(start), 2)
+    if row_h is not None and body:
+        h = round(start + row_h * len(body), 2)
+    else:
+        h = round(float(h), 2)
+    widths = _distribute(list(widths)[:ncol] or [1.0] * ncol, w)
     if len(widths) < ncol:
         widths = _distribute([1.0] * ncol, w)
     heights = _distribute([1.0] * len(body), h - start) if body else []
 
+    shape = _TABLE_SHAPE + f"startSize={_num(start)};fontSize={font:g};"
     out = [
         f'        <mxCell id="{cid}" value={_attr(title)} '
-        f'style={_attr(_TABLE_SHAPE + f"startSize={_num(start)};")} '
-        f'vertex="1" parent="1">',
+        f'style={_attr(shape)} vertex="1" parent="1">',
         f'          <mxGeometry x="{_num(x)}" y="{_num(y)}" width="{_num(w)}" '
         f'height="{_num(h)}" as="geometry" />',
         '        </mxCell>',
@@ -1346,9 +1635,11 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, weights,
         cx = 0.0
         for c in range(ncol):
             value = str(cells[c]) if c < len(cells) else ""
+            extra = col_keys[c] if c < len(col_keys) else ""
             out += [
                 f'        <mxCell id="{cid}-r{r}-c{c}" value={_attr(value)} '
-                f'style={_attr(_TABLE_CELL + head)} vertex="1" parent="{cid}-r{r}">',
+                f'style={_attr(_TABLE_CELL + head + extra)} vertex="1" '
+                f'parent="{cid}-r{r}">',
                 f'          <mxGeometry x="{_num(cx)}" width="{_num(widths[c])}" '
                 f'height="{_num(rh)}" as="geometry">',
                 f'            <mxRectangle width="{_num(widths[c])}" '
@@ -1378,6 +1669,97 @@ def _text_box(cid: str, title: str, rows, x, y, w, h) -> list[str]:
         f'width="{_num(w)}" height="{_num(h)}" as="geometry" />',
         '        </mxCell>',
     ]
+
+
+def _fitted(inner, free) -> "tuple[float, float, float]":
+    """The scale and offset that centre the drawing in the region left for it.
+
+    :func:`pandid.render.svg._fit_scale` for the ratio and
+    :meth:`SvgRenderer._fit` for the centring, said as three numbers instead of
+    as an SVG transform string. Deriving the ratio here would be a second
+    opinion about how big the drawing comes out, and the title strip's scale
+    cell reports the first one.
+    """
+    from pandid.render.svg import _fit_scale
+
+    dx0, dy0, dx1, dy1 = inner
+    fx, fy, fw, fh = free
+    dw, dh = dx1 - dx0, dy1 - dy0
+    s = _fit_scale(dw, dh, free)
+    return (s, fx + (fw - s * dw) / 2 - s * dx0, fy + (fh - s * dh) / 2 - s * dy0)
+
+
+def _rect(cid: str, x, y, w, h, style: str) -> list[str]:
+    """A bare rectangle, for the two the drawing frame is built from."""
+    return [
+        f'        <mxCell id="{cid}" value="" style={_attr(style)} '
+        f'vertex="1" parent="1">',
+        f'          <mxGeometry x="{_num(x)}" y="{_num(y)}" width="{_num(w)}" '
+        f'height="{_num(h)}" as="geometry" />',
+        '        </mxCell>',
+    ]
+
+
+def _segment(cid: str, x1, y1, x2, y2, ink: str, weight: float) -> list[str]:
+    """A plain ruled line between two fixed points.
+
+    An edge rather than a vertex, because that is what a line joining two points
+    is in this format, and an edge with both terminals stated as points and
+    neither as a cell is how draw.io itself writes a free-standing rule.
+    """
+    style = (f"edgeStyle=none;rounded=0;html=1;endArrow=none;startArrow=none;"
+             f"strokeColor={ink};strokeWidth={weight:g};movable=1;")
+    return [
+        f'        <mxCell id="{cid}" value="" style={_attr(style)} '
+        f'edge="1" parent="1">',
+        '          <mxGeometry relative="1" as="geometry">',
+        f'            <mxPoint x="{_num(x1)}" y="{_num(y1)}" as="sourcePoint" />',
+        f'            <mxPoint x="{_num(x2)}" y="{_num(y2)}" as="targetPoint" />',
+        '          </mxGeometry>',
+        '        </mxCell>',
+    ]
+
+
+#: Half the box a zone letter is centred in. The glyph is placed by its centre
+#: and a draw.io label is centred in its cell, so the cell is drawn around the
+#: point rather than from it.
+_LABEL_HALF = 8.0
+
+
+def _label(cid: str, cx, cy, text: str, size: float) -> list[str]:
+    """One piece of lettering, centred on a point: a zone's letter or numeral.
+
+    ``text`` with no stroke and no fill, which is draw.io's own way of writing a
+    caption that is lettering and not a box.
+    """
+    style = ("text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;"
+             f"align=center;verticalAlign=middle;fontStyle=1;fontSize={size:g};"
+             f"fontColor={_LINE_INK};")
+    return [
+        f'        <mxCell id="{cid}" value={_attr(text)} style={_attr(style)} '
+        f'vertex="1" parent="1">',
+        f'          <mxGeometry x="{_num(cx - _LABEL_HALF)}" '
+        f'y="{_num(cy - _LABEL_HALF)}" width="{_num(2 * _LABEL_HALF)}" '
+        f'height="{_num(2 * _LABEL_HALF)}" as="geometry" />',
+        '        </mxCell>',
+    ]
+
+
+def _strip_size(block) -> "tuple[float, float]":
+    """How much room the exported title strip actually needs.
+
+    The width is the sheet's own (``measure_title_strip``), since the strip is
+    ruled into the same two columns. The **height** is not: the sheet merges its
+    information block into four bands of unequal depth and a draw.io table
+    cannot, so the fields come out as one row each and the block is as tall as it
+    has fields. Measuring that here, rather than handing the dock the sheet's
+    80-unit strip and then drawing 154 units of table into it, is what keeps the
+    bottom band wide enough to hold what lands in it -- otherwise the strip grows
+    up out of its own band and over the foot of the drawing.
+    """
+    _heading, fields, revisions = _title_block_fields(block)
+    return (F.measure_title_strip(block)[0],
+            F._REV_ROW * max(len(revisions) + 1, len(fields), 1))
 
 
 def _title_block_fields(block) -> "tuple[str, list[list[str]], list[list[str]]]":

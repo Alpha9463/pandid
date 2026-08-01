@@ -431,21 +431,60 @@ def test_a_flag_is_drawn_across_its_own_box():
             assert uy0 < by0 < by1 < uy1
 
 
-def test_a_tee_draws_the_run_in_the_pipes_own_ink():
-    """A tee is bare pipe. The two streams meeting at one stop at its nozzles on
-    the box edges, so the twelve units between them are covered by the tee's own
-    mark and by nothing else -- an invisible tee would open a gap in the run.
-    What it must not be is a *lighter, thinner* rule than the pipes it joins,
-    which is what ``#111`` at draw.io's default weight drew."""
+def test_a_tee_draws_no_ink_of_its_own():
+    """The pipes draw the junction. A `line` drew a mark the width of the whole
+    box, which the branch met at the box *edge* -- a stub jutting out of the
+    pipe -- and hiding the cell without moving the pipes left a twelve-unit gap
+    between the two nozzles instead. The cell stays, so the three edges have
+    something to hold on to, and draws nothing."""
     fs = Flowsheet("tee")
     tee = fs.add(units.Tee("TEE"))
     tee.pin(x=100, y=100)
     fs.layout()
-    style = _style(_cells(fs, check=False)["u0"])
-    assert style["shape"] == "line"
-    assert style["strokeColor"] == "#000000"
-    assert style["strokeWidth"] == "2"
-    assert style.get("value", "") == ""
+    cell = _cells(fs, check=False)["u0"]
+    style = _style(cell)
+    assert "shape" not in style
+    assert style["strokeColor"] == "none"
+    assert style["fillColor"] == "none"
+    assert (cell.get("value") or "") == ""
+    # Still a cell, so the pipes stay attached to it when it is dragged.
+    assert cell.get("vertex") == "1"
+    assert cell.find("mxGeometry") is not None
+
+
+def test_three_runs_meeting_at_a_tee_close_on_one_point():
+    """Flush by construction rather than by measurement: every leg ends on the
+    box centre, so there is no gap to leave and no overshoot to trim. And each
+    leg stays straight, because a tee's nozzles are the midpoints of three faces
+    and the centre is on the axis of all three."""
+    fs = Flowsheet("junction")
+    header = fs.add(units.Feed("HDR"))
+    tee = fs.add(units.Tee("TEE"))
+    sink = fs.add(units.Product("OUT"))
+    drop = fs.add(units.Tank("T-1"))
+    header.pin(x=0, y=200)
+    tee.pin(x=400, y=200)
+    sink.pin(x=800, y=200)
+    drop.pin(x=350, y=500)
+    fs.connect(header.outlet, tee.inlet)
+    fs.connect(tee.outlet, sink.inlet)
+    fs.connect(tee.branch, drop.inlet)
+    fs.route()
+
+    cells = _cells(fs, check=False)
+    at = {i: _style(c) for i, c in cells.items()}
+    x0, y0, x1, y1 = cell_box(tee)
+    centre = ((x0 + x1) / 2, (y0 + y1) / 2)
+    legs = 0
+    for n, s in enumerate(fs.streams):
+        style = _style(cells[f"s{n}"])
+        for prefix, port in (("exit", s.source), ("entry", s.dest)):
+            if port.owner is not tee:
+                continue
+            legs += 1
+            landed = _drawio_connection_point(tee, at[f"u{fs.units.index(tee)}"], style, prefix)
+            assert landed == pytest.approx(centre, abs=0.01)
+    assert legs == 3, "the fixture stopped exercising a three-way junction"
 
 
 def test_a_pneumatic_line_is_marked_where_the_sheet_marks_it():
@@ -567,6 +606,20 @@ def test_an_edges_waypoints_are_the_line_the_renderer_draws(sample):
         )
         for (ex, ey), (dx, dy) in zip(emitted, drawn[1:-1]):
             assert (ex, ey) == pytest.approx((dx, dy), abs=0.01)
+
+
+def stream_end(port) -> tuple[float, float]:
+    """Where a stream's line is expected to stop at this port.
+
+    The drawn nozzle everywhere except a tee, which has no body: the pipes are
+    carried on to the junction's centre so the three of them draw the meeting
+    themselves. See ``_APPROXIMATIONS[("tee", "default")]``.
+    """
+    unit = port.owner
+    if unit.kind == "tee":
+        x0, y0, x1, y1 = cell_box(unit)
+        return ((x0 + x1) / 2, (y0 + y1) / 2)
+    return port_point(unit, unit.frame, port.name)
 
 
 def cell_box(unit) -> tuple[float, float, float, float]:
@@ -865,7 +918,7 @@ def test_a_title_block_exports_as_the_two_tables_it_is():
     present, each in a cell of its own."""
     cells = _cells(_titled(), check=False)
     values = {c.get("value") for c in cells.values()}
-    assert "REVISIONS" in values, "the revision grid lost its heading"
+    assert {"REV", "DATE", "DESCRIPTION"} <= values, "the revision grid lost its headings"
     assert {"A", "2026-01-02", "Issued"} <= values, "a revision row was flattened"
     assert {"A-301", "Acme", "Ethanol Purification"} <= values, "a field was dropped"
     # ...and each of those is its own cell, not a run of <br>-separated text.
@@ -966,6 +1019,107 @@ def test_a_tables_parts_add_up_at_the_precision_they_are_written_at(nrows):
         assert sum((Decimal(c.find("mxGeometry").get("width")) for c in cs), Decimal(0)) == width
 
 
+def _clipped(cells) -> list[str]:
+    """Every table cell whose text is wider than the column it is drawn in.
+
+    Measured with ``furniture.text_width`` -- the estimate the SVG rules its own
+    columns by -- at the size the cell states it will be *drawn* at, which is the
+    pair that has to agree. A column measured at one size and drawn at another is
+    the whole of this defect.
+    """
+    from pandid.render.furniture import text_width
+
+    out = []
+    for cell in cells.values():
+        style = _style(cell)
+        if style.get("shape") != "partialRectangle":
+            continue
+        value = cell.get("value") or ""
+        if not value:
+            continue
+        row = cells[cell.get("parent")]
+        size = float(
+            _style(row).get("fontSize")
+            or style.get("fontSize")
+            or _style(cells[row.get("parent")]).get("fontSize", 12)
+        )
+        size = float(style.get("fontSize", size))
+        bold = style.get("fontStyle") == "1"
+        width = float(cell.find("mxGeometry").get("width"))
+        if text_width(value, size, bold) > width:
+            out.append(
+                f"{cell.get('id')} {value!r} needs "
+                f"{text_width(value, size, bold):.1f} of {width:.1f}"
+            )
+    return out
+
+
+def test_no_table_cell_is_narrower_than_the_text_in_it():
+    """`HPSSH` came out `HPSS` and `APP'D` came out `APP'`. Columns were given a
+    proportional share of the box instead of their own measured width, and were
+    then drawn at draw.io's default 12 while having been measured at 11."""
+    for stem in SHEETS:
+        fs, kwargs = gallery.flowsheet(stem)
+        fs.to_svg(**kwargs)
+        cells = {
+            c.get("id"): c
+            for c in ET.fromstring(fs.to_drawio(diagram=kwargs.get("diagram"))).iter("mxCell")
+        }
+        clipped = _clipped(cells)
+        assert not clipped, f"{stem}: " + "; ".join(clipped)
+
+
+def test_a_table_states_the_size_its_columns_were_measured_at():
+    """draw.io's default is 12 and every box on the sheet measures its own text
+    at its ``font_size``. Leaving the size unsaid is what made the measurement
+    and the drawing disagree."""
+    from pandid.document import Annotation
+
+    fs = Flowsheet("sized")
+    fs.add(units.Pump("P-101")).pin(x=100, y=100)
+    fs.annotations.append(
+        Annotation(title="LEGEND", align="top-left", font_size=9.0, rows=[("SS", "316L")])
+    )
+    fs.layout()
+    cells = _cells(fs, check=False)
+    table = next(c for c in cells.values() if "shape=table;" in (c.get("style") or ""))
+    assert _style(table)["fontSize"] == "9"
+
+
+def test_the_title_block_rules_rows_deep_enough_to_draw_text_in():
+    """Eleven fields shared between an eighty-unit strip are rows 5.6 units
+    tall, and 11-point type in a 5.6-unit row draws nothing: the reader saw a
+    stack of empty rules. The block is as tall as its fields need instead, and
+    the dock is told so, or it grows up over the foot of the drawing."""
+    from pandid.render.drawio import _strip_size
+
+    fs = _titled()
+    cells = _cells(fs, check=False)
+    rows = [c for c in cells.values() if _style(c).get("shape") == "tableRow"]
+    assert rows
+    for row in rows:
+        height = float(row.find("mxGeometry").get("height"))
+        assert height >= 11.0, f"{row.get('id')} is {height} units tall"
+    # ...and the strip claims the room it actually uses, so the dock reserves it.
+    _w, h = _strip_size(fs.title_block)
+    tables = [c for c in cells.values() if "shape=table;" in (c.get("style") or "")]
+    assert max(float(t.find("mxGeometry").get("height")) for t in tables) <= h + 0.01
+
+
+def test_both_halves_of_the_title_strip_sit_on_one_bottom_line():
+    """The strip's bottom edge is where the sheet rules its last band, and it is
+    the edge worth holding still when the two tables come out different
+    heights."""
+    cells = _cells(_titled(), check=False)
+    feet = set()
+    for c in cells.values():
+        if "shape=table;" not in (c.get("style") or ""):
+            continue
+        geo = c.find("mxGeometry")
+        feet.add(round(float(geo.get("y")) + float(geo.get("height")), 2))
+    assert len(feet) == 1, f"the two tables end at {sorted(feet)}"
+
+
 def test_a_columnar_box_is_a_table_and_a_prose_box_is_not():
     """A box whose rows have columns in them is a grid and goes out as one.
     Ruling a column of sentences into a table would invent structure the author
@@ -1026,17 +1180,161 @@ def test_the_furniture_docks_where_the_sheet_docks_it():
     "option,value",
     [
         ("show_stream_table", True),
-        ("border", "zone"),
-        ("page_size", "A3"),
         ("jump_direction", "horizontal"),
         ("debug", True),
     ],
 )
 def test_render_refuses_a_sheet_option_it_cannot_honour(tmp_path, sample, option, value):
     """Accepting and ignoring these would tell the caller something false about
-    the file they now hold."""
+    the file they now hold. ``page_size`` and ``border`` are no longer among
+    them; see the two tests below."""
     with pytest.raises(ValueError, match=option):
         sample.render(tmp_path / "sheet.drawio", **{option: value})
+
+
+@pytest.mark.parametrize("option,value", [("page_size", "A3"), ("border", "zone")])
+def test_render_honours_the_sheet_options_it_can(tmp_path, sample, option, value):
+    out = tmp_path / "sheet.drawio"
+    sample.render(out, **{option: value})
+    assert out.read_text(encoding="utf-8") == sample.to_drawio(**{option: value})
+
+
+def test_a_page_size_is_the_paper_the_file_opens_on():
+    """The defect: a sheet drawn A3 opened on draw.io's default page. The page
+    is stated in the drawing units everything else here is stated in, which is
+    what makes A3 1587 by 1123 rather than 420 by 297."""
+    from pandid.render.svg import _page
+
+    fs = Flowsheet("paper")
+    fs.add(units.Pump("P-101")).pin(x=100, y=100)
+    fs.layout()
+    model = ET.fromstring(fs.to_drawio(page_size="A3", check=False)).find("diagram/mxGraphModel")
+    sheet = _page("A3")
+    assert model.get("page") == "1"
+    assert float(model.get("pageWidth")) == pytest.approx(sheet.width, abs=0.01)
+    assert float(model.get("pageHeight")) == pytest.approx(sheet.height, abs=0.01)
+    # ...and without one there is no paper to rule, so none is claimed.
+    plain = ET.fromstring(fs.to_drawio(check=False)).find("diagram/mxGraphModel")
+    assert plain.get("page") == "0"
+    assert plain.get("pageWidth") is None
+
+
+def test_a_paged_drawing_is_fitted_onto_its_paper():
+    """A page that the drawing spills off is not the paper it was drawn for.
+    Held against ``svg._fit_scale`` and the region the dock leaves, which is
+    what the SVG places the drawing at, rather than against a remembered
+    number."""
+    from pandid.render import furniture as F
+    from pandid.render.svg import _fit_scale, _page
+
+    fs = Flowsheet("fitted")
+    a = fs.add(units.Tank("T-1"))
+    b = fs.add(units.Tank("T-2"))
+    a.pin(x=0, y=0)
+    b.pin(x=3000, y=1600)
+    fs.connect(a.outlet, b.inlet)
+    fs.route()
+
+    sheet = _page("A3")
+    inner = DrawioRenderer()._drawing_box(fs)
+    _placed, _frame, free = F.dock([], inner, sheet=sheet)
+    scale = _fit_scale(inner[2] - inner[0], inner[3] - inner[1], free)
+    assert scale < 1.0, "the fixture stopped needing to be shrunk"
+
+    cells = _cells(fs, page_size="A3", check=False)
+    for i, u in enumerate(fs.units):
+        x0, y0, x1, y1 = cell_box(u)
+        geo = cells[f"u{i}"].find("mxGeometry")
+        assert float(geo.get("width")) == pytest.approx(scale * (x1 - x0), abs=0.01)
+    # ...and every cell lands inside the paper it was fitted to.
+    for cell in cells.values():
+        geo = cell.find("mxGeometry")
+        if geo is None or geo.get("x") is None or cell.get("edge") == "1":
+            continue
+        assert -1 <= float(geo.get("x")) <= sheet.width
+        assert -1 <= float(geo.get("y")) <= sheet.height
+
+
+def test_a_zone_border_rules_the_same_frame_the_sheet_rules():
+    """Held against ``furniture.zone_layout`` -- the geometry the SVG strokes --
+    so the exported band is divided into the same fields, lettered the same way
+    round."""
+    from pandid.render import furniture as F
+
+    fs = Flowsheet("ruled")
+    fs.add(units.Pump("P-101")).pin(x=100, y=100)
+    fs.layout()
+    cells = _cells(fs, page_size="A3", border="zone", check=False)
+    values = {c.get("value") for c in cells.values()}
+
+    _placed, frame, _free = F.dock(
+        [],
+        DrawioRenderer()._drawing_box(fs),
+        sheet=__import__("pandid.render.svg", fromlist=["x"])._page("A3"),
+    )
+    z = F.zone_layout(*frame)
+    assert {t for _k, *_r, t in [p for p in z.parts if p[0] == "label"]} <= values, (
+        "a zone lost its letter"
+    )
+    rules = [p for p in z.parts if p[0] == "rule"]
+    ruled = [
+        c for c in cells.values() if (c.get("id") or "").startswith("z") and c.get("edge") == "1"
+    ]
+    assert len(ruled) == len(rules)
+    # The two rectangles the frame is: the sheet edge and the drawing frame.
+    ix, iy, iw, ih = z.inner
+    geo = cells["z-frame"].find("mxGeometry")
+    assert (float(geo.get("x")), float(geo.get("y"))) == pytest.approx((ix, iy), abs=0.01)
+    assert (float(geo.get("width")), float(geo.get("height"))) == pytest.approx((iw, ih), abs=0.01)
+    ox, oy, ow, oh = z.outer
+    geo = cells["z-sheet"].find("mxGeometry")
+    assert (float(geo.get("x")), float(geo.get("y"))) == pytest.approx((ox, oy), abs=0.01)
+
+
+def test_every_example_exported_on_its_own_paper_lands_on_it():
+    """Each sheet exported with the page size and border it is *drawn* with,
+    which is what ``drawio-samples/`` carries and what the reader opens. A page
+    the drawing hangs off is not the paper it was drawn for."""
+    from pandid.render.svg import _page
+
+    for stem in SHEETS:
+        _lands_on_its_paper(stem, _page)
+
+
+def _lands_on_its_paper(stem, _page):
+    fs, kwargs = gallery.flowsheet(stem)
+    fs.to_svg(**kwargs)
+    sheet = _page(kwargs.get("page_size"))
+    doc = fs.to_drawio(
+        diagram=kwargs.get("diagram"),
+        page_size=kwargs.get("page_size"),
+        border=kwargs.get("border"),
+    )
+    root = ET.fromstring(doc)
+    if sheet is None:
+        assert root.find("diagram/mxGraphModel").get("page") == "0"
+        return
+    for cell in root.iter("mxCell"):
+        geo = cell.find("mxGeometry")
+        if geo is None or cell.get("edge") == "1" or geo.get("x") is None:
+            continue
+        if cell.get("parent") not in (None, "1"):
+            continue  # a table row or cell, measured inside its own container
+        x, y = float(geo.get("x")), float(geo.get("y"))
+        w, h = float(geo.get("width") or 0), float(geo.get("height") or 0)
+        assert -1 <= x and x + w <= sheet.width + 1, f"{cell.get('id')} runs off the page"
+        assert -1 <= y and y + h <= sheet.height + 1, f"{cell.get('id')} runs off the page"
+
+
+def test_an_unruled_sheet_draws_no_frame():
+    """The sheet draws no rectangle for ``border="none"`` -- it takes the region
+    for the canvas and strokes nothing -- so neither does the export. What the
+    reader sees as the paper's edge is the page draw.io is now told to rule."""
+    fs = Flowsheet("plain")
+    fs.add(units.Pump("P-101")).pin(x=100, y=100)
+    fs.layout()
+    cells = _cells(fs, page_size="A3", check=False)
+    assert not [i for i in cells if i.startswith("z")]
 
 
 def test_render_writes_the_document_to_a_drawio_path(tmp_path, sample):
@@ -1104,6 +1402,4 @@ def test_every_example_exports_a_document_that_matches_its_sheet(stem):
         style = _style(cells[f"s{n}"])
         for prefix, port in (("exit", s.source), ("entry", s.dest)):
             landed = _drawio_connection_point(port.owner, at[id(port.owner)], style, prefix)
-            assert landed == pytest.approx(
-                port_point(port.owner, port.owner.frame, port.name), abs=0.01
-            )
+            assert landed == pytest.approx(stream_end(port), abs=0.01)

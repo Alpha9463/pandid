@@ -1070,7 +1070,9 @@ class Flowsheet:
             jump_direction=jump_direction, debug=debug
         )
 
-    def to_drawio(self, *, diagram: str | None = None, check: bool = True) -> str:
+    def to_drawio(self, *, diagram: str | None = None,
+                  page_size: str | None = None, border: str | None = None,
+                  check: bool = True) -> str:
         """Render the flowsheet to a draw.io (``.drawio``) document string,
         running ``layout()`` and ``route()`` first if they have not been run yet.
 
@@ -1092,15 +1094,32 @@ class Flowsheet:
         it: a P&ID exports its process lines without arrowheads. ``check``
         validates first, on the same terms.
 
-        Sheet furniture (the title block and any annotation boxes) is docked to
-        the corners of the drawing by the same arithmetic the sheet docks it
-        with, and anything columnar -- an equipment list, a legend, a numbered
-        note list, a :class:`~pandid.document.TableBox` -- comes out as a real
-        draw.io table with rows and cells rather than as one block of text. What
-        a sheet *is* -- its page size, its border, its stream table -- has no
-        counterpart in a model on an unbounded canvas, and :meth:`render`
-        refuses those options for a ``.drawio`` path rather than accepting and
-        ignoring them.
+        Sheet furniture (the title block and any annotation boxes) is docked by
+        the same arithmetic the sheet docks it with, and anything columnar -- an
+        equipment list, a legend, a numbered note list, a
+        :class:`~pandid.document.TableBox` -- comes out as a real draw.io table
+        with rows and cells rather than as one block of text.
+
+        ``page_size`` puts the model on paper, exactly as it does for
+        :meth:`to_svg`: the file carries the page for draw.io to rule, the
+        furniture docks to that page rather than to the drawing's own bounds,
+        and the drawing is fitted into what the furniture leaves. Omit it and
+        the drawing keeps its own coordinates on an unbounded canvas, which is
+        what a model is.
+
+        ``border`` rules that page. ``"zone"`` draws the frame, the sheet edge
+        and the lettered band between them. One caveat the author should know,
+        and it is the reason this was argued over rather than simply added: a
+        zone grid is an *address space* (ISO 15519-1 Clause 9), and
+        :attr:`pandid.units._Boundary.reference` is where this library writes
+        addresses into it. Those hold while the sheet holds. In an editable
+        model they do not -- move a column and it is in a different zone from
+        the one every reference names -- so what is exported is a **snapshot of
+        the grid**, true of the drawing as it left pandid.
+
+        The stream table, the jump direction and the debug overlay have no
+        counterpart here and :meth:`render` refuses them for a ``.drawio`` path
+        rather than accepting and ignoring them.
         """
         if any(u.frame is None for u in self.units):
             self.layout()
@@ -1117,7 +1136,8 @@ class Flowsheet:
                     + "\n".join(f"  {e}" for e in errors)
                 )
         from pandid.render.drawio import DrawioRenderer
-        return DrawioRenderer().render(self, diagram=diagram)
+        return DrawioRenderer().render(self, diagram=diagram,
+                                       page_size=page_size, border=border)
 
     def render(self, path: str | Path, *, show_stream_table: bool = False,
                border: str | None = None,
@@ -1157,47 +1177,36 @@ class Flowsheet:
             # and got neither has been told something false about the file they
             # now hold. Named one by one, since the fix is to drop that argument.
             #
-            # ``border`` is the one worth arguing, because the furniture *is*
-            # docked now and a frame therefore exists to rule. It still raises.
-            # A zone grid is not decoration around a drawing; ISO 15519-1
-            # Clause 9 is explicit about what it is for -- "For reference to a
-            # document, to a sheet of a document, or to a column, a row or a
-            # zone on a sheet, the grid reference system described in 5.1.2
-            # shall be used" -- and §5.1.2 defines a zone as the cross-section
-            # of a lettered row and a numbered column. So a ruled border is an
-            # address space, and Feed.reference is where this library already
-            # writes addresses into it (``4334/.B3``, Table 2). Addresses only
-            # hold while the sheet does. The whole point of the .drawio export
-            # is a model the reader re-lays out by hand, and the first column
-            # they drag two hundred units left is in a different zone from the
-            # one every reference on the sheet says it is in -- and the file
-            # would still look authoritative. A stale grid is worse than no
-            # grid, so the export has none and says so.
+            # ``page_size`` and ``border`` are no longer among them: a
+            # .drawio file can carry the page draw.io is to rule and the frame
+            # ruled on it, so asking for A3 and a zone border now gets A3 and a
+            # zone border. See to_drawio() for the caveat the grid comes with.
             #
-            # The furniture is a different case and that is why it is not an
-            # inconsistency: a docked box states a *relation* to a corner, which
-            # survives the reader moving things, and no reference anywhere
-            # points at it.
+            # The three that remain have no counterpart at all. A stream table
+            # is sheet furniture this exporter has no measurement for; draw.io
+            # decides its own line jumps and would ignore the direction; and the
+            # debug overlay is scaffolding for whoever is writing a placement
+            # rather than part of the drawing. Named one by one, since the fix
+            # is to drop that argument.
             sheet_only = [
                 name for name, given, default in (
                     ("show_stream_table", show_stream_table, False),
-                    ("border", border, None),
-                    ("page_size", page_size, None),
                     ("jump_direction", jump_direction, "vertical"),
                     ("debug", debug, False),
                 ) if given != default
             ]
             if sheet_only:
                 raise ValueError(
-                    f"{', '.join(sheet_only)} describe(s) a drawing sheet, and a "
-                    f".drawio file is an editable model on an unbounded canvas "
-                    f"rather than a sheet: there is no paper for a page size or a "
-                    f"border to rule, no sheet furniture to dock a stream table "
-                    f"to, and draw.io decides its own line jumps. Render the "
-                    f"sheet to .svg/.pdf/.png, or drop these arguments"
+                    f"{', '.join(sheet_only)} describe(s) a drawing sheet that "
+                    f"a .drawio file has no counterpart for: there is no sheet "
+                    f"furniture to dock a stream table to, draw.io decides its "
+                    f"own line jumps, and the coordinate overlay is scaffolding "
+                    f"rather than drawing. Render the sheet to .svg/.pdf/.png, "
+                    f"or drop these arguments"
                 )
             Path(path).write_text(
-                self.to_drawio(diagram=diagram, check=check), encoding="utf-8")
+                self.to_drawio(diagram=diagram, page_size=page_size,
+                               border=border, check=check), encoding="utf-8")
             return
 
         svg = self.to_svg(
