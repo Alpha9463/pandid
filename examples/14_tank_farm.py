@@ -121,7 +121,8 @@ def main():
     lpg_in.pin(port="outlet", x=200, y=lpg_recv_y)
 
     lpg_run_y, eth_run_y, ms_run_y = 390.0, 510.0, 665.0
-    balloon_row_y, low_row_y, psv_run_y = 445.0, 570.0, 600.0
+    balloon_row_y, low_row_y, psv_run_y = 462.0, 570.0, 600.0
+    cascade_y = 422.0
 
     hv601.pin(port="inlet", x=495, y=ms_run_y)
     ej601.pin(port="inlet", x=560, y=ms_run_y)
@@ -246,6 +247,8 @@ def main():
     pt603 = fs.add_instrument("PT", lpg_press, on=v603, at="E", offset=30)
     fs.add_instrument("PI", lpg_press, on=pt603, at="N", offset=40, variant="shared")
 
+    cv604_axis = 1275 + port_offset(cv604, "actuator")[0]
+    cv605_axis = 1105 + port_offset(cv605, "actuator")[0]
     fe604_top = blend_y - port_offset(fe604, "inlet")[1]
     cv604_top = blend_y - port_offset(cv604, "inlet")[1]
     fe605_top = eth_run_y - port_offset(fe605, "inlet")[1]
@@ -262,8 +265,10 @@ def main():
     fic605 = fs.add_instrument("FIC", blend_flow, on=cv605, at="N", variant="shared",
                                offset=cv605_top - balloon_row_y)
     fic605.nozzle("sig_out", "S")
+    fic605.nozzle("sig_in", "N")
     fs.connect(ft605.sig_out, fic605.pv, kind="electric")
-    fs.connect(fic604.sig_out, fic605.sig_in, kind="software").via([(1200, balloon_row_y)])
+    fs.connect(fic604.sig_out, fic605.sig_in, kind="software").via(
+        [(cv604_axis, cascade_y), (cv605_axis, cascade_y)])
     fs.connect(fic605.sig_out, cv605.actuator, kind="pneumatic")
 
     # --- Sheet furniture -------------------------------------------------
