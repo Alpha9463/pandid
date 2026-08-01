@@ -682,3 +682,302 @@ def test_a_repeated_square_survives_a_round_trip_through_a_spec():
         (s.source.owner.name, s.dest.owner.name) for s in fs.streams
     ]
     assert rebuilt.to_dict() == spec
+
+
+# --- the signal pool: several connections on one balloon ----------------------
+#
+# P&ID-301 ("Ethanol Purification A300 -- Process & Instrumentation Diagram 1",
+# Rev B, 30/10/2025) draws PIC-301 with one signal line in from PT-301 and two
+# out, one to CV-301-1 and one to CV-301-2, and letters the split-range bands
+# beside them: `0-95%` alongside the leg that drops to CV-301-1, `95-100%` on
+# the leg that runs right to CV-301-2. That sheet is in this repository and this
+# package could not draw it, because a balloon had exactly one sig_out.
+
+
+def _split_range():
+    """P&ID-301's loop 301: one controller, two control valves, both strokes.
+
+    Pinned rather than laid out, so what the assertions read is the pool and the
+    face selection rather than whatever the ranking phase decided this week.
+    """
+    fs = Flowsheet("split range")
+    loop = fs.add_loop("P", 301)
+    pt = fs.add(U.Instrument("PT", 301)).pin(x=120, y=300)
+    pic = fs.add(U.Instrument("PIC", 301, variant="shared")).pin(x=340, y=300)
+    cv1 = fs.add(U.Valve("CV-301-1", variant="control")).pin(x=320, y=520)
+    cv2 = fs.add(U.Valve("CV-301-2", variant="control")).pin(x=600, y=280)
+    fs.connect(pt.sig_out, pic.sig_in, kind="electric")
+    lo = fs.connect(pic.sig_out, cv1.actuator, kind="pneumatic")
+    hi = fs.connect(pic.sig_out, cv2.actuator, kind="pneumatic")
+    return fs, loop, pt, pic, (cv1, lo), (cv2, hi)
+
+
+def test_split_range_draws_one_controller_onto_two_valves():
+    """The sheet the package could not draw. Two outputs off one balloon, each
+    landing on its own valve's stem, and the drawing comes out."""
+    from pandid.portgeom import port_point
+
+    fs, _, _, pic, (cv1, lo), (cv2, hi) = _split_range()
+    assert lo.source.owner is pic and lo.dest is cv1.actuator
+    assert hi.source.owner is pic and hi.dest is cv2.actuator
+    assert lo.source is not hi.source
+    fs.route()
+    # Two lines off one balloon leave from two different points on it, which is
+    # the whole of what "several connections, on any face" has to mean.
+    assert port_point(pic, pic.frame, lo.source.name) != port_point(pic, pic.frame, hi.source.name)
+    svg = fs.to_svg()
+    assert ">PIC<" in svg and ">301<" in svg
+    assert svg.count("<path") >= 3  # the measurement and both outputs
+
+
+def test_a_second_line_off_one_output_is_another_connection():
+    """``sig_out`` is a pool. Asking it to drive a second valve mints a member
+    rather than refusing, which is how an author writes split range; and the
+    first line stays exactly where it was, so ``pic.sig_out.stream`` still reads
+    back the connection it was given."""
+    _, _, _, pic, (_, lo), (_, hi) = _split_range()
+    assert lo.source is pic.sig_out
+    assert pic.sig_out.stream is lo
+    assert hi.source.name == "sig_out_2"
+    assert list(pic.ports) == ["pv", "sig_in", "sig_out", "sig_out_2"]
+
+
+def test_a_balloon_with_one_line_each_way_grows_nothing():
+    """The pool costs the ordinary case nothing: three ports, the three it has
+    always had, in the order it has always had them. Every balloon in
+    ``tests/golden`` is one of these, and this is why none of them moved."""
+    fs = Flowsheet("plain")
+    a = fs.add(U.Instrument("FT-101"))
+    b = fs.add(U.Instrument("FIC-101", variant="panel"))
+    fs.connect(a.sig_out, b.sig_in, kind="electric")
+    assert list(a.ports) == ["pv", "sig_in", "sig_out"]
+    assert list(b.ports) == ["pv", "sig_in", "sig_out"]
+
+
+def test_a_minted_connection_is_drawn_on_the_balloons_own_nozzle():
+    """A pool member is not a nozzle the symbol has to be redrawn for. It takes
+    the menu its pool's first member has -- all four faces, since a balloon is a
+    circle -- so it lands on ink and not on the box-centre fallback."""
+    from pandid.portgeom import is_anchored, port_faces
+
+    _, _, _, pic, _, _ = _split_range()
+    assert is_anchored(pic, "sig_out_2")
+    assert set(port_faces(pic, "sig_out_2")) == set(port_faces(pic, "sig_out"))
+    assert set(port_faces(pic, "sig_out_2")) == {"N", "S", "E", "W"}
+
+
+def test_each_output_takes_a_face_of_its_own():
+    """Two live connections may not resolve to one point, and the face selector
+    is what keeps that true as the pool grows: it serves each port in turn and
+    will not put one on a placement already spoken for."""
+    from pandid.portgeom import resolve_port
+    from pandid.validate import validate
+
+    fs, _, _, pic, _, _ = _split_range()
+    fs.route()
+    faces = {
+        name: resolve_port(pic, pic.frame, name).face for name in ("sig_in", "sig_out", "sig_out_2")
+    }
+    assert len(set(faces.values())) == 3, faces
+    assert not [i for i in validate(fs) if i.code == "coincident-ports"]
+
+
+def test_a_measurement_feeds_two_alarms_on_separate_lines():
+    """ISO 15519-2 §6.2 (p.14): signal lines for functions inside the PCI symbol
+    and for functions outside it "shall be drawn separate between the PCI
+    symbols". A high alarm and a low alarm therefore each take a line from the
+    measurement rather than being chained one behind the other, which needs two
+    outputs on the transmitter."""
+    fs = Flowsheet("alarms")
+    li = fs.add(U.Instrument("LI", 322, variant="shared")).pin(x=200, y=300)
+    lah = fs.add(U.Instrument("LAH", 322, variant="shared")).pin(x=420, y=200)
+    lal = fs.add(U.Instrument("LAL", 322, variant="shared")).pin(x=420, y=400)
+    high = fs.connect(li.sig_out, lah.sig_in, kind="electric")
+    low = fs.connect(li.sig_out, lal.sig_in, kind="electric")
+    assert high.source is not low.source
+    assert {high.source.name, low.source.name} == {"sig_out", "sig_out_2"}
+    fs.route()
+    assert fs.to_svg()
+
+
+def test_an_alarm_takes_an_input_and_an_output():
+    """P&ID-301 runs I-2 into LAH-322 and LAL-322 out into I-1. An alarm that
+    participates in a trip is a balloon with connections of its own, and it may
+    need one of each."""
+    fs = Flowsheet("trip")
+    lt = fs.add(U.Instrument("LT", 322)).pin(x=120, y=300)
+    lal = fs.add(U.Instrument("LAL", 322, variant="shared")).pin(x=360, y=300)
+    trip = fs.add(U.Instrument("I", 1, variant="sis")).pin(x=600, y=300)
+    fs.connect(lt.sig_out, lal.sig_in, kind="electric")
+    fs.connect(lal.sig_out, trip.sig_in, kind="electric")
+    assert lal.sig_in.stream.source.owner is lt
+    assert lal.sig_out.stream.dest.owner is trip
+
+
+def test_a_signal_connection_takes_either_end_of_its_line():
+    """A signal port carries no direction requirement. The same terminal is fed
+    on one sheet and trips from it on another, so which end it took is read off
+    the stream and not declared in advance."""
+    fs = Flowsheet("either end")
+    a = fs.add(U.Instrument("LAL-322", variant="shared"))
+    b = fs.add(U.Instrument("I-1", variant="sis"))
+    # ``sig_in`` as the source: named for the author's reading, not enforced.
+    s = fs.connect(a.sig_in, b.sig_in, kind="electric")
+    assert s.source is a.sig_in and s.dest is b.sig_in
+    assert s.source.direction == "inlet"  # the field is a label, not a rule
+
+
+def test_a_process_nozzle_still_has_a_direction():
+    """The guard is not gone, it is narrowed. Fluid enters a nozzle or leaves
+    it, and a pipe drawn the other way is still refused."""
+    fs = Flowsheet("piping")
+    p1 = fs.add(U.Pump("P-101"))
+    p2 = fs.add(U.Pump("P-102"))
+    with pytest.raises(ValueError, match="must be an outlet"):
+        fs.connect(p1.suction, p2.discharge)
+    with pytest.raises(ValueError, match="must be an inlet"):
+        fs.connect(p1.discharge, p2.discharge)
+
+
+def test_the_process_tap_is_one_tap():
+    """``pv`` is not a pool. An instrument taps one process point, and a second
+    line to it is a mistake in the drawing rather than a request for another
+    connection. (A differential instrument tapping two points wants a second
+    *named* tap, high and low; nothing here is designed for it.)"""
+    fs = Flowsheet("tap")
+    fic = fs.add(U.Instrument("FIC-301", variant="shared"))
+    a = fs.add(U.Instrument("FT-301"))
+    b = fs.add(U.Instrument("FT-302"))
+    fs.connect(a.sig_out, fic.pv, kind="electric")
+    with pytest.raises(ValueError, match=r"FIC-301\.pv is already connected"):
+        fs.connect(b.sig_out, fic.pv, kind="electric")
+
+
+def test_a_valve_has_one_actuator():
+    """Split range is one actuator per valve with the controller holding two
+    outputs, so the stem stays singular and a second line onto it is refused."""
+    fs = Flowsheet("stem")
+    cv = fs.add(U.Valve("CV-301-1", variant="control"))
+    a = fs.add(U.Instrument("PIC-301", variant="shared"))
+    b = fs.add(U.Instrument("HIC-301", variant="shared"))
+    fs.connect(a.sig_out, cv.actuator, kind="pneumatic")
+    with pytest.raises(ValueError, match=r"CV-301-1\.actuator is already connected"):
+        fs.connect(b.sig_out, cv.actuator, kind="pneumatic")
+
+
+# --- naming the units instead of their connections ----------------------------
+
+
+def test_naming_the_units_draws_the_signal_line():
+    """On a signal line the connection is not information: a balloon mints one
+    per line and a control valve has exactly one stem. So either end may be the
+    unit and the engine picks."""
+    fs = Flowsheet("units")
+    ft = fs.add(U.Instrument("FT-305"))
+    fic = fs.add(U.Instrument("FIC-305", variant="shared"))
+    cv = fs.add(U.Valve("CV-305", variant="control"))
+    a = fs.connect(ft, fic, kind="electric")
+    b = fs.connect(fic, cv, kind="pneumatic")
+    assert (a.source.name, a.dest.name) == ("sig_out", "sig_in")
+    assert (b.source.name, b.dest.name) == ("sig_out", "actuator")
+
+
+def test_naming_the_units_mints_a_second_output():
+    """The split-range case written the short way."""
+    fs = Flowsheet("units split")
+    pic = fs.add(U.Instrument("PIC-301", variant="shared"))
+    cv1 = fs.add(U.Valve("CV-301-1", variant="control"))
+    cv2 = fs.add(U.Valve("CV-301-2", variant="control"))
+    fs.connect(pic, cv1, kind="pneumatic")
+    fs.connect(pic, cv2, kind="pneumatic")
+    assert list(pic.ports) == ["pv", "sig_in", "sig_out", "sig_out_2"]
+
+
+def test_piping_still_names_its_nozzle():
+    """Which nozzle a pipe runs to is the whole question -- a column has a feed,
+    an overhead and a bottoms -- so a process kind refuses a bare unit."""
+    fs = Flowsheet("piping")
+    p1 = fs.add(U.Pump("P-101"))
+    p2 = fs.add(U.Pump("P-102"))
+    with pytest.raises(ValueError, match="a unit rather than one of its nozzles"):
+        fs.connect(p1, p2)
+
+
+def test_a_unit_with_no_signal_connection_is_named_not_guessed_at():
+    """A pump has no stem for a signal line to reach, so naming it refuses and
+    says which nozzles it does have."""
+    fs = Flowsheet("no stem")
+    pic = fs.add(U.Instrument("PIC-301", variant="shared"))
+    pump = fs.add(U.Pump("P-101"))
+    with pytest.raises(ValueError, match="has no signal connection"):
+        fs.connect(pic, pump, kind="electric")
+
+
+def test_a_unit_with_several_signal_connections_is_not_guessed_at():
+    """Two signal connections that are not a pool are two different things, so
+    this refuses rather than picking one."""
+    fs = Flowsheet("ambiguous")
+    pic = fs.add(U.Instrument("PIC-301", variant="shared"))
+    station = fs.add(U.Valve("CV-301", variant="control"))
+    station._add_port("sig_spare", "inlet", "signal")
+    with pytest.raises(ValueError, match="2 signal connections"):
+        fs.connect(pic, station, kind="pneumatic")
+
+
+def test_split_range_survives_a_round_trip_through_a_spec():
+    """A minted connection is written out under its own name and read back by
+    it, so a sheet the pool was used on rebuilds exactly."""
+    fs, *_ = _split_range()
+    spec = fs.to_dict()
+    rebuilt = Flowsheet.from_dict(spec)
+    pic = next(u for u in rebuilt.units if u.name == "PIC-301")
+    assert list(pic.ports) == ["pv", "sig_in", "sig_out", "sig_out_2"]
+    assert rebuilt.to_dict() == spec
+
+
+def test_a_refused_connection_mints_nothing():
+    """Both refusals are made before either end is taken, so a call that raises
+    leaves the sheet exactly as it found it. A balloon carrying a spare nozzle
+    no line reaches is a drawing changed by an error, and ``debug=True`` draws
+    every port it has."""
+    fs = Flowsheet("refused")
+    pic = fs.add(U.Instrument("PIC-301", variant="shared"))
+    cv = fs.add(U.Valve("CV-301-1", variant="control"))
+    fs.connect(pic.sig_out, cv.actuator, kind="pneumatic")
+    with pytest.raises(ValueError, match="already connected"):
+        fs.connect(pic.sig_out, cv.actuator, kind="pneumatic")  # same valve twice
+    assert list(pic.ports) == ["pv", "sig_in", "sig_out"]
+    with pytest.raises(ValueError, match="signal connection"):
+        fs.connect(pic.sig_out, fs.add(U.Pump("P-101")).suction, kind="pneumatic")
+    assert list(pic.ports) == ["pv", "sig_in", "sig_out"]
+
+
+def test_a_fifth_line_onto_a_balloon_is_reported_not_hidden():
+    """A balloon is a circle with four faces, so the fifth connection has
+    nowhere of its own to go and lands on a placement already taken. The pool
+    does not pretend otherwise: the face selector leaves it on the symbol's own
+    nozzle and ``validate`` reports the stack as a hard error, which is the
+    signal to draw a trunk with stubs instead."""
+    from pandid.validate import validate
+
+    fs = Flowsheet("crowded")
+    pic = fs.add(U.Instrument("PIC-301", variant="shared")).pin(x=400, y=400)
+    for i in range(5):
+        cv = fs.add(U.Valve(f"CV-{i}", variant="control")).pin(x=100 + 180 * i, y=700)
+        fs.connect(pic.sig_out, cv.actuator, kind="pneumatic")
+    fs.route()
+    assert [i.code for i in validate(fs) if i.severity == "error"] == ["coincident-ports"]
+
+
+def test_a_pool_member_can_be_asked_for_by_name():
+    """``signal_port`` is how a member the balloon has not grown yet is reached
+    -- what the spec reader needs, and what an author needs to name a face on
+    one before the line that mints it is written."""
+    fs = Flowsheet("by name")
+    pic = fs.add(U.Instrument("PIC-301", variant="shared"))
+    port = pic.signal_port("sig_out_2")
+    assert port.name == "sig_out_2" and port.role == "signal"
+    assert pic.signal_port("sig_out_2") is port  # asked twice, minted once
+    assert pic.signal_port("sig_out") is pic.sig_out
+    with pytest.raises(KeyError, match="signal pools"):
+        pic.signal_port("sig_sideways")

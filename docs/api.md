@@ -111,16 +111,32 @@ balloon is two ISA-5.1 symbols claiming to be the same thing, and a `Feed` and a
 raise.
 
 ```text
-connect(src: Port, dst: Port, *,
+connect(src: Port | Unit, dst: Port | Unit, *,
         kind: str = "material",
         name: str | None = None,
         draw_as_recycle: bool = False,
         size=None, schedule=None, service=None, sequence=None, spec=None,
         insulation=None) -> Stream
 ```
-Creates the stream. `src` must be an outlet and `dst` an inlet, both units must
-already be on this flowsheet, and neither port may already carry a stream. Each
-of those raises `ValueError`.
+Creates the stream. Both units must already be on this flowsheet, and neither
+port may already carry a stream. Each of those raises `ValueError`.
+
+On a **process** connection `src` must be an outlet and `dst` an inlet; fluid
+enters a nozzle or leaves it. A **signal** connection has no such rule — the
+same alarm terminal is fed on one sheet and trips from it on another — so either
+of an instrument's connections takes either end, and which end it took is
+`stream.source` / `stream.dest`.
+
+On a signal line either end may be the **unit** instead of one of its
+connections, and this picks: an instrument mints a connection and a control
+valve offers its stem.
+
+```python
+fs.connect(ft305, fic305, kind="electric")     # same as ft305.sig_out -> fic305.sig_in
+```
+
+Process piping always names its nozzle, since which nozzle a pipe runs to is the
+whole question; a `"material"` kind with a bare unit at either end raises.
 
 `kind` is one of `"material"`, `"energy"`, `"electric"`, `"pneumatic"`,
 `"data"`, `"software"` or `"capillary"`. Anything else raises. A `"material"`
@@ -400,7 +416,7 @@ Each entry is `port` *(direction / role)*.
 | `Ejector` | `ejector` | `motive` *(in/utility)*, `suction` *(in)*, `discharge` *(out)* |
 | `Vent` | `vent` | `inlet` *(in/vapor)* |
 | `Funnel` | `funnel` | `outlet` *(out/feed)* |
-| `Instrument` | `instrument` | `pv` *(in/signal)*, `sig_in` *(in/signal)*, `sig_out` *(out/signal)* |
+| `Instrument` | `instrument` | `pv` *(in/signal)*, `sig_in` … `sig_in_n`, `sig_out` … `sig_out_n` *(signal)*; the two are [pools](#several-signal-lines-on-one-balloon) |
 | `Mixer` | `mixer` | `in_1` … `in_n` *(in)*, `outlet` *(out)*; the family is [`inlets`](#the-family-as-a-sequence) |
 | `Splitter` | `splitter` | `inlet` *(in)*, `out_1` … `out_n` *(out)*; the family is [`outlets`](#the-family-as-a-sequence) |
 | `Block` | `block` | `in_1` … `in_n` *(in)*, `out_1` … `out_m` *(out)*; the families are [`inlets`/`outlets`](#the-family-as-a-sequence) |
@@ -1947,6 +1963,37 @@ These are relative weights inside one drawing. They still scale with the sheet,
 so a drawing that has been fitted down carries both of them down together; the
 ratio holds, the millimetres do not. Holding a stroke at a physical width is
 ISO 15519-1 §11.1.3's separate and larger problem, and `pandid` does not do it.
+
+### Several signal lines on one balloon
+
+`sig_in` and `sig_out` are **pools**. A second line off one is another
+connection, not an error: the balloon mints `sig_out_2`, and the face selector
+puts it wherever the new peer is.
+
+```python
+# split range: one controller, two valves
+fs.connect(pic.sig_out, cv1.actuator, kind="pneumatic")
+fs.connect(pic.sig_out, cv2.actuator, kind="pneumatic")
+
+pic.sig_out.stream.dest.owner        # CV-301-1 -- the first line, unchanged
+pic.port("sig_out_2")                # the second
+```
+
+A balloon is a circle, so every connection offers all four faces and a minted
+one is drawn on the same nozzles as the pool's first member. Two live
+connections never share a point; the selector will not put one on a placement
+already spoken for.
+
+- **`pv` is one tap.** An instrument taps one process point, so a second line to
+  it raises. (A differential instrument tapping two points wants a second
+  *named* tap; that is not this.)
+- **`Valve.actuator` is one stem.** Split range is one actuator per valve with
+  the controller holding two outputs.
+- **`signal_port(name)`** reaches a member the balloon has not grown yet, which
+  is how a spec names one and how a face is set on one in advance.
+- **Four is the ceiling.** A balloon has four faces, so a fifth connection lands
+  on a placement already taken and `validate()` reports `coincident-ports` as an
+  error. That is the point to draw a trunk with stubs instead.
 
 ---
 

@@ -102,6 +102,62 @@ def _spell(port: "Port") -> str:
     return f"{port.owner.name}.{port.name}"
 
 
+def _signal_end(end: "Port | Unit", kind: str, which: str) -> "Port":
+    """The connection at one end of a stream, where the caller named a unit.
+
+    ``fs.connect(ft305, fic305, kind="electric")`` is the spelling this exists
+    for, and the argument for it is that on a signal line the nozzle is not
+    information. A process line's nozzle is the whole question -- a column has a
+    feed, an overhead and a bottoms and they are three different sheets -- so
+    piping always names it. An instrument balloon is a circle whose connections
+    are declared faceless precisely because a signal may meet it anywhere, and
+    it now mints one per line, so "which connection" has exactly one sensible
+    answer and making the author write it down is making them repeat the
+    engine. The same is true at the other end: a control valve has one signal
+    connection, its stem.
+
+    Where a unit has several, this refuses rather than picking. Two signal
+    connections that are not a pool are two different things (a valve station's
+    control valve and its own instruments), and guessing between them draws a
+    line to the wrong device and says nothing.
+    """
+    from pandid.ports import Port
+    from pandid.units import Instrument, Unit
+
+    if isinstance(end, Port):
+        return end
+    if not isinstance(end, Unit):
+        raise TypeError(
+            f"connect() takes a Port or a Unit at each end, got "
+            f"{type(end).__name__}"
+        )
+    if kind not in SIGNAL_KINDS:
+        raise ValueError(
+            f"the {which} is {end.name}, a unit rather than one of its nozzles, and "
+            f"kind={kind!r} is process piping. Which nozzle a pipe runs to is the "
+            f"whole question, so name it ({end.name}.<nozzle>); only a signal line "
+            f"(kind one of {sorted(SIGNAL_KINDS)}) may be drawn to the unit"
+        )
+    if isinstance(end, Instrument):
+        # The pool, and never ``pv``: an instrument's tap on the process is a
+        # different kind of edge from a line between two instruments, and it is
+        # named where it is meant. See :class:`pandid.units.Instrument`.
+        return end.sig_out if which == "source" else end.sig_in
+    signals = [port for port in end.ports.values() if port.role == "signal"]
+    if len(signals) == 1:
+        return signals[0]
+    if not signals:
+        raise ValueError(
+            f"the {which} is {end.name}, which has no signal connection for a "
+            f"{kind} line to reach; its nozzles are {sorted(end.ports)}"
+        )
+    raise ValueError(
+        f"the {which} is {end.name}, which has {len(signals)} signal connections "
+        f"({', '.join(port.name for port in signals)}); name the one this line "
+        f"runs to"
+    )
+
+
 def _check_signal_pairing(src: "Port", dst: "Port", kind: str) -> None:
     """Raise unless the stream's kind matches what its two ports are.
 
@@ -646,7 +702,7 @@ class Flowsheet:
         self.components.append(component)
         return component
 
-    def connect(self, src: "Port", dst: "Port", *, kind: str = "material",
+    def connect(self, src: "Port | Unit", dst: "Port | Unit", *, kind: str = "material",
                 name: str | None = None, draw_as_recycle: bool = False,
                 size: str | float | None = None, schedule: str | float | None = None,
                 service: str | float | None = None,
@@ -663,6 +719,12 @@ class Flowsheet:
         nozzles. Mixing them draws a pipe into a valve stem or a control signal
         between two pumps.
 
+        For a signal line either end may be the **unit** instead of one of its
+        connections, and this picks the connection: an instrument mints a free
+        one and anything else with a single signal connection offers that one
+        (``fs.connect(ft305, fic305, kind="electric")``). Process piping always
+        names its nozzles, since which nozzle is the whole question.
+
         ``size``/``schedule``/``service``/``spec``/``insulation`` are the
         line-number components; supplying any of them draws this line with its
         line number instead of a stream number. ``sequence`` is filled by
@@ -676,13 +738,23 @@ class Flowsheet:
             raise ValueError(
                 f"Stream kind must be one of {sorted(STREAM_KINDS)}, got {kind!r}"
             )
+        src = _signal_end(src, kind, "source")
+        dst = _signal_end(dst, kind, "destination")
 
-        if src.direction != "outlet":
+        # Process nozzles only. Fluid enters a nozzle or it leaves one, and a
+        # sheet that says otherwise is wrong about the plant, so the guard stays
+        # exactly as it was for them. A signal connection has no such fact to be
+        # right or wrong about: the same alarm terminal is fed on one sheet and
+        # trips from it on another, and which it is here is which end of the line
+        # it took. That is now read off ``Stream.source``/``Stream.dest``, which
+        # is exact because a port holds at most one stream, rather than declared
+        # in advance and enforced here. See :class:`pandid.units.Instrument`.
+        if src.role != "signal" and src.direction != "outlet":
             raise ValueError(
                 f"source port {src.owner.name}.{src.name} must be an outlet, "
                 f"got {src.direction!r}"
             )
-        if dst.direction != "inlet":
+        if dst.role != "signal" and dst.direction != "inlet":
             raise ValueError(
                 f"destination port {dst.owner.name}.{dst.name} must be an inlet, "
                 f"got {dst.direction!r}"
@@ -691,15 +763,26 @@ class Flowsheet:
             raise ValueError(
                 "both units must be added to this flowsheet before connecting"
             )
-        if src.stream is not None:
-            raise ValueError(
-                f"port {src.owner.name}.{src.name} is already connected"
-            )
-        if dst.stream is not None:
-            raise ValueError(
-                f"port {dst.owner.name}.{dst.name} is already connected"
-            )
         _check_signal_pairing(src, dst, kind)
+        # A connection already spoken for is a mistake on every nozzle but one:
+        # an instrument balloon's signal connections are a *pool*, so a second
+        # line off ``sig_out`` is the split-range case and gets a member of its
+        # own rather than an error. The unit answers, because which of its
+        # connections are plural is a fact about the equipment.
+        #
+        # Both ends are asked before either is taken, and both refusals are made
+        # before either is minted, so a call that raises leaves the sheet exactly
+        # as it found it -- a balloon carrying a spare nozzle no line reaches is
+        # a drawing changed by an error.
+        for port in (src, dst):
+            if port.stream is not None and not port.owner.has_another_port(port):
+                raise ValueError(
+                    f"port {port.owner.name}.{port.name} is already connected"
+                )
+        if src.stream is not None:
+            src = src.owner.another_port(src)
+        if dst.stream is not None:
+            dst = dst.owner.another_port(dst)
         if kind == "material" and src.role in _ENERGY_ROLES and dst.role in _ENERGY_ROLES:
             kind = "energy"
 

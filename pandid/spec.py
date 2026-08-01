@@ -616,6 +616,16 @@ def _read_port_order(unit: "unit_types.Block", entry: Any, where: str) -> None:
 
 
 def _find_port(unit: Unit, name: Any, where: str) -> Port:
+    # A balloon's signal connections are minted per line rather than declared,
+    # so the ones a spec names are exactly the ones the sheet it was written
+    # from had grown. Asking the instrument for them is what makes
+    # ``from_dict(to_dict(fs))`` rebuild a split-range loop; refusing them would
+    # make ``to_dict`` able to write a sheet its own reader could not read.
+    if isinstance(unit, Instrument) and isinstance(name, str) and name not in unit.ports:
+        try:
+            return unit.signal_port(name)
+        except KeyError:
+            pass
     if not isinstance(name, str) or name not in unit.ports:
         raise SpecError(
             f"{where}: {type(unit).__name__} {unit.name!r} has no port {name!r}"

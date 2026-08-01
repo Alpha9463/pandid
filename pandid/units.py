@@ -19,6 +19,7 @@ This module is also the public ``units`` namespace: ``from pandid import units``
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from collections.abc import Sequence
 from difflib import get_close_matches
@@ -131,6 +132,12 @@ class Unit:
     #: nozzle vocabularies depending on which class was constructed. See
     #: :mod:`pandid.devices`, which is where that happens and where it is
     #: argued.
+    #:
+    #: A dict on the class can only name nozzles the class knows about when it
+    #: is written, which is every nozzle but the ones :class:`Instrument` mints
+    #: per signal connection. :meth:`_symbol_anchor` is the reader, and it is
+    #: what that one class overrides; this stays the declaration for everything
+    #: whose list is fixed.
     PORT_ANCHORS: dict[str, str] = {}
 
     #: The layout engine's solver scratch, seeded from :attr:`pin_` at the start
@@ -446,6 +453,49 @@ class Unit:
         self.ports[name] = port
         setattr(self, name, port)
         return port
+
+    def has_another_port(self, port: "Port") -> bool:
+        """Whether this unit has a second connection like ``port`` to give.
+
+        False here, and so for every nozzle of every piece of equipment: a pump
+        has one suction, and a second line to it is a mistake in the drawing
+        rather than a request for another nozzle. The one class that answers
+        otherwise is :class:`Instrument`, whose signal connections are a pool,
+        and it is the whole of the exception.
+
+        The question is asked separately from :meth:`another_port`, which does
+        the taking, because :meth:`pandid.flowsheet.Flowsheet.connect` has two
+        ends to settle and must not mint on one of them for a call it is about
+        to refuse on the other: a balloon left carrying a nozzle no line reaches
+        is a drawing changed by an error, and the debug overlay draws it.
+        """
+        return False
+
+    def another_port(self, port: "Port") -> "Port":
+        """A second connection like ``port``. Only called where :meth:`has_another_port`.
+
+        ``port`` itself here, since nothing on this class has a second of
+        anything; overriding :meth:`has_another_port` without this would be a
+        unit that says it has more connections and then hands back the one that
+        is already spoken for.
+        """
+        return port
+
+    def _symbol_anchor(self, port_name: str) -> str:
+        """The name this unit's *symbol* anchors ``port_name`` under.
+
+        :attr:`PORT_ANCHORS` is the whole of the answer for every unit whose
+        nozzle list is fixed when the class is written, which is all but one of
+        them: the rename is a fact about the class and the class states it.
+        :class:`Instrument` overrides this because its signal connections are
+        minted per connection, so their names do not exist when the class is
+        written and no dict on the class could hold them.
+
+        :mod:`pandid.portgeom` asks through here and nowhere else, so a unit that
+        answers for a name the artwork never heard of lands its nozzle on drawn
+        ink rather than on the box-centre fallback.
+        """
+        return type(self).PORT_ANCHORS.get(port_name, port_name)
 
     def port(self, name: str) -> Port:
         try:
@@ -1310,6 +1360,13 @@ def split_tag(type: str, number: str | int = "") -> tuple[str, str]:
     return tag[:i], tag[i:]
 
 
+#: A minted member of one of :class:`Instrument`'s signal pools. Member one of
+#: each keeps the name it shipped under (``sig_out``) and the rest count on from
+#: two (``sig_out_2``), so the pattern is what tells a grown connection from a
+#: born one -- and from ``pv``, which is neither.
+_POOL_MEMBER = re.compile(r"(sig_in|sig_out)_\d+")
+
+
 class Instrument(Unit):
     """ISA-5.1 instrument balloon.
 
@@ -1322,7 +1379,18 @@ class Instrument(Unit):
 
     ``pv`` taps the process; ``sig_in``/``sig_out`` carry signals. All three are
     signal connections and take a signal ``kind``: an impulse line to a
-    transmitter is an instrument connection, not a process pipe. Variants:
+    transmitter is an instrument connection, not a process pipe.
+
+    ``sig_in`` and ``sig_out`` are **pools**, not single connections. Each hands
+    back a free one and mints another when they are all taken, so a balloon
+    takes as many signal lines as the loop needs and each is placed on whichever
+    face suits::
+
+        fs.connect(pic301.sig_out, cv1.actuator, kind="pneumatic")
+        fs.connect(pic301.sig_out, cv2.actuator, kind="pneumatic")   # split range
+
+    Naming the units instead lets the engine pick both ends:
+    ``fs.connect(ft305, fic305, kind="electric")``. Variants:
     ``"default"`` (field balloon), ``"panel"``, ``"aux"``, ``"shared"``
     (a circle in a square: shared display and shared control, which ISA-5.1 no
     longer reads as "DCS"),
@@ -1340,8 +1408,18 @@ class Instrument(Unit):
     sig_out: Port
 
     kind = "instrument"
+    # The three a balloon is born with, in the order everything downstream reads
+    # them in. ``sig_in`` and ``sig_out`` are the first member of their pool
+    # rather than the whole of it. They are declared here, and not minted lazily
+    # on first use, because ``ports`` is an ordered dict that
+    # :mod:`pandid.layout.faces` serves in order -- a balloon whose connections
+    # appeared in the order the author happened to reach for them would draw
+    # differently depending on which line was written first.
     PORTS = [("pv", "inlet", "signal"), ("sig_in", "inlet", "signal"),
              ("sig_out", "outlet", "signal")]
+
+    #: The two pools, and the name the first member of each ships under.
+    _SIGNAL_POOLS = ("sig_in", "sig_out")
 
     #: The variants that stand for a function rather than a device. A balloon is
     #: a thing (a transmitter in the field, a faceplate in the control room)
@@ -1370,6 +1448,156 @@ class Instrument(Unit):
         self.offset: float = 45.0
         self.angle: float = 90.0
         self.tap: tuple[float, float] | None = None   # resolved (set only by layout)
+
+    # ------------------------------------------------------------------
+    # The signal pools.
+    #
+    # A balloon used to have exactly one input and exactly one output, and that
+    # is not what a loop is. One controller drives two final elements on split
+    # range; a measurement feeds a high alarm and a low alarm, which ISO
+    # 15519-2 requires be drawn as separate lines rather than chained; an alarm
+    # that participates in a trip needs an input *and* an output of its own. All
+    # three are ordinary practice and none of them could be drawn.
+    #
+    # **Why a pool and not a declared count.** A count (``outputs=2``) has to be
+    # given before the connections are made, so it is a second statement of
+    # something the ``connect()`` calls already say, and the two can disagree:
+    # an author who declares two and wires three gets an error about a number
+    # rather than about the drawing, and one who declares three and wires two
+    # gets a balloon carrying a nozzle nothing reaches. Minting per connection
+    # cannot disagree with the connections, because it *is* them. It also means
+    # nothing already written has to be revisited: a balloon with one line each
+    # way has exactly the ports it always had, on exactly the anchors it always
+    # had, which is what keeps every issued sheet in this repository
+    # byte-identical across this change.
+    #
+    # **Why the members keep their shipped names.** ``sig_in`` and ``sig_out``
+    # are public and are all over the examples, so member one of each pool is
+    # spelled the way it always was and the rest count on from two.
+    #
+    # **Why they stay attributes and are not properties over the pool.** A
+    # property handing back a free member reads well at the call site and
+    # destroys the read-back. ``inst.sig_out.stream`` is how a caller asks what a
+    # balloon drives; once the first line is made, a property would answer with a
+    # *freshly minted* port whose stream is None, having grown a nozzle nothing
+    # reaches as a side effect of being looked at. Reading an object must not
+    # change it. So the pool is entered where a *connection* is made and not
+    # where an attribute is read: :meth:`pandid.flowsheet.Flowsheet.connect` asks
+    # for another member when the one it was handed is already wired, which is
+    # the split-range case stated the way an author states it --
+    #
+    #     fs.connect(pic.sig_out, cv1.actuator, kind="pneumatic")
+    #     fs.connect(pic.sig_out, cv2.actuator, kind="pneumatic")
+    #
+    # -- and leaves ``pic.sig_out`` meaning the first line for good.
+    #
+    # **Why signal ports carry no direction requirement.** ``Port.direction``
+    # was checked by ``Flowsheet.connect`` and read nowhere else in the package,
+    # and on a signal connection there was never anything for it to be true of:
+    # an alarm's one connection is an input on the sheet that feeds it and an
+    # output on the sheet that trips from it, and which it is on this sheet is
+    # simply which end of the line it took. So the guard is now a rule about
+    # process nozzles, where it does mean something -- fluid enters a nozzle or
+    # leaves it -- and direction on a signal port is *derived*, from
+    # ``Stream.source``/``Stream.dest``, which is exact because a port holds at
+    # most one stream.
+    #
+    # It is deliberately **not** a bidirectional "both" state that latches to
+    # the first use. There would be nothing for such a latch to refuse: every
+    # connection gets a port of its own, minted free, so no port is ever asked
+    # to be an input after it has been an output. The check would have been dead
+    # code on the day it was written, and a state nothing can reach is a
+    # statement about the design that the design does not make.
+    #
+    # **Why ``pv`` is not a pool.** An instrument taps one process point, and
+    # that edge is a different kind of thing from a line between two
+    # instruments: it is the impulse or capillary connection to the medium, and
+    # it is what :meth:`attach` places the balloon against. A differential
+    # instrument tapping two points is a real case and a known future one; it
+    # wants a *second named tap*, high and low, not an anonymous pool member, so
+    # nothing here is designed for it.
+    # ------------------------------------------------------------------
+
+    def has_another_port(self, port: Port) -> bool:
+        """True for a member of one of the signal pools, false for ``pv``.
+
+        A balloon taps one process point, so a second line to ``pv`` is the
+        mistake :meth:`Unit.has_another_port` describes and is refused as one.
+        """
+        return self._pool_of(port.name) is not None
+
+    def another_port(self, port: Port) -> Port:
+        """A free member of ``port``'s signal pool, minting one if all are taken.
+
+        Called by :meth:`pandid.flowsheet.Flowsheet.connect` on a connection that
+        is already spoken for, which is what makes two lines off one ``sig_out``
+        two lines rather than an error.
+        """
+        base = self._pool_of(port.name)
+        if base is None:
+            return port
+        members = [p for name, p in self.ports.items() if self._pool_of(name) == base]
+        for member in members:
+            if member.stream is None:
+                return member
+        # Numbered from the members present rather than from a running count, so
+        # a sheet rebuilt from a spec that named ``sig_out_2`` and ``sig_out_4``
+        # numbers its next one 5 and does not collide with 4. The loop is what
+        # makes that true when the named ones left a gap.
+        n = len(members) + 1
+        while f"{base}_{n}" in self.ports:
+            n += 1
+        return self._add_port(f"{base}_{n}", members[0].direction, "signal")
+
+    def signal_port(self, name: str) -> Port:
+        """The signal connection called ``name``, minting it if it is not there.
+
+        The way to reach a pool member the balloon has not grown yet
+        (``pic.signal_port("sig_out_2")``), which is what
+        :func:`pandid.spec.from_dict` needs to rebuild a sheet a pool was used
+        on. An existing port of any name comes back unchanged, so this is
+        :meth:`~Unit.port` for everything but a pool member that is missing.
+        """
+        if name in self.ports:
+            return self.ports[name]
+        member = _POOL_MEMBER.fullmatch(name)
+        if member is None:
+            raise KeyError(
+                f"{type(self).__name__!r} has no port named {name!r} and mints none "
+                f"under that name; its signal pools are "
+                f"{', '.join(f'{base}, {base}_2, {base}_3' for base in self._SIGNAL_POOLS)}"
+            )
+        return self._add_port(name, self.ports[member.group(1)].direction, "signal")
+
+    @classmethod
+    def _pool_of(cls, port_name: str) -> str | None:
+        """The pool ``port_name`` belongs to, or None for a nozzle that is unique.
+
+        Member one keeps the name it shipped under and the rest count on from
+        two, so this is the one rule that tells ``sig_out`` and ``sig_out_2``
+        apart from ``pv``, and everything about the pools reads it.
+        """
+        if port_name in cls._SIGNAL_POOLS:
+            return port_name
+        member = _POOL_MEMBER.fullmatch(port_name)
+        return member.group(1) if member else None
+
+    def _symbol_anchor(self, port_name: str) -> str:
+        """Every pool member is drawn on the nozzle its pool's first one is.
+
+        A balloon is a circle and its signal connections are declared
+        ``faceless`` (:attr:`pandid.render.symbols.Symbol.faceless_ports`), which
+        is exactly the statement that they all share one menu of four faces and
+        none of them owns one. So a minted member wants the menu ``sig_out``
+        already has, and asking the artwork for it by rule is what saves the
+        registry from having to anchor a name it cannot know.
+
+        Which of those four faces a member actually lands on is
+        :mod:`pandid.layout.faces`' answer, port by port, against where each
+        peer ended up, and it already refuses to put two live connections on one
+        point.
+        """
+        return self._pool_of(port_name) or super()._symbol_anchor(port_name)
 
     @property
     def tag(self) -> str:
