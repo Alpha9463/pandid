@@ -171,6 +171,7 @@ from typing import NamedTuple, TYPE_CHECKING
 
 from pandid.portgeom import port_point, unit_box
 from pandid.render import furniture as F
+from pandid.render import generator
 from pandid.render import svg as _svg
 from pandid.render.svg import (_DIAMOND_BALLOONS, _furniture_name, _scale_text, _too_small,
                                _SIGNAL_DASH, _PROCESS_STROKE,
@@ -698,7 +699,12 @@ class DrawioRenderer:
         page = hashlib.sha256(fs.name.encode("utf-8")).hexdigest()[:16]
         return "\n".join([
             '<?xml version="1.0" encoding="UTF-8"?>',
-            '<mxfile host="pandid" agent="pandid" type="device">',
+            # ``agent`` is where draw.io writes the user-agent string of
+            # whatever produced the file, so it is where the version belongs;
+            # ``host`` stays the bare application name, which is what it names.
+            # A bare ``agent="pandid"`` could not tell 0.1.0 output from 0.1.2
+            # output, which is the whole complaint.
+            f'<mxfile host="pandid" agent={_attr(generator())} type="device">',
             f'  <diagram id="pandid-{page}" name={_attr(fs.name)}>',
             '    <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" '
             f'tooltips="1" connect="1" arrows="1" fold="1" {paper} '

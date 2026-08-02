@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="590" height="390" viewBox="-25.0 45.0 590.0 390.0">
+  <title>Manual Override Example</title>
+  <!-- pandid:provenance -->
+  <!-- /pandid:provenance -->
   <!-- Background -->
   <rect x="-25.0" y="45.0" width="590.0" height="390.0" fill="white" />
   <defs>

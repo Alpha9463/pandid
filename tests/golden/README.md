@@ -57,12 +57,26 @@ it out" rule for anything that varies run to run. `10` and `11` state their own
 dates, so those two need no pinning.
 
 Comparisons run on *normalized* text (see `_normalize` in `test_golden.py`),
-which canonicalizes `<defs>` ordering: `SvgRenderer._defs()` builds its
-marker/symbol defs from Python `set`s (`used_colors`, `used_symbols`), so
-their emitted order depends on the process's string-hash seed, not on
-anything about the diagram, confirmed by rendering the same flowsheet under
-several `PYTHONHASHSEED` values and diffing. Every other line compares
-verbatim, so a real rendering regression still fails the test.
+which canonicalizes two things and leaves every other line to compare verbatim,
+so a real rendering regression still fails the test.
+
+**`<defs>` ordering.** `SvgRenderer._defs()` builds its marker/symbol defs from
+Python `set`s (`used_colors`, `used_symbols`), so their emitted order depends on
+the process's string-hash seed, not on anything about the diagram — confirmed by
+rendering the same flowsheet under several `PYTHONHASHSEED` values and diffing.
+
+**The provenance block.** Every rendered sheet says what drew it, version
+included. Left alone, bumping `pandid.__version__` would rewrite all fourteen
+fixtures for a reason that is about none of the drawings, and cutting a release
+would be a diff of every artefact in the repository. The renderer therefore
+fences the block between `<!-- pandid:provenance -->` and
+`<!-- /pandid:provenance -->`, and `_normalize` drops what lies between them — a
+slice between two known lines, not a version pattern hunted across the document.
+That is why the committed fixtures show the two fence comments with nothing in
+between: they are stored normalized, so `git grep` finds no version number here.
+The `<title>` above the fence is *not* dropped; it carries the sheet's own name
+and no version, so it compares like any other line.
+`test_a_version_bump_does_not_move_a_fixture` holds all of that to being true.
 
 ## Regenerating
 

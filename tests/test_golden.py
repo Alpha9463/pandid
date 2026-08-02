@@ -31,6 +31,7 @@ from pandid.document import (
     notes,
 )
 from pandid.portgeom import port_offset, resolve_size
+from pandid.render.svg import PROVENANCE_CLOSE, PROVENANCE_OPEN
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
 UPDATE = os.environ.get("PANDID_UPDATE_GOLDEN") == "1"
@@ -2078,22 +2079,41 @@ SCENARIOS = {
 
 
 def _normalize(svg: str) -> str:
-    """Canonicalize ordering the renderer itself does not guarantee.
+    """Canonicalize what the renderer does not promise to hold still.
 
-    ``SvgRenderer._defs()`` builds its marker/symbol defs from Python ``set``s
-    (``used_colors``, ``used_symbols``), so their order in the output depends
-    on the process's string-hash seed, not on anything about the diagram --
-    confirmed by rendering one flowsheet under several ``PYTHONHASHSEED``
-    values and diffing the result. Sorting each group canonicalizes that away
-    so two renders of an identical flowsheet always compare equal; every other
-    line is left untouched so a real regression still shows up.
+    Two things, and nothing else. Every other line is left untouched so a real
+    regression still shows up.
+
+    **Defs ordering.** ``SvgRenderer._defs()`` builds its marker/symbol defs
+    from Python ``set``s (``used_colors``, ``used_symbols``), so their order in
+    the output depends on the process's string-hash seed, not on anything about
+    the diagram -- confirmed by rendering one flowsheet under several
+    ``PYTHONHASHSEED`` values and diffing the result. Sorting each group
+    canonicalizes that away so two renders of an identical flowsheet always
+    compare equal.
+
+    **The provenance block.** Every sheet says what drew it, version included,
+    which means every release would otherwise rewrite all fourteen fixtures --
+    and the gallery with them -- for a reason that is not about any drawing. The
+    contents of the block are dropped here, which is why the renderer fences it
+    between two marker comments: this is a slice between two known lines, not a
+    version pattern hunted across the document. The fences themselves are kept,
+    so a fixture still records that the block exists and where it sits, and
+    ``<title>`` is deliberately outside them -- it is the sheet's own name and
+    carries no version, so it stays in the comparison.
     """
     lines = svg.split("\n")
+    open_i = next((i for i, ln in enumerate(lines) if ln.strip() == PROVENANCE_OPEN.strip()), None)
+    close_i = next(
+        (i for i, ln in enumerate(lines) if ln.strip() == PROVENANCE_CLOSE.strip()), None
+    )
+    if open_i is not None and close_i is not None and close_i > open_i:
+        del lines[open_i + 1 : close_i]
     try:
         start = next(i for i, ln in enumerate(lines) if ln.strip() == "<defs>")
         end = next(i for i, ln in enumerate(lines) if ln.strip() == "</defs>")
     except StopIteration:
-        return svg
+        return "\n".join(lines)  # no defs to sort; the provenance edit still stands
     body = lines[start + 1 : end]
     markers = []
     j = 0
@@ -2145,6 +2165,34 @@ def test_golden_svg(name):
     fs = build()
     svg = fs.to_svg(**kwargs)
     _check_golden(name, svg)
+
+
+def test_a_version_bump_does_not_move_a_fixture(monkeypatch):
+    """Cutting a release must not be a diff of every artefact in the repo.
+
+    Every sheet now says what drew it, version included, so without
+    :func:`_normalize`'s rule a one-line change to ``pandid.__version__`` would
+    rewrite all fourteen fixtures for a reason that is about none of the
+    drawings. This is that rule, checked rather than asserted in a comment.
+
+    Three claims, and the first is what stops the other two being vacuous: the
+    version really is in the file, so the raw renders differ; normalized they
+    are the same text; and the fixture on disk still passes at a version it was
+    never generated under. One scenario is enough -- the block is emitted
+    identically for every sheet -- and a furnished one is used so the ``<title>``
+    and ``dc:title`` that sit either side of the fence are both in play.
+    """
+    import pandid
+
+    name = "03_distillation_train"
+    build, kwargs = SCENARIOS[name]
+    at_this_version = build().to_svg(**kwargs)
+    monkeypatch.setattr(pandid, "__version__", "99.99.99")
+    at_another = build().to_svg(**kwargs)
+
+    assert at_this_version != at_another, "the version is not in the rendered file at all"
+    assert _normalize(at_this_version) == _normalize(at_another)
+    _check_golden(name, at_another)
 
 
 def test_the_fractionator_schedules_only_equipment_that_exists():

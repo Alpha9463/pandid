@@ -9,6 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Every rendered file says what drew it.** An SVG opened straight into
+  `<!-- Background -->` and said nothing about its origin; a draw.io export said
+  `agent="pandid"` with no version, so a reader could not tell 0.1.0 output from
+  0.1.2 output. Both now carry the package and the version that produced them.
+
+  An SVG gets, as the first children of `<svg>`, a `<title>` holding the sheet's
+  own name — the title block's title if it has one, the flowsheet's name
+  otherwise — followed by a generator comment and an RDF `<metadata>` block with
+  `dc:creator` and `dc:title`. `<title>` earns its place twice: it is what a
+  browser shows as a tooltip and what a screen reader announces as the
+  document's name. A draw.io export puts the version in `agent`, which is the
+  attribute draw.io itself writes a producer string into, and leaves `host` the
+  bare application name.
+
+  Openly, in a comment and a metadata element, and not as a hidden mark. Both
+  formats are plain text, so concealment buys nothing a comment does not; one
+  edit removes it, so its absence would prove nothing; and an invisible string in
+  a controlled engineering document surfaces on select-all-copy and in any text
+  extractor, into a deliverable nobody chose to put it in.
+
+  Bumping the version does not move the golden fixtures. `_normalize` in
+  `tests/test_golden.py` drops the block, which is fenced between two marker
+  comments so that dropping it is a slice between two known lines rather than a
+  version pattern hunted across the document. `docs/gallery/` and
+  `drawio-samples/` are committed *rendered* output and do carry the version, so
+  a release regenerates them; `CONTRIBUTING.md` says so under Releasing.
+
 - **Every unit class is on the package.** `from pandid import Separator, Pump,
   Flowsheet` works, alongside the device classes that have been importable that
   way since the layer landed. `units.Separator` beside a bare `Cyclone` was two
