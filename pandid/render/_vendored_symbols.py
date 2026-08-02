@@ -350,20 +350,22 @@ def register_vendored(registry):
     registry.register('tank', Symbol(
         svg='<g id="sym_tank"><rect x="0.0" y="25.46" width="100.0" height="70.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 25.46 A 75.0 75.0 0.0 0 1 100.0 25.46 Z" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=95.5,
-        ports={'inlet': (50.0, 6.4), 'outlet': (50.0, 95.5), 'vent': (35.0, 7.9), 'relief': (65.0, 7.9), 'drain': (20.0, 95.5)},
+        ports={'inlet': (0.0, 85.0), 'outlet': (50.0, 95.5), 'vent': (35.0, 7.9), 'relief': (65.0, 7.9), 'drain': (20.0, 95.5)},
         drawio_shape='mxgraph.pid.vessels.tank_(dished_roof)',
         # must not be turned: dished roof over a free surface, draw at the floor
         gravity_fixed=True,
+        port_faces={'inlet': {'W': (0.0, 85.0), 'E': (100.0, 85.0), 'N': (50.0, 6.4)}},
     ), 'default')
 
     # draw.io vessels:Tank (Conical Roof) (aspect=variable) -> tank/conical
     registry.register('tank', Symbol(
         svg='<g id="sym_tank_conical"><path d="M 0.0 20.0 L 0.0 90.0 L 100.0 90.0 L 100.0 20.0 L 50.0 0.0 Z M 0.0 20.0 L 100.0 20.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=90.0,
-        ports={'inlet': (50.0, 0.0), 'outlet': (50.0, 90.0), 'vent': (25.0, 10.0), 'relief': (75.0, 10.0), 'drain': (20.0, 90.0)},
+        ports={'inlet': (0.0, 80.0), 'outlet': (50.0, 90.0), 'vent': (25.0, 10.0), 'relief': (75.0, 10.0), 'drain': (20.0, 90.0)},
         drawio_shape='mxgraph.pid.vessels.tank_(conical_roof)',
         # must not be turned: conical roof over a free surface, draw at the floor
         gravity_fixed=True,
+        port_faces={'inlet': {'W': (0.0, 80.0), 'E': (100.0, 80.0), 'N': (50.0, 0.0)}},
     ), 'conical')
 
     # draw.io piping:Concentric Reducer (aspect=variable) -> reducer/default
@@ -909,10 +911,11 @@ def register_vendored(registry):
     registry.register('tank', Symbol(
         svg='<g id="sym_tank_floating_roof"><path d="M 0.0 0.0 L 0.0 70.0 L 100.0 70.0 L 100.0 0.0 M 5.0 0.0 L 5.0 5.0 L 95.0 5.0 L 95.0 0.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=70.0,
-        ports={'inlet': (30.0, 5.0), 'outlet': (50.0, 70.0), 'vent': (15.0, 5.0), 'relief': (45.0, 5.0), 'drain': (20.0, 70.0)},
+        ports={'inlet': (0.0, 60.0), 'outlet': (50.0, 70.0), 'vent': (15.0, 5.0), 'relief': (45.0, 5.0), 'drain': (20.0, 70.0)},
         drawio_shape='mxgraph.pid.vessels.tank_(floating_roof)',
         # must not be turned: the roof floats on the liquid
         gravity_fixed=True,
+        port_faces={'inlet': {'W': (0.0, 60.0), 'E': (100.0, 60.0)}},
     ), 'floating_roof')
 
     # draw.io vessels:Storage Sphere (aspect=variable) -> tank/sphere
@@ -934,6 +937,7 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.vessels.tank_(conical_bottom)',
         # must not be turned: flat roof over a free surface, drains to the cone apex
         gravity_fixed=True,
+        port_faces={'inlet': {'N': (50.0, 0.0), 'W': (0.0, 60.0), 'E': (100.0, 60.0)}},
     ), 'conical_bottom')
 
     # draw.io vessels:Tank (Conical Roof and Bottom) (aspect=variable) -> tank/conical_ends
@@ -944,6 +948,7 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.vessels.tank_(conical_roof_and_bottom)',
         # must not be turned: conical roof over a free surface, drains to the cone apex
         gravity_fixed=True,
+        port_faces={'inlet': {'N': (51.0, 0.0), 'W': (1.0, 110.0), 'E': (101.0, 110.0)}},
     ), 'conical_ends')
 
     # draw.io vessels:Tank (Dished Roof, Conical Bottom) (aspect=variable) -> tank/dished_roof_conical_bottom
@@ -954,6 +959,7 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.vessels.tank_(dished_roof,_conical_bottom)',
         # must not be turned: dished roof over a free surface, drains to the cone apex
         gravity_fixed=True,
+        port_faces={'inlet': {'N': (50.0, 6.4), 'W': (0.0, 85.0), 'E': (100.0, 85.0)}},
     ), 'dished_roof_conical_bottom')
 
     # draw.io vessels:Reactor (aspect=variable) -> reactor/plain

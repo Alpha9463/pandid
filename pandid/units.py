@@ -1225,6 +1225,50 @@ class Tank(Unit):
     declaring all four would tell a checker a flash drum has an overflow. Here
     every variant has all five and the question is only whether a particular
     plant piped them.
+
+    **Where a tank fills** is a menu and not a fixture, which is issue #226.
+    Until 0.1.2 every variant's ``inlet`` was fixed on the crown, so no sheet
+    could draw a bottom-filled tank at all: ``examples/14`` top-filled both its
+    atmospheric tanks because the symbol left no choice, and one of them is a
+    *floating roof*, where the plate the fill landed on rides on the liquid.
+
+    Splash-filling a flammable liquid into a vapour space generates static, so
+    bottom entry -- or a fill pipe carried down to the floor -- is the ordinary
+    arrangement for motor spirit or ethanol, and a fill drawn onto the crown
+    with nothing said about a downcomer reads as the splash fill. **None of the
+    three documents on disk covers tank filling, static or downcomers**, so that
+    is ordinary practice and is claimed as nothing more; contrast the relief
+    above, which CHEE4001 p.7 places outright.
+
+    So the four flat-floored variants -- ``default``, ``conical``,
+    ``floating_roof`` and the sphere -- anchor the fill low on the shell, and
+    the three hopper-bottomed ones keep the crown, because a hopper is the
+    drawing for solids or a slurry and a silo is filled over the top. Every
+    variant offers both, and moving between them is the same
+    :meth:`~Unit.nozzle` call every other unit takes::
+
+        tk = Tank("TK-602")                 # fills low on the shell
+        tk.nozzle("inlet", "N")             # ...through a crown downcomer
+
+    No new keyword, deliberately. "This tank is bottom-filled" and "pipe this
+    nozzle from the west" are the same sentence, and ``nozzle()`` is the one an
+    engineer already types for a drum, a column and a pump. A ``fill=`` argument
+    would be a second spelling of it on one class, and would then owe the draw,
+    the drain and the vent one each.
+
+    ``floating_roof`` is the one variant offering no crown placement at all, and
+    that is a fact about the drawing rather than a default: a floating roof
+    rides on the liquid, so there is no fixed roof to weld a nozzle to and
+    ``nozzle("inlet", "N")`` raises rather than drawing a pipe joined to a
+    moving deck. The sphere is the other end of the same argument -- its crown
+    carries two drawn nozzles and both are spoken for; see #225 and the block in
+    ``scripts/vendor_symbols.py``.
+
+    A tank with no ``nozzle()`` call still gets its face chosen by layout, from
+    where the peer landed (:mod:`pandid.layout.faces`), exactly as a drum's
+    inlet has always been. The anchor above is what an unconstrained tank falls
+    back to and what the menu is ordered by; a sheet that has *decided* how a
+    tank fills says so, which is what naming a face is for.
     """
 
     inlet: Port

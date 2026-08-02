@@ -325,6 +325,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A tank's fill is a menu, and its default moved to the shell (#226).** Every
+  `Tank` variant fixed `inlet` on the crown, so no sheet could draw a
+  bottom-filled tank at all. Splash-filling a flammable liquid into a vapour
+  space generates static, so bottom entry is the ordinary arrangement for motor
+  spirit or ethanol — none of the three documents on disk covers tank filling,
+  static or downcomers, so that is claimed as ordinary practice and nothing
+  more. The four flat-floored variants (`default`, `conical`, `floating_roof`,
+  `sphere`) now anchor the fill low on the shell and the three hopper-bottomed
+  ones keep the crown, since a silo is filled over the top.
+
+  Both are reachable on every variant through the `nozzle()` call every other
+  unit already takes — `tk.nozzle("inlet", "N")` is the top nozzle with an
+  internal downcomer — with one exception that is a fact rather than a default:
+  `floating_roof` offers no crown placement, because a floating roof rides on
+  the liquid and there is no fixed roof to weld a nozzle to.
+  `examples/14_tank_farm`'s `TK-601` had its motor spirit landing on that
+  moving deck; it now takes it on the shell, and `TK-602` asks for the crown by
+  name and says so in the notes.
+
 ### Deprecated
 
 - **`Valve(variant="pneumatic")` (#136).** Use `Valve(variant="control")`, or

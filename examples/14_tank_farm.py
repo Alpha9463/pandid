@@ -50,22 +50,24 @@ gravity is a functionality", which "must not be turned". Boundary flags sit on
 the east or west edge, which is CHEE4001 p.2's preference "to show off-page
 connectors horizontally and at the edge of a P&ID".
 
-**Two symbol defects constrain this sheet**, and it is drawn around them
-rather than working against them:
+**How the three vessels are filled**, since each is filled differently and none
+of it is a default. ``TK-601``'s roof floats on the liquid, so there is no fixed
+roof to weld a nozzle to and the receipt lands on the shell. ``TK-602`` takes
+its ethanol over the top through an internal downcomer carried to the floor,
+which is what the crown nozzle is asked for by name and what the notes say.
+``V-603`` fills low on the shell and draws from the nozzle drawn under its
+belly, its crown left to the relief and the vapour connection.
 
-- #226 -- ``Tank``'s inlet is fixed on the crown, so ``TK-601`` and ``TK-602``
-  are top-filled because the symbol leaves no choice, not because a flammable
-  should be splash-filled.
-- #222 -- ``Tank`` has a fill and a draw and no third nozzle, so ``TK-602``'s
-  own conservation vent and ``V-603``'s fire-case relief are left off rather
-  than hung where they do not belong. CHEE4001 p.8 names the second duty
-  exactly, for "protection against exposure of a pressure vessel to fire ...
-  usually the case with storage vessels for non-refrigerated liquefied
-  compressible gases at ambient temperatures".
+Every vessel here carries five nozzles and none of them is piped for all five: a
+declared nozzle is offered rather than asserted, so ``TK-602``'s conservation
+vent and ``V-603``'s fire-case relief are drawings this sheet does not make.
+CHEE4001 p.8 names the second duty exactly, for "protection against exposure of
+a pressure vessel to fire ... usually the case with storage vessels for
+non-refrigerated liquefied compressible gases at ambient temperatures".
 
 Nothing in ISO 15519-1, ISO 15519-2 or the CHEE4001 guidelines covers flame
-arrestors, conservation vents, floating roofs or tank venting at all, so those
-choices are engineering and are attributed to nothing.
+arrestors, conservation vents, floating roofs, tank venting or tank filling at
+all, so those choices are engineering and are attributed to nothing.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -95,8 +97,8 @@ def main():
     blend_flow = fs.add_loop("F")    # F-605, ethanol blend ratio
 
     # --- Storage ---------------------------------------------------------
-    # label_pos="center" on all three: the fill line arrives on the crown, so a
-    # tag written above the tank would be written across that drop.
+    # label_pos="center" on all three: each carries a vent, a relief or a fill on
+    # the crown, and a tag written above the tank would be written across them.
     tk601 = fs.add(Tank("TK-601", variant="floating_roof", width=190, height=140,
                         label_pos="center", description="Motor Spirit Storage Tank"))
     tk602 = fs.add(Tank("TK-602", width=180, height=150, label_pos="center",
@@ -195,7 +197,13 @@ def main():
     tk602.pin(x=680, y=205)
     v603.pin(x=1090, y=180)
 
-    ms_fill_x = 360 + port_offset(tk601, "inlet")[0]
+    # TK-602 is the only one of the three filled over the top, and it says so:
+    # the crown is an alternate on a fixed-roof tank and the shell is the
+    # default, so a sheet that wants the downcomer arrangement asks for it.
+    tk602.nozzle("inlet", "N")
+
+    ms_drop_x = 340.0
+    ms_fill_y = 215 + port_offset(tk601, "inlet")[1]
     ms_draw_x = 360 + port_offset(tk601, "outlet")[0]
     eth_fill_x = 680 + port_offset(tk602, "inlet")[0]
     eth_draw_x = 680 + port_offset(tk602, "outlet")[0]
@@ -280,7 +288,8 @@ def main():
     # --- Process lines ---------------------------------------------------
     fs.connect(ms_in.outlet, xv601.inlet, service="MS", sequence=601, size=200,
                schedule=40, spec="CS")
-    fs.connect(xv601.outlet, tk601.inlet).via([(ms_fill_x, ms_recv_y)])
+    fs.connect(xv601.outlet, tk601.inlet).via(
+        [(ms_drop_x, ms_recv_y), (ms_drop_x, ms_fill_y)])
     fs.connect(eth_in.outlet, xv602.inlet, service="ETH", sequence=602, size=150,
                schedule=40, spec="SS")
     fs.connect(xv602.outlet, tk602.inlet).via([(eth_fill_x, eth_recv_y)])
@@ -344,7 +353,7 @@ def main():
     # represented outside the PCI symbol" -- and pandid cannot yet write a code
     # string beside a balloon (#137, #169), so they are left off rather than
     # drawn as balloons that would compete with the trip below.
-    lt601 = fs.add_instrument("LT", ms_level, on=tk601, at="W", offset=40)
+    lt601 = fs.add_instrument("LT", ms_level, on=tk601, at="W", offset=62)
     fs.add_instrument("LI", ms_level, on=lt601, at="S", offset=50, variant="shared")
     lt602 = fs.add_instrument("LT", eth_level, on=tk602, at="W", offset=32)
     fs.add_instrument("LI", eth_level, on=lt602, at="S", offset=50, variant="shared")
@@ -440,6 +449,7 @@ def main():
         "FA-601 is deflagration rated; FA-602, on the rack return, is detonation",
         "rated. VT-601 is the vapour system's only opening to atmosphere.",
         "SB-601 gives TK-602 positive isolation from the blend header.",
+        "TK-602 is filled through an internal downcomer carried to the floor.",
         # Stands in for a mark the sheet cannot yet draw; delete it when #223
         # lands and fail="closed" goes back on XV-601 and XV-602.
         "XV-601 and XV-602 fail closed.",

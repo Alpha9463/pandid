@@ -1775,7 +1775,10 @@ def _tank_farm() -> Flowsheet:
     tk602.pin(x=680, y=205)
     v603.pin(x=1090, y=180)
 
-    ms_fill_x = 360 + port_offset(tk601, "inlet")[0]
+    tk602.nozzle("inlet", "N")
+
+    ms_drop_x = 340.0
+    ms_fill_y = 215 + port_offset(tk601, "inlet")[1]
     ms_draw_x = 360 + port_offset(tk601, "outlet")[0]
     eth_fill_x = 680 + port_offset(tk602, "inlet")[0]
     eth_draw_x = 680 + port_offset(tk602, "outlet")[0]
@@ -1848,7 +1851,7 @@ def _tank_farm() -> Flowsheet:
     fs.connect(
         ms_in.outlet, xv601.inlet, service="MS", sequence=601, size=200, schedule=40, spec="CS"
     )
-    fs.connect(xv601.outlet, tk601.inlet).via([(ms_fill_x, ms_recv_y)])
+    fs.connect(xv601.outlet, tk601.inlet).via([(ms_drop_x, ms_recv_y), (ms_drop_x, ms_fill_y)])
     fs.connect(
         eth_in.outlet, xv602.inlet, service="ETH", sequence=602, size=150, schedule=40, spec="SS"
     )
@@ -1917,7 +1920,7 @@ def _tank_farm() -> Flowsheet:
     )
     fs.connect(fa601.outlet, vt601.inlet)
 
-    lt601 = fs.add_instrument("LT", ms_level, on=tk601, at="W", offset=40)
+    lt601 = fs.add_instrument("LT", ms_level, on=tk601, at="W", offset=62)
     fs.add_instrument("LI", ms_level, on=lt601, at="S", offset=50, variant="shared")
     lt602 = fs.add_instrument("LT", eth_level, on=tk602, at="W", offset=32)
     fs.add_instrument("LI", eth_level, on=lt602, at="S", offset=50, variant="shared")
@@ -1999,6 +2002,7 @@ def _tank_farm() -> Flowsheet:
                 "FA-601 is deflagration rated; FA-602, on the rack return, is detonation",
                 "rated. VT-601 is the vapour system's only opening to atmosphere.",
                 "SB-601 gives TK-602 positive isolation from the blend header.",
+                "TK-602 is filled through an internal downcomer carried to the floor.",
                 "XV-601 and XV-602 fail closed.",
             ],
             title="GENERAL NOTES",
