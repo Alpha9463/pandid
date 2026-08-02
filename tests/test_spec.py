@@ -202,6 +202,37 @@ def test_a_column_or_reactor_feed_count_round_trips():
     assert "n_feeds" not in written["R-1"]
 
 
+@pytest.mark.parametrize("kind", ["Vessel", "Tank"])
+def test_a_vessels_relief_and_drain_need_no_key_of_their_own(kind):
+    """The spec carries #222's nozzles by carrying nothing.
+
+    This is the round trip the design was partly chosen for. A counted family
+    or a set of constructor flags would each have needed a new key here, a new
+    entry in the ``_UNIT_KWARGS`` table that says which classes accept it, and
+    a rule for when it is written out and when it is left off -- the three
+    things ``n_feeds`` above costs. A port set that follows from the class
+    follows from ``kind:``, which the spec already writes, so a sheet drawn
+    against a relief connection round-trips with no format change at all.
+    """
+    fs = Flowsheet.from_dict(
+        {
+            "name": "T",
+            "units": [
+                {"kind": kind, "name": "V-1", "variant": "sphere" if kind == "Tank" else "legs"},
+                {"kind": "Product", "name": "Flare"},
+                {"kind": "Product", "name": "Sump"},
+            ],
+            "streams": [
+                {"from": ["V-1", "relief"], "to": ["Flare", "inlet"]},
+                {"from": ["V-1", "drain"], "to": ["Sump", "inlet"]},
+            ],
+        }
+    )
+    written = {u["name"]: u for u in fs.to_dict()["units"]}["V-1"]
+    assert set(written) == {"kind", "name", "variant"}
+    assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
+
+
 def test_a_feed_count_on_a_kind_with_no_feed_family_is_rejected():
     with pytest.raises(SpecError) as excinfo:
         Flowsheet.from_dict({"name": "T", "units": [{"kind": "Pump", "name": "P-1", "n_feeds": 2}]})

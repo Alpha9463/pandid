@@ -430,6 +430,26 @@ def test_a_block_is_caught_though_its_symbol_has_no_series():
     assert "Reaction.out_2 carries no stream" in issues[1].message
 
 
+@pytest.mark.parametrize("cls", [U.Vessel, U.Tank], ids=["Vessel", "Tank"])
+def test_a_vessels_spare_relief_and_drain_are_not_reported(cls):
+    """The other half of "only counted nozzles", on the case #222 added.
+
+    A vessel and a tank each carry five connections and a sheet typically pipes
+    two. Those three are *offered* -- CHEE4001 p.7 says where a relief goes, not
+    that one must be drawn -- exactly as a vessel's ``vent`` has been offered
+    since 0.1.0 and is one of the 7 unpiped vents this finding was measured
+    against. Had #222 answered with a count instead (``Tank(outlets=3)``) every
+    one of them would report here, which is the concrete cost of the API this
+    file's rule would have made the wrong one.
+    """
+    fs = Flowsheet("holdup")
+    u = fs.add(cls("V-1"))
+    fs.connect(fs.add(U.Feed("F")).outlet, u.inlet)
+    fs.connect(u.outlet, fs.add(U.Product("P")).inlet)
+    assert _unpiped(fs) == []
+    assert [n for n in u.ports if u.ports[n].stream is None] == ["vent", "relief", "drain"]
+
+
 def test_a_column_counts_its_feeds():
     fs = Flowsheet("col")
     col = fs.add(U.Column("T-1", n_feeds=3))

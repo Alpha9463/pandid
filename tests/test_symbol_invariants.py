@@ -714,6 +714,102 @@ def test_signal_ports_stay_on_the_outline_at_any_box_shape(entry, odd_box_sheets
             )
 
 
+# ---------------------------------------------------------------------------
+# A vessel's and a tank's five nozzles, on every drawing that has to carry them
+# (#222).
+#
+# The generic invariants above hold every symbol to its OWN port map: what it
+# anchors has to land on ink and no two of them may coincide. Neither notices a
+# symbol that anchors too FEW, because a symbol has no idea which class draws
+# it. That gap is the whole risk in adding a nozzle to a class with seventeen
+# drawings: a port the artwork never anchored falls back to the centre of the
+# box (``portgeom._drawn_placements``), where every other unanchored port lands
+# too, and the sheet draws two streams on one point without raising anything.
+#
+# So this reads the class's PORTS and asks the drawing, one variant at a time.
+# It is the check that would have caught the same class of defect as #225 --
+# ports and drawn nozzles drifting apart -- one commit earlier than the sheet.
+# ---------------------------------------------------------------------------
+
+_HOLDUP = [(units.Vessel, "vessel"), (units.Tank, "tank")]
+
+#: (kind, variant, port) -> the face the nozzle comes out of at the SYMBOL's own
+#: box, for the two nozzles that do not take the face their role asks for.
+#:
+#: Both are the same fact about the same stencil pair: ``vessel/legs`` and
+#: ``vessel/skirted`` are 122.69 tall over a vessel that ends at 95.38, so the
+#: bottom head's crown is nearer a side wall (20) than the box's floor (27.3)
+#: and ``outward_dir`` reads it as west. The drain is on the vessel's low point
+#: regardless, which is where the pipe leaves from; moving it to win a face
+#: would put it on a leg. Recorded rather than tolerated silently -- a third
+#: entry appearing here is a stencil that needs looking at, and #225 is the
+#: change that gives a supported vessel its face back.
+_DRAIN_FACES_SIDEWAYS = {
+    ("vessel", "legs", "drain"): "W",
+    ("vessel", "skirted", "drain"): "W",
+}
+
+#: The face each role asks for, by what the role means. ``inlet`` and ``outlet``
+#: are absent: where the process pair goes is the stencil's business (a vessel
+#: is piped side to side, a tank top to bottom) and this is a rule about the
+#: three that are positioned by duty.
+_ROLE_FACE = {"vent": "N", "relief": "N", "drain": "S"}
+
+
+@pytest.mark.parametrize(
+    "cls,kind,variant",
+    [(cls, kind, v) for cls, kind in _HOLDUP for v in sorted(default_registry.variants(kind))],
+    ids=[f"{kind}/{v}" for _, kind in _HOLDUP for v in sorted(default_registry.variants(kind))],
+)
+def test_every_holdup_variant_anchors_every_nozzle_its_class_declares(cls, kind, variant):
+    """No fallback to the centre of the box, on any of the seventeen."""
+    from pandid.portgeom import is_anchored
+
+    unit = cls("X-1", variant=variant)
+    for name in unit.ports:
+        assert is_anchored(unit, name), (
+            f"{kind}/{variant} does not anchor {name!r}, so it falls back to the "
+            f"centre of the box and shares that point with every other one that does"
+        )
+
+
+@pytest.mark.parametrize(
+    "cls,kind,variant",
+    [(cls, kind, v) for cls, kind in _HOLDUP for v in sorted(default_registry.variants(kind))],
+    ids=[f"{kind}/{v}" for _, kind in _HOLDUP for v in sorted(default_registry.variants(kind))],
+)
+def test_a_relief_is_on_the_crown_and_a_drain_at_the_low_point(cls, kind, variant):
+    """The position is the role, so it is the position that is checked.
+
+    CHEE4001 p.7 is the citable half: "The PSV should be placed, whenever
+    possible, directly on the system to be protected, vertically, upward, and at
+    the top of the container." A relief drawn on the floor is not a layout
+    preference gone wrong -- it is a sheet asserting that the protective device
+    vents the liquid. The vent is on the crown for the same reason a vapour
+    space is at the top, and the drain at the low point because that is what a
+    drain is.
+    """
+    from pandid.portgeom import port_faces
+
+    unit = cls("X-1", variant=variant)
+    for name, want in _ROLE_FACE.items():
+        want = _DRAIN_FACES_SIDEWAYS.get((kind, variant, name), want)
+        got = port_faces(unit, name)
+        assert got == [want], (
+            f"{kind}/{variant}.{name} is piped from {got} as drawn; the role puts it on {want}"
+        )
+
+
+def test_the_two_holdup_classes_offer_the_same_nozzles():
+    """A tank and a vessel are one shell at two design pressures.
+
+    Held here as well as in ``tests/test_units.py`` because this file is where
+    the *drawings* are, and the pair only means anything if both families draw
+    it: swapping ``Tank`` for ``Vessel`` on a sheet must not lose a connection.
+    """
+    assert list(units.Tank("T-1").ports) == list(units.Vessel("V-1").ports)
+
+
 def test_the_reported_column_and_reactor_meet_their_streams():
     """The bug as reported, in the two sizes it was reported at.
 
