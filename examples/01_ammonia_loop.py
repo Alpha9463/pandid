@@ -1,15 +1,15 @@
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pandid import Flowsheet, units
+from pandid import Compressor, Feed, Flowsheet, HeatExchanger, Mixer, Product, Reactor, Separator
 
 fs = Flowsheet("Ammonia Loop Auto")
-feed = fs.add(units.Feed("Natural Gas"))
-mix = fs.add(units.Mixer("M-101"))
-reformer = fs.add(units.Reactor("R-101"))
-hx = fs.add(units.HeatExchanger("E-101"))
-sep = fs.add(units.Separator("V-101"))
-comp = fs.add(units.Compressor("K-101"))
-prod = fs.add(units.Product("Ammonia"))
+feed = fs.add(Feed("Natural Gas"))
+mix = fs.add(Mixer("M-101"))
+reformer = fs.add(Reactor("R-101"))
+hx = fs.add(HeatExchanger("E-101"))
+sep = fs.add(Separator("V-101"))
+comp = fs.add(Compressor("K-101"))
+prod = fs.add(Product("Ammonia"))
 
 fs.connect(feed.outlet, mix.in_2)
 fs.connect(mix.outlet, reformer.feed)

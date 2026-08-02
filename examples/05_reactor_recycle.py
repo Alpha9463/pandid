@@ -13,21 +13,21 @@ the topology alone. It exercises:
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pandid import Flowsheet, units
+from pandid import Compressor, Cooler, Feed, Flowsheet, Mixer, Product, Reactor, Separator, Splitter
 
 
 def main():
     fs = Flowsheet("Reactor Recycle Loop")
 
-    feed = fs.add(units.Feed("Syngas Feed"))
-    mix = fs.add(units.Mixer("M-201", n_inlets=2))
-    comp = fs.add(units.Compressor("K-201"))
-    rx = fs.add(units.Reactor("R-201"))
-    cool = fs.add(units.Cooler("E-201"))
-    sep = fs.add(units.Separator("V-201"))
-    split = fs.add(units.Splitter("SP-201", n_outlets=2))
-    prod = fs.add(units.Product("Liquid Product"))
-    purge = fs.add(units.Product("Purge Gas"))
+    feed = fs.add(Feed("Syngas Feed"))
+    mix = fs.add(Mixer("M-201", n_inlets=2))
+    comp = fs.add(Compressor("K-201"))
+    rx = fs.add(Reactor("R-201"))
+    cool = fs.add(Cooler("E-201"))
+    sep = fs.add(Separator("V-201"))
+    split = fs.add(Splitter("SP-201", n_outlets=2))
+    prod = fs.add(Product("Liquid Product"))
+    purge = fs.add(Product("Purge Gas"))
 
     fs.connect(feed.outlet, mix.in_2)
     fs.connect(mix.outlet, comp.suction)

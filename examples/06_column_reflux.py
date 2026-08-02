@@ -13,7 +13,7 @@ labels are automatic.
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pandid import Flowsheet, units
+from pandid import Column, Feed, Flowsheet, HeatExchanger, Product, Splitter, Vessel
 from pandid.portgeom import port_offset
 
 
@@ -21,24 +21,24 @@ def main():
     fs = Flowsheet("Column Overhead System")
 
     # --- Equipment -------------------------------------------------------
-    feed = fs.add(units.Feed("Feed", reference="PFD-100"))
-    col = fs.add(units.Column("T-701", description="Main Fractionator"))
+    feed = fs.add(Feed("Feed", reference="PFD-100"))
+    col = fs.add(Column("T-701", description="Main Fractionator"))
 
     # width/height stay close to each symbol's native proportions: scaling one
     # far past its drawn aspect is what makes a sheet look wrong.
-    cond = fs.add(units.HeatExchanger("E-701", variant="straight_tubes", width=120,
-                                      height=36, description="Overhead Condenser"))
+    cond = fs.add(HeatExchanger("E-701", variant="straight_tubes", width=120,
+                                height=36, description="Overhead Condenser"))
     # The drum's inlet is authored on three faces and the engine picks the top
     # one unaided, so nothing here has to override it.
-    drum = fs.add(units.Vessel("V-701", variant="horizontal", width=130, height=42,
-                               description="Reflux Drum"))
-    vent = fs.add(units.Product("Vent Gas", reference="PFD-900"))
-    split = fs.add(units.Splitter("SP-701", n_outlets=2, description="Reflux Split"))
-    dist = fs.add(units.Product("Distillate", reference="PFD-200"))
+    drum = fs.add(Vessel("V-701", variant="horizontal", width=130, height=42,
+                         description="Reflux Drum"))
+    vent = fs.add(Product("Vent Gas", reference="PFD-900"))
+    split = fs.add(Splitter("SP-701", n_outlets=2, description="Reflux Split"))
+    dist = fs.add(Product("Distillate", reference="PFD-200"))
 
-    reb = fs.add(units.HeatExchanger("E-702", variant="kettle", width=120, height=44,
-                                     description="Kettle Reboiler"))
-    bot = fs.add(units.Product("Bottoms", reference="PFD-300"))
+    reb = fs.add(HeatExchanger("E-702", variant="kettle", width=120, height=44,
+                               description="Kettle Reboiler"))
+    bot = fs.add(Product("Bottoms", reference="PFD-300"))
 
     # --- Placement -------------------------------------------------------
     # A port sits at a fixed fraction of its symbol's box, so lining two items

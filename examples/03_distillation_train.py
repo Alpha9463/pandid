@@ -13,7 +13,19 @@ tower's worth of the same arrangement on its own.
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pandid import Flowsheet, units
+from pandid import (
+    Column,
+    Feed,
+    Flowsheet,
+    HeatExchanger,
+    Mixer,
+    Product,
+    Pump,
+    Splitter,
+    Tee,
+    Valve,
+    Vessel,
+)
 from pandid.portgeom import port_offset
 
 def main():
@@ -21,39 +33,39 @@ def main():
 
     # reference= puts an off-page drawing number on a boundary flag, drawn as
     # the connector's second line.
-    feed = fs.add(units.Feed("Raw Feed", reference="PFD-1000"))
-    mixer = fs.add(units.Mixer("M-100", n_inlets=2, description="Feed Mixer Drum"))
-    feed_valve = fs.add(units.Valve("FV-100"))
-    preheater = fs.add(units.HeatExchanger("E-100", description="Feed Preheater"))
+    feed = fs.add(Feed("Raw Feed", reference="PFD-1000"))
+    mixer = fs.add(Mixer("M-100", n_inlets=2, description="Feed Mixer Drum"))
+    feed_valve = fs.add(Valve("FV-100"))
+    preheater = fs.add(HeatExchanger("E-100", description="Feed Preheater"))
 
     # Column 1. Tee splits the drum's single draw into reflux and distillate:
     # it carries no tag and puts no row in the equipment list.
-    col1 = fs.add(units.Column("T-100", description="Light Ends Column"))
-    c1_ovhd = fs.add(units.HeatExchanger("E-101", description="T-100 Overhead Condenser"))
-    c1_drum = fs.add(units.Vessel("V-101", variant="horizontal", width=130, height=42,
-                                  description="T-100 Reflux Drum"))
-    c1_tee = fs.add(units.Tee())
-    c1_reb = fs.add(units.HeatExchanger("E-102", variant="kettle", width=120, height=44,
-                                        description="T-100 Kettle Reboiler"))
-    c1_prod = fs.add(units.Product("Light Product", reference="PFD-1002"))
+    col1 = fs.add(Column("T-100", description="Light Ends Column"))
+    c1_ovhd = fs.add(HeatExchanger("E-101", description="T-100 Overhead Condenser"))
+    c1_drum = fs.add(Vessel("V-101", variant="horizontal", width=130, height=42,
+                            description="T-100 Reflux Drum"))
+    c1_tee = fs.add(Tee())
+    c1_reb = fs.add(HeatExchanger("E-102", variant="kettle", width=120, height=44,
+                                  description="T-100 Kettle Reboiler"))
+    c1_prod = fs.add(Product("Light Product", reference="PFD-1002"))
 
-    pump1 = fs.add(units.Pump("P-100A/B", description="T-100 Bottoms Pump"))
+    pump1 = fs.add(Pump("P-100A/B", description="T-100 Bottoms Pump"))
 
     # Column 2, with the same two circuits on it.
-    col2 = fs.add(units.Column("T-200", description="Product Column"))
-    c2_ovhd = fs.add(units.HeatExchanger("E-201", description="T-200 Overhead Condenser"))
-    c2_drum = fs.add(units.Vessel("V-201", variant="horizontal", width=130, height=42,
-                                  description="T-200 Reflux Drum"))
-    c2_tee = fs.add(units.Tee())
-    c2_reb = fs.add(units.HeatExchanger("E-202", variant="kettle", width=120, height=44,
-                                        description="T-200 Kettle Reboiler"))
-    c2_prod = fs.add(units.Product("Med Product", reference="PFD-1002"))
+    col2 = fs.add(Column("T-200", description="Product Column"))
+    c2_ovhd = fs.add(HeatExchanger("E-201", description="T-200 Overhead Condenser"))
+    c2_drum = fs.add(Vessel("V-201", variant="horizontal", width=130, height=42,
+                            description="T-200 Reflux Drum"))
+    c2_tee = fs.add(Tee())
+    c2_reb = fs.add(HeatExchanger("E-202", variant="kettle", width=120, height=44,
+                                  description="T-200 Kettle Reboiler"))
+    c2_prod = fs.add(Product("Med Product", reference="PFD-1002"))
 
     # Bottoms split and recycle
-    pump2 = fs.add(units.Pump("P-200A/B", description="T-200 Bottoms Pump"))
-    splitter = fs.add(units.Splitter("SP-200", n_outlets=2, description="Bottoms Splitter"))
-    c2_bot = fs.add(units.Product("Heavy Product", reference="PFD-1003"))
-    recycle_valve = fs.add(units.Valve("FV-200"))
+    pump2 = fs.add(Pump("P-200A/B", description="T-200 Bottoms Pump"))
+    splitter = fs.add(Splitter("SP-200", n_outlets=2, description="Bottoms Splitter"))
+    c2_bot = fs.add(Product("Heavy Product", reference="PFD-1003"))
+    recycle_valve = fs.add(Valve("FV-200"))
 
     # --- Pinned coordinates (Manual Grid) ---
     # Pinned by nozzle, not by corner: pin(port=...) asks each symbol where its

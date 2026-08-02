@@ -19,7 +19,7 @@ waypoints for one stream.
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pandid import Flowsheet, units
+from pandid import Feed, Flowsheet, HeatExchanger, Product
 
 
 def main():
@@ -28,9 +28,9 @@ def main():
     # --- Top train: pinned by the corner ---------------------------------
     # Three corners; each nozzle then lands wherever its own symbol puts it, so
     # these numbers only line up against today's artwork.
-    f1 = fs.add(units.Feed("F-1")).pin(x=60, y=105)
-    e1 = fs.add(units.HeatExchanger("E-1")).pin(x=210, y=100)
-    p1 = fs.add(units.Product("P-1")).pin(x=430, y=105)
+    f1 = fs.add(Feed("F-1")).pin(x=60, y=105)
+    e1 = fs.add(HeatExchanger("E-1")).pin(x=210, y=100)
+    p1 = fs.add(Product("P-1")).pin(x=430, y=105)
 
     # --- Bottom train: pinned by the nozzle -------------------------------
     # The same drawing 200 units lower. The elevation is written once and each
@@ -38,9 +38,9 @@ def main():
     # job, so the second pin() names only y and leaves the first call's x
     # alone. Nothing here measures the artwork.
     run_y = 330
-    f2 = fs.add(units.Feed("F-2")).pin(x=60).pin(port="outlet", y=run_y)
-    e2 = fs.add(units.HeatExchanger("E-2")).pin(x=210).pin(port="tube_in", y=run_y)
-    p2 = fs.add(units.Product("P-2")).pin(x=430).pin(port="inlet", y=run_y)
+    f2 = fs.add(Feed("F-2")).pin(x=60).pin(port="outlet", y=run_y)
+    e2 = fs.add(HeatExchanger("E-2")).pin(x=210).pin(port="tube_in", y=run_y)
+    p2 = fs.add(Product("P-2")).pin(x=430).pin(port="inlet", y=run_y)
 
     fs.connect(f1.outlet, e1.tube_in)
     fs.connect(e1.tube_out, p1.inlet)

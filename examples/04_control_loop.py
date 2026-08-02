@@ -26,7 +26,7 @@ The equipment is pinned; the instrumentation is placed entirely by its hosts.
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pandid import Flowsheet, units
+from pandid import Feed, Fitting, Flowsheet, Product, Valve, Vessel
 from pandid.portgeom import port_offset
 
 
@@ -43,24 +43,24 @@ def main():
     # nozzle sits. A boundary flag is pinned at the tip of its arrow.
     run_y = 195
 
-    feed = fs.add(units.Feed("Feed")).pin(port="outlet", x=110, y=run_y)
-    fv = fs.add(units.Valve(flow.tag("FV"), variant="control")).pin(
+    feed = fs.add(Feed("Feed")).pin(port="outlet", x=110, y=run_y)
+    fv = fs.add(Valve(flow.tag("FV"), variant="control")).pin(
         x=270, port="inlet", y=run_y)
-    drum = fs.add(units.Vessel("V-101", description="Surge Drum")).pin(
+    drum = fs.add(Vessel("V-101", description="Surge Drum")).pin(
         x=420, port="inlet", y=run_y)
-    fe = fs.add(units.Fitting(flow.tag("FE"), variant="orifice",
-                              description="Feed Orifice Plate")).pin(
+    fe = fs.add(Fitting(flow.tag("FE"), variant="orifice",
+                        description="Feed Orifice Plate")).pin(
         x=180, port="inlet", y=run_y)
     # Flipped so the actuator faces the controller under the drum and the
     # signal drops straight in rather than climbing over the valve.
-    lv = fs.add(units.Valve(level.tag("LV"), variant="control")).pin(
+    lv = fs.add(Valve(level.tag("LV"), variant="control")).pin(
         x=640, port="inlet", y=run_y, mirrored="y")
-    prod = fs.add(units.Product("Product")).pin(port="inlet", x=790, y=run_y)
+    prod = fs.add(Product("Product")).pin(port="inlet", x=790, y=run_y)
     # Two pins: how high the PSV stands is a free choice and stays a corner,
     # while the axis its riser has to land on is read off the drum's nozzle.
-    psv = fs.add(units.Valve("PSV-101", variant="relief")).pin(y=55).pin(
+    psv = fs.add(Valve("PSV-101", variant="relief")).pin(y=55).pin(
         port="inlet", x=420 + port_offset(drum, "vent")[0])
-    flare = fs.add(units.Product("To Flare", reference="P&ID-902")).pin(x=630, y=5)
+    flare = fs.add(Product("To Flare", reference="P&ID-902")).pin(x=630, y=5)
 
     fs.connect(feed.outlet, fe.inlet)
     fs.connect(fe.outlet, fv.inlet)
