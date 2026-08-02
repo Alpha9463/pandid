@@ -863,7 +863,11 @@ def _stretch_scale(sym, u) -> "tuple[float, float]":
     return (1.0, 1.0)
 
 
-@lru_cache(maxsize=None)
+# Bounded rather than unbounded: the key is a whole artwork string and a placed
+# size, so a long-running process drawing many differently-sized units would
+# otherwise hold every one of them forever. Cached at all because _fold,
+# _pen_scale, _size_tag and _sym_id each ask it, several times per unit.
+@lru_cache(maxsize=2048)
 def _uneven(svg: str, fx: float, fy: float) -> bool:
     """Would an *uneven* scale stand between this artwork's ink and the page?
 
@@ -1057,7 +1061,7 @@ _ATTR = re.compile(r'([\w:.-]+)="([^"]*)"')
 # The symbol library emits these and nothing else; a relative or curve command
 # would mean the library had changed under this file, and is refused rather than
 # guessed at, for the reason export._reject_unsupported exists.
-_PATH_ARITY = {"M": 2, "L": 2, "A": 7, "Z": 0}
+_PATH_ARITY = {"M": 2, "L": 2, "A": 7, "Z": 0, "z": 0}
 _PATH_TOKEN = re.compile(r"[A-Za-z]|-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")
 
 

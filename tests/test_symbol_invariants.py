@@ -332,6 +332,54 @@ def test_svg_is_well_formed_and_declares_stroke_width(entry):
     assert "stroke-width" in sym.svg, f"{kind}/{variant} declares no stroke-width"
 
 
+#: Sizes to redraw a symbol at, as factors on its own box. The wide and tall
+#: pairs are what a layout actually asks for; the last two are past anything a
+#: drawing would want, because a check is only worth having under strain.
+_REDRAWS = ((1.0, 1.0), (2.0, 1.0), (1.0, 2.5), (3.0, 0.5), (0.4, 1.7))
+
+
+@pytest.mark.parametrize("factors", _REDRAWS, ids=[f"{a}x{b}" for a, b in _REDRAWS])
+@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
+def test_a_symbol_redrawn_at_a_new_size_draws_the_ink_it_was_drawn_from(entry, factors):
+    """``pandid.render.svg._baked`` moves the pen and nothing else.
+
+    A placement that would scale the two axes differently is emitted redrawn at
+    the placed size rather than stretched by its viewport (#235), which rewrites
+    every number in the drawing. That is only allowed to be a change of
+    *notation*: the ink has to land where the scale would have put it. Every
+    check in this file says a port lands on drawn ink, and every one of them is
+    worth nothing if the ink itself has quietly moved.
+
+    Measured against the scale applied by this file's own flattener rather than
+    against the renderer's arithmetic restated, so the two sides are independent
+    -- and over every registered symbol, since it is the arcs (which have to be
+    recomputed rather than scaled) and the mirrored derivations that are the
+    parts with somewhere to go wrong.
+    """
+    from pandid.render.svg import _baked
+
+    (kind, variant), sym = entry
+    fx, fy = factors
+    want = [
+        ((ax * fx, ay * fy), (bx * fx, by * fy))
+        for (ax, ay), (bx, by) in _collect_segments(sym.svg)
+    ]
+    got = _collect_segments(_baked(sym.svg, fx, fy))
+    assert len(got) == len(want), (
+        f"{kind}/{variant} redrawn at {fx} x {fy} flattens to {len(got)} segments, "
+        f"against the {len(want)} it was drawn from"
+    )
+    worst = max(
+        (max(math.dist(p, q) for p, q in zip(g, w)) for g, w in zip(got, want)),
+        default=0.0,
+    )
+    # The redraw writes six decimals, so a point may land half a millionth of a
+    # unit from where the scale would have put it. A drawing unit is 0,26 mm.
+    assert worst <= 1e-5, (
+        f"{kind}/{variant} redrawn at {fx} x {fy} moved its ink by {worst:.3g} units"
+    )
+
+
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_ports_within_bounding_box(entry):
     (kind, variant), sym = entry

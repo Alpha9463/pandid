@@ -335,20 +335,58 @@ def test_every_line_on_the_corpus_lands_on_one_of_the_two_sheet_weights(name):
     assert seen, f"{name} drew no stream or impulse line"
 
 
+@pytest.mark.parametrize("name", list(SCENARIOS), ids=list(SCENARIOS))
+def test_the_sheet_the_raster_backend_is_handed_carries_no_uneven_pen(name):
+    """The same corpus, one step further down: what ``.pdf`` and ``.png`` see.
+
+    This is the check that would have caught the fix that looked like a fix.
+    ``vector-effect="non-scaling-stroke"`` is the direct way to say #235's rule
+    and a browser honours it, so an .svg wearing it measures perfectly here --
+    but the PDF/PNG backend has never heard of the property, drops it in
+    silence, and strokes the scaled geometry anyway (see the argument above
+    ``pandid.render.svg._baked``). Every gallery PNG and every exported sheet
+    would have stayed exactly as wrong as before, and nothing in this file
+    would have said so, because this file reads the .svg.
+
+    So the invariant is asserted on ``export.flatten``'s output, which is the
+    document svglib is actually given: every ``<use>`` resolved into the group
+    and transform it stands for. A pen that is round *there* is round on any
+    backend that can draw a transform at all, which is the property a redraw
+    has and an attribute the renderer has to be told about does not.
+    """
+    from pandid.render.export import flatten
+
+    build, kwargs = SCENARIOS[name]
+    fs = build()
+    seen = 0
+    for where, lo, hi in drawn_pens(flatten(fs.to_svg(**kwargs))):
+        assert math.isclose(lo, hi, rel_tol=1e-9), (
+            f"{name}: a stroke under {where!r} reaches the raster backend {hi:.4g} "
+            f"one way and {lo:.4g} the other"
+        )
+        seen += 1
+    assert seen > 10, f"{name} flattened to {seen} strokes, which is not a sheet"
+
+
 # --- deliberately resized units -----------------------------------------------
 
 # One specimen per way a placement can meet a symbol: a plain vendored drawing;
-# one of the four families the generator reproportions unevenly, whose declared
+# two of the four families the generator reproportions unevenly, whose declared
 # pen is already an ellipse before any placement touches it; a symbol drawn by
 # hand rather than vendored; one carrying fine detail at a deliberate fraction
-# of its outline weight; and a symbol that may not be stretched at all, which
-# keeps its aspect and is centred, so its pen stays round however odd the box.
+# of its outline weight; one whose heads are vendored as arcs at a *tilt*, so
+# the redraw has to recompute the ellipse rather than scale it; one the registry
+# derives by mirroring, so the redraw meets a negative scale; and a symbol that
+# may not be stretched at all, which keeps its aspect and is centred, so its pen
+# stays round however odd the box.
 _SPECIMENS = {
     "valve": lambda **kw: units.Valve("FV-1", **kw),
     "vessel": lambda **kw: units.Vessel("V-1", **kw),
     "vessel/horizontal": lambda **kw: units.Vessel("V-2", variant="horizontal", **kw),
+    "vessel/dome": lambda **kw: units.Vessel("V-3", variant="dome", **kw),
     "hex/kettle": lambda **kw: units.HeatExchanger("E-1", variant="kettle", **kw),
     "column/packed": lambda **kw: units.Column("T-1", variant="packed", **kw),
+    "reducer": lambda **kw: units.Reducer("RD-1", large_end="outlet", **kw),
     "mixer": lambda **kw: units.Mixer("M-1", **kw),
     "instrument": lambda **kw: units.Instrument("PI-101", **kw),
 }
