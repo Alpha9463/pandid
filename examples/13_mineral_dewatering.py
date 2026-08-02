@@ -355,11 +355,11 @@ def main():
         status="ISSUED FOR REVIEW",
         sheet="1", of_sheets="1",
         date="12/09/25",
-        drawn_by="AA", checked_by="RG", approved_by="HVL",
+        drawn_by="AA", checked_by="JS", approved_by="RL",
         revisions=[
             Revision("A", "22/08/25", "Issued for internal review", "AA"),
             Revision("B", "05/09/25", "Dryer exhaust scrubber added", "AA"),
-            Revision("C", "12/09/25", "Issued For Review", "AA", "RG", "HVL"),
+            Revision("C", "12/09/25", "Issued For Review", "AA", "JS", "RL"),
         ],
     )
 
