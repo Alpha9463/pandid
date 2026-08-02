@@ -62,20 +62,26 @@ the rendered sheet uses. ``border="zone"`` then rules that page. Without a page
 size none of it happens and the drawing keeps its own coordinates, which is what
 makes an exported model a model. See :class:`_Fit`.
 
-Two pieces of sheet *detail* have no draw.io construct at all, and simply are
-not drawn: the leader a stream number is given where the search found no clear
-paper alongside its run, which would have to be a second cell hung off a label
-that is not itself a cell; and a symbol's own lettering held upright under a
-turn (the "M" on a motor operator), which draw.io turns with the shape. Where
-the number *itself* goes came off this list: it is
-:func:`~pandid.render.svg.stream_numbers`' answer for both backends now, written
-into the edge's own ``mxGeometry``. See :func:`_number_geometry`.
+**One** piece of sheet detail has no draw.io construct at all, and simply is not
+drawn: a symbol's own lettering held upright under a turn (the "M" on a motor
+operator), which draw.io turns with the shape.
 
-The semicircle a crossing line hops with came off it too, and the sentence that
-stood here -- "since draw.io decides its own jumps" -- was false in both halves.
-draw.io decides nothing: a jump is a per-connector style, defaulting to off, and
-*which* of two crossing lines hops is decided by z-order in ``<root>``, which
-this file writes. See :func:`_hops` and :data:`_JUMP_STYLE`.
+The list used to be four long and the other three came off it one at a time,
+each because the sentence that put it there did not survive being checked.
+
+* Where a line **number** goes is
+  :func:`~pandid.render.svg.stream_numbers`' answer for both backends now,
+  written into the edge's own ``mxGeometry``. See :func:`_number_geometry`.
+* The **semicircle** a crossing line hops with is a per-connector style that
+  defaults to off, and *which* of two crossing lines hops is decided by z-order
+  in ``<root>``. "draw.io decides its own jumps" was false in both halves. See
+  :func:`_hops`.
+* The **leader** tying a displaced number back to its run was held to need "a
+  second cell hung off a label that is not itself a cell". It needs nothing of
+  the sort: an edge with both terminals stated as points and neither as a cell
+  is how draw.io writes a free-standing line, which is what :func:`_segment`
+  had been emitting for the furniture all along. See :func:`_leader`, which
+  also records what it does cost.
 
 The output is a plain uncompressed ``mxfile``. draw.io reads that as readily as
 its compressed form, and it diffs.
@@ -187,7 +193,8 @@ from pandid.portgeom import port_point, unit_box
 from pandid.render import furniture as F
 from pandid.render import generator
 from pandid.render import svg as _svg
-from pandid.render.svg import (_DIAMOND_BALLOONS, _furniture_name, _scale_text, _too_small,
+from pandid.render.svg import (_DIAMOND_BALLOONS, _furniture_name, _LEADER_HEAD,
+                               _scale_text, _too_small,
                                _SIGNAL_DASH, _PROCESS_STROKE,
                                _SIGNAL_STROKE, _TAP_DASH, HOP_R, NUMBER_TYPE, boundary_flag,
                                draws_arrowheads, impulse_tap, stream_numbers,
@@ -1537,6 +1544,8 @@ class DrawioRenderer:
             # draw.io writes a parent before its children and so does this.
             if s.kind == "pneumatic":
                 cells[n] += _hatches(f"s{n}", points, s.color or _LINE_INK, fit)
+            if number is not None and number.leader is not None:
+                cells[n] += _leader(f"s{n}", number, s.color or _LINE_INK, fit)
         out: list[str] = []
         for n in order:
             out += cells[n]
@@ -2016,6 +2025,67 @@ def _number_geometry(number, points, fit: "_Fit"):
     reach = before + t * span
     return (max(-1.0, min(1.0, 2.0 * reach / total - 1.0)),
             (fit.length(number.x - foot[0]), fit.length(number.y - foot[1])))
+
+
+def _leader(edge_id: str, number, ink: str, fit: "_Fit") -> list[str]:
+    """The leader a displaced line number is tied back to its run with.
+
+    Where :func:`~pandid.render.svg.stream_numbers` finds no clear paper
+    alongside a run it writes the number off the line and draws a leader back to
+    it, and ISO 15519-1 §6.4 says how that leader ends: "Leader lines **shall**
+    terminate: with a dot if it terminates within an object; with an arrowhead
+    if it ends on the outline of an object or a connection; with an oblique
+    stroke if it ends at several parallel connections." A line number's leader
+    ends on a connection, so it wears an arrowhead. Without one the number is a
+    string of characters floating in blank paper, attached to nothing, which is
+    what ``AE-304-150-80-SS`` on ``11_ethanol_pid`` was in every exported file.
+
+    **The reason this was deferred was wrong.** #236 recorded that it "would
+    have to be a second cell hung off a label that is not itself a cell". It
+    does not have to be hung off anything: an edge whose two terminals are
+    stated as ``mxPoint``\\ s and neither as a cell is how draw.io itself writes
+    a free-standing rule, it is what :func:`_segment` has been emitting for the
+    sheet furniture all along, and ``endArrow=block;endFill=1`` is the filled
+    triangle :func:`~pandid.render.svg._arrowhead` draws. The whole construct
+    was already in the file.
+
+    What is true, and is the honest cost, is that **it does not ride the run**.
+    Its two ends are absolute points, so dragging the plant leaves the leader
+    where it was while the number itself -- which *is* on the edge's geometry --
+    moves with the line. That is the same trade :meth:`DrawioRenderer._taps`
+    takes for a tap whose host is a stream, for the same reason: draw.io can
+    join an edge to another edge, but the point it picks is its own, and a
+    leader that slid along the pipe would be pointing somewhere the sheet does
+    not point. The alternative is not a better leader, it is no leader.
+
+    ``noJump=1`` because a leader is not a connection and the sheet's jump pass
+    never sees one; see :data:`_NO_HOP`. ``ink`` is the label's colour, which is
+    the sheet's own choice (:meth:`SvgRenderer._draw_streams` strokes it "in the
+    label's own colour, since it is part of the label and not a line of its
+    own") and comes to the same thing as the pipe's -- ``stream_numbers`` takes
+    it from ``s.color`` -- so it is passed in, in the spelling
+    :data:`_LINE_INK` settles on rather than in the SVG's ``black``. The weight
+    is
+    :data:`~pandid.render.svg._SIGNAL_STROKE`, because §6.4 hands the leader
+    itself to ISO 128-22 where it is a narrow line and a head heavier than the
+    line it ends would read as the weightier of the two.
+    """
+    (ax, ay), (bx, by) = number.leader
+    style = (f"edgeStyle=none;rounded=0;html=1;startArrow=none;endArrow=block;"
+             f"endFill=1;endSize={fit.length(_LEADER_HEAD):g};"
+             f"strokeColor={ink};"
+             f"strokeWidth={fit.length(_SIGNAL_STROKE):g};movable=1;{_NO_HOP}")
+    x0, y0 = fit.at(ax, ay)
+    x1, y1 = fit.at(bx, by)
+    return [
+        f'        <mxCell id="{edge_id}-lead" value="" style={_attr(style)} '
+        f'edge="1" parent="1">',
+        '          <mxGeometry relative="1" as="geometry">',
+        f'            <mxPoint x="{_num(x0)}" y="{_num(y0)}" as="sourcePoint" />',
+        f'            <mxPoint x="{_num(x1)}" y="{_num(y1)}" as="targetPoint" />',
+        '          </mxGeometry>',
+        '        </mxCell>',
+    ]
 
 
 #: How a label on each of the four sides of a box is asked for in a draw.io

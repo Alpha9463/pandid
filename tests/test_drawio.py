@@ -44,13 +44,15 @@ from pandid.portgeom import port_point, unit_box
 from pandid.render.drawio import _APPROXIMATIONS, DrawioRenderer
 from pandid.render.svg import (
     _page,
+    _PROCESS_STROKE,
+    _SIGNAL_STROKE,
     boundary_flag,
     impulse_tap,
     pneumatic_marks,
     stream_polyline,
     tap_lines,
 )
-from pandid.render.symbols import Symbol, default_registry, expander
+from pandid.render.symbols import ARROWHEAD, Symbol, default_registry, expander
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 STENCILS = ROOT / "scripts" / "vendor_data" / "drawio"
@@ -2055,6 +2057,60 @@ def test_no_line_number_is_written_over_a_symbol_or_an_equipment_tag(stem):
         if meets(box, obstacle)
     ]
     assert not struck, f"{stem}: line numbers written over {struck}"
+
+
+@pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
+def test_a_displaced_line_number_is_tied_back_to_its_run(stem):
+    """The leader #236 deferred, on the grounds that it "would have to be a
+    second cell hung off a label that is not itself a cell".
+
+    It does not: an edge with both terminals stated as points and neither as a
+    cell is how draw.io writes a free-standing line, and ``endArrow=block;
+    endFill=1`` is the filled triangle the sheet's own `_arrowhead` draws.
+    ISO 15519-1 §6.4 makes the head a *shall* -- "Leader lines shall terminate
+    ... with an arrowhead if it ends on the outline of an object or a
+    connection" -- and without one `AE-304-150-80-SS` was a string of
+    characters floating in blank paper attached to nothing.
+
+    Held against the **rendered sheet** rather than against `stream_numbers`:
+    the leaders are read back out of the SVG's own ink, put through the fit,
+    and matched to the emitted cells. Two backends drawing a leader in
+    different places is exactly what that catches.
+    """
+    from test_label_invariants import _labels
+
+    fs, kwargs = gallery.flowsheet(stem)
+    svg = fs.to_svg(**kwargs)
+    _boxes, _frame, fit = DrawioRenderer()._furniture(fs, _page(kwargs.get("page_size")))
+    cells = _drawio_cells(fs, kwargs)
+
+    drawn = {label.name: label for label in _labels(svg) if label.leader is not None}
+    emitted = {cid: cell for cid, cell in cells.items() if cid.endswith("-lead")}
+    assert sorted(cells[cid[: -len("-lead")]].get("value") for cid in emitted) == sorted(drawn), (
+        f"{stem}: the sheet draws {sorted(drawn)} leaders and the export {len(emitted)}"
+    )
+
+    for cid, cell in emitted.items():
+        label = drawn[cells[cid[: -len("-lead")]].get("value")]
+        assert label.head, "the sheet drew this leader without a head"
+        geometry = cell.find("mxGeometry")
+        got, want = [], []
+        for point, end in zip(("sourcePoint", "targetPoint"), label.leader, strict=True):
+            at = geometry.find(f'mxPoint[@as="{point}"]')
+            got += [float(at.get("x")), float(at.get("y"))]
+            want += list(fit.at(*end))
+        # A twentieth, because the sheet writes this line's coordinates to one
+        # decimal and the export writes them to two.
+        assert got == pytest.approx(want, abs=0.06)
+        style = _style(cell)
+        # The head goes on the end that lands on the run, and nowhere else.
+        assert style["endArrow"] == "block" and style["endFill"] == "1"
+        assert style["startArrow"] == "none"
+        assert float(style["endSize"]) == pytest.approx(
+            fit.length(ARROWHEAD * _SIGNAL_STROKE / _PROCESS_STROKE), abs=0.01
+        )
+        # A leader is drawn at half a pipeline's weight, in the label's own ink.
+        assert float(style["strokeWidth"]) == pytest.approx(fit.length(_SIGNAL_STROKE), abs=0.01)
 
 
 # ---------------------------------------------------------------------------
