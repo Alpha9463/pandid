@@ -1738,7 +1738,7 @@ def _tank_farm() -> Flowsheet:
         units.Valve(load_flow.tag("CV"), variant="control", description="Loading Rate Valve")
     )
     hv604 = fs.add(units.Valve("HV-604", variant="ball", description="E10 Loading Arm Valve"))
-    hs601 = fs.add(units.Fitting("HS-601", variant="hose", description="E10 Loading Hose"))
+    hos601 = fs.add(units.Fitting("HOS-601", variant="hose", description="E10 Loading Hose"))
 
     fa602 = fs.add(
         units.Fitting(
@@ -1809,7 +1809,7 @@ def _tank_farm() -> Flowsheet:
     fe604.pin(port="inlet", x=1340, y=blend_y)
     cv604.pin(port="inlet", x=1400, y=blend_y)
     hv604.pin(port="inlet", x=1460, y=blend_y)
-    hs601.pin(port="inlet", x=1505, y=blend_y)
+    hos601.pin(port="inlet", x=1505, y=blend_y)
     e10_out.pin(port="inlet", x=1560, y=blend_y)
 
     vap_y, vru_y = 830.0, 935.0
@@ -1880,8 +1880,8 @@ def _tank_farm() -> Flowsheet:
     )
     fs.connect(fe604.outlet, cv604.inlet)
     fs.connect(cv604.outlet, hv604.inlet)
-    fs.connect(hv604.outlet, hs601.inlet)
-    fs.connect(hs601.outlet, e10_out.inlet)
+    fs.connect(hv604.outlet, hos601.inlet)
+    fs.connect(hos601.outlet, e10_out.inlet)
 
     fs.connect(
         vap_in.outlet, hv607.inlet, service="VAP", sequence=610, size=150, schedule=40, spec="CS"

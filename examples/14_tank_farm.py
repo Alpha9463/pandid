@@ -348,7 +348,15 @@ def main():
     cv604 = fs.add(units.Valve(load_flow.tag("CV"), variant="control",
                                description="Loading Rate Valve"))
     hv604 = fs.add(units.Valve("HV-604", variant="ball", description="E10 Loading Arm Valve"))
-    hs601 = fs.add(units.Fitting("HS-601", variant="hose", description="E10 Loading Hose"))
+    # HOS and not HS. ISO 15519-2 Table 2 (p. 11) gives H as a process variable,
+    # "Human observation", and S as a control function, "Switching (open loop)",
+    # and §5.2.2/§5.2.3 say a letter code string is a process variable followed
+    # by a control function -- so HS-601 was a well-formed instrument tag on a
+    # length of rubber. HOS breaks the string at its second letter, which is
+    # neither a control function nor a Table 3 modifier, so it cannot be read as
+    # one. This is the ISA-5.1 "hand switch" by another name; those are not the
+    # standard's words and the note above quotes the ones that are.
+    hos601 = fs.add(units.Fitting("HOS-601", variant="hose", description="E10 Loading Hose"))
 
     # --- In-line: the vapour system --------------------------------------
     fa602 = fs.add(units.Fitting("FA-602", variant="flame_arrestor_detonation_proof",
@@ -436,7 +444,7 @@ def main():
     fe604.pin(port="inlet", x=1340, y=blend_y)
     cv604.pin(port="inlet", x=1400, y=blend_y)
     hv604.pin(port="inlet", x=1460, y=blend_y)
-    hs601.pin(port="inlet", x=1505, y=blend_y)
+    hos601.pin(port="inlet", x=1505, y=blend_y)
     e10_out.pin(port="inlet", x=1560, y=blend_y)
 
     # The vapour system stands at the rack it serves and both of its off-page
@@ -512,8 +520,8 @@ def main():
                schedule=40, spec="CS")
     fs.connect(fe604.outlet, cv604.inlet)
     fs.connect(cv604.outlet, hv604.inlet)
-    fs.connect(hv604.outlet, hs601.inlet)
-    fs.connect(hs601.outlet, e10_out.inlet)
+    fs.connect(hv604.outlet, hos601.inlet)
+    fs.connect(hos601.outlet, e10_out.inlet)
 
     fs.connect(vap_in.outlet, hv607.inlet, service="VAP", sequence=610, size=150,
                schedule=40, spec="CS")

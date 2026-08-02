@@ -437,8 +437,8 @@
     <text x="1412.25" y="665.0999999999999" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CV-604</text>
     <rect x="1448.5" y="613.1" width="47.6" height="15.0" fill="white" />
     <text x="1472.25" y="625.0999999999999" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HV-604</text>
-    <rect x="1503.7" y="616.8" width="47.6" height="15.0" fill="white" />
-    <text x="1527.5" y="628.8" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HS-601</text>
+    <rect x="1500.4" y="616.8" width="54.2" height="15.0" fill="white" />
+    <text x="1527.5" y="628.8" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HOS-601</text>
     <rect x="1353.7" y="795.5" width="47.6" height="15.0" fill="white" />
     <text x="1377.5" y="807.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">FA-602</text>
     <rect x="1434.0" y="800.5" width="47.6" height="15.0" fill="white" />
