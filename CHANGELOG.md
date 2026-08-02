@@ -325,6 +325,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A tank's fill is a menu, and its default moved to the shell (#226).** Every
+  `Tank` variant fixed `inlet` on the crown, so no sheet could draw a
+  bottom-filled tank at all. Splash-filling a flammable liquid into a vapour
+  space generates static, so bottom entry is the ordinary arrangement for motor
+  spirit or ethanol — none of the three documents on disk covers tank filling,
+  static or downcomers, so that is claimed as ordinary practice and nothing
+  more. The four flat-floored variants (`default`, `conical`, `floating_roof`,
+  `sphere`) now anchor the fill low on the shell and the three hopper-bottomed
+  ones keep the crown, since a silo is filled over the top.
+
+  Both are reachable on every variant through the `nozzle()` call every other
+  unit already takes — `tk.nozzle("inlet", "N")` is the top nozzle with an
+  internal downcomer — with one exception that is a fact rather than a default:
+  `floating_roof` offers no crown placement, because a floating roof rides on
+  the liquid and there is no fixed roof to weld a nozzle to.
+  `examples/14_tank_farm`'s `TK-601` had its motor spirit landing on that
+  moving deck; it now takes it on the shell, and `TK-602` asks for the crown by
+  name and says so in the notes.
+
 ### Deprecated
 
 - **`Valve(variant="pneumatic")` (#136).** Use `Valve(variant="control")`, or
@@ -505,6 +524,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rejected nothing: every balloon's first letter already agreed with its loop.
 
 ### Fixed
+
+- **A line number's plate erased half of an outline it sat flush against
+  (#243).** Label placement built its obstacle set from `unit_box`, the symbol's
+  *geometric* box. An outline is stroked centred on that box, so half the pen
+  lies outside it, and a plate laid flush covered exactly that half — wrong by
+  half a line width every time a number landed against a wall. `examples/14`'s
+  V-604 drew its left shell wall at 48.7% of its weight for the forty pixels
+  `VAP-611-150-40-CS` ran beside it and at full weight the row after, a 2.06:1
+  step inside one outline, which ISO 15519-1 §6.2 leaves nothing to call: "If
+  two or more widths of line are used, the ratio between any two widths shall
+  be at least 2:1".
+
+  Obstacle boxes are now grown by half the drawn weight plus a named clearance,
+  where the box is *used* rather than where any one list of them is built, so
+  the equipment tags, the line numbers and the leader lines all keep the same
+  paper — and so does the draw.io export, which builds a list of its own and
+  hands it to the same search. Six symbols across three sheets were being cut;
+  `tests/test_halo_invariants.py` now measures the ink and not the box.
+
+- **The storage sphere's ports did not land on the nozzles it draws (#225).**
+  `tank/sphere` is the one stencil in the registry that draws its nozzles as
+  nozzles — three flanged stubs, two on the crown and one under the belly — and
+  none of its five ports was on one. `inlet` sat at the top centre midway
+  between the two crown stubs, so `examples/14`'s butane receipt arrived at bare
+  shell; `outlet` sat on the base rail of the *support skirt*, ten units below
+  the nozzle drawn for it, so the sheet drew product leaving the structure.
+
+  The three drawn nozzles now carry the three duties the drawing is about:
+  `relief` and `vent` on the crown (CHEE4001 p.7 puts a protective device
+  "vertically, upward, and at the top of the container", and a vapour space is
+  at the top by definition), and `outlet` on the belly nozzle. `inlet` and
+  `drain` are both liquid and go low on the shell either side of it — `inlet`
+  west by default with an east alternate reachable through
+  `nozzle("inlet", "E")`, `drain` south, which is the face its role asks for.
+  They are not stacked on the belly nozzle with the outlet, because two ports on
+  one placement draw two streams on one point.
+
+  Two new invariants over all 157 registered symbols hold the correspondence:
+  every drawn nozzle carries a port, and no port sits in the gap between two
+  nozzles drawn on one face. The sphere was the only symbol failing either.
 
 - **A resized symbol's line width changed with it, and changed differently in
   each axis.** ISO 15519-1 §11.1.3 (p. 28) is a *shall*: "When the size of a

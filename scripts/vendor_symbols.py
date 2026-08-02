@@ -397,32 +397,54 @@ KIND_MAP = {
     # until ry is the 7.69 the shell is inset by.
     ("separator", "knockout"): ("vessels", "Knock-out Drum",
                                 {"feed": ("W", 55), "vapor": ("N", 25), "liquid": ("S", 25)}),
-    # Both roofs rise inside the bounding box, so an inlet on the box's top edge
-    # floats above the drawn ink. Put it on the roof itself: the dome crown, and
-    # the cone apex.
+    # Both roofs rise inside the bounding box, so a nozzle on the box's top edge
+    # floats above the drawn ink. Anything put on the roof goes on the roof
+    # itself: the dome crown, and the cone apex.
     #
     # A tank takes a third roof nozzle the vessels above do not: ``vent``, the
-    # conservation vent a fixed roof breathes through. It flanks the fill, and
-    # ``relief`` flanks it on the other side, so the three roof connections read
-    # left to right in the order a reader meets them and neither of the two new
-    # ones is nearer the fill than the other. Both are measured onto the roof's
-    # own ink, and ``drain`` onto the floor clear of the draw-off: see the
-    # ``vessel/default`` block above for the rule and for what it costs.
+    # conservation vent a fixed roof breathes through. It flanks the crown, and
+    # ``relief`` flanks it on the other side, so the roof connections read left
+    # to right in the order a reader meets them and neither of the two is nearer
+    # the middle than the other. Both are measured onto the roof's own ink, and
+    # ``drain`` onto the floor clear of the draw-off: see the ``vessel/default``
+    # block above for the rule and for what it costs.
+    #
+    # WHERE A TANK FILLS (#226). The fill is on the SHELL, low, and the crown is
+    # the alternate rather than the default. Splash-filling a flammable liquid
+    # into a vapour space generates static, so bottom entry -- or a fill pipe
+    # carried down to the floor -- is ordinary practice for a motor spirit or an
+    # ethanol tank, and a fill line drawn onto the crown with nothing said about
+    # a downcomer reads as the splash fill. Being honest about the evidence:
+    # none of the three documents on disk says anything about tank filling,
+    # static or downcomers, so this is ordinary practice and is claimed as
+    # nothing more -- unlike the relief above it, which CHEE4001 p.7 places
+    # outright.
+    #
+    # It is a default and not a rule, which is the whole of what #226 asked for:
+    # top entry with an internal downcomer is a real arrangement and a sheet
+    # reaches it with ``nozzle("inlet", "N")``. West and east are both offered
+    # because a fill header runs down whichever side the plot puts it on, and
+    # the layout engine picks from where the peer landed.
     #
     # The dished roof is an arc of r = 75 over a 100-wide chord springing from
     # y = 25.46, so its centre is at (50, 25.46 + sqrt(75^2 - 50^2)) = (50,
     # 81.36) and its crown at (50, 6.36). x = 35 and x = 65 are 15 either side
-    # of that crown, at y = 81.36 - sqrt(75^2 - 15^2) = 7.9.
+    # of that crown, at y = 81.36 - sqrt(75^2 - 15^2) = 7.9. The shell is a
+    # plain rect from y = 25.46 to 95.46, so the fill takes its wall at y = 85,
+    # ten above the floor.
     ("tank", "default"):  ("vessels", "Tank (Dished Roof)",
-                           {"inlet": ("AT", 50.0, 6.4), "outlet": ("S", 50),
+                           {"inlet": [("W", 85), ("E", 85), ("AT", 50.0, 6.4)],
+                            "outlet": ("S", 50),
                             "vent": ("AT", 35.0, 7.9),
                             "relief": ("AT", 65.0, 7.9),
                             "drain": ("S", 20)}),
     # The conical roof runs (0, 20) - (50, 0) - (100, 20), so a nozzle halfway
     # along either slope is at (25, 10) and (75, 10). The floor is a plain line
-    # across y = 90, so the drain takes it directly, 30 clear of the outlet.
+    # across y = 90, so the drain takes it directly, 30 clear of the outlet, and
+    # the shell walls span y 20..90, so the fill takes them at y = 80.
     ("tank", "conical"):  ("vessels", "Tank (Conical Roof)",
-                           {"inlet": ("N", 50), "outlet": ("S", 50),
+                           {"inlet": [("W", 80), ("E", 80), ("N", 50)],
+                            "outlet": ("S", 50),
                             "vent": ("AT", 25.0, 10.0),
                             "relief": ("AT", 75.0, 10.0),
                             "drain": ("S", 20)}),
@@ -869,55 +891,110 @@ KIND_MAP = {
                            {"inlet": ("W", 67.0), "outlet": ("E", 67.0),
                             "vent": ("N", 25.0),
                             "relief": ("AT", 16.0, 3.0), "drain": ("S", 25.0)}),
-    # The third roof that rises inside its bounding box, and the same treatment
-    # the dished and conical ones get above: the shell is open between x = 5 and
-    # x = 95 at y = 0 (that gap is what the roof floats in), so an inlet on the
-    # box's top edge is drawn in mid-air 5 units above the roof plate. Put it on
-    # the plate, which spans x 5..95 at y = 5. (Nothing showed while the tank was
-    # painted as a solid block; with the block gone the nozzle is in the open.)
+    # The third roof that rises inside its bounding box: the shell is open
+    # between x = 5 and x = 95 at y = 0 (that gap is what the roof floats in),
+    # so anything on the box's top edge is drawn in mid-air 5 units above the
+    # roof plate. The plate spans x 5..95 at y = 5, and the vent and the relief
+    # go on it, 15 either side of its middle. A floating roof has no vapour
+    # space to conserve and is not what a conservation vent is for; the nozzles
+    # are still here because a declared nozzle is offered rather than asserted,
+    # which is the argument in ``units.Tank``, and because a rim vent and a roof
+    # bleeder are connections a floating roof does have.
     #
-    # The vent and the relief go on that same plate, 15 either side of the fill.
-    # A floating roof has no vapour space to conserve and is not what a
-    # conservation vent is for; the nozzles are still here because a declared
-    # nozzle is offered rather than asserted, which is the argument in
-    # ``units.Tank``, and because a rim vent and a roof bleeder are connections
-    # a floating roof does have.
+    # THE FILL HAS NO ROOF PLACEMENT AT ALL, and this is the one variant where
+    # that is not a default but a fact about the drawing (#226). A floating roof
+    # rides on the liquid: there is no fixed roof to weld a nozzle to, and the
+    # plate the reader sees at y = 5 is the deck, drawn at whatever level the
+    # tank happens to be at. A fill line landing on it is a pipe joined to a
+    # moving deck. So the shell wall is the whole menu -- west or east at y =
+    # 60, ten above the floor -- and ``nozzle("inlet", "N")`` raises rather than
+    # drawing something the plant cannot have. ``examples/14``'s TK-601 was
+    # taking its motor spirit onto the deck.
     ("tank", "floating_roof"): ("vessels", "Tank (Floating Roof)",
-                                {"inlet": ("AT", 30.0, 5.0), "outlet": ("S", 50),
+                                {"inlet": [("W", 60), ("E", 60)],
+                                 "outlet": ("S", 50),
                                  "vent": ("AT", 15.0, 5.0),
                                  "relief": ("AT", 45.0, 5.0),
                                  "drain": ("S", 20)}),
-    # ...and the third: the sphere rides on legs inside its box, so its crown is
-    # at (40, 5) and the box's top edge carries only the two short lines the
-    # legs are drawn against, at x 15..33 and x 47..65. An inlet at x = 40 falls
-    # in the gap between them. Put it on the crown, as on the dished roof.
+    # ...and the third: the sphere rides on a support skirt inside its box, so
+    # its crown is at (40, 5) and the box's top and bottom edges are the skirt,
+    # not the vessel.
     #
-    # This is the one stencil in the two families that draws its nozzles as
-    # nozzles: three 12 x 12 rectangles, two on the crown at x 18..30 and
-    # 50..62 and one under the belly at x 34..46. The two on top are what the
-    # vent and the relief take, at (24, 0) and (56, 0), which is where issue
-    # #226's research puts them -- an LPG sphere takes liquid in and out at the
-    # LOWEST part of the vessel and reserves the crown for relief and vapour --
-    # and where CHEE4001 p.7 puts a PSV: "vertically, upward, and at the top of
-    # the container". Which of the two rectangles is which is arbitrary; they
-    # are one drawing twice.
+    # THIS IS THE ONE STENCIL IN THE LIBRARY THAT DRAWS ITS NOZZLES AS NOZZLES
+    # (all 157 registered symbols were swept for a second; there is none -- see
+    # ``tests/test_symbol_invariants.py``'s drawn-nozzle check). Three 12 x 12
+    # rectangles, each with a flange line ruled across its free face: two on the
+    # crown at x 18..30 and 50..62, faces at y = 0, and one under the belly at
+    # x 34..46, face at y = 90. A rectangle drawn on a vessel is a statement
+    # that a connection exists *there*, so a port anywhere else on this drawing
+    # is the drawing disagreeing with itself. That is issue #225, and the whole
+    # of what it costs is that three nozzles have to carry five duties.
     #
-    # The drain does not take the third rectangle. That one is the liquid
-    # connection, and issue #225 is the change that moves ``outlet`` up onto it
-    # from the leg rail at y = 100 where it sits today; squatting on it here
-    # would trade one misplaced nozzle for another and make that fix harder.
-    # It goes on the shell instead, at x = 25 on the ellipse (cx 40, cy 45,
-    # r 40), which is y = 45 + 40*sqrt(1 - (15/40)^2) = 82.1 -- low on the
-    # sphere, clear of the liquid nozzle, and on ink.
+    # WHICH THREE DUTIES GET THE NOZZLES. Two of the five are fixed by
+    # something other than preference and both are on top. CHEE4001 p.7 puts the
+    # protective device there -- "The PSV should be placed, whenever possible,
+    # directly on the system to be protected, vertically, upward, and at the top
+    # of the container" -- so ``relief`` takes a crown rectangle. ``vent`` is
+    # the vapour connection and a vapour space is at the top of a vessel by
+    # definition, so it takes the other. Which rectangle is which is arbitrary;
+    # they are one drawing twice. That leaves the belly nozzle for one of the
+    # three liquid duties, and ``outlet`` has it: the draw is what the vessel is
+    # piped for on every day of its life, and on this sheet it is the whole
+    # reason the sphere is drawn at all (``examples/14``'s butane leaves under
+    # its own pressure and needs no pump). It also had the more visible half of
+    # the defect -- the outlet sat at (40, 100), on the base rail of the support
+    # skirt, so the sheet drew product leaving the *structure* 10 units below
+    # the nozzle the stencil drew for it.
+    #
+    # WHERE THE OTHER TWO GO. ``inlet`` and ``drain`` are both liquid and both
+    # therefore belong low, which is also the research issue #226 recorded for
+    # this vessel: an LPG sphere takes liquid in and out at the lowest part of
+    # the shell and reserves the crown for relief and vapour. They go on the
+    # shell either side of the belly nozzle, which is the ordinary convention
+    # and what every other stencil in the library does with every nozzle it has
+    # -- 156 of 157 draw no nozzle at all and let the line stop at the wall.
+    # They are NOT stacked on the belly rectangle with the outlet: two ports on
+    # one placement draw two streams on one point, which
+    # ``Symbol.coincident_ports`` refuses and is right to.
+    #
+    # All three sit on the ellipse (cx 40, cy 45, r 40), so each coordinate is
+    # the circle solved for the height wanted:
+    #
+    #   inlet, the fill, at y = 75:   x = 40 -+ 40*sqrt(1 - (30/40)^2) = 13.5 / 66.5
+    #   drain, the water draw-off, at y = 82.1: x = 40 + 40*sqrt(1 - (37.1/40)^2) = 54.9
+    #
+    # The fill is the one port here with a face to choose, so it is the one with
+    # a menu: west by default and east on request, since a sphere is filled from
+    # whichever side the header runs down. 75 rather than 82.1 is what buys it
+    # those faces -- at 82.1 the point is nearer the box floor than either wall
+    # and ``outward_dir`` reads it as south, and a fill drawn arriving from
+    # underneath is a line the reader has to follow around the vessel to
+    # believe. The drain keeps south, which is the face its role asks for
+    # (``tests/test_symbol_invariants.py``) and where a low-point draw-off goes.
+    #
+    # The crown is deliberately left with no fill placement on it. A pressure
+    # sphere's two top connections are spoken for, and offering ``inlet`` an
+    # "N" it would have to share with the relief or the vent is offering a
+    # nozzle the drawing cannot honour.
     ("tank", "sphere"):        ("vessels", "Storage Sphere",
-                                {"inlet": ("AT", 40.0, 5.0), "outlet": ("S", 40),
+                                {"inlet": [("AT", 13.5, 75.0), ("AT", 66.5, 75.0)],
+                                 "outlet": ("AT", 40.0, 90.0),
                                  "vent": ("AT", 24.0, 0.0),
                                  "relief": ("AT", 56.0, 0.0),
-                                 "drain": ("AT", 25.0, 82.1)}),
+                                 "drain": ("AT", 54.9, 82.1)}),
     # Tanks that drain to a cone rather than to a floor. The four above vary the
     # roof and all of them stand on a flat bottom; a hopper is what anything
     # holding solids, a slurry or a settled phase is actually drawn with, and
     # the family had none.
+    #
+    # ALL THREE KEEP THE CROWN AS THEIR DEFAULT FILL, where the flat-floored
+    # four moved theirs to the shell (#226, argued at ``tank/default``). The
+    # reason a flammable liquid is filled low is the static a splash fill
+    # generates in a vapour space, and a hopper is the drawing for solids, a
+    # slurry or a settled phase, filled over the top the way a silo is. The low
+    # shell nozzle is offered on both walls all the same, since the shape is
+    # also what a liquid tank with a drain cone is drawn as, and #226's
+    # complaint was that the library permitted only one arrangement.
     #
     # The outlet goes on the cone's APEX, which is the same rule the roofs above
     # follow at the other end: a cone touches the box's bottom edge at one point
@@ -938,8 +1015,11 @@ KIND_MAP = {
     # It goes half way down the cone's west slope, from (0, 70) to the apex at
     # (50, 100), which is (35, 91) -- still south-facing, since 9 units of
     # bottom clearance beat 35 of side.
+    # The shell walls run from y = 0 to y = 70 where the cone springs, so the
+    # two alternate fills take them at y = 60.
     ("tank", "conical_bottom"): ("vessels", "Tank (Conical Bottom)",
-                                 {"inlet": ("N", 50), "outlet": ("S", 50),
+                                 {"inlet": [("N", 50), ("W", 60), ("E", 60)],
+                                  "outlet": ("S", 50),
                                   "vent": ("N", 35), "relief": ("N", 65),
                                   "drain": ("AT", 35.0, 91.0)}),
     # A cone at each end: the silo or bin a tank holding solids is drawn as.
@@ -967,8 +1047,12 @@ KIND_MAP = {
     # apex: (26, 15) and (76, 15) on the roof, (26, 135) on the floor. All three
     # keep the shell's x = 1..101, so the pair on the roof are as far either
     # side of the fill as ``default``'s are, scaled to a taller drawing.
+    # The alternate fills take the shell walls at y = 110, ten above the cone.
+    # The west one is named outright: the wall is at x = 1 rather than at the
+    # box edge, for the same half-unit reason the two apexes are at x = 51.
     ("tank", "conical_ends"): ("vessels", "Tank (Conical Roof and Bottom)",
-                               {"inlet": ("N", 51), "outlet": ("S", 51),
+                               {"inlet": [("N", 51), ("AT", 1.0, 110.0), ("E", 110)],
+                                "outlet": ("S", 51),
                                 "vent": ("AT", 26.0, 15.0),
                                 "relief": ("AT", 76.0, 15.0),
                                 "drain": ("AT", 26.0, 135.0)}),
@@ -982,12 +1066,16 @@ KIND_MAP = {
     # the cone apex at (50, 125.46) where on ``default`` it resolved to the flat
     # floor: same spec, same face, different ink, which is what a variant is.
     # The roof nozzles are ``default``'s too, at (35, 7.9) and (65, 7.9), for
-    # the same arc. Only the drain differs, and for ``conical_bottom``'s reason:
-    # the apex is the outlet's, so the drain takes the west slope's midpoint,
-    # from (0, 95.46) to (50, 125.46), which is (35, 116.5).
+    # the same arc, and the shell walls are ``default``'s as well -- y 25.46 to
+    # 95.46 -- so the alternate fills take them at the same y = 85. Only the
+    # drain differs, and for ``conical_bottom``'s reason: the apex is the
+    # outlet's, so the drain takes the west slope's midpoint, from (0, 95.46) to
+    # (50, 125.46), which is (35, 116.5). The fill's *default* differs too, for
+    # the reason given at ``conical_bottom``: this one stands on a hopper, so
+    # the crown keeps it.
     ("tank", "dished_roof_conical_bottom"): (
         "vessels", "Tank (Dished Roof, Conical Bottom)",
-        {"inlet": ("AT", 50.0, 6.4), "outlet": ("S", 50),
+        {"inlet": [("AT", 50.0, 6.4), ("W", 85), ("E", 85)], "outlet": ("S", 50),
          "vent": ("AT", 35.0, 7.9), "relief": ("AT", 65.0, 7.9),
          "drain": ("AT", 35.0, 116.5)}),
     # Two more shapes in vessels.xml were weighed with those and left out, and
@@ -1387,7 +1475,7 @@ GRAVITY_FIXED = {
     ("tank", "default"):        "dished roof over a free surface, draw at the floor",
     ("tank", "conical"):        "conical roof over a free surface, draw at the floor",
     ("tank", "floating_roof"):  "the roof floats on the liquid",
-    ("tank", "sphere"):         "stands on legs, fills at the crown and drains at the bottom",
+    ("tank", "sphere"):         "stands on a skirt; relief and vapour on the crown, liquid below",
     ("tank", "conical_bottom"): "flat roof over a free surface, drains to the cone apex",
     ("tank", "conical_ends"):   "conical roof over a free surface, drains to the cone apex",
     ("tank", "dished_roof_conical_bottom"):
@@ -1754,8 +1842,16 @@ def drawing(el, kind, variant, port_map, sx, sy):
     inner, w, h, constraints, aspect = convert_shape(
         el, stroke_width=round(2.0 / math.sqrt(sx * sy), 3))
     # A port spec may be a LIST: the first entry is the default placement and
-    # the rest are alternate faces the user can move that port to, keyed by
-    # the edge each one names.
+    # the rest are alternate faces the user can move that port to.
+    #
+    # An alternate is written the same two ways a home placement is. An edge
+    # spec -- ``("N", 30.0)`` -- names the face it lands on outright. An
+    # ``("AT", x, y)`` one does not, because it is a point *inboard* of the box:
+    # a dished roof's crown sits 6,4 under the top edge, and a tank offering a
+    # top fill has to put the nozzle on the roof plate rather than on the empty
+    # paper above it. So the face is read off the point, by the same
+    # :func:`outward_dir` that reads the home placement's, and read *after* the
+    # family's scale has been applied for the same reason that one is.
     ports, alts, series = {}, {}, {}
     for p, spec in port_map.items():
         if is_series(spec):
@@ -1765,30 +1861,37 @@ def drawing(el, kind, variant, port_map, sx, sy):
         choices = spec if isinstance(spec, list) else [spec]
         ports[p] = resolve_port(choices[0], constraints, w, h)
         for extra in choices[1:]:
-            if not isinstance(extra, tuple) or extra[0] not in ("N", "S", "E", "W"):
+            if not isinstance(extra, tuple) or extra[0] not in ("N", "S", "E", "W", "AT"):
                 raise SystemExit(
                     f"{kind}/{variant} port {p!r}: an alternate face must be an "
-                    f'edge spec like ("N", 30.0), got {extra!r}')
-            alts.setdefault(p, {})[extra[0]] = resolve_port(extra, constraints, w, h)
+                    f'edge spec like ("N", 30.0) or a point like ("AT", 50.0, '
+                    f"6.4), got {extra!r}")
+            face = None if extra[0] == "AT" else extra[0]
+            alts.setdefault(p, []).append((face, resolve_port(extra, constraints, w, h)))
 
     if (sx, sy) != (1.0, 1.0):
         factors = f"{sx}" if sx == sy else f"{sx}, {sy}"
         inner = f'<g transform="scale({factors})">{inner}</g>'
         w, h = w * sx, h * sy
         ports = {p: (x * sx, y * sy) for p, (x, y) in ports.items()}
-        alts = {p: {f: (x * sx, y * sy) for f, (x, y) in d.items()} for p, d in alts.items()}
+        alts = {p: [(f, (x * sx, y * sy)) for f, (x, y) in v] for p, v in alts.items()}
         # A series runs along one face, so it is the along-axis that scales it.
         series = {p: (e, at * (sy if e in ("W", "E") else sx),
                       pitch * (sy if e in ("W", "E") else sx), ext)
                   for p, (e, at, pitch, ext) in series.items()}
     w, h = round(w, 1), round(h, 1)
     ports = {p: tuple(round(v, 1) for v in xy) for p, xy in ports.items()}
-    alts = {p: {f: tuple(round(v, 1) for v in xy) for f, xy in d.items()}
-            for p, d in alts.items()}
+    alts = {p: [(f, tuple(round(v, 1) for v in xy)) for f, xy in v]
+            for p, v in alts.items()}
     # Emit the whole menu, home first: Symbol keeps exactly one enumeration
     # of a port's placements, so a symbol with alternates must declare the
     # default among them rather than leave it to be merged in later.
-    menu = {p: {outward_dir(*ports[p], w, h): ports[p], **d} for p, d in alts.items()}
+    menu = {}
+    for p, entries in alts.items():
+        faces = {outward_dir(*ports[p], w, h): ports[p]}
+        for face, xy in entries:
+            faces[face or outward_dir(*xy, w, h)] = xy
+        menu[p] = faces
     return inner, w, h, ports, menu, series, aspect
 
 

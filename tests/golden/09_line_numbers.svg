@@ -194,14 +194,14 @@
     <path d="M 782.3,131.6 L 945.0,131.6" fill="none" stroke="black" stroke-width="2" />
     <rect x="129.2" y="283.0" width="86.6" height="13.0" fill="white" />
     <text x="172.5" y="289.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">8&quot;-P-1001-A1A</text>
-    <rect x="497.7" y="297.0" width="86.6" height="13.0" fill="white" />
-    <text x="541.0" y="303.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">6&quot;-P-1002-A1A</text>
+    <rect x="503.7" y="297.0" width="86.6" height="13.0" fill="white" />
+    <text x="547.0" y="303.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">6&quot;-P-1002-A1A</text>
     <rect x="619.0" y="263.0" width="86.6" height="13.0" fill="white" />
     <text x="662.2" y="269.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">6&quot;-P-1003-D1B</text>
     <rect x="826.7" y="263.0" width="86.6" height="13.0" fill="white" />
     <text x="870.0" y="269.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">6&quot;-P-1004-D1B</text>
-    <rect x="740.0" y="121.6" width="13.0" height="86.6" fill="white" />
-    <text x="746.5" y="164.9" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 746.5, 164.9)">3&quot;-P-1005-A1A</text>
+    <rect x="740.0" y="115.6" width="13.0" height="86.6" fill="white" />
+    <text x="746.5" y="158.9" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 746.5, 158.9)">3&quot;-P-1005-A1A</text>
     <rect x="817.2" y="125.1" width="92.8" height="13.0" fill="white" />
     <text x="863.6" y="131.6" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">4&quot;-FL-2740-A1A</text>
   </g>
