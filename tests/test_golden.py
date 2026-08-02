@@ -1256,8 +1256,6 @@ def _ethanol_pid() -> Flowsheet:
     fs.add_annotation(
         notes(
             [
-                "Diamond in square: safety instrumented system logic, code Z.",
-                "One trip is one tag, drawn at every point the trip acts.",
                 "Z-2: high pressure trip. PT-318 is its own measurement point.",
                 "Z-1: process shutdown logic, reading three measurements.",
                 "Alarms are lettered A and trips S or Z; H is drawn above L.",
@@ -1974,9 +1972,7 @@ def _tank_farm() -> Flowsheet:
     fs.add_annotation(
         notes(
             [
-                "Diamond in square: safety instrumented system logic, code Z.",
-                "Z-1: receipt shutdown on tank high-high level. One trip, drawn at each",
-                "point it acts: both level switches and both receipt valves.",
+                "Z-1: receipt shutdown on tank high-high level.",
                 "LSHH-611/612 are independent of the gauging transmitters they back up.",
                 "FA-601 is deflagration rated; FA-602, on the rack return, is detonation",
                 "rated. VT-601 is the vapour system's only opening to atmosphere.",

@@ -636,11 +636,10 @@ def main():
     # five references to nothing, which is what this box used to be: it was
     # copied off the issued sheet, where every one of its five notes is flagged
     # on the drawing, and landed on a sheet that flags none of them. What is
-    # left is what a general note is for: the conventions a reader needs to
-    # read the sheet, each true of something drawn on it.
+    # left is what a general note is for: three statements the drawing itself
+    # cannot make. A symbol key belongs in the LEGEND box below, and that one
+    # trip is drawn at every point it acts is visible in the squares.
     fs.add_annotation(notes([
-        "Diamond in square: safety instrumented system logic, code Z.",
-        "One trip is one tag, drawn at every point the trip acts.",
         "Z-2: high pressure trip. PT-318 is its own measurement point.",
         "Z-1: process shutdown logic, reading three measurements.",
         "Alarms are lettered A and trips S or Z; H is drawn above L.",

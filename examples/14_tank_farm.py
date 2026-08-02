@@ -655,16 +655,19 @@ def main():
     ))
     # General, and general is why they are not numbered: a number in a notes box
     # is a flag note, drawn on the line it applies to, and nothing here puts a
-    # reference on a line. What is left is what a general note is for -- the
-    # conventions a reader needs, each true of something drawn on this sheet.
+    # reference on a line. What is left is what a general note is for -- what
+    # the drawing itself cannot say. A symbol key belongs in the LEGEND box
+    # below, and where the trip squares are is visible in the trip squares.
     fs.add_annotation(notes([
-        "Diamond in square: safety instrumented system logic, code Z.",
-        "Z-1: receipt shutdown on tank high-high level. One trip, drawn at each",
-        "point it acts: both level switches and both receipt valves.",
+        "Z-1: receipt shutdown on tank high-high level.",
         "LSHH-611/612 are independent of the gauging transmitters they back up.",
         "FA-601 is deflagration rated; FA-602, on the rack return, is detonation",
         "rated. VT-601 is the vapour system's only opening to atmosphere.",
         "SB-601 gives TK-602 positive isolation from the blend header.",
+        # This one is not a fact about the plant: it stands in for a mark the
+        # sheet cannot yet draw, since fail="closed" puts an FC mark whose halo
+        # deletes the trip square's impulse line (#223). Delete the note when
+        # #223 lands and the mark goes back on XV-601 and XV-602.
         "XV-601 and XV-602 fail closed.",
     ], title="GENERAL NOTES", numbered=False, align="bottom-left"))
     fs.add_annotation(legend({
