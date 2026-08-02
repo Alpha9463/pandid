@@ -162,10 +162,11 @@ def _off_elevation(fs):
 def _corner_pinned_run(fv_y=180.0):
     """The real bug, from an earlier draft of examples/04.
 
-    A control valve is 15 tall, so its nozzles sit 7.5 below the corner ``pin()``
-    reads; a vessel takes its inlet at mid-height, 50 below. Pinning both to
-    convenient corner values silently puts the two nozzles on different
-    elevations, and the router draws a step into the valve and a step back out.
+    A control valve is 19.8 tall and carries its body under the diaphragm
+    actuator, so its nozzles sit 12.4 below the corner ``pin()`` reads; a vessel
+    takes its inlet at mid-height, 50 below. Pinning both to convenient corner
+    values silently puts the two nozzles on different elevations, and the router
+    draws a step into the valve and a step back out.
     """
     fs = Flowsheet("corner-pinned")
     feed = fs.add(U.Feed("Feed")).pin(x=60, y=170)
@@ -181,7 +182,7 @@ def test_a_corner_pinned_inline_device_is_reported_off_the_run():
     fs.layout()
     issues = _off_elevation(fs)
     assert [i.severity for i in issues] == ["warning", "warning"]
-    assert "7.5px apart" in issues[0].message
+    assert "2.6px apart" in issues[0].message
     # The finding is only worth making if it also says what to do about it, the
     # way gravity-turned names the lying drum.
     assert "FV-101.pin(port='inlet', y=195)" in issues[0].message

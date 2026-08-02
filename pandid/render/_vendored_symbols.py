@@ -55,13 +55,13 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.valves.check_valve_1',
     ), 'check')
 
-    # draw.io valves:Diaphragm (aspect=variable) -> valve/control
+    # draw.io valves:Diaphragm (aspect=variable) -> valve/saunders
     registry.register('valve', Symbol(
-        svg='<g id="sym_valve_control"><g transform="scale(0.25)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="none" stroke="#111" stroke-width="8.0"/><path d="M 29.0 18.0 A 25.0 25.0 0.0 0 1 69.0 18.0" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
+        svg='<g id="sym_valve_saunders"><g transform="scale(0.25)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="none" stroke="#111" stroke-width="8.0"/><path d="M 29.0 18.0 A 25.0 25.0 0.0 0 1 69.0 18.0" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
         width=24.5, height=15.0,
         ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.2, 0.0)},
         drawio_shape='mxgraph.pid.valves.diaphragm',
-    ), 'control')
+    ), 'saunders')
 
     # draw.io valves:Needle (aspect=variable) -> valve/needle
     registry.register('valve', Symbol(
@@ -151,13 +151,13 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.valves.hydraulic_valve',
     ), 'hydraulic')
 
-    # draw.io valves:Pneumatic Operated (aspect=variable) -> valve/pneumatic
+    # draw.io valves:Pneumatic Operated (aspect=variable) -> valve/control
     registry.register('valve', Symbol(
-        svg='<g id="sym_valve_pneumatic"><g transform="scale(0.25)"><path d="M 0.0 79.0 L 0.0 20.0 L 98.0 79.0 L 98.0 20.0 Z M 29.0 20.0 A 20.0 20.0 0.0 0 1 49.0 0.0 A 20.0 20.0 0.0 0 1 69.0 20.0 Z M 49.0 20.0 L 49.0 49.0" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
+        svg='<g id="sym_valve_control"><g transform="scale(0.25)"><path d="M 0.0 79.0 L 0.0 20.0 L 98.0 79.0 L 98.0 20.0 Z M 29.0 20.0 A 20.0 20.0 0.0 0 1 49.0 0.0 A 20.0 20.0 0.0 0 1 69.0 20.0 Z M 49.0 20.0 L 49.0 49.0" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
         width=24.5, height=19.8,
         ports={'inlet': (0.0, 12.4), 'outlet': (24.5, 12.4), 'actuator': (12.2, 0.0)},
         drawio_shape='mxgraph.pid.valves.pneumatic_operated',
-    ), 'pneumatic')
+    ), 'control')
 
     # draw.io valves:Manual Operated Valve (aspect=variable) -> valve/manual
     registry.register('valve', Symbol(

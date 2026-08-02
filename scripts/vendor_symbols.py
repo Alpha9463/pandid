@@ -65,7 +65,13 @@ KIND_MAP = {
                              "actuator": ("N", 49.0)}),
     ("valve", "check"):     ("valves", "Check Valve 1",     {"inlet": "W", "outlet": "E",
                              "actuator": ("N", 49.25)}),
-    ("valve", "control"):   ("valves", "Diaphragm",         {"inlet": "W", "outlet": "E",
+    # Saunders / weir diaphragm valve: a *body*, not an operator. The stencil
+    # draws the weir as an arc inside the bowtie and puts nothing on top of it,
+    # so what is bolted to its stem is not stated -- the same silence a gate or
+    # a ball body keeps. Up to 0.1.1 this drawing was filed under ``control``,
+    # which is what issue #136 is about: the variant an engineer types for a
+    # control valve drew a hand valve with a weir in it and no actuator at all.
+    ("valve", "saunders"):  ("valves", "Diaphragm",         {"inlet": "W", "outlet": "E",
                              "actuator": ("N", 49.0)}),
     ("valve", "needle"):    ("valves", "Needle",            {"inlet": "W", "outlet": "E",
                              "actuator": ("N", 49.0)}),
@@ -129,10 +135,16 @@ KIND_MAP = {
                              {"inlet": "W", "outlet": "E", "actuator": ("AT", 49.0, 0.0)}),
     ("valve", "hydraulic"): ("valves", "Hydraulic Valve",
                              {"inlet": "W", "outlet": "E", "actuator": ("AT", 49.0, 0.0)}),
-    # Diaphragm actuator drawn as a dome *above* the body (the "control" variant
-    # above uses the Diaphragm stencil, which draws a diaphragm inside the body
-    # instead: a Saunders body, not an operator).
-    ("valve", "pneumatic"): ("valves", "Pneumatic Operated",
+    # The control valve. A diaphragm actuator -- a dome on a short stem -- drawn
+    # *above* the body, which is what ISO 15519-2 Table 5 means by listing
+    # "valves incl. actuators" as basic information for a P&ID, and what
+    # ``professional_examples/P&ID_301.pdf`` draws on all six of its CVs.
+    #
+    # Filed under ``control`` because that is what an engineer types. Up to
+    # 0.1.1 this drawing answered to ``pneumatic`` -- the signal medium, which
+    # is not a kind of valve -- while ``control`` drew the Saunders body now
+    # registered above. Issue #136.
+    ("valve", "control"):   ("valves", "Pneumatic Operated",
                              {"inlet": "W", "outlet": "E", "actuator": ("AT", 49.0, 0.0)}),
     ("valve", "manual"):    ("valves", "Manual Operated Valve",
                              {"inlet": "W", "outlet": "E", "actuator": ("AT", 49.0, 0.0)}),

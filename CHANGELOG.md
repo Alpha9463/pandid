@@ -327,6 +327,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Deprecated
 
+- **`Valve(variant="pneumatic")` (#136).** Use `Valve(variant="control")`, or
+  spell the pairing out as `Valve(variant="gate", actuator="diaphragm")`. It
+  goes on drawing for 0.1.2 with a `DeprecationWarning` and a `deprecated`
+  finding on `fs.validate()`, and is removed in 0.1.3.
+
+  Two reasons at once. It names a **signal medium**, and a medium is not a kind
+  of valve — "the pneumatic one" picks out no body, no operator and no duty. And
+  as of this release it names the **same drawing** `control` names, so it is the
+  second of two spellings for one symbol, and it was the one an engineer had to
+  go and find because the obvious one drew a valve with nothing on top of it.
+
+  `butterfly_pneumatic` is deliberately kept. It names a *body* with an actuator
+  on it, which is a valve you can point at on a rack, and it is the only
+  spelling for its drawing. Reach it either way — `variant="butterfly_pneumatic"`
+  or `variant="butterfly", actuator="diaphragm"`.
+
 - **`vapor` and `liquid` on a dust-collecting separator.** On
   `Separator(variant="cyclone")`, `("gravity")` and `("electrostatic")` the two
   draws are now `overflow` and `underflow`. The old names go on reaching the
@@ -348,6 +364,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   two phases.
 
 ### Changed
+
+- **A control valve draws its actuator (#136).** `Valve(variant="control")` drew
+  a Saunders body — a bowtie with a weir arc inside it and nothing on top — so
+  the variant an engineer types for a control valve drew the one thing a control
+  valve cannot be without. It now draws the diaphragm actuator: a dome on a
+  short stem over the body, which is what `professional_examples/P&ID_301.pdf`
+  draws on all six of its CVs. **ISO 15519-2:2015 Table 5** (p. 19) lists
+  *"specific graphical symbols for process equipment incl. prime movers …,
+  valves incl. actuators, connections, etc."* as **basic** information for a
+  P&ID: the actuator is part of what the symbol is for.
+
+  The old drawing is a real valve body and keeps its place as
+  `Valve(variant="saunders")`. What it is not is a control valve.
+
+  This moves every sheet that draws a control valve. The symbol is 19.8 tall
+  rather than 15.0 and carries its body under the dome, so its nozzles sit 12.4
+  below the top of the box rather than 7.5. **Pin such a valve by its nozzle**
+  — `cv.pin(x=…, port="inlet", y=…)` — rather than by a literal or by its
+  centreline; `fs.validate()` reports the difference as `run-off-elevation` and
+  names the `pin()` that cures it.
+
+- **The body and the actuator are two questions (#136).** `Valve` takes an
+  `actuator=` keyword beside `variant=`: `variant` is the **body**, `actuator`
+  is **what strokes it**.
+
+  ```python
+  units.Valve("HV-101", variant="globe")                      # a plain globe valve
+  units.Valve("CV-303", variant="control")                    # a control valve
+  units.Valve("XV-201", variant="butterfly", actuator="diaphragm")
+  units.Valve("SV-401", variant="solenoid")                   # = actuator="solenoid"
+  ```
+
+  That is **ISO 15519-2 Table A.3**'s own model, stated in its registration
+  numbers: A.3.01 registers the bowtie alone (2101A), A.3.40–A.3.45 register the
+  actuators alone, and A.3.20 — *"Control valve, general … shown with general
+  actuator"* — carries 2101A, 210A and P050B at once, because the control valve
+  symbol *is* the body symbol with an actuator symbol on it. `variant="control"`
+  stays as the shorthand for that pairing, since it is what an engineer types
+  and what a sheet draws six times.
+
+  The draw.io stencil set **fuses** the two: every actuated valve it ships is
+  one shape drawing a body and an operator together, so the pairings that can be
+  drawn are the ones it draws — `pandid.render.symbols.ACTUATED`, eleven keys
+  over five actuators. A globe body under a diaphragm is not among them and is
+  refused by name, listing the pairings that are. Synthesising the missing ones
+  was refused: a composed symbol has no `drawio_shape`, and the draw.io export
+  would hand back a traced picture where every other valve is a native editable
+  stencil.
 
 - **One drawing, one nozzle vocabulary (#138).** `Separator(variant="cyclone")`,
   `("gravity")` and `("electrostatic")` draw `overflow` and `underflow`, which

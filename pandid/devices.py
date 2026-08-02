@@ -806,17 +806,20 @@ class SprayDryer(Dryer):
 class ControlValve(Valve):
     """Control valve: the final element a loop's output lands on.
 
-    The valve a controller modulates: a diaphragm actuator over the body
-    (``pneumatic``, ``butterfly_pneumatic``) or the Saunders body the set files
-    under ``control``. It is the one valve family that regularly declares
-    ``fail=``, where it goes when its air is lost, and it may **not** be shown
-    normally closed -- PIP PIC001 clause 4.2.2.10, because a darkened control
-    valve on an issued sheet reads as a block valve someone has closed. Say
-    ``fail="closed"`` instead.
+    The valve a controller modulates, drawn the way **ISO 15519-2 Table A.3**
+    builds it: a body with a diaphragm actuator on top of it. ``default`` is the
+    general body every sheet's CVs are drawn on; ``butterfly_pneumatic`` is the
+    same actuator on a butterfly disc, and is reached as
+    ``ControlValve(variant="butterfly", actuator="diaphragm")`` too.
+
+    It is the one valve family that regularly declares ``fail=``, where it goes
+    when its air is lost, and it may **not** be shown normally closed -- PIP
+    PIC001 clause 4.2.2.10, because a darkened control valve on an issued sheet
+    reads as a block valve someone has closed. Say ``fail="closed"`` instead.
     """
 
     kind = "valve"
-    VARIANTS = ("default", "pneumatic", "butterfly_pneumatic", "control")
+    VARIANTS = ("default", "butterfly_pneumatic", "control")
     VARIANT_ALIASES = {"default": "control"}
     PORTS = [
         ("inlet", "inlet", "process"),

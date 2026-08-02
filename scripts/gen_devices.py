@@ -360,13 +360,16 @@ DEVICES = {
     # ``Valve(variant="ball")`` has always been.
     ("valve", "control"): ("ControlValve", """Control valve: the final element a loop's output lands on.
 
-    The valve a controller modulates: a diaphragm actuator over the body
-    (``pneumatic``, ``butterfly_pneumatic``) or the Saunders body the set files
-    under ``control``. It is the one valve family that regularly declares
-    ``fail=``, where it goes when its air is lost, and it may **not** be shown
-    normally closed -- PIP PIC001 clause 4.2.2.10, because a darkened control
-    valve on an issued sheet reads as a block valve someone has closed. Say
-    ``fail="closed"`` instead.
+    The valve a controller modulates, drawn the way **ISO 15519-2 Table A.3**
+    builds it: a body with a diaphragm actuator on top of it. ``default`` is the
+    general body every sheet's CVs are drawn on; ``butterfly_pneumatic`` is the
+    same actuator on a butterfly disc, and is reached as
+    ``ControlValve(variant="butterfly", actuator="diaphragm")`` too.
+
+    It is the one valve family that regularly declares ``fail=``, where it goes
+    when its air is lost, and it may **not** be shown normally closed -- PIP
+    PIC001 clause 4.2.2.10, because a darkened control valve on an issued sheet
+    reads as a block valve someone has closed. Say ``fail="closed"`` instead.
     """),
     ("valve", "solenoid"): ("SolenoidValve", """Solenoid valve: an electrically operated on/off valve.
 
@@ -496,8 +499,7 @@ OWNS = {
     # shaped -- and it is already one of the variants FAIL_ACTUATED lets declare
     # a fail position.
     "ControlValve": {
-        "default": "control", "pneumatic": "pneumatic",
-        "butterfly_pneumatic": "butterfly_pneumatic",
+        "default": "control", "butterfly_pneumatic": "butterfly_pneumatic",
     },
     # Two bodies of one device: the bonnet-on-a-stem PRV and the spring-loaded
     # angle PSV. Body style, which the rule leaves a variant.
@@ -628,6 +630,7 @@ STAYS_ON_BASE = {
     ("valve", "ball"): "body style",
     ("valve", "butterfly"): "body style",
     ("valve", "needle"): "body style",
+    ("valve", "saunders"): "body style: a weir under a diaphragm, and no operator drawn",
     ("valve", "plug"): "body style",
     ("valve", "pinch"): "body style",
     ("valve", "knife"): "body style",

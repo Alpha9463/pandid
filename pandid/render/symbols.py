@@ -813,7 +813,126 @@ NC_DARKENS = frozenset({
 #: clause 4.2.2.10: "Control valves or relief valves shall not be shown as NC."
 #: A darkened control valve on an issued sheet reads as a block valve someone
 #: has closed, which is a drafting error rather than a style.
-NC_FORBIDDEN = frozenset({"control", "pneumatic", "regulator", "relief", "psv"})
+#:
+#: ``butterfly_pneumatic`` is deliberately absent. An actuated butterfly is
+#: ordinarily an on-off block valve rather than a modulating one, and 4.2.2.10
+#: scopes itself to control and relief valves; its disc lives inside the outline
+#: so it takes the letters of 4.2.2.8 rather than the fill.
+NC_FORBIDDEN = frozenset({"control", "regulator", "relief", "psv"})
+
+# ---------------------------------------------------------------------------
+# Body and actuator: two questions, and one drawing that answers both.
+#
+# ISO 15519-2:2015 Table A.3 puts these on separate axes and says so with its
+# registration numbers. A.3.01 registers the plain bowtie as "2-way on-off
+# valve, straight type, general" (2101A); A.3.40 to A.3.45 register the
+# actuators on their own -- "Actuator, without indication of type or control
+# media" (P050B), "Diaphragm actuator, single acting" (725A), "Cylinder
+# actuator" (P051B), "Electromagnetic actuator" (P001B), "Electrical motor
+# actuator" (P002B). A.3.20, "Control valve, general, continuously
+# adjustability, SHOWN WITH GENERAL ACTUATOR", then carries three registration
+# numbers at once -- 2101A, 210A, P050B -- because the control valve symbol *is*
+# the body symbol with an actuator symbol on it. §7.4.4.3 completes the rule:
+# "Actuators shall be represented by actuator symbols without indication of type
+# or indication of power media. Only if it of importance for understanding of
+# the diagram actuator symbol of specific type should be used."
+#
+# So the API takes the two questions separately -- ``variant`` is the body,
+# ``actuator`` is what strokes it -- and that is a decision about the *vocabulary
+# an engineer types*, not about the artwork. The artwork cannot follow it.
+#
+# The stencil set FUSES the two. Every actuated valve draw.io ships is one path
+# drawing a body and an operator together: "Pneumatic Operated" is the bowtie
+# with a dome on it, "Motor Operated Valve" the same bowtie with a lettered box,
+# and so on through the whole of valves.xml (32 shapes; the six below are all of
+# them that draw an operator at all). There is no separate actuator glyph to lay
+# over a globe or a ball, so a globe body with a diaphragm actuator is not a
+# combination this package can draw -- not because the API forbids it, but
+# because no drawing of it exists. Synthesising one was considered and refused:
+# a composed symbol has no ``drawio_shape``, so an export to draw.io would hand
+# the reader a traced picture where every other valve is a native editable
+# stencil, and the whole point of the vendored set (see NOTICE) is that it does
+# not have to trace.
+#
+# This table is therefore the honest middle: the pairs the stencil set can draw,
+# keyed the way an engineer asks for them. A pair that is not here raises and
+# names the ones that are, which is the same answer ``Symbol.__post_init__``
+# gives a port it cannot anchor -- reject rather than repair, because a silently
+# substituted drawing is a drawing that says something the author did not.
+#
+# ``default`` and ``gate`` are both keyed because they are byte-for-byte the same
+# stencil (draw.io's "Gate Valve"), and it is ISO's *general* two-way body rather
+# than specifically a gate: A.3.20 builds the control valve on exactly it.
+# ---------------------------------------------------------------------------
+
+#: ``(body, actuator)`` -> the variant whose artwork draws that pairing.
+#:
+#: Read by :class:`pandid.units.Valve`, which resolves the pair to a single
+#: variant and stores *that*. The pair is a spelling and the variant is the
+#: drawing; keeping both would be one fact in two places, and the drawing is the
+#: one the sheet is issued with.
+ACTUATED: dict[tuple[str, str], str] = {
+    # The control valve. ISO A.3.20's general body with A.3.41's diaphragm on
+    # it, which is what professional_examples/P&ID_301.pdf draws on CV-301-1,
+    # CV-303, CV-305, CV-306, CV-308 and CV-312, and what CHEE4001-7103 p.5
+    # draws. ``variant="control"`` is the shorthand for this pairing.
+    ("default", "diaphragm"): "control",
+    ("gate", "diaphragm"): "control",
+    # The same actuator on a butterfly body: the one non-bowtie pairing the
+    # stencil set draws.
+    ("butterfly", "diaphragm"): "butterfly_pneumatic",
+    # The three lettered operator boxes. One body, three letters, so they are
+    # three stencils and three pairings.
+    ("default", "motor"): "motor",
+    ("gate", "motor"): "motor",
+    ("default", "solenoid"): "solenoid",
+    ("gate", "solenoid"): "solenoid",
+    ("default", "hydraulic"): "hydraulic",
+    ("gate", "hydraulic"): "hydraulic",
+    # A handwheel is an *operator* and not an actuator -- it loses no air, so
+    # :data:`FAIL_ACTUATED` refuses it a fail position. It is in this table all
+    # the same, because "what is on top of this valve" is one question and a
+    # hand valve answers it too.
+    ("default", "handwheel"): "manual",
+    ("gate", "handwheel"): "manual",
+}
+
+#: The actuators that may be named, in the order the error message lists them:
+#: the three powered ones ISA-5.1 note 5.3.4(10) scopes its failure symbols to,
+#: then the hand operator.
+#:
+#: ``piston`` is deliberately not here. ISO A.3.43 registers a cylinder actuator
+#: (P051B) and it is an ordinary thing to bolt to a valve, but valves.xml draws
+#: no cylinder, and a name that always raises is a trap rather than an API. An
+#: author who needs one supplies the artwork through
+#: :meth:`SymbolRegistry.register` and asks for it by variant.
+ACTUATORS: tuple[str, ...] = ("diaphragm", "motor", "solenoid", "hydraulic",
+                              "handwheel")
+
+
+def actuated_variant(body: str, actuator: str) -> str:
+    """The variant drawing *body* with *actuator* on it.
+
+    Raises :class:`ValueError` naming every pairing that exists when this one
+    does not, because the reader of that message is holding a body the stencil
+    set draws and an actuator it draws and has no way to know which of the two
+    is the reason.
+    """
+    drawn = ACTUATED.get((body, actuator))
+    if drawn is not None:
+        return drawn
+    pairs = ", ".join(
+        f"variant={b!r}, actuator={a!r}" for b, a in sorted(ACTUATED) if b != "gate"
+    )
+    raise ValueError(
+        f"no symbol draws a {body!r} body with a {actuator!r} actuator on it. The "
+        f"draw.io P&ID stencil set this package vendors draws each actuated valve "
+        f"as one fused shape rather than as a body plus an operator, so only the "
+        f"pairings it ships can be drawn: {pairs} (and 'gate' wherever 'default' "
+        f"appears, which is the same drawing). Ask for the body on its own if the "
+        f"sheet does not have to say what strokes it."
+    )
+
 
 # ---------------------------------------------------------------------------
 # Fail position: where an actuated valve goes when its motive power is lost.
@@ -866,11 +985,13 @@ FAIL_POSITIONS: dict[str, str] = {
 #:   -- is drawn with no operator at all. Its stem is turned by whatever is
 #:   bolted to it, and the drawing does not say what that is.
 #:
-#: ``control`` is on the list although its stencil draws a Saunders body rather
-#: than an operator. It is the variant this package names *the control valve*,
-#: it is the one :data:`NC_FORBIDDEN` refuses on the strength of being one, and
-#: an automated valve is exactly what PIP PIC001 4.5.3.2 requires a fail action
-#: on.
+#: Every entry is a pairing out of :data:`ACTUATED`, and that is now the whole
+#: of the rule: a valve declares a fail position when the drawing puts a powered
+#: actuator on it. Up to 0.1.1 ``control`` was on this list while its stencil
+#: drew a Saunders body and no operator at all -- a valve that said where it
+#: failed and showed nothing that could fail. That is issue #136, and the list
+#: no longer has to make an exception for it. ``manual`` is the one pairing left
+#: out, because a handwheel is an operator and not an actuator.
 #:
 #: Every variant here is a two-port body. PIP PIC001 4.5.3.2(2) rules multi-port
 #: valves out of the letters -- "for multi-port automated valves, FL and FI shall
@@ -880,7 +1001,7 @@ FAIL_POSITIONS: dict[str, str] = {
 #: operator, so the question does not arise today; an actuated multi-port variant
 #: added later must not simply be added to this set.
 FAIL_ACTUATED = frozenset({
-    "control", "pneumatic", "butterfly_pneumatic", "solenoid", "motor", "hydraulic",
+    "control", "butterfly_pneumatic", "solenoid", "motor", "hydraulic",
 })
 
 
