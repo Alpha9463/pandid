@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Every unit class is on the package.** `from pandid import Separator, Pump,
+  Flowsheet` works, alongside the device classes that have been importable that
+  way since the layer landed. `units.Separator` beside a bare `Cyclone` was two
+  spellings for a base class and its own subclass, which is a distinction the
+  import line made and the type system does not.
+
+  All thirty public names in `pandid.units` are re-exported, `Unit` among them:
+  it is the base a custom unit subclasses, so it is a name you type even if not
+  one you instantiate. `pandid.Separator is pandid.units.Separator`. Additive —
+  `from pandid import units, devices` is unchanged, and `units.Kind(variant=…)`
+  is still how you reach the drawings that get no class of their own.
+
 - **`examples/13_mineral_dewatering.py`: a solids circuit, as a PFD.** The first
   sheet in the gallery that is not a fluids plant. A flotation concentrate is
   thickened, dewatered on a vacuum belt filter, dropped as cake onto a conveyor,
