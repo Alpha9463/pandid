@@ -42,6 +42,8 @@ direction of the main flow should be from left to right or from top to bottom".
 Both are what the elevations are chosen for: the receipt to the *furthest* tank
 takes the *highest* run and the draw from the *nearest* tank the *lowest*, so
 every drop falls through empty paper and the sheet carries no process crossing.
+All four feeds enter on the west edge and all three products leave on the east,
+the vapour return included, so the main flow reads left to right everywhere.
 §13.1's vertical view is why the tanks sit above the pumps and §11.4.2 is why
 none of them is turned -- it names symbol 2061, *Open tank*, as a symbol "where
 gravity is a functionality", which "must not be turned". Boundary flags sit on
@@ -255,17 +257,20 @@ def main():
     hos601.pin(port="inlet", x=1505, y=blend_y)
     e10_out.pin(port="inlet", x=1560, y=blend_y)
 
-    # The vapour system belongs at the rack it serves, so both its off-page
-    # flags are on the east edge with the tanker flags: the return enters there,
-    # turns round in V-604 and leaves on the row below. Run west across the whole
-    # sheet it was a full-width counterflow, which ISO 15519-1 §13.2 reads
-    # against. The two rows are 120 apart because the drum's vent riser rises
-    # between them and has to top out clear of the E10 rack above.
+    # The return enters on the west edge with the other three feeds and reads
+    # left to right into V-604, which un-mirrored puts the drum's outlet on the
+    # east face the VRU flag is already on: the drop off it turns once and runs
+    # straight to the edge, and vru_y is below the drum so it clears the legs.
+    # HV-607 and FA-602 are walked back from the drum by their own widths, so
+    # the two gaps hold whatever the artwork measures.
     vap_y, vru_y = 830.0, 935.0
-    vap_in.pin(mirrored=True).pin(port="outlet", x=1560, y=vap_y)
-    hv607.pin(mirrored=True).pin(port="inlet", x=1470, y=vap_y)
-    fa602.pin(mirrored=True).pin(port="inlet", x=1390, y=vap_y)
-    v604.pin(mirrored=True).pin(port="inlet", x=1315, y=vap_y)
+    drum_x, vap_gap = 1255.0, 52.0
+    fa602_x = drum_x - vap_gap - port_offset(fa602, "outlet")[0]
+    hv607_x = fa602_x - vap_gap - port_offset(hv607, "outlet")[0]
+    vap_in.pin(port="outlet", x=200, y=vap_y)
+    hv607.pin(port="inlet", x=hv607_x, y=vap_y)
+    fa602.pin(port="inlet", x=fa602_x, y=vap_y)
+    v604.pin(port="inlet", x=drum_x, y=vap_y)
     vent_x = v604.pin_.x + port_offset(v604, "vent")[0]
     vent_y = v604.pin_.y + port_offset(v604, "vent")[1]
     vru_x = v604.pin_.x + port_offset(v604, "outlet")[0]
