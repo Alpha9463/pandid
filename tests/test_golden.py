@@ -1781,8 +1781,9 @@ def _tank_farm() -> Flowsheet:
     ej601.pin(port="inlet", x=560, y=ms_run_y)
     st601.pin(port="inlet", x=605, y=ms_run_y)
     rd601.pin(port="inlet", x=665, y=ms_run_y)
-    p601.pin(port="suction", x=705, y=ms_run_y)
-    ms_disch_y = ms_run_y + port_offset(p601, "discharge")[1] - port_offset(p601, "suction")[1]
+    ms_suction_y = ms_run_y + port_offset(rd601, "outlet")[1] - port_offset(rd601, "inlet")[1]
+    p601.pin(port="suction", x=705, y=ms_suction_y)
+    ms_disch_y = ms_suction_y + port_offset(p601, "discharge")[1] - port_offset(p601, "suction")[1]
     rd602.pin(port="inlet", x=795, y=ms_disch_y)
     nrv601.pin(port="inlet", x=875, y=ms_disch_y)
 
@@ -1813,16 +1814,17 @@ def _tank_farm() -> Flowsheet:
     hs601.pin(port="inlet", x=1505, y=blend_y)
     e10_out.pin(port="inlet", x=1560, y=blend_y)
 
-    vap_y = 775.0
+    vap_y, vru_y = 830.0, 935.0
     vap_in.pin(mirrored=True).pin(port="outlet", x=1560, y=vap_y)
-    hv607.pin(mirrored=True).pin(port="inlet", x=590, y=vap_y)
-    fa602.pin(mirrored=True).pin(port="inlet", x=490, y=vap_y)
-    v604.pin(mirrored=True).pin(port="inlet", x=405, y=vap_y)
+    hv607.pin(mirrored=True).pin(port="inlet", x=1470, y=vap_y)
+    fa602.pin(mirrored=True).pin(port="inlet", x=1390, y=vap_y)
+    v604.pin(mirrored=True).pin(port="inlet", x=1315, y=vap_y)
     vent_x = v604.pin_.x + port_offset(v604, "vent")[0]
     vent_y = v604.pin_.y + port_offset(v604, "vent")[1]
+    vru_x = v604.pin_.x + port_offset(v604, "outlet")[0]
     fa601.pin(orientation=270).pin(port="inlet", x=vent_x, y=vent_y - 22)
     vt601.pin(port="inlet", x=vent_x, y=vent_y - 68)
-    vru_out.pin(mirrored=True).pin(port="inlet", x=335, y=vap_y)
+    vru_out.pin(port="inlet", x=1560, y=vru_y)
 
     fs.connect(
         ms_in.outlet, xv601.inlet, service="MS", sequence=601, size=200, schedule=40, spec="CS"
@@ -1890,7 +1892,7 @@ def _tank_farm() -> Flowsheet:
     fs.connect(fa602.outlet, v604.inlet)
     fs.connect(
         v604.outlet, vru_out.inlet, service="VAP", sequence=612, size=150, schedule=40, spec="CS"
-    )
+    ).via([(vru_x, vru_y)])
     fs.connect(
         v604.vent, fa601.inlet, service="VAP", sequence=611, size=150, schedule=40, spec="CS"
     )

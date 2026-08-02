@@ -399,8 +399,16 @@ def main():
     ej601.pin(port="inlet", x=560, y=ms_run_y)
     st601.pin(port="inlet", x=605, y=ms_run_y)
     rd601.pin(port="inlet", x=665, y=ms_run_y)
-    p601.pin(port="suction", x=705, y=ms_run_y)
-    ms_disch_y = ms_run_y + port_offset(p601, "discharge")[1] - port_offset(p601, "suction")[1]
+    # RD-601 is the eccentric body, so its two nozzles are not on one centreline:
+    # flat on top puts the small end's axis half the bore difference above the
+    # large end's. Pinning the pump on ms_run_y therefore put a step in the line
+    # immediately downstream of the one fitting whose whole point is that there
+    # is no step in the crown of the run. The pump is pinned at the reducer's
+    # *outlet* elevation instead, asked of the symbol rather than measured off
+    # the drawing, and the suction is straight from the strainer to the nozzle.
+    ms_suction_y = ms_run_y + port_offset(rd601, "outlet")[1] - port_offset(rd601, "inlet")[1]
+    p601.pin(port="suction", x=705, y=ms_suction_y)
+    ms_disch_y = ms_suction_y + port_offset(p601, "discharge")[1] - port_offset(p601, "suction")[1]
     rd602.pin(port="inlet", x=795, y=ms_disch_y)
     nrv601.pin(port="inlet", x=875, y=ms_disch_y)
 
@@ -431,16 +439,31 @@ def main():
     hs601.pin(port="inlet", x=1505, y=blend_y)
     e10_out.pin(port="inlet", x=1560, y=blend_y)
 
-    vap_y = 775.0
+    # The vapour system stands at the rack it serves and both of its off-page
+    # flags are on the east edge, beside the tanker flags whose traffic makes
+    # the vapour: the return comes in on one row, turns round in V-604 and
+    # leaves for the recovery unit on the row below. It used to run the full
+    # width of the sheet from the east edge to the west, which is a return
+    # stream counterflowing for 1200 units against ISO 15519-1 §13.2 (p. 28),
+    # "the direction of the main flow should be from left to right or from top
+    # to bottom". Both flags stay at a sheet edge, which is CHEE4001 p.2's
+    # preference for an off-page connector, so the fix is where the run ends and
+    # not whether it is drawn at an edge at all.
+    #
+    # The two rows are 120 apart and low on the sheet because the drum's vent
+    # riser rises between them: VT-601 tops out at vap_y - 130, and the E10 rack
+    # run at blend_y is what it has to clear.
+    vap_y, vru_y = 830.0, 935.0
     vap_in.pin(mirrored=True).pin(port="outlet", x=1560, y=vap_y)
-    hv607.pin(mirrored=True).pin(port="inlet", x=590, y=vap_y)
-    fa602.pin(mirrored=True).pin(port="inlet", x=490, y=vap_y)
-    v604.pin(mirrored=True).pin(port="inlet", x=405, y=vap_y)
+    hv607.pin(mirrored=True).pin(port="inlet", x=1470, y=vap_y)
+    fa602.pin(mirrored=True).pin(port="inlet", x=1390, y=vap_y)
+    v604.pin(mirrored=True).pin(port="inlet", x=1315, y=vap_y)
     vent_x = v604.pin_.x + port_offset(v604, "vent")[0]
     vent_y = v604.pin_.y + port_offset(v604, "vent")[1]
+    vru_x = v604.pin_.x + port_offset(v604, "outlet")[0]
     fa601.pin(orientation=270).pin(port="inlet", x=vent_x, y=vent_y - 22)
     vt601.pin(port="inlet", x=vent_x, y=vent_y - 68)
-    vru_out.pin(mirrored=True).pin(port="inlet", x=335, y=vap_y)
+    vru_out.pin(port="inlet", x=1560, y=vru_y)
 
     # --- Process lines ---------------------------------------------------
     fs.connect(ms_in.outlet, xv601.inlet, service="MS", sequence=601, size=200,
@@ -496,8 +519,11 @@ def main():
                schedule=40, spec="CS")
     fs.connect(hv607.outlet, fa602.inlet)
     fs.connect(fa602.outlet, v604.inlet)
+    # Routed by hand: the drum's outlet faces west and the recovery unit is
+    # east, so the drop is put on the drum's own face rather than wherever the
+    # router would have turned it.
     fs.connect(v604.outlet, vru_out.inlet, service="VAP", sequence=612, size=150,
-               schedule=40, spec="CS")
+               schedule=40, spec="CS").via([(vru_x, vru_y)])
     fs.connect(v604.vent, fa601.inlet, service="VAP", sequence=611, size=150,
                schedule=40, spec="CS")
     fs.connect(fa601.outlet, vt601.inlet)
