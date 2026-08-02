@@ -1814,7 +1814,7 @@ def _tank_farm() -> Flowsheet:
     hos601.pin(port="inlet", x=1505, y=blend_y)
     e10_out.pin(port="inlet", x=1560, y=blend_y)
 
-    vap_y, vru_y = 830.0, 935.0
+    vap_y = 830.0
     drum_x, vap_gap = 1255.0, 52.0
     fa602_x = drum_x - vap_gap - port_offset(fa602, "outlet")[0]
     hv607_x = fa602_x - vap_gap - port_offset(hv607, "outlet")[0]
@@ -1824,10 +1824,9 @@ def _tank_farm() -> Flowsheet:
     v604.pin(port="inlet", x=drum_x, y=vap_y)
     vent_x = v604.pin_.x + port_offset(v604, "vent")[0]
     vent_y = v604.pin_.y + port_offset(v604, "vent")[1]
-    vru_x = v604.pin_.x + port_offset(v604, "outlet")[0]
     fa601.pin(orientation=270).pin(port="inlet", x=vent_x, y=vent_y - 22)
     vt601.pin(port="inlet", x=vent_x, y=vent_y - 68)
-    vru_out.pin(port="inlet", x=1560, y=vru_y)
+    vru_out.pin(port="inlet", x=1560, y=vap_y)
 
     fs.connect(
         ms_in.outlet, xv601.inlet, service="MS", sequence=601, size=200, schedule=40, spec="CS"
@@ -1895,7 +1894,7 @@ def _tank_farm() -> Flowsheet:
     fs.connect(fa602.outlet, v604.inlet)
     fs.connect(
         v604.outlet, vru_out.inlet, service="VAP", sequence=612, size=150, schedule=40, spec="CS"
-    ).via([(vru_x, vru_y)])
+    )
     fs.connect(
         v604.vent, fa601.inlet, service="VAP", sequence=611, size=150, schedule=40, spec="CS"
     )

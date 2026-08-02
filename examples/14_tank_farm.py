@@ -258,12 +258,11 @@ def main():
     e10_out.pin(port="inlet", x=1560, y=blend_y)
 
     # The return enters on the west edge with the other three feeds and reads
-    # left to right into V-604, which un-mirrored puts the drum's outlet on the
-    # east face the VRU flag is already on: the drop off it turns once and runs
-    # straight to the edge, and vru_y is below the drum so it clears the legs.
-    # HV-607 and FA-602 are walked back from the drum by their own widths, so
-    # the two gaps hold whatever the artwork measures.
-    vap_y, vru_y = 830.0, 935.0
+    # left to right into V-604, which un-mirrored puts the drum's inlet and
+    # outlet on one centreline: both flags sit on vap_y and the run is straight
+    # from edge to edge. HV-607 and FA-602 are walked back from the drum by
+    # their own widths, so the two gaps hold whatever the artwork measures.
+    vap_y = 830.0
     drum_x, vap_gap = 1255.0, 52.0
     fa602_x = drum_x - vap_gap - port_offset(fa602, "outlet")[0]
     hv607_x = fa602_x - vap_gap - port_offset(hv607, "outlet")[0]
@@ -273,10 +272,9 @@ def main():
     v604.pin(port="inlet", x=drum_x, y=vap_y)
     vent_x = v604.pin_.x + port_offset(v604, "vent")[0]
     vent_y = v604.pin_.y + port_offset(v604, "vent")[1]
-    vru_x = v604.pin_.x + port_offset(v604, "outlet")[0]
     fa601.pin(orientation=270).pin(port="inlet", x=vent_x, y=vent_y - 22)
     vt601.pin(port="inlet", x=vent_x, y=vent_y - 68)
-    vru_out.pin(port="inlet", x=1560, y=vru_y)
+    vru_out.pin(port="inlet", x=1560, y=vap_y)
 
     # --- Process lines ---------------------------------------------------
     fs.connect(ms_in.outlet, xv601.inlet, service="MS", sequence=601, size=200,
@@ -332,11 +330,8 @@ def main():
                schedule=40, spec="CS")
     fs.connect(hv607.outlet, fa602.inlet)
     fs.connect(fa602.outlet, v604.inlet)
-    # Routed by hand: the drum's outlet leaves west and the recovery unit is
-    # east, so the drop is put on the drum's own face rather than wherever the
-    # router would have turned.
     fs.connect(v604.outlet, vru_out.inlet, service="VAP", sequence=612, size=150,
-               schedule=40, spec="CS").via([(vru_x, vru_y)])
+               schedule=40, spec="CS")
     fs.connect(v604.vent, fa601.inlet, service="VAP", sequence=611, size=150,
                schedule=40, spec="CS")
     fs.connect(fa601.outlet, vt601.inlet)
