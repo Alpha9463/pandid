@@ -1180,7 +1180,8 @@ class DrawioRenderer:
         rect = ("rounded=0;whiteSpace=wrap;html=1;fillColor=none;movable=1;"
                 f"strokeColor={_LINE_INK};")
         out = _rect("z-sheet", ox, oy, ow, oh, rect + "strokeWidth=1;")
-        out += _rect("z-frame", ix, iy, iw, ih, rect + "strokeWidth=2;")
+        out += _rect("z-frame", ix, iy, iw, ih,
+                     rect + f"strokeWidth={_FRAME_STROKE:g};")
         for n, part in enumerate(z.parts):
             if part[0] == "rule":
                 _, x1, y1, x2, y2 = part
@@ -1214,18 +1215,22 @@ class DrawioRenderer:
             grid = [[str(c) for c in r] if isinstance(r, (tuple, list)) else [str(r)]
                     for r in rows]
             ncol = max(len(r) for r in grid)
+            # Left, as the sheet sets a row, with the first column bold where
+            # there is more than one -- draw_annotation's own rule. The same
+            # list of weights is what the columns are measured in, so the key
+            # column is measured in the face its key is drawn in.
+            heavy = [True] + [False] * (ncol - 1)
             return _table(cid, title, [], grid, x, y, w, h,
-                          columns(grid, [size] * ncol, w), title_h, font=size,
-                          # Left, as the sheet sets a row, with the first column
-                          # bold where there is more than one -- draw_annotation's
-                          # own rule.
-                          col_keys=["align=left;spacingLeft=4;fontStyle=1;"]
-                          + ["align=left;spacingLeft=4;"] * (ncol - 1))
+                          columns(grid, [size] * ncol, w, bold=heavy), title_h,
+                          font=size,
+                          col_keys=[f"align=left;spacingLeft=4;{'fontStyle=1;' if b else ''}"
+                                    for b in heavy])
         # Not tabular: a titled box of free-form lines, which is what it is on
         # the sheet too. Anything docked that is neither an Annotation nor a
         # TableBox lands here as well, on the two things every box has -- a title
         # and some rows -- rather than being dropped for being neither.
-        return _text_box(cid, title, [str(r) for r in rows], x, y, w, h)
+        size = getattr(obj, "font_size", 11.0)
+        return _text_box(cid, title, [str(r) for r in rows], x, y, w, h, size)
 
     def _title_strip(self, cid: str, block, x, y, w, h) -> list[str]:
         """The engineering title strip, as the two tables it really is.
@@ -1284,24 +1289,30 @@ class DrawioRenderer:
         # it and the company cell and information block share the rest, which is
         # where draw_title_strip() rules its two vertical lines.
         rev_w = min(F._REV_W, w)
-        row_h = F._REV_ROW
+        row_h = _STRIP_ROW
+        # Bottom-aligned, but to the frame's *paper* rather than to its
+        # centreline. See :data:`_FRAME_STROKE`.
+        foot = y + h - _FRAME_STROKE
         # No heading on either: the title and subtitle are field rows below, and
         # a heading would say them twice -- once in a band too narrow to hold
         # the sheet's own title, which is what overflowed.
         rev_h = row_h * (len(revisions) + 1)
         id_h = row_h * max(len(fields), 1)
         out = _table(f"{cid}-rev", "", [c[0] for c in F._REV_COLS], revisions,
-                     x, y + h - rev_h, rev_w, rev_h,
+                     x, foot - rev_h, rev_w, rev_h,
                      [c[1] for c in F._REV_COLS], header_last=True,
                      font=_STRIP_FONT, row_h=row_h,
                      col_keys=["align=left;spacingLeft=3;"] * len(F._REV_COLS))
         # The caption column is measured and drawn at the size the sheet sets a
         # caption at, and the value column at the size it sets a value; a column
         # measured at one size and drawn at another is the whole of defect 9.
+        # The weights go the same way round: the captions are set light and the
+        # values bold, which is the pair `columns` used to have inverted.
         id_w = w - rev_w
-        widths = columns(fields, [_STRIP_FONT, _STRIP_VALUE], id_w, bold_first=False)
+        widths = columns(fields, [_STRIP_FONT, _STRIP_VALUE], id_w,
+                         bold=[False, True])
         out += _table(f"{cid}-id", "", [], fields,
-                      x + rev_w, y + h - id_h, id_w, id_h, widths,
+                      x + rev_w, foot - id_h, id_w, id_h, widths,
                       font=_STRIP_VALUE, row_h=row_h,
                       col_keys=[f"align=left;spacingLeft=3;fontSize={_STRIP_FONT:g};"
                                 f"fontColor={_CAPTION_INK};",
@@ -1501,10 +1512,60 @@ def _distribute(weights, total: float) -> list[float]:
 
 
 #: Clearance between a cell's rule and the text in it, both sides together.
-#: mxGraph insets a label by ``mxConstants.LABEL_INSET`` (3) at each end before
-#: it starts drawing, and a word that ends exactly on its own rule reads as
-#: touching it, so a column is cut this much wider than the text it holds.
-_CELL_PAD = 8.0
+#:
+#: **There is no ``mxConstants.LABEL_INSET``.** The comment that used to stand
+#: here cited one, and the constant does not exist in mxGraph or in draw.io's
+#: fork of it -- a search of both trees returns nothing. What is really taken
+#: off a cell before the text starts is the *spacing*: ``mxText.prototype
+#: .spacing`` is 2 and is added to each of the four sides on top of whatever
+#: ``spacingLeft``/``spacingRight`` the style states, and
+#: ``mxCellRenderer.rotateLabelBounds`` then narrows the label's bounds by
+#: ``spacingLeft + spacingRight`` -- but only while ``labelPosition`` is
+#: ``center`` and ``verticalLabelPosition`` is ``middle``, which for a table
+#: cell they are. Every cell here says ``spacingLeft=3`` or ``4``, so seven or
+#: eight of the twelve is spent before a letter is drawn.
+#:
+#: The rest is the gutter, and it is deliberately generous rather than exact.
+#: It was eight, which left one unit of it, and one unit is well inside the
+#: error of :func:`~pandid.render.furniture.text_width`: that estimate sets a
+#: bold capital at ``_ADV_BOLD`` = 0,62 em where Helvetica Bold sets ``HPSSH``
+#: at 0,689, eleven per cent wider. The estimate is the only measurement either
+#: backend has -- the sheet rules its own columns by it -- so the slack is where
+#: the difference between the estimate and the face has to live, and the legend
+#: clipping ``HPSSH`` to ``HPSSI`` is what it costs to run out of it.
+_CELL_PAD = 12.0
+
+#: A line of text, as a multiple of its font size, which is what a row has to be
+#: at least as tall as.
+#:
+#: Every label this file writes is an HTML label -- ``html=1``, and draw.io's
+#: ``Graph.isHtmlLabel`` also answers yes to anything carrying
+#: ``whiteSpace=wrap`` -- so it goes out through ``mxSvgCanvas2D.getTextCss``,
+#: which writes ``line-height`` from ``mxConstants.LINE_HEIGHT``. That is 1.2,
+#: ``mxConstants.ABSOLUTE_LINE_HEIGHT`` is false and
+#: ``mxSvgCanvas2D.lineHeightCorrection`` is 1, so what reaches the browser is
+#: the *unitless* ``line-height: 1.2`` and a line's box is 1,2 times its font
+#: size, ``n`` lines being ``n`` times that. (The plain-SVG path measures a
+#: single line as the font size flat and only steps by 1,2 between lines. It is
+#: not the path taken here, and assuming it is is how a two-line label comes out
+#: a fifth taller than it was budgeted for.)
+#:
+#: **Nothing shrinks type to fit.** There is no font-scaling pass anywhere in
+#: mxGraph: ``mxText.updateSize`` sets a ``max-height`` and an ``overflow`` and
+#: leaves the size alone, and ``TableLayout`` never measures a string at all --
+#: it takes each row's height from the geometry and normalises the rows to fill
+#: the table, so a row is exactly as tall as this file writes it and its text is
+#: exactly as tall as the font says. A row shorter than its own line box loses
+#: the difference off the top and bottom of every letter in it, which is the
+#: title strip's last field being cut in half: eleven-point values in
+#: fourteen-unit rows are fine, and draw.io's *default* twelve -- which is what
+#: the cells were silently being drawn at -- needs 14,4.
+_LINE_BOX = 1.2
+
+
+def _line_box(size: float) -> float:
+    """How tall a single line set at ``size`` draws. See :data:`_LINE_BOX`."""
+    return size * _LINE_BOX
 
 #: How a :class:`~pandid.document.TableBox`'s per-column ``l``/``c``/``r``
 #: alignment is said in a draw.io style. The sheet's own default is centred
@@ -1520,6 +1581,39 @@ _ALIGN_KEY = {"l": "align=left;spacingLeft=4;", "r": "align=right;spacingRight=4
 _STRIP_FONT, _STRIP_VALUE = 7.5, 11.0
 _CAPTION_INK = "#666666"
 
+#: The weight the drawing frame is ruled at, and the reason the strip stands off
+#: the frame by exactly that much.
+#:
+#: mxGraph strokes a rectangle on its path, so the ``strokeWidth=2`` rule
+#: :meth:`DrawioRenderer._border` draws lays one unit of ink *inside* the frame
+#: rectangle. The strip docks flush to that rectangle's bottom edge -- which is
+#: right, it is the edge the sheet rules its own last band on -- so the last
+#: row's descenders were being drawn under the heavy rule and the reader saw
+#: ``APPROVED / HVL`` cut in half. Standing the tables off by the whole width of
+#: the rule, rather than by the half of it that is actually in the way, is the
+#: same clearance the sheet leaves: ``draw_title_strip`` sets its bottom band's
+#: value on a baseline five units above the strip's own edge.
+#:
+#: :func:`_strip_size` adds it to the height it reports, so :func:`F.dock`
+#: reserves the room rather than the strip growing up out of its own band.
+_FRAME_STROKE = 2.0
+
+#: How deep a title-strip row is ruled.
+#:
+#: The sheet's own ``_REV_ROW`` where that is deep enough to draw in, and the
+#: line box of the largest type in the strip where it is not. draw.io does not
+#: shrink text to fit a row -- there is no such style and no such pass; see
+#: :data:`_LINE_BOX` -- so a row shorter than its own type is a row whose text
+#: is simply drawn across the rules above and below it, which is what the strip
+#: did when its cells were left to draw.io's default 12 in a 14-unit row.
+#:
+#: Stating it as a maximum rather than trusting the fourteen is the point: the
+#: strip is a *fixed* geometry that a font size is chosen against, and this is
+#: the one line of code where the two are held against each other. Raise
+#: :data:`_STRIP_VALUE` past 11,67 and the rows grow rather than the values
+#: being clipped.
+_STRIP_ROW = max(F._REV_ROW, _line_box(max(_STRIP_FONT, _STRIP_VALUE)))
+
 
 def _ALIGN_KEYS(col_align, ncol: int) -> list[str]:
     align = list(col_align or [])
@@ -1527,7 +1621,7 @@ def _ALIGN_KEYS(col_align, ncol: int) -> list[str]:
             for c in range(ncol)]
 
 
-def columns(rows, sizes, total: float, bold_first: bool = True) -> list[float]:
+def columns(rows, sizes, total: float, bold=None) -> list[float]:
     """Column widths for a grid, measured off the text rather than shared out.
 
     The defect this replaced: the columns were given *proportional* shares of
@@ -1547,15 +1641,27 @@ def columns(rows, sizes, total: float, bold_first: bool = True) -> list[float]:
     ``sizes`` is the font size per column, because a title block sets its field
     captions smaller than its values and a column has to be measured at the size
     it will be *drawn* at.
+
+    ``bold`` is the same statement about *weight*, per column, and it is a
+    sequence rather than the "first column only" it used to be because the title
+    strip is the counter-example: it sets its captions light and its **values**
+    bold, so the one column the old rule measured heavy was the one column drawn
+    light and vice versa. Bold is the wider face -- ``_ADV_BOLD`` against
+    ``_ADV`` is 0,62 against 0,56, eleven per cent -- so a column measured in the
+    wrong face is a column that clips or a column that wastes the room the
+    column beside it needed. The caller states it because the caller is what
+    writes the ``fontStyle=1`` into the cell's own style; the two must be read
+    off one line of code or they will drift.
     """
     from pandid.render.furniture import text_width
 
     ncol = max((len(r) for r in rows), default=1)
+    weights = list(bold) if bold is not None else []
     need = []
     for c in range(ncol):
         size = sizes[c] if c < len(sizes) else (sizes[-1] if sizes else 11.0)
-        bold = bold_first and c == 0
-        widest = max((text_width(r[c], size, bold) for r in rows if c < len(r)),
+        heavy = bool(weights[c]) if c < len(weights) else False
+        widest = max((text_width(r[c], size, heavy) for r in rows if c < len(r)),
                      default=0.0)
         need.append(widest + _CELL_PAD)
     span = sum(need)
@@ -1580,11 +1686,33 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
     carries the box's title; a box with no title is given ``startSize=0`` and no
     band at all.
 
-    ``font`` is the size the cells are *drawn* at, and it is stated rather than
-    left to draw.io because draw.io's default is 12 while every box on the sheet
-    measures its own text at its ``font_size``. A column measured at 11 and
-    drawn at 12 is a column three-quarters of a letter too narrow, which is what
-    clipped ``APP'D`` to ``APP'`` in the revision strip.
+    ``font`` is the size the cells are *drawn* at, and it is stated **on every
+    cell** rather than left to draw.io or to the table. draw.io's default is 12
+    while every box on the sheet measures its own text at its ``font_size``, and
+    a column measured at 11 and drawn at 12 is a column three-quarters of a
+    letter too narrow.
+
+    Saying it once on the table container was the mistake, and it is worth
+    stating why it looked like it would work: **mxGraph does not inherit a style
+    from a parent cell.** ``mxGraph.getCellStyle`` resolves a cell's own style
+    string against the stylesheet's default and stops; the only key on a
+    draw.io table that reaches down the tree is the literal value ``inherit``,
+    which ``Graph.getCellStyle`` special-cases for ``strokeColor``,
+    ``fillColor`` and ``gradientColor`` alone -- which is exactly why every row
+    and cell here has to say ``strokeColor=inherit`` in as many words rather
+    than simply not mentioning ink. So a ``fontSize`` on the container styles
+    the container's *own* label -- the table's title band -- and nothing else,
+    and every cell under it was drawn at 12 however carefully its column had
+    been measured. That is the whole of the legend clipping ``HPSSH`` to
+    ``HPSSI``, of the revision grid clipping ``APP'D`` to ``APP'`` and
+    ``Issued for internal review`` to ``Issued for internal``, and -- since
+    12 needs a 14,4-unit line box and the strip rules 14 -- of the title strip's
+    values being drawn through the rule beneath them.
+
+    It goes in ahead of ``col_keys`` so a column that sets a size of its own
+    still wins: a style is parsed left to right into a dictionary
+    (``mxStylesheet.getCellStyle``), so the last statement of a key is the one
+    that stands.
 
     ``row_h`` rules every row at that height and lets the table be as tall as
     its rows come to; the default fills ``h`` instead. Eleven title-block fields
@@ -1614,6 +1742,7 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
     heights = _distribute([1.0] * len(body), h - start) if body else []
 
     shape = _TABLE_SHAPE + f"startSize={_num(start)};fontSize={font:g};"
+    cell = _TABLE_CELL + f"fontSize={font:g};"
     out = [
         f'        <mxCell id="{cid}" value={_attr(title)} '
         f'style={_attr(shape)} vertex="1" parent="1">',
@@ -1638,7 +1767,7 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
             extra = col_keys[c] if c < len(col_keys) else ""
             out += [
                 f'        <mxCell id="{cid}-r{r}-c{c}" value={_attr(value)} '
-                f'style={_attr(_TABLE_CELL + head + extra)} vertex="1" '
+                f'style={_attr(cell + head + extra)} vertex="1" '
                 f'parent="{cid}-r{r}">',
                 f'          <mxGeometry x="{_num(cx)}" width="{_num(widths[c])}" '
                 f'height="{_num(rh)}" as="geometry">',
@@ -1652,15 +1781,21 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
     return out
 
 
-def _text_box(cid: str, title: str, rows, x, y, w, h) -> list[str]:
+def _text_box(cid: str, title: str, rows, x, y, w, h, font: float = 11.0) -> list[str]:
     """A box of free-form lines, for furniture that is not a grid.
 
     A note list written as sentences has one column, and ruling one column into
     a table would invent a structure the author did not write. The lines go into
     one cell, which is what the sheet draws too.
+
+    ``font`` for the reason :func:`_table` states one: the box was measured off
+    its own ``font_size`` (:func:`~pandid.render.furniture.measure_annotation`)
+    and draw.io would otherwise set it at 12, which is a notes box whose lines
+    are wider and taller than the box measured for them.
     """
     lines = ([title] if title else []) + [str(r) for r in rows]
     style = ("rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;"
+             f"fontSize={font:g};"
              f"strokeColor={_INK};fillColor={_NO_FILL};")
     return [
         f'        <mxCell id="{cid}" value={_attr("<br>".join(lines))} '
@@ -1759,7 +1894,7 @@ def _strip_size(block) -> "tuple[float, float]":
     """
     _heading, fields, revisions = _title_block_fields(block)
     return (F.measure_title_strip(block)[0],
-            F._REV_ROW * max(len(revisions) + 1, len(fields), 1))
+            _STRIP_ROW * max(len(revisions) + 1, len(fields), 1) + _FRAME_STROKE)
 
 
 def _title_block_fields(block) -> "tuple[str, list[list[str]], list[list[str]]]":
