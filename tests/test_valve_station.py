@@ -115,9 +115,9 @@ def test_a_drain_leg_ends_at_its_valve():
 
 
 def test_the_control_valve_takes_the_tag_and_the_variant():
-    _fs, st = _sheet(variant="pneumatic")
+    _fs, st = _sheet(variant="butterfly_pneumatic")
     assert st.control.name == "CV-303"
-    assert st.control.variant == "pneumatic"
+    assert st.control.variant == "butterfly_pneumatic"
 
 
 def test_members_can_be_left_out():

@@ -307,7 +307,7 @@ def test_the_letters_step_past_a_tag_on_the_riser_side_too():
 def test_the_position_round_trips_through_a_spec():
     fs = Flowsheet("round trip")
     fs.add(units.Valve("FV-1", variant="control", fail="closed"))
-    fs.add(units.Valve("FV-2", variant="pneumatic", fail="drift_open"))
+    fs.add(units.Valve("FV-2", variant="butterfly", actuator="diaphragm", fail="drift_open"))
     fs.add(units.Valve("FV-3", variant="control"))
 
     written = spec.to_dict(fs)

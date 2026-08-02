@@ -280,8 +280,9 @@ def test_declarations_finds_a_module_constant():
     # Keyed by where each is reachable from, so a constant imported into a
     # second module appears twice. Asserted by suffix for that reason.
     declared = declarations()
-    assert declared, "the walker found nothing in a package that declares two"
+    assert declared, "the walker found nothing in a package that declares some"
     assert {where.rsplit(".", 1)[1] for where in declared} == {
         "_RETIRED_VAPOR_DRAW",
         "_RETIRED_LIQUID_DRAW",
+        "_RETIRED_PNEUMATIC",
     }

@@ -789,13 +789,83 @@ class _NormallyPositioned(Unit):
         """
 
 
+#: ``variant='pneumatic'`` retired in 0.1.2, and the only spelling this change
+#: takes away.
+#:
+#: A module constant beside the branch that honours it, which is what
+#: :func:`pandid.deprecation.declarations` enumerates and the only shape a
+#: retirement can be held to a release by.
+#:
+#: The name went for two reasons at once. It names a **signal medium**, and a
+#: medium is not a kind of valve: every actuated valve on this list is stroked by
+#: something, and "the pneumatic one" picks out no body, no operator and no duty.
+#: And as of 0.1.2 it names the **same drawing** ``control`` names, so it is the
+#: second of two spellings for one symbol -- and it was the one an engineer had
+#: to find, since the obvious one drew a valve with nothing on top of it.
+#:
+#: ``butterfly_pneumatic`` survives the same argument and is deliberately kept.
+#: It names a *body* with an actuator on it, which is a valve you can point at on
+#: a rack, and it is the only spelling for its drawing. Reach it either way:
+#: ``variant='butterfly_pneumatic'``, or ``variant='butterfly',
+#: actuator='diaphragm'``.
+_RETIRED_PNEUMATIC = Deprecation(
+    what="Valve(variant='pneumatic')",
+    instead="Valve(variant='control')",
+    removed_in="0.1.3",
+)
+
+
 class Valve(_NormallyPositioned):
     """Control or let-down valve.
 
-    ``actuator`` is the signal connection on top of the valve, the terminus of
-    a control loop, so a controller's output lands on the final control element
-    rather than in mid-air. Being a signal port, it takes a signal ``kind`` and
-    refuses process fluid: a pipe into a valve stem is not a connection.
+    Two questions, asked separately. ``variant`` is the **body** -- what the
+    valve is, ``"globe"``, ``"ball"``, ``"butterfly"``, ``"gate"`` and the rest.
+    The ``actuator`` argument is **what strokes it**: ``"diaphragm"``,
+    ``"motor"``, ``"solenoid"``, ``"hydraulic"`` or ``"handwheel"``, and unset
+    for a bare body whose operator the drawing does not state.
+
+    That is **ISO 15519-2:2015 Table A.3**'s own model, and it says so with its
+    registration numbers. A.3.01 registers the bowtie as *"2-way on-off valve,
+    straight type, general"* (2101A); A.3.41 registers a *"Diaphragm actuator,
+    single acting"* (725A) on its own; and A.3.20, *"Control valve, general,
+    continuously adjustability, shown with general actuator"*, carries three
+    numbers at once because that symbol **is** the body symbol with an actuator
+    symbol on it.
+
+    ``variant="control"`` is the shorthand for the pairing every sheet draws six
+    times: general body, diaphragm actuator. Type it and you get a complete
+    control valve, dome and all::
+
+        units.Valve("HV-101", variant="globe")                        # plain globe valve
+        units.Valve("CV-303", variant="control")                      # control valve
+        units.Valve("CV-303", variant="gate", actuator="diaphragm")   # the same drawing
+        units.Valve("XV-201", variant="butterfly", actuator="diaphragm")
+        units.Valve("SV-401", variant="solenoid")                     # = actuator="solenoid"
+
+    **The stencil set draws pairings, not parts.** Every actuated valve draw.io
+    ships is one fused shape -- "Pneumatic Operated" is a bowtie with a dome on
+    it, "Motor Operated Valve" the same bowtie with a lettered box -- so there is
+    no loose actuator glyph to lay over a globe or a ball, and a globe body with
+    a diaphragm on it is a drawing that does not exist. The pairings that do are
+    :data:`pandid.render.symbols.ACTUATED`, and asking for one that is not there
+    raises and names them. What is stored is the *variant*, because the variant
+    is the drawing and the pair is only a way of asking for it.
+
+    Up to 0.1.1 ``variant="control"`` drew a Saunders body with no operator at
+    all: a bowtie, a weir arc inside it, and nothing on top. That drawing is a
+    real valve and keeps its place as ``variant="saunders"``; what it is not is
+    a control valve. **ISO 15519-2:2015 Table 5** (p. 19) lists *"specific
+    graphical symbols for process equipment incl. prime movers ..., valves incl.
+    actuators, connections, etc."* as **basic information** for a P&ID, so the
+    actuator is not decoration on the symbol -- it is part of what the symbol is
+    for. Issue #136.
+
+    ``actuator`` is also the name of the **signal connection** on top of the
+    valve, the terminus of a control loop, so a controller's output lands on the
+    final control element rather than in mid-air. One word for one thing: the
+    keyword says which actuator is fitted and the port is the terminal on it.
+    Being a signal port, it takes a signal ``kind`` and refuses process fluid: a
+    pipe into a valve stem is not a connection.
 
     ``normal_position`` is where the valve sits with the plant running:
     ``"open"`` (the default) or ``"closed"``. A closed one is drawn with its
@@ -815,8 +885,8 @@ class Valve(_NormallyPositioned):
     darken.
 
     Clause 4.2.2.10, *"control valves or relief valves shall not be shown as
-    NC"*, is enforced: a ``control``, ``pneumatic``, ``regulator``, ``relief``
-    or ``psv`` valve raises rather than drawing a mark the standard forbids.
+    NC"*, is enforced: a ``control``, ``regulator``, ``relief`` or ``psv`` valve
+    raises rather than drawing a mark the standard forbids.
 
     **This is not an ISA-5.1 or ISO 10628 convention.** ISA-5.1 says nothing
     about valve fill and hands manual block valve depiction to the piping
@@ -837,16 +907,65 @@ class Valve(_NormallyPositioned):
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process"),
              ("actuator", "inlet", "signal")]
 
-    def __init__(self, name: str, variant: str = "default",
+    def __init__(self, name: str, variant: str = "default", *,
+                 actuator: str = "",
                  width: float | None = None, height: float | None = None,
                  label_pos: str | None = None, description: str = "",
                  reference: str = "", normal_position: str = "open",
                  fail: str = ""):
+        variant = self._resolve(name, variant, actuator)
         super().__init__(name, variant=variant, width=width, height=height,
                          label_pos=label_pos, description=description,
                          reference=reference, normal_position=normal_position)
         self._fail = ""
         self.fail = fail
+
+    def _resolve(self, name: str, variant: str, actuator: str) -> str:
+        """The one variant that draws *variant* with *actuator* on it.
+
+        Before ``super().__init__``, so what the rest of this package sees is a
+        variant and nothing else: :data:`~pandid.render.symbols.NC_DARKENS`,
+        :data:`~pandid.render.symbols.FAIL_ACTUATED`,
+        :func:`pandid.spec.dump`, the SVG renderer and the draw.io exporter all
+        go on reading ``self.variant`` and none of them learns a second axis.
+        That is the same move :attr:`Unit.VARIANT_ALIASES` already makes for
+        :class:`pandid.devices.ControlValve`, whose ``default`` has resolved to
+        ``control`` since 0.1.0.
+
+        It is also why the pair is not kept. Storing ``(body, actuator)``
+        *beside* the resolved variant would be one fact in two places, which
+        :attr:`Block._faces` argues is a fact that will one day disagree with
+        itself; and the resolved variant is the one the sheet is issued with,
+        so it is the one that survives a round trip through
+        :mod:`pandid.spec`.
+        """
+        from pandid.render.symbols import ACTUATED, ACTUATORS, actuated_variant
+
+        if variant == "pneumatic":
+            _RETIRED_PNEUMATIC.warn(self, where=name)
+            variant = "control"
+        if not actuator:
+            return variant
+        if actuator not in ACTUATORS:
+            raise ValueError(
+                f"{name}: actuator is one of "
+                f"{', '.join(repr(a) for a in ACTUATORS)}, got {actuator!r}. It is "
+                f"what strokes the valve; what the valve *is* -- the body -- is "
+                f"variant."
+            )
+        # ``control`` and the rest already name a body with an operator on it,
+        # so a second answer to the same question is a contradiction rather than
+        # a refinement, and the two spellings are not merged silently: an author
+        # who wrote both meant one of them and this package cannot tell which.
+        if variant in set(ACTUATED.values()):
+            raise ValueError(
+                f"{name}: variant {variant!r} already draws a valve with an "
+                f"operator on it, so it cannot also take actuator={actuator!r}. "
+                f"Name the body and the actuator (variant='gate', "
+                f"actuator={actuator!r}), or the pairing on its own "
+                f"(variant={variant!r})."
+            )
+        return actuated_variant(variant, actuator)
 
     @property
     def fail(self) -> str:
