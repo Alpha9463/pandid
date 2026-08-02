@@ -880,18 +880,18 @@
     <path d="M 1340.0,640.0 L 1340.0,680.0 L 1430.0,680.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <rect x="191.5" y="133.5" width="37.0" height="13.0" fill="white" />
     <text x="210.0" y="140.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-401</text>
-    <rect x="91.5" y="213.0" width="37.0" height="13.0" fill="white" />
-    <text x="110.0" y="219.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-402</text>
-    <rect x="153.0" y="186.5" width="13.0" height="37.0" fill="white" />
-    <text x="159.5" y="205.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 159.5, 205.0)">S-403</text>
-    <line x1="153.0" y1="205.0" x2="136.0" y2="219.3" stroke="black" stroke-width="1" />
-    <path d="M 136.0,219.3 L 138.7,213.2 L 142.5,217.8 Z" fill="black" />
-    <rect x="170.5" y="213.0" width="37.0" height="13.0" fill="white" />
-    <text x="189.0" y="219.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-404</text>
+    <rect x="97.5" y="247.0" width="37.0" height="13.0" fill="white" />
+    <text x="116.0" y="253.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-402</text>
+    <rect x="106.0" y="186.5" width="13.0" height="37.0" fill="white" />
+    <text x="112.5" y="205.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 112.5, 205.0)">S-403</text>
+    <line x1="119.0" y1="217.0" x2="136.0" y2="219.3" stroke="black" stroke-width="1" />
+    <path d="M 136.0,219.3 L 129.6,221.5 L 130.5,215.5 Z" fill="black" />
+    <rect x="152.5" y="213.0" width="37.0" height="13.0" fill="white" />
+    <text x="171.0" y="219.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-404</text>
     <rect x="239.5" y="398.5" width="37.0" height="13.0" fill="white" />
     <text x="258.0" y="405.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-405</text>
-    <rect x="342.5" y="123.0" width="37.0" height="13.0" fill="white" />
-    <text x="361.0" y="129.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-406</text>
+    <rect x="342.5" y="110.0" width="37.0" height="13.0" fill="white" />
+    <text x="361.0" y="116.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-406</text>
     <rect x="471.5" y="123.0" width="37.0" height="13.0" fill="white" />
     <text x="490.0" y="129.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-407</text>
     <rect x="413.5" y="271.7" width="13.0" height="37.0" fill="white" />
@@ -908,8 +908,8 @@
     <text x="825.0" y="740.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-413</text>
     <rect x="949.5" y="569.2" width="13.0" height="37.0" fill="white" />
     <text x="956.0" y="587.8" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 956.0, 587.8)">S-414</text>
-    <rect x="962.5" y="473.0" width="37.0" height="13.0" fill="white" />
-    <text x="981.0" y="479.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-415</text>
+    <rect x="956.5" y="460.0" width="37.0" height="13.0" fill="white" />
+    <text x="975.0" y="466.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S-415</text>
     <rect x="1148.5" y="387.5" width="13.0" height="37.0" fill="white" />
     <text x="1155.0" y="406.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1155.0, 406.0)">S-416</text>
     <rect x="1213.5" y="202.5" width="13.0" height="37.0" fill="white" />

@@ -1090,8 +1090,8 @@
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="s36" value="HPS-308-100-80-CS" style="html=1;edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;strokeColor=#000000;strokeWidth=1.70176;endArrow=none;startArrow=none;labelBackgroundColor=#ffffff;verticalAlign=middle;align=center;fontSize=8.5088;" edge="1" parent="1" source="u66" target="u59">
-          <mxGeometry relative="1" as="geometry" x="0.8">
-            <mxPoint x="0" y="20" as="offset" />
+          <mxGeometry relative="1" as="geometry" x="0">
+            <mxPoint x="0" y="31.06" as="offset" />
           </mxGeometry>
         </mxCell>
         <mxCell id="s37" value="" style="html=1;edgeStyle=none;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=1;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.5;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;strokeColor=#000000;strokeWidth=1.70176;endArrow=none;startArrow=none;" edge="1" parent="1" source="u59" target="u68">

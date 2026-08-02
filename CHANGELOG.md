@@ -525,6 +525,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A line number's plate erased half of an outline it sat flush against
+  (#243).** Label placement built its obstacle set from `unit_box`, the symbol's
+  *geometric* box. An outline is stroked centred on that box, so half the pen
+  lies outside it, and a plate laid flush covered exactly that half — wrong by
+  half a line width every time a number landed against a wall. `examples/14`'s
+  V-604 drew its left shell wall at 48.7% of its weight for the forty pixels
+  `VAP-611-150-40-CS` ran beside it and at full weight the row after, a 2.06:1
+  step inside one outline, which ISO 15519-1 §6.2 leaves nothing to call: "If
+  two or more widths of line are used, the ratio between any two widths shall
+  be at least 2:1".
+
+  Obstacle boxes are now grown by half the drawn weight plus a named clearance,
+  where the box is *used* rather than where any one list of them is built, so
+  the equipment tags, the line numbers and the leader lines all keep the same
+  paper — and so does the draw.io export, which builds a list of its own and
+  hands it to the same search. Six symbols across three sheets were being cut;
+  `tests/test_halo_invariants.py` now measures the ink and not the box.
+
 - **The storage sphere's ports did not land on the nozzles it draws (#225).**
   `tank/sphere` is the one stencil in the registry that draws its nozzles as
   nozzles — three flanged stubs, two on the crown and one under the belly — and

@@ -698,12 +698,15 @@ def overlay(fs: "Flowsheet", bounds: "tuple[float, float, float, float]",
     modified.
     """
     # The symbol boxes come from :func:`~pandid.portgeom.unit_box`, the same box
-    # the router treats as the obstacle and the sheet's own placement engine
-    # scores against. Most of them are white-filled artwork; the rest are near
-    # enough that a coordinate written across one is not a coordinate anybody
-    # reads. They belong with the halos rather than with the ink, and the caller
-    # does not have to hand them over because they are the overlay's own
-    # business: it draws each of them as an outline anyway.
+    # the router treats as the obstacle. The sheet's own label passes score
+    # against that box grown to its ink and to the clearance beyond it
+    # (:func:`~pandid.render.svg._obstacle`); the overlay does not, because a
+    # coordinate a hair outside a box is still a readable coordinate and the
+    # overlay draws every box as an outline anyway. Most of them are
+    # white-filled artwork; the rest are near enough that a coordinate written
+    # across one is not a coordinate anybody reads. They belong with the halos
+    # rather than with the ink, and the caller does not have to hand them over
+    # because they are the overlay's own business.
     from pandid.portgeom import unit_box
 
     solid = list(plates or ())

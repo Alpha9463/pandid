@@ -120,6 +120,55 @@ _LABEL_STEP = 6.0
 # clear band and there is nothing past it to find.
 _LABEL_BANDS = 7
 
+#: The weight a graphical symbol's outline is drawn at, in whatever box it is
+#: placed in. ISO 15519-1 §11.1.3 is a *shall* -- "When the size of a symbol is
+#: changed, the line width shall be unchanged" -- and :func:`_nominal` is what
+#: holds every artwork in the registry to it, so this is one number for all of
+#: them and not a property of any one drawing.
+_SYMBOL_STROKE = 2.0
+
+#: The paper a label's opaque plate leaves outside a symbol's ink.
+#:
+#: **A symbol's box is not its ink**, and this is the whole of issue #243.
+#: :func:`~pandid.portgeom.unit_box` reports the *geometry*; an outline is
+#: stroked centred on that geometry, so half the pen falls outside the box, and
+#: a plate laid flush against the box covers exactly that half. On the shipped
+#: ``examples/14`` V-604's left shell wall is centred on x = 1255 with its pen
+#: spanning 1254..1256, and ``VAP-611-150-40-CS``'s plate ended at 1255.0 and
+#: deleted the inner half of it. The rendered wall integrated 1.141 of ink for
+#: the forty pixels the plate ran beside it and 2.345 the row after it ended:
+#: 48,7 % of its weight, with nothing in the drawing to say why. ISO 15519-1
+#: §6.2 leaves nothing to call that -- "If two or more widths of line are used,
+#: the ratio between any two widths shall be at least 2:1" -- so 2,06:1 inside
+#: one outline is not a second weight, it is damage.
+#:
+#: Stated as a clearance and not as a bare half-pen, because the two say
+#: different things and only one of them is arithmetic. Half the pen is where
+#: the plate stops *erasing*; this is where it stops *crowding*, and a line
+#: number set hard against a vessel wall is bad drafting even on the reading
+#: where it takes nothing away, since the reader has to pick the lettering off
+#: the equipment. It is the same division :func:`_ink` already makes for a
+#: pipe, which pads by a whole stroke and calls half of it ink and half of it
+#: margin; the margin is the larger share here because an outline is what
+#: identifies a symbol and a run is identified at both ends.
+_PLATE_CLEARANCE = 2.0
+
+
+def _obstacle(box) -> "tuple[float, float, float, float]":
+    """A symbol's drawn box, grown to what a label has to keep off.
+
+    Every place in this module that treats a unit as something a label may not
+    land on goes through here, so the two label passes -- the equipment tags in
+    :meth:`SvgRenderer._tag_item` and the line numbers and their leaders in
+    :func:`stream_numbers` -- cannot disagree about where a symbol ends. The
+    draw.io exporter builds its own list of boxes and hands them to
+    ``_tag_item``, which is why the growth is applied where the boxes are
+    *used* rather than where that one list is built: an exporter that had to
+    remember to grow them is an exporter that will one day forget.
+    """
+    pad = _SYMBOL_STROKE / 2 + _PLATE_CLEARANCE
+    return (box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad)
+
 
 def _along(box, vertical: bool, lo: float, hi: float) -> bool:
     """Is a label at *box* written **along** the run that spans ``lo``..``hi``?
@@ -709,13 +758,13 @@ def stream_numbers(fs, placed: list) -> "list[StreamNumber]":
 
     Everything else the search needs is derived here from the flowsheet, so the
     two callers cannot disagree about it: :func:`_ink` for the lines, and
-    :func:`~pandid.portgeom.unit_box` for the symbols.
+    :func:`~pandid.portgeom.unit_box` through :func:`_obstacle` for the symbols.
     """
     from pandid.portgeom import unit_box
 
     ink = _ink(fs)
     symbols: list[tuple[float, float, float, float]] = [
-        unit_box(u, u.frame) for u in fs.units if u.frame is not None
+        _obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None
     ]
 
     # A number names a *run*, and a run survives the valves and fittings in it:
@@ -2694,8 +2743,11 @@ class SvgRenderer:
         # This unit's own box is not among them: a tag is placed a fixed clear
         # distance off its own symbol and never lands on it, and counting it
         # would make every spot equally bad and so make the search choose
-        # nothing.
-        others = [b for v, b in symbols if v is not u and _meets(b, window)]
+        # nothing. The rest are grown to their ink (:func:`_obstacle`) here
+        # rather than by the caller, so the draw.io exporter -- which builds a
+        # list of its own and hands it to this method -- gets the same answer.
+        others = [_obstacle(b) for v, b in symbols
+                  if v is not u and _meets(_obstacle(b), window)]
 
         clear = (0, 0, 0)
         best, damage = item, _erases(box, near, others)

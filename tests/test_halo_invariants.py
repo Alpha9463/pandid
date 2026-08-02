@@ -27,6 +27,17 @@ README leads with: D-301's tag ate the upper-left quadrant of LT-304's balloon
 and broke its circle in two places, and HV-301C's ate the left edge of
 PIC-301's square. Every test in the suite passed, because nothing had ever
 looked.
+
+**And a symbol's box is not a symbol's ink**, which is issue #243 and why the
+first check below measures the second and not the first.
+:func:`~pandid.portgeom.unit_box` reports the geometry; the outline is stroked
+*centred* on it, so half the pen lies outside the box and a plate flush against
+the box deletes exactly that half. ``examples/14``'s V-604 drew its left shell
+wall at 48,7 % of its weight for the forty pixels ``VAP-611-150-40-CS`` ran
+beside it -- a 2,06:1 step inside one outline, which ISO 15519-1 §6.2 leaves
+nothing to call: "If two or more widths of line are used, the ratio between any
+two widths shall be at least 2:1". This file passed on that sheet every time,
+because it was asking about the box.
 """
 
 import re
@@ -34,6 +45,7 @@ import re
 import pytest
 
 from pandid.portgeom import unit_box
+from pandid.render.svg import _PLATE_CLEARANCE, _SYMBOL_STROKE, _obstacle
 
 from test_label_invariants import CORPUS, _RENDER_OPTS
 
@@ -79,8 +91,15 @@ def drawn():
     return out
 
 
+def _inked(box):
+    """A symbol's box grown by the half-pen that is drawn outside it."""
+    half = _SYMBOL_STROKE / 2
+    return (box[0] - half, box[1] - half, box[2] + half, box[3] + half)
+
+
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
 def test_no_halo_lands_on_a_graphical_symbol(drawn, name):
+    """Measured against the ink, not against the box it is centred on (#243)."""
     fs, halos = drawn[name]
     symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     # A tag written *inside* its own symbol carries no halo at all (see
@@ -89,9 +108,33 @@ def test_no_halo_lands_on_a_graphical_symbol(drawn, name):
         f"{u.tag or u.kind} at ({box[0]:.0f}, {box[1]:.0f})"
         for halo in halos
         for u, box in symbols
-        if _overlaps(halo, box)
+        if _overlaps(halo, _inked(box))
     ]
-    assert not broken, f"{name}: halo over " + "; ".join(sorted(set(broken)))
+    assert not broken, f"{name}: halo over the ink of " + "; ".join(sorted(set(broken)))
+
+
+@pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
+def test_no_halo_is_written_hard_against_an_outline(drawn, name):
+    """Not touching is not the same as clear.
+
+    The check above is the one that says a plate takes nothing away. This is the
+    drafting half: a line number set against a vessel wall is a number the
+    reader has to pick off the equipment, so the placement search keeps
+    :data:`~pandid.render.svg._PLATE_CLEARANCE` of paper outside the ink and
+    this asserts the sheet got it. Held apart from the check above so a failure
+    says which of the two happened.
+    """
+    fs, halos = drawn[name]
+    symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    crowded = [
+        f"{u.tag or u.kind} at ({box[0]:.0f}, {box[1]:.0f})"
+        for halo in halos
+        for u, box in symbols
+        if _overlaps(halo, _obstacle(box))
+    ]
+    assert not crowded, f"{name}: halo within {_PLATE_CLEARANCE}u of " + "; ".join(
+        sorted(set(crowded))
+    )
 
 
 def test_the_corpus_has_halos_to_check(drawn):
