@@ -64,10 +64,13 @@ makes an exported model a model. See :class:`_Fit`.
 
 Three pieces of sheet *detail* have no draw.io construct at all, and simply are
 not drawn: the semicircle a crossing line hops with, since draw.io decides its
-own jumps; the searched placement of a stream number, and the leader it gets
-where no clear paper was found, both of which become a plain edge label; and a
-symbol's own lettering held upright under a turn (the "M" on a motor operator),
-which draw.io turns with the shape.
+own jumps; the leader a stream number is given where the search found no clear
+paper alongside its run, which would have to be a second cell hung off a label
+that is not itself a cell; and a symbol's own lettering held upright under a
+turn (the "M" on a motor operator), which draw.io turns with the shape. Where
+the number *itself* goes came off this list: it is
+:func:`~pandid.render.svg.stream_numbers`' answer for both backends now, written
+into the edge's own ``mxGeometry``. See :func:`_number_geometry`.
 
 The output is a plain uncompressed ``mxfile``. draw.io reads that as readily as
 its compressed form, and it diffs.
@@ -169,9 +172,9 @@ from pandid.portgeom import port_point, unit_box
 from pandid.render import furniture as F
 from pandid.render import svg as _svg
 from pandid.render.svg import (_DIAMOND_BALLOONS, _furniture_name, _too_small, _SIGNAL_DASH, _PROCESS_STROKE,
-                               _SIGNAL_STROKE, _TAP_DASH, boundary_flag,
-                               draws_arrowheads, impulse_tap, stream_polyline,
-                               tap_lines)
+                               _SIGNAL_STROKE, _TAP_DASH, NUMBER_TYPE, boundary_flag,
+                               draws_arrowheads, impulse_tap, stream_numbers,
+                               stream_polyline, tap_lines)
 from pandid.render.symbols import (ARROWHEAD, closed_marking, fail_marking,
                                    wears_arrowhead)
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
@@ -399,11 +402,10 @@ _CHAR_W, _LINE_H = 6.2, 14.0
 #: ``SvgRenderer._draw_unit_labels``, ``_draw_instrument_tag`` and
 #: ``_draw_boundary`` all set, and a sheet exported at a different size from the
 #: one it renders at is two drawings.
+#: A line number's size is the sheet's :data:`~pandid.render.svg.NUMBER_TYPE`,
+#: imported rather than repeated: it is the one number both backends letter the
+#: same string with.
 _TAG_TYPE = 12.0
-
-#: And the size a **line number** is set at, which is smaller:
-#: ``SvgRenderer._draw_streams`` letters one at 10 and measures its halo 13 deep.
-_NUMBER_TYPE = 10.0
 
 
 def _drawn_type(nominal: float, fit: "_Fit", *, lines: int = 1, box=None) -> str:
@@ -980,6 +982,9 @@ class DrawioRenderer:
     def _edges(self, fs, arrows: bool, fit: "_Fit") -> list[str]:
         """Every stream, as a draw.io edge between the two ports it joins."""
         index = {id(u): i for i, u in enumerate(fs.units)}
+        # Where the sheet writes each line number, by the sheet's own search
+        # rather than by centring it on the edge. See :func:`_number_geometry`.
+        numbers = {number.name: number for number in stream_numbers(fs, [])}
         labelled: set = set()
         out: list[str] = []
         for n, s in enumerate(fs.streams):
@@ -1021,9 +1026,13 @@ class DrawioRenderer:
             # carry it is the one that carries it here too. A signal line is
             # unlabelled on the sheet and stays unlabelled here.
             label = ""
+            number = None
             if not signal and s.name not in labelled:
                 labelled.add(s.name)
                 label = s.name
+                number = numbers.get(s.name)
+                if number is not None:
+                    keys += _NUMBER_KEYS + [_drawn_type(NUMBER_TYPE, fit)]
 
             style = ";".join(keys) + ";"
             # The ends are the two nozzles, and they are stated as constraints
@@ -1032,15 +1041,29 @@ class DrawioRenderer:
             # a straight edge and keeps a straight run from reading as a route
             # that happens to have no points left.
             waypoints = points[1:-1]
-            if waypoints:
-                geometry = ['          <mxGeometry relative="1" as="geometry">',
-                            '            <Array as="points">',
-                            *(f'              <mxPoint x="{_num(fx)}" y="{_num(fy)}" />'
-                              for fx, fy in (fit.at(px, py) for px, py in waypoints)),
-                            '            </Array>',
-                            '          </mxGeometry>']
+            along, offset = _number_geometry(number, points, fit)
+            body = [
+                *(['            <Array as="points">',
+                   *(f'              <mxPoint x="{_num(fx)}" y="{_num(fy)}" />'
+                     for fx, fy in (fit.at(px, py) for px, py in waypoints)),
+                   '            </Array>'] if waypoints else []),
+                *([f'            <mxPoint x="{_num(offset[0])}" y="{_num(offset[1])}" '
+                   'as="offset" />'] if offset is not None else []),
+            ]
+            # `x` on the edge's own geometry is where the label sits along the
+            # run; the `offset` beside it is where it sits across. Both are the
+            # *label's*, and they ride on the same mxGeometry as the waypoints
+            # because mxGeometry has a field for each and mxObjectCodec decodes
+            # them independently -- an `<Array as="points">` and an
+            # `<mxPoint as="offset">` are two named children of one element, and
+            # draw.io writes exactly this shape itself when a reader drags a
+            # label along a routed edge (`mxEdgeHandler.moveLabel`).
+            head = ('          <mxGeometry relative="1" as="geometry"'
+                    + ('' if along is None else f' x="{_fraction(along)}"'))
+            if body:
+                geometry = [head + ">", *body, '          </mxGeometry>']
             else:
-                geometry = ['          <mxGeometry relative="1" as="geometry" />']
+                geometry = [head + " />"]
             out += [
                 f'        <mxCell id="s{n}" value={_attr(label)} style={_attr(style)} '
                 f'edge="1" parent="1" source="{self._id(index[id(src_u)])}" '
@@ -1396,6 +1419,96 @@ class DrawioRenderer:
                                 f"fontColor={_CAPTION_INK};",
                                 "align=left;spacingLeft=3;fontStyle=1;"])
         return out
+
+
+#: What a line number is, over and above where it is put.
+#:
+#: ``labelBackgroundColor`` is the sheet's halo, said in a style: mxGraph paints
+#: an opaque box behind a label sized to the measured text, on an edge exactly
+#: as on a vertex -- ``mxText.configureCanvas`` calls
+#: ``setFontBackgroundColor`` and ``mxSvgCanvas2D`` either writes a CSS
+#: ``background-color`` or inserts a ``<rect>`` before the glyphs, and nothing
+#: in that path asks whether the cell is an edge. So a number that has to be
+#: written across a passing run still reads, which is the whole reason the sheet
+#: draws one.
+#:
+#: ``verticalLabelPosition`` is deliberately **not** here, and it is worth
+#: saying why since it is what places every *vertex* label in this file: it has
+#: no effect at all on an edge. ``mxCellRenderer.getLabelBounds`` takes a
+#: separate branch for an edge, starting from ``state.absoluteOffset`` and
+#: adding only the text's spacing, and the final ``if (!isEdge)`` guard skips
+#: ``rotateLabelBounds`` -- which is the only place either label-position style
+#: changes any geometry. The other reader, ``updateVertexLabelOffset``, is
+#: vertex-only by name. An edge label is moved by its geometry and by nothing
+#: else.
+_NUMBER_KEYS = ["labelBackgroundColor=#ffffff", "verticalAlign=middle",
+                "align=center"]
+
+
+def _number_geometry(number, points, fit: "_Fit"):
+    """A line number's place on its edge: how far along, and how far across.
+
+    ``mxGraphView.getPoint`` is the whole of the mechanism and it is exact
+    enough to reproduce the sheet's own placement rather than approximate it.
+    For an edge whose geometry is ``relative``, ``geometry.x`` runs -1 to +1
+    over the routed polyline's Euclidean arc length --
+    ``dist = Math.round((geometry.x / 2 + 0.5) * state.length)`` -- and
+    ``geometry.offset``, an ``<mxPoint as="offset">``, displaces the label from
+    there in plain drawing units, multiplied by the view's zoom and by nothing
+    else.
+
+    **The offset and not ``geometry.y``**, which is the other displacement on
+    offer and is a trap. ``getPoint`` applies it as ``(nx * gy, -ny * gy)``
+    where ``nx = dy/segment`` and ``ny = dx/segment``, so its sign is taken from
+    the direction the segment happens to be *routed* in: the same positive
+    number puts a label above a run drawn left to right and below the identical
+    run drawn right to left. Which end of a stream is its source is a fact about
+    the process and not about the paper, so a perpendicular offset stated that
+    way would put half this sheet's numbers on the wrong side of their lines.
+    The offset is axis-aligned and direction-free, and the sheet's answer is
+    already an absolute point.
+
+    The along-run figure is taken by projecting that point onto the segment the
+    number names -- clamped to the segment, so a number the sheet slid past the
+    end of a short run stays attached to it and the overrun goes into the offset
+    instead. The label lands on the same paper either way; what the clamping
+    buys is that the number rides its own segment when a reader drags the plant
+    about, rather than jumping to whichever piece of the route the arc length
+    then points at.
+
+    Returns ``(None, None)`` for an edge with no number on it.
+    """
+    if number is None:
+        return None, None
+    (ax, ay), (bx, by) = number.seg
+    dx, dy = bx - ax, by - ay
+    span = (dx * dx + dy * dy) ** 0.5
+    if span <= 0:
+        return None, None
+    # The foot of the perpendicular from the number onto its own segment, held
+    # inside it.
+    t = min(1.0, max(0.0, ((number.x - ax) * dx + (number.y - ay) * dy) / (span * span)))
+    foot = (ax + t * dx, ay + t * dy)
+
+    # ...and where that foot falls along the *whole* polyline, which is what
+    # draw.io measures the fraction against. The segment is found by identity on
+    # its endpoints, since stream_polyline is what both the number and the edge
+    # were built from.
+    lengths = [((q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2) ** 0.5
+               for p, q in zip(points, points[1:])]
+    total = sum(lengths)
+    if total <= 0:
+        return None, None
+    before = 0.0
+    for i, (p, q) in enumerate(zip(points, points[1:])):
+        if p == (ax, ay) and q == (bx, by):
+            break
+        before += lengths[i]
+    else:  # the number names a segment this edge does not carry: leave it centred
+        return None, (fit.length(number.x - foot[0]), fit.length(number.y - foot[1]))
+    reach = before + t * span
+    return (max(-1.0, min(1.0, 2.0 * reach / total - 1.0)),
+            (fit.length(number.x - foot[0]), fit.length(number.y - foot[1])))
 
 
 #: How a label on each of the four sides of a box is asked for in a draw.io

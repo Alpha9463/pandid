@@ -961,6 +961,101 @@ def test_a_stream_number_is_written_once_however_many_segments_carry_it(sample):
     assert set(written) == {s.name for s in sample.streams if s.kind == "material"}
 
 
+def _drawio_edge_label(points, geometry) -> tuple[float, float]:
+    """Where draw.io draws an edge's label, by draw.io's own arithmetic.
+
+    ``mxGraphView.getPoint``, transcribed: ``geometry.x`` runs -1 to +1 over the
+    routed polyline's Euclidean arc length, the walk finds the segment that
+    ``dist`` falls in, and ``geometry.offset`` displaces the result in plain
+    drawing units. The view scale is 1 here, so it drops out.
+
+    ``Math.round`` is reproduced because it is the whole of the residual: the
+    rounding of ``dist`` to a whole pixel is worth up to half a unit of
+    along-run slop and there is no way to write a fraction that avoids it.
+    """
+    lengths = [((q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2) ** 0.5 for p, q in zip(points, points[1:])]
+    total = sum(lengths)
+    gx = float(geometry.get("x") or 0.0) / 2
+    dist = round((gx + 0.5) * total)
+    walked, index, segment = 0.0, 1, lengths[0]
+    while dist >= round(walked + segment) and index < len(points) - 1:
+        walked += segment
+        segment = lengths[index]
+        index += 1
+    factor = (dist - walked) / segment if segment else 0.0
+    p0, pe = points[index - 1], points[index]
+    offset = geometry.find("mxPoint[@as='offset']")
+    dx = float(offset.get("x")) if offset is not None else 0.0
+    dy = float(offset.get("y")) if offset is not None else 0.0
+    return (p0[0] + (pe[0] - p0[0]) * factor + dx, p0[1] + (pe[1] - p0[1]) * factor + dy)
+
+
+def test_a_line_number_is_written_where_the_sheet_writes_it():
+    """`CWS-311-150-40-CS` was centred on its own run, across HV-311's body and
+    the CWSH flag; `FB-301-200-160-SS` and `FB-310-300-160-SS` were centred over
+    the lettering of the flags they run to. The sheet does not centre a number,
+    it searches for paper -- and the export had no way to ask, so it centred.
+
+    Now it asks. This replays draw.io's own `getPoint` over the emitted geometry
+    and holds the answer against `stream_numbers`, which is the one derivation
+    both backends read.
+    """
+    from pandid.render.drawio import DrawioRenderer
+    from pandid.render.svg import _page, stream_numbers
+
+    for stem in SHEETS:
+        fs, kwargs = gallery.flowsheet(stem)
+        fs.to_svg(**kwargs)
+        cells = _drawio_cells(fs, kwargs)
+        _boxes, _frame, fit = DrawioRenderer()._furniture(fs, _page(kwargs.get("page_size")))
+        wanted = {number.name: number for number in stream_numbers(fs, [])}
+        checked = 0
+        for n, s in enumerate(fs.streams):
+            cell = cells[f"s{n}"]
+            name = cell.get("value") or ""
+            if not name:
+                continue
+            landed = _drawio_edge_label(
+                [fit.at(*p) for p in stream_polyline(s)], cell.find("mxGeometry")
+            )
+            number = wanted[name]
+            # Half a unit, which is `Math.round(dist)` and nothing else.
+            assert landed == pytest.approx(fit.at(number.x, number.y), abs=0.6), (
+                f"{stem}: {name} lands at {landed}, not where the sheet writes it"
+            )
+            # ...and it is written on the sheet's own opaque halo, so a number
+            # that has to cross a passing run still reads.
+            assert _style(cell)["labelBackgroundColor"] == "#ffffff"
+            checked += 1
+        assert checked or not [s for s in fs.streams if s.kind == "material"]
+
+
+def test_a_line_number_beside_its_run_carries_a_perpendicular_offset():
+    """The defect stated plainly: with no offset at all, every number sat on the
+    midpoint of its own polyline. `geometry.offset` is what moves it off, and it
+    is the offset rather than `geometry.y` because `getPoint` applies the latter
+    as `(nx*gy, -ny*gy)` -- a sign taken from the direction the segment happens
+    to be routed in, which would put half a sheet's numbers on the wrong side of
+    their lines."""
+    fs, kwargs = gallery.flowsheet("11_ethanol_pid")
+    fs.to_svg(**kwargs)
+    cells = _drawio_cells(fs, kwargs)
+    offsets = []
+    for n, s in enumerate(fs.streams):
+        cell = cells[f"s{n}"]
+        if not (cell.get("value") or ""):
+            continue
+        point = cell.find("mxGeometry/mxPoint[@as='offset']")
+        if point is None:
+            offsets.append(0.0)
+            continue
+        offsets.append(abs(float(point.get("x"))) + abs(float(point.get("y"))))
+    assert offsets, "the sample sheet writes line numbers"
+    # Most of them stand off their run; the rest sit in it on the sheet's own
+    # halo, which is the convention and not an omission.
+    assert sum(1 for d in offsets if d > 1.0) >= len(offsets) // 2
+
+
 # ---------------------------------------------------------------------------
 # Sheet furniture, and the options a model has no room for.
 # ---------------------------------------------------------------------------
