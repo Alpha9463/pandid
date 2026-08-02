@@ -415,6 +415,71 @@ def test_tank_is_its_own_kind():
     assert U.Vessel("V-1").kind == "vessel"
 
 
+# ---------------------------------------------------------------------------
+# A vessel's and a tank's five nozzles (#222)
+# ---------------------------------------------------------------------------
+
+#: What both classes declare, in order. Written out rather than derived from
+#: ``PORTS``, which is the thing under test: a list compared against itself
+#: would pass whatever it said.
+_HOLDUP_PORTS = ["inlet", "outlet", "vent", "relief", "drain"]
+
+
+@pytest.mark.parametrize("cls", [U.Vessel, U.Tank], ids=["Vessel", "Tank"])
+def test_a_vessel_and_a_tank_carry_the_same_five_nozzles(cls):
+    """One shell at two design pressures, so one set of connections.
+
+    0.1.1 gave a vessel a ``vent`` and a tank nothing, which said a tank does
+    not breathe -- and left ``examples/14``'s fixed-roof ethanol tank unable to
+    carry the conservation vent and its flame arrestor, which is issue #222.
+    """
+    assert list(cls("X-1").ports) == _HOLDUP_PORTS
+
+
+@pytest.mark.parametrize("cls", [U.Vessel, U.Tank], ids=["Vessel", "Tank"])
+def test_the_two_process_nozzles_come_first(cls):
+    """The new three are appended, and that is what makes this additive.
+
+    ``ports`` is insertion-ordered and observable -- a port family placed by a
+    ``PortSeries`` is spread in the unit's own port order -- so weaving a new
+    nozzle in among the old ones could move ink on a sheet that never asks for
+    it. Nothing here has a series today; this is what says so tomorrow.
+    """
+    assert list(cls("X-1").ports)[:2] == ["inlet", "outlet"]
+
+
+@pytest.mark.parametrize("cls", [U.Vessel, U.Tank], ids=["Vessel", "Tank"])
+def test_each_added_nozzle_leaves_the_vessel_and_says_what_it_carries(cls):
+    """Directions and roles, which is the half a name does not carry.
+
+    ``relief`` is ``process`` and not ``vapor`` deliberately: what a relief
+    passes is whatever the vessel is full of when it lifts, which on a fire case
+    is liquid. ``drain`` is ``liquid`` because a low-point draw is not.
+    """
+    u = cls("X-1")
+    assert [u.port(n).direction for n in _HOLDUP_PORTS] == ["inlet"] + ["outlet"] * 4
+    assert u.vent.role == "vapor"
+    assert u.relief.role == "process"
+    assert u.drain.role == "liquid"
+
+
+@pytest.mark.parametrize("cls", [U.Vessel, U.Tank], ids=["Vessel", "Tank"])
+def test_none_of_the_five_is_numbered(cls):
+    """So ``nozzle-unconnected`` does not report a tank nobody drained.
+
+    That finding reads a *count the author wrote down and did not meet*, which
+    it recognises by the ``stem_N`` spelling. A named role is not a count: a
+    vessel is offered a relief connection the way it has always been offered a
+    vent, and leaving one open is a drawing decision. The rule is
+    ``validate._family_stem``'s, and it is *asked* here rather than restated --
+    a second copy of the naming rule is a second thing to keep in step.
+    ``tests/test_validate.py`` holds the finding itself.
+    """
+    from pandid.validate import _family_stem
+
+    assert [n for n in cls("X-1").ports if _family_stem(n) is not None] == []
+
+
 def test_mixer_rejects_zero_inlets():
     with pytest.raises(ValueError, match="at least 1 inlet"):
         U.Mixer("M", n_inlets=0)
