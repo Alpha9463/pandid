@@ -49,7 +49,7 @@ junctions are tees that **combine** rather than split.
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pandid import Flowsheet, units
+from pandid import Flowsheet, devices, units
 from pandid.document import Revision, TableBox, TitleBlock, equipment_list
 from pandid.portgeom import port_offset
 
@@ -168,8 +168,8 @@ def main():
     # undo the make-up entirely. Both its connections are drawn on the crown,
     # which is where a hose pump's really are, and that is what shapes the
     # piping around it below.
-    dose = fs.add(units.Pump("P-402", variant="peristaltic",
-                             description="Flocculant Dosing Pump"))
+    dose = fs.add(devices.PeristalticPump(
+        "P-402", description="Flocculant Dosing Pump"))
 
     # --- Thickening -------------------------------------------------------
     concentrate = fs.add(units.Feed("Flotation Concentrate",
@@ -180,16 +180,8 @@ def main():
     # the 224 t/h that arrive, in one step, as water clean enough to use again.
     # Its two draws are what the "gravity separator, settling chamber" stencil
     # is -- a high draw off the wall and a low one out of the apex.
-    #
-    # Those two ports are called ``vapor`` and ``liquid``, which is wrong here
-    # and is a wart the library documents rather than hides: ``Separator``'s
-    # docstring says the mechanical separators took ``overflow``/``underflow``
-    # and that ``cyclone``, ``gravity`` and ``electrostatic`` kept the phase
-    # names only because 0.1.0 shipped them. Read ``vapor`` as the overflow
-    # launder and ``liquid`` as the underflow cone. The sheet says which is
-    # which in its stream names, so no reader of the drawing has to know.
-    thickener = fs.add(units.Separator("TH-401", variant="gravity",
-                                       description="Concentrate Thickener"))
+    thickener = fs.add(devices.GravitySeparator(
+        "TH-401", description="Concentrate Thickener"))
     overflow = fs.add(units.Product("Recovered Water", reference="PCD-402"))
 
     # --- Filtration -------------------------------------------------------
@@ -202,8 +194,8 @@ def main():
     # the rate *is* the speed; it holds that rate against a filter whose
     # backpressure moves through the cycle; and it delivers without the
     # pulsation a reciprocating pump would put into a filter feed box.
-    underflow_pump = fs.add(units.Pump("P-401", variant="screw",
-                                       description="Thickener Underflow Pump"))
+    underflow_pump = fs.add(devices.ScrewPump(
+        "P-401", description="Thickener Underflow Pump"))
     # Eccentric on the suction, flat side up: a concentric body there leaves a
     # pocket against the roof of the line for air to collect in, and a PC pump
     # that loses suction runs its rubber stator dry and cooks it in seconds.
@@ -293,8 +285,8 @@ def main():
     # two draws are not named for which one is wanted -- "a cyclone on a spray
     # dryer recovers its product from the underflow, and the identical cyclone
     # on a vent line throws that same catch away".
-    cyclone = fs.add(units.Separator("CY-401", variant="cyclone",
-                                     description="Product Recovery Cyclone"))
+    cyclone = fs.add(devices.Cyclone(
+        "CY-401", description="Product Recovery Cyclone"))
     scrub_water = fs.add(units.Feed("Scrubbing Water", reference="PCD-402"))
     scrub_tee = fs.add(units.Tee(branch="inlet"))
     # The water ties in upstream of the vessel because that is where a venturi
@@ -303,8 +295,8 @@ def main():
     # tie-in is on the sheet, which it has to be -- a scrubber with no water on
     # it is not a scrubber -- and the 0.13 t/h of dust the cyclone missed
     # leaves in the effluent rather than up the stack.
-    scrubber = fs.add(units.Separator("SC-401", variant="scrubber",
-                                      description="Dryer Exhaust Scrubber"))
+    scrubber = fs.add(devices.Scrubber(
+        "SC-401", description="Dryer Exhaust Scrubber"))
     effluent = fs.add(units.Product("Scrubber Effluent", reference="PCD-402"))
     # Induced draught, and last on purpose. Everything from the burner to the
     # scrubber then runs below atmospheric, so hot gas and dust cannot blow out
@@ -343,8 +335,11 @@ def main():
     # lose. An electromagnet earns its complication where the field has to reach
     # down into a deep burden, or has to be switched off to drop what it has
     # caught -- neither of which is true of 5 kg an hour of discrete steel.
-    magnet = fs.add(units.Separator("MS-401", variant="permanent_magnet",
-                                    description="Product Magnetic Separator"))
+    # variant= stated rather than defaulted: MagneticSeparator draws both the
+    # permanent and the electromagnetic body, and this sheet means the former.
+    magnet = fs.add(devices.MagneticSeparator(
+        "MS-401", variant="permanent_magnet",
+        description="Product Magnetic Separator"))
     product = fs.add(units.Product("Dry Concentrate", reference="PFD-402"))
     tramp = fs.add(units.Product("Tramp Metal"))
 
@@ -472,12 +467,12 @@ def main():
     fs.connect(dose.discharge, floc.branch, name="S-405")
     fs.connect(floc.outlet, thickener.feed, name="S-406")
 
-    fs.connect(thickener.port("vapor"), overflow.inlet, name="S-407")
+    fs.connect(thickener.overflow, overflow.inlet, name="S-407")
 
     # Straight down out of the cone. Left to itself the router steps the riser
     # 34 units east on its way past the thickener's skirt, and it lands in the
     # only clear window RD-401's tag has.
-    fs.connect(thickener.port("liquid"), suction_red.inlet, name="S-408").via(
+    fs.connect(thickener.underflow, suction_red.inlet, name="S-408").via(
         [(420, 332.4)])
     fs.connect(suction_red.outlet, underflow_pump.suction, name="S-408")
 
@@ -501,17 +496,17 @@ def main():
     fs.connect(breeching.outlet, dryer.feed, name="S-415")
     fs.connect(dryer.product, cyclone.feed, name="S-416")
 
-    fs.connect(cyclone.port("vapor"), scrub_tee.inlet, name="S-417")
+    fs.connect(cyclone.overflow, scrub_tee.inlet, name="S-417")
     fs.connect(scrub_water.outlet, scrub_tee.branch, name="S-418")
     fs.connect(scrub_tee.outlet, scrubber.feed, name="S-419")
 
-    fs.connect(scrubber.port("vapor"), fan.suction, name="S-420")
+    fs.connect(scrubber.vapor, fan.suction, name="S-420")
     fs.connect(fan.discharge, stack.inlet, name="S-420")
-    fs.connect(scrubber.port("liquid"), effluent.inlet, name="S-421")
+    fs.connect(scrubber.liquid, effluent.inlet, name="S-421")
 
-    fs.connect(cyclone.port("liquid"), magnet.feed, name="S-422")
-    fs.connect(magnet.port("overflow"), product.inlet, name="S-423")
-    fs.connect(magnet.port("underflow"), tramp.inlet, name="S-424")
+    fs.connect(cyclone.underflow, magnet.feed, name="S-422")
+    fs.connect(magnet.overflow, product.inlet, name="S-423")
+    fs.connect(magnet.underflow, tramp.inlet, name="S-424")
 
     for s in fs.streams:
         values = PROPERTIES.get(s.name)
