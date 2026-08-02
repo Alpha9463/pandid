@@ -43,6 +43,7 @@ from pandid.flowsheet import Flowsheet
 from pandid.portgeom import port_point, unit_box
 from pandid.render.drawio import _APPROXIMATIONS, DrawioRenderer
 from pandid.render.svg import (
+    _page,
     boundary_flag,
     impulse_tap,
     pneumatic_marks,
@@ -998,9 +999,10 @@ def test_a_line_number_is_written_where_the_sheet_writes_it():
 
     Now it asks. This replays draw.io's own `getPoint` over the emitted geometry
     and holds the answer against `stream_numbers`, which is the one derivation
-    both backends read.
+    both backends read -- seeded, as the sheet seeds it, with the plates the
+    equipment tags lay down.
     """
-    from pandid.render.drawio import DrawioRenderer
+    from pandid.render.drawio import DrawioRenderer, _tag_pass
     from pandid.render.svg import _page, stream_numbers
 
     for stem in SHEETS:
@@ -1008,7 +1010,8 @@ def test_a_line_number_is_written_where_the_sheet_writes_it():
         fs.to_svg(**kwargs)
         cells = _drawio_cells(fs, kwargs)
         _boxes, _frame, fit = DrawioRenderer()._furniture(fs, _page(kwargs.get("page_size")))
-        wanted = {number.name: number for number in stream_numbers(fs, [])}
+        plates = _tag_pass(fs, default_registry).plates
+        wanted = {number.name: number for number in stream_numbers(fs, plates)}
         checked = 0
         for n, s in enumerate(fs.streams):
             cell = cells[f"s{n}"]
@@ -1056,8 +1059,6 @@ def test_a_line_number_beside_its_run_carries_a_perpendicular_offset():
     assert sum(1 for d in offsets if d > 1.0) >= len(offsets) // 2
 
 
-# ---------------------------------------------------------------------------
-# Sheet furniture, and the options a model has no room for.
 # ---------------------------------------------------------------------------
 
 
@@ -1683,3 +1684,102 @@ def test_every_example_exports_a_document_that_matches_its_sheet(stem):
         for prefix, port in (("exit", s.source), ("entry", s.dest)):
             landed = _drawio_connection_point(port.owner, at[id(port.owner)], style, prefix)
             assert landed == pytest.approx(stream_end(port), abs=0.01)
+
+
+def _drawn_boxes(fs, kwargs) -> tuple[dict, dict, list]:
+    """Every rectangle the emitted file actually inks, read back out of it.
+
+    Read out of the **XML** and not out of the renderer, which is the whole
+    point of the check below: the renderer already believes it stepped the
+    number aside, and what a reader opens is the file. A vertex's box is its
+    geometry; a label's box is its measured text at the `fontSize` the cell
+    states, laid out the way draw.io lays a label out.
+
+    Returns the symbol boxes by cell id, the equipment-tag label boxes by cell
+    id, and the line-number label boxes as `(name, box)`.
+    """
+    from pandid.render.drawio import _LINE_BOX, _Fit
+    from pandid.render.furniture import text_width
+
+    cells = _drawio_cells(fs, kwargs)
+    symbols, tags, numbers = {}, {}, []
+    for i, u in enumerate(fs.units):
+        cell = cells[f"u{i}"]
+        geometry = cell.find("mxGeometry")
+        x, y = float(geometry.get("x")), float(geometry.get("y"))
+        w, h = float(geometry.get("width")), float(geometry.get("height"))
+        symbols[f"u{i}"] = (x, y, x + w, y + h)
+        text = cell.get("value") or ""
+        style = _style(cell)
+        # A label written *inside* the shape is not on the paper beside it and
+        # is not an obstacle: an instrument's tag and a boundary flag's service
+        # name are the shape's own contents.
+        if not text or style.get("verticalLabelPosition", "middle") == "middle":
+            continue
+        size = float(style.get("fontSize", 12))
+        lines = text.split("<br>")
+        lw = max(text_width(line, size) for line in lines)
+        lh = _LINE_BOX * size * len(lines)
+        offset = geometry.find("mxPoint[@as='offset']")
+        dx = float(offset.get("x")) if offset is not None else 0.0
+        dy = float(offset.get("y")) if offset is not None else 0.0
+        # `verticalLabelPosition` puts the label's box outside the cell and the
+        # `verticalAlign` beside it pulls the text back against the cell.
+        cx = x + w / 2 + dx
+        top = (y - lh if style["verticalLabelPosition"] == "top" else y + h) + dy
+        tags[f"u{i}"] = (cx - lw / 2, top, cx + lw / 2, top + lh)
+
+    _boxes, _frame, fit = DrawioRenderer()._furniture(fs, _page(kwargs.get("page_size")))
+    assert isinstance(fit, _Fit)
+    for n, s in enumerate(fs.streams):
+        cell = cells[f"s{n}"]
+        name = cell.get("value") or ""
+        if not name:
+            continue
+        style = _style(cell)
+        size = float(style["fontSize"])
+        cx, cy = _drawio_edge_label(
+            [fit.at(*p) for p in stream_polyline(s)], cell.find("mxGeometry")
+        )
+        lw, lh = text_width(name, size), _LINE_BOX * size
+        # `horizontal=0` turns the label a quarter, so the paper it takes is the
+        # transpose; it is centred on the same point either way round.
+        if style.get("horizontal") == "0":
+            lw, lh = lh, lw
+        numbers.append((name, (cx - lw / 2, cy - lh / 2, cx + lw / 2, cy + lh / 2)))
+    return symbols, tags, numbers
+
+
+@pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
+def test_no_line_number_is_written_over_a_symbol_or_an_equipment_tag(stem):
+    """The user's report, measured rather than looked at.
+
+    `some of the valves are covered by the stream labels`. They were: the
+    exporter seeded `stream_numbers` with an empty list of plates where the
+    sheet seeds it with every equipment tag it has already laid down, so the
+    search was offered paper the sheet had already spent and took it --
+    `AE-302-300-80-SS` over `HV-301A`, `FB-301-200-160-SS` over `XV-301`,
+    seventeen numbers over four sheets. And a number on a vertical run was
+    written flat where the sheet turns it, so its lettering ran across the
+    corridor it was reserved a slot *along*.
+
+    Parsed back out of the emitted XML and measured, because a renderer that
+    believes it stepped a label aside is not evidence of anything: draw.io's own
+    `getPoint` places the number, `text_width` and the cell's stated `fontSize`
+    measure it, and the boxes either meet or they do not.
+    """
+    fs, kwargs = gallery.flowsheet(stem)
+    fs.to_svg(**kwargs)
+    symbols, tags, numbers = _drawn_boxes(fs, kwargs)
+    drawn = {**symbols, **{f"{k} tag": v for k, v in tags.items()}}
+
+    def meets(a, b):
+        return a[2] > b[0] and a[0] < b[2] and a[3] > b[1] and a[1] < b[3]
+
+    struck = [
+        (name, other)
+        for name, box in numbers
+        for other, obstacle in drawn.items()
+        if meets(box, obstacle)
+    ]
+    assert not struck, f"{stem}: line numbers written over {struck}"

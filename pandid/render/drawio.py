@@ -408,6 +408,91 @@ _CHAR_W, _LINE_H = 6.2, 14.0
 _TAG_TYPE = 12.0
 
 
+class _Tags(NamedTuple):
+    """The sheet's equipment-tag pass, which this exporter had never run.
+
+    ``at`` is where each unit's tag ended up, by ``id(unit)``: the side it
+    settled on and how far along that side it was stepped, in **drawing** units.
+    ``plates`` is the opaque white rectangle each of those tags lays on the
+    paper -- the tag itself, and the ``NC`` and fail-position letters that go in
+    the corners beside it.
+
+    ``plates`` is the point. :func:`~pandid.render.svg.stream_numbers` takes the
+    plates already on the sheet as its seed and steps a line number clear of
+    them; the exporter was passing ``[]``, which is that function's own
+    documented caveat -- "an exporter with no equipment-tag pass of its own
+    passes an empty list and gets a placement that dodges every symbol and every
+    line but may still land under a tag". Measured over the twelve examples that
+    is seventeen numbers on four sheets, and on ``11_ethanol_pid`` it is
+    ``AE-302-300-80-SS`` over ``HV-301A``'s tag, ``AE-303-80-80-SS`` over
+    ``HV-303A``'s, ``AE-305-40-80-SS`` over ``HV-305A``'s,
+    ``HPS-308-100-80-CS`` over ``HV-308A``'s and ``FB-301-200-160-SS`` over
+    ``XV-301``'s -- the last of which hides the tag outright. The sheet writes
+    none of them there.
+    """
+    at: dict
+    plates: list
+
+
+def _tag_pass(fs, registry) -> "_Tags":
+    """Run the sheet's equipment-tag placement, without drawing anything.
+
+    :meth:`SvgRenderer._tag_item` is the search and it is called here rather
+    than re-derived, for the reason :func:`~pandid.render.furniture.dock` and
+    :func:`~pandid.render.svg.stream_numbers` are: a second implementation of a
+    *search* does not drift, it answers differently on the first crowded
+    corridor. What is repeated is only the walk over the units, which is fused
+    into ``SvgRenderer._draw_units`` with the drawing of them and so cannot be
+    called on its own; the three placements it dispatches to
+    (:meth:`~SvgRenderer._tag_item`, :meth:`~SvgRenderer._nc_label_item`,
+    :meth:`~SvgRenderer._fail_label_item`) and the halo each lands on
+    (``_unit_label_box``) are the sheet's own.
+
+    The text is ``html.escape``'d before it is measured because the sheet
+    measures the escaped string -- ``_unit_label_box`` sizes a halo from
+    ``len(text)``, and an ampersand in a tag is five characters to it.
+
+    Three kinds of unit are skipped, and each for the reason the sheet skips
+    it: an instrument writes its tag *inside* its balloon, so there is no halo;
+    a boundary flag writes its service name inside the pennant, likewise; and a
+    unit with no tag -- the pipe tee is the only one today -- is labelled
+    nowhere at all.
+    """
+    import html as _html
+
+    from pandid.render.svg import SvgRenderer, _ink, _unit_label_box
+
+    sheet = SvgRenderer(registry)
+    ink = _ink(fs)
+    symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    at: dict = {}
+    items: list = []
+    for u in fs.units:
+        f = u.frame
+        if f is None or u.kind in ("feed", "product", "instrument"):
+            continue
+        x, y, w, h = f.x, f.y, f.w, f.h
+        tag_box = None
+        if u.tag:
+            item = sheet._tag_item(u, f, x, y, w, h, _html.escape(u.tag),
+                                   ink, symbols)
+            tag_box = _unit_label_box(item)
+            items.append(item)
+            # The side, and the step along it, said the way a draw.io style has
+            # to say it: `_LABEL_SIDE` states the side and the geometry offset
+            # states the step, so the step is measured against where that same
+            # side would have put the tag untouched.
+            side = item[4]
+            base = sheet._label_place(side, x, y, w, h)
+            at[id(u)] = (side, item[0] - base[0], item[1] - base[1])
+        if closed_marking(u, registry) == "NC":
+            items.append(sheet._nc_label_item(u, f, x, y, w, h, tag_box))
+        letters = fail_marking(u)
+        if letters:
+            items.append(sheet._fail_label_item(u, f, x, y, w, h, letters, tag_box))
+    return _Tags(at, [b for b in map(_unit_label_box, items) if b is not None])
+
+
 def _drawn_type(nominal: float, fit: "_Fit", *, lines: int = 1, box=None) -> str:
     """The ``fontSize`` key for a piece of lettering **in the drawing**.
 
@@ -577,11 +662,15 @@ class DrawioRenderer:
         # a reference resolved by id over the whole document, not a back-pointer
         # into what has been read so far. It has to be, since z-order *is* cell
         # order and draw.io lets a user send an edge behind the shapes it joins.
+        # The sheet's equipment-tag pass, run once: it settles where every tag
+        # lands *and* hands the line-number search the plates it has to step
+        # clear of. See :class:`_Tags`.
+        tags = _tag_pass(fs, self.registry)
         balloons: list[str] = []
         for i, u in enumerate(fs.units):
             (balloons if u.kind == "instrument" else body).extend(
-                self._vertex(u, i, fit))
-        body.extend(self._edges(fs, arrows, fit))
+                self._vertex(u, i, fit, tags))
+        body.extend(self._edges(fs, arrows, fit, tags))
         # Instrumentation goes on over the lines, as it does on the sheet: the
         # tap runs from the plant to the balloon and the balloon's opaque body
         # then knocks out both it and any process line an in-line element
@@ -776,14 +865,16 @@ class DrawioRenderer:
                 f"strokeColor={_LINE_INK}", f"fillColor={_NO_FILL}",
                 f"strokeWidth={_PROCESS_STROKE:g}"]
 
-    def _label(self, u, fit: "_Fit") -> "tuple[str, list[str]]":
-        """A unit's label text and the style keys that place it.
+    def _label(self, u, fit: "_Fit", tags: "_Tags") -> "tuple[str, list[str], tuple]":
+        """A unit's label text, the style keys that place it, and how far the
+        sheet stepped it off that side.
 
         An instrument's tag goes *inside* its balloon, letters over number, which
         is where a sheet writes it and where draw.io's default centred label puts
-        it. Everything else is labelled on the side layout picked for it
-        (:func:`pandid.layout.coordinates.assign_labels`), which is a resolved
-        result on the frame and so is read rather than decided again.
+        it. Everything else is labelled on the side the sheet settles on --
+        which is :func:`pandid.layout.coordinates.assign_labels`' choice and
+        then :meth:`SvgRenderer._tag_item`'s, because a face with no nozzle on
+        it is not yet free paper. See :meth:`_tag_placement`.
 
         Two markings ride along on the label because they have nowhere else to
         go: ``NC`` for a valve declared normally closed whose body cannot carry
@@ -816,7 +907,7 @@ class DrawioRenderer:
             return text, ["verticalLabelPosition=middle", "verticalAlign=middle",
                           "align=center",
                           _drawn_type(_TAG_TYPE, fit, lines=len(parts),
-                                      box=self._cell_box(u))]
+                                      box=self._cell_box(u))], (0.0, 0.0)
 
         lines = [u.tag] if u.tag else []
         if u.kind in ("feed", "product"):
@@ -847,19 +938,20 @@ class DrawioRenderer:
             # the whole of it.
             return "<br>".join(lines), _LABEL_SIDE["center"] + [
                 _drawn_type(_TAG_TYPE, fit, lines=len(lines),
-                            box=self._cell_box(u))]
+                            box=self._cell_box(u))], (0.0, 0.0)
         if closed_marking(u, self.registry) == "NC":
             lines.append("NC")
         letters = fail_marking(u)
         if letters:
             lines.append(letters)
-        side = (u.frame.label_pos or "top") if u.frame is not None else "top"
+        side, dx, dy = tags.at.get(id(u), (
+            (u.frame.label_pos or "top") if u.frame is not None else "top", 0.0, 0.0))
         # No cap: a tag on a side of a symbol is written on the paper beside it,
         # not in the cell, so there is no box for it to overflow. `_LABEL_SIDE`
         # gives the label its own box outside the cell and mxGraph draws it at
         # whatever size it is told (`mxGraphView.updateVertexLabelOffset`).
         return "<br>".join(lines), _LABEL_SIDE.get(side, _LABEL_SIDE["top"]) + [
-            _drawn_type(_TAG_TYPE, fit)]
+            _drawn_type(_TAG_TYPE, fit)], (fit.length(dx), fit.length(dy))
 
     @staticmethod
     def _cell_box(u) -> "tuple[float, float, float, float]":
@@ -884,18 +976,31 @@ class DrawioRenderer:
             return boundary_flag(u, u.frame).box
         return unit_box(u, u.frame)
 
-    def _vertex(self, u, index: int, fit: "_Fit") -> list[str]:
-        """One unit, as a draw.io vertex."""
+    def _vertex(self, u, index: int, fit: "_Fit", tags: "_Tags") -> list[str]:
+        """One unit, as a draw.io vertex.
+
+        The ``<mxPoint as="offset">`` is how far the sheet stepped this unit's
+        tag along the side it settled on. ``mxGraphView.updateCellState`` reads
+        a *vertex* geometry's offset into ``state.absoluteOffset``, and
+        ``mxCellRenderer.getLabelBounds`` starts its non-edge branch from
+        exactly that -- so it displaces the label and leaves the cell alone,
+        which is what a tag stepping clear of somebody else's line is.
+        """
         sym = self.registry.for_unit(u)
         x0, y0, x1, y1 = fit.box(self._cell_box(u))
         placement, _, _ = self._placement(u, sym)
-        text, label_keys = self._label(u, fit)
+        text, label_keys, (dx, dy) = self._label(u, fit, tags)
         style = ";".join(["html=1", *self._shape(u, sym), *label_keys, *placement]) + ";"
+        geometry = (f'          <mxGeometry x="{_num(x0)}" y="{_num(y0)}" '
+                    f'width="{_num(x1 - x0)}" height="{_num(y1 - y0)}" as="geometry"')
+        body = ([geometry + ">",
+                 f'            <mxPoint x="{_num(dx)}" y="{_num(dy)}" as="offset" />',
+                 '          </mxGeometry>']
+                if (round(dx, 2) or round(dy, 2)) else [geometry + " />"])
         return [
             f'        <mxCell id="{self._id(index)}" value={_attr(text)} '
             f'style={_attr(style)} vertex="1" parent="1">',
-            f'          <mxGeometry x="{_num(x0)}" y="{_num(y0)}" '
-            f'width="{_num(x1 - x0)}" height="{_num(y1 - y0)}" as="geometry" />',
+            *body,
             '        </mxCell>',
         ]
 
@@ -979,12 +1084,15 @@ class DrawioRenderer:
                      f"{prefix}Dx=0", f"{prefix}Dy=0", f"{prefix}Perimeter=0"]
         return keys
 
-    def _edges(self, fs, arrows: bool, fit: "_Fit") -> list[str]:
+    def _edges(self, fs, arrows: bool, fit: "_Fit", tags: "_Tags") -> list[str]:
         """Every stream, as a draw.io edge between the two ports it joins."""
         index = {id(u): i for i, u in enumerate(fs.units)}
         # Where the sheet writes each line number, by the sheet's own search
-        # rather than by centring it on the edge. See :func:`_number_geometry`.
-        numbers = {number.name: number for number in stream_numbers(fs, [])}
+        # rather than by centring it on the edge -- seeded with the equipment
+        # tags the sheet seeds it with, so the search is offered the same paper.
+        # See :func:`_number_geometry` and :class:`_Tags`.
+        numbers = {number.name: number
+                   for number in stream_numbers(fs, list(tags.plates))}
         labelled: set = set()
         out: list[str] = []
         for n, s in enumerate(fs.streams):
@@ -1033,6 +1141,8 @@ class DrawioRenderer:
                 number = numbers.get(s.name)
                 if number is not None:
                     keys += _NUMBER_KEYS + [_drawn_type(NUMBER_TYPE, fit)]
+                    if number.vertical:
+                        keys.append("horizontal=0")
 
             style = ";".join(keys) + ";"
             # The ends are the two nozzles, and they are stated as constraints
@@ -1441,6 +1551,25 @@ class DrawioRenderer:
 #: changes any geometry. The other reader, ``updateVertexLabelOffset``, is
 #: vertex-only by name. An edge label is moved by its geometry and by nothing
 #: else.
+#: ``horizontal=0`` is the exception and is added per number, in
+#: :meth:`DrawioRenderer._edges`, for one on a vertical run. The sheet turns
+#: such a number a quarter to read bottom to top (ISO 15519-1 §7.2.5, and
+#: §5.1.5 for reading "from the right-hand edge of the document"), so the paper
+#: the search reserved for it is 13 units across by however long the string is.
+#: Written flat, the label occupies the **transpose** of that: on
+#: ``11_ethanol_pid`` ``AE-304-150-80-SS`` is 105 units of lettering laid across
+#: a 13-unit corridor, and it swept over D-301's shell. Two of the sixteen
+#: numbers on that sheet and eight of the twenty-four on
+#: ``13_mineral_dewatering`` are vertical, so this is not a corner case.
+#:
+#: It is one key, and unlike the two above it does reach an edge label.
+#: ``mxText.getTextRotation`` defers to ``mxShape.getTextRotation``, which adds
+#: ``mxText.verticalTextRotation`` -- **-90**, bottom to top, which is the way
+#: round the sheet turns it -- whenever ``horizontal`` is not 1. That is a
+#: property of the *shape*, and an edge has one (``mxConnector``), so the
+#: edge-only branch in ``getLabelBounds`` is not in the way. The opaque halo
+#: turns with it: ``mxSvgCanvas2D`` puts the background on the same transformed
+#: group as the glyphs, so the two cannot come apart.
 _NUMBER_KEYS = ["labelBackgroundColor=#ffffff", "verticalAlign=middle",
                 "align=center"]
 
