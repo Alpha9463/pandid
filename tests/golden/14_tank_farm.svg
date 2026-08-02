@@ -178,7 +178,7 @@
     <symbol id="sym_valve_ball" viewBox="0 0 24.5 15.0" overflow="visible"><g transform="scale(0.25)"><path d="M 0.0 0.0 L 31.9 19.7 A 20.0 20.0 0.0 0 1 66.2 19.7 L 98.0 0.0 L 98.0 60.0 L 66.2 40.5 A 20.0 20.0 0.0 0 1 31.9 40.5 L 0.0 60.0 Z" fill="none" stroke="#111" stroke-width="8.0"/><path d="M 31.9 40.5 A 20.0 20.0 0.0 0 1 31.9 19.7 M 66.2 19.7 A 20.0 20.0 0.0 0 1 66.2 40.5" fill="none" stroke="#111" stroke-width="8.0"/></g></symbol>
     <symbol id="sym_valve_butterfly" viewBox="0 0 24.5 15.0" overflow="visible"><g transform="scale(0.25)"><ellipse cx="49.0" cy="30.0" rx="5.0" ry="5.0" fill="none" stroke="#111" stroke-width="8.0"/><path d="M 0.0 60.0 L 0.0 0.0 L 45.0 27.5 M 53.0 32.5 L 98.0 60.0 L 98.0 0.0" fill="none" stroke="#111" stroke-width="8.0"/></g></symbol>
     <symbol id="sym_valve_check" viewBox="0 0 24.6 15.5" overflow="visible"><g transform="scale(0.25)"><path d="M 3.0 62.0 L 3.0 2.0 L 98.5 62.0 L 98.5 2.0" fill="none" stroke="#111" stroke-width="8.0"/><ellipse cx="3.0" cy="3.0" rx="3.0" ry="3.0" fill="none" stroke="#111" stroke-width="8.0"/><path d="M 89.5 50.0 L 98.5 62.0 L 84.0 59.5 L 89.5 56.5 Z" fill="none" stroke="#111" stroke-width="8.0"/></g></symbol>
-    <symbol id="sym_valve_control" viewBox="0 0 24.5 15.0" overflow="visible"><g transform="scale(0.25)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="none" stroke="#111" stroke-width="8.0"/><path d="M 29.0 18.0 A 25.0 25.0 0.0 0 1 69.0 18.0" fill="none" stroke="#111" stroke-width="8.0"/></g></symbol>
+    <symbol id="sym_valve_control" viewBox="0 0 24.5 19.8" overflow="visible"><g transform="scale(0.25)"><path d="M 0.0 79.0 L 0.0 20.0 L 98.0 79.0 L 98.0 20.0 Z M 29.0 20.0 A 20.0 20.0 0.0 0 1 49.0 0.0 A 20.0 20.0 0.0 0 1 69.0 20.0 Z M 49.0 20.0 L 49.0 49.0" fill="none" stroke="#111" stroke-width="8.0"/></g></symbol>
     <symbol id="sym_valve_gate" viewBox="0 0 24.5 15.0" overflow="visible"><g transform="scale(0.25)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="none" stroke="#111" stroke-width="8.0"/></g></symbol>
     <symbol id="sym_valve_regulator" viewBox="0 0 24.5 23.5" overflow="visible"><g transform="scale(0.25)"><path d="M 0.0 94.0 L 0.0 35.0 L 98.0 94.0 L 98.0 35.0 Z M 49.0 35.0 L 49.0 64.0 M 29.0 35.0 A 20.0 20.0 0.0 0 1 49.0 15.0 A 20.0 20.0 0.0 0 1 69.0 35.0 Z" fill="none" stroke="#111" stroke-width="8.0"/><path d="M 49.0 15.0 L 49.0 0.0 L 97.5 0.0 L 49.0 64.5" fill="none" stroke="#111" stroke-width="8.0"/></g></symbol>
     <symbol id="sym_valve_relief" viewBox="0 0 15.0 22.1" overflow="visible"><g transform="scale(0.375)"><path d="M 0.0 20.0 A 20.0 20.0 0.0 0 1 20.0 0.0 A 20.0 20.0 0.0 0 1 40.0 20.0 Z M 20.0 20.0 L 20.0 59.0" fill="none" stroke="#111" stroke-width="5.333"/><rect x="20.0" y="20.0" width="20.0" height="8.0" fill="none" stroke="#111" stroke-width="5.333"/></g></symbol>
@@ -230,14 +230,14 @@
     <use href="#sym_tee" x="1060" y="504" width="12.0" height="12.0" />
     <use href="#sym_valve_relief" x="868.5" y="577.9" width="15.0" height="22.1" />
     <use href="#sym_fitting_coriolis" x="1080" y="497.5" width="25.0" height="25.0" />
-    <use href="#sym_valve_control" x="1140" y="502.5" width="24.5" height="15.0" />
+    <use href="#sym_valve_control" x="1140" y="497.6" width="24.5" height="19.8" />
     <use href="#sym_valve_check" x="1179.3" y="502.2" width="24.6" height="15.5" />
     <use href="#sym_valve_gate" x="1250" y="382.5" width="24.5" height="15.0" />
     <use href="#sym_valve_regulator" x="1310" y="373.9" width="24.5" height="23.5" />
     <use href="#sym_valve_ball" x="1390" y="382.5" width="24.5" height="15.0" />
     <use href="#sym_tee" x="1220" y="636.6" width="12.0" height="12.0" transform="translate(0, 1285.2) scale(1, -1)" />
     <use href="#sym_fitting_positive_displacement" x="1340" y="635.1" width="25.0" height="15.0" />
-    <use href="#sym_valve_control" x="1400" y="635.1" width="24.5" height="15.0" />
+    <use href="#sym_valve_control" x="1400" y="630.2" width="24.5" height="19.8" />
     <use href="#sym_valve_ball" x="1460" y="635.1" width="24.5" height="15.0" />
     <use href="#sym_fitting_hose" x="1505" y="638.8" width="45.0" height="7.5" />
     <use href="#sym_fitting_flame_arrestor_detonation_proof" x="1178" y="817.5" width="25.0" height="25.0" />
@@ -287,16 +287,16 @@
     <path d="M 1285.0,783.3496332518338 L 1285.0,761.3496332518338" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1285.0,748.8496332518338 L 1285.0,715.3496332518338" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1352.5,548.0 L 1352.5,462.0 L 1390.25,462.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
-    <path d="M 1412.25,484.0 L 1412.25,610.0999999999999 L 1412.2,610.0999999999999 L 1412.2,635.0999999999999" fill="none" stroke="black" stroke-width="1" />
-    <line x1="1407.2" y1="520.5" x2="1417.2" y2="526.5" stroke="black" stroke-width="1" />
-    <line x1="1407.2" y1="524.5" x2="1417.2" y2="530.5" stroke="black" stroke-width="1" />
-    <line x1="1407.2" y1="562.6" x2="1417.2" y2="568.6" stroke="black" stroke-width="1" />
-    <line x1="1407.2" y1="566.6" x2="1417.2" y2="572.6" stroke="black" stroke-width="1" />
-    <line x1="1407.2" y1="617.1" x2="1417.2" y2="623.1" stroke="black" stroke-width="1" />
-    <line x1="1407.2" y1="621.1" x2="1417.2" y2="627.1" stroke="black" stroke-width="1" />
+    <path d="M 1412.25,484.0 L 1412.25,605.1999999999999 L 1412.2,605.1999999999999 L 1412.2,630.1999999999999" fill="none" stroke="black" stroke-width="1" />
+    <line x1="1407.2" y1="518.9" x2="1417.2" y2="524.9" stroke="black" stroke-width="1" />
+    <line x1="1407.2" y1="522.9" x2="1417.2" y2="528.9" stroke="black" stroke-width="1" />
+    <line x1="1407.2" y1="559.3" x2="1417.2" y2="565.3" stroke="black" stroke-width="1" />
+    <line x1="1407.2" y1="563.3" x2="1417.2" y2="569.3" stroke="black" stroke-width="1" />
+    <line x1="1407.2" y1="612.2" x2="1417.2" y2="618.2" stroke="black" stroke-width="1" />
+    <line x1="1407.2" y1="616.2" x2="1417.2" y2="622.2" stroke="black" stroke-width="1" />
     <path d="M 1114.5,462.0 L 1130.25,462.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 1412.25,440.0 L 1412.25,422.0 L 1152.25,422.0 L 1152.25,440.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="9,3,2,3" />
-    <path d="M 1152.25,484.0 L 1152.25,493.25 L 1152.2,493.25 L 1152.2,502.5" fill="none" stroke="black" stroke-width="1" />
+    <path d="M 1152.25,484.0 L 1152.25,490.8 L 1152.2,490.8 L 1152.2,497.6" fill="none" stroke="black" stroke-width="1" />
     <rect x="136.4" y="200.0" width="105.2" height="13.0" fill="white" />
     <text x="189.0" y="206.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">MS-601-200-40-CS</text>
     <line x1="196.9" y1="200.0" x2="226.9" y2="170.0" stroke="black" stroke-width="1" />
@@ -424,8 +424,8 @@
     <text x="893.5" y="588.9499999999999" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">PSV-602</text>
     <rect x="1068.7" y="530.0" width="47.6" height="15.0" fill="white" />
     <text x="1092.5" y="537.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FE-605</text>
-    <rect x="1128.5" y="525.0" width="47.6" height="15.0" fill="white" />
-    <text x="1152.25" y="532.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CV-605</text>
+    <rect x="1128.5" y="524.9" width="47.6" height="15.0" fill="white" />
+    <text x="1152.25" y="532.4" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CV-605</text>
     <rect x="1176.5" y="480.2" width="54.2" height="15.0" fill="white" />
     <text x="1203.6" y="492.2" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">NRV-602</text>
     <rect x="1238.5" y="360.5" width="47.6" height="15.0" fill="white" />
@@ -436,8 +436,8 @@
     <text x="1402.25" y="372.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HV-608</text>
     <rect x="1328.7" y="657.6" width="47.6" height="15.0" fill="white" />
     <text x="1352.5" y="665.0999999999999" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FE-604</text>
-    <rect x="1388.5" y="657.6" width="47.6" height="15.0" fill="white" />
-    <text x="1412.25" y="665.0999999999999" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CV-604</text>
+    <rect x="1388.5" y="657.5" width="47.6" height="15.0" fill="white" />
+    <text x="1412.25" y="664.9999999999999" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CV-604</text>
     <rect x="1448.5" y="613.1" width="47.6" height="15.0" fill="white" />
     <text x="1472.25" y="625.0999999999999" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HV-604</text>
     <rect x="1500.4" y="616.8" width="54.2" height="15.0" fill="white" />
