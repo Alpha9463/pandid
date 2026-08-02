@@ -1924,8 +1924,9 @@ SHEETS = gallery.sheets()
 
 @pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
 def test_every_example_exports_a_document_that_matches_its_sheet(stem):
-    """Twelve real sheets: parsed back, with every box, waypoint and shape
-    reference held against the drawing the same flowsheet renders."""
+    """Fourteen real sheets -- ``gallery.sheets()``, counted rather than
+    remembered: parsed back, with every box, waypoint and shape reference held
+    against the drawing the same flowsheet renders."""
     fs, kwargs = gallery.flowsheet(stem)
     fs.to_svg(**kwargs)  # settle layout and routing exactly as the sheet does
     root = ET.fromstring(fs.to_drawio(diagram=kwargs.get("diagram")))

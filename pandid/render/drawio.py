@@ -647,13 +647,23 @@ class _Tags(NamedTuple):
     them; the exporter was passing ``[]``, which is that function's own
     documented caveat -- "an exporter with no equipment-tag pass of its own
     passes an empty list and gets a placement that dodges every symbol and every
-    line but may still land under a tag". Measured over the twelve examples that
-    is seventeen numbers on four sheets, and on ``11_ethanol_pid`` it is
+    line but may still land under a tag".
+
+    Re-measured over the **fourteen** examples the corpus holds today, the
+    sentence here having been written against twelve: seventeen numbers on four
+    sheets. That is the same pair of figures the twelve gave, and it is a
+    coincidence of composition rather than a count that did not move -- where
+    they land did. Nine of the seventeen are on ``11_ethanol_pid``:
     ``AE-302-300-80-SS`` over ``HV-301A``'s tag, ``AE-303-80-80-SS`` over
-    ``HV-303A``'s, ``AE-305-40-80-SS`` over ``HV-305A``'s,
-    ``HPS-308-100-80-CS`` over ``HV-308A``'s and ``FB-301-200-160-SS`` over
-    ``XV-301``'s -- the last of which hides the tag outright. The sheet writes
-    none of them there.
+    ``HV-303A``'s, ``AE-304-150-80-SS`` over ``D-301``'s, ``AE-305-40-80-SS``
+    over ``HV-305A``'s, ``CWS-311-150-40-CS`` over ``HV-311``'s,
+    ``CWS-315-100-40-CS`` over ``HV-315``'s, ``FB-301-200-160-SS`` over
+    ``XV-301``'s, ``FB-306-100-160-SS`` over ``CV-306``'s and
+    ``HPS-308-100-80-CS`` over ``HV-308A``'s. Six are on ``14_tank_farm`` and
+    one each on ``09_line_numbers`` and ``13_mineral_dewatering``. Not one of
+    the nine covers its tag completely, which the old sentence claimed of
+    ``FB-301-200-160-SS``; each strikes it, which is enough to lose it. The
+    sheet writes none of them there.
     """
     at: dict
     plates: list
