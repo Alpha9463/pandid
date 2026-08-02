@@ -156,7 +156,7 @@ The base classes are `Feed`, `Product`, `Pump`, `Compressor`, `Blower`, `Valve`,
 `Funnel`, `Furnace`, `Turbine`, `Filter`, `Dryer`, `Conveyor` and `Instrument`,
 with 42 equipment classes over them — a `GearPump` *is* a `Pump`.
 
-A variant is a drawing within a class, picked with `variant=`. 92 of the 157
+A variant is a drawing within a class, picked with `variant=`. 93 of the 157
 registered drawings get no class of their own, and this is how you reach them:
 
 ```python

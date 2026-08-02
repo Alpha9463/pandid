@@ -422,7 +422,7 @@ from pandid import units
 sifter = units.Separator("SC-101", variant="sifter")
 ```
 
-`units.Kind(variant=…)` is the escape hatch. 92 of the 157 registered drawings
+`units.Kind(variant=…)` is the escape hatch. 93 of the 157 registered drawings
 get no class of their own, and this is how you reach them; see
 [Variants](#variants) for the list. Where a class exists, name it.
 
