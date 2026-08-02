@@ -409,6 +409,75 @@ def test_an_off_page_flag_is_a_pennant_with_its_tag_inside_it():
     assert cells["u0"].get("value") == "FEED<br>P-01"
 
 
+def test_a_label_written_inside_its_shape_fits_inside_it():
+    """`Fermentation Broth / P&ID-201` was drawn across the top and bottom edges
+    of its own pennant: two lines of draw.io's default 12 want 28,8 of line box
+    and the flag is 26 deep before the sheet's fitting scales it. Nothing in
+    mxGraph shrinks type to fit, so the size has to be chosen against the box."""
+    from pandid.render.drawio import _LINE_BOX
+
+    for stem in SHEETS:
+        fs, kwargs = gallery.flowsheet(stem)
+        fs.to_svg(**kwargs)
+        cells = _drawio_cells(fs, kwargs)
+        for i, unit in enumerate(fs.units):
+            cell = cells[f"u{i}"]
+            value = cell.get("value") or ""
+            style = _style(cell)
+            # Only the labels written *in* the cell: a tag on a side of a symbol
+            # is on the paper beside it and has no box to overflow.
+            if not value or style.get("verticalLabelPosition") != "middle":
+                continue
+            if style.get("labelPosition") in ("left", "right"):
+                continue
+            box = _LINE_BOX * float(style["fontSize"]) * (value.count("<br>") + 1)
+            height = float(cell.find("mxGeometry").get("height"))
+            assert box <= height + 0.01, (
+                f"{stem}: {unit.name} writes {value!r} as {box:.2f} units of "
+                f"line box inside a {height:.2f}-unit shape"
+            )
+
+
+def test_the_drawing_is_lettered_at_the_size_the_sheet_letters_it():
+    """The export stated no size anywhere in the drawing, so every tag, balloon
+    and flag came out at draw.io's default 12 -- unscaled, in a drawing the
+    sheet had fitted to three-quarters. A rendered sheet puts its type inside
+    the same `scale()` as its geometry; this backend has to multiply it in."""
+    from pandid.render.drawio import _TAG_TYPE
+
+    fs, kwargs = gallery.flowsheet("11_ethanol_pid")
+    fs.to_svg(**kwargs)
+
+    def sizes(**over):
+        cells = _drawio_cells(fs, {**kwargs, **over})
+        return [
+            float(_style(cells[f"u{i}"])["fontSize"])
+            for i in range(len(fs.units))
+            if cells[f"u{i}"].get("value")
+        ]
+
+    # Without paper there is no fitting to do, so the drawing keeps its own
+    # coordinates and its own type: _Fit.identity() end to end.
+    plain = sizes(page_size=None, border=None)
+    assert plain and max(plain) == _TAG_TYPE
+
+    # With it, every label rides the same ratio the geometry does -- or is
+    # smaller still, where it had to be capped to the shape it is written in.
+    fitted = sizes()
+    assert len(fitted) == len(plain)
+    assert max(fitted) < _TAG_TYPE, "the type was left at its unfitted size"
+    ratio = max(fitted) / _TAG_TYPE
+    assert all(size <= ratio * _TAG_TYPE + 0.01 for size in fitted)
+    for i, unit in enumerate(fs.units):
+        if unit.kind not in ("feed", "product") or not fs.units[i].tag:
+            continue
+        box = boundary_flag(unit, unit.frame).box
+        # A flag's cell is scaled by that same ratio, which is what makes the
+        # cap a statement about the drawing rather than about the model.
+        cell = _drawio_cells(fs, kwargs)[f"u{i}"].find("mxGeometry")
+        assert float(cell.get("height")) == pytest.approx(ratio * (box[3] - box[1]), abs=0.01)
+
+
 def test_a_flag_is_drawn_across_its_own_box():
     """``boundary_flag`` writes the horizontal extent out again rather than
     reading ``unit_box``, so that whole-number coordinates keep the spelling the

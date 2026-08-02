@@ -394,6 +394,55 @@ _APPROXIMATIONS = {
 #: a label's halo with, so the two at least agree with each other.
 _CHAR_W, _LINE_H = 6.2, 14.0
 
+#: The size the *drawing* is lettered at: an equipment tag, an instrument's
+#: letters, a boundary flag's service name. Twelve, because that is what
+#: ``SvgRenderer._draw_unit_labels``, ``_draw_instrument_tag`` and
+#: ``_draw_boundary`` all set, and a sheet exported at a different size from the
+#: one it renders at is two drawings.
+_TAG_TYPE = 12.0
+
+#: And the size a **line number** is set at, which is smaller:
+#: ``SvgRenderer._draw_streams`` letters one at 10 and measures its halo 13 deep.
+_NUMBER_TYPE = 10.0
+
+
+def _drawn_type(nominal: float, fit: "_Fit", *, lines: int = 1, box=None) -> str:
+    """The ``fontSize`` key for a piece of lettering **in the drawing**.
+
+    Two things happen to it that do not happen to a piece of furniture, and
+    neither was happening at all: the export stated no size anywhere in the
+    drawing, so every tag, balloon and flag on every sheet was lettered at
+    draw.io's default 12 -- unscaled, in a drawing that had been scaled to a
+    third of that in places.
+
+    **It scales.** ``page_size`` makes the export a sheet, and the drawing is
+    then fitted into whatever the furniture leaves. On the rendered sheet that
+    fitting is one ``<g transform="scale(s)">`` around the whole drawing, and a
+    ``font-size="12"`` inside it comes out at ``12 s``. draw.io has no such
+    group -- :class:`_Fit` multiplies every coordinate on the way out instead --
+    so the type has to be multiplied with them or the sheet's own proportion
+    between a symbol and the tag beside it is lost. On ``11_ethanol_pid`` the
+    ratio is 0,76, which is a third again too much ink on every label.
+
+    **It is capped where it is written *inside* the shape.** A boundary flag and
+    an ISA balloon carry their text in the cell, so ``lines`` of it at
+    :data:`_LINE_BOX` each have to fit ``box``'s depth. Nothing in mxGraph
+    shrinks type to fit -- see :data:`_LINE_BOX` -- so a label too tall for its
+    cell is drawn across the shape's top and bottom edges, and with
+    ``overflow=hidden`` it is drawn across them and then cut. That is the flag
+    the reader saw: two lines of 12, needing 28,8, in a pennant 26 deep, and the
+    pennant scaled to 19,66 besides.
+
+    ``box`` is in **drawing** units, since :meth:`DrawioRenderer._cell_box` is,
+    so the cap is taken there and the fit applied to the answer -- which is the
+    same number either way round and the easier one to check by hand.
+    """
+    size = nominal
+    if box is not None and lines > 0:
+        depth = abs(box[3] - box[1])
+        size = min(size, depth / (lines * _LINE_BOX))
+    return f"fontSize={fit.length(size):g}"
+
 
 def _attr(value) -> str:
     """One XML attribute value, quoted and escaped.
@@ -725,7 +774,7 @@ class DrawioRenderer:
                 f"strokeColor={_LINE_INK}", f"fillColor={_NO_FILL}",
                 f"strokeWidth={_PROCESS_STROKE:g}"]
 
-    def _label(self, u) -> "tuple[str, list[str]]":
+    def _label(self, u, fit: "_Fit") -> "tuple[str, list[str]]":
         """A unit's label text and the style keys that place it.
 
         An instrument's tag goes *inside* its balloon, letters over number, which
@@ -740,6 +789,9 @@ class DrawioRenderer:
         small labels of their own against the corner of the symbol; there is no
         second label on a draw.io cell, so they follow the tag rather than being
         dropped.
+
+        ``fit`` is here because every one of these is lettering **in the
+        drawing**, and the drawing is scaled. See :func:`_drawn_type`.
         """
         from pandid.units import split_tag
 
@@ -752,9 +804,17 @@ class DrawioRenderer:
                 parts = [number or letters.upper()]
             else:
                 parts = [letters.upper(), number]
-            text = "<br>".join(part for part in parts if part)
+            parts = [part for part in parts if part]
+            text = "<br>".join(parts)
+            # A balloon's tag is written inside the balloon, so its type is
+            # capped to what the balloon holds. The sheet sets the letters at 12
+            # and the number at 11 and a draw.io label has one size for the
+            # whole of it, so the pair goes out at the larger of the two -- the
+            # letters are what a reader picks the loop out by.
             return text, ["verticalLabelPosition=middle", "verticalAlign=middle",
-                          "align=center"]
+                          "align=center",
+                          _drawn_type(_TAG_TYPE, fit, lines=len(parts),
+                                      box=self._cell_box(u))]
 
         lines = [u.tag] if u.tag else []
         if u.kind in ("feed", "product"):
@@ -772,14 +832,32 @@ class DrawioRenderer:
             # of the pennant -- half the point's depth to the blunt end of the
             # difference, which is under four units on a flag eighty wide. There
             # is no key that says "centre me in the shape minus its point".
-            return "<br>".join(lines), _LABEL_SIDE["center"]
+            #
+            # The type is capped to the pennant, which is what a flag needs and
+            # a side label does not: a boundary flag's label is written *in* the
+            # shape. A flag carrying an off-page reference is 26 units deep and
+            # two lines at the sheet's own 12 want 28,8 of draw.io's line box,
+            # so the pair is set a shade smaller rather than laid across the
+            # pennant's top and bottom edges -- which is what the reader saw, a
+            # box with text lying over it. The sheet does not have to make that
+            # trade: it sets the reference at 10,5 on a baseline of its own
+            # choosing, and a draw.io label has one size and one line height for
+            # the whole of it.
+            return "<br>".join(lines), _LABEL_SIDE["center"] + [
+                _drawn_type(_TAG_TYPE, fit, lines=len(lines),
+                            box=self._cell_box(u))]
         if closed_marking(u, self.registry) == "NC":
             lines.append("NC")
         letters = fail_marking(u)
         if letters:
             lines.append(letters)
         side = (u.frame.label_pos or "top") if u.frame is not None else "top"
-        return "<br>".join(lines), _LABEL_SIDE.get(side, _LABEL_SIDE["top"])
+        # No cap: a tag on a side of a symbol is written on the paper beside it,
+        # not in the cell, so there is no box for it to overflow. `_LABEL_SIDE`
+        # gives the label its own box outside the cell and mxGraph draws it at
+        # whatever size it is told (`mxGraphView.updateVertexLabelOffset`).
+        return "<br>".join(lines), _LABEL_SIDE.get(side, _LABEL_SIDE["top"]) + [
+            _drawn_type(_TAG_TYPE, fit)]
 
     @staticmethod
     def _cell_box(u) -> "tuple[float, float, float, float]":
@@ -809,7 +887,7 @@ class DrawioRenderer:
         sym = self.registry.for_unit(u)
         x0, y0, x1, y1 = fit.box(self._cell_box(u))
         placement, _, _ = self._placement(u, sym)
-        text, label_keys = self._label(u)
+        text, label_keys = self._label(u, fit)
         style = ";".join(["html=1", *self._shape(u, sym), *label_keys, *placement]) + ";"
         return [
             f'        <mxCell id="{self._id(index)}" value={_attr(text)} '
