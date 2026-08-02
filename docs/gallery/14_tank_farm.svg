@@ -259,7 +259,7 @@
     <path d="M 274.5,170.0 L 417.0,170.0 L 417.0,225.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 200.0,110.0 L 500.0,110.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 524.5,110.0 L 770.0,110.0 L 770.0,215.0523560209424" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 200.0,50.0 L 1160.0,50.0 L 1160.0,189.25" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 200.0,50.0 L 1040.0,50.0 L 1040.0,318.75 L 1113.625,318.75" fill="none" stroke="black" stroke-width="2" />
     <path d="M 455.0,355.0 L 455.0,665.0 L 495.0,665.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 519.5,665.0 L 560.0,665.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 570.0,665.0 L 605.0,665.0" fill="none" stroke="black" stroke-width="2" />
@@ -280,7 +280,7 @@
     <path d="M 1203.8999999999999,510.0 L 1226.0,510.0 L 1226.0,636.5999999999999" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1066.0,516.0 L 1066.0,600.0 L 876.0,600.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 876.0,577.9 L 876.0,516.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1160.0,365.0 L 1160.0,390.0 L 1250.0,390.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1160.0,346.5 L 1160.0,390.0 L 1250.0,390.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1274.5,390.0 L 1310.0,390.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1334.5,390.0 L 1390.0,390.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1414.5,390.0 L 1560.0,390.0" fill="none" stroke="black" stroke-width="2" />
@@ -312,8 +312,8 @@
     <path d="M 226.9,170.0 L 224.8,176.4 L 220.5,172.1 Z" fill="black" />
     <rect x="294.3" y="103.5" width="111.4" height="13.0" fill="white" />
     <text x="350.0" y="110.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">ETH-602-150-40-SS</text>
-    <rect x="624.3" y="43.5" width="111.4" height="13.0" fill="white" />
-    <text x="680.0" y="50.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">LPG-603-100-80-CS</text>
+    <rect x="564.3" y="43.5" width="111.4" height="13.0" fill="white" />
+    <text x="620.0" y="50.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">LPG-603-100-80-CS</text>
     <rect x="448.5" y="457.4" width="13.0" height="105.2" fill="white" />
     <text x="455.0" y="510.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 455.0, 510.0)">MS-604-250-40-CS</text>
     <rect x="780.4" y="659.6" width="105.2" height="13.0" fill="white" />

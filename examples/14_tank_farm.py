@@ -50,14 +50,12 @@ gravity is a functionality", which "must not be turned". Boundary flags sit on
 the east or west edge, which is CHEE4001 p.2's preference "to show off-page
 connectors horizontally and at the edge of a P&ID".
 
-**Three symbol defects constrain this sheet**, and it is drawn around them
+**Two symbol defects constrain this sheet**, and it is drawn around them
 rather than working against them:
 
 - #226 -- ``Tank``'s inlet is fixed on the crown, so ``TK-601`` and ``TK-602``
   are top-filled because the symbol leaves no choice, not because a flammable
   should be splash-filled.
-- #225 -- the sphere's port anchors sit between its own drawn nozzles, so the
-  receipt into ``V-603`` meets bare shell rather than a nozzle.
 - #222 -- ``Tank`` has a fill and a draw and no third nozzle, so ``TK-602``'s
   own conservation vent and ``V-603``'s fire-case relief are left off rather
   than hung where they do not belong. CHEE4001 p.8 names the second duty
@@ -201,7 +199,9 @@ def main():
     ms_draw_x = 360 + port_offset(tk601, "outlet")[0]
     eth_fill_x = 680 + port_offset(tk602, "inlet")[0]
     eth_draw_x = 680 + port_offset(tk602, "outlet")[0]
-    lpg_fill_x = 1090 + port_offset(v603, "inlet")[0]
+    # The sphere fills low on the west shell and draws from the nozzle under its
+    # belly, so the receipt drops clear of the vessel and comes in level.
+    lpg_fill_y = 180 + port_offset(v603, "inlet")[1]
     lpg_draw_x = 1090 + port_offset(v603, "outlet")[0]
 
     ms_recv_y, eth_recv_y, lpg_recv_y = 170.0, 110.0, 50.0
@@ -212,6 +212,7 @@ def main():
     lpg_in.pin(port="outlet", x=200, y=lpg_recv_y)
 
     lpg_run_y, eth_run_y, ms_run_y = 390.0, 510.0, 665.0
+    lpg_drop_x = 1040.0
     balloon_row_y, low_row_y, psv_run_y = 462.0, 570.0, 600.0
     cascade_y = 422.0
 
@@ -284,7 +285,8 @@ def main():
                schedule=40, spec="SS")
     fs.connect(xv602.outlet, tk602.inlet).via([(eth_fill_x, eth_recv_y)])
     fs.connect(lpg_in.outlet, v603.inlet, service="LPG", sequence=603, size=100,
-               schedule=80, spec="CS").via([(lpg_fill_x, lpg_recv_y)])
+               schedule=80, spec="CS").via([(lpg_drop_x, lpg_recv_y),
+                                            (lpg_drop_x, lpg_fill_y)])
 
     fs.connect(tk601.outlet, hv601.inlet, service="MS", sequence=604, size=250,
                schedule=40, spec="CS").via([(ms_draw_x, ms_run_y)])

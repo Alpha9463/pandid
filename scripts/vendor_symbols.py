@@ -887,33 +887,72 @@ KIND_MAP = {
                                  "vent": ("AT", 15.0, 5.0),
                                  "relief": ("AT", 45.0, 5.0),
                                  "drain": ("S", 20)}),
-    # ...and the third: the sphere rides on legs inside its box, so its crown is
-    # at (40, 5) and the box's top edge carries only the two short lines the
-    # legs are drawn against, at x 15..33 and x 47..65. An inlet at x = 40 falls
-    # in the gap between them. Put it on the crown, as on the dished roof.
+    # ...and the third: the sphere rides on a support skirt inside its box, so
+    # its crown is at (40, 5) and the box's top and bottom edges are the skirt,
+    # not the vessel.
     #
-    # This is the one stencil in the two families that draws its nozzles as
-    # nozzles: three 12 x 12 rectangles, two on the crown at x 18..30 and
-    # 50..62 and one under the belly at x 34..46. The two on top are what the
-    # vent and the relief take, at (24, 0) and (56, 0), which is where issue
-    # #226's research puts them -- an LPG sphere takes liquid in and out at the
-    # LOWEST part of the vessel and reserves the crown for relief and vapour --
-    # and where CHEE4001 p.7 puts a PSV: "vertically, upward, and at the top of
-    # the container". Which of the two rectangles is which is arbitrary; they
-    # are one drawing twice.
+    # THIS IS THE ONE STENCIL IN THE LIBRARY THAT DRAWS ITS NOZZLES AS NOZZLES
+    # (all 157 registered symbols were swept for a second; there is none -- see
+    # ``tests/test_symbol_invariants.py``'s drawn-nozzle check). Three 12 x 12
+    # rectangles, each with a flange line ruled across its free face: two on the
+    # crown at x 18..30 and 50..62, faces at y = 0, and one under the belly at
+    # x 34..46, face at y = 90. A rectangle drawn on a vessel is a statement
+    # that a connection exists *there*, so a port anywhere else on this drawing
+    # is the drawing disagreeing with itself. That is issue #225, and the whole
+    # of what it costs is that three nozzles have to carry five duties.
     #
-    # The drain does not take the third rectangle. That one is the liquid
-    # connection, and issue #225 is the change that moves ``outlet`` up onto it
-    # from the leg rail at y = 100 where it sits today; squatting on it here
-    # would trade one misplaced nozzle for another and make that fix harder.
-    # It goes on the shell instead, at x = 25 on the ellipse (cx 40, cy 45,
-    # r 40), which is y = 45 + 40*sqrt(1 - (15/40)^2) = 82.1 -- low on the
-    # sphere, clear of the liquid nozzle, and on ink.
+    # WHICH THREE DUTIES GET THE NOZZLES. Two of the five are fixed by
+    # something other than preference and both are on top. CHEE4001 p.7 puts the
+    # protective device there -- "The PSV should be placed, whenever possible,
+    # directly on the system to be protected, vertically, upward, and at the top
+    # of the container" -- so ``relief`` takes a crown rectangle. ``vent`` is
+    # the vapour connection and a vapour space is at the top of a vessel by
+    # definition, so it takes the other. Which rectangle is which is arbitrary;
+    # they are one drawing twice. That leaves the belly nozzle for one of the
+    # three liquid duties, and ``outlet`` has it: the draw is what the vessel is
+    # piped for on every day of its life, and on this sheet it is the whole
+    # reason the sphere is drawn at all (``examples/14``'s butane leaves under
+    # its own pressure and needs no pump). It also had the more visible half of
+    # the defect -- the outlet sat at (40, 100), on the base rail of the support
+    # skirt, so the sheet drew product leaving the *structure* 10 units below
+    # the nozzle the stencil drew for it.
+    #
+    # WHERE THE OTHER TWO GO. ``inlet`` and ``drain`` are both liquid and both
+    # therefore belong low, which is also the research issue #226 recorded for
+    # this vessel: an LPG sphere takes liquid in and out at the lowest part of
+    # the shell and reserves the crown for relief and vapour. They go on the
+    # shell either side of the belly nozzle, which is the ordinary convention
+    # and what every other stencil in the library does with every nozzle it has
+    # -- 156 of 157 draw no nozzle at all and let the line stop at the wall.
+    # They are NOT stacked on the belly rectangle with the outlet: two ports on
+    # one placement draw two streams on one point, which
+    # ``Symbol.coincident_ports`` refuses and is right to.
+    #
+    # All three sit on the ellipse (cx 40, cy 45, r 40), so each coordinate is
+    # the circle solved for the height wanted:
+    #
+    #   inlet, the fill, at y = 75:   x = 40 -+ 40*sqrt(1 - (30/40)^2) = 13.5 / 66.5
+    #   drain, the water draw-off, at y = 82.1: x = 40 + 40*sqrt(1 - (37.1/40)^2) = 54.9
+    #
+    # The fill is the one port here with a face to choose, so it is the one with
+    # a menu: west by default and east on request, since a sphere is filled from
+    # whichever side the header runs down. 75 rather than 82.1 is what buys it
+    # those faces -- at 82.1 the point is nearer the box floor than either wall
+    # and ``outward_dir`` reads it as south, and a fill drawn arriving from
+    # underneath is a line the reader has to follow around the vessel to
+    # believe. The drain keeps south, which is the face its role asks for
+    # (``tests/test_symbol_invariants.py``) and where a low-point draw-off goes.
+    #
+    # The crown is deliberately left with no fill placement on it. A pressure
+    # sphere's two top connections are spoken for, and offering ``inlet`` an
+    # "N" it would have to share with the relief or the vent is offering a
+    # nozzle the drawing cannot honour.
     ("tank", "sphere"):        ("vessels", "Storage Sphere",
-                                {"inlet": ("AT", 40.0, 5.0), "outlet": ("S", 40),
+                                {"inlet": [("AT", 13.5, 75.0), ("AT", 66.5, 75.0)],
+                                 "outlet": ("AT", 40.0, 90.0),
                                  "vent": ("AT", 24.0, 0.0),
                                  "relief": ("AT", 56.0, 0.0),
-                                 "drain": ("AT", 25.0, 82.1)}),
+                                 "drain": ("AT", 54.9, 82.1)}),
     # Tanks that drain to a cone rather than to a floor. The four above vary the
     # roof and all of them stand on a flat bottom; a hopper is what anything
     # holding solids, a slurry or a settled phase is actually drawn with, and
@@ -1387,7 +1426,7 @@ GRAVITY_FIXED = {
     ("tank", "default"):        "dished roof over a free surface, draw at the floor",
     ("tank", "conical"):        "conical roof over a free surface, draw at the floor",
     ("tank", "floating_roof"):  "the roof floats on the liquid",
-    ("tank", "sphere"):         "stands on legs, fills at the crown and drains at the bottom",
+    ("tank", "sphere"):         "stands on a skirt; relief and vapour on the crown, liquid below",
     ("tank", "conical_bottom"): "flat roof over a free surface, drains to the cone apex",
     ("tank", "conical_ends"):   "conical roof over a free surface, drains to the cone apex",
     ("tank", "dished_roof_conical_bottom"):
@@ -1754,8 +1793,16 @@ def drawing(el, kind, variant, port_map, sx, sy):
     inner, w, h, constraints, aspect = convert_shape(
         el, stroke_width=round(2.0 / math.sqrt(sx * sy), 3))
     # A port spec may be a LIST: the first entry is the default placement and
-    # the rest are alternate faces the user can move that port to, keyed by
-    # the edge each one names.
+    # the rest are alternate faces the user can move that port to.
+    #
+    # An alternate is written the same two ways a home placement is. An edge
+    # spec -- ``("N", 30.0)`` -- names the face it lands on outright. An
+    # ``("AT", x, y)`` one does not, because it is a point *inboard* of the box:
+    # a dished roof's crown sits 6,4 under the top edge, and a tank offering a
+    # top fill has to put the nozzle on the roof plate rather than on the empty
+    # paper above it. So the face is read off the point, by the same
+    # :func:`outward_dir` that reads the home placement's, and read *after* the
+    # family's scale has been applied for the same reason that one is.
     ports, alts, series = {}, {}, {}
     for p, spec in port_map.items():
         if is_series(spec):
@@ -1765,30 +1812,37 @@ def drawing(el, kind, variant, port_map, sx, sy):
         choices = spec if isinstance(spec, list) else [spec]
         ports[p] = resolve_port(choices[0], constraints, w, h)
         for extra in choices[1:]:
-            if not isinstance(extra, tuple) or extra[0] not in ("N", "S", "E", "W"):
+            if not isinstance(extra, tuple) or extra[0] not in ("N", "S", "E", "W", "AT"):
                 raise SystemExit(
                     f"{kind}/{variant} port {p!r}: an alternate face must be an "
-                    f'edge spec like ("N", 30.0), got {extra!r}')
-            alts.setdefault(p, {})[extra[0]] = resolve_port(extra, constraints, w, h)
+                    f'edge spec like ("N", 30.0) or a point like ("AT", 50.0, '
+                    f"6.4), got {extra!r}")
+            face = None if extra[0] == "AT" else extra[0]
+            alts.setdefault(p, []).append((face, resolve_port(extra, constraints, w, h)))
 
     if (sx, sy) != (1.0, 1.0):
         factors = f"{sx}" if sx == sy else f"{sx}, {sy}"
         inner = f'<g transform="scale({factors})">{inner}</g>'
         w, h = w * sx, h * sy
         ports = {p: (x * sx, y * sy) for p, (x, y) in ports.items()}
-        alts = {p: {f: (x * sx, y * sy) for f, (x, y) in d.items()} for p, d in alts.items()}
+        alts = {p: [(f, (x * sx, y * sy)) for f, (x, y) in v] for p, v in alts.items()}
         # A series runs along one face, so it is the along-axis that scales it.
         series = {p: (e, at * (sy if e in ("W", "E") else sx),
                       pitch * (sy if e in ("W", "E") else sx), ext)
                   for p, (e, at, pitch, ext) in series.items()}
     w, h = round(w, 1), round(h, 1)
     ports = {p: tuple(round(v, 1) for v in xy) for p, xy in ports.items()}
-    alts = {p: {f: tuple(round(v, 1) for v in xy) for f, xy in d.items()}
-            for p, d in alts.items()}
+    alts = {p: [(f, tuple(round(v, 1) for v in xy)) for f, xy in v]
+            for p, v in alts.items()}
     # Emit the whole menu, home first: Symbol keeps exactly one enumeration
     # of a port's placements, so a symbol with alternates must declare the
     # default among them rather than leave it to be merged in later.
-    menu = {p: {outward_dir(*ports[p], w, h): ports[p], **d} for p, d in alts.items()}
+    menu = {}
+    for p, entries in alts.items():
+        faces = {outward_dir(*ports[p], w, h): ports[p]}
+        for face, xy in entries:
+            faces[face or outward_dir(*xy, w, h)] = xy
+        menu[p] = faces
     return inner, w, h, ports, menu, series, aspect
 
 

@@ -506,6 +506,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The storage sphere's ports did not land on the nozzles it draws (#225).**
+  `tank/sphere` is the one stencil in the registry that draws its nozzles as
+  nozzles — three flanged stubs, two on the crown and one under the belly — and
+  none of its five ports was on one. `inlet` sat at the top centre midway
+  between the two crown stubs, so `examples/14`'s butane receipt arrived at bare
+  shell; `outlet` sat on the base rail of the *support skirt*, ten units below
+  the nozzle drawn for it, so the sheet drew product leaving the structure.
+
+  The three drawn nozzles now carry the three duties the drawing is about:
+  `relief` and `vent` on the crown (CHEE4001 p.7 puts a protective device
+  "vertically, upward, and at the top of the container", and a vapour space is
+  at the top by definition), and `outlet` on the belly nozzle. `inlet` and
+  `drain` are both liquid and go low on the shell either side of it — `inlet`
+  west by default with an east alternate reachable through
+  `nozzle("inlet", "E")`, `drain` south, which is the face its role asks for.
+  They are not stacked on the belly nozzle with the outlet, because two ports on
+  one placement draw two streams on one point.
+
+  Two new invariants over all 157 registered symbols hold the correspondence:
+  every drawn nozzle carries a port, and no port sits in the gap between two
+  nozzles drawn on one face. The sphere was the only symbol failing either.
+
 - **A resized symbol's line width changed with it, and changed differently in
   each axis.** ISO 15519-1 §11.1.3 (p. 28) is a *shall*: "When the size of a
   symbol is changed, the line width shall be unchanged." A `<symbol>` placed

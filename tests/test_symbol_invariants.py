@@ -23,6 +23,7 @@ import math
 import pathlib
 import re
 import xml.etree.ElementTree as ET
+from typing import NamedTuple
 
 import pytest
 
@@ -508,6 +509,192 @@ def test_no_two_ports_coincide(entry):
     assert sym.coincident_ports() == [], f"{kind}/{variant}: " + "; ".join(
         f"ports {a!r} and {b!r} both resolve to {xy}" for a, b, xy in sym.coincident_ports()
     )
+
+
+# ---------------------------------------------------------------------------
+# Ports, and the nozzles the artwork draws for them (#225).
+#
+# ``test_ports_lie_on_drawn_geometry`` above holds every port to the ink, and
+# that is not the same question. A stencil that draws an explicit nozzle has
+# said something stronger than "there is a wall here": a nozzle drawn on a
+# vessel is a statement that a connection exists *at that point*, and a port
+# somewhere else on the same drawing is the drawing disagreeing with itself.
+# Both halves of #225 passed the ink check and were wrong -- ``tank/sphere``'s
+# inlet sat on the crown midway between the two nozzles drawn either side of
+# it, and its outlet sat on the base rail of the support skirt, ten units below
+# the nozzle the stencil drew for it and on the structure rather than on the
+# vessel.
+#
+# This is the companion of ``nozzle-unconnected`` (#209). That finding reads a
+# *numbered* nozzle a sheet did not pipe; this reads a *drawn* one the class
+# cannot pipe at all, which is a defect one layer further down and is caught
+# without a flowsheet.
+#
+# WHAT COUNTS AS A DRAWN NOZZLE. In the draw.io P&ID stencils a nozzle is a
+# short rectangular stub standing off the shell with a flange line ruled across
+# its free end. All three parts are required here, because each of them is what
+# tells a nozzle from something else the artwork draws:
+#
+#   - a *rectangle*, small against the box on both axes (``_NOZZLE_STUB``),
+#     which is what ``vessel/jacketed``'s full-height jacket panels, a
+#     submersible pump's mounting plate and a damper's body are not;
+#   - a *flange*, a straight line on the same axis as one of the rectangle's
+#     four faces, centred on it and longer than it, which is what makes that
+#     face the free end and gives the connection its point;
+#   - and an overhang short enough to read as a flange (``_NOZZLE_FLANGE``),
+#     which is what a submersible pump's 90-unit casing line across a 14-unit
+#     rectangle is not.
+#
+# The sweep that settled these numbers found exactly one symbol in the 157 that
+# draws a nozzle this way, plus the one gauge stub named below. If a later
+# vendoring adds a second, it gets both invariants for free -- which is the
+# whole point, since the port map is authored by hand in
+# ``scripts/vendor_symbols.py`` and the artwork is not.
+# ---------------------------------------------------------------------------
+
+#: How much of the box a nozzle stub may be, on each axis.
+_NOZZLE_STUB = 0.25
+#: How much longer than the face it caps a flange line may be. A flange
+#: overhangs a nozzle by a little; a line seven times its width is some other
+#: part of the drawing that happens to pass through.
+_NOZZLE_FLANGE = 2.0
+
+#: (kind, variant) whose flanged stub is not a process nozzle. One entry, named
+#: rather than tolerated silently, exactly as ``_KNOWN_GEOMETRY_GAPS`` is:
+#: ``separator/knockout`` draws a level gauge on the east wall -- an 8 x 12 stub
+#: carrying the two vertical lines of the glass -- and the outer of those two
+#: reads as a flange across the stub's end. It is a gauge and not a connection:
+#: nothing flows through it, ``Separator`` has no port for one, and the giveaway
+#: in the artwork is that there is a second line drawn *outboard* of the
+#: "flange", which no real nozzle has.
+_NOT_NOZZLES = {("separator", "knockout")}
+
+
+def _rects(svg: str) -> list[tuple[float, float, float, float]]:
+    """Every ``<rect>`` in the artwork, as world-space (x0, y0, x1, y1).
+
+    ``_collect_segments`` flattens a rect into four unattributed segments, which
+    is right for a proximity test and useless here: the whole question is which
+    four segments belong to one rectangle.
+    """
+    out: list[tuple[float, float, float, float]] = []
+
+    def walk(el, m: Matrix) -> None:
+        m2 = _compose(m, _parse_transform(el.get("transform", "")))
+        if el.tag.split("}")[-1] == "rect":
+            x, y = float(el.get("x", 0)), float(el.get("y", 0))
+            w, h = float(el.get("width", 0)), float(el.get("height", 0))
+            (ax, ay), (bx, by) = _apply(m2, x, y), _apply(m2, x + w, y + h)
+            out.append((min(ax, bx), min(ay, by), max(ax, bx), max(ay, by)))
+        for child in el:
+            walk(child, m2)
+
+    walk(ET.fromstring(svg), _IDENTITY)
+    return out
+
+
+class _Nozzle(NamedTuple):
+    """One nozzle the artwork draws: the face it points out of, the point a
+    pipe meets it at, and the stretch of that face the stub covers."""
+
+    face: str
+    point: Point
+    lo: float
+    hi: float
+
+
+def _drawn_nozzles(sym: Symbol) -> list[_Nozzle]:
+    """Every flanged rectangular stub in a symbol's artwork."""
+    segments = _collect_segments(sym.svg)
+    found: list[_Nozzle] = []
+    for x0, y0, x1, y1 in _rects(sym.svg):
+        if x1 - x0 > _NOZZLE_STUB * sym.width or y1 - y0 > _NOZZLE_STUB * sym.height:
+            continue
+        for face, (a, b) in (
+            ("N", ((x0, y0), (x1, y0))),
+            ("S", ((x0, y1), (x1, y1))),
+            ("W", ((x0, y0), (x0, y1))),
+            ("E", ((x1, y0), (x1, y1))),
+        ):
+            across = face in ("N", "S")
+            mid = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
+            width = abs(b[0] - a[0]) if across else abs(b[1] - a[1])
+            for sa, sb in segments:
+                span = abs(sb[0] - sa[0]) if across else abs(sb[1] - sa[1])
+                # Same straight line as the face, centred on it, longer than it
+                # but not by more than a flange plate is.
+                if not width < span <= _NOZZLE_FLANGE * width:
+                    continue
+                if abs(sa[int(across)] - sb[int(across)]) > GEOM_TOL / 4:
+                    continue  # not on the face's own axis
+                if abs(sa[int(across)] - mid[int(across)]) > GEOM_TOL / 4:
+                    continue  # parallel to the face, but not on it
+                if (
+                    abs((sa[1 - int(across)] + sb[1 - int(across)]) / 2 - mid[1 - int(across)])
+                    > GEOM_TOL / 4
+                ):
+                    continue  # on the face's line, but not centred on the stub
+                lo, hi = (x0, x1) if across else (y0, y1)
+                found.append(_Nozzle(face, mid, lo, hi))
+                break
+    return found
+
+
+def _port_placements(sym: Symbol) -> list[tuple[str, str, Point]]:
+    """Every (port, face, point) the symbol offers, home placements and menu."""
+    return [
+        (name, face, xy) for name, faces in sym.port_faces.items() for face, xy in faces.items()
+    ]
+
+
+@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
+def test_every_drawn_nozzle_carries_a_port(entry):
+    """A nozzle nobody can connect to is a connection the class cannot make.
+
+    ``tank/sphere`` drew a flanged nozzle under its belly and put ``outlet`` on
+    the base rail of the support skirt instead, so ``examples/14``'s butane left
+    the structure rather than the vessel and the one nozzle the stencil drew for
+    it was never used.
+    """
+    (kind, variant), sym = entry
+    if (kind, variant) in _NOT_NOZZLES:
+        pytest.skip("draws a gauge stub, not a process nozzle")
+    points = [xy for _n, _f, xy in _port_placements(sym)]
+    for nozzle in _drawn_nozzles(sym):
+        near = min(math.dist(nozzle.point, p) for p in points) if points else math.inf
+        assert near <= GEOM_TOL, (
+            f"{kind}/{variant} draws a nozzle on its {nozzle.face} face at "
+            f"{nozzle.point} and anchors no port on it, so the drawing offers a "
+            f"connection the class cannot make"
+        )
+
+
+@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
+def test_no_port_lands_between_two_drawn_nozzles(entry):
+    """Where a face carries a row of nozzles, its connections are those nozzles.
+
+    ``tank/sphere``'s inlet sat at (40, 5) with nozzles drawn at x 18..30 and
+    50..62 either side of it: on ink, on the crown, and on nothing that says a
+    pipe may be joined there. The reported symptom of #225 is a line arriving at
+    bare shell in the gap, which is this.
+    """
+    (kind, variant), sym = entry
+    if (kind, variant) in _NOT_NOZZLES:
+        pytest.skip("draws a gauge stub, not a process nozzle")
+    nozzles = _drawn_nozzles(sym)
+    for name, face, (x, y) in _port_placements(sym):
+        on_face = [n for n in nozzles if n.face == face]
+        if len(on_face) < 2:
+            continue
+        along = x if face in ("N", "S") else y
+        if any(n.lo - GEOM_TOL <= along <= n.hi + GEOM_TOL for n in on_face):
+            continue
+        assert not (min(n.lo for n in on_face) < along < max(n.hi for n in on_face)), (
+            f"{kind}/{variant} port {name!r} at ({x}, {y}) sits on the {face} "
+            f"face between the nozzles drawn at "
+            + " and ".join(f"{n.lo:g}..{n.hi:g}" for n in on_face)
+            + ", so a pipe to it arrives at bare shell"
+        )
 
 
 # ---------------------------------------------------------------------------

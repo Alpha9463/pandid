@@ -919,10 +919,11 @@ def register_vendored(registry):
     registry.register('tank', Symbol(
         svg='<g id="sym_tank_sphere"><rect x="34.0" y="78.0" width="12.0" height="12.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="18.0" y="0.0" width="12.0" height="12.0" fill="none" stroke="#111" stroke-width="2.0"/><rect x="50.0" y="0.0" width="12.0" height="12.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 45.0 L 0.0 100.0 L 80.0 100.0 L 80.0 45.0 M 15.0 0.0 L 33.0 0.0 M 47.0 0.0 L 65.0 0.0 M 31.0 90.0 L 49.0 90.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="40.0" cy="45.0" rx="40.0" ry="40.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=100.0,
-        ports={'inlet': (40.0, 5.0), 'outlet': (40.0, 100.0), 'vent': (24.0, 0.0), 'relief': (56.0, 0.0), 'drain': (25.0, 82.1)},
+        ports={'inlet': (13.5, 75.0), 'outlet': (40.0, 90.0), 'vent': (24.0, 0.0), 'relief': (56.0, 0.0), 'drain': (54.9, 82.1)},
         drawio_shape='mxgraph.pid.vessels.storage_sphere',
-        # must not be turned: stands on legs, fills at the crown and drains at the bottom
+        # must not be turned: stands on a skirt; relief and vapour on the crown, liquid below
         gravity_fixed=True,
+        port_faces={'inlet': {'W': (13.5, 75.0), 'E': (66.5, 75.0)}},
     ), 'sphere')
 
     # draw.io vessels:Tank (Conical Bottom) (aspect=variable) -> tank/conical_bottom
