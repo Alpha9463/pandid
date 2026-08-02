@@ -235,8 +235,14 @@ def test_a_subclass_declaring_its_own_ports_builds_exactly_those(cls):
 
 
 def test_a_subclass_declaring_no_ports_still_gets_the_variants():
-    """...and the inherited path is untouched for one that declares none."""
-    assert set(_Cyclone("S-1", variant="cyclone").ports) == {"feed", "vapor", "liquid"}
+    """...and the inherited path is untouched for one that declares none.
+
+    ``cyclone`` is one of the three whose draws the base renamed in 0.1.2, so
+    what it inherits is the over/under pair. That is the point of the case: the
+    subclass says nothing about nozzles and gets whatever the *variant* has,
+    including a change to it.
+    """
+    assert set(_Cyclone("S-1", variant="cyclone").ports) == {"feed", "overflow", "underflow"}
 
 
 def test_an_alias_stores_the_registry_spelling():

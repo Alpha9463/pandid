@@ -626,6 +626,12 @@ def _find_port(unit: Unit, name: Any, where: str) -> Port:
             return unit.signal_port(name)
         except KeyError:
             pass
+    # A spec file is a stored artifact, so it can name a nozzle by a spelling
+    # this release has retired -- which is the one thing a deprecation window is
+    # for. ``_current_name`` warns and hands back the current name; anything
+    # else comes back unchanged and is refused below exactly as it was.
+    if isinstance(name, str):
+        name = unit._current_name(name)
     if not isinstance(name, str) or name not in unit.ports:
         raise SpecError(
             f"{where}: {type(unit).__name__} {unit.name!r} has no port {name!r}"

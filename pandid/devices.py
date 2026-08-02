@@ -25,20 +25,23 @@ supported indefinitely, and it is the only way to reach the ninety-odd drawings
 that never get a class of their own; ``pandid.render.symbols.default_registry``
 is still the whole catalogue.
 
-**One drawing, two nozzle vocabularies.** :class:`Cyclone`,
+**One drawing, one nozzle vocabulary.** :class:`Cyclone`,
 :class:`GravitySeparator` and :class:`ElectrostaticPrecipitator` collect *dust*,
-and their drawings have called the catch ``liquid`` since 0.1.0. These classes
-call it ``underflow``, and the vapour draw ``overflow``, which is what
+and their drawings have anchored the catch ``liquid`` since 0.1.0. All three
+classes call it ``underflow``, and the gas draw ``overflow``, which is what
 classification and solid-liquid separation call them and what the sibling
-mechanical separators already ship with. ``Separator(variant="cyclone")`` keeps
-``vapor``/``liquid`` **permanently**, because every sheet drawn against 0.1.0
-depends on it.
+mechanical separators already ship with.
 
-That is the accepted, permanent cost of correcting the names without a break:
-one drawing then answers to two vocabularies, and which one you get depends on
-which class you constructed. It is written here rather than left to be met by
-surprise. The rename is applied by :attr:`pandid.units.Unit.PORT_ANCHORS`, so
-the artwork keeps the anchors it shipped with.
+Up to 0.1.1 ``Separator(variant="cyclone")`` kept ``vapor``/``liquid``, and this
+docstring recorded the split as the permanent cost of correcting the names
+without a break: one drawing answering to two vocabularies, and which you got
+depended on which class you constructed. As of 0.1.2 it does not. The low-level
+form draws ``overflow`` and ``underflow`` too, the old pair resolves for one
+release with a :class:`DeprecationWarning` and a ``deprecated`` finding on
+``fs.validate()``, and it is gone in 0.1.3. The artwork is untouched throughout:
+the anchors it shipped with are mapped in
+:attr:`pandid.units.Separator._VARIANT_ANCHORS`, which is why nothing on any
+sheet moved.
 
 Not star-imported into :mod:`pandid.units`: this module imports its bases from
 there, so that would be a genuine cycle. ``from pandid import devices``, or take
@@ -495,13 +498,12 @@ class Cyclone(Separator):
     The draws are ``overflow`` and ``underflow``, not ``vapor`` and ``liquid``:
     what leaves the apex is a catch, and calling a hopper full of dust a liquid
     is the bend this class exists to stop. ``Separator(variant="cyclone")``
-    keeps the older pair, permanently; see the module docstring.
+    draws the same pair as of 0.1.2; see the module docstring.
     """
 
     kind = "separator"
     VARIANTS = ("default", "cyclone")
     VARIANT_ALIASES = {"default": "cyclone"}
-    PORT_ANCHORS = {"overflow": "vapor", "underflow": "liquid"}
     PORTS = [
         ("feed", "inlet", "feed"),
         ("overflow", "outlet", "process"),
@@ -524,7 +526,6 @@ class GravitySeparator(Separator):
     kind = "separator"
     VARIANTS = ("default", "gravity")
     VARIANT_ALIASES = {"default": "gravity"}
-    PORT_ANCHORS = {"overflow": "vapor", "underflow": "liquid"}
     PORTS = [
         ("feed", "inlet", "feed"),
         ("overflow", "outlet", "process"),
@@ -547,7 +548,6 @@ class ElectrostaticPrecipitator(Separator):
     kind = "separator"
     VARIANTS = ("default", "electrostatic")
     VARIANT_ALIASES = {"default": "electrostatic"}
-    PORT_ANCHORS = {"overflow": "vapor", "underflow": "liquid"}
     PORTS = [
         ("feed", "inlet", "feed"),
         ("overflow", "outlet", "process"),

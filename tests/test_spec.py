@@ -580,6 +580,46 @@ def test_unknown_port_lists_that_unit_s_ports():
     assert "available ports: ['discharge', 'suction']" in message
 
 
+def test_a_spec_file_may_still_name_a_retired_port():
+    """A spec file is a stored artifact, which is what the window is for.
+
+    ``Separator(variant="cyclone")`` called its draws ``vapor`` and ``liquid``
+    up to 0.1.1, so a file written then names them. It reads, resolving to the
+    nozzles they were renamed to, and warns; ``to_dict`` writes the new names,
+    so reading and re-writing such a file is what upgrades it.
+    """
+    spec = {
+        "name": "an 0.1.1 file",
+        "units": [
+            {"kind": "Separator", "name": "CY-401", "variant": "cyclone"},
+            {"kind": "Product", "name": "Dust"},
+        ],
+        "streams": [{"from": ["CY-401", "liquid"], "to": ["Dust", "inlet"]}],
+    }
+    with pytest.warns(DeprecationWarning, match="use .underflow"):
+        fs = Flowsheet.from_dict(spec)
+    assert fs.streams[0].source.name == "underflow"
+    assert fs.to_dict()["streams"][0]["from"] == ["CY-401", "underflow"]
+
+
+def test_a_retired_port_name_does_not_soften_the_error_for_a_real_typo():
+    """The lookup is a rename table, not a fuzzy match: a name that is not on it
+    is refused with the message it always got."""
+    spec = {
+        "name": "T",
+        "units": [
+            {"kind": "Separator", "name": "CY-401", "variant": "cyclone"},
+            {"kind": "Product", "name": "Dust"},
+        ],
+        "streams": [{"from": ["CY-401", "vapour"], "to": ["Dust", "inlet"]}],
+    }
+    with pytest.raises(SpecError) as excinfo:
+        Flowsheet.from_dict(spec)
+    message = str(excinfo.value)
+    assert "has no port 'vapour'" in message
+    assert "available ports: ['feed', 'overflow', 'underflow']" in message
+
+
 def test_unknown_port_face_lists_that_unit_s_ports():
     with pytest.raises(SpecError) as excinfo:
         Flowsheet.from_dict(

@@ -33,14 +33,14 @@ From a checkout, `pip install -e '.[dev]'` adds pytest, ruff and mypy.
 ## Quick start
 
 ```python
-from pandid import Flowsheet, units
+from pandid import Flowsheet, Feed, Heater, Separator, Product
 
 fs = Flowsheet("Flash Separation")
-feed   = fs.add(units.Feed("Crude"))
-heater = fs.add(units.Heater("E-101"))
-drum   = fs.add(units.Separator("V-101"))
-gas    = fs.add(units.Product("Off-Gas"))
-liquid = fs.add(units.Product("Condensate"))
+feed   = fs.add(Feed("Crude"))
+heater = fs.add(Heater("E-101"))
+drum   = fs.add(Separator("V-101"))
+gas    = fs.add(Product("Off-Gas"))
+liquid = fs.add(Product("Condensate"))
 
 fs.connect(feed.outlet,   heater.inlet)
 fs.connect(heater.outlet, drum.feed)
@@ -139,25 +139,38 @@ and what each claim does not cover.
 
 ## Equipment
 
-A class is a functional equipment type, defined by its ports. A variant is a
-visual style within it, picked with `variant=`.
+A class is a functional equipment type, defined by its ports. Import it from the
+package and build it:
 
 ```python
-fs.add(units.HeatExchanger("E-1", variant="plate"))
-fs.add(units.Valve("FV-1", variant="control", fail="closed"))
+from pandid import PlateExchanger, ControlValve, StirredTankReactor
+
+fs.add(PlateExchanger("E-1"))
+fs.add(ControlValve("FV-1", fail="closed"))
+fs.add(StirredTankReactor("R-1"))
+```
+
+The base classes are `Feed`, `Product`, `Pump`, `Compressor`, `Blower`, `Valve`,
+`Vessel`, `Tank`, `HeatExchanger`, `Heater`, `Cooler`, `Reactor`, `Separator`,
+`Column`, `Mixer`, `Splitter`, `Tee`, `Reducer`, `Fitting`, `Ejector`, `Vent`,
+`Funnel`, `Furnace`, `Turbine`, `Filter`, `Dryer`, `Conveyor` and `Instrument`,
+with 42 equipment classes over them — a `GearPump` *is* a `Pump`.
+
+A variant is a drawing within a class, picked with `variant=`. 92 of the 157
+registered drawings get no class of their own, and this is how you reach them:
+
+```python
+from pandid import units
+
 fs.add(units.Valve("HV-301", variant="gate", normal_position="closed"))
 fs.add(units.Column("T-1", variant="packed", n_feeds=2))
 fs.add(units.Fitting("ST-1", variant="strainer"))
 ```
 
-The classes are `Feed`, `Product`, `Pump`, `Compressor`, `Blower`, `Valve`,
-`Vessel`, `Tank`, `HeatExchanger`, `Heater`, `Cooler`, `Reactor`, `Separator`,
-`Column`, `Mixer`, `Splitter`, `Tee`, `Reducer`, `Fitting`, `Ejector`, `Vent`,
-`Funnel`, `Furnace`, `Turbine`, `Filter`, `Dryer`, `Conveyor` and `Instrument`.
 The [API reference](https://github.com/Alpha9463/pandid/blob/main/docs/api.md#units-and-ports)
 lists every class's ports and every registered variant, and
 [Custom equipment](https://github.com/Alpha9463/pandid/blob/main/docs/api.md#custom-equipment)
-covers a `units.Unit` subclass of your own.
+covers a `Unit` subclass of your own.
 
 `Tee` is the fitting that branches a line, drawn as three lines meeting with
 nothing at the junction. `add_valve_station()` builds the whole arrangement a

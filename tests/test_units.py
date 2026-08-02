@@ -1,4 +1,5 @@
 import re
+import warnings
 
 import pytest
 from pandid.units import Unit
@@ -216,24 +217,125 @@ def _nozzles(unit):
     return [(p.name, p.direction, p.role) for p in unit.ports.values()]
 
 
-@pytest.mark.parametrize(
-    "variant",
-    [
-        "default",
-        "horizontal",
-        "knockout",
-        "cyclone",
-        "gravity",
-        "scrubber",
-        "electrostatic",
-    ],
-)
-def test_every_separator_0_1_0_could_draw_keeps_the_nozzles_it_shipped_with(variant):
-    """Giving `Separator` per-variant nozzles must not move a single one of the
-    nozzles it already had. These seven are every variant the symbol registry
-    answered to at 0.1.0, so this list is the released API: the same names, in
-    the same order, with the same directions and roles."""
+@pytest.mark.parametrize("variant", ["default", "horizontal", "knockout", "scrubber"])
+def test_a_separator_that_separates_phases_names_them(variant):
+    """The four whose two draws really are a vapour and a liquid.
+
+    Three drawings of a drum, where the vapour disengages off the top and the
+    liquid settles out of the bottom, and the wet scrubber, whose products are a
+    cleaned gas and a dirty scrubbing liquid. The list is written out rather
+    than read off the class, so this compares against the released API and not
+    against itself: same names, same order, same directions, same roles.
+    """
     assert _nozzles(U.Separator("V-101", variant=variant)) == _FLASH_DRUM_NOZZLES
+
+
+# The renamed pair, written out for the same reason ``_FLASH_DRUM_NOZZLES`` is.
+_COLLECTOR_NOZZLES = [
+    ("feed", "inlet", "feed"),
+    ("overflow", "outlet", "process"),
+    ("underflow", "outlet", "process"),
+]
+
+#: The three drawings whose catch is dust. 0.1.0 called it ``liquid`` here while
+#: ``pandid.devices`` called it ``underflow`` over the same three symbols; 0.1.2
+#: is where the low-level form stopped disagreeing.
+_COLLECTORS = ["cyclone", "gravity", "electrostatic"]
+
+
+@pytest.mark.parametrize("variant", _COLLECTORS)
+def test_a_separator_that_collects_dust_draws_an_overflow_and_an_underflow(variant):
+    """A hopper full of dust is not a liquid, and a precipitator's stack gas is
+    not the vapour of anything. Both draws take the ``process`` role for it: the
+    role vocabulary has no word for tramp metal or a size fraction, and no
+    drawing reads a role that is not ``signal``."""
+    assert _nozzles(U.Separator("V-101", variant=variant)) == _COLLECTOR_NOZZLES
+
+
+@pytest.mark.parametrize("variant", _COLLECTORS)
+@pytest.mark.parametrize(("retired", "current"), [("vapor", "overflow"), ("liquid", "underflow")])
+def test_a_collectors_old_draw_name_still_reaches_the_nozzle_it_named(variant, retired, current):
+    """Both ways in, because a sheet written at 0.1.0 used whichever it liked.
+
+    The same ``Port`` object, not a copy: the rename is a name, so a sheet that
+    reaches the nozzle by the old one draws exactly what it drew before.
+    """
+    sep = U.Separator("CY-401", variant=variant)
+    with pytest.warns(DeprecationWarning):
+        assert getattr(sep, retired) is sep.ports[current]
+    with pytest.warns(DeprecationWarning):
+        assert sep.port(retired) is sep.ports[current]
+
+
+@pytest.mark.parametrize("variant", _COLLECTORS)
+def test_a_retired_draw_name_says_what_to_type_instead(variant):
+    """A finding that only says "this is deprecated" leaves the reader with the
+    same file and no next line to type, so the sentence ends on the new name."""
+    sep = U.Separator("CY-401", variant=variant)
+    with pytest.warns(DeprecationWarning, match=r"CY-401: .*\.vapor is deprecated") as caught:
+        sep.vapor
+    message = str(caught[0].message)
+    assert "removed in pandid 0.1.3" in message
+    assert message.endswith("use .overflow")
+
+
+def test_a_sheet_written_against_the_old_draw_names_still_draws():
+    """The one thing a deprecation window is for, end to end.
+
+    Every by-name entry point a 0.1.1 sheet could have used -- attribute,
+    ``port()``, ``pin(port=…)`` and ``nozzle()`` -- on one flowsheet that then
+    renders. A window that let the sheet build and refused to place it would be
+    no window at all.
+    """
+    from pandid import Flowsheet
+
+    fs = Flowsheet("a 0.1.1 sheet")
+    feed = fs.add(U.Feed("Gas"))
+    cy = fs.add(U.Separator("CY-401", variant="cyclone"))
+    clean = fs.add(U.Product("Clean Gas"))
+    dust = fs.add(U.Product("Dust"))
+    with pytest.warns(DeprecationWarning):
+        fs.connect(feed.outlet, cy.feed)
+        fs.connect(cy.vapor, clean.inlet)
+        fs.connect(cy.port("liquid"), dust.inlet)
+        cy.nozzle("vapor", "N")
+        cy.pin(port="liquid", x=300, y=400)
+    assert "<svg" in fs.to_svg()
+
+
+def test_the_old_draw_names_are_reported_by_validate():
+    """Because ``fs.validate()`` is what an author is told to run, and Python
+    hides a ``DeprecationWarning`` by default outside ``__main__``. One finding
+    per distinct sentence: two nozzles renamed, two things to fix."""
+    from pandid import Flowsheet
+
+    fs = Flowsheet("a 0.1.1 sheet")
+    cy = fs.add(U.Separator("CY-401", variant="cyclone"))
+    dust = fs.add(U.Product("Dust"))
+    with pytest.warns(DeprecationWarning):
+        fs.connect(cy.liquid, dust.inlet)
+        cy.port("vapor")
+        cy.port("vapor")  # ...and the same sentence twice is still one finding
+
+    findings = [issue for issue in fs.validate() if issue.code == "deprecated"]
+    assert len(findings) == 2
+    assert all(issue.message.startswith("CY-401: ") for issue in findings)
+    assert {issue.message.rsplit("use ", 1)[1] for issue in findings} == {".overflow", ".underflow"}
+
+
+@pytest.mark.parametrize("variant", ["default", "horizontal", "knockout", "scrubber"])
+def test_a_phase_separators_draws_are_not_deprecated(variant):
+    """The half of the retirement that would be easy to get wrong.
+
+    A flash drum's ``vapor`` is the vapour leaving it. Retiring the name on the
+    class rather than on the three drawings that misused it would have deprecated
+    the correct vocabulary along with the wrong one.
+    """
+    sep = U.Separator("V-101", variant=variant)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        assert sep.vapor is sep.ports["vapor"]
+        assert sep.port("liquid") is sep.ports["liquid"]
 
 
 @pytest.mark.parametrize("variant", ["sifter", "impact", "permanent_magnet", "electromagnetic"])

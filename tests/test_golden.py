@@ -1511,9 +1511,9 @@ def _mineral_dewatering() -> Flowsheet:
     fs.connect(dose.discharge, floc.branch, name="S-405")
     fs.connect(floc.outlet, thickener.feed, name="S-406")
 
-    fs.connect(thickener.port("vapor"), overflow.inlet, name="S-407")
+    fs.connect(thickener.port("overflow"), overflow.inlet, name="S-407")
 
-    fs.connect(thickener.port("liquid"), suction_red.inlet, name="S-408").via([(420, 332.4)])
+    fs.connect(thickener.port("underflow"), suction_red.inlet, name="S-408").via([(420, 332.4)])
     fs.connect(suction_red.outlet, underflow_pump.suction, name="S-408")
 
     fs.connect(underflow_pump.discharge, disch_red.inlet, name="S-409")
@@ -1532,7 +1532,7 @@ def _mineral_dewatering() -> Flowsheet:
     fs.connect(breeching.outlet, dryer.feed, name="S-415")
     fs.connect(dryer.product, cyclone.feed, name="S-416")
 
-    fs.connect(cyclone.port("vapor"), scrub_tee.inlet, name="S-417")
+    fs.connect(cyclone.port("overflow"), scrub_tee.inlet, name="S-417")
     fs.connect(scrub_water.outlet, scrub_tee.branch, name="S-418")
     fs.connect(scrub_tee.outlet, scrubber.feed, name="S-419")
 
@@ -1540,7 +1540,7 @@ def _mineral_dewatering() -> Flowsheet:
     fs.connect(fan.discharge, stack.inlet, name="S-420")
     fs.connect(scrubber.port("liquid"), effluent.inlet, name="S-421")
 
-    fs.connect(cyclone.port("liquid"), magnet.feed, name="S-422")
+    fs.connect(cyclone.port("underflow"), magnet.feed, name="S-422")
     fs.connect(magnet.port("overflow"), product.inlet, name="S-423")
     fs.connect(magnet.port("underflow"), tramp.inlet, name="S-424")
 

@@ -9,10 +9,14 @@ listed here is either internal or not part of the supported surface.
 > future backend and are never written by this library.
 
 ```python
-from pandid import Flowsheet, Component, units
+from pandid import Flowsheet, Component, Pump, Separator, Cyclone
 import pandid
 pandid.__version__          # the installed version, e.g. "0.0.1"
 ```
+
+Every unit and equipment class is on the package. `pandid.units` and
+`pandid.devices` are the same classes under a qualified name, and importing
+either namespace still works.
 
 ---
 
@@ -399,13 +403,33 @@ them.
 
 ## Units and ports
 
-Every unit type is reached through the `units` namespace, and the
-[equipment classes](#equipment-classes) over them through `devices`. Ports are
-exposed both
-as `unit.ports["name"]` and as attributes (`pump.suction`). An unknown attribute
-raises `AttributeError` listing the real ports, and `unit.port("name")` raises
-`KeyError` the same way. A type of your own is
-[Custom equipment](#custom-equipment).
+Import a unit type from the package and build it:
+
+```python
+from pandid import Flowsheet, Pump, Separator
+
+pump = Pump("P-101")
+drum = Separator("V-101")
+```
+
+Every class below, and every [equipment class](#equipment-classes) over them, is
+importable that way. `units.Pump` and `devices.Cyclone` are the same classes
+qualified by their namespace, which is worth importing for one thing:
+
+```python
+from pandid import units
+
+sifter = units.Separator("SC-101", variant="sifter")
+```
+
+`units.Kind(variant=…)` is the escape hatch. 92 of the 157 registered drawings
+get no class of their own, and this is how you reach them; see
+[Variants](#variants) for the list. Where a class exists, name it.
+
+Ports are exposed both as `unit.ports["name"]` and as attributes
+(`pump.suction`). An unknown attribute raises `AttributeError` listing the real
+ports, and `unit.port("name")` raises `KeyError` the same way. A type of your own
+is [Custom equipment](#custom-equipment).
 
 ```text
 Unit(name, variant="default", width=None, height=None,
@@ -451,7 +475,7 @@ Each entry is `port` *(direction / role)*.
 | `Valve` | `valve` | `inlet` *(in)*, `outlet` *(out)*, `actuator` *(in/signal)* |
 | `Vessel` | `vessel` | `inlet` *(in)*, `outlet` *(out)*, `vent` *(out/vapor)*, `relief` *(out)*, `drain` *(out/liquid)* |
 | `Tank` | `tank` | the same five as `Vessel` |
-| `Separator` | `separator` | `feed` *(in)*, `vapor` *(out/vapor)*, `liquid` *(out/liquid)*. The four mechanical variants sort by size, inertia or magnetism rather than into phases, and name the two draws their artwork actually has: `feed` *(in/feed)*, `overflow` *(out)*, `underflow` *(out)*; see [Variants](#variants) |
+| `Separator` | `separator` | `feed` *(in)*, `vapor` *(out/vapor)*, `liquid` *(out/liquid)* on the four variants whose draws really are phases — the drum (`default`, `horizontal`, `knockout`) and the wet `scrubber`. The other seven sort or collect rather than separating into phases, and name the two draws their artwork has: `feed` *(in/feed)*, `overflow` *(out)*, `underflow` *(out)*; see [Variants](#variants) |
 | `Column` | `column` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*, `reflux_in` *(in/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*, `condenser_duty` *(out/energy)*; the feeds are [`feeds`](#the-family-as-a-sequence) |
 | `Reactor` | `reactor` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `outlet` *(out)*, `vent` *(out/vapor)*, `duty` *(in/energy)*; the feeds are [`feeds`](#the-family-as-a-sequence) |
 | `HeatExchanger` | `hex` | `shell_in`, `shell_out`, `tube_in`, `tube_out`; `kettle` adds `bottoms` *(out/liquid)*. Four variants name their sides differently; see [Variants](#variants) |
@@ -629,15 +653,15 @@ package, and each is a subclass of the `units` class that owns its kind: a
 `GearPump` *is* a `Pump`.
 
 ```python
-from pandid import devices
+from pandid import Cyclone
 
-sep = devices.Cyclone("S-101")   # units.Separator(variant="cyclone"), by the name it goes by
-sep.variant                      # 'cyclone'
-sep.underflow                    # the dust draw, and a Port a type checker can resolve
+sep = Cyclone("S-101")   # units.Separator(variant="cyclone"), by the name it goes by
+sep.variant              # 'cyclone'
+sep.underflow            # the dust draw, and a Port a type checker can resolve
 ```
 
 `Kind(variant=…)` stays the low-level form, and is the only way to reach the
-ninety-odd drawings that get no class of their own. A class stores the
+92 drawings that get no class of their own. A class stores the
 **registry's** spelling of its variant and not its own, so `to_dict()` writes
 `variant: cyclone` rather than the class-local `default`, and the file reads
 back. [Variants](#variants) lists the drawings each class owns.
@@ -697,10 +721,11 @@ Three of them do something the name does not say:
 - `CheckValve` drops `actuator`. The flow works it, so there is no operator for
   a signal to land on.
 - `Cyclone`, `GravitySeparator` and `ElectrostaticPrecipitator` collect *dust*,
-  and name their draws `overflow` and `underflow` for it, while
-  `Separator(variant="cyclone")` keeps `vapor`/`liquid` **permanently** for the
-  sheets already drawn against it. One drawing, two nozzle vocabularies, and
-  which you get depends on which class you built.
+  and name their draws `overflow` and `underflow` for it. So does
+  `Separator(variant="cyclone")`, as of 0.1.2: it called them `vapor` and
+  `liquid` up to 0.1.1, and those two names go on reaching the same nozzles
+  until 0.1.3 with a `DeprecationWarning` and a `deprecated` finding on
+  `validate()`. One drawing, one vocabulary, whichever class you built.
 
 ### `Block`: the block flow diagram
 
@@ -2363,14 +2388,27 @@ default outside `__main__`, so the finding is the one you can rely on seeing.
 Both are built from one declaration and always read the same:
 
 ```text
-[warning] deprecated: P-101: Pump(cooled=True) is deprecated and is removed in pandid 0.1.3; use Pump(jacket='cooling')
+[warning] deprecated: CY-401: Separator(variant='cyclone'|'gravity'|'electrostatic').vapor is deprecated and is removed in pandid 0.1.3; use .overflow
 ```
 
 A deprecation lives for one release. It works throughout the release that
 announces it and is deleted in the next, so the message always names a release
 that has not shipped yet. The CHANGELOG lists it under `### Deprecated` when it
-is announced and under `### Removed` when it goes. Nothing is deprecated today;
-the line above is the shape, not a real call.
+is announced and under `### Removed` when it goes.
+
+**In flight now**, both going in 0.1.3:
+
+| Deprecated | Type instead |
+|---|---|
+| `Separator(variant="cyclone"\|"gravity"\|"electrostatic").vapor` | `.overflow` |
+| the same three separators' `.liquid` | `.underflow` |
+
+Those three drawings collect dust, and their two draws are `overflow` and
+`underflow` like every other separator that sorts rather than separating into
+phases. The old names still reach the same nozzles through attribute access,
+`port()`, `nozzle()`, `pin(port=…)` and a spec file's endpoints — everything but
+`unit.ports["vapor"]`, which is the dict itself. A drum or a wet scrubber keeps
+`vapor` and `liquid`; nothing about those is deprecated.
 
 The finding rides on the object the call was made on, so a unit deprecated
 during construction is reported even though it was not on a flowsheet yet. A
