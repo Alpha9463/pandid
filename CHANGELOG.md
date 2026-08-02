@@ -305,6 +305,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Nothing about the SVG changes: `tests/golden/` and `docs/gallery/` are byte
   for byte what they were, checked by regenerating both from a fresh render.
 
+- **Each golden fixture is now checked against the example it was copied from.**
+  `tests/test_golden.py` rebuilds every sheet from an inline copy of the
+  example's code, so the suite was green whenever the fixture matched the
+  golden — whether or not either matched `examples/NN_*.py`. That drift was not
+  hypothetical: #230 corrected real people's initials in
+  `examples/13_mineral_dewatering.py`, and the golden went on reading the old
+  ones because the golden is built from the fixture.
+
+  Every example is now also imported, rendered and compared against the same
+  golden, so a divergence fails on the next test run rather than on the next
+  screenshot. The examples are scripts that write files and print, so the
+  capture in `scripts/gallery.py` is reused rather than reimplemented: it runs
+  each one with `Flowsheet.render` replaced, catching the flowsheet and the
+  options it was about to be drawn with and writing nothing anywhere. A second
+  check asserts that every example has a scenario at all, so a new sheet cannot
+  arrive unguarded.
+
 ### Changed
 
 ### Deprecated
