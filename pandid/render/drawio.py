@@ -452,6 +452,10 @@ class _Approximation(NamedTuple):
     says what the sheet has that the stand-in does not, in words, and is the
     point of the table: an approximation nobody wrote down is indistinguishable
     from a mistake.
+
+    ``inscribed`` is a *second* built-in, drawn inside the first and filling the
+    same box, for a symbol that is two outlines rather than one. See
+    :meth:`DrawioRenderer._vertex`, which emits it as a child of the cell.
     """
 
     shape: str | None
@@ -461,6 +465,7 @@ class _Approximation(NamedTuple):
     stroke: str = _INK
     weight: float = 1.0
     keys: tuple = ()
+    inscribed: "str | None" = None
 
 
 #: Every symbol this library draws itself, and what draw.io is asked for instead.
@@ -473,10 +478,19 @@ class _Approximation(NamedTuple):
 #: The balloons are the ones that matter, a P&ID being mostly balloons. Every one
 #: of them keeps its outline -- a circle stays a circle, a diamond a diamond, the
 #: computer hexagon a hexagon -- and what goes is the *location* marking layered
-#: on it: the bar across a panel balloon, the square around a shared-display one,
-#: the square behind a logic diamond. So an exported balloon says "instrument"
-#: correctly and stops saying where the instrument lives. Nothing here is a
-#: silent loss; it is a loss with a sentence against it.
+#: on it: the bar across a panel balloon, the square around a shared-display one.
+#: So an exported balloon says "instrument" correctly and stops saying where the
+#: instrument lives. Nothing here is a silent loss; it is a loss with a sentence
+#: against it.
+#:
+#: The trip square is no longer one of them. ``sis``/``logic`` is a square with
+#: an *inscribed diamond*, and it was exported as ``shape=rhombus`` -- a bare
+#: diamond, which is the generic interlock symbol of the variant next door. So
+#: the sheet's two trip symbols came out as one, and the distinction
+#: ANSI/ISA-5.1 draws between them, and CHEE4001 p.20 asks for ("For potentially
+#: hazardous situations it is better practice to specify a separate trip
+#: system"), was silently lost rather than recorded as lost. It is ``inscribed``
+#: now: a square cell with the diamond as a child.
 #: Opaque, as every balloon's own artwork is: a balloon is drawn over the line it
 #: reads and knocks a hole in it, and a transparent one would have that line
 #: running through the tag inside it.
@@ -499,12 +513,15 @@ _APPROXIMATIONS = {
     ("instrument", "computer"): _Approximation(
         # The computer hexagon, drawn as one.
         "hexagon", "", fill=_BALLOON_FILL),
+    # A square with a diamond inscribed in it, which is two outlines and so two
+    # cells. Nothing lost, so nothing listed. `logic` is the same Symbol under
+    # its second name (pandid.render.symbols registers one object twice), so the
+    # two entries have to say the same thing or the two spellings would draw
+    # differently.
     ("instrument", "sis"): _Approximation(
-        "rhombus", "the square around the diamond that puts the logic in a safety "
-                   "instrumented system", fill=_BALLOON_FILL),
+        None, "", fill=_BALLOON_FILL, inscribed="rhombus"),
     ("instrument", "logic"): _Approximation(
-        "rhombus", "the square around the diamond that puts the function in a "
-                   "logic solver", fill=_BALLOON_FILL),
+        None, "", fill=_BALLOON_FILL, inscribed="rhombus"),
     ("instrument", "interlock"): _Approximation(
         # A bare diamond, drawn as one.
         "rhombus", "", fill=_BALLOON_FILL),
@@ -1169,6 +1186,9 @@ class DrawioRenderer:
         ``mxCellRenderer.getLabelBounds`` starts its non-edge branch from
         exactly that -- so it displaces the label and leaves the cell alone,
         which is what a tag stepping clear of somebody else's line is.
+
+        A symbol that is **two outlines** gets a second cell, inscribed in the
+        first: see :meth:`_inscribed`.
         """
         sym = self.registry.for_unit(u)
         x0, y0, x1, y1 = fit.box(self._cell_box(u))
@@ -1181,10 +1201,80 @@ class DrawioRenderer:
                  f'            <mxPoint x="{_num(dx)}" y="{_num(dy)}" as="offset" />',
                  '          </mxGeometry>']
                 if (round(dx, 2) or round(dy, 2)) else [geometry + " />"])
+        cid = self._id(index)
         return [
-            f'        <mxCell id="{self._id(index)}" value={_attr(text)} '
+            f'        <mxCell id="{cid}" value={_attr(text)} '
             f'style={_attr(style)} vertex="1" parent="1">',
             *body,
+            '        </mxCell>',
+            *self._inscribed(cid, self._approximation(u, sym), x1 - x0, y1 - y0),
+        ]
+
+    @staticmethod
+    def _inscribed(cid: str, approx: "_Approximation | None",
+                   w: float, h: float) -> list[str]:
+        """The second outline of a symbol that has two, as a child of the first.
+
+        The safety-instrumented-system balloon is the case and today the only
+        one: ANSI/ISA-5.1-2009 Table 5.1.1 column B draws it as a **square with
+        an inscribed diamond**, and the exporter was writing ``shape=rhombus``
+        -- a bare diamond, which is Table 5.1.2's generic interlock and the
+        symbol of the variant next door. Two different symbols came out as one.
+
+        **A child cell rather than a stencil**, which was the other candidate
+        and is the one this file's own doctrine rules out. Every shape named in
+        :data:`_APPROXIMATIONS` is a draw.io *built-in* and deliberately never a
+        stencil key, because the hazard the whole export guards against is a
+        reference that silently fails to resolve. An inline
+        ``shape=stencil(<deflated base64>)`` would sidestep that -- the artwork
+        travels in the style, so there is nothing to resolve -- but it buys the
+        one path out with two costs: this file promises "a plain uncompressed
+        ``mxfile`` ... and it diffs", and a compressed blob is exactly what does
+        not; and it would be the one shape here that ``tests/test_drawio.py``
+        cannot hold against anything, since there is no stencil set to check it
+        in. Two cells cost a reader one extra shape in the outline panel.
+
+        The pair holds together under editing, which is the thing a group has to
+        do to be worth preferring:
+
+        * **moving.** A child's geometry is relative to its parent's origin, so
+          the parent moves and the child comes with it, with no model change at
+          all.
+        * **resizing.** ``Graph.isRecursiveVertexResize`` answers yes for any
+          non-swimlane vertex that has children, is not collapsed, states no
+          ``childLayout`` and does not say ``recursiveResize=0`` -- which is
+          this cell -- and ``mxVertexHandler.isRecursiveResize`` defers to it.
+          ``resizeChildCells`` then scales the child by the ratio of the new
+          box to the old, so the diamond stays inscribed. This is why the child
+          is a plain vertex and not, say, a group with a layout: a
+          ``childLayout`` would switch the recursion *off*.
+        * ``connectable=0``, so a stream dropped on the balloon lands on the
+          square. Every connection fraction :meth:`_constraint` writes is a
+          fraction of the square's box, and the diamond's own box is the same
+          rectangle, so a point that resolved against the child would be in the
+          right place by luck rather than by construction.
+        * ``movable=0``, because the diamond is *part of* the symbol and not a
+          mark on it. The child is drawn over the parent -- children are
+          validated after their parents -- so a reader clicking the middle of
+          the balloon grabs the diamond, and without this they would drag it out
+          of its own square.
+
+        ``fillColor`` is deliberately not the parent's: the square is opaque
+        white and knocks a hole in the line the balloon is dropped on, and a
+        second opaque fill inside it would draw nothing but would have to be
+        argued about the next time somebody read it.
+        """
+        if approx is None or approx.inscribed is None:
+            return []
+        style = ";".join([f"shape={approx.inscribed}", "rounded=0", "html=1",
+                          f"strokeColor={approx.stroke}", f"fillColor={_NO_FILL}",
+                          f"strokeWidth={approx.weight:g}",
+                          "connectable=0", "movable=0"]) + ";"
+        return [
+            f'        <mxCell id="{cid}-in" value="" style={_attr(style)} '
+            f'vertex="1" parent="{cid}">',
+            f'          <mxGeometry x="0" y="0" width="{_num(w)}" '
+            f'height="{_num(h)}" as="geometry" />',
             '        </mxCell>',
         ]
 

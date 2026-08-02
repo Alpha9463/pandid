@@ -200,11 +200,12 @@ def test_the_approximations_name_only_shapes_and_symbols_that_exist():
             f"{kind}/{variant} has a draw.io stencil of its own, so approximating "
             f"it throws the real shape away"
         )
-        assert approx.shape in _BUILTIN_SHAPES, (
-            f"{kind}/{variant} is approximated with {approx.shape!r}, which is not "
-            f"an mxGraph built-in; a stencil key here could go stale, and the "
-            f"whole point of an approximation is a shape that is certainly there"
-        )
+        for shape in (approx.shape, approx.inscribed):
+            assert shape in _BUILTIN_SHAPES or shape is None, (
+                f"{kind}/{variant} is approximated with {shape!r}, which is not "
+                f"an mxGraph built-in; a stencil key here could go stale, and the "
+                f"whole point of an approximation is a shape that is certainly there"
+            )
 
 
 def test_a_referenced_stencil_is_always_variable_aspect():
@@ -880,6 +881,59 @@ def test_a_diamond_balloon_carries_its_number_alone():
     cell = _cells(fs, check=False)["u0"]
     assert cell.get("value") == "301"
     assert _style(cell)["shape"] == "rhombus"
+
+
+@pytest.mark.parametrize("variant", ["sis", "logic"])
+def test_a_trip_balloon_keeps_the_square_around_its_diamond(variant):
+    """#242. ANSI/ISA-5.1-2009 Table 5.1.1 column B draws the
+    safety-instrumented-system symbol as a square with an inscribed diamond;
+    the export wrote ``shape=rhombus``, which is Table 5.1.2's *generic
+    interlock* -- the variant next door, and a different claim about the
+    system. Two symbols came out as one.
+
+    So it is two cells: the square is the cell, the diamond is a child filling
+    the same box. Held against the artwork the sheet draws rather than against
+    a remembered pair of shapes -- ``sym_instrument_sis`` really is a ``<rect>``
+    and a four-point ``<polygon>``, and the plain interlock really is the
+    polygon on its own.
+    """
+    art = default_registry.get("instrument", variant).svg
+    assert art.count("<rect") == 1 and art.count("<polygon") == 1, (
+        "the sheet has stopped drawing this as a square with a diamond in it"
+    )
+
+    fs = Flowsheet("trip")
+    fs.add(units.Instrument("Z", 301, variant=variant)).pin(x=100, y=100)
+    fs.layout()
+    cells = _cells(fs, check=False)
+    square, diamond = cells["u0"], cells["u0-in"]
+    # The square is the cell: it carries the number, it is what a pipe lands on,
+    # and it is draw.io's default vertex with the corners left square.
+    assert "shape" not in _style(square)
+    assert _style(square)["rounded"] == "0"
+    assert square.get("value") == "301"
+    assert _style(square)["fillColor"] == "#ffffff", "a balloon is opaque"
+
+    # The diamond is inscribed in it, is scenery, and draws no second fill.
+    assert diamond.get("parent") == "u0"
+    assert _style(diamond)["shape"] == "rhombus"
+    assert _style(diamond)["fillColor"] == "none"
+    assert _style(diamond)["connectable"] == "0"
+    assert _style(diamond)["movable"] == "0"
+    box = square.find("mxGeometry")
+    inner = diamond.find("mxGeometry")
+    assert (inner.get("x"), inner.get("y")) == ("0", "0")
+    assert inner.get("width") == box.get("width")
+    assert inner.get("height") == box.get("height")
+
+    # ...and the plain interlock is still the bare diamond it is on the sheet,
+    # which is the distinction that was being thrown away.
+    plain = Flowsheet("interlock")
+    plain.add(units.Instrument("Z", 302, variant="interlock")).pin(x=100, y=100)
+    plain.layout()
+    bare = _cells(plain, check=False)
+    assert _style(bare["u0"])["shape"] == "rhombus"
+    assert "u0-in" not in bare
 
 
 def test_a_unit_from_outside_the_package_exports_as_the_box_it_draws(gapped_kind):

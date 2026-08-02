@@ -153,8 +153,11 @@
         <mxCell id="u13" value="LAL&lt;br&gt;101" style="html=1;shape=ellipse;rounded=0;whiteSpace=wrap;strokeColor=#111;fillColor=#ffffff;strokeWidth=1;verticalLabelPosition=middle;verticalAlign=middle;align=center;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="429" y="510" width="44" height="44" as="geometry" />
         </mxCell>
-        <mxCell id="u14" value="1" style="html=1;shape=rhombus;rounded=0;whiteSpace=wrap;strokeColor=#111;fillColor=#ffffff;strokeWidth=1;verticalLabelPosition=middle;verticalAlign=middle;align=center;fontSize=12;" vertex="1" parent="1">
+        <mxCell id="u14" value="1" style="html=1;rounded=0;whiteSpace=wrap;strokeColor=#111;fillColor=#ffffff;strokeWidth=1;verticalLabelPosition=middle;verticalAlign=middle;align=center;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="475" y="353.5" width="40" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="u14-in" value="" style="shape=rhombus;rounded=0;html=1;strokeColor=#111;fillColor=none;strokeWidth=1;connectable=0;movable=0;" vertex="1" parent="u14">
+          <mxGeometry x="0" y="0" width="40" height="40" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
