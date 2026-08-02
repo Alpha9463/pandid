@@ -44,13 +44,15 @@ from pandid.portgeom import port_point, unit_box
 from pandid.render.drawio import _APPROXIMATIONS, DrawioRenderer
 from pandid.render.svg import (
     _page,
+    _PROCESS_STROKE,
+    _SIGNAL_STROKE,
     boundary_flag,
     impulse_tap,
     pneumatic_marks,
     stream_polyline,
     tap_lines,
 )
-from pandid.render.symbols import Symbol, default_registry, expander
+from pandid.render.symbols import ARROWHEAD, Symbol, default_registry, expander
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 STENCILS = ROOT / "scripts" / "vendor_data" / "drawio"
@@ -200,11 +202,12 @@ def test_the_approximations_name_only_shapes_and_symbols_that_exist():
             f"{kind}/{variant} has a draw.io stencil of its own, so approximating "
             f"it throws the real shape away"
         )
-        assert approx.shape in _BUILTIN_SHAPES, (
-            f"{kind}/{variant} is approximated with {approx.shape!r}, which is not "
-            f"an mxGraph built-in; a stencil key here could go stale, and the "
-            f"whole point of an approximation is a shape that is certainly there"
-        )
+        for shape in (approx.shape, approx.inscribed):
+            assert shape in _BUILTIN_SHAPES or shape is None, (
+                f"{kind}/{variant} is approximated with {shape!r}, which is not "
+                f"an mxGraph built-in; a stencil key here could go stale, and the "
+                f"whole point of an approximation is a shape that is certainly there"
+            )
 
 
 def test_a_referenced_stencil_is_always_variable_aspect():
@@ -880,6 +883,59 @@ def test_a_diamond_balloon_carries_its_number_alone():
     cell = _cells(fs, check=False)["u0"]
     assert cell.get("value") == "301"
     assert _style(cell)["shape"] == "rhombus"
+
+
+@pytest.mark.parametrize("variant", ["sis", "logic"])
+def test_a_trip_balloon_keeps_the_square_around_its_diamond(variant):
+    """#242. ANSI/ISA-5.1-2009 Table 5.1.1 column B draws the
+    safety-instrumented-system symbol as a square with an inscribed diamond;
+    the export wrote ``shape=rhombus``, which is Table 5.1.2's *generic
+    interlock* -- the variant next door, and a different claim about the
+    system. Two symbols came out as one.
+
+    So it is two cells: the square is the cell, the diamond is a child filling
+    the same box. Held against the artwork the sheet draws rather than against
+    a remembered pair of shapes -- ``sym_instrument_sis`` really is a ``<rect>``
+    and a four-point ``<polygon>``, and the plain interlock really is the
+    polygon on its own.
+    """
+    art = default_registry.get("instrument", variant).svg
+    assert art.count("<rect") == 1 and art.count("<polygon") == 1, (
+        "the sheet has stopped drawing this as a square with a diamond in it"
+    )
+
+    fs = Flowsheet("trip")
+    fs.add(units.Instrument("Z", 301, variant=variant)).pin(x=100, y=100)
+    fs.layout()
+    cells = _cells(fs, check=False)
+    square, diamond = cells["u0"], cells["u0-in"]
+    # The square is the cell: it carries the number, it is what a pipe lands on,
+    # and it is draw.io's default vertex with the corners left square.
+    assert "shape" not in _style(square)
+    assert _style(square)["rounded"] == "0"
+    assert square.get("value") == "301"
+    assert _style(square)["fillColor"] == "#ffffff", "a balloon is opaque"
+
+    # The diamond is inscribed in it, is scenery, and draws no second fill.
+    assert diamond.get("parent") == "u0"
+    assert _style(diamond)["shape"] == "rhombus"
+    assert _style(diamond)["fillColor"] == "none"
+    assert _style(diamond)["connectable"] == "0"
+    assert _style(diamond)["movable"] == "0"
+    box = square.find("mxGeometry")
+    inner = diamond.find("mxGeometry")
+    assert (inner.get("x"), inner.get("y")) == ("0", "0")
+    assert inner.get("width") == box.get("width")
+    assert inner.get("height") == box.get("height")
+
+    # ...and the plain interlock is still the bare diamond it is on the sheet,
+    # which is the distinction that was being thrown away.
+    plain = Flowsheet("interlock")
+    plain.add(units.Instrument("Z", 302, variant="interlock")).pin(x=100, y=100)
+    plain.layout()
+    bare = _cells(plain, check=False)
+    assert _style(bare["u0"])["shape"] == "rhombus"
+    assert "u0-in" not in bare
 
 
 def test_a_unit_from_outside_the_package_exports_as_the_box_it_draws(gapped_kind):
@@ -1677,19 +1733,21 @@ def test_the_furniture_docks_where_the_sheet_docks_it():
     "option,value",
     [
         ("show_stream_table", True),
-        ("jump_direction", "horizontal"),
         ("debug", True),
     ],
 )
 def test_render_refuses_a_sheet_option_it_cannot_honour(tmp_path, sample, option, value):
     """Accepting and ignoring these would tell the caller something false about
-    the file they now hold. ``page_size`` and ``border`` are no longer among
-    them; see the two tests below."""
+    the file they now hold. ``page_size``, ``border`` and ``jump_direction`` are
+    no longer among them; see the tests below."""
     with pytest.raises(ValueError, match=option):
         sample.render(tmp_path / "sheet.drawio", **{option: value})
 
 
-@pytest.mark.parametrize("option,value", [("page_size", "A3"), ("border", "zone")])
+@pytest.mark.parametrize(
+    "option,value",
+    [("page_size", "A3"), ("border", "zone"), ("jump_direction", "horizontal")],
+)
 def test_render_honours_the_sheet_options_it_can(tmp_path, sample, option, value):
     out = tmp_path / "sheet.drawio"
     sample.render(out, **{option: value})
@@ -1866,8 +1924,9 @@ SHEETS = gallery.sheets()
 
 @pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
 def test_every_example_exports_a_document_that_matches_its_sheet(stem):
-    """Twelve real sheets: parsed back, with every box, waypoint and shape
-    reference held against the drawing the same flowsheet renders."""
+    """Fourteen real sheets -- ``gallery.sheets()``, counted rather than
+    remembered: parsed back, with every box, waypoint and shape reference held
+    against the drawing the same flowsheet renders."""
     fs, kwargs = gallery.flowsheet(stem)
     fs.to_svg(**kwargs)  # settle layout and routing exactly as the sheet does
     root = ET.fromstring(fs.to_drawio(diagram=kwargs.get("diagram")))
@@ -1999,6 +2058,393 @@ def test_no_line_number_is_written_over_a_symbol_or_an_equipment_tag(stem):
         if meets(box, obstacle)
     ]
     assert not struck, f"{stem}: line numbers written over {struck}"
+
+
+@pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
+def test_a_displaced_line_number_is_tied_back_to_its_run(stem):
+    """The leader #236 deferred, on the grounds that it "would have to be a
+    second cell hung off a label that is not itself a cell".
+
+    It does not: an edge with both terminals stated as points and neither as a
+    cell is how draw.io writes a free-standing line, and ``endArrow=block;
+    endFill=1`` is the filled triangle the sheet's own `_arrowhead` draws.
+    ISO 15519-1 §6.4 makes the head a *shall* -- "Leader lines shall terminate
+    ... with an arrowhead if it ends on the outline of an object or a
+    connection" -- and without one `AE-304-150-80-SS` was a string of
+    characters floating in blank paper attached to nothing.
+
+    Held against the **rendered sheet** rather than against `stream_numbers`:
+    the leaders are read back out of the SVG's own ink, put through the fit,
+    and matched to the emitted cells. Two backends drawing a leader in
+    different places is exactly what that catches.
+    """
+    from test_label_invariants import _labels
+
+    fs, kwargs = gallery.flowsheet(stem)
+    svg = fs.to_svg(**kwargs)
+    _boxes, _frame, fit = DrawioRenderer()._furniture(fs, _page(kwargs.get("page_size")))
+    cells = _drawio_cells(fs, kwargs)
+
+    drawn = {label.name: label for label in _labels(svg) if label.leader is not None}
+    emitted = {cid: cell for cid, cell in cells.items() if cid.endswith("-lead")}
+    assert sorted(cells[cid[: -len("-lead")]].get("value") for cid in emitted) == sorted(drawn), (
+        f"{stem}: the sheet draws {sorted(drawn)} leaders and the export {len(emitted)}"
+    )
+
+    for cid, cell in emitted.items():
+        label = drawn[cells[cid[: -len("-lead")]].get("value")]
+        assert label.head, "the sheet drew this leader without a head"
+        geometry = cell.find("mxGeometry")
+        got, want = [], []
+        for point, end in zip(("sourcePoint", "targetPoint"), label.leader, strict=True):
+            at = geometry.find(f'mxPoint[@as="{point}"]')
+            got += [float(at.get("x")), float(at.get("y"))]
+            want += list(fit.at(*end))
+        # A twentieth, because the sheet writes this line's coordinates to one
+        # decimal and the export writes them to two.
+        assert got == pytest.approx(want, abs=0.06)
+        style = _style(cell)
+        # The head goes on the end that lands on the run, and nowhere else.
+        assert style["endArrow"] == "block" and style["endFill"] == "1"
+        assert style["startArrow"] == "none"
+        assert float(style["endSize"]) == pytest.approx(
+            fit.length(ARROWHEAD * _SIGNAL_STROKE / _PROCESS_STROKE), abs=0.01
+        )
+        # A leader is drawn at half a pipeline's weight, in the label's own ink.
+        assert float(style["strokeWidth"]) == pytest.approx(fit.length(_SIGNAL_STROKE), abs=0.01)
+
+
+# ---------------------------------------------------------------------------
+# Line weight
+# ---------------------------------------------------------------------------
+
+
+def test_the_pen_the_export_states_is_the_pen_the_library_draws_with():
+    """``_SYMBOL_STROKE`` is a copy, and this is what stops it drifting.
+
+    It has to be a copy: the number is a literal inside a hundred SVG fragments
+    in `pandid.render.symbols` and a division inside `scripts/vendor_symbols.py`,
+    which is not part of the installed package. So it is held against the
+    library's own artwork instead -- `authored_pens` reads the weight each
+    symbol declares through its internal scale group, which is the weight it
+    draws at on the paper.
+    """
+    from pandid.render.drawio import _SYMBOL_STROKE
+    from test_line_weight import authored_pens
+
+    checked = 0
+    for (kind, variant), sym in sorted(default_registry._symbols.items()):
+        # The outline is the heaviest pen; a symbol's fine detail is
+        # deliberately lighter and draw.io has one weight for the whole stencil.
+        pen = max(authored_pens(sym))
+        assert pen == pytest.approx(_SYMBOL_STROKE, rel=2e-3), (
+            f"{kind}/{variant} is drawn at {pen:.4g} and exported at {_SYMBOL_STROKE}"
+        )
+        checked += 1
+    assert checked > 100, f"only {checked} symbols were walked; the registry is bigger"
+
+
+@pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
+def test_every_drawn_symbol_states_the_weight_the_sheet_rules_it_at(stem):
+    """#239. No ``strokeWidth`` was written on a stencil cell at all.
+
+    All 319 vendored stencils declare ``strokewidth="inherit"``, which is a
+    stencil saying *take the pen from the cell* -- and the cell said nothing, so
+    draw.io's default 1 drew every valve, vessel and pump lighter than the pipes
+    they sit on, which were already emitted at the sheet's 2. The stand-ins were
+    worse than unstated: they said ``strokeWidth=1`` outright.
+
+    Scaled, because a symbol's outline is a *drawing* dimension and a paged
+    export fits the drawing into what the furniture leaves. Stating it flat
+    beside a stream stated scaled is the same defect the other way round.
+    """
+    from pandid.render.drawio import _SYMBOL_STROKE
+
+    fs, kwargs = gallery.flowsheet(stem)
+    fs.to_svg(**kwargs)
+    _boxes, _frame, fit = DrawioRenderer()._furniture(fs, _page(kwargs.get("page_size")))
+    cells = _drawio_cells(fs, kwargs)
+    want = fit.length(_SYMBOL_STROKE)
+    seen = 0
+    for i, u in enumerate(fs.units):
+        for cid in (f"u{i}", f"u{i}-in"):
+            cell = cells.get(cid)
+            if cell is None:
+                continue
+            style = _style(cell)
+            # A pipe tee draws no ink of its own -- the three runs meeting draw
+            # the junction -- so it has no pen to state.
+            if style.get("strokeColor") == "none":
+                continue
+            assert "strokeWidth" in style, (
+                f"{stem}: {u.kind}/{getattr(u, 'variant', 'default')} leaves its "
+                f"pen to draw.io, which draws it at 1 beside pipes drawn at 2"
+            )
+            assert float(style["strokeWidth"]) == pytest.approx(want, abs=0.01)
+            seen += 1
+    assert seen, f"{stem}: no unit cell was checked"
+
+
+@pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
+def test_no_cell_that_inks_anything_leaves_its_weight_to_drawio(stem):
+    """The rest of #239, over the whole document rather than over the symbols.
+
+    Three ways a cell can honestly say nothing about its pen, and they are the
+    only three: it strokes no ink (``strokeColor=none`` -- a text label, the
+    tee); it is a table row or cell, which switches its own four edges off and
+    lets the *container* draw every rule from the container's style
+    (``strokeColor=inherit``); or it is one of draw.io's two root cells.
+    Anything else that reaches the canvas with a colour and no width is drawn at
+    draw.io's default rather than at the sheet's.
+    """
+    fs, kwargs = gallery.flowsheet(stem)
+    fs.to_svg(**kwargs)
+    root = ET.fromstring(
+        fs.to_drawio(**{k: v for k, v in kwargs.items() if k in _DRAWIO_KWARGS})
+    ).find("diagram/mxGraphModel/root")
+    silent = []
+    for cell in root.findall("mxCell"):
+        style = _style(cell)
+        ink = style.get("strokeColor")
+        if ink in (None, "none", "inherit") or "strokeWidth" in style:
+            continue
+        silent.append(cell.get("id"))
+    assert not silent, f"{stem}: cells drawn at draw.io's default weight: {silent}"
+
+
+# ---------------------------------------------------------------------------
+# Line jumps
+#
+# draw.io is still not run, so what is done here is what the header of this file
+# says is done everywhere else: draw.io's *algorithm* is written out from its
+# own source and applied to the emitted XML. `mxGraphView.updateLineJumps` is
+# forty lines long and every branch of it is reproduced below, including the two
+# that decide a crossing is not one. That catches a hop on the wrong line, a hop
+# on both lines, a hop draw.io would refuse to draw, and a hop drawn where the
+# sheet draws none; it cannot catch a mistake in the transcription itself.
+# ---------------------------------------------------------------------------
+
+
+def _intersection(p0, p1, p2, p3):
+    """``mxUtils.intersection``: where two *segments* meet, or None.
+
+    Inclusive at all four ends, which matters: draw.io excludes an intersection
+    at the jumping segment's own ends further down, and at the *other*
+    segment's ends not at all.
+    """
+    (x0, y0), (x1, y1), (x2, y2), (x3, y3) = p0, p1, p2, p3
+    denom = ((y3 - y2) * (x1 - x0)) - ((x3 - x2) * (y1 - y0))
+    if denom == 0:
+        return None
+    ua = (((x3 - x2) * (y0 - y2)) - ((y3 - y2) * (x0 - x2))) / denom
+    ub = (((x1 - x0) * (y0 - y2)) - ((y1 - y0) * (x0 - x2))) / denom
+    if 0.0 <= ua <= 1.0 and 0.0 <= ub <= 1.0:
+        return (x0 + ua * (x1 - x0), y0 + ua * (y1 - y0))
+    return None
+
+
+def _edge_lines(fs, kwargs, root):
+    """Every edge in the document, in ``<root>`` order, with the line it draws.
+
+    An edge with both terminals stated as points carries its own geometry -- a
+    ruled line of furniture, a tap whose host is a stream. Everything else is
+    pinned to cells at one or both ends, and the line it draws is the sheet's
+    own: the routed polyline for a stream, `tap_lines`' pair for a tap, each put
+    through the fit a page size applies. Taken from the sheet rather than
+    re-derived from the connection fractions because
+    `test_an_edges_waypoints_are_the_line_the_renderer_draws` already holds the
+    emitted waypoints against exactly that.
+    """
+    from pandid.render.drawio import _Fit
+
+    _boxes, _frame, fit = DrawioRenderer()._furniture(fs, _page(kwargs.get("page_size")))
+    assert isinstance(fit, _Fit)
+    known = {f"s{n}": [fit.at(*p) for p in stream_polyline(s)] for n, s in enumerate(fs.streams)}
+    for n, (_inst, tap, centre) in enumerate(tap_lines(fs)):
+        known[f"t{n}"] = [fit.at(*tap), fit.at(*centre)]
+    out = []
+    for cell in root.findall("mxCell"):
+        if cell.get("edge") != "1":
+            continue
+        geometry = cell.find("mxGeometry")
+        start = geometry.find('mxPoint[@as="sourcePoint"]')
+        end = geometry.find('mxPoint[@as="targetPoint"]')
+        if start is not None and end is not None:
+            line = [(float(p.get("x")), float(p.get("y"))) for p in (start, end)]
+        else:
+            line = known[cell.get("id")]
+        out.append((cell.get("id"), _style(cell), line))
+    return out, fit
+
+
+def _drawio_hops(edges):
+    """Every hop draw.io draws on this document, by its own rule.
+
+    ``mxGraphView.updateLineJumps``, transcribed: an edge is intersected only
+    against ``this.validEdges``, which ``validateCellState`` appends to as it
+    walks the model in child order -- so it holds exactly the edges written
+    before this one. ``state2.style['noJump'] != '1'`` skips a candidate that
+    has opted out, and the two ``thresh`` guards drop an intersection sitting on
+    either end of the *jumping* segment, which is what keeps three runs meeting
+    at a tee from being read as three crossings.
+
+    Returns ``{(hopping id, hopped id, x, y)}``, the point rounded to the
+    hundredth this file writes coordinates at.
+    """
+    thresh = 0.5
+    seen: list = []
+    out: set = set()
+    for cid, style, line in edges:
+        if style.get("jumpStyle", "none") != "none":
+            for p0, p1 in zip(line, line[1:]):
+                for other, other_style, other_line in seen:
+                    if other_style.get("noJump") == "1":
+                        continue
+                    for p2, p3 in zip(other_line, other_line[1:]):
+                        at = _intersection(p0, p1, p2, p3)
+                        if at is None:
+                            continue
+                        if (abs(at[0] - p0[0]) <= thresh and abs(at[1] - p0[1]) <= thresh) or (
+                            abs(at[0] - p1[0]) <= thresh and abs(at[1] - p1[1]) <= thresh
+                        ):
+                            continue
+                        out.add((cid, other, round(at[0], 2), round(at[1], 2)))
+        seen.append((cid, style, line))
+    return out
+
+
+def _sheet_hops(fs, fit, direction="vertical"):
+    """Every hop the *sheet* draws, by ``SvgRenderer._draw_streams``' own rule.
+
+    A vertical segment strictly inside a horizontal one hops it, or the reverse
+    under ``"horizontal"``. Put through the same fit as the export, so the two
+    sets are comparable point for point.
+    """
+    hor, ver = [], []
+    for n, s in enumerate(fs.streams):
+        points = stream_polyline(s)
+        for (x1, y1), (x2, y2) in zip(points, points[1:]):
+            if y1 == y2 and x1 != x2:
+                hor.append((n, min(x1, x2), max(x1, x2), y1))
+            elif x1 == x2 and y1 != y2:
+                ver.append((n, min(y1, y2), max(y1, y2), x1))
+    hopping, crossed = (ver, hor) if direction == "vertical" else (hor, ver)
+    out = set()
+    for hop, lo, hi, at in hopping:
+        for cross, c_lo, c_hi, c_at in crossed:
+            if hop == cross or not (c_lo < at < c_hi and lo < c_at < hi):
+                continue
+            point = (at, c_at) if direction == "vertical" else (c_at, at)
+            x, y = fit.at(*point)
+            out.add((f"s{hop}", f"s{cross}", round(x, 2), round(y, 2)))
+    return out
+
+
+@pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
+def test_a_crossing_is_hopped_by_the_line_the_sheet_hops(stem):
+    """#241, measured rather than looked at.
+
+    The export drew no jump anywhere -- `grep -c jumpStyle` on a committed
+    sample returned 0 -- so every crossing on an exported sheet was a flat
+    four-way and a reader could not tell one from a junction. The premise was
+    that draw.io decides its own jumps; it decides nothing, and does not draw
+    one at all unless the edge asks.
+
+    So the two sets are built independently and compared: what
+    `_draw_streams` hops, and what draw.io would hop given this document. Equal
+    means every crossing carries exactly one hop, on the line the direction
+    selects, and that the hopping edge really is the later of the two in
+    ``<root>`` -- because an edge written first cannot hop at all.
+    """
+    fs, kwargs = gallery.flowsheet(stem)
+    fs.to_svg(**kwargs)
+    root = ET.fromstring(
+        fs.to_drawio(**{k: v for k, v in kwargs.items() if k in _DRAWIO_KWARGS})
+    ).find("diagram/mxGraphModel/root")
+    edges, fit = _edge_lines(fs, kwargs, root)
+    assert _drawio_hops(edges) == _sheet_hops(fs, fit)
+
+
+@pytest.mark.parametrize("direction", ["vertical", "horizontal"])
+def test_jump_direction_picks_which_of_two_crossing_lines_hops(direction):
+    """The option the exporter used to refuse, doing what it says.
+
+    One horizontal run and one vertical, crossing once. Whichever the direction
+    names is the one that carries the style, and it is the one written second.
+    """
+    fs = Flowsheet("jump")
+    a = fs.add(units.Feed("F1")).pin(x=60, y=175)
+    b = fs.add(units.Product("P1")).pin(x=600, y=175)
+    c = fs.add(units.Feed("F2")).pin(x=60, y=375)
+    d = fs.add(units.Product("P2")).pin(x=600, y=375)
+    fs.connect(a.outlet, b.inlet)
+    fs.connect(c.outlet, d.inlet).via([(300, 400), (300, 100), (400, 100), (400, 400)])
+    fs.layout()
+    fs.route()
+    fs.renumber_streams()
+    root = ET.fromstring(fs.to_drawio(jump_direction=direction, check=False)).find(
+        "diagram/mxGraphModel/root"
+    )
+    edges, fit = _edge_lines(fs, {}, root)
+    hops = _drawio_hops(edges)
+    assert hops, f"{direction}: nothing hops a sheet with two lines crossing on it"
+    assert hops == _sheet_hops(fs, fit, direction)
+    # ...and the two directions really do put the hop on different lines.
+    assert {hop for hop, _crossed, _x, _y in hops} == (
+        {"s1"} if direction == "vertical" else {"s0"}
+    )
+
+
+def test_the_hop_is_the_radius_the_sheet_draws_it_at():
+    """``jumpSize`` is not the radius, and reading it as one draws a hop a
+    third too small on a process line.
+
+    ``mxConnector.paintLine`` takes the hop's half-extent along the run as
+    ``(parseInt(jumpSize) - 2) / 2 + this.strokewidth``, so the number in the
+    style is net of the pen -- and the pen is the edge's own, which is why a
+    signal line and the pipe it crosses are hopped by the same radius under
+    different sizes. Solved back here and held against the sheet's own
+    ``HOP_R``.
+    """
+    from pandid.render.svg import HOP_R
+
+    fs, kwargs = gallery.flowsheet("11_ethanol_pid")
+    fs.to_svg(**kwargs)
+    _boxes, _frame, fit = DrawioRenderer()._furniture(fs, _page(kwargs.get("page_size")))
+    cells = _drawio_cells(fs, kwargs)
+    hopping = [c for c in cells.values() if _style(c).get("jumpStyle", "none") != "none"]
+    assert len(hopping) == 6, "11_ethanol_pid has six runs that hop another"
+    for cell in hopping:
+        style = _style(cell)
+        assert style["jumpStyle"] == "arc", "the sheet hops with a semicircle"
+        size = float(style["jumpSize"])
+        assert size == int(size), "parseInt truncates a fractional jumpSize"
+        weight = float(style["strokeWidth"])
+        radius = (size - 2) / 2 + weight
+        # Within the half unit rounding jumpSize to an integer can cost.
+        assert radius == pytest.approx(fit.length(HOP_R), abs=0.5)
+
+
+def test_only_a_stream_hops_or_is_hopped():
+    """Only a *stream* hops or is hopped, because that is the only thing
+    ``_draw_streams`` builds its two lists of segments from.
+
+    draw.io has no such distinction and would hop a zone tick or an instrument
+    connection as readily as a pipe, so the rule is stated on the cell rather
+    than left to the order the edges happen to come out in -- which
+    :func:`~pandid.render.drawio._hops` reorders.
+    """
+    fs, kwargs = gallery.flowsheet("11_ethanol_pid")
+    fs.to_svg(**kwargs)
+    cells = _drawio_cells(fs, kwargs)
+    edges = {cid: c for cid, c in cells.items() if c.get("edge") == "1"}
+    assert edges, "no edges at all"
+    for cid, cell in edges.items():
+        stream = cid.startswith("s") and cid[1:].isdigit()
+        assert (_style(cell).get("noJump") == "1") != stream, (
+            f"{cid}: a {'stream' if stream else 'rule or tap'} says "
+            f"noJump={_style(cell).get('noJump')}"
+        )
 
 
 # ---------------------------------------------------------------------------

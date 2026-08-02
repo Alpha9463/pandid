@@ -62,15 +62,26 @@ the rendered sheet uses. ``border="zone"`` then rules that page. Without a page
 size none of it happens and the drawing keeps its own coordinates, which is what
 makes an exported model a model. See :class:`_Fit`.
 
-Three pieces of sheet *detail* have no draw.io construct at all, and simply are
-not drawn: the semicircle a crossing line hops with, since draw.io decides its
-own jumps; the leader a stream number is given where the search found no clear
-paper alongside its run, which would have to be a second cell hung off a label
-that is not itself a cell; and a symbol's own lettering held upright under a
-turn (the "M" on a motor operator), which draw.io turns with the shape. Where
-the number *itself* goes came off this list: it is
-:func:`~pandid.render.svg.stream_numbers`' answer for both backends now, written
-into the edge's own ``mxGeometry``. See :func:`_number_geometry`.
+**One** piece of sheet detail has no draw.io construct at all, and simply is not
+drawn: a symbol's own lettering held upright under a turn (the "M" on a motor
+operator), which draw.io turns with the shape.
+
+The list used to be four long and the other three came off it one at a time,
+each because the sentence that put it there did not survive being checked.
+
+* Where a line **number** goes is
+  :func:`~pandid.render.svg.stream_numbers`' answer for both backends now,
+  written into the edge's own ``mxGeometry``. See :func:`_number_geometry`.
+* The **semicircle** a crossing line hops with is a per-connector style that
+  defaults to off, and *which* of two crossing lines hops is decided by z-order
+  in ``<root>``. "draw.io decides its own jumps" was false in both halves. See
+  :func:`_hops`.
+* The **leader** tying a displaced number back to its run was held to need "a
+  second cell hung off a label that is not itself a cell". It needs nothing of
+  the sort: an edge with both terminals stated as points and neither as a cell
+  is how draw.io writes a free-standing line, which is what :func:`_segment`
+  had been emitting for the furniture all along. See :func:`_leader`, which
+  also records what it does cost.
 
 The output is a plain uncompressed ``mxfile``. draw.io reads that as readily as
 its compressed form, and it diffs.
@@ -139,6 +150,15 @@ deleted, since the reasoning is what the next change has to hold against.
   the route's bounding box and no line is drawn. And a marker goes at an edge's
   two ends and nowhere else: ``mxConnector.createMarker`` is called twice, with
   ``pts[0]`` and ``pts[n-1]``. There is no mid-line marker style.
+* **A line jump is a style on the edge that hops, and the hop goes on whichever
+  of two crossing edges is written later.** ``mxGraphView.updateLineJumps``
+  reads ``jumpStyle`` off the edge being validated and intersects its segments
+  against ``this.validEdges`` -- a list ``mxGraphView.validateCellState``
+  *appends to* as it walks the model in child order, so it holds exactly the
+  edges that appear before this one in ``<root>``. That is draw.io's own "a
+  connection jumps another connection when it is above that connection", said
+  as an algorithm. ``state2.style['noJump'] != '1'`` in the same loop is the
+  opt-out for an edge that is never to be hopped. See :func:`_hops`.
 * **A child vertex on an edge is positioned by arc length, from its top-left.**
   ``mxGeometry.x`` runs -1 to +1 over the *routed* polyline's Euclidean length;
   ``mxGeometry.y`` displaces perpendicular; ``mxGeometry.offset`` displaces in
@@ -173,9 +193,10 @@ from pandid.portgeom import port_point, unit_box
 from pandid.render import furniture as F
 from pandid.render import generator
 from pandid.render import svg as _svg
-from pandid.render.svg import (_DIAMOND_BALLOONS, _furniture_name, _scale_text, _too_small,
+from pandid.render.svg import (_DIAMOND_BALLOONS, _furniture_name, _LEADER_HEAD,
+                               _scale_text, _too_small,
                                _SIGNAL_DASH, _PROCESS_STROKE,
-                               _SIGNAL_STROKE, _TAP_DASH, NUMBER_TYPE, boundary_flag,
+                               _SIGNAL_STROKE, _TAP_DASH, HOP_R, NUMBER_TYPE, boundary_flag,
                                draws_arrowheads, impulse_tap, stream_numbers,
                                stream_polyline, tap_lines)
 from pandid.render.symbols import (ARROWHEAD, closed_marking, fail_marking,
@@ -209,12 +230,196 @@ _NO_FILL = "none"
 #: back to the default vertex and draws a plain rectangle.
 _NO_STROKE = "none"
 
+#: The pen the sheet rules a **symbol's outline** with.
+#:
+#: This file was writing no ``strokeWidth`` at all on a stencil cell, and every
+#: one of the 319 vendored stencils declares ``strokewidth="inherit"`` -- which
+#: puts the pen in the cell's style rather than in the stencil's own coordinate
+#: space. With nothing in the style, every exported symbol drew at draw.io's
+#: default 1 against pipes emitted at the sheet's 2: valve outlines lighter than
+#: the lines they sit on, on every sheet, constantly.
+#:
+#: Two is the sheet's own answer and it is one number in two places. Every
+#: hand-drawn symbol in :mod:`pandid.render.symbols` says ``stroke-width="2"``
+#: on its outline -- the balloons, the block, the boundary pennant, the generic
+#: box a foreign ``Unit`` falls back to. And ``scripts/vendor_symbols.py``
+#: compensates each converted stencil for the scale its artwork is drawn at,
+#: ``stroke_width = 2.0 / sqrt(sx * sy)``, so a gate valve's ``8.0`` inside a
+#: ``scale(0.25)`` group is that same 2 on the paper. Stated here rather than
+#: imported because neither of those is a constant to import: one is a literal
+#: in a hundred SVG fragments and the other is in a generator that is not part
+#: of the installed package. ``tests/test_drawio.py`` measures it back off the
+#: rendered sheet, which is what keeps the copy honest.
+#:
+#: ISO 15519-1:2010 §6.2 Table 1 gives the process industry 0,1 M for symbols
+#: and 0,2 M for connections, so a symbol is *meant* to be the lighter of the
+#: two -- by a stated ratio, though, not by whatever the reader's editor
+#: defaults to. This library rules both at 2 and it is the library's sheet that
+#: this file has to carry across.
+_SYMBOL_STROKE = 2.0
+
 #: The ink a *line* is drawn in, which is not quite the ink a symbol is drawn in:
 #: the SVG renderer strokes a stream ``black`` and a converted stencil ``#111``,
 #: and this is the first of those, written the way a draw.io style writes a
 #: colour. A hundredth of a shade apart, and copied rather than unified because
 #: unifying them here would be this file quietly editing the sheet.
 _LINE_INK = "#000000"
+
+#: The glyph draw.io hops a crossing line with, of the five its Format panel
+#: offers (``none``, ``arc``, ``gap``, ``sharp``, ``line`` --
+#: ``EditorFormatPanel.addLineJumps``). ``arc`` because the sheet draws a
+#: semicircle: :meth:`SvgRenderer._draw_streams` writes ``A 5 5 0 0 1`` and
+#: nothing else, and ``gap`` breaks the line instead while ``sharp`` and
+#: ``line`` are a chevron and a pair of ticks.
+#:
+#: The arc is not quite a semicircle at draw.io's end and the difference is
+#: worth knowing rather than discovering: ``mxConnector.paintLine`` draws a
+#: *cubic* whose two control points stand off the run by ``1,3`` times the hop's
+#: half-extent, which puts the crown at ``0,75 x 1,3 = 0,975`` of it. So a hop
+#: sized to the sheet's radius is a hundredth of a unit shallower than the
+#: sheet's, over the same length of run. There is no key that makes it an arc of
+#: a circle, and nothing that reads a P&ID reads the difference.
+#:
+#: **Which side it bulges is draw.io's and not the author's.** ``paintLine``
+#: takes the sign from the segment's own direction -- ``f = (round(n.x) < 0 ||
+#: (round(n.x) == 0 && round(n.y) <= 0)) ? 1 : -1`` -- which works out to *east*
+#: for every vertical run and *north* for every horizontal one, whichever way
+#: round the run was routed. The sheet's own sweep flag is fixed instead of its
+#: sign, so its hop follows the routing: east down a run and west up the
+#: identical run. Which end of a stream is its source is a fact about the
+#: process, so draw.io's answer is arguably the better-behaved of the two; it is
+#: recorded here because it is a difference a reader comparing the two drawings
+#: will see, not because it is a loss.
+_JUMP_STYLE = "arc"
+
+#: An edge that is never hopped, whatever is written after it.
+#:
+#: The sheet's jump pass builds its two lists of segments from ``fs.streams``
+#: and from nothing else (:meth:`SvgRenderer._draw_streams`), so on paper only a
+#: *stream* hops and only a stream is hopped. Everything else this file writes
+#: as an edge -- a ruled line of furniture, an instrument connection, a line
+#: number's leader -- is an edge because that is how the format says "a line
+#: between two points", not because it is a connection anything flows along.
+#:
+#: draw.io has no such distinction and would hop any of them, so the rule is
+#: stated rather than left to the emission order that happens to hold today:
+#: ``updateLineJumps`` skips a candidate whose style says ``noJump=1``. Saying
+#: it makes the drawing right whichever way round the cells are written, which
+#: matters here more than usual, since :func:`_hops` reorders them.
+_NO_HOP = "noJump=1;"
+
+
+def _jump_size(radius: float, weight: float) -> int:
+    """draw.io's ``jumpSize``, for a hop of *radius* on a line of *weight*.
+
+    Not the radius. ``mxConnector.paintLine`` computes the hop's half-extent
+    along the run as ``(parseInt(jumpSize) - 2) / 2 + this.strokewidth``, so the
+    number in the style is two units of its own plus twice the pen -- and the
+    pen is the *edge's* pen, which is why this takes one: a signal line and the
+    pipe it crosses are hopped by the same radius but stated with different
+    sizes. Solved for ``jumpSize`` that is ``2 (radius - weight) + 2``.
+
+    ``parseInt`` and not ``parseFloat``, so a fractional value is **truncated**
+    rather than rounded; the answer is rounded here instead, which is worth at
+    most a quarter of a unit of radius and never the whole unit truncation would
+    cost. One is the floor because a ``jumpSize`` small enough to make the
+    half-extent negative would draw the hop inside out, and draw.io's own
+    default is 6 (``Graph.defaultJumpSize``).
+    """
+    return max(1, round(2.0 * (radius - weight) + 2.0))
+
+
+def _hops(polylines: dict, direction: str) -> "tuple[list, set]":
+    """Which edges carry the hop, and the order that lets draw.io draw it.
+
+    ``polylines`` is ``{key: points}`` for every **stream** on the sheet, in the
+    order the streams are to be written; ``direction`` is
+    :meth:`Flowsheet.to_svg`'s own ``jump_direction``. Returns the keys in the
+    order they must be emitted in, and the set of them that is to carry
+    :data:`_JUMP_STYLE`.
+
+    Two things have to be arranged and only one of them is a style key.
+
+    **Which line hops** is the sheet's rule, taken from the same place
+    :meth:`SvgRenderer._draw_streams` takes it: a *vertical* segment crossing a
+    *horizontal* one hops it, or the other way round under
+    ``jump_direction="horizontal"``. Strictly inside both segments, as the sheet
+    has it, so a run that merely ends on another one is a junction and is not
+    hopped. Any other spelling of ``direction`` hops nothing, which is what the
+    SVG does with one too.
+
+    **Which line draw.io *lets* hop** is z-order, and that is the half the
+    exporter has to build rather than state: ``updateLineJumps`` intersects an
+    edge only against the edges written before it, so the hopping edge has to be
+    written after every edge it crosses. The streams are therefore emitted in a
+    topological order of "crossed before crossing" rather than in
+    ``fs.streams`` order -- stable, by original index, so a sheet with no
+    crossing on it comes out in exactly the order it always did, and so does
+    every part of a sheet that is not involved in one.
+
+    Only the *hop* is per-edge; a style key cannot say "hop on my vertical
+    segments and not my horizontal ones". That turns out not to matter, and the
+    reason is worth writing down because it looks like it should. An edge H that
+    is crossed at c is written *before* the edge V that hops it, so H cannot hop
+    at c -- whether or not H carries ``jumpStyle`` for a crossing of its own
+    somewhere else. The single constraint "hopper after crossed" is the whole of
+    it.
+
+    Where it does not hold is a **cycle**: V's vertical crosses H's horizontal
+    *and* H's vertical crosses V's horizontal, so each has to be written after
+    the other. draw.io's model cannot express that pair and neither can this
+    function; what it does is satisfy every constraint it can and leave the
+    remainder in stream order, so the sheet loses a hop rather than gaining a
+    wrong one. Nothing in the shipped corpus reaches it -- ``11_ethanol_pid`` is
+    the only example with crossings at all, seven of them, and its precedence
+    graph is a forest -- and a test pins that the order that comes out really
+    does satisfy every crossing.
+    """
+    keys = list(polylines)
+    if direction not in ("vertical", "horizontal"):
+        return keys, set()
+    # The two families of segment, by the edge that owns each. `_draw_streams`
+    # keeps the same two lists and tests the same strict containment.
+    hopping: list = []
+    crossed: list = []
+    for key, points in polylines.items():
+        for (x1, y1), (x2, y2) in zip(points, points[1:]):
+            if y1 == y2 and x1 != x2:
+                (crossed if direction == "vertical" else hopping).append(
+                    (key, min(x1, x2), max(x1, x2), y1))
+            elif x1 == x2 and y1 != y2:
+                (hopping if direction == "vertical" else crossed).append(
+                    (key, min(y1, y2), max(y1, y2), x1))
+    # (crossed, hopper): the crossed edge must be written first.
+    after: dict = {key: set() for key in keys}
+    hops: set = set()
+    for hop_key, lo, hi, at in hopping:
+        for cross_key, c_lo, c_hi, c_at in crossed:
+            if not (c_lo < at < c_hi and lo < c_at < hi):
+                continue
+            # A run crossing itself is one line, not two, and draw.io does not
+            # hop it either: an edge is pushed onto `validEdges` after its own
+            # jumps are computed, so it never intersects itself.
+            if hop_key == cross_key:
+                continue
+            hops.add(hop_key)
+            after[hop_key].add(cross_key)
+    if not hops:
+        return keys, hops
+    # Kahn's, taking the lowest original index each round -- `keys` is already
+    # in that order, so `ready[0]` is it -- which keeps the emitted order as
+    # close to the stream order as the crossings allow.
+    order: list = []
+    done: set = set()
+    while len(done) < len(keys):
+        ready = [key for key in keys if key not in done and not (after[key] - done)]
+        if not ready:  # a cycle: see the docstring
+            break
+        order.append(ready[0])
+        done.add(ready[0])
+    # Whatever the cycle left behind, in stream order.
+    return order + [key for key in keys if key not in done], hops
+
 
 #: pandid turns a symbol clockwise; draw.io names the same four attitudes after
 #: the compass point the shape's own east ends up on. ``mxShape.getShapeRotation``
@@ -282,6 +487,10 @@ class _Approximation(NamedTuple):
     says what the sheet has that the stand-in does not, in words, and is the
     point of the table: an approximation nobody wrote down is indistinguishable
     from a mistake.
+
+    ``inscribed`` is a *second* built-in, drawn inside the first and filling the
+    same box, for a symbol that is two outlines rather than one. See
+    :meth:`DrawioRenderer._vertex`, which emits it as a child of the cell.
     """
 
     shape: str | None
@@ -289,8 +498,9 @@ class _Approximation(NamedTuple):
     flip_h: bool = False
     fill: str = _NO_FILL
     stroke: str = _INK
-    weight: float = 1.0
+    weight: float = _SYMBOL_STROKE
     keys: tuple = ()
+    inscribed: "str | None" = None
 
 
 #: Every symbol this library draws itself, and what draw.io is asked for instead.
@@ -303,10 +513,19 @@ class _Approximation(NamedTuple):
 #: The balloons are the ones that matter, a P&ID being mostly balloons. Every one
 #: of them keeps its outline -- a circle stays a circle, a diamond a diamond, the
 #: computer hexagon a hexagon -- and what goes is the *location* marking layered
-#: on it: the bar across a panel balloon, the square around a shared-display one,
-#: the square behind a logic diamond. So an exported balloon says "instrument"
-#: correctly and stops saying where the instrument lives. Nothing here is a
-#: silent loss; it is a loss with a sentence against it.
+#: on it: the bar across a panel balloon, the square around a shared-display one.
+#: So an exported balloon says "instrument" correctly and stops saying where the
+#: instrument lives. Nothing here is a silent loss; it is a loss with a sentence
+#: against it.
+#:
+#: The trip square is no longer one of them. ``sis``/``logic`` is a square with
+#: an *inscribed diamond*, and it was exported as ``shape=rhombus`` -- a bare
+#: diamond, which is the generic interlock symbol of the variant next door. So
+#: the sheet's two trip symbols came out as one, and the distinction
+#: ANSI/ISA-5.1 draws between them, and CHEE4001 p.20 asks for ("For potentially
+#: hazardous situations it is better practice to specify a separate trip
+#: system"), was silently lost rather than recorded as lost. It is ``inscribed``
+#: now: a square cell with the diamond as a child.
 #: Opaque, as every balloon's own artwork is: a balloon is drawn over the line it
 #: reads and knocks a hole in it, and a transparent one would have that line
 #: running through the tag inside it.
@@ -329,12 +548,15 @@ _APPROXIMATIONS = {
     ("instrument", "computer"): _Approximation(
         # The computer hexagon, drawn as one.
         "hexagon", "", fill=_BALLOON_FILL),
+    # A square with a diamond inscribed in it, which is two outlines and so two
+    # cells. Nothing lost, so nothing listed. `logic` is the same Symbol under
+    # its second name (pandid.render.symbols registers one object twice), so the
+    # two entries have to say the same thing or the two spellings would draw
+    # differently.
     ("instrument", "sis"): _Approximation(
-        "rhombus", "the square around the diamond that puts the logic in a safety "
-                   "instrumented system", fill=_BALLOON_FILL),
+        None, "", fill=_BALLOON_FILL, inscribed="rhombus"),
     ("instrument", "logic"): _Approximation(
-        "rhombus", "the square around the diamond that puts the function in a "
-                   "logic solver", fill=_BALLOON_FILL),
+        None, "", fill=_BALLOON_FILL, inscribed="rhombus"),
     ("instrument", "interlock"): _Approximation(
         # A bare diamond, drawn as one.
         "rhombus", "", fill=_BALLOON_FILL),
@@ -425,13 +647,23 @@ class _Tags(NamedTuple):
     them; the exporter was passing ``[]``, which is that function's own
     documented caveat -- "an exporter with no equipment-tag pass of its own
     passes an empty list and gets a placement that dodges every symbol and every
-    line but may still land under a tag". Measured over the twelve examples that
-    is seventeen numbers on four sheets, and on ``11_ethanol_pid`` it is
+    line but may still land under a tag".
+
+    Re-measured over the **fourteen** examples the corpus holds today, the
+    sentence here having been written against twelve: seventeen numbers on four
+    sheets. That is the same pair of figures the twelve gave, and it is a
+    coincidence of composition rather than a count that did not move -- where
+    they land did. Nine of the seventeen are on ``11_ethanol_pid``:
     ``AE-302-300-80-SS`` over ``HV-301A``'s tag, ``AE-303-80-80-SS`` over
-    ``HV-303A``'s, ``AE-305-40-80-SS`` over ``HV-305A``'s,
-    ``HPS-308-100-80-CS`` over ``HV-308A``'s and ``FB-301-200-160-SS`` over
-    ``XV-301``'s -- the last of which hides the tag outright. The sheet writes
-    none of them there.
+    ``HV-303A``'s, ``AE-304-150-80-SS`` over ``D-301``'s, ``AE-305-40-80-SS``
+    over ``HV-305A``'s, ``CWS-311-150-40-CS`` over ``HV-311``'s,
+    ``CWS-315-100-40-CS`` over ``HV-315``'s, ``FB-301-200-160-SS`` over
+    ``XV-301``'s, ``FB-306-100-160-SS`` over ``CV-306``'s and
+    ``HPS-308-100-80-CS`` over ``HV-308A``'s. Six are on ``14_tank_farm`` and
+    one each on ``09_line_numbers`` and ``13_mineral_dewatering``. Not one of
+    the nine covers its tag completely, which the old sentence claimed of
+    ``FB-301-200-160-SS``; each strikes it, which is enough to lose it. The
+    sheet writes none of them there.
     """
     at: dict
     plates: list
@@ -614,7 +846,7 @@ class DrawioRenderer:
 
     def render(self, fs: "Flowsheet", *, diagram: "str | None" = None,
                page_size: "str | None" = None, border: "str | None" = None,
-               **opts) -> str:
+               jump_direction: str = "vertical", **opts) -> str:
         """Render the flowsheet to a draw.io document.
 
         ``diagram`` says which drawing this is, in the spelling
@@ -634,10 +866,16 @@ class DrawioRenderer:
         edge to be the paper's, which is what the sheet does too -- an unruled
         sheet draws no rectangle, it just stops.
 
-        The stream table, jump direction and debug overlay remain refused. A
-        stream table is furniture this exporter has no measurement for, draw.io
-        decides its own line jumps, and the overlay is scaffolding for whoever
-        is writing a placement rather than part of the drawing.
+        ``jump_direction`` says which of two crossing lines hops the other, and
+        means what it means on the sheet: ``"vertical"`` puts the semicircle on
+        the vertical runs. It reaches draw.io as a style key on the hopping
+        edges *and* as the order those edges are written in, since z-order is
+        what breaks the tie. See :func:`_hops`.
+
+        The stream table and the debug overlay remain refused. A stream table is
+        furniture this exporter has no measurement for, and the overlay is
+        scaffolding for whoever is writing a placement rather than part of the
+        drawing.
         """
         from pandid.render.svg import _page, _resolve_sheet
 
@@ -673,7 +911,7 @@ class DrawioRenderer:
         for i, u in enumerate(fs.units):
             (balloons if u.kind == "instrument" else body).extend(
                 self._vertex(u, i, fit, tags))
-        body.extend(self._edges(fs, arrows, fit, tags))
+        body.extend(self._edges(fs, arrows, fit, tags, jump_direction))
         # Instrumentation goes on over the lines, as it does on the sheet: the
         # tap runs from the plant to the balloon and the balloon's opaque body
         # then knocks out both it and any process line an in-line element
@@ -811,17 +1049,31 @@ class DrawioRenderer:
             keys.append("flipV=1")
         return keys, flip_h, flip_v
 
-    def _shape(self, u, sym) -> list[str]:
-        """The style keys naming what draw.io is to draw for this unit."""
+    def _shape(self, u, sym, fit: "_Fit") -> list[str]:
+        """The style keys naming what draw.io is to draw for this unit.
+
+        ``fit`` is here for the pen. A symbol's outline is a **drawing**
+        dimension, so it scales with the drawing exactly as a pipe's does
+        (:class:`_Fit`), and stating it unscaled beside a stream stated scaled
+        would put the two back out of proportion at the other end.
+        """
+        weight = f"strokeWidth={fit.length(_SYMBOL_STROKE):g}"
         if u.kind in ("feed", "product"):
-            return self._flag_shape(u)
+            return self._flag_shape(u, fit)
         if sym.drawio_shape:
             # A vendored stencil: name it and let draw.io draw its own artwork.
             # `outlineConnect=0` is what draw.io's own P&ID palette sets, and it
             # matters here more than there: it stops a stream being dropped onto
             # the shape's outline instead of onto the nozzle it was routed to.
+            #
+            # And the pen, which was not being written at all. Every vendored
+            # stencil declares `strokewidth="inherit"`, which is a stencil
+            # saying "take the pen from the cell" -- and the cell said nothing,
+            # so draw.io's default 1 drew every symbol lighter than the pipes
+            # around it. See :data:`_SYMBOL_STROKE`.
             keys = [f"shape={sym.drawio_shape}", "outlineConnect=0",
-                    f"strokeColor={_INK}", f"fillColor={sym.drawio_fill or _NO_FILL}"]
+                    f"strokeColor={_INK}", f"fillColor={sym.drawio_fill or _NO_FILL}",
+                    weight]
             return keys
         # The stand-in, or draw.io's default vertex. Its mirror, where it needs
         # one, is applied in :meth:`_placement` with everything else that flips.
@@ -830,13 +1082,15 @@ class DrawioRenderer:
         keys = [] if shape is None else [f"shape={shape}"]
         keys += ["rounded=0", "whiteSpace=wrap"]
         if approx is None:
-            return keys + [f"strokeColor={_INK}", f"fillColor={_NO_FILL}"]
+            # A kind with no artwork at all: the sheet draws `_generic_symbol`'s
+            # 60-unit box, ruled at the same weight everything else is.
+            return keys + [f"strokeColor={_INK}", f"fillColor={_NO_FILL}", weight]
         return keys + [*approx.keys, f"strokeColor={approx.stroke}",
                        f"fillColor={approx.fill}",
-                       f"strokeWidth={approx.weight:g}"]
+                       f"strokeWidth={fit.length(approx.weight):g}"]
 
     @staticmethod
-    def _flag_shape(u) -> list[str]:
+    def _flag_shape(u, fit: "_Fit") -> list[str]:
         """The off-page flag, as draw.io's own five-point connector polygon.
 
         ``offPageConnector`` draws ``(0,0) (w,0) (w,h-s) (w/2,h) (0,h-s)``: a
@@ -871,7 +1125,11 @@ class DrawioRenderer:
                 "anchorPointDirection=0", "legacyAnchorPoints=1",
                 "rounded=0", "whiteSpace=wrap",
                 f"strokeColor={_LINE_INK}", f"fillColor={_NO_FILL}",
-                f"strokeWidth={_PROCESS_STROKE:g}"]
+                # The pennant is a symbol outline and is ruled like one, and
+                # like one it scales with the drawing. It was stated flat here,
+                # which on a paged sheet drew the flag heavier than the pipe
+                # running into it.
+                f"strokeWidth={fit.length(_SYMBOL_STROKE):g}"]
 
     def _label(self, u, fit: "_Fit", tags: "_Tags") -> "tuple[str, list[str], tuple]":
         """A unit's label text, the style keys that place it, and how far the
@@ -993,22 +1251,95 @@ class DrawioRenderer:
         ``mxCellRenderer.getLabelBounds`` starts its non-edge branch from
         exactly that -- so it displaces the label and leaves the cell alone,
         which is what a tag stepping clear of somebody else's line is.
+
+        A symbol that is **two outlines** gets a second cell, inscribed in the
+        first: see :meth:`_inscribed`.
         """
         sym = self.registry.for_unit(u)
         x0, y0, x1, y1 = fit.box(self._cell_box(u))
         placement, _, _ = self._placement(u, sym)
         text, label_keys, (dx, dy) = self._label(u, fit, tags)
-        style = ";".join(["html=1", *self._shape(u, sym), *label_keys, *placement]) + ";"
+        style = ";".join(["html=1", *self._shape(u, sym, fit), *label_keys, *placement]) + ";"
         geometry = (f'          <mxGeometry x="{_num(x0)}" y="{_num(y0)}" '
                     f'width="{_num(x1 - x0)}" height="{_num(y1 - y0)}" as="geometry"')
         body = ([geometry + ">",
                  f'            <mxPoint x="{_num(dx)}" y="{_num(dy)}" as="offset" />',
                  '          </mxGeometry>']
                 if (round(dx, 2) or round(dy, 2)) else [geometry + " />"])
+        cid = self._id(index)
         return [
-            f'        <mxCell id="{self._id(index)}" value={_attr(text)} '
+            f'        <mxCell id="{cid}" value={_attr(text)} '
             f'style={_attr(style)} vertex="1" parent="1">',
             *body,
+            '        </mxCell>',
+            *self._inscribed(cid, self._approximation(u, sym), x1 - x0, y1 - y0, fit),
+        ]
+
+    @staticmethod
+    def _inscribed(cid: str, approx: "_Approximation | None",
+                   w: float, h: float, fit: "_Fit") -> list[str]:
+        """The second outline of a symbol that has two, as a child of the first.
+
+        The safety-instrumented-system balloon is the case and today the only
+        one: ANSI/ISA-5.1-2009 Table 5.1.1 column B draws it as a **square with
+        an inscribed diamond**, and the exporter was writing ``shape=rhombus``
+        -- a bare diamond, which is Table 5.1.2's generic interlock and the
+        symbol of the variant next door. Two different symbols came out as one.
+
+        **A child cell rather than a stencil**, which was the other candidate
+        and is the one this file's own doctrine rules out. Every shape named in
+        :data:`_APPROXIMATIONS` is a draw.io *built-in* and deliberately never a
+        stencil key, because the hazard the whole export guards against is a
+        reference that silently fails to resolve. An inline
+        ``shape=stencil(<deflated base64>)`` would sidestep that -- the artwork
+        travels in the style, so there is nothing to resolve -- but it buys the
+        one path out with two costs: this file promises "a plain uncompressed
+        ``mxfile`` ... and it diffs", and a compressed blob is exactly what does
+        not; and it would be the one shape here that ``tests/test_drawio.py``
+        cannot hold against anything, since there is no stencil set to check it
+        in. Two cells cost a reader one extra shape in the outline panel.
+
+        The pair holds together under editing, which is the thing a group has to
+        do to be worth preferring:
+
+        * **moving.** A child's geometry is relative to its parent's origin, so
+          the parent moves and the child comes with it, with no model change at
+          all.
+        * **resizing.** ``Graph.isRecursiveVertexResize`` answers yes for any
+          non-swimlane vertex that has children, is not collapsed, states no
+          ``childLayout`` and does not say ``recursiveResize=0`` -- which is
+          this cell -- and ``mxVertexHandler.isRecursiveResize`` defers to it.
+          ``resizeChildCells`` then scales the child by the ratio of the new
+          box to the old, so the diamond stays inscribed. This is why the child
+          is a plain vertex and not, say, a group with a layout: a
+          ``childLayout`` would switch the recursion *off*.
+        * ``connectable=0``, so a stream dropped on the balloon lands on the
+          square. Every connection fraction :meth:`_constraint` writes is a
+          fraction of the square's box, and the diamond's own box is the same
+          rectangle, so a point that resolved against the child would be in the
+          right place by luck rather than by construction.
+        * ``movable=0``, because the diamond is *part of* the symbol and not a
+          mark on it. The child is drawn over the parent -- children are
+          validated after their parents -- so a reader clicking the middle of
+          the balloon grabs the diamond, and without this they would drag it out
+          of its own square.
+
+        ``fillColor`` is deliberately not the parent's: the square is opaque
+        white and knocks a hole in the line the balloon is dropped on, and a
+        second opaque fill inside it would draw nothing but would have to be
+        argued about the next time somebody read it.
+        """
+        if approx is None or approx.inscribed is None:
+            return []
+        style = ";".join([f"shape={approx.inscribed}", "rounded=0", "html=1",
+                          f"strokeColor={approx.stroke}", f"fillColor={_NO_FILL}",
+                          f"strokeWidth={fit.length(approx.weight):g}",
+                          "connectable=0", "movable=0"]) + ";"
+        return [
+            f'        <mxCell id="{cid}-in" value="" style={_attr(style)} '
+            f'vertex="1" parent="{cid}">',
+            f'          <mxGeometry x="0" y="0" width="{_num(w)}" '
+            f'height="{_num(h)}" as="geometry" />',
             '        </mxCell>',
         ]
 
@@ -1092,8 +1423,22 @@ class DrawioRenderer:
                      f"{prefix}Dx=0", f"{prefix}Dy=0", f"{prefix}Perimeter=0"]
         return keys
 
-    def _edges(self, fs, arrows: bool, fit: "_Fit", tags: "_Tags") -> list[str]:
-        """Every stream, as a draw.io edge between the two ports it joins."""
+    def _edges(self, fs, arrows: bool, fit: "_Fit", tags: "_Tags",
+               direction: str = "vertical") -> list[str]:
+        """Every stream, as a draw.io edge between the two ports it joins.
+
+        ``direction`` is the sheet's ``jump_direction``, and it settles two
+        things at once: which edges carry :data:`_JUMP_STYLE`, and **the order
+        the edges come out in**, since draw.io breaks the tie between two
+        crossing lines by z-order. Both are :func:`_hops`' answer.
+
+        The cells are therefore built in ``fs.streams`` order and *written* in
+        the hop order. Building them in stream order is not incidental: a line
+        number is written on the first segment of its run to carry it, and
+        "first" has to mean first in the flowsheet or a crossing somewhere else
+        on the sheet would move a number onto a different segment of a run it
+        was not otherwise involved in.
+        """
         index = {id(u): i for i, u in enumerate(fs.units)}
         # Where the sheet writes each line number, by the sheet's own search
         # rather than by centring it on the edge -- seeded with the equipment
@@ -1101,11 +1446,13 @@ class DrawioRenderer:
         # See :func:`_number_geometry` and :class:`_Tags`.
         numbers = {number.name: number
                    for number in stream_numbers(fs, list(tags.plates))}
+        polylines = {n: stream_polyline(s) for n, s in enumerate(fs.streams)}
+        order, hops = _hops(polylines, direction)
         labelled: set = set()
-        out: list[str] = []
+        cells: dict = {}
         for n, s in enumerate(fs.streams):
             src_u, dst_u = s.source.owner, s.dest.owner
-            points = stream_polyline(s)
+            points = polylines[n]
             ex, ey = self._constraint(src_u, self.registry.for_unit(src_u), s.source.name)
             tx, ty = self._constraint(dst_u, self.registry.for_unit(dst_u), s.dest.name)
             signal = s.kind in _SIGNAL_KINDS
@@ -1128,9 +1475,22 @@ class DrawioRenderer:
                 # note on _PROCESS_STROKE in pandid.render.svg.
                 f"strokeWidth={fit.length(_SIGNAL_STROKE if signal else _PROCESS_STROKE):g}",
             ]
+            # The semicircle this run hops the runs it crosses with, where the
+            # direction selects it. Sized off the edge's own pen, since
+            # draw.io's jumpSize is stated net of it; see :func:`_jump_size`.
+            if n in hops:
+                weight = fit.length(_SIGNAL_STROKE if signal else _PROCESS_STROKE)
+                keys += [f"jumpStyle={_JUMP_STYLE}",
+                         f"jumpSize={_jump_size(fit.length(HOP_R), weight)}"]
             keys += _dash(s.dasharray or _SIGNAL_DASH.get(s.kind, ""))
             if arrows and wears_arrowhead(s, self.registry):
-                keys += ["endArrow=block", "endFill=1", f"endSize={ARROWHEAD:g}"]
+                # Through the fit, like the pen beside it. A flow head is twelve
+                # units of *drawing*, and stating it flat on a sheet fitted to
+                # three quarters of its own size drew a head a third too big at
+                # the end of a line correctly thinned -- the same slip as the
+                # missing stroke widths, in the same function.
+                keys += ["endArrow=block", "endFill=1",
+                         f"endSize={fit.length(ARROWHEAD):g}"]
             else:
                 keys.append("endArrow=none")
             keys.append("startArrow=none")
@@ -1182,15 +1542,23 @@ class DrawioRenderer:
                 geometry = [head + ">", *body, '          </mxGeometry>']
             else:
                 geometry = [head + " />"]
-            out += [
+            cells[n] = [
                 f'        <mxCell id="s{n}" value={_attr(label)} style={_attr(style)} '
                 f'edge="1" parent="1" source="{self._id(index[id(src_u)])}" '
                 f'target="{self._id(index[id(dst_u)])}">',
                 *geometry,
                 '        </mxCell>',
             ]
+            # The hatch marks ride on their edge and go out with it, wherever the
+            # hop order puts it: a child cell is resolved by its parent's id, but
+            # draw.io writes a parent before its children and so does this.
             if s.kind == "pneumatic":
-                out += _hatches(f"s{n}", points, s.color or _LINE_INK, fit)
+                cells[n] += _hatches(f"s{n}", points, s.color or _LINE_INK, fit)
+            if number is not None and number.leader is not None:
+                cells[n] += _leader(f"s{n}", number, s.color or _LINE_INK, fit)
+        out: list[str] = []
+        for n in order:
+            out += cells[n]
         return out
 
     def _taps(self, fs, fit: "_Fit") -> list[str]:
@@ -1263,7 +1631,9 @@ class DrawioRenderer:
                 keys += _dash(_TAP_DASH)
             # No head at either end: the line says what the instrument is on,
             # not which way anything flows. §5.1.1 above says so in as many words.
-            keys += ["endArrow=none", "startArrow=none"]
+            # And no hop over it either: a tap is not one of the runs the
+            # sheet's jump pass looks at. See :data:`_NO_HOP`.
+            keys += ["endArrow=none", "startArrow=none", _NO_HOP.rstrip(";")]
             style = ";".join(keys) + ";"
             terminals = f' source="{self._id(source)}"' if source is not None else ""
             geometry = ['          <mxGeometry relative="1" as="geometry">',
@@ -1443,10 +1813,16 @@ class DrawioRenderer:
             size, _ncol, col_w, _row_h = F._table_layout(obj)
             # A TableBox rules its own columns, and _table_layout's widths
             # already carry that ruling's padding and sum to the measured box.
+            # A table's border and every rule inside it are drawn by the
+            # *container*, from the container's own style
+            # (``TableShape.paintTableForeground``), so the weight has to be
+            # stated there or draw.io rules the whole grid at its default 1
+            # where the sheet strokes each cell at ``_CELL_RULE``.
             return _table(cid, title, [str(c) for c in obj.headers],
                           [[str(c) for c in row] for row in obj.rows],
                           x, y, w, h, col_w, (size + 10) if title else 0.0,
-                          font=size, col_keys=_ALIGN_KEYS(obj.col_align, len(col_w)))
+                          font=size, keys=f"strokeWidth={F._CELL_RULE:g};",
+                          col_keys=_ALIGN_KEYS(obj.col_align, len(col_w)))
         rows = list(getattr(obj, "rows", []) or [])
         if any(isinstance(r, (tuple, list)) for r in rows):
             # Columnar: an equipment schedule, a legend, a numbered note list.
@@ -1463,7 +1839,14 @@ class DrawioRenderer:
             heavy = [True] + [False] * (ncol - 1)
             return _table(cid, title, [], grid, x, y, w, h,
                           columns(grid, [size] * ncol, w, bold=heavy), title_h,
-                          font=size, keys=_ANNOTATION_KEYS + f"fontSize={size + 1:g};",
+                          font=size,
+                          # `_ANNOTATION_KEYS` leaves the container's own border
+                          # as the only rule this box draws, so the weight
+                          # stated here is the weight of the rectangle the sheet
+                          # strokes around a legend. It was unstated, and
+                          # draw.io's default 1 drew it two thirds as heavy.
+                          keys=(_ANNOTATION_KEYS + f"fontSize={size + 1:g};"
+                                + f"strokeWidth={F._BOX_RULE:g};"),
                           col_keys=[f"align=left;spacingLeft=4;{'fontStyle=1;' if b else ''}"
                                     for b in heavy])
         # Not tabular: a titled box of free-form lines, which is what it is on
@@ -1652,6 +2035,67 @@ def _number_geometry(number, points, fit: "_Fit"):
     reach = before + t * span
     return (max(-1.0, min(1.0, 2.0 * reach / total - 1.0)),
             (fit.length(number.x - foot[0]), fit.length(number.y - foot[1])))
+
+
+def _leader(edge_id: str, number, ink: str, fit: "_Fit") -> list[str]:
+    """The leader a displaced line number is tied back to its run with.
+
+    Where :func:`~pandid.render.svg.stream_numbers` finds no clear paper
+    alongside a run it writes the number off the line and draws a leader back to
+    it, and ISO 15519-1 §6.4 says how that leader ends: "Leader lines **shall**
+    terminate: with a dot if it terminates within an object; with an arrowhead
+    if it ends on the outline of an object or a connection; with an oblique
+    stroke if it ends at several parallel connections." A line number's leader
+    ends on a connection, so it wears an arrowhead. Without one the number is a
+    string of characters floating in blank paper, attached to nothing, which is
+    what ``AE-304-150-80-SS`` on ``11_ethanol_pid`` was in every exported file.
+
+    **The reason this was deferred was wrong.** #236 recorded that it "would
+    have to be a second cell hung off a label that is not itself a cell". It
+    does not have to be hung off anything: an edge whose two terminals are
+    stated as ``mxPoint``\\ s and neither as a cell is how draw.io itself writes
+    a free-standing rule, it is what :func:`_segment` has been emitting for the
+    sheet furniture all along, and ``endArrow=block;endFill=1`` is the filled
+    triangle :func:`~pandid.render.svg._arrowhead` draws. The whole construct
+    was already in the file.
+
+    What is true, and is the honest cost, is that **it does not ride the run**.
+    Its two ends are absolute points, so dragging the plant leaves the leader
+    where it was while the number itself -- which *is* on the edge's geometry --
+    moves with the line. That is the same trade :meth:`DrawioRenderer._taps`
+    takes for a tap whose host is a stream, for the same reason: draw.io can
+    join an edge to another edge, but the point it picks is its own, and a
+    leader that slid along the pipe would be pointing somewhere the sheet does
+    not point. The alternative is not a better leader, it is no leader.
+
+    ``noJump=1`` because a leader is not a connection and the sheet's jump pass
+    never sees one; see :data:`_NO_HOP`. ``ink`` is the label's colour, which is
+    the sheet's own choice (:meth:`SvgRenderer._draw_streams` strokes it "in the
+    label's own colour, since it is part of the label and not a line of its
+    own") and comes to the same thing as the pipe's -- ``stream_numbers`` takes
+    it from ``s.color`` -- so it is passed in, in the spelling
+    :data:`_LINE_INK` settles on rather than in the SVG's ``black``. The weight
+    is
+    :data:`~pandid.render.svg._SIGNAL_STROKE`, because §6.4 hands the leader
+    itself to ISO 128-22 where it is a narrow line and a head heavier than the
+    line it ends would read as the weightier of the two.
+    """
+    (ax, ay), (bx, by) = number.leader
+    style = (f"edgeStyle=none;rounded=0;html=1;startArrow=none;endArrow=block;"
+             f"endFill=1;endSize={fit.length(_LEADER_HEAD):g};"
+             f"strokeColor={ink};"
+             f"strokeWidth={fit.length(_SIGNAL_STROKE):g};movable=1;{_NO_HOP}")
+    x0, y0 = fit.at(ax, ay)
+    x1, y1 = fit.at(bx, by)
+    return [
+        f'        <mxCell id="{edge_id}-lead" value="" style={_attr(style)} '
+        f'edge="1" parent="1">',
+        '          <mxGeometry relative="1" as="geometry">',
+        f'            <mxPoint x="{_num(x0)}" y="{_num(y0)}" as="sourcePoint" />',
+        f'            <mxPoint x="{_num(x1)}" y="{_num(y1)}" as="targetPoint" />',
+        '          </mxGeometry>',
+        '        </mxCell>',
+    ]
 
 
 #: How a label on each of the four sides of a box is asked for in a draw.io
@@ -2158,7 +2602,8 @@ def _text_box(cid: str, title: str, rows, x, y, w, h, font: float = 11.0,
     are wider and taller than the box measured for them.
     """
     box = ("rounded=0;whiteSpace=wrap;html=1;movable=1;"
-           f"strokeColor={_INK};fillColor={_NO_FILL};strokeWidth=1.5;")
+           f"strokeColor={_INK};fillColor={_NO_FILL};"
+           f"strokeWidth={F._BOX_RULE:g};")
     out = _rect(cid, x, y, w, h, box)
     if title:
         # Centred, bold and one point larger, which is draw_annotation's own
@@ -2166,7 +2611,8 @@ def _text_box(cid: str, title: str, rows, x, y, w, h, font: float = 11.0,
         # sheet rules it.
         out += _strip_label(f"{cid}-t", ("text", x + w / 2, y + title_h - 6,
                                          title, font + 1, "middle", True, "black"))
-        out += _segment(f"{cid}-r", x, y + title_h, x + w, y + title_h, _INK, 1)
+        out += _segment(f"{cid}-r", x, y + title_h, x + w, y + title_h,
+                        _INK, F._BOX_UNDERLINE)
     # The body, in the sheet's own gutter: `draw_annotation` sets a row at
     # `pad` = 9 from the box edge, less the two units a draw.io cell spends
     # before its first letter (:data:`_TEXT_INSET`).
@@ -2236,9 +2682,13 @@ def _segment(cid: str, x1, y1, x2, y2, ink: str, weight: float) -> list[str]:
     An edge rather than a vertex, because that is what a line joining two points
     is in this format, and an edge with both terminals stated as points and
     neither as a cell is how draw.io itself writes a free-standing rule.
+
+    ``noJump=1`` because it is a **rule and not a connection**. Every one of
+    these is furniture -- a zone tick, a title-strip rule, the line under a
+    notes box's heading -- and :data:`_NO_HOP` is where that is argued.
     """
     style = (f"edgeStyle=none;rounded=0;html=1;endArrow=none;startArrow=none;"
-             f"strokeColor={ink};strokeWidth={weight:g};movable=1;")
+             f"strokeColor={ink};strokeWidth={weight:g};movable=1;{_NO_HOP}")
     return [
         f'        <mxCell id="{cid}" value="" style={_attr(style)} '
         f'edge="1" parent="1">',

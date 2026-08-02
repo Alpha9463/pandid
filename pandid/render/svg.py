@@ -78,6 +78,18 @@ _SIGNAL_DASH = {"electric": "7,4", "data": "9,3,2,3", "software": "9,3,2,3",
 #: dashes and for the same reason: the export writes this one too.
 _TAP_DASH = "5,4"
 
+#: The radius of the semicircle a crossing line hops with, which is half the
+#: length of run the hop takes out and how far it stands off it.
+#: :meth:`SvgRenderer._draw_streams` builds the arc from this and nothing else.
+#:
+#: Named for the same reason :data:`_TAP_DASH` is: draw.io draws its own hop from
+#: a ``jumpSize``, which is a *different* number in a different arithmetic
+#: (``mxConnector.paintLine``: half-extent = ``(jumpSize - 2) / 2 + strokeWidth``),
+#: and :func:`pandid.render.drawio._jump_size` solves that for this radius. Two
+#: literal fives, one here and one in the exporter, would be two answers to how
+#: big a hop is on this sheet.
+HOP_R = 5
+
 # --- stream-label placement -------------------------------------------------
 # A stream label is written on an opaque halo, so it can only sit *on* the pipe
 # where the run is long enough to leave pipe showing at each end: the ARROWHEAD
@@ -2894,18 +2906,18 @@ class SvgRenderer:
                     crossings.sort(reverse=(y1 > y2))
                     for hy in crossings:
                         if y1 < y2:
-                            d_parts.extend([f"L {x1},{hy - 5}", f"A 5 5 0 0 1 {x1},{hy + 5}"])
+                            d_parts.extend([f"L {x1},{hy - HOP_R}", f"A {HOP_R} {HOP_R} 0 0 1 {x1},{hy + HOP_R}"])
                         else:
-                            d_parts.extend([f"L {x1},{hy + 5}", f"A 5 5 0 0 1 {x1},{hy - 5}"])
+                            d_parts.extend([f"L {x1},{hy + HOP_R}", f"A {HOP_R} {HOP_R} 0 0 1 {x1},{hy - HOP_R}"])
                     d_parts.append(f"L {x2},{y2}")
                 elif jump_direction == "horizontal" and y1 == y2:
                     crossings = [vx for vx, my, My in verticals if my < y1 < My and min(x1, x2) < vx < max(x1, x2)]
                     crossings.sort(reverse=(x1 > x2))
                     for vx in crossings:
                         if x1 < x2:
-                            d_parts.extend([f"L {vx - 5},{y1}", f"A 5 5 0 0 1 {vx + 5},{y1}"])
+                            d_parts.extend([f"L {vx - HOP_R},{y1}", f"A {HOP_R} {HOP_R} 0 0 1 {vx + HOP_R},{y1}"])
                         else:
-                            d_parts.extend([f"L {vx + 5},{y1}", f"A 5 5 0 0 1 {vx - 5},{y1}"])
+                            d_parts.extend([f"L {vx + HOP_R},{y1}", f"A {HOP_R} {HOP_R} 0 0 1 {vx - HOP_R},{y1}"])
                     d_parts.append(f"L {x2},{y2}")
                 else:
                     d_parts.append(f"L {x2},{y2}")
