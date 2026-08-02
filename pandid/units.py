@@ -898,29 +898,168 @@ class Vessel(Unit):
 
     Reach for :class:`Separator` instead when the point of the vessel is
     splitting phases and you want to name the vapour and liquid products.
+
+    Besides the process pair a vessel has three connections that are not what
+    enters and what leaves: ``vent``, the vapour connection off the top head;
+    ``relief``, where the protective device sits; and ``drain``, the low-point
+    liquid draw. :class:`Tank` carries the same five, which is the point --
+    a tank and a vessel are one shell at two design pressures, and the
+    difference between them is drawn rather than declared.
+
+    **Named, and not counted**, and this is the canonical statement of that
+    choice; :class:`Tank` refers here rather than restating it.
+
+    A count was the consistent answer. Five classes already take one --
+    ``Mixer(n_inlets=)``, ``Splitter(n_outlets=)``, ``Column``/
+    ``Reactor(n_feeds=)``, ``Block(inputs=)`` -- and ``Vessel(outlets=3)`` would
+    have been the sixth. It is the wrong answer here, and consistency does not
+    rescue it, because **a vessel's connections are positioned by what they are
+    for and a number carries no duty**. CHEE4001 p.7: "The PSV should be placed,
+    whenever possible, directly on the system to be protected, vertically,
+    upward, and at the top of the container." A relief is on the crown because
+    that clause puts it there. Three interchangeable draws have nothing in them
+    that says the third is a relief, so nothing stops it being placed on the
+    floor -- and a relief on the floor is not a layout preference gone wrong, it
+    is a drawing that asserts the protective device vents the liquid. A
+    :class:`Block`'s connections carry no such meaning, which is exactly why
+    counting is right there and wrong here.
+
+    The same number decides **where the ink goes**, and that is where a count
+    runs out of drawing. A stencil draws a fixed set of nozzles, and not many:
+    ``tank/sphere`` draws three rectangles, ``vessel/legs`` draws none at all.
+    A role has one position per drawing because it has one meaning, so each of
+    the ten vessel stencils and seven tank stencils authors a coordinate for
+    each of the five nozzles and :func:`pandid.portgeom.is_anchored` is true for
+    every pair -- there is no placement rule to run and therefore nothing to
+    outrun. Ask a count for one more and the only thing that can place it is
+    :func:`pandid.render.symbols.spread`, walking a family along a face the
+    artwork may have no ink on; a nozzle the symbol never anchored falls back to
+    the centre of the box, where any two of them land on each other. Ports and
+    drawn nozzles have already come apart once that way, which is issue #225.
+
+    What a fixed set costs is that the drawing cannot be asked for a *second*
+    relief, and that is the honest bound: it is a change to the artwork, made
+    where the artwork is, rather than a number that promises what no stencil
+    can draw. ``scripts/vendor_symbols.py`` is where the seventeen port maps
+    live and what the measurement for each of them is written against.
+
+    Nothing here is reported by ``nozzle-unconnected``. That finding reads a
+    *numbered* nozzle -- a count the author wrote down and did not meet -- and
+    none of these is numbered, so a tank with a bare ``relief`` is silent for
+    the same reason a vessel with a bare ``vent`` has always been silent. It
+    does make the case for drawing a spare nozzle blanked (issue #215) worth
+    more, since there are now three unpiped connections on a typical tank rather
+    than none; it does not make it more urgent, because an unpiped port draws
+    nothing at all and no sheet changes until #215 lands.
     """
 
     inlet: Port
     outlet: Port
     vent: Port
+    # The connection a protective device sits on: a PSV, a rupture disc, a pilot
+    # valve. Not the device, which is a :class:`Valve` or a :class:`Fitting` of
+    # its own with its own tag -- this is the nozzle it is mounted on, so that
+    # the relief path is drawn *from the vessel* and can be seen not to run
+    # through anything else. That is the whole reason it is a third connection
+    # rather than a takeoff off the draw-off, and issue #222 puts it in one
+    # line: a relief path must not depend on a valve someone can close.
+    #
+    # ``process`` and not ``vapor``, which ``vent`` next door takes. What a
+    # relief passes is whatever the vessel is full of at the moment it lifts --
+    # vapour on a gas case, liquid on a thermal-expansion or a fire case where
+    # the vessel is liquid-full, two phases in between -- and the role
+    # vocabulary has no word that covers those. Saying ``vapor`` of a
+    # liquid-full relief is the kind of bend :class:`Separator`'s
+    # ``overflow``/``underflow`` pair exists to keep out of the names.
+    relief: Port
+    # The low-point liquid draw: a water draw-off, a clean-out, the knocked-out
+    # liquid a vapour drum collects. Distinct from ``outlet`` because on nine of
+    # the ten vessel drawings ``outlet`` is on the *shell wall* -- a vessel is
+    # piped side to side and the bottom head is left free -- so before this
+    # there was no nozzle at the bottom of a vessel at all, which is
+    # ``examples/14``'s V-604 knocking liquid out of a vapour stream with
+    # nowhere to put it.
+    drain: Port
 
     kind = "vessel"
+    # Appended rather than woven in among the three that were here in 0.1.1.
+    # ``ports`` is insertion-ordered and a family placed by a
+    # :class:`~pandid.render.symbols.PortSeries` is spread in the unit's own
+    # port order (see :func:`pandid.portgeom._series_point`), so the order is
+    # observable; putting the new ones last is what makes this change purely
+    # additive for every sheet already drawn.
     PORTS = [
         ("inlet", "inlet", "process"),
         ("outlet", "outlet", "process"),
         ("vent", "outlet", "vapor"),
+        ("relief", "outlet", "process"),
+        ("drain", "outlet", "liquid"),
     ]
 
 
 class Tank(Unit):
     """Storage tank. Variants: ``"default"`` (dished roof), ``"conical"``,
-    ``"floating_roof"``, ``"sphere"``."""
+    ``"floating_roof"``, ``"sphere"``, and three named for a cone at the bottom:
+    ``"conical_bottom"``, ``"conical_ends"``, ``"dished_roof_conical_bottom"``.
+
+    A tank's five nozzles are :class:`Vessel`'s five, for the reason argued
+    there. Two of them are what a storage tank exists to have and could not be
+    drawn before:
+
+    - **``vent``, the conservation vent.** A fixed-roof tank fills, empties and
+      warms through the day, and it breathes through a roof nozzle that is
+      neither the fill nor the draw. ``examples/14``'s ethanol tank wants a
+      breather with a flame arrestor under it and could only imply the
+      arrangement. No document on disk says anything about tank venting,
+      arrestors or floating roofs -- ``examples/14`` went looking and reported
+      the absence rather than stretching a clause -- so this one is ordinary
+      practice and is claimed as nothing more.
+    - **``relief``, the fire-case relief on the sphere.** This one *is* cited.
+      CHEE4001 p.8 names the duty exactly: "Protection against exposure of a
+      pressure vessel to fire or other sources of heat provided that the vessel
+      has no permanent supply connection. This is usually the case with storage
+      vessels for non-refrigerated liquefied compressible gases at ambient
+      temperatures." And p.7 says where it goes, which is why the two are
+      separate nozzles rather than one: "The PSV should be placed, whenever
+      possible, directly on the system to be protected, vertically, upward, and
+      at the top of the container."
+
+    A vent and a relief are both on the crown and are still two connections,
+    because one of them passes something on every fill and every cold night and
+    the other passes nothing until the design case. A sheet that draws one line
+    off the roof has said which of those two it is.
+
+    Whether a given tank really has all five is the sheet's business and not
+    this class's. A floating roof has no vapour space to conserve, an
+    atmospheric tank is protected by its vents rather than by a PSV, and neither
+    is a reason to withhold a nozzle: a declared nozzle is *offered*, and
+    choosing not to pipe one is a drawing decision -- which is the rule
+    :func:`pandid.validate.validate` already measures the whole corpus against.
+    Withholding one per variant is what :class:`Separator` does, and it is worth
+    saying why this is not that case: a mechanical separator has ``overflow``
+    and ``underflow`` **instead of** ``vapor`` and ``liquid``, never as well, so
+    declaring all four would tell a checker a flash drum has an overflow. Here
+    every variant has all five and the question is only whether a particular
+    plant piped them.
+    """
 
     inlet: Port
     outlet: Port
+    # The same three :class:`Vessel` declares, and each carries the comment
+    # there. The pair of classes is deliberately identical: 0.1.1 gave a vessel
+    # a ``vent`` and a tank nothing, which said that a tank does not breathe.
+    vent: Port
+    relief: Port
+    drain: Port
 
     kind = "tank"
-    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+    PORTS = [
+        ("inlet", "inlet", "process"),
+        ("outlet", "outlet", "process"),
+        ("vent", "outlet", "vapor"),
+        ("relief", "outlet", "process"),
+        ("drain", "outlet", "liquid"),
+    ]
 
 
 class Blower(Unit):

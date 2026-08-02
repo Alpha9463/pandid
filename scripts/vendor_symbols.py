@@ -242,9 +242,45 @@ KIND_MAP = {
     # same places. Both process nozzles are at mid-height, which is on the
     # straight shell (it spans y 15..185) at any box the unit is drawn at,
     # rather than on a head, where the ink curves away from the box edge.
+    #
+    # ``relief`` and ``drain`` are the two nozzles issue #222 added to Vessel
+    # and Tank, and every one of the seventeen stencils in those two families
+    # places them by the same two rules, which are the roles' own meanings and
+    # not a layout convention:
+    #
+    #   relief -- on the CROWN, beside the vent. CHEE4001 p.7: "The PSV should
+    #       be placed, whenever possible, directly on the system to be
+    #       protected, vertically, upward, and at the top of the container."
+    #       Measured onto the head's own arc or slope rather than onto the box's
+    #       top edge, for the reason the roofs below are: a head rises inside
+    #       its bounding box, so a nozzle on the edge floats above the ink.
+    #   drain -- on the vessel's LOWEST DRAWN POINT, because that is what a
+    #       drain is. Where the stencil draws a support -- legs, a skirt, the
+    #       sphere's frame -- the low point is INBOARD of the box's bottom, and
+    #       the nozzle goes on the vessel rather than on the steel: a drain out
+    #       of the bottom of a leg is worse than a drain that leaves sideways.
+    #
+    # That second case has a consequence worth stating rather than discovering.
+    # ``portgeom.outward_dir`` reads a nozzle's face off the nearest box edge,
+    # so on ``vessel/legs`` and ``vessel/skirted``, whose 40 x 122.69 box is a
+    # third leg by height, the bottom head's centre is nearer a side wall (20)
+    # than the box's floor (27.3) and the drain comes out WEST at the symbol's
+    # own aspect. Give the unit a box less than about 2.2 times as tall as it is
+    # wide -- 60 x 120, which is what ``examples/14`` draws V-604 at -- and it
+    # comes out south. Supports pushing a nozzle's face around is #225's
+    # territory, and papering over it here with a second placement rule would
+    # put the drain somewhere that is not the low point in order to get a face.
     ("vessel", "default"): ("vessels", "Pressurized Vessel",
                             {"inlet": ("W", 100.0), "outlet": ("E", 100.0),
-                             "vent": ("N", 50.0)}),
+                             "vent": ("N", 50.0),
+                             # Unscaled: SCALE reproportions this one by
+                             # (0.62, 0.5), so the relief's (25, 2) lands at
+                             # (15.5, 1.0) and the drain's apex at (31, 100).
+                             # The top head is an ellipse rx 50 ry 15 about
+                             # (50, 15); x = 25 is half a radius off the crown,
+                             # putting it at y = 15 - 15*sin(120 deg) = 2.
+                             "relief": ("AT", 25.0, 2.0),
+                             "drain": ("S", 50.0)}),
     # Feed enters on the left; the returns come back on the RIGHT, which is the
     # side the overhead and reboiler systems are drawn on. reflux_in sits high
     # and boilup_in low on the straight shell wall (which spans y 15..185), with
@@ -352,10 +388,32 @@ KIND_MAP = {
     # Both roofs rise inside the bounding box, so an inlet on the box's top edge
     # floats above the drawn ink. Put it on the roof itself: the dome crown, and
     # the cone apex.
+    #
+    # A tank takes a third roof nozzle the vessels above do not: ``vent``, the
+    # conservation vent a fixed roof breathes through. It flanks the fill, and
+    # ``relief`` flanks it on the other side, so the three roof connections read
+    # left to right in the order a reader meets them and neither of the two new
+    # ones is nearer the fill than the other. Both are measured onto the roof's
+    # own ink, and ``drain`` onto the floor clear of the draw-off: see the
+    # ``vessel/default`` block above for the rule and for what it costs.
+    #
+    # The dished roof is an arc of r = 75 over a 100-wide chord springing from
+    # y = 25.46, so its centre is at (50, 25.46 + sqrt(75^2 - 50^2)) = (50,
+    # 81.36) and its crown at (50, 6.36). x = 35 and x = 65 are 15 either side
+    # of that crown, at y = 81.36 - sqrt(75^2 - 15^2) = 7.9.
     ("tank", "default"):  ("vessels", "Tank (Dished Roof)",
-                           {"inlet": ("AT", 50.0, 6.4), "outlet": ("S", 50)}),
+                           {"inlet": ("AT", 50.0, 6.4), "outlet": ("S", 50),
+                            "vent": ("AT", 35.0, 7.9),
+                            "relief": ("AT", 65.0, 7.9),
+                            "drain": ("S", 20)}),
+    # The conical roof runs (0, 20) - (50, 0) - (100, 20), so a nozzle halfway
+    # along either slope is at (25, 10) and (75, 10). The floor is a plain line
+    # across y = 90, so the drain takes it directly, 30 clear of the outlet.
     ("tank", "conical"):  ("vessels", "Tank (Conical Roof)",
-                           {"inlet": ("N", 50), "outlet": ("S", 50)}),
+                           {"inlet": ("N", 50), "outlet": ("S", 50),
+                            "vent": ("AT", 25.0, 10.0),
+                            "relief": ("AT", 75.0, 10.0),
+                            "drain": ("S", 20)}),
     # Fittings.
     #
     # A reducer is a trapezoid between a large face and a small one, and both
@@ -661,12 +719,32 @@ KIND_MAP = {
     # Vessel / tank styles.
     # Brackets widen the bounding box past the shell, so box-edge ports float
     # outside the vessel; pin them to the shell walls at x = 10 and x = 50.
+    #
+    # Six of the ten vessels below are one 40-wide dished shell dressed
+    # differently, and their heads are all the same ellipse: rx 20, ry 7.69,
+    # about (cx, 7.69) on top and (cx, 87.69) underneath. So the relief is the
+    # same point on all six, shifted with the shell: x = cx - 12 is 0.6 of a
+    # radius off the crown, at y = 7.69 - 7.69*0.8 = 1.5. The drain is the
+    # bottom head's own crown at (cx, 95.38). Stating the arithmetic once here
+    # is what keeps the six from drifting apart one variant at a time, which is
+    # the same reason ``insulated`` takes ``jacketed``'s map to the decimal.
     ("vessel", "dished"): ("vessels", "Vessel (Dished Ends, Brackets)",
                            {"inlet": ("AT", 10.0, 47.0), "outlet": ("AT", 50.0, 47.0),
-                            "vent": ("N", 30.0)}),
+                            "vent": ("N", 30.0),
+                            "relief": ("AT", 18.0, 1.5), "drain": ("S", 30.0)}),
     # the vent rides the raised manway dome on top, apex near x = 62.7
+    #
+    # The dome is the one vessel lying down in this group: a 95.4 x 55 body with
+    # its top wall drawn as a line at y = 14.95 and its bottom at y = 54.95, the
+    # manway riding above the first. So the relief goes on the body's top wall
+    # rather than on the manway, which the vent already has, and the drain on
+    # the bottom wall at the body's midpoint. Both are 15 or so inboard of the
+    # box edge the face is read against, which is what a dome and a manway cost
+    # in bounding box; both still resolve N and S, since the box is nearly twice
+    # as wide as it is tall.
     ("vessel", "dome"):   ("vessels", "Vessel (Dome)",
-                           {"inlet": ("W", 27), "outlet": ("E", 27), "vent": ("N", 62.7)}),
+                           {"inlet": ("W", 27), "outlet": ("E", 27), "vent": ("N", 62.7),
+                            "relief": ("AT", 30.0, 15.0), "drain": ("S", 47.7)}),
     # Jacketed: the same dished vessel inside a heating/cooling jacket, drawn as
     # a panel down each side out to the box edge. The process nozzles go on the
     # jacket's outer wall rather than on the shell at x = 6 and 46, so the line
@@ -675,7 +753,15 @@ KIND_MAP = {
     # the top head's crown, as on "dished".
     ("vessel", "jacketed"): ("vessels", "Vessel (Dished Ends, Heating-Cooling Jacket)",
                              {"inlet": ("W", 47.7), "outlet": ("E", 47.7),
-                              "vent": ("N", 26.0)}),
+                              "vent": ("N", 26.0),
+                              # Shell at x 6..46, so cx = 26 and the heads'
+                              # arithmetic above gives 26 - 12 = 14 and 95.38.
+                              # The relief and the drain go on the SHELL's heads
+                              # and not on the jacket, which the two process
+                              # nozzles are moved out onto: a jacket is a
+                              # utility annulus, and a nozzle drawn on it would
+                              # be relieving the heating medium.
+                              "relief": ("AT", 14.0, 1.5), "drain": ("S", 26.0)}),
     # Insulated: the same vessel again, lagged rather than jacketed, and the
     # closest thing in the set to a pure change of artwork. The insulation is
     # drawn as a line down each side at x = 0 and x = 52 with the hatch ticks
@@ -687,7 +773,8 @@ KIND_MAP = {
     # is drawn at, and the vent is on the top head's crown at (26, 0).
     ("vessel", "insulated"): ("vessels", "Vessel (Dished Ends, Thermal Insulation)",
                               {"inlet": ("W", 47.7), "outlet": ("E", 47.7),
-                               "vent": ("N", 26.0)}),
+                               "vent": ("N", 26.0),
+                               "relief": ("AT", 14.0, 1.5), "drain": ("S", 26.0)}),
     # Electrically heated: the 40-wide shell "skirted" and "legs" are drawn
     # from, at x 0..40 between heads that reach y = 0 and y = 95.38, with the
     # resistor element hung on the OUTSIDE of the east wall at x 44..50. That
@@ -707,13 +794,30 @@ KIND_MAP = {
     # heater's own casing, and a process nozzle does not belong on it.
     ("vessel", "electrical_heating"): (
         "vessels", "Vessel (Dished Ends, Electrical Heating)",
-        {"inlet": ("W", 47.7), "outlet": ("AT", 40.0, 77.7), "vent": ("N", 20.0)}),
+        {"inlet": ("W", 47.7), "outlet": ("AT", 40.0, 77.7), "vent": ("N", 20.0),
+         # Shell at x 0..40, so cx = 20 and the heads give 8 and 95.38. The
+         # element hangs off the east wall between y 27.69 and 67.69 and the
+         # drain is below all of it, so unlike the outlet above it needs no
+         # dodging: it is the family's bottom crown, unmoved.
+         "relief": ("AT", 8.0, 1.5), "drain": ("S", 20.0)}),
     # Skirted: the same 40-wide shell as "dished", standing on a skirt instead
     # of brackets. Nothing widens the box here, so the shell walls ARE the box's
     # west and east faces and the two process nozzles take them directly.
+    #
+    # The drain is the one nozzle here that cannot take the box's south face.
+    # ``skirted`` and ``legs`` are 122.69 tall over a vessel that ends at 95.38,
+    # and there is no ink at all across the bottom of the box -- the skirt is
+    # two lines with a foot turned off each, the legs two rects, and between
+    # them 24 units of nothing. So the drain goes on the bottom head's crown at
+    # (20, 95.38), which is the vessel's low point and is what the pipe would
+    # actually leave from, and comes out of the west face at this box's own
+    # aspect. The block at ``vessel/default`` argues why that is the right way
+    # round to be wrong.
     ("vessel", "skirted"): ("vessels", "Vessel (Dished Ends, Skirts)",
                             {"inlet": ("W", 47.7), "outlet": ("E", 47.7),
-                             "vent": ("N", 20.0)}),
+                             "vent": ("N", 20.0),
+                             "relief": ("AT", 8.0, 1.5),
+                             "drain": ("AT", 20.0, 95.4)}),
     # Legs: "skirted"'s vessel on a pair of legs. The two stencils draw the same
     # shell and the same heads from the same path -- x 0..40, straight between
     # y 7.69 and 87.69, heads out to y = 0 and 95.38 -- in the same 40 x 122.69
@@ -723,7 +827,9 @@ KIND_MAP = {
     # change of variant is supposed to cost.
     ("vessel", "legs"): ("vessels", "Vessel (Dished Ends, Legs)",
                          {"inlet": ("W", 47.7), "outlet": ("E", 47.7),
-                          "vent": ("N", 20.0)}),
+                          "vent": ("N", 20.0),
+                          "relief": ("AT", 8.0, 1.5),
+                          "drain": ("AT", 20.0, 95.4)}),
     # Swaged: one vessel in two diameters, the narrow section on top of the wide
     # one with a cone between them at y 40..50. It comes out at 50 x 97.5, in
     # among ``jacketed``'s 52 x 95.38 and ``dished``'s 60 x 95.38 rather than
@@ -741,23 +847,61 @@ KIND_MAP = {
     # r = 10 over a 30-wide chord, which SVG scales up to the r = 15 the chord
     # needs, so the arc springs from y = 15 and its crown lands exactly on the
     # box's top edge rather than a fraction under it.
+    #
+    # The relief goes on that same true semicircle, r = 15 about (25, 15), so
+    # x = 16 puts it at y = 15 - sqrt(15^2 - 9^2) = 3 -- the 3-4-5 triangle, not
+    # the flattened family's 0.6-of-a-radius rule, because this head is not that
+    # head. The drain is the bottom ellipse's crown at (25, 97.5), on the WIDE
+    # section, which is where a two-diameter vessel holds its liquid.
     ("vessel", "swaged"): ("vessels", "Vessel (Different Diameters)",
                            {"inlet": ("W", 67.0), "outlet": ("E", 67.0),
-                            "vent": ("N", 25.0)}),
+                            "vent": ("N", 25.0),
+                            "relief": ("AT", 16.0, 3.0), "drain": ("S", 25.0)}),
     # The third roof that rises inside its bounding box, and the same treatment
     # the dished and conical ones get above: the shell is open between x = 5 and
     # x = 95 at y = 0 (that gap is what the roof floats in), so an inlet on the
     # box's top edge is drawn in mid-air 5 units above the roof plate. Put it on
     # the plate, which spans x 5..95 at y = 5. (Nothing showed while the tank was
     # painted as a solid block; with the block gone the nozzle is in the open.)
+    #
+    # The vent and the relief go on that same plate, 15 either side of the fill.
+    # A floating roof has no vapour space to conserve and is not what a
+    # conservation vent is for; the nozzles are still here because a declared
+    # nozzle is offered rather than asserted, which is the argument in
+    # ``units.Tank``, and because a rim vent and a roof bleeder are connections
+    # a floating roof does have.
     ("tank", "floating_roof"): ("vessels", "Tank (Floating Roof)",
-                                {"inlet": ("AT", 30.0, 5.0), "outlet": ("S", 50)}),
+                                {"inlet": ("AT", 30.0, 5.0), "outlet": ("S", 50),
+                                 "vent": ("AT", 15.0, 5.0),
+                                 "relief": ("AT", 45.0, 5.0),
+                                 "drain": ("S", 20)}),
     # ...and the third: the sphere rides on legs inside its box, so its crown is
     # at (40, 5) and the box's top edge carries only the two short lines the
     # legs are drawn against, at x 15..33 and x 47..65. An inlet at x = 40 falls
     # in the gap between them. Put it on the crown, as on the dished roof.
+    #
+    # This is the one stencil in the two families that draws its nozzles as
+    # nozzles: three 12 x 12 rectangles, two on the crown at x 18..30 and
+    # 50..62 and one under the belly at x 34..46. The two on top are what the
+    # vent and the relief take, at (24, 0) and (56, 0), which is where issue
+    # #226's research puts them -- an LPG sphere takes liquid in and out at the
+    # LOWEST part of the vessel and reserves the crown for relief and vapour --
+    # and where CHEE4001 p.7 puts a PSV: "vertically, upward, and at the top of
+    # the container". Which of the two rectangles is which is arbitrary; they
+    # are one drawing twice.
+    #
+    # The drain does not take the third rectangle. That one is the liquid
+    # connection, and issue #225 is the change that moves ``outlet`` up onto it
+    # from the leg rail at y = 100 where it sits today; squatting on it here
+    # would trade one misplaced nozzle for another and make that fix harder.
+    # It goes on the shell instead, at x = 25 on the ellipse (cx 40, cy 45,
+    # r 40), which is y = 45 + 40*sqrt(1 - (15/40)^2) = 82.1 -- low on the
+    # sphere, clear of the liquid nozzle, and on ink.
     ("tank", "sphere"):        ("vessels", "Storage Sphere",
-                                {"inlet": ("AT", 40.0, 5.0), "outlet": ("S", 40)}),
+                                {"inlet": ("AT", 40.0, 5.0), "outlet": ("S", 40),
+                                 "vent": ("AT", 24.0, 0.0),
+                                 "relief": ("AT", 56.0, 0.0),
+                                 "drain": ("AT", 25.0, 82.1)}),
     # Tanks that drain to a cone rather than to a floor. The four above vary the
     # roof and all of them stand on a flat bottom; a hopper is what anything
     # holding solids, a slurry or a settled phase is actually drawn with, and
@@ -775,8 +919,17 @@ KIND_MAP = {
     # roof is a plain line across y = 0 from x 0 to 100, so the inlet takes the
     # north face directly, and the cone runs from y = 70 down to its apex at
     # (50, 100).
+    #
+    # The roof is flat, so the vent and the relief take the north face directly
+    # at x = 35 and 65, as the inlet does. The drain cannot take the south face:
+    # a cone touches the box's bottom edge at one point and the outlet is on it.
+    # It goes half way down the cone's west slope, from (0, 70) to the apex at
+    # (50, 100), which is (35, 91) -- still south-facing, since 9 units of
+    # bottom clearance beat 35 of side.
     ("tank", "conical_bottom"): ("vessels", "Tank (Conical Bottom)",
-                                 {"inlet": ("N", 50), "outlet": ("S", 50)}),
+                                 {"inlet": ("N", 50), "outlet": ("S", 50),
+                                  "vent": ("N", 35), "relief": ("N", 65),
+                                  "drain": ("AT", 35.0, 91.0)}),
     # A cone at each end: the silo or bin a tank holding solids is drawn as.
     # Called ``conical_ends`` and not ``conical_roof_bottom`` for the reason
     # ``vessel/dished`` is called that after "Vessel (Dished Ends, Brackets)":
@@ -796,8 +949,17 @@ KIND_MAP = {
     # stencil puts its shell walls at x = 1 and x = 101 in a box 101 wide, so
     # the two apexes are on the SHELL's centreline, half a unit right of the
     # box's, and a nozzle at 50 would be half a unit off the point of the cone.
+    #
+    # Both cones are half as steep as they are wide -- 30 of rise over 50 of
+    # run -- so the midpoint of each slope is 25 across and 15 down from its
+    # apex: (26, 15) and (76, 15) on the roof, (26, 135) on the floor. All three
+    # keep the shell's x = 1..101, so the pair on the roof are as far either
+    # side of the fill as ``default``'s are, scaled to a taller drawing.
     ("tank", "conical_ends"): ("vessels", "Tank (Conical Roof and Bottom)",
-                               {"inlet": ("N", 51), "outlet": ("S", 51)}),
+                               {"inlet": ("N", 51), "outlet": ("S", 51),
+                                "vent": ("AT", 26.0, 15.0),
+                                "relief": ("AT", 76.0, 15.0),
+                                "drain": ("AT", 26.0, 135.0)}),
     # Dished roof over a conical bottom: ``default``'s tank with the floor
     # opened out into a cone, and it takes ``default``'s port map verbatim,
     # character for character. The roof is the same arc drawn over the same
@@ -807,9 +969,15 @@ KIND_MAP = {
     # 6.4 units of the box empty. The outlet's ("S", 50) resolves to
     # the cone apex at (50, 125.46) where on ``default`` it resolved to the flat
     # floor: same spec, same face, different ink, which is what a variant is.
+    # The roof nozzles are ``default``'s too, at (35, 7.9) and (65, 7.9), for
+    # the same arc. Only the drain differs, and for ``conical_bottom``'s reason:
+    # the apex is the outlet's, so the drain takes the west slope's midpoint,
+    # from (0, 95.46) to (50, 125.46), which is (35, 116.5).
     ("tank", "dished_roof_conical_bottom"): (
         "vessels", "Tank (Dished Roof, Conical Bottom)",
-        {"inlet": ("AT", 50.0, 6.4), "outlet": ("S", 50)}),
+        {"inlet": ("AT", 50.0, 6.4), "outlet": ("S", 50),
+         "vent": ("AT", 35.0, 7.9), "relief": ("AT", 65.0, 7.9),
+         "drain": ("AT", 35.0, 116.5)}),
     # Two more shapes in vessels.xml were weighed with those and left out, and
     # both for the same reason: a nozzle a class has no name for is a nozzle
     # that cannot be drawn.
@@ -818,9 +986,12 @@ KIND_MAP = {
     #   the sump welded under one end that a settled water phase is drawn off
     #   separately from the product. The boot IS the variant: a tank with one
     #   drawn and piped like a tank without one says nothing the plain tank does
-    #   not, and Tank.PORTS is inlet/outlet, so there is no third draw to put on
-    #   it. Giving Tank one is a change to the public port signature and belongs
-    #   in its own change, not smuggled in with a batch of artwork.
+    #   not, and Tank.PORTS was inlet/outlet, so there was no third draw to put
+    #   on it. That half of the objection is now spent -- issue #222 gave Tank
+    #   the ``drain`` a settled phase leaves by, which is exactly the boot's
+    #   draw -- and the shapes are still out, because the change that lets them
+    #   in is a vendoring with its own measurements and its own place in the
+    #   variants table, not a line added to a port map.
     #
     #   "Vessel (Full-Tube Heating-Cooling Coil)" and its semi-tube sibling --
     #   a 120 x 70 box holding a bare 100 x 70 rect, with the coil's four cut
@@ -846,10 +1017,17 @@ KIND_MAP = {
     # The outlet takes no alternate: liquid draws off the bottom, and the right
     # head is already the inlet's alternate. Giving both an "E" option would
     # land two nozzles on the same point.
+    #
+    # A lying drum has no crown and no bottom head: the whole top wall is the
+    # top of the vessel and the whole bottom wall its low point, so the relief
+    # and the drain take the two faces directly rather than being measured onto
+    # a curve. 30 and 25 keep both clear of the three placements the inlet may
+    # take and of the outlet at 68.
     ("vessel", "horizontal"): ("vessels", "Drum or Condenser",
                                {"inlet": [("W", 15), ("N", 20.0), ("E", 15)],
                                 "outlet": ("S", 68.0),
-                                "vent": ("N", 55.0)}),
+                                "vent": ("N", 55.0),
+                                "relief": ("N", 30.0), "drain": ("S", 25.0)}),
     # The same shape as a horizontal phase separator, where naming the vapour
     # and liquid products is the point. Neither product takes an alternate face:
     # vapour always disengages off the top, liquid draws off the bottom.
