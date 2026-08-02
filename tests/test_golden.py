@@ -807,14 +807,15 @@ def _ethanol_pfd() -> Flowsheet:
         status="ISSUED FOR REVIEW",
         sheet="1",
         of_sheets="1",
+        scale="NTS",
         date="30/08/25",
         drawn_by="AA",
-        checked_by="RG",
-        approved_by="HVL",
+        checked_by="JS",
+        approved_by="RL",
         revisions=[
             Revision("A", "30/07/25", "Issued for internal review", "AA"),
             Revision("B", "20/08/25", "Flocculation package added", "AA"),
-            Revision("C", "30/08/25", "Issued For Review", "AA", "RG", "HVL"),
+            Revision("C", "30/08/25", "Issued For Review", "AA", "JS", "RL"),
         ],
     )
 
@@ -1228,13 +1229,14 @@ def _ethanol_pid() -> Flowsheet:
         status="ISSUED FOR REVIEW",
         sheet="1",
         of_sheets="1",
+        scale="NTS",
         date="30/10/25",
         drawn_by="AA",
-        checked_by="RG",
-        approved_by="HVL",
+        checked_by="JS",
+        approved_by="RL",
         revisions=[
             Revision("A", "11/10/25", "Issued for internal review", "AA"),
-            Revision("B", "25/10/25", "Issued For Review", "AA", "RG", "HVL"),
+            Revision("B", "25/10/25", "Issued For Review", "AA", "JS", "RL"),
         ],
     )
 
@@ -1946,13 +1948,14 @@ def _tank_farm() -> Flowsheet:
         status="ISSUED FOR REVIEW",
         sheet="1",
         of_sheets="1",
+        scale="NTS",
         date="12/12/25",
         drawn_by="AA",
-        checked_by="RG",
-        approved_by="HVL",
+        checked_by="JS",
+        approved_by="RL",
         revisions=[
             Revision("A", "28/11/25", "Issued for internal review", "AA"),
-            Revision("B", "12/12/25", "Issued For Review", "AA", "RG", "HVL"),
+            Revision("B", "12/12/25", "Issued For Review", "AA", "JS", "RL"),
         ],
     )
     fs.add_annotation(

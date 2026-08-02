@@ -643,12 +643,20 @@ def main():
         drawing_number="P&ID-601",
         company="PANDID",
         status="ISSUED FOR REVIEW",
-        sheet="1", of_sheets="1",
+        # scale="NTS" rather than left blank: a blank cell makes the sheet
+        # report the ratio the renderer fitted it at, and CHEE4001 p.2 is flat
+        # about that -- "Do not represent the real length of pipes on P&IDs.
+        # P&ID is a 'Not to Scale' (NTS) drawing." The date is stated for the
+        # same kind of reason a fixture pins one: left blank, the renderer fills
+        # in today's and the sheet differs from itself tomorrow.
+        sheet="1", of_sheets="1", scale="NTS",
         date="12/12/25",
-        drawn_by="AA", checked_by="RG", approved_by="HVL",
+        # All three sets of initials are fictional, as they are on 03 and 09.
+        # AA is the repo's author.
+        drawn_by="AA", checked_by="JS", approved_by="RL",
         revisions=[
             Revision("A", "28/11/25", "Issued for internal review", "AA"),
-            Revision("B", "12/12/25", "Issued For Review", "AA", "RG", "HVL"),
+            Revision("B", "12/12/25", "Issued For Review", "AA", "JS", "RL"),
         ],
     )
     fs.add_annotation(Annotation(

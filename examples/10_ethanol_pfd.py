@@ -228,20 +228,26 @@ def main():
 
     # --- Title strip -----------------------------------------------------
     # The date is stated rather than left blank, so the sheet renders the same
-    # today as it did at issue.
+    # today as it did at issue. scale="NTS" for the same kind of reason: a blank
+    # cell makes the sheet report the ratio the renderer fitted it at, and a
+    # flow diagram has no scale to report -- CHEE4001 p.1 asks only that it "be
+    # roughly in proportion (not necessarily to scale)".
+    #
+    # All three initials are fictional, as they are on 03 and 09. AA is the
+    # repo's author.
     fs.title_block = TitleBlock(
         title="Ethanol Purification",
         subtitle="A300 Process Flow Diagram 1",
         drawing_number="PFD-301",
         company="PANDID",
         status="ISSUED FOR REVIEW",
-        sheet="1", of_sheets="1",
+        sheet="1", of_sheets="1", scale="NTS",
         date="30/08/25",
-        drawn_by="AA", checked_by="RG", approved_by="HVL",
+        drawn_by="AA", checked_by="JS", approved_by="RL",
         revisions=[
             Revision("A", "30/07/25", "Issued for internal review", "AA"),
             Revision("B", "20/08/25", "Flocculation package added", "AA"),
-            Revision("C", "30/08/25", "Issued For Review", "AA", "RG", "HVL"),
+            Revision("C", "30/08/25", "Issued For Review", "AA", "JS", "RL"),
         ],
     )
 

@@ -608,12 +608,20 @@ def main():
         status="ISSUED FOR REVIEW",
         sheet="1", of_sheets="1",
         # Stated rather than left blank, so the sheet renders the same today as
-        # it did at issue.
+        # it did at issue. scale="NTS" is the same argument: blank, the cell
+        # reports the ratio the renderer fitted the drawing at, and CHEE4001 p.2
+        # is flat about that -- "Do not represent the real length of pipes on
+        # P&IDs. P&ID is a 'Not to Scale' (NTS) drawing."
+        scale="NTS",
         date="30/10/25",
-        drawn_by="AA", checked_by="RG", approved_by="HVL",
+        # Deliberately fictional, and worth saying on this sheet in particular:
+        # it is modelled on professional_examples/P&ID_301.pdf, whose checker
+        # and approver are real people. JS and RL are the initials 03 and 09 use;
+        # AA is the repo's author.
+        drawn_by="AA", checked_by="JS", approved_by="RL",
         revisions=[
             Revision("A", "11/10/25", "Issued for internal review", "AA"),
-            Revision("B", "25/10/25", "Issued For Review", "AA", "RG", "HVL"),
+            Revision("B", "25/10/25", "Issued For Review", "AA", "JS", "RL"),
         ],
     )
 
