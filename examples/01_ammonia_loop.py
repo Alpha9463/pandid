@@ -11,7 +11,6 @@ sep = fs.add(units.Separator("V-101"))
 comp = fs.add(units.Compressor("K-101"))
 prod = fs.add(units.Product("Ammonia"))
 
-# Connect
 fs.connect(feed.outlet, mix.in_2)
 fs.connect(mix.outlet, reformer.feed)
 fs.connect(reformer.outlet, hx.shell_in)

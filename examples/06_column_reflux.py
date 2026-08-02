@@ -1,16 +1,14 @@
 """
 Example 6: Distillation column with reflux and reboiler loops
 
-Laid out the way a fractionation sheet is actually drawn: the column stands tall
-on the left, its overhead condenser sits high and to the right with the reflux
-drum beneath it, and the kettle reboiler hangs off the bottom of the tower. Both
-loops close on the column itself, through its ``reflux_in`` and ``boilup_in``
-return nozzles, and the bottoms product leaves from the reboiler's own draw at
-the weir end, which is where it leaves the plant.
+The column stands tall on the left, its overhead condenser high and to the
+right with the reflux drum beneath it, and the kettle reboiler off the bottom
+of the tower. Both loops close on the column's ``reflux_in`` and ``boilup_in``
+nozzles, and the bottoms leaves from the reboiler's own weir draw.
 
 That arrangement is a drawing convention rather than something a topological
-layout can infer, so the equipment is pinned. Everything else (routing, stream
-numbering and labels) is automatic.
+layout can infer, so the equipment is pinned. Routing, stream numbering and
+labels are automatic.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -26,44 +24,33 @@ def main():
     feed = fs.add(units.Feed("Feed", reference="PFD-100"))
     col = fs.add(units.Column("T-701", description="Main Fractionator"))
 
-    # Overhead: a horizontal shell-and-tube condenser over a horizontal drum.
-    # Both keep close to their symbols' native proportions, because scaling a
-    # symbol far past its drawn aspect is what makes a sheet look wrong.
+    # width/height stay close to each symbol's native proportions: scaling one
+    # far past its drawn aspect is what makes a sheet look wrong.
     cond = fs.add(units.HeatExchanger("E-701", variant="straight_tubes", width=120,
                                       height=36, description="Overhead Condenser"))
-    # The drum's inlet is authored on three faces, and the engine takes the top
-    # one on its own: the condenser drains straight down onto it, so reaching
-    # the left head instead would mean hooking back on itself.
+    # The drum's inlet is authored on three faces and the engine picks the top
+    # one unaided, so nothing here has to override it.
     drum = fs.add(units.Vessel("V-701", variant="horizontal", width=130, height=42,
                                description="Reflux Drum"))
     vent = fs.add(units.Product("Vent Gas", reference="PFD-900"))
     split = fs.add(units.Splitter("SP-701", n_outlets=2, description="Reflux Split"))
     dist = fs.add(units.Product("Distillate", reference="PFD-200"))
 
-    # Bottoms: the sump drains into the kettle, where what boils returns to the
-    # tower as boilup and what does not overflows the weir and leaves as bottoms
-    # product, off the reboiler's own draw, which is where it leaves the plant.
     reb = fs.add(units.HeatExchanger("E-702", variant="kettle", width=120, height=44,
                                      description="Kettle Reboiler"))
     bot = fs.add(units.Product("Bottoms", reference="PFD-300"))
 
     # --- Placement -------------------------------------------------------
-    # Equipment is positioned by NOZZLE, not by its top-left corner: a port sits
-    # at a fixed fraction of its symbol's box, so lining two items up means
-    # matching those fractions. Every run below is either dead straight or a
-    # single corner, bar the two that cannot be: the tower overhead, where the
-    # distillate and the condenser inlet both face upward and the line has to
-    # rise, cross and drop, and the sump, which leaves the tower downward and
-    # has to climb back into the kettle's underside.
+    # A port sits at a fixed fraction of its symbol's box, so lining two items
+    # up means matching those fractions rather than measuring the artwork.
     col_x, col_y = 300, 260
     col.pin(x=col_x, y=col_y)
-    # The tower's feed is placed by a rule rather than authored as a coordinate
-    # (Column takes n_feeds=), so the elevation is asked for rather than
-    # measured off the drawing. The flag's tip is 25 below where it is pinned.
+    # The feed nozzle's elevation is asked of the symbol rather than measured;
+    # the flag's tip is 25 below where the flag itself is pinned.
     feed.pin(x=90, y=col_y + port_offset(col, "feed")[1] - 25)
 
-    # Condenser, mirrored so it drains towards the drum: vapour enters the top
-    # shell nozzle at x + 0.25w, condensate leaves the bottom one at x + 0.75w.
+    # Mirrored so vapour enters the top shell nozzle at x + 0.25w and the
+    # condensate leaves the bottom one at x + 0.75w, over the drum.
     cond_x, cond_y, cond_w = 560, 70, 120
     cond.pin(x=cond_x, y=cond_y, mirrored="x")
     cond_drain_x = cond_x + 0.75 * cond_w
