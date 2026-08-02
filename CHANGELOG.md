@@ -397,6 +397,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A resized symbol's line width changed with it, and changed differently in
+  each axis.** ISO 15519-1 §11.1.3 (p. 28) is a *shall*: "When the size of a
+  symbol is changed, the line width shall be unchanged." A `<symbol>` placed
+  under `preserveAspectRatio="none"` scales its ink as readily as its geometry,
+  so a vertical line came out at `sx` and a horizontal one at `sy`, and no
+  `stroke-width` can undo a difference that depends on which way the element
+  runs. The compensation that shipped took the geometric mean of the two, which
+  put the average right and every individual line wrong: `V-604`'s shell walls
+  drew 2.48 against its own heads' 1.61 — 1.53:1 inside one outline, against
+  process lines at a flat 2.0 — and §6.2 (p. 19) leaves nothing between 1:1 and
+  2:1 to call that instead. Twenty stretched placements across the golden corpus
+  were affected, eleven of them visibly.
+
+  So was a case no placement could reach: the four vendored families whose own
+  artwork is wrapped in an uneven `scale()` — `vessel/default`,
+  `separator/default`, `column/packed` and `valve/butterfly_pneumatic` — drew an
+  ellipse at their *natural* size, a separator's shell walls at 2.23 against its
+  heads' 1.80 on any sheet that resized nothing at all.
+
+  The artwork is now redrawn at the placed size instead of being stretched by
+  its viewport: every scale group and the placement are flattened into the
+  coordinates, and each `stroke-width` is stated at the weight the symbol's
+  author drew, so no uneven scale is left above any stroke anywhere.
+  `vector-effect="non-scaling-stroke"` says the rule directly and browsers
+  honour it, but svglib has never heard of the property and drops it in silence,
+  which would have left the `.svg` right and every exported PDF and gallery PNG
+  exactly as wrong as before. Geometry is untouched — every drawn point on the
+  corpus lands within 1.2e-6 px of where it did.
+
 - **`examples/14_tank_farm`: the pump suction had a bend in it, and the vapour
   return crossed the whole sheet.** `RD-601` is the eccentric reducer, whose two
   nozzles are deliberately not on one centreline — flat on top, the small end's

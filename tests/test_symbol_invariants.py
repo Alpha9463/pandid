@@ -332,6 +332,54 @@ def test_svg_is_well_formed_and_declares_stroke_width(entry):
     assert "stroke-width" in sym.svg, f"{kind}/{variant} declares no stroke-width"
 
 
+#: Sizes to redraw a symbol at, as factors on its own box. The wide and tall
+#: pairs are what a layout actually asks for; the last two are past anything a
+#: drawing would want, because a check is only worth having under strain.
+_REDRAWS = ((1.0, 1.0), (2.0, 1.0), (1.0, 2.5), (3.0, 0.5), (0.4, 1.7))
+
+
+@pytest.mark.parametrize("factors", _REDRAWS, ids=[f"{a}x{b}" for a, b in _REDRAWS])
+@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
+def test_a_symbol_redrawn_at_a_new_size_draws_the_ink_it_was_drawn_from(entry, factors):
+    """``pandid.render.svg._baked`` moves the pen and nothing else.
+
+    A placement that would scale the two axes differently is emitted redrawn at
+    the placed size rather than stretched by its viewport (#235), which rewrites
+    every number in the drawing. That is only allowed to be a change of
+    *notation*: the ink has to land where the scale would have put it. Every
+    check in this file says a port lands on drawn ink, and every one of them is
+    worth nothing if the ink itself has quietly moved.
+
+    Measured against the scale applied by this file's own flattener rather than
+    against the renderer's arithmetic restated, so the two sides are independent
+    -- and over every registered symbol, since it is the arcs (which have to be
+    recomputed rather than scaled) and the mirrored derivations that are the
+    parts with somewhere to go wrong.
+    """
+    from pandid.render.svg import _baked
+
+    (kind, variant), sym = entry
+    fx, fy = factors
+    want = [
+        ((ax * fx, ay * fy), (bx * fx, by * fy))
+        for (ax, ay), (bx, by) in _collect_segments(sym.svg)
+    ]
+    got = _collect_segments(_baked(sym.svg, fx, fy))
+    assert len(got) == len(want), (
+        f"{kind}/{variant} redrawn at {fx} x {fy} flattens to {len(got)} segments, "
+        f"against the {len(want)} it was drawn from"
+    )
+    worst = max(
+        (max(math.dist(p, q) for p, q in zip(g, w)) for g, w in zip(got, want)),
+        default=0.0,
+    )
+    # The redraw writes six decimals, so a point may land half a millionth of a
+    # unit from where the scale would have put it. A drawing unit is 0,26 mm.
+    assert worst <= 1e-5, (
+        f"{kind}/{variant} redrawn at {fx} x {fy} moved its ink by {worst:.3g} units"
+    )
+
+
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_ports_within_bounding_box(entry):
     (kind, variant), sym = entry
@@ -524,8 +572,28 @@ def _invert(m: Matrix) -> Matrix:
     )
 
 
-def _placements(svg: str) -> dict[tuple[float, float], Matrix]:
-    """Symbol coordinates -> sheet coordinates for each placed symbol.
+def _natives(fs) -> dict[str, tuple[float, float]]:
+    """What each definition on *fs*'s sheet was **authored** at, by ``<defs>`` id.
+
+    Which is not always what its viewBox says: see :func:`_placements`.
+    """
+    from pandid.render.svg import SvgRenderer
+
+    renderer = SvgRenderer()
+    return {
+        renderer._sym_id(u): (
+            default_registry.for_unit(u).width,
+            default_registry.for_unit(u).height,
+        )
+        for u in fs.units
+        if u.frame is not None and u.kind not in ("feed", "product")
+    }
+
+
+def _placements(
+    svg: str, natives: dict[str, tuple[float, float]] | None = None
+) -> dict[tuple[float, float], Matrix]:
+    """Authored symbol coordinates -> sheet coordinates for each placed symbol.
 
     Keyed by the centre of the box it was placed in, which is the one point a
     quarter turn and a mirror both leave alone, and so the only handle on a
@@ -535,24 +603,37 @@ def _placements(svg: str) -> dict[tuple[float, float], Matrix]:
     ``preserveAspectRatio``: ``none`` fills the box exactly, while the default
     ``xMidYMid meet`` scales uniformly and centres, leaving a letterbox the box
     edge is no longer on. Whatever the ``<use>`` then does to the result is
-    composed on top, so the matrix is the whole journey from the coordinates the
-    symbol was authored in to the ones the sheet is drawn in.
+    composed on top.
+
+    One more step, and it is the one #235 added. A placement that would have
+    scaled the two axes differently is emitted *redrawn* at the placed size
+    rather than stretched by its viewport (``pandid.render.svg._baked``), so its
+    viewBox is that box and the viewport contributes a scale of exactly 1 --
+    which is the whole point, since a viewport scales ink and a redraw does not.
+    Those definitions are therefore no longer written in the coordinates the
+    symbol was authored in, and *natives* is what says so: the size each id was
+    authored at, from :func:`_natives`. Left out, every viewBox is taken at face
+    value, which is right for every definition nothing reshaped.
     """
+    natives = natives or {}
     defs = {m.group(1): m.group(0) for m in re.finditer(r'<symbol id="([^"]+)"[^>]*>', svg)}
     out: dict[tuple[float, float], Matrix] = {}
     for use in re.findall(r"<use\b[^>]*/>", svg):
         attr = dict(re.findall(r'([\w-]+)="([^"]*)"', use))
+        sym_id = attr["href"][1:]
         ux, uy = float(attr["x"]), float(attr["y"])
         uw, uh = float(attr["width"]), float(attr["height"])
-        _, _, vw, vh = _nums(re.search(r'viewBox="([^"]+)"', defs[attr["href"][1:]]).group(1))
-        if 'preserveAspectRatio="none"' in defs[attr["href"][1:]]:
+        _, _, vw, vh = _nums(re.search(r'viewBox="([^"]+)"', defs[sym_id]).group(1))
+        if 'preserveAspectRatio="none"' in defs[sym_id]:
             sx, sy, ox, oy = uw / vw, uh / vh, 0.0, 0.0
         else:
             sx = sy = min(uw / vw, uh / vh)
             ox, oy = (uw - sx * vw) / 2, (uh - sy * vh) / 2
         fit: Matrix = (sx, 0.0, 0.0, sy, ux + ox, uy + oy)
+        nw, nh = natives.get(sym_id, (vw, vh))
+        redraw: Matrix = (vw / nw, 0.0, 0.0, vh / nh, 0.0, 0.0)
         key = (round(ux + uw / 2, 6), round(uy + uh / 2, 6))
-        out[key] = _compose(_parse_transform(attr.get("transform", "")), fit)
+        out[key] = _compose(_parse_transform(attr.get("transform", "")), _compose(fit, redraw))
     return out
 
 
@@ -580,7 +661,7 @@ def odd_box_sheets():
                 # anything.
                 fs.add(unit).pin(x=200 + 600 * (i % 8), y=200 + 600 * (i // 8), **placement)
                 placed[(kind, variant)] = unit
-            matrices = _placements(fs.to_svg())
+            matrices = _placements(fs.to_svg(), _natives(fs))
             sheets[(box, turn)] = {
                 key: (unit, matrices[(round(unit.frame.cx, 6), round(unit.frame.cy, 6))])
                 for key, unit in placed.items()
@@ -825,7 +906,7 @@ def test_the_reported_column_and_reactor_meet_their_streams():
     fs = Flowsheet("as reported")
     col = fs.add(units.Column("T-301", width=110, height=250)).pin(x=100, y=100)
     reactor = fs.add(units.Reactor("M-301", width=80, height=100)).pin(x=600, y=100)
-    matrices = _placements(fs.to_svg())
+    matrices = _placements(fs.to_svg(), _natives(fs))
     for unit in (col, reactor):
         sym = default_registry.for_unit(unit)
         frame = unit.frame
@@ -955,7 +1036,9 @@ def test_a_turned_fittings_ports_land_on_drawn_ink_at_any_box_shape(entry):
                 height=box[1],
             )
             fs.add(unit).pin(x=200, y=200, **placement)
-            matrix = _placements(fs.to_svg())[(round(unit.frame.cx, 6), round(unit.frame.cy, 6))]
+            matrix = _placements(fs.to_svg(), _natives(fs))[
+                (round(unit.frame.cx, 6), round(unit.frame.cy, 6))
+            ]
             for name in unit.ports:
                 d = _nearest_distance(_resolved_in_symbol_space(unit, matrix, name), segments)
                 assert d <= GEOM_TOL + _ROUNDTRIP_EPS, (

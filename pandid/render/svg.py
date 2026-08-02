@@ -5,6 +5,7 @@ import html
 import math
 import re
 from datetime import datetime
+from functools import lru_cache
 
 from pandid.render import furniture as F
 from pandid.render.symbols import (ARROWHEAD, closed_marking, fail_marking,
@@ -1006,15 +1007,23 @@ def _reshapes(sym, u) -> bool:
 # --- the pen a placement draws with ------------------------------------------
 # A symbol's line weights are compensated once, at generation time:
 # scripts/vendor_symbols.py bakes stroke_width = 2/sqrt(sx*sy) inside the scale
-# group it wraps the artwork in -- the same geometric mean _pen_scale below
-# takes, for the same reason -- so a valve drawn under scale(0.25) carries an
-# 8.0 and lands on the sheet's 2.0. That is right for exactly one box -- the
-# symbol's own. A <use> resizes the <symbol>'s viewport, and a viewport scales
-# the ink as readily as the geometry, so the same valve placed in a box twice
-# its own draws at 4.0, and nothing scales it back. The compensation is therefore
-# half an answer, and this is the other half: divide the baked weight back out
+# group it wraps the artwork in -- the geometric mean, for the reason given at
+# _NOMINAL below -- so a valve drawn under scale(0.25) carries an 8.0 and lands
+# on the sheet's 2.0. That is right for exactly one box -- the symbol's own. A
+# <use> resizes the <symbol>'s viewport, and a viewport scales the ink as
+# readily as the geometry, so the same valve placed in a box twice its own
+# draws at 4.0, and nothing scales it back. The compensation is therefore half
+# an answer, and _pen_scale is the other half: divide the baked weight back out
 # by whatever the placement multiplied it by, which is what makes a resized
 # unit's <defs> entry per placed *size* rather than per (kind, variant).
+#
+# Dividing works while the placement scales both axes alike, and only then. A
+# stroke is swept by a *circular* pen, and a viewport that scales the axes
+# differently sweeps an elliptical one: under preserveAspectRatio="none" a
+# vertical line comes out at sx and a horizontal one at sy, and no single
+# stroke-width can undo a difference that depends on which way the element runs.
+# _baked is what handles that case, and the comment above it is the argument for
+# how.
 
 
 def _placement_scale(sym, u) -> "tuple[float, float]":
@@ -1025,34 +1034,98 @@ def _placement_scale(sym, u) -> "tuple[float, float]":
     return (box[0] / sym.width, box[1] / sym.height)
 
 
+def _stretch_scale(sym, u) -> "tuple[float, float]":
+    """What the ``<use>`` viewport would scale the artwork by, per axis.
+
+    ``(1, 1)`` unless the placement actually reshapes a symbol that may be
+    reshaped: everything else lands on a *uniform* scale (the symbol's own box,
+    a plain resize, or the letterbox a non-stretchable symbol is centred in),
+    and a uniform scale is the case the pen division below answers exactly.
+    """
+    if sym.stretchable and _reshapes(sym, u):
+        return _placement_scale(sym, u)
+    return (1.0, 1.0)
+
+
+# Bounded rather than unbounded: the key is a whole artwork string and a placed
+# size, so a long-running process drawing many differently-sized units would
+# otherwise hold every one of them forever. Cached at all because _fold,
+# _pen_scale, _size_tag and _sym_id each ask it, several times per unit.
+@lru_cache(maxsize=2048)
+def _uneven(svg: str, fx: float, fy: float) -> bool:
+    """Would an *uneven* scale stand between this artwork's ink and the page?
+
+    Two things can put one there and they multiply. The placement is one, and
+    is what :func:`_stretch_scale` reports. The artwork's own groups are the
+    other, and are easy to miss: ``scripts/vendor_symbols.py`` reproportions
+    four stencil families to the box the library wants them in -- a plain vessel
+    is drawn under ``scale(0.62, 0.5)`` -- so those four draw an elliptical pen
+    *at their own size*, with no placement involved at all. It is why a
+    separator on a sheet that resizes nothing still draws its shell walls at
+    2.23 against its heads' 1.80.
+
+    Magnitudes, so a mirror does not read as an unevenness: the derived
+    expansion fittings are their reducer under ``scale(-1, 1)``, which turns the
+    pen round and does not deform it.
+    """
+    return any(not math.isclose(ax, ay, rel_tol=1e-9)
+               for ax, ay in _stroke_scales(svg, fx, fy))
+
+
+def _stroke_scales(svg: str, fx: float, fy: float) -> "list[tuple[float, float]]":
+    """The magnitude of the scale over every stroke in *svg*, at ``scale(fx, fy)``."""
+    out: list[tuple[float, float]] = []
+    scales = [(fx, fy)]
+    for m in _TAG.finditer(svg):
+        closing, name, raw, self_closing = m.groups()
+        if closing:
+            scales.pop()
+            continue
+        ax, ay = scales[-1]
+        if name == "g":
+            found = re.search(r'\btransform="([^"]*)"', raw)
+            if found:
+                sx, sy, _, _ = _affine(found.group(1))
+                ax, ay = ax * sx, ay * sy
+        elif 'stroke-width="' in raw:
+            out.append((abs(ax), abs(ay)))
+        if not self_closing:
+            scales.append((ax, ay))
+    return out
+
+
+def _fold(sym, u) -> "tuple[float, float]":
+    """The placement scale a definition takes into its own coordinates.
+
+    ``(1, 1)`` -- the artwork is left in the symbol's own coordinates and the
+    viewport does the scaling -- unless the viewport would scale the two axes
+    differently, in which case there is nothing for it to do but rewrite the
+    drawing at the placed size. See :func:`_baked`.
+    """
+    fx, fy = _stretch_scale(sym, u)
+    return (fx, fy) if _uneven(sym.svg, fx, fy) else (1.0, 1.0)
+
+
 def _pen_scale(sym, u) -> float:
     """The single factor a placement multiplies a symbol's line weights by.
 
-    One factor and not two, because ``stroke-width`` is one number. SVG strokes
-    a path by sweeping a *circular* pen along it, and a viewport that scales the
-    axes differently sweeps an elliptical one: under ``preserveAspectRatio``
-    ``"none"`` a vertical line comes out at ``sx`` and a horizontal one at
-    ``sy``, and no width written on the element can undo a difference that
-    depends on the direction the element runs in. The two constructs that can
-    are both refused here: ``vector-effect="non-scaling-stroke"`` is dropped in
-    silence by the PDF backend (see ``pandid.render.export``), which would leave
-    the SVG right and every exported sheet wrong, and re-emitting the artwork's
-    coordinates at the placed size rewrites every number in the drawing to move
-    nothing.
+    One factor and not two, because ``stroke-width`` is one number -- so this
+    is only ever asked where the placement leaves a *uniform* scale over the
+    artwork, and it is :func:`_fold` that guarantees it: a placement that would
+    have left an uneven one has already been rewritten into the coordinates, at
+    which point the viewport scales by exactly 1 and there is nothing to divide.
 
-    So a placement that reshapes takes the geometric mean. It is the factor that
-    leaves the pen's area the pen's area, it splits what is left evenly either
-    side of the intended weight rather than piling it onto one axis, and it is
-    *exact* the moment the two axes agree -- which is every placement that
-    resizes a unit without also reshaping it, and every one that reshapes a
-    symbol which may not be stretched, since that one keeps its aspect and is
-    centred at the smaller of the two scales.
-
-    The residual is the aspect change the placement itself asked for, and it is
-    bounded by it: a box 4% off the symbol's shape draws within 2% of weight.
+    What is left is the three ways a placement can resize a symbol evenly: not
+    at all, a plain resize, and the letterbox a symbol that may not be stretched
+    is centred in, which keeps its aspect at the smaller of the two scales.
     """
+    if _fold(sym, u) != (1.0, 1.0):
+        return 1.0
     kx, ky = _placement_scale(sym, u)
     if sym.stretchable and _reshapes(sym, u):
+        # An uneven box over an artwork whose own wrapper is uneven the other
+        # way: the two cancel and the pen comes out round after all. Rare, but
+        # it is the case _uneven() declines to rewrite, so it has to be priced.
         return math.sqrt(kx * ky)
     return min(kx, ky)
 
@@ -1065,7 +1138,8 @@ def _size_tag(sym, u) -> str:
     one definition with every other unit of its kind. Only a unit given a
     ``width``/``height`` of its own costs the sheet a second entry.
     """
-    if math.isclose(_pen_scale(sym, u), 1.0, rel_tol=1e-9):
+    if (math.isclose(_pen_scale(sym, u), 1.0, rel_tol=1e-9)
+            and _fold(sym, u) == (1.0, 1.0)):
         return ""
     box = _placed_box(u)
     assert box is not None  # a scale of anything but 1 came from a box
@@ -1092,6 +1166,309 @@ def _at_pen_scale(svg: str, scale: float) -> str:
         return svg
     return _STROKE_WIDTH.sub(
         lambda m: f'stroke-width="{float(m.group(1)) / scale:.6g}"', svg)
+
+
+# --- baking an uneven scale into the drawing ---------------------------------
+#
+# ISO 15519-1:2010 §11.1.3, "Line width in graphical symbols", is a *shall*:
+#
+#     The normal line width of graphical symbols is 0,1 M, according to
+#     ISO 81714-1. When the size of a symbol is changed, the line width shall be
+#     unchanged.
+#
+# §11.1.2 immediately above permits the proportions themselves to be modified,
+# so stretching a stencil to fill the box a unit was given is allowed; carrying
+# the stroke along with it is what is not. And §6.2 closes the other door --
+# "If two or more widths of line are used, the ratio between any two widths
+# shall be at least 2:1" -- so an outline drawn 1,53 heavier one way than the
+# other cannot be defended as a deliberate second weight either. Nothing between
+# 1:1 and 2:1 is a weight; it is a mistake.
+#
+# An uneven viewport breaks that rule and no ``stroke-width`` can put it back,
+# because the width the reader measures depends on the direction the line runs
+# in and a stroke-width is one number. Exactly two constructs can, and the first
+# is not available here:
+#
+# - ``vector-effect="non-scaling-stroke"`` says the thing directly, and browsers
+#   honour it. The PDF/PNG backend does not: svglib has no notion of the
+#   property (grep it), so it strokes the scaled geometry and drops the
+#   attribute without a word, and ``export._reject_unsupported`` would not catch
+#   it because an attribute it has never been taught is an attribute it does not
+#   look for. Measured through ``export.to_png`` on a rule stretched 3:1, the
+#   raster comes out byte-identical with the attribute and without it. Emitting
+#   it would leave the .svg right and every exported sheet and every gallery PNG
+#   wrong -- the worst of the three states to be in, because it looks fixed.
+#
+# - Rewriting the artwork's coordinates at the placed size, which is this. It
+#   costs a definition per placed size, which the sheet was already paying (see
+#   _size_tag), and it rewrites every number in the drawing to move nothing --
+#   the objection to it, and not much of one against a *shall*, since it is
+#   arithmetic that is exact except in the last bits of a float and leaves the
+#   drawing with no uneven scale anywhere above a stroke. What the placement
+#   asked for is then the whole of what the reader gets: the shape is stretched
+#   and the pen is not.
+#
+# Baked and not merely straightened, note, because the same rewrite is what
+# rounds out the *four vendored families* whose own wrapper group is uneven
+# before any placement touches them (see _uneven). Those draw an elliptical pen
+# at their natural size, which no amount of care at the <use> could have fixed.
+
+def _nominal(width: float, gx: float, gy: float) -> float:
+    """The weight *width* stands for on the sheet, drawn under ``scale(gx, gy)``.
+
+    The generator divides by this same geometric mean when it bakes the weight
+    in (``scripts/vendor_symbols.py``), so the two are inverses and a vendored
+    outline reads back as exactly the 2.0 it was drawn to be. The mean rather
+    than either axis because that is the factor that leaves the pen's *area*
+    alone, and because for the 138 families whose wrapper is uniform the choice
+    does not arise at all: ``sqrt(k*k)`` is ``k``.
+
+    Magnitudes, since a mirror is a negative scale and turns no pen over.
+    """
+    return width * math.sqrt(abs(gx * gy))
+
+
+# How each attribute answers to the map, by name. A *point* takes the scale and
+# the translation; a *length* takes the scale alone, and unsigned, since a
+# mirror turns the drawing over and no drawn width is negative. ``rx``/``ry``
+# cover both the ellipse radii and a rect's corner rounding, which are the same
+# lengths on the same axes; ``r`` is handled apart, since a circle scaled
+# unevenly is not a circle any more.
+_X_POINTS = {"x", "x1", "x2", "cx"}
+_Y_POINTS = {"y", "y1", "y2", "cy"}
+_X_LENGTHS = {"rx", "width"}
+_Y_LENGTHS = {"ry", "height"}
+
+_TAG = re.compile(r'<(/?)([A-Za-z][\w.-]*)((?:\s+[\w:.-]+="[^"]*")*)\s*(/?)>')
+_ATTR = re.compile(r'([\w:.-]+)="([^"]*)"')
+# Absolute moves, lines and elliptical arcs, and how many numbers each takes.
+# The symbol library emits these and nothing else; a relative or curve command
+# would mean the library had changed under this file, and is refused rather than
+# guessed at, for the reason export._reject_unsupported exists.
+_PATH_ARITY = {"M": 2, "L": 2, "A": 7, "Z": 0, "z": 0}
+_PATH_TOKEN = re.compile(r"[A-Za-z]|-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")
+
+
+def _art(v: float) -> str:
+    """A number in a symbol's own coordinates.
+
+    Six decimals, which is four more than the sheet coordinates around it get
+    (:func:`_num`) and about six more than any plate size can resolve: these are
+    products of numbers the artwork already carried, and rounding them to the
+    drawing's own precision would be a *geometry* change made in the course of
+    fixing a *weight*. Fixed-point rather than significant figures so a small
+    number never comes out in exponent notation, which SVG does accept and no
+    other number in the file is written in.
+    """
+    s = f"{v:.6f}".rstrip("0").rstrip(".")
+    return "0" if s in ("", "-0", "0") else s
+
+
+def _affine(transform: str) -> "tuple[float, float, float, float]":
+    """A symbol's own transform as the axis-aligned map it is: ``(sx, sy, tx, ty)``.
+
+    The library writes two things and only two: the ``scale()`` a vendored
+    stencil is reproportioned by, and the ``translate() scale(-1, 1)`` that
+    turns a reducer end for end into an expansion. Both are diagonal, which is
+    what lets the flattening below be arithmetic on each number in turn rather
+    than a matrix applied to a point; a rotation or a skew is not, and is
+    refused rather than silently flattened as though it were.
+    """
+    sx = sy = 1.0
+    tx = ty = 0.0
+    for op, args in re.findall(r"([a-zA-Z]+)\(([^)]*)\)", transform):
+        v = [float(t) for t in args.replace(",", " ").split()]
+        if op == "translate":
+            # Composed on the right: each op is stated in the frame the ones
+            # before it have already established.
+            tx += sx * v[0]
+            ty += sy * (v[1] if len(v) > 1 else 0.0)
+        elif op == "scale":
+            sx, sy = sx * v[0], sy * v[-1]
+        else:
+            raise RuntimeError(
+                f"a symbol carries transform={transform!r}, whose {op}() is not "
+                f"axis-aligned; pandid.render.svg._baked needs to learn it."
+            )
+    return (sx, sy, tx, ty)
+
+
+def _scaled_ellipse(rx: float, ry: float, rot: float,
+                    ax: float, ay: float) -> "tuple[float, float, float]":
+    """The ellipse ``scale(ax, ay)`` makes of the one *rx*, *ry*, *rot* describe.
+
+    An axis-aligned scale of a *tilted* ellipse is still an ellipse, but with
+    different radii and a different tilt, so the arc's own parameters have to be
+    recomputed rather than scaled. The ellipse is the image of the unit circle
+    under ``R(rot) diag(rx, ry)``; the scale composes on the left, and the
+    singular value decomposition of the product hands back the new radii and the
+    new tilt directly. The sweep flag is untouched because both scales are
+    positive, and the large-arc flag because neither depends on the frame.
+
+    One family needs this -- the domed vessel, whose arcs are vendored at a tilt
+    of 179,97 degrees -- and it needs it only when something stretches it.
+    """
+    if ax == ay:
+        return rx * ax, ry * ay, rot
+    r = math.radians(rot)
+    cos, sin = math.cos(r), math.sin(r)
+    a, b = ax * cos * rx, -ax * sin * ry
+    c, d = ay * sin * rx, ay * cos * ry
+    e, f = (a + d) / 2, (a - d) / 2
+    g, h = (c + b) / 2, (c - b) / 2
+    q, s = math.hypot(e, h), math.hypot(f, g)
+    return abs(q + s), abs(q - s), math.degrees((math.atan2(h, e) + math.atan2(g, f)) / 2)
+
+
+def _scaled_path(d: str, m: "tuple[float, float, float, float]") -> str:
+    """One ``d`` attribute with the map *m* folded into its numbers."""
+    ax, ay, ex, ey = m
+    tokens = _PATH_TOKEN.findall(d)
+    out: list[str] = []
+    i = 0
+    while i < len(tokens):
+        cmd = tokens[i]
+        arity = _PATH_ARITY.get(cmd)
+        if arity is None:
+            raise RuntimeError(
+                f"path command {cmd!r} is not one pandid.render.svg._baked can scale"
+            )
+        nums = [float(v) for v in tokens[i + 1: i + 1 + arity]]
+        out.append(cmd)
+        if cmd == "A":
+            rx, ry, rot = _scaled_ellipse(nums[0], nums[1], nums[2], ax, ay)
+            # The large-arc flag is a property of the arc; the sweep flag is a
+            # handedness, and a map that turns the plane over reverses it. The
+            # two are written back as the integers they are, since a round trip
+            # through float would print them "1.0" and the arc grammar takes a
+            # single digit.
+            sweep = int(nums[4]) if ax * ay > 0 else 1 - int(nums[4])
+            out += [_art(rx), _art(ry), _art(rot), str(int(nums[3])), str(sweep),
+                    _art(nums[5] * ax + ex), _art(nums[6] * ay + ey)]
+        else:
+            out += [_art(n * ax + ex if k % 2 == 0 else n * ay + ey)
+                    for k, n in enumerate(nums)]
+        i += 1 + arity
+    return " ".join(out)
+
+
+def _scaled_points(points: str, m: "tuple[float, float, float, float]") -> str:
+    """One ``points`` attribute with the map *m* folded into its numbers."""
+    ax, ay, ex, ey = m
+    v = [float(t) for t in points.replace(",", " ").split()]
+    return " ".join(
+        f"{_art(v[i] * ax + ex)},{_art(v[i + 1] * ay + ey)}" for i in range(0, len(v), 2)
+    )
+
+
+def _scaled_element(name: str, attrs: "list[tuple[str, str]]",
+                    m: "tuple[float, float, float, float]",
+                    gx: float, gy: float, self_closing: str) -> str:
+    """One drawn element, rewritten as it would look under the map *m*.
+
+    *gx*, *gy* are the artwork's *own* share of that map's scale -- its groups,
+    without the placement -- and are what the weight is read back through. The
+    weight is therefore independent of the box: a symbol drawn to a 2.0 outline
+    comes out declaring 2.0 whatever size it was placed at, which is
+    ISO 15519-1 §11.1.3 stated in one line of code.
+    """
+    ax, ay, ex, ey = m
+    src = dict(attrs)
+    # A rect is stated as one corner and two lengths, and a map that turns an
+    # axis over moves the corner it is stated from to the other end. Both ends
+    # are mapped and the near one taken, so the rectangle covers the same ground
+    # whichever way round the map is.
+    corner = {}
+    if name == "rect":
+        for axis, span, s, e in (("x", "width", ax, ex), ("y", "height", ay, ey)):
+            lo = float(src.get(axis, 0)) * s + e
+            corner[axis] = min(lo, lo + float(src.get(span, 0)) * s)
+    out: list[tuple[str, str]] = []
+    for key, value in attrs:
+        if key == "stroke-width":
+            out.append(("stroke-width", _art(_nominal(float(value), gx, gy))))
+        elif key == "d":
+            out.append((key, _scaled_path(value, m)))
+        elif key == "points":
+            out.append((key, _scaled_points(value, m)))
+        elif key == "font-size":
+            # A glyph has no direction to be measured along, so an uneven scale
+            # has no size to give it; the mean is the only answer, and it is the
+            # answer that keeps the lettering a legal character height rather
+            # than a stretched one (ISO 15519-1 §11.4.1).
+            out.append((key, _art(math.sqrt(abs(ax * ay)) * float(value))))
+        elif key == "r":
+            out.append(("rx", _art(abs(float(value) * ax))))
+            out.append(("ry", _art(abs(float(value) * ay))))
+            name = "ellipse"  # a circle stretched unevenly is not a circle
+        elif key in corner:
+            out.append((key, _art(corner[key])))
+        elif key in _X_LENGTHS:
+            out.append((key, _art(abs(float(value) * ax))))
+        elif key in _Y_LENGTHS:
+            out.append((key, _art(abs(float(value) * ay))))
+        elif key in _X_POINTS:
+            out.append((key, _art(float(value) * ax + ex)))
+        elif key in _Y_POINTS:
+            out.append((key, _art(float(value) * ay + ey)))
+        else:
+            out.append((key, value))
+    written = "".join(f' {k}="{v}"' for k, v in out)
+    return f"<{name}{written}{'/' if self_closing else ''}>"
+
+
+def _baked(svg: str, fx: float, fy: float) -> str:
+    """*svg* redrawn at ``scale(fx, fy)``, with every scale group flattened out.
+
+    The drawing is unchanged -- every point lands where the scale would have put
+    it -- and what changes is that no scale is left above any stroke, so each
+    ``stroke-width`` is the width the reader measures, in both directions, and
+    is stated at the weight the symbol's author drew.
+
+    A no-op wherever the scale over the ink is already even, which is the great
+    majority: a uniform wrapper is harmless, the ``<use>`` viewport divides back
+    out exactly (:func:`_at_pen_scale`), and leaving those alone keeps the
+    ``<defs>`` a reader can still recognise as the vendored stencil.
+    """
+    if not _uneven(svg, fx, fy):
+        return svg
+    out: list[str] = []
+    pos = 0
+    maps = [(fx, fy, 0.0, 0.0)]  # accumulated map, innermost last
+    elided: list[bool] = []      # whether an open tag's closer went with it
+    for m in _TAG.finditer(svg):
+        out.append(svg[pos:m.start()])
+        pos = m.end()
+        closing, name, raw, self_closing = m.groups()
+        if closing:
+            if not elided.pop():
+                out.append(m.group(0))
+            maps.pop()
+            continue
+        here = maps[-1]
+        attrs = _ATTR.findall(raw)
+        if name == "g":
+            kept = [(k, v) for k, v in attrs if k != "transform"]
+            for _, value in [a for a in attrs if a[0] == "transform"]:
+                ax, ay, ex, ey = here
+                sx, sy, tx, ty = _affine(value)
+                here = (ax * sx, ay * sy, ax * tx + ex, ay * ty + ey)
+            # A group that carried nothing but the transform has nothing left
+            # to say once the transform is in the numbers, so it goes with it.
+            if not self_closing:
+                maps.append(here)
+                elided.append(not kept)
+            if kept:
+                written = "".join(f' {k}="{v}"' for k, v in kept)
+                out.append(f"<g{written}{'/' if self_closing else ''}>")
+            continue
+        out.append(_scaled_element(name, attrs, here, here[0] / fx, here[1] / fy,
+                                   self_closing))
+        if not self_closing:
+            maps.append(here)
+            elided.append(False)
+    out.append(svg[pos:])
+    return "".join(out)
 
 
 def _upright_text(svg: str, rot: int, mirror_x: bool, mirror_y: bool) -> str:
@@ -1849,9 +2226,10 @@ class SvgRenderer:
         One definition per ``(kind, variant)``, plus a suffix for whatever else
         is baked into the definition rather than applied by the ``<use>``: the
         size a built-to-measure symbol was drawn at, the size a *resized* unit
-        had its line weights compensated for (see :func:`_pen_scale`), and the
-        counter-transform that keeps a symbol's own lettering readable or its
-        direction arrow pointing the way it was drawn.
+        had its line weights compensated for (see :func:`_pen_scale`) or was
+        redrawn at outright (see :func:`_fold`), and the counter-transform that
+        keeps a symbol's own lettering readable or its direction arrow pointing
+        the way it was drawn.
         """
         variant = getattr(u, 'variant', 'default')
         sym = self.registry.for_unit(u)
@@ -1903,13 +2281,21 @@ class SvgRenderer:
                 continue
             sym = self.registry.for_unit(u)
             xform = self._baked_xform(u)
-            pen = _pen_scale(sym, u)
-            key = (u.kind, getattr(u, 'variant', 'default'), sym.id_suffix, pen) + xform
-            used[key] = (self._sym_id(u), sym, pen, *xform)
-            if sym.stretchable and _reshapes(sym, u):
+            fold, pen = _fold(sym, u), _pen_scale(sym, u)
+            key = ((u.kind, getattr(u, 'variant', 'default'), sym.id_suffix, fold, pen)
+                   + xform)
+            used[key] = (self._sym_id(u), sym, fold, pen, *xform)
+            # A definition redrawn at the placed size fills its box by being the
+            # size of it, so it has no aspect ratio left to give up.
+            if sym.stretchable and _reshapes(sym, u) and fold == (1.0, 1.0):
                 stretched.add(key)
         for key in sorted(used):
-            sym_id, sym, pen, rot, mirror_x, mirror_y = used[key]
+            sym_id, sym, fold, pen, rot, mirror_x, mirror_y = used[key]
+            # The redraw first, so everything after it -- the pen division, the
+            # counter-transforms, the viewBox -- is stated in the coordinates
+            # the definition is actually going to be written in.
+            art = _baked(sym.svg, *fold)
+            width, height = sym.width * fold[0], sym.height * fold[1]
             # Either, never both. A directional symbol's *whole* drawing is held
             # still, lettering included, so a glyph inside one would need the
             # residual of the two rather than its own counter-transform. No
@@ -1917,10 +2303,10 @@ class SvgRenderer:
             # test_a_directional_symbol_carries_no_lettering_of_its_own says so
             # over the registry rather than leaving this branch to be trusted.
             if sym.directional:
-                svg_str = _upright_artwork(_at_pen_scale(sym.svg, pen),
-                                           sym.width, sym.height, mirror_x, mirror_y)
+                svg_str = _upright_artwork(_at_pen_scale(art, pen),
+                                           width, height, mirror_x, mirror_y)
             else:
-                svg_str = _upright_text(_at_pen_scale(sym.svg, pen), rot, mirror_x, mirror_y)
+                svg_str = _upright_text(_at_pen_scale(art, pen), rot, mirror_x, mirror_y)
             if svg_str.startswith('<g'):
                 inner = svg_str[svg_str.find('>') + 1:svg_str.rfind('</g>')]
                 # preserveAspectRatio: stated only where a placement reshapes the
@@ -1933,7 +2319,9 @@ class SvgRenderer:
                 # viewBox edge (e.g. an ellipse with rx == w/2). That makes a circle
                 # render thin at its four cardinal points while the diagonals stay full
                 # weight. Letting the symbol overflow keeps every stroke at uniform width.
-                svg_str = (f'<symbol id="{sym_id}" viewBox="0 0 {sym.width} {sym.height}"'
+                box = (f"{sym.width} {sym.height}" if fold == (1.0, 1.0)
+                       else f"{_art(width)} {_art(height)}")
+                svg_str = (f'<symbol id="{sym_id}" viewBox="0 0 {box}"'
                            f'{fill} overflow="visible">{inner}</symbol>')
             else:
                 svg_str = re.sub(r'id="[^"]+"', f'id="{sym_id}"', svg_str, count=1)
