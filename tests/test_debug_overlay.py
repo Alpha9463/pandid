@@ -359,8 +359,8 @@ def test_a_port_label_is_not_written_under_the_unit_tags_halo():
 
 
 #: How many labels a sheet is allowed to leave sitting under something. Zero
-#: everywhere the drawing has room, which is eleven of the thirteen sheets
-#: swept; the two below are where it genuinely runs out.
+#: everywhere the drawing has room, which is twelve of the fifteen sheets
+#: swept; the three below are where it genuinely runs out.
 #:
 #: ``11_ethanol_pid`` writes 364 labels on a forty-unit P&ID whose markers are
 #: twenty units apart and whose labels are sixty units long, so some of them

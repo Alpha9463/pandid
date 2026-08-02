@@ -401,32 +401,45 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     # thing that made ``nozzles-crowded`` invisible for as long as it was.
     #
     # **What counts as unconnected is the whole of this finding**, and the
-    # narrowness is not caution, it is the measurement. Over the twelve shipped
-    # examples 167 ports carry no stream. Every one of them is legitimate:
+    # narrowness is not caution, it is the measurement. Over the fourteen
+    # shipped examples 252 ports carry no stream. Every one of them is
+    # legitimate:
     #
-    #   112  a signal connection -- 36 balloon ``pv``, 32 valve ``actuator``,
-    #        27 ``sig_in``, 17 ``sig_out``
+    #   165  a signal connection -- 51 balloon ``pv``, 44 valve ``actuator``,
+    #        41 ``sig_in``, 29 ``sig_out``
     #    26  the other side of a heat exchanger, drawn with only its process
     #        side piped, which is what a PFD does with a utility service
     #    14  a duty: two per column, one per reactor, a cooler's ``utility_out``
+    #    14  a vessel's or a tank's ``relief``
+    #    14  a vessel's or a tank's ``drain``
+    #    11  a vessel's, a tank's or a reactor's ``vent``
     #     8  a station drain valve's outlet -- "a drain runs down to a funnel on
     #        the floor, which is not on this sheet, so the leg ends at the
     #        valve", in ``Flowsheet.add_valve_station``'s own words
-    #     7  a vessel's or a reactor's ``vent``
     #
-    # A rule reading "an unconnected port" reports all 167. A rule reading "an
-    # unconnected *process* port" still reports 34 of them, because a drain to a
-    # funnel off the sheet and an exchanger's dry shell side are both process
-    # connections a drawing is right to leave open. Every one of those 167 is a
-    # nozzle its **class** declares, offered to every instance whether the sheet
-    # uses it or not, and choosing not to pipe one is a drawing decision.
+    # Up from the 167 measured over twelve, and the 85 divides exactly: 67 are
+    # the two sheets added since -- ``14_tank_farm`` alone carries 64 of them --
+    # and the other 18 are #228 giving ``Vessel`` and ``Tank`` a relief, a drain
+    # and a vent, three more nozzles offered on every one already drawn. Both
+    # halves are the finding restating itself. A nozzle a class declares costs
+    # nothing to leave open, so the population of them grows with the sheets and
+    # with the classes alike, and a number that moves when neither the drawings
+    # nor the rule changed is exactly the number a rule must not be built on.
+    #
+    # A rule reading "an unconnected port" reports all 252. A rule reading "an
+    # unconnected *process* port" still reports 48 of them, because a drain to a
+    # funnel off the sheet, a vessel's relief and an exchanger's dry shell side
+    # are all process connections a drawing is right to leave open. Every one of
+    # those 252 is a nozzle its **class** declares, offered to every instance
+    # whether the sheet uses it or not, and choosing not to pipe one is a
+    # drawing decision.
     #
     # A **numbered** nozzle is not offered, it is *asked for*. ``n_inlets=4`` is
     # a number the author wrote, and the four nozzles exist only because of it,
     # so one of them carrying nothing is that number not being met -- which is
     # exactly the defect issue #183 came from, a loop over ``(1, 2, 3)`` wiring
-    # ``in_2``, ``in_3`` and ``in_4``. Zero of the 167 is one, so this fires on
-    # none of the twelve.
+    # ``in_2``, ``in_3`` and ``in_4``. Zero of the 252 is one, so this fires on
+    # none of the fourteen.
     #
     # It is visible on the paper as well as in the model, which is what makes it
     # a finding rather than a lint. A family is spread evenly across its face
@@ -464,7 +477,7 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         for stem, members in families.items():
             # **Process nozzles only**, which is the scope issue #183 sets and
             # the scope this keeps. A signal connection is a different question
-            # and a harder one: a balloon's ``pv`` is bare on 36 of the 167
+            # and a harder one: a balloon's ``pv`` is bare on 51 of the 252
             # because an instrument may be *placed* against its equipment rather
             # than drawn tapped off a line, and an actuator with no output on it
             # is a hand valve. Neither is answered by counting, so neither is

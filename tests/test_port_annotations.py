@@ -35,7 +35,7 @@ kinds, each argued at the class or the module it applies to:
   re-annotating the name with something narrower is an incompatible override.
   So the phantom check answers for the annotations a class *writes*, and
   :func:`test_only_these_classes_supersede_a_declaration` is what keeps that
-  from spreading past the twelve classes it is true of.
+  from spreading past the eleven classes it is true of.
 """
 
 import inspect

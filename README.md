@@ -65,7 +65,7 @@ and a flowsheet renders inline in Jupyter.
   peer is actually on.
 - **Orthogonal A\* routing.** Right-angle streams with crossing jump-gaps and
   parallel-segment separation. Never emits a disconnected stream.
-- **139 registered symbols** with style variants, so a heat exchanger can be
+- **157 registered symbols** with style variants, so a heat exchanger can be
   shell-and-tube, plate, kettle or U-tube. They derive from the Apache-2.0
   draw.io P&ID stencils (see [`NOTICE`](https://github.com/Alpha9463/pandid/blob/main/NOTICE)).
 - **Pixel-perfect overrides.** `pin()` equipment to exact coordinates and

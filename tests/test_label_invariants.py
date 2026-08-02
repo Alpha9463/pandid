@@ -405,12 +405,18 @@ def test_a_leader_is_drawn_only_where_the_line_is_not_beside_the_words(sheets):
     with its own run beside most of it does not get a leader *as well*.
 
     Both directions matter, and the corpus is the evidence for the line falling
-    where it does. Of 108 numbers on the twelve shipped sheets only three have
+    where it does. Of 145 numbers on the fourteen shipped sheets twelve have
     their own run beside less than the whole of them, and they part into two
-    groups with a wide gap between: ``3"-P-1005-A1A`` on 09 at 77 % and
-    ``FB-301-200-160-SS`` on 11 at 74 % read as their own line's unaided, and
-    ``AE-304-150-80-SS`` on 11 at 32 % -- sixteen characters naming a thirty-unit
-    stub, two thirds of it lying against a reflux drum -- does not.
+    groups with a gap between: nine read as their own line's unaided, from
+    ``VAP-611-150-40-CS`` on 14 at 61 % to ``E10-609-200-40-CS`` on 14 at 98 %,
+    and three do not -- ``MS-601-200-40-CS`` on 14 at 40 %, ``S-403`` on 13 at
+    37 % and ``AE-304-150-80-SS`` on 11 at 29 %, the last sixteen characters
+    naming a thirty-unit stub with two thirds of it lying against a reflux drum.
+
+    The gap is 40 % to 61 %, narrower than the 32 % to 74 % the twelve-sheet
+    corpus showed; see :func:`pandid.render.svg._along` for what that is and is
+    not evidence for. This test is one of the two that would fail first if a
+    number ever landed inside it.
     """
     over, under = [], []
     for name, (fs, labels) in sheets.items():

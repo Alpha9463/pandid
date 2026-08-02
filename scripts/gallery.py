@@ -24,7 +24,7 @@ checkout first on ``sys.path`` and then refuses to run unless that is where
 
 **It never has to rename anything.** Each example writes a name of its own into
 ``examples/`` (``01_ammonia_loop.py`` writes ``ammonia_auto.svg``), so copying
-the output in was a rename, done by hand, eleven times. Instead of running the
+the output in was a rename, done by hand, fourteen times. Instead of running the
 scripts and copying files, this imports each one with ``Flowsheet.render``
 stubbed, catching the flowsheet and the keyword arguments it was about to be
 drawn with, and renders it here under the example's own stem. Nothing is written
@@ -59,7 +59,9 @@ GALLERY = ROOT / "docs" / "gallery"
 # sheet carries: the 7.5-unit lettering of the title block's revision rows.
 #
 # Crop one revision row's description cell -- glyphs only, no rule -- and read
-# the darkest pixel in it. Across the five sheets that carry a title block:
+# the darkest pixel in it. Across the five sheets that carried a title block
+# when the width was chosen (13 and 14 have since added two more, and are the
+# same 7,5-unit lettering at the same widths):
 #
 #     width     03    08    09    10    11
 #     1600      65    50    50    57    57
@@ -70,9 +72,11 @@ GALLERY = ROOT / "docs" / "gallery"
 # At 1600 the darkest ink in that lettering is mid-grey; the strings are legible
 # as shapes and not as letters. 2400 puts every sheet at or near black, and the
 # inked fraction of the cell stops climbing there -- at 3000 it is flat or a
-# shade lower, which is more anti-aliasing rather than more letter. Twelve PNGs
-# weigh 1.00 MiB at 1600, 1.65 at 2400 and 2.15 at 3000, so the 0.65 MiB from
-# 1600 to 2400 buys a readable title block and the next 0.50 buys very little.
+# shade lower, which is more anti-aliasing rather than more letter. Fourteen
+# PNGs weigh 1.45 MiB at 1600, 2.38 at 2400 and 3.11 at 3000, so the 0.93 MiB
+# from 1600 to 2400 buys a readable title block and the next 0.73 buys very
+# little. (The darkest-pixel table above is per sheet and does not move with the
+# size of the corpus; the weights do, and are re-measured with it.)
 #
 # Supersampling and downsampling does not substitute: rendering at 2x and
 # resampling averages a one-pixel stroke back into its background, which is the

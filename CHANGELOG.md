@@ -191,16 +191,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are numbered from one.
 
   Deciding what counts as unconnected is the whole of the change. Over the
-  twelve shipped examples 167 ports carry no stream and every one is legitimate:
-  112 signal connections, 26 heat-exchanger utility sides, 14 duties, 8 station
-  drain outlets ("a drain runs down to a funnel on the floor, which is not on
-  this sheet") and 7 vents. All 167 are nozzles a *class* declares, offered to
+  fourteen shipped examples 252 ports carry no stream and every one is
+  legitimate: 165 signal connections, 26 heat-exchanger utility sides, 14
+  duties, 14 reliefs, 14 drains, 11 vents and 8 station drain outlets ("a drain
+  runs down to a funnel on the floor, which is not on this sheet"). All 252 are
+  nozzles a *class* declares, offered to
   every instance whether the sheet uses one or not. A **numbered** nozzle is not
   offered but asked for — `n_inlets=`, `n_outlets=`, `n_feeds=`, `inputs=`,
   `outputs=` are the five arguments that make one — so a bare member of such a
   family is a number the author wrote down that the drawing did not meet. Zero
-  of the 167 is one, and the rule is silent on all twelve while still inspecting
-  35 counted nozzles across seven of them.
+  of the 252 is one, and the rule is silent on all fourteen while still
+  inspecting 36 counted nozzles across eight of them.
 
   It is visible on the paper as well as in the model: a family is spread evenly
   across its face for every member it has, wired or not, so that four-inlet
@@ -360,8 +361,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   draw.
 
   Every sheet in `tests/golden/` and `docs/gallery/` is byte for byte what it
-  was, checked by hashing a fresh render of all twelve examples in both corpora
-  against the committed files.
+  was, checked by hashing a fresh render of all fourteen examples in both
+  corpora against the committed files.
 
 
 - **`examples/11_ethanol_pid` declares its control loops.** The README's lead

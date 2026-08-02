@@ -463,8 +463,15 @@ def _settle(labels: "list[_Label]", bounds: "tuple[float, float, float, float]"
     is a property of the drawing and not of the order -- the labels that have a
     choice give way to the ones that do not. On ``11_ethanol_pid`` that is worth
     a fifth of the labels that would otherwise be more than a quarter buried (52
-    of 364 down to 41), and it costs nothing anywhere else, since every other
-    sheet in the corpus places every label completely clear either way.
+    of 364 down to 41), measured when the corpus was twelve sheets; 11 now
+    writes 366 labels and leaves 26 of them touching a halo at all, and
+    ``14_tank_farm`` -- which did not exist then -- leaves two. So the second
+    half of that sentence, that it costs nothing anywhere else, is now the
+    weaker claim that it costs nothing anywhere else *much*. The A/B is not
+    restated here because reproducing it means running the placement in
+    declaration order under a "more than a quarter covered" threshold, which is
+    an experiment on this heuristic rather than a count of the corpus; the
+    standing bound is ``_CROWDED`` in ``tests/test_debug_overlay.py``.
 
     An anchor label goes before a port label on a tie. There are far fewer of
     them and each says more -- a unit has one corner and up to eight nozzles,
@@ -472,8 +479,11 @@ def _settle(labels: "list[_Label]", bounds: "tuple[float, float, float, float]"
     with.
 
     Each label joins the obstacles as it lands, so one only ever writes over
-    another where the second had nowhere at all left to go: four times on 11 and
-    nowhere else in the corpus. That is the other half of what #200 left on that
+    another where the second had nowhere at all left to go. Swept over the
+    fifteen sheets ``tests/test_debug_overlay.py`` renders, that is today
+    nowhere at all -- no overlay label overlaps another anywhere in the corpus;
+    it was four times on 11 when this was written. That is the other half of
+    what #200 left on that
     sheet, and it is the same defect as the halo eating a port label seen from
     the other side -- both are the overlay writing where something else already
     is.
