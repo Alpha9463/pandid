@@ -242,8 +242,8 @@ def test_no_deprecation_has_outlived_its_release():
     Every deprecation the package declares names a release that has not shipped.
     One that names the current version or an older one should have been deleted
     in that release, and this is what says so before a user finds it still
-    there. Vacuous today, on purpose: the mechanism lands before its customers,
-    and this is the gate each of them walks through.
+    there. It stopped being vacuous when #138 retired the dust collectors' phase
+    draws, which are the first declarations to walk through this gate.
     """
     from pandid import __version__
 
@@ -263,15 +263,25 @@ def test_no_deprecation_has_outlived_its_release():
 
 
 def test_declarations_finds_a_module_constant():
-    """The walker itself, since the test above is vacuous until #136 lands.
+    """The walker itself, proved twice over.
 
-    Proved against this module rather than against ``pandid``: a package with no
-    declarations cannot show that a declaration would be found, and a test that
-    cannot fail is not the enforcement it looks like.
+    Against this module, whose stand-in is declared the way a real one is; and
+    against ``pandid``, which now has real ones to find. The first is what makes
+    the test able to fail on its own terms -- a package that declared none could
+    not show that a declaration *would* be found -- and the second is what says
+    the walker reaches the package it is pointed at.
     """
     import sys
 
     module = sys.modules[__name__]
     found = {name: value for name, value in vars(module).items() if isinstance(value, Deprecation)}
     assert found == {"RETIRED": RETIRED}
-    assert declarations() == {}  # ...and pandid itself declares none yet
+
+    # Keyed by where each is reachable from, so a constant imported into a
+    # second module appears twice. Asserted by suffix for that reason.
+    declared = declarations()
+    assert declared, "the walker found nothing in a package that declares two"
+    assert {where.rsplit(".", 1)[1] for where in declared} == {
+        "_RETIRED_VAPOR_DRAW",
+        "_RETIRED_LIQUID_DRAW",
+    }

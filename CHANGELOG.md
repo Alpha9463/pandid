@@ -280,6 +280,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+### Deprecated
+
+- **`vapor` and `liquid` on a dust-collecting separator.** On
+  `Separator(variant="cyclone")`, `("gravity")` and `("electrostatic")` the two
+  draws are now `overflow` and `underflow`. The old names go on reaching the
+  same nozzles for 0.1.2 and are removed in 0.1.3, with a `DeprecationWarning`
+  and a `deprecated` finding on `fs.validate()` naming the replacement.
+
+  ```python
+  sep = units.Separator("CY-401", variant="cyclone")
+  fs.connect(sep.vapor,     scrubber.feed)    # deprecated
+  fs.connect(sep.overflow,  scrubber.feed)    # type this
+  ```
+
+  Every way to a nozzle by name is covered: attribute access, `port()`,
+  `nozzle()`, `pin(port=…)` and a spec file's endpoints — a `.yaml` or `.json`
+  written against 0.1.1 still reads, and `to_dict()` writes the new names, so
+  reading and re-writing one upgrades it. `sep.ports["vapor"]` is not covered
+  and cannot be: it is the dict itself, and the rename is a fact about what is
+  in it. Nothing changes for a drum or a scrubber, whose draws really are the
+  two phases.
+
+### Changed
+
+- **One drawing, one nozzle vocabulary (#138).** `Separator(variant="cyclone")`,
+  `("gravity")` and `("electrostatic")` draw `overflow` and `underflow`, which
+  is what `devices.Cyclone`, `devices.GravitySeparator` and
+  `devices.ElectrostaticPrecipitator` have called the same three drawings'
+  nozzles since the device layer landed. All three collect *dust*, and a hopper
+  full of dust is not a `liquid`.
+
+  Up to 0.1.1 the low-level form kept `vapor`/`liquid`, and `pandid/devices.py`
+  recorded the split as the permanent cost of correcting the names without a
+  break: one drawing answered to two vocabularies, and which you got depended on
+  which class you constructed. That is withdrawn.
+
+  Scope is those three drawings and nothing else. The four whose draws really
+  are phases keep `vapor` and `liquid`: the drum in its `default`, `horizontal`
+  and `knockout` forms, and the wet `scrubber`, whose products are a cleaned gas
+  and a dirty scrubbing liquid. The mechanical separators (`sifter`, `impact`,
+  `permanent_magnet`, `electromagnetic`) already drew the over/under pair.
+
+  No drawing moved. The artwork still anchors `vapor` and `liquid` on all three
+  stencils, and `Separator._VARIANT_ANCHORS` maps the rename onto it — the same
+  mechanism `devices.Cyclone` used, moved down to the base so the two forms
+  cannot disagree again. All 14 goldens and every gallery sheet are byte for
+  byte what they were, checked by regenerating both.
+
 - **`examples/10`, `11` and `14`: comments explain the code and nothing else.**
   The three were 40%, 58% and 54% prose; a reader looking for what a line does
   walked past a paragraph on why a gear pump suits a metering duty first. Every

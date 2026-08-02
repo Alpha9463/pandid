@@ -25,6 +25,7 @@ from collections.abc import Sequence
 from difflib import get_close_matches
 from typing import TYPE_CHECKING, Any, TypeVar
 
+from pandid.deprecation import Deprecation
 from pandid.geometry import Frame, Pin, _Slot
 from pandid.ports import Port
 
@@ -382,6 +383,7 @@ class Unit:
         meant. Pinning the same nozzle to the same point twice is therefore the
         same placement twice, not a device walking off its run.
         """
+        port_name = self._current_name(port_name)
         if port_name not in self.ports:
             raise KeyError(
                 f"{type(self).__name__} {self.name!r} has no port {port_name!r} to "
@@ -417,6 +419,7 @@ class Unit:
         """
         from pandid.portgeom import port_faces
 
+        port_name = self._current_name(port_name)
         if port_name not in self.ports:
             raise KeyError(
                 f"{type(self).__name__} {self.name!r} has no port {port_name!r}; "
@@ -497,14 +500,69 @@ class Unit:
         """
         return type(self).PORT_ANCHORS.get(port_name, port_name)
 
+    def _retired_ports(self) -> dict[str, tuple[str, Deprecation]]:
+        """Nozzle names this unit still answers to, and what each one is now.
+
+        Empty for everything but a class that has renamed a draw, and empty
+        there for every variant that did not have the old name. Asked of the
+        *unit* rather than read off the class for that second reason:
+        :class:`Separator`'s rename is true of three of its eleven drawings, and
+        a dict on the class would have a flash drum answering to an
+        ``overflow`` it never had.
+
+        Each value pairs the current name with the
+        :class:`~pandid.deprecation.Deprecation` that announces it, because a
+        lookup that returned one nozzle while the sentence named another is
+        exactly the drift the deprecation mechanism exists to make impossible.
+        """
+        return {}
+
+    def _retired_port(self, name: str, stacklevel: int = 4) -> Port | None:
+        """The nozzle a retired name still reaches, or ``None`` if it is not one.
+
+        Every way to a nozzle *by name* goes through here -- ``sep.vapor``,
+        ``sep.port("vapor")``, ``nozzle()``, ``pin(port=...)`` and the spec
+        reader -- so a sheet or a spec file written against the old name still
+        draws, and gets the same sentence whichever spelling it used.
+        ``sep.ports["vapor"]`` does not, and cannot: it is the dict itself, and
+        the rename is a fact about what is in it.
+
+        *stacklevel* is 4 rather than :meth:`~pandid.deprecation.Deprecation.warn`'s
+        default 3, because there is one frame more than it assumes: ``warn``,
+        this method, the accessor that called it, and then the author's line. A
+        caller with a frame of its own in between passes 5.
+        """
+        retired = self._retired_ports().get(name)
+        if retired is None:
+            return None
+        current, notice = retired
+        notice.warn(self, where=self.name, stacklevel=stacklevel)
+        return self.ports[current]
+
+    def _current_name(self, port_name: str) -> str:
+        """``port_name``, or what it is called now if it is a retired spelling.
+
+        For the entry points that carry a name rather than hand back a
+        :class:`~pandid.ports.Port`: :meth:`nozzle`, :meth:`pin`'s ``port=`` and
+        :func:`pandid.spec._find_port`. A name that is not retired comes back
+        unchanged, typos included, so each of them still raises exactly where it
+        did on one.
+        """
+        if port_name in self.ports:
+            return port_name
+        retired = self._retired_port(port_name, stacklevel=5)
+        return port_name if retired is None else retired.name
+
     def port(self, name: str) -> Port:
-        try:
+        if name in self.ports:
             return self.ports[name]
-        except KeyError:
-            raise KeyError(
-                f"{type(self).__name__!r} has no port named {name!r}; "
-                f"available ports: {sorted(self.ports)}"
-            ) from None
+        retired = self._retired_port(name)
+        if retired is not None:
+            return retired
+        raise KeyError(
+            f"{type(self).__name__!r} has no port named {name!r}; "
+            f"available ports: {sorted(self.ports)}"
+        )
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.name!r})"
@@ -534,6 +592,13 @@ class Unit:
             # AttributeError.
             ports = self.__dict__.get("ports")
             if ports is not None and not name.startswith("_"):
+                # A nozzle this class used to call something else is still
+                # reachable by the old name for one release. It is looked up
+                # here rather than kept in ``ports``, so the sheet's own list of
+                # nozzles is the new vocabulary and nothing but it.
+                retired = self._retired_port(name)
+                if retired is not None:
+                    return retired
                 raise AttributeError(
                     f"{type(self).__name__} {self.__dict__.get('name', '?')!r} has no "
                     f"attribute or port {name!r}; available ports: {sorted(ports)}"
@@ -2024,6 +2089,28 @@ class Reactor(Unit):
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
 
 
+#: The two draws the dust collectors renamed in 0.1.2, one declaration each.
+#:
+#: Module constants because :func:`pandid.deprecation.declarations` finds them
+#: that way and no other: one built inside :attr:`Separator._RETIRED_DRAWS`
+#: would be a retirement no release could be held to, which is the failure that
+#: convention exists to prevent.
+#:
+#: One per nozzle rather than one for the pair, because a finding names the call
+#: the author has to go and find in their own file, and an author who piped only
+#: the catch away should not be sent looking for a ``vapor`` they never typed.
+_RETIRED_VAPOR_DRAW = Deprecation(
+    what="Separator(variant='cyclone'|'gravity'|'electrostatic').vapor",
+    instead=".overflow",
+    removed_in="0.1.3",
+)
+_RETIRED_LIQUID_DRAW = Deprecation(
+    what="Separator(variant='cyclone'|'gravity'|'electrostatic').liquid",
+    instead=".underflow",
+    removed_in="0.1.3",
+)
+
+
 class Separator(Unit):
     """Flash drum or phase separator.
 
@@ -2046,17 +2133,33 @@ class Separator(Unit):
     separating bodies that are not drums at all, each with its own hopper or
     vortex.
 
-    ``"sifter"``, ``"impact"``, ``"permanent_magnet"`` and ``"electromagnetic"``
-    are the **mechanical** separators, which sort by size, inertia or magnetism
-    rather than into phases. Their products are neither a vapour nor a liquid, so
-    they do not borrow those names: the draws are ``overflow``, high on the body,
-    and ``underflow``, out of the apex. The pair names the two *positions* the
+    **The draws are named for what leaves, not for the shape of the body.** Four
+    variants keep ``vapor`` and ``liquid``, and those four are the ones where the
+    two really are phases disengaging: the drum in its three drawings, and the
+    wet scrubber, whose products are a cleaned gas and a dirty scrubbing liquid.
+
+    The other seven draw ``overflow``, high on the body, and ``underflow``, out
+    of the apex. They are the four **mechanical** separators -- ``"sifter"``,
+    ``"impact"``, ``"permanent_magnet"``, ``"electromagnetic"`` -- which sort by
+    size, inertia or magnetism rather than into phases, and the three **dust
+    collectors**, ``"cyclone"``, ``"gravity"`` and ``"electrostatic"``, whose
+    catch is a hopper full of solids. The pair names the two *positions* the
     artwork draws, on the same principle as :class:`HeatExchanger`'s nozzles, and
     it is the ordinary vocabulary of classification and solid-liquid separation.
     Neither name says which of the two is the product, because that is a fact
     about the service and not about the machine: a cyclone on a spray dryer
     recovers its product from the underflow, and the identical cyclone on a vent
     line throws that same catch away.
+
+    The three collectors called their catch ``liquid`` up to 0.1.1, while
+    :class:`~pandid.devices.Cyclone`, :class:`~pandid.devices.GravitySeparator`
+    and :class:`~pandid.devices.ElectrostaticPrecipitator` -- the same three
+    drawings, reached by name -- have always called it ``underflow``. One
+    drawing answering to two vocabularies depending on which class built it was
+    a cost recorded as permanent and is not one any more. The old pair still
+    resolves for 0.1.2 with a :class:`DeprecationWarning` and a ``deprecated``
+    finding on :meth:`~pandid.flowsheet.Flowsheet.validate`, and goes in 0.1.3;
+    see :meth:`_retired_ports`.
 
     Every variant is drawn one way up and reported as ``gravity-turned`` by
     :meth:`~pandid.flowsheet.Flowsheet.validate` if turned: vapour disengages
@@ -2066,14 +2169,15 @@ class Separator(Unit):
 
     # The phase draws, and only those: ``_VARIANT_PORTS`` below defaults to
     # ``_PHASES``, so they are what a separator asked for by name has.
-    # ``overflow`` and ``underflow`` are deliberately absent. Four of the
-    # variants have them *instead of* ``vapor`` and ``liquid``, never as well
-    # as, so declaring all four here would tell a checker that a plain flash
-    # drum has an ``overflow``, which is exactly the mistake the mechanical
-    # separators exist to keep out of the vocabulary. They belong on a
-    # per-variant subclass, which is the follow-up change this annotation layer
-    # is the foundation for; until then a mechanical separator's draws are
-    # reached by ``sep.port("overflow")``.
+    # ``overflow`` and ``underflow`` are deliberately absent. Seven of the
+    # eleven variants have them *instead of* ``vapor`` and ``liquid``, never as
+    # well as, so declaring all four here would tell a checker that a plain
+    # flash drum has an ``overflow``, which is exactly the mistake the over/under
+    # pair exists to keep out of the vocabulary. They belong on a per-variant
+    # subclass, which ``pandid.devices`` is: ``devices.Cyclone`` declares the
+    # collectors' three and a checker resolves them. Off it, the draws of a
+    # variant this class does not annotate are reached by
+    # ``sep.port("overflow")``.
     feed: Port
     vapor: Port
     liquid: Port
@@ -2092,19 +2196,24 @@ class Separator(Unit):
         ("vapor", "outlet", "vapor"),
         ("liquid", "outlet", "liquid"),
     ]
-    # The mechanical separators. All four stencils are one body, anchor for
-    # anchor: a box with a hopper under it, the feed high on one wall (0, 12),
-    # one draw high on the opposite wall (80, 12) and one out of the apex
-    # (40, 120). A high draw and a low draw is the whole of what is true of all
-    # of them, so naming the two positions is the most the drawing supports --
-    # and it is what classification and solid-liquid separation call them
-    # anyway, on a hydrocyclone, a thickener or a classifier.
+    # A high draw and a low draw. That is the whole of what is true of every
+    # body that takes this set, so naming the two positions is the most the
+    # drawing supports -- and it is what classification and solid-liquid
+    # separation call them anyway, on a hydrocyclone, a thickener or a
+    # classifier. The four mechanical stencils are one body, anchor for anchor:
+    # a box with a hopper under it, the feed high on one wall (0, 12), one draw
+    # high on the opposite wall (80, 12) and one out of the apex (40, 120). The
+    # three collectors put the high draw at the top of the vortex or the chamber
+    # instead, which is why the pair names positions and not coordinates.
     #
     # ``process`` rather than ``vapor``/``liquid`` on both draws, because what
-    # leaves is dry dust from a precipitator, tramp metal from a magnet, or a
-    # screened size fraction, and the role vocabulary has no word that covers
-    # those. Saying ``liquid`` of a hopper full of dust is the bend this set
-    # exists to stop.
+    # leaves is dry dust from a precipitator or a settling chamber, tramp metal
+    # from a magnet, a screened size fraction, or a cyclone's recovered product,
+    # and the role vocabulary has no word that covers those. Saying ``liquid``
+    # of a hopper full of dust is the bend this set exists to stop. No drawing
+    # depends on the difference: outside ``signal``, and ``energy``/``utility``
+    # on both ends of one stream, ``connect()`` and the renderer never read a
+    # role.
     _OVER_AND_UNDER = [
         ("feed", "inlet", "feed"),
         ("overflow", "outlet", "process"),
@@ -2113,25 +2222,75 @@ class Separator(Unit):
     #: The nozzles each variant has, keyed by variant, defaulting to
     #: :data:`_PHASES`.
     #:
-    #: ``scrubber`` and ``venturi_scrubber`` are absent deliberately. A wet
-    #: scrubber's draws really are a cleaned gas and a dirty scrubbing liquid,
-    #: which is what :data:`_PHASES` already says; a scrubber cleans a gas
-    #: rather than classifying a solid, so it is not one of these.
+    #: ``default``, ``horizontal``, ``knockout`` and ``scrubber`` are absent, and
+    #: they are the four whose draws really are phases. A drum's two are the
+    #: vapour disengaging and the liquid settling out; a wet scrubber's are a
+    #: cleaned gas and a dirty scrubbing liquid. :data:`_PHASES` already says so.
     #:
-    #: ``cyclone``, ``gravity`` and ``electrostatic`` are absent for a worse
-    #: reason. A settling chamber and a precipitator collect *dust*, and so does
-    #: a cyclone in the gas-solid service ISO 15519-1 draws it for; all three
-    #: call that catch ``liquid``, which is the bend this mechanism exists to
-    #: stop. They are left alone because 0.1.0 shipped those names and every
-    #: sheet drawn against them would break. Correcting them is a deliberate,
-    #: announced break and belongs in its own change, not smuggled in under a
-    #: new mechanism.
+    #: ``cyclone``, ``gravity`` and ``electrostatic`` are in it as of 0.1.2. A
+    #: settling chamber and a precipitator collect *dust*, and so does a cyclone
+    #: in the gas-solid service ISO 15519-1 draws it for; all three called that
+    #: catch ``liquid`` up to 0.1.1 while the three device classes over the same
+    #: drawings called it ``underflow``. That divergence was written down as a
+    #: permanent cost of correcting the names without a break, and this is the
+    #: announced break instead: the old pair resolves through
+    #: :meth:`_retired_ports` for one release and is gone in 0.1.3.
     _VARIANT_PORTS = {
+        "cyclone": _OVER_AND_UNDER,
+        "gravity": _OVER_AND_UNDER,
+        "electrostatic": _OVER_AND_UNDER,
         "sifter": _OVER_AND_UNDER,
         "impact": _OVER_AND_UNDER,
         "permanent_magnet": _OVER_AND_UNDER,
         "electromagnetic": _OVER_AND_UNDER,
     }
+    #: The name each renamed draw is anchored under in the *artwork*, keyed by
+    #: variant. The three collectors' stencils have anchored ``vapor`` and
+    #: ``liquid`` since 0.1.0 and still do: the ink did not move, and this is a
+    #: rename of the nozzle rather than a redrawing of the symbol.
+    #:
+    #: Keyed by variant rather than declared in :attr:`Unit.PORT_ANCHORS`, which
+    #: is the class-wide form of the same statement, because eight of this
+    #: class's eleven drawings anchor exactly what they are asked for. A dict on
+    #: the class would send a sifter's ``overflow`` to a ``vapor`` anchor its
+    #: stencil does not have, and an unfound anchor is a nozzle on the centre of
+    #: the box. :class:`~pandid.devices.Cyclone` and its two siblings carried a
+    #: copy of this each and now inherit it: a class that owns one drawing has
+    #: the drawing's rename, and stating it twice was two places for one fact.
+    #:
+    #: It doubles as the list of variants that renamed anything, which is what
+    #: :meth:`_retired_ports` reads it for. The two are the same three by
+    #: construction -- a drawing's anchors differ from its nozzle names exactly
+    #: when the nozzle was renamed -- so they are one list.
+    _VARIANT_ANCHORS = {
+        "cyclone": {"overflow": "vapor", "underflow": "liquid"},
+        "gravity": {"overflow": "vapor", "underflow": "liquid"},
+        "electrostatic": {"overflow": "vapor", "underflow": "liquid"},
+    }
+    #: The old draw names, what each reaches now, and the notice it carries.
+    _RETIRED_DRAWS = {
+        "vapor": ("overflow", _RETIRED_VAPOR_DRAW),
+        "liquid": ("underflow", _RETIRED_LIQUID_DRAW),
+    }
+
+    def _symbol_anchor(self, port_name: str) -> str:
+        """The name this separator's *drawing* anchors ``port_name`` under.
+
+        :attr:`_VARIANT_ANCHORS` first, then the base's, so a subclass that
+        states a rename of its own in :attr:`Unit.PORT_ANCHORS` still gets it.
+        """
+        renamed = self._VARIANT_ANCHORS.get(self.variant, {})
+        return renamed.get(port_name) or super()._symbol_anchor(port_name)
+
+    def _retired_ports(self) -> dict[str, tuple[str, Deprecation]]:
+        """``vapor`` and ``liquid``, on the three variants that renamed them.
+
+        Answered from ``self.variant``, because a flash drum, a knockout drum
+        and a wet scrubber still *have* a ``vapor`` and a ``liquid`` and there is
+        nothing deprecated about either: they are the phases leaving. A class-
+        wide answer would retire the correct vocabulary along with the wrong one.
+        """
+        return self._RETIRED_DRAWS if self.variant in self._VARIANT_ANCHORS else {}
 
     @classmethod
     def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:

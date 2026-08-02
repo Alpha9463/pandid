@@ -222,39 +222,49 @@ def test_a_class_refuses_a_drawing_another_device_owns(cls):
 
 
 # ---------------------------------------------------------------------------
-# One drawing, two nozzle vocabularies: the accepted cost, pinned
+# One drawing, one nozzle vocabulary
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("cls", "variant"),
-    [
-        (devices.Cyclone, "cyclone"),
-        (devices.GravitySeparator, "gravity"),
-        (devices.ElectrostaticPrecipitator, "electrostatic"),
-    ],
-    ids=lambda x: getattr(x, "__name__", x),
-)
-def test_a_collector_renames_its_draws_and_the_low_level_form_does_not(cls, variant):
-    """The free win and its permanent cost, in one assertion.
+_COLLECTORS = [
+    (devices.Cyclone, "cyclone"),
+    (devices.GravitySeparator, "gravity"),
+    (devices.ElectrostaticPrecipitator, "electrostatic"),
+]
 
-    These three collect *dust*, and their drawings have called the catch
-    ``liquid`` since 0.1.0. The class corrects it; ``Separator(variant=...)``
-    does not, and never will, because every sheet drawn against 0.1.0 depends on
-    it. So one drawing answers to two vocabularies depending on which class was
-    constructed, permanently, and this is where that is written down as a fact
-    about the library rather than met as a surprise.
+
+@pytest.mark.parametrize(("cls", "variant"), _COLLECTORS, ids=lambda x: getattr(x, "__name__", x))
+def test_a_collector_draws_the_same_nozzles_whichever_way_it_was_built(cls, variant):
+    """The whole of #138, in one assertion.
+
+    These three collect *dust*, and their drawings have anchored the catch
+    ``liquid`` since 0.1.0. The classes corrected it to ``underflow``; up to
+    0.1.1 ``Separator(variant=...)`` did not, so one drawing answered to two
+    vocabularies and which you got depended on which class you constructed.
+    That was written down as permanent and is not, and this is where the two
+    forms are held to one another.
     """
     assert set(cls("S-1").ports) == {"feed", "overflow", "underflow"}
-    assert set(units.Separator("S-2", variant=variant).ports) == {"feed", "vapor", "liquid"}
+    assert set(units.Separator("S-2", variant=variant).ports) == set(cls("S-3").ports)
 
 
-def test_a_renamed_draw_lands_where_the_drawing_puts_the_nozzle_it_renamed():
-    """The rename is a name and nothing else: same point, same faces, same ink."""
-    renamed = devices.Cyclone("S-1")
-    original = units.Separator("S-2", variant="cyclone")
+@pytest.mark.parametrize(("cls", "variant"), _COLLECTORS, ids=lambda x: getattr(x, "__name__", x))
+def test_a_renamed_draw_lands_where_the_drawing_puts_the_nozzle_it_renamed(cls, variant):
+    """The rename is a name and nothing else: same point, same faces, same ink.
+
+    Against the *artwork's* own names, which never changed: the stencils still
+    anchor ``vapor`` and ``liquid``, and both spellings of the class reach them
+    through ``Separator._VARIANT_ANCHORS``. A nozzle whose anchor went missing
+    would fall back to the centre of the box, which is how this would show up as
+    a moved drawing rather than as a failure here.
+    """
+    renamed = cls("S-1")
+    low_level = units.Separator("S-2", variant=variant)
+    symbol = default_registry.for_unit(renamed)
     for new, old in (("overflow", "vapor"), ("underflow", "liquid")):
-        assert portgeom.port_faces(renamed, new) == portgeom.port_faces(original, old)
+        assert portgeom.port_faces(renamed, new) == portgeom.port_faces(low_level, new)
+        assert renamed._symbol_anchor(new) == old
+        assert old in symbol.ports
 
 
 # ---------------------------------------------------------------------------
