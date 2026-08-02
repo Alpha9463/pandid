@@ -1072,7 +1072,7 @@ class Flowsheet:
 
     def to_drawio(self, *, diagram: str | None = None,
                   page_size: str | None = None, border: str | None = None,
-                  check: bool = True) -> str:
+                  jump_direction: str = "vertical", check: bool = True) -> str:
         """Render the flowsheet to a draw.io (``.drawio``) document string,
         running ``layout()`` and ``route()`` first if they have not been run yet.
 
@@ -1117,9 +1117,15 @@ class Flowsheet:
         the one every reference names -- so what is exported is a **snapshot of
         the grid**, true of the drawing as it left pandid.
 
-        The stream table, the jump direction and the debug overlay have no
-        counterpart here and :meth:`render` refuses them for a ``.drawio`` path
-        rather than accepting and ignoring them.
+        ``jump_direction`` selects which of two crossing lines gets the
+        semicircle hop, exactly as it does on the sheet: ``"vertical"``, the
+        default, hops the vertical runs. draw.io draws the hop itself from a
+        style key on the edge that carries it, and settles ties between two
+        crossing lines by z-order, so the export states both.
+
+        The stream table and the debug overlay have no counterpart here and
+        :meth:`render` refuses them for a ``.drawio`` path rather than accepting
+        and ignoring them.
         """
         if any(u.frame is None for u in self.units):
             self.layout()
@@ -1137,7 +1143,8 @@ class Flowsheet:
                 )
         from pandid.render.drawio import DrawioRenderer
         return DrawioRenderer().render(self, diagram=diagram,
-                                       page_size=page_size, border=border)
+                                       page_size=page_size, border=border,
+                                       jump_direction=jump_direction)
 
     def render(self, path: str | Path, *, show_stream_table: bool = False,
                border: str | None = None,
@@ -1182,16 +1189,23 @@ class Flowsheet:
             # ruled on it, so asking for A3 and a zone border now gets A3 and a
             # zone border. See to_drawio() for the caveat the grid comes with.
             #
-            # The three that remain have no counterpart at all. A stream table
-            # is sheet furniture this exporter has no measurement for; draw.io
-            # decides its own line jumps and would ignore the direction; and the
+            # ``jump_direction`` is no longer among them either, and the
+            # sentence that put it here was wrong twice over. draw.io does not
+            # decide its own line jumps: a jump is a per-connector style that
+            # defaults to *off*, which is why the export had none at all rather
+            # than jumps we disagreed with. And the direction is expressible,
+            # because which of two crossing lines hops is settled by which
+            # carries the style and by z-order in the file -- both of which the
+            # exporter writes. See :func:`pandid.render.drawio._hops`.
+            #
+            # The two that remain have no counterpart at all. A stream table is
+            # sheet furniture this exporter has no measurement for; and the
             # debug overlay is scaffolding for whoever is writing a placement
             # rather than part of the drawing. Named one by one, since the fix
             # is to drop that argument.
             sheet_only = [
                 name for name, given, default in (
                     ("show_stream_table", show_stream_table, False),
-                    ("jump_direction", jump_direction, "vertical"),
                     ("debug", debug, False),
                 ) if given != default
             ]
@@ -1199,14 +1213,14 @@ class Flowsheet:
                 raise ValueError(
                     f"{', '.join(sheet_only)} describe(s) a drawing sheet that "
                     f"a .drawio file has no counterpart for: there is no sheet "
-                    f"furniture to dock a stream table to, draw.io decides its "
-                    f"own line jumps, and the coordinate overlay is scaffolding "
-                    f"rather than drawing. Render the sheet to .svg/.pdf/.png, "
-                    f"or drop these arguments"
+                    f"furniture to dock a stream table to, and the coordinate "
+                    f"overlay is scaffolding rather than drawing. Render the "
+                    f"sheet to .svg/.pdf/.png, or drop these arguments"
                 )
             Path(path).write_text(
                 self.to_drawio(diagram=diagram, page_size=page_size,
-                               border=border, check=check), encoding="utf-8")
+                               border=border, jump_direction=jump_direction,
+                               check=check), encoding="utf-8")
             return
 
         svg = self.to_svg(

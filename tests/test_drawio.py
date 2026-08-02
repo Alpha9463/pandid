@@ -1677,19 +1677,21 @@ def test_the_furniture_docks_where_the_sheet_docks_it():
     "option,value",
     [
         ("show_stream_table", True),
-        ("jump_direction", "horizontal"),
         ("debug", True),
     ],
 )
 def test_render_refuses_a_sheet_option_it_cannot_honour(tmp_path, sample, option, value):
     """Accepting and ignoring these would tell the caller something false about
-    the file they now hold. ``page_size`` and ``border`` are no longer among
-    them; see the two tests below."""
+    the file they now hold. ``page_size``, ``border`` and ``jump_direction`` are
+    no longer among them; see the tests below."""
     with pytest.raises(ValueError, match=option):
         sample.render(tmp_path / "sheet.drawio", **{option: value})
 
 
-@pytest.mark.parametrize("option,value", [("page_size", "A3"), ("border", "zone")])
+@pytest.mark.parametrize(
+    "option,value",
+    [("page_size", "A3"), ("border", "zone"), ("jump_direction", "horizontal")],
+)
 def test_render_honours_the_sheet_options_it_can(tmp_path, sample, option, value):
     out = tmp_path / "sheet.drawio"
     sample.render(out, **{option: value})
@@ -1999,6 +2001,241 @@ def test_no_line_number_is_written_over_a_symbol_or_an_equipment_tag(stem):
         if meets(box, obstacle)
     ]
     assert not struck, f"{stem}: line numbers written over {struck}"
+
+
+# ---------------------------------------------------------------------------
+# Line jumps
+#
+# draw.io is still not run, so what is done here is what the header of this file
+# says is done everywhere else: draw.io's *algorithm* is written out from its
+# own source and applied to the emitted XML. `mxGraphView.updateLineJumps` is
+# forty lines long and every branch of it is reproduced below, including the two
+# that decide a crossing is not one. That catches a hop on the wrong line, a hop
+# on both lines, a hop draw.io would refuse to draw, and a hop drawn where the
+# sheet draws none; it cannot catch a mistake in the transcription itself.
+# ---------------------------------------------------------------------------
+
+
+def _intersection(p0, p1, p2, p3):
+    """``mxUtils.intersection``: where two *segments* meet, or None.
+
+    Inclusive at all four ends, which matters: draw.io excludes an intersection
+    at the jumping segment's own ends further down, and at the *other*
+    segment's ends not at all.
+    """
+    (x0, y0), (x1, y1), (x2, y2), (x3, y3) = p0, p1, p2, p3
+    denom = ((y3 - y2) * (x1 - x0)) - ((x3 - x2) * (y1 - y0))
+    if denom == 0:
+        return None
+    ua = (((x3 - x2) * (y0 - y2)) - ((y3 - y2) * (x0 - x2))) / denom
+    ub = (((x1 - x0) * (y0 - y2)) - ((y1 - y0) * (x0 - x2))) / denom
+    if 0.0 <= ua <= 1.0 and 0.0 <= ub <= 1.0:
+        return (x0 + ua * (x1 - x0), y0 + ua * (y1 - y0))
+    return None
+
+
+def _edge_lines(fs, kwargs, root):
+    """Every edge in the document, in ``<root>`` order, with the line it draws.
+
+    An edge with both terminals stated as points carries its own geometry -- a
+    ruled line of furniture, a tap whose host is a stream. Everything else is
+    pinned to cells at one or both ends, and the line it draws is the sheet's
+    own: the routed polyline for a stream, `tap_lines`' pair for a tap, each put
+    through the fit a page size applies. Taken from the sheet rather than
+    re-derived from the connection fractions because
+    `test_an_edges_waypoints_are_the_line_the_renderer_draws` already holds the
+    emitted waypoints against exactly that.
+    """
+    from pandid.render.drawio import _Fit
+
+    _boxes, _frame, fit = DrawioRenderer()._furniture(fs, _page(kwargs.get("page_size")))
+    assert isinstance(fit, _Fit)
+    known = {f"s{n}": [fit.at(*p) for p in stream_polyline(s)] for n, s in enumerate(fs.streams)}
+    for n, (_inst, tap, centre) in enumerate(tap_lines(fs)):
+        known[f"t{n}"] = [fit.at(*tap), fit.at(*centre)]
+    out = []
+    for cell in root.findall("mxCell"):
+        if cell.get("edge") != "1":
+            continue
+        geometry = cell.find("mxGeometry")
+        start = geometry.find('mxPoint[@as="sourcePoint"]')
+        end = geometry.find('mxPoint[@as="targetPoint"]')
+        if start is not None and end is not None:
+            line = [(float(p.get("x")), float(p.get("y"))) for p in (start, end)]
+        else:
+            line = known[cell.get("id")]
+        out.append((cell.get("id"), _style(cell), line))
+    return out, fit
+
+
+def _drawio_hops(edges):
+    """Every hop draw.io draws on this document, by its own rule.
+
+    ``mxGraphView.updateLineJumps``, transcribed: an edge is intersected only
+    against ``this.validEdges``, which ``validateCellState`` appends to as it
+    walks the model in child order -- so it holds exactly the edges written
+    before this one. ``state2.style['noJump'] != '1'`` skips a candidate that
+    has opted out, and the two ``thresh`` guards drop an intersection sitting on
+    either end of the *jumping* segment, which is what keeps three runs meeting
+    at a tee from being read as three crossings.
+
+    Returns ``{(hopping id, hopped id, x, y)}``, the point rounded to the
+    hundredth this file writes coordinates at.
+    """
+    thresh = 0.5
+    seen: list = []
+    out: set = set()
+    for cid, style, line in edges:
+        if style.get("jumpStyle", "none") != "none":
+            for p0, p1 in zip(line, line[1:]):
+                for other, other_style, other_line in seen:
+                    if other_style.get("noJump") == "1":
+                        continue
+                    for p2, p3 in zip(other_line, other_line[1:]):
+                        at = _intersection(p0, p1, p2, p3)
+                        if at is None:
+                            continue
+                        if (abs(at[0] - p0[0]) <= thresh and abs(at[1] - p0[1]) <= thresh) or (
+                            abs(at[0] - p1[0]) <= thresh and abs(at[1] - p1[1]) <= thresh
+                        ):
+                            continue
+                        out.add((cid, other, round(at[0], 2), round(at[1], 2)))
+        seen.append((cid, style, line))
+    return out
+
+
+def _sheet_hops(fs, fit, direction="vertical"):
+    """Every hop the *sheet* draws, by ``SvgRenderer._draw_streams``' own rule.
+
+    A vertical segment strictly inside a horizontal one hops it, or the reverse
+    under ``"horizontal"``. Put through the same fit as the export, so the two
+    sets are comparable point for point.
+    """
+    hor, ver = [], []
+    for n, s in enumerate(fs.streams):
+        points = stream_polyline(s)
+        for (x1, y1), (x2, y2) in zip(points, points[1:]):
+            if y1 == y2 and x1 != x2:
+                hor.append((n, min(x1, x2), max(x1, x2), y1))
+            elif x1 == x2 and y1 != y2:
+                ver.append((n, min(y1, y2), max(y1, y2), x1))
+    hopping, crossed = (ver, hor) if direction == "vertical" else (hor, ver)
+    out = set()
+    for hop, lo, hi, at in hopping:
+        for cross, c_lo, c_hi, c_at in crossed:
+            if hop == cross or not (c_lo < at < c_hi and lo < c_at < hi):
+                continue
+            point = (at, c_at) if direction == "vertical" else (c_at, at)
+            x, y = fit.at(*point)
+            out.add((f"s{hop}", f"s{cross}", round(x, 2), round(y, 2)))
+    return out
+
+
+@pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
+def test_a_crossing_is_hopped_by_the_line_the_sheet_hops(stem):
+    """#241, measured rather than looked at.
+
+    The export drew no jump anywhere -- `grep -c jumpStyle` on a committed
+    sample returned 0 -- so every crossing on an exported sheet was a flat
+    four-way and a reader could not tell one from a junction. The premise was
+    that draw.io decides its own jumps; it decides nothing, and does not draw
+    one at all unless the edge asks.
+
+    So the two sets are built independently and compared: what
+    `_draw_streams` hops, and what draw.io would hop given this document. Equal
+    means every crossing carries exactly one hop, on the line the direction
+    selects, and that the hopping edge really is the later of the two in
+    ``<root>`` -- because an edge written first cannot hop at all.
+    """
+    fs, kwargs = gallery.flowsheet(stem)
+    fs.to_svg(**kwargs)
+    root = ET.fromstring(
+        fs.to_drawio(**{k: v for k, v in kwargs.items() if k in _DRAWIO_KWARGS})
+    ).find("diagram/mxGraphModel/root")
+    edges, fit = _edge_lines(fs, kwargs, root)
+    assert _drawio_hops(edges) == _sheet_hops(fs, fit)
+
+
+@pytest.mark.parametrize("direction", ["vertical", "horizontal"])
+def test_jump_direction_picks_which_of_two_crossing_lines_hops(direction):
+    """The option the exporter used to refuse, doing what it says.
+
+    One horizontal run and one vertical, crossing once. Whichever the direction
+    names is the one that carries the style, and it is the one written second.
+    """
+    fs = Flowsheet("jump")
+    a = fs.add(units.Feed("F1")).pin(x=60, y=175)
+    b = fs.add(units.Product("P1")).pin(x=600, y=175)
+    c = fs.add(units.Feed("F2")).pin(x=60, y=375)
+    d = fs.add(units.Product("P2")).pin(x=600, y=375)
+    fs.connect(a.outlet, b.inlet)
+    fs.connect(c.outlet, d.inlet).via([(300, 400), (300, 100), (400, 100), (400, 400)])
+    fs.layout()
+    fs.route()
+    fs.renumber_streams()
+    root = ET.fromstring(fs.to_drawio(jump_direction=direction, check=False)).find(
+        "diagram/mxGraphModel/root"
+    )
+    edges, fit = _edge_lines(fs, {}, root)
+    hops = _drawio_hops(edges)
+    assert hops, f"{direction}: nothing hops a sheet with two lines crossing on it"
+    assert hops == _sheet_hops(fs, fit, direction)
+    # ...and the two directions really do put the hop on different lines.
+    assert {hop for hop, _crossed, _x, _y in hops} == (
+        {"s1"} if direction == "vertical" else {"s0"}
+    )
+
+
+def test_the_hop_is_the_radius_the_sheet_draws_it_at():
+    """``jumpSize`` is not the radius, and reading it as one draws a hop a
+    third too small on a process line.
+
+    ``mxConnector.paintLine`` takes the hop's half-extent along the run as
+    ``(parseInt(jumpSize) - 2) / 2 + this.strokewidth``, so the number in the
+    style is net of the pen -- and the pen is the edge's own, which is why a
+    signal line and the pipe it crosses are hopped by the same radius under
+    different sizes. Solved back here and held against the sheet's own
+    ``HOP_R``.
+    """
+    from pandid.render.svg import HOP_R
+
+    fs, kwargs = gallery.flowsheet("11_ethanol_pid")
+    fs.to_svg(**kwargs)
+    _boxes, _frame, fit = DrawioRenderer()._furniture(fs, _page(kwargs.get("page_size")))
+    cells = _drawio_cells(fs, kwargs)
+    hopping = [c for c in cells.values() if _style(c).get("jumpStyle", "none") != "none"]
+    assert len(hopping) == 6, "11_ethanol_pid has six runs that hop another"
+    for cell in hopping:
+        style = _style(cell)
+        assert style["jumpStyle"] == "arc", "the sheet hops with a semicircle"
+        size = float(style["jumpSize"])
+        assert size == int(size), "parseInt truncates a fractional jumpSize"
+        weight = float(style["strokeWidth"])
+        radius = (size - 2) / 2 + weight
+        # Within the half unit rounding jumpSize to an integer can cost.
+        assert radius == pytest.approx(fit.length(HOP_R), abs=0.5)
+
+
+def test_only_a_stream_hops_or_is_hopped():
+    """Only a *stream* hops or is hopped, because that is the only thing
+    ``_draw_streams`` builds its two lists of segments from.
+
+    draw.io has no such distinction and would hop a zone tick or an instrument
+    connection as readily as a pipe, so the rule is stated on the cell rather
+    than left to the order the edges happen to come out in -- which
+    :func:`~pandid.render.drawio._hops` reorders.
+    """
+    fs, kwargs = gallery.flowsheet("11_ethanol_pid")
+    fs.to_svg(**kwargs)
+    cells = _drawio_cells(fs, kwargs)
+    edges = {cid: c for cid, c in cells.items() if c.get("edge") == "1"}
+    assert edges, "no edges at all"
+    for cid, cell in edges.items():
+        stream = cid.startswith("s") and cid[1:].isdigit()
+        assert (_style(cell).get("noJump") == "1") != stream, (
+            f"{cid}: a {'stream' if stream else 'rule or tap'} says "
+            f"noJump={_style(cell).get('noJump')}"
+        )
 
 
 # ---------------------------------------------------------------------------
