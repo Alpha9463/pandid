@@ -964,8 +964,8 @@ normally open is not implemented.
 | | Valve variants |
 |---|---|
 | darkened body | `default`, `gate`, `globe`, `ball`, `needle`, `plug`, `pinch`, `three_way`, `angle`, `bleed`, `manual`, `motor`, `solenoid`, `hydraulic` |
-| `NC` in letters | `butterfly` (PIP PIC001 4.2.2.8's own example), `butterfly_pneumatic`, `check`, `knife` |
-| refused | `control`, `pneumatic`, `regulator`, `relief`, `psv` |
+| `NC` in letters | `butterfly` (PIP PIC001 4.2.2.8's own example), `butterfly_pneumatic`, `check`, `knife`, `saunders` |
+| refused | `control`, `regulator`, `relief`, `psv` |
 
 The list is `pandid.render.symbols.NC_DARKENS`, and a variant added later takes
 the letters until it is put on it. That is the safe way round, since a variant
@@ -1101,10 +1101,10 @@ from outside the valve.
 
 | | Valve variants |
 |---|---|
-| may declare `fail` | `control`, `pneumatic`, `butterfly_pneumatic`, `solenoid`, `motor`, `hydraulic` |
+| may declare `fail` | `control`, `butterfly_pneumatic`, `solenoid`, `motor`, `hydraulic` |
 | refused, hand-operated | `manual`, `knife` |
 | refused, self-acting | `regulator`, `relief`, `psv` |
-| refused, no operator drawn | `default`, `gate`, `globe`, `ball`, `butterfly`, `check`, `needle`, `plug`, `pinch`, `three_way`, `angle`, `bleed` |
+| refused, no operator drawn | `default`, `gate`, `globe`, `ball`, `butterfly`, `check`, `needle`, `saunders`, `plug`, `pinch`, `three_way`, `angle`, `bleed` |
 
 ```python
 units.Valve("HV-1", variant="gate", fail="closed")
@@ -1241,13 +1241,13 @@ first listed is what the class draws when it is built by name alone.
 | `RotaryDryer` | `dryer` | `default` |
 | `FluidizedBedDryer` | `dryer` | `fluidized_bed` (as `default`) |
 | `SprayDryer` | `dryer` | `spray` (as `default`) |
-| `ControlValve` | `valve` | `control` (as `default`), `pneumatic`, `butterfly_pneumatic` |
+| `ControlValve` | `valve` | `control` (as `default`), `butterfly_pneumatic` |
 | `SolenoidValve` | `valve` | `solenoid` (as `default`) |
 | `ReliefValve` | `valve` | `relief` (as `default`), `psv` |
 | `PressureRegulator` | `valve` | `regulator` (as `default`) |
 | `MotorOperatedValve` | `valve` | `motor` (as `default`) |
 | `CheckValve` | `valve` | `check` (as `default`) |
-| `Valve` | `valve` | bodies: `default` (gate), `gate`, `globe`, `ball`, `butterfly`, `needle`, `three_way`, `plug`, `pinch`, `angle`, `bleed`<br>with a drawn operator: `hydraulic`, `manual`, `knife`<br>which of them take a [`normal_position`](#normally-closed-valves) and which a [`fail`](#fail-position) are two different lists |
+| `Valve` | `valve` | bodies: `default` (gate), `gate`, `globe`, `ball`, `butterfly`, `needle`, `saunders`, `three_way`, `plug`, `pinch`, `angle`, `bleed`<br>with a drawn operator: `hydraulic`, `manual`, `knife`<br>which of them take a [`normal_position`](#normally-closed-valves) and which a [`fail`](#fail-position) are two different lists |
 | `SpectacleBlind` | `fitting` | `blind` (as `default`) |
 | `FlowElement` | `fitting` | `venturi` (as `default`), `flow_nozzle`, `coriolis`, `vortex`, `ultrasonic`, `turbine_meter`, `positive_displacement`, `v_cone`, `wedge`, `target`, `pitot`, `averaging_pitot` |
 | `Fitting` | `fitting` | `default` (flanged connection), `flange`, `strainer`, `strainer_cone`, `strainer_y`, `strainer_basket`, `strainer_duplex`, `orifice`, `rotameter`, `rupture_disc`, `sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `bellows`, `damper`, `spool`, `static_mixer`, `hose`, `coupling`, `clamped_coupling`, `flame_arrestor`, `flame_arrestor_explosion_proof`, `flame_arrestor_detonation_proof`, `flame_arrestor_fire_resistant` |
@@ -2942,9 +2942,9 @@ catalogue.
 
 ```text
 $ pandid symbols --kind valve
-Valve  default  angle  ball  butterfly  butterfly_pneumatic  check  control  gate  globe
-       hydraulic  knife  manual  motor  needle  pinch  plug  pneumatic  psv  regulator
-       relief  solenoid  three_way
+Valve  default  angle  ball  bleed  butterfly  butterfly_pneumatic  check  control  gate  globe
+       hydraulic  knife  manual  motor  needle  pinch  plug  psv  regulator  relief  saunders
+       solenoid  three_way
 ```
 
 ### Exit codes
