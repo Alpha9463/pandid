@@ -807,14 +807,15 @@ def _ethanol_pfd() -> Flowsheet:
         status="ISSUED FOR REVIEW",
         sheet="1",
         of_sheets="1",
+        scale="NTS",
         date="30/08/25",
         drawn_by="AA",
-        checked_by="RG",
-        approved_by="HVL",
+        checked_by="JS",
+        approved_by="RL",
         revisions=[
             Revision("A", "30/07/25", "Issued for internal review", "AA"),
             Revision("B", "20/08/25", "Flocculation package added", "AA"),
-            Revision("C", "30/08/25", "Issued For Review", "AA", "RG", "HVL"),
+            Revision("C", "30/08/25", "Issued For Review", "AA", "JS", "RL"),
         ],
     )
 
@@ -1228,13 +1229,14 @@ def _ethanol_pid() -> Flowsheet:
         status="ISSUED FOR REVIEW",
         sheet="1",
         of_sheets="1",
+        scale="NTS",
         date="30/10/25",
         drawn_by="AA",
-        checked_by="RG",
-        approved_by="HVL",
+        checked_by="JS",
+        approved_by="RL",
         revisions=[
             Revision("A", "11/10/25", "Issued for internal review", "AA"),
-            Revision("B", "25/10/25", "Issued For Review", "AA", "RG", "HVL"),
+            Revision("B", "25/10/25", "Issued For Review", "AA", "JS", "RL"),
         ],
     )
 
@@ -1256,8 +1258,6 @@ def _ethanol_pid() -> Flowsheet:
     fs.add_annotation(
         notes(
             [
-                "Diamond in square: safety instrumented system logic, code Z.",
-                "One trip is one tag, drawn at every point the trip acts.",
                 "Z-2: high pressure trip. PT-318 is its own measurement point.",
                 "Z-1: process shutdown logic, reading three measurements.",
                 "Alarms are lettered A and trips S or Z; H is drawn above L.",
@@ -1740,7 +1740,7 @@ def _tank_farm() -> Flowsheet:
         units.Valve(load_flow.tag("CV"), variant="control", description="Loading Rate Valve")
     )
     hv604 = fs.add(units.Valve("HV-604", variant="ball", description="E10 Loading Arm Valve"))
-    hs601 = fs.add(units.Fitting("HS-601", variant="hose", description="E10 Loading Hose"))
+    hos601 = fs.add(units.Fitting("HOS-601", variant="hose", description="E10 Loading Hose"))
 
     fa602 = fs.add(
         units.Fitting(
@@ -1781,8 +1781,9 @@ def _tank_farm() -> Flowsheet:
     ej601.pin(port="inlet", x=560, y=ms_run_y)
     st601.pin(port="inlet", x=605, y=ms_run_y)
     rd601.pin(port="inlet", x=665, y=ms_run_y)
-    p601.pin(port="suction", x=705, y=ms_run_y)
-    ms_disch_y = ms_run_y + port_offset(p601, "discharge")[1] - port_offset(p601, "suction")[1]
+    ms_suction_y = ms_run_y + port_offset(rd601, "outlet")[1] - port_offset(rd601, "inlet")[1]
+    p601.pin(port="suction", x=705, y=ms_suction_y)
+    ms_disch_y = ms_suction_y + port_offset(p601, "discharge")[1] - port_offset(p601, "suction")[1]
     rd602.pin(port="inlet", x=795, y=ms_disch_y)
     nrv601.pin(port="inlet", x=875, y=ms_disch_y)
 
@@ -1810,19 +1811,20 @@ def _tank_farm() -> Flowsheet:
     fe604.pin(port="inlet", x=1340, y=blend_y)
     cv604.pin(port="inlet", x=1400, y=blend_y)
     hv604.pin(port="inlet", x=1460, y=blend_y)
-    hs601.pin(port="inlet", x=1505, y=blend_y)
+    hos601.pin(port="inlet", x=1505, y=blend_y)
     e10_out.pin(port="inlet", x=1560, y=blend_y)
 
-    vap_y = 775.0
+    vap_y, vru_y = 830.0, 935.0
     vap_in.pin(mirrored=True).pin(port="outlet", x=1560, y=vap_y)
-    hv607.pin(mirrored=True).pin(port="inlet", x=590, y=vap_y)
-    fa602.pin(mirrored=True).pin(port="inlet", x=490, y=vap_y)
-    v604.pin(mirrored=True).pin(port="inlet", x=405, y=vap_y)
+    hv607.pin(mirrored=True).pin(port="inlet", x=1470, y=vap_y)
+    fa602.pin(mirrored=True).pin(port="inlet", x=1390, y=vap_y)
+    v604.pin(mirrored=True).pin(port="inlet", x=1315, y=vap_y)
     vent_x = v604.pin_.x + port_offset(v604, "vent")[0]
     vent_y = v604.pin_.y + port_offset(v604, "vent")[1]
+    vru_x = v604.pin_.x + port_offset(v604, "outlet")[0]
     fa601.pin(orientation=270).pin(port="inlet", x=vent_x, y=vent_y - 22)
     vt601.pin(port="inlet", x=vent_x, y=vent_y - 68)
-    vru_out.pin(mirrored=True).pin(port="inlet", x=335, y=vap_y)
+    vru_out.pin(port="inlet", x=1560, y=vru_y)
 
     fs.connect(
         ms_in.outlet, xv601.inlet, service="MS", sequence=601, size=200, schedule=40, spec="CS"
@@ -1880,8 +1882,8 @@ def _tank_farm() -> Flowsheet:
     )
     fs.connect(fe604.outlet, cv604.inlet)
     fs.connect(cv604.outlet, hv604.inlet)
-    fs.connect(hv604.outlet, hs601.inlet)
-    fs.connect(hs601.outlet, e10_out.inlet)
+    fs.connect(hv604.outlet, hos601.inlet)
+    fs.connect(hos601.outlet, e10_out.inlet)
 
     fs.connect(
         vap_in.outlet, hv607.inlet, service="VAP", sequence=610, size=150, schedule=40, spec="CS"
@@ -1890,7 +1892,7 @@ def _tank_farm() -> Flowsheet:
     fs.connect(fa602.outlet, v604.inlet)
     fs.connect(
         v604.outlet, vru_out.inlet, service="VAP", sequence=612, size=150, schedule=40, spec="CS"
-    )
+    ).via([(vru_x, vru_y)])
     fs.connect(
         v604.vent, fa601.inlet, service="VAP", sequence=611, size=150, schedule=40, spec="CS"
     )
@@ -1946,13 +1948,14 @@ def _tank_farm() -> Flowsheet:
         status="ISSUED FOR REVIEW",
         sheet="1",
         of_sheets="1",
+        scale="NTS",
         date="12/12/25",
         drawn_by="AA",
-        checked_by="RG",
-        approved_by="HVL",
+        checked_by="JS",
+        approved_by="RL",
         revisions=[
             Revision("A", "28/11/25", "Issued for internal review", "AA"),
-            Revision("B", "12/12/25", "Issued For Review", "AA", "RG", "HVL"),
+            Revision("B", "12/12/25", "Issued For Review", "AA", "JS", "RL"),
         ],
     )
     fs.add_annotation(
@@ -1972,9 +1975,7 @@ def _tank_farm() -> Flowsheet:
     fs.add_annotation(
         notes(
             [
-                "Diamond in square: safety instrumented system logic, code Z.",
-                "Z-1: receipt shutdown on tank high-high level. One trip, drawn at each",
-                "point it acts: both level switches and both receipt valves.",
+                "Z-1: receipt shutdown on tank high-high level.",
                 "LSHH-611/612 are independent of the gauging transmitters they back up.",
                 "FA-601 is deflagration rated; FA-602, on the rack return, is detonation",
                 "rated. VT-601 is the vapour system's only opening to atmosphere.",

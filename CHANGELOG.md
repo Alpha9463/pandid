@@ -268,6 +268,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`examples/10`, `11` and `14`: comments explain the code and nothing else.**
+  The three were 40%, 58% and 54% prose; a reader looking for what a line does
+  walked past a paragraph on why a gear pump suits a metering duty first. Every
+  comment explaining process engineering is deleted rather than shortened, and
+  what is left is what a reader of the code cannot recover from it: magic
+  coordinates, choices that look arbitrary (`on=tt307` and not `on=tic307`), the
+  library limitations behind an odd shape (#137, #169, #222, #223, #225, #226),
+  and the clauses that are the reason a call is written the way it is. The
+  sheet's story moves to the module docstring, which is also much shorter.
+  10: 277 → 257 lines, 40% → 35% prose. 11: 671 → 453, 58% → 38%.
+  14: 661 → 462, 54% → 34%. Nothing rendered moves.
+
+- **`11` and `14`'s GENERAL NOTES keep only what the drawing cannot say.** Out
+  go `"Diamond in square: safety instrumented system logic, code Z."` from both,
+  which is a symbol key on sheets that already carry a LEGEND box, and the two
+  sentences counting how many times the trip square is drawn, which a reader can
+  see. `14`'s trip note keeps its first sentence, which states what the trip
+  does. Everything not inferable from the drawing stays — the switches'
+  independence, the arrestor ratings, the spectacle blind's duty — and
+  `"XV-601 and XV-602 fail closed."` now says in a comment that it stands in for
+  a mark the sheet cannot draw until #223 is fixed.
+
 - **`direction` is a rule about process nozzles.** Fluid enters a nozzle or
   leaves it, so `connect()` refuses a pipe drawn the other way, exactly as
   before. A signal connection has no such fact to be right about — the same
@@ -314,6 +336,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rejected nothing: every balloon's first letter already agreed with its loop.
 
 ### Fixed
+
+- **`examples/14_tank_farm`: the pump suction had a bend in it, and the vapour
+  return crossed the whole sheet.** `RD-601` is the eccentric reducer, whose two
+  nozzles are deliberately not on one centreline — flat on top, the small end's
+  axis sits half the bore difference above the large end's — and `P-601` was
+  pinned on the *large* end's elevation, so the run stepped 2.4 units straight
+  out of the fitting whose entire purpose is that the crown of the line does not
+  step. The pump is now pinned at the reducer's outlet elevation, asked of the
+  symbol with `port_offset()`, and everything the discharge sets moves with it.
+
+  The tanker vapour return ran east edge to west, a return stream counterflowing
+  for 1200 units against ISO 15519-1 §13.2 (p. 28), "the direction of the main
+  flow should be from left to right or from top to bottom" — a *should*, and the
+  only clause on flow direction in any of the three documents on disk. The
+  vapour system now stands at the rack it serves with both off-page flags on the
+  east edge, so `VAP-610` comes in on one row and `VAP-612` leaves on the row
+  below. `V-604`'s vent riser has to top out clear of the E10 rack, which puts
+  the two rows lower than the old single row: the drawing is 96 units taller and
+  the A3 fit falls from 1:1.19 to 1:1.29.
+
+- **`HS-601` tagged a hose as an instrument.** ISO 15519-2 Table 2 (p. 11) gives
+  `H` as the process variable "Human observation" and `S` as the control
+  function "Switching (open loop)", and §5.2.2/§5.2.3 build a letter code string
+  as the one followed by the other — so `HS` is exactly what the standard
+  constructs and §5.1.1 draws it in a PCI symbol. The loading hose is now
+  `HOS-601`, which breaks the string at a letter that is neither a control
+  function nor a Table 3 modifier.
+
+- **Three sheets carried a real drawing's checker and approver.** `RG` and `HVL`
+  are the initials on `professional_examples/P&ID_301.pdf` and had been copied
+  into `10_ethanol_pfd`, `11_ethanol_pid` and `14_tank_farm`. They are now `JS`
+  and `RL`, the fictional pair `03` and `09` already use. `AA` stays: that is
+  the repo's author.
+
+- **The scale cell reported a fit ratio on a diagram that is not to scale.**
+  Blank, `TitleBlock.scale` makes the sheet report the ratio the renderer placed
+  the drawing at, so `10` read `1:1.31`, `11` `1:1.23` and `14` `1:1.19`.
+  CHEE4001 p.2: "Do not represent the real length of pipes on P&IDs. P&ID is a
+  'Not to Scale' (NTS) drawing." All three now state `scale="NTS"`, as `03` and
+  `09` do. The default is unchanged.
 
 - **`to_drawio` takes `page_size` and `border`, and the export is a sheet when
   it is given them.** A drawing made `page_size="A3"` opened on draw.io's

@@ -98,11 +98,9 @@
     <text x="1418.9" y="115.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Overhead Condenser</text>
     <text x="1369.9" y="133.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">RB-301</text>
     <text x="1418.9" y="133.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">U-tube Kettle Reboiler</text>
-    <rect x="24.0" y="977.5" width="393.8" height="121.0" fill="white" stroke="black" stroke-width="1.5"/>
-    <text x="220.9" y="994.5" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">GENERAL NOTES</text>
-    <line x1="24.0" y1="1000.5" x2="417.8" y2="1000.5" stroke="black" stroke-width="1"/>
-    <text x="33.0" y="1014.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Diamond in square: safety instrumented system logic, code Z.</text>
-    <text x="33.0" y="1032.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">One trip is one tag, drawn at every point the trip acts.</text>
+    <rect x="24.0" y="1013.5" width="393.8" height="85.0" fill="white" stroke="black" stroke-width="1.5"/>
+    <text x="220.9" y="1030.5" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">GENERAL NOTES</text>
+    <line x1="24.0" y1="1036.5" x2="417.8" y2="1036.5" stroke="black" stroke-width="1"/>
     <text x="33.0" y="1050.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Z-2: high pressure trip. PT-318 is its own measurement point.</text>
     <text x="33.0" y="1068.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Z-1: process shutdown logic, reading three measurements.</text>
     <text x="33.0" y="1086.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Alarms are lettered A and trips S or Z; H is drawn above L.</text>
@@ -125,8 +123,8 @@
     <text x="936.4" y="1080.5" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">25/10/25</text>
     <text x="986.4" y="1080.5" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">Issued For Review</text>
     <text x="1118.4" y="1080.5" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">AA</text>
-    <text x="1150.4" y="1080.5" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">RG</text>
-    <text x="1182.4" y="1080.5" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">HVL</text>
+    <text x="1150.4" y="1080.5" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">JS</text>
+    <text x="1182.4" y="1080.5" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">RL</text>
     <text x="914.4" y="1066.5" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">A</text>
     <text x="936.4" y="1066.5" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">11/10/25</text>
     <text x="986.4" y="1066.5" font-family="sans-serif" font-size="7.5" text-anchor="start" fill="black">Issued for internal review</text>
@@ -145,7 +143,7 @@
     <text x="1316.4" y="1093.5" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">P&amp;ID-301</text>
     <line x1="1407.2" y1="1072.9" x2="1407.2" y2="1098.5" stroke="black" stroke-width="0.5"/>
     <text x="1412.2" y="1080.9" font-family="sans-serif" font-size="6.5" text-anchor="start" fill="#666">SCALE</text>
-    <text x="1412.2" y="1093.5" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">1:1.23</text>
+    <text x="1412.2" y="1093.5" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">NTS</text>
     <line x1="1460.1" y1="1072.9" x2="1460.1" y2="1098.5" stroke="black" stroke-width="0.5"/>
     <text x="1465.1" y="1080.9" font-family="sans-serif" font-size="6.5" text-anchor="start" fill="#666">DATE</text>
     <text x="1465.1" y="1093.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">30/10/25</text>
@@ -171,7 +169,7 @@
     <symbol id="sym_valve_solenoid_ty" viewBox="0 0 24.5 22.2" overflow="visible"><g transform="scale(0.25)"><path d="M 0.0 89.0 L 0.0 30.0 L 98.0 89.0 L 98.0 30.0 Z" fill="none" stroke="#111" stroke-width="8.0"/><rect x="19.0" y="0.0" width="60.0" height="30.0" fill="none" stroke="#111" stroke-width="8.0"/><path d="M 49.0 15.0 L 49.0 59.0 M 19.0 15.0 L 79.0 15.0" fill="none" stroke="#111" stroke-width="8.0"/><g transform="translate(0, 20.2) scale(1, -1)"><text x="49.0" y="16.4" font-family="sans-serif" font-size="18.0" text-anchor="middle" fill="white" stroke="white" stroke-width="4.5" stroke-linejoin="round">S</text></g><g transform="translate(0, 20.2) scale(1, -1)"><text x="49.0" y="16.4" font-family="sans-serif" font-size="18.0" text-anchor="middle" fill="#111">S</text></g></g></symbol>
     <symbol id="sym_vessel_horizontal_s130x42" viewBox="0 0 91.5 30.0" preserveAspectRatio="none" overflow="visible"><path d="M 5.77 30.0 L 85.77 30.0 A 5.7692 15.0 0.0 0 0 91.5392 15.0 A 5.7692 15.0 0.0 0 0 85.77 0.0 L 5.77 0.0 A 5.7692 15.0 0.0 0 0 0.0008 15.0 A 5.7692 15.0 0.0 0 0 5.77 30.0 Z M 5.77 0.0 L 5.77 30.0 M 85.77 0.0 L 85.77 30.0" fill="none" stroke="#111" stroke-width="1.41809"/></symbol>
   </defs>
-  <g id="drawing" transform="translate(89.23, 279.44) scale(0.809737)">
+  <g id="drawing" transform="translate(53.44, 281.29) scale(0.85088)">
   <g id="units">
     <use href="#sym_column" x="470" y="300" width="100.0" height="200.0" />
     <use href="#sym_hex_straight_tubes_s130x40" x="1010" y="210" width="130" height="40" />
