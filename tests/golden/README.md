@@ -56,13 +56,39 @@ sets an explicit fixed date instead, per the "prefer a fixture over regexing
 it out" rule for anything that varies run to run. `10` and `11` state their own
 dates, so those two need no pinning.
 
+Each golden is nevertheless compared against **both** copies. A rebuilt fixture
+is a copy, and a copy drifts: #230 corrected real people's initials in
+`examples/13_mineral_dewatering.py` and this golden went on reading the old
+ones, because the golden is built from the fixture and nothing asserted the two
+agreed. `test_the_example_draws_the_same_sheet_as_its_fixture` closes that — it
+imports each example with `Flowsheet.render` replaced (reusing the capture in
+`scripts/gallery.py`, so nothing is written anywhere), renders what the example
+was about to draw, and compares it against this same file. If it fails, one of
+the two copies is wrong: fix that one, and do not regenerate the golden until
+they agree. The only field it does not take from the example is the blank `date`
+on `03` and `08`, which it pins to the fixture's value for the reason above.
+
 Comparisons run on *normalized* text (see `_normalize` in `test_golden.py`),
-which canonicalizes `<defs>` ordering: `SvgRenderer._defs()` builds its
-marker/symbol defs from Python `set`s (`used_colors`, `used_symbols`), so
-their emitted order depends on the process's string-hash seed, not on
-anything about the diagram, confirmed by rendering the same flowsheet under
-several `PYTHONHASHSEED` values and diffing. Every other line compares
-verbatim, so a real rendering regression still fails the test.
+which canonicalizes two things and leaves every other line to compare verbatim,
+so a real rendering regression still fails the test.
+
+**`<defs>` ordering.** `SvgRenderer._defs()` builds its marker/symbol defs from
+Python `set`s (`used_colors`, `used_symbols`), so their emitted order depends on
+the process's string-hash seed, not on anything about the diagram — confirmed by
+rendering the same flowsheet under several `PYTHONHASHSEED` values and diffing.
+
+**The provenance block.** Every rendered sheet says what drew it, version
+included. Left alone, bumping `pandid.__version__` would rewrite all fourteen
+fixtures for a reason that is about none of the drawings, and cutting a release
+would be a diff of every artefact in the repository. The renderer therefore
+fences the block between `<!-- pandid:provenance -->` and
+`<!-- /pandid:provenance -->`, and `_normalize` drops what lies between them — a
+slice between two known lines, not a version pattern hunted across the document.
+That is why the committed fixtures show the two fence comments with nothing in
+between: they are stored normalized, so `git grep` finds no version number here.
+The `<title>` above the fence is *not* dropped; it carries the sheet's own name
+and no version, so it compares like any other line.
+`test_a_version_bump_does_not_move_a_fixture` holds all of that to being true.
 
 ## Regenerating
 

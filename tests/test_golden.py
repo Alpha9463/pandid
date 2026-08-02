@@ -5,16 +5,31 @@ furniture -- title block, equipment list, notes, legend -- with a stream table
 on all but 11. 09 and 11 are the two issued as P&IDs, and 10 and 11 the two on
 a fixed A3 page.
 
-The flowsheets are rebuilt here rather than by importing examples/*.py: those
-scripts render straight to a file under examples/ (a side effect a test suite
-shouldn't have), and 03's and 08's TitleBlocks leave ``date`` empty, which
-SvgRenderer fills in with ``datetime.now()`` -- fine for a real render, but it
-would make the golden change every day. 10's and 11's title blocks state their
-own dates, so those two need no pinning. Every other input is copied verbatim
-from the matching example script; for 08, whose example *is* data, the copied
-input is its spec mapping. See tests/golden/README.md for how to regenerate.
+Each golden is built twice, from two independent sources, and both are compared
+against it.
+
+**From a fixture in this file.** Each scenario below is a rebuilt copy of the
+matching example: the example scripts render straight to a file under examples/
+(a side effect a test suite shouldn't have), and 03's and 08's TitleBlocks leave
+``date`` empty, which SvgRenderer fills in with ``datetime.now()`` -- fine for a
+real render, but it would make the golden change every day. 10's and 11's title
+blocks state their own dates, so those two need no pinning. Every other input is
+copied verbatim from the matching example script; for 08, whose example *is*
+data, the copied input is its spec mapping.
+
+**From the example itself.** A copy drifts from what it copied, and this one
+did: #230 corrected real people's initials in examples/13_mineral_dewatering.py
+and the golden went on reading the old ones, because the golden is built from
+the fixture. So every example is also imported, rendered and compared against
+the same golden -- see ``test_the_example_draws_the_same_sheet_as_its_fixture``
+-- which is what turns that class of drift from something a screenshot catches
+into something the next test run catches.
+
+See tests/golden/README.md for how to regenerate.
 """
 
+import functools
+import importlib.util
 import os
 from pathlib import Path
 
@@ -31,6 +46,7 @@ from pandid.document import (
     notes,
 )
 from pandid.portgeom import port_offset, resolve_size
+from pandid.render.svg import PROVENANCE_CLOSE, PROVENANCE_OPEN
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
 UPDATE = os.environ.get("PANDID_UPDATE_GOLDEN") == "1"
@@ -2078,22 +2094,41 @@ SCENARIOS = {
 
 
 def _normalize(svg: str) -> str:
-    """Canonicalize ordering the renderer itself does not guarantee.
+    """Canonicalize what the renderer does not promise to hold still.
 
-    ``SvgRenderer._defs()`` builds its marker/symbol defs from Python ``set``s
-    (``used_colors``, ``used_symbols``), so their order in the output depends
-    on the process's string-hash seed, not on anything about the diagram --
-    confirmed by rendering one flowsheet under several ``PYTHONHASHSEED``
-    values and diffing the result. Sorting each group canonicalizes that away
-    so two renders of an identical flowsheet always compare equal; every other
-    line is left untouched so a real regression still shows up.
+    Two things, and nothing else. Every other line is left untouched so a real
+    regression still shows up.
+
+    **Defs ordering.** ``SvgRenderer._defs()`` builds its marker/symbol defs
+    from Python ``set``s (``used_colors``, ``used_symbols``), so their order in
+    the output depends on the process's string-hash seed, not on anything about
+    the diagram -- confirmed by rendering one flowsheet under several
+    ``PYTHONHASHSEED`` values and diffing the result. Sorting each group
+    canonicalizes that away so two renders of an identical flowsheet always
+    compare equal.
+
+    **The provenance block.** Every sheet says what drew it, version included,
+    which means every release would otherwise rewrite all fourteen fixtures --
+    and the gallery with them -- for a reason that is not about any drawing. The
+    contents of the block are dropped here, which is why the renderer fences it
+    between two marker comments: this is a slice between two known lines, not a
+    version pattern hunted across the document. The fences themselves are kept,
+    so a fixture still records that the block exists and where it sits, and
+    ``<title>`` is deliberately outside them -- it is the sheet's own name and
+    carries no version, so it stays in the comparison.
     """
     lines = svg.split("\n")
+    open_i = next((i for i, ln in enumerate(lines) if ln.strip() == PROVENANCE_OPEN.strip()), None)
+    close_i = next(
+        (i for i, ln in enumerate(lines) if ln.strip() == PROVENANCE_CLOSE.strip()), None
+    )
+    if open_i is not None and close_i is not None and close_i > open_i:
+        del lines[open_i + 1 : close_i]
     try:
         start = next(i for i, ln in enumerate(lines) if ln.strip() == "<defs>")
         end = next(i for i, ln in enumerate(lines) if ln.strip() == "</defs>")
     except StopIteration:
-        return svg
+        return "\n".join(lines)  # no defs to sort; the provenance edit still stands
     body = lines[start + 1 : end]
     markers = []
     j = 0
@@ -2145,6 +2180,117 @@ def test_golden_svg(name):
     fs = build()
     svg = fs.to_svg(**kwargs)
     _check_golden(name, svg)
+
+
+def test_a_version_bump_does_not_move_a_fixture(monkeypatch):
+    """Cutting a release must not be a diff of every artefact in the repo.
+
+    Every sheet now says what drew it, version included, so without
+    :func:`_normalize`'s rule a one-line change to ``pandid.__version__`` would
+    rewrite all fourteen fixtures for a reason that is about none of the
+    drawings. This is that rule, checked rather than asserted in a comment.
+
+    Three claims, and the first is what stops the other two being vacuous: the
+    version really is in the file, so the raw renders differ; normalized they
+    are the same text; and the fixture on disk still passes at a version it was
+    never generated under. One scenario is enough -- the block is emitted
+    identically for every sheet -- and a furnished one is used so the ``<title>``
+    and ``dc:title`` that sit either side of the fence are both in play.
+    """
+    import pandid
+
+    name = "03_distillation_train"
+    build, kwargs = SCENARIOS[name]
+    at_this_version = build().to_svg(**kwargs)
+    monkeypatch.setattr(pandid, "__version__", "99.99.99")
+    at_another = build().to_svg(**kwargs)
+
+    assert at_this_version != at_another, "the version is not in the rendered file at all"
+    assert _normalize(at_this_version) == _normalize(at_another)
+    _check_golden(name, at_another)
+
+
+# --- the examples, against the same goldens -----------------------------------
+#
+# Everything above rebuilds each sheet from a fixture in this file, which leaves
+# the suite green whenever the fixture matches the golden -- whether or not
+# either matches the example it was copied from. That is not hypothetical: #230
+# corrected a set of real people's initials in examples/13_mineral_dewatering.py
+# and the golden went on reading the old ones, because the golden is built from
+# the fixture. Both copies had to be found and edited by hand, and nothing would
+# have complained if only one of them had been.
+#
+# So the examples are rendered here too, and compared against the *same* golden.
+# Any divergence now fails on the next run instead of on the next screenshot.
+# Merging the two copies -- making the examples the fixtures outright -- is the
+# expensive fix and #231 scopes it out; this is what makes it unnecessary.
+
+
+@functools.lru_cache(maxsize=1)
+def _example_capture():
+    """``scripts/gallery.py``, loaded by path, once.
+
+    Reused rather than reimplemented, because it already solves the awkward
+    half of this: an example is a script, so it writes a file and prints, and
+    ``01`` does it at import while the other thirteen do it behind ``main()``.
+    ``gallery.flowsheet()`` runs either shape with ``Flowsheet.render`` replaced,
+    catching the flowsheet and the keyword arguments the example was about to
+    draw it with and writing nothing anywhere. A second copy of that capture
+    living here would be one more thing to drift, which is the bug this section
+    exists to prevent.
+
+    Loading a dev-only script by path is the convention already: it is what
+    ``tests/test_gallery.py`` does with this same file and what
+    ``tests/test_devices.py`` does with ``scripts/gen_devices.py``.
+    """
+    path = Path(__file__).resolve().parent.parent / "scripts" / "gallery.py"
+    module_spec = importlib.util.spec_from_file_location("_golden_script_gallery", path)
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+    return module
+
+
+# The two examples that leave ``TitleBlock.date`` blank, which ``SvgRenderer``
+# fills in with ``datetime.now()``. That is right for a sheet drawn today and
+# impossible for one committed to a repository, so both the fixture and the
+# gallery pin it -- and they pin it *differently*: the fixture to a constant
+# (2026-01-01), the gallery to the newest revision's date, which is the date the
+# sheet was in fact issued at. Neither is wrong and there is no drift here; the
+# field simply has no value in the example for the two to agree on.
+#
+# So the guard takes the fixture's, since the fixture's golden is what it is
+# comparing against. It is read off the fixture rather than written out again
+# here, so the constant still lives in exactly one place. Everything else on the
+# sheet is compared as the example draws it, this one field included the moment
+# an example starts stating its own date.
+_DATE_LEFT_TO_THE_RENDERER = ("03_distillation_train", "08_from_data")
+
+
+@pytest.mark.parametrize("name", list(SCENARIOS), ids=list(SCENARIOS))
+def test_the_example_draws_the_same_sheet_as_its_fixture(name):
+    if UPDATE:
+        pytest.skip("the goldens are being rewritten from the fixtures; compare on the next run")
+    fs, kwargs = _example_capture().flowsheet(name)
+    if name in _DATE_LEFT_TO_THE_RENDERER:
+        fs.title_block.date = SCENARIOS[name][0]().title_block.date
+    drawn = _normalize(fs.to_svg(**kwargs))
+    golden = _normalize((GOLDEN_DIR / f"{name}.svg").read_text(encoding="utf-8"))
+    if drawn != golden:
+        pytest.fail(
+            f"examples/{name}.py does not draw tests/golden/{name}.svg.\n"
+            "The golden is built from the fixture in this file, so the two have drifted: "
+            "either the example was edited and the fixture was not, or the reverse. Fix "
+            "whichever is wrong -- do not regenerate the golden until they agree.\n\n"
+            + _diff_message(name, golden, drawn),
+            pytrace=False,
+        )
+
+
+def test_every_example_has_a_fixture():
+    """A new example with no scenario beside it is unguarded, and silently so:
+    the suite would stay green while nothing at all held the new sheet to
+    anything. #231 asks for this before the corpus grows again."""
+    assert sorted(SCENARIOS) == _example_capture().sheets()
 
 
 def test_the_fractionator_schedules_only_equipment_that_exists():
