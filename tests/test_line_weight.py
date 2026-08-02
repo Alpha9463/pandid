@@ -22,6 +22,19 @@ constant: a symbol's own fine detail (a column's trays, an agitator, the
 location bar across a panel balloon) is deliberately finer than its outline, and
 a signal line is deliberately half a process line's weight. "2.0 everywhere" is
 not the invariant. "The weight it should be" is.
+
+And it is one weight, not a range. #235 is the half of #153 that was left: a box
+of another *shape* scales the two axes differently, and this file used to price
+that as an ellipse bounded by the aspect change the placement asked for -- which
+let V-604's shell walls draw 1,53 heavier than its heads inside one outline, and
+let the four vendored families whose own wrapper group is uneven draw an ellipse
+at their natural size with no placement involved at all. ISO 15519-1:2010
+§11.1.3 is a *shall* -- "When the size of a symbol is changed, the line width
+shall be unchanged" -- and §6.2's "the ratio between any two widths shall be at
+least 2:1" leaves nothing between 1:1 and 2:1 to call it instead. The renderer
+now redraws the artwork at the placed size rather than stretching its viewport
+(``pandid.render.svg._baked``), so every stroke below is checked for being
+*round*, at the weight its definition declares, with no bound and no exception.
 """
 
 import math
@@ -158,22 +171,27 @@ def drawn_pens(svg):
 
 
 def authored_pens(sym):
-    """The weights a symbol's own definition declares, in document order.
+    """The weight a symbol's own definition declares, in document order.
 
     Read through the artwork's internal scale group, so this is the weight the
-    symbol draws at in the box it was drawn for -- 2.0 for an outline, whatever
-    finer weight the author chose for a detail line, and a *pair* for the four
-    families ``scripts/vendor_symbols.py`` reproportions unevenly, whose scale
-    group strokes with an elliptical pen the generator can centre on the sheet
-    weight but not round out. That is a statement about the stencil scale and
-    not about the placement this file is checking, so it is the fixed point a
-    placement is measured against here, and it is pinned in its own right by
-    :func:`test_every_symbol_declares_a_pen_centred_on_the_sheet_weight`.
+    symbol draws at in the box it was drawn for: 2.0 for an outline, and
+    whatever finer weight the author chose for a detail line.
+
+    One number per stroke, taken as the geometric mean of the two axes, because
+    four of the vendored families are drawn under an *uneven* scale group and so
+    declare an ellipse rather than a pen -- a plain vessel under
+    ``scale(0.62, 0.5)`` declares 2.23 by 1.80. That is a fact about how the
+    stencil was reproportioned and not a weight anybody chose; the mean is the
+    weight it was centred on, it is what ``scripts/vendor_symbols.py`` divided
+    by to bake it in, and it is exact for the other 138 families, whose two axes
+    agree. The renderer flattens that group into the coordinates and strokes at
+    this number (``pandid.render.svg._baked``), which is why the drawn pens
+    checked against it below are round even for those four.
     """
     root = ET.fromstring(f'<svg xmlns="http://www.w3.org/2000/svg">{sym.svg}</svg>')
     out = []
     _walk(root, _IDENTITY, {}, out, "")
-    return [(lo, hi) for _, lo, hi in out]
+    return [math.sqrt(lo * hi) for _, lo, hi in out]
 
 
 # --- the invariant ------------------------------------------------------------
@@ -182,13 +200,21 @@ def authored_pens(sym):
 def check_symbol_weights(fs, svg):
     """Every symbol on *svg* is drawn with the pen its definition declares.
 
-    Exactly, whenever the box only *resizes* the artwork -- which is the whole
-    of what a placement usually asks, and the case that shipped wrong. A box
-    that also *reshapes* it stretches the pen into an ellipse, since SVG has no
-    elliptical pen to counter-sweep it with; that is bounded here by the aspect
-    change the placement itself asked for, and the ellipse's area is held to the
-    circle's exactly, which is what makes the bound collapse to equality the
-    moment the two axes agree.
+    Round, and at that weight exactly, whatever box the unit was given: a
+    resize, a reshape, a quarter turn, a mirror or any of them together. Two
+    assertions and no branch, which is the point of #235 -- the version of this
+    function that shipped with #153 checked the *mean* of the two axes exactly
+    and then allowed the axes themselves to spread as far apart as the box was
+    out of the symbol's shape, so V-604's 2.48 by 1.61 passed. ISO 15519-1
+    §11.1.3 does not allow a spread and §6.2 has no name for one under 2:1.
+
+    ``authored_pens`` is a weight per stroke rather than a constant because a
+    symbol's own fine detail is deliberately finer than its outline; the sheet
+    weight itself is pinned separately, both under the definitions
+    (:func:`test_every_symbol_declares_a_pen_centred_on_the_sheet_weight`) and
+    on the lines a sheet draws directly
+    (:func:`test_every_line_on_the_corpus_lands_on_one_of_the_two_sheet_weights`),
+    so "the weight it should be" cannot be satisfied by moving the target.
     """
     renderer = SvgRenderer()
     by_id = {}
@@ -209,22 +235,17 @@ def check_symbol_weights(fs, svg):
             f"declares {len(expected)}"
         )
         kx, ky = _placement_scale(sym, u)
-        stretch = max(kx, ky) / min(kx, ky)
-        for i, ((elo, ehi), (dlo, dhi)) in enumerate(zip(expected, drawn)):
+        for i, (want, (dlo, dhi)) in enumerate(zip(expected, drawn)):
             what = f"{u.name} ({sym_id}) stroke {i}"
-            assert math.isclose(math.sqrt(dlo * dhi), math.sqrt(elo * ehi), rel_tol=1e-5), (
-                f"{what}: drawn at {dlo:.4g}..{dhi:.4g}, its definition is drawn "
-                f"at {elo:.4g}..{ehi:.4g}"
+            assert math.isclose(dlo, dhi, rel_tol=1e-5), (
+                f"{what}: drawn {dhi:.4g} one way and {dlo:.4g} the other, in a box "
+                f"{kx:.4g} by {ky:.4g} of the symbol's own -- one outline, two "
+                f"widths, and ISO 15519-1 §6.2 has no weight between 1:1 and 2:1"
             )
-            if math.isclose(kx, ky, rel_tol=1e-9):  # a resize and nothing more
-                assert math.isclose(dlo, elo, rel_tol=1e-5) and math.isclose(
-                    dhi, ehi, rel_tol=1e-5
-                ), f"{what}: {kx:.4g}x resize moved the weight {elo:.4g} to {dlo:.4g}"
-            else:
-                assert dhi / dlo <= (ehi / elo) * stretch * (1 + 1e-6), (
-                    f"{what}: drawn {dhi / dlo:.4g} out of round against a box "
-                    f"{stretch:.4g} out of the symbol's own shape"
-                )
+            assert math.isclose(dlo, want, rel_tol=1e-5), (
+                f"{what}: a {kx:.4g} by {ky:.4g} box moved the weight its "
+                f"definition draws at, {want:.4g}, to {dlo:.4g}"
+            )
         checked += 1
     assert checked, "no unit was checked"
 
@@ -251,28 +272,28 @@ def test_every_symbol_declares_a_pen_centred_on_the_sheet_weight():
     geometric mean now, so the sheet weight is the *middle* of every pen in the
     library rather than one edge of four of them.
 
-    Round wherever it can be, which is every hand-drawn symbol and 138 of the
-    142 vendored families. It cannot be for the other four, since one
-    ``stroke-width`` cannot express a weight that depends on the direction the
-    line runs in; there the two axes straddle the sheet weight by
-    ``sqrt(sx/sy)`` each way, which is what this measures and what dividing by
-    one axis did not do.
+    The middle is all a ``stroke-width`` inside an uneven scale group can be,
+    and until #235 that was where it ended: those four families drew 2.23 by
+    1.80 on the page, at their own natural size, and no care taken at the
+    ``<use>`` could have helped. The renderer flattens the group into the
+    coordinates now, so the mean this measures is the weight that reaches the
+    page in both directions -- which is what
+    :func:`test_every_symbol_on_the_corpus_is_drawn_at_its_declared_weight`
+    checks and what makes this the right number to hold the library to.
     """
     checked = 0
     for (kind, variant), sym in sorted(default_registry._symbols.items()):
         pens = authored_pens(sym)
         assert pens, f"{kind}/{variant} declares no stroke at all"
-        # The outline is the heaviest pen by AREA, not by long axis: an uneven
-        # pair's ellipse is longer on one axis than the round pen it stands in
-        # for, and ordering on that would pick a detail line over an outline
-        # the moment one was drawn under a wide enough pair.
-        lo, hi = max(pens, key=lambda pen: pen[0] * pen[1])
+        # The outline is the heaviest pen, and for the four uneven families that
+        # is a mean rather than a width; see authored_pens.
+        pen = max(pens)
         # The tolerance is the generator's own rounding: it emits the divided
         # weight to three decimals, and the packed tower's 0.662 is the
         # smallest number that lands on, so a part in a thousand there.
-        assert math.isclose(math.sqrt(lo * hi), float(_PROCESS_STROKE), rel_tol=2e-3), (
-            f"{kind}/{variant}: its outline is drawn at {lo:.4g} by {hi:.4g}, a pen "
-            f"of mean {math.sqrt(lo * hi):.4g} against the sheet's {_PROCESS_STROKE}"
+        assert math.isclose(pen, float(_PROCESS_STROKE), rel_tol=2e-3), (
+            f"{kind}/{variant}: its outline is drawn at {pen:.4g} against the "
+            f"sheet's {_PROCESS_STROKE}"
         )
         checked += 1
     assert checked > 100, f"only {checked} symbols were walked; the registry is bigger"
