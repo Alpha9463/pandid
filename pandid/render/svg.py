@@ -129,14 +129,27 @@ def _along(box, vertical: bool, lo: float, hi: float) -> bool:
     what a reader attaches it to.
 
     More than half, because that is the least arbitrary line there is to draw
-    and because the corpus is not close to it. Measured over all 108 line
-    numbers on the twelve shipped sheets, only three overrun their run at all,
-    and they fall in two groups with nothing between: ``3"-P-1005-A1A`` on 09
-    (77 % of it alongside, overrunning only where it passes the relief valve the
-    line leaves) and ``FB-301-200-160-SS`` on 11 (74 %) both read as their own
-    line's without help, and ``AE-304-150-80-SS`` on 11 (32 %) does not -- it is
-    a sixteen-character number naming a thirty-unit stub, so two thirds of it
-    lies against a reflux drum and a condenser instead.
+    and because nothing in the corpus sits on it. Measured over all 145 line
+    numbers on the fourteen shipped sheets, twelve overrun their run at all, and
+    they fall in two groups with a clear band of nothing between: nine read as
+    their own line's without help, from ``VAP-611-150-40-CS`` on 14 at 61 % of
+    it alongside up through ``3"-P-1005-A1A`` on 09 at 74 % (overrunning only
+    where it passes the relief valve the line leaves) to
+    ``E10-609-200-40-CS`` on 14 at 98 %; and three do not --
+    ``MS-601-200-40-CS`` on 14 at 40 %, ``S-403`` on 13 at 37 % and
+    ``AE-304-150-80-SS`` on 11 at 29 %, the last a sixteen-character number
+    naming a thirty-unit stub, so two thirds of it lies against a reflux drum
+    and a condenser instead.
+
+    The band has narrowed as the corpus has grown -- 40 % to 61 % over fourteen
+    sheets, where it was 32 % to 74 % over twelve -- and that is worth watching
+    rather than worth moving the rule for. Half is still the only value in it
+    that names something (the words are mostly beside their line, or mostly not)
+    and the twelve overruns are still nine plainly one way and three plainly the
+    other. A sheet that lands a number *in* the band is the signal that this
+    threshold has stopped sorting them, and the two checks in
+    ``tests/test_label_invariants.py`` that read this corpus are what would say
+    so.
 
     What this replaces is a cap on the *stand-off*: past one label height of
     blank paper the number was held to be adrift and given a leader. That

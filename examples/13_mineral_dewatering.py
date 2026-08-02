@@ -29,7 +29,27 @@ real paper.
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pandid import Flowsheet, devices, units
+from pandid import (
+    Blower,
+    Conveyor,
+    Cyclone,
+    Dryer,
+    Feed,
+    Filter,
+    Flowsheet,
+    Funnel,
+    Furnace,
+    GravitySeparator,
+    MagneticSeparator,
+    PeristalticPump,
+    Product,
+    Reducer,
+    ScrewPump,
+    Scrubber,
+    Tank,
+    Tee,
+    Vent,
+)
 from pandid.document import Revision, TableBox, TitleBlock, equipment_list
 from pandid.portgeom import port_offset
 
@@ -94,70 +114,70 @@ def main():
     fs = Flowsheet("Mineral Concentrate Dewatering A400")
 
     # --- Flocculant make-up ----------------------------------------------
-    water = fs.add(units.Feed("Raw Water", reference="PCD-402"))
+    water = fs.add(Feed("Raw Water", reference="PCD-402"))
     # Not in ``document._MAJOR_EQUIPMENT``, so it spends no row of the
     # equipment list, like the tees and reducers below.
-    funnel = fs.add(units.Funnel("FN-401",
-                                 description="Flocculant Charging Funnel"))
-    charge = fs.add(units.Tee(branch="inlet"))
+    funnel = fs.add(Funnel("FN-401",
+                           description="Flocculant Charging Funnel"))
+    charge = fs.add(Tee(branch="inlet"))
     # The stirrer this tank has is not drawn: ``Tank`` has no agitated variant,
     # and ``Reactor``, which draws one, is the wrong symbol for a reagent tank.
-    tank = fs.add(units.Tank("TK-401", variant="conical_bottom",
-                             description="Flocculant Make-up Tank"))
+    tank = fs.add(Tank("TK-401", variant="conical_bottom",
+                       description="Flocculant Make-up Tank"))
     # Both its connections are drawn on the crown of the head, which is what
     # shapes the piping around it in the placement block below.
-    dose = fs.add(devices.PeristalticPump(
+    dose = fs.add(PeristalticPump(
         "P-402", description="Flocculant Dosing Pump"))
 
     # --- Thickening -------------------------------------------------------
-    concentrate = fs.add(units.Feed("Flotation Concentrate",
-                                    reference="PFD-302"))
-    floc = fs.add(units.Tee(branch="inlet"))
+    concentrate = fs.add(Feed("Flotation Concentrate",
+                              reference="PFD-302"))
+    floc = fs.add(Tee(branch="inlet"))
     # ``overflow`` is the high draw off the launder wall and ``underflow`` the
     # low one out of the apex, which is what the stencil draws.
-    thickener = fs.add(devices.GravitySeparator(
+    thickener = fs.add(GravitySeparator(
         "TH-401", description="Concentrate Thickener"))
-    overflow = fs.add(units.Product("Recovered Water", reference="PCD-402"))
+    overflow = fs.add(Product("Recovered Water", reference="PCD-402"))
 
     # --- Filtration -------------------------------------------------------
-    underflow_pump = fs.add(devices.ScrewPump(
+    underflow_pump = fs.add(ScrewPump(
         "P-401", description="Thickener Underflow Pump"))
     # ``large_end="outlet"`` is what turns the second one into an expander;
     # neither carries a row in the equipment list.
-    suction_red = fs.add(units.Reducer("RD-401", variant="eccentric",
-                                       description="P-401 Suction Reducer"))
-    disch_red = fs.add(units.Reducer("RD-402", variant="concentric",
-                                     large_end="outlet",
-                                     description="P-401 Discharge Expander"))
+    suction_red = fs.add(Reducer("RD-401", variant="eccentric",
+                                 description="P-401 Suction Reducer"))
+    disch_red = fs.add(Reducer("RD-402", variant="concentric",
+                               large_end="outlet",
+                               description="P-401 Discharge Expander"))
     # Left as a variant: no class in ``pandid.devices`` covers the liquid belt
     # filter. ``DustCollector`` has a ``belt`` variant, but it aliases to
     # ``gas_belt`` -- a different symbol, and a gas casing.
     #
     # The vacuum package is bought with the filter and drawn on the vendor's
     # sheet, so only the cake and the filtrate cross this one.
-    belt_filter = fs.add(units.Filter("FL-401", variant="belt", width=60,
-                                      height=110,
-                                      description="Concentrate Belt Filter"))
+    belt_filter = fs.add(Filter("FL-401", variant="belt", width=60,
+                                height=110,
+                                description="Concentrate Belt Filter"))
     # A Tee is drawn as nothing at all and carries no tag. This one splits;
     # the four ``branch="inlet"`` tees elsewhere on the sheet combine, and are
     # drawn identically, since a tee does not know which way its branch runs.
-    cake_tee = fs.add(units.Tee())
-    filtrate = fs.add(units.Product("Filtrate", reference="PCD-402"))
+    cake_tee = fs.add(Tee())
+    filtrate = fs.add(Product("Filtrate", reference="PCD-402"))
     # Cake is dropped onto a belt, not piped into it, so the tail nozzle comes
     # off the top face rather than off the end.
-    conveyor = fs.add(units.Conveyor("CV-401", length=150,
-                                     description="Filter Cake Conveyor"))
+    conveyor = fs.add(Conveyor("CV-401", length=150,
+                               description="Filter Cake Conveyor"))
     conveyor.nozzle("feed", "N")
 
     # --- Drying -----------------------------------------------------------
-    air = fs.add(units.Feed("Ambient Air"))
-    gas = fs.add(units.Feed("Natural Gas", reference="PCD-403"))
+    air = fs.add(Feed("Ambient Air"))
+    gas = fs.add(Feed("Natural Gas", reference="PCD-403"))
     # ``Furnace`` and not ``Heater``: the difference between the two classes is
     # the ``fuel`` nozzle, and the fuel line is why this item is here.
-    heater = fs.add(units.Furnace("FH-401", description="Dryer Air Heater"))
+    heater = fs.add(Furnace("FH-401", description="Dryer Air Heater"))
     # The dryer's feed breeching is bought and tagged with the dryer, so it is
     # a tee rather than an item of its own.
-    breeching = fs.add(units.Tee(branch="inlet"))
+    breeching = fs.add(Tee(branch="inlet"))
     # **Two nozzles where the plant has four.** A rotary dryer has a solids
     # chute and a gas inlet at the feed hood and the same pair at the
     # discharge; ``units.Dryer`` declares only ``feed`` and ``product``, so
@@ -166,29 +186,29 @@ def main():
     # whole product in the gas where a real drum's carries only entrained
     # fines. A ``Dryer`` with gas nozzles of its own is the fix, and this
     # sheet wants redrawing around them when it has them.
-    dryer = fs.add(units.Dryer("DR-401",
-                               description="Concentrate Rotary Dryer"))
+    dryer = fs.add(Dryer("DR-401",
+                         description="Concentrate Rotary Dryer"))
 
     # --- Product recovery and dust capture --------------------------------
     # Neither draw is named for which one is wanted, so here the product is
     # the ``underflow`` and the gas still to be cleaned is the ``overflow``.
-    cyclone = fs.add(devices.Cyclone(
+    cyclone = fs.add(Cyclone(
         "CY-401", description="Product Recovery Cyclone"))
-    scrub_water = fs.add(units.Feed("Scrubbing Water", reference="PCD-402"))
-    scrub_tee = fs.add(units.Tee(branch="inlet"))
+    scrub_water = fs.add(Feed("Scrubbing Water", reference="PCD-402"))
+    scrub_tee = fs.add(Tee(branch="inlet"))
     # The water ties in on the duct upstream rather than on the body, so the
     # tee above carries it and the vessel takes one feed.
-    scrubber = fs.add(devices.Scrubber(
+    scrubber = fs.add(Scrubber(
         "SC-401", description="Dryer Exhaust Scrubber"))
-    effluent = fs.add(units.Product("Scrubber Effluent", reference="PCD-402"))
+    effluent = fs.add(Product("Scrubber Effluent", reference="PCD-402"))
     # Induced draught, so the fan is last and FH-401's air inlet is a plain
     # flag rather than a second machine.
-    fan = fs.add(units.Blower("BL-401", description="Dryer Exhaust Fan"))
+    fan = fs.add(Blower("BL-401", description="Dryer Exhaust Fan"))
     # A Vent draws real piping rather than an off-page flag. Like the funnel
     # and the reducers it is a line item and is scheduled nowhere.
-    stack = fs.add(units.Vent("VE-401", variant="exhaust_head", width=45,
-                              height=36,
-                              description="Dryer Exhaust Head"))
+    stack = fs.add(Vent("VE-401", variant="exhaust_head", width=45,
+                        height=36,
+                        description="Dryer Exhaust Head"))
 
     # The stencil draws the reject leaving the apex rather than lifted off the
     # top, which is a suspended magnet drawn upside down. Read ``underflow`` as
@@ -197,11 +217,11 @@ def main():
     #
     # variant= stated rather than defaulted: MagneticSeparator draws both the
     # permanent and the electromagnetic body, and this sheet means the former.
-    magnet = fs.add(devices.MagneticSeparator(
+    magnet = fs.add(MagneticSeparator(
         "MS-401", variant="permanent_magnet",
         description="Product Magnetic Separator"))
-    product = fs.add(units.Product("Dry Concentrate", reference="PFD-402"))
-    tramp = fs.add(units.Product("Tramp Metal"))
+    product = fs.add(Product("Dry Concentrate", reference="PFD-402"))
+    tramp = fs.add(Product("Tramp Metal"))
 
     # --- Placement --------------------------------------------------------
     # Positioned by nozzle, not by corner: a port sits at a fixed fraction of

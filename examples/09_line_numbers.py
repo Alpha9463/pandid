@@ -21,7 +21,7 @@ that already exists on someone else's line list.
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pandid import Flowsheet, units
+from pandid import Feed, Fitting, Flowsheet, Product, Pump, Valve, Vessel
 from pandid.document import Revision, TitleBlock
 from pandid.portgeom import port_offset
 
@@ -30,19 +30,19 @@ def main():
     fs = Flowsheet("Transfer and Relief")
 
     # --- Equipment -------------------------------------------------------
-    feed = fs.add(units.Feed("Raw Feed", reference="PFD-100"))
-    hv = fs.add(units.Valve("HV-101", description="Suction Isolation Valve"))
-    strainer = fs.add(units.Fitting("ST-101", variant="strainer",
-                                    description="Suction Strainer"))
-    pump = fs.add(units.Pump("P-101", description="Transfer Pump"))
-    fv = fs.add(units.Valve("FV-101", variant="control",
-                            description="Discharge Control Valve"))
-    surge = fs.add(units.Vessel("V-101", width=90, height=140,
-                                description="Surge Vessel"))
-    psv = fs.add(units.Valve("PSV-101", variant="psv",
-                             description="Vessel Relief Valve"))
-    flare = fs.add(units.Product("To Flare", reference="PFD-900"))
-    prod = fs.add(units.Product("To Unit 200", reference="PFD-200"))
+    feed = fs.add(Feed("Raw Feed", reference="PFD-100"))
+    hv = fs.add(Valve("HV-101", description="Suction Isolation Valve"))
+    strainer = fs.add(Fitting("ST-101", variant="strainer",
+                              description="Suction Strainer"))
+    pump = fs.add(Pump("P-101", description="Transfer Pump"))
+    fv = fs.add(Valve("FV-101", variant="control",
+                      description="Discharge Control Valve"))
+    surge = fs.add(Vessel("V-101", width=90, height=140,
+                          description="Surge Vessel"))
+    psv = fs.add(Valve("PSV-101", variant="psv",
+                       description="Vessel Relief Valve"))
+    flare = fs.add(Product("To Flare", reference="PFD-900"))
+    prod = fs.add(Product("To Unit 200", reference="PFD-200"))
 
     # The two spec breaks on this sheet. Everything else in line is left alone
     # and keeps its run whole.

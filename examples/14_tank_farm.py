@@ -72,7 +72,7 @@ choices are engineering and are attributed to nothing.
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pandid import Flowsheet, units
+from pandid import Feed, Fitting, Flowsheet, Product, Pump, Reducer, Tank, Tee, Valve, Vent, Vessel
 from pandid.document import Annotation, Revision, TitleBlock, legend, notes
 from pandid.portgeom import port_offset, resolve_size
 
@@ -99,28 +99,28 @@ def main():
     # --- Storage ---------------------------------------------------------
     # label_pos="center" on all three: the fill line arrives on the crown, so a
     # tag written above the tank would be written across that drop.
-    tk601 = fs.add(units.Tank("TK-601", variant="floating_roof", width=190, height=140,
-                              label_pos="center", description="Motor Spirit Storage Tank"))
-    tk602 = fs.add(units.Tank("TK-602", width=180, height=150, label_pos="center",
-                              description="Denatured Ethanol Storage Tank"))
-    v603 = fs.add(units.Tank("V-603", variant="sphere", width=140, height=185,
-                             label_pos="center", description="Butane Storage Sphere"))
-    v604 = fs.add(units.Vessel("V-604", variant="legs", width=60, height=120,
-                               description="Loading Vapour Knock-Out Drum"))
+    tk601 = fs.add(Tank("TK-601", variant="floating_roof", width=190, height=140,
+                        label_pos="center", description="Motor Spirit Storage Tank"))
+    tk602 = fs.add(Tank("TK-602", width=180, height=150, label_pos="center",
+                        description="Denatured Ethanol Storage Tank"))
+    v603 = fs.add(Tank("V-603", variant="sphere", width=140, height=185,
+                       label_pos="center", description="Butane Storage Sphere"))
+    v604 = fs.add(Vessel("V-604", variant="legs", width=60, height=120,
+                         description="Loading Vapour Knock-Out Drum"))
 
     # --- Rotating --------------------------------------------------------
-    p601 = fs.add(units.Pump("P-601", description="Motor Spirit Transfer Pump"))
-    p602 = fs.add(units.Pump("P-602", variant="gear", width=48, height=76,
-                             description="Ethanol Blend Pump"))
+    p601 = fs.add(Pump("P-601", description="Motor Spirit Transfer Pump"))
+    p602 = fs.add(Pump("P-602", variant="gear", width=48, height=76,
+                       description="Ethanol Blend Pump"))
 
     # --- Boundary --------------------------------------------------------
-    ms_in = fs.add(units.Feed("Motor Spirit", reference="P&ID-501"))
-    eth_in = fs.add(units.Feed("Denatured Ethanol", reference="PFD-302"))
-    lpg_in = fs.add(units.Feed("Butane", reference="P&ID-503"))
-    e10_out = fs.add(units.Product("E10 Road Tanker", reference="P&ID-611"))
-    lpg_out = fs.add(units.Product("LPG Road Tanker", reference="P&ID-612"))
-    vap_in = fs.add(units.Feed("Tanker Vapour Return", reference="P&ID-611"))
-    vru_out = fs.add(units.Product("Vapour Recovery Unit", reference="P&ID-609"))
+    ms_in = fs.add(Feed("Motor Spirit", reference="P&ID-501"))
+    eth_in = fs.add(Feed("Denatured Ethanol", reference="PFD-302"))
+    lpg_in = fs.add(Feed("Butane", reference="P&ID-503"))
+    e10_out = fs.add(Product("E10 Road Tanker", reference="P&ID-611"))
+    lpg_out = fs.add(Product("LPG Road Tanker", reference="P&ID-612"))
+    vap_in = fs.add(Feed("Tanker Vapour Return", reference="P&ID-611"))
+    vru_out = fs.add(Product("Vapour Recovery Unit", reference="P&ID-609"))
 
     # --- In-line: motor spirit -------------------------------------------
     # Both receipt valves fail closed, and both say so in the notes rather than
@@ -128,66 +128,66 @@ def main():
     # square hangs on, and the mark's halo then deletes the impulse line joining
     # the two -- #223. The square is the more important of the pair, so the mark
     # comes off; put it back when #223 is fixed and drop the note.
-    xv601 = fs.add(units.Valve("XV-601", variant="solenoid",
-                               description="MS Receipt Trip Valve"))
-    xv602 = fs.add(units.Valve("XV-602", variant="solenoid",
-                               description="Ethanol Receipt Trip Valve"))
-    hv601 = fs.add(units.Valve("HV-601", variant="gate", description="TK-601 Root Valve"))
-    ej601 = fs.add(units.Fitting("EJ-601", variant="expansion_joint",
-                                 description="TK-601 Nozzle Compensator"))
-    st601 = fs.add(units.Fitting("ST-601", variant="strainer_basket",
-                                 description="P-601 Suction Strainer"))
+    xv601 = fs.add(Valve("XV-601", variant="solenoid",
+                         description="MS Receipt Trip Valve"))
+    xv602 = fs.add(Valve("XV-602", variant="solenoid",
+                         description="Ethanol Receipt Trip Valve"))
+    hv601 = fs.add(Valve("HV-601", variant="gate", description="TK-601 Root Valve"))
+    ej601 = fs.add(Fitting("EJ-601", variant="expansion_joint",
+                           description="TK-601 Nozzle Compensator"))
+    st601 = fs.add(Fitting("ST-601", variant="strainer_basket",
+                           description="P-601 Suction Strainer"))
     # large_end="outlet" is what makes RD-602 an expansion: the same fitting
     # piped round the other way rather than a second symbol, so the run still
     # goes inlet to outlet through both.
-    rd601 = fs.add(units.Reducer("RD-601", variant="eccentric",
-                                 description="P-601 Suction Reducer"))
-    rd602 = fs.add(units.Reducer("RD-602", variant="concentric", large_end="outlet",
-                                 description="P-601 Discharge Expander"))
-    nrv601 = fs.add(units.Valve("NRV-601", variant="check", description="P-601 Non-Return Valve"))
+    rd601 = fs.add(Reducer("RD-601", variant="eccentric",
+                           description="P-601 Suction Reducer"))
+    rd602 = fs.add(Reducer("RD-602", variant="concentric", large_end="outlet",
+                           description="P-601 Discharge Expander"))
+    nrv601 = fs.add(Valve("NRV-601", variant="check", description="P-601 Non-Return Valve"))
 
     # --- In-line: ethanol ------------------------------------------------
-    hv603 = fs.add(units.Valve("HV-603", variant="gate", description="TK-602 Root Valve"))
-    sb601 = fs.add(units.Fitting("SB-601", variant="blind", description="TK-602 Spectacle Blind"))
-    t_rec = fs.add(units.Tee(branch="inlet"))
-    st602 = fs.add(units.Fitting("ST-602", variant="strainer_y",
-                                 description="P-602 Suction Strainer"))
-    t_psv = fs.add(units.Tee())
-    psv602 = fs.add(units.Valve("PSV-602", variant="relief", description="P-602 Relief Valve"))
-    fe605 = fs.add(units.Fitting(blend_flow.tag("FE"), variant="coriolis",
-                                 description="Ethanol Blend Meter"))
-    cv605 = fs.add(units.Valve(blend_flow.tag("CV"), variant="control",
-                               description="Ethanol Blend Valve"))
-    nrv602 = fs.add(units.Valve("NRV-602", variant="check", description="P-602 Non-Return Valve"))
+    hv603 = fs.add(Valve("HV-603", variant="gate", description="TK-602 Root Valve"))
+    sb601 = fs.add(Fitting("SB-601", variant="blind", description="TK-602 Spectacle Blind"))
+    t_rec = fs.add(Tee(branch="inlet"))
+    st602 = fs.add(Fitting("ST-602", variant="strainer_y",
+                           description="P-602 Suction Strainer"))
+    t_psv = fs.add(Tee())
+    psv602 = fs.add(Valve("PSV-602", variant="relief", description="P-602 Relief Valve"))
+    fe605 = fs.add(Fitting(blend_flow.tag("FE"), variant="coriolis",
+                           description="Ethanol Blend Meter"))
+    cv605 = fs.add(Valve(blend_flow.tag("CV"), variant="control",
+                         description="Ethanol Blend Valve"))
+    nrv602 = fs.add(Valve("NRV-602", variant="check", description="P-602 Non-Return Valve"))
 
     # --- In-line: butane -------------------------------------------------
-    hv605 = fs.add(units.Valve("HV-605", variant="gate", description="V-603 Root Valve"))
-    pcv606 = fs.add(units.Valve("PCV-606", variant="regulator",
-                                description="Butane Let-Down Regulator"))
-    hv608 = fs.add(units.Valve("HV-608", variant="ball", description="LPG Loading Arm Valve"))
+    hv605 = fs.add(Valve("HV-605", variant="gate", description="V-603 Root Valve"))
+    pcv606 = fs.add(Valve("PCV-606", variant="regulator",
+                          description="Butane Let-Down Regulator"))
+    hv608 = fs.add(Valve("HV-608", variant="ball", description="LPG Loading Arm Valve"))
 
     # --- In-line: the loading rack ---------------------------------------
-    t_blend = fs.add(units.Tee(branch="inlet"))
+    t_blend = fs.add(Tee(branch="inlet"))
     t_blend.new_line_number = True
     # label_pos="bottom" keeps FE-604's tag clear of FT-604, which stands over it.
-    fe604 = fs.add(units.Fitting(load_flow.tag("FE"), variant="positive_displacement",
-                                 label_pos="bottom", description="Loading Meter"))
-    cv604 = fs.add(units.Valve(load_flow.tag("CV"), variant="control",
-                               description="Loading Rate Valve"))
-    hv604 = fs.add(units.Valve("HV-604", variant="ball", description="E10 Loading Arm Valve"))
+    fe604 = fs.add(Fitting(load_flow.tag("FE"), variant="positive_displacement",
+                           label_pos="bottom", description="Loading Meter"))
+    cv604 = fs.add(Valve(load_flow.tag("CV"), variant="control",
+                         description="Loading Rate Valve"))
+    hv604 = fs.add(Valve("HV-604", variant="ball", description="E10 Loading Arm Valve"))
     # HOS and not HS. ISO 15519-2 Table 2 (p. 11) gives H as a process variable,
     # "Human observation", and S as a control function, "Switching (open loop)",
     # so HS-601 is a well-formed letter code string and tagged this hose as an
     # instrument. HOS breaks at the second letter, which is neither.
-    hos601 = fs.add(units.Fitting("HOS-601", variant="hose", description="E10 Loading Hose"))
+    hos601 = fs.add(Fitting("HOS-601", variant="hose", description="E10 Loading Hose"))
 
     # --- In-line: the vapour system --------------------------------------
-    fa602 = fs.add(units.Fitting("FA-602", variant="flame_arrestor_detonation_proof",
-                                 description="Vapour Return Flame Arrestor"))
-    hv607 = fs.add(units.Valve("HV-607", variant="butterfly", description="Vapour Header Valve"))
-    fa601 = fs.add(units.Fitting("FA-601", variant="flame_arrestor",
-                                 description="V-604 Vent Flame Arrestor"))
-    vt601 = fs.add(units.Vent("VT-601", variant="breather", description="V-604 Conservation Vent"))
+    fa602 = fs.add(Fitting("FA-602", variant="flame_arrestor_detonation_proof",
+                           description="Vapour Return Flame Arrestor"))
+    hv607 = fs.add(Valve("HV-607", variant="butterfly", description="Vapour Header Valve"))
+    fa601 = fs.add(Fitting("FA-601", variant="flame_arrestor",
+                           description="V-604 Vent Flame Arrestor"))
+    vt601 = fs.add(Vent("VT-601", variant="breather", description="V-604 Conservation Vent"))
 
     # --- Placement -------------------------------------------------------
     # Pinned by nozzle, not by corner: every device is placed with pin(port=...),

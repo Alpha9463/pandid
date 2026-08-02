@@ -2479,7 +2479,7 @@ fs.to_svg()
 The rule is stated as the **clearance**, not as a multiple of the head, and the
 difference matters: at the default 20 pitch those same two heads have 8 units of
 paper between them — four line-widths — and read without effort, so nothing is
-reported. Only one unit on the twelve shipped examples is inside the floor:
+reported. Only one unit on the fourteen shipped examples is inside the floor:
 `10_ethanol_pfd`'s `M-301`, whose two feeds land 14.5px apart.
 
 The cure is the box, and the message does the arithmetic: the drawn pitch is
@@ -2546,9 +2546,10 @@ instead of the 17.5 apart that `n_inlets=3` would have given them.
 **Only counted nozzles.** A `vent`, a `relief`, a `drain`, a `duty`, an
 exchanger's other side, a drain valve's outlet — every fixed nozzle a class
 declares is offered to every instance whether the sheet uses it or not, and
-leaving one open is a drawing decision. Across the twelve examples in `examples/` 167 ports carry no stream
-and every one of them is one of those: 112 signal connections, 26 exchanger
-utility sides, 14 duties, 8 station drain outlets and 7 vents. None is reported.
+leaving one open is a drawing decision. Across the fourteen examples in
+`examples/` 252 ports carry no stream and every one of them is one of those:
+165 signal connections, 26 exchanger utility sides, 14 duties, 14 reliefs,
+14 drains, 11 vents and 8 station drain outlets. None is reported.
 What is reported is a *count that went unmet*, which is why the singular
 spelling is silent too — a one-feed column's nozzle is called `feed`, not
 `feed_1`, and no number was ever written down for it.
@@ -3359,7 +3360,7 @@ against one. What it follows, feature by feature:
 - **Symbols where gravity is a functionality** are not turned. **ISO 15519-1
   §11.4.2** excepts them from the general permission to turn and mirror: *"for
   example symbol 2061: Open tank or symbol X 2618: Cyclone separator … Such
-  symbols must not be turned."* 27 registered symbols carry
+  symbols must not be turned."* 41 registered symbols carry
   `Symbol.gravity_fixed`, and
   [Symbols that must not be turned](#symbols-that-must-not-be-turned) lists them.
 

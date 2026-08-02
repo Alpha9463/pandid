@@ -39,7 +39,7 @@ balloon with a letter code string, so the balloon form stands until #137 and
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pandid import Flowsheet, units
+from pandid import Column, Feed, Fitting, Flowsheet, HeatExchanger, Product, Tee, Valve, Vessel
 from pandid.document import Annotation, Revision, TitleBlock, legend, notes
 from pandid.portgeom import port_offset, resolve_size
 
@@ -69,50 +69,50 @@ def main():
     # --- Equipment -------------------------------------------------------
     # label_pos="center": the overhead leaves the top centre, so a tag written
     # above the tower would be written across that riser.
-    col = fs.add(units.Column("T-301", label_pos="center", description="Beer Column"))
-    cond = fs.add(units.HeatExchanger("C-301", variant="straight_tubes", width=130,
-                                      height=40, description="Overhead Condenser"))
-    drum = fs.add(units.Vessel("D-301", variant="horizontal", width=130, height=42,
-                               description="Reflux Drum"))
-    reb = fs.add(units.HeatExchanger("RB-301", variant="kettle", width=140, height=50,
-                                     description="U-tube Kettle Reboiler"))
-    cooler = fs.add(units.HeatExchanger("HX-301", variant="straight_tubes", width=130,
-                                        height=40, description="Beer Bottoms Cooler"))
+    col = fs.add(Column("T-301", label_pos="center", description="Beer Column"))
+    cond = fs.add(HeatExchanger("C-301", variant="straight_tubes", width=130,
+                                height=40, description="Overhead Condenser"))
+    drum = fs.add(Vessel("D-301", variant="horizontal", width=130, height=42,
+                         description="Reflux Drum"))
+    reb = fs.add(HeatExchanger("RB-301", variant="kettle", width=140, height=50,
+                               description="U-tube Kettle Reboiler"))
+    cooler = fs.add(HeatExchanger("HX-301", variant="straight_tubes", width=130,
+                                  height=40, description="Beer Bottoms Cooler"))
 
     # header=True is one service tapped wherever the sheet wants it, so both
     # cooling-water tie-ins carry CWSH and both returns CWRH -- one tag, drawn
     # twice, rather than two boundary flags named apart.
-    fb_feed = fs.add(units.Feed("Fermentation Broth", reference="P&ID-201"))
-    cws_cond = fs.add(units.Feed("CWSH", header=True))
-    cwr_cond = fs.add(units.Product("CWRH", header=True))
-    cws_cool = fs.add(units.Feed("CWSH", header=True))
-    cwr_cool = fs.add(units.Product("CWRH", header=True))
-    steam = fs.add(units.Feed("HPSSH", header=True))
-    condensate = fs.add(units.Product("HPSRH", header=True))
-    ae_prod = fs.add(units.Product("Azeotropic Ethanol", reference="PFD-302"))
-    bottoms_prod = fs.add(units.Product("Cooled Bottoms", reference="F-301"))
+    fb_feed = fs.add(Feed("Fermentation Broth", reference="P&ID-201"))
+    cws_cond = fs.add(Feed("CWSH", header=True))
+    cwr_cond = fs.add(Product("CWRH", header=True))
+    cws_cool = fs.add(Feed("CWSH", header=True))
+    cwr_cool = fs.add(Product("CWRH", header=True))
+    steam = fs.add(Feed("HPSSH", header=True))
+    condensate = fs.add(Product("HPSRH", header=True))
+    ae_prod = fs.add(Product("Azeotropic Ethanol", reference="PFD-302"))
+    bottoms_prod = fs.add(Product("Cooled Bottoms", reference="F-301"))
 
     # The in-line devices that stand on their own, outside a station.
-    xv = fs.add(units.Valve("XV-301", variant="solenoid",
-                            description="Feed Trip Valve"))
-    meter = fs.add(units.Fitting("FE-313", variant="rotameter",
-                                 description="Feed Flow Element"))
+    xv = fs.add(Valve("XV-301", variant="solenoid",
+                      description="Feed Trip Valve"))
+    meter = fs.add(Fitting("FE-313", variant="rotameter",
+                           description="Feed Flow Element"))
     # loop.tag() composes without checking the first letter and cannot: a final
     # element is not tagged from the measured variable. Its *number* does track
     # the loop, which is the half tag() supplies. The check valve behind it is
     # in no loop and types its own.
-    cv306 = fs.add(units.Valve(level306.tag("CV"), variant="control",
-                               description="Bottoms Control Valve"))
-    nrv306 = fs.add(units.Valve("NRV-306", variant="check",
-                                description="Bottoms Non-Return Valve"))
-    hv311 = fs.add(units.Valve("HV-311", description="C-301 Cooling Water Block Valve"))
-    hv315 = fs.add(units.Valve("HV-315", description="HX-301 Cooling Water Block Valve"))
+    cv306 = fs.add(Valve(level306.tag("CV"), variant="control",
+                         description="Bottoms Control Valve"))
+    nrv306 = fs.add(Valve("NRV-306", variant="check",
+                          description="Bottoms Non-Return Valve"))
+    hv311 = fs.add(Valve("HV-311", description="C-301 Cooling Water Block Valve"))
+    hv315 = fs.add(Valve("HV-315", description="HX-301 Cooling Water Block Valve"))
     # label_pos="bottom" because FT-303 stands over this element, and an impulse
     # line drawn up through the tag would be knocked out by the tag's own halo.
-    fe303 = fs.add(units.Fitting(flow303.tag("FE"), variant="venturi", label_pos="bottom",
-                                 description="Reflux Flow Element"))
+    fe303 = fs.add(Fitting(flow303.tag("FE"), variant="venturi", label_pos="bottom",
+                           description="Reflux Flow Element"))
     # The size steps down 100 -> 40 across it, so the run's number breaks here.
-    t_draw = fs.add(units.Tee())
+    t_draw = fs.add(Tee())
     t_draw.new_line_number = True
 
     # --- Placement -------------------------------------------------------

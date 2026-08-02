@@ -26,7 +26,7 @@ over the sheet. Pinning is the answer until that is fixed.
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pandid import Flowsheet, units
+from pandid import Block, Feed, Flowsheet, Product
 
 
 def main():
@@ -36,31 +36,31 @@ def main():
     # One box per section, in a row, at one elevation. Each declares the side
     # of the box every connection is on; nothing declares a size.
     reforming = fs.add(
-        units.Block("Reforming", inputs=["W", "N", "N"], outputs=["E"])
+        Block("Reforming", inputs=["W", "N", "N"], outputs=["E"])
     ).pin(x=260, y=340)
     shift = fs.add(
-        units.Block("Shift & CO2 Removal", inputs=1, outputs=["E", "N"])
+        Block("Shift & CO2 Removal", inputs=1, outputs=["E", "N"])
     ).pin(x=520, y=340)
     synthesis = fs.add(
-        units.Block("Synthesis Loop", inputs=["W", "S"], outputs=["E", "S"])
+        Block("Synthesis Loop", inputs=["W", "S"], outputs=["E", "S"])
     ).pin(x=830, y=340)
     # Purge west, recycle east along the loop's south wall. Declaration order
     # puts inputs first, which would land the recycle to the left of the purge
     # and send it back across the sheet to reach its own nozzle.
     synthesis.order_on("S", [synthesis.out_2, synthesis.in_2])
     refrigeration = fs.add(
-        units.Block("Refrigeration", inputs=1, outputs=["E", "S"])
+        Block("Refrigeration", inputs=1, outputs=["E", "S"])
     ).pin(x=1080, y=340)
 
     # --- Where the sheet ends --------------------------------------------
     # The two above the row feed the reformer's north wall. The purge flag
     # hangs under the loop, clear of the recycle's channel.
-    natural_gas = fs.add(units.Feed("Natural Gas")).pin(x=60, y=355)
-    air = fs.add(units.Feed("Air")).pin(x=180, y=180)
-    steam = fs.add(units.Feed("Steam")).pin(x=330, y=180)
-    co2 = fs.add(units.Product("CO2 to Urea")).pin(x=560, y=170)
-    ammonia = fs.add(units.Product("Liquid NH3")).pin(x=1300, y=355)
-    purge = fs.add(units.Product("Purge Gas")).pin(x=975, y=490)
+    natural_gas = fs.add(Feed("Natural Gas")).pin(x=60, y=355)
+    air = fs.add(Feed("Air")).pin(x=180, y=180)
+    steam = fs.add(Feed("Steam")).pin(x=330, y=180)
+    co2 = fs.add(Product("CO2 to Urea")).pin(x=560, y=170)
+    ammonia = fs.add(Product("Liquid NH3")).pin(x=1300, y=355)
+    purge = fs.add(Product("Purge Gas")).pin(x=975, y=490)
 
     # --- The streams -----------------------------------------------------
     fs.connect(natural_gas.outlet, reforming.in_1)

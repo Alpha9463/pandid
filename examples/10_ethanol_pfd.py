@@ -28,7 +28,19 @@ same unit.
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pandid import Flowsheet, units
+from pandid import (
+    Column,
+    Conveyor,
+    Feed,
+    Filter,
+    Flowsheet,
+    HeatExchanger,
+    Mixer,
+    Product,
+    Reactor,
+    Tee,
+    Vessel,
+)
 from pandid.document import Revision, TableBox, TitleBlock, equipment_list
 from pandid.portgeom import port_offset
 
@@ -67,44 +79,44 @@ def main():
     fs = Flowsheet("Ethanol Purification A300")
 
     # --- Equipment -------------------------------------------------------
-    broth = fs.add(units.Feed("Fermentation Broth", reference="PFD-201"))
-    floc = fs.add(units.Feed("Flocculant", reference="PCD-301"))
-    water = fs.add(units.Feed("RO Water", reference="PCD-301"))
+    broth = fs.add(Feed("Fermentation Broth", reference="PFD-201"))
+    floc = fs.add(Feed("Flocculant", reference="PCD-301"))
+    water = fs.add(Feed("RO Water", reference="PCD-301"))
 
-    col = fs.add(units.Column("T-301", width=110, height=250, label_pos="center",
-                              description="Beer Column"))
-    cond = fs.add(units.HeatExchanger("E-301", variant="condenser", width=64,
-                                      height=64,
-                                      description="T-301 Overhead Condenser"))
-    drum = fs.add(units.Vessel("V-301", variant="horizontal", width=110,
-                               height=36, description="T-301 Reflux Drum"))
+    col = fs.add(Column("T-301", width=110, height=250, label_pos="center",
+                        description="Beer Column"))
+    cond = fs.add(HeatExchanger("E-301", variant="condenser", width=64,
+                                height=64,
+                                description="T-301 Overhead Condenser"))
+    drum = fs.add(Vessel("V-301", variant="horizontal", width=110,
+                         height=36, description="T-301 Reflux Drum"))
     # A Tee, not a Splitter: the reflux parts from the distillate in the piping,
     # so it is drawn as nothing at all and carries no tag. A Splitter would put
     # an item on the drawing and a row in the equipment list.
-    refl = fs.add(units.Tee())
-    reb = fs.add(units.HeatExchanger("E-302", variant="kettle", width=120,
-                                     height=44,
-                                     description="T-301 Kettle Reboiler"))
-    hx = fs.add(units.HeatExchanger("HX-301", variant="straight_tubes", width=150,
-                                    height=45,
-                                    description="Beer Column Bottoms Cooling"))
-    mix1 = fs.add(units.Reactor("M-301", n_feeds=2, width=80, height=100,
-                                description="Flocculant Activation Mixer Tank"))
-    mix2 = fs.add(units.Mixer("M-302", n_inlets=2,
-                              description="Beer Flocculant Mixer Tank"))
-    press = fs.add(units.Filter("F-301", variant="press", width=120, height=60,
-                                description="Membrane Pressure Filter Press"))
+    refl = fs.add(Tee())
+    reb = fs.add(HeatExchanger("E-302", variant="kettle", width=120,
+                               height=44,
+                               description="T-301 Kettle Reboiler"))
+    hx = fs.add(HeatExchanger("HX-301", variant="straight_tubes", width=150,
+                              height=45,
+                              description="Beer Column Bottoms Cooling"))
+    mix1 = fs.add(Reactor("M-301", n_feeds=2, width=80, height=100,
+                          description="Flocculant Activation Mixer Tank"))
+    mix2 = fs.add(Mixer("M-302", n_inlets=2,
+                        description="Beer Flocculant Mixer Tank"))
+    press = fs.add(Filter("F-301", variant="press", width=120, height=60,
+                          description="Membrane Pressure Filter Press"))
     # The second tee, and unlike the first one the size and the service both
     # change across it, so new_line_number breaks the run's number there.
-    disch = fs.add(units.Tee())
+    disch = fs.add(Tee())
     disch.new_line_number = True
-    belt = fs.add(units.Conveyor("BC-301", length=120,
-                                 description="Filter Cake Conveyor Belt"))
+    belt = fs.add(Conveyor("BC-301", length=120,
+                           description="Filter Cake Conveyor Belt"))
     belt.nozzle("feed", "N")            # cake is dropped onto the belt, not piped
 
-    ethanol = fs.add(units.Product("Azeotropic Ethanol", reference="PFD-302"))
-    effluent = fs.add(units.Product("Wastewater", reference="PCD-302"))
-    cake = fs.add(units.Product("Biomass Filter Cake", reference="PFD-501"))
+    ethanol = fs.add(Product("Azeotropic Ethanol", reference="PFD-302"))
+    effluent = fs.add(Product("Wastewater", reference="PCD-302"))
+    cake = fs.add(Product("Biomass Filter Cake", reference="PFD-501"))
 
     # --- Placement -------------------------------------------------------
     # Positioned by NOZZLE, not by top-left corner: a port sits at a fixed

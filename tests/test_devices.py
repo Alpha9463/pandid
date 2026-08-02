@@ -15,7 +15,7 @@ Five promises, and this file is each of them:
    nobody documented is a class nobody finds, which is the whole reason this
    layer exists.
 
-The compatibility half -- that the 156 shipped ``(kind, variant)`` pairs still
+The compatibility half -- that the 157 shipped ``(kind, variant)`` pairs still
 build and draw exactly what they always did -- is ``tests/test_variants.py``,
 which sweeps the base classes and only the base classes.
 """
@@ -490,3 +490,69 @@ def test_the_variants_table_gives_every_drawing_exactly_one_owner():
     for cls in DEVICE_CLASSES:
         listed = {variant for (_, variant), name in owner.items() if name == cls.__name__}
         assert listed == {cls.VARIANT_ALIASES.get(v, v) for v in cls.VARIANTS}
+
+
+# ---------------------------------------------------------------------------
+# The counts the prose quotes, against the registry that decides them
+# ---------------------------------------------------------------------------
+
+README = pathlib.Path(__file__).resolve().parent.parent / "README.md"
+
+
+def _prose(path):
+    """A page as one line, so a count that wrapped is still one match."""
+    return " ".join(path.read_text(encoding="utf-8").split())
+
+
+def _counts_in(path, pattern):
+    """Every match of *pattern* on *path*, as a tuple of the integers in it.
+
+    ``re.findall`` hands back a bare string for a one-group pattern and a tuple
+    for the rest, so the single group is re-wrapped rather than iterated -- over
+    a string, ``tuple(int(n) for n in m)`` counts digits.
+    """
+    found = re.findall(pattern, _prose(path))
+    return [tuple(int(n) for n in (m if isinstance(m, tuple) else (m,))) for m in found]
+
+
+def test_the_pages_quote_the_registry_they_are_describing():
+    """README.md and docs/api.md state the size of the registry in prose, and
+    prose does not recompute itself: `139 registered symbols` outlived two
+    vendoring PRs on the front page of the project, and `docs/api.md` managed to
+    say 27 and 41 about the same set of symbols in one document.
+
+    So the four registry-derived numbers on those two pages are asserted here
+    rather than reviewed. Each is matched on a distinctive phrase rather than on
+    a bare integer, which is what keeps this from firing on a pressure or a
+    pixel count that happens to be the same number.
+
+    The size of the *example* corpus is not pinned this way. It is spelled as an
+    English word ("the fourteen shipped examples") in a dozen docstrings whose
+    sentences differ, and a regex over those is a worse thing to maintain than
+    the sentences. What holds that number honest instead is that every corpus
+    measurement is taken by a test over ``SCENARIOS``, which is built from the
+    examples rather than from a literal.
+    """
+    symbols = default_registry.__dict__["_symbols"]
+    gravity = sum(1 for s in symbols.values() if s.gravity_fixed)
+    # A drawing "gets no class of its own" when the docs' own Variants table
+    # hands it to a base class in pandid.units rather than to a device class.
+    owner = {}
+    for row in _table("Variants"):
+        for name in CLASS.findall(row[0]):
+            cls = getattr(devices, name, None) or getattr(units, name)
+            for variant in _drawings(row[2], cls.kind):
+                owner[(cls.kind, variant)] = name
+    classless = sum(1 for name in owner.values() if name not in devices.__all__)
+
+    assert _counts_in(README, r"\*\*(\d+) registered symbols\*\*") == [(len(symbols),)]
+    assert _counts_in(README, r"(\d+) of the (\d+) registered drawings") == [
+        (classless, len(symbols))
+    ]
+    assert _counts_in(DOCS, r"(\d+) of the (\d+) registered drawings") == [
+        (classless, len(symbols))
+    ]
+    assert _counts_in(DOCS, r"(\d+) registered symbols carry `Symbol\.gravity_fixed`") == [
+        (gravity,)
+    ]
+    assert _counts_in(DOCS, r"The (\d+) marked symbols") == [(gravity,)]
