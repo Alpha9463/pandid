@@ -1815,10 +1815,13 @@ def _tank_farm() -> Flowsheet:
     e10_out.pin(port="inlet", x=1560, y=blend_y)
 
     vap_y, vru_y = 830.0, 935.0
-    vap_in.pin(mirrored=True).pin(port="outlet", x=1560, y=vap_y)
-    hv607.pin(mirrored=True).pin(port="inlet", x=1470, y=vap_y)
-    fa602.pin(mirrored=True).pin(port="inlet", x=1390, y=vap_y)
-    v604.pin(mirrored=True).pin(port="inlet", x=1315, y=vap_y)
+    drum_x, vap_gap = 1255.0, 52.0
+    fa602_x = drum_x - vap_gap - port_offset(fa602, "outlet")[0]
+    hv607_x = fa602_x - vap_gap - port_offset(hv607, "outlet")[0]
+    vap_in.pin(port="outlet", x=200, y=vap_y)
+    hv607.pin(port="inlet", x=hv607_x, y=vap_y)
+    fa602.pin(port="inlet", x=fa602_x, y=vap_y)
+    v604.pin(port="inlet", x=drum_x, y=vap_y)
     vent_x = v604.pin_.x + port_offset(v604, "vent")[0]
     vent_y = v604.pin_.y + port_offset(v604, "vent")[1]
     vru_x = v604.pin_.x + port_offset(v604, "outlet")[0]
