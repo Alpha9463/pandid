@@ -37,7 +37,7 @@ def main():
     fs.connect(sep.liquid, prod.inlet)
     fs.connect(sep.vapor, split.inlet)
     fs.connect(split.out_2, purge.inlet)
-    fs.connect(split.out_1, mix.in_1, draw_as_recycle=True)   # recycle back to the mixer
+    fs.connect(split.out_1, mix.in_1, draw_as_recycle=True)
 
     fs.render(out("reactor_recycle.svg"))
     print("Generated reactor_recycle.svg")

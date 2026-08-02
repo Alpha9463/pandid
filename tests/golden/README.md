@@ -41,6 +41,13 @@ carries a `width` or a `height`, so it is what turns the nozzle pitch, the
 minimum box and the label allowance into a drawing that can be looked at rather
 than an arithmetic claim in a unit test.
 
+`13_mineral_dewatering` is the solids circuit, and the only fixture that draws a
+dryer, a furnace, a blower or a funnel at all. It is also the only one with a
+`Tee(branch="inlet")` — a junction where a second stream *joins* a run rather
+than leaving it — and the only one whose stream table is wider than the drawing
+above it, so it is what pins a sheet sized to fit furniture the diagram does not
+set the width of. Its title block states its own date, so it needs no pinning.
+
 The flowsheets are rebuilt inline in `test_golden.py` rather than by running
 `examples/*.py` directly: those scripts write into `examples/` (a side
 effect a test suite shouldn't have) and `03`'s and `08`'s `TitleBlock`s leave

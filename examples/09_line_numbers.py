@@ -44,37 +44,31 @@ def main():
     flare = fs.add(units.Product("To Flare", reference="PFD-900"))
     prod = fs.add(units.Product("To Unit 200", reference="PFD-200"))
 
-    # The control valve and the relief valve are the two spec breaks on this
-    # sheet: rating and size both change across them, so the number must not
-    # run through. The isolation valve and the strainer are ordinary in-line
-    # items and keep the suction line whole.
+    # The two spec breaks on this sheet. Everything else in line is left alone
+    # and keeps its run whole.
     fv.new_line_number = True
     psv.new_line_number = True
 
     # --- Placement -------------------------------------------------------
     # Pinned by nozzle, not by corner: pin(port=...) asks each symbol where its
-    # own nozzle sits, so nothing here writes down half a valve body and no
-    # in-line device can land off its run. A boundary flag is pinned at the tip
-    # of its arrow, which is where its line reaches it.
-    # The run off the feed flag is drawn long on purpose: a line number is a
-    # dozen characters wide, and it is labelled on the longest segment it has.
+    # own nozzle sits. A boundary flag is pinned at the tip of its arrow.
+    #
+    # The run off the feed flag is long on purpose: a line number is a dozen
+    # characters wide and is labelled on the longest segment it has. The two
+    # elevations are the pump's, whose discharge nozzle sits above its suction.
     suction_y = 300
     discharge_y = 280
 
     feed.pin(port="outlet", x=110, y=suction_y)
     hv.pin(port="inlet", x=235, y=suction_y)
     strainer.pin(port="inlet", x=335, y=suction_y)
-    # The one rise on the sheet, and it is the pump's own: its discharge nozzle
-    # really does sit above its suction, which is what lifts the spine.
     pump.pin(port="suction", x=425, y=suction_y)
     fv.pin(port="inlet", x=575, y=discharge_y)
     surge.pin(port="inlet", x=725, y=discharge_y)
     prod.pin(port="inlet", x=925, y=discharge_y)
 
-    # Relief stack: the PSV takes flow in its base and discharges from its side,
-    # so it stands directly over the vessel's relief nozzle.
-    # How high it stands is a free choice, so that one is pinned by the corner;
-    # only the axis the riser has to land on is read as a nozzle.
+    # Two pins: how high the PSV stands is a free choice and stays a corner,
+    # while the axis its riser has to land on is read off the vessel's nozzle.
     psv.pin(y=110).pin(port="inlet", x=725 + port_offset(surge, "vent")[0])
     flare.pin(port="inlet", x=945, y=110 + port_offset(psv, "outlet")[1])
 
@@ -90,8 +84,7 @@ def main():
     to_unit = fs.connect(surge.outlet, prod.inlet, size='6"', service="P", spec="D1B")
 
     relief = fs.connect(surge.vent, psv.inlet, size='3"', service="P", spec="A1A")
-    # An existing line, so its sequence comes off the line list rather than off
-    # this drawing; the automatic sequence runs on regardless.
+    # sequence= set by hand; the automatic sequence runs on regardless.
     tail = fs.connect(psv.outlet, flare.inlet, size='4"', service="FL",
                       sequence=2740, spec="A1A")
 
@@ -132,9 +125,7 @@ def main():
         ],
     )
 
-    # A line number is a P&ID's identifier, and this sheet is issued as one, so
-    # it is drawn as one: its process lines carry no arrowheads, because flow
-    # direction on a P&ID is read off the equipment and the line list.
+    # diagram="p&id" is what drops the arrowheads off the process lines.
     fs.render(out("line_numbers.svg"), border="zone", diagram="p&id",
               show_stream_table=True)
     print("Generated line_numbers.svg")

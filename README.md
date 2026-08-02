@@ -226,6 +226,7 @@ rendered in the
 | `10_ethanol_pfd.py` | a whole issue-ready sheet on a real A3 page, with six off-page connectors, equipment list, utilities summary and sectioned stream table |
 | `11_ethanol_pid.py` | a whole issued P&ID on a fixed A3 sheet: line numbers on every line, hand-isolated control valve stations, five loops, and a repeated interlock square |
 | `12_block_flow_diagram.py` | the drawing a level above the PFD: one `Block` per plant section, connections on all four sides, every box sized to its own name and nozzles |
+| `13_mineral_dewatering.py` | a solids circuit as a PFD: thickener, belt filter, conveyor, rotary dryer, recovery cyclone, scrubber, magnetic separator, and tees that *combine* rather than split |
 | `14_tank_farm.py` | a bulk liquid storage terminal: floating-roof, fixed-roof and pressure storage, a loading rack, a vapour system with its flame arrestors, and loop numbers allocated rather than typed |
 
 ## Contributing

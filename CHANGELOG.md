@@ -9,6 +9,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`examples/13_mineral_dewatering.py`: a solids circuit, as a PFD.** The first
+  sheet in the gallery that is not a fluids plant. A flotation concentrate is
+  thickened, dewatered on a vacuum belt filter, dropped as cake onto a conveyor,
+  dried in a direct-fired rotary drum, recovered out of its own drying gas by a
+  cyclone and cleaned of tramp steel by a magnet; the spent gas is scrubbed and
+  pulled to the stack by an induced-draught fan. Sixteen tagged items, twelve of
+  them scheduled.
+
+  It draws thirteen `(kind, variant)` symbols that were registered and had never
+  appeared on a sheet — `separator/gravity`, `/cyclone`, `/scrubber`,
+  `/permanent_magnet`, `filter/belt`, `dryer/default`, `furnace/default`,
+  `blower/default`, `tank/conical_bottom`, `funnel/default`,
+  `vent/exhaust_head`, `pump/screw` and `pump/peristaltic` — taking the gallery
+  from 60 of the 157 registered symbols to 73. It is the first example to build
+  a `Blower`, a `Dryer`, a `Funnel` or a `Furnace` at all. Coverage was the
+  reason to draw the sheet and not the reason for anything on it: every item is
+  argued in a comment beside it, and the symbols a dewatering circuit does not
+  want (a second filter, a second dryer, a second magnet) are left out.
+
+  Four of its five junctions are `Tee(branch="inlet")`s where a second stream
+  **joins** a run rather than leaving it. That is the reverse of the takeoff
+  tees `10` draws, and neither the gallery nor the golden corpus had one. Every
+  tee ends a stream number, so each of the twenty-four columns of the stream
+  table is true of the line it names and the sheet's total-flow balance closes:
+  297.06 t/h in over five inlet flags, 297.03 t/h out over five and the stack,
+  no item out by more than 0.04 t/h.
+
+  Like `03` and `08` it takes no `page_size` — twenty-four streams side by side
+  is wider than A3 carries beside a utilities summary — so it is also the first
+  golden fixture whose *furniture* rather than whose drawing sets the sheet
+  width. It is drawn as a PFD on the model of `professional_examples/PFD_301`,
+  with an equipment list, a sectioned stream table, a utilities summary and no
+  instrumentation at all, which is ISO 15519-2 §4.2's "In the start of a project
+  the representation in process flow diagrams (PFD) is pure functional".
+
 - **`Vessel` and `Tank` carry five nozzles, and the same five.** `relief` is the
   connection a PSV or a rupture disc is mounted on, `drain` the low-point liquid
   draw-off, and `vent` — which a vessel already had — is now a tank's
