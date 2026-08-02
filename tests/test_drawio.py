@@ -409,6 +409,75 @@ def test_an_off_page_flag_is_a_pennant_with_its_tag_inside_it():
     assert cells["u0"].get("value") == "FEED<br>P-01"
 
 
+def test_a_label_written_inside_its_shape_fits_inside_it():
+    """`Fermentation Broth / P&ID-201` was drawn across the top and bottom edges
+    of its own pennant: two lines of draw.io's default 12 want 28,8 of line box
+    and the flag is 26 deep before the sheet's fitting scales it. Nothing in
+    mxGraph shrinks type to fit, so the size has to be chosen against the box."""
+    from pandid.render.drawio import _LINE_BOX
+
+    for stem in SHEETS:
+        fs, kwargs = gallery.flowsheet(stem)
+        fs.to_svg(**kwargs)
+        cells = _drawio_cells(fs, kwargs)
+        for i, unit in enumerate(fs.units):
+            cell = cells[f"u{i}"]
+            value = cell.get("value") or ""
+            style = _style(cell)
+            # Only the labels written *in* the cell: a tag on a side of a symbol
+            # is on the paper beside it and has no box to overflow.
+            if not value or style.get("verticalLabelPosition") != "middle":
+                continue
+            if style.get("labelPosition") in ("left", "right"):
+                continue
+            box = _LINE_BOX * float(style["fontSize"]) * (value.count("<br>") + 1)
+            height = float(cell.find("mxGeometry").get("height"))
+            assert box <= height + 0.01, (
+                f"{stem}: {unit.name} writes {value!r} as {box:.2f} units of "
+                f"line box inside a {height:.2f}-unit shape"
+            )
+
+
+def test_the_drawing_is_lettered_at_the_size_the_sheet_letters_it():
+    """The export stated no size anywhere in the drawing, so every tag, balloon
+    and flag came out at draw.io's default 12 -- unscaled, in a drawing the
+    sheet had fitted to three-quarters. A rendered sheet puts its type inside
+    the same `scale()` as its geometry; this backend has to multiply it in."""
+    from pandid.render.drawio import _TAG_TYPE
+
+    fs, kwargs = gallery.flowsheet("11_ethanol_pid")
+    fs.to_svg(**kwargs)
+
+    def sizes(**over):
+        cells = _drawio_cells(fs, {**kwargs, **over})
+        return [
+            float(_style(cells[f"u{i}"])["fontSize"])
+            for i in range(len(fs.units))
+            if cells[f"u{i}"].get("value")
+        ]
+
+    # Without paper there is no fitting to do, so the drawing keeps its own
+    # coordinates and its own type: _Fit.identity() end to end.
+    plain = sizes(page_size=None, border=None)
+    assert plain and max(plain) == _TAG_TYPE
+
+    # With it, every label rides the same ratio the geometry does -- or is
+    # smaller still, where it had to be capped to the shape it is written in.
+    fitted = sizes()
+    assert len(fitted) == len(plain)
+    assert max(fitted) < _TAG_TYPE, "the type was left at its unfitted size"
+    ratio = max(fitted) / _TAG_TYPE
+    assert all(size <= ratio * _TAG_TYPE + 0.01 for size in fitted)
+    for i, unit in enumerate(fs.units):
+        if unit.kind not in ("feed", "product") or not fs.units[i].tag:
+            continue
+        box = boundary_flag(unit, unit.frame).box
+        # A flag's cell is scaled by that same ratio, which is what makes the
+        # cap a statement about the drawing rather than about the model.
+        cell = _drawio_cells(fs, kwargs)[f"u{i}"].find("mxGeometry")
+        assert float(cell.get("height")) == pytest.approx(ratio * (box[3] - box[1]), abs=0.01)
+
+
 def test_a_flag_is_drawn_across_its_own_box():
     """``boundary_flag`` writes the horizontal extent out again rather than
     reading ``unit_box``, so that whole-number coordinates keep the spelling the
@@ -892,6 +961,101 @@ def test_a_stream_number_is_written_once_however_many_segments_carry_it(sample):
     assert set(written) == {s.name for s in sample.streams if s.kind == "material"}
 
 
+def _drawio_edge_label(points, geometry) -> tuple[float, float]:
+    """Where draw.io draws an edge's label, by draw.io's own arithmetic.
+
+    ``mxGraphView.getPoint``, transcribed: ``geometry.x`` runs -1 to +1 over the
+    routed polyline's Euclidean arc length, the walk finds the segment that
+    ``dist`` falls in, and ``geometry.offset`` displaces the result in plain
+    drawing units. The view scale is 1 here, so it drops out.
+
+    ``Math.round`` is reproduced because it is the whole of the residual: the
+    rounding of ``dist`` to a whole pixel is worth up to half a unit of
+    along-run slop and there is no way to write a fraction that avoids it.
+    """
+    lengths = [((q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2) ** 0.5 for p, q in zip(points, points[1:])]
+    total = sum(lengths)
+    gx = float(geometry.get("x") or 0.0) / 2
+    dist = round((gx + 0.5) * total)
+    walked, index, segment = 0.0, 1, lengths[0]
+    while dist >= round(walked + segment) and index < len(points) - 1:
+        walked += segment
+        segment = lengths[index]
+        index += 1
+    factor = (dist - walked) / segment if segment else 0.0
+    p0, pe = points[index - 1], points[index]
+    offset = geometry.find("mxPoint[@as='offset']")
+    dx = float(offset.get("x")) if offset is not None else 0.0
+    dy = float(offset.get("y")) if offset is not None else 0.0
+    return (p0[0] + (pe[0] - p0[0]) * factor + dx, p0[1] + (pe[1] - p0[1]) * factor + dy)
+
+
+def test_a_line_number_is_written_where_the_sheet_writes_it():
+    """`CWS-311-150-40-CS` was centred on its own run, across HV-311's body and
+    the CWSH flag; `FB-301-200-160-SS` and `FB-310-300-160-SS` were centred over
+    the lettering of the flags they run to. The sheet does not centre a number,
+    it searches for paper -- and the export had no way to ask, so it centred.
+
+    Now it asks. This replays draw.io's own `getPoint` over the emitted geometry
+    and holds the answer against `stream_numbers`, which is the one derivation
+    both backends read.
+    """
+    from pandid.render.drawio import DrawioRenderer
+    from pandid.render.svg import _page, stream_numbers
+
+    for stem in SHEETS:
+        fs, kwargs = gallery.flowsheet(stem)
+        fs.to_svg(**kwargs)
+        cells = _drawio_cells(fs, kwargs)
+        _boxes, _frame, fit = DrawioRenderer()._furniture(fs, _page(kwargs.get("page_size")))
+        wanted = {number.name: number for number in stream_numbers(fs, [])}
+        checked = 0
+        for n, s in enumerate(fs.streams):
+            cell = cells[f"s{n}"]
+            name = cell.get("value") or ""
+            if not name:
+                continue
+            landed = _drawio_edge_label(
+                [fit.at(*p) for p in stream_polyline(s)], cell.find("mxGeometry")
+            )
+            number = wanted[name]
+            # Half a unit, which is `Math.round(dist)` and nothing else.
+            assert landed == pytest.approx(fit.at(number.x, number.y), abs=0.6), (
+                f"{stem}: {name} lands at {landed}, not where the sheet writes it"
+            )
+            # ...and it is written on the sheet's own opaque halo, so a number
+            # that has to cross a passing run still reads.
+            assert _style(cell)["labelBackgroundColor"] == "#ffffff"
+            checked += 1
+        assert checked or not [s for s in fs.streams if s.kind == "material"]
+
+
+def test_a_line_number_beside_its_run_carries_a_perpendicular_offset():
+    """The defect stated plainly: with no offset at all, every number sat on the
+    midpoint of its own polyline. `geometry.offset` is what moves it off, and it
+    is the offset rather than `geometry.y` because `getPoint` applies the latter
+    as `(nx*gy, -ny*gy)` -- a sign taken from the direction the segment happens
+    to be routed in, which would put half a sheet's numbers on the wrong side of
+    their lines."""
+    fs, kwargs = gallery.flowsheet("11_ethanol_pid")
+    fs.to_svg(**kwargs)
+    cells = _drawio_cells(fs, kwargs)
+    offsets = []
+    for n, s in enumerate(fs.streams):
+        cell = cells[f"s{n}"]
+        if not (cell.get("value") or ""):
+            continue
+        point = cell.find("mxGeometry/mxPoint[@as='offset']")
+        if point is None:
+            offsets.append(0.0)
+            continue
+        offsets.append(abs(float(point.get("x"))) + abs(float(point.get("y"))))
+    assert offsets, "the sample sheet writes line numbers"
+    # Most of them stand off their run; the rest sit in it on the sheet's own
+    # halo, which is the convention and not an omission.
+    assert sum(1 for d in offsets if d > 1.0) >= len(offsets) // 2
+
+
 # ---------------------------------------------------------------------------
 # Sheet furniture, and the options a model has no room for.
 # ---------------------------------------------------------------------------
@@ -1019,54 +1183,170 @@ def test_a_tables_parts_add_up_at_the_precision_they_are_written_at(nrows):
         assert sum((Decimal(c.find("mxGeometry").get("width")) for c in cs), Decimal(0)) == width
 
 
+#: The keyword arguments a ``.drawio`` export takes, out of the wider set the
+#: gallery renders a sheet with. Every furniture defect below is a defect of a
+#: *paged* export -- the strip docks to the frame, the frame is ruled, the
+#: drawing is fitted into what is left -- so a check that drops ``page_size``
+#: and ``border`` is a check run on a different picture from the one the reader
+#: opened.
+_DRAWIO_KWARGS = ("diagram", "page_size", "border")
+
+
+def _drawio_cells(fs, kwargs) -> dict:
+    return {
+        c.get("id"): c
+        for c in ET.fromstring(
+            fs.to_drawio(**{k: v for k, v in kwargs.items() if k in _DRAWIO_KWARGS})
+        ).iter("mxCell")
+    }
+
+
+def _cell_font(cell) -> float:
+    """The size a table cell's own style says it is drawn at.
+
+    **No fallback to the row or to the table**, and that is the point of the
+    function. mxGraph does not inherit a style from a parent cell:
+    ``mxGraph.getCellStyle`` resolves the cell's own string against the
+    stylesheet default and stops, and the only key that reaches down a draw.io
+    table is the literal value ``inherit``, which ``Graph.getCellStyle``
+    special-cases for ``strokeColor``, ``fillColor`` and ``gradientColor``
+    alone. This helper used to read the row's size and then the table's, and
+    that is why the export passed a clipping check while every cell in it was
+    being drawn at draw.io's default 12: the size the *container* stated was
+    never the size the cell was set in.
+    """
+    size = _style(cell).get("fontSize")
+    assert size is not None, f"{cell.get('id')} states no fontSize of its own"
+    return float(size)
+
+
+def _table_cells(cells):
+    """Every drawn table cell, with the row and the table it belongs to."""
+    for cell in cells.values():
+        if _style(cell).get("shape") != "partialRectangle":
+            continue
+        if not (cell.get("value") or ""):
+            continue
+        row = cells[cell.get("parent")]
+        yield cell, row, cells[row.get("parent")]
+
+
 def _clipped(cells) -> list[str]:
     """Every table cell whose text is wider than the column it is drawn in.
 
     Measured with ``furniture.text_width`` -- the estimate the SVG rules its own
-    columns by -- at the size the cell states it will be *drawn* at, which is the
-    pair that has to agree. A column measured at one size and drawn at another is
-    the whole of this defect.
+    columns by -- at the size and in the face the cell states it will be *drawn*
+    at, which is the pair that has to agree. A column measured at one size and
+    drawn at another is the whole of this defect.
     """
     from pandid.render.furniture import text_width
 
     out = []
-    for cell in cells.values():
-        style = _style(cell)
-        if style.get("shape") != "partialRectangle":
-            continue
-        value = cell.get("value") or ""
-        if not value:
-            continue
-        row = cells[cell.get("parent")]
-        size = float(
-            _style(row).get("fontSize")
-            or style.get("fontSize")
-            or _style(cells[row.get("parent")]).get("fontSize", 12)
-        )
-        size = float(style.get("fontSize", size))
-        bold = style.get("fontStyle") == "1"
+    for cell, _row, _table in _table_cells(cells):
+        value = cell.get("value")
+        need = text_width(value, _cell_font(cell), _style(cell).get("fontStyle") == "1")
         width = float(cell.find("mxGeometry").get("width"))
-        if text_width(value, size, bold) > width:
-            out.append(
-                f"{cell.get('id')} {value!r} needs "
-                f"{text_width(value, size, bold):.1f} of {width:.1f}"
-            )
+        if need > width:
+            out.append(f"{cell.get('id')} {value!r} needs {need:.1f} of {width:.1f}")
     return out
 
 
 def test_no_table_cell_is_narrower_than_the_text_in_it():
-    """`HPSSH` came out `HPSS` and `APP'D` came out `APP'`. Columns were given a
-    proportional share of the box instead of their own measured width, and were
-    then drawn at draw.io's default 12 while having been measured at 11."""
+    """`HPSSH` came out `HPSSI`, `APP'D` came out `APP'`, and
+    `Issued for internal review` lost its last word. The columns were measured
+    at the size the sheet sets them and drawn at draw.io's default 12, because
+    the size was stated on the table and mxGraph does not inherit a style from a
+    parent cell."""
     for stem in SHEETS:
         fs, kwargs = gallery.flowsheet(stem)
         fs.to_svg(**kwargs)
-        cells = {
-            c.get("id"): c
-            for c in ET.fromstring(fs.to_drawio(diagram=kwargs.get("diagram"))).iter("mxCell")
-        }
-        clipped = _clipped(cells)
+        clipped = _clipped(_drawio_cells(fs, kwargs))
         assert not clipped, f"{stem}: " + "; ".join(clipped)
+
+
+def test_every_table_cell_states_the_size_it_is_drawn_at():
+    """The container's ``fontSize`` styles the container's own label -- the
+    table's title band -- and nothing below it, so a cell that says nothing is a
+    cell drawn at 12 however carefully its column was measured."""
+    sized = []
+    for stem in SHEETS:
+        fs, kwargs = gallery.flowsheet(stem)
+        fs.to_svg(**kwargs)
+        # _cell_font is the assertion: it refuses to fall back to the container.
+        sized += [_cell_font(c) for c, _r, _t in _table_cells(_drawio_cells(fs, kwargs))]
+    assert sized, "no sheet in the gallery carries a table"
+
+
+def test_no_table_row_is_shorter_than_the_line_box_of_its_own_text():
+    """draw.io lays an HTML label out at ``line-height: 1.2`` and has no pass
+    that shrinks type to fit -- ``TableLayout`` never measures a string at all --
+    so a row shorter than its text loses the difference off the top and the
+    bottom of every letter in it. Twelve-point values in fourteen-unit rows is
+    what cut the title strip's last field in half."""
+    from pandid.render.drawio import _line_box
+
+    for stem in SHEETS:
+        fs, kwargs = gallery.flowsheet(stem)
+        fs.to_svg(**kwargs)
+        for cell, row, _table in _table_cells(_drawio_cells(fs, kwargs)):
+            box = _line_box(_cell_font(cell))
+            height = float(row.find("mxGeometry").get("height"))
+            assert box <= height + 0.01, (
+                f"{stem}: {cell.get('id')} {cell.get('value')!r} sets a "
+                f"{box:.2f}-unit line in a {height:.2f}-unit row"
+            )
+
+
+def test_no_furniture_text_is_drawn_under_the_frames_own_rule():
+    """The title strip docks flush to the frame, which is where the sheet rules
+    its own last band -- but mxGraph strokes a rectangle *on* its path, so the
+    frame lays half its weight inside that edge, and the strip's bottom row was
+    drawn under it. `APPROVED / HVL` read as cut in half."""
+    from pandid.render.drawio import _line_box
+
+    for stem in SHEETS:
+        fs, kwargs = gallery.flowsheet(stem)
+        fs.to_svg(**kwargs)
+        cells = _drawio_cells(fs, kwargs)
+        frame = cells.get("z-frame")
+        if frame is None:  # an unruled sheet has no frame to be drawn under
+            continue
+        geometry = frame.find("mxGeometry")
+        paper = (
+            float(geometry.get("y"))
+            + float(geometry.get("height"))
+            - float(_style(frame)["strokeWidth"]) / 2
+        )
+        for cell, row, table in _table_cells(cells):
+            top = float(table.find("mxGeometry").get("y")) + float(row.find("mxGeometry").get("y"))
+            height = float(row.find("mxGeometry").get("height"))
+            # Centred in its row, which is what verticalAlign=middle does.
+            ink = top + height - (height - _line_box(_cell_font(cell))) / 2
+            assert ink <= paper + 0.01, (
+                f"{stem}: {cell.get('id')} {cell.get('value')!r} is drawn to "
+                f"{ink:.2f}, past the frame's own ink at {paper:.2f}"
+            )
+
+
+def test_a_column_is_measured_in_the_face_its_text_is_drawn_in():
+    """A legend's key column is set bold and its description column is not; a
+    title strip is the other way round, captions light and values bold. Bold is
+    eleven per cent the wider face, so a column measured in the wrong one either
+    clips its own text or steals the room the column beside it needed."""
+    from pandid.render.furniture import text_width
+
+    for stem in SHEETS:
+        fs, kwargs = gallery.flowsheet(stem)
+        fs.to_svg(**kwargs)
+        for cell, _row, _table in _table_cells(_drawio_cells(fs, kwargs)):
+            if _style(cell).get("fontStyle") != "1":
+                continue
+            width = float(cell.find("mxGeometry").get("width"))
+            # The bold measurement, not the light one it used to be taken at.
+            assert text_width(cell.get("value"), _cell_font(cell), True) <= width, (
+                f"{stem}: {cell.get('id')} {cell.get('value')!r} is drawn bold "
+                f"in a column only {width:.1f} wide"
+            )
 
 
 def test_a_table_states_the_size_its_columns_were_measured_at():

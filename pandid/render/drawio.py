@@ -64,10 +64,13 @@ makes an exported model a model. See :class:`_Fit`.
 
 Three pieces of sheet *detail* have no draw.io construct at all, and simply are
 not drawn: the semicircle a crossing line hops with, since draw.io decides its
-own jumps; the searched placement of a stream number, and the leader it gets
-where no clear paper was found, both of which become a plain edge label; and a
-symbol's own lettering held upright under a turn (the "M" on a motor operator),
-which draw.io turns with the shape.
+own jumps; the leader a stream number is given where the search found no clear
+paper alongside its run, which would have to be a second cell hung off a label
+that is not itself a cell; and a symbol's own lettering held upright under a
+turn (the "M" on a motor operator), which draw.io turns with the shape. Where
+the number *itself* goes came off this list: it is
+:func:`~pandid.render.svg.stream_numbers`' answer for both backends now, written
+into the edge's own ``mxGeometry``. See :func:`_number_geometry`.
 
 The output is a plain uncompressed ``mxfile``. draw.io reads that as readily as
 its compressed form, and it diffs.
@@ -169,9 +172,9 @@ from pandid.portgeom import port_point, unit_box
 from pandid.render import furniture as F
 from pandid.render import svg as _svg
 from pandid.render.svg import (_DIAMOND_BALLOONS, _furniture_name, _too_small, _SIGNAL_DASH, _PROCESS_STROKE,
-                               _SIGNAL_STROKE, _TAP_DASH, boundary_flag,
-                               draws_arrowheads, impulse_tap, stream_polyline,
-                               tap_lines)
+                               _SIGNAL_STROKE, _TAP_DASH, NUMBER_TYPE, boundary_flag,
+                               draws_arrowheads, impulse_tap, stream_numbers,
+                               stream_polyline, tap_lines)
 from pandid.render.symbols import (ARROWHEAD, closed_marking, fail_marking,
                                    wears_arrowhead)
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
@@ -393,6 +396,54 @@ _APPROXIMATIONS = {
 #: geometry the layout engine settled. 6.2 is the width the SVG renderer measures
 #: a label's halo with, so the two at least agree with each other.
 _CHAR_W, _LINE_H = 6.2, 14.0
+
+#: The size the *drawing* is lettered at: an equipment tag, an instrument's
+#: letters, a boundary flag's service name. Twelve, because that is what
+#: ``SvgRenderer._draw_unit_labels``, ``_draw_instrument_tag`` and
+#: ``_draw_boundary`` all set, and a sheet exported at a different size from the
+#: one it renders at is two drawings.
+#: A line number's size is the sheet's :data:`~pandid.render.svg.NUMBER_TYPE`,
+#: imported rather than repeated: it is the one number both backends letter the
+#: same string with.
+_TAG_TYPE = 12.0
+
+
+def _drawn_type(nominal: float, fit: "_Fit", *, lines: int = 1, box=None) -> str:
+    """The ``fontSize`` key for a piece of lettering **in the drawing**.
+
+    Two things happen to it that do not happen to a piece of furniture, and
+    neither was happening at all: the export stated no size anywhere in the
+    drawing, so every tag, balloon and flag on every sheet was lettered at
+    draw.io's default 12 -- unscaled, in a drawing that had been scaled to a
+    third of that in places.
+
+    **It scales.** ``page_size`` makes the export a sheet, and the drawing is
+    then fitted into whatever the furniture leaves. On the rendered sheet that
+    fitting is one ``<g transform="scale(s)">`` around the whole drawing, and a
+    ``font-size="12"`` inside it comes out at ``12 s``. draw.io has no such
+    group -- :class:`_Fit` multiplies every coordinate on the way out instead --
+    so the type has to be multiplied with them or the sheet's own proportion
+    between a symbol and the tag beside it is lost. On ``11_ethanol_pid`` the
+    ratio is 0,76, which is a third again too much ink on every label.
+
+    **It is capped where it is written *inside* the shape.** A boundary flag and
+    an ISA balloon carry their text in the cell, so ``lines`` of it at
+    :data:`_LINE_BOX` each have to fit ``box``'s depth. Nothing in mxGraph
+    shrinks type to fit -- see :data:`_LINE_BOX` -- so a label too tall for its
+    cell is drawn across the shape's top and bottom edges, and with
+    ``overflow=hidden`` it is drawn across them and then cut. That is the flag
+    the reader saw: two lines of 12, needing 28,8, in a pennant 26 deep, and the
+    pennant scaled to 19,66 besides.
+
+    ``box`` is in **drawing** units, since :meth:`DrawioRenderer._cell_box` is,
+    so the cap is taken there and the fit applied to the answer -- which is the
+    same number either way round and the easier one to check by hand.
+    """
+    size = nominal
+    if box is not None and lines > 0:
+        depth = abs(box[3] - box[1])
+        size = min(size, depth / (lines * _LINE_BOX))
+    return f"fontSize={fit.length(size):g}"
 
 
 def _attr(value) -> str:
@@ -725,7 +776,7 @@ class DrawioRenderer:
                 f"strokeColor={_LINE_INK}", f"fillColor={_NO_FILL}",
                 f"strokeWidth={_PROCESS_STROKE:g}"]
 
-    def _label(self, u) -> "tuple[str, list[str]]":
+    def _label(self, u, fit: "_Fit") -> "tuple[str, list[str]]":
         """A unit's label text and the style keys that place it.
 
         An instrument's tag goes *inside* its balloon, letters over number, which
@@ -740,6 +791,9 @@ class DrawioRenderer:
         small labels of their own against the corner of the symbol; there is no
         second label on a draw.io cell, so they follow the tag rather than being
         dropped.
+
+        ``fit`` is here because every one of these is lettering **in the
+        drawing**, and the drawing is scaled. See :func:`_drawn_type`.
         """
         from pandid.units import split_tag
 
@@ -752,9 +806,17 @@ class DrawioRenderer:
                 parts = [number or letters.upper()]
             else:
                 parts = [letters.upper(), number]
-            text = "<br>".join(part for part in parts if part)
+            parts = [part for part in parts if part]
+            text = "<br>".join(parts)
+            # A balloon's tag is written inside the balloon, so its type is
+            # capped to what the balloon holds. The sheet sets the letters at 12
+            # and the number at 11 and a draw.io label has one size for the
+            # whole of it, so the pair goes out at the larger of the two -- the
+            # letters are what a reader picks the loop out by.
             return text, ["verticalLabelPosition=middle", "verticalAlign=middle",
-                          "align=center"]
+                          "align=center",
+                          _drawn_type(_TAG_TYPE, fit, lines=len(parts),
+                                      box=self._cell_box(u))]
 
         lines = [u.tag] if u.tag else []
         if u.kind in ("feed", "product"):
@@ -772,14 +834,32 @@ class DrawioRenderer:
             # of the pennant -- half the point's depth to the blunt end of the
             # difference, which is under four units on a flag eighty wide. There
             # is no key that says "centre me in the shape minus its point".
-            return "<br>".join(lines), _LABEL_SIDE["center"]
+            #
+            # The type is capped to the pennant, which is what a flag needs and
+            # a side label does not: a boundary flag's label is written *in* the
+            # shape. A flag carrying an off-page reference is 26 units deep and
+            # two lines at the sheet's own 12 want 28,8 of draw.io's line box,
+            # so the pair is set a shade smaller rather than laid across the
+            # pennant's top and bottom edges -- which is what the reader saw, a
+            # box with text lying over it. The sheet does not have to make that
+            # trade: it sets the reference at 10,5 on a baseline of its own
+            # choosing, and a draw.io label has one size and one line height for
+            # the whole of it.
+            return "<br>".join(lines), _LABEL_SIDE["center"] + [
+                _drawn_type(_TAG_TYPE, fit, lines=len(lines),
+                            box=self._cell_box(u))]
         if closed_marking(u, self.registry) == "NC":
             lines.append("NC")
         letters = fail_marking(u)
         if letters:
             lines.append(letters)
         side = (u.frame.label_pos or "top") if u.frame is not None else "top"
-        return "<br>".join(lines), _LABEL_SIDE.get(side, _LABEL_SIDE["top"])
+        # No cap: a tag on a side of a symbol is written on the paper beside it,
+        # not in the cell, so there is no box for it to overflow. `_LABEL_SIDE`
+        # gives the label its own box outside the cell and mxGraph draws it at
+        # whatever size it is told (`mxGraphView.updateVertexLabelOffset`).
+        return "<br>".join(lines), _LABEL_SIDE.get(side, _LABEL_SIDE["top"]) + [
+            _drawn_type(_TAG_TYPE, fit)]
 
     @staticmethod
     def _cell_box(u) -> "tuple[float, float, float, float]":
@@ -809,7 +889,7 @@ class DrawioRenderer:
         sym = self.registry.for_unit(u)
         x0, y0, x1, y1 = fit.box(self._cell_box(u))
         placement, _, _ = self._placement(u, sym)
-        text, label_keys = self._label(u)
+        text, label_keys = self._label(u, fit)
         style = ";".join(["html=1", *self._shape(u, sym), *label_keys, *placement]) + ";"
         return [
             f'        <mxCell id="{self._id(index)}" value={_attr(text)} '
@@ -902,6 +982,9 @@ class DrawioRenderer:
     def _edges(self, fs, arrows: bool, fit: "_Fit") -> list[str]:
         """Every stream, as a draw.io edge between the two ports it joins."""
         index = {id(u): i for i, u in enumerate(fs.units)}
+        # Where the sheet writes each line number, by the sheet's own search
+        # rather than by centring it on the edge. See :func:`_number_geometry`.
+        numbers = {number.name: number for number in stream_numbers(fs, [])}
         labelled: set = set()
         out: list[str] = []
         for n, s in enumerate(fs.streams):
@@ -943,9 +1026,13 @@ class DrawioRenderer:
             # carry it is the one that carries it here too. A signal line is
             # unlabelled on the sheet and stays unlabelled here.
             label = ""
+            number = None
             if not signal and s.name not in labelled:
                 labelled.add(s.name)
                 label = s.name
+                number = numbers.get(s.name)
+                if number is not None:
+                    keys += _NUMBER_KEYS + [_drawn_type(NUMBER_TYPE, fit)]
 
             style = ";".join(keys) + ";"
             # The ends are the two nozzles, and they are stated as constraints
@@ -954,15 +1041,29 @@ class DrawioRenderer:
             # a straight edge and keeps a straight run from reading as a route
             # that happens to have no points left.
             waypoints = points[1:-1]
-            if waypoints:
-                geometry = ['          <mxGeometry relative="1" as="geometry">',
-                            '            <Array as="points">',
-                            *(f'              <mxPoint x="{_num(fx)}" y="{_num(fy)}" />'
-                              for fx, fy in (fit.at(px, py) for px, py in waypoints)),
-                            '            </Array>',
-                            '          </mxGeometry>']
+            along, offset = _number_geometry(number, points, fit)
+            body = [
+                *(['            <Array as="points">',
+                   *(f'              <mxPoint x="{_num(fx)}" y="{_num(fy)}" />'
+                     for fx, fy in (fit.at(px, py) for px, py in waypoints)),
+                   '            </Array>'] if waypoints else []),
+                *([f'            <mxPoint x="{_num(offset[0])}" y="{_num(offset[1])}" '
+                   'as="offset" />'] if offset is not None else []),
+            ]
+            # `x` on the edge's own geometry is where the label sits along the
+            # run; the `offset` beside it is where it sits across. Both are the
+            # *label's*, and they ride on the same mxGeometry as the waypoints
+            # because mxGeometry has a field for each and mxObjectCodec decodes
+            # them independently -- an `<Array as="points">` and an
+            # `<mxPoint as="offset">` are two named children of one element, and
+            # draw.io writes exactly this shape itself when a reader drags a
+            # label along a routed edge (`mxEdgeHandler.moveLabel`).
+            head = ('          <mxGeometry relative="1" as="geometry"'
+                    + ('' if along is None else f' x="{_fraction(along)}"'))
+            if body:
+                geometry = [head + ">", *body, '          </mxGeometry>']
             else:
-                geometry = ['          <mxGeometry relative="1" as="geometry" />']
+                geometry = [head + " />"]
             out += [
                 f'        <mxCell id="s{n}" value={_attr(label)} style={_attr(style)} '
                 f'edge="1" parent="1" source="{self._id(index[id(src_u)])}" '
@@ -1180,7 +1281,8 @@ class DrawioRenderer:
         rect = ("rounded=0;whiteSpace=wrap;html=1;fillColor=none;movable=1;"
                 f"strokeColor={_LINE_INK};")
         out = _rect("z-sheet", ox, oy, ow, oh, rect + "strokeWidth=1;")
-        out += _rect("z-frame", ix, iy, iw, ih, rect + "strokeWidth=2;")
+        out += _rect("z-frame", ix, iy, iw, ih,
+                     rect + f"strokeWidth={_FRAME_STROKE:g};")
         for n, part in enumerate(z.parts):
             if part[0] == "rule":
                 _, x1, y1, x2, y2 = part
@@ -1214,18 +1316,22 @@ class DrawioRenderer:
             grid = [[str(c) for c in r] if isinstance(r, (tuple, list)) else [str(r)]
                     for r in rows]
             ncol = max(len(r) for r in grid)
+            # Left, as the sheet sets a row, with the first column bold where
+            # there is more than one -- draw_annotation's own rule. The same
+            # list of weights is what the columns are measured in, so the key
+            # column is measured in the face its key is drawn in.
+            heavy = [True] + [False] * (ncol - 1)
             return _table(cid, title, [], grid, x, y, w, h,
-                          columns(grid, [size] * ncol, w), title_h, font=size,
-                          # Left, as the sheet sets a row, with the first column
-                          # bold where there is more than one -- draw_annotation's
-                          # own rule.
-                          col_keys=["align=left;spacingLeft=4;fontStyle=1;"]
-                          + ["align=left;spacingLeft=4;"] * (ncol - 1))
+                          columns(grid, [size] * ncol, w, bold=heavy), title_h,
+                          font=size,
+                          col_keys=[f"align=left;spacingLeft=4;{'fontStyle=1;' if b else ''}"
+                                    for b in heavy])
         # Not tabular: a titled box of free-form lines, which is what it is on
         # the sheet too. Anything docked that is neither an Annotation nor a
         # TableBox lands here as well, on the two things every box has -- a title
         # and some rows -- rather than being dropped for being neither.
-        return _text_box(cid, title, [str(r) for r in rows], x, y, w, h)
+        size = getattr(obj, "font_size", 11.0)
+        return _text_box(cid, title, [str(r) for r in rows], x, y, w, h, size)
 
     def _title_strip(self, cid: str, block, x, y, w, h) -> list[str]:
         """The engineering title strip, as the two tables it really is.
@@ -1284,29 +1390,125 @@ class DrawioRenderer:
         # it and the company cell and information block share the rest, which is
         # where draw_title_strip() rules its two vertical lines.
         rev_w = min(F._REV_W, w)
-        row_h = F._REV_ROW
+        row_h = _STRIP_ROW
+        # Bottom-aligned, but to the frame's *paper* rather than to its
+        # centreline. See :data:`_FRAME_STROKE`.
+        foot = y + h - _FRAME_STROKE
         # No heading on either: the title and subtitle are field rows below, and
         # a heading would say them twice -- once in a band too narrow to hold
         # the sheet's own title, which is what overflowed.
         rev_h = row_h * (len(revisions) + 1)
         id_h = row_h * max(len(fields), 1)
         out = _table(f"{cid}-rev", "", [c[0] for c in F._REV_COLS], revisions,
-                     x, y + h - rev_h, rev_w, rev_h,
+                     x, foot - rev_h, rev_w, rev_h,
                      [c[1] for c in F._REV_COLS], header_last=True,
                      font=_STRIP_FONT, row_h=row_h,
                      col_keys=["align=left;spacingLeft=3;"] * len(F._REV_COLS))
         # The caption column is measured and drawn at the size the sheet sets a
         # caption at, and the value column at the size it sets a value; a column
         # measured at one size and drawn at another is the whole of defect 9.
+        # The weights go the same way round: the captions are set light and the
+        # values bold, which is the pair `columns` used to have inverted.
         id_w = w - rev_w
-        widths = columns(fields, [_STRIP_FONT, _STRIP_VALUE], id_w, bold_first=False)
+        widths = columns(fields, [_STRIP_FONT, _STRIP_VALUE], id_w,
+                         bold=[False, True])
         out += _table(f"{cid}-id", "", [], fields,
-                      x + rev_w, y + h - id_h, id_w, id_h, widths,
+                      x + rev_w, foot - id_h, id_w, id_h, widths,
                       font=_STRIP_VALUE, row_h=row_h,
                       col_keys=[f"align=left;spacingLeft=3;fontSize={_STRIP_FONT:g};"
                                 f"fontColor={_CAPTION_INK};",
                                 "align=left;spacingLeft=3;fontStyle=1;"])
         return out
+
+
+#: What a line number is, over and above where it is put.
+#:
+#: ``labelBackgroundColor`` is the sheet's halo, said in a style: mxGraph paints
+#: an opaque box behind a label sized to the measured text, on an edge exactly
+#: as on a vertex -- ``mxText.configureCanvas`` calls
+#: ``setFontBackgroundColor`` and ``mxSvgCanvas2D`` either writes a CSS
+#: ``background-color`` or inserts a ``<rect>`` before the glyphs, and nothing
+#: in that path asks whether the cell is an edge. So a number that has to be
+#: written across a passing run still reads, which is the whole reason the sheet
+#: draws one.
+#:
+#: ``verticalLabelPosition`` is deliberately **not** here, and it is worth
+#: saying why since it is what places every *vertex* label in this file: it has
+#: no effect at all on an edge. ``mxCellRenderer.getLabelBounds`` takes a
+#: separate branch for an edge, starting from ``state.absoluteOffset`` and
+#: adding only the text's spacing, and the final ``if (!isEdge)`` guard skips
+#: ``rotateLabelBounds`` -- which is the only place either label-position style
+#: changes any geometry. The other reader, ``updateVertexLabelOffset``, is
+#: vertex-only by name. An edge label is moved by its geometry and by nothing
+#: else.
+_NUMBER_KEYS = ["labelBackgroundColor=#ffffff", "verticalAlign=middle",
+                "align=center"]
+
+
+def _number_geometry(number, points, fit: "_Fit"):
+    """A line number's place on its edge: how far along, and how far across.
+
+    ``mxGraphView.getPoint`` is the whole of the mechanism and it is exact
+    enough to reproduce the sheet's own placement rather than approximate it.
+    For an edge whose geometry is ``relative``, ``geometry.x`` runs -1 to +1
+    over the routed polyline's Euclidean arc length --
+    ``dist = Math.round((geometry.x / 2 + 0.5) * state.length)`` -- and
+    ``geometry.offset``, an ``<mxPoint as="offset">``, displaces the label from
+    there in plain drawing units, multiplied by the view's zoom and by nothing
+    else.
+
+    **The offset and not ``geometry.y``**, which is the other displacement on
+    offer and is a trap. ``getPoint`` applies it as ``(nx * gy, -ny * gy)``
+    where ``nx = dy/segment`` and ``ny = dx/segment``, so its sign is taken from
+    the direction the segment happens to be *routed* in: the same positive
+    number puts a label above a run drawn left to right and below the identical
+    run drawn right to left. Which end of a stream is its source is a fact about
+    the process and not about the paper, so a perpendicular offset stated that
+    way would put half this sheet's numbers on the wrong side of their lines.
+    The offset is axis-aligned and direction-free, and the sheet's answer is
+    already an absolute point.
+
+    The along-run figure is taken by projecting that point onto the segment the
+    number names -- clamped to the segment, so a number the sheet slid past the
+    end of a short run stays attached to it and the overrun goes into the offset
+    instead. The label lands on the same paper either way; what the clamping
+    buys is that the number rides its own segment when a reader drags the plant
+    about, rather than jumping to whichever piece of the route the arc length
+    then points at.
+
+    Returns ``(None, None)`` for an edge with no number on it.
+    """
+    if number is None:
+        return None, None
+    (ax, ay), (bx, by) = number.seg
+    dx, dy = bx - ax, by - ay
+    span = (dx * dx + dy * dy) ** 0.5
+    if span <= 0:
+        return None, None
+    # The foot of the perpendicular from the number onto its own segment, held
+    # inside it.
+    t = min(1.0, max(0.0, ((number.x - ax) * dx + (number.y - ay) * dy) / (span * span)))
+    foot = (ax + t * dx, ay + t * dy)
+
+    # ...and where that foot falls along the *whole* polyline, which is what
+    # draw.io measures the fraction against. The segment is found by identity on
+    # its endpoints, since stream_polyline is what both the number and the edge
+    # were built from.
+    lengths = [((q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2) ** 0.5
+               for p, q in zip(points, points[1:])]
+    total = sum(lengths)
+    if total <= 0:
+        return None, None
+    before = 0.0
+    for i, (p, q) in enumerate(zip(points, points[1:])):
+        if p == (ax, ay) and q == (bx, by):
+            break
+        before += lengths[i]
+    else:  # the number names a segment this edge does not carry: leave it centred
+        return None, (fit.length(number.x - foot[0]), fit.length(number.y - foot[1]))
+    reach = before + t * span
+    return (max(-1.0, min(1.0, 2.0 * reach / total - 1.0)),
+            (fit.length(number.x - foot[0]), fit.length(number.y - foot[1])))
 
 
 #: How a label on each of the four sides of a box is asked for in a draw.io
@@ -1501,10 +1703,60 @@ def _distribute(weights, total: float) -> list[float]:
 
 
 #: Clearance between a cell's rule and the text in it, both sides together.
-#: mxGraph insets a label by ``mxConstants.LABEL_INSET`` (3) at each end before
-#: it starts drawing, and a word that ends exactly on its own rule reads as
-#: touching it, so a column is cut this much wider than the text it holds.
-_CELL_PAD = 8.0
+#:
+#: **There is no ``mxConstants.LABEL_INSET``.** The comment that used to stand
+#: here cited one, and the constant does not exist in mxGraph or in draw.io's
+#: fork of it -- a search of both trees returns nothing. What is really taken
+#: off a cell before the text starts is the *spacing*: ``mxText.prototype
+#: .spacing`` is 2 and is added to each of the four sides on top of whatever
+#: ``spacingLeft``/``spacingRight`` the style states, and
+#: ``mxCellRenderer.rotateLabelBounds`` then narrows the label's bounds by
+#: ``spacingLeft + spacingRight`` -- but only while ``labelPosition`` is
+#: ``center`` and ``verticalLabelPosition`` is ``middle``, which for a table
+#: cell they are. Every cell here says ``spacingLeft=3`` or ``4``, so seven or
+#: eight of the twelve is spent before a letter is drawn.
+#:
+#: The rest is the gutter, and it is deliberately generous rather than exact.
+#: It was eight, which left one unit of it, and one unit is well inside the
+#: error of :func:`~pandid.render.furniture.text_width`: that estimate sets a
+#: bold capital at ``_ADV_BOLD`` = 0,62 em where Helvetica Bold sets ``HPSSH``
+#: at 0,689, eleven per cent wider. The estimate is the only measurement either
+#: backend has -- the sheet rules its own columns by it -- so the slack is where
+#: the difference between the estimate and the face has to live, and the legend
+#: clipping ``HPSSH`` to ``HPSSI`` is what it costs to run out of it.
+_CELL_PAD = 12.0
+
+#: A line of text, as a multiple of its font size, which is what a row has to be
+#: at least as tall as.
+#:
+#: Every label this file writes is an HTML label -- ``html=1``, and draw.io's
+#: ``Graph.isHtmlLabel`` also answers yes to anything carrying
+#: ``whiteSpace=wrap`` -- so it goes out through ``mxSvgCanvas2D.getTextCss``,
+#: which writes ``line-height`` from ``mxConstants.LINE_HEIGHT``. That is 1.2,
+#: ``mxConstants.ABSOLUTE_LINE_HEIGHT`` is false and
+#: ``mxSvgCanvas2D.lineHeightCorrection`` is 1, so what reaches the browser is
+#: the *unitless* ``line-height: 1.2`` and a line's box is 1,2 times its font
+#: size, ``n`` lines being ``n`` times that. (The plain-SVG path measures a
+#: single line as the font size flat and only steps by 1,2 between lines. It is
+#: not the path taken here, and assuming it is is how a two-line label comes out
+#: a fifth taller than it was budgeted for.)
+#:
+#: **Nothing shrinks type to fit.** There is no font-scaling pass anywhere in
+#: mxGraph: ``mxText.updateSize`` sets a ``max-height`` and an ``overflow`` and
+#: leaves the size alone, and ``TableLayout`` never measures a string at all --
+#: it takes each row's height from the geometry and normalises the rows to fill
+#: the table, so a row is exactly as tall as this file writes it and its text is
+#: exactly as tall as the font says. A row shorter than its own line box loses
+#: the difference off the top and bottom of every letter in it, which is the
+#: title strip's last field being cut in half: eleven-point values in
+#: fourteen-unit rows are fine, and draw.io's *default* twelve -- which is what
+#: the cells were silently being drawn at -- needs 14,4.
+_LINE_BOX = 1.2
+
+
+def _line_box(size: float) -> float:
+    """How tall a single line set at ``size`` draws. See :data:`_LINE_BOX`."""
+    return size * _LINE_BOX
 
 #: How a :class:`~pandid.document.TableBox`'s per-column ``l``/``c``/``r``
 #: alignment is said in a draw.io style. The sheet's own default is centred
@@ -1520,6 +1772,39 @@ _ALIGN_KEY = {"l": "align=left;spacingLeft=4;", "r": "align=right;spacingRight=4
 _STRIP_FONT, _STRIP_VALUE = 7.5, 11.0
 _CAPTION_INK = "#666666"
 
+#: The weight the drawing frame is ruled at, and the reason the strip stands off
+#: the frame by exactly that much.
+#:
+#: mxGraph strokes a rectangle on its path, so the ``strokeWidth=2`` rule
+#: :meth:`DrawioRenderer._border` draws lays one unit of ink *inside* the frame
+#: rectangle. The strip docks flush to that rectangle's bottom edge -- which is
+#: right, it is the edge the sheet rules its own last band on -- so the last
+#: row's descenders were being drawn under the heavy rule and the reader saw
+#: ``APPROVED / HVL`` cut in half. Standing the tables off by the whole width of
+#: the rule, rather than by the half of it that is actually in the way, is the
+#: same clearance the sheet leaves: ``draw_title_strip`` sets its bottom band's
+#: value on a baseline five units above the strip's own edge.
+#:
+#: :func:`_strip_size` adds it to the height it reports, so :func:`F.dock`
+#: reserves the room rather than the strip growing up out of its own band.
+_FRAME_STROKE = 2.0
+
+#: How deep a title-strip row is ruled.
+#:
+#: The sheet's own ``_REV_ROW`` where that is deep enough to draw in, and the
+#: line box of the largest type in the strip where it is not. draw.io does not
+#: shrink text to fit a row -- there is no such style and no such pass; see
+#: :data:`_LINE_BOX` -- so a row shorter than its own type is a row whose text
+#: is simply drawn across the rules above and below it, which is what the strip
+#: did when its cells were left to draw.io's default 12 in a 14-unit row.
+#:
+#: Stating it as a maximum rather than trusting the fourteen is the point: the
+#: strip is a *fixed* geometry that a font size is chosen against, and this is
+#: the one line of code where the two are held against each other. Raise
+#: :data:`_STRIP_VALUE` past 11,67 and the rows grow rather than the values
+#: being clipped.
+_STRIP_ROW = max(F._REV_ROW, _line_box(max(_STRIP_FONT, _STRIP_VALUE)))
+
 
 def _ALIGN_KEYS(col_align, ncol: int) -> list[str]:
     align = list(col_align or [])
@@ -1527,7 +1812,7 @@ def _ALIGN_KEYS(col_align, ncol: int) -> list[str]:
             for c in range(ncol)]
 
 
-def columns(rows, sizes, total: float, bold_first: bool = True) -> list[float]:
+def columns(rows, sizes, total: float, bold=None) -> list[float]:
     """Column widths for a grid, measured off the text rather than shared out.
 
     The defect this replaced: the columns were given *proportional* shares of
@@ -1547,15 +1832,27 @@ def columns(rows, sizes, total: float, bold_first: bool = True) -> list[float]:
     ``sizes`` is the font size per column, because a title block sets its field
     captions smaller than its values and a column has to be measured at the size
     it will be *drawn* at.
+
+    ``bold`` is the same statement about *weight*, per column, and it is a
+    sequence rather than the "first column only" it used to be because the title
+    strip is the counter-example: it sets its captions light and its **values**
+    bold, so the one column the old rule measured heavy was the one column drawn
+    light and vice versa. Bold is the wider face -- ``_ADV_BOLD`` against
+    ``_ADV`` is 0,62 against 0,56, eleven per cent -- so a column measured in the
+    wrong face is a column that clips or a column that wastes the room the
+    column beside it needed. The caller states it because the caller is what
+    writes the ``fontStyle=1`` into the cell's own style; the two must be read
+    off one line of code or they will drift.
     """
     from pandid.render.furniture import text_width
 
     ncol = max((len(r) for r in rows), default=1)
+    weights = list(bold) if bold is not None else []
     need = []
     for c in range(ncol):
         size = sizes[c] if c < len(sizes) else (sizes[-1] if sizes else 11.0)
-        bold = bold_first and c == 0
-        widest = max((text_width(r[c], size, bold) for r in rows if c < len(r)),
+        heavy = bool(weights[c]) if c < len(weights) else False
+        widest = max((text_width(r[c], size, heavy) for r in rows if c < len(r)),
                      default=0.0)
         need.append(widest + _CELL_PAD)
     span = sum(need)
@@ -1580,11 +1877,33 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
     carries the box's title; a box with no title is given ``startSize=0`` and no
     band at all.
 
-    ``font`` is the size the cells are *drawn* at, and it is stated rather than
-    left to draw.io because draw.io's default is 12 while every box on the sheet
-    measures its own text at its ``font_size``. A column measured at 11 and
-    drawn at 12 is a column three-quarters of a letter too narrow, which is what
-    clipped ``APP'D`` to ``APP'`` in the revision strip.
+    ``font`` is the size the cells are *drawn* at, and it is stated **on every
+    cell** rather than left to draw.io or to the table. draw.io's default is 12
+    while every box on the sheet measures its own text at its ``font_size``, and
+    a column measured at 11 and drawn at 12 is a column three-quarters of a
+    letter too narrow.
+
+    Saying it once on the table container was the mistake, and it is worth
+    stating why it looked like it would work: **mxGraph does not inherit a style
+    from a parent cell.** ``mxGraph.getCellStyle`` resolves a cell's own style
+    string against the stylesheet's default and stops; the only key on a
+    draw.io table that reaches down the tree is the literal value ``inherit``,
+    which ``Graph.getCellStyle`` special-cases for ``strokeColor``,
+    ``fillColor`` and ``gradientColor`` alone -- which is exactly why every row
+    and cell here has to say ``strokeColor=inherit`` in as many words rather
+    than simply not mentioning ink. So a ``fontSize`` on the container styles
+    the container's *own* label -- the table's title band -- and nothing else,
+    and every cell under it was drawn at 12 however carefully its column had
+    been measured. That is the whole of the legend clipping ``HPSSH`` to
+    ``HPSSI``, of the revision grid clipping ``APP'D`` to ``APP'`` and
+    ``Issued for internal review`` to ``Issued for internal``, and -- since
+    12 needs a 14,4-unit line box and the strip rules 14 -- of the title strip's
+    values being drawn through the rule beneath them.
+
+    It goes in ahead of ``col_keys`` so a column that sets a size of its own
+    still wins: a style is parsed left to right into a dictionary
+    (``mxStylesheet.getCellStyle``), so the last statement of a key is the one
+    that stands.
 
     ``row_h`` rules every row at that height and lets the table be as tall as
     its rows come to; the default fills ``h`` instead. Eleven title-block fields
@@ -1614,6 +1933,7 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
     heights = _distribute([1.0] * len(body), h - start) if body else []
 
     shape = _TABLE_SHAPE + f"startSize={_num(start)};fontSize={font:g};"
+    cell = _TABLE_CELL + f"fontSize={font:g};"
     out = [
         f'        <mxCell id="{cid}" value={_attr(title)} '
         f'style={_attr(shape)} vertex="1" parent="1">',
@@ -1638,7 +1958,7 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
             extra = col_keys[c] if c < len(col_keys) else ""
             out += [
                 f'        <mxCell id="{cid}-r{r}-c{c}" value={_attr(value)} '
-                f'style={_attr(_TABLE_CELL + head + extra)} vertex="1" '
+                f'style={_attr(cell + head + extra)} vertex="1" '
                 f'parent="{cid}-r{r}">',
                 f'          <mxGeometry x="{_num(cx)}" width="{_num(widths[c])}" '
                 f'height="{_num(rh)}" as="geometry">',
@@ -1652,15 +1972,21 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
     return out
 
 
-def _text_box(cid: str, title: str, rows, x, y, w, h) -> list[str]:
+def _text_box(cid: str, title: str, rows, x, y, w, h, font: float = 11.0) -> list[str]:
     """A box of free-form lines, for furniture that is not a grid.
 
     A note list written as sentences has one column, and ruling one column into
     a table would invent a structure the author did not write. The lines go into
     one cell, which is what the sheet draws too.
+
+    ``font`` for the reason :func:`_table` states one: the box was measured off
+    its own ``font_size`` (:func:`~pandid.render.furniture.measure_annotation`)
+    and draw.io would otherwise set it at 12, which is a notes box whose lines
+    are wider and taller than the box measured for them.
     """
     lines = ([title] if title else []) + [str(r) for r in rows]
     style = ("rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;"
+             f"fontSize={font:g};"
              f"strokeColor={_INK};fillColor={_NO_FILL};")
     return [
         f'        <mxCell id="{cid}" value={_attr("<br>".join(lines))} '
@@ -1759,7 +2085,7 @@ def _strip_size(block) -> "tuple[float, float]":
     """
     _heading, fields, revisions = _title_block_fields(block)
     return (F.measure_title_strip(block)[0],
-            F._REV_ROW * max(len(revisions) + 1, len(fields), 1))
+            _STRIP_ROW * max(len(revisions) + 1, len(fields), 1) + _FRAME_STROKE)
 
 
 def _title_block_fields(block) -> "tuple[str, list[list[str]], list[list[str]]]":

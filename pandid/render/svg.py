@@ -630,6 +630,190 @@ def stream_polyline(s) -> "list[tuple[float, float]]":
     return simplified
 
 
+#: The size a line number is lettered at, and the halo it is written on: the
+#: string's estimated width plus a gutter, by a fixed depth. Held at module
+#: scope because the draw.io exporter sizes the same label with them.
+NUMBER_TYPE = 10
+_HALO_CHAR, _HALO_PAD, _HALO_DEEP = 6.2, 6.0, 13.0
+
+
+class StreamNumber(NamedTuple):
+    """One line number, and where the sheet decided to write it.
+
+    ``seg`` is the segment of the run the number names -- its longest, which is
+    the piece a reader has the most line to attach a caption to. ``x``/``y`` is
+    the point the string is *centred* on, ``vertical`` says it is turned a
+    quarter to read bottom to top, ``box`` is the opaque halo it is written on,
+    and ``leader`` is the pair of points a leader runs between where the search
+    could not find paper alongside the run (``None`` where it could).
+    """
+    name: str
+    color: str
+    seg: tuple
+    x: float
+    y: float
+    vertical: bool
+    box: tuple
+    leader: "tuple | None"
+
+
+def stream_numbers(fs, placed: list) -> "list[StreamNumber]":
+    """Where every line number on the sheet goes.
+
+    Lifted out of :meth:`SvgRenderer._draw_streams` for the reason
+    :func:`stream_polyline` and :func:`boundary_flag` were, and with more at
+    stake than either: this is a *search*, not a formula, so a second
+    implementation of it would not merely drift, it would answer differently on
+    the first crowded corridor. The draw.io exporter had no way to ask and
+    centred each number on its edge instead, which put ``CWS-311-150-40-CS``
+    across a hand valve, ``FB-301-200-160-SS`` across an off-page flag's own
+    lettering, and ``FB-310-300-160-SS`` likewise -- three numbers the sheet
+    places clear of all three.
+
+    ``placed`` is the list of opaque plates already on the sheet, and it is
+    **appended to**: each number's halo, and each leader's box, is seeded as
+    occupied so the next number does not delete it. The caller passes the
+    equipment tags it has already laid down, and gets back the whole set --
+    which is exactly what :meth:`SvgRenderer._draw_streams` hands to the
+    debugging overlay. An exporter with no equipment-tag pass of its own passes
+    an empty list and gets a placement that dodges every symbol and every line
+    but may still land under a tag; that is the one thing about this the two
+    backends do not share, and it is a difference of a seed rather than of a
+    method.
+
+    Everything else the search needs is derived here from the flowsheet, so the
+    two callers cannot disagree about it: :func:`_ink` for the lines, and
+    :func:`~pandid.portgeom.unit_box` for the symbols.
+    """
+    from pandid.portgeom import unit_box
+
+    ink = _ink(fs)
+    symbols: list[tuple[float, float, float, float]] = [
+        unit_box(u, u.frame) for u in fs.units if u.frame is not None
+    ]
+
+    # A number names a *run*, and a run survives the valves and fittings in it:
+    # renumber_streams() gives every segment of one the same name and the sheet
+    # writes it once, on the longest piece.
+    label_items: list = []
+    labeled_names: set = set()
+    for s in fs.streams:
+        if s.kind in _SIGNAL_KINDS or s.name in labeled_names:
+            continue
+        points = stream_polyline(s)
+        longest_seg, max_len = None, -1.0
+        for i in range(len(points) - 1):
+            x1, y1 = points[i]
+            x2, y2 = points[i + 1]
+            seg = abs(x2 - x1) + abs(y2 - y1)
+            if seg > max_len:
+                max_len, longest_seg = seg, ((x1, y1), (x2, y2))
+        if not longest_seg:
+            continue
+        labeled_names.add(s.name)
+        label_items.append((longest_seg, s.name, s.color or "black"))
+
+    out: list[StreamNumber] = []
+    for seg, name, color in label_items:
+        (sx1, sy1), (sx2, sy2) = seg
+        hw, hh = len(name) * _HALO_CHAR + _HALO_PAD, _HALO_DEEP
+        cx, cy = (sx1 + sx2) / 2, (sy1 + sy2) / 2
+        vertical = abs(sx2 - sx1) < abs(sy2 - sy1)
+        span = abs(sy2 - sy1) if vertical else abs(sx2 - sx1)
+        # Turned to follow the run, the halo measures hw along it, hh across.
+        bw, bh = (hh, hw) if vertical else (hw, hh)
+
+        # Everything the anchors below can reach: along the run as far as
+        # _label_anchors will slide the label, and across it as far as the
+        # outermost band beside the pipe. Seeds outside it can be dropped
+        # before the search rather than re-tested at every step of it.
+        along = (span + hw) / 2 + max(bw, bh) / 2
+        across = hh / 2 + _LABEL_GAP + _LABEL_BANDS * hh + max(bw, bh) / 2
+        rx, ry = (across, along) if vertical else (along, across)
+        window = (cx - rx, cy - ry, cx + rx, cy + ry)
+
+        axis, at = ("v", (sx1 + sx2) / 2) if vertical else ("h", (sy1 + sy2) / 2)
+        # How far **the run** goes, which is not how far the labelled segment
+        # goes: an in-line valve splits a straight length of pipe into three
+        # drawn pieces, and a reader sees one line. It is the same set this
+        # search already treats as the label's own -- everything collinear
+        # with the segment -- and it is what :func:`_along` measures against.
+        # Taken over all the ink and not just the ink inside the window,
+        # since a run that leaves the window is a run the label cannot
+        # overrun on that side.
+        run_lo = min(sy1, sy2) if vertical else min(sx1, sx2)
+        run_hi = max(sy1, sy2) if vertical else max(sx1, sx2)
+        for line in ink:
+            if line.axis == axis and abs(line.at - at) < 0.5:
+                run_lo = min(run_lo, line.y0 if vertical else line.x0)
+                run_hi = max(run_hi, line.y1 if vertical else line.x1)
+
+        near_symbols = [p for p in symbols if _meets(p, window)]
+        occupied = [p for p in placed if _meets(p, window)]
+        occupied += [line.box for line in ink
+                     if not (line.axis == axis and abs(line.at - at) < 0.5)
+                     and _meets(line.box, window)]
+        # A leader is ink like any other and has to dodge the same things
+        # the halo does, symbols included, so it is scored against the lot.
+        everything = near_symbols + occupied
+
+        # Best first, and the first spot that covers nothing wins outright.
+        # Where nothing is clear -- a dozen-character line number in a
+        # crowded corridor -- the least damaging spot wins instead, and a tie
+        # keeps the earlier anchor. Since the anchors that sit *on* the pipe
+        # come first, that makes the label's own line the last resort, which
+        # is the right one: breaking the run you are naming is a convention a
+        # reader knows, and breaking the run beside it is a lie about that
+        # line. The old fallback was whichever anchor happened to be first,
+        # taken however much of the sheet it deleted.
+        #
+        # An anchor the run does not run along is no longer this line's
+        # number on its own terms, so it carries a leader instead
+        # (ISO 15519-1 §7.2.5, and :func:`_along` for where the line falls).
+        # The leader's own crossings are the last part of the score: new ink
+        # drawn through the vessel the label stepped around is not an
+        # improvement on the label sitting against that vessel, and the halo
+        # machinery this search is built on exists precisely so a label does
+        # not delete somebody else's line. A clear spot alongside the run
+        # still wins outright, since it scores all zeros and the anchors are
+        # generated near-first.
+        clear = (0, 0, 0)
+        spot: "tuple[float, float] | None" = None
+        damage: "tuple[int, int, int] | None" = None
+        leader: "tuple | None" = None
+        for ux, uy, _off in _label_anchors(cx, cy, span, hw, hh, vertical):
+            box = (ux - bw / 2, uy - bh / 2, ux + bw / 2, uy + bh / 2)
+            hits = _covering(box, occupied, near_symbols,
+                             None if damage is None else damage[:2])
+            if damage is not None and hits > damage[:2]:
+                continue
+            lead, cut = ((None, 0) if _along(box, vertical, run_lo, run_hi)
+                         else _leader(box, seg, everything))
+            cost = (*hits, cut)
+            if damage is None or cost < damage:
+                spot, damage, leader = (ux, uy), cost, lead
+                if cost == clear:
+                    break
+        # `_label_anchors` always offers at least the innermost band either side
+        # of the run, so there is always a spot: the search chooses between
+        # anchors, it never fails to find one.
+        assert spot is not None
+        tx, ty = spot
+        halo = (tx - bw / 2, ty - bh / 2, tx + bw / 2, ty + bh / 2)
+        placed.append(halo)
+        if leader is not None:
+            # Seeded as occupied so the next label's halo cannot delete it. The
+            # seed is the leader's bounding box rather than the stroke, which is
+            # generous for a sloping line -- but a leader is rare, and the
+            # alternative is a halo landing on the one mark that says which line
+            # this number belongs to.
+            (ax0, ay0), (ax1, ay1) = leader
+            placed.append((min(ax0, ax1), min(ay0, ay1),
+                           max(ax0, ax1), max(ay0, ay1)))
+        out.append(StreamNumber(name, color, seg, tx, ty, vertical, halo, leader))
+    return out
+
+
 #: How deep the point of an off-page flag is cut back from the end of its
 #: rectangle, and how far the pennant is inset inside the flag's box, top and
 #: bottom -- less where an off-page reference has to be written under the tag,
@@ -1361,7 +1545,7 @@ class SvgRenderer:
         plates: "list[tuple[float, float, float, float]] | None" = (
             [] if grid is not None else None)
         drawing.extend(self._draw_units(fs, unit_labels, balloons, ink))
-        drawing.extend(self._draw_streams(fs, jump_direction, unit_labels, arrows, ink,
+        drawing.extend(self._draw_streams(fs, jump_direction, unit_labels, arrows,
                                           plates))
         # Instrumentation goes on over the lines: an impulse line runs from the
         # tap to the balloon, and the balloon's opaque body then knocks out both
@@ -2175,7 +2359,7 @@ class SvgRenderer:
         """
         return arrows and wears_arrowhead(s, self.registry)
 
-    def _draw_streams(self, fs, jump_direction, unit_labels, arrows=True, ink=(),
+    def _draw_streams(self, fs, jump_direction, unit_labels, arrows=True,
                       plates=None):
         """Draw every run, and the line numbers written on and beside them.
 
@@ -2185,9 +2369,12 @@ class SvgRenderer:
         it, and it asks because it is drawn *underneath* all of them: see
         :func:`pandid.render.debug.overlay`. Left ``None`` nothing is collected
         and nothing about the render changes.
-        """
-        from pandid.portgeom import unit_box
 
+        The ink this used to be handed is :func:`stream_numbers`' own business
+        now: it derives the lines and the symbols from the flowsheet, so the two
+        backends that ask it where a number goes cannot be given different
+        answers by being given different seeds.
+        """
         stream_geoms, horizontals, verticals = [], [], []
         for s in fs.streams:
             points = stream_polyline(s)
@@ -2201,8 +2388,6 @@ class SvgRenderer:
                     verticals.append((x1, min(y1, y2), max(y1, y2)))
 
         lines = ['  <g id="streams">']
-        labeled_names: set = set()
-        label_items: list = []   # (tx, ty, name, color); drawn last, over every line
         for s, points in stream_geoms:
             color = s.color or "black"
             marker_id = f'arrow_{color.replace("#", "").replace(" ", "_")}'
@@ -2212,14 +2397,6 @@ class SvgRenderer:
                 dash = f' stroke-dasharray="{s.dasharray}"'
             elif s.kind in _SIGNAL_DASH:
                 dash = f' stroke-dasharray="{_SIGNAL_DASH[s.kind]}"'
-
-            longest_seg, max_len = None, -1
-            for i in range(len(points) - 1):
-                x1, y1 = points[i]
-                x2, y2 = points[i + 1]
-                seg = abs(x2 - x1) + abs(y2 - y1)
-                if seg > max_len:
-                    max_len, longest_seg = seg, ((x1, y1), (x2, y2))
 
             d_parts = [f"M {points[0][0]},{points[0][1]}"]
             for i in range(len(points) - 1):
@@ -2246,12 +2423,6 @@ class SvgRenderer:
                 else:
                     d_parts.append(f"L {x2},{y2}")
             d_str = " ".join(d_parts)
-
-            # A stream number is labelled once (on its longest segment); a
-            # white halo drawn in a final pass knocks the line out beneath it.
-            if bool(longest_seg) and not is_signal and s.name not in labeled_names:
-                labeled_names.add(s.name)
-                label_items.append((longest_seg, s.name, color))
 
             marker = f' marker-end="url(#{marker_id})"' if self._tipped(s, arrows) else ""
             # A signal is drawn at half the weight of the pipe it reads, per
@@ -2306,117 +2477,36 @@ class SvgRenderer:
         # The single exception is the run the label names. Writing the number
         # *in* the line is the convention, and the halo is what opens the gap it
         # is written in, so a line collinear with the labelled segment is left
-        # out of that run's seeds below.
-        symbols: list[tuple[float, float, float, float]] = [
-            unit_box(u, u.frame) for u in fs.units if u.frame is not None
-        ]
+        # out of that run's seeds.
+        #
+        # All of which is :func:`stream_numbers`' now, and this pass only draws
+        # it: the draw.io exporter has the same question to answer and had been
+        # answering it by centring each number on its own edge. See that
+        # function.
         placed: list[tuple[float, float, float, float]] = [
             b for b in map(_unit_label_box, unit_labels) if b is not None
         ]
 
-        for seg, name, color in label_items:
-            (sx1, sy1), (sx2, sy2) = seg
-            hw, hh = len(name) * 6.2 + 6, 13.0
-            cx, cy = (sx1 + sx2) / 2, (sy1 + sy2) / 2
-            vertical = abs(sx2 - sx1) < abs(sy2 - sy1)
-            span = abs(sy2 - sy1) if vertical else abs(sx2 - sx1)
-            # Turned to follow the run, the halo measures hw along it, hh across.
-            bw, bh = (hh, hw) if vertical else (hw, hh)
-
-            # Everything the anchors below can reach: along the run as far as
-            # _label_anchors will slide the label, and across it as far as the
-            # outermost band beside the pipe. Seeds outside it can be dropped
-            # before the search rather than re-tested at every step of it.
-            along = (span + hw) / 2 + max(bw, bh) / 2
-            across = hh / 2 + _LABEL_GAP + _LABEL_BANDS * hh + max(bw, bh) / 2
-            rx, ry = (across, along) if vertical else (along, across)
-            window = (cx - rx, cy - ry, cx + rx, cy + ry)
-
-            axis, at = ("v", (sx1 + sx2) / 2) if vertical else ("h", (sy1 + sy2) / 2)
-            # How far **the run** goes, which is not how far the labelled segment
-            # goes: an in-line valve splits a straight length of pipe into three
-            # drawn pieces, and a reader sees one line. It is the same set this
-            # search already treats as the label's own -- everything collinear
-            # with the segment -- and it is what :func:`_along` measures against.
-            # Taken over all the ink and not just the ink inside the window,
-            # since a run that leaves the window is a run the label cannot
-            # overrun on that side.
-            run_lo = min(sy1, sy2) if vertical else min(sx1, sx2)
-            run_hi = max(sy1, sy2) if vertical else max(sx1, sx2)
-            for line in ink:
-                if line.axis == axis and abs(line.at - at) < 0.5:
-                    run_lo = min(run_lo, line.y0 if vertical else line.x0)
-                    run_hi = max(run_hi, line.y1 if vertical else line.x1)
-
-            near_symbols = [p for p in symbols if _meets(p, window)]
-            occupied = [p for p in placed if _meets(p, window)]
-            occupied += [line.box for line in ink
-                         if not (line.axis == axis and abs(line.at - at) < 0.5)
-                         and _meets(line.box, window)]
-            # A leader is ink like any other and has to dodge the same things
-            # the halo does, symbols included, so it is scored against the lot.
-            everything = near_symbols + occupied
-
-            # Best first, and the first spot that covers nothing wins outright.
-            # Where nothing is clear -- a dozen-character line number in a
-            # crowded corridor -- the least damaging spot wins instead, and a tie
-            # keeps the earlier anchor. Since the anchors that sit *on* the pipe
-            # come first, that makes the label's own line the last resort, which
-            # is the right one: breaking the run you are naming is a convention a
-            # reader knows, and breaking the run beside it is a lie about that
-            # line. The old fallback was whichever anchor happened to be first,
-            # taken however much of the sheet it deleted.
-            #
-            # An anchor the run does not run along is no longer this line's
-            # number on its own terms, so it carries a leader instead
-            # (ISO 15519-1 §7.2.5, and :func:`_along` for where the line falls).
-            # The leader's own crossings are the last part of the score: new ink
-            # drawn through the vessel the label stepped around is not an
-            # improvement on the label sitting against that vessel, and the halo
-            # machinery this search is built on exists precisely so a label does
-            # not delete somebody else's line. A clear spot alongside the run
-            # still wins outright, since it scores all zeros and the anchors are
-            # generated near-first.
-            clear = (0, 0, 0)
-            spot, damage, leader = None, None, None
-            for ux, uy, _off in _label_anchors(cx, cy, span, hw, hh, vertical):
-                box = (ux - bw / 2, uy - bh / 2, ux + bw / 2, uy + bh / 2)
-                hits = _covering(box, occupied, near_symbols,
-                                 None if damage is None else damage[:2])
-                if damage is not None and hits > damage[:2]:
-                    continue
-                lead, cut = ((None, 0) if _along(box, vertical, run_lo, run_hi)
-                             else _leader(box, seg, everything))
-                cost = (*hits, cut)
-                if damage is None or cost < damage:
-                    spot, damage, leader = (ux, uy), cost, lead
-                    if cost == clear:
-                        break
-            tx, ty = spot
-            placed.append((tx - bw / 2, ty - bh / 2, tx + bw / 2, ty + bh / 2))
-            lines.append(f'    <rect x="{tx - bw / 2:.1f}" y="{ty - bh / 2:.1f}" '
-                         f'width="{bw:.1f}" height="{bh:.1f}" fill="white" />')
-            turn = f' transform="rotate(-90, {tx:.1f}, {ty:.1f})"' if vertical else ""
+        for number in stream_numbers(fs, placed):
+            tx, ty, name, color = number.x, number.y, number.name, number.color
+            bx0, by0, bx1, by1 = number.box
+            lines.append(f'    <rect x="{bx0:.1f}" y="{by0:.1f}" '
+                         f'width="{bx1 - bx0:.1f}" height="{by1 - by0:.1f}" fill="white" />')
+            turn = f' transform="rotate(-90, {tx:.1f}, {ty:.1f})"' if number.vertical else ""
             lines.append(
-                f'    <text x="{tx:.1f}" y="{ty:.1f}" font-family="sans-serif" font-size="10" '
+                f'    <text x="{tx:.1f}" y="{ty:.1f}" font-family="sans-serif" '
+                f'font-size="{NUMBER_TYPE}" '
                 f'text-anchor="middle" dominant-baseline="middle" '
                 f'fill="{color}"{turn}>{html.escape(name)}</text>'
             )
-            if leader is not None:
-                (ax0, ay0), (ax1, ay1) = leader
+            if number.leader is not None:
+                (ax0, ay0), (ax1, ay1) = number.leader
                 # Drawn in the label's own colour, since it is part of the label
-                # and not a line of its own, and seeded as occupied so the next
-                # label's halo cannot delete it. The seed is the leader's
-                # bounding box rather than the stroke, which is generous for a
-                # sloping line -- but a leader is rare, and the alternative is a
-                # halo landing on the one mark that says which line this number
-                # belongs to.
+                # and not a line of its own.
                 lines.append(f'    <line x1="{ax0:.1f}" y1="{ay0:.1f}" '
                              f'x2="{ax1:.1f}" y2="{ay1:.1f}" '
                              f'stroke="{color}" stroke-width="{_SIGNAL_STROKE}" />')
-                lines.append(f'    <path d="{_arrowhead(*leader)}" fill="{color}" />')
-                placed.append((min(ax0, ax1), min(ay0, ay1),
-                               max(ax0, ax1), max(ay0, ay1)))
+                lines.append(f'    <path d="{_arrowhead(*number.leader)}" fill="{color}" />')
         # ``placed`` is now every opaque plate the sheet's two label passes lay
         # down: the equipment tags it was seeded with, each line number, and
         # each leader. That is exactly the set the overlay has to dodge, and
