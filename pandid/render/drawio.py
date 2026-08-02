@@ -50,7 +50,7 @@ What is *not* free is written down rather than discovered in draw.io.
 has no stencil for it, each with the sentence saying what its stand-in loses; the
 stand-ins are draw.io *built-ins* rather than stencils, so a reference there
 cannot fail to resolve the way a stencil key could. Sheet furniture is docked
-where the sheet docks it and ruled as the tables it is
+where the sheet docks it and ruled the way the sheet rules it
 (:meth:`DrawioRenderer._furniture`). Nothing on the sheet is silently absent.
 
 **A model, or a sheet.** Given ``page_size`` this stops being a drawing on an
@@ -166,12 +166,14 @@ deleted, since the reasoning is what the next change has to hold against.
 from __future__ import annotations
 
 import hashlib
+from datetime import datetime
 from typing import NamedTuple, TYPE_CHECKING
 
 from pandid.portgeom import port_point, unit_box
 from pandid.render import furniture as F
 from pandid.render import svg as _svg
-from pandid.render.svg import (_DIAMOND_BALLOONS, _furniture_name, _too_small, _SIGNAL_DASH, _PROCESS_STROKE,
+from pandid.render.svg import (_DIAMOND_BALLOONS, _furniture_name, _scale_text, _too_small,
+                               _SIGNAL_DASH, _PROCESS_STROKE,
                                _SIGNAL_STROKE, _TAP_DASH, NUMBER_TYPE, boundary_flag,
                                draws_arrowheads, impulse_tap, stream_numbers,
                                stream_polyline, tap_lines)
@@ -1329,6 +1331,17 @@ class DrawioRenderer:
         whose rows are plain strings is not tabular and stays a box: ruling a
         single column into a grid would be inventing structure the author did not
         write.
+
+        **Ruled where the sheet rules it, though, and not everywhere a grid
+        could be ruled.** A table's rows and cells are what make it editable;
+        its *lines* are a separate question and the answer is the sheet's. An
+        :class:`~pandid.document.Annotation` is drawn on paper as a box with a
+        title bar and rows of text -- no column rules, no row rules -- so it is
+        exported with ``rowLines=0;columnLines=0`` and keeps its cells (see
+        :data:`_ANNOTATION_KEYS`). A :class:`~pandid.document.TableBox` really
+        does rule every cell (``draw_table`` strokes a rectangle apiece) and so
+        keeps both. The two were coming out identical, and the legend and
+        equipment list read as spreadsheets beside a drawing that has none.
         """
         from pandid.document import TableBox
 
@@ -1352,9 +1365,18 @@ class DrawioRenderer:
         # around it.
         fit = _Fit.identity() if free is None else _Fit(
             *_fitted(inner, free))
+        # What the title strip's own three variable fields are filled from, all
+        # three of them the sheet's answer rather than this file's: the drawing
+        # name a blank title falls back to, today's date where the block states
+        # none, and the ratio the dock has just settled the drawing at.
+        block = fs.title_block
+        name = (getattr(block, "title", "") or fs.name) if block is not None else fs.name
+        date = (getattr(block, "date", "") if block is not None else "") or \
+            datetime.now().strftime("%Y-%m-%d")
+        scale = "" if free is None else _scale_text(fit.scale)
         out: list[str] = []
         for n, (obj, x, y, w, h) in enumerate(placed):
-            out += self._furniture_cell(f"f{n}", obj, x, y, w, h)
+            out += self._furniture_cell(f"f{n}", obj, x, y, w, h, name, date, scale)
         return out, frame, fit
 
     @staticmethod
@@ -1402,12 +1424,14 @@ class DrawioRenderer:
                 out += _label(f"z{n}", lx, ly, text, F.ZONE_TYPE)
         return out
 
-    def _furniture_cell(self, cid: str, obj, x, y, w, h) -> list[str]:
+    def _furniture_cell(self, cid: str, obj, x, y, w, h,
+                        name: str = "", date: str = "",
+                        scale: str = "") -> list[str]:
         """One docked piece of furniture, as the cells that draw it."""
         from pandid.document import TableBox, TitleBlock
 
         if isinstance(obj, TitleBlock):
-            return self._title_strip(cid, obj, x, y, w, h)
+            return self._title_strip(cid, obj, x, y, w, h, name, date, scale)
         title = getattr(obj, "title", "") or ""
         if isinstance(obj, TableBox):
             size, _ncol, col_w, _row_h = F._table_layout(obj)
@@ -1433,7 +1457,7 @@ class DrawioRenderer:
             heavy = [True] + [False] * (ncol - 1)
             return _table(cid, title, [], grid, x, y, w, h,
                           columns(grid, [size] * ncol, w, bold=heavy), title_h,
-                          font=size,
+                          font=size, keys=_ANNOTATION_KEYS + f"fontSize={size + 1:g};",
                           col_keys=[f"align=left;spacingLeft=4;{'fontStyle=1;' if b else ''}"
                                     for b in heavy])
         # Not tabular: a titled box of free-form lines, which is what it is on
@@ -1441,93 +1465,77 @@ class DrawioRenderer:
         # TableBox lands here as well, on the two things every box has -- a title
         # and some rows -- rather than being dropped for being neither.
         size = getattr(obj, "font_size", 11.0)
-        return _text_box(cid, title, [str(r) for r in rows], x, y, w, h, size)
+        _s, _row_h, title_h, _col_w = F._ann_layout(obj) if rows or title else (
+            size, 0.0, 0.0, [])
+        return _text_box(cid, title, [str(r) for r in rows], x, y, w, h, size,
+                         title_h)
 
-    def _title_strip(self, cid: str, block, x, y, w, h) -> list[str]:
-        """The engineering title strip, as the two tables it really is.
+    def _title_strip(self, cid: str, block, x, y, w, h, name: str, date: str,
+                     scale: str) -> list[str]:
+        """The engineering title strip, ruled where the sheet rules it.
 
-        The strip is one rectangle on the sheet and three columns inside it: the
-        revision grid on the left, the company cell in the middle, and the
-        information block on the right carrying client, project, title, status
-        and the drawing-number band. Only the first of those three is a uniform
-        grid. The other two are cells of unequal height stacked against each
-        other: a title band with the sheet count tucked into its corner, a status
-        band, and a bottom band ruled into four.
+        **This reverses the arrangement that stood here.** The reversal is the
+        author's call on a trade this docstring used to argue the other side of,
+        so what was traded away is worth the paragraph.
 
-        A draw.io table *can* merge cells -- ``colspan``/``rowspan`` on a cell,
-        with the cells it covers kept in the file as hidden siblings -- so the
-        reason the strip is not rebuilt as one table is not that the format
-        forbids it. It is that every cell in a row shares that row's height
-        (``TableLayout.layoutRow`` assigns it), so bands of three different
-        heights would need the strip ruled into a fine lattice of short rows and
-        then knitted back together with a rowspan on almost every cell. What
-        that produces is a picture of a title block that happens to be made of
-        table cells, and the first thing a reader does to it -- drag a column
-        rule, add a revision -- takes the lattice apart.
+        The strip is one rectangle and three columns: a revision grid on the
+        left, a company cell in the middle, and on the right an information
+        block of bands of unequal depth -- a title band with the sheet count
+        tucked into its corner, a status band, and a bottom band ruled into
+        DRAWING No / SCALE / DATE / REV. Only the first of the three is a
+        uniform grid, and a draw.io table gives every cell in a row that row's
+        height (``TableLayout.layoutRow``), so the other two came out as a
+        second table of label and value, one field per row: twelve rows reading
+        COMPANY, TITLE, SUBTITLE, STATUS, DRAWING No, SCALE, SHEET, DATE, REV,
+        DRAWN, CHECKED, APPROVED. Every value was present and labelled, the
+        reader could drag a column rule, and it looked nothing whatever like the
+        sheet. Having opened it, the author rejected the trade: a title block is
+        the one part of a drawing whose *shape* a reader recognises before
+        reading a word of it, and a file that opens looking like a different
+        drawing has not exported this one.
 
-        So the strip goes out as two tables side by side, which is the honest
-        decomposition rather than a picture of the strip:
+        So the bands go out as what they are -- a rectangle, some rules, and
+        text at the sizes and weights the sheet letters them at -- read from
+        :func:`~pandid.render.furniture.title_strip_layout`, which is now the
+        one derivation and which
+        :func:`~pandid.render.furniture.draw_title_strip` strokes into SVG from
+        the same list of parts. **There is no strip arithmetic in this method at
+        all**, and that is the point rather than an economy: a band whose depth
+        is 0,4 of the block is 0,4 of it in both backends because neither
+        backend works it out.
 
-        * the **revision history**, six columns wide, exactly the REV / DATE /
-          DESCRIPTION / BY / CHK'D / APP'D grid the sheet rules and at the same
-          column widths, with its heading row at the foot where the sheet puts
-          it and the newest revision immediately above;
-        * the **identification fields**, two columns of label and value, one
-          row each. That is a demotion: the sheet rules the drawing number, the
-          scale, the date and the revision index as four cells on one line under
-          a title that spans the strip, and here they are four rows. It is
-          also the only arrangement a table can hold, and every field is present
-          and labelled.
+        **The revision history stays a real table**, and it is the only piece
+        that could be one: a grid of six named columns with one row per
+        revision, and the one part of an issued title block a reader actually
+        edits, since the next thing that happens to a drawing is a revision.
+        See :func:`_rev_table` for how it is ruled to the sheet's own rules and
+        no others.
 
-        What is lost, and is worth a reader knowing: the merged geometry above,
-        the sheet count's corner placement, and the title band's own size, since
-        a title is a field row here like any other rather than a heading set
-        across the strip. What is kept: every value, the revision history in
-        order at the sheet's own column widths, the caption/value type sizes,
-        and a grid the reader can edit.
-
-        **Both tables are ruled at their own row height and bottom-aligned**,
-        rather than being stretched to fill the docked rectangle. Filling it was
-        what produced the row of empty rules a reader saw: eleven fields shared
-        between eighty units are rows 5.6 units tall, and 11-point type in a
-        5.6-unit row draws nothing at all. So the field table is as tall as its
-        fields need and reaches *up* from the strip's bottom edge, which is the
-        edge the sheet rules its own last band on and the one worth holding
-        still.
+        What the reversal costs, plainly: the eleven identification fields are
+        no longer cells of a grid. A reader who wants to change the drawing
+        number double-clicks a text label rather than a table cell, and there is
+        no column rule to drag between the caption and the value. Nothing is
+        lost from the file -- every field is a cell of its own, with its own id,
+        and so is every rule -- so the strip can still be taken apart and put
+        back together. What it is now is a drawing the reader can edit rather
+        than a form they can fill in, which is what a title strip is on paper.
         """
-        _heading, fields, revisions = _title_block_fields(block)
-        # The strip's own division: the revision grid takes the left _REV_W of
-        # it and the company cell and information block share the rest, which is
-        # where draw_title_strip() rules its two vertical lines.
-        rev_w = min(F._REV_W, w)
-        row_h = _STRIP_ROW
-        # Bottom-aligned, but to the frame's *paper* rather than to its
-        # centreline. See :data:`_FRAME_STROKE`.
-        foot = y + h - _FRAME_STROKE
-        # No heading on either: the title and subtitle are field rows below, and
-        # a heading would say them twice -- once in a band too narrow to hold
-        # the sheet's own title, which is what overflowed.
-        rev_h = row_h * (len(revisions) + 1)
-        id_h = row_h * max(len(fields), 1)
-        out = _table(f"{cid}-rev", "", [c[0] for c in F._REV_COLS], revisions,
-                     x, foot - rev_h, rev_w, rev_h,
-                     [c[1] for c in F._REV_COLS], header_last=True,
-                     font=_STRIP_FONT, row_h=row_h,
-                     col_keys=["align=left;spacingLeft=3;"] * len(F._REV_COLS))
-        # The caption column is measured and drawn at the size the sheet sets a
-        # caption at, and the value column at the size it sets a value; a column
-        # measured at one size and drawn at another is the whole of defect 9.
-        # The weights go the same way round: the captions are set light and the
-        # values bold, which is the pair `columns` used to have inverted.
-        id_w = w - rev_w
-        widths = columns(fields, [_STRIP_FONT, _STRIP_VALUE], id_w,
-                         bold=[False, True])
-        out += _table(f"{cid}-id", "", [], fields,
-                      x + rev_w, foot - id_h, id_w, id_h, widths,
-                      font=_STRIP_VALUE, row_h=row_h,
-                      col_keys=[f"align=left;spacingLeft=3;fontSize={_STRIP_FONT:g};"
-                                f"fontColor={_CAPTION_INK};",
-                                "align=left;spacingLeft=3;fontStyle=1;"])
+        strip = F.title_strip_layout(block, name, date, x + w, y + h, scale)
+        bx, by, bw, bh = strip.box
+        # Flush to the frame, exactly as the sheet's own strip is: `_strip_size`
+        # reports the sheet's rectangle and `dock` puts its bottom-right corner
+        # on the frame's. The strip's rule and the frame's are then coincident
+        # and two units wide apiece, which is what the rendered sheet draws.
+        out = _rect(cid, bx, by, bw, bh,
+                    "rounded=0;html=1;movable=1;"
+                    f"strokeColor={_LINE_INK};fillColor={_NO_FILL};"
+                    f"strokeWidth={F._STRIP_RULE:g};")
+        for n, part in enumerate(strip.rules):
+            out += _strip_rule(f"{cid}-v{n}", part)
+        out += _rev_table(f"{cid}-rev", strip.rev)
+        for n, part in enumerate(strip.parts):
+            out += (_strip_rule(f"{cid}-p{n}", part) if part[0] == "rule"
+                    else _strip_label(f"{cid}-p{n}", part))
         return out
 
 
@@ -1893,46 +1901,53 @@ def _line_box(size: float) -> float:
 _ALIGN_KEY = {"l": "align=left;spacingLeft=4;", "r": "align=right;spacingRight=4;",
               "c": "align=center;"}
 
-#: The two type sizes the title strip is set in: ``draw_title_strip`` letters a
-#: revision cell and a field caption at 7,5 and 6,5 and sets a value at 11. The
-#: caption size is rounded to the revision size so the two tables' rows line up,
-#: and the grey is the caption colour the strip uses to hold a caption back from
-#: the value beside it.
-_STRIP_FONT, _STRIP_VALUE = 7.5, 11.0
-_CAPTION_INK = "#666666"
-
-#: The weight the drawing frame is ruled at, and the reason the strip stands off
-#: the frame by exactly that much.
+#: The weight the drawing frame is ruled at.
 #:
-#: mxGraph strokes a rectangle on its path, so the ``strokeWidth=2`` rule
-#: :meth:`DrawioRenderer._border` draws lays one unit of ink *inside* the frame
-#: rectangle. The strip docks flush to that rectangle's bottom edge -- which is
-#: right, it is the edge the sheet rules its own last band on -- so the last
-#: row's descenders were being drawn under the heavy rule and the reader saw
-#: ``APPROVED / HVL`` cut in half. Standing the tables off by the whole width of
-#: the rule, rather than by the half of it that is actually in the way, is the
-#: same clearance the sheet leaves: ``draw_title_strip`` sets its bottom band's
-#: value on a baseline five units above the strip's own edge.
-#:
-#: :func:`_strip_size` adds it to the height it reports, so :func:`F.dock`
-#: reserves the room rather than the strip growing up out of its own band.
+#: The strip no longer stands off it. It used to, by exactly this much: two
+#: tables docked flush to the frame had their last row's descenders drawn under
+#: the heavy rule, because mxGraph strokes a rectangle on its path and a
+#: ``strokeWidth=2`` frame lays one unit of ink *inside* the rectangle the strip
+#: docks to. The strip is now the sheet's own rectangle, and the sheet docks it
+#: flush and sets its bottom band's value on a baseline five units above its own
+#: edge -- so the clearance is in the layout where it belongs, and standing the
+#: whole strip off would put it two units up from where the sheet rules it.
 _FRAME_STROKE = 2.0
 
-#: How deep a title-strip row is ruled.
+#: How far into its line box a baseline falls, as a fraction of the font size.
 #:
-#: The sheet's own ``_REV_ROW`` where that is deep enough to draw in, and the
-#: line box of the largest type in the strip where it is not. draw.io does not
-#: shrink text to fit a row -- there is no such style and no such pass; see
-#: :data:`_LINE_BOX` -- so a row shorter than its own type is a row whose text
-#: is simply drawn across the rules above and below it, which is what the strip
-#: did when its cells were left to draw.io's default 12 in a 14-unit row.
+#: The sheet states a piece of lettering the way SVG does, at a **baseline**;
+#: draw.io states one the way CSS does, as a box a line is laid out in. This is
+#: the conversion, and it is the only place in this file where the two ways of
+#: saying where a letter sits meet.
 #:
-#: Stating it as a maximum rather than trusting the fourteen is the point: the
-#: strip is a *fixed* geometry that a font size is chosen against, and this is
-#: the one line of code where the two are held against each other. Raise
-#: :data:`_STRIP_VALUE` past 11,67 and the rows grow rather than the values
-#: being clipped.
-_STRIP_ROW = max(F._REV_ROW, _line_box(max(_STRIP_FONT, _STRIP_VALUE)))
+#: A line box is :data:`_LINE_BOX` = 1,2 em (see there for why it is that and
+#: not the font size). Inside it the browser stacks half-leading, then the
+#: ascent, then the baseline: ``(1,2 - (ascent + descent)) / 2 + ascent``.
+#: Helvetica's own ascent and descent are 0,770 and 0,230, which sum to exactly
+#: one em and put the baseline at 0,90; Arial, which is what a machine without
+#: Helvetica resolves draw.io's font stack to, reports 0,905 and 0,212 and puts
+#: it at 0,947. So this is right for one of the two faces and about half a unit
+#: out at 12,5 for the other, and there is no third number that is right for
+#: both -- a browser measures the face it actually loaded and this file cannot.
+#: Half a unit is inside the error of :func:`~pandid.render.furniture.text_width`
+#: and well inside the two and a half units of clearance a 7,5 caption has in a
+#: 14-unit band.
+_BASELINE = 0.9
+
+#: What a draw.io cell takes off its own rectangle before a letter is drawn.
+#:
+#: ``mxText.spacing`` is 2 and is added to each of the four sides
+#: (``this.spacingLeft = this.spacing + parseInt(spacingLeft || 0)``, and so on
+#: for the other three), and ``mxCellRenderer.rotateLabelBounds`` then shifts
+#: the label bounds by ``mxText.getSpacing()`` and narrows them by
+#: ``spacingLeft + spacingRight``. Worked through for each alignment -- the
+#: ``bounds.x -= margin.x * bounds.width`` at the head of that function is
+#: undone by the ``x + this.margin.x * w`` in ``mxText.paint``, so the two
+#: cancel -- the answer is the same one every time: **the text is laid out
+#: inside the cell rectangle inset by two units on every side**, whichever way
+#: it is aligned. So a cell whose text must start at the sheet's ``x`` begins
+#: two units left of it, and one whose text must end there ends two units right.
+_TEXT_INSET = 2.0
 
 
 def _ALIGN_KEYS(col_align, ncol: int) -> list[str]:
@@ -1995,8 +2010,8 @@ def columns(rows, sizes, total: float, bold=None) -> list[float]:
 
 def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
            start: float = 0.0, *, header_last: bool = False,
-           font: float = 11.0, col_keys=(), row_h: "float | None" = None
-           ) -> list[str]:
+           font: float = 11.0, col_keys=(), row_h: "float | None" = None,
+           heights=None, keys: str = "") -> list[str]:
     """A ruled grid, as draw.io's own table: container, rows, cells.
 
     ``widths`` are absolute column widths and must sum to ``w``; they come from
@@ -2042,6 +2057,19 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
     ``header_last`` puts the heading row at the foot, which is where a revision
     history has it: the newest revision sits against the heading and the older
     ones climb away from it.
+
+    ``heights`` rules the rows at *stated* depths rather than at one depth. A
+    revision grid is the case: the sheet rules its revisions at 14 apiece and
+    leaves whatever is over as blank paper above them, so the grid is not a
+    uniform stack and cannot be written as one. They are shared out through
+    :func:`_distribute` like the widths, and so add up to the table exactly as
+    written.
+
+    ``keys`` are table-level style keys for the caller's own case --
+    ``rowLines=0`` for a grid the sheet does not rule across, a ``strokeWidth``
+    for one it rules lighter. They go on the container, which is where a table
+    draws its own row and column lines from (``TableShape.paintTableForeground``
+    reads ``rowLines``/``columnLines`` off exactly this style).
     """
     body = [row for row in rows]
     if headers:
@@ -2059,9 +2087,10 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
     widths = _distribute(list(widths)[:ncol] or [1.0] * ncol, w)
     if len(widths) < ncol:
         widths = _distribute([1.0] * ncol, w)
-    heights = _distribute([1.0] * len(body), h - start) if body else []
+    rows_h = _distribute(list(heights) if heights else [1.0] * len(body),
+                         h - start) if body else []
 
-    shape = _TABLE_SHAPE + f"startSize={_num(start)};fontSize={font:g};"
+    shape = _TABLE_SHAPE + f"startSize={_num(start)};fontSize={font:g};" + keys
     cell = _TABLE_CELL + f"fontSize={font:g};"
     out = [
         f'        <mxCell id="{cid}" value={_attr(title)} '
@@ -2072,7 +2101,7 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
     ]
     ry = start
     for r, cells in enumerate(body):
-        rh = heights[r]
+        rh = rows_h[r]
         head = _TABLE_HEAD if r == head_at else _TABLE_BODY
         out += [
             f'        <mxCell id="{cid}-r{r}" value="" style={_attr(_TABLE_ROW)} '
@@ -2101,29 +2130,69 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
     return out
 
 
-def _text_box(cid: str, title: str, rows, x, y, w, h, font: float = 11.0) -> list[str]:
+def _text_box(cid: str, title: str, rows, x, y, w, h, font: float = 11.0,
+              title_h: float = 0.0) -> list[str]:
     """A box of free-form lines, for furniture that is not a grid.
 
     A note list written as sentences has one column, and ruling one column into
     a table would invent a structure the author did not write. The lines go into
     one cell, which is what the sheet draws too.
 
+    **The title band is the sheet's**, and it was not here: the box went out as
+    one cell holding the title and the notes as one run of ``<br>``-separated
+    lines, left-aligned and set at the body size, where
+    :func:`~pandid.render.furniture.draw_annotation` centres the title, sets it
+    bold and a point larger, and rules a line under it. The reader saw
+    ``GENERAL NOTES`` reading as the first note. So it is three cells: the box,
+    the title on its own with the sheet's own weight and size, and the rule.
+
     ``font`` for the reason :func:`_table` states one: the box was measured off
     its own ``font_size`` (:func:`~pandid.render.furniture.measure_annotation`)
     and draw.io would otherwise set it at 12, which is a notes box whose lines
     are wider and taller than the box measured for them.
     """
-    lines = ([title] if title else []) + [str(r) for r in rows]
-    style = ("rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;"
-             f"fontSize={font:g};"
-             f"strokeColor={_INK};fillColor={_NO_FILL};")
-    return [
-        f'        <mxCell id="{cid}" value={_attr("<br>".join(lines))} '
-        f'style={_attr(style)} vertex="1" parent="1">',
-        f'          <mxGeometry x="{_num(x)}" y="{_num(y)}" '
-        f'width="{_num(w)}" height="{_num(h)}" as="geometry" />',
+    box = ("rounded=0;whiteSpace=wrap;html=1;movable=1;"
+           f"strokeColor={_INK};fillColor={_NO_FILL};strokeWidth=1.5;")
+    out = _rect(cid, x, y, w, h, box)
+    if title:
+        # Centred, bold and one point larger, which is draw_annotation's own
+        # rule; the band is `_ann_layout`'s so the rule under it lands where the
+        # sheet rules it.
+        out += _strip_label(f"{cid}-t", ("text", x + w / 2, y + title_h - 6,
+                                         title, font + 1, "middle", True, "black"))
+        out += _segment(f"{cid}-r", x, y + title_h, x + w, y + title_h, _INK, 1)
+    # The body, in the sheet's own gutter: `draw_annotation` sets a row at
+    # `pad` = 9 from the box edge, less the two units a draw.io cell spends
+    # before its first letter (:data:`_TEXT_INSET`).
+    body = ("text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;"
+            f"align=left;verticalAlign=top;spacingLeft=7;fontSize={font:g};"
+            f"fontColor={_LINE_INK};")
+    return out + [
+        f'        <mxCell id="{cid}-b" value={_attr("<br>".join(str(r) for r in rows))} '
+        f'style={_attr(body)} vertex="1" parent="1">',
+        f'          <mxGeometry x="{_num(x)}" y="{_num(y + title_h)}" '
+        f'width="{_num(w)}" height="{_num(h - title_h)}" as="geometry" />',
         '        </mxCell>',
     ]
+
+
+#: What an :class:`~pandid.document.Annotation` is ruled with, over and above
+#: being a table.
+#:
+#: **No internal rules at all.** The sheet draws one of these as a box with a
+#: title bar, one line under the title, and rows of text: no column rules and no
+#: row rules -- look at any legend on a sheet in ``docs/gallery``. The export
+#: was ruling every one of them into a full grid, which is why the reader's
+#: legend and equipment list came out looking like spreadsheets beside a drawing
+#: that has none. ``rowLines``/``columnLines`` are read off the table
+#: container's own style by ``TableShape.paintTableForeground``, and switching
+#: both off leaves the container's border and its ``startSize`` title band --
+#: which is exactly the two rules the sheet does draw.
+#:
+#: The rows and cells stay. They are what makes the box an editable grid, and
+#: they cost no ink now: every one of them already says ``top=0;left=0;
+#: right=0;bottom=0`` and strokes nothing itself.
+_ANNOTATION_KEYS = "rowLines=0;columnLines=0;"
 
 
 def _fitted(inner, free) -> "tuple[float, float, float]":
@@ -2200,44 +2269,119 @@ def _label(cid: str, cx, cy, text: str, size: float) -> list[str]:
     ]
 
 
+def _strip_rule(cid: str, part) -> list[str]:
+    """One of the strip's ruled lines, as a draw.io edge between two points."""
+    _kind, x1, y1, x2, y2, weight = part
+    return _segment(cid, x1, y1, x2, y2, _LINE_INK, weight)
+
+
+def _strip_label(cid: str, part) -> list[str]:
+    """One piece of the title strip's lettering, as a draw.io text cell.
+
+    ``part`` is :class:`~pandid.render.furniture.Strip`'s own: a string, a size,
+    a ``text-anchor`` and a **baseline**, which is how SVG says where a letter
+    sits. The conversion to the box draw.io says it in is
+    :data:`_BASELINE` for the baseline and :data:`_TEXT_INSET` for the anchor,
+    and both are stated there rather than here.
+
+    The cell is exactly one line box tall plus the inset, so the line draw.io
+    lays out in it *is* the line the sheet draws, rather than a line floating in
+    a taller box. Nothing wraps and nothing clips: ``whiteSpace`` is left unsaid
+    (so ``mxText.wrap`` is false) and ``overflow`` defaults to visible, which
+    means a string this file measured a shade narrow than the browser sets it
+    runs on past its box instead of being folded onto a second line halfway
+    through a drawing number. The width does not move the text either way --
+    align=left fixes the left edge, align=right the right, align=center the
+    centre -- so it is a measurement for the reader's selection handle rather
+    than for the layout.
+    """
+    _kind, tx, ty, text, size, anchor, bold, ink = part
+    if not text:
+        return []
+    box_w = F.text_width(text, size, bold) + 2 * _TEXT_INSET
+    box_h = _line_box(size) + 2 * _TEXT_INSET
+    top = ty - _BASELINE * size - _TEXT_INSET
+    if anchor == "middle":
+        left, align = tx - box_w / 2, "center"
+    elif anchor == "end":
+        left, align = tx + _TEXT_INSET - box_w, "right"
+    else:
+        left, align = tx - _TEXT_INSET, "left"
+    style = ("text;html=1;strokeColor=none;fillColor=none;"
+             f"align={align};verticalAlign=middle;fontSize={size:g};"
+             f"fontColor={_LINE_INK if ink == 'black' else ink};"
+             + ("fontStyle=1;" if bold else ""))
+    return [
+        f'        <mxCell id="{cid}" value={_attr(text)} style={_attr(style)} '
+        f'vertex="1" parent="1">',
+        f'          <mxGeometry x="{_num(left)}" y="{_num(top)}" '
+        f'width="{_num(box_w)}" height="{_num(box_h)}" as="geometry" />',
+        '        </mxCell>',
+    ]
+
+
+def _rev_table(cid: str, grid) -> list[str]:
+    """The revision history, as draw.io's own table.
+
+    The one part of the strip that is a grid, and the one part a reader edits:
+    the next thing that happens to an issued drawing is a revision, and this is
+    where it is written. So it is a real ``shape=table`` with real rows and
+    cells rather than lettering that looks like one.
+
+    **Ruled to the sheet's rules and no others.** ``rowLines=0``, because the
+    sheet draws no rule *between* revisions -- it tells them apart by their
+    lettering, and ruling each one would put six more lines into the busiest
+    corner of the drawing. ``Graph.getTableLines`` builds one horizontal line
+    per row only while ``rowLines`` is not ``0`` and takes the vertical ones
+    from a separate ``columnLines``, so switching the first off leaves the
+    column rules the sheet does draw. The single horizontal the sheet draws --
+    above the heading row at the foot -- is a segment of its own, at the weight
+    the sheet strokes it.
+
+    ``strokeWidth`` is the sheet's own hairline for those column rules. The
+    table's outer border is drawn at the same weight and is invisible for it:
+    the strip's own two-unit rectangle is on three of its edges and the
+    company cell's rule on the fourth, so there is no edge of this table that
+    is not already inked by something heavier.
+
+    The blank paper above the oldest revision goes out as blank rows of the
+    same depth. That is what the sheet leaves there -- ruled vertically, ruled
+    across not at all -- and it is somewhere for the reader to type.
+    """
+    headings = [heading for heading, _cw in grid.cols]
+    rows = [row for row in grid.rows]
+    # Filler first, then the revisions oldest to newest, then the heading at the
+    # foot. The remainder that is not a whole row goes into the topmost filler
+    # rather than being ruled as a short row of its own.
+    blank = grid.header_y - grid.y - grid.row_h * len(rows)
+    whole = int(round(blank / grid.row_h - 0.5)) if blank > 0 else 0
+    heights: list[float] = []
+    if whole:
+        heights = [blank - (whole - 1) * grid.row_h] + [grid.row_h] * (whole - 1)
+    elif blank > 0.01:
+        heights = [blank]
+    body = [[""] * len(headings) for _ in heights] + rows
+    heights += [grid.row_h] * (len(rows) + 1)
+
+    out = _table(cid, "", headings, body, grid.x, grid.y, grid.w, grid.h,
+                 [cw for _heading, cw in grid.cols], header_last=True,
+                 font=F._REV_TYPE, heights=heights,
+                 keys=f"rowLines=0;strokeWidth={F._STRIP_HAIRLINE:g};",
+                 col_keys=["align=left;spacingLeft=3;"] * len(headings))
+    return out + _segment(f"{cid}-rule", grid.x, grid.header_y,
+                          grid.x + grid.w, grid.header_y, _LINE_INK, 1)
+
+
 def _strip_size(block) -> "tuple[float, float]":
-    """How much room the exported title strip actually needs.
+    """How much room the exported title strip needs: the sheet's own rectangle.
 
-    The width is the sheet's own (``measure_title_strip``), since the strip is
-    ruled into the same two columns. The **height** is not: the sheet merges its
-    information block into four bands of unequal depth and a draw.io table
-    cannot, so the fields come out as one row each and the block is as tall as it
-    has fields. Measuring that here, rather than handing the dock the sheet's
-    80-unit strip and then drawing 154 units of table into it, is what keeps the
-    bottom band wide enough to hold what lands in it -- otherwise the strip grows
-    up out of its own band and over the foot of the drawing.
+    It used to be more. The strip was two draw.io tables and the sheet's
+    information block does not fit in one: eleven fields at one row each are
+    154 units where the sheet rules 80, so the height had to be measured here
+    and the dock told, or the strip grew up out of its own band and over the
+    foot of the drawing. The bands are bands again, so the rectangle is
+    ``measure_title_strip``'s and this function is the sheet's answer repeated
+    -- which is the point, since it is what makes the exported strip land on
+    the same paper the rendered one does.
     """
-    _heading, fields, revisions = _title_block_fields(block)
-    return (F.measure_title_strip(block)[0],
-            _STRIP_ROW * max(len(revisions) + 1, len(fields), 1) + _FRAME_STROKE)
-
-
-def _title_block_fields(block) -> "tuple[str, list[list[str]], list[list[str]]]":
-    """A title block as a heading, a label/value list and a revision grid.
-
-    Every field that was filled in, named, in the order the strip rules them.
-    A blank field is left out rather than ruled empty, which is what the sheet
-    does with one too. The revisions come back as the six columns the strip
-    rules them in rather than as a sentence, since that grid is the one part of
-    the strip a draw.io table can hold exactly.
-    """
-    fields = [[label, str(value)] for label, value in
-              (("CLIENT", block.client), ("PROJECT", block.project),
-               ("COMPANY", block.company), ("TITLE", block.title),
-               ("SUBTITLE", block.subtitle), ("STATUS", block.status),
-               ("DRAWING No", block.drawing_number), ("SCALE", block.scale),
-               ("SHEET", f"{block.sheet} of {block.of_sheets}"
-                if block.sheet or block.of_sheets else ""),
-               ("DATE", block.date), ("REV", block.revisions[-1].rev
-                                      if block.revisions else ""),
-               ("DRAWN", block.drawn_by), ("CHECKED", block.checked_by),
-               ("APPROVED", block.approved_by)) if value]
-    revisions = [[rev.rev, rev.date, rev.description, rev.by, rev.checked,
-                  rev.approved] for rev in block.revisions]
-    heading = " - ".join(p for p in (block.title, block.subtitle) if p)
-    return heading, fields, revisions
+    return F.measure_title_strip(block)

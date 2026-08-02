@@ -235,6 +235,14 @@ def draw_table(tb, x: float, y: float) -> list[str]:
 # status, drawing number / scale / date / rev)
 # ---------------------------------------------------------------------------
 
+#: The weight the strip's own rectangle is ruled at. It is the frame's weight
+#: too, and it docks flush to the frame, so the two rules are coincident and the
+#: corner of the sheet reads as one heavy line rather than two.
+_STRIP_RULE = 2.0
+#: The hairline the strip rules a revision column and a bottom-band cell with:
+#: light enough that the grid does not compete with the drawing above it.
+_STRIP_HAIRLINE = 0.5
+
 _REV_W = 300.0
 _COMPANY_W = 100.0
 _INFO_W = 252.0
@@ -264,6 +272,25 @@ _TITLE_W = _INFO_W - 10 - _SHEET_W
 # block; a block that names neither is ruled no row for them.
 _HDR_ROW = 13.0
 _HDR_VALUE_X = 40.0
+# How the information block's depth is shared between the title band, the status
+# band and the drawing-number band that carries the rest.
+_TITLE_BAND, _STATUS_BAND = 0.40, 0.28
+
+# The type the strip is lettered in, band by band. Constants rather than
+# literals in :func:`title_strip_layout` because a second backend letters the
+# same bands, and a size stated twice is a size that drifts.
+_REV_TYPE = 7.5        # a revision cell, and the sheet count in the title band
+_CAPTION = 6.5         # the small grey label sitting over a field's value
+_COMPANY_TYPE = 8.0
+_HDR_TYPE = 9.0        # a client or project value
+_TITLE_TYPE = 12.5
+_SUBTITLE_TYPE = 10.5
+_VALUE_TYPE = 11.0     # a status, a drawing number, a scale, a date, a rev
+
+#: The ink a caption is set in, which is what holds it back from the value under
+#: it: a caption names the field and the value is the drawing's own information,
+#: so the two are not read at the same weight.
+CAPTION_INK = "#666"
 
 
 def _header_lines(tb) -> list[tuple[str, str]]:
@@ -277,68 +304,118 @@ def measure_title_strip(tb) -> tuple[float, float]:
     return _REV_W + _COMPANY_W + _INFO_W, h
 
 
-def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
-                     fit_scale: str = "", *,
-                     report: "Reporter | None" = None) -> list[str]:
-    """Draw the strip so its bottom-right corner sits at (right, bottom).
+class RevGrid(NamedTuple):
+    """The revision history, as the grid it is rather than as ink.
 
-    ``fit_scale`` is the ratio the renderer actually placed the drawing at, which
-    is what the scale cell reports for a sheet that does not state a scale of
-    its own.
+    ``x``/``y``/``w``/``h`` is the whole left-hand column of the strip, which is
+    the rectangle the vertical rules run the full depth of; ``cols`` is
+    ``(heading, width)`` per column, ``row_h`` the depth of a row, ``header_y``
+    the line the heading row is ruled off at, and ``rows`` the revisions
+    **oldest first** -- top to bottom on the sheet, since the heading sits at
+    the foot and the newest revision immediately above it. Every value in
+    ``rows`` and every heading has already been clipped to its own column, so a
+    second backend cannot letter the grid at a size the widths were not measured
+    at.
+
+    The blank paper above the oldest revision is not a row and is not listed: it
+    is the room the next revision will be written in, and the sheet rules
+    nothing across it.
+    """
+    x: float
+    y: float
+    w: float
+    h: float
+    cols: tuple
+    row_h: float
+    header_y: float
+    rows: list
+
+
+class Strip(NamedTuple):
+    """The title strip, as geometry rather than as ink.
+
+    :func:`zone_layout` is the pattern, and the reason is the same one, one
+    level up: the draw.io backend rules the *same* strip rather than a second
+    opinion about one. It was a second opinion -- two draw.io tables, a revision
+    grid and a label/value list, which is a decomposition that holds every value
+    and looks nothing like the sheet -- and the answer to that is not a better
+    second opinion, it is one derivation with two strokers.
+
+    ``box`` is the strip rectangle ``(x, y, w, h)``, ruled at 2. ``rules`` is
+    the pair of full-depth column rules that divide it into revision grid,
+    company cell and information block. ``rev`` is the grid. ``parts`` is
+    everything else, **in drawing order**: ``("rule", x1, y1, x2, y2, weight)``
+    and ``("text", x, baseline, string, size, anchor, bold, fill)``, the text
+    stated the way SVG states it -- at a baseline, with a ``text-anchor``.
+
+    One list in drawing order, for :class:`Zoned`'s reason: the sheet's own file
+    is the thing that must not move, and two lists would have to be
+    re-interleaved to put the ink back where it was.
+    """
+    box: tuple
+    rules: list
+    rev: RevGrid
+    parts: list
+
+
+def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
+                       fit_scale: str = "", *,
+                       report: "Reporter | None" = None) -> Strip:
+    """Where every part of the title strip goes, its bottom-right corner at
+    (``right``, ``bottom``).
+
+    ``fit_scale`` is the ratio the renderer actually placed the drawing at,
+    which is what the scale cell reports for a sheet that does not state a scale
+    of its own.
 
     The strip is fixed geometry (an ISO 7200 block is a known rectangle in a
     known corner), so a value too long for its cell cannot be given more room
     and is abbreviated instead. ``report`` is how each such cell says which
-    field it abbreviated and what it was given; see :data:`Reporter`.
+    field it abbreviated and what it was given; see :data:`Reporter`. The
+    clipping happens **here** and not in either stroker, so the two backends
+    abbreviate the same field to the same string.
     """
     w, h = measure_title_strip(tb)
     x, y = right - w, bottom - h
-    L = [f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" '
-         f'fill="white" stroke="black" stroke-width="2"/>']
     rx = x + _REV_W
     cx2 = rx + _COMPANY_W
-    for vx in (rx, cx2):
-        L.append(f'<line x1="{vx:.1f}" y1="{y:.1f}" x2="{vx:.1f}" y2="{bottom:.1f}" '
-                 f'stroke="black" stroke-width="1.5"/>')
+    rules = [("rule", vx, y, vx, bottom, 1.5) for vx in (rx, cx2)]
 
-    # --- Revision table (left): header row at the bottom, revisions above it ---
-    def rev_cells(ry, vals, bold=False, where=""):
-        cx = x
-        for (_, cw, attr), v in zip(_REV_COLS, vals):
-            L.append(_text(cx + _REV_PAD, ry + _REV_ROW - 4,
-                           clip(v, cw - 2 * _REV_PAD, 7.5, bold,
-                                field=f"{where}.{attr}",
-                                report=report if where else None),
-                           7.5, bold=bold))
-            cx += cw
+    # --- Revision grid (left): heading row at the bottom, revisions above it ---
+    def rev_cells(vals, bold=False, where=""):
+        return [clip(v, cw - 2 * _REV_PAD, _REV_TYPE, bold,
+                     field=f"{where}.{attr}", report=report if where else None)
+                for (_, cw, attr), v in zip(_REV_COLS, vals)]
+
     header_y = bottom - _REV_ROW
-    L.append(f'<line x1="{x:.1f}" y1="{header_y:.1f}" x2="{rx:.1f}" y2="{header_y:.1f}" '
-             f'stroke="black" stroke-width="1"/>')
-    cx = x
-    for _, cw, _attr in _REV_COLS[:-1]:
-        cx += cw
-        L.append(f'<line x1="{cx:.1f}" y1="{y:.1f}" x2="{cx:.1f}" y2="{bottom:.1f}" '
-                 f'stroke="black" stroke-width="0.5"/>')
-    rev_cells(header_y, [c[0] for c in _REV_COLS], bold=True)
-    # newest revision nearest the header (bottom); oldest climbs the stack. The
-    # block-level drawn/checked/approved fields backfill the newest row's
-    # signatories when that revision leaves them blank.
-    ry = header_y - _REV_ROW
+    headings = rev_cells([c[0] for c in _REV_COLS], bold=True)
+    # Clipped newest first, which is the order the strip used to draw them in
+    # and so the order a caller watching ``report`` already sees; stored oldest
+    # first, which is the order they are read in.
+    newest_first = []
     for idx, rv in enumerate(reversed(tb.revisions)):
         newest = idx == 0
+        # The block-level drawn/checked/approved fields backfill the newest
+        # row's signatories when that revision leaves them blank.
         by = rv.by or (tb.drawn_by if newest else "")
         chk = rv.checked or (tb.checked_by if newest else "")
         app = rv.approved or (tb.approved_by if newest else "")
-        rev_cells(ry, [rv.rev, rv.date, rv.description, by, chk, app],
-                  where=f"revisions[{len(tb.revisions) - 1 - idx}]")
-        ry -= _REV_ROW
+        newest_first.append(rev_cells(
+            [rv.rev, rv.date, rv.description, by, chk, app],
+            where=f"revisions[{len(tb.revisions) - 1 - idx}]"))
+    rev = RevGrid(x, y, _REV_W, h,
+                  tuple((heading, cw) for heading, (_, cw, _a)
+                        in zip(headings, _REV_COLS)),
+                  _REV_ROW, header_y, list(reversed(newest_first)))
+
+    parts: list[tuple] = []
 
     # --- Company / logo cell (middle) ---
     if tb.company:
         words, line, lines = tb.company.split(), "", []
         for wd in words:
             trial = (line + " " + wd).strip()
-            if text_width(trial, 8, bold=True) > _COMPANY_W - 10 and line:
+            if text_width(trial, _COMPANY_TYPE, bold=True) > _COMPANY_W - 10 and line:
                 lines.append(line)
                 line = wd
             else:
@@ -350,10 +427,10 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
             # A word too long for the cell has no break point the wrapper may
             # use: hyphenating a company name invents one, so it is drawn whole
             # and said out loud instead.
-            L.append(_text(rx + _COMPANY_W / 2, cy,
-                           check_fit(ln, _COMPANY_W - 10, 8, True,
-                                     field="company", report=report),
-                           8, anchor="middle", bold=True))
+            parts.append(("text", rx + _COMPANY_W / 2, cy,
+                          check_fit(ln, _COMPANY_W - 10, _COMPANY_TYPE, True,
+                                    field="company", report=report),
+                          _COMPANY_TYPE, "middle", True, "black"))
             cy += 12
 
     # --- Info block (right): client/project header, title, status, dwg/date/rev ---
@@ -361,69 +438,122 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
     header = _header_lines(tb)
     top = y + _HDR_ROW * len(header)     # top of the title band
     body = h - _HDR_ROW * len(header)
-    title_h = body * 0.40
-    status_h = body * 0.28
-    band2 = top + title_h
-    band3 = top + title_h + status_h
+    band2 = top + body * _TITLE_BAND
+    band3 = band2 + body * _STATUS_BAND
     hy = y
     for i, (label, value) in enumerate(header):
         if i:
-            L.append(f'<line x1="{ix:.1f}" y1="{hy:.1f}" x2="{x + w:.1f}" '
-                     f'y2="{hy:.1f}" stroke="black" stroke-width="0.5"/>')
-        L.append(_text(ix + 6, hy + _HDR_ROW - 4, label, 6.5, fill="#666"))
-        L.append(_text(ix + _HDR_VALUE_X, hy + _HDR_ROW - 4,
-                       clip(value, _INFO_W - _HDR_VALUE_X - 5, 9,
-                            field=label.lower(), report=report), 9))
+            parts.append(("rule", ix, hy, x + w, hy, _STRIP_HAIRLINE))
+        parts.append(("text", ix + 6, hy + _HDR_ROW - 4, label, _CAPTION,
+                      "start", False, CAPTION_INK))
+        parts.append(("text", ix + _HDR_VALUE_X, hy + _HDR_ROW - 4,
+                      clip(value, _INFO_W - _HDR_VALUE_X - 5, _HDR_TYPE,
+                           field=label.lower(), report=report),
+                      _HDR_TYPE, "start", False, "black"))
         hy += _HDR_ROW
     for ly in ([top] if header else []) + [band2, band3]:
-        L.append(f'<line x1="{ix:.1f}" y1="{ly:.1f}" x2="{x + w:.1f}" '
-                 f'y2="{ly:.1f}" stroke="black" stroke-width="0.75"/>')
+        parts.append(("rule", ix, ly, x + w, ly, 0.75))
     # title + subtitle, with sheet count tucked top-right of the title band
     sheets = f"SHEET {tb.sheet} of {tb.of_sheets}"
-    L.append(_text(ix + 6, top + 15,
-                   clip(tb.title or name, _TITLE_W, 12.5, True,
-                        field="title", report=report),
-                   12.5, bold=True))
+    parts.append(("text", ix + 6, top + 15,
+                  clip(tb.title or name, _TITLE_W, _TITLE_TYPE, True,
+                       field="title", report=report),
+                  _TITLE_TYPE, "start", True, "black"))
     if tb.subtitle:
-        L.append(_text(ix + 6, band2 - 6,
-                       clip(tb.subtitle, _INFO_W - 12, 10.5,
-                            field="subtitle", report=report), 10.5))
-    L.append(_text(x + w - 5, top + 11,
-                   check_fit(sheets, _SHEET_W, 7.5, field="sheet", report=report),
-                   7.5, anchor="end", fill="#666"))
+        parts.append(("text", ix + 6, band2 - 6,
+                      clip(tb.subtitle, _INFO_W - 12, _SUBTITLE_TYPE,
+                           field="subtitle", report=report),
+                      _SUBTITLE_TYPE, "start", False, "black"))
+    parts.append(("text", x + w - 5, top + 11,
+                  check_fit(sheets, _SHEET_W, _REV_TYPE, field="sheet",
+                            report=report),
+                  _REV_TYPE, "end", False, CAPTION_INK))
     # status (tiny label at cell top, value below)
-    L.append(_text(ix + 6, band2 + 8, "STATUS", 6.5, fill="#666"))
-    L.append(_text(ix + 6, band3 - 5,
-                   clip(tb.status or "—", _INFO_W - 12, 11, True,
-                        field="status", report=report), 11, bold=True))
+    parts.append(("text", ix + 6, band2 + 8, "STATUS", _CAPTION,
+                  "start", False, CAPTION_INK))
+    parts.append(("text", ix + 6, band3 - 5,
+                  clip(tb.status or "—", _INFO_W - 12, _VALUE_TYPE, True,
+                       field="status", report=report),
+                  _VALUE_TYPE, "start", True, "black"))
     # Bottom band: DRAWING No | SCALE | DATE | REV. Keeping the scale with the
     # number and the revision index is common drafting practice rather than a
     # standard: ISO 7200 §4 puts scale outside the title block, and ASME
     # title-block content is Y14.100's concern, not Y14.1's. A sheet with no
     # scale to state gives its room back to the three cells that identify the
     # drawing.
-    rev = tb.revisions[-1].rev if tb.revisions else "0"
+    rev_id = tb.revisions[-1].rev if tb.revisions else "0"
     scale = tb.scale or fit_scale
     cells: list[tuple[float, str, str, str]] = [
         (_INFO_W * 0.38, "DRAWING No", tb.drawing_number or "—", "drawing_number"),
         (_INFO_W * 0.21, "SCALE", scale, "scale"),
         (_INFO_W * 0.29, "DATE", date, "date"),
-        (_INFO_W * 0.12, "REV", rev, "rev")] if scale else [
+        (_INFO_W * 0.12, "REV", rev_id, "rev")] if scale else [
         (_INFO_W * 0.50, "DRAWING No", tb.drawing_number or "—", "drawing_number"),
         (_INFO_W * 0.30, "DATE", date, "date"),
-        (_INFO_W * 0.20, "REV", rev, "rev")]
+        (_INFO_W * 0.20, "REV", rev_id, "rev")]
     cxr = ix
     for j, (seg_w, seg_label, seg_val, seg_field) in enumerate(cells):
         if j:
-            L.append(f'<line x1="{cxr:.1f}" y1="{band3:.1f}" x2="{cxr:.1f}" '
-                     f'y2="{bottom:.1f}" stroke="black" stroke-width="0.5"/>')
+            parts.append(("rule", cxr, band3, cxr, bottom, _STRIP_HAIRLINE))
         bold = seg_label != "DATE"
-        L.append(_text(cxr + 5, band3 + 8, seg_label, 6.5, fill="#666"))
-        L.append(_text(cxr + 5, bottom - 5,
-                       clip(seg_val, seg_w - 8, 11, bold,
-                            field=seg_field, report=report), 11,
-                       bold=bold))
+        parts.append(("text", cxr + 5, band3 + 8, seg_label, _CAPTION,
+                      "start", False, CAPTION_INK))
+        parts.append(("text", cxr + 5, bottom - 5,
+                      clip(seg_val, seg_w - 8, _VALUE_TYPE, bold,
+                           field=seg_field, report=report),
+                      _VALUE_TYPE, "start", bold, "black"))
         cxr += seg_w
+    return Strip((x, y, w, h), rules, rev, parts)
+
+
+def _strip_part(part) -> str:
+    """One laid-out strip part, as SVG."""
+    if part[0] == "rule":
+        _, x1, y1, x2, y2, weight = part
+        return (f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" '
+                f'stroke="black" stroke-width="{weight:g}"/>')
+    _, tx, ty, text, size, anchor, bold, fill = part
+    return _text(tx, ty, text, size, anchor=anchor, bold=bold, fill=fill)
+
+
+def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
+                     fit_scale: str = "", *,
+                     report: "Reporter | None" = None) -> list[str]:
+    """Draw the strip so its bottom-right corner sits at (right, bottom).
+
+    The geometry is :func:`title_strip_layout`'s; this strokes it, exactly as
+    :func:`zone_frame` strokes :func:`zone_layout`.
+    """
+    strip = title_strip_layout(tb, name, date, right, bottom, fit_scale,
+                               report=report)
+    x, y, w, h = strip.box
+    L = [f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" '
+         f'fill="white" stroke="black" stroke-width="{_STRIP_RULE:g}"/>']
+    L += [_strip_part(part) for part in strip.rules]
+
+    # The revision grid: the heading's own rule, then the column rules the full
+    # depth of the strip, then the cells. No rule *between* revisions -- the
+    # rows are told apart by their lettering, and ruling each one would put six
+    # more lines into the busiest corner of the sheet.
+    g = strip.rev
+    L.append(_strip_part(("rule", g.x, g.header_y, g.x + g.w, g.header_y, 1)))
+    cx = g.x
+    for _heading, cw in g.cols[:-1]:
+        cx += cw
+        L.append(_strip_part(("rule", cx, g.y, cx, g.y + g.h, _STRIP_HAIRLINE)))
+
+    def rev_row(ry, vals, bold=False):
+        cx = g.x
+        for (_heading, cw), value in zip(g.cols, vals):
+            L.append(_text(cx + _REV_PAD, ry + g.row_h - 4, value,
+                           _REV_TYPE, bold=bold))
+            cx += cw
+    rev_row(g.header_y, [heading for heading, _cw in g.cols], bold=True)
+    # Newest revision nearest the heading (bottom); oldest climbs the stack.
+    for idx, values in enumerate(reversed(g.rows)):
+        rev_row(g.header_y - (idx + 1) * g.row_h, values)
+
+    L += [_strip_part(part) for part in strip.parts]
     return L
 
 

@@ -1078,19 +1078,141 @@ def _titled() -> Flowsheet:
     return fs
 
 
-def test_a_title_block_exports_as_the_two_tables_it_is():
-    """Degraded, not dropped, and ruled rather than run together: every field is
-    present, each in a cell of its own."""
+def test_a_title_block_carries_every_field_in_a_cell_of_its_own():
+    """Nothing is run together into a blob of ``<br>``-separated text: every
+    field, heading and revision value is a cell a reader can double-click."""
     cells = _cells(_titled(), check=False)
     values = {c.get("value") for c in cells.values()}
     assert {"REV", "DATE", "DESCRIPTION"} <= values, "the revision grid lost its headings"
     assert {"A", "2026-01-02", "Issued"} <= values, "a revision row was flattened"
     assert {"A-301", "Acme", "Ethanol Purification"} <= values, "a field was dropped"
-    # ...and each of those is its own cell, not a run of <br>-separated text.
     for cell in cells.values():
         assert "<br>" not in (cell.get("value") or ""), (
             f"{cell.get('id')} is a text blob: {cell.get('value')!r}"
         )
+
+
+def test_the_title_strip_carries_the_same_ink_the_sheet_rules():
+    """The user's second report: `the blocks don't look anything like our SVG or
+    PNG outputs`. They did not. The strip went out as two draw.io tables -- a
+    revision grid and a twelve-row list reading COMPANY, TITLE, SUBTITLE,
+    STATUS, DRAWING No, SCALE, SHEET, DATE, REV, DRAWN, CHECKED, APPROVED --
+    which holds every value and is not a title block.
+
+    Held against the SVG the sheet draws, part for part, rather than against the
+    layout both are now built from: every rule the sheet strokes has an edge in
+    the export between the same two points, and every string the sheet letters
+    has a cell carrying it. That is what makes this a parity check rather than a
+    restatement of the code.
+    """
+    import html
+    import re
+
+    from pandid.render import furniture as F
+    from pandid.render.drawio import _BASELINE, _TEXT_INSET
+
+    block = _titled().title_block
+    x, y, w, h = 400.0, 300.0, *F.measure_title_strip(block)
+    sheet = "\n".join(F.draw_title_strip(block, "titled", "2026-01-02", x + w, y + h, "1:1"))
+    root = ET.fromstring(
+        "<root>"
+        + "\n".join(
+            DrawioRenderer()._title_strip("t", block, x, y, w, h, "titled", "2026-01-02", "1:1")
+        )
+        + "</root>"
+    )
+    cells = list(root.iter("mxCell"))
+
+    # --- every rule the sheet strokes -------------------------------------
+    emitted = set()
+    for cell in cells:
+        src = cell.find("mxGeometry/mxPoint[@as='sourcePoint']")
+        dst = cell.find("mxGeometry/mxPoint[@as='targetPoint']")
+        if src is None or dst is None:
+            continue
+        emitted.add(
+            (
+                round(float(src.get("x")), 1),
+                round(float(src.get("y")), 1),
+                round(float(dst.get("x")), 1),
+                round(float(dst.get("y")), 1),
+            )
+        )
+    # ...bar the revision grid's column rules, which the table draws itself
+    # from its own cells' geometry (`TableShape.paintTableForeground`) rather
+    # than needing a segment apiece.
+    table = next(c for c in cells if "shape=table;" in (c.get("style") or ""))
+    geo = table.find("mxGeometry")
+    stops, at = set(), float(geo.get("x"))
+    for cell in cells:
+        if _style(cell).get("shape") != "partialRectangle":
+            continue
+        stops.add(round(at + float(cell.find("mxGeometry").get("x")), 1))
+    stops.add(round(at + float(geo.get("width")), 1))
+    for line in re.finditer(
+        r'<line x1="([\d.]+)" y1="([\d.]+)" x2="([\d.]+)" y2="([\d.]+)"', sheet
+    ):
+        rule = tuple(round(float(v), 1) for v in line.groups())
+        if rule in emitted or (rule[0] == rule[2] and rule[0] in stops):
+            continue
+        raise AssertionError(f"the export does not rule {rule}")
+
+    # --- every string the sheet letters -----------------------------------
+    #
+    # An SVG string sits on a baseline at an anchor; a draw.io one is laid out
+    # in a box. `_BASELINE` and `_TEXT_INSET` are the conversion. A whole unit
+    # and a half of slack, because a table cell is centred in its own row where
+    # the sheet sets it four units off the row's foot, and a table cell's
+    # gutter is its `spacingLeft` where the sheet's is `_REV_PAD`.
+    written = []
+    for cell in cells:
+        value, style = cell.get("value") or "", _style(cell)
+        if not value or "fontSize" not in style:
+            continue
+        box = cell.find("mxGeometry")
+        cw = float(box.get("width"))
+        size = float(style["fontSize"])
+        if style.get("shape") == "partialRectangle":  # a revision cell
+            row = next(c for c in cells if c.get("id") == cell.get("id").rsplit("-", 1)[0])
+            top = float(geo.get("y")) + float(row.find("mxGeometry").get("y"))
+            depth = float(row.find("mxGeometry").get("height"))
+            left = at + float(box.get("x"))
+            written.append((value, size, left + 5, top + depth / 2 + size * (_BASELINE - 0.6)))
+            continue
+        top, left = float(box.get("y")), float(box.get("x"))
+        align = style.get("align", "center")
+        anchored = (
+            left + _TEXT_INSET
+            if align == "left"
+            else left + cw - _TEXT_INSET
+            if align == "right"
+            else left + cw / 2
+        )
+        written.append((value, size, anchored, top + _TEXT_INSET + _BASELINE * size))
+
+    for text in re.finditer(
+        r'<text x="([-\d.]+)" y="([-\d.]+)"[^>]*font-size="([\d.]+)"[^>]*>([^<]*)</text>', sheet
+    ):
+        # The two backends escape differently -- `html.escape` writes `&#x27;`
+        # for an apostrophe and an XML attribute writes `&apos;` -- and neither
+        # is what the reader sees, so both are compared unescaped.
+        tx, ty, size, value = (
+            float(text.group(1)),
+            float(text.group(2)),
+            float(text.group(3)),
+            html.unescape(text.group(4)),
+        )
+        if not value:  # a blank revision cell inks nothing at either end
+            continue
+        near = [
+            c
+            for c in written
+            if c[0] == value
+            and abs(c[1] - size) < 0.01
+            and abs(c[2] - tx) <= 2.5
+            and abs(c[3] - ty) <= 1.5
+        ]
+        assert near, f"{value!r} at {tx},{ty} size {size} is not written by the export"
 
 
 def test_a_table_rules_rows_and_cells_that_add_up_to_it():
@@ -1353,7 +1475,13 @@ def test_a_column_is_measured_in_the_face_its_text_is_drawn_in():
 def test_a_table_states_the_size_its_columns_were_measured_at():
     """draw.io's default is 12 and every box on the sheet measures its own text
     at its ``font_size``. Leaving the size unsaid is what made the measurement
-    and the drawing disagree."""
+    and the drawing disagree.
+
+    The container's own size is the *title band's*, since a style does not
+    inherit down a draw.io table and the container's label is the title: the
+    sheet sets that one point larger than the rows (``draw_annotation``), so
+    the two sizes are checked apart rather than assumed equal.
+    """
     from pandid.document import Annotation
 
     fs = Flowsheet("sized")
@@ -1364,16 +1492,17 @@ def test_a_table_states_the_size_its_columns_were_measured_at():
     fs.layout()
     cells = _cells(fs, check=False)
     table = next(c for c in cells.values() if "shape=table;" in (c.get("style") or ""))
-    assert _style(table)["fontSize"] == "9"
+    assert _style(table)["fontSize"] == "10", "the title band is not the sheet's size"
+    for cell, _row, _table in _table_cells(cells):
+        assert _cell_font(cell) == 9.0, f"{cell.get('id')} is drawn at another size"
 
 
 def test_the_title_block_rules_rows_deep_enough_to_draw_text_in():
     """Eleven fields shared between an eighty-unit strip are rows 5.6 units
     tall, and 11-point type in a 5.6-unit row draws nothing: the reader saw a
-    stack of empty rules. The block is as tall as its fields need instead, and
-    the dock is told so, or it grows up over the foot of the drawing."""
-    from pandid.render.drawio import _strip_size
-
+    stack of empty rules. Nothing in mxGraph shrinks type to fit, so a row is
+    exactly as tall as the file writes it and its text exactly as tall as the
+    font says."""
     fs = _titled()
     cells = _cells(fs, check=False)
     rows = [c for c in cells.values() if _style(c).get("shape") == "tableRow"]
@@ -1381,24 +1510,111 @@ def test_the_title_block_rules_rows_deep_enough_to_draw_text_in():
     for row in rows:
         height = float(row.find("mxGeometry").get("height"))
         assert height >= 11.0, f"{row.get('id')} is {height} units tall"
-    # ...and the strip claims the room it actually uses, so the dock reserves it.
-    _w, h = _strip_size(fs.title_block)
-    tables = [c for c in cells.values() if "shape=table;" in (c.get("style") or "")]
-    assert max(float(t.find("mxGeometry").get("height")) for t in tables) <= h + 0.01
 
 
-def test_both_halves_of_the_title_strip_sit_on_one_bottom_line():
-    """The strip's bottom edge is where the sheet rules its last band, and it is
-    the edge worth holding still when the two tables come out different
-    heights."""
-    cells = _cells(_titled(), check=False)
-    feet = set()
-    for c in cells.values():
-        if "shape=table;" not in (c.get("style") or ""):
-            continue
-        geo = c.find("mxGeometry")
-        feet.add(round(float(geo.get("y")) + float(geo.get("height")), 2))
-    assert len(feet) == 1, f"the two tables end at {sorted(feet)}"
+def test_the_title_strip_asks_the_dock_for_the_rectangle_the_sheet_rules():
+    """The strip used to need measuring: two draw.io tables holding eleven
+    fields at a row each are 154 units where the sheet rules 80, so the height
+    had to be worked out here or the strip grew up over the foot of the drawing.
+    The bands are bands again, so the answer is the sheet's own -- and it has to
+    be, or the exported strip lands on different paper from the rendered one.
+    """
+    from pandid.render import furniture as F
+    from pandid.render.drawio import _strip_size
+
+    block = _titled().title_block
+    assert _strip_size(block) == F.measure_title_strip(block)
+
+
+def test_the_title_strip_is_one_rectangle_flush_to_the_frame():
+    """It is drawn from a bottom-right corner because that is its natural
+    anchor: the strip's own rule and the drawing frame's are coincident on the
+    sheet, and every band inside it is ruled off that corner."""
+    from pandid.render import furniture as F
+    from pandid.render.drawio import _FRAME_STROKE
+
+    fs = _titled()
+    cells = _cells(fs, page_size="A3", border="zone", check=False)
+    frame = cells["z-frame"].find("mxGeometry")
+    fx, fy = float(frame.get("x")), float(frame.get("y"))
+    fw, fh = float(frame.get("width")), float(frame.get("height"))
+    strip = next(
+        c
+        for c in cells.values()
+        if f"strokeWidth={F._STRIP_RULE:g};" in (c.get("style") or "")
+        and c.get("id", "").startswith("f")
+    )
+    geo = strip.find("mxGeometry")
+    sw, sh = F.measure_title_strip(fs.title_block)
+    assert (float(geo.get("width")), float(geo.get("height"))) == pytest.approx((sw, sh))
+    assert float(geo.get("x")) + sw == pytest.approx(fx + fw, abs=0.01)
+    assert float(geo.get("y")) + sh == pytest.approx(fy + fh, abs=0.01)
+    # ...and the frame it is flush to is ruled at the weight the strip is, so
+    # the corner of the sheet reads as one heavy line rather than two.
+    assert _style(cells["z-frame"])["strokeWidth"] == f"{_FRAME_STROKE:g}"
+
+
+def test_the_revision_history_is_still_a_grid_a_reader_can_edit():
+    """The one part of a title block that is a grid, and the one part a reader
+    edits -- the next thing that happens to an issued drawing is a revision.
+
+    Ruled to the sheet's rules and no others: `rowLines=0`, because the sheet
+    draws no line *between* revisions, and the column rules the sheet does draw
+    left to the table. The heading sits at the foot with the newest revision
+    against it, and the blank paper above the oldest is blank rows of the same
+    depth rather than a stretched grid.
+    """
+    from pandid.render import furniture as F
+
+    fs = _titled()
+    cells = _cells(fs, check=False)
+    table = next(
+        c
+        for c in cells.values()
+        if "shape=table;" in (c.get("style") or "") and c.get("id", "").endswith("-rev")
+    )
+    style = _style(table)
+    assert style["rowLines"] == "0", "the export rules between revisions; the sheet does not"
+    assert style.get("columnLines", "1") != "0", "the revision columns lost their rules"
+
+    rows = [
+        c
+        for c in cells.values()
+        if _style(c).get("shape") == "tableRow" and c.get("parent") == table.get("id")
+    ]
+    rows.sort(key=lambda c: float(c.find("mxGeometry").get("y")))
+    assert [c.get("value") for c in _row_cells(cells, rows[-1])] == [
+        heading for heading, _w in _rev_cols()
+    ], "the heading row is not at the foot"
+    assert [c.get("value") for c in _row_cells(cells, rows[-2])] == [
+        "A",
+        "2026-01-02",
+        "Issued",
+        "",
+        "",
+        "",
+    ], "the newest revision is not against the heading"
+    # The revisions and the heading, at the sheet's own depth. The rows above
+    # them are the blank paper the sheet leaves for the next revision, and the
+    # remainder that is not a whole row goes into the topmost of those.
+    for row in rows[-(len(fs.title_block.revisions) + 1) :]:
+        assert float(row.find("mxGeometry").get("height")) == pytest.approx(F._REV_ROW, abs=0.01), (
+            "a revision row is not the sheet's own depth"
+        )
+    # Every column at the width the sheet rules it.
+    widths = [float(c.find("mxGeometry").get("width")) for c in _row_cells(cells, rows[-1])]
+    assert widths == pytest.approx([w for _heading, w in _rev_cols()], abs=0.01)
+
+
+def _rev_cols():
+    from pandid.render import furniture as F
+
+    return [(heading, width) for heading, width, _attr in F._REV_COLS]
+
+
+def _row_cells(cells, row):
+    kids = [c for c in cells.values() if c.get("parent") == row.get("id")]
+    return sorted(kids, key=lambda c: float(c.find("mxGeometry").get("x")))
 
 
 def test_a_columnar_box_is_a_table_and_a_prose_box_is_not():
@@ -1783,3 +1999,38 @@ def test_no_line_number_is_written_over_a_symbol_or_an_equipment_tag(stem):
         if meets(box, obstacle)
     ]
     assert not struck, f"{stem}: line numbers written over {struck}"
+
+
+# ---------------------------------------------------------------------------
+# The committed samples, and the script that makes them.
+# ---------------------------------------------------------------------------
+
+
+def _samples():
+    path = ROOT / "scripts" / "drawio_samples.py"
+    spec = importlib.util.spec_from_file_location("_pandid_script_drawio_samples", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize("stem", sorted(_samples().SAMPLES))
+def test_the_committed_sample_is_what_the_exporter_emits(stem):
+    """`drawio-samples/` is the file a reader opens to see what this backend
+    actually produces, and it had nothing holding it to the code: the command
+    that made it was written into a commit message and nowhere else, three of
+    the four committed files were pre-#236 exports carrying defects the branch
+    had fixed, and the file the author opened to review the exporter was one of
+    them. That is exactly the drift `scripts/gallery.py` exists to prevent for
+    the SVGs, and its docstring warns against generating an artefact without a
+    check beside it.
+
+    Regenerate with `python scripts/drawio_samples.py`.
+    """
+    samples = _samples()
+    committed = samples.OUT / f"{stem}.drawio"
+    assert committed.exists(), f"{committed.name} is not committed"
+    document, _dropped = samples.sample(stem)
+    assert committed.read_text(encoding="utf-8") == document, (
+        f"{committed.name} is stale; run python scripts/drawio_samples.py"
+    )
