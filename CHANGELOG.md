@@ -9,6 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`Vessel` and `Tank` carry five nozzles, and the same five.** `relief` is the
+  connection a PSV or a rupture disc is mounted on, `drain` the low-point liquid
+  draw-off, and `vent` — which a vessel already had — is now a tank's
+  conservation vent as well. A fixed-roof tank breathes through a roof nozzle
+  that is neither the fill nor the draw; a pressure sphere's fire-case relief is
+  a third connection by definition, since a relief path must not run through a
+  valve someone can close; and a knock-out drum's liquid had nowhere to go,
+  because on nine of the ten vessel drawings the `outlet` is on the shell wall
+  and the bottom head carried nothing at all. `examples/14_tank_farm.py` states
+  all three in its docstring as things a real sheet carries and that one could
+  not.
+
+  **Named roles rather than a count**, which is the one place this departs from
+  `Mixer`, `Splitter`, `Column`, `Reactor` and `Block`. A vessel's connections
+  are positioned by what they are for: CHEE4001 p.7 puts a relief "vertically,
+  upward, and at the top of the container", so `Tank(outlets=3)` would offer
+  three interchangeable draws with nothing to stop the relief being placed on
+  the floor. A role also has somewhere to go — each of the seventeen tank and
+  vessel stencils authors a coordinate for each of its five nozzles, measured
+  onto its own artwork — where a count has no bound and would place its sixth
+  nozzle by spreading it along a face the drawing may have no ink on.
+
+  Purely additive: the new nozzles are appended, nothing is renamed or moved,
+  none of them is numbered so `nozzle-unconnected` stays silent on a tank
+  nobody drained, the spec needs no key of its own since the port set follows
+  from `kind:`, and every golden and gallery sheet is byte-identical.
+
 - **`examples/14_tank_farm.py`**: a bulk liquid storage terminal, drawn as a
   P&ID on a fixed A3 sheet. Three storage vessels and the reason each is the
   vessel it is -- a floating roof over motor spirit, a fixed roof over ethanol

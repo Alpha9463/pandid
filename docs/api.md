@@ -449,8 +449,8 @@ Each entry is `port` *(direction / role)*.
 | `Blower` | `blower` | `suction` *(in)*, `discharge` *(out)* |
 | `Turbine` | `turbine` | `inlet` *(in)*, `outlet` *(out)* |
 | `Valve` | `valve` | `inlet` *(in)*, `outlet` *(out)*, `actuator` *(in/signal)* |
-| `Vessel` | `vessel` | `inlet` *(in)*, `outlet` *(out)*, `vent` *(out/vapor)* |
-| `Tank` | `tank` | `inlet` *(in)*, `outlet` *(out)* |
+| `Vessel` | `vessel` | `inlet` *(in)*, `outlet` *(out)*, `vent` *(out/vapor)*, `relief` *(out)*, `drain` *(out/liquid)* |
+| `Tank` | `tank` | the same five as `Vessel` |
 | `Separator` | `separator` | `feed` *(in)*, `vapor` *(out/vapor)*, `liquid` *(out/liquid)*. The four mechanical variants sort by size, inertia or magnetism rather than into phases, and name the two draws their artwork actually has: `feed` *(in/feed)*, `overflow` *(out)*, `underflow` *(out)*; see [Variants](#variants) |
 | `Column` | `column` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*, `reflux_in` *(in/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*, `condenser_duty` *(out/energy)*; the feeds are [`feeds`](#the-family-as-a-sequence) |
 | `Reactor` | `reactor` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `outlet` *(out)*, `vent` *(out/vapor)*, `duty` *(in/energy)*; the feeds are [`feeds`](#the-family-as-a-sequence) |
@@ -471,6 +471,36 @@ Each entry is `port` *(direction / role)*.
 | `Mixer` | `mixer` | `in_1` … `in_n` *(in)*, `outlet` *(out)*; the family is [`inlets`](#the-family-as-a-sequence) |
 | `Splitter` | `splitter` | `inlet` *(in)*, `out_1` … `out_n` *(out)*; the family is [`outlets`](#the-family-as-a-sequence) |
 | `Block` | `block` | `in_1` … `in_n` *(in)*, `out_1` … `out_m` *(out)*; the families are [`inlets`/`outlets`](#the-family-as-a-sequence) |
+
+`Vessel` and `Tank` carry the same five nozzles, because a tank and a vessel are
+one shell at two design pressures. Three of them are not what enters and what
+leaves:
+
+| nozzle | where it is drawn | what it is |
+|---|---|---|
+| `vent` | the crown | the vapour connection. On a fixed-roof tank, the conservation vent it breathes through as it fills, empties and warms |
+| `relief` | the crown | the connection a PSV or a rupture disc is mounted on. Separate from `vent` because a relief passes nothing until the design case, and its path must not run through a valve someone can close |
+| `drain` | the vessel's low point | the liquid draw-off: settled water, a clean-out, the liquid a vapour drum knocks out |
+
+```python
+tank = fs.add(units.Tank("TK-602", description="Denatured Ethanol Storage"))
+fs.connect(tank.vent, arrestor.inlet)      # breather, with the arrestor under it
+fs.connect(sphere.relief, flare.inlet)     # PSV takeoff on the crown
+fs.connect(drum.drain, sump.inlet)
+```
+
+Each is drawn where its duty puts it, not where a count would: a relief is on
+the crown because CHEE4001 p.7 puts it there ("vertically, upward, and at the
+top of the container"), and a drain at the low point because that is what a
+drain is. Every tank and vessel variant has all five, and piping none of them
+draws the sheet you drew before — a declared nozzle is offered, and leaving one
+open is a drawing decision that nothing reports. See
+[Nozzles nothing is piped to](#nozzles-nothing-is-piped-to).
+
+Two variants read their drain's face differently: `vessel/legs` and
+`vessel/skirted` are drawn much taller than wide, so at their own proportions
+the drain leaves sideways rather than downwards. Give the unit a `height` less
+than about 2.2 × its `width` and it comes out of the bottom.
 
 Variable-port constructors take their count first:
 
@@ -2468,10 +2498,10 @@ spread evenly across its face for **every** member it has, wired or not, so the
 three lines that are drawn land 11.7 apart around a hole where `in_1` is,
 instead of the 17.5 apart that `n_inlets=3` would have given them.
 
-**Only counted nozzles.** A `vent`, a `duty`, an exchanger's other side, a drain
-valve's outlet — every fixed nozzle a class declares is offered to every
-instance whether the sheet uses it or not, and leaving one open is a drawing
-decision. Across the twelve examples in `examples/` 167 ports carry no stream
+**Only counted nozzles.** A `vent`, a `relief`, a `drain`, a `duty`, an
+exchanger's other side, a drain valve's outlet — every fixed nozzle a class
+declares is offered to every instance whether the sheet uses it or not, and
+leaving one open is a drawing decision. Across the twelve examples in `examples/` 167 ports carry no stream
 and every one of them is one of those: 112 signal connections, 26 exchanger
 utility sides, 14 duties, 8 station drain outlets and 7 vents. None is reported.
 What is reported is a *count that went unmet*, which is why the singular
