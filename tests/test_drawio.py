@@ -2058,6 +2058,104 @@ def test_no_line_number_is_written_over_a_symbol_or_an_equipment_tag(stem):
 
 
 # ---------------------------------------------------------------------------
+# Line weight
+# ---------------------------------------------------------------------------
+
+
+def test_the_pen_the_export_states_is_the_pen_the_library_draws_with():
+    """``_SYMBOL_STROKE`` is a copy, and this is what stops it drifting.
+
+    It has to be a copy: the number is a literal inside a hundred SVG fragments
+    in `pandid.render.symbols` and a division inside `scripts/vendor_symbols.py`,
+    which is not part of the installed package. So it is held against the
+    library's own artwork instead -- `authored_pens` reads the weight each
+    symbol declares through its internal scale group, which is the weight it
+    draws at on the paper.
+    """
+    from pandid.render.drawio import _SYMBOL_STROKE
+    from test_line_weight import authored_pens
+
+    checked = 0
+    for (kind, variant), sym in sorted(default_registry._symbols.items()):
+        # The outline is the heaviest pen; a symbol's fine detail is
+        # deliberately lighter and draw.io has one weight for the whole stencil.
+        pen = max(authored_pens(sym))
+        assert pen == pytest.approx(_SYMBOL_STROKE, rel=2e-3), (
+            f"{kind}/{variant} is drawn at {pen:.4g} and exported at {_SYMBOL_STROKE}"
+        )
+        checked += 1
+    assert checked > 100, f"only {checked} symbols were walked; the registry is bigger"
+
+
+@pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
+def test_every_drawn_symbol_states_the_weight_the_sheet_rules_it_at(stem):
+    """#239. No ``strokeWidth`` was written on a stencil cell at all.
+
+    All 319 vendored stencils declare ``strokewidth="inherit"``, which is a
+    stencil saying *take the pen from the cell* -- and the cell said nothing, so
+    draw.io's default 1 drew every valve, vessel and pump lighter than the pipes
+    they sit on, which were already emitted at the sheet's 2. The stand-ins were
+    worse than unstated: they said ``strokeWidth=1`` outright.
+
+    Scaled, because a symbol's outline is a *drawing* dimension and a paged
+    export fits the drawing into what the furniture leaves. Stating it flat
+    beside a stream stated scaled is the same defect the other way round.
+    """
+    from pandid.render.drawio import _SYMBOL_STROKE
+
+    fs, kwargs = gallery.flowsheet(stem)
+    fs.to_svg(**kwargs)
+    _boxes, _frame, fit = DrawioRenderer()._furniture(fs, _page(kwargs.get("page_size")))
+    cells = _drawio_cells(fs, kwargs)
+    want = fit.length(_SYMBOL_STROKE)
+    seen = 0
+    for i, u in enumerate(fs.units):
+        for cid in (f"u{i}", f"u{i}-in"):
+            cell = cells.get(cid)
+            if cell is None:
+                continue
+            style = _style(cell)
+            # A pipe tee draws no ink of its own -- the three runs meeting draw
+            # the junction -- so it has no pen to state.
+            if style.get("strokeColor") == "none":
+                continue
+            assert "strokeWidth" in style, (
+                f"{stem}: {u.kind}/{getattr(u, 'variant', 'default')} leaves its "
+                f"pen to draw.io, which draws it at 1 beside pipes drawn at 2"
+            )
+            assert float(style["strokeWidth"]) == pytest.approx(want, abs=0.01)
+            seen += 1
+    assert seen, f"{stem}: no unit cell was checked"
+
+
+@pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
+def test_no_cell_that_inks_anything_leaves_its_weight_to_drawio(stem):
+    """The rest of #239, over the whole document rather than over the symbols.
+
+    Three ways a cell can honestly say nothing about its pen, and they are the
+    only three: it strokes no ink (``strokeColor=none`` -- a text label, the
+    tee); it is a table row or cell, which switches its own four edges off and
+    lets the *container* draw every rule from the container's style
+    (``strokeColor=inherit``); or it is one of draw.io's two root cells.
+    Anything else that reaches the canvas with a colour and no width is drawn at
+    draw.io's default rather than at the sheet's.
+    """
+    fs, kwargs = gallery.flowsheet(stem)
+    fs.to_svg(**kwargs)
+    root = ET.fromstring(
+        fs.to_drawio(**{k: v for k, v in kwargs.items() if k in _DRAWIO_KWARGS})
+    ).find("diagram/mxGraphModel/root")
+    silent = []
+    for cell in root.findall("mxCell"):
+        style = _style(cell)
+        ink = style.get("strokeColor")
+        if ink in (None, "none", "inherit") or "strokeWidth" in style:
+            continue
+        silent.append(cell.get("id"))
+    assert not silent, f"{stem}: cells drawn at draw.io's default weight: {silent}"
+
+
+# ---------------------------------------------------------------------------
 # Line jumps
 #
 # draw.io is still not run, so what is done here is what the header of this file

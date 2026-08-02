@@ -92,6 +92,21 @@ def _text(x, y, s, size, *, anchor="start", bold=False, fill="black", baseline=N
 # Generic titled box (Annotation): title bar over free-form / columnar rows
 # ---------------------------------------------------------------------------
 
+#: The weight a titled box's own rectangle is ruled at, and the rule under its
+#: title. Named beside :data:`_STRIP_RULE` and for the same reason the strip's
+#: weights are: :mod:`pandid.render.drawio` writes the box out as a draw.io
+#: table and has to state the weight on the container, since draw.io draws a
+#: table's border and internal rules from the container's own style. Two
+#: literals, one here and one there, is two answers to how heavily the sheet
+#: rules a legend.
+_BOX_RULE = 1.5
+_BOX_UNDERLINE = 1.0
+#: The weight a :class:`~pandid.document.TableBox` rules every one of its cells
+#: at -- lighter than the box above, because a table really is ruled across and
+#: down and a grid at 1,5 would compete with the drawing beside it.
+_CELL_RULE = 0.75
+
+
 def _ann_layout(ann):
     """Compute the column widths and row metrics for an Annotation."""
     size = ann.font_size
@@ -149,12 +164,13 @@ def draw_annotation(ann, x: float, y: float, *,
             over = _overflowing_text(ann, size, body_w)
             report(f"annotation {ann.title!r} (width={ann.width:g})", over, over)
     L = [f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" '
-         f'fill="white" stroke="black" stroke-width="1.5"/>']
+         f'fill="white" stroke="black" stroke-width="{_BOX_RULE:g}"/>']
     if ann.title:
         L.append(_text(x + w / 2, y + title_h - 6, ann.title, size + 1,
                        anchor="middle", bold=True))
         L.append(f'<line x1="{x:.1f}" y1="{y + title_h:.1f}" x2="{x + w:.1f}" '
-                 f'y2="{y + title_h:.1f}" stroke="black" stroke-width="1"/>')
+                 f'y2="{y + title_h:.1f}" stroke="black" '
+                 f'stroke-width="{_BOX_UNDERLINE:g}"/>')
     ry = y + title_h + row_h - 4
     for r in ann.rows:
         if isinstance(r, (tuple, list)):
@@ -208,7 +224,8 @@ def draw_table(tb, x: float, y: float) -> list[str]:
             val = cells[ci] if ci < len(cells) else ""
             fill = "#eee" if header else "white"
             L.append(f'<rect x="{cx:.1f}" y="{ry:.1f}" width="{col_w[ci]:.1f}" '
-                     f'height="{row_h:.1f}" fill="{fill}" stroke="black" stroke-width="0.75"/>')
+                     f'height="{row_h:.1f}" fill="{fill}" stroke="black" '
+                     f'stroke-width="{_CELL_RULE:g}"/>')
             a = align[ci] if ci < len(align) else "c"
             if a == "l":
                 tx, anc = cx + 5, "start"

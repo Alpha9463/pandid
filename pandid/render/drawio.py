@@ -223,6 +223,34 @@ _NO_FILL = "none"
 #: back to the default vertex and draws a plain rectangle.
 _NO_STROKE = "none"
 
+#: The pen the sheet rules a **symbol's outline** with.
+#:
+#: This file was writing no ``strokeWidth`` at all on a stencil cell, and every
+#: one of the 319 vendored stencils declares ``strokewidth="inherit"`` -- which
+#: puts the pen in the cell's style rather than in the stencil's own coordinate
+#: space. With nothing in the style, every exported symbol drew at draw.io's
+#: default 1 against pipes emitted at the sheet's 2: valve outlines lighter than
+#: the lines they sit on, on every sheet, constantly.
+#:
+#: Two is the sheet's own answer and it is one number in two places. Every
+#: hand-drawn symbol in :mod:`pandid.render.symbols` says ``stroke-width="2"``
+#: on its outline -- the balloons, the block, the boundary pennant, the generic
+#: box a foreign ``Unit`` falls back to. And ``scripts/vendor_symbols.py``
+#: compensates each converted stencil for the scale its artwork is drawn at,
+#: ``stroke_width = 2.0 / sqrt(sx * sy)``, so a gate valve's ``8.0`` inside a
+#: ``scale(0.25)`` group is that same 2 on the paper. Stated here rather than
+#: imported because neither of those is a constant to import: one is a literal
+#: in a hundred SVG fragments and the other is in a generator that is not part
+#: of the installed package. ``tests/test_drawio.py`` measures it back off the
+#: rendered sheet, which is what keeps the copy honest.
+#:
+#: ISO 15519-1:2010 §6.2 Table 1 gives the process industry 0,1 M for symbols
+#: and 0,2 M for connections, so a symbol is *meant* to be the lighter of the
+#: two -- by a stated ratio, though, not by whatever the reader's editor
+#: defaults to. This library rules both at 2 and it is the library's sheet that
+#: this file has to carry across.
+_SYMBOL_STROKE = 2.0
+
 #: The ink a *line* is drawn in, which is not quite the ink a symbol is drawn in:
 #: the SVG renderer strokes a stream ``black`` and a converted stencil ``#111``,
 #: and this is the first of those, written the way a draw.io style writes a
@@ -463,7 +491,7 @@ class _Approximation(NamedTuple):
     flip_h: bool = False
     fill: str = _NO_FILL
     stroke: str = _INK
-    weight: float = 1.0
+    weight: float = _SYMBOL_STROKE
     keys: tuple = ()
     inscribed: "str | None" = None
 
@@ -1004,17 +1032,31 @@ class DrawioRenderer:
             keys.append("flipV=1")
         return keys, flip_h, flip_v
 
-    def _shape(self, u, sym) -> list[str]:
-        """The style keys naming what draw.io is to draw for this unit."""
+    def _shape(self, u, sym, fit: "_Fit") -> list[str]:
+        """The style keys naming what draw.io is to draw for this unit.
+
+        ``fit`` is here for the pen. A symbol's outline is a **drawing**
+        dimension, so it scales with the drawing exactly as a pipe's does
+        (:class:`_Fit`), and stating it unscaled beside a stream stated scaled
+        would put the two back out of proportion at the other end.
+        """
+        weight = f"strokeWidth={fit.length(_SYMBOL_STROKE):g}"
         if u.kind in ("feed", "product"):
-            return self._flag_shape(u)
+            return self._flag_shape(u, fit)
         if sym.drawio_shape:
             # A vendored stencil: name it and let draw.io draw its own artwork.
             # `outlineConnect=0` is what draw.io's own P&ID palette sets, and it
             # matters here more than there: it stops a stream being dropped onto
             # the shape's outline instead of onto the nozzle it was routed to.
+            #
+            # And the pen, which was not being written at all. Every vendored
+            # stencil declares `strokewidth="inherit"`, which is a stencil
+            # saying "take the pen from the cell" -- and the cell said nothing,
+            # so draw.io's default 1 drew every symbol lighter than the pipes
+            # around it. See :data:`_SYMBOL_STROKE`.
             keys = [f"shape={sym.drawio_shape}", "outlineConnect=0",
-                    f"strokeColor={_INK}", f"fillColor={sym.drawio_fill or _NO_FILL}"]
+                    f"strokeColor={_INK}", f"fillColor={sym.drawio_fill or _NO_FILL}",
+                    weight]
             return keys
         # The stand-in, or draw.io's default vertex. Its mirror, where it needs
         # one, is applied in :meth:`_placement` with everything else that flips.
@@ -1023,13 +1065,15 @@ class DrawioRenderer:
         keys = [] if shape is None else [f"shape={shape}"]
         keys += ["rounded=0", "whiteSpace=wrap"]
         if approx is None:
-            return keys + [f"strokeColor={_INK}", f"fillColor={_NO_FILL}"]
+            # A kind with no artwork at all: the sheet draws `_generic_symbol`'s
+            # 60-unit box, ruled at the same weight everything else is.
+            return keys + [f"strokeColor={_INK}", f"fillColor={_NO_FILL}", weight]
         return keys + [*approx.keys, f"strokeColor={approx.stroke}",
                        f"fillColor={approx.fill}",
-                       f"strokeWidth={approx.weight:g}"]
+                       f"strokeWidth={fit.length(approx.weight):g}"]
 
     @staticmethod
-    def _flag_shape(u) -> list[str]:
+    def _flag_shape(u, fit: "_Fit") -> list[str]:
         """The off-page flag, as draw.io's own five-point connector polygon.
 
         ``offPageConnector`` draws ``(0,0) (w,0) (w,h-s) (w/2,h) (0,h-s)``: a
@@ -1064,7 +1108,11 @@ class DrawioRenderer:
                 "anchorPointDirection=0", "legacyAnchorPoints=1",
                 "rounded=0", "whiteSpace=wrap",
                 f"strokeColor={_LINE_INK}", f"fillColor={_NO_FILL}",
-                f"strokeWidth={_PROCESS_STROKE:g}"]
+                # The pennant is a symbol outline and is ruled like one, and
+                # like one it scales with the drawing. It was stated flat here,
+                # which on a paged sheet drew the flag heavier than the pipe
+                # running into it.
+                f"strokeWidth={fit.length(_SYMBOL_STROKE):g}"]
 
     def _label(self, u, fit: "_Fit", tags: "_Tags") -> "tuple[str, list[str], tuple]":
         """A unit's label text, the style keys that place it, and how far the
@@ -1194,7 +1242,7 @@ class DrawioRenderer:
         x0, y0, x1, y1 = fit.box(self._cell_box(u))
         placement, _, _ = self._placement(u, sym)
         text, label_keys, (dx, dy) = self._label(u, fit, tags)
-        style = ";".join(["html=1", *self._shape(u, sym), *label_keys, *placement]) + ";"
+        style = ";".join(["html=1", *self._shape(u, sym, fit), *label_keys, *placement]) + ";"
         geometry = (f'          <mxGeometry x="{_num(x0)}" y="{_num(y0)}" '
                     f'width="{_num(x1 - x0)}" height="{_num(y1 - y0)}" as="geometry"')
         body = ([geometry + ">",
@@ -1207,12 +1255,12 @@ class DrawioRenderer:
             f'style={_attr(style)} vertex="1" parent="1">',
             *body,
             '        </mxCell>',
-            *self._inscribed(cid, self._approximation(u, sym), x1 - x0, y1 - y0),
+            *self._inscribed(cid, self._approximation(u, sym), x1 - x0, y1 - y0, fit),
         ]
 
     @staticmethod
     def _inscribed(cid: str, approx: "_Approximation | None",
-                   w: float, h: float) -> list[str]:
+                   w: float, h: float, fit: "_Fit") -> list[str]:
         """The second outline of a symbol that has two, as a child of the first.
 
         The safety-instrumented-system balloon is the case and today the only
@@ -1268,7 +1316,7 @@ class DrawioRenderer:
             return []
         style = ";".join([f"shape={approx.inscribed}", "rounded=0", "html=1",
                           f"strokeColor={approx.stroke}", f"fillColor={_NO_FILL}",
-                          f"strokeWidth={approx.weight:g}",
+                          f"strokeWidth={fit.length(approx.weight):g}",
                           "connectable=0", "movable=0"]) + ";"
         return [
             f'        <mxCell id="{cid}-in" value="" style={_attr(style)} '
@@ -1419,7 +1467,13 @@ class DrawioRenderer:
                          f"jumpSize={_jump_size(fit.length(HOP_R), weight)}"]
             keys += _dash(s.dasharray or _SIGNAL_DASH.get(s.kind, ""))
             if arrows and wears_arrowhead(s, self.registry):
-                keys += ["endArrow=block", "endFill=1", f"endSize={ARROWHEAD:g}"]
+                # Through the fit, like the pen beside it. A flow head is twelve
+                # units of *drawing*, and stating it flat on a sheet fitted to
+                # three quarters of its own size drew a head a third too big at
+                # the end of a line correctly thinned -- the same slip as the
+                # missing stroke widths, in the same function.
+                keys += ["endArrow=block", "endFill=1",
+                         f"endSize={fit.length(ARROWHEAD):g}"]
             else:
                 keys.append("endArrow=none")
             keys.append("startArrow=none")
@@ -1740,10 +1794,16 @@ class DrawioRenderer:
             size, _ncol, col_w, _row_h = F._table_layout(obj)
             # A TableBox rules its own columns, and _table_layout's widths
             # already carry that ruling's padding and sum to the measured box.
+            # A table's border and every rule inside it are drawn by the
+            # *container*, from the container's own style
+            # (``TableShape.paintTableForeground``), so the weight has to be
+            # stated there or draw.io rules the whole grid at its default 1
+            # where the sheet strokes each cell at ``_CELL_RULE``.
             return _table(cid, title, [str(c) for c in obj.headers],
                           [[str(c) for c in row] for row in obj.rows],
                           x, y, w, h, col_w, (size + 10) if title else 0.0,
-                          font=size, col_keys=_ALIGN_KEYS(obj.col_align, len(col_w)))
+                          font=size, keys=f"strokeWidth={F._CELL_RULE:g};",
+                          col_keys=_ALIGN_KEYS(obj.col_align, len(col_w)))
         rows = list(getattr(obj, "rows", []) or [])
         if any(isinstance(r, (tuple, list)) for r in rows):
             # Columnar: an equipment schedule, a legend, a numbered note list.
@@ -1760,7 +1820,14 @@ class DrawioRenderer:
             heavy = [True] + [False] * (ncol - 1)
             return _table(cid, title, [], grid, x, y, w, h,
                           columns(grid, [size] * ncol, w, bold=heavy), title_h,
-                          font=size, keys=_ANNOTATION_KEYS + f"fontSize={size + 1:g};",
+                          font=size,
+                          # `_ANNOTATION_KEYS` leaves the container's own border
+                          # as the only rule this box draws, so the weight
+                          # stated here is the weight of the rectangle the sheet
+                          # strokes around a legend. It was unstated, and
+                          # draw.io's default 1 drew it two thirds as heavy.
+                          keys=(_ANNOTATION_KEYS + f"fontSize={size + 1:g};"
+                                + f"strokeWidth={F._BOX_RULE:g};"),
                           col_keys=[f"align=left;spacingLeft=4;{'fontStyle=1;' if b else ''}"
                                     for b in heavy])
         # Not tabular: a titled box of free-form lines, which is what it is on
@@ -2455,7 +2522,8 @@ def _text_box(cid: str, title: str, rows, x, y, w, h, font: float = 11.0,
     are wider and taller than the box measured for them.
     """
     box = ("rounded=0;whiteSpace=wrap;html=1;movable=1;"
-           f"strokeColor={_INK};fillColor={_NO_FILL};strokeWidth=1.5;")
+           f"strokeColor={_INK};fillColor={_NO_FILL};"
+           f"strokeWidth={F._BOX_RULE:g};")
     out = _rect(cid, x, y, w, h, box)
     if title:
         # Centred, bold and one point larger, which is draw_annotation's own
@@ -2463,7 +2531,8 @@ def _text_box(cid: str, title: str, rows, x, y, w, h, font: float = 11.0,
         # sheet rules it.
         out += _strip_label(f"{cid}-t", ("text", x + w / 2, y + title_h - 6,
                                          title, font + 1, "middle", True, "black"))
-        out += _segment(f"{cid}-r", x, y + title_h, x + w, y + title_h, _INK, 1)
+        out += _segment(f"{cid}-r", x, y + title_h, x + w, y + title_h,
+                        _INK, F._BOX_UNDERLINE)
     # The body, in the sheet's own gutter: `draw_annotation` sets a row at
     # `pad` = 9 from the box edge, less the two units a draw.io cell spends
     # before its first letter (:data:`_TEXT_INSET`).
