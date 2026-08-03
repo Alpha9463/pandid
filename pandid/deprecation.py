@@ -50,15 +50,12 @@ first customer needs no edit here. A unit built and never added keeps
 its finding and is never reported, which is correct: ``validate()``
 answers for the drawing.
 
-No carrier at all
------------------
-
-A deprecated free function has nothing to ride on. ``warn()`` with no
-carrier files the finding against the *process*, and every
-``validate()`` in that process reports it. The cost is over-reporting --
-a program building four sheets gets one such finding on all four -- and
-the alternative is dropping it entirely. Pass a carrier wherever one is
-in scope.
+A carrier is required. A finding with nothing to ride on reaches no
+sheet's ``validate()``, and the only home left for it is the process --
+which is one sheet's finding read out by every *other* sheet built in
+the same interpreter. Such a call still raises its
+:class:`DeprecationWarning`, which is the signal that does not need a
+sheet to arrive.
 """
 
 from __future__ import annotations
@@ -82,10 +79,6 @@ CODE = "deprecated"
 #: here: a carrier does not declare it, and nothing outside this module
 #: reads it.
 _ATTR = "_deprecations"
-
-#: Findings from calls that had no carrier. Process-wide, and never
-#: cleared during a run; see the module docstring.
-_unattached: list[Issue] = []
 
 #: The flowsheet attributes whose members can carry a finding: every
 #: list a :class:`~pandid.flowsheet.Flowsheet` holds of objects an
@@ -140,7 +133,7 @@ class Deprecation:
         return (f"{lead}{self.what} is deprecated and is removed in pandid "
                 f"{self.removed_in}; use {self.instead}")
 
-    def warn(self, carrier: object | None = None, *, where: str = "",
+    def warn(self, carrier: object, *, where: str = "",
              stacklevel: int = 3) -> None:
         """Emit both signals for one deprecated call.
 
@@ -150,8 +143,10 @@ class Deprecation:
 
         *carrier* is the object the finding rides on until
         ``validate()`` runs: the unit under construction, the stream,
-        the flowsheet. ``None`` files it against the process instead,
-        for a call with no pandid object in scope.
+        the flowsheet. Required, and required to be able to hold the
+        finding, so that a call with nothing to attach to fails here
+        rather than quietly reporting against sheets it has no
+        connection to.
 
         *stacklevel* defaults to 3 so the warning points at the author's
         line: 1 is this method, 2 is the library function that called
@@ -164,9 +159,15 @@ class Deprecation:
         emitted each time; suppressing a repeat is what the ``warnings``
         module's own filters are for.
         """
+        if not hasattr(carrier, "__dict__"):
+            raise TypeError(
+                f"a deprecation rides to validate() on a carrier -- the unit under "
+                f"construction, the stream, the flowsheet -- and {carrier!r} cannot "
+                f"hold one"
+            )
         text = self.message(where)
         warnings.warn(text, DeprecationWarning, stacklevel=stacklevel)
-        bucket = _unattached if carrier is None else vars(carrier).setdefault(_ATTR, [])
+        bucket = vars(carrier).setdefault(_ATTR, [])
         if not any(seen.message == text for seen in bucket):
             bucket.append(Issue("warning", CODE, text))
 
@@ -183,7 +184,7 @@ def _recorded(obj: object) -> list[Issue]:
 
 
 def findings(fs: "Flowsheet") -> list[Issue]:
-    """Every deprecation this sheet triggered, plus carrier-less ones.
+    """Every deprecation this sheet triggered, and no other sheet's.
 
     Called by :func:`pandid.validate.validate`, which reports rather
     than recomputes: the findings were built at the deprecated call, the
@@ -193,7 +194,6 @@ def findings(fs: "Flowsheet") -> list[Issue]:
     for held in _HELD:
         for obj in getattr(fs, held, ()):
             out.extend(_recorded(obj))
-    out.extend(_unattached)
     return out
 
 
@@ -221,12 +221,3 @@ def declarations() -> dict[str, Deprecation]:
             if isinstance(value, Deprecation):
                 found[f"{info.name}.{name}"] = value
     return found
-
-
-def _forget_unattached() -> None:
-    """Drop the carrier-less findings. For tests, which start empty.
-
-    Not part of the API: a knob for un-reporting a deprecation would be
-    a knob for hiding one.
-    """
-    _unattached.clear()

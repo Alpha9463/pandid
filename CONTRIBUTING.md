@@ -338,10 +338,10 @@ neither signal is enough on its own.
 
 Pass the object the author is holding — the unit under construction, the stream,
 the flowsheet — as the carrier. It is what gets the finding from the call site to
-`validate()`, which runs much later. `warn()` with no carrier is the fallback for
-a call with no pandid object in scope, and costs a finding reported by every
-`validate()` in the process; `pandid/deprecation.py` argues that trade, and is
-worth reading before you reach for it.
+`validate()`, which runs much later, and it is required: a finding with nothing
+to ride on reaches no sheet, so `warn()` refuses the call rather than reporting
+it against sheets that never made it. Such a call still raises its
+`DeprecationWarning`, which is the signal that needs no sheet to arrive.
 
 In the same PR:
 
