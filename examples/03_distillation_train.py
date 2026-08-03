@@ -222,7 +222,10 @@ def main():
 
     # --- Render ---
     fs.render(out("distillation_train.svg"), show_stream_table=True, border="zone")
-    print("Generated distillation_train.svg")
+    # The same sheet and the same arguments, as an editable draw.io model. The
+    # stream table exports as a real table: 21 columns a reader can widen.
+    fs.render(out("distillation_train.drawio"), show_stream_table=True, border="zone")
+    print("Generated distillation_train.svg and distillation_train.drawio")
 
 if __name__ == "__main__":
     main()

@@ -46,7 +46,11 @@ SAMPLES = {
     "11_ethanol_pid": "a full P&ID on A3 paper, with every piece of furniture",
     # A zone-ruled sheet with no page size: the frame is grown around the
     # drawing rather than fixed by the paper, so the drawing keeps its own
-    # coordinates and the furniture docks to the grown frame. It is also a PFD,
+    # coordinates and the furniture docks to the grown frame. It is also the
+    # only sample that carries a stream table -- 21 stream columns and a section
+    # heading spanning all of them -- which is why its example writes its own
+    # .drawio beside its sheet, as `11` does: the line an example makes writes
+    # the file the repository already shows. It is also a PFD,
     # which draws the arrowheads a P&ID does not.
     "03_distillation_train": "a bordered PFD sized to its own drawing",
     # A model rather than a sheet: no page, no furniture, so the drawing keeps
@@ -78,10 +82,10 @@ def _gallery():
 #: option it cannot honour, so passing them straight through would simply raise,
 #: and passing them through a silent filter would write a sample that is not the
 #: sheet without saying so. `03`, `08`, `09`, `10` and `13` all ask for a stream
-#: table, which is furniture this exporter has no measurement for; `02` asks for
-#: the debug overlay, which is scaffolding rather than drawing. See
-#: `DrawioRenderer.render`.
-_EXPORTED = ("diagram", "page_size", "border")
+#: table, which the exporter now docks and rules like the sheet does. What is
+#: left to drop is `02`'s debug overlay, which is scaffolding rather than
+#: drawing. See `DrawioRenderer.render`.
+_EXPORTED = ("diagram", "page_size", "border", "show_stream_table")
 
 
 def sample(stem: str) -> "tuple[str, list[str]]":

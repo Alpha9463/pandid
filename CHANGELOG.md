@@ -366,6 +366,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and examples 04, 11 and 14 tag their elements the new way; `tag()` is
   unchanged and nothing that used it for a final element moves.
 
+- **The draw.io export carries the stream table (#251).**
+  `render("sheet.drawio", show_stream_table=True)` raised, on the grounds that
+  there was no sheet furniture to dock a stream table to. That reason had
+  expired: the title strip, legend, equipment list, notes and `TableBox` all go
+  through `furniture.dock` in the exporter. What was actually missing was that
+  the stream table had never been shared — it lived inside `SvgRenderer`, so the
+  exporter had no way to ask for one.
+
+  It is now `furniture.stream_table_layout`, a layout function and a stroker,
+  the split `title_strip_layout` already has. The sheet strokes it; the exporter
+  builds table cells from the same measurement, so the columns are the same
+  columns and the table docks on the same coordinates rather than merely in the
+  same corner. No rendered SVG moves: `tests/golden/` and `docs/gallery/` hash
+  the same before and after.
+
+  It goes out as a real `shape=table` ruled the way the sheet rules it. A stream
+  table strokes a rectangle around every cell, so a rule between every row and
+  every column is the sheet's own answer and draw.io's `rowLines`/`columnLines`
+  defaults are right here — unlike the revision grid, where the default drew six
+  lines the sheet does not. The weight is not draw.io's: it rules at 1 where the
+  sheet rules this grid at 0,75. `stream_table_sections` comes through as
+  itself, one cell spanning the whole row, which is the single rectangle the
+  sheet strokes and what leaves that row ruled across and not down.
+
+  `examples/03_distillation_train.py` writes `distillation_train.drawio` beside
+  its sheet, and `drawio-samples/03_distillation_train.drawio` is regenerated
+  with the table on it — 21 stream columns under a section heading spanning all
+  of them. One example and not five, on #250's own argument: 03 is the only
+  sheet in the committed sample set that draws a stream table, so the line
+  writes the file the repository already shows. (`13`'s table is bigger still at
+  24 columns; it is exported and checked like every other, it just has no
+  sample.)
+
+  `debug` is now the only render option a `.drawio` path refuses, and it is
+  refused because the coordinate overlay is deliberately not part of the drawing
+  rather than because nobody had written it yet.
+
 ### Changed
 
 - **A tank's fill is a menu, and its default moved to the shell (#226).** Every

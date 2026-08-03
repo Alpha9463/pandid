@@ -31,8 +31,10 @@ opening the file can.
 
 from __future__ import annotations
 
+import html
 import importlib.util
 import pathlib
+import re
 from decimal import Decimal
 import xml.etree.ElementTree as ET
 
@@ -1058,14 +1060,14 @@ def test_a_line_number_is_written_where_the_sheet_writes_it():
     both backends read -- seeded, as the sheet seeds it, with the plates the
     equipment tags lay down.
     """
-    from pandid.render.drawio import DrawioRenderer, _tag_pass
-    from pandid.render.svg import _page, stream_numbers
+    from pandid.render.drawio import _tag_pass
+    from pandid.render.svg import stream_numbers
 
     for stem in SHEETS:
         fs, kwargs = gallery.flowsheet(stem)
         fs.to_svg(**kwargs)
         cells = _drawio_cells(fs, kwargs)
-        _boxes, _frame, fit = DrawioRenderer()._furniture(fs, _page(kwargs.get("page_size")))
+        _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
         plates = _tag_pass(fs, default_registry).plates
         wanted = {number.name: number for number in stream_numbers(fs, plates)}
         checked = 0
@@ -1367,8 +1369,11 @@ def test_a_tables_parts_add_up_at_the_precision_they_are_written_at(nrows):
 #: *paged* export -- the strip docks to the frame, the frame is ruled, the
 #: drawing is fitted into what is left -- so a check that drops ``page_size``
 #: and ``border`` is a check run on a different picture from the one the reader
-#: opened.
-_DRAWIO_KWARGS = ("diagram", "page_size", "border")
+#: opened. ``show_stream_table`` is here for the same reason, and it is what
+#: puts the widest tables in the corpus under every check that walks a table's
+#: cells: twenty-one stream columns on ``03`` and twenty-four on ``13``, against
+#: the four and five of a legend or an equipment list.
+_DRAWIO_KWARGS = ("diagram", "page_size", "border", "show_stream_table")
 
 
 def _drawio_cells(fs, kwargs) -> dict:
@@ -1378,6 +1383,23 @@ def _drawio_cells(fs, kwargs) -> dict:
             fs.to_drawio(**{k: v for k, v in kwargs.items() if k in _DRAWIO_KWARGS})
         ).iter("mxCell")
     }
+
+
+def _drawio_furniture(fs, kwargs):
+    """The dock's answer for the same export :func:`_drawio_cells` writes.
+
+    Every option in :data:`_DRAWIO_KWARGS` changes what the furniture takes off
+    the page, and so the ratio the drawing left over is fitted at: a stream
+    table docked at the foot of an A3 sheet is a hundred units the drawing does
+    not get, and every symbol on it is drawn smaller for it. Asking for the
+    furniture with the defaults and comparing the answer against a document
+    exported with the sheet's own arguments is a check run against a different
+    picture -- which is how a lettering check passed while the export and the
+    sheet were fitting the drawing at two different ratios.
+    """
+    return DrawioRenderer()._furniture(
+        fs, _page(kwargs.get("page_size")), bool(kwargs.get("show_stream_table", False))
+    )
 
 
 def _cell_font(cell) -> float:
@@ -1729,24 +1751,212 @@ def test_the_furniture_docks_where_the_sheet_docks_it():
     assert at[id(left)][0] < at[id(right)][0]
 
 
+def _svg_stream_table(svg: str) -> list[tuple]:
+    """Every cell of the sheet's own stream table, in the order it strokes them.
+
+    Read out of the **SVG text** rather than out of the layout the two backends
+    share, which is the whole point of the comparison below: what has to agree
+    is the file a reader opens in a browser and the file a reader opens in
+    draw.io, and reading the layout twice would only prove that a function
+    returns what it returns.
+    """
+    body = re.search(r'<g id="stream_table">(.*?)</g>', svg, re.S)
+    assert body is not None, "the sheet drew no stream table"
+    cell = re.compile(
+        r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" height="([\d.]+)" '
+        r'fill="(\S+)" stroke="black" stroke-width="([\d.]+)"/>\s*'
+        r'<text x="[-\d.]+" y="[-\d.]+" font-family="\S+" font-size="[\d.]+"'
+        r'( font-weight="bold")? text-anchor="(\w+)">(.*?)</text>'
+    )
+    out = []
+    for m in cell.finditer(body.group(1)):
+        x, y, w, h, fill, rule, bold, anchor, text = m.groups()
+        out.append(
+            (
+                float(x),
+                float(y),
+                float(w),
+                float(h),
+                fill,
+                float(rule),
+                bold is not None,
+                anchor,
+                text,
+            )
+        )
+    assert out, "the stream table drew no cells"
+    return out
+
+
+def _drawio_stream_table(cells):
+    """The exported stream table's container, and its cells in file order.
+
+    It is the one table with no title, which is what tells it from a legend, an
+    equipment list or a revision grid: the stream table's corner cell is its own
+    heading and the sheet rules no band over it.
+    """
+    tables = [
+        c
+        for c in cells.values()
+        if "shape=table;" in (c.get("style") or "")
+        and not (c.get("value") or "")
+        and not c.get("id").endswith("-rev")
+    ]
+    assert len(tables) == 1, f"expected one stream table, found {len(tables)}"
+    table = tables[0]
+    geo = table.find("mxGeometry")
+    x0, y0 = float(geo.get("x")), float(geo.get("y"))
+    out = []
+    for row in [c for c in cells.values() if c.get("parent") == table.get("id")]:
+        rgeo = row.find("mxGeometry")
+        ry, rh = float(rgeo.get("y")), float(rgeo.get("height"))
+        for cell in [c for c in cells.values() if c.get("parent") == row.get("id")]:
+            cgeo = cell.find("mxGeometry")
+            style = _style(cell)
+            out.append(
+                (
+                    x0 + float(cgeo.get("x")),
+                    y0 + ry,
+                    float(cgeo.get("width")),
+                    rh,
+                    style.get("fillColor"),
+                    style.get("fontStyle") == "1",
+                    style.get("align"),
+                    cell.get("value") or "",
+                )
+            )
+    return table, out
+
+
+def test_the_stream_table_is_the_grid_the_sheet_draws():
+    """Cell for cell against the sheet's own ink.
+
+    Every column -- one per unique material stream -- every row, and every
+    section heading ``stream_table_sections`` asks for, each at the width and
+    the depth the sheet rules it and holding the string the sheet letters it
+    with. Furniture is *docked* rather than fitted in both backends, so the
+    table lands on the same coordinates and not merely in the same corner.
+    """
+    from pandid.render.drawio import _fill
+
+    checked = []
+    for stem in SHEETS:
+        fs, kwargs = gallery.flowsheet(stem)
+        if not kwargs.get("show_stream_table"):
+            continue
+        drawn = _svg_stream_table(fs.to_svg(**kwargs))
+        table, exported = _drawio_stream_table(_drawio_cells(fs, kwargs))
+        assert len(exported) == len(drawn), (
+            f"{stem}: the sheet rules {len(drawn)} cells and the export writes {len(exported)}"
+        )
+        for want, got in zip(drawn, exported):
+            x, y, w, h, fill, _rule, bold, anchor, text = want
+            gx, gy, gw, gh, gfill, gbold, galign, gtext = got
+            # A sheet writes a coordinate to one decimal and a .drawio file to
+            # two, so the same number reaches the two files as 66.9 and 66.92.
+            # Half of the sheet's own last digit is the whole of the slack
+            # allowed here: the geometry is one layout's and anything wider than
+            # the rounding is two.
+            assert (gx, gy, gw, gh) == pytest.approx((x, y, w, h), abs=0.06), (
+                f"{stem}: {text!r} is ruled at {(x, y, w, h)} and exported at {(gx, gy, gw, gh)}"
+            )
+            # The sheet escapes its text for SVG (a line number carries an
+            # inch mark, which comes out `&quot;`); ElementTree has already
+            # un-escaped the exported cell's own value.
+            want_text = html.unescape(text)
+            assert gtext == want_text, f"{stem}: {want_text!r} exported as {gtext!r}"
+            assert gfill == _fill(fill), f"{stem}: {text!r} is filled {fill} and exported {gfill}"
+            assert gbold is bold, f"{stem}: {text!r} exported at the wrong weight"
+            assert galign == ("left" if anchor == "start" else "center"), (
+                f"{stem}: {text!r} is set {anchor} and exported {galign}"
+            )
+        # ...and the whole of it is inside the frame the export rules, which is
+        # what the dock was asked for.
+        geo = table.find("mxGeometry")
+        tx, ty = float(geo.get("x")), float(geo.get("y"))
+        tw, th = float(geo.get("width")), float(geo.get("height"))
+        fx, fy, fw, fh = _drawio_furniture(fs, kwargs)[1]
+        assert fx - 0.01 <= tx and tx + tw <= fx + fw + 0.01, f"{stem}: out of frame"
+        assert fy - 0.01 <= ty and ty + th <= fy + fh + 0.01, f"{stem}: out of frame"
+        checked.append(stem)
+    assert checked, "no example in the gallery draws a stream table"
+
+
+def test_the_stream_table_is_ruled_across_and_down_as_the_sheet_rules_it():
+    """The rules are the sheet's answer rather than draw.io's default -- and
+    here the two agree, which is worth having checked rather than assumed.
+
+    A stream table strokes a rectangle around every cell, so a rule between
+    every row *and* every column is what the sheet draws, and
+    ``rowLines``/``columnLines`` default on. The revision grid is the
+    counter-example that makes this worth measuring: there the default put six
+    lines into a strip the sheet rules none across. What draw.io does not get
+    right on its own is the weight, which it rules at 1 where the sheet rules
+    this grid at ``_CELL_RULE``.
+
+    The section headings are the exception the sheet itself makes: one rectangle
+    across the whole table, so one cell across the whole row, and a table rules
+    its column lines at its cells' own edges.
+    """
+    from pandid.render import furniture as F
+
+    checked = []
+    for stem in SHEETS:
+        fs, kwargs = gallery.flowsheet(stem)
+        if not kwargs.get("show_stream_table"):
+            continue
+        fs.to_svg(**kwargs)
+        cells = _drawio_cells(fs, kwargs)
+        table, _drawn = _drawio_stream_table(cells)
+        style = _style(table)
+        assert style.get("rowLines", "1") != "0"
+        assert style.get("columnLines", "1") != "0"
+        assert float(style["strokeWidth"]) == pytest.approx(F._CELL_RULE)
+
+        rows = [c for c in cells.values() if c.get("parent") == table.get("id")]
+        widths = [
+            [
+                float(c.find("mxGeometry").get("width"))
+                for c in cells.values()
+                if c.get("parent") == r.get("id")
+            ]
+            for r in rows
+        ]
+        ncol = max(len(w) for w in widths)
+        total = float(table.find("mxGeometry").get("width"))
+        for w in widths:
+            assert len(w) in (1, ncol), f"{stem}: a row of {len(w)} of {ncol} cells"
+            assert sum(w) == pytest.approx(total, abs=0.01)
+        assert len([w for w in widths if len(w) == 1]) == len(fs.stream_table_sections), (
+            f"{stem}: {len(fs.stream_table_sections)} section headings, "
+            f"{len([w for w in widths if len(w) == 1])} rows spanning the table"
+        )
+        checked.append(stem)
+    assert checked, "no example in the gallery draws a stream table"
+
+
 @pytest.mark.parametrize(
     "option,value",
     [
-        ("show_stream_table", True),
         ("debug", True),
     ],
 )
 def test_render_refuses_a_sheet_option_it_cannot_honour(tmp_path, sample, option, value):
-    """Accepting and ignoring these would tell the caller something false about
-    the file they now hold. ``page_size``, ``border`` and ``jump_direction`` are
-    no longer among them; see the tests below."""
+    """Accepting and ignoring this would tell the caller something false about
+    the file they now hold. ``page_size``, ``border``, ``jump_direction`` and
+    ``show_stream_table`` are no longer among them; see the tests below."""
     with pytest.raises(ValueError, match=option):
         sample.render(tmp_path / "sheet.drawio", **{option: value})
 
 
 @pytest.mark.parametrize(
     "option,value",
-    [("page_size", "A3"), ("border", "zone"), ("jump_direction", "horizontal")],
+    [
+        ("page_size", "A3"),
+        ("border", "zone"),
+        ("jump_direction", "horizontal"),
+        ("show_stream_table", True),
+    ],
 )
 def test_render_honours_the_sheet_options_it_can(tmp_path, sample, option, value):
     out = tmp_path / "sheet.drawio"
@@ -2004,7 +2214,7 @@ def _drawn_boxes(fs, kwargs) -> tuple[dict, dict, list]:
         top = (y - lh if style["verticalLabelPosition"] == "top" else y + h) + dy
         tags[f"u{i}"] = (cx - lw / 2, top, cx + lw / 2, top + lh)
 
-    _boxes, _frame, fit = DrawioRenderer()._furniture(fs, _page(kwargs.get("page_size")))
+    _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
     assert isinstance(fit, _Fit)
     for n, s in enumerate(fs.streams):
         cell = cells[f"s{n}"]
@@ -2082,7 +2292,7 @@ def test_a_displaced_line_number_is_tied_back_to_its_run(stem):
 
     fs, kwargs = gallery.flowsheet(stem)
     svg = fs.to_svg(**kwargs)
-    _boxes, _frame, fit = DrawioRenderer()._furniture(fs, _page(kwargs.get("page_size")))
+    _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
     cells = _drawio_cells(fs, kwargs)
 
     drawn = {label.name: label for label in _labels(svg) if label.leader is not None}
@@ -2162,7 +2372,7 @@ def test_every_drawn_symbol_states_the_weight_the_sheet_rules_it_at(stem):
 
     fs, kwargs = gallery.flowsheet(stem)
     fs.to_svg(**kwargs)
-    _boxes, _frame, fit = DrawioRenderer()._furniture(fs, _page(kwargs.get("page_size")))
+    _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
     cells = _drawio_cells(fs, kwargs)
     want = fit.length(_SYMBOL_STROKE)
     seen = 0
@@ -2257,7 +2467,7 @@ def _edge_lines(fs, kwargs, root):
     """
     from pandid.render.drawio import _Fit
 
-    _boxes, _frame, fit = DrawioRenderer()._furniture(fs, _page(kwargs.get("page_size")))
+    _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
     assert isinstance(fit, _Fit)
     known = {f"s{n}": [fit.at(*p) for p in stream_polyline(s)] for n, s in enumerate(fs.streams)}
     for n, (_inst, tap, centre) in enumerate(tap_lines(fs)):
@@ -2410,7 +2620,7 @@ def test_the_hop_is_the_radius_the_sheet_draws_it_at():
 
     fs, kwargs = gallery.flowsheet("11_ethanol_pid")
     fs.to_svg(**kwargs)
-    _boxes, _frame, fit = DrawioRenderer()._furniture(fs, _page(kwargs.get("page_size")))
+    _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
     cells = _drawio_cells(fs, kwargs)
     hopping = [c for c in cells.values() if _style(c).get("jumpStyle", "none") != "none"]
     assert len(hopping) == 6, "11_ethanol_pid has six runs that hop another"

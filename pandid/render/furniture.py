@@ -1,5 +1,5 @@
 """Sheet furniture: the engineering title strip, generic titled boxes, generic
-tables, and the zone-ruled drawing border.
+tables, the stream property table, and the zone-ruled drawing border.
 
 Every routine here is a pure function returning a list of SVG-fragment strings
 (or a ``(width, height)`` measurement). The renderer in :mod:`pandid.render.svg`
@@ -245,6 +245,222 @@ def draw_table(tb, x: float, y: float) -> list[str]:
         _row(ry, list(r), header=False)
         ry += row_h
     return L
+
+
+# ---------------------------------------------------------------------------
+# Stream property table (a heading row of line numbers, a row per property,
+# section headings where the flowsheet asks for them)
+# ---------------------------------------------------------------------------
+#
+# Here rather than in :mod:`pandid.render.svg`, which is where it was written
+# and where it stayed while every other shared piece of furniture moved out:
+# ``stream_polyline`` and ``stream_numbers`` to module level, ``dock`` and
+# ``title_strip_layout`` to this file. It is the same argument each time, and
+# the stream table is the case that made it concrete -- the draw.io exporter had
+# no way to *ask* for the table, so ``Flowsheet.render`` refused
+# ``show_stream_table`` for a ``.drawio`` path outright, and with six of the
+# fourteen examples asking for one that refusal is what kept most of the corpus
+# from exporting at all.
+#
+# Split the way the title strip is split, and for the title strip's reason: a
+# layout function (:func:`stream_table_layout`) that answers where every cell
+# goes and what is in it, and a stroker (:func:`draw_stream_table`) that turns
+# that into SVG. The sheet strokes the layout; :mod:`pandid.render.drawio`
+# builds table cells from the same one. Neither backend measures a column.
+
+#: Clearance a stream-table column is ruled with over the widest thing in it.
+#: Applied once per column, to whichever of the heading and the values is wider.
+_STREAM_GUTTER = 14.0
+
+#: Gutter between a cell's rule and text set against its left edge. The draw.io
+#: exporter states this too -- less what a draw.io cell insets on its own
+#: account -- so a row label starts the same distance in whichever backend drew
+#: it.
+_STREAM_PAD = 5.0
+
+#: What the table fills its four kinds of cell with. Named because a second
+#: backend has to fill the same cells the same way, and because a colour written
+#: twice is a colour that drifts. The heading row is the grey the sheet fills
+#: every heading row with; a section heading is a shade lighter, being a heading
+#: *inside* the table rather than over it; a row label is lighter still, since
+#: it is read as a label rather than as a heading; a value is the paper.
+_STREAM_HEAD_FILL = "#eee"
+_STREAM_SECTION_FILL = "#f4f4f4"
+_STREAM_KEY_FILL = "#f9f9f9"
+_STREAM_VALUE_FILL = "white"
+
+
+class StreamCell(NamedTuple):
+    """One ruled cell of the stream table.
+
+    ``w`` is the cell's own width rather than its column's: a section heading
+    spans the whole table and is **one** cell, which is what the sheet strokes
+    and what a merged cell is in a draw.io table. ``anchor`` is the SVG
+    ``text-anchor``, and the table sets a cell one of two ways -- ``start`` for
+    a label, ``middle`` for a value -- so those are the two it takes.
+    """
+    text: str
+    w: float
+    fill: str
+    bold: bool
+    anchor: str
+
+
+class StreamTable(NamedTuple):
+    """The stream property table, as geometry rather than as ink.
+
+    ``rows`` is the table row by row, top to bottom, each row its cells left to
+    right -- which is both the order the sheet strokes them in and the structure
+    a draw.io table is built from (a container of rows of cells). :class:`Strip`
+    hands its parts over as one flat list because a strip is lettering with a
+    few rules through it and the drawing *order* is the only structure it has;
+    a table's structure is the rows, and flattening them would only mean the
+    second backend had to put them back.
+
+    ``w``/``h`` is what the table measures, which is what :func:`dock` is given
+    to place it by; ``row_h`` is the depth of every row and ``size`` the type it
+    is all set in. A row is uniform depth here, unlike a revision grid: every
+    row of a stream table holds one line of text.
+    """
+    rows: list
+    size: float
+    row_h: float
+    w: float
+    h: float
+
+
+def _stream_cell_text(s, key) -> str:
+    """What one stream's cell draws for one property row.
+
+    The single place the placeholder for a missing value is decided, so the
+    column that is *measured* is the column that is drawn.
+    """
+    val = s.properties.get(key, "-")
+    return "-" if val in (None, "") else str(val)
+
+
+def _table_streams(fs) -> list:
+    """The streams that get a column: the unique material ones, in sheet order.
+
+    A signal is not a stream of anything and has no properties to tabulate, and
+    a stream drawn in two segments is one stream and gets one column.
+    """
+    from pandid.streams import SIGNAL_KINDS
+
+    streams, seen = [], set()
+    for s in fs.streams:
+        if s.kind in SIGNAL_KINDS or s.name in seen:
+            continue
+        seen.add(s.name)
+        streams.append(s)
+    return streams
+
+
+def stream_table_layout(fs) -> "StreamTable | None":
+    """Where every cell of the stream table goes and what is in it, or ``None``
+    for a flowsheet with no material stream to tabulate.
+
+    The table is measured from its own contents and placed at whatever it comes
+    to -- the sheet is grown around it, or a page too small for it is refused --
+    so unlike a title-block cell there is no fixed room here to abbreviate into.
+    A stream table that cannot show ``0.0441 kg/kg total`` is not a stream
+    table.
+    """
+    streams = _table_streams(fs)
+    if not streams:
+        return None
+
+    # property rows in first-seen order (dict preserves insertion order)
+    order, seen = [], set()
+    for s in streams:
+        for k in s.properties:
+            if k not in seen:
+                seen.add(k)
+                order.append(k)
+    sec_before: dict[str, str] = {}
+    for key, label in (getattr(fs, "stream_table_sections", []) or []):
+        sec_before.setdefault(key, label)
+
+    n = len(streams)
+    size = 10.5 if n <= 18 else max(8.0, 190.0 / n)
+    row_h = 20.0 if n <= 18 else max(15.0, size + 5)
+    disp = []  # ('section', label) | ('data', key)
+    for k in order:
+        if k in sec_before:
+            disp.append(("section", sec_before[k]))
+        disp.append(("data", k))
+    # The corner cell has to be true of every column under it, so the table
+    # only calls itself a line-number table when every line drawn in it is
+    # identified that way.
+    heading = ("Line Number" if all(s.has_line_number for s in streams)
+               else "Stream Number")
+
+    # Every column is sized to what goes in it. A minimum keeps a table of short
+    # values from ruling columns too narrow to read as columns.
+    labels = [heading] + [key for kind, key in disp if kind == "data"]
+    label_w = max(122.0, max(text_width(t, size, bold=True)
+                             for t in labels) + _STREAM_GUTTER)
+    values = [_stream_cell_text(s, key) for kind, key in disp if kind == "data"
+              for s in streams]
+    name_w = max(52.0,
+                 max((text_width(s.name, size, bold=True) for s in streams),
+                     default=0.0) + _STREAM_GUTTER,
+                 max((text_width(v, size) for v in values), default=0.0)
+                 + _STREAM_GUTTER)
+    # A section header spans the whole table, so it is the total width it
+    # constrains rather than any one column; the row label column is the
+    # only one free to take up the slack.
+    sections = [label for kind, label in disp if kind == "section"]
+    span = max((text_width(t, size, bold=True) for t in sections),
+               default=0.0) + _STREAM_GUTTER
+    label_w = max(label_w, span - name_w * n)
+
+    rows: list[list[StreamCell]] = [
+        [StreamCell(heading, label_w, _STREAM_HEAD_FILL, True, "start")]
+        + [StreamCell(s.name, name_w, _STREAM_HEAD_FILL, True, "middle")
+           for s in streams]]
+    for kind, key in disp:
+        if kind == "section":
+            rows.append([StreamCell(key, label_w + name_w * n,
+                                    _STREAM_SECTION_FILL, True, "start")])
+            continue
+        rows.append(
+            [StreamCell(key, label_w, _STREAM_KEY_FILL, True, "start")]
+            + [StreamCell(_stream_cell_text(s, key), name_w,
+                          _STREAM_VALUE_FILL, False, "middle")
+               for s in streams])
+    return StreamTable(rows, size, row_h, label_w + name_w * n,
+                       row_h * len(rows))
+
+
+def draw_stream_table(table: StreamTable, left: float, top: float) -> list[str]:
+    """Draw the table with its top-left corner at (``left``, ``top``).
+
+    The geometry is :func:`stream_table_layout`'s; this strokes it, exactly as
+    :func:`draw_title_strip` strokes :func:`title_strip_layout`. Every cell is
+    ruled on all four sides -- a stream table really is a grid, read across for
+    one property and down for one stream -- at the weight a grid beside a
+    drawing is ruled at rather than the weight a box around one is.
+    """
+    out = ['<g id="stream_table">']
+    y = top
+    for row in table.rows:
+        x = left
+        for c in row:
+            out.append(f'  <rect x="{x:.1f}" y="{y:.1f}" width="{c.w:.1f}" '
+                       f'height="{table.row_h:.1f}" '
+                       f'fill="{c.fill}" stroke="black" '
+                       f'stroke-width="{_CELL_RULE:g}"/>')
+            tx = (x + _STREAM_PAD if c.anchor == "start" else x + c.w / 2)
+            wt = ' font-weight="bold"' if c.bold else ''
+            out.append(f'  <text x="{tx:.1f}" '
+                       f'y="{y + table.row_h / 2 + table.size / 3:.1f}" '
+                       f'font-family="{FONT}" font-size="{table.size:.1f}"{wt} '
+                       f'text-anchor="{c.anchor}">{_esc(c.text)}</text>')
+            x += c.w
+        y += table.row_h
+    out.append('</g>')
+    return out
 
 
 # ---------------------------------------------------------------------------

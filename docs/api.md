@@ -215,7 +215,12 @@ run. With `check=True`, validation errors raise `ValueError` and warnings land
 on `fs.warnings`.
 
 ```text
-to_drawio(*, diagram: str | None = None, check: bool = True) -> str
+to_drawio(*, diagram: str | None = None,
+          page_size: str | None = None,
+          border: str | None = None,
+          jump_direction: str = "vertical",
+          show_stream_table: bool = False,
+          check: bool = True) -> str
 ```
 Returns a draw.io / diagrams.net document, on the same terms. See
 [Editing the sheet by hand](#editing-the-sheet-by-hand).
@@ -386,18 +391,18 @@ approximated with draw.io's built-in shapes:
 | conveyor | a rectangle | the belt and its rollers |
 | block | a rectangle | nothing |
 
-Four things a sheet has that a model does not: the semicircle a crossing line
-hops with, the cross-hatching on a pneumatic signal line, the fine tap line from
-a process line to the balloon reading it, and the searched placement (and
-leaders) of the stream numbers, which become plain edge labels. The title block
-and any annotation boxes export as labelled boxes stacked below the drawing,
-carrying every field but at neither the size nor the dock position the sheet
-rules them at.
+The sheet's own drawing conventions survive the export: the semicircle a
+crossing line hops with, the cross-hatching on a pneumatic signal line, the fine
+tap line from a process line to the balloon reading it, and the stream numbers
+where the sheet searched for clear paper to write them, leaders and all. Sheet
+furniture docks where the sheet docks it, and anything ruled — an equipment
+list, a legend, a note list, a `TableBox`, the stream table — comes out as a
+real draw.io table with rows and cells rather than as one block of text.
 
-`page_size`, `border`, `show_stream_table`, `jump_direction` and `debug` all
-describe a *sheet*. A `.drawio` file is a model on an unbounded canvas, so
-`render()` raises `ValueError` naming them rather than accepting and ignoring
-them.
+`debug` is the one render option a `.drawio` path refuses. The coordinate
+overlay is scaffolding for whoever is placing equipment rather than part of the
+drawing, so `render()` raises `ValueError` naming it rather than accepting and
+ignoring it.
 
 ---
 
