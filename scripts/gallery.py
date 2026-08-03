@@ -126,8 +126,8 @@ def flowsheet(stem: str) -> "tuple[Flowsheet, dict]":
     """The flowsheet *stem*'s example builds, and the options it draws it with.
 
     The example is imported rather than executed as a subprocess, with
-    ``Flowsheet.render`` replaced for the duration so the one call at the end of
-    it hands over the flowsheet and its keyword arguments instead of writing a
+    ``Flowsheet.render`` replaced for the duration so the call at the end of it
+    hands over the flowsheet and its keyword arguments instead of writing a
     file. ``01`` renders at import and the rest behind ``main()``; both shapes
     end in that same call, so both are caught the same way.
 
@@ -135,12 +135,19 @@ def flowsheet(stem: str) -> "tuple[Flowsheet, dict]":
     builds -- and not the sheet it draws -- has one, without a second copy of
     the capture. ``tests/test_drawio.py`` is that caller: a draw.io export is
     made from a flowsheet and has no SVG anywhere in it.
+
+    A ``.drawio`` write is passed over rather than caught. ``11`` writes one
+    beside its SVG, because the export is a one-liner and an example is where a
+    reader looks for one; what that call writes is the *same drawing in a second
+    format*, not a second sheet. Caught, it would trip the count below on a file
+    that draws exactly one.
     """
     caught: list[tuple[Flowsheet, dict]] = []
     original = Flowsheet.render
 
     def capture(self, path, **kwargs):
-        caught.append((self, kwargs))
+        if pathlib.Path(path).suffix.lower() != ".drawio":
+            caught.append((self, kwargs))
 
     sys.path.insert(0, str(EXAMPLES))  # the examples' own _bootstrap
     Flowsheet.render = capture  # type: ignore[method-assign]

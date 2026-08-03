@@ -323,6 +323,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   check asserts that every example has a scenario at all, so a new sheet cannot
   arrive unguarded.
 
+- **An example writes the draw.io export.** `fs.render("sheet.drawio")` was
+  documented in `README.md`, in `docs/api.md` and in `scripts/drawio_samples.py`,
+  and appeared in none of the fourteen examples — so the one place a reader goes
+  to see a call being made was the one place the export was absent.
+  `examples/11_ethanol_pid.py` now writes `ethanol_pid.drawio` beside its SVG,
+  one `fs.render()` with the same arguments as the line above it.
+
+  One example and not fourteen. The export is a single call whose second
+  appearance teaches nothing the first did not, and the sheet worth opening in
+  an editor is the one with everything on it: 11 is the A3 page, the zone
+  border, the title strip with its revision history, the legend, the equipment
+  list, the notes box, twenty instrument taps, the pneumatic hatching and
+  sixteen line numbers. It is the same argument `scripts/drawio_samples.py`
+  already makes for keeping its own sample set to four.
+
+  What it writes is gitignored, like every other file an example emits, and it
+  is byte-for-byte `drawio-samples/11_ethanol_pid.drawio` — the committed sample
+  is made from the same flowsheet with the same options.
+
+  `scripts/gallery.py` passes a `.drawio` write over rather than counting it: the
+  gallery is one SVG per example and refuses a file that draws two sheets, and an
+  example that also exports draws one sheet twice, in two formats.
+
 ### Changed
 
 - **A tank's fill is a menu, and its default moved to the shell (#226).** Every

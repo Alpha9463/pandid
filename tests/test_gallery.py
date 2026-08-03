@@ -42,6 +42,7 @@ import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 GALLERY = ROOT / "docs" / "gallery"
+EXAMPLES = ROOT / "examples"
 
 
 def _generator():
@@ -201,6 +202,46 @@ def test_the_readme_states_the_width_the_rasters_are_made_at():
     to be the number the generator used."""
     readme = (GALLERY / "README.md").read_text(encoding="utf-8")
     assert f"{gallery.WIDTH} px" in readme
+
+
+# ---------------------------------------------------------------------------
+# The draw.io export an example writes beside its sheet
+# ---------------------------------------------------------------------------
+
+
+def _exporters():
+    """The examples that write a ``.drawio`` as well as their sheet."""
+    return [
+        stem
+        for stem in SHEETS
+        if ".drawio" in (EXAMPLES / f"{stem}.py").read_text(encoding="utf-8")
+    ]
+
+
+def test_an_example_shows_the_drawio_export():
+    """``fs.render("sheet.drawio")`` is a one-liner, and until now it appeared in
+    ``README.md``, in ``docs/api.md`` and in ``scripts/drawio_samples.py`` and in
+    no example at all — so the export was documented everywhere except the place
+    a reader goes to see a call being made. This is what notices when the line is
+    deleted rather than moved."""
+    assert _exporters(), (
+        "no example writes a .drawio. The export is one line and examples/ is where "
+        "a reader looks for one; put the call back beside a sheet's own render()."
+    )
+
+
+@pytest.mark.parametrize("stem", _exporters(), ids=_exporters())
+def test_the_export_is_not_counted_as_a_second_sheet(rendered, stem):
+    """:func:`gallery.flowsheet` refuses an example that draws two sheets, and an
+    example that exports calls ``render()`` twice. What the second call writes is
+    the same drawing in a second format, so it is passed over and the count goes
+    on meaning what it says for a file that really does draw two.
+
+    The ``rendered`` fixture is the check: it runs ``flowsheet(stem)``, which
+    raises ``SystemExit`` if the ``.drawio`` write is counted as a sheet."""
+    source = (EXAMPLES / f"{stem}.py").read_text(encoding="utf-8")
+    assert source.count(".render(") >= 2, "an exporting example writes its sheet as well"
+    assert rendered[stem], "and the generator still gets exactly one sheet out of it"
 
 
 # ---------------------------------------------------------------------------

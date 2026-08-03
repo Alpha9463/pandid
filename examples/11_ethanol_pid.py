@@ -444,7 +444,11 @@ def main():
 
     fs.render(out("ethanol_pid.svg"), page_size="A3", border="zone",
               diagram="p&id")
-    print("Generated ethanol_pid.svg")
+    # The same sheet and the same arguments, as an editable draw.io model rather
+    # than a finished drawing. Every flowsheet exports; this is the densest one.
+    fs.render(out("ethanol_pid.drawio"), page_size="A3", border="zone",
+              diagram="p&id")
+    print("Generated ethanol_pid.svg and ethanol_pid.drawio")
     for issue in fs.validate():
         print(f"  {issue}")
 

@@ -21,12 +21,16 @@ uv.lock
 
 # Generated diagram output (reproducible from examples/)
 *.svg
+*.drawio
 # ...but the golden fixtures are source, not output: the regression suite has
 # nothing to compare against if these are ignored.
 !tests/golden/*.svg
 # ...and the gallery is documentation: docs/gallery/README.md has nothing to
 # show if these are ignored. Regenerate by running examples/ (see that README).
 !docs/gallery/*.svg
+# ...as are the draw.io samples, which are what a reader opens to see the export.
+# Rebuild them with `python scripts/drawio_samples.py`.
+!drawio-samples/*.drawio
 
 # Agent / harness working files
 .agents/
