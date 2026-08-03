@@ -206,7 +206,7 @@ def _loop() -> Flowsheet:
     prod = fs.add(U.Product("P"))
     fs.connect(feed.outlet, fv.inlet)
     fs.connect(fv.outlet, prod.inlet)
-    fic = fs.add_instrument("FIC", 1, on=fv, at="N", offset=80)
+    fic = fs.add_instrument("FIC", 1, near=fv, at="N", offset=80)
     fs.connect(fic.sig_out, fv.actuator, kind="pneumatic")
     return fs
 

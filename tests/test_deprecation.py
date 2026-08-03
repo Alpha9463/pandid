@@ -335,4 +335,7 @@ def test_declarations_finds_a_module_constant():
         "_RETIRED_VAPOR_DRAW",
         "_RETIRED_LIQUID_DRAW",
         "_RETIRED_PNEUMATIC",
+        "_RETIRED_PANEL",
+        "_RETIRED_AUX",
+        "_RETIRED_ON",
     }

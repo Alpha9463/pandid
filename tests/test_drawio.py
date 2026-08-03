@@ -243,6 +243,11 @@ def test_a_referenced_stencil_is_always_variable_aspect():
 # ---------------------------------------------------------------------------
 
 
+#: The registered ``(kind, variant)`` pairs that are reached through
+#: ``display=`` instead; see :func:`every_symbol_sheet`.
+_BY_DISPLAY = {("instrument", "panel"): "central", ("instrument", "aux"): "subsidiary"}
+
+
 @pytest.fixture(scope="module")
 def every_symbol_sheet() -> Flowsheet:
     """One unit of every registered ``(kind, variant)``, pinned on a grid.
@@ -257,7 +262,14 @@ def every_symbol_sheet() -> Flowsheet:
     for name in units.__all__:
         cls = getattr(units, name)
         for variant in default_registry.variants(cls.kind):
-            unit = cls(f"{cls.kind[:3].upper()}-{n}", variant=variant)
+            tag = f"{cls.kind[:3].upper()}-{n}"
+            # The balloon's two location bars are registered artwork whose
+            # *constructor* spelling is retired -- they are a display, not a
+            # symbol type -- so they are asked for the way that is not going.
+            if (cls.kind, variant) in _BY_DISPLAY:
+                unit = cls(tag, display=_BY_DISPLAY[cls.kind, variant])
+            else:
+                unit = cls(tag, variant=variant)
             fs.add(unit)
             unit.pin(x=(n % 12) * 300.0, y=(n // 12) * 300.0)
             n += 1
@@ -316,7 +328,7 @@ def sample() -> Flowsheet:
     line = fs.connect(pump.discharge, valve.inlet)
     fs.connect(valve.outlet, tank.inlet)
     fs.connect(tank.outlet, product.inlet)
-    ft = fs.add_instrument("FT", 101, on=line, at=0.5, offset=60)
+    ft = fs.add_instrument("FT", 101, sensing=line, at=0.5, offset=60)
     fs.connect(ft.sig_out, valve.actuator, kind="electric")
     fs.route()
     return fs
@@ -569,7 +581,7 @@ def test_a_pneumatic_line_is_marked_where_the_sheet_marks_it():
     fs = Flowsheet("pneumatic")
     valve = fs.add(units.Valve("FV-101", variant="control"))
     valve.pin(x=400, y=300)
-    pic = fs.add_instrument("PIC", 101, variant="panel")
+    pic = fs.add_instrument("PIC", 101, display="central")
     pic.pin(x=100, y=100)
     fs.connect(pic.sig_out, valve.actuator, kind="pneumatic")
     fs.route()
@@ -1118,6 +1130,62 @@ def test_a_line_number_beside_its_run_carries_a_perpendicular_offset():
     # Most of them stand off their run; the rest sit in it on the sheet's own
     # halo, which is the convention and not an omission.
     assert sum(1 for d in offsets if d > 1.0) >= len(offsets) // 2
+
+
+def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported():
+    """The information-loss check, over every sheet that letters a code.
+
+    ISO 15519-2 §5.2.5 makes a high or low function *lettering* beside the
+    symbol rather than a balloon of its own, and lettering outside a symbol
+    belongs to no cell: it is not a unit's label and not a line's. So the
+    exporter, which builds every label from one of those two, wrote none of
+    them -- `PAH`, `PAL`, `TAH`, `TAL`, `LAH` and `LAL` were on the rendered
+    `11_ethanol_pid` and in none of the six thousand lines of its `.drawio`.
+    Six alarms said on the sheet and not said in the file a reader opens.
+
+    The quadrant is checked with the text, because half of what a code says is
+    where it is: §5.1.3 puts a high function above the centre line and a low one
+    below, so a pair exported into one quadrant is a different statement about
+    the plant. `quadrant_labels` is the placement both backends read, and the
+    export is held to it through the same fit its geometry rides.
+    """
+    from pandid.render.drawio import _TEXT_INSET
+    from pandid.render.svg import quadrant_labels
+
+    written = {}
+    for stem in SHEETS:
+        fs, kwargs = gallery.flowsheet(stem)
+        svg = fs.to_svg(**kwargs)
+        cells = _drawio_cells(fs, kwargs)
+        _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
+        codes = quadrant_labels(fs)
+        written[stem] = {item[5] for item in codes}
+        for n, (lx, ly, anchor, _baseline, _lpos, text) in enumerate(codes):
+            assert f">{text}</text>" in svg, f"{stem}: the sheet letters no {text}"
+            cell = cells.get(f"q{n}")
+            assert cell is not None, f"{stem}: {text} reached no cell in the export"
+            assert cell.get("value") == html.unescape(text)
+            style = _style(cell)
+            geometry = cell.find("mxGeometry")
+            x, y = float(geometry.get("x")), float(geometry.get("y"))
+            w, h = float(geometry.get("width")), float(geometry.get("height"))
+            # The sheet states an anchored string; draw.io states a box inset by
+            # two units on every side. Undoing that inset recovers the point the
+            # sheet placed, and the quadrant with it.
+            edge = x + w - _TEXT_INSET if style["align"] == "right" else x + _TEXT_INSET
+            assert (edge, y + h / 2) == pytest.approx(fit.at(lx, ly), abs=0.01), (
+                f"{stem}: {text} is exported out of its quadrant"
+            )
+            # A code is written in a two-unit gap beside a balloon, so it is
+            # haloed for the lines it could not step off, as the sheet haloes it.
+            assert style["labelBackgroundColor"] == "#ffffff"
+
+    # Vacuous on the eleven sheets that annotate nothing, so the three that do
+    # are named. `tests/test_halo_invariants.py` counts the same codes from the
+    # sheet's side; this is the pair of them the export was losing.
+    assert written["11_ethanol_pid"] == {"PAH", "PAL", "TAH", "TAL", "LAH", "LAL"}
+    assert written["04_control_loop"] == {"LAH", "LAL"}
+    assert written["14_tank_farm"] == {"LAH", "LAL", "PAH"}
 
 
 # ---------------------------------------------------------------------------

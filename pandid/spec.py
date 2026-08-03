@@ -44,8 +44,9 @@ The format::
       - {variable: F}                # no number: takes the next one
 
     instruments:
-      - {type: LIC, number: 101, variant: panel,
-         on: V-101, at: S, offset: 115, port_faces: {sig_out: W}}
+      - {type: LIC, number: 101, display: central,
+         near: LT-101, at: S, offset: 115, port_faces: {sig_out: W}}
+      - {balloon_of: FE-101, at: N, offset: 38}   # the element's own tag
 
     streams:
       - {from: [Raw Feed, outlet], to: [ST-101, inlet],
@@ -280,10 +281,23 @@ _UNIT_KEYS = {
     "kind", "name", "variant", "description", "reference", "width", "height",
     "label_pos", "new_line_number", "pin", "port_faces",
 }
+#: What a primary element's balloon entry may set, beside the
+#: ``balloon_of`` naming the element whose tag it carries. Not ``type``
+#: or ``number``: the tag is the element's, which is the whole of what
+#: the balloon is for.
+_BALLOON_KEYS = {"balloon_of", "at", "offset", "angle", "variant", "display"}
 _INSTRUMENT_KEYS = {
-    "type", "number", "variant", "description", "reference", "width", "height",
-    "label_pos", "on", "at", "offset", "angle", "pin", "port_faces",
+    "type", "number", "variant", "display", "description", "reference", "width",
+    "height", "label_pos", "sensing", "acting_on", "near", "on", "at", "offset",
+    "angle", "pin", "port_faces", "quadrants",
 }
+#: The three ways an instrument entry names its anchor. ``on`` is the
+#: retired spelling of ``sensing``; see :data:`pandid.flowsheet._RETIRED_ON`.
+_ANCHOR_KEYS = ("sensing", "acting_on", "near")
+#: The quadrant each ``quadrants:`` key writes into. The spec spells the
+#: argument names :meth:`pandid.units.Instrument.annotate` takes, not
+#: ISO's letters, so a spec and the call it round-trips read the same.
+_QUADRANT_KEYS = {"safety": "a", "variable": "b", "high": "c", "low": "d"}
 _LOOP_KEYS = {"variable", "number"}
 _STREAM_KEYS = {
     "from", "to", "kind", "name", "draw_as_recycle", "properties", "via", "color", "dasharray",
@@ -387,7 +401,13 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
     pending = []
     for i, entry in enumerate(_sequence(data.get("instruments", []), "instruments")):
         where_i = f"instruments[{i}]"
-        pending.append((_read_instrument(fs, entry, where_i), _mapping(entry, where_i), where_i))
+        mapping = _mapping(entry, where_i)
+        # A primary element's balloon is anchored to a unit that already
+        # exists, so it needs none of the deferral below.
+        if "balloon_of" in mapping:
+            _read_balloon(fs, mapping, where_i)
+            continue
+        pending.append((_read_instrument(fs, entry, where_i), mapping, where_i))
 
     for i, entry in enumerate(_sequence(data.get("streams", []), "streams")):
         _read_stream(fs, entry, f"streams[{i}]")
@@ -544,7 +564,7 @@ def _read_instrument(fs: Flowsheet, entry: Any, where: str) -> Instrument:
         raise SpecError(f"{where}.number must be a loop number or text, got {number!r}")
 
     kwargs: dict[str, Any] = {}
-    for key in ("variant", "description", "reference"):
+    for key in ("variant", "display", "description", "reference"):
         if key in data:
             kwargs[key] = _text(data[key], f"{where}.{key}")
     for key in ("width", "height"):
@@ -554,8 +574,25 @@ def _read_instrument(fs: Flowsheet, entry: Any, where: str) -> Instrument:
         inst = Instrument(type_, number, **kwargs)
     except ValueError as e:
         raise _fail_from(e, where) from None
+    if "quadrants" in data:
+        _annotate_instrument(inst, data["quadrants"], f"{where}.quadrants")
     _read_common(fs, inst, data, f"{where} {inst.name!r}")
     return inst
+
+
+def _annotate_instrument(inst: Instrument, entry: Any, where: str) -> None:
+    """Apply an instrument entry's ``quadrants:`` mapping."""
+    data = _mapping(entry, where)
+    _check_keys(data, set(_QUADRANT_KEYS), where)
+    codes: dict[str, Any] = {}
+    for key, value in data.items():
+        codes[key] = ([_text(v, f"{where}.{key}[{i}]") for i, v in enumerate(value)]
+                      if isinstance(value, (list, tuple))
+                      else _text(value, f"{where}.{key}"))
+    try:
+        inst.annotate(**codes)
+    except ValueError as e:
+        raise _fail_from(e, where) from None
 
 
 def _read_common(fs: Flowsheet, unit: Unit, data: Mapping[str, Any], where: str) -> None:
@@ -572,6 +609,38 @@ def _read_common(fs: Flowsheet, unit: Unit, data: Mapping[str, Any], where: str)
         _read_pin(unit, data["pin"], f"{where}.pin")
     if "port_faces" in data:
         _read_port_faces(unit, data["port_faces"], f"{where}.port_faces")
+
+
+def _read_balloon(fs: Flowsheet, entry: Mapping[str, Any], where: str) -> Instrument:
+    """A primary element's balloon; see ``Flowsheet.add_balloon``.
+
+    An instrument entry rather than a key on the element's, even though
+    it carries the element's tag, because a spec is read back in the
+    order it was written and this is the order the balloon was made in.
+    """
+    _check_keys(entry, _BALLOON_KEYS, where)
+    name = _text(entry["balloon_of"], f"{where}.balloon_of")
+    element = next((u for u in fs.units if u.name == name), None)
+    if element is None:
+        raise SpecError(
+            f"{where}.balloon_of names {name!r}, which is not a unit on this sheet. "
+            f"A balloon carries the tag of the element it is drawn for, so that "
+            f"element has to be in the 'units:' section"
+        )
+    kwargs: dict[str, Any] = {}
+    if "at" in entry:
+        at = entry["at"]
+        kwargs["at"] = at if isinstance(at, str) else _number(at, f"{where}.at")
+    for key in ("offset", "angle"):
+        if key in entry:
+            kwargs[key] = _number(entry[key], f"{where}.{key}")
+    for key in ("variant", "display"):
+        if key in entry:
+            kwargs[key] = _text(entry[key], f"{where}.{key}")
+    try:
+        return fs.add_balloon(element, **kwargs)
+    except (TypeError, ValueError) as e:
+        raise _fail_from(e, where) from None
 
 
 def _read_pin(unit: Unit, entry: Any, where: str) -> None:
@@ -779,17 +848,39 @@ def _read_host(fs: Flowsheet, entry: Any, where: str) -> Stream | Unit:
 
 def _attach_instrument(fs: Flowsheet, inst: Instrument, data: Mapping[str, Any],
                        where: str) -> None:
+    from pandid.flowsheet import _RETIRED_ON
+
     where = f"{where} {inst.name!r}"
-    if "on" not in data:
+    named = [key for key in _ANCHOR_KEYS if key in data]
+    if "on" in data:
+        if named:
+            raise SpecError(
+                f"{where}: 'on' is the retired spelling of "
+                f"{', '.join(repr(k) for k in named)}, so both together ask for two "
+                f"anchors. Drop the 'on'"
+            )
+        _RETIRED_ON.warn(inst, where=inst.name)
+        named = ["sensing"]
+        data = {**data, "sensing": data["on"]}
+    if len(named) > 1:
+        raise SpecError(
+            f"{where}: a balloon is anchored to one thing, and this entry named "
+            f"{len(named)} ({', '.join(repr(k) for k in named)}). Which one decides "
+            f"what is drawn between them: 'sensing' and 'acting_on' draw a "
+            f"connection, 'near' draws nothing"
+        )
+    if not named:
         stray = [key for key in ("at", "offset", "angle") if key in data]
         if stray:
             raise SpecError(
-                f"{where}: {stray} only mean something with 'on': the stream or unit the "
-                "balloon is anchored to"
+                f"{where}: {stray} only mean something with one of "
+                f"{', '.join(repr(k) for k in _ANCHOR_KEYS)}: the stream or unit the "
+                f"balloon is placed against"
             )
         return
-    host = _read_host(fs, data["on"], f"{where}.on")
-    kwargs: dict[str, Any] = {}
+    relation = named[0]
+    host = _read_host(fs, data[relation], f"{where}.{relation}")
+    kwargs: dict[str, Any] = {"relation": relation}
     if "at" in data:
         at = data["at"]
         kwargs["at"] = at if isinstance(at, str) else _number(at, f"{where}.at")
@@ -1120,13 +1211,39 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
 
 
 def _write_instrument(inst: Instrument) -> dict[str, Any]:
-    entry: dict[str, Any] = {"type": inst.type, "number": inst.number}
+    # A primary element's balloon carries the element's tag rather than
+    # one of its own, so it is written by naming the element; see
+    # :func:`_read_balloon`.
+    entry: dict[str, Any] = (
+        {"balloon_of": inst._marks.name} if inst._marks is not None
+        else {"type": inst.type, "number": inst.number}
+    )
     _write_common(inst, entry)
+    # The two axes apart again. ``_write_common`` wrote the registry's
+    # spelling, which folds them together, and reading that back would
+    # trigger a retired one on a sheet nobody had edited.
+    entry.pop("variant", None)
+    if inst.symbol_type != "default":
+        entry["variant"] = inst.symbol_type
+    if inst.display != "field":
+        entry["display"] = inst.display
+    if inst.quadrants:
+        by_name = {name: list(codes) for name, letter in _QUADRANT_KEYS.items()
+                   for codes in [inst.quadrants.get(letter, ())] if codes}
+        if by_name:
+            entry["quadrants"] = by_name
+    if inst._marks is not None:
+        entry["at"] = inst.at
+        if inst.offset != 46.0:
+            entry["offset"] = inst.offset
+        if inst.angle != 90.0:
+            entry["angle"] = inst.angle
+        return entry
     if inst.host is not None:
         # Name a stream by the port it leaves, not by its number:
         # auto-numbering owns that name and re-derives it as the sheet
         # grows, and a spec must survive that.
-        entry["on"] = (
+        entry[inst.relation] = (
             [inst.host.source.owner.name, inst.host.source.name]
             if isinstance(inst.host, Stream) else inst.host.name
         )

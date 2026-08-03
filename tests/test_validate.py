@@ -64,7 +64,7 @@ def _loop_with_a_balloon():
     fs.connect(feed.outlet, fv.inlet)
     fs.connect(fv.outlet, prod.inlet)
     lt = fs.add(U.Instrument("LT-101")).pin(x=300, y=400)
-    lic = fs.add(U.Instrument("LIC-101", variant="panel")).pin(x=300, y=520)
+    lic = fs.add(U.Instrument("LIC-101", display="central")).pin(x=300, y=520)
     fs.connect(lt.sig_out, lic.sig_in, kind="electric")
     fs.connect(lic.sig_out, fv.actuator, kind="electric")
     return fs, lic
@@ -296,7 +296,7 @@ def test_a_signal_line_has_no_elevation_to_be_off():
     prod = fs.add(U.Product("P")).pin(x=700, port="inlet", y=195)
     fs.connect(fv.outlet, drum.inlet)
     fs.connect(drum.outlet, prod.inlet)
-    lic = fs.add_instrument("LIC", 101, on=drum, at="S", offset=90, variant="panel")
+    lic = fs.add_instrument("LIC", 101, sensing=drum, at="S", offset=90, display="central")
     fs.connect(lic.sig_out, fv.actuator, kind="electric")
     fs.layout()
     assert [i.message for i in _off_elevation(fs) if "LIC" in i.message] == []

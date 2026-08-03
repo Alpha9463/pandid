@@ -302,30 +302,33 @@ def _control_loop() -> Flowsheet:
     fs.connect(drum.vent, psv.inlet)
     fs.connect(psv.outlet, flare.inlet)
 
+    # The one fixture carrying a primary element's balloon: the plate's tag
+    # moves into it, the fitting is left unlettered, and FT-101 stacks on top.
+    fe_b = fs.add_balloon(fe, at="N", offset=38)
+    ft = fs.add_instrument("FT", flow, near=fe_b, at="N", offset=23)
     # Both controllers are circle-in-square, ISA-5.1's shared display and shared
-    # control; the bare circle of "panel" says the instrument only reads.
-    ft = fs.add_instrument("FT", flow, on=fe, at="N", offset=62)
-    fic = fs.add_instrument("FIC", flow, on=ft, at="N", offset=125, angle=35, variant="shared")
+    # control; a bare circle with display="central" says the instrument only
+    # reads.
+    fic = fs.add_instrument("FIC", flow, near=ft, at="N", offset=110, angle=35, variant="shared")
     fic.nozzle("sig_out", "S")
     fs.connect(ft.sig_out, fic.sig_in, kind="electric")
     fs.connect(fic.sig_out, fv.actuator, kind="pneumatic")
 
     # Element -> transmitter -> controller on the level as well as on the flow:
     # the impulse line off the drum reaches LT-101 and the controller reads it.
-    lt = fs.add_instrument("LT", level, on=drum, at="S", offset=70)
-    lic = fs.add_instrument("LIC", level, on=lt, at="S", offset=95, variant="shared")
-    # One face each, at the default angle, so every impulse line runs square,
-    # and squared like the controller because the square is the DCS point:
-    # see the comment on the same four balloons in examples/04_control_loop.py.
-    fs.add_instrument("LAH", level, on=lic, at="W", offset=78, variant="shared")
-    fs.add_instrument("LAL", level, on=lic, at="S", offset=78, variant="shared")
+    lt = fs.add_instrument("LT", level, sensing=drum, at="S", offset=70)
+    lic = fs.add_instrument("LIC", level, near=lt, at="S", offset=95, variant="shared")
+    # The alarms are lettering in the controller's own quadrants, which is what
+    # keeps a quadrant pair in the golden corpus; see the same two codes in
+    # examples/04_control_loop.py.
+    lic.annotate(high="LAH", low="LAL")
     # In no loop and with no measured variable: a repeatable logic function
     # takes a literal number, and has to keep being able to. Teed off the
     # measurement signal line rather than off a balloon face, which is also the
     # fixture that keeps a stream-hosted tap in the golden corpus -- it is drawn
     # dashed, and the two process taps above it are not.
     measurement = fs.connect(lt.sig_out, lic.sig_in, kind="electric")
-    fs.add_instrument("I", 1, on=measurement, at=0.5, offset=44, angle=90, variant="logic")
+    fs.add_instrument("I", 1, sensing=measurement, at=0.5, offset=44, angle=90, variant="logic")
     fs.connect(lic.sig_out, lv.actuator, kind="electric")
     return fs
 
@@ -446,7 +449,7 @@ def _metering_skid() -> Flowsheet:
     fs.connect(surge.vent, psv.inlet)
     fs.connect(psv.outlet, flare.inlet)
 
-    lic = fs.add_instrument("LIC", 101, on=surge, at="S", offset=115, variant="panel")
+    lic = fs.add_instrument("LIC", 101, sensing=surge, at="S", offset=115, display="central")
     fs.connect(lic.sig_out, fv.actuator, kind="electric")
     return fs
 
@@ -944,7 +947,6 @@ def _ethanol_pid() -> Flowsheet:
         units.Fitting(
             flow303.element("FE"),
             variant="venturi",
-            label_pos="bottom",
             description="Reflux Flow Element",
         )
     )
@@ -1155,85 +1157,92 @@ def _ethanol_pid() -> Flowsheet:
     # The trip square is logic rather than a device, so it is drawn at each place
     # the trip acts and carries the same tag every time. Z, not I: a function
     # that acts is lettered S or Z.
-    fs.add_instrument("Z", 2, on=xv, at="S", offset=26, variant="sis")
-    fs.add_instrument("FI", 314, on=meter, at="S", offset=36)
-    fs.add_instrument("PI", 315, on=col_feed, at=0.45, offset=58)
-    fs.add_instrument("TI", 325, on=cw_return, at=0.3, offset=55)
+    fs.add_instrument("Z", 2, acting_on=xv, at="S", offset=26, variant="sis")
+    fs.add_instrument("FI", 314, sensing=meter, at="S", offset=36)
+    fs.add_instrument("PI", 315, sensing=col_feed, at=0.45, offset=58)
+    fs.add_instrument("TI", 325, sensing=cw_return, at=0.3, offset=55)
 
-    # Loop 301: tower overhead pressure. The faceplate is mounted on the valve it
-    # drives, so its output drops straight onto the actuator. Both alarms read
-    # the controller and each takes a face of its own, high above low.
+    # Loop 301: tower overhead pressure. The faceplate stands over the valve it
+    # drives -- near=, so nothing is drawn between the two and the output is the
+    # connect() below -- and its alarms are lettering in its own quadrants.
     balloon_row_y = 45.0
     cv3011_top = overhead_y - port_offset(st301.control, "inlet")[1]
-    pt301 = fs.add_instrument("PT", press301, on=vapour, at=0.75, offset=overhead_y - balloon_row_y)
+    pt301 = fs.add_instrument(
+        "PT", press301, sensing=vapour, at=0.75, offset=overhead_y - balloon_row_y
+    )
     pic301 = fs.add_instrument(
         "PIC",
         press301,
-        on=st301.control,
+        near=st301.control,
         at="N",
         variant="shared",
         offset=cv3011_top - balloon_row_y,
     )
     pic301.nozzle("sig_out", "S")
-    fs.add_instrument("PAH", press301, on=pic301, at="N", offset=46, variant="shared")
-    fs.add_instrument("PAL", press301, on=pic301, at="E", offset=46, variant="shared")
+    pic301.annotate(high="PAH", low="PAL")
     fs.connect(pt301.sig_out, pic301.sig_in, kind="electric")
     fs.connect(pic301.sig_out, st301.control.actuator, kind="pneumatic")
 
     # The high pressure trip, on a measurement of its own: PT-318 taps the
     # overhead west of PT-301 and drives Z-2 alone.
-    pt318 = fs.add_instrument("PT", 318, on=vapour, at=0.55, offset=overhead_y - balloon_row_y)
-    fs.add_instrument("Z", 2, on=pt318, at="N", offset=40, variant="sis")
+    pt318 = fs.add_instrument("PT", 318, sensing=vapour, at=0.55, offset=overhead_y - balloon_row_y)
+    fs.add_instrument("Z", 2, sensing=pt318, at="N", offset=40, variant="sis")
 
     # Loops 302/303: tower top temperature cascaded onto the reflux flow. A
     # cascade sets a setpoint, so it lands on the flow controller's pv.
-    tt302 = fs.add_instrument("TT", temp302, on=vapour, at=0.13, offset=80, angle=-90)
-    tic302 = fs.add_instrument("TIC", temp302, on=tt302, at="E", offset=78, variant="shared")
+    tt302 = fs.add_instrument("TT", temp302, sensing=vapour, at=0.13, offset=80, angle=-90)
+    tic302 = fs.add_instrument("TIC", temp302, near=tt302, at="E", offset=78, variant="shared")
     tic302.nozzle("sig_out", "S")
+    tic302.annotate(high="TAH", low="TAL")
     fs.connect(tt302.sig_out, tic302.sig_in, kind="electric")
 
-    ft303 = fs.add_instrument("FT", flow303, on=fe303, at="N", offset=90)
-    fic303 = fs.add_instrument("FIC", flow303, on=ft303, at="E", offset=70, variant="shared")
+    # The venturi's tag moves into a balloon on its impulse line and FT-303
+    # stacks on that, edge to edge: two touching balloons need no line.
+    fe303_b = fs.add_balloon(fe303, at="N", offset=38)
+    ft303 = fs.add_instrument("FT", flow303, near=fe303_b, at="N", offset=23)
+    fic303 = fs.add_instrument("FIC", flow303, near=ft303, at="E", offset=70, variant="shared")
     fic303.nozzle("sig_out", "E")  # the valve it strokes stands below and right
     fs.connect(ft303.sig_out, fic303.pv, kind="electric")
     fs.connect(tic302.sig_out, fic303.sig_in, kind="software")
     fs.connect(fic303.sig_out, st303.control.actuator, kind="pneumatic")
 
-    # Loop 304: reflux drum level on the distillate valve. Four lines reach this
-    # controller, so it needs four faces: the high alarm takes the north, the
-    # measurement comes in from the west, the output leaves south onto the
-    # actuator and the low alarm takes the east.
-    lt304 = fs.add_instrument("LT", level304, on=drum, at="E", offset=60)
+    # Loop 304: reflux drum level on the distillate valve. The faceplate stands
+    # over the valve it drives: the cooling-water return crosses 49 px above the
+    # transmitter's own row and a balloon is 44 of those.
+    lt304 = fs.add_instrument("LT", level304, sensing=drum, at="E", offset=60)
     lic304_row_y = 403.0
     cv305_top = dist_y - port_offset(st305.control, "inlet")[1]
     lic304 = fs.add_instrument(
-        "LIC", level304, on=st305.control, at="N", variant="shared", offset=cv305_top - lic304_row_y
+        "LIC",
+        level304,
+        near=st305.control,
+        at="N",
+        variant="shared",
+        offset=cv305_top - lic304_row_y,
     )
-    lic304.nozzle("sig_in", "W")
     lic304.nozzle("sig_out", "S")
-    fs.add_instrument("LAH", level304, on=lic304, at="N", offset=46, variant="shared")
-    fs.add_instrument("LAL", level304, on=lic304, at="E", offset=46, variant="shared")
+    lic304.annotate(high="LAH", low="LAL")
     # Teed off the measurement rather than hung on an alarm: an alarm host would
     # draw the alarm as driving the trip.
     level = fs.connect(lt304.sig_out, lic304.sig_in, kind="electric")
-    fs.add_instrument("Z", 1, on=level, at=0.6, offset=40, angle=-90, variant="sis")
+    fs.add_instrument("Z", 1, sensing=level, at=0.6, offset=40, angle=-90, variant="sis")
     fs.connect(lic304.sig_out, st305.control.actuator, kind="pneumatic")
 
     # Loop 307: reboiler return temperature on the steam valve. The trip goes on
     # the transmitter, which keeps working when the loop is put on manual.
-    tt307 = fs.add_instrument("TT", temp307, on=sump, at=0.05, offset=85, angle=-90)
-    tic307 = fs.add_instrument("TIC", temp307, on=tt307, at="W", offset=96, variant="shared")
+    tt307 = fs.add_instrument("TT", temp307, sensing=sump, at=0.05, offset=85, angle=-90)
+    tic307 = fs.add_instrument("TIC", temp307, near=tt307, at="W", offset=96, variant="shared")
     tic307.nozzle("sig_out", "S")
-    fs.add_instrument("TI", 321, on=boilup, at=0.05, offset=70, angle=-90)
-    fs.add_instrument("Z", 1, on=tt307, at="N", offset=40, variant="sis")
+    fs.add_instrument("TI", 321, sensing=boilup, at=0.05, offset=70, angle=-90)
+    fs.add_instrument("Z", 1, sensing=tt307, at="N", offset=40, variant="sis")
     fs.connect(tt307.sig_out, tic307.sig_in, kind="electric")
     fs.connect(tic307.sig_out, st308.control.actuator, kind="pneumatic")
 
     # Loop 306: kettle level on the bottoms draw.
-    lt306 = fs.add_instrument("LT", level306, on=reb, at="S", offset=68)
-    lic306 = fs.add_instrument("LIC", level306, on=lt306, at="E", offset=56, variant="shared")
+    lt306 = fs.add_instrument("LT", level306, sensing=reb, at="S", offset=68)
+    lic306 = fs.add_instrument("LIC", level306, near=lt306, at="E", offset=56, variant="shared")
     lic306.nozzle("sig_out", "E")
-    fs.add_instrument("Z", 1, on=lt306, at="W", offset=44, variant="sis")
+    fs.add_instrument("Z", 1, sensing=lt306, at="W", offset=44, variant="sis")
     fs.connect(lt306.sig_out, lic306.sig_in, kind="electric")
     fs.connect(lic306.sig_out, cv306.actuator, kind="pneumatic")
 
@@ -1800,9 +1809,9 @@ def _tank_farm() -> Flowsheet:
     xv602.pin(port="inlet", x=500, y=eth_recv_y)
     lpg_in.pin(port="outlet", x=200, y=lpg_recv_y)
 
-    lpg_run_y, eth_run_y, ms_run_y = 390.0, 510.0, 665.0
+    lpg_run_y, eth_run_y, ms_run_y = 390.0, 550.0, 665.0
     lpg_drop_x = 1040.0
-    balloon_row_y, low_row_y, psv_run_y = 462.0, 570.0, 600.0
+    balloon_row_y, low_row_y, psv_run_y = 462.0, 564.0, 620.0
     cascade_y = 422.0
 
     hv601.pin(port="inlet", x=495, y=ms_run_y)
@@ -1928,20 +1937,26 @@ def _tank_farm() -> Flowsheet:
     )
     fs.connect(fa601.outlet, vt601.inlet)
 
-    lt601 = fs.add_instrument("LT", ms_level, on=tk601, at="W", offset=62)
-    fs.add_instrument("LI", ms_level, on=lt601, at="S", offset=50, variant="shared")
-    lt602 = fs.add_instrument("LT", eth_level, on=tk602, at="W", offset=32)
-    fs.add_instrument("LI", eth_level, on=lt602, at="S", offset=50, variant="shared")
+    lt601 = fs.add_instrument("LT", ms_level, sensing=tk601, at="W", offset=62)
+    fs.add_instrument("LI", ms_level, near=lt601, at="S", offset=50, variant="shared").annotate(
+        high="LAH", low="LAL"
+    )
+    lt602 = fs.add_instrument("LT", eth_level, sensing=tk602, at="W", offset=32)
+    fs.add_instrument("LI", eth_level, near=lt602, at="S", offset=50, variant="shared").annotate(
+        high="LAH", low="LAL"
+    )
 
-    lsh611 = fs.add_instrument("LSHH", 611, on=tk601, at="E", offset=32)
-    lsh612 = fs.add_instrument("LSHH", 612, on=tk602, at="E", offset=40)
-    fs.add_instrument("Z", 1, on=lsh611, at="N", offset=40, variant="sis")
-    fs.add_instrument("Z", 1, on=lsh612, at="N", offset=40, variant="sis")
-    fs.add_instrument("Z", 1, on=xv601, at="S", offset=46, variant="sis")
-    fs.add_instrument("Z", 1, on=xv602, at="S", offset=46, variant="sis")
+    lsh611 = fs.add_instrument("LSHH", 611, sensing=tk601, at="E", offset=32)
+    lsh612 = fs.add_instrument("LSHH", 612, sensing=tk602, at="E", offset=40)
+    fs.add_instrument("Z", 1, sensing=lsh611, at="N", offset=40, variant="sis")
+    fs.add_instrument("Z", 1, sensing=lsh612, at="N", offset=40, variant="sis")
+    fs.add_instrument("Z", 1, acting_on=xv601, at="S", offset=46, variant="sis")
+    fs.add_instrument("Z", 1, acting_on=xv602, at="S", offset=46, variant="sis")
 
-    pt603 = fs.add_instrument("PT", lpg_press, on=v603, at="E", offset=30)
-    fs.add_instrument("PI", lpg_press, on=pt603, at="N", offset=40, variant="shared")
+    pt603 = fs.add_instrument("PT", lpg_press, sensing=v603, at="E", offset=30)
+    fs.add_instrument("PI", lpg_press, near=pt603, at="N", offset=40, variant="shared").annotate(
+        high="PAH"
+    )
 
     cv604_axis = 1400 + resolve_size(cv604)[0] / 2
     cv605_axis = 1140 + resolve_size(cv605)[0] / 2
@@ -1950,17 +1965,19 @@ def _tank_farm() -> Flowsheet:
     fe605_top = eth_run_y - port_offset(fe605, "inlet")[1]
     cv605_top = eth_run_y - port_offset(cv605, "inlet")[1]
 
-    ft604 = fs.add_instrument("FT", load_flow, on=fe604, at="N", offset=fe604_top - low_row_y)
+    fe604_b = fs.add_balloon(fe604, at="N", offset=fe604_top - low_row_y - 45)
+    ft604 = fs.add_instrument("FT", load_flow, near=fe604_b, at="N", offset=23)
     fic604 = fs.add_instrument(
-        "FIC", load_flow, on=cv604, at="N", variant="shared", offset=cv604_top - balloon_row_y
+        "FIC", load_flow, near=cv604, at="N", variant="shared", offset=cv604_top - balloon_row_y
     )
     fic604.nozzle("sig_out", "S")
     fs.connect(ft604.sig_out, fic604.sig_in, kind="electric")
     fs.connect(fic604.sig_out, cv604.actuator, kind="pneumatic")
 
-    ft605 = fs.add_instrument("FT", blend_flow, on=fe605, at="N", offset=fe605_top - balloon_row_y)
+    fe605_b = fs.add_balloon(fe605, at="N", offset=fe605_top - balloon_row_y - 45)
+    ft605 = fs.add_instrument("FT", blend_flow, near=fe605_b, at="N", offset=23)
     fic605 = fs.add_instrument(
-        "FIC", blend_flow, on=cv605, at="N", variant="shared", offset=cv605_top - balloon_row_y
+        "FIC", blend_flow, near=cv605, at="N", variant="shared", offset=cv605_top - balloon_row_y
     )
     fic605.nozzle("sig_out", "S")
     fic605.nozzle("sig_in", "N")

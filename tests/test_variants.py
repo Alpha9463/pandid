@@ -97,6 +97,15 @@ def test_every_generated_class_names_its_variants():
     assert silent == []
 
 
+# ``Instrument(variant='panel')`` and ``'aux'`` are two of the shipped
+# spellings and are on their way out, which is precisely a claim these two
+# sweeps have to keep making: a retired spelling still constructs and still
+# draws for the release it is retired in. The warning is the deprecation
+# working, so it is filtered rather than avoided.
+_RETIRED = pytest.mark.filterwarnings("ignore::DeprecationWarning")
+
+
+@_RETIRED
 @pytest.mark.parametrize(("cls", "variant"), _shipped_cases(), ids=_CASE_IDS)
 def test_every_shipped_variant_still_constructs(cls, variant):
     """Construction is not where a shipped ``Kind(variant=...)`` can fail.
@@ -107,6 +116,7 @@ def test_every_shipped_variant_still_constructs(cls, variant):
     assert cls("X-1", variant=variant).variant == variant
 
 
+@_RETIRED
 @pytest.mark.parametrize(("cls", "variant"), _shipped_cases(), ids=_CASE_IDS)
 def test_a_shipped_variant_resolves_the_nozzles_it_always_did(cls, variant):
     """The ports, against the expression that built them before this change.

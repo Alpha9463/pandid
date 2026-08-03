@@ -98,7 +98,7 @@ def test_allocation_order_is_declaration_order():
     first = fs.add_loop("F")
     unused = fs.add_loop("L")  # declared, never tagged, still spends 102
     third = fs.add_loop("T")
-    fs.add_instrument("TT", third, on=line, at=0.5, offset=60)
+    fs.add_instrument("TT", third, sensing=line, at=0.5, offset=60)
     fs.to_svg()
     assert [loop.number for loop in (first, unused, third)] == ["101", "102", "103"]
 
@@ -118,7 +118,7 @@ def test_a_one_member_loop_is_a_legitimate_use():
     """
     fs, line = _sheet()
     lone = fs.add_loop("P")
-    pi = fs.add_instrument("PI", lone, on=line, at=0.3, offset=50)
+    pi = fs.add_instrument("PI", lone, sensing=line, at=0.3, offset=50)
     assert (lone.name, pi.name) == ("P-101", "PI-101")
 
 
@@ -167,7 +167,7 @@ def test_an_allocated_number_is_never_rewritten_afterwards():
     """Allocation is where "allocate once" happens, not an exception to it."""
     fs, line = _sheet()
     loop = fs.add_loop("F", None)
-    ft = fs.add_instrument("FT", loop, on=line, at=0.5, offset=60)
+    ft = fs.add_instrument("FT", loop, sensing=line, at=0.5, offset=60)
     cv = fs.add(U.Valve(loop.tag("CV"), variant="control")).pin(x=300, y=300)
     vent = fs.add(U.Product("Vent")).pin(x=520, y=300)
     fs.connect(cv.outlet, vent.inlet)
@@ -199,7 +199,7 @@ def test_the_number_is_allocated_once_and_never_renumbered():
     """
     fs, line = _sheet()
     loop = fs.add_loop("F", 303)
-    ft = fs.add_instrument("FT", loop, on=line, at=0.5, offset=60)
+    ft = fs.add_instrument("FT", loop, sensing=line, at=0.5, offset=60)
     cv = fs.add(U.Valve(loop.tag("CV"), variant="control")).pin(x=300, y=300)
     vent = fs.add(U.Product("Vent")).pin(x=520, y=300)
     fs.connect(cv.outlet, vent.inlet)  # more topology, and so more renumbering
@@ -306,7 +306,7 @@ def test_a_foreign_first_letter_raises_at_the_call_site():
     fs, line = _sheet()
     loop = fs.add_loop("F", 303)
     with pytest.raises(ValueError) as excinfo:
-        fs.add_instrument("TT", loop, on=line, at=0.5, offset=60)
+        fs.add_instrument("TT", loop, sensing=line, at=0.5, offset=60)
     message = str(excinfo.value)
     assert "loop F-303 measures 'F'" in message  # names the loop's variable
     assert "'TT' opens with 'T'" in message  # names what was passed
@@ -345,8 +345,8 @@ def test_a_literal_number_still_works():
     legacy and takes no deprecation.
     """
     fs, line = _sheet()
-    ti = fs.add_instrument("TI", 325, on=line, at=0.3, offset=50)
-    square = fs.add_instrument("I", 1, on=ti, at="S", offset=44, variant="logic")
+    ti = fs.add_instrument("TI", 325, sensing=line, at=0.3, offset=50)
+    square = fs.add_instrument("I", 1, sensing=ti, at="S", offset=44, variant="logic")
     assert (ti.name, square.name) == ("TI-325", "I-1")
     assert fs.loops == []
     fs.to_svg()  # renders, and validation raises nothing
@@ -355,8 +355,8 @@ def test_a_literal_number_still_works():
 def test_declared_and_undeclared_instruments_mix_on_one_sheet():
     fs, line = _sheet()
     loop = fs.add_loop("F", 303)
-    ft = fs.add_instrument("FT", loop, on=line, at=0.5, offset=60)
-    pi = fs.add_instrument("PI", 315, on=line, at=0.2, offset=50)
+    ft = fs.add_instrument("FT", loop, sensing=line, at=0.5, offset=60)
+    pi = fs.add_instrument("PI", 315, sensing=line, at=0.2, offset=50)
     assert (ft.name, pi.name) == ("FT-303", "PI-315")
 
 
@@ -372,7 +372,7 @@ def test_a_loop_never_reaches_the_units_list_or_an_equipment_list():
     fs, line = _sheet()
     loop = fs.add_loop("F", 303)
     fs.add(U.Vessel("V-101", description="Surge Drum")).pin(x=300, y=320)
-    fs.add_instrument("FT", loop, on=line, at=0.5, offset=60)
+    fs.add_instrument("FT", loop, sensing=line, at=0.5, offset=60)
 
     assert loop not in fs.units
     rows = equipment_list(fs).rows
@@ -394,7 +394,7 @@ def _letter_warnings(fs):
 def test_out_of_sequence_control_functions_warn():
     """ISO 15519-2:2015 5.2.4 orders control functions I, R, C, S, M, Z, A."""
     fs, line = _sheet()
-    fs.add_instrument("FCI", 303, on=line, at=0.5, offset=60)
+    fs.add_instrument("FCI", 303, sensing=line, at=0.5, offset=60)
     (warning,) = _letter_warnings(fs)
     assert warning.severity == "warning"
     assert "FCI-303 spells its control functions 'FCI'" in warning.message
@@ -404,7 +404,7 @@ def test_out_of_sequence_control_functions_warn():
 
 def test_the_sequence_is_a_warning_and_never_stops_the_drawing():
     fs, line = _sheet()
-    fs.add_instrument("FCI", 303, on=line, at=0.5, offset=60)
+    fs.add_instrument("FCI", 303, sensing=line, at=0.5, offset=60)
     assert fs.to_svg()  # no raise: the letters still read
     assert [i.severity for i in fs.validate() if i.code == "letter-sequence"] == ["warning"]
 
@@ -415,7 +415,7 @@ def test_the_sequence_is_a_warning_and_never_stops_the_drawing():
 def test_correctly_ordered_tags_do_not_warn(letters):
     """The shipped examples spell every one of these; none may start warning."""
     fs, line = _sheet()
-    fs.add_instrument(letters, 303, on=line, at=0.5, offset=60)
+    fs.add_instrument(letters, 303, sensing=line, at=0.5, offset=60)
     assert _letter_warnings(fs) == []
 
 
@@ -432,10 +432,10 @@ def test_a_modifier_keeps_the_place_the_author_gave_it():
 
 def test_one_warning_per_tag_however_often_the_square_is_drawn():
     fs, line = _sheet()
-    first = fs.add_instrument("ZAC", 1, on=line, at=0.5, offset=60, variant="logic")
+    first = fs.add_instrument("ZAC", 1, sensing=line, at=0.5, offset=60, variant="logic")
     host = first
     for _ in range(3):
-        host = fs.add_instrument("ZAC", 1, on=host, at="N", offset=50, variant="logic")
+        host = fs.add_instrument("ZAC", 1, sensing=host, at="N", offset=50, variant="logic")
     assert len({u.tag for u in fs.units if isinstance(u, U.Instrument)}) == 1
     assert len(_letter_warnings(fs)) == 1
 
@@ -446,7 +446,7 @@ def test_one_warning_per_tag_however_often_the_square_is_drawn():
 def test_loops_round_trip_through_a_spec():
     fs, line = _sheet()
     loop = fs.add_loop("F", 303)
-    fs.add_instrument("FT", loop, on=line, at=0.5, offset=60)
+    fs.add_instrument("FT", loop, sensing=line, at=0.5, offset=60)
 
     spec = fs.to_dict()
     assert spec["loops"] == [{"variable": "F", "number": "303"}]
@@ -459,7 +459,7 @@ def test_loops_round_trip_through_a_spec():
 def test_a_sheet_with_no_loops_writes_no_loops_section():
     """An unconverted sheet serializes exactly as it did before loops existed."""
     fs, line = _sheet()
-    fs.add_instrument("FT", 101, on=line, at=0.5, offset=60)
+    fs.add_instrument("FT", 101, sensing=line, at=0.5, offset=60)
     assert "loops" not in fs.to_dict()
 
 

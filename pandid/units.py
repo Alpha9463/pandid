@@ -200,6 +200,11 @@ class Unit:
                 f"Put it on the Feed or Product where the line crosses the sheet edge."
             )
         self.reference = reference
+        #: The balloon this item's tag is drawn in, if it has one; set
+        #: only by :meth:`pandid.flowsheet.Flowsheet.add_balloon`. A
+        #: primary element with a balloon draws no lettering of its own,
+        #: because the two marks share one tag: see :attr:`tag`.
+        self.balloon: "Instrument | None" = None
         self.flowsheet: Flowsheet | None = None
         self.ports: dict[str, Port] = {}
         self.params: dict = {}
@@ -217,8 +222,13 @@ class Unit:
         For equipment the tag *is* the name the flowsheet knows it by.
         Only a symbol drawn in several places tells the two apart; see
         :attr:`Instrument.tag` and :attr:`_Boundary.tag`.
+
+        Empty once :attr:`balloon` holds it. One tag is drawn once, and
+        every backend already writes nothing against a symbol whose tag
+        is empty, so moving it is the whole of what a primary element's
+        balloon does to the element.
         """
-        return self.name
+        return "" if self.balloon is not None else self.name
 
     def repeats(self, other: "Unit") -> bool:
         """Whether this unit is *another drawing of* ``other``.
@@ -1505,6 +1515,60 @@ def split_tag(type: str, number: str | int = "") -> tuple[str, str]:
 #: rest count on from two (``sig_out_2``).
 _POOL_MEMBER = re.compile(r"(sig_in|sig_out)_\d+")
 
+#: Where the information a balloon shows is available. ISO 15519-2:2015
+#: Table 1, p. 7, tabulates one additional graphic per row: none is
+#: "Information available on field mounted instrument/display", a
+#: horizontal single full line "Information available in central control
+#: system", a double "Information available in subsidiary control
+#: system".
+DISPLAYS = ("field", "central", "subsidiary")
+
+#: What a balloon relates to its host by. ``"sensing"`` and
+#: ``"acting_on"`` are connections and draw a line; ``"near"`` is a
+#: placement and draws nothing.
+RELATIONS = ("sensing", "acting_on", "near")
+
+#: The registered drawing each (symbol type, display) pair resolves to.
+#: The two axes are the standard's; the registry spells one enum over
+#: both, so this table is where they meet. A pair asking for no bar is
+#: not in it and falls through to the registry unchanged, which is what
+#: lets a balloon shape registered later need no edit here.
+_BALLOON_SYMBOLS = {
+    ("default", "field"): "default",
+    ("default", "central"): "panel",
+    ("default", "subsidiary"): "aux",
+    ("shared", "central"): "shared",
+}
+
+#: The same table read back: the symbol type a registered variant
+#: draws, for anything that has to state the two axes apart again
+#: (:meth:`pandid.flowsheet.Flowsheet.to_dict`, chiefly).
+_BALLOON_SHAPES = {drawn: shape for (shape, _display), drawn in _BALLOON_SYMBOLS.items()}
+
+#: The display a symbol type states on its own, so its bar is not a
+#: second decision to make. CHEE4001 p.13 on the square: "A circle
+#: within a square shows that the instrument has some controlling
+#: function. The circle represents a smooth control process, such as a
+#: distributed control system (DCS)."
+_IMPLIED_DISPLAY = {"shared": "central"}
+
+_RETIRED_PANEL = Deprecation(
+    what="Instrument(variant='panel')",
+    instead="Instrument(display='central')",
+    removed_in="0.1.3",
+)
+
+_RETIRED_AUX = Deprecation(
+    what="Instrument(variant='aux')",
+    instead="Instrument(display='subsidiary')",
+    removed_in="0.1.3",
+)
+
+#: The two variants that were a location wearing a symbol type's
+#: clothes, and the display each of them meant.
+_RETIRED_DISPLAYS = {"panel": (_RETIRED_PANEL, "central"),
+                     "aux": (_RETIRED_AUX, "subsidiary")}
+
 
 class Instrument(Unit):
     """ISA-5.1 instrument balloon.
@@ -1531,12 +1595,20 @@ class Instrument(Unit):
     Naming the units instead lets the engine pick both ends:
     ``fs.connect(ft305, fic305, kind="electric")``.
 
-    Variants: ``"default"`` (field balloon), ``"panel"`` (one location
-    bar), ``"aux"`` (two), ``"shared"`` (a circle in a square with one
-    bar: shared display and shared control), ``"computer"``, ``"sis"``
-    (a diamond in a square, ANSI/ISA-5.1-2009 Table 5.1.1 column B, also
-    spelled ``"logic"``) and ``"interlock"`` (a plain diamond, Table
-    5.1.2 items 3-5).
+    Two axes, asked separately. ``variant`` is the **symbol type**, what
+    the instrument does: ``"default"`` (a circle), ``"shared"`` (a
+    circle in a square, shared display and shared control),
+    ``"computer"`` (a hexagon), ``"sis"`` (a diamond in a square,
+    ANSI/ISA-5.1-2009 Table 5.1.1 column B, also spelled ``"logic"``)
+    and ``"interlock"`` (a plain diamond, Table 5.1.2 items 3-5).
+    ``display`` is **where the information is available**, ISO 15519-2
+    Table 1's additional graphic: ``"field"`` (no bar), ``"central"``
+    (one) or ``"subsidiary"`` (two). See :data:`DISPLAYS`.
+
+    Not every pair has a drawing registered. ``variant="shared"`` is the
+    only shape carrying a bar today, and it carries ``"central"``
+    without being asked; a shape and a display with no artwork between
+    them raises rather than drawing the shape and dropping the bar.
 
     A balloon that measures something belongs *on* what it measures: see
     :meth:`attach` and
@@ -1568,13 +1640,25 @@ class Instrument(Unit):
 
     def __init__(self, type: str, number: str | int = "", variant: str = "default",
                  width: float | None = None, height: float | None = None,
-                 label_pos: str | None = None, description: str = "", reference: str = ""):
+                 label_pos: str | None = None, description: str = "", reference: str = "",
+                 display: str | None = None):
         letters, num = split_tag(type, number)
         name = f"{type}-{number}" if number != "" and number is not None else type
+        #: Which of :data:`DISPLAYS` this balloon states. Set by the
+        #: resolver below, which is also what turns the pair into the
+        #: one variant the registry, the exporter and :mod:`pandid.spec`
+        #: all read.
+        self.display = "field"
+        variant = self._resolved_variant(name, variant, display)
         super().__init__(name, variant=variant, width=width, height=height,
                          label_pos=label_pos, description=description, reference=reference)
         self.type = letters
         self.number = num
+        #: The symbol type the author asked for, kept apart from
+        #: :attr:`~Unit.variant` because the registry's spelling folds
+        #: the display into it. This is the half ``to_dict`` writes, so
+        #: a sheet read back never triggers a retired spelling.
+        self.symbol_type = _BALLOON_SHAPES.get(variant, variant)
         # The drawn tag, kept apart from the name because a repeated
         # square needs a name of its own to be addressed by. See
         # :attr:`tag`.
@@ -1585,8 +1669,68 @@ class Instrument(Unit):
         self.at: float | str | None = None
         self.offset: float = 45.0
         self.angle: float = 90.0
+        #: One of :data:`RELATIONS`; set only by :meth:`attach`. What
+        #: the sheet draws between this balloon and its host follows
+        #: from it -- see :func:`pandid.render.svg.tap_lines`.
+        self.relation: str = "sensing"
+        #: The item whose tag this balloon carries, for a primary
+        #: element's balloon; set only by
+        #: :meth:`pandid.flowsheet.Flowsheet.add_balloon`. What makes
+        #: the shared tag legal rather than a clash: see :meth:`repeats`.
+        self._marks: "Unit | None" = None
+        # Letter codes written outside the symbol, keyed by quadrant;
+        # see :meth:`annotate`.
+        self.quadrants: dict[str, tuple[str, ...]] = {}
         # Resolved tap point; set only by layout.
         self.tap: tuple[float, float] | None = None
+
+    def _resolved_variant(self, name: str, variant: str, display: str | None) -> str:
+        """The one registered spelling for a symbol type and a display.
+
+        ISO 15519-2 asks two questions -- Table 1's additional graphic
+        is *where the information is*, and the outline is *what the
+        instrument does* -- and the registry answers both with one
+        variant name. This is where the two meet, so that the rest of
+        the package sees a variant and nothing else, exactly as
+        :meth:`Valve._resolved_variant` folds a body and an actuator
+        into one.
+        """
+        retired = _RETIRED_DISPLAYS.get(variant)
+        if retired is not None:
+            notice, implied = retired
+            notice.warn(self, where=name)
+            if display is not None and display != implied:
+                raise ValueError(
+                    f"{name}: variant={variant!r} already says the information is in "
+                    f"the {implied} control system, and display={display!r} says it is "
+                    f"somewhere else. variant={variant!r} is retired for this reason; "
+                    f"state the location once, as display={display!r}"
+                )
+            variant, display = "default", implied
+        if display is None:
+            display = _IMPLIED_DISPLAY.get(variant, "field")
+        if display not in DISPLAYS:
+            raise ValueError(
+                f"{name}: display= is where the information this balloon shows is "
+                f"available, one of {', '.join(repr(d) for d in DISPLAYS)}, got "
+                f"{display!r}. It is ISO 15519-2 Table 1's additional graphic: no bar "
+                f"in the field, one for the central control system, two for a "
+                f"subsidiary one. What the instrument *does* is variant="
+            )
+        self.display = display
+        pair = _BALLOON_SYMBOLS.get((variant, display))
+        if pair is not None:
+            return pair
+        if display == "field":
+            return variant  # an unregistered shape is the registry's to refuse
+        drawn = ", ".join(f"variant={v!r} display={d!r}"
+                          for (v, d) in _BALLOON_SYMBOLS if d != "field")
+        raise ValueError(
+            f"{name}: no balloon is drawn for variant={variant!r} with "
+            f"display={display!r}. A location bar is registered artwork rather than "
+            f"a stripe laid over any outline, and the pairs drawn today are {drawn}. "
+            f"Ask for display='field', or for one of those"
+        )
 
     # ------------------------------------------------------------------
     # The signal pools.
@@ -1706,24 +1850,85 @@ class Instrument(Unit):
         return self._tag
 
     def repeats(self, other: "Unit") -> bool:
-        """Whether this square redraws the same logic function.
+        """Whether this balloon is *another mark of* ``other``.
 
-        Both ends have to be trip squares carrying the same tag, and to
-        be the *same* square: a plain interlock diamond and a
-        diamond-in-square are two different ISA-5.1 symbols, so one of
-        each on a tag is still a clash. ``"sis"`` and ``"logic"`` name
-        one symbol and count as the same.
+        Two ways it can be. It is **the same logic function drawn
+        again**: both ends trip squares carrying the same tag, and the
+        *same* square, since a plain interlock diamond and a
+        diamond-in-square are two different ISA-5.1 symbols and one of
+        each on a tag is still a clash (``"sis"`` and ``"logic"`` name
+        one symbol and count as the same). Or it is **a primary
+        element's balloon**, holding the tag of the thing in the pipe
+        that :meth:`pandid.flowsheet.Flowsheet.add_balloon` built it
+        for -- one instrument, two marks, issue #249.
         """
         def symbol(variant: object) -> object:
             return "sis" if variant == "logic" else variant
 
+        if other is self._marks:
+            return True
         return (isinstance(other, Instrument)
                 and other.tag == self.tag
                 and self.variant in self._REPEATABLE_VARIANTS
                 and symbol(self.variant) == symbol(other.variant))
 
+    def annotate(self, *, high: "str | Sequence[str] | None" = None,
+                 low: "str | Sequence[str] | None" = None,
+                 safety: "str | Sequence[str] | None" = None,
+                 variable: "str | Sequence[str] | None" = None) -> "Instrument":
+        """Write letter codes in the quadrants around this symbol.
+
+        ISO 15519-2 §5.2.5, p. 22: "Letter code combinations with
+        modifiers H and L **shall** be represented outside the PCI
+        symbol. The sequence **shall** be A, S, and Z with increasing
+        value away from the centre line of the PCI symbol." So a high
+        alarm on a controller is lettering beside that controller, not a
+        balloon of its own, and no line is drawn: an annotation is not a
+        signal.
+
+        §5.1.3, p. 19, names the four quadrants Figure 8 puts them in,
+        and this method's four arguments are that list in its order:
+
+        - ``safety`` -- (a) "Reference to typical diagram, safety
+          information, e.g. SIL or SIF identifiers";
+        - ``variable`` -- (b) "Specification of type of measured
+          variable when using letter code U (multivariable), e.g. pH,
+          µS, MJ/s";
+        - ``high`` -- (c) "Information of high output/input functions,
+          e.g. alarm or switching";
+        - ``low`` -- (d) "Information of low output/input function".
+
+        The quadrants are the corners, which is the clause's own reason
+        for them: "This allows for horizontal and vertical connections
+        to the symbol." So annotating a balloon spends no face.
+
+        Each takes one code or several. Several are ordered A, S then Z
+        outward whatever order they are given in, since the standard
+        fixes the sequence and the author has no choice to express::
+
+            lic304.annotate(high="LAH", low="LAL")
+            lsh611.annotate(high=("LAHH", "LSHH"))
+            ai301.annotate(variable="pH", safety="SIL 2")
+
+        Chainable. An argument left out is a quadrant left alone, so a
+        second call replaces only what it names; ``high=()`` is how a
+        quadrant is emptied, which is a different request from not
+        mentioning it.
+        """
+        for name, codes in (("a", safety), ("b", variable),
+                            ("c", high), ("d", low)):
+            if codes is None:
+                continue
+            written = _quadrant_codes(self.name, name, codes)
+            if written:
+                self.quadrants[name] = written
+            else:
+                self.quadrants.pop(name, None)
+        return self
+
     def attach(self, on: "Stream | Unit", *, at: float | str | None = None,
-               offset: float = 45.0, angle: float = 90.0) -> "Instrument":
+               offset: float = 45.0, angle: float = 90.0,
+               relation: str = "sensing") -> "Instrument":
         """Anchor this balloon to a process line or to equipment.
 
         ``on`` is the host: a :class:`~pandid.streams.Stream` (tap a
@@ -1731,6 +1936,13 @@ class Instrument(Unit):
         the tap: a fraction ``0..1`` along the host stream's routed
         path, or a face (``"N"``, ``"S"``, ``"E"``, ``"W"``) of a host
         unit's drawn box.
+
+        ``relation`` is what the balloon has to do with the host, one of
+        :data:`RELATIONS`, and it decides whether a line is drawn
+        between them: ``"sensing"`` and ``"acting_on"`` are connections,
+        ``"near"`` is a placement and draws nothing.
+        :meth:`pandid.flowsheet.Flowsheet.add_instrument` is where an
+        author states it.
 
         ``offset`` is the distance from the tap to the balloon centre;
         ``offset=0`` leaves the element sitting *on* the line, which is
@@ -1774,11 +1986,47 @@ class Instrument(Unit):
             at = at.upper()
         if offset < 0:
             raise ValueError(f"{self.name}: offset= must not be negative, got {offset!r}")
+        if relation not in RELATIONS:
+            raise ValueError(
+                f"{self.name}: relation= is what this balloon has to do with "
+                f"{getattr(on, 'name', on)!r}, one of "
+                f"{', '.join(repr(r) for r in RELATIONS)}, got {relation!r}"
+            )
         self.host = on
         self.at = at
         self.offset = float(offset)
         self.angle = float(angle)
+        self.relation = relation
         return self
+
+
+def _quadrant_codes(where: str, quadrant: str, codes: "str | Sequence[str]") -> tuple[str, ...]:
+    """One quadrant's letter codes, in the sequence the standard fixes.
+
+    ISO 15519-2 §5.2.5: "The sequence shall be A, S, and Z with
+    increasing value away from the centre line of the PCI symbol." The
+    author has no choice to express, so the order they wrote is not
+    preserved; an alarm, a switch and a trip in one quadrant come out A
+    then S then Z outward however they were listed. A code with none of
+    the three letters in it keeps its place after those that have one.
+    """
+    if isinstance(codes, str):
+        codes = (codes,) if codes else ()
+    out = [str(code).strip() for code in codes]
+    for code in out:
+        if not code:
+            raise ValueError(
+                f"{where}: quadrant {quadrant!r} was given an empty letter code. A "
+                f"quadrant holds the codes written outside the symbol, e.g. "
+                f"high='LAH'; leave the argument out to write nothing there"
+            )
+
+    def rank(code: str) -> int:
+        # The function letter, which is the one after the measured
+        # variable: 'LAH' alarms, 'LSHH' switches, 'LZHH' trips.
+        return next((" ASZ".index(c) for c in code[1:] if c in "ASZ"), 4)
+
+    return tuple(sorted(out, key=rank))
 
 
 def _side_ports(*sides: str) -> list[tuple[str, str, str]]:
