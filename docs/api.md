@@ -188,13 +188,16 @@ add_annotation(annotation) -> annotation
 Registers an `Annotation` or `TableBox` (see [Sheet furniture](#sheet-furniture)).
 
 ```text
-add_instrument(type, number="", *, on=None, at=None,
-               offset=45.0, angle=90.0, variant="default", **kwargs) -> Instrument
+add_instrument(type, number="", *, sensing=None, acting_on=None, near=None,
+               at=None, offset=45.0, angle=90.0, variant="default",
+               display=None, **kwargs) -> Instrument
+add_balloon(element, *, at=None, offset=46.0, angle=90.0, **kwargs) -> Instrument
 add_loop(variable: str, number: str | int | None = None) -> Loop
 add_valve_station(tag: str, **kwargs) -> ValveStation
 ```
-See [Instrumentation](#instrumentation), [Control loops](#control-loops) and
-[Valve stations](#valve-stations).
+See [Instrumentation](#instrumentation),
+[A primary element's balloon](#a-primary-elements-balloon),
+[Control loops](#control-loops) and [Valve stations](#valve-stations).
 
 ### Geometry and output
 
@@ -1319,7 +1322,7 @@ first listed is what the class draws when it is built by name alone.
 | `Column` | `column` | `default` (plain shell), `packed` |
 | `Reducer` | `reducer` | `default` (the concentric trapezoid), `concentric`, `eccentric`, plus `large_end`, which points the cone |
 | `Vent` | `vent` | `default` (stack with a weather cap), `exhaust_head`, `breather` |
-| `Instrument` | `instrument` | `default` (field balloon), `panel`, `aux`, `shared`, `computer`, `sis` (diamond in a square, also spelled `logic`), `interlock` (plain diamond) |
+| `Instrument` | `instrument` | `default` (a circle), `shared` (a circle in a square), `computer` (a hexagon), `sis` (a diamond in a square, also spelled `logic`), `interlock` (a plain diamond). Where the information is available is the separate [`display`](#where-the-information-is) axis; `panel` and `aux` are that axis in this column and are deprecated |
 | `Heater`, `Cooler`, `Furnace`, `Turbine`, `Blower`, `Ejector`, `Funnel`, `Conveyor`, `Mixer`, `Splitter`, `Tee`, `Block`, `Feed`, `Product` | each its own | `default` only |
 
 `HeatExchanger(variant="kettle")` carries a fifth nozzle, `bottoms`. It is the
@@ -1382,9 +1385,9 @@ west wall at mid-height, `vent` on the top head's crown.
 
 A primary flow element is a pair of faces on a line like any other in-line
 device, so it is a `Fitting` variant rather than a class of its own. `venturi`
-is the one a differential-pressure loop is usually drawn with. Hang the balloon
-on it with `add_instrument(..., on=element)`, and pass `offset=0` to draw the
-balloon sitting on the line rather than beside it.
+is the one a differential-pressure loop is usually drawn with. Its tag goes in a
+balloon beside it with [`add_balloon()`](#a-primary-elements-balloon), which is
+how a P&ID draws one: the fitting itself is left unlettered.
 
 `Reducer(variant="eccentric")` is flat on top, so the two ends share a roof and
 the small end's centreline is the higher of the two. That is the reducer a pump
@@ -1600,7 +1603,7 @@ mirroring move them, and `nozzle()` always takes the moved face.
 |---|---|---|
 | `Vessel(variant="horizontal")` | `inlet` | `W` (home), `N`, `E` |
 | `Separator(variant="horizontal")` | `feed` | `W` (home), `N`, `E` |
-| `Instrument` (`default`, `panel`, `aux`, `shared`, `computer`) | `pv`, `sig_in`, `sig_out` | `N`, `S`, `E`, `W` |
+| `Instrument` (`default`, `shared`, `computer`, and any `display`) | `pv`, `sig_in`, `sig_out` | `N`, `S`, `E`, `W` |
 
 (The trip squares, `Instrument(variant="sis")`, `"logic"` and `"interlock"`,
 offer no choice either.)
@@ -1614,7 +1617,7 @@ it on.
 drum = fs.add(units.Separator("V-1", variant="horizontal"))
 drum.nozzle("feed", "N")      # always from above, however the header is laid in
 
-lic = fs.add_instrument("LIC", 101, on=vessel, at="S", variant="panel")
+lic = fs.add_instrument("LIC", 101, near=lt, at="S", display="central")
 lic.nozzle("sig_out", "W")    # keep the loop's output on the panel side
 ```
 
@@ -1813,13 +1816,14 @@ and says so.
 ## Instrumentation
 
 ```text
-fs.add_instrument(type, number="", *, on=None, at=None,
-                  offset=45.0, angle=90.0, variant="default", **kwargs) -> Instrument
+fs.add_instrument(type, number="", *, sensing=None, acting_on=None, near=None,
+                  at=None, offset=45.0, angle=90.0, variant="default",
+                  display=None, **kwargs) -> Instrument
 ```
 
-Constructs an `Instrument`, adds it, and attaches it when `on` is given. Extra
-`**kwargs` go to the `Instrument` constructor (`width`, `height`, `label_pos`,
-`description`).
+Constructs an `Instrument`, adds it, and anchors it to whatever `sensing`,
+`acting_on` or `near` named. Extra `**kwargs` go to the `Instrument`
+constructor (`width`, `height`, `label_pos`, `description`).
 
 `type` is the functional letter string and `number` the loop number.
 `instrument.tag` is the full tag (`"FT-101"`) for equipment lists and
@@ -1831,9 +1835,34 @@ what tells one square from another (see
 
 ```python
 ft  = fs.add_instrument("FT", 101)                        # field transmitter
-fic = fs.add_instrument("FIC", 101, variant="panel")      # panel-mounted controller
+fic = fs.add_instrument("FIC", 101, display="central")    # control-room controller
 fy  = fs.add_instrument("FY", 101, variant="computer")    # computing relay
 ```
+
+#### Where the information is
+
+`display` is ISO 15519-2 **Table 1**'s additional graphic, a horizontal bar
+across the symbol, and its three values are that table's three rows:
+
+| `display` | drawn | Table 1 |
+|---|---|---|
+| `"field"` (default) | no bar | "Information available on field mounted instrument/display" |
+| `"central"` | one bar | "Information available in central control system" |
+| `"subsidiary"` | two bars | "Information available in subsidiary control system" |
+
+It is a separate question from `variant`, which is what the instrument *does*.
+**§5.1.1**, same page: *"The geographical availability or origin of information
+inside or outside the PCI symbol are illustrated by means of additional graphics
+within the PCI symbol, see Table 1."*
+
+Not every pair has a drawing registered. `variant="shared"` is the only shape
+carrying a bar today and it carries `"central"` without being asked, a shared
+display being the control room by definition; a shape and a display with no
+artwork between them raises and names the pairs that are drawn.
+
+`variant="panel"` and `variant="aux"` were this axis wearing `variant`'s name.
+They still work, warn, and are removed in 0.1.3; write `display="central"` and
+`display="subsidiary"`, which draw the same two symbols.
 
 ### Control loops
 
@@ -1854,9 +1883,11 @@ place of a literal.
 ```python
 loop = fs.add_loop("F", 303)
 fe  = fs.add(units.Fitting(loop.element("FE"), variant="venturi"))
-ft  = fs.add_instrument("FT",  loop, on=fe, at="N", offset=90)
-fic = fs.add_instrument("FIC", loop, on=ft, at="E", offset=70, variant="shared")
+feb = fs.add_balloon(fe, at="N", offset=38)
+ft  = fs.add_instrument("FT",  loop, near=feb, at="N", offset=23)
+fic = fs.add_instrument("FIC", loop, near=ft, at="E", offset=70, variant="shared")
 cv  = fs.add(units.Valve(loop.tag("CV"), variant="control"))
+fs.connect(ft.sig_out, fic.sig_in, kind="electric")
 fs.connect(fic.sig_out, cv.actuator, kind="pneumatic")
 ```
 
@@ -2043,15 +2074,43 @@ isolate it with. So does a `drains` that is not 0, 1 or 2, one of `x`/`y`
 without the other, and a `bypass_over` naming a member the station was told to
 leave out.
 
-### Attaching a balloon
+### Anchoring a balloon
 
 ```text
-instrument.attach(on, *, at=None, offset=45.0, angle=90.0) -> Instrument
+fs.add_instrument(type, number, *, sensing=…, acting_on=…, near=…, at=…, offset=…)
+instrument.attach(on, *, at=None, offset=45.0, angle=90.0, relation="sensing")
 ```
 
-- `on` is the host: a `Stream` (tap the line) or a `Unit` (mount on equipment).
-  Anything else raises `TypeError`, and attaching a balloon to itself raises
-  `ValueError`.
+**Three keywords name the anchor, and they say different things.** Each takes a
+`Stream` (tap the line) or a `Unit` (stand against equipment) and places the
+balloon there; what they differ on is whether the sheet draws a line between the
+two.
+
+| keyword | means | drawn between them |
+|---|---|---|
+| `sensing=` | the balloon takes its reading from this | an impulse line, or a fine dashed instrument connection |
+| `acting_on=` | the balloon commands this | a fine dashed instrument connection |
+| `near=` | the balloon only *sits* here | **nothing** |
+
+`near=` is what a control-room faceplate hung over the valve it drives wants: it
+buys the position and says nothing else, and what reaches the actuator is a
+signal, stated with [`connect()`](#signal-lines) and routed like one. Naming two
+of the three raises, since a balloon is anchored to one thing and a second
+relationship is a second line.
+
+```python
+lt  = fs.add_instrument("LT",  101, sensing=drum, at="S", offset=70)
+lic = fs.add_instrument("LIC", 101, near=lt, at="S", offset=95, display="central")
+fs.connect(lt.sig_out, lic.sig_in, kind="electric")
+fs.connect(lic.sig_out, lv.actuator, kind="pneumatic")
+fs.add_instrument("Z", 1, acting_on=xv, at="S", offset=46, variant="sis")
+```
+
+`on=` was all three at once — it bought a position and drew an edge nobody asked
+for. It still works, warns, and is removed in 0.1.3; it means `sensing=`.
+
+- The host is a `Stream` or a `Unit`. Anything else raises `TypeError`, and
+  anchoring a balloon to itself raises `ValueError`.
 - `at` is, on a stream, a fraction `0..1` along the host's **routed** path
   (default `0.5`); on a unit, a face `"N"`/`"S"`/`"E"`/`"W"` of its drawn box
   (default `"E"`). Out-of-range or wrong-typed values raise `ValueError`.
@@ -2073,21 +2132,24 @@ the plant at the other, so it is drawn solid only where
 - the host carries fluid — a process line, a vessel, an exchanger, an in-line
   element — rather than a measurement, which is what a balloon and a signal line
   carry; **and**
-- the balloon is ISA-5.1's field-mounted one, the bare circle. Every other
-  balloon is a location or function symbol saying the function is in a panel
-  (`"panel"`, `"aux"`), in the shared display (`"shared"`), in a computer
-  (`"computer"`) or in a logic solver (`"sis"`/`"logic"`/`"interlock"`), and no
-  tubing runs from a drum to any of those.
+- the balloon is ISA-5.1's field-mounted one, the bare circle with no bar. Every
+  other balloon is a location or function symbol saying the function is in the
+  control room (`display="central"`, `"subsidiary"`), in the shared display
+  (`variant="shared"`), in a computer (`"computer"`) or in a logic solver
+  (`"sis"`/`"logic"`/`"interlock"`), and no tubing runs from a drum to any of
+  those; **and**
+- the relation is `sensing`. Tubing brings the fluid **to** the instrument, so a
+  square `acting_on` the valve it strokes is not one however the other two
+  answer: what runs down to the actuator is a command.
 
 Everything else is **dashed**: a balloon hung off another balloon, a balloon teed
 off a **signal line** — which is how a trip is drawn, not on a face of the
 balloon it acts for but branched at a right angle off the line carrying the
-command — a trip square hung on the valve it strokes, and a control-room
-controller declared `on` a vessel to place it.
+command — and a trip square hung on the valve it strokes.
 
 ```python
 trip = fs.connect(lic.sig_out, lv.actuator, kind="electric")
-fs.add_instrument("I", 1, on=trip, at=0.25, offset=44, angle=-90, variant="logic")
+fs.add_instrument("I", 1, sensing=trip, at=0.25, offset=44, angle=-90, variant="logic")
 ```
 
 Hanging the square on an alarm instead would draw the alarm as driving it, and an
@@ -2105,12 +2167,87 @@ so an alarm on a controller on a transmitter resolves in order.
 
 ```python
 s   = fs.connect(feed.outlet, fv.inlet)
-fs.add_instrument("FE", 101, on=s, at=0.4, offset=0)                    # on the line
-ft  = fs.add_instrument("FT", 101, on=s, at=0.4, offset=60)             # above the tap
-lic = fs.add_instrument("LIC", 101, on=drum, at="E", variant="panel")   # on the drum
-fs.add_instrument("LAH", 101, on=lic, at="N", offset=48)                # alarm
-fs.add_instrument("I", 1, on=lic, at="S", offset=44, variant="logic")   # interlock
+ft  = fs.add_instrument("FT", 101, sensing=s, at=0.4, offset=60)        # above the tap
+lic = fs.add_instrument("LIC", 101, near=ft, at="S", display="central") # under it
+lic.annotate(high="LAH", low="LAL")                                     # the alarms
+fs.add_instrument("I", 1, near=lic, at="S", offset=44, variant="logic") # interlock
 ```
+
+### Letter codes outside the symbol
+
+```text
+instrument.annotate(*, safety=(), variable=(), high=(), low=()) -> Instrument
+```
+
+An alarm is a **function of a controller**, not a second instrument, so it is
+written beside that controller's balloon and no line is drawn to it.
+**ISO 15519-2 §5.2.5** (p. 22): *"Letter code combinations with modifiers H and
+L shall be represented outside the PCI symbol. The sequence shall be A, S, and Z
+with increasing value away from the centre line of the PCI symbol."*
+
+```python
+lic304.annotate(high="LAH", low="LAL")
+lsh611.annotate(high=("LAHH", "LSHH"))
+ai301.annotate(variable="pH", safety="SIL 2")
+```
+
+The four arguments are **§5.1.3**'s four quadrants (p. 19) in its own order:
+
+| argument | quadrant | §5.1.3 |
+|---|---|---|
+| `safety` | upper left | "Reference to typical diagram, safety information, e.g. SIL or SIF identifiers" |
+| `variable` | lower left | "Specification of type of measured variable when using letter code U (multivariable), e.g. pH, µS, MJ/s" |
+| `high` | upper right | "Information of high output/input functions, e.g. alarm or switching" |
+| `low` | lower right | "Information of low output/input function, e.g. alarm or switching" |
+
+The quadrants are the **corners**, which is the clause's own reason for them:
+*"This allows for horizontal and vertical connections to the symbol."* So
+annotating a balloon spends none of its four faces, and a connection arriving on
+the centre line runs between a `high` code and the `low` one beneath it, as the
+reference sheet draws it.
+
+Each argument takes one code or several. Several in one quadrant come out
+ordered A, then S, then Z outward whatever order they were given in, since the
+standard fixes the sequence and there is no choice to express. Chainable; called
+twice, the second call replaces the quadrants it names and leaves the rest.
+
+Codes are placed hard against the symbol and stepped **outward** if that is not
+clear paper, scored against the sheet's lines and symbols the way an equipment
+tag is; the quadrant itself never moves, being what the code means. The
+equipment-tag and line-number passes are told where they landed, so nothing is
+written across one.
+
+### A primary element's balloon
+
+```text
+fs.add_balloon(element, *, at=None, offset=46.0, angle=90.0, **kwargs) -> Instrument
+```
+
+A primary element is **one instrument shown as two marks**: the thing in the
+pipe, and the balloon carrying its tag. CHEE4001 p.10 is what makes it one
+instrument — *"Primary element (E): instrument that measures a process variable
+(e.g. orifice plates, thermocouples)"* — and a P&ID draws it with the fitting
+**unlettered** and the tag in a balloon on a short impulse line.
+
+```python
+fe303 = fs.add(units.Fitting(flow303.element("FE"), variant="venturi"))
+fs.add_balloon(fe303, at="N", offset=38)
+ft303 = fs.add_instrument("FT", flow303, near=fe303.balloon, at="N", offset=23)
+```
+
+The tag is typed once, on the element, and moves: `element.tag` goes empty,
+`element.balloon` is the balloon, and the sheet draws `FE-303` exactly once.
+Both objects answer to it, which is why the pair joins the sheet's
+[one thing, several marks](#building-the-topology) exemption instead of one of
+them needing a second tag invented for it. The element keeps the plain name,
+being what an equipment list schedules; the balloon is named `FE-303 (2)`, as a
+repeated trip square is.
+
+The relation is `sensing`, so a solid impulse line is drawn from the element to
+the balloon. `offset` is measured from the element's face; the default is the
+reference sheet's, whose FE balloon centre stands 1,05 balloon diameters off the
+process line. A second balloon on one element raises, as does one on something
+that draws no tag.
 
 ### Signal lines
 
@@ -2471,19 +2608,31 @@ announces it and is deleted in the next, so the message always names a release
 that has not shipped yet. The CHANGELOG lists it under `### Deprecated` when it
 is announced and under `### Removed` when it goes.
 
-**In flight now**, both going in 0.1.3:
+**In flight now**, all going in 0.1.3:
 
 | Deprecated | Type instead |
 |---|---|
 | `Separator(variant="cyclone"\|"gravity"\|"electrostatic").vapor` | `.overflow` |
 | the same three separators' `.liquid` | `.underflow` |
+| `Valve(variant="pneumatic")` | `Valve(variant="control")` |
+| `add_instrument(on=…)`, and `on:` in a spec | `sensing=`, `acting_on=` or `near=` |
+| `Instrument(variant="panel")` | `Instrument(display="central")` |
+| `Instrument(variant="aux")` | `Instrument(display="subsidiary")` |
 
-Those three drawings collect dust, and their two draws are `overflow` and
-`underflow` like every other separator that sorts rather than separating into
-phases. The old names still reach the same nozzles through attribute access,
-`port()`, `nozzle()`, `pin(port=…)` and a spec file's endpoints — everything but
-`unit.ports["vapor"]`, which is the dict itself. A drum or a wet scrubber keeps
-`vapor` and `liquid`; nothing about those is deprecated.
+Those three separator drawings collect dust, and their two draws are `overflow`
+and `underflow` like every other separator that sorts rather than separating
+into phases. The old names still reach the same nozzles through attribute
+access, `port()`, `nozzle()`, `pin(port=…)` and a spec file's endpoints —
+everything but `unit.ports["vapor"]`, which is the dict itself. A drum or a wet
+scrubber keeps `vapor` and `liquid`; nothing about those is deprecated.
+
+`on=` said two things at once and an author reaching for one of them silently
+got the other; the three that replace it each say which
+[relation](#anchoring-a-balloon) is meant, and `on=` means `sensing=`.
+`panel` and `aux` were a *location* wearing `variant`'s name, which is what left
+no way to ask for a squared balloon in a subsidiary system or a hexagon in the
+control room; they are the [`display`](#where-the-information-is) axis and draw
+the same two symbols under it.
 
 The finding rides on the object the call was made on, so a unit deprecated
 during construction is reported even though it was not on a flowsheet yet. A
@@ -2910,12 +3059,19 @@ literal, so a spec this package wrote reads back frozen.
 ### The `instruments` section
 
 `type` (required) and `number` make the tag, so `{type: LIC, number: 101}` is
-`LIC-101` elsewhere. `on` names the host: a unit, a named stream, or
-`[unit, port]` for the line leaving that nozzle. `to_dict()` writes that last
-form, since auto-numbered stream names are rewritten at render time. `at`,
-`offset`, `angle`, `variant` and `port_faces` behave as in
-[`add_instrument()`](#instrumentation). An instrument with no `on` is laid out
-like any other unit.
+`LIC-101` elsewhere. `sensing`, `acting_on` and `near` name the anchor and mean
+what they do in [`add_instrument()`](#anchoring-a-balloon): a unit, a named
+stream, or `[unit, port]` for the line leaving that nozzle. `to_dict()` writes
+that last form, since auto-numbered stream names are rewritten at render time.
+`at`, `offset`, `angle`, `variant`, `display` and `port_faces` behave as in
+[`add_instrument()`](#instrumentation), and `quadrants` is a mapping of
+[`annotate()`](#letter-codes-outside-the-symbol)'s own argument names. An
+instrument that names no anchor is laid out like any other unit. `on` is the
+retired spelling of `sensing`.
+
+A primary element's balloon is written on the **element's** entry, as
+`balloon: {at, offset, angle, variant, display}`, since it carries the element's
+tag and has none of its own to be an entry under.
 
 ### The `streams` section
 

@@ -9,6 +9,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **An alarm is lettering beside its controller, not a balloon of its own
+  (#253).** `instrument.annotate(high="LAH", low="LAL")` writes letter codes in
+  the four quadrants around a symbol and draws no line to them, because an
+  annotation is not a signal. **ISO 15519-2 §5.2.5** (p. 22) is a *shall*:
+  *"Letter code combinations with modifiers H and L shall be represented outside
+  the PCI symbol. The sequence shall be A, S, and Z with increasing value away
+  from the centre line of the PCI symbol."*
+
+  Drawing `PAH-301` as its own balloon said there was a second instrument. There
+  is not; there is one controller with a high-alarm function, and the sheet was
+  claiming an item that appears on no list. It also **spent a face**:
+  `examples/11`'s own comment recorded that `LIC-304`'s "north face is spent on
+  the high alarm", which is why its measurement had to come in from the west.
+  Six alarms across three sheets are lettering now, and four faces came back.
+
+  The four arguments are **§5.1.3**'s four quadrants (p. 19) under its own
+  names — `safety` for *"Reference to typical diagram, safety information, e.g.
+  SIL or SIF identifiers"*, `variable` for the measured-variable type under
+  letter code U, `high` and `low` for the high and low functions. They are the
+  **corners**, which is the clause's own reason for them: *"This allows for
+  horizontal and vertical connections to the symbol."* So annotating spends no
+  face at all, and a signal arriving on the centre line runs between the high
+  code and the low one — which is what `professional_examples/P&ID_301.pdf`
+  draws at all three of its annotated controllers.
+
+  Several codes in one quadrant come out ordered A, then S, then Z outward
+  however they were given, since the standard fixes the sequence. Placement is
+  hard against the symbol and steps **outward** where that is not clear paper,
+  scored against the sheet's lines and symbols exactly as an equipment tag is;
+  the quadrant never moves, being what the code means. The tag pass and the
+  line-number pass are both told where the codes landed, so nothing is written
+  across one.
+
+- **A primary element and its balloon share one tag (#249).**
+  `fs.add_balloon(element)` draws an element's tag in a balloon on a short
+  impulse line and leaves the fitting itself unlettered, which is how a P&ID
+  draws a primary element — `P&ID_301`'s venturi carries **no text at all**, an
+  `FE 303` balloon hangs under it and `FT 303` sits touching that.
+
+  ```python
+  fe303 = fs.add(units.Fitting(flow303.element("FE"), variant="venturi"))
+  fs.add_balloon(fe303, at="N", offset=38)
+  ft303 = fs.add_instrument("FT", flow303, near=fe303.balloon, at="N", offset=23)
+  ```
+
+  Stacking was never the blocker; the **tag** was. Adding the balloon as
+  `FE-303` while the fitting was also `FE-303` was refused, so a sheet had to
+  invent a junk tag for one of them or give up the balloon. CHEE4001 p.10
+  settles it: *"Primary element (E): **instrument** that measures a process
+  variable (e.g. orifice plates, thermocouples)."* One instrument, two marks —
+  so the pair joins the exemption the sheet already has for a trip square and a
+  utility header flag, rather than needing a second tag. The tag is typed once,
+  on the element, and moves: `element.tag` goes empty and `element.balloon` is
+  the balloon. Both drawing backends drop the element's lettering with no change
+  of their own, since both already write nothing against an empty tag.
+
+  All four flow loops in the corpus are drawn that way now — `04`'s orifice
+  plate, `11`'s venturi and `14`'s two meters. The pressure, level and
+  temperature loops are deliberately **not**: `P&ID_301` draws no `PE`, `LE` or
+  `TE` anywhere, and ISO 15519-2 §6.3.3 gives one PCI symbol per function in a
+  common housing, so a gauge or a transmitter with an integral sensor is one
+  device performing one function. Flow is the exception because an orifice or a
+  venturi genuinely is a separate item on the line.
+
 - **A P&ID can draw its flanged connections without a unit for every flange.**
   `render(connections="flanged")` marks the double tick at every equipment
   nozzle and both sides of every valve and in-line fitting;
@@ -462,6 +526,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A balloon says what it has to do with the thing it is placed against
+  (#137).** `add_instrument(on=…)` meant both *"put the balloon here"* and
+  *"draw an edge from here"*. Authors reached for the first and silently got the
+  second, so sheets stated things nobody had specified. Three keywords replace
+  it, one per relation:
+
+  | keyword | means | drawn between them |
+  |---|---|---|
+  | `sensing=` | the balloon takes its reading from this | an impulse line, or a fine dashed instrument connection |
+  | `acting_on=` | the balloon commands this | a fine dashed instrument connection |
+  | `near=` | the balloon only *sits* here | **nothing** |
+
+  `near=` is the one that did not exist. A control-room faceplate hung over the
+  valve it drives wants a position and nothing else — and since ISO 15519-2
+  §6.2 wants the signal line drawn separately, the author had to `connect()` it
+  anyway. So `on=` bought a position and a lie: `08`'s `LIC-201`, *"declared
+  purely to sit below LT-201"*, was drawn tapped to the drum it is not piped to.
+  That line is gone.
+
+  `acting_on=` is what a trip square hung on the valve it strokes was reaching
+  for, and it settles the line style from the model rather than from the host's
+  class: an impulse line carries fluid **to** an instrument, so only a `sensing`
+  relation can be one. `Z-2` off `XV-301` and `Z-1` off `XV-601`/`XV-602` are
+  dashed now for the reason they should always have been, and not by accident of
+  what class was on the other end.
+
+  Naming two of the three raises: a balloon is anchored to one thing, and a
+  second relationship is a second line, which is what `connect()` is for.
+
+- **`variant` is the symbol, `display` is where the information is (#181).**
+  ISO 15519-2 **Table 1** (p. 7) tabulates two independent things and `variant`
+  collapsed them into one enum. The additional graphic — no bar, one bar, two —
+  answers *where*: `"field"` is *"Information available on field mounted
+  instrument/display"*, `"central"` *"…in central control system"*,
+  `"subsidiary"` *"…in subsidiary control system"*. The outline answers *what*.
+  §5.1.1 on the same page gives the column its job: *"The geographical
+  availability or origin of information inside or outside the PCI symbol are
+  illustrated by means of additional graphics within the PCI symbol."*
+
+  ```python
+  fs.add_instrument("LIC", 101, near=lt, at="S", display="central")
+  ```
+
+  `variant="shared"` stays: a circle in a square is a symbol type and says
+  something the bar does not, namely that the function controls as well as
+  displays. Its display defaults to `"central"` because a shared display *is*
+  the control room — CHEE4001 p.13 — so no bar is a second decision to make and
+  nothing on any sheet moved.
+
+  Three combinations have no artwork registered (a squared balloon with two
+  bars, a hexagon or a diamond with any bar) and asking for one raises, naming
+  the pairs that are drawn, rather than quietly dropping the bar. Drawing them
+  is a `pandid/render/symbols.py` change and is not in this PR.
+
 - **A tank's fill is a menu, and its default moved to the shell (#226).** Every
   `Tank` variant fixed `inlet` on the crown, so no sheet could draw a
   bottom-filled tank at all. Splash-filling a flammable liquid into a vapour
@@ -482,6 +600,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   name and says so in the notes.
 
 ### Deprecated
+
+- **`add_instrument(on=…)`, and `on:` in a spec (#137).** Use `sensing=`,
+  `acting_on=` or `near=`, whichever states what the balloon has to do with what
+  it is placed against. `on=` goes on working for 0.1.2 with a
+  `DeprecationWarning` and a `deprecated` finding on `fs.validate()`, means
+  `sensing=`, and is removed in 0.1.3. Naming it together with any of the three
+  raises, since that is two anchors.
+
+- **`Instrument(variant="panel")` and `Instrument(variant="aux")` (#181).** Use
+  `display="central"` and `display="subsidiary"`. Both were a *location* wearing
+  the symbol-type argument's name, which is what left no way to ask for a
+  squared balloon in a subsidiary system or a hexagon in the control room. They
+  draw exactly the same two symbols under `display`, so no sheet moves; they
+  warn, file a `deprecated` finding, and are removed in 0.1.3. `to_dict()`
+  writes the two axes separately, so a spec written by this release reads back
+  without triggering either.
 
 - **`Valve(variant="pneumatic")` (#136).** Use `Valve(variant="control")`, or
   spell the pairing out as `Valve(variant="gate", actuator="diaphragm")`. It
