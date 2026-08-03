@@ -26,7 +26,7 @@ def _line(**kw):
     prod = fs.add(U.Product("Product")).pin(x=520, y=170)
     s = fs.connect(feed.outlet, fv.inlet)
     fs.connect(fv.outlet, prod.inlet)
-    inst = fs.add_instrument("FT", 101, on=s, **kw)
+    inst = fs.add_instrument("FT", 101, sensing=s, **kw)
     fs.route()
     return fs, s, inst, fv
 
@@ -46,7 +46,7 @@ def _hatch_marks(svg: str) -> int:
 def test_instrument_tag_rendered_inside():
     fs = Flowsheet("i")
     a = fs.add(U.Instrument("FT-101"))
-    b = fs.add(U.Instrument("FIC-101", variant="panel"))
+    b = fs.add(U.Instrument("FIC-101", display="central"))
     fs.connect(a.sig_out, b.sig_in, kind="electric")
     svg = fs.to_svg()
     assert ">FT<" in svg and ">101<" in svg  # split tag drawn inside
@@ -204,7 +204,7 @@ def test_angle_follows_a_reroute_rather_than_the_screen():
     feed = fs.add(U.Feed("Feed")).pin(x=60, y=60)
     col = fs.add(U.Column("T-1")).pin(x=300, y=300)
     s = fs.connect(feed.outlet, col.feed)
-    inst = fs.add_instrument("PT", 1, on=s, at=0.99, offset=40)
+    inst = fs.add_instrument("PT", 1, sensing=s, at=0.99, offset=40)
     fs.route()
     pts = [p for p in s.route.waypoints]
     ux, uy = pts[-1][0] - pts[-2][0], pts[-1][1] - pts[-2][1]
@@ -228,7 +228,7 @@ def test_impulse_line_is_drawn_thin_from_the_tap():
 def test_attached_to_unit_hangs_off_the_named_face():
     fs = Flowsheet("u")
     drum = fs.add(U.Vessel("V-101")).pin(x=200, y=100)
-    lic = fs.add_instrument("LIC", 101, on=drum, at="E", offset=80, variant="panel")
+    lic = fs.add_instrument("LIC", 101, sensing=drum, at="E", offset=80, display="central")
     fs.route()
     f = drum.frame
     assert lic.tap == pytest.approx((f.x_max, f.cy))
@@ -238,11 +238,11 @@ def test_attached_to_unit_hangs_off_the_named_face():
 def test_unit_face_default_and_validation():
     fs = Flowsheet("u")
     drum = fs.add(U.Vessel("V-101")).pin(x=200, y=100)
-    assert fs.add_instrument("LT", 1, on=drum).at == "E"
+    assert fs.add_instrument("LT", 1, sensing=drum).at == "E"
     with pytest.raises(ValueError):
-        fs.add_instrument("LT", 2, on=drum, at=0.5)
+        fs.add_instrument("LT", 2, sensing=drum, at=0.5)
     with pytest.raises(ValueError):
-        fs.add_instrument("LT", 3, on=drum, at="up")
+        fs.add_instrument("LT", 3, sensing=drum, at="up")
 
 
 def test_stream_host_rejects_a_face():
@@ -251,9 +251,9 @@ def test_stream_host_rejects_a_face():
     prod = fs.add(U.Product("P"))
     s = fs.connect(feed.outlet, prod.inlet)
     with pytest.raises(ValueError):
-        fs.add_instrument("FT", 1, on=s, at="E")
+        fs.add_instrument("FT", 1, sensing=s, at="E")
     with pytest.raises(ValueError):
-        fs.add_instrument("FT", 2, on=s, at=1.4)
+        fs.add_instrument("FT", 2, sensing=s, at=1.4)
 
 
 # --- layout ------------------------------------------------------------------
@@ -264,8 +264,8 @@ def test_attached_balloons_take_no_rank():
     feed = fs.add(U.Feed("Feed"))
     prod = fs.add(U.Product("Product"))
     s = fs.connect(feed.outlet, prod.inlet)
-    ft = fs.add_instrument("FT", 101, on=s, offset=60)
-    fic = fs.add_instrument("FIC", 101, on=ft, at="N", offset=60)
+    ft = fs.add_instrument("FT", 101, sensing=s, offset=60)
+    fic = fs.add_instrument("FIC", 101, near=ft, at="N", offset=60)
     fs.connect(ft.sig_out, fic.sig_in, kind="electric")
     fs.layout()
     assert (ft.frame.col, ft.frame.row) == (None, None)
@@ -289,7 +289,7 @@ def test_controller_output_routes_to_the_valve_actuator():
     from pandid.portgeom import port_point
 
     fs, _, ft, fv = _line(at=0.4, offset=60)
-    fic = fs.add_instrument("FIC", 101, on=ft, at="N", offset=120, angle=35, variant="panel")
+    fic = fs.add_instrument("FIC", 101, near=ft, at="N", offset=120, angle=35, display="central")
     fs.connect(ft.sig_out, fic.sig_in, kind="electric")
     sig = fs.connect(fic.sig_out, fv.actuator, kind="pneumatic")
     fs.route()
@@ -382,7 +382,10 @@ def test_relief_valve_is_tagged_as_plain_text_beside_the_symbol():
 
 def test_hanger_is_not_drawn_where_a_signal_already_joins_the_pair():
     fs, _, ft, _ = _line(at=0.5, offset=60)
-    fic = fs.add_instrument("FIC", 101, on=ft, at="N", offset=110, angle=35, variant="panel")
+    # sensing= and not near=, deliberately: what this asserts is that the
+    # *signal* is what suppresses the hanger, so the balloon has to be one
+    # that would otherwise be joined to its host by a line.
+    fic = fs.add_instrument("FIC", 101, sensing=ft, at="N", offset=110, angle=35, display="central")
     fs.connect(ft.sig_out, fic.sig_in, kind="electric")
     taps = [ln for ln in fs.to_svg().split("\n") if "<line" in ln and 'stroke-width="1"' in ln]
     assert len(taps) == 1  # the transmitter's impulse line, not a second FT-FIC line
@@ -390,7 +393,7 @@ def test_hanger_is_not_drawn_where_a_signal_already_joins_the_pair():
 
 def test_interlock_hangs_off_its_controller_on_a_dashed_line():
     fs, _, ft, _ = _line(at=0.5, offset=60)
-    fs.add_instrument("I", 1, on=ft, at="S", offset=44, variant="logic")
+    fs.add_instrument("I", 1, sensing=ft, at="S", offset=44, variant="logic")
     taps = [ln for ln in fs.to_svg().split("\n") if "<line" in ln and 'stroke-width="1"' in ln]
     assert any("stroke-dasharray" in ln for ln in taps)  # instrument host -> dashed
     assert any("stroke-dasharray" not in ln for ln in taps)  # process tap -> solid
@@ -428,35 +431,37 @@ def _tap_styles(fs) -> dict:
 
 
 @pytest.mark.parametrize(
-    "variant,style",
+    "variant,display,style",
     [
         # A bare balloon is ISA-5.1's field-mounted device, and a device in the
         # field is the only thing a length of impulse tubing can reach.
-        ("default", "solid"),
+        ("default", "field", "solid"),
         # Everything else is a location or function symbol, and says outright that
         # the function is not out on the plant: a bar across the balloon puts it in
-        # a panel, a square around it in the shared display, a hexagon in a computer
-        # and a diamond in a logic solver. No tubing runs from a drum to any of
-        # those, whatever the drum is.
-        ("panel", "dashed"),
-        ("aux", "dashed"),
-        ("shared", "dashed"),
-        ("computer", "dashed"),
-        ("sis", "dashed"),
-        ("logic", "dashed"),
-        ("interlock", "dashed"),
+        # a control room, a square around it in the shared display, a hexagon in a
+        # computer and a diamond in a logic solver. No tubing runs from a drum to
+        # any of those, whatever the drum is.
+        ("default", "central", "dashed"),
+        ("default", "subsidiary", "dashed"),
+        ("shared", "central", "dashed"),
+        ("computer", "field", "dashed"),
+        ("sis", "field", "dashed"),
+        ("logic", "field", "dashed"),
+        ("interlock", "field", "dashed"),
     ],
 )
-def test_link_style_follows_the_balloon_not_only_its_host(variant, style):
+def test_link_style_follows_the_balloon_not_only_its_host(variant, display, style):
     """One host, every balloon: the host cannot be what decides it.
 
     The vessel is the same piece of plant in all eight, and full of the same
     fluid. What changes is whether there is anything at the other end of the
-    line for that fluid to reach.
+    line for that fluid to reach -- which is both axes of the balloon, the
+    symbol type and the display, since either one can put the function off the
+    plant.
     """
     fs = Flowsheet("what is on the end of it")
     drum = fs.add(U.Vessel("V-101")).pin(x=200, y=200)
-    fs.add_instrument("LX", 101, on=drum, at="E", offset=80, variant=variant)
+    fs.add_instrument("LX", 101, sensing=drum, at="E", offset=80, variant=variant, display=display)
     fs.route()
     assert _tap_styles(fs) == {"LX-101": style}
 
@@ -487,13 +492,13 @@ def test_link_style_follows_the_host_not_only_its_balloon(host, style):
         valve = fs.add(U.Valve("XV-1", variant="solenoid")).pin(x=200, y=300)
         hosts["valve"] = lambda: (valve, {"at": "S"})
     elif host in ("instrument", "signal"):
-        lt = fs.add_instrument("LT", 101, on=drum, at="E", offset=70)
-        lic = fs.add_instrument("LIC", 101, on=lt, at="E", offset=70, variant="shared")
+        lt = fs.add_instrument("LT", 101, sensing=drum, at="E", offset=70)
+        lic = fs.add_instrument("LIC", 101, near=lt, at="E", offset=70, variant="shared")
         signal = fs.connect(lt.sig_out, lic.sig_in, kind="electric")
         hosts["instrument"] = lambda: (lt, {"at": "N"})
         hosts["signal"] = lambda: (signal, {"at": 0.5})
-    on, where = hosts[host]()
-    fs.add_instrument("PX", 1, on=on, offset=70, variant="default", **where)
+    anchor, where = hosts[host]()
+    fs.add_instrument("PX", 1, sensing=anchor, offset=70, variant="default", **where)
     fs.route()
     assert _tap_styles(fs)["PX-1"] == style
 
@@ -512,9 +517,9 @@ def test_the_trip_square_on_a_valve_is_drawn_as_the_signal_it_is():
     prod = fs.add(U.Product("Product")).pin(x=520, y=170)
     fs.connect(feed.outlet, xv.inlet)
     fs.connect(xv.outlet, prod.inlet)
-    ti = fs.add_instrument("TI", 325, on=xv, at="N", offset=44)
-    fs.add_instrument("I", 2, on=xv, at="S", offset=44, variant="sis")
-    fs.add_instrument("I", 2, on=ti, at="E", offset=44, variant="sis")
+    ti = fs.add_instrument("TI", 325, sensing=xv, at="N", offset=44)
+    fs.add_instrument("I", 2, acting_on=xv, at="S", offset=44, variant="sis")
+    fs.add_instrument("I", 2, sensing=ti, at="E", offset=44, variant="sis")
     fs.route()
     styles = _tap_styles(fs)
     assert styles["I-2"] == styles["I-2 (2)"] == "dashed"
@@ -531,7 +536,7 @@ def test_balloon_signal_ports_reach_every_face():
     seen = {}
     for face in ("N", "S", "E", "W"):
         fs = Flowsheet("faces")
-        inst = fs.add_instrument("LIC", 101, variant="panel")
+        inst = fs.add_instrument("LIC", 101, display="central")
         inst.pin(x=200, y=250)
         inst.nozzle("sig_out", face)
         fs.layout()
@@ -556,8 +561,8 @@ def test_balloon_ports_have_no_face_of_their_own_but_equipment_nozzles_do():
 
 
 def test_a_barred_balloons_tag_clears_its_location_bar():
-    """The panel, aux and shared variants draw a location bar across the middle
-    of the circle, right where the tag letters would otherwise sit. ISO 15519-2
+    """Every balloon carrying a location bar draws it across the middle of the
+    circle, right where the tag letters would otherwise sit. ISO 15519-2
     5.1.2 (p. 8) puts the letters above it and the number below: "Letter codes
     for process variables and control functions ... shall be placed in the upper
     part of the symbol and reference designation in the lower part of the
@@ -566,12 +571,16 @@ def test_a_barred_balloons_tag_clears_its_location_bar():
 
     from pandid.render.symbols import default_registry
 
-    for variant, bars in (("panel", (22.0,)), ("aux", (19.0, 25.0)), ("shared", (22.0,))):
-        fs = Flowsheet(f"bar-{variant}")
-        inst = fs.add_instrument("LIC", 101, variant=variant).pin(x=200, y=200)
+    for kwargs, bars in (
+        ({"display": "central"}, (22.0,)),
+        ({"display": "subsidiary"}, (19.0, 25.0)),
+        ({"variant": "shared"}, (22.0,)),
+    ):
+        fs = Flowsheet("bar")
+        inst = fs.add_instrument("LIC", 101, **kwargs).pin(x=200, y=200)
         fs.layout()
         svg = fs.to_svg(check=False)
-        sym = default_registry.get("instrument", variant)
+        sym = default_registry.get("instrument", inst.variant)
         # Balloon centre in sheet coordinates, and the bars relative to it.
         cy = inst.frame.y + inst.frame.h / 2
         band = [cy + b - sym.height / 2 for b in bars]
@@ -580,10 +589,10 @@ def test_a_barred_balloons_tag_clears_its_location_bar():
             t: float(y)
             for y, t in re.findall(r'<text x="[\d.]+" y="([\d.]+)"[^>]*>(LIC|101)</text>', svg)
         }
-        assert len(ys) == 2, f"{variant}: expected both tag lines, got {ys}"
+        assert len(ys) == 2, f"{inst.variant}: expected both tag lines, got {ys}"
         # 12pt letters and an 11pt number, centred on their baselines.
-        assert ys["LIC"] + 6 <= min(band), f"{variant}: letters run into the bar"
-        assert ys["101"] - 5.5 >= max(band), f"{variant}: number runs into the bar"
+        assert ys["LIC"] + 6 <= min(band), f"{inst.variant}: letters run into the bar"
+        assert ys["101"] - 5.5 >= max(band), f"{inst.variant}: number runs into the bar"
 
 
 def test_every_shared_display_balloon_carries_a_location_bar():
@@ -622,7 +631,7 @@ def test_a_short_pneumatic_run_still_gets_its_cross_hatch():
     actuator right beneath it) with none at all, rendering it as plain pipe."""
     fs = Flowsheet("short-pneumatic")
     valve = fs.add(U.Valve("LV-101", variant="control")).pin(x=300, y=300)
-    ly = fs.add_instrument("LY", 101, on=valve, at="N", offset=58)
+    ly = fs.add_instrument("LY", 101, near=valve, at="N", offset=58)
     ly.nozzle("sig_out", "S")
     fs.connect(ly.sig_out, valve.actuator, kind="pneumatic")
     fs.layout()
@@ -781,7 +790,7 @@ def test_a_balloon_with_one_line_each_way_grows_nothing():
     ``tests/golden`` is one of these, and this is why none of them moved."""
     fs = Flowsheet("plain")
     a = fs.add(U.Instrument("FT-101"))
-    b = fs.add(U.Instrument("FIC-101", variant="panel"))
+    b = fs.add(U.Instrument("FIC-101", display="central"))
     fs.connect(a.sig_out, b.sig_in, kind="electric")
     assert list(a.ports) == ["pv", "sig_in", "sig_out"]
     assert list(b.ports) == ["pv", "sig_in", "sig_out"]
@@ -1014,3 +1023,394 @@ def test_a_pool_member_can_be_asked_for_by_name():
     assert pic.signal_port("sig_out") is pic.sig_out
     with pytest.raises(KeyError, match="signal pools"):
         pic.signal_port("sig_sideways")
+
+
+# --- what the balloon has to do with what it is placed against ----------------
+#
+# One keyword used to place a balloon and it meant only "here". Everything the
+# sheet then drew between the two was guessed from their classes, so an author
+# who wanted somewhere to hang a control-room faceplate got a line saying the
+# faceplate was piped to the drum (#137). The three keywords are that guess made
+# into a statement: ``sensing=`` reads the host, ``acting_on=`` commands it,
+# ``near=`` is a placement and nothing more.
+
+
+def _drum(relation, **kwargs):
+    """One balloon on one drum, placed by whichever keyword is named."""
+    fs = Flowsheet("relation")
+    feed = fs.add(U.Feed("Feed")).pin(x=60, y=170)
+    drum = fs.add(U.Vessel("V-101")).pin(x=300, y=140)
+    prod = fs.add(U.Product("Product")).pin(x=600, y=170)
+    fs.connect(feed.outlet, drum.inlet)
+    fs.connect(drum.outlet, prod.inlet)
+    inst = fs.add_instrument("LX", 101, at="E", offset=70, **{relation: drum}, **kwargs)
+    fs.route()
+    return fs, inst
+
+
+def test_a_placement_draws_nothing_where_a_reading_draws_a_line():
+    """``near=`` is the whole of the difference, held against ``sensing=`` on
+    the same pair so nothing else can be what moved.
+
+    Asserted on both the derivation and the drawing, because the two have to
+    agree: label placement dodges the lines :func:`tap_lines` reports, so a line
+    derived and then not drawn would leave the sheet with a gap nothing is in.
+    """
+    from pandid.render.svg import tap_lines
+
+    read, reading = _drum("sensing")
+    stood, standing = _drum("near")
+    assert [u.name for u, _, _ in tap_lines(read)] == ["LX-101"]
+    assert tap_lines(stood) == []
+    assert (reading.relation, standing.relation) == ("sensing", "near")
+    # ...and the group is not merely empty, it is not opened at all.
+    assert '<g id="instrument_taps">' in read.to_svg()
+    assert '<g id="instrument_taps">' not in stood.to_svg()
+
+
+def test_a_placement_is_still_a_placement():
+    """``near=`` gives up the line and keeps everything else: the balloon hangs
+    off the face it was given, which is what an author asked for by naming a
+    host at all."""
+    _, standing = _drum("near")
+    host = standing.host
+    assert standing.at == "E"
+    assert (standing.frame.cx, standing.frame.cy) == pytest.approx(
+        (host.frame.x_max + 70, host.frame.cy)
+    )
+
+
+def test_a_command_is_a_signal_even_where_the_host_holds_fluid():
+    """The two ends were already both asked; the *line* is the third question.
+
+    A vessel is full of fluid and a bare balloon is out in the field, which is
+    every condition impulse tubing needs -- and a square stroking that vessel is
+    still commanding it. Tubing brings the fluid **to** the instrument, so only
+    a reading can be a length of it.
+    """
+    from pandid.render.svg import impulse_tap
+
+    _, reading = _drum("sensing")
+    fs, commanding = _drum("acting_on")
+    assert impulse_tap(reading) is True
+    assert impulse_tap(commanding) is False
+    # Both are drawn: what differs is what the line says, not whether there is
+    # one. A command reaches what it acts on, and the sheet has to show it.
+    assert _tap_styles(fs) == {"LX-101": "dashed"}
+
+
+def test_a_balloon_is_placed_against_one_thing():
+    """Two keywords are two placements, and a second relationship is a second
+    line. The refusal names both, since which of the two the author meant to
+    delete is not the library's to decide."""
+    fs = Flowsheet("two anchors")
+    drum = fs.add(U.Vessel("V-101"))
+    valve = fs.add(U.Valve("FV-101", variant="control"))
+    with pytest.raises(ValueError) as excinfo:
+        fs.add_instrument("LX", 101, sensing=drum, near=valve)
+    message = str(excinfo.value)
+    assert "named 2 (sensing=, near=)" in message
+    assert "connect()" in message  # ...and where a second relationship goes
+
+
+def test_an_unknown_relation_is_refused_at_the_call_that_wrote_it():
+    from pandid.units import RELATIONS
+
+    fs = Flowsheet("relation")
+    drum = fs.add(U.Vessel("V-101"))
+    with pytest.raises(ValueError, match="relation="):
+        fs.add(U.Instrument("LX", 101)).attach(drum, relation="watching")
+    assert RELATIONS == ("sensing", "acting_on", "near")
+
+
+# --- two axes: what the instrument does, and where its reading is -------------
+#
+# ISO 15519-2 asks them separately. The outline is the symbol type -- a circle,
+# a circle in a square, a hexagon, a diamond -- and Table 1's additional graphic
+# is where the information is available: no bar in the field, one for the
+# central control system, two for a subsidiary one. The registry answers both
+# with one variant name, so ``Instrument`` is where the two meet.
+
+
+@pytest.mark.parametrize(
+    "display,drawn", [("field", "default"), ("central", "panel"), ("subsidiary", "aux")]
+)
+def test_a_display_picks_the_artwork_its_bar_is_drawn_in(display, drawn):
+    """The pair resolves to one registered variant, and that variant is what the
+    rest of the package sees. Both halves stay readable off the instrument, so a
+    sheet can still be asked which of the two axes it stated."""
+    inst = U.Instrument("LIC", 101, display=display)
+    assert (inst.symbol_type, inst.display, inst.variant) == ("default", display, drawn)
+
+
+def test_a_square_says_where_it_is_without_being_asked():
+    """A circle in a square is the shared display, and CHEE4001 p.13 is why the
+    display is not a second decision to make: "A circle within a square shows
+    that the instrument has some controlling function ... such as a distributed
+    control system (DCS)." The bar it carries follows from the symbol."""
+    assert U.Instrument("FIC", 301, variant="shared").display == "central"
+    assert U.Instrument("FIC", 301, variant="shared", display="central").variant == "shared"
+
+
+def test_a_display_is_registered_artwork_and_not_a_stripe_over_any_outline():
+    """The pairs that draw are a table, not a rule, so a pair with no artwork
+    behind it raises rather than drawing the outline and dropping the bar --
+    which would state the one thing about the point that is certainly false."""
+    with pytest.raises(ValueError) as excinfo:
+        U.Instrument("KIC", 301, variant="computer", display="central")
+    message = str(excinfo.value)
+    assert "no balloon is drawn for variant='computer' with display='central'" in message
+    # ...and it names the pairs that are drawn, so the reader has somewhere to go
+    assert "variant='default' display='central'" in message
+    assert "variant='default' display='subsidiary'" in message
+    assert "variant='shared' display='central'" in message
+
+
+def test_a_display_that_is_not_one_of_the_three_is_refused():
+    with pytest.raises(ValueError, match="display= is where the information"):
+        U.Instrument("LIC", 101, display="panel")
+
+
+# --- letter codes written outside the symbol ----------------------------------
+
+
+def test_annotate_writes_high_and_low_into_the_quadrants_iso_names_them():
+    """ISO 15519-2 5.1.3 (p. 19) letters them: (c) "Information of high
+    output/input functions, e.g. alarm or switching", (d) "Information of low
+    output/input function". High above the centre line and low below is 5.2.5's
+    "increasing value away from the centre line"."""
+    inst = U.Instrument("LIC", 304).annotate(high="LAH", low="LAL")
+    written = {name: codes for name, codes in inst.quadrants.items() if codes}
+    assert written == {"c": ("LAH",), "d": ("LAL",)}
+
+
+def test_annotate_returns_the_balloon_it_lettered():
+    inst = U.Instrument("LIC", 304)
+    assert inst.annotate(high="LAH") is inst
+
+
+def test_several_codes_in_one_quadrant_take_the_sequence_the_standard_fixes():
+    """ISO 15519-2 5.2.5: "The sequence shall be A, S, and Z with increasing
+    value away from the centre line of the PCI symbol." A shall is not an
+    author's choice to express, so the order they wrote is not preserved: an
+    alarm, a switch and a trip come out A, S, Z outward however they are given.
+    """
+    scrambled = U.Instrument("LIC", 304).annotate(high=("LZHH", "LAHH", "LSHH"))
+    in_order = U.Instrument("LIC", 305).annotate(high=("LAHH", "LSHH", "LZHH"))
+    assert scrambled.quadrants["c"] == ("LAHH", "LSHH", "LZHH")
+    assert in_order.quadrants["c"] == scrambled.quadrants["c"]
+
+
+def test_an_empty_letter_code_is_refused_rather_than_written():
+    """Nothing is not a thing to write in a quadrant. An empty string is a
+    mistake in the call that wrote it, and leaving the argument out is how an
+    author says nothing."""
+    with pytest.raises(ValueError, match="empty letter code"):
+        U.Instrument("LIC", 304).annotate(high=("LAH", ""))
+
+
+def test_an_annotated_balloon_spends_no_face():
+    """ISO 15519-2 5.1.3's own reason for the corners: "This allows for
+    horizontal and vertical connections to the symbol." The alarms used to be
+    balloons of their own hung off the controller, and a face went with each."""
+    fs = Flowsheet("annotated")
+    lt = fs.add(U.Instrument("LT-304")).pin(x=200, y=400)
+    lic = fs.add(U.Instrument("LIC-304", variant="shared")).pin(x=200, y=250)
+    lic.annotate(high="LAH", low="LAL")
+    fs.connect(lt.sig_out, lic.sig_in, kind="electric")
+    fs.route()
+    svg = fs.to_svg()
+    assert ">LAH</text>" in svg and ">LAL</text>" in svg
+    # Lettering, not instruments: no second balloon was drawn for either.
+    assert [u.name for u in fs.units] == ["LT-304", "LIC-304"]
+
+
+# --- a primary element's balloon ----------------------------------------------
+#
+# A primary element is one instrument shown as two marks: the thing in the pipe
+# and the balloon that carries its tag. ``professional_examples/P&ID_301.pdf``
+# draws its venturi with no lettering at all and an ``FE 303`` balloon under it
+# on a short impulse line, which is what ``add_balloon()`` is for (#249).
+
+
+def _element():
+    """A venturi in a run, tagged, with nothing else on the sheet."""
+    fs = Flowsheet("primary element")
+    feed = fs.add(U.Feed("Feed")).pin(x=60, y=170)
+    fe = fs.add(U.Fitting("FE-303", variant="venturi")).pin(x=300, port="inlet", y=195)
+    prod = fs.add(U.Product("Product")).pin(x=560, y=170)
+    fs.connect(feed.outlet, fe.inlet)
+    fs.connect(fe.outlet, prod.inlet)
+    return fs, fe
+
+
+def test_a_balloon_carries_the_elements_tag_and_the_element_stops_drawing_it():
+    """The tag is typed once, on the element, and moves. The element keeps the
+    plain name, since it is the item an equipment list schedules; the balloon is
+    named as a repeated square is."""
+    fs, fe = _element()
+    balloon = fs.add_balloon(fe, at="N", offset=38)
+    assert fe.balloon is balloon
+    assert (balloon.tag, balloon.name) == ("FE-303", "FE-303 (2)")
+    assert (fe.tag, fe.name) == ("", "FE-303")
+
+
+def test_the_shared_tag_is_drawn_exactly_once():
+    """Which is the whole of what moving it does to the sheet: one tag, one
+    place, and the bookkeeping name never reaches the paper."""
+    fs, fe = _element()
+    fs.add_balloon(fe, at="N", offset=38)
+    fs.route()
+    svg = fs.to_svg()
+    assert svg.count(">FE<") == 1 and svg.count(">303<") == 1
+    assert "(2)" not in svg
+
+
+def test_the_balloon_reads_the_element_it_stands_for():
+    """A short impulse line, solid: the element is in the pipe and the balloon
+    is a field device, so the one thing between them is tubing."""
+    from pandid.render.svg import impulse_tap
+
+    fs, fe = _element()
+    balloon = fs.add_balloon(fe, at="N", offset=38)
+    fs.route()
+    assert (balloon.host, balloon.relation) == (fe, "sensing")
+    assert impulse_tap(balloon) is True
+    assert _tap_styles(fs) == {"FE-303 (2)": "solid"}
+
+
+def test_a_second_balloon_on_one_element_is_refused():
+    """One tag is drawn once. A second reading of the same point is a second
+    instrument with a tag of its own, and the refusal says so."""
+    fs, fe = _element()
+    fs.add_balloon(fe)
+    with pytest.raises(ValueError, match=r"already in the balloon 'FE-303 \(2\)'"):
+        fs.add_balloon(fe)
+
+
+def test_an_untagged_item_has_nothing_to_move():
+    fs, _ = _element()
+    tee = fs.add(U.Tee("TEE-1"))
+    with pytest.raises(ValueError, match="draws no tag"):
+        fs.add_balloon(tee)
+
+
+def test_an_element_on_another_sheet_is_refused():
+    fs, fe = _element()
+    with pytest.raises(ValueError, match="already on this sheet"):
+        Flowsheet("elsewhere").add_balloon(fe)
+
+
+# --- the retired spellings ----------------------------------------------------
+
+
+def test_the_anchor_no_longer_leaves_the_relationship_to_be_guessed():
+    """``on=`` said where and nothing else, so it is read as the commonest of
+    the three things it used to mean, and still draws what it always drew."""
+    fs = Flowsheet("retired")
+    drum = fs.add(U.Vessel("V-101")).pin(x=300, y=140)
+    with pytest.warns(DeprecationWarning, match=r"add_instrument\(on=\.\.\.\)"):
+        inst = fs.add_instrument("LX", 101, on=drum, at="E", offset=70)
+    assert (inst.host, inst.relation) == (drum, "sensing")
+
+
+def test_the_retired_anchor_draws_the_line_it_always_drew():
+    """The whole sheet, byte for byte, against the same sheet written the new
+    way: a deprecation is a spelling going, not a drawing moving."""
+    fs = Flowsheet("relation")  # the name _drum() gives it, so the two compare
+    feed = fs.add(U.Feed("Feed")).pin(x=60, y=170)
+    drum = fs.add(U.Vessel("V-101")).pin(x=300, y=140)
+    prod = fs.add(U.Product("Product")).pin(x=600, y=170)
+    fs.connect(feed.outlet, drum.inlet)
+    fs.connect(drum.outlet, prod.inlet)
+    with pytest.warns(DeprecationWarning):
+        fs.add_instrument("LX", 101, on=drum, at="E", offset=70)
+    fs.route()
+    sensed, _ = _drum("sensing")
+    assert _tap_styles(fs) == _tap_styles(sensed) == {"LX-101": "solid"}
+    assert fs.to_svg() == sensed.to_svg()
+
+
+def test_the_retired_anchor_reports_on_validate():
+    """The second signal: ``DeprecationWarning`` is filtered out of most
+    programs, and ``fs.validate()`` is what an author is told to run."""
+    from pandid.deprecation import CODE
+
+    fs = Flowsheet("retired")
+    drum = fs.add(U.Vessel("V-101")).pin(x=300, y=140)
+    with pytest.warns(DeprecationWarning):
+        fs.add_instrument("LX", 101, on=drum, at="E", offset=70)
+    found = [i for i in fs.validate() if i.code == CODE]
+    assert len(found) == 1
+    assert "use add_instrument(sensing=...), acting_on= or near=" in found[0].message
+
+
+def test_the_retired_anchor_and_a_new_one_together_are_two_anchors():
+    """``on=`` is one of the three under another name, so naming it beside one
+    of them asks for two placements exactly as naming two of them does."""
+    fs = Flowsheet("both")
+    drum = fs.add(U.Vessel("V-101"))
+    valve = fs.add(U.Valve("FV-101", variant="control"))
+    with pytest.raises(ValueError, match="Drop the on="):
+        fs.add_instrument("LX", 101, on=drum, sensing=valve)
+    with pytest.raises(ValueError, match="Drop the on="):
+        fs.add_instrument("LX", 102, on=drum, near=valve)
+
+
+@pytest.mark.parametrize("variant,display", [("panel", "central"), ("aux", "subsidiary")])
+def test_a_location_is_no_longer_a_kind_of_balloon(variant, display):
+    """Both named where the information was available, which is Table 1's
+    additional graphic and not an outline. The drawing is untouched: the pair
+    resolves to the variant that used to be asked for by name."""
+    with pytest.warns(DeprecationWarning, match=rf"Instrument\(variant='{variant}'\)"):
+        inst = U.Instrument("LIC", 101, variant=variant)
+    assert inst.variant == variant, "and it still draws, for one release"
+    assert (inst.symbol_type, inst.display) == ("default", display)
+
+
+@pytest.mark.parametrize("variant,display", [("panel", "central"), ("aux", "subsidiary")])
+def test_the_retired_display_draws_the_sheet_the_new_one_draws(variant, display):
+    """Byte for byte, so no golden moves and no sheet already authored does."""
+
+    def sheet(**kwargs):
+        fs = Flowsheet("bar")
+        fs.add_instrument("LIC", 101, **kwargs).pin(x=200, y=200)
+        fs.layout()
+        return fs.to_svg(check=False)
+
+    with pytest.warns(DeprecationWarning):
+        retired = sheet(variant=variant)
+    assert retired == sheet(display=display)
+
+
+def test_the_retired_display_reports_on_validate():
+    from pandid.deprecation import CODE
+
+    fs = Flowsheet("retired")
+    with pytest.warns(DeprecationWarning):
+        fs.add_instrument("LIC", 101, variant="panel")
+    found = [i for i in fs.validate() if i.code == CODE]
+    assert len(found) == 1
+    assert "use Instrument(display='central')" in found[0].message
+
+
+def test_the_retired_display_will_not_be_contradicted():
+    """``variant='panel'`` already said where the information is, so a
+    ``display=`` saying somewhere else is two answers to one question -- and
+    that is the reason the spelling is going."""
+    with (
+        pytest.warns(DeprecationWarning),
+        pytest.raises(ValueError, match="state the location once"),
+    ):
+        U.Instrument("LIC", 101, variant="panel", display="subsidiary")
+
+
+def test_the_square_is_not_a_retired_spelling():
+    """``variant='shared'`` is a symbol type and stays. Only the two that were a
+    location wearing a symbol type's name were retired, and a sweep over the
+    whole of the registry's balloons would have taken this with them."""
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        assert U.Instrument("FIC", 301, variant="shared").variant == "shared"

@@ -370,10 +370,23 @@ def test_a_port_label_is_not_written_under_the_unit_tags_halo():
 #: ``14_tank_farm`` mounts two faceplates on the crown of the valve each one
 #: strokes, which is what puts a controller's output on the actuator without a
 #: line crossing the run; the balloon's marker and the valve's then sit a
-#: nozzle's height apart and the two overlay labels meet. All three carry
-#: headroom, because the point of the numbers is to catch a placement that has
-#: stopped working rather than to pin the corpus to what it draws today.
-_CROWDED = {"11_ethanol_pid": 50, "12_block_flow_diagram": 4, "14_tank_farm": 6}
+#: nozzle's height apart and the two overlay labels meet.
+#: ``04_control_loop`` stands its ``FE-101`` balloon 23 units off the
+#: transmitter above it, which is what makes the primary element and its reading
+#: read as one column, and leaves the two markers closer than a label is tall.
+#:
+#: 04 and 14 both grew when the letter codes ISO 15519-2 5.2.5 writes outside a
+#: symbol arrived: a code is haloed lettering like any tag, so it is one more
+#: thing an overlay marker can land under, and the sheets that letter the most
+#: are the ones that moved. Every entry carries headroom, because the point of
+#: the numbers is to catch a placement that has stopped working rather than to
+#: pin the corpus to what it draws today.
+_CROWDED = {
+    "04_control_loop": 3,
+    "11_ethanol_pid": 50,
+    "12_block_flow_diagram": 4,
+    "14_tank_farm": 14,
+}
 
 
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))

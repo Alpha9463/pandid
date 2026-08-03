@@ -91,8 +91,8 @@ def _crowded_taps() -> Flowsheet:
     fs.connect(feed.outlet, drum.inlet)
     transfer = fs.connect(drum.outlet, sep.feed)
     overhead = fs.connect(sep.vapor, prod.inlet)
-    pt = fs.add_instrument("PT", 104, on=transfer, at=0.5, offset=60, angle=90)
-    pic = fs.add_instrument("PIC", 101, on=overhead, at=0.3, offset=30, angle=90)
+    pt = fs.add_instrument("PT", 104, sensing=transfer, at=0.5, offset=60, angle=90)
+    pic = fs.add_instrument("PIC", 101, sensing=overhead, at=0.3, offset=30, angle=90)
     fs.connect(pt.sig_out, pic.sig_in, kind="electric")
     return fs
 

@@ -370,8 +370,8 @@ def test_instrument_attached_to_a_unit():
                 {
                     "type": "LIC",
                     "number": 101,
-                    "variant": "panel",
-                    "on": "P-101",
+                    "display": "central",
+                    "sensing": "P-101",
                     "at": "S",
                     "offset": 90,
                     "angle": 35,
@@ -382,8 +382,10 @@ def test_instrument_attached_to_a_unit():
     )
     inst = fs.units[-1]
     assert inst.name == "LIC-101"
-    assert (inst.type, inst.number, inst.variant) == ("LIC", "101", "panel")
-    assert inst.host.name == "P-101"
+    assert (inst.type, inst.number) == ("LIC", "101")
+    # The two axes the entry states, and the one variant they resolve to.
+    assert (inst.symbol_type, inst.display, inst.variant) == ("default", "central", "panel")
+    assert (inst.host.name, inst.relation) == ("P-101", "sensing")
     assert (inst.at, inst.offset, inst.angle) == ("S", 90.0, 35.0)
     assert inst._port_faces == {"sig_out": "W"}
 
@@ -392,7 +394,7 @@ def test_instrument_tapping_a_line_by_the_port_it_leaves():
     fs = Flowsheet.from_dict(
         _spec(
             instruments=[
-                {"type": "FE", "number": 101, "on": ["F", "outlet"], "at": 0.4, "offset": 0}
+                {"type": "FE", "number": 101, "sensing": ["F", "outlet"], "at": 0.4, "offset": 0}
             ]
         )
     )
@@ -405,7 +407,7 @@ def test_instrument_tapping_a_named_line():
     fs = Flowsheet.from_dict(
         _spec(
             streams=[{"from": ["F", "outlet"], "to": ["P-101", "suction"], "name": "100-P-01"}],
-            instruments=[{"type": "FT", "number": 101, "on": "100-P-01"}],
+            instruments=[{"type": "FT", "number": 101, "sensing": "100-P-01"}],
         )
     )
     assert fs.units[-1].host is fs.streams[0]
@@ -414,6 +416,73 @@ def test_instrument_tapping_a_named_line():
 def test_unattached_instrument_is_laid_out_like_any_unit():
     fs = Flowsheet.from_dict(_spec(instruments=[{"type": "PI", "number": 7}]))
     assert fs.units[-1].host is None
+
+
+@pytest.mark.parametrize("relation", ["sensing", "acting_on", "near"])
+def test_each_relation_is_read_back_and_written_out_again(relation):
+    """Which keyword named the anchor is what decides what is drawn between the
+    two, so it is part of the sheet and has to survive being written down."""
+    entry = {"type": "I", "number": 1, "variant": "sis", relation: "P-101", "at": "S"}
+    fs = Flowsheet.from_dict(_spec(instruments=[entry]))
+    assert (fs.units[-1].host.name, fs.units[-1].relation) == ("P-101", relation)
+    assert fs.to_dict()["instruments"][0][relation] == "P-101"
+    assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
+
+
+def test_a_sheet_using_the_whole_instrument_vocabulary_round_trips():
+    """Every part of a balloon that is a *decision* has to be in the file.
+
+    The relation decides what is drawn between the balloon and its host, the
+    display decides whether it carries a bar, the quadrants are lettering on the
+    paper and a primary element's balloon is where its tag went. A sheet that
+    lost any of them on the way through a spec would come back a different
+    drawing under the same name.
+    """
+    fs = Flowsheet("vocabulary")
+    feed = fs.add(units.Feed("Feed")).pin(x=60, y=170)
+    fe = fs.add(units.Fitting("FE-303", variant="venturi")).pin(x=300, port="inlet", y=195)
+    prod = fs.add(units.Product("Product")).pin(x=620, y=170)
+    fs.connect(feed.outlet, fe.inlet)
+    fs.connect(fe.outlet, prod.inlet)
+    balloon = fs.add_balloon(fe, at="N", offset=38)
+    ft = fs.add_instrument("FT", 303, near=balloon, at="N", offset=23)
+    fic = fs.add_instrument("FIC", 303, near=ft, at="E", offset=70, display="central")
+    fic.annotate(high=("FAHH", "FSHH"), low="FAL", safety="SIL 2")
+
+    spec = fs.to_dict()
+    assert json.loads(json.dumps(spec)) == spec, "spec must be JSON-safe"
+    rebuilt = Flowsheet.from_dict(spec)
+    assert rebuilt.to_dict() == spec
+
+    def by_name(sheet, name):
+        return next(u for u in sheet.units if u.name == name)
+
+    element = by_name(rebuilt, "FE-303")
+    assert element.tag == "", "the tag moved to the balloon and stayed there"
+    assert element.balloon is by_name(rebuilt, "FE-303 (2)")
+    assert (element.balloon.tag, element.balloon.relation) == ("FE-303", "sensing")
+    assert by_name(rebuilt, "FT-303").relation == "near"
+    controller = by_name(rebuilt, "FIC-303")
+    assert (controller.relation, controller.display, controller.variant) == (
+        "near",
+        "central",
+        "panel",
+    )
+    assert controller.quadrants["a"] == ("SIL 2",)
+    assert controller.quadrants["c"] == ("FAHH", "FSHH")
+    assert controller.quadrants["d"] == ("FAL",)
+
+
+def test_an_entry_naming_two_anchors_is_refused():
+    """A balloon is placed against one thing. Two keywords are two placements,
+    and the reader says which two rather than silently taking the first."""
+    with pytest.raises(SpecError) as excinfo:
+        Flowsheet.from_dict(
+            _spec(instruments=[{"type": "FT", "number": 101, "sensing": "P-101", "near": "F"}])
+        )
+    message = str(excinfo.value)
+    assert "named 2" in message
+    assert "'sensing'" in message and "'near'" in message
 
 
 # --- sheet furniture ----------------------------------------------------------
@@ -522,11 +591,17 @@ def test_from_yaml(tmp_path):
 
 
 @pytest.mark.skipif(not _HAS_YAML, reason="PyYAML is an optional extra")
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_yaml_reads_the_keys_that_were_written(tmp_path):
-    """YAML 1.1 makes ``on:`` the boolean True and a bare date a date object.
+    """YAML 1.1 makes ``on:`` the boolean True, ``N`` the boolean False and a
+    bare date a date object.
 
-    Both traps are sprung by writing the format exactly as documented, so the
-    loader follows the YAML 1.2 core schema instead.
+    All three traps are sprung by writing the format exactly as documented, so
+    the loader follows the YAML 1.2 core schema instead. ``on:`` is retired in
+    favour of ``sensing:`` and is written here anyway: while a spelling is
+    accepted it has to be *readable*, and a loader that turned it into ``True``
+    would give a file nobody had edited an error naming a key it does not
+    contain.
     """
     path = tmp_path / "fs.yaml"
     path.write_text(
@@ -536,12 +611,13 @@ def test_yaml_reads_the_keys_that_were_written(tmp_path):
         "  - type: LIC\n"
         "    number: 101\n"
         "    on: V-1\n"
-        "    at: S\n"
+        "    at: N\n"
         "title_block: {revisions: [{rev: A, date: 2026-05-18}]}\n",
         encoding="utf-8",
     )
     fs = Flowsheet.from_yaml(path)
     assert fs.units[-1].host is fs.units[0]
+    assert fs.units[-1].at == "N"
     assert fs.title_block.revisions[0].date == "2026-05-18"
 
 
@@ -724,12 +800,15 @@ def test_instruments_are_not_declared_as_units():
 def test_attachment_arguments_need_a_host():
     with pytest.raises(SpecError) as excinfo:
         Flowsheet.from_dict(_spec(instruments=[{"type": "FT", "number": 101, "at": 0.5}]))
-    assert "['at'] only mean something with 'on'" in str(excinfo.value)
+    assert (
+        "['at'] only mean something with one of 'sensing', 'acting_on', 'near': "
+        "the stream or unit the balloon is placed against"
+    ) in str(excinfo.value)
 
 
 def test_unknown_attachment_host():
     with pytest.raises(SpecError) as excinfo:
-        Flowsheet.from_dict(_spec(instruments=[{"type": "FT", "number": 101, "on": "P-1O1"}]))
+        Flowsheet.from_dict(_spec(instruments=[{"type": "FT", "number": 101, "sensing": "P-1O1"}]))
     message = str(excinfo.value)
     assert "nothing named 'P-1O1' to attach to" in message
     assert "did you mean 'P-101'?" in message

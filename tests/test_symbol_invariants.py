@@ -736,11 +736,22 @@ _UNBOXABLE_KINDS = {"conveyor"}
 
 _UNIT_BY_KIND = {cls.kind: cls for cls in (getattr(units, n) for n in units.__all__)}
 
+#: The balloon variants that are reached through ``display=`` instead; see
+#: :func:`_sized_unit`.
+_RETIRED_DISPLAYS = {"panel": "central", "aux": "subsidiary"}
+
 
 def _sized_unit(kind: str, variant: str, index: int, w: float, h: float):
     """One unit of ``(kind, variant)``, forced into a ``w`` x ``h`` box."""
     cls = _UNIT_BY_KIND[kind]
     if kind == "instrument":  # tagged (type, number) rather than named
+        # ``panel`` and ``aux`` are registered artwork whose *constructor*
+        # spelling is retired: they are a display, not a symbol type. The
+        # drawing is still theirs and still has to satisfy every invariant
+        # below, so it is asked for the way that is not on its way out.
+        display = _RETIRED_DISPLAYS.get(variant)
+        if display is not None:
+            return cls("XX", index, display=display, width=w, height=h)
         return cls("XX", index, variant=variant, width=w, height=h)
     return cls(f"{kind}-{variant}-{index}", variant=variant, width=w, height=h)
 

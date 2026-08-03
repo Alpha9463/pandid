@@ -322,7 +322,7 @@ def test_the_letters_step_off_an_impulse_line_leaving_the_same_face():
     product = fs.add(units.Product("PROD"))
     fs.connect(feed.outlet, valve.inlet)
     fs.connect(valve.outlet, product.inlet)
-    fs.add_instrument("Z", 1, on=valve, at="S", offset=26, variant="sis")
+    fs.add_instrument("Z", 1, acting_on=valve, at="S", offset=26, variant="sis")
     fs.layout()
     svg = fs.to_svg()
 

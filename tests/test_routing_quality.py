@@ -143,8 +143,8 @@ def _inline_element_signal():
     feed = fs.add(U.Feed("Feed")).pin(x=60, y=170)
     prod = fs.add(U.Product("Product")).pin(x=700, y=170)
     line = fs.connect(feed.outlet, prod.inlet)
-    fe = fs.add_instrument("FE", 101, on=line, at=0.5, offset=0)
-    fic = fs.add_instrument("FIC", 101, on=line, at=0.15, offset=150, variant="panel")
+    fe = fs.add_instrument("FE", 101, sensing=line, at=0.5, offset=0)
+    fic = fs.add_instrument("FIC", 101, sensing=line, at=0.15, offset=150, display="central")
     fs.connect(fe.sig_out, fic.sig_in, kind="electric")
     return fs
 

@@ -243,6 +243,11 @@ def test_a_referenced_stencil_is_always_variable_aspect():
 # ---------------------------------------------------------------------------
 
 
+#: The registered ``(kind, variant)`` pairs that are reached through
+#: ``display=`` instead; see :func:`every_symbol_sheet`.
+_BY_DISPLAY = {("instrument", "panel"): "central", ("instrument", "aux"): "subsidiary"}
+
+
 @pytest.fixture(scope="module")
 def every_symbol_sheet() -> Flowsheet:
     """One unit of every registered ``(kind, variant)``, pinned on a grid.
@@ -257,7 +262,14 @@ def every_symbol_sheet() -> Flowsheet:
     for name in units.__all__:
         cls = getattr(units, name)
         for variant in default_registry.variants(cls.kind):
-            unit = cls(f"{cls.kind[:3].upper()}-{n}", variant=variant)
+            tag = f"{cls.kind[:3].upper()}-{n}"
+            # The balloon's two location bars are registered artwork whose
+            # *constructor* spelling is retired -- they are a display, not a
+            # symbol type -- so they are asked for the way that is not going.
+            if (cls.kind, variant) in _BY_DISPLAY:
+                unit = cls(tag, display=_BY_DISPLAY[cls.kind, variant])
+            else:
+                unit = cls(tag, variant=variant)
             fs.add(unit)
             unit.pin(x=(n % 12) * 300.0, y=(n // 12) * 300.0)
             n += 1
@@ -316,7 +328,7 @@ def sample() -> Flowsheet:
     line = fs.connect(pump.discharge, valve.inlet)
     fs.connect(valve.outlet, tank.inlet)
     fs.connect(tank.outlet, product.inlet)
-    ft = fs.add_instrument("FT", 101, on=line, at=0.5, offset=60)
+    ft = fs.add_instrument("FT", 101, sensing=line, at=0.5, offset=60)
     fs.connect(ft.sig_out, valve.actuator, kind="electric")
     fs.route()
     return fs
@@ -569,7 +581,7 @@ def test_a_pneumatic_line_is_marked_where_the_sheet_marks_it():
     fs = Flowsheet("pneumatic")
     valve = fs.add(units.Valve("FV-101", variant="control"))
     valve.pin(x=400, y=300)
-    pic = fs.add_instrument("PIC", 101, variant="panel")
+    pic = fs.add_instrument("PIC", 101, display="central")
     pic.pin(x=100, y=100)
     fs.connect(pic.sig_out, valve.actuator, kind="pneumatic")
     fs.route()
