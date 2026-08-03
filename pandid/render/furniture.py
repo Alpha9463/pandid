@@ -1,19 +1,21 @@
-"""Sheet furniture: the engineering title strip, generic titled boxes, generic
-tables, the stream property table, and the zone-ruled drawing border.
+"""Sheet furniture: the engineering title strip, generic titled boxes,
+generic tables, the stream property table, and the zone-ruled drawing
+border.
 
-Every routine here is a pure function returning a list of SVG-fragment strings
-(or a ``(width, height)`` measurement). The renderer in :mod:`pandid.render.svg`
-measures each piece, places it at a sheet corner, unions the result to size the
-canvas, then draws it; none of the geometry logic lives in the giant render
-method.
+Every routine here is a pure function returning a list of SVG-fragment
+strings (or a ``(width, height)`` measurement). The renderer in
+:mod:`pandid.render.svg` measures each piece, places it at a sheet
+corner, unions the result to size the canvas, then draws it; none of the
+geometry logic lives in the giant render method.
 
-:func:`dock` is the placement itself, and it is *not* SVG: it takes measured
-boxes and answers the rectangle the sheet gives each one. It lives here rather
-than inside the renderer because two backends now ask the question. See its
-docstring.
+:func:`dock` is the placement itself, and it is *not* SVG: it takes
+measured boxes and answers the rectangle the sheet gives each one. It
+lives here rather than inside the renderer because two backends now ask
+the question. See its docstring.
 
-Coordinates are absolute SVG user units. Boxes are drawn from a top-left origin;
-the title strip is drawn from a bottom-right corner (its natural anchor).
+Coordinates are absolute SVG user units. Boxes are drawn from a top-left
+origin; the title strip is drawn from a bottom-right corner (its natural
+anchor).
 """
 
 from __future__ import annotations
@@ -22,20 +24,21 @@ import html
 import string
 from typing import Callable, NamedTuple
 
-# Rough advance width of the sans-serif the renderer uses, as a fraction of the
-# font size. Slightly generous so auto-sized boxes never clip their text.
+# Rough advance width of the sans-serif the renderer uses, as a fraction
+# of the font size. Slightly generous so auto-sized boxes never clip
+# their text.
 _ADV = 0.56
 _ADV_BOLD = 0.62
 
 FONT = "sans-serif"
 
-# How a cell says it could not hold what it was given: the field it draws, the
-# text it was asked for, and the text it actually drew (the same string when
-# nothing was trimmed). An ellipsis tells whoever reads the sheet that a value
-# was abbreviated; it tells the program that supplied the value nothing at all,
-# and that program is the one that can shorten the field or ask for a bigger
-# sheet. Every fixed-width cell in this module therefore measures first and
-# reports through one of these.
+# How a cell says it could not hold what it was given: the field it
+# draws, the text it was asked for, and the text it actually drew (the
+# same string when nothing was trimmed). An ellipsis tells whoever reads
+# the sheet that a value was abbreviated and tells the program that
+# supplied it nothing at all, and that program is the one that can
+# shorten the field or ask for a bigger sheet. Every fixed-width cell
+# here measures first and reports through one of these.
 Reporter = Callable[[str, str, str], None]
 
 
@@ -47,9 +50,10 @@ def clip(s, room: float, size: float, bold: bool = False, *,
          field: str = "", report: "Reporter | None" = None) -> str:
     """Trim a value to the room its cell has, and report what was cut.
 
-    A title-block cell is ruled and the strip is fixed geometry, so a value
-    longer than its cell would run across the rule and into the value beside it
-    and no amount of growing can help. A draftsman abbreviates.
+    A title-block cell is ruled and the strip is fixed geometry, so a
+    value longer than its cell would run across the rule and into the
+    value beside it and no amount of growing can help. A draftsman
+    abbreviates.
     """
     s = str(s)
     if text_width(s, size, bold) <= room:
@@ -63,13 +67,13 @@ def clip(s, room: float, size: float, bold: bool = False, *,
 
 def check_fit(s, room: float, size: float, bold: bool = False, *,
               field: str = "", report: "Reporter | None" = None) -> str:
-    """Measure a value that is drawn whole whatever it measures, and report an
-    overrun.
+    """Measure a value that is drawn whole whatever it measures, and
+    report an overrun.
 
-    Some cells have nothing worth trimming. Half a sheet count reads as a
-    different sheet count, and a company name broken mid-word reads as a
-    different company, so those are drawn in full and the overrun is reported
-    instead of hidden.
+    Some cells have nothing worth trimming. Half a sheet count reads as
+    a different sheet count, and a company name broken mid-word reads as
+    a different company, so those are drawn in full and the overrun is
+    reported instead of hidden.
     """
     s = str(s)
     if report is not None and text_width(s, size, bold) > room:
@@ -88,22 +92,21 @@ def _text(x, y, s, size, *, anchor="start", bold=False, fill="black", baseline=N
             f' text-anchor="{anchor}"{wt}{bl} fill="{fill}">{_esc(s)}</text>')
 
 
-# ---------------------------------------------------------------------------
-# Generic titled box (Annotation): title bar over free-form / columnar rows
-# ---------------------------------------------------------------------------
+# ----------------------------------------------------------------
+# Generic titled box (Annotation): title bar over rows
+# ----------------------------------------------------------------
 
-#: The weight a titled box's own rectangle is ruled at, and the rule under its
-#: title. Named beside :data:`_STRIP_RULE` and for the same reason the strip's
-#: weights are: :mod:`pandid.render.drawio` writes the box out as a draw.io
-#: table and has to state the weight on the container, since draw.io draws a
-#: table's border and internal rules from the container's own style. Two
-#: literals, one here and one there, is two answers to how heavily the sheet
-#: rules a legend.
+#: The weight a titled box's own rectangle is ruled at, and the rule
+#: under its title. Named because :mod:`pandid.render.drawio` writes the
+#: box out as a draw.io table and has to state the weight on the
+#: container: draw.io draws a table's border and internal rules from the
+#: container's own style.
 _BOX_RULE = 1.5
 _BOX_UNDERLINE = 1.0
-#: The weight a :class:`~pandid.document.TableBox` rules every one of its cells
-#: at -- lighter than the box above, because a table really is ruled across and
-#: down and a grid at 1,5 would compete with the drawing beside it.
+#: The weight a :class:`~pandid.document.TableBox` rules every one of
+#: its cells at -- lighter than the box above, because a table really is
+#: ruled across and down and a grid at 1,5 would compete with the
+#: drawing beside it.
 _CELL_RULE = 0.75
 
 
@@ -134,8 +137,9 @@ def measure_annotation(ann) -> tuple[float, float]:
 
 
 def _overflowing_text(ann, size: float, body_w: float) -> str:
-    """The one string a too-narrow box is best described by: its title where
-    that is what overruns, otherwise the row that does."""
+    """The one string a too-narrow box is best described by: its title
+    where that is what overruns, otherwise the row that does.
+    """
     if text_width(ann.title, size + 1, bold=True) > body_w:
         return ann.title
 
@@ -149,10 +153,11 @@ def draw_annotation(ann, x: float, y: float, *,
                     report: "Reporter | None" = None) -> list[str]:
     """Draw an Annotation with its top-left corner at (x, y).
 
-    A box left to size itself is sized from its own rows, so it always fits.
-    One given an explicit ``width`` is a fixed cell like any other: the rows are
-    still drawn at the column stops their content asks for, so a width smaller
-    than that content runs the text out through the side of the box.
+    A box left to size itself is sized from its own rows, so it always
+    fits. One given an explicit ``width`` is a fixed cell like any
+    other: the rows are still drawn at the column stops their content
+    asks for, so a width smaller than that content runs the text out
+    through the side of the box.
     """
     size, row_h, title_h, col_w = _ann_layout(ann)
     pad, gap = 9.0, 12.0
@@ -184,9 +189,9 @@ def draw_annotation(ann, x: float, y: float, *,
     return L
 
 
-# ---------------------------------------------------------------------------
+# ----------------------------------------------------------------
 # Generic bordered table (TableBox)
-# ---------------------------------------------------------------------------
+# ----------------------------------------------------------------
 
 def _table_layout(tb):
     size = tb.font_size
@@ -247,43 +252,34 @@ def draw_table(tb, x: float, y: float) -> list[str]:
     return L
 
 
-# ---------------------------------------------------------------------------
-# Stream property table (a heading row of line numbers, a row per property,
-# section headings where the flowsheet asks for them)
-# ---------------------------------------------------------------------------
+# ----------------------------------------------------------------
+# Stream property table (a heading row of line numbers, a row per
+# property, section headings where the flowsheet asks for them)
+# ----------------------------------------------------------------
 #
-# Here rather than in :mod:`pandid.render.svg`, which is where it was written
-# and where it stayed while every other shared piece of furniture moved out:
-# ``stream_polyline`` and ``stream_numbers`` to module level, ``dock`` and
-# ``title_strip_layout`` to this file. It is the same argument each time, and
-# the stream table is the case that made it concrete -- the draw.io exporter had
-# no way to *ask* for the table, so ``Flowsheet.render`` refused
-# ``show_stream_table`` for a ``.drawio`` path outright, and with six of the
-# fourteen examples asking for one that refusal is what kept most of the corpus
-# from exporting at all.
-#
-# Split the way the title strip is split, and for the title strip's reason: a
-# layout function (:func:`stream_table_layout`) that answers where every cell
-# goes and what is in it, and a stroker (:func:`draw_stream_table`) that turns
-# that into SVG. The sheet strokes the layout; :mod:`pandid.render.drawio`
-# builds table cells from the same one. Neither backend measures a column.
+# Split the way the title strip is split: a layout function
+# (:func:`stream_table_layout`) that answers where every cell goes and
+# what is in it, and a stroker (:func:`draw_stream_table`) that turns
+# that into SVG. The sheet strokes the layout;
+# :mod:`pandid.render.drawio` builds table cells from the same one.
+# Neither backend measures a column.
 
-#: Clearance a stream-table column is ruled with over the widest thing in it.
-#: Applied once per column, to whichever of the heading and the values is wider.
+#: Clearance a stream-table column is ruled with over the widest thing
+#: in it. Applied once per column, to whichever of the heading and the
+#: values is wider.
 _STREAM_GUTTER = 14.0
 
-#: Gutter between a cell's rule and text set against its left edge. The draw.io
-#: exporter states this too -- less what a draw.io cell insets on its own
-#: account -- so a row label starts the same distance in whichever backend drew
-#: it.
+#: Gutter between a cell's rule and text set against its left edge. The
+#: draw.io exporter states this too -- less what a draw.io cell insets
+#: on its own account -- so a row label starts the same distance in
+#: whichever backend drew it.
 _STREAM_PAD = 5.0
 
-#: What the table fills its four kinds of cell with. Named because a second
-#: backend has to fill the same cells the same way, and because a colour written
-#: twice is a colour that drifts. The heading row is the grey the sheet fills
-#: every heading row with; a section heading is a shade lighter, being a heading
-#: *inside* the table rather than over it; a row label is lighter still, since
-#: it is read as a label rather than as a heading; a value is the paper.
+#: What the table fills its four kinds of cell with. The heading row is
+#: the grey the sheet fills every heading row with; a section heading is
+#: a shade lighter, being a heading *inside* the table rather than over
+#: it; a row label is lighter still, since it is read as a label rather
+#: than as a heading; a value is the paper.
 _STREAM_HEAD_FILL = "#eee"
 _STREAM_SECTION_FILL = "#f4f4f4"
 _STREAM_KEY_FILL = "#f9f9f9"
@@ -293,11 +289,12 @@ _STREAM_VALUE_FILL = "white"
 class StreamCell(NamedTuple):
     """One ruled cell of the stream table.
 
-    ``w`` is the cell's own width rather than its column's: a section heading
-    spans the whole table and is **one** cell, which is what the sheet strokes
-    and what a merged cell is in a draw.io table. ``anchor`` is the SVG
-    ``text-anchor``, and the table sets a cell one of two ways -- ``start`` for
-    a label, ``middle`` for a value -- so those are the two it takes.
+    ``w`` is the cell's own width rather than its column's: a section
+    heading spans the whole table and is **one** cell, which is what the
+    sheet strokes and what a merged cell is in a draw.io table.
+    ``anchor`` is the SVG ``text-anchor``, and the table sets a cell one
+    of two ways -- ``start`` for a label, ``middle`` for a value -- so
+    those are the two it takes.
     """
     text: str
     w: float
@@ -309,18 +306,15 @@ class StreamCell(NamedTuple):
 class StreamTable(NamedTuple):
     """The stream property table, as geometry rather than as ink.
 
-    ``rows`` is the table row by row, top to bottom, each row its cells left to
-    right -- which is both the order the sheet strokes them in and the structure
-    a draw.io table is built from (a container of rows of cells). :class:`Strip`
-    hands its parts over as one flat list because a strip is lettering with a
-    few rules through it and the drawing *order* is the only structure it has;
-    a table's structure is the rows, and flattening them would only mean the
-    second backend had to put them back.
+    ``rows`` is the table row by row, top to bottom, each row its cells
+    left to right -- which is both the order the sheet strokes them in
+    and the structure a draw.io table is built from (a container of rows
+    of cells).
 
-    ``w``/``h`` is what the table measures, which is what :func:`dock` is given
-    to place it by; ``row_h`` is the depth of every row and ``size`` the type it
-    is all set in. A row is uniform depth here, unlike a revision grid: every
-    row of a stream table holds one line of text.
+    ``w``/``h`` is what the table measures, which is what :func:`dock`
+    is given to place it by; ``row_h`` is the depth of every row and
+    ``size`` the type it is all set in. A row is uniform depth here,
+    unlike a revision grid: every row holds one line of text.
     """
     rows: list
     size: float
@@ -332,18 +326,20 @@ class StreamTable(NamedTuple):
 def _stream_cell_text(s, key) -> str:
     """What one stream's cell draws for one property row.
 
-    The single place the placeholder for a missing value is decided, so the
-    column that is *measured* is the column that is drawn.
+    The single place the placeholder for a missing value is decided, so
+    the column that is *measured* is the column that is drawn.
     """
     val = s.properties.get(key, "-")
     return "-" if val in (None, "") else str(val)
 
 
 def _table_streams(fs) -> list:
-    """The streams that get a column: the unique material ones, in sheet order.
+    """The streams that get a column: the unique material ones, in sheet
+    order.
 
-    A signal is not a stream of anything and has no properties to tabulate, and
-    a stream drawn in two segments is one stream and gets one column.
+    A signal is not a stream of anything and has no properties to
+    tabulate, and a stream drawn in two segments is one stream and gets
+    one column.
     """
     from pandid.streams import SIGNAL_KINDS
 
@@ -357,14 +353,14 @@ def _table_streams(fs) -> list:
 
 
 def stream_table_layout(fs) -> "StreamTable | None":
-    """Where every cell of the stream table goes and what is in it, or ``None``
-    for a flowsheet with no material stream to tabulate.
+    """Where every cell of the stream table goes and what is in it, or
+    ``None`` for a flowsheet with no material stream to tabulate.
 
-    The table is measured from its own contents and placed at whatever it comes
-    to -- the sheet is grown around it, or a page too small for it is refused --
-    so unlike a title-block cell there is no fixed room here to abbreviate into.
-    A stream table that cannot show ``0.0441 kg/kg total`` is not a stream
-    table.
+    The table is measured from its own contents and placed at whatever
+    it comes to -- the sheet is grown around it, or a page too small for
+    it is refused -- so unlike a title-block cell there is no fixed room
+    here to abbreviate into. A stream table that cannot show ``0.0441
+    kg/kg total`` is not a stream table.
     """
     streams = _table_streams(fs)
     if not streams:
@@ -389,14 +385,14 @@ def stream_table_layout(fs) -> "StreamTable | None":
         if k in sec_before:
             disp.append(("section", sec_before[k]))
         disp.append(("data", k))
-    # The corner cell has to be true of every column under it, so the table
-    # only calls itself a line-number table when every line drawn in it is
-    # identified that way.
+    # The corner cell has to be true of every column under it, so the
+    # table only calls itself a line-number table when every line drawn
+    # in it is identified that way.
     heading = ("Line Number" if all(s.has_line_number for s in streams)
                else "Stream Number")
 
-    # Every column is sized to what goes in it. A minimum keeps a table of short
-    # values from ruling columns too narrow to read as columns.
+    # Every column is sized to what goes in it. A minimum keeps a table
+    # of short values from ruling columns too narrow to read as columns.
     labels = [heading] + [key for kind, key in disp if kind == "data"]
     label_w = max(122.0, max(text_width(t, size, bold=True)
                              for t in labels) + _STREAM_GUTTER)
@@ -407,9 +403,9 @@ def stream_table_layout(fs) -> "StreamTable | None":
                      default=0.0) + _STREAM_GUTTER,
                  max((text_width(v, size) for v in values), default=0.0)
                  + _STREAM_GUTTER)
-    # A section header spans the whole table, so it is the total width it
-    # constrains rather than any one column; the row label column is the
-    # only one free to take up the slack.
+    # A section header spans the whole table, so it is the total width
+    # it constrains rather than any one column; the row label column is
+    # the only one free to take up the slack.
     sections = [label for kind, label in disp if kind == "section"]
     span = max((text_width(t, size, bold=True) for t in sections),
                default=0.0) + _STREAM_GUTTER
@@ -436,11 +432,12 @@ def stream_table_layout(fs) -> "StreamTable | None":
 def draw_stream_table(table: StreamTable, left: float, top: float) -> list[str]:
     """Draw the table with its top-left corner at (``left``, ``top``).
 
-    The geometry is :func:`stream_table_layout`'s; this strokes it, exactly as
-    :func:`draw_title_strip` strokes :func:`title_strip_layout`. Every cell is
-    ruled on all four sides -- a stream table really is a grid, read across for
-    one property and down for one stream -- at the weight a grid beside a
-    drawing is ruled at rather than the weight a box around one is.
+    The geometry is :func:`stream_table_layout`'s; this strokes it,
+    exactly as :func:`draw_title_strip` strokes
+    :func:`title_strip_layout`. Every cell is ruled on all four sides --
+    a stream table really is a grid, read across for one property and
+    down for one stream -- at the weight a grid beside a drawing is
+    ruled at rather than the weight a box around one is.
     """
     out = ['<g id="stream_table">']
     y = top
@@ -463,27 +460,28 @@ def draw_stream_table(table: StreamTable, left: float, top: float) -> list[str]:
     return out
 
 
-# ---------------------------------------------------------------------------
-# Engineering title strip (revision table | company | client/project, title,
-# status, drawing number / scale / date / rev)
-# ---------------------------------------------------------------------------
+# ----------------------------------------------------------------
+# Engineering title strip (revision table | company | client/project,
+# title, status, drawing number / scale / date / rev)
+# ----------------------------------------------------------------
 
-#: The weight the strip's own rectangle is ruled at. It is the frame's weight
-#: too, and it docks flush to the frame, so the two rules are coincident and the
-#: corner of the sheet reads as one heavy line rather than two.
+#: The weight the strip's own rectangle is ruled at. It is the frame's
+#: weight too, and it docks flush to the frame, so the two rules are
+#: coincident and the corner of the sheet reads as one heavy line rather
+#: than two.
 _STRIP_RULE = 2.0
-#: The hairline the strip rules a revision column and a bottom-band cell with:
-#: light enough that the grid does not compete with the drawing above it.
+#: The hairline the strip rules a revision column and a bottom-band cell
+#: with: light enough that the grid does not compete with the drawing
+#: above it.
 _STRIP_HAIRLINE = 0.5
 
 _REV_W = 300.0
 _COMPANY_W = 100.0
 _INFO_W = 252.0
 _REV_ROW = 14.0
-# (heading, width, the Revision field the column draws). The widths sum to
-# _REV_W. DATE holds a full ISO 8601 date at 7.5 with a gutter either side,
-# which is what fixes it at 50: at the 42 it was, the date every one of these
-# sheets is stamped with ran over its own rule.
+# (heading, width, the Revision field the column draws). The widths sum
+# to _REV_W. DATE is 50 because a full ISO 8601 date at 7.5 with a
+# gutter either side comes to that, and at 42 it ran over its own rule.
 _REV_COLS = (("REV", 22, "rev"), ("DATE", 50, "date"),
              ("DESCRIPTION", 132, "description"), ("BY", 32, "by"),
              ("CHK'D", 32, "checked"), ("APP'D", 32, "approved"))
@@ -491,27 +489,27 @@ _REV_COLS = (("REV", 22, "rev"), ("DATE", 50, "date"),
 _REV_PAD = 3.0
 # The title / status / drawing-number bands, which every sheet carries.
 _BODY_H = 80.0
-# The sheet count is drawn top-right of the title band, on the same line as the
-# title. Reserving it a fixed slot is what keeps the title's own budget a
-# constant: how much of a drawing's title survives must not depend on how many
-# sheets the set happens to have, which is not a fact about the title. Sized for
-# "SHEET 1 of 12" at 7.5; a longer count is drawn whole and reported, since half
-# a sheet count reads as a different sheet.
+# The sheet count is drawn top-right of the title band, on the same line
+# as the title. A fixed slot keeps the title's own budget constant: how
+# much of a drawing's title survives must not depend on how many sheets
+# the set happens to have. Sized for "SHEET 1 of 12" at 7.5; a longer
+# count is drawn whole and reported, since half a sheet count reads as a
+# different sheet.
 _SHEET_W = 55.0
 _TITLE_W = _INFO_W - 10 - _SHEET_W
-# One client or project line above them. Neither is an ISO 7200 field. Its
-# mandatory "legal owner" is the issuing organisation, which is the company
-# cell. An issued sheet names both anyway, so the pair heads the information
-# block; a block that names neither is ruled no row for them.
+# One client or project line above them. Neither is an ISO 7200 field:
+# its mandatory "legal owner" is the issuing organisation, which is the
+# company cell. An issued sheet names both anyway, so the pair heads the
+# information block; a block that names neither is ruled no row for
+# them.
 _HDR_ROW = 13.0
 _HDR_VALUE_X = 40.0
-# How the information block's depth is shared between the title band, the status
-# band and the drawing-number band that carries the rest.
+# How the information block's depth is shared between the title band,
+# the status band and the drawing-number band that carries the rest.
 _TITLE_BAND, _STATUS_BAND = 0.40, 0.28
 
-# The type the strip is lettered in, band by band. Constants rather than
-# literals in :func:`title_strip_layout` because a second backend letters the
-# same bands, and a size stated twice is a size that drifts.
+# The type the strip is lettered in, band by band. Named because a
+# second backend letters the same bands.
 _REV_TYPE = 7.5        # a revision cell, and the sheet count in the title band
 _CAPTION = 6.5         # the small grey label sitting over a field's value
 _COMPANY_TYPE = 8.0
@@ -520,9 +518,10 @@ _TITLE_TYPE = 12.5
 _SUBTITLE_TYPE = 10.5
 _VALUE_TYPE = 11.0     # a status, a drawing number, a scale, a date, a rev
 
-#: The ink a caption is set in, which is what holds it back from the value under
-#: it: a caption names the field and the value is the drawing's own information,
-#: so the two are not read at the same weight.
+#: The ink a caption is set in, which is what holds it back from the
+#: value under it: a caption names the field and the value is the
+#: drawing's own information, so the two are not read at the same
+#: weight.
 CAPTION_INK = "#666"
 
 
@@ -540,19 +539,19 @@ def measure_title_strip(tb) -> tuple[float, float]:
 class RevGrid(NamedTuple):
     """The revision history, as the grid it is rather than as ink.
 
-    ``x``/``y``/``w``/``h`` is the whole left-hand column of the strip, which is
-    the rectangle the vertical rules run the full depth of; ``cols`` is
-    ``(heading, width)`` per column, ``row_h`` the depth of a row, ``header_y``
-    the line the heading row is ruled off at, and ``rows`` the revisions
-    **oldest first** -- top to bottom on the sheet, since the heading sits at
-    the foot and the newest revision immediately above it. Every value in
-    ``rows`` and every heading has already been clipped to its own column, so a
-    second backend cannot letter the grid at a size the widths were not measured
-    at.
+    ``x``/``y``/``w``/``h`` is the whole left-hand column of the strip,
+    which is the rectangle the vertical rules run the full depth of;
+    ``cols`` is ``(heading, width)`` per column, ``row_h`` the depth of
+    a row, ``header_y`` the line the heading row is ruled off at, and
+    ``rows`` the revisions **oldest first** -- top to bottom on the
+    sheet, since the heading sits at the foot and the newest revision
+    immediately above it. Every value in ``rows`` and every heading has
+    already been clipped to its own column, so a second backend cannot
+    letter the grid at a size the widths were not measured at.
 
-    The blank paper above the oldest revision is not a row and is not listed: it
-    is the room the next revision will be written in, and the sheet rules
-    nothing across it.
+    The blank paper above the oldest revision is not a row and is not
+    listed: it is the room the next revision will be written in, and the
+    sheet rules nothing across it.
     """
     x: float
     y: float
@@ -567,23 +566,18 @@ class RevGrid(NamedTuple):
 class Strip(NamedTuple):
     """The title strip, as geometry rather than as ink.
 
-    :func:`zone_layout` is the pattern, and the reason is the same one, one
-    level up: the draw.io backend rules the *same* strip rather than a second
-    opinion about one. It was a second opinion -- two draw.io tables, a revision
-    grid and a label/value list, which is a decomposition that holds every value
-    and looks nothing like the sheet -- and the answer to that is not a better
-    second opinion, it is one derivation with two strokers.
+    :func:`zone_layout`'s pattern one level up, so that the draw.io
+    backend rules the *same* strip rather than a second opinion about
+    one.
 
-    ``box`` is the strip rectangle ``(x, y, w, h)``, ruled at 2. ``rules`` is
-    the pair of full-depth column rules that divide it into revision grid,
-    company cell and information block. ``rev`` is the grid. ``parts`` is
-    everything else, **in drawing order**: ``("rule", x1, y1, x2, y2, weight)``
-    and ``("text", x, baseline, string, size, anchor, bold, fill)``, the text
-    stated the way SVG states it -- at a baseline, with a ``text-anchor``.
-
-    One list in drawing order, for :class:`Zoned`'s reason: the sheet's own file
-    is the thing that must not move, and two lists would have to be
-    re-interleaved to put the ink back where it was.
+    ``box`` is the strip rectangle ``(x, y, w, h)``, ruled at 2.
+    ``rules`` is the pair of full-depth column rules that divide it into
+    revision grid, company cell and information block. ``rev`` is the
+    grid. ``parts`` is everything else, **in drawing order**: ``("rule",
+    x1, y1, x2, y2, weight)`` and ``("text", x, baseline, string, size,
+    anchor, bold, fill)``, the text stated the way SVG states it -- at a
+    baseline, with a ``text-anchor``. One list, because two would have
+    to be re-interleaved to put the ink back where it was.
     """
     box: tuple
     rules: list
@@ -594,19 +588,20 @@ class Strip(NamedTuple):
 def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
                        fit_scale: str = "", *,
                        report: "Reporter | None" = None) -> Strip:
-    """Where every part of the title strip goes, its bottom-right corner at
-    (``right``, ``bottom``).
+    """Where every part of the title strip goes, its bottom-right corner
+    at (``right``, ``bottom``).
 
-    ``fit_scale`` is the ratio the renderer actually placed the drawing at,
-    which is what the scale cell reports for a sheet that does not state a scale
-    of its own.
+    ``fit_scale`` is the ratio the renderer actually placed the drawing
+    at, which is what the scale cell reports for a sheet that does not
+    state a scale of its own.
 
-    The strip is fixed geometry (an ISO 7200 block is a known rectangle in a
-    known corner), so a value too long for its cell cannot be given more room
-    and is abbreviated instead. ``report`` is how each such cell says which
-    field it abbreviated and what it was given; see :data:`Reporter`. The
-    clipping happens **here** and not in either stroker, so the two backends
-    abbreviate the same field to the same string.
+    The strip is fixed geometry (an ISO 7200 block is a known rectangle
+    in a known corner), so a value too long for its cell cannot be given
+    more room and is abbreviated instead. ``report`` is how each such
+    cell says which field it abbreviated and what it was given; see
+    :data:`Reporter`. The clipping happens **here** and not in either
+    stroker, so the two backends abbreviate the same field to the same
+    string.
     """
     w, h = measure_title_strip(tb)
     x, y = right - w, bottom - h
@@ -614,7 +609,7 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
     cx2 = rx + _COMPANY_W
     rules = [("rule", vx, y, vx, bottom, 1.5) for vx in (rx, cx2)]
 
-    # --- Revision grid (left): heading row at the bottom, revisions above it ---
+    # --- Revision grid (left): heading at the foot, revisions above
     def rev_cells(vals, bold=False, where=""):
         return [clip(v, cw - 2 * _REV_PAD, _REV_TYPE, bold,
                      field=f"{where}.{attr}", report=report if where else None)
@@ -622,14 +617,14 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
 
     header_y = bottom - _REV_ROW
     headings = rev_cells([c[0] for c in _REV_COLS], bold=True)
-    # Clipped newest first, which is the order the strip used to draw them in
-    # and so the order a caller watching ``report`` already sees; stored oldest
-    # first, which is the order they are read in.
+    # Clipped newest first, which is the order the strip used to draw
+    # them in and so the order a caller watching ``report`` already
+    # sees; stored oldest first, which is the order they are read in.
     newest_first = []
     for idx, rv in enumerate(reversed(tb.revisions)):
         newest = idx == 0
-        # The block-level drawn/checked/approved fields backfill the newest
-        # row's signatories when that revision leaves them blank.
+        # The block-level drawn/checked/approved fields backfill the
+        # newest row's signatories when that revision leaves them blank.
         by = rv.by or (tb.drawn_by if newest else "")
         chk = rv.checked or (tb.checked_by if newest else "")
         app = rv.approved or (tb.approved_by if newest else "")
@@ -643,7 +638,7 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
 
     parts: list[tuple] = []
 
-    # --- Company / logo cell (middle) ---
+    # Company / logo cell (middle) -------------------------------
     if tb.company:
         words, line, lines = tb.company.split(), "", []
         for wd in words:
@@ -657,16 +652,16 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
             lines.append(line)
         cy = y + h / 2 - (len(lines) - 1) * 6
         for ln in lines:
-            # A word too long for the cell has no break point the wrapper may
-            # use: hyphenating a company name invents one, so it is drawn whole
-            # and said out loud instead.
+            # A word too long for the cell has no break point the
+            # wrapper may use: hyphenating a company name invents one,
+            # so it is drawn whole and said out loud instead.
             parts.append(("text", rx + _COMPANY_W / 2, cy,
                           check_fit(ln, _COMPANY_W - 10, _COMPANY_TYPE, True,
                                     field="company", report=report),
                           _COMPANY_TYPE, "middle", True, "black"))
             cy += 12
 
-    # --- Info block (right): client/project header, title, status, dwg/date/rev ---
+    # --- Info block (right): client/project, title, status, dwg/rev
     ix = cx2
     header = _header_lines(tb)
     top = y + _HDR_ROW * len(header)     # top of the title band
@@ -686,7 +681,8 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
         hy += _HDR_ROW
     for ly in ([top] if header else []) + [band2, band3]:
         parts.append(("rule", ix, ly, x + w, ly, 0.75))
-    # title + subtitle, with sheet count tucked top-right of the title band
+    # title + subtitle, with sheet count tucked top-right of the title
+    # band
     sheets = f"SHEET {tb.sheet} of {tb.of_sheets}"
     parts.append(("text", ix + 6, top + 15,
                   clip(tb.title or name, _TITLE_W, _TITLE_TYPE, True,
@@ -708,12 +704,12 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
                   clip(tb.status or "—", _INFO_W - 12, _VALUE_TYPE, True,
                        field="status", report=report),
                   _VALUE_TYPE, "start", True, "black"))
-    # Bottom band: DRAWING No | SCALE | DATE | REV. Keeping the scale with the
-    # number and the revision index is common drafting practice rather than a
-    # standard: ISO 7200 §4 puts scale outside the title block, and ASME
-    # title-block content is Y14.100's concern, not Y14.1's. A sheet with no
-    # scale to state gives its room back to the three cells that identify the
-    # drawing.
+    # Bottom band: DRAWING No | SCALE | DATE | REV. Keeping the scale
+    # with the number and the revision index is common drafting practice
+    # rather than a standard: ISO 7200 §4 puts scale outside the title
+    # block, and ASME title-block content is Y14.100's concern, not
+    # Y14.1's. A sheet with no scale to state gives its room back to the
+    # three cells that identify the drawing.
     rev_id = tb.revisions[-1].rev if tb.revisions else "0"
     scale = tb.scale or fit_scale
     cells: list[tuple[float, str, str, str]] = [
@@ -752,10 +748,11 @@ def _strip_part(part) -> str:
 def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
                      fit_scale: str = "", *,
                      report: "Reporter | None" = None) -> list[str]:
-    """Draw the strip so its bottom-right corner sits at (right, bottom).
+    """Draw the strip so its bottom-right corner sits at (right,
+    bottom).
 
-    The geometry is :func:`title_strip_layout`'s; this strokes it, exactly as
-    :func:`zone_frame` strokes :func:`zone_layout`.
+    The geometry is :func:`title_strip_layout`'s; this strokes it,
+    exactly as :func:`zone_frame` strokes :func:`zone_layout`.
     """
     strip = title_strip_layout(tb, name, date, right, bottom, fit_scale,
                                report=report)
@@ -764,10 +761,11 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
          f'fill="white" stroke="black" stroke-width="{_STRIP_RULE:g}"/>']
     L += [_strip_part(part) for part in strip.rules]
 
-    # The revision grid: the heading's own rule, then the column rules the full
-    # depth of the strip, then the cells. No rule *between* revisions -- the
-    # rows are told apart by their lettering, and ruling each one would put six
-    # more lines into the busiest corner of the sheet.
+    # The revision grid: the heading's own rule, then the column rules
+    # the full depth of the strip, then the cells. No rule *between*
+    # revisions -- the rows are told apart by their lettering, and
+    # ruling each one would put six more lines into the busiest corner
+    # of the sheet.
     g = strip.rev
     L.append(_strip_part(("rule", g.x, g.header_y, g.x + g.w, g.header_y, 1)))
     cx = g.x
@@ -782,7 +780,8 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
                            _REV_TYPE, bold=bold))
             cx += cw
     rev_row(g.header_y, [heading for heading, _cw in g.cols], bold=True)
-    # Newest revision nearest the heading (bottom); oldest climbs the stack.
+    # Newest revision nearest the heading (bottom); oldest climbs the
+    # stack.
     for idx, values in enumerate(reversed(g.rows)):
         rev_row(g.header_y - (idx + 1) * g.row_h, values)
 
@@ -790,20 +789,22 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
     return L
 
 
-# ---------------------------------------------------------------------------
+# ----------------------------------------------------------------
 # Zone-ruled drawing border (ASME-style: A.. bottom→top, 1.. right→left)
 #
-# This is a drawing-frame zone reference in the ASME idiom, not an ISO 5457
-# grid. ISO 5457 §4.4 runs letters top down and numerals left to right at a
-# fixed 50 mm pitch with the field counts of its Table 2, and §4.3/§4.5 add
-# centring and trimming marks. None of that is drawn here: the band is a
-# constant in drawing units and the field count is chosen to suit the sheet.
-# ISO 15519-1 §5.1.2, the clause that applies to a diagram, asks for the
-# centring marks only on a document prepared for microfilming.
-# ---------------------------------------------------------------------------
+# This is a drawing-frame zone reference in the ASME idiom, not an ISO
+# 5457 grid. ISO 5457 §4.4 runs letters top down and numerals left to
+# right at a fixed 50 mm pitch with the field counts of its Table 2, and
+# §4.3/§4.5 add centring and trimming marks. None of that is drawn here:
+# the band is a constant in drawing units and the field count is chosen
+# to suit the sheet. ISO 15519-1 §5.1.2, the clause that applies to a
+# diagram, asks for the centring marks only on a document prepared for
+# microfilming.
+# ----------------------------------------------------------------
 
-# Width of the lettered/numbered band between the drawing frame and the sheet
-# border. A fixed-size sheet insets its frame by this to rule to the page edge.
+# Width of the lettered/numbered band between the drawing frame and the
+# sheet border. A fixed-size sheet insets its frame by this to rule to
+# the page edge.
 ZONE_BAND = 16.0
 
 
@@ -811,32 +812,32 @@ def sheet_rect(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BA
                ) -> tuple[float, float, float, float]:
     """The sheet rectangle around a drawing frame, ruled or not.
 
-    An unruled sheet keeps the band as plain margin, so turning the border on
-    and off leaves every piece of furniture exactly where it was.
+    An unruled sheet keeps the band as plain margin, so turning the
+    border on and off leaves every piece of furniture exactly where it
+    was.
     """
     return ix - band, iy - band, iw + 2 * band, ih + 2 * band
 
 
-#: The size the zone letters and numerals are lettered at, and the drop from the
-#: middle of the band to their baseline.
+#: The size the zone letters and numerals are lettered at, and the drop
+#: from the middle of the band to their baseline.
 ZONE_TYPE, _ZONE_BASE = 9, 3
 
 
 class Zoned(NamedTuple):
     """The zone-ruled border, as geometry rather than as ink.
 
-    ``outer`` and ``inner`` are the sheet border and the drawing frame, each
-    ``(x, y, w, h)``. ``parts`` is everything ruled in the band between them, in
-    the order the sheet draws it: ``("rule", x1, y1, x2, y2)`` for a tick, and
-    ``("label", x, y, text)`` for a letter or a numeral, stated at the point the
-    glyph is *centred* on. The SVG sets a label ``text-anchor="middle"`` and
-    drops the baseline by :data:`_ZONE_BASE`, which is that same point said the
-    way SVG says it.
+    ``outer`` and ``inner`` are the sheet border and the drawing frame,
+    each ``(x, y, w, h)``. ``parts`` is everything ruled in the band
+    between them, in the order the sheet draws it: ``("rule", x1, y1,
+    x2, y2)`` for a tick, and ``("label", x, y, text)`` for a letter or
+    a numeral, stated at the point the glyph is *centred* on. The SVG
+    sets a label ``text-anchor="middle"`` and drops the baseline by
+    :data:`_ZONE_BASE`, which is that same point said the way SVG says
+    it.
 
-    One list rather than two, and in drawing order, because
-    :func:`zone_frame` strokes it straight through: two lists would have to be
-    re-interleaved to put the ink back where it was, and the sheet's own file is
-    the thing that must not move.
+    One list rather than two, and in drawing order, since
+    :func:`zone_frame` strokes it straight through.
     """
     outer: tuple[float, float, float, float]
     inner: tuple[float, float, float, float]
@@ -847,14 +848,16 @@ def zone_layout(ix: float, iy: float, iw: float, ih: float,
                 band: float = ZONE_BAND) -> Zoned:
     """Where every part of the zone-ruled border goes.
 
-    The geometry of :func:`zone_frame`, with the drawing taken out of it, so the
-    draw.io exporter rules the same border rather than a second opinion about
-    one -- the same split :func:`dock` and
-    :func:`~pandid.render.svg.stream_polyline` are already on the far side of.
+    The geometry of :func:`zone_frame`, with the drawing taken out of
+    it, so the draw.io exporter rules the same border rather than a
+    second opinion about one -- the same split :func:`dock` and
+    :func:`~pandid.render.svg.stream_polyline` are already on the far
+    side of.
 
-    The field counts are the sheet's own and are chosen from its size (a zone
-    about 165 units across, four to twelve columns and three to eight rows). They
-    are *not* ISO 5457's fixed 50 mm pitch; see the note above :data:`ZONE_BAND`.
+    The field counts are the sheet's own and are chosen from its size (a
+    zone about 165 units across, four to twelve columns and three to
+    eight rows). They are *not* ISO 5457's fixed 50 mm pitch; see the
+    note above :data:`ZONE_BAND`.
     """
     ox, oy, ow, oh = sheet_rect(ix, iy, iw, ih, band)
     cols = max(4, min(12, round(iw / 165)))
@@ -886,12 +889,12 @@ def zone_layout(ix: float, iy: float, iw: float, ih: float,
 
 def zone_frame(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BAND
                ) -> tuple[list[str], tuple[float, float, float, float]]:
-    """Draw the drawing frame (inner rect) plus the sheet border (outer rect)
-    with zone letters/numbers ruled in the band between them.
+    """Draw the drawing frame (inner rect) plus the sheet border (outer
+    rect) with zone letters/numbers ruled in the band between them.
 
-    (``ix``, ``iy``, ``iw``, ``ih``) is the inner drawing rectangle. Returns the
-    SVG fragments and the outer sheet rectangle (x, y, w, h). The geometry is
-    :func:`zone_layout`'s; this strokes it.
+    (``ix``, ``iy``, ``iw``, ``ih``) is the inner drawing rectangle.
+    Returns the SVG fragments and the outer sheet rectangle (x, y, w,
+    h). The geometry is :func:`zone_layout`'s; this strokes it.
     """
     z = zone_layout(ix, iy, iw, ih, band)
     ox, oy, ow, oh = z.outer
@@ -911,19 +914,20 @@ def zone_frame(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BA
     return L, z.outer
 
 
-# ---------------------------------------------------------------------------
+# ----------------------------------------------------------------
 # The sheet dock: which rectangle each piece of furniture is given
-# ---------------------------------------------------------------------------
+# ----------------------------------------------------------------
 
-# Clearance between the drawing and the frame it is framed by; between two boxes
-# stacked in one corner; and between a left-hand and a right-hand stack sharing
-# a band. The last is what stops a wide equipment list and a wide legend being
-# ruled as though they could be laid end to end.
+# Clearance between the drawing and the frame it is framed by; between
+# two boxes stacked in one corner; and between a left-hand and a
+# right-hand stack sharing a band. The last is what stops a wide
+# equipment list and a wide legend being ruled as though they could be
+# laid end to end.
 INNER, GAP, SEP = 26.0, 14.0, 18.0
 
-#: Margin outside the sheet border. A fixed page insets its frame by this plus
-#: the zone band, so the border rules to the paper edge whether or not the zones
-#: are lettered.
+#: Margin outside the sheet border. A fixed page insets its frame by
+#: this plus the zone band, so the border rules to the paper edge
+#: whether or not the zones are lettered.
 OUTER_MARGIN = 8.0
 
 
@@ -937,45 +941,40 @@ class Docked(NamedTuple):
 
 
 def dock(items, inner, *, sheet=None, too_small=None):
-    """Where each piece of sheet furniture lands, and the frame it lands on.
+    """Where each piece of sheet furniture lands, and the frame it lands
+    on.
 
-    **This is the placement, and nothing here draws.** It was inside
-    ``SvgRenderer._place_furniture``, which measured, placed and drew in one
-    pass, so the draw.io exporter -- which has the same boxes to place and no
-    SVG to draw them into -- had no way to ask the question and invented an
-    answer instead: it stacked the title block, the equipment list, the notes
-    and the legend in a column down the left of the drawing while the sheet
-    docks them to four different corners. That is the same failure
-    :func:`~pandid.render.svg.stream_polyline` was lifted out of the renderer to
-    prevent, one level up: two derivations of one placement is the drift that
-    leaves an exported sheet's furniture somewhere the rendered sheet never put
-    it.
+    **This is the placement, and nothing here draws.** Both backends
+    have the same boxes to place, so both ask this rather than deriving
+    it twice.
 
-    Nothing about the arithmetic is SVG's. A box is measured from its own text
-    (:func:`measure_annotation`, :func:`measure_table`, and
-    :func:`measure_title_strip`, all of which are already pure), grouped into an
-    edge *band* by its ``align``, and placed flush against the frame edge that
-    band names. The frame either grows out of the drawing far enough to hold the
-    bands, or -- given a *sheet* -- is the fixed page inset by the border, with
-    the drawing fitted into whatever the bands leave.
+    Nothing about the arithmetic is SVG's. A box is measured from its
+    own text (:func:`measure_annotation`, :func:`measure_table`, and
+    :func:`measure_title_strip`, all of which are already pure), grouped
+    into an edge *band* by its ``align``, and placed flush against the
+    frame edge that band names. The frame either grows out of the
+    drawing far enough to hold the bands, or -- given a *sheet* -- is
+    the fixed page inset by the border, with the drawing fitted into
+    whatever the bands leave.
 
-    ``items`` are ``(obj, align, w, h)``. ``obj`` is opaque: its ``margin`` and
-    ``position`` are read off it where it has them, so a caller may pass a
-    sentinel for a piece of furniture that is not one of the caller's objects
-    (the title strip, the stream table) and have the band maths size the frame
-    around it too. ``inner`` is the drawing's own bounding box
-    ``(x0, y0, x1, y1)``.
+    ``items`` are ``(obj, align, w, h)``. ``obj`` is opaque: its
+    ``margin`` and ``position`` are read off it where it has them, so a
+    caller may pass a sentinel for a piece of furniture that is not one
+    of the caller's objects (the title strip, the stream table) and have
+    the band maths size the frame around it too. ``inner`` is the
+    drawing's own bounding box ``(x0, y0, x1, y1)``.
 
     ``sheet`` is a fixed page, or None to grow the frame to the drawing.
-    ``too_small`` is called with ``(need_w, need_h, culprit)`` when a fixed page
-    cannot hold its own furniture and must return the exception to raise; the
-    caller supplies it because naming ``culprit`` in words is the caller's
-    vocabulary, not this module's.
+    ``too_small`` is called with ``(need_w, need_h, culprit)`` when a
+    fixed page cannot hold its own furniture and must return the
+    exception to raise; the caller supplies it because naming
+    ``culprit`` in words is the caller's vocabulary, not this module's.
 
-    Returns ``(placed, frame, free)``: the list of :class:`Docked` rectangles in
-    the order the sheet draws them, the frame rectangle ``(x, y, w, h)``, and
-    the region a fixed page leaves for the drawing (None when the frame was
-    grown to the drawing, which needs no fitting).
+    Returns ``(placed, frame, free)``: the list of :class:`Docked`
+    rectangles in the order the sheet draws them, the frame rectangle
+    ``(x, y, w, h)``, and the region a fixed page leaves for the drawing
+    (None when the frame was grown to the drawing, which needs no
+    fitting).
     """
     from pandid.document import _ALIGN
 
@@ -996,13 +995,14 @@ def dock(items, inner, *, sheet=None, too_small=None):
         return max((w for _, w, _ in entries), default=0.0)
 
     def biggest(dim: int):
-        """The largest piece of furniture along ``dim`` (1 = width, 2 = height),
-        for an error that has to say which piece will not fit rather than that
-        something will not."""
+        """The largest piece of furniture along ``dim`` (1 = width, 2 =
+        height), for an error that has to say which piece will not fit
+        rather than that something will not.
+        """
         entries = [it for col in cols.values() for it in col]
         return max(entries, key=lambda it: it[dim])[0] if entries else None
 
-    # --- band thicknesses -------------------------------------------------
+    # band thicknesses -------------------------------------------
     top_h = max(stack_h(cols["top-left"]), stack_h(cols["top"]),
                 stack_h(cols["top-right"]))
     bottom_h = max(stack_h(cols["bottom-left"]), stack_h(cols["bottom"]),
@@ -1017,11 +1017,11 @@ def dock(items, inner, *, sheet=None, too_small=None):
     band_w = max(row_w("top-left", "top", "top-right"),
                  row_w("bottom-left", "bottom", "bottom-right"))
 
-    # --- frame rectangle --------------------------------------------------
+    # frame rectangle --------------------------------------------
     if sheet is not None:
-        # A named page fixes the frame: the sheet inset by the zone band and
-        # the margin outside it, so the border rules to the sheet edges and
-        # the zone count does not drift with the drawing.
+        # A named page fixes the frame: the sheet inset by the zone band
+        # and the margin outside it, so the border rules to the sheet
+        # edges and the zone count does not drift with the drawing.
         edge = OUTER_MARGIN + ZONE_BAND
         need_w = max(band_w, left_w + right_w + 2 * INNER)
         need_h = max(top_h + bottom_h + 2 * INNER,
@@ -1047,14 +1047,14 @@ def dock(items, inner, *, sheet=None, too_small=None):
             iyb += extra / 2
     iw, ih = ixr - ix, iyb - iy
 
-    # The bands are measured, so the region left for the drawing is settled and
-    # so is the ratio it will be placed at. A frame grown to the drawing has no
-    # fixed page and so nothing to fit into.
+    # The bands are measured, so the region left for the drawing is
+    # settled and so is the ratio it will be placed at. A frame grown to
+    # the drawing has no fixed page and so nothing to fit into.
     free = None if sheet is None else (
         ix + left_w + INNER, iy + top_h + INNER,
         iw - left_w - right_w - 2 * INNER, ih - top_h - bottom_h - 2 * INNER)
 
-    # --- place each column flush to the frame -----------------------------
+    # place each column flush to the frame -----------------------
     placed: list[Docked] = []
 
     def x_for(mode, w, m):
@@ -1099,7 +1099,7 @@ def dock(items, inner, *, sheet=None, too_small=None):
         placed.append(Docked(obj, ix + (iw - w) / 2, cy, w, h))
         cy += h + GAP
 
-    # --- hand-placed boxes; expand the frame to keep them inside ----------
+    # hand-placed boxes; expand the frame to keep them inside ----
     for obj, px, py, w, h in positioned:
         placed.append(Docked(obj, px, py, w, h))
         if sheet is not None:  # the page is fixed; absolute means absolute
