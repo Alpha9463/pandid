@@ -7,6 +7,8 @@ start failing on the day that spelling was deleted -- one release after it was
 added -- which is the wrong thing for a test of the machinery to be tied to.
 """
 
+import warnings
+
 import pytest
 
 from pandid import Flowsheet, units as U
@@ -36,22 +38,6 @@ class _OldPump(U.Pump):
     def __init__(self, name, **kwargs):
         super().__init__(name, **kwargs)
         RETIRED.warn(self, where=name)
-
-
-@pytest.fixture(autouse=True)
-def _no_carrier_less_leftovers():
-    """Start and end with the process-wide bucket empty.
-
-    It is process-wide by design (see :mod:`pandid.deprecation`), so without
-    this one test's carrier-less finding turns up in the next test's
-    ``validate()``. Both ends, so a failure here cannot be inherited from
-    somewhere else or handed on.
-    """
-    from pandid.deprecation import _forget_unattached
-
-    _forget_unattached()
-    yield
-    _forget_unattached()
 
 
 def _sheet():
@@ -198,24 +184,88 @@ def test_a_loop_carries_one():
     assert len([i for i in fs.validate() if i.code == CODE]) == 1
 
 
-def test_no_carrier_reports_against_every_sheet():
-    """The documented cost of the carrier-less home, asserted rather than hoped.
+# --- one sheet's finding is only ever that sheet's ---------------------------
 
-    A free function has no sheet, so the finding lands on whichever sheets the
-    process goes on to validate. Over-reporting, deliberately, in preference to
-    dropping it.
+
+def test_a_deprecation_needs_a_carrier():
+    """#207: there is no home for a finding with nothing to ride on.
+
+    There was one -- a process-wide list, appended to every ``validate()`` for
+    the life of the interpreter -- and a sheet built in one Jupyter cell
+    reported a call made in another. Refusing the call is what closes it: each
+    of these three used to record, and the second is the one a customer writes
+    by accident, passing a ``flowsheet`` that is still ``None``.
     """
-    with pytest.warns(DeprecationWarning):
-        RETIRED.warn()
-    assert len([i for i in Flowsheet("a").validate() if i.code == CODE]) == 1
-    assert len([i for i in Flowsheet("b").validate() if i.code == CODE]) == 1
+    for nothing in ((), (None,), (object(),)):
+        with pytest.raises(TypeError, match="carrier"):
+            RETIRED.warn(*nothing)
 
 
-def test_a_carrier_less_finding_says_it_once():
+def test_a_refused_call_does_not_warn_either():
+    """Both signals or neither. A finding nothing will report is a bug in the
+    caller, not something to half-announce."""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(TypeError):
+            RETIRED.warn(None)
+    assert caught == []
+
+
+def test_the_shipped_deprecations_stay_on_the_sheet_that_made_them():
+    """All three 0.1.2 ships, end to end, and a second sheet that sees none.
+
+    The real ones rather than the stand-in, because #207 is about what a
+    process holding more than one sheet reports. Held to a count and to the
+    sentences the warnings carried, not to spellings written out here, so the
+    release that deletes them thins this test rather than reddening it.
+    """
+    used = Flowsheet("used")
+    feed = used.add(U.Feed("F"))
+    cyclone = used.add(U.Separator("CY-401", variant="cyclone"))
+    prod = used.add(U.Product("P"))
+    used.connect(feed.outlet, cyclone.feed)
+    used.connect(cyclone.overflow, prod.inlet)
+
+    with pytest.warns(DeprecationWarning) as caught:
+        cyclone.vapor  # -> .overflow
+        cyclone.liquid  # -> .underflow
+        used.add(U.Valve("CV-303", variant="pneumatic"))  # -> variant='control'
+    warned = sorted(str(w.message) for w in caught)
+    assert len(warned) == 3
+
+    reported = sorted(i.message for i in used.validate() if i.code == CODE)
+    assert reported == warned
+
+    untouched = Flowsheet("untouched")
+    assert [i for i in untouched.validate() if i.code == CODE] == []
+
+
+# --- said once, and not lost -------------------------------------------------
+
+
+def test_two_carriers_with_the_same_sentence_both_report():
+    """The dedupe is per carrier, not per sentence.
+
+    Two units are two places in the author's file to edit even when the finding
+    reads identically, which it does when the call names no ``where``. A
+    mechanism that deduplicated on the sentence would report one and drop one.
+    """
+    fs = Flowsheet("twins")
+    first = fs.add(U.Pump("P-101"))
+    second = fs.add(U.Pump("P-102"))
     with pytest.warns(DeprecationWarning):
-        RETIRED.warn()
-        RETIRED.warn()
-    assert len([i for i in Flowsheet("a").validate() if i.code == CODE]) == 1
+        RETIRED.warn(first)
+        RETIRED.warn(second)
+    assert len([i for i in fs.validate() if i.code == CODE]) == 2
+
+
+def test_a_second_render_says_it_once_too():
+    """``render()`` assigns ``fs.warnings`` rather than appending to it, so a
+    sheet drawn twice reports what it found once, not twice."""
+    fs, _ = _sheet()
+    fs.to_svg()
+    fs.to_svg()
+    assert [i.code for i in fs.warnings if i.code == CODE] == [CODE]
 
 
 # --- the declaration ---------------------------------------------------------

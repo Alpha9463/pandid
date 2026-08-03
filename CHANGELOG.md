@@ -253,9 +253,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   finding itself and `validate()` collects from the sheet and everything the
   sheet holds. That is the shape `fs.warnings` and `fs.route_converged` already
   have: a fact settled in an earlier phase, parked on an object, read out later.
-  A call with no pandid object in scope at all files against the process and is
-  then reported by every `validate()` in it, which over-reports rather than
-  drops.
+  A carrier is required: a finding with nothing to ride on reaches no sheet's
+  `validate()`, and the only home left for it is the process — which is one
+  sheet's finding read out by every *other* sheet built in the same interpreter.
 
   The policy is now in `CONTRIBUTING.md` instead of in anyone's head: a
   deprecation lives for one release, announced under `### Deprecated` and
