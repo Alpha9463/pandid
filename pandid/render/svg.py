@@ -371,14 +371,25 @@ def impulse_tap(inst) -> bool:
 # no face. That is the half of #253 that also undoes what #253 records -- a
 # controller whose north face was "spent on the high alarm".
 #
-# Which corner is which comes from the clause's own lettering: (a) references and
-# safety identifiers, (b) the measured-variable type for letter code U, (c) high
-# functions, (d) low. High above the centre line and low below is §5.2.5's
-# "increasing value away from the centre line"; a and b take the other side.
+# What §5.2.5 fixes is the *vertical* half: "increasing value away from the
+# centre line", so a high function is above it and a low one below. Which side of
+# the symbol the pair goes on it does not fix, and
+# ``professional_examples/P&ID_301.pdf`` bears that out -- all three of its
+# annotated controllers put their alarms on the left, which is the side each of
+# them has room on. So a pair keeps its half of the symbol and takes whichever
+# side reads: the two kinds of information are (a) references and safety
+# identifiers with (b) the measured-variable type for letter code U, and (c) high
+# functions with (d) low.
 
 #: Each quadrant as ``(side, away)``: which way from the symbol it sits, and
 #: which way a second code in it stacks. Both are +1 right/down.
 _QUADRANTS = {"a": (-1, -1), "b": (-1, 1), "c": (1, -1), "d": (1, 1)}
+
+#: The two pairs, in the order they are placed, and the side each prefers. They
+#: are placed as pairs because they are read as one: a high code over a low one
+#: is a column, and splitting it across the symbol would put the reader's eye in
+#: two places for one statement.
+_QUADRANT_PAIRS = ((("a", "b"), -1), (("c", "d"), 1))
 
 #: Paper left clear on the symbol's centre line, each side. A connection arrives
 #: there -- on ``professional_examples/P&ID_301.pdf`` the signal line into every
@@ -422,37 +433,57 @@ def quadrant_labels(fs) -> list:
     out: list = []
     for u in annotated:
         box = unit_box(u, u.frame)
-        cy = (box[1] + box[3]) / 2
-        for name, (side, away) in _QUADRANTS.items():
-            codes = u.quadrants.get(name) or ()
-            if not codes:
+        for names, prefers in _QUADRANT_PAIRS:
+            codes = {name: u.quadrants.get(name) or () for name in names}
+            if not any(codes.values()):
                 continue
-            edge = box[2] if side > 0 else box[0]
-            anchor, lpos = ("start", "right") if side > 0 else ("end", "left")
-            lx = edge + side * _QUADRANT_GAP
-            block = [
-                (lx, cy + away * (_QUADRANT_BAND + _QUADRANT_PITCH / 2
-                                  + i * _QUADRANT_PITCH),
-                 anchor, "middle", lpos, html.escape(code))
-                for i, code in enumerate(codes)
-            ]
-            dx = side * _quadrant_stand_off(block, side, ink, symbols)
-            placed = [(x + dx, y, *rest) for x, y, *rest in block]
-            out.extend(placed)
-            # Each code is paper for the next quadrant, and for the next
-            # balloon's: two controllers a balloon apart annotate into the same
-            # gap, and the second has to see where the first landed.
-            symbols += [b for b in map(_unit_label_box, placed) if b is not None]
+            # The preferred side first, so a tie keeps it; the other only wins
+            # by being cleaner, which is the draughtsman's own reason to swap.
+            best = None
+            for side in (prefers, -prefers):
+                block = _quadrant_block(box, codes, side)
+                shift, damage = _quadrant_stand_off(block, side, ink, symbols)
+                if best is None or damage < best[0]:
+                    best = (damage, [(x + side * shift, y, *rest)
+                                     for x, y, *rest in block])
+                if damage == (0, 0, 0):
+                    break
+            assert best is not None
+            out.extend(best[1])
+            # Each code is paper for the next pair, and for the next balloon's:
+            # two controllers a balloon apart annotate into the same gap, and
+            # the second has to see where the first landed.
+            symbols += [b for b in map(_unit_label_box, best[1]) if b is not None]
     return out
 
 
-def _quadrant_stand_off(block, side: int, ink, symbols) -> float:
-    """How far out of the symbol a quadrant's codes have to stand, ``0`` if not.
+def _quadrant_block(box, codes, side: int) -> list:
+    """One side's codes, laid out from the symbol's box outward.
 
-    Outward only, and the whole quadrant moves together: the codes are a block
-    whose order is the standard's, so sliding one out of line would say
-    something the author did not. Outward is also the only direction that leaves
-    the quadrant *being* that quadrant.
+    ``codes`` is the pair keyed by quadrant letter; which of the two is above
+    the centre line and which below is :data:`_QUADRANTS`', and does not change
+    with the side.
+    """
+    cy = (box[1] + box[3]) / 2
+    lx = (box[2] if side > 0 else box[0]) + side * _QUADRANT_GAP
+    anchor, lpos = ("start", "right") if side > 0 else ("end", "left")
+    return [
+        (lx,
+         cy + _QUADRANTS[name][1] * (_QUADRANT_BAND + _QUADRANT_PITCH / 2
+                                     + i * _QUADRANT_PITCH),
+         anchor, "middle", lpos, html.escape(code))
+        for name in codes
+        for i, code in enumerate(codes[name])
+    ]
+
+
+def _quadrant_stand_off(block, side: int, ink, symbols):
+    """How far out of the symbol a pair's codes have to stand, and what is left.
+
+    Returns ``(shift, damage)``. Outward only, and the whole pair moves
+    together: the codes are a block whose order is the standard's, so sliding
+    one out of line would say something the author did not, and outward is the
+    only direction that leaves each code in its own quadrant.
 
     Scored with :func:`_erases`, so a code gives things up in the order every
     other label on the sheet does -- symbols first, then impulse lines, then
@@ -461,7 +492,7 @@ def _quadrant_stand_off(block, side: int, ink, symbols) -> float:
     """
     boxes = [b for b in map(_unit_label_box, block) if b is not None]
     if not boxes:
-        return 0.0
+        return 0.0, (0, 0, 0)
 
     def damage(m: float) -> tuple[int, int, int]:
         hits = taps = pipes = 0
@@ -478,13 +509,13 @@ def _quadrant_stand_off(block, side: int, ink, symbols) -> float:
                       else b[2] - o[0] + _PLATE_CLEARANCE)
     clear = (0, 0, 0)
     best, cost = 0.0, damage(0.0)
-    for m in sorted(s for s in steps if 0.0 < s <= _QUADRANT_REACH):
+    for m in sorted(step for step in steps if 0.0 < step <= _QUADRANT_REACH):
         if cost == clear:
             break
         got = damage(m)
         if got < cost:
             best, cost = m, got
-    return best
+    return best, cost
 
 
 def _ink(fs) -> "list[_Ink]":

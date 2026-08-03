@@ -363,3 +363,71 @@ def test_the_corpus_has_flange_marks_to_check(drawn):
     assert all(n % 2 == 0 for n in counted.values()), (
         "a flange is a pair of faces and they are drawn together"
     )
+
+
+# --- letter codes written outside a symbol ------------------------------------
+# The quadrant codes are haloed lettering like a tag, so the checks above already
+# hold them off the symbols and the impulse lines. These are the two things they
+# are held to that a tag is not.
+#
+# A tag may be written *in* a run -- that is what its halo is for, and a reader
+# reads across the gap -- but a letter code sits in a gap two units wide between
+# a balloon and whatever is beside it, and there is no run for a reader to read
+# across. So it clears every line on the sheet, pipe and signal alike.
+#
+# And it is placed before either label pass, which is the whole reason
+# :func:`~pandid.render.svg.quadrant_labels` derives itself from the flowsheet:
+# the equipment tags and the line numbers are handed the boxes it chose and dodge
+# them. If that seeding is ever dropped these go red, and nothing else would.
+
+
+def _code_boxes(fs) -> "list[tuple[float, float, float, float]]":
+    """The halo of every letter code written outside a symbol on this sheet."""
+    from pandid.render.svg import _unit_label_box, quadrant_labels
+
+    return [b for b in map(_unit_label_box, quadrant_labels(fs)) if b is not None]
+
+
+@pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
+def test_no_letter_code_lands_on_a_line(drawn, name):
+    """Pipe as well as signal, which is stricter than a tag is held to."""
+    fs, _halos_, _bars = drawn[name]
+    struck = [
+        f"({box[0]:.0f}, {box[1]:.0f}) on {line.kind}"
+        for box in _code_boxes(fs)
+        for line in _ink(fs)
+        if _overlaps(box, line.box)
+    ]
+    assert not struck, f"{name}: a letter code lies on " + "; ".join(sorted(set(struck)))
+
+
+@pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
+def test_no_letter_code_lands_on_a_tag_or_a_line_number(drawn, name):
+    """Every other plate on the sheet is one of those two; see :func:`_halos`."""
+    fs, halos, _bars = drawn[name]
+    codes = _code_boxes(fs)
+    others = [
+        h
+        for h in halos
+        if not any(all(abs(a - b) < 0.2 for a, b in zip(h, code)) for code in codes)
+    ]
+    hit = [
+        f"({box[0]:.0f}, {box[1]:.0f})"
+        for box in codes
+        for other in others
+        if _overlaps(box, other)
+    ]
+    assert not hit, f"{name}: a letter code is written over a label at " + "; ".join(
+        sorted(set(hit))
+    )
+
+
+def test_the_corpus_has_letter_codes_to_check(drawn):
+    """Both checks above say nothing on a sheet that annotates nothing, and the
+    corpus is free to change. Six codes on three sheets is what it draws today:
+    the two alarms on each of 04's LIC-101, 11's PIC-301, TIC-302 and LIC-304,
+    and 14's two level indicators, with a lone PAH on its pressure indicator."""
+    counted = {name: len(_code_boxes(fs)) for name, (fs, _h, _b) in drawn.items()}
+    assert counted["04_control_loop"] == 2, counted
+    assert counted["11_ethanol_pid"] == 6, counted
+    assert counted["14_tank_farm"] == 5, counted
