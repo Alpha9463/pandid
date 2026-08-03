@@ -1,67 +1,71 @@
 """Build a flowsheet from data: the declarative spec format.
 
-The topology API (``fs.add`` / ``fs.connect``) assumes whoever wants a drawing
-writes Python. Most process engineers do not: the equipment list and the stream
-table already exist, in a spreadsheet or a YAML file, and retyping them as code
-is what stops the drawing getting made. This module is the other door: a plain
-mapping describing the same flowsheet, plus the serializer that writes one back
-out, so a diagram round-trips through data:
+The other door beside the topology API (``fs.add`` / ``fs.connect``): a
+plain mapping describing the same flowsheet, plus the serializer that
+writes one back out, so a diagram round-trips through data.
 
-    fs = Flowsheet.from_dict(spec)     # plain dict, no dependencies
-    fs = Flowsheet.from_json(path)     # stdlib only
-    fs = Flowsheet.from_yaml(path)     # needs the optional PyYAML extra
-    spec = fs.to_dict()                # feeds straight back into from_dict()
+    fs = Flowsheet.from_dict(spec)   # plain dict, no dependencies
+    fs = Flowsheet.from_json(path)   # stdlib only
+    fs = Flowsheet.from_yaml(path)   # needs the PyYAML extra
+    spec = fs.to_dict()              # feeds back into from_dict()
 
-The spec is *validated*, not interpreted: an unknown key is an error rather than
-a silent no-op, because a typo in a hand-written file must not quietly drop a
-nozzle off the sheet. Every message names the entry it came from
-(``units[3] 'P-101'``) and lists what would have been accepted, in the style of
-:meth:`pandid.units.Unit.port`.
+The spec is *validated*, not interpreted: an unknown key is an error
+rather than a silent no-op, because a typo in a hand-written file must
+not quietly drop a nozzle off the sheet. Every message names the entry
+it came from (``units[3] 'P-101'``) and lists what would have been
+accepted, in the style of :meth:`pandid.units.Unit.port`.
 
 The format::
 
-    name: Feed Metering Skid          # required; everything else is optional
+    name: Feed Metering Skid      # required; the rest is optional
     stream_naming_scheme: "S{n}"
-    stream_number_start: 1            # the S1 a flag draws
+    stream_number_start: 1        # the S1 a flag draws
     line_numbering_scheme: "{size}-{service}-{sequence}-{spec}"
-    line_number_start: 1001           # the 1001 inside 6"-P-1001-A1A
-    loop_number_start: 101            # where a loop with no number counts from
-    auto_faces: true                  # engine picks each movable port's face
+    line_number_start: 1001       # the 1001 in 6"-P-1001-A1A
+    loop_number_start: 101        # where an unnumbered loop starts
+    auto_faces: true              # engine picks each movable face
     components: [{name: Water, formula: H2O}]
 
     units:
-      - {kind: Feed, name: Raw Feed, reference: PFD-100, pin: {x: 60, y: 275}}
-      - {kind: Feed, name: CWSH, header: true}   # a header: tap it as often as needed
-      - {kind: Fitting, name: ST-101, variant: strainer, description: Strainer}
-      - {kind: Valve, name: HV-101, variant: gate, normal_position: closed}
+      - {kind: Feed, name: Raw Feed, reference: PFD-100,
+         pin: {x: 60, y: 275}}
+      - {kind: Feed, name: CWSH, header: true}    # tap it as often
+      - {kind: Fitting, name: ST-101, variant: strainer,
+         description: Strainer}
+      - {kind: Valve, name: HV-101, variant: gate,
+         normal_position: closed}
       - {kind: Mixer, name: M-100, n_inlets: 2}
-      - {kind: Vessel, name: V-101, variant: horizontal, width: 130, height: 42,
-         port_faces: {inlet: N}, pin: {x: 680, y: 210, mirrored: y}}
+      - {kind: Vessel, name: V-101, variant: horizontal,
+         width: 130, height: 42, port_faces: {inlet: N},
+         pin: {x: 680, y: 210, mirrored: y}}
 
     loops:
-      - {variable: L, number: 101}     # declared loops; a loop draws nothing
-      - {variable: F}                  # no number: takes the sheet's next one
+      - {variable: L, number: 101}   # a loop draws nothing itself
+      - {variable: F}                # no number: takes the next one
 
     instruments:
       - {type: LIC, number: 101, variant: panel,
          on: V-101, at: S, offset: 115, port_faces: {sig_out: W}}
 
     streams:
-      - {from: [Raw Feed, outlet], to: [ST-101, inlet], size: '6"', service: P, spec: A1A}
-      - {from: [LIC-101, sig_out], to: [FV-101, actuator], kind: electric}
-      - {from: [FV-200, outlet], to: [M-100, in_2], draw_as_recycle: true,
+      - {from: [Raw Feed, outlet], to: [ST-101, inlet],
+         size: '6"', service: P, spec: A1A}
+      - {from: [LIC-101, sig_out], to: [FV-101, actuator],
+         kind: electric}
+      - {from: [FV-200, outlet], to: [M-100, in_2],
+         draw_as_recycle: true,
          properties: {"Temperature (C)": 25 C}}
 
     stream_table_sections: [[Benzene, Mass Fraction]]
     title_block: {title: ..., revisions: [{rev: A, date: ..., by: AA}]}
     annotations: [{type: equipment_list, align: top-right}]
 
-A unit is addressed by its name, so a symbol drawn more than once (an
-interlock square, a utility header flag, the two tags a flowsheet lets repeat)
-is addressed by the name the flowsheet gives each drawing of it: the first entry
-is ``I-1``, the second ``I-1 (2)``, in the order the list declares them. Each
-entry carries the tag, so a header tapped twice is written out as two ``CWSH``
-entries and read back as the same two taps.
+A unit is addressed by its name, so a symbol drawn more than once -- an
+interlock square, a utility header flag -- is addressed by the name the
+flowsheet gives each drawing: the first entry is ``I-1``, the second
+``I-1 (2)``, in list order. Each entry carries the tag, so a header
+tapped twice is written as two ``CWSH`` entries and read back as the
+same two taps.
 """
 
 from __future__ import annotations
@@ -94,20 +98,20 @@ from pandid.units import Instrument, Unit, _Boundary
 class SpecError(ValueError):
     """A flowsheet spec could not be understood.
 
-    A :class:`ValueError`, so existing ``except ValueError`` handlers still
-    catch it; a distinct class so a tool loading user files can tell "your spec
-    is wrong" apart from "the engine is unhappy".
+    A :class:`ValueError`, so ``except ValueError`` handlers still catch
+    it; a distinct class so a tool loading user files can tell "your
+    spec is wrong" apart from "the engine is unhappy".
     """
 
 
-# ---------------------------------------------------------------------------
-# Primitive validation. Each helper takes the dotted path of the value it is
-# checking so the message points at the line the author has to fix.
-# ---------------------------------------------------------------------------
+# ----------------------------------------------------------------
+# Primitive validation. Each helper takes the dotted path of the value
+# it is checking, so the message points at the line to fix.
+# ----------------------------------------------------------------
 
 
 def _suggest(value: Any, candidates) -> str:
-    """``" (did you mean 'variant'?)"`` when a typo is close to a real name."""
+    """``" (did you mean 'variant'?)"`` for a near-miss typo."""
     close = get_close_matches(str(value), [str(c) for c in candidates], n=1, cutoff=0.6)
     return f" (did you mean {close[0]!r}?)" if close else ""
 
@@ -146,9 +150,10 @@ def _text(value: Any, where: str) -> str:
 
 
 def _number(value: Any, where: str) -> float:
-    # Returned unchanged rather than coerced to float: a whole-number coordinate
-    # is drawn as "120", a float one as "120.0", so widening here would rewrite
-    # the SVG of every flowsheet that went through a spec.
+    # Returned unchanged rather than coerced to float: a whole-number
+    # coordinate is drawn as "120" and a float one as "120.0", so
+    # widening here rewrites the SVG of every flowsheet built from a
+    # spec.
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise SpecError(f"{where} must be a number, got {value!r}")
     return value
@@ -169,12 +174,12 @@ def _flag(value: Any, where: str) -> bool:
 def _faces(value: Any, where: str) -> int | list[str]:
     """A connection count, or one face per connection.
 
-    Both spellings are handed straight to the class, which owns the vocabulary
-    and the error message for a face that is not one; this only settles that the
-    spec said a whole number or a list of words. A bare string is refused here
-    rather than passed on, because YAML makes ``inputs: W`` far too easy to
-    write and a string is a sequence of one-character faces that would read as
-    exactly what was meant right up until somebody wrote ``inputs: WN``.
+    Both spellings go straight to the class, which owns the vocabulary
+    and the message for a face that is not one; this only settles that
+    the spec said a whole number or a list of words. A bare string is
+    refused here because YAML makes ``inputs: W`` easy to write, and a
+    string is a sequence of one-character faces that reads as what was
+    meant right up until somebody writes ``inputs: WN``.
     """
     if isinstance(value, bool) or isinstance(value, int):
         return _integer(value, where)
@@ -182,8 +187,11 @@ def _faces(value: Any, where: str) -> int | list[str]:
 
 
 def _component(value: Any, where: str) -> str | float:
-    """A line-number component: text such as ``6"``, or the number an unquoted
-    metric size (``size: 150``) parses as."""
+    """A line-number component.
+
+    Text such as ``6"``, or the number an unquoted metric size
+    (``size: 150``) parses as.
+    """
     if isinstance(value, bool) or not isinstance(value, (str, int, float)):
         raise SpecError(
             f"{where} must be text or a number (an imperial size carries its own "
@@ -193,14 +201,14 @@ def _component(value: Any, where: str) -> str | float:
 
 
 def _fail_from(error: Exception, where: str) -> SpecError:
-    """Re-raise a library error against the spec entry that provoked it."""
+    """Re-raise a library error against the entry that provoked it."""
     message = error.args[0] if error.args else str(error)
     return SpecError(f"{where}: {message}")
 
 
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------
 # The equipment registry
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------
 
 
 def _snake(name: str) -> str:
@@ -210,31 +218,26 @@ def _snake(name: str) -> str:
     return "".join(out)
 
 
-# Every class a spec may name, which is both layers: the ``kind`` + ``variant``
-# classes of :mod:`pandid.units` and the per-device classes generated into
-# :mod:`pandid.devices`. Both are needed, and for opposite directions --
-# ``_resolve_kind`` reads a spec that names ``Cyclone``, and ``_write_unit``
-# writes ``type(unit).__name__``, so a sheet built from device classes would
-# have failed to serialize at all if only ``units`` were here.
+# Every class a spec may name, and both layers are needed, in opposite
+# directions: ``_resolve_kind`` reads a spec naming a device class such
+# as ``Cyclone``, and ``_write_unit`` writes ``type(unit).__name__``.
 _CLASSES: dict[str, type[Unit]] = {
     name: getattr(unit_types, name) for name in unit_types.__all__ if name != "Unit"
 }
 _CLASSES.update({name: getattr(device_types, name) for name in device_types.__all__})
 
-# A spec is hand-written, so accept every name the reader might reasonably use:
-# the class name from the README (``HeatExchanger``), and its snake_case
-# spelling.
+# A spec is hand-written, so accept every name the reader might
+# reasonably use: the class name from the README (``HeatExchanger``),
+# and its snake_case spelling.
 _ALIASES: dict[str, str] = {}
 for _name, _cls in _CLASSES.items():
     for _alias in (_name, _snake(_name)):
         _ALIASES[_alias.lower()] = _name
-# ...and the internal ``Unit.kind`` tag (``hex``), which is a *different* kind of
-# alias: it names a kind rather than a class, and the class it has to resolve to
-# is the one that owns the whole kind. Built from ``units`` alone for that
-# reason. Fifteen device classes carry ``kind == "pump"``, so folding them in
-# above would make ``kind: pump`` mean whichever of them iterated last -- and
-# the answer would move about as classes were added, which is the worst kind of
-# quiet.
+# ...and the internal ``Unit.kind`` tag (``hex``), which names a kind
+# rather than a class and must resolve to the class owning the whole
+# kind. Built from ``units`` alone: fifteen device classes carry
+# ``kind == "pump"``, so folding them in would make ``kind: pump`` mean
+# whichever iterated last, and that answer moves as classes are added.
 for _name in unit_types.__all__:
     if _name != "Unit":
         _ALIASES[_CLASSES[_name].kind.lower()] = _name
@@ -256,9 +259,9 @@ def _resolve_kind(value: Any, where: str) -> type[Unit]:
     return _CLASSES[name]
 
 
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------
 # Reading: spec -> Flowsheet
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------
 
 _TOP_KEYS = {
     "name", "stream_naming_scheme", "stream_number_start",
@@ -266,8 +269,9 @@ _TOP_KEYS = {
     "auto_faces", "components", "units", "loops",
     "instruments", "streams", "stream_table_sections", "title_block", "annotations",
 }
-# Keys the format no longer has. A file written against the old one names the
-# sheet it wants; saying so beats "unknown key" and beats honouring it silently.
+# Keys the format no longer has. A file written against the old one
+# names the sheet it wants, so say so rather than reporting an unknown
+# key or honouring it silently.
 _RETIRED_KEYS = {
     "direction": "the layout engine only draws left to right, so it never did anything",
 }
@@ -287,69 +291,62 @@ _STREAM_KEYS = {
     *LINE_NUMBER_FIELDS,
 }
 _COMPONENT_KEYS = {"name", "formula"}
-# Port counts, keyed by the classes that take one. A count named on a class that
-# has no such family is rejected rather than ignored: the ports it asked for
-# would simply not exist on the drawing.
+# Port counts, keyed by the classes that take one. A count named on a
+# class with no such family is rejected rather than ignored: the ports
+# it asked for would not exist on the drawing.
 _VARIABLE_PORTS = {
     "n_inlets": ("Mixer",),
     "n_outlets": ("Splitter",),
     "n_feeds": ("Column", "Reactor"),
 }
-# Sizes only some classes carry, policed the same way: a conveyor's belt run is
-# a dimension of its own rather than the generic width, so naming it on anything
-# else asks for a length nothing draws.
+# Sizes only some classes carry, policed the same way: a conveyor's belt
+# run is a dimension of its own rather than the generic width, so naming
+# it on anything else asks for a length nothing draws.
 _KIND_SIZES = {
     "length": ("Conveyor",),
 }
-# Text fields only some classes carry. ``normal_position`` is where a valve or a
-# blind sits with the plant running: a darkened body says it for the one and a
-# solid disc for the other; a pump has no such position, so naming one on it is
-# a statement nothing draws.
+# Text fields only some classes carry. ``normal_position`` is where a
+# valve or a blind sits with the plant running; a pump has no such
+# position, so naming one on it is a statement nothing draws.
 _KIND_TEXT = {
     "normal_position": ("Valve", "Fitting"),
-    # Where an actuated valve goes when its motive power is lost. A different
-    # question from ``normal_position`` and a narrower one: a blind has a
-    # position but no actuator, so only a valve is asked it.
+    # Where an actuated valve goes on loss of motive power. Narrower
+    # than ``normal_position``: a blind has a position but no actuator.
     "fail": ("Valve",),
-    # Which way a tee's third connection runs. Nothing else has a third
-    # connection to a run, so nothing else has the question to answer.
+    # Which way a tee's third connection runs; nothing else has one.
     "branch": ("Tee",),
-    # Which nozzle a reducer's wide face is on, and so whether the fitting
-    # reduces the line or expands it. Nothing else has two ends of different
-    # sizes.
+    # Which nozzle a reducer's wide face is on, and so whether it
+    # reduces the line or expands it.
     "large_end": ("Reducer",),
 }
-# Connection faces, keyed the same way. A block declares which side of its box
-# each connection is on, and the argument is either a count (all on the face
-# that kind of connection defaults to) or one face per connection. Nothing else
-# has the question: every other symbol is artwork drawn in advance, so where its
-# nozzles are is a fact about the drawing rather than something a sheet states.
+# Connection faces, keyed the same way. A block declares which side of
+# its box each connection is on, as a count (all on the default face) or
+# one face per connection. Every other symbol is artwork drawn in
+# advance, so where its nozzles are is a fact about the drawing.
 _KIND_FACES = {
     "inputs": ("Block",),
     "outputs": ("Block",),
 }
-# The order along a face, keyed the same way and separate from the two above
-# because it is not a constructor argument: ``Block.order_on`` takes the ports,
-# which do not exist until the block does. Written only where a face's order is
-# not the order its connections were declared in, so an ordinary block's entry
-# is exactly what it was; see ``_write_unit``.
+# The order along a face. Separate from the two above because it is not
+# a constructor argument: ``Block.order_on`` takes the ports, which do
+# not exist until the block does. Written only where a face's order is
+# not the declared one; see ``_write_unit``.
 _KIND_ORDER = {
     "port_order": ("Block",),
 }
-# Flags only some classes carry. ``header`` says a boundary flag stands for a
-# utility service tapped wherever it is wanted rather than for one line leaving
-# the sheet, which is what lets it be drawn more than once; equipment is drawn
-# once whatever it is connected to, so the question does not arise for it.
+# Flags only some classes carry. ``header`` says a boundary flag stands
+# for a utility service tapped wherever it is wanted rather than for one
+# line leaving the sheet, which is what lets it repeat.
 _KIND_FLAGS = {
     "header": ("Feed", "Product"),
 }
 
 
 def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
-    """Build a :class:`~pandid.flowsheet.Flowsheet` from a declarative mapping.
+    """Build a :class:`~pandid.flowsheet.Flowsheet` from a mapping.
 
-    Raises :class:`SpecError` (a :class:`ValueError`) naming the offending
-    entry for anything it cannot honour.
+    Raises :class:`SpecError` (a :class:`ValueError`) naming the
+    offending entry for anything it cannot honour.
     """
     where = "the flowsheet spec"
     data = _mapping(spec, where)
@@ -384,9 +381,9 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
     for i, entry in enumerate(_sequence(data.get("loops", []), "loops")):
         _read_loop(fs, entry, f"loops[{i}]")
 
-    # Instruments are created before the streams so a controller output can be
-    # connected, but attached afterwards because a balloon may hang off a line
-    # that does not exist yet.
+    # Instruments are created before the streams so a controller output
+    # can be connected, but attached afterwards because a balloon may
+    # hang off a line that does not exist yet.
     pending = []
     for i, entry in enumerate(_sequence(data.get("instruments", []), "instruments")):
         where_i = f"instruments[{i}]"
@@ -425,10 +422,10 @@ def _read_component(entry: Any, where: str) -> Component:
 
 
 def _takes(cls: type[Unit], owners: tuple[str, ...]) -> bool:
-    """Whether ``cls`` is one of the classes that carries a keyed argument.
+    """Whether ``cls`` is a class that carries a keyed argument.
 
-    The tables above name the class the argument is declared on; a subclass
-    inherits the constructor and so inherits the argument.
+    The tables above name the class the argument is declared on; a
+    subclass inherits the constructor and so inherits the argument.
     """
     return any(issubclass(cls, _CLASSES[owner]) for owner in owners)
 
@@ -448,11 +445,10 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
     allowed = set(_UNIT_KEYS)
     for key, owners in {**_VARIABLE_PORTS, **_KIND_SIZES, **_KIND_TEXT,
                         **_KIND_FLAGS, **_KIND_FACES, **_KIND_ORDER}.items():
-        # By inheritance, not by name: the tables above name the class that
-        # *declares* the argument, and a ControlValve is a Valve, so it takes
-        # ``fail`` for exactly the reason its base does. Matching on the name
-        # would have refused every device class the argument its own constructor
-        # accepts, which is a spec refusing to read back what it wrote.
+        # By inheritance, not by name: the tables above name the class
+        # that *declares* the argument, and a ControlValve is a Valve.
+        # Matching on the name would refuse every device class an
+        # argument its own constructor accepts.
         if _takes(cls, owners):
             allowed.add(key)
         elif key in data:
@@ -488,10 +484,10 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
         raise _fail_from(e, where) from None
 
     _read_common(fs, unit, data, where)
-    # After ``_read_common``, because ``port_faces`` in there is what decides
-    # which face a connection is on and this orders what is on one. Only a
-    # Block can carry the key -- the gate above refuses it on anything else --
-    # so the isinstance is what tells a type checker so, not a second guard.
+    # After ``_read_common``, whose ``port_faces`` decides which face a
+    # connection is on; this orders what is on one. The gate above
+    # already refuses the key on anything but a Block, so the isinstance
+    # is for the type checker rather than a second guard.
     if "port_order" in data and isinstance(unit, unit_types.Block):
         _read_port_order(unit, data["port_order"], f"{where}.port_order")
     return unit
@@ -500,18 +496,21 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
 def _read_loop(fs: Flowsheet, entry: Any, where: str) -> Loop:
     """Read one declared control loop.
 
-    A loop's members carry their whole tag, so the section says only that the
-    loop was declared. The rule a loop enforces, that a balloon's first letter
-    is the loop's measured variable, is checked where the letters are typed, and
-    in a spec they are typed once, on the instrument itself.
+    A loop's members carry their whole tag, so the section says only
+    that the loop was declared. The rule a loop enforces, that a
+    balloon's first letter is the loop's measured variable, is checked
+    where the letters are typed, and in a spec they are typed once, on
+    the instrument itself.
 
-    ``number`` is optional and omitting it allocates, exactly as omitting the
-    argument to :meth:`~pandid.flowsheet.Flowsheet.add_loop` does. The spec is
-    the same declaration in another language and a hand-written one is drafted
-    the same way, so ``loop_number_start`` would be unreachable from a file if
-    the number stayed compulsory here. It does not cost the round trip anything:
-    :func:`to_dict` writes every loop's number out as a literal, so a spec this
-    module *wrote* never leaves one to be allocated and reads back frozen.
+    ``number`` is optional and omitting it allocates, exactly as
+    omitting the argument to
+    :meth:`~pandid.flowsheet.Flowsheet.add_loop` does. The spec is the
+    same declaration in another language and a hand-written one is
+    drafted the same way, so ``loop_number_start`` would be unreachable
+    from a file if the number stayed compulsory here. It does not cost
+    the round trip anything: :func:`to_dict` writes every loop's number
+    out as a literal, so a spec this module *wrote* never leaves one to
+    be allocated and reads back frozen.
     """
     data = _mapping(entry, where)
     _check_keys(data, _LOOP_KEYS, where)
@@ -560,7 +559,7 @@ def _read_instrument(fs: Flowsheet, entry: Any, where: str) -> Instrument:
 
 
 def _read_common(fs: Flowsheet, unit: Unit, data: Mapping[str, Any], where: str) -> None:
-    """Apply the fields every unit shares, then register it on the flowsheet."""
+    """Apply the shared fields, then register the unit on the sheet."""
     if "label_pos" in data:
         unit.label_pos = _text(data["label_pos"], f"{where}.label_pos")
     if "new_line_number" in data:
@@ -605,7 +604,7 @@ def _read_port_faces(unit: Unit, entry: Any, where: str) -> None:
 
 
 def _read_port_order(unit: "unit_types.Block", entry: Any, where: str) -> None:
-    """``port_order: {S: [out_2, in_2]}`` -- one ``order_on`` call per face."""
+    """``port_order: {S: [out_2, in_2]}``: one ``order_on`` per face."""
     for face, names in _mapping(entry, where).items():
         at = f"{where}.{face}"
         ports = [_find_port(unit, name, at)
@@ -617,20 +616,19 @@ def _read_port_order(unit: "unit_types.Block", entry: Any, where: str) -> None:
 
 
 def _find_port(unit: Unit, name: Any, where: str) -> Port:
-    # A balloon's signal connections are minted per line rather than declared,
-    # so the ones a spec names are exactly the ones the sheet it was written
-    # from had grown. Asking the instrument for them is what makes
-    # ``from_dict(to_dict(fs))`` rebuild a split-range loop; refusing them would
-    # make ``to_dict`` able to write a sheet its own reader could not read.
+    # A balloon's signal connections are minted per line rather than
+    # declared, so a spec names exactly the ones its sheet had grown.
+    # Asking the instrument for them is what makes
+    # ``from_dict(to_dict(fs))`` rebuild a split-range loop.
     if isinstance(unit, Instrument) and isinstance(name, str) and name not in unit.ports:
         try:
             return unit.signal_port(name)
         except KeyError:
             pass
-    # A spec file is a stored artifact, so it can name a nozzle by a spelling
-    # this release has retired -- which is the one thing a deprecation window is
-    # for. ``_current_name`` warns and hands back the current name; anything
-    # else comes back unchanged and is refused below exactly as it was.
+    # A spec file is a stored artifact, so it may name a nozzle by a
+    # spelling this release has retired. ``_current_name`` warns and
+    # hands back the current name; anything else comes back unchanged
+    # and is refused below.
     if isinstance(name, str):
         name = unit._current_name(name)
     if not isinstance(name, str) or name not in unit.ports:
@@ -713,7 +711,7 @@ def _read_stream(fs: Flowsheet, entry: Any, where: str) -> Stream:
 
 
 def _read_ends(entry: Any, where: str) -> "str | tuple[str, str]":
-    """How a line's two joints are made up: one name, or ``[source, dest]``.
+    """How a line's two joints are made: a name, or ``[source, dest]``.
 
     The name itself is not checked here. ``connect()`` checks it against
     :data:`~pandid.render.svg.CONNECTIONS` and raises with the accepted
@@ -752,7 +750,7 @@ def _read_waypoints(entry: Any, where: str) -> list[tuple[float, float]]:
 
 
 def _read_host(fs: Flowsheet, entry: Any, where: str) -> Stream | Unit:
-    """Resolve an instrument's ``on:`` (a unit/stream name, or a tapped port)."""
+    """Resolve an instrument's ``on:``: a unit or stream, or a port."""
     if isinstance(entry, str):
         unit = next((u for u in fs.units if u.name == entry), None)
         stream = next((s for s in fs.streams if s.name == entry), None)
@@ -843,7 +841,7 @@ _ANNOTATION_KEYS = {
 
 
 def _read_placement(data: Mapping[str, Any], where: str) -> dict[str, Any]:
-    """The ``align`` / ``position`` / ``margin`` trio every sheet box shares."""
+    """The ``align``/``position``/``margin`` trio every box shares."""
     out: dict[str, Any] = {}
     if "align" in data:
         out["align"] = _text(data["align"], f"{where}.align")
@@ -863,7 +861,7 @@ def _read_placement(data: Mapping[str, Any], where: str) -> dict[str, Any]:
 
 
 def _read_rows(entry: Any, where: str) -> list:
-    """Annotation rows: a plain line, or cells that align into columns."""
+    """Annotation rows: a plain line, or cells aligned in columns."""
     rows: list = []
     for i, row in enumerate(_sequence(entry, where)):
         if isinstance(row, str):
@@ -925,12 +923,12 @@ def _read_annotation(fs: Flowsheet, entry: Any, where: str) -> Annotation | Tabl
     except SpecError:
         raise  # already carries its own path
     except ValueError as e:
-        raise _fail_from(e, where) from None  # e.g. an align= outside the nine
+        raise _fail_from(e, where) from None  # e.g. a bad align=
 
 
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------
 # Writing: Flowsheet -> spec
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------
 
 _MIRROR_NAMES = {(True, False): "x", (False, True): "y", (True, True): "xy"}
 
@@ -938,10 +936,11 @@ _MIRROR_NAMES = {(True, False): "x", (False, True): "y", (True, True): "xy"}
 def to_dict(fs: Flowsheet) -> dict:
     """Serialize a flowsheet to a spec :func:`from_dict` reads back.
 
-    Only what differs from a default is written, so the output stays a file a
-    human can read and edit. Placement *results* (``Frame``, routed paths,
-    computed stream numbers) are left out: they are the engine's output, not the
-    author's intent, and re-deriving them is the whole point of the engine.
+    Only what differs from a default is written, so the output stays a
+    file a human can read and edit. Placement *results* (``Frame``,
+    routed paths, computed stream numbers) are left out: they are the
+    engine's output, not the author's intent, and re-deriving them is
+    the whole point of the engine.
     """
     if not isinstance(fs.stream_naming_scheme, str):
         raise SpecError(
@@ -962,15 +961,10 @@ def to_dict(fs: Flowsheet) -> dict:
         spec["line_numbering_scheme"] = fs.line_numbering_scheme
     if fs.line_number_start != DEFAULT_LINE_NUMBER_START:
         spec["line_number_start"] = fs.line_number_start
-    # Written even though every loop below carries a literal number, so nothing
-    # in the file needs it to read back the sheet it came from. It is the one
-    # setting here that survives its own output: a spec is edited, and the loop
-    # someone adds by hand tomorrow should land in the series this sheet is
-    # numbered in rather than at 1. Its neighbours above are load-bearing for a
-    # different reason -- an auto-derived line `sequence` is engine output and
-    # is not written at all (see `_write_stream`), so `line_number_start` is the
-    # only record of it. A loop number is not engine output, and that asymmetry
-    # is the whole of what freezing a draft means.
+    # Written even though every loop below carries a literal number, so
+    # nothing in the file needs it to read the sheet back. It is here
+    # for the edit after: a loop added by hand tomorrow should land in
+    # this sheet's series rather than at 1.
     if fs.loop_number_start != DEFAULT_LOOP_NUMBER_START:
         spec["loop_number_start"] = fs.loop_number_start
     if not fs.auto_faces:
@@ -985,8 +979,8 @@ def to_dict(fs: Flowsheet) -> dict:
     instruments = [u for u in fs.units if isinstance(u, Instrument)]
     if equipment:
         spec["units"] = [_write_unit(u) for u in equipment]
-    # A sheet that declared no loop writes no section, so a spec written before
-    # loops existed and one written after are the same file.
+    # A sheet that declared no loop writes no section, so a spec written
+    # before loops existed and one written after are the same file.
     if fs.loops:
         spec["loops"] = [{"variable": loop.variable, "number": loop.number}
                          for loop in fs.loops]
@@ -1039,37 +1033,34 @@ def _write_placement(unit: Unit, entry: dict[str, Any]) -> dict[str, Any]:
 def _write_unit(unit: Unit) -> dict[str, Any]:
     kind = type(unit).__name__
     if kind not in _CLASSES:
-        # A spec naming a class the reader cannot construct is worse than no
-        # spec at all, so refuse here rather than at whatever reads the file.
+        # A spec naming a class the reader cannot construct is worse
+        # than no spec at all, so refuse here rather than at whatever
+        # reads the file.
         raise SpecError(
             f"{unit.name!r} is a {kind}, which is not one of the built-in equipment "
             f"classes, so it cannot be written to a spec; available kinds: {sorted(_CLASSES)}"
         )
-    # The tag, not the name: a header tapped twice is two entries carrying the
-    # one label, and reading them back re-derives the names the flowsheet tells
-    # the taps apart by, exactly as it did the first time. A tee has no tag, so
-    # its name is written instead: already unique, and already the only thing
-    # the junction is addressed by.
+    # The tag, not the name: a header tapped twice is two entries
+    # carrying one label, and reading them back re-derives the names the
+    # flowsheet tells the taps apart by. A tee has no tag, so its name
+    # is written instead.
     entry: dict[str, Any] = {"kind": kind, "name": unit.tag or unit.name}
     _write_common(unit, entry)
     if isinstance(unit, unit_types.Block):
-        # The faces, which carry the count with them. Written as the bare count
-        # where every connection is on the face that kind of connection defaults
-        # to, which is the shorthand the constructor takes and the way most
-        # blocks are written; a block that puts one input on the north is only
-        # describable as the list, so it is written as one.
+        # The faces, which carry the count with them. Written as the
+        # bare count where every connection is on its default face,
+        # which is the shorthand the constructor takes; a block that
+        # puts one input on the north is only describable as a list.
         for key, faces, default in (
             ("inputs", unit.input_faces, unit.DEFAULT_INPUT_FACE),
             ("outputs", unit.output_faces, unit.DEFAULT_OUTPUT_FACE),
         ):
             entry[key] = len(faces) if all(f == default for f in faces) else list(faces)
-        # And the order along a face where it is not the declared one. The two
-        # keys above carry a face per connection but not the sequence the face
-        # is drawn in, because they are two lists and the face interleaves them
-        # -- so a block whose ``order_on`` put an output before an input would
-        # otherwise be written back out drawn the other way round, which is the
-        # one thing a round trip may not do. Absent from every block nobody
-        # reordered, which is all of them until somebody does.
+        # And the order along a face where it is not the declared one.
+        # The two keys above are two lists and a face interleaves them,
+        # so they cannot carry the sequence: a block whose ``order_on``
+        # put an output before an input would otherwise be written back
+        # out drawn the other way round.
         declared = [port.name for port in (*unit.inlets, *unit.outlets)]
         port_order = {
             face: [port.name for port in unit.ports_on(face)]
@@ -1086,39 +1077,43 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
     elif isinstance(unit, unit_types.Splitter):
         entry["n_outlets"] = len(unit.outlets)
     elif isinstance(unit, (unit_types.Column, unit_types.Reactor)):
-        # A single feed is the class's own shape and spells its nozzle `feed`,
-        # so writing the count would be writing the default down.
+        # A single feed is the class's own shape and spells its nozzle
+        # `feed`, so writing the count would be writing the default
+        # down.
         if len(unit.feeds) > 1:
             entry["n_feeds"] = len(unit.feeds)
     elif isinstance(unit, unit_types.Tee):
-        # Only a returning tee. A takeoff is the ordinary case and is what a
-        # tee without the word already is.
+        # Only a returning tee. A takeoff is the ordinary case and is
+        # what a tee without the word already is.
         if unit.branch_direction != "outlet":
             entry["branch"] = unit.branch_direction
     elif isinstance(unit, unit_types.Reducer):
-        # Only an expansion. A reduction is what a reducer without the word
-        # already is, so writing it would be writing the default down.
+        # Only an expansion. A reduction is what a reducer without the
+        # word already is, so writing it would be writing the default
+        # down.
         if unit.large_end != "inlet":
             entry["large_end"] = unit.large_end
     elif isinstance(unit, unit_types.Conveyor):
-        # Always written: it is how long the belt is, which is the whole of a
-        # conveyor's geometry, and nothing else on the entry records it.
+        # Always written: it is how long the belt is, which is the whole
+        # of a conveyor's geometry, and nothing else on the entry
+        # records it.
         entry["length"] = unit.length
     elif isinstance(unit, unit_types._NormallyPositioned):
-        # Only when closed. "Open" is not a convention a P&ID draws, it is the
-        # absence of one, so writing it down would be writing the default down.
+        # Only when closed. "Open" is not a convention a P&ID draws, it
+        # is the absence of one, so writing it down would be writing the
+        # default down.
         if unit.normal_position != "open":
             entry["normal_position"] = unit.normal_position
-        # Only a valve has an actuator, and only a declared fail position is
-        # written. There is no default to leave out here: an undeclared valve
-        # is one the sheet says nothing about, not one that fails somewhere in
-        # particular.
+        # Only a valve has an actuator, and only a declared fail
+        # position is written: an undeclared valve is one the sheet says
+        # nothing about, not one that fails somewhere in particular.
         fail = getattr(unit, "fail", "")
         if fail:
             entry["fail"] = fail
     elif isinstance(unit, _Boundary):
-        # Only when set: a flag standing for one line leaving the sheet is the
-        # ordinary case, and it is what a flag without the word already means.
+        # Only when set: a flag standing for one line leaving the sheet
+        # is the ordinary case, and it is what a flag without the word
+        # already means.
         if unit.header:
             entry["header"] = True
     return _write_placement(unit, entry)
@@ -1128,9 +1123,9 @@ def _write_instrument(inst: Instrument) -> dict[str, Any]:
     entry: dict[str, Any] = {"type": inst.type, "number": inst.number}
     _write_common(inst, entry)
     if inst.host is not None:
-        # Name a stream by the port it leaves, not by its number: auto-numbering
-        # owns that name and re-derives it as the sheet grows, and a spec must
-        # survive that.
+        # Name a stream by the port it leaves, not by its number:
+        # auto-numbering owns that name and re-derives it as the sheet
+        # grows, and a spec must survive that.
         entry["on"] = (
             [inst.host.source.owner.name, inst.host.source.name]
             if isinstance(inst.host, Stream) else inst.host.name
@@ -1156,16 +1151,18 @@ def _write_stream(stream: Stream) -> dict[str, Any]:
         entry["draw_as_recycle"] = True
     for key in LINE_NUMBER_FIELDS:
         value = getattr(stream, key)
-        # The sequence auto-numbering assigned is a result, not intent: writing
-        # it would pin a number the engine re-derives from the topology.
+        # The sequence auto-numbering assigned is a result, not intent:
+        # writing it would pin a number the engine re-derives from the
+        # topology.
         if value is not None and not (key == "sequence" and value == stream._auto_sequence):
             entry[key] = value
     for key in ("color", "dasharray"):
         if getattr(stream, key) is not None:
             entry[key] = getattr(stream, key)
     if stream.ends is not None:
-        # A pair goes out as a list, which is what it came in as and what YAML
-        # writes anyway; one name for both ends stays one name.
+        # A pair goes out as a list, which is what it came in as and
+        # what YAML writes anyway; one name for both ends stays one
+        # name.
         entry["ends"] = (stream.ends if isinstance(stream.ends, str)
                          else list(stream.ends))
     if stream.route is not None and stream.route.manual:
@@ -1193,9 +1190,9 @@ def _write_title_block(block: TitleBlock) -> dict[str, Any]:
 
 
 def _write_annotation(box: Annotation | TableBox) -> dict[str, Any]:
-    # equipment_list()/notes()/legend() are constructors, not types: what they
-    # build is a plain Annotation, so that is what comes back out. The rows are
-    # identical, so the drawing is.
+    # equipment_list()/notes()/legend() are constructors, not types:
+    # what they build is a plain Annotation, so that is what comes back
+    # out. The rows are identical, so the drawing is.
     entry: dict[str, Any] = {"type": "table" if isinstance(box, TableBox) else "annotation"}
     if box.title:
         entry["title"] = box.title
@@ -1212,7 +1209,7 @@ def _write_annotation(box: Annotation | TableBox) -> dict[str, Any]:
         entry["position"] = list(box.position)
     if box.margin:
         entry["margin"] = box.margin
-    width = getattr(box, "width", None)  # only an Annotation sizes itself
+    width = getattr(box, "width", None)  # only Annotation sizes up
     if width is not None:
         entry["width"] = width
     if box.font_size != 11.0:
@@ -1220,13 +1217,13 @@ def _write_annotation(box: Annotation | TableBox) -> dict[str, Any]:
     return entry
 
 
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------
 # File loaders
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------
 
 
 def from_json(path: str | Path) -> Flowsheet:
-    """Build a flowsheet from a JSON spec file (standard library only)."""
+    """Build a flowsheet from a JSON spec file (stdlib only)."""
     text = Path(path).read_text(encoding="utf-8")
     try:
         data = json.loads(text)
@@ -1241,11 +1238,12 @@ _YAML_LOADER: Any = None
 def _core_schema_loader(yaml_module) -> Any:
     """A safe loader restricted to the YAML **1.2** core schema.
 
-    PyYAML implements YAML 1.1, where ``on``, ``off``, ``yes`` and ``no`` are
-    booleans and an unquoted date is a ``datetime.date``. That silently turns an
-    instrument's ``on:`` key into ``True`` and a revision's ``date:`` into an
-    object: two traps sprung by writing the format exactly as documented. YAML
-    1.2 dropped both, and only ``true``/``false`` are booleans here.
+    PyYAML implements YAML 1.1, where ``on``, ``off``, ``yes`` and
+    ``no`` are booleans and an unquoted date is a ``datetime.date``.
+    That silently turns an instrument's ``on:`` key into ``True`` and a
+    revision's ``date:`` into an object: two traps sprung by writing the
+    format exactly as documented. YAML 1.2 dropped both, and only
+    ``true``/``false`` are booleans here.
     """
     global _YAML_LOADER
     if _YAML_LOADER is None:
@@ -1271,7 +1269,8 @@ def from_yaml(path: str | Path) -> Flowsheet:
     """Build a flowsheet from a YAML spec file.
 
     YAML is the friendliest format to hand-write, but parsing it is not
-    something the standard library does, so it is the one optional extra.
+    something the standard library does, so it is the one optional
+    extra.
     """
     try:
         import yaml
