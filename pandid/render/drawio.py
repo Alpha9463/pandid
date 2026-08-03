@@ -866,13 +866,21 @@ class DrawioRenderer:
         :meth:`~pandid.flowsheet.Flowsheet.to_svg` takes it: a P&ID draws its
         process lines without arrowheads and so exports them without one.
 
-        ``page_size`` puts the model on **paper**. Without it the drawing is
-        exported at its own coordinates on an unbounded canvas, which is what a
-        model is; with it the file carries the page draw.io is to rule, the
-        furniture docks to that page rather than to the drawing's own bounds,
-        and the drawing is fitted into what the furniture leaves -- the same
-        three things :meth:`SvgRenderer.render` does with the same argument, so
-        the two open at the same size on the same paper.
+        ``page_size`` puts the model on **paper**. Without it the drawing keeps
+        its own coordinates and the furniture docks to its own bounds, which is
+        what a model is; with it the file carries the page draw.io is to rule,
+        the furniture docks to that page instead, and the drawing is fitted into
+        what the furniture leaves -- the same three things
+        :meth:`SvgRenderer.render` does with the same argument, so the two open
+        at the same size on the same paper.
+
+        What it does **not** decide is whether the file states a page size at
+        all. It always does, because draw.io does not offer a document the
+        option of having none: a file that states no size is not read as unpaged,
+        it is read as being on whatever paper the reader's locale defaults to,
+        and PDF export then bounds the drawing by that. The long note beside the
+        ``paper`` attributes below is the evidence, and :meth:`_page_box` is the
+        size.
 
         ``border`` rules that page. ``"zone"`` draws the frame, the sheet edge
         and the lettered band between them; ``"none"`` leaves the page's own
@@ -937,18 +945,91 @@ class DrawioRenderer:
         body.extend(self._taps(fs, fit))
         body.extend(balloons)
 
-        # page="1" only where there is paper. Without a page size the drawing is
-        # sized to itself, exactly as to_svg() is, and there is nothing for
-        # draw.io to rule page breaks across; stating a page then would draw
-        # break lines through a sheet that was never laid out to fit them. With
-        # one, the page *is* the sheet, and pageWidth/pageHeight are in the same
-        # drawing units everything else here is, which is what makes an A3 page
-        # 1587 by 1123 rather than 420 by 297.
-        if sheet is None:
-            paper = 'page="0" pageScale="1"'
-        else:
-            paper = (f'page="1" pageScale="1" pageWidth="{_num(sheet.width)}" '
-                     f'pageHeight="{_num(sheet.height)}"')
+        # **The page and the page *view* are two separate statements**, and they
+        # were being made as one: no page_size meant page="0" *and* no
+        # pageWidth/pageHeight, so three of the four committed samples went out
+        # stating no size at all and a wide drawing came back from draw.io's PDF
+        # export sliced across several sheets. Both halves of that are wrong,
+        # and jgraph's own sources say why. Line numbers are omitted throughout
+        # because both repositories move; the function names are the anchors.
+        #
+        # **The size is never optional.** `Editor.prototype.readGraphState`
+        # (drawio, js/grapheditor/Editor.js) parses pageWidth/pageHeight into
+        # `graph.pageFormat` and, when either is absent, has no `else` branch at
+        # all: the format keeps whatever `resetGraph` left, which is
+        # `mxGraph.prototype.pageFormat`. That is not "no page" and it is not
+        # reliably A4 either -- js/grapheditor/Graph.js sets it by locale, A4
+        # portrait 827x1169 everywhere except en-us/en-ca/es-mx, which get US
+        # Letter 850x1100. A file stating no size does not open unpaged; it
+        # opens on whatever paper the *reader's* machine picks, so the same file
+        # is a different document in Brisbane and in Houston.
+        #
+        # **And the size is what bounds a PDF.** The headless renderer that both
+        # drawio-desktop and the export server run (js/export.js, `renderPage`)
+        # sets `graph.pdfPageVisible = !imagePageVisible` for every PDF export,
+        # unconditionally and whatever `page` says, and then:
+        #
+        #     bounds = (graph.pdfPageVisible || imagePageVisible) ?
+        #         graph.view.getBackgroundPageBounds() : graph.getGraphBounds();
+        #
+        # `getBackgroundPageBounds` snaps outward to a whole number of page
+        # tiles, so a 1950-unit-wide drawing against an 827-wide default tile
+        # comes back as a 3x1 grid with the drawing cut across the joins. That
+        # is exactly the complaint. A PNG or an SVG was never affected, which is
+        # why this only ever showed up in print: `EditorUi.showExportDialog`
+        # defaults to exportType='diagram', which `Graph.prototype.getSvg`
+        # resolves to `getGraphBounds()` -- the drawing's own extent, page
+        # format nowhere in it.
+        #
+        # So the size is stated either way, and what is stated is the sheet the
+        # SVG backend would have drawn: see :meth:`_page_box`.
+        #
+        # **The page view is the separate question, and its honest answer
+        # differs between the two cases.** `readGraphState` spends `page` on
+        # `graph.pageVisible` and `pageBreaksVisible` -- editor chrome, whether
+        # a page is ruled on screen -- and on nothing about `pageFormat`. A
+        # model with no paper has no page to rule, so page="0" is the true thing
+        # for it to say.
+        #
+        # It is also the thing that makes such a model export whole. `renderPage`
+        # again:
+        #
+        #     var autoOrigin = ((data.print || data.format == 'pdf') &&
+        #         data.fit == '1') || data.crop == '1' ||
+        #         xmlDoc.documentElement.getAttribute('page') != '1';
+        #
+        # and mxPrintPreview documents `autoOrigin` as "Specifies if the origin
+        # should be automatically computed based on the top, left corner of the
+        # actual diagram contents". Under page="1" it is false and the page grid
+        # is anchored at the model origin -- but an unpaged export keeps the
+        # drawing's own coordinates, and those routinely run left of or above
+        # zero: `12_block_flow_diagram`'s frame starts at x = -34 and
+        # `03_distillation_train`'s at y = -165. Anchored at zero, each would
+        # straddle a tile boundary and lose its left or its top edge to the page
+        # before it, no matter how large a page we asked for. Under page="0" the
+        # origin follows the contents and the page sized here holds them.
+        #
+        # A fixed page is the opposite case on both counts. There *is* paper,
+        # the furniture is docked to it and the drawing is fitted into what is
+        # left, so every coordinate already lies within [0, sheet]; page="1"
+        # both says the true thing and anchors the grid where the sheet is.
+        #
+        # **pageScale stays 1 and stays stated.** drawio's own default is 1, but
+        # it reaches it by overriding `mxGraph.prototype.pageScale`, which is
+        # 1.5; writing it is what keeps this file independent of that override
+        # still being there. **Nothing else is needed to stop a re-fit.** The
+        # three things in the sources that rescale a drawing to paper --
+        # `mxUtils.getScaleForPageCount` behind the print dialog's "fit to N
+        # pages", `renderPage`'s `fit`/`sheetsAcross`/`sheetsDown`, and `crop`
+        # -- are every one of them driven by a request parameter or a checkbox,
+        # not by any attribute a document can carry. `fold` is container folding
+        # and touches no measurement. `math` would matter: the diagramly
+        # `getSvg` force-typesets before measuring when it is on, because
+        # untypeset formula source has different bounds than rendered math. It
+        # is off here, and stays off.
+        page_w, page_h = self._page_box(sheet, frame)
+        paper = (f'page="{0 if sheet is None else 1}" pageScale="1" '
+                 f'pageWidth="{_num(page_w)}" pageHeight="{_num(page_h)}"')
         # A stable page id, so exporting the same flowsheet twice gives the same
         # file. draw.io generates a random one; a random one here would make
         # every re-export a diff of one line that means nothing.
@@ -1699,6 +1780,54 @@ class DrawioRenderer:
                     x0, y0 = min(x0, px), min(y0, py)
                     x1, y1 = max(x1, px), max(y1, py)
         return (x0, y0, x1, y1)
+
+    @staticmethod
+    def _page_box(sheet, frame) -> "tuple[float, float]":
+        """The page the file states, as ``(width, height)`` in drawing units.
+
+        Drawing units, not millimetres, which is what makes an A3 page 1587 by
+        1123 rather than 420 by 297: pageWidth and pageHeight are read straight
+        into `graph.pageFormat` and measured against the same coordinates every
+        cell in the file is placed at.
+
+        **Given paper, the paper.** The dock has already fitted the drawing into
+        what the sheet's furniture left, so the page and the sheet are one thing.
+
+        **Without paper, the extent of what this file draws.** There is a page
+        either way -- see :meth:`render` for why draw.io leaves nobody the option
+        of having none -- and the size has to be measured from the rectangle the
+        cells in this file are actually placed against, which is
+        :meth:`_furniture`'s ``frame``: the dock hangs every box off it, and
+        :meth:`_border` rules the sheet edge at
+        :func:`~pandid.render.furniture.sheet_rect` of it. So the page is that
+        frame, out through the border band -- which an unruled sheet keeps as
+        plain margin, so that turning the border on moves nothing -- and out
+        again by :data:`~pandid.render.furniture.OUTER_MARGIN`. Anything sized
+        from a rectangle this file does not draw to could leave a zone border
+        hanging over the edge of its own page.
+
+        On a furnished sheet that lands exactly on
+        ``SvgRenderer._place_furniture``'s viewBox, because both are that same
+        derivation off that same frame. On an unfurnished one the two differ by
+        five units a side: the SVG takes a flat 55 margin off the drawing where
+        the dock takes 26 and the band and margin make it 50. Which is a real
+        difference and not this method's to reconcile -- it is a margin, either
+        is a sheet, and matching it here would mean sizing the page off a
+        rectangle none of these cells knows about. ``tests/test_drawio.py``
+        asserts what actually matters instead: that every cell the file writes
+        lands inside the page it states.
+
+        Only the *extent* is taken, never the corner. The unpaged page is
+        positioned by draw.io from the drawing's own top-left, not from the model
+        origin -- ``page="0"`` is what buys that, and :meth:`render` argues it --
+        so where the frame sits is not this method's business and adding it in
+        would inflate the page by however far the author happened to pin the
+        first vessel from zero.
+        """
+        if sheet is not None:
+            return (sheet.width, sheet.height)
+        _ox, _oy, ow, oh = F.sheet_rect(*frame)
+        return (ow + 2 * F.OUTER_MARGIN, oh + 2 * F.OUTER_MARGIN)
 
     def _furniture(self, fs, sheet=None, show_stream_table: bool = False):
         """Title block, annotations, table boxes and the stream table, docked

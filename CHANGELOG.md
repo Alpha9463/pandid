@@ -698,6 +698,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **An export with no `page_size` was cropped across several sheets when
+  draw.io exported it.** The exporter wrote `pageWidth`/`pageHeight` only where a
+  page size had been asked for, on the reading that a model with no paper has no
+  page. draw.io does not offer that reading. `Editor.readGraphState`
+  (`js/grapheditor/Editor.js`) parses the two attributes into `graph.pageFormat`
+  and has no `else` when they are missing, so the format stays at the prototype
+  default — which `js/grapheditor/Graph.js` sets *by locale*, A4 portrait
+  827×1169 everywhere except `en-us`/`en-ca`/`es-mx`, which get US Letter. The
+  same file therefore opened on different paper in different places.
+
+  That default is then what bounds a PDF. The headless renderer both
+  drawio-desktop and the export server run (`js/export.js`, `renderPage`) sets
+  `graph.pdfPageVisible` for every PDF export whatever `page` says, and takes its
+  bounds from `getBackgroundPageBounds()`, which snaps outward to a whole number
+  of page tiles. A 1950-unit-wide drawing came back as a 3×1 grid, cut at the
+  joins. PNG and SVG were never affected — the export dialog defaults to
+  `exportType='diagram'`, which resolves to the drawing's own bounds — which is
+  why this only ever showed up in print.
+
+  Every export now states a page. Given paper it is the paper; without paper it
+  is the extent of what the file draws, taken off the same frame the furniture is
+  docked to and the border is ruled on. `page` stays `"0"` on an unpaged export
+  and that is deliberate rather than left over: it is the true thing to say, since
+  `page` sets only `pageVisible`/`pageBreaksVisible` and a model with no paper has
+  no page view to rule — and it is also what makes the drawing fit, because
+  `renderPage` sets `autoOrigin` when `page != '1'`, and `mxPrintPreview`
+  documents that as computing the origin "based on the top, left corner of the
+  actual diagram contents". Anchored at the model origin instead, an unpaged
+  drawing that starts left of or above zero — as two of the four committed
+  samples do — would lose that edge to the tile before it however large a page it
+  asked for. A fixed page keeps `page="1"`, where the drawing is already fitted
+  inside `[0, sheet]`.
+
+  `scripts/drawio_samples.py` was also dropping `connections`, so the committed
+  sample of the one flanged sheet in the repo was the only picture of it a reader
+  could open and its joints were not in it.
+
 - **`variant="shared"` drew no location bar (#181).** ISO 15519-2 Table 1 (p. 7)
   tabulates the *additional graphic* a PCI symbol carries: "None: Information
   available on field mounted instrument/display" against "Horizontal single full
