@@ -186,6 +186,7 @@ deleted, since the reasoning is what the next change has to hold against.
 from __future__ import annotations
 
 import hashlib
+import math
 from datetime import datetime
 from typing import NamedTuple, TYPE_CHECKING
 
@@ -197,8 +198,9 @@ from pandid.render.svg import (_DIAMOND_BALLOONS, _furniture_name, _LEADER_HEAD,
                                _scale_text, _too_small,
                                _SIGNAL_DASH, _PROCESS_STROKE,
                                _SIGNAL_STROKE, _TAP_DASH, HOP_R, NUMBER_TYPE, boundary_flag,
-                               draws_arrowheads, impulse_tap, stream_numbers,
-                               stream_polyline, tap_lines)
+                               draws_arrowheads, flange_marks, impulse_tap,
+                               resolve_connections, sheet_connections,
+                               stream_numbers, stream_polyline, tap_lines)
 from pandid.render.symbols import (ARROWHEAD, closed_marking, fail_marking,
                                    wears_arrowhead)
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
@@ -848,6 +850,7 @@ class DrawioRenderer:
 
     def render(self, fs: "Flowsheet", *, diagram: "str | None" = None,
                page_size: "str | None" = None, border: "str | None" = None,
+               connections: "str | None" = None,
                jump_direction: str = "vertical",
                show_stream_table: bool = False, **opts) -> str:
         """Render the flowsheet to a draw.io document.
@@ -918,7 +921,8 @@ class DrawioRenderer:
         for i, u in enumerate(fs.units):
             (balloons if u.kind == "instrument" else body).extend(
                 self._vertex(u, i, fit, tags))
-        body.extend(self._edges(fs, arrows, fit, tags, jump_direction))
+        body.extend(self._edges(fs, arrows, fit, tags, jump_direction,
+                                sheet_connections(diagram, connections)))
         # Instrumentation goes on over the lines, as it does on the sheet: the
         # tap runs from the plant to the balloon and the balloon's opaque body
         # then knocks out both it and any process line an in-line element
@@ -1431,8 +1435,13 @@ class DrawioRenderer:
         return keys
 
     def _edges(self, fs, arrows: bool, fit: "_Fit", tags: "_Tags",
-               direction: str = "vertical") -> list[str]:
+               direction: str = "vertical",
+               joints: "str | None" = None) -> list[str]:
         """Every stream, as a draw.io edge between the two ports it joins.
+
+        ``joints`` is the sheet's :func:`~pandid.render.svg.sheet_connections`
+        answer, threaded in for the same reason ``arrows`` is: the flange mark
+        is a fact about the drawing, and the export draws the drawing.
 
         ``direction`` is the sheet's ``jump_direction``, and it settles two
         things at once: which edges carry :data:`_JUMP_STYLE`, and **the order
@@ -1561,6 +1570,8 @@ class DrawioRenderer:
             # draw.io writes a parent before its children and so does this.
             if s.kind == "pneumatic":
                 cells[n] += _hatches(f"s{n}", points, s.color or _LINE_INK, fit)
+            cells[n] += _flanges(f"s{n}", s, points, resolve_connections(s, joints),
+                                 s.color or _LINE_INK, fit)
             if number is not None and number.leader is not None:
                 cells[n] += _leader(f"s{n}", number, s.color or _LINE_INK, fit)
         out: list[str] = []
@@ -2224,6 +2235,66 @@ def _hatches(edge_id: str, points, ink: str, fit: "_Fit") -> list[str]:
             dx, dy = (step, 0.0) if horiz else (0.0, step)
             out += [
                 f'        <mxCell id="{edge_id}h{n}{k}" value="" style={_attr(style)} '
+                f'vertex="1" connectable="0" parent="{edge_id}">',
+                f'          <mxGeometry x="{_fraction(rel)}" y="0" '
+                f'width="{_num(length)}" height="{_num(length)}" '
+                'relative="1" as="geometry">',
+                f'            <mxPoint x="{_num(dx - half)}" y="{_num(dy - half)}" '
+                'as="offset" />',
+                '          </mxGeometry>',
+                '        </mxCell>',
+            ]
+    return out
+
+
+def _flanges(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[str]:
+    """The flanged-connection marks on one line, hung on its edge.
+
+    **It does not ride on the arrowhead's path, and it could not.** An
+    arrowhead is a terminal on an edge: ``_ends`` states the two nozzles as
+    ``exitX``/``entryX`` constraints and the head itself is three style keys,
+    ``endArrow=block;endFill=1;endSize=...``. draw.io's arrow vocabulary is the
+    ``mxMarker`` registry -- classic, block, open, oval, diamond, ERone and the
+    rest -- and there is no flange in it, nor any way to register one in a file
+    rather than in the application. Worse, the terminal marker is drawn *at* the
+    end point and rotated to the segment, which is an arrowhead's geometry and
+    not a flange's: the mark stands **off** the nozzle by
+    :data:`~pandid.render.svg.FLANGE_STANDOFF`, and there is no marker property
+    that displaces one along its line. And a line has two ends but wants marks
+    on however many of them are equipment, which ``startArrow``/``endArrow``
+    cannot express independently of the head.
+
+    So it gets its own cells, by the same mechanism :func:`_hatches` uses and
+    for the same reason -- a child vertex on the edge, placed by arc length
+    along the routed polyline, which rides the line when draw.io re-routes it.
+    Two cells per mark, because two bars is what the mark *is*.
+
+    Where the marks fall is :func:`~pandid.render.svg.flange_marks`', so the
+    export marks the joints the sheet marks and in the places the sheet marks
+    them. A flange lands hard against an equipment outline, where one rule here
+    and another there is the difference between a joint and a collision.
+    """
+    total = sum(((bx - ax) ** 2 + (by - ay) ** 2) ** 0.5
+                for (ax, ay), (bx, by) in zip(points, points[1:]))
+    if total <= 0:
+        return []
+
+    length = fit.length(_svg.FLANGE_TICK)
+    half = length / 2
+    out: list[str] = []
+    for n, mark in enumerate(flange_marks(s, points, ends)):
+        rel = max(-1.0, min(1.0, 2.0 * mark.along / total - 1.0))
+        # The bar is drawn *across* the run, and `line` strokes its box's
+        # horizontal centreline, so the box turns a further quarter.
+        style = (f"shape=line;rotation={mark.angle + 90.0:g};strokeColor={ink};"
+                 f"strokeWidth={fit.length(_PROCESS_STROKE):g};fillColor={_NO_FILL};"
+                 "html=1;resizable=0;movable=1;")
+        rad = math.radians(mark.angle)
+        for k, sign in enumerate((-1, 1)):
+            step = fit.length(_svg.FLANGE_GAP / 2) * sign
+            dx, dy = math.cos(rad) * step, math.sin(rad) * step
+            out += [
+                f'        <mxCell id="{edge_id}f{n}{k}" value="" style={_attr(style)} '
                 f'vertex="1" connectable="0" parent="{edge_id}">',
                 f'          <mxGeometry x="{_fraction(rel)}" y="0" '
                 f'width="{_num(length)}" height="{_num(length)}" '
