@@ -281,10 +281,16 @@ def tap_lines(fs):
     centre)``.
 
     The line from a tap to the balloon reading it, and the rule for when there
-    is one at all: nothing is drawn where a stream already joins the two, or
-    where the element sits directly on the line (``offset=0``). Shared by the
-    drawing pass and by label placement, so a label cannot be placed against an
-    impulse line the renderer then declines to draw, or over one it does.
+    is one at all: nothing is drawn where the balloon is merely *placed*
+    against its host (``near=``; see :data:`~pandid.units.RELATIONS`), where a
+    stream already joins the two, or where the element sits directly on the
+    line (``offset=0``). Shared by the drawing pass and by label placement, so
+    a label cannot be placed against an impulse line the renderer then declines
+    to draw, or over one it does.
+
+    ``near=`` is issue #137. An author wanting somewhere to hang a control-room
+    faceplate had only ``on=``, which meant both, so the sheet grew a line
+    saying the faceplate was piped to a drum. A placement is now a placement.
 
     Shared with the draw.io exporter for the reason :func:`stream_polyline` is:
     these are the only lines on a P&ID that are not streams, so an exporter that
@@ -301,6 +307,8 @@ def tap_lines(fs):
         if not is_attached(u) or tap is None or u.frame is None:
             continue
         host = u.host
+        if getattr(u, "relation", "sensing") == "near":
+            continue
         if (id(u), id(host)) in wired or (id(host), id(u)) in wired:
             continue
         centre = (u.frame.cx, u.frame.cy)
@@ -329,6 +337,11 @@ def impulse_tap(inst) -> bool:
     the shared display, in a computer or in a logic solver, and no tubing runs
     from a drum to any of those; see :data:`_FIELD_BALLOONS`.
 
+    *The line itself* has to be carrying the reading. Tubing brings the fluid
+    **to** the instrument, so only a ``sensing`` relation can be one; a trip
+    square hung on the valve it strokes is ``acting_on``, and what runs down to
+    the actuator is a command.
+
     Reading the host alone, which is what this used to do, answered a question
     about the *host* and drew the answer as though it were about the line. Three
     of the shipped sheets state something untrue because of it, every one of
@@ -343,7 +356,135 @@ def impulse_tap(inst) -> bool:
     host_kind = getattr(host, "kind", "")
     holds_fluid = (host is not None and host_kind != "instrument"
                    and host_kind not in _SIGNAL_KINDS)
-    return holds_fluid and getattr(inst, "variant", "default") in _FIELD_BALLOONS
+    return (holds_fluid
+            and getattr(inst, "relation", "sensing") == "sensing"
+            and getattr(inst, "variant", "default") in _FIELD_BALLOONS)
+
+
+# --- letter codes written outside the symbol ---------------------------------
+# ISO 15519-2 §5.1.3, p. 19: "Information placed outside the PCI symbol shall be
+# placed in the four quadrants around the symbol as illustrated in Figure 8.
+# This allows for horizontal and vertical connections to the symbol."
+#
+# The quadrants are the *corners*, and the second sentence is why: N, S, E and W
+# stay clear for the four connections a balloon takes, so annotating one spends
+# no face. That is the half of #253 that also undoes what #253 records -- a
+# controller whose north face was "spent on the high alarm".
+#
+# Which corner is which comes from the clause's own lettering: (a) references and
+# safety identifiers, (b) the measured-variable type for letter code U, (c) high
+# functions, (d) low. High above the centre line and low below is §5.2.5's
+# "increasing value away from the centre line"; a and b take the other side.
+
+#: Each quadrant as ``(side, away)``: which way from the symbol it sits, and
+#: which way a second code in it stacks. Both are +1 right/down.
+_QUADRANTS = {"a": (-1, -1), "b": (-1, 1), "c": (1, -1), "d": (1, 1)}
+
+#: Paper left clear on the symbol's centre line, each side. A connection arrives
+#: there -- on ``professional_examples/P&ID_301.pdf`` the signal line into every
+#: annotated controller runs between the two alarm codes -- so the band is what
+#: keeps the pair straddling the line rather than sitting on it.
+_QUADRANT_BAND = 3.0
+#: From the symbol's drawn edge to the near edge of the code. 0,12 balloon
+#: diameters, which is what PIC-301 and LIC-304 are drawn at (0,142 and 0,085);
+#: TIC-302's 0,384 is the outlier and the three together are hand-placed.
+_QUADRANT_GAP = 5.0
+#: Between two codes stacked in one quadrant: one line of type, so the halos
+#: touch and the pair reads as a block.
+_QUADRANT_PITCH = 15.0
+#: How far outward the search may push a quadrant to find clear paper. The
+#: quadrant itself is not up for negotiation -- it is what the code *means* --
+#: so the only freedom is the stand-off, and past this the placement is one to
+#: make by hand.
+_QUADRANT_REACH = 60.0
+
+
+def quadrant_labels(fs) -> list:
+    """Every letter code written outside a symbol, placed.
+
+    Items in :meth:`SvgRenderer._draw_unit_labels`' own form, so the codes are
+    haloed and drawn over the lines exactly as an equipment tag is.
+
+    Derived from the flowsheet alone, for the reason :func:`stream_numbers` is:
+    the tag pass and the line-number pass both have to dodge these, and a second
+    derivation would put them somewhere else for one of the two.
+    """
+    from pandid.portgeom import unit_box
+
+    annotated = [u for u in fs.units
+                 if u.frame is not None and getattr(u, "quadrants", None)]
+    if not annotated:
+        return []
+    ink = _ink(fs)
+    symbols = [_obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    symbols += [_obstacle(b) for b in flange_boxes(fs, None)]
+
+    out: list = []
+    for u in annotated:
+        box = unit_box(u, u.frame)
+        cy = (box[1] + box[3]) / 2
+        for name, (side, away) in _QUADRANTS.items():
+            codes = u.quadrants.get(name) or ()
+            if not codes:
+                continue
+            edge = box[2] if side > 0 else box[0]
+            anchor, lpos = ("start", "right") if side > 0 else ("end", "left")
+            lx = edge + side * _QUADRANT_GAP
+            block = [
+                (lx, cy + away * (_QUADRANT_BAND + _QUADRANT_PITCH / 2
+                                  + i * _QUADRANT_PITCH),
+                 anchor, "middle", lpos, html.escape(code))
+                for i, code in enumerate(codes)
+            ]
+            dx = side * _quadrant_stand_off(block, side, ink, symbols)
+            placed = [(x + dx, y, *rest) for x, y, *rest in block]
+            out.extend(placed)
+            # Each code is paper for the next quadrant, and for the next
+            # balloon's: two controllers a balloon apart annotate into the same
+            # gap, and the second has to see where the first landed.
+            symbols += [b for b in map(_unit_label_box, placed) if b is not None]
+    return out
+
+
+def _quadrant_stand_off(block, side: int, ink, symbols) -> float:
+    """How far out of the symbol a quadrant's codes have to stand, ``0`` if not.
+
+    Outward only, and the whole quadrant moves together: the codes are a block
+    whose order is the standard's, so sliding one out of line would say
+    something the author did not. Outward is also the only direction that leaves
+    the quadrant *being* that quadrant.
+
+    Scored with :func:`_erases`, so a code gives things up in the order every
+    other label on the sheet does -- symbols first, then impulse lines, then
+    pipe -- and the smallest clearing step wins, which keeps a code hard against
+    its own symbol wherever the paper there is already clear.
+    """
+    boxes = [b for b in map(_unit_label_box, block) if b is not None]
+    if not boxes:
+        return 0.0
+
+    def damage(m: float) -> tuple[int, int, int]:
+        hits = taps = pipes = 0
+        for b in boxes:
+            moved = (b[0] + side * m, b[1], b[2] + side * m, b[3])
+            one, two, three = _erases(moved, ink, symbols)
+            hits, taps, pipes = hits + one, taps + two, pipes + three
+        return hits, taps, pipes
+
+    steps = {0.0}
+    for o in [*symbols, *(line.box for line in ink)]:
+        for b in boxes:
+            steps.add(o[2] + _PLATE_CLEARANCE - b[0] if side > 0
+                      else b[2] - o[0] + _PLATE_CLEARANCE)
+    clear = (0, 0, 0)
+    best, cost = 0.0, damage(0.0)
+    for m in sorted(s for s in steps if 0.0 < s <= _QUADRANT_REACH):
+        if cost == clear:
+            break
+        got = damage(m)
+        if got < cost:
+            best, cost = m, got
+    return best
 
 
 def _ink(fs) -> "list[_Ink]":
@@ -887,6 +1028,10 @@ def stream_numbers(fs, placed: list,
     # flanges, and the number's leader landed on one of them. See
     # :func:`flange_boxes`, which the equipment-tag pass now asks as well.
     symbols += [_obstacle(b) for b in flange_boxes(fs, joints)]
+    # A letter code written outside a balloon is a mark on the sheet the same
+    # way: it is placed before either label pass runs (see
+    # :func:`quadrant_labels`), so both can be told where it went.
+    symbols += [b for b in map(_unit_label_box, quadrant_labels(fs)) if b is not None]
 
     # A number names a *run*, and a run survives the valves and fittings in it:
     # renumber_streams() gives every segment of one the same name and the sheet
@@ -2533,6 +2678,10 @@ class SvgRenderer:
         # balloons have stopped moving, so the impulse lines are settled with
         # them. See :func:`_ink`.
         ink = _ink(fs)
+        # The letter codes written outside the balloons, placed before anything
+        # that has to dodge them; see :func:`quadrant_labels`. Drawn with the
+        # equipment tags at the end, on the same halo.
+        quadrants = quadrant_labels(fs)
         drawing: list[str] = []
         # Every opaque white plate the sheet lays down, collected only when the
         # overlay is going to be drawn. The overlay is emitted *under* the
@@ -2542,7 +2691,8 @@ class SvgRenderer:
         # the list is ``None`` and not one of these boxes is computed.
         plates: "list[tuple[float, float, float, float]] | None" = (
             [] if grid is not None else None)
-        drawing.extend(self._draw_units(fs, unit_labels, balloons, ink, joints))
+        drawing.extend(self._draw_units(fs, unit_labels, balloons, ink, joints,
+                                        quadrants))
         drawing.extend(self._draw_streams(fs, jump_direction, unit_labels, arrows,
                                           plates, joints))
         # Instrumentation goes on over the lines: an impulse line runs from the
@@ -2553,8 +2703,10 @@ class SvgRenderer:
             drawing.append('  <g id="instruments">')
             drawing.extend(balloons)
             drawing.append('  </g>')
-        # Equipment tags go on last, haloed, so no stream line strikes through them.
-        drawing.extend(self._draw_unit_labels(unit_labels))
+        # Equipment tags go on last, haloed, so no stream line strikes through
+        # them, and the quadrant codes with them: a code is lettering outside a
+        # symbol and wants the same halo over the same lines.
+        drawing.extend(self._draw_unit_labels(unit_labels + quadrants))
 
         # Placed last and drawn first. The overlay must sit *under* every piece
         # of the sheet's own ink -- it is scaffolding for the author and must
@@ -2838,7 +2990,8 @@ class SvgRenderer:
 
     # ------------------------------------------------------------------ units
 
-    def _draw_units(self, fs, label_items, balloons, ink=(), joints=None):
+    def _draw_units(self, fs, label_items, balloons, ink=(), joints=None,
+                    quadrants=()):
         from pandid.portgeom import unit_box
 
         lines = ['  <g id="units">']
@@ -2855,6 +3008,10 @@ class SvgRenderer:
         # about the lines and the symbols and a flange is neither.
         symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
         symbols += [(None, b) for b in flange_boxes(fs, joints)]
+        # A letter code outside a balloon is under no unit either, and for the
+        # same reason: it is lettering, not artwork, so every tag has to see it
+        # and none of them owns it.
+        symbols += [(None, b) for b in map(_unit_label_box, quadrants) if b is not None]
         for u in fs.units:
             f = u.frame
             out = balloons if u.kind == "instrument" else lines

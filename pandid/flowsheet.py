@@ -9,6 +9,7 @@ from pathlib import Path
 from string import Formatter
 from typing import Callable, TYPE_CHECKING, TypeVar
 
+from pandid.deprecation import Deprecation
 from pandid.stations import (
     DEFAULT_BYPASS_RISE,
     DEFAULT_DRAIN_DROP,
@@ -75,6 +76,12 @@ DEFAULT_LOOP_NUMBER_START = 101
 #: break the run to pull, and a reducer and a tee are welded fittings. See
 #: :data:`~pandid.render.svg._INLINE_BODIES`, which is a strict subset of this.
 INLINE_KINDS = frozenset({"valve", "reducer", "fitting", "tee"})
+
+_RETIRED_ON = Deprecation(
+    what="add_instrument(on=...)",
+    instead="add_instrument(sensing=...), acting_on= or near=",
+    removed_in="0.1.3",
+)
 
 
 def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream) -> str:
@@ -323,6 +330,10 @@ class Flowsheet:
                 f"header=True), one service drawn at each place it is tapped. Both "
                 f"drawings have to be of the same thing, so they must agree on the "
                 f"class and the variant, and two flags on the off-page reference. "
+                f"A primary element and its balloon are one instrument shown twice "
+                f"and share a tag for that reason, but the balloon has to be asked "
+                f"for from the element: fs.add_balloon(fe303), not a second "
+                f"Instrument carrying the same letters. "
                 f"A Tee repeats against another Tee, having no tag to clash with, "
                 f"but the name is still what a stream and a spec entry reach it by, "
                 f"so it may not take one that already means something else."
@@ -466,23 +477,45 @@ class Flowsheet:
         return loop
 
     def add_instrument(self, type: str, number: "str | int | Loop" = "", *,
+                       sensing: "Stream | Unit | None" = None,
+                       acting_on: "Stream | Unit | None" = None,
+                       near: "Stream | Unit | None" = None,
                        on: "Stream | Unit | None" = None, at: float | str | None = None,
                        offset: float = 45.0, angle: float = 90.0,
                        variant: str = "default", **kwargs) -> "Instrument":
-        """Add an ISA-5.1 instrument balloon, optionally anchored to its host.
+        """Add an ISA-5.1 instrument balloon, anchored to something on the sheet.
 
         ``type`` is the functional letter string and ``number`` the loop number;
         together they make the tag (``add_instrument("FT", 101)`` -> ``FT-101``).
         ``number`` also takes a :class:`~pandid.loops.Loop` from :meth:`add_loop`,
         which supplies the number and checks ``type`` against the loop's measured
         variable, raising here rather than warning at render time.
-        ``on``/``at``/``offset``/``angle`` are passed straight to
-        :meth:`~pandid.units.Instrument.attach`; without ``on`` the balloon is laid
-        out like any other unit.
+
+        **Three ways to name the anchor, and they say different things.** Each
+        takes a :class:`~pandid.streams.Stream` or a :class:`~pandid.units.Unit`
+        and places the balloon against it; what they differ on is whether the
+        sheet then draws a line between the two.
+
+        - ``sensing=`` -- the balloon takes its reading from here. Drawn: an
+          impulse line where the host holds the fluid being measured and the
+          balloon is a field device, a fine dashed instrument connection
+          otherwise.
+        - ``acting_on=`` -- the balloon commands this. A trip square under the
+          valve it strokes. Drawn dashed: nothing is piped from a logic solver.
+        - ``near=`` -- neither. The balloon is only *placed* here, and nothing
+          is drawn between them. A control-room faceplate hung over the valve
+          it drives is near it; what reaches the actuator is a signal, stated
+          with :meth:`connect` and routed like one.
+
+        ``at``/``offset``/``angle`` locate the balloon against whichever was
+        named; see :meth:`~pandid.units.Instrument.attach`. With no anchor at
+        all the balloon is laid out like any other unit.
 
         >>> s = fs.connect(feed.outlet, fv.inlet)
-        >>> fs.add_instrument("FE", 101, on=s, at=0.4, offset=0)     # in-line element
-        >>> fs.add_instrument("FT", 101, on=s, at=0.4, offset=60)    # transmitter above
+        >>> ft = fs.add_instrument("FT", 101, sensing=s, at=0.4, offset=60)
+        >>> fic = fs.add_instrument("FIC", 101, near=ft, at="N", offset=70,
+        ...                         display="central")
+        >>> fs.connect(ft.sig_out, fic.sig_in, kind="electric")
         """
         from pandid.loops import Loop
         from pandid.units import Instrument
@@ -492,8 +525,111 @@ class Flowsheet:
             number = number.number
         inst = Instrument(type, number, variant=variant, **kwargs)
         self.add(inst)
+        host, relation = self._anchor(inst, sensing, acting_on, near, on)
+        if host is not None:
+            inst.attach(host, at=at, offset=offset, angle=angle, relation=relation)
+        return inst
+
+    def _anchor(self, inst: "Instrument", sensing, acting_on, near, on):
+        """The one anchor an ``add_instrument`` call named, and what it means.
+
+        Returns ``(host, relation)``, or ``(None, "sensing")`` for a balloon
+        that named none. Retiring ``on=`` happens here rather than in
+        :meth:`~pandid.units.Instrument.attach`, since ``attach`` takes the
+        relation already decided.
+        """
+        given = [("sensing", sensing), ("acting_on", acting_on), ("near", near)]
+        named = [(relation, host) for relation, host in given if host is not None]
         if on is not None:
-            inst.attach(on, at=at, offset=offset, angle=angle)
+            if named:
+                raise ValueError(
+                    f"{inst.name}: on= is the retired spelling of "
+                    f"{named[0][0]}=/near=, so naming both asks for two anchors. "
+                    f"Drop the on="
+                )
+            _RETIRED_ON.warn(self, where=inst.name)
+            named = [("sensing", on)]
+        if len(named) > 1:
+            spellings = ", ".join(f"{relation}=" for relation, _ in named)
+            raise ValueError(
+                f"{inst.name}: a balloon is anchored to one thing, and this call "
+                f"named {len(named)} ({spellings}). Which one it is decides what is "
+                f"drawn between them: sensing= and acting_on= draw a connection, "
+                f"near= draws nothing. A second relationship is a second line, so "
+                f"state it with connect()"
+            )
+        if not named:
+            return None, "sensing"
+        relation, host = named[0]
+        return host, relation
+
+    def add_balloon(self, element: "Unit", *, at: float | str | None = None,
+                    offset: float = 46.0, angle: float = 90.0,
+                    variant: str = "default", **kwargs) -> "Instrument":
+        """Draw *element*'s tag in a balloon beside it instead of against it.
+
+        A primary element is **one instrument shown as two marks**: the thing
+        in the pipe, and the balloon that carries its tag. CHEE4001 p.10 is
+        what settles that it is one instrument -- "Primary element (E):
+        instrument that measures a process variable (e.g. orifice plates,
+        thermocouples)" -- and ``professional_examples/P&ID_301.pdf`` is what
+        settles the drawing: its venturi carries **no lettering at all**, an
+        ``FE 303`` balloon hangs under it on a short impulse line, and
+        ``FT 303`` sits immediately below that::
+
+            fe303 = fs.add(units.Fitting(flow303.element("FE"), variant="venturi"))
+            fs.add_balloon(fe303, at="S", offset=46)
+            ft303 = fs.add_instrument("FT", flow303, near=fe303.balloon,
+                                      at="S", offset=45)
+
+        The tag is typed once, on the element, and moves to the balloon: the
+        element stops drawing lettering of its own, so the sheet shows
+        ``FE-303`` exactly once. Both objects answer to it, which is why the
+        pair joins the sheet's existing "one thing, several marks" exemption
+        rather than needing a second tag invented for one of them (issue
+        #249). The element keeps the plain name, since it is the item an
+        equipment list schedules; the balloon is named ``FE-303 (2)``, as a
+        repeated trip square is.
+
+        ``at``/``offset``/``angle`` place the balloon exactly as
+        :meth:`add_instrument` does, and the relation is ``sensing``: the
+        balloon reads the element, so a solid impulse line is drawn between
+        them. The default ``offset`` is the reference sheet's, whose FE
+        balloon centre stands 1,05 balloon diameters off the process line.
+
+        Raises:
+            ValueError: if *element* already has a balloon, or is not on this
+                flowsheet, or carries no tag to move.
+        """
+        from pandid.units import Instrument
+
+        if element.flowsheet is not self:
+            raise ValueError(
+                f"add_balloon() draws the tag of something already on this sheet, and "
+                f"{element.name!r} is on "
+                f"{'no flowsheet' if element.flowsheet is None else 'another one'}. "
+                f"fs.add() it first"
+            )
+        if element.balloon is not None:
+            raise ValueError(
+                f"{element.name}: one tag is drawn once, and this element's is already "
+                f"in the balloon {element.balloon.name!r}. A second reading of the same "
+                f"point is a second instrument with a tag of its own -- a transmitter "
+                f"over a primary element is fs.add_instrument('FT', loop, ...)"
+            )
+        if not element.tag:
+            raise ValueError(
+                f"{element.name!r} draws no tag, so there is none to move into a "
+                f"balloon. add_balloon() takes a tagged item: a primary element "
+                f"lettered from its loop, e.g. Fitting(loop.element('FE'))"
+            )
+        inst = Instrument(element.tag, variant=variant, **kwargs)
+        # Set before add(), which is where the shared tag is either allowed
+        # or refused; see Instrument.repeats.
+        inst._marks = element
+        self.add(inst)
+        element.balloon = inst
+        inst.attach(element, at=at, offset=offset, angle=angle, relation="sensing")
         return inst
 
     def add_valve_station(
