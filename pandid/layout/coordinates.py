@@ -135,6 +135,18 @@ def assign_coordinates(fs: "Flowsheet") -> None:
         if not _overlaps(u, s, new_y):
             s.y = new_y
 
+    # The same post-pass across the other axis, for the runs the one
+    # above cannot straighten: a unit stacked over or under its peer by
+    # a north/south face (see pandid.layout.stacking), whose own nozzle
+    # points sideways. Ranking has put the two in one column, which is
+    # not the same as putting the nozzles in one line, and 10px out is
+    # enough for a run to leave east, drop, and come back west. Aim the
+    # leaving nozzle a stand-off short of the arriving one and that
+    # becomes one turn.
+    for u, s, new_x in _stack_offsets(fs, units):
+        if not _overlaps_x(u, s, new_x, units):
+            s.x = new_x
+
     # Emit the resolved frame for every ranked unit; attached
     # instruments take theirs from their host instead.
     for u in units:
@@ -146,6 +158,57 @@ def assign_coordinates(fs: "Flowsheet") -> None:
         )
 
     place_attached(fs)
+
+
+#: How far short of the nozzle it drops onto a sideways-facing one is
+#: aimed. The router stands a run off a nozzle before it may turn, so
+#: aiming dead on costs a turn out and a turn back; this is that
+#: stand-off, spent going the way the run was already going.
+STACK_LEAD = 25.0
+
+
+def _stack_offsets(fs: "Flowsheet", units: list) -> list[tuple]:
+    """``(unit, slot, x)`` for every stacked unit worth shifting.
+
+    Only a nozzle facing sideways is aimed: one already facing the peer
+    it is stacked against drops straight onto it, and moving the box
+    would be the thing that bent the run.
+    """
+    from pandid.layout.stacking import stacked_edges
+    from pandid.portgeom import resolve_port
+
+    out = []
+    for st in stacked_edges(fs):
+        u, peer = st.satellite, st.anchor
+        if u not in units or peer not in units:
+            continue
+        s, p = u._slot, peer._slot
+        if s is None or p is None or s.x is None:
+            continue
+        if u.pin_ is not None and u.pin_.x is not None:
+            continue
+        mine = st.stream.source if st.stream.source.owner is u else st.stream.dest
+        theirs = st.stream.dest if mine is st.stream.source else st.stream.source
+        (my_x, _), _, face = resolve_port(u, s, mine.name)
+        if face not in ("E", "W"):
+            continue
+        (their_x, _), _, _ = resolve_port(peer, p, theirs.name)
+        lead = STACK_LEAD if face == "E" else -STACK_LEAD
+        out.append((u, s, their_x - lead - (my_x - s.x)))
+    return out
+
+
+def _overlaps_x(u, s, new_x: float, units: list) -> bool:
+    """Would moving ``u`` to ``new_x`` put it over a unit beside it?"""
+    for other in units:
+        o = other._slot
+        if other is u or o is None or o.x is None or o.y is None:
+            continue
+        if s.y + s.h <= o.y or s.y >= o.y + o.h:
+            continue
+        if not (new_x + s.w <= o.x or new_x >= o.x + o.w):
+            return True
+    return False
 
 
 _DIR_OF_SIDE = {"top": "N", "bottom": "S", "left": "W", "right": "E"}

@@ -127,3 +127,177 @@ def test_spine_straightening_scales_the_port_offset_to_the_resolved_box():
     fs.layout()
 
     assert port_point(feed, feed.frame, "outlet")[1] == port_point(drum, drum.frame, "inlet")[1]
+
+
+# --- north and south faces (#168) ---------------------------------------------
+
+
+def _syngas_block():
+    """The sheet from issue #168: two north inlets on one block."""
+    fs = Flowsheet("north face")
+    ng = fs.add(U.Feed("Natural Gas"))
+    air = fs.add(U.Feed("Air"))
+    steam = fs.add(U.Feed("Steam"))
+    sec = fs.add(U.Block("Sec", inputs=["W", "N", "N"], outputs=["E"]))
+    prod = fs.add(U.Product("Syngas"))
+    fs.connect(ng.outlet, sec.in_1)
+    fs.connect(air.outlet, sec.in_2)
+    fs.connect(steam.outlet, sec.in_3)
+    fs.connect(sec.out_1, prod.inlet)
+    return fs, ng, air, steam, sec, prod
+
+
+def test_a_north_face_puts_its_peer_above_the_block_and_not_beside_it():
+    """Issue #168: a peer on a north connection belongs in the row above.
+
+    Ranked as a flow-order step it went a column to the left and wherever
+    the barycentre landed it -- for ``Air`` here, the bottom of the sheet,
+    from which its run climbed the full height and crossed two others to
+    reach a nozzle on the roof.
+    """
+    fs, ng, air, steam, sec, prod = _syngas_block()
+    fs.layout()
+
+    for feed in (air, steam):
+        assert feed._slot.col == sec._slot.col
+        assert feed._slot.row < sec._slot.row
+    # The two of them stack rather than fight over the one row.
+    assert air._slot.row != steam._slot.row
+    # The west inlet is unaffected: it still ranks a column to the left.
+    assert ng._slot.col == sec._slot.col - 1
+    assert ng._slot.row == sec._slot.row
+
+
+def test_a_north_face_peer_reaches_its_nozzle_in_one_turn():
+    """The row above is only half of it: the run has to be short too.
+
+    Both feeds face east and the nozzles they drop onto are inside the
+    block, so the coordinate pass aims each flag a stand-off short of its
+    own nozzle. Without that the run leaves east, drops, and comes back
+    west -- three turns to cross ten pixels.
+    """
+    from pandid.layout.attach import stream_path
+
+    fs, ng, air, steam, sec, prod = _syngas_block()
+    fs.layout()
+    fs.route()
+
+    for feed in (air, steam):
+        legs = _legs(stream_path(feed.outlet.stream))
+        assert len(legs) <= 2, f"{feed.name} turns {len(legs) - 1} times: {legs}"
+
+
+def _legs(path):
+    """The straight runs of a routed path, in order, as unit steps.
+
+    Zero-length repeats and the stand-off waypoint that continues a leg
+    are folded in, so this counts *turns* rather than waypoints.
+    """
+    out = []
+    for a, b in zip(path, path[1:]):
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        if (dx, dy) == (0.0, 0.0):
+            continue
+        step = (0 if dx == 0 else dx / abs(dx), 0 if dy == 0 else dy / abs(dy))
+        if not out or out[-1] != step:
+            out.append(step)
+    return out
+
+
+def test_a_south_face_puts_its_peer_below():
+    fs = Flowsheet("south face")
+    feed = fs.add(U.Feed("Feed"))
+    sec = fs.add(U.Block("Sec", inputs=["W"], outputs=["E", "S"]))
+    prod = fs.add(U.Product("Product"))
+    waste = fs.add(U.Product("Waste"))
+    fs.connect(feed.outlet, sec.in_1)
+    fs.connect(sec.out_1, prod.inlet)
+    fs.connect(sec.out_2, waste.inlet)
+    fs.layout()
+
+    assert waste._slot.col == sec._slot.col
+    assert waste._slot.row == sec._slot.row + 1
+    assert prod._slot.col == sec._slot.col + 1
+
+
+def test_two_north_faces_facing_each_other_state_no_order():
+    """A north connected to a north says each is above the other.
+
+    There is no arrangement that satisfies both, so neither is applied and
+    the edge ranks as any other does.
+    """
+    fs = Flowsheet("facing")
+    a = fs.add(U.Block("A", inputs=["W"], outputs=["N"]))
+    b = fs.add(U.Block("B", inputs=["N"], outputs=["E"]))
+    feed = fs.add(U.Feed("Feed"))
+    prod = fs.add(U.Product("Product"))
+    fs.connect(feed.outlet, a.in_1)
+    fs.connect(a.out_1, b.in_1)
+    fs.connect(b.out_1, prod.inlet)
+    fs.layout()
+
+    assert b._slot.col == a._slot.col + 1
+
+
+def test_an_equipment_nozzle_on_the_north_is_not_a_stacking_constraint():
+    """A drum's vapour leaves the top because vapour does.
+
+    The compressor it feeds is still the next unit along, and a rule read
+    off the geometry rather than off the author would put it on the roof --
+    and would rearrange every sheet in the corpus for the same reason.
+    """
+    fs = Flowsheet("equipment")
+    feed = fs.add(U.Feed("Feed"))
+    sep = fs.add(U.Separator("V-1"))
+    comp = fs.add(U.Compressor("K-1"))
+    fs.connect(feed.outlet, sep.feed)
+    fs.connect(sep.vapor, comp.suction)
+    fs.layout()
+
+    assert comp._slot.col == sep._slot.col + 1
+    assert comp._slot.row == sep._slot.row
+
+
+def test_a_named_north_nozzle_is_not_a_stacking_constraint_either():
+    """``examples/08`` feeds its deaerator over the top tray.
+
+    ``nozzle("inlet", "N")`` moves the stream to another part of the same
+    drum; the pump on the other end of it still belongs beside the drum.
+    """
+    fs = Flowsheet("named")
+    pump = fs.add(U.Pump("P-1"))
+    drum = fs.add(U.Vessel("V-1", variant="horizontal"))
+    drum.nozzle("inlet", "N")
+    fs.connect(pump.discharge, drum.inlet)
+    fs.layout()
+
+    assert drum._slot.col == pump._slot.col + 1
+
+
+def test_a_recycle_into_a_south_face_does_not_drag_its_source_back():
+    """A recycle is drawn backward from a unit columns downstream.
+
+    Reading its face as a same-column constraint would pull that unit back
+    to the block it returns to.
+    """
+    fs = Flowsheet("recycle")
+    feed = fs.add(U.Feed("Feed"))
+    a = fs.add(U.Block("A", inputs=["W", "S"], outputs=["E"]))
+    b = fs.add(U.Block("B", inputs=["W"], outputs=["E", "E"]))
+    prod = fs.add(U.Product("Product"))
+    fs.connect(feed.outlet, a.in_1)
+    fs.connect(a.out_1, b.in_1)
+    fs.connect(b.out_1, prod.inlet)
+    fs.connect(b.out_2, a.in_2, draw_as_recycle=True)
+    fs.layout()
+
+    assert b._slot.col == a._slot.col + 1
+
+
+def test_a_stacked_sheet_lays_out_the_same_way_twice():
+    """Faces are read off the solver slot, not off the frames left behind."""
+    fs, *_ = _syngas_block()
+    fs.layout()
+    first = {u.name: (u.frame.x, u.frame.y) for u in fs.units}
+    fs.layout()
+    assert {u.name: (u.frame.x, u.frame.y) for u in fs.units} == first
