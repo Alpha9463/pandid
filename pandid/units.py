@@ -1872,10 +1872,10 @@ class Instrument(Unit):
                 and self.variant in self._REPEATABLE_VARIANTS
                 and symbol(self.variant) == symbol(other.variant))
 
-    def annotate(self, *, high: "str | Sequence[str]" = (),
-                 low: "str | Sequence[str]" = (),
-                 safety: "str | Sequence[str]" = (),
-                 variable: "str | Sequence[str]" = "") -> "Instrument":
+    def annotate(self, *, high: "str | Sequence[str] | None" = None,
+                 low: "str | Sequence[str] | None" = None,
+                 safety: "str | Sequence[str] | None" = None,
+                 variable: "str | Sequence[str] | None" = None) -> "Instrument":
         """Write letter codes in the quadrants around this symbol.
 
         ISO 15519-2 §5.2.5, p. 22: "Letter code combinations with
@@ -1910,12 +1910,20 @@ class Instrument(Unit):
             lsh611.annotate(high=("LAHH", "LSHH"))
             ai301.annotate(variable="pH", safety="SIL 2")
 
-        Chainable. Called twice, the second call replaces what the first
-        put in the quadrants it names and leaves the others alone.
+        Chainable. An argument left out is a quadrant left alone, so a
+        second call replaces only what it names; ``high=()`` is how a
+        quadrant is emptied, which is a different request from not
+        mentioning it.
         """
         for name, codes in (("a", safety), ("b", variable),
                             ("c", high), ("d", low)):
-            self.quadrants[name] = _quadrant_codes(self.name, name, codes)
+            if codes is None:
+                continue
+            written = _quadrant_codes(self.name, name, codes)
+            if written:
+                self.quadrants[name] = written
+            else:
+                self.quadrants.pop(name, None)
         return self
 
     def attach(self, on: "Stream | Unit", *, at: float | str | None = None,

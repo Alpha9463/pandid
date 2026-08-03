@@ -2208,8 +2208,10 @@ reference sheet draws it.
 
 Each argument takes one code or several. Several in one quadrant come out
 ordered A, then S, then Z outward whatever order they were given in, since the
-standard fixes the sequence and there is no choice to express. Chainable; called
-twice, the second call replaces the quadrants it names and leaves the rest.
+standard fixes the sequence and there is no choice to express. Chainable, and an
+argument left out is a quadrant left alone, so a second call replaces only what
+it names; `high=()` empties one, which is a different request from not
+mentioning it.
 
 Codes are placed hard against the symbol and stepped **outward** if that is not
 clear paper, scored against the sheet's lines and symbols the way an equipment

@@ -524,8 +524,10 @@ class Flowsheet:
             number.check(type)
             number = number.number
         inst = Instrument(type, number, variant=variant, **kwargs)
-        self.add(inst)
+        # Resolved before the balloon joins the sheet, so a call refused
+        # for naming two anchors leaves nothing behind to be drawn.
         host, relation = self._anchor(inst, sensing, acting_on, near, on)
+        self.add(inst)
         if host is not None:
             inst.attach(host, at=at, offset=offset, angle=angle, relation=relation)
         return inst
@@ -540,13 +542,14 @@ class Flowsheet:
         """
         given = [("sensing", sensing), ("acting_on", acting_on), ("near", near)]
         named = [(relation, host) for relation, host in given if host is not None]
+        if on is not None and named:
+            spellings = " and ".join(f"{relation}=" for relation, _ in named)
+            raise ValueError(
+                f"{inst.name}: on= is the retired spelling of sensing=, and this "
+                f"call also names {spellings}, so it asks for two anchors. Drop "
+                f"the on="
+            )
         if on is not None:
-            if named:
-                raise ValueError(
-                    f"{inst.name}: on= is the retired spelling of "
-                    f"{named[0][0]}=/near=, so naming both asks for two anchors. "
-                    f"Drop the on="
-                )
             _RETIRED_ON.warn(self, where=inst.name)
             named = [("sensing", on)]
         if len(named) > 1:
