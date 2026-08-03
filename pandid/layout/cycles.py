@@ -10,14 +10,15 @@ if TYPE_CHECKING:
 
 def break_cycles(fs: "Flowsheet") -> None:
     """Identify and mark recycle streams using DFS back-edge detection.
-    
-    This phase ensures the layout algorithm works on a Directed Acyclic Graph (DAG).
-    Streams marked as is_recycle=True will be drawn backward, while all others
-    flow forward through the ranks.
+
+    This phase ensures the layout algorithm works on a Directed Acyclic
+    Graph (DAG). Streams marked as is_recycle=True will be drawn
+    backward, while all others flow forward through the ranks.
     """
     from pandid.layout.attach import free_streams, free_units
 
-    # 1. Reset all recycles (private field; is_recycle is read-only to callers)
+    # 1. Reset all recycles (private field; is_recycle is read-only to
+    #    callers)
     for s in fs.streams:
         s._is_recycle = False
 
@@ -25,9 +26,10 @@ def break_cycles(fs: "Flowsheet") -> None:
     if not units:
         return
 
-    # 2. Build adjacency across ALL streams (material, energy, and signal). Any
-    # of them can form a cycle the layering DAG must be free of, e.g. a control
-    # loop's transmitter -> controller -> valve -> ... signal feedback.
+    # 2. Build adjacency across ALL streams (material, energy, and
+    #    signal). Any of them can form a cycle the layering DAG must be
+    #    free of, e.g. a control loop's transmitter -> controller ->
+    #    valve -> ... signal feedback.
     adj: dict["Unit", list["Stream"]] = {u: [] for u in units}
     in_degree: dict["Unit", int] = {u: 0 for u in units}
 

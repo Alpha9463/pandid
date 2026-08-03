@@ -1,29 +1,29 @@
 """The ``pandid`` command line.
 
-:mod:`pandid.spec` already reads an entire flowsheet from a YAML or JSON file, so
-the only thing left between an equipment list and a drawing is a Python prompt.
-This module removes it. It is a shell over the public API and knows nothing
-about drawing: it reads the spec, calls the methods a script would call, and
-turns whatever the engine raises into one line on stderr and an exit code a
-shell can gate on.
+:mod:`pandid.spec` already reads an entire flowsheet from a YAML or JSON
+file, so the only thing left between an equipment list and a drawing is
+a Python prompt. This module removes it. It is a shell over the public
+API and knows nothing about drawing: it reads the spec, calls the
+methods a script would call, and turns whatever the engine raises into
+one line on stderr and an exit code a shell can gate on.
 
     pandid draw plant.yaml -o plant.pdf --page-size A3 --border zone
     pandid validate plant.yaml
     pandid symbols --kind valve
 
-The exit codes are the interface a script sees, so they distinguish the three
-things that can go wrong rather than all reporting 1:
+The exit codes are the interface a script sees, so they distinguish the
+three things that can go wrong rather than all reporting 1:
 
-===== ======================================================================
+===== ============================================================
 ``0`` the command did what it was asked
-``1`` the flowsheet was rejected: the spec could not be read or understood,
-      validation found errors, or the engine refused the request (an unknown
-      page size, a page too small for its own furniture)
-``2`` the command line was wrong: an unknown flag, a missing argument, an
-      option value this module checks itself
-``3`` an optional extra the request needs is not installed (PyYAML to read a
-      YAML spec, the ``pdf`` extra to write a PDF or a PNG)
-===== ======================================================================
+``1`` the flowsheet was rejected: the spec could not be read, or
+      validation found errors, or the engine refused the request
+      (an unknown page size, a page too small for its furniture)
+``2`` the command line was wrong: an unknown flag, a missing
+      argument, an option value this module checks itself
+``3`` an optional extra is not installed (PyYAML to read a YAML
+      spec, the ``pdf`` extra to write a PDF or a PNG)
+===== ============================================================
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ EXIT_MISSING_DEPENDENCY = 3
 
 
 class _Failure(Exception):
-    """Something this module found wrong, and the code to report it under."""
+    """Something wrong, and the code to report it under."""
 
     def __init__(self, message: str, code: int = EXIT_FAILED) -> None:
         super().__init__(message)
@@ -53,10 +53,10 @@ class _Failure(Exception):
 
 
 def _note(message: str) -> None:
-    """Write a line to stderr, behind whatever is still queued on stdout.
+    """Write to stderr, behind whatever is queued on stdout.
 
-    The two streams are buffered differently once either is a pipe, so without
-    the flush a note lands above the line it is about.
+    The two streams are buffered differently once either is a pipe, so
+    without the flush a note lands above the line it is about.
     """
     sys.stdout.flush()
     print(message, file=sys.stderr)
@@ -72,7 +72,7 @@ def _plural(count: int, noun: str) -> str:
 
 
 def _fold(name: str) -> str:
-    """``HeatExchanger``, ``heat_exchanger`` and ``hex`` all written one way."""
+    """``HeatExchanger``, ``heat_exchanger``, ``hex``: one way."""
     return name.lower().replace("_", "").replace("-", "")
 
 
@@ -84,9 +84,9 @@ def _suggest(value: str, candidates: Sequence[str]) -> str:
     return f" (did you mean {match!r}?)"
 
 
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------
 # Subcommands
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------
 
 
 def _load(path: Path) -> Flowsheet:
@@ -119,16 +119,17 @@ def _draw(args: argparse.Namespace) -> int:
         f"{_plural(len(fs.streams), 'stream')})"
     )
     if fs.warnings:
-        # The drawing is made either way; say where to read what was flagged.
+        # The drawing is made either way; say where to read what was
+        # flagged.
         _note(f"{_plural(len(fs.warnings), 'warning')}; see: pandid validate {args.spec}")
     return EXIT_OK
 
 
 def _validate(args: argparse.Namespace) -> int:
     fs = _load(args.spec)
-    # Lay the sheet out first: the geometric checks have nothing to measure
-    # until every unit has a frame, so validating a freshly read spec without
-    # this reports only what the reader itself caught.
+    # Lay the sheet out first: the geometric checks have nothing to
+    # measure until every unit has a frame, so validating a freshly read
+    # spec without this reports only what the reader itself caught.
     fs.route()
     issues = fs.validate()
     for issue in issues:
@@ -147,11 +148,12 @@ def _validate(args: argparse.Namespace) -> int:
 
 
 def _catalogue() -> list[tuple[str, str, list[str]]]:
-    """Every registered symbol as ``(class name, kind, variants)``, one per kind.
+    """Every symbol as ``(class name, kind, variants)``, per kind.
 
-    The kinds come from the unit classes rather than from the registry, so what
-    is listed is what a flowsheet can actually put on a sheet: a ``kind`` a spec
-    is free to name, with the variants the renderer has artwork for.
+    The kinds come from the unit classes rather than from the registry,
+    so what is listed is what a flowsheet can actually put on a sheet: a
+    ``kind`` a spec is free to name, with the variants the renderer has
+    artwork for.
     """
     from pandid.render.symbols import default_registry
 
@@ -188,9 +190,10 @@ def _symbols(args: argparse.Namespace) -> int:
                 EXIT_USAGE,
             )
 
-    # A class name is what a spec writes; the kind is what the symbol is filed
-    # under and what the engine names in its own messages. They read the same
-    # for all but a couple, so the second is shown only where it differs.
+    # A class name is what a spec writes; the kind is what the symbol is
+    # filed under and what the engine names in its own messages. They
+    # read the same for all but a couple, so the second is shown only
+    # where it differs.
     labels = [name if _fold(name) == kind else f"{name} ({kind})" for name, kind, _ in rows]
     pad = max(len(label) for label in labels) + 2
     width = max(shutil.get_terminal_size(fallback=(100, 24)).columns - 1, pad + 24)
@@ -206,9 +209,9 @@ def _symbols(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------
 # The command line itself
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -254,12 +257,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--jump-direction", choices=("vertical", "horizontal"), default="vertical",
         help="which of two crossing lines gets the semicircle hop (default: vertical)",
     )
-    # Every other render option is reachable from here, and a debugging view is
-    # if anything more use from a shell than from a script: it is the thing you
-    # switch on for one render, look at, and switch off again. ``nargs="?"``
-    # gives that the shortest spelling there is -- ``--debug`` alone for the
-    # default grid, ``--debug 100`` to change it -- and the two land on the same
-    # bool-or-number the API takes.
+    # Every other render option is reachable from here, and a debugging
+    # view is if anything more use from a shell than from a script: it
+    # is the thing you switch on for one render, look at, and switch off
+    # again. ``nargs="?"`` gives that the shortest spelling there is --
+    # ``--debug`` alone for the default grid, ``--debug 100`` to change
+    # it -- and the two land on the same bool-or-number the API takes.
     draw.add_argument(
         "--debug", nargs="?", type=float, const=True, default=None, metavar="SPACING",
         help="draw the coordinate overlay under the diagram: the grid, every pin() anchor "
@@ -285,15 +288,15 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run the command line and return the exit code, printing rather than raising.
+    """Run the command line and return the exit code.
 
-    Every failure a user can provoke is reported as one line on stderr. A
-    traceback out of here is a bug in the engine, not a bad spec.
+    Every failure a user can provoke is reported as one line on stderr.
+    A traceback out of here is a bug in the engine, not a bad spec.
     """
     parser = _build_parser()
     try:
         args = parser.parse_args(None if argv is None else list(argv))
-    except SystemExit as e:  # --help and --version, and a line argparse rejected
+    except SystemExit as e:  # --help, --version, a bad line
         return e.code if isinstance(e.code, int) else EXIT_USAGE
 
     try:
@@ -301,15 +304,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     except _Failure as e:
         return _fail(str(e), e.code)
     except ImportError as e:
-        # PyYAML and the pdf extra are the two optional installs, and both of
-        # these messages already name the package to install and the extra.
+        # PyYAML and the pdf extra are the two optional installs, and
+        # both of these messages already name the package to install and
+        # the extra.
         return _fail(str(e), EXIT_MISSING_DEPENDENCY)
     except ValueError as e:
-        # SpecError is a ValueError, and so is every refusal from the engine.
-        # Those messages are written to be read by whoever wrote the file, so
-        # they are printed as they are rather than wrapped in anything.
+        # SpecError is a ValueError, and so is every refusal from the
+        # engine. Those messages are written to be read by whoever wrote
+        # the file, so they are printed as they are rather than wrapped
+        # in anything.
         return _fail(str(e), EXIT_FAILED)
     except OSError as e:
-        # A file that is not there, or not readable, or a directory that is not.
+        # A file that is not there, or not readable, or a directory that
+        # is not.
         detail = f"{e.filename}: {e.strerror}" if e.filename and e.strerror else str(e)
         return _fail(detail, EXIT_FAILED)
