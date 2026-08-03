@@ -15,8 +15,10 @@ Every balloon is anchored to a host with ``add_instrument(..., on=...)``:
 
 ``fs.add_loop(variable, number)`` declares a loop and its members are tagged
 from it: a balloon by passing the loop where the number would go, a valve
-through ``loop.tag(...)``. The loop checks each member's first letter, so a
-``TT`` put on a flow loop raises at the line that wrote it. The interlock
+through ``loop.element(...)`` if it is a primary element and ``loop.tag(...)``
+if it is the final one. The loop checks the letters of everything lettered
+from the measured variable, so a ``TT`` put on a flow loop raises at the line
+that wrote it. The interlock
 square is in no loop and takes a literal number. Signal line types come from
 ``connect(kind=...)``: ``"electric"`` (dashed), ``"pneumatic"`` (slash ticks),
 ``"data"``/``"software"`` (dash-dot), ``"capillary"``.
@@ -48,7 +50,7 @@ def main():
         x=270, port="inlet", y=run_y)
     drum = fs.add(Vessel("V-101", description="Surge Drum")).pin(
         x=420, port="inlet", y=run_y)
-    fe = fs.add(Fitting(flow.tag("FE"), variant="orifice",
+    fe = fs.add(Fitting(flow.element("FE"), variant="orifice",
                         description="Feed Orifice Plate")).pin(
         x=180, port="inlet", y=run_y)
     # Flipped so the actuator faces the controller under the drum and the

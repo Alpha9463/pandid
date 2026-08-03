@@ -281,7 +281,7 @@ def _control_loop() -> Flowsheet:
     fv = fs.add(units.Valve(flow.tag("FV"), variant="control")).pin(x=270, port="inlet", y=run_y)
     drum = fs.add(units.Vessel("V-101", description="Surge Drum")).pin(x=420, port="inlet", y=run_y)
     fe = fs.add(
-        units.Fitting(flow.tag("FE"), variant="orifice", description="Feed Orifice Plate")
+        units.Fitting(flow.element("FE"), variant="orifice", description="Feed Orifice Plate")
     ).pin(x=180, port="inlet", y=run_y)
     lv = fs.add(units.Valve(level.tag("LV"), variant="control")).pin(
         x=640, port="inlet", y=run_y, mirrored="y"
@@ -942,7 +942,7 @@ def _ethanol_pid() -> Flowsheet:
     hv315 = fs.add(units.Valve("HV-315", description="HX-301 Cooling Water Block Valve"))
     fe303 = fs.add(
         units.Fitting(
-            flow303.tag("FE"),
+            flow303.element("FE"),
             variant="venturi",
             label_pos="bottom",
             description="Reflux Flow Element",
@@ -1735,7 +1735,9 @@ def _tank_farm() -> Flowsheet:
     t_psv = fs.add(units.Tee())
     psv602 = fs.add(units.Valve("PSV-602", variant="relief", description="P-602 Relief Valve"))
     fe605 = fs.add(
-        units.Fitting(blend_flow.tag("FE"), variant="coriolis", description="Ethanol Blend Meter")
+        units.Fitting(
+            blend_flow.element("FE"), variant="coriolis", description="Ethanol Blend Meter"
+        )
     )
     cv605 = fs.add(
         units.Valve(blend_flow.tag("CV"), variant="control", description="Ethanol Blend Valve")
@@ -1752,7 +1754,7 @@ def _tank_farm() -> Flowsheet:
     t_blend.new_line_number = True
     fe604 = fs.add(
         units.Fitting(
-            load_flow.tag("FE"),
+            load_flow.element("FE"),
             variant="positive_displacement",
             label_pos="bottom",
             description="Loading Meter",

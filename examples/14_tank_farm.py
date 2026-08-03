@@ -150,7 +150,7 @@ def main():
                            description="P-602 Suction Strainer"))
     t_psv = fs.add(Tee())
     psv602 = fs.add(Valve("PSV-602", variant="relief", description="P-602 Relief Valve"))
-    fe605 = fs.add(Fitting(blend_flow.tag("FE"), variant="coriolis",
+    fe605 = fs.add(Fitting(blend_flow.element("FE"), variant="coriolis",
                            description="Ethanol Blend Meter"))
     cv605 = fs.add(Valve(blend_flow.tag("CV"), variant="control",
                          description="Ethanol Blend Valve"))
@@ -166,7 +166,7 @@ def main():
     t_blend = fs.add(Tee(branch="inlet"))
     t_blend.new_line_number = True
     # label_pos="bottom" keeps FE-604's tag clear of FT-604, which stands over it.
-    fe604 = fs.add(Fitting(load_flow.tag("FE"), variant="positive_displacement",
+    fe604 = fs.add(Fitting(load_flow.element("FE"), variant="positive_displacement",
                            label_pos="bottom", description="Loading Meter"))
     cv604 = fs.add(Valve(load_flow.tag("CV"), variant="control",
                          description="Loading Rate Valve"))

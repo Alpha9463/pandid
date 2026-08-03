@@ -346,6 +346,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gallery is one SVG per example and refuses a file that draws two sheets, and an
   example that also exports draws one sheet twice, in two formats.
 
+- **`loop.element()`, for a primary element (#203).** `Loop.check()` holds every
+  balloon to its loop's measured variable and `add_instrument` calls it, so
+  `add_instrument("TT", flow_loop)` raised at the line that wrote it. `tag()`
+  composed without checking, so `flow_loop.tag("TE")` quietly yielded `TE-303` —
+  a temperature element on a flow loop, the same mistake caught on one route in
+  and not the other.
+
+  A primary element is lettered from the measured variable exactly as a balloon
+  is; a final control element is not, and a sheet spelling every control valve
+  `CV-` gives a first-letter rule nothing to hold true. So the two now go
+  through two methods rather than through one method and a flag:
+  `loop.element("FE")` checks and `loop.tag("CV")` does not. The distinction is
+  between two pieces of equipment rather than between two strictnesses, an
+  author reaching for either already knows which they have in hand, and a
+  `check=` parameter would have to default one way for both — leaving the safe
+  call the one you had to remember to write. `element("CV")` names `tag("CV")`
+  in its message, so the wrong route says what the right one is. `docs/api.md`
+  and examples 04, 11 and 14 tag their elements the new way; `tag()` is
+  unchanged and nothing that used it for a final element moves.
+
 ### Changed
 
 - **A tank's fill is a menu, and its default moved to the shell (#226).** Every
