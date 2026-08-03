@@ -245,8 +245,11 @@ def _build_parser() -> argparse.ArgumentParser:
              "arrowheads (default: pfd)",
     )
     draw.add_argument(
-        "--connections", choices=("none", "flanged"), default="none",
-        help="mark the joints where lines meet equipment nozzles; a P&ID only "
+        "--connections", choices=("none", "flanged", "flanged-at-nozzles"),
+        default="none",
+        help="mark the sheet's joints; 'flanged' marks every equipment nozzle "
+             "and both sides of every valve and in-line fitting, "
+             "'flanged-at-nozzles' marks the nozzles only. A P&ID only "
              "(default: none)",
     )
     draw.add_argument(

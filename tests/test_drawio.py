@@ -1987,10 +1987,102 @@ def test_a_page_size_is_the_paper_the_file_opens_on():
     assert model.get("page") == "1"
     assert float(model.get("pageWidth")) == pytest.approx(sheet.width, abs=0.01)
     assert float(model.get("pageHeight")) == pytest.approx(sheet.height, abs=0.01)
-    # ...and without one there is no paper to rule, so none is claimed.
+    # ...and without one there is no page *view* to rule, which is the whole of
+    # what page="0" says. It does not mean there is no page: see below.
     plain = ET.fromstring(fs.to_drawio(check=False)).find("diagram/mxGraphModel")
     assert plain.get("page") == "0"
-    assert plain.get("pageWidth") is None
+
+
+def _page_states(fs: Flowsheet, **kwargs) -> "tuple[str, float, float]":
+    """``(page, pageWidth, pageHeight)`` off a fresh export."""
+    model = ET.fromstring(fs.to_drawio(**kwargs)).find("diagram/mxGraphModel")
+    assert model.get("pageWidth") is not None and model.get("pageHeight") is not None, (
+        "a model that states no page size does not open unpaged -- draw.io's "
+        "Editor.readGraphState leaves graph.pageFormat at the prototype default, "
+        "which js/grapheditor/Graph.js sets to A4 or US Letter by the *reader's* "
+        "locale, and js/export.js then bounds every PDF by it"
+    )
+    return (model.get("page"), float(model.get("pageWidth")), float(model.get("pageHeight")))
+
+
+@pytest.mark.parametrize("border", ["none", "zone"])
+@pytest.mark.parametrize("page_size", [None, "A3"])
+def test_every_export_states_a_page_that_holds_the_whole_drawing(page_size, border):
+    """The defect, and the reason it went unseen for four samples: an export with
+    no ``page_size`` wrote no ``pageWidth``/``pageHeight`` at all, and draw.io
+    answers a missing page size with a *default* one rather than with none. A
+    wide drawing then came back from PDF export tiled across three A4 sheets and
+    cut at the joins.
+
+    Held against the geometry rather than against a remembered number: the page
+    has to contain the drawing's own bounds and the frame the dock grew around
+    them, which is the rectangle every cell in the file is placed against."""
+    from pandid.render import furniture as F
+    from pandid.render.svg import _page
+
+    fs = Flowsheet("held")
+    a = fs.add(units.Tank("T-1"))
+    b = fs.add(units.Tank("T-2"))
+    a.pin(x=0, y=0)
+    b.pin(x=900, y=260)
+    fs.connect(a.outlet, b.inlet)
+    fs.route()
+
+    kwargs = {"border": border, "check": False}
+    if page_size is not None:
+        kwargs["page_size"] = page_size
+    page, pw, ph = _page_states(fs, **kwargs)
+
+    sheet = _page(page_size)
+    _furniture, frame, _fit = DrawioRenderer()._furniture(fs, sheet)
+    if sheet is not None:
+        # Paper: the page is the paper, and page="1" anchors draw.io's page grid
+        # at the model origin, which is where the fitted drawing already sits.
+        assert page == "1"
+        assert (pw, ph) == pytest.approx((sheet.width, sheet.height), abs=0.01)
+        return
+
+    # No paper: the page is the extent of what the file draws, and page="0" is
+    # what makes draw.io take its origin from the drawing's top-left corner
+    # instead of from zero -- without which a frame starting left of or above
+    # zero would lose that edge to the tile before it.
+    assert page == "0"
+    ox, oy, ow, oh = F.sheet_rect(*frame)
+    ox, oy = ox - F.OUTER_MARGIN, oy - F.OUTER_MARGIN
+    assert (pw, ph) == pytest.approx((ow + 2 * F.OUTER_MARGIN, oh + 2 * F.OUTER_MARGIN), abs=0.01)
+
+    # ...and that box really does hold the drawing and its frame.
+    dx0, dy0, dx1, dy1 = DrawioRenderer()._drawing_box(fs)
+    fx, fy, fw, fh = frame
+    for x0, y0, x1, y1 in ((dx0, dy0, dx1, dy1), (fx, fy, fx + fw, fy + fh)):
+        assert ox <= x0 and oy <= y0
+        assert x1 <= ox + pw and y1 <= oy + ph
+
+
+@pytest.mark.parametrize("border", ["none", "zone"])
+def test_no_cell_hangs_over_the_edge_of_the_page_the_file_states(sample, border):
+    """A page that the file's own ink spills off is not a page. Every vertex --
+    equipment, furniture, the border rectangles, the zone letters -- is held
+    inside the stated page, positioned as draw.io positions an unpaged one: from
+    the drawing's top-left corner rather than from the model origin."""
+    from pandid.render import furniture as F
+
+    _page_attr, pw, ph = _page_states(sample, border=border, check=False)
+    _furniture, frame, _fit = DrawioRenderer()._furniture(sample, None)
+    ox, oy, _ow, _oh = F.sheet_rect(*frame)
+    ox, oy = ox - F.OUTER_MARGIN, oy - F.OUTER_MARGIN
+
+    seen = 0
+    for cell in _cells(sample, border=border, check=False).values():
+        geo = cell.find("mxGeometry")
+        if geo is None or cell.get("edge") == "1" or geo.get("x") is None:
+            continue
+        x, y = float(geo.get("x")), float(geo.get("y"))
+        w, h = float(geo.get("width") or 0), float(geo.get("height") or 0)
+        seen += 1
+        assert ox <= x and x + w <= ox + pw, f"{cell.get('id')} runs off the page"
+        assert oy <= y and y + h <= oy + ph, f"{cell.get('id')} runs off the page"
+    assert seen > 1, "the sheet stopped writing vertices"
 
 
 def test_a_paged_drawing_is_fitted_onto_its_paper():

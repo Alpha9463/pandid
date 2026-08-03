@@ -884,15 +884,9 @@ def stream_numbers(fs, placed: list,
     # because the mark is drawn hard against a nozzle and a leader wants the
     # clear middle of a segment -- on the short spool between a condenser and
     # the drum beneath it, "the clear middle" was the two units between the two
-    # flanges, and the number's leader landed on one of them. Nothing else on
-    # the sheet is ink the label pass cannot see, and this was very nearly the
-    # exception.
-    for s in fs.streams:
-        for fx, fy, _angle, _at in flange_marks(s, stream_polyline(s),
-                                                resolve_connections(s, joints)):
-            half = max(FLANGE_TICK, FLANGE_GAP) / 2
-            symbols.append(
-                _obstacle((fx - half, fy - half, fx + half, fy + half)))
+    # flanges, and the number's leader landed on one of them. See
+    # :func:`flange_boxes`, which the equipment-tag pass now asks as well.
+    symbols += [_obstacle(b) for b in flange_boxes(fs, joints)]
 
     # A number names a *run*, and a run survives the valves and fittings in it:
     # renumber_streams() gives every segment of one the same name and the sheet
@@ -1145,15 +1139,47 @@ def pneumatic_marks(points) -> "list[Hatch]":
     return out
 
 
-#: What a drawing may say about the joints where its lines meet equipment.
-#: A two-value tuple rather than a bool for the reason ``Valve.NORMAL_POSITIONS``
-#: is one: the joint's make-up is an enumeration the plant has more entries in
+#: What a drawing may say about the joints where its lines meet what they serve.
+#: A tuple rather than a bool for the reason ``Valve.NORMAL_POSITIONS`` is one:
+#: the joint's make-up is an enumeration the plant has more entries in
 #: (threaded, socket-welded, a spec break) and not a switch with two settings.
+#:
 #: ``"none"`` is not ``"welded"``. It is the drawing declining to say, which is
 #: what an unmarked line has always meant and the only honest default: a library
 #: that marked every joint flanged would be making a claim about piping nobody
 #: gave it.
-CONNECTIONS = ("none", "flanged")
+#:
+#: The other two differ in exactly one thing, and it is the thing the author is
+#: choosing between: whether the **bodies standing in the run** -- the valves and
+#: the in-line fittings -- are bolted in or welded in.
+#:
+#: * ``"flanged"`` marks every joint the sheet can mark, valves included.
+#: * ``"flanged-at-nozzles"`` marks only where a line meets an equipment nozzle
+#:   and leaves the bodies in the run unmarked.
+#:
+#: The broader one takes the plain word deliberately. ``connections="flanged"``
+#: has one reading to somebody who has not read this file -- *the connections on
+#: this sheet are flanged, all of them* -- and an API whose plain word means the
+#: narrower thing teaches that reading is wrong. So the narrower setting says
+#: what it restricts, in its own name, and nobody has to be told. See
+#: :func:`flanged_joint` for what each marks, and for why no standard settles it.
+CONNECTIONS = ("none", "flanged", "flanged-at-nozzles")
+
+#: The in-line kinds that are *bodies bolted into* a run rather than pipe welded
+#: along it, and so the ones ``"flanged"`` marks. A strict subset of
+#: :data:`~pandid.flowsheet.INLINE_KINDS`, which is the wider set of things that
+#: interrupt a line without ending it; the two are not the same question and
+#: ``test_render_api`` holds the subset relation so they cannot drift into being
+#: treated as though they were.
+#:
+#: A valve, a strainer, a sight glass or an orifice plate is a body you break the
+#: line to pull, and it is bolted between a pair of faces *so that* you can. A
+#: concentric reducer and a tee are butt-welded fittings: they are as much "pipe"
+#: as the pipe either side, and a sheet that flanged them would be describing a
+#: plant almost nobody builds. So the mark follows what has to come out, which is
+#: also the only reading of it that tells a reader something they did not already
+#: know from the symbol.
+_INLINE_BODIES = frozenset({"valve", "fitting"})
 
 #: The flanged-connection mark, in the proportions the vendored draw.io stencil
 #: draws it in: ``('fitting', 'flange')`` in :mod:`._vendored_symbols` is two
@@ -1193,37 +1219,87 @@ class Flange(NamedTuple):
     along: float
 
 
-def flanged_joint(port) -> bool:
-    """Is this end of a stream a joint at an *equipment* nozzle?
+def _draws_its_own_flange(u) -> bool:
+    """Is this body's own symbol already the flanged connection?
 
-    P&ID_301 is unambiguous about where the mark goes and, just as usefully,
-    about where it does not. Every piped branch off a shell carries it: all four
-    of D-301's nozzles, both of RB-301's level-bridle taps, each of HX-301's
-    four, T-301's ``-160-SS`` feed and its pressure taps. Nothing else on the
-    sheet does. The gate valves either side of CV-305 carry none. The drains the
-    bottom nozzles run down to carry none. The boundary flags carry none.
+    ``Fitting``'s *default* variant is the flanged connection, and ``"flange"``
+    is the same artwork under its own name, so an author who pins one has drawn
+    the joint explicitly. Marking it would put three flange pairs where one was
+    asked for. Asked of the registry rather than matched against a list of
+    variant names, so re-pointing the artwork cannot leave this checking for a
+    symbol nothing draws any more.
+    """
+    from pandid.render.symbols import default_registry
 
-    So the mark belongs to the *nozzle*, not to the line and not to the valve:
-    it is how the drawing says this branch is bolted to the vessel rather than
-    welded to it. Three kinds of end are therefore not joints at all --
+    own = default_registry.get(u.kind, getattr(u, "variant", "default"))
+    return (own.drawio_shape is not None
+            and own.drawio_shape == default_registry.get("fitting", "flange").drawio_shape)
 
-    * an inline component (:data:`~pandid.flowsheet.INLINE_KINDS`), because a
-      valve part-way along a run is not a branch off anything;
+
+def flanged_joint(port, want: str) -> bool:
+    """Does a ``want`` joint put a mark at this end of a stream?
+
+    ``want`` is one of :data:`CONNECTIONS` and has already been resolved against
+    the sheet by :func:`resolve_connections`, so all that is left is whether this
+    particular end is the kind of thing that end takes a mark.
+
+    **No standard on disk settles this, and this docstring is not going to
+    pretend one does.** The word "flange" appears nowhere in either part of the
+    reference the rest of this module cites -- zero occurrences in
+    ISO 15519-1:2010 and zero in ISO 15519-2:2015. ISO 15519-1 §12.4 is headed
+    *Joints* and is not about pipe joints at all: it governs the joining of
+    *connecting lines* on the paper -- "Joining shall be indicated with symbol
+    501: Joint of connections, a dot" -- which is the T-junction dot this library
+    already draws for a tee. ISO 15519-2 §6.3.1 hands symbols off to the
+    ISO 14617 series, which is where the flanged-connection symbol lives, but
+    14617 is a registry of symbols rather than a rule about where to put them and
+    it is not in ``professional_examples/``, so nothing is quoted from it here.
+
+    So: **no clause requires a flange at a valve and no clause forbids one.**
+    What follows is a drafting choice, attributed to nothing but ordinary
+    practice, and it is offered as a choice for that reason rather than settled
+    on the author's behalf.
+
+    Two kinds of end are not joints under either setting, and these two really
+    are rules rather than preferences:
+
     * a boundary flag, because a ``Feed`` or a ``Product`` is a reference to
       another sheet and a reference has no flange faces;
-    * an instrument, because what a balloon terminates is a tap or a signal.
+    * an instrument, because what a balloon terminates is a tap or a signal, and
+      :func:`flange_marks` has already dropped the signal lines.
 
-    -- and that is one rule, not two. The worry it answers is that excluding
-    inline bodies leaves a sheet half-flanged, ``shell | -- valve`` where a run
-    between two vessels gets marks at both ends: but ``shell | -- valve`` is
-    precisely what P&ID_301 draws at every one of HX-301's drains, and it reads
-    correctly, because the reader is being told about the nozzle and not about
-    the valve. A second setting to flange inline bodies would only let an author
-    draw the thing the reference declines to.
+    Everything else turns on ``want``:
+
+    ``"flanged"``
+        Every equipment nozzle, **and both sides of every body standing in the
+        run** (:data:`_INLINE_BODIES`). A valve in flanged service is flanged
+        both sides -- that is how it is got out of the line -- so a sheet that
+        says its connections are flanged and then draws a valve welded in is
+        saying two things. Reducers and tees stay unmarked: they are welded
+        fittings, not bodies. See :data:`_INLINE_BODIES`.
+
+    ``"flanged-at-nozzles"``
+        The nozzles only, which is what ``P&ID_301.pdf`` draws. Every piped
+        branch off a shell carries the mark there -- all four of D-301's
+        nozzles, both of RB-301's level-bridle taps, each of HX-301's four,
+        T-301's ``-160-SS`` feed and its pressure taps -- and nothing else on
+        the sheet does: not the gate valves either side of CV-305, not the
+        drains, not the boundary flags. It reads correctly, because on that
+        sheet the mark means *this branch is bolted to the vessel* and says
+        nothing about the valve downstream of it. It is a real drawing office's
+        convention and it stays reachable; it is simply not the only one, and
+        the reference sheet is evidence of what one office drew rather than of
+        what a standard demands.
     """
     from pandid.flowsheet import INLINE_KINDS
 
-    return port.owner.kind not in INLINE_KINDS | {"feed", "product", "instrument"}
+    kind = port.owner.kind
+    if kind in {"feed", "product", "instrument"}:
+        return False
+    if kind in INLINE_KINDS:
+        return (want == "flanged" and kind in _INLINE_BODIES
+                and not _draws_its_own_flange(port.owner))
+    return True
 
 
 def flange_marks(s, points, ends) -> "list[Flange]":
@@ -1251,10 +1327,10 @@ def flange_marks(s, points, ends) -> "list[Flange]":
 
     out: list[Flange] = []
     for at_dest, want in enumerate(ends):
-        if want != "flanged":
+        if want == "none":
             continue
         port = s.dest if at_dest else s.source
-        if not flanged_joint(port):
+        if not flanged_joint(port, want):
             continue
 
         # The mark stands off the nozzle *along the line*, which is the same
@@ -1277,6 +1353,44 @@ def flange_marks(s, points, ends) -> "list[Flange]":
         along = total - FLANGE_STANDOFF if at_dest else FLANGE_STANDOFF
         out.append(Flange(cx, cy, math.degrees(math.atan2(uy, ux)), along))
     return out
+
+
+def flange_boxes(fs, joints) -> "list[tuple[float, float, float, float]]":
+    """Every flanged-connection mark on a sheet, as a box a label must keep off.
+
+    **A flange mark is a graphical symbol standing on a run**, so every pass that
+    places opaque lettering has to rank it with the symbols and not with the
+    pipe. The distinction is :func:`_erases`': a halo over a length of pipe is a
+    gap the reader reads across, and a halo over a flange face is the sheet no
+    longer saying the joint is bolted.
+
+    ``joints`` is :func:`sheet_connections`' answer, and ``None`` -- a drawing
+    that marks no joints -- gives an empty list, so a caller with nothing to
+    dodge need not ask whether it has anything to dodge.
+
+    One function rather than a list built at each pass, because there are now
+    three of them and they were not agreeing. :func:`stream_numbers` grew the
+    rule when a line number's leader landed on a flange on the spool under
+    ``11_ethanol_pid``'s condenser; :meth:`SvgRenderer._draw_units` did not, and
+    ``RB-301``'s tag went out with two units of a flange face on the reboiler's
+    vapour riser cut out of it. The exporter's :func:`~pandid.render.drawio
+    ._tag_pass` runs the same search and has to be handed the same ink or the
+    two backends place one tag in two places.
+
+    Square, and sized on the longer of the pair's two dimensions, because the
+    mark's angle follows the run and a box that tracked the angle would be four
+    numbers saying less than one. That is a little slack on the along-the-run
+    axis, on a mark 12,5 across; a label wanting those two units is a label with
+    somewhere better to be.
+
+    Ungrown. The caller applies :func:`_obstacle`, for the reason given there.
+    """
+    half = max(FLANGE_TICK, FLANGE_GAP) / 2
+    return [
+        (m.x - half, m.y - half, m.x + half, m.y + half)
+        for s in fs.streams
+        for m in flange_marks(s, stream_polyline(s), resolve_connections(s, joints))
+    ]
 
 
 def _arrowhead(start, end) -> str:
@@ -2428,7 +2542,7 @@ class SvgRenderer:
         # the list is ``None`` and not one of these boxes is computed.
         plates: "list[tuple[float, float, float, float]] | None" = (
             [] if grid is not None else None)
-        drawing.extend(self._draw_units(fs, unit_labels, balloons, ink))
+        drawing.extend(self._draw_units(fs, unit_labels, balloons, ink, joints))
         drawing.extend(self._draw_streams(fs, jump_direction, unit_labels, arrows,
                                           plates, joints))
         # Instrumentation goes on over the lines: an impulse line runs from the
@@ -2724,14 +2838,23 @@ class SvgRenderer:
 
     # ------------------------------------------------------------------ units
 
-    def _draw_units(self, fs, label_items, balloons, ink=()):
+    def _draw_units(self, fs, label_items, balloons, ink=(), joints=None):
         from pandid.portgeom import unit_box
 
         lines = ['  <g id="units">']
         # Every symbol on the sheet, paired with the unit that drew it, so a tag
         # can step off somebody else's artwork the way it already steps off
         # somebody else's line. Built once: it is the same list for every tag.
+        #
+        # The flange marks are in it under no unit at all, which is what they
+        # are: a mark on a run belongs to the joint and not to either end of it,
+        # and _tag_item's `v is not u` test then lets every tag see every one of
+        # them. They earn their place the way the balloons did -- RB-301's tag
+        # shipped with two units cut out of the flange face on the reboiler's
+        # vapour riser, and every test passed, because the tag pass was told
+        # about the lines and the symbols and a flange is neither.
         symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+        symbols += [(None, b) for b in flange_boxes(fs, joints)]
         for u in fs.units:
             f = u.frame
             out = balloons if u.kind == "instrument" else lines

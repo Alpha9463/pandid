@@ -55,7 +55,9 @@ two widths shall be at least 2:1". This file passed on that sheet every time,
 because it was asking about the box.
 """
 
+import math
 import re
+from typing import NamedTuple
 
 import pytest
 
@@ -95,14 +97,80 @@ def _overlaps(a, b) -> bool:
     return a[2] > b[0] and a[0] < b[2] and a[3] > b[1] and a[1] < b[3]
 
 
+class Face(NamedTuple):
+    """One drawn flange face, and the joint it belongs to."""
+
+    box: tuple  # the rectangle this bar's stroke covers
+    at: tuple  # the *pair's* centre, which is the joint the pair straddles
+    port: object  # the nozzle it stands off
+
+
+def _flange_bars(fs, kwargs) -> "list[Face]":
+    """Every flange face on a sheet.
+
+    The rectangle is derived the way ``SvgRenderer._draw_streams`` strokes it --
+    two bars ``FLANGE_GAP`` apart along the run, each ``FLANGE_TICK`` across it
+    -- rather than read back out of the SVG, because a face is a plain
+    ``<line>`` at the pipe's own pen and nothing in the document tells one from
+    a length of pipe.
+
+    The port is recovered from the geometry rather than from the placement's own
+    bookkeeping: a mark stands ``FLANGE_STANDOFF`` from one end of the polyline
+    and the length of the run from the other, so the nearer end names it, and
+    that stays true however the placement is reorganised.
+    """
+    from pandid.render.svg import (
+        FLANGE_GAP,
+        FLANGE_TICK,
+        flange_marks,
+        resolve_connections,
+        sheet_connections,
+        stream_polyline,
+    )
+
+    joints = sheet_connections(kwargs.get("diagram"), kwargs.get("connections"))
+    out = []
+    for s in fs.streams:
+        pts = stream_polyline(s)
+        for m in flange_marks(s, pts, resolve_connections(s, joints)):
+            at_source = math.dist((m.x, m.y), pts[0]) <= math.dist((m.x, m.y), pts[-1])
+            port = s.source if at_source else s.dest
+            rad = math.radians(m.angle)
+            ax, ay = math.cos(rad) * FLANGE_GAP / 2, math.sin(rad) * FLANGE_GAP / 2
+            bx, by = -math.sin(rad) * FLANGE_TICK / 2, math.cos(rad) * FLANGE_TICK / 2
+            for sign in (-1.0, 1.0):
+                cx, cy = m.x + ax * sign, m.y + ay * sign
+                out.append(
+                    Face(
+                        (
+                            min(cx - bx, cx + bx),
+                            min(cy - by, cy + by),
+                            max(cx - bx, cx + bx),
+                            max(cy - by, cy + by),
+                        ),
+                        (m.x, m.y),
+                        port,
+                    )
+                )
+    return out
+
+
+class Drawn(NamedTuple):
+    """One rendered corpus sheet, and the ink these checks weigh against it."""
+
+    fs: object
+    halos: list
+    bars: list
+
+
 @pytest.fixture(scope="module")
 def drawn():
-    """Every sheet in the corpus, rendered once, as (flowsheet, halos)."""
+    """Every sheet in the corpus, rendered once."""
     out = {}
     for name, build in CORPUS.items():
         fs, kwargs = build()
         svg = fs.to_svg(**{k: v for k, v in kwargs.items() if k in _RENDER_OPTS})
-        out[name] = (fs, _halos(svg))
+        out[name] = Drawn(fs, _halos(svg), _flange_bars(fs, kwargs))
     return out
 
 
@@ -115,7 +183,7 @@ def _inked(box):
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
 def test_no_halo_lands_on_a_graphical_symbol(drawn, name):
     """Measured against the ink, not against the box it is centred on (#243)."""
-    fs, halos = drawn[name]
+    fs, halos, _bars = drawn[name]
     symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     # A tag written *inside* its own symbol carries no halo at all (see
     # _unit_label_box), so every plate on the sheet belongs outside one.
@@ -139,7 +207,7 @@ def test_no_halo_is_written_hard_against_an_outline(drawn, name):
     this asserts the sheet got it. Held apart from the check above so a failure
     says which of the two happened.
     """
-    fs, halos = drawn[name]
+    fs, halos, _bars = drawn[name]
     symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     crowded = [
         f"{u.tag or u.kind} at ({box[0]:.0f}, {box[1]:.0f})"
@@ -162,7 +230,7 @@ def test_no_halo_lands_on_an_impulse_line(drawn, name):
     written in its own run is a convention, and this file is about what a halo
     may *not* take away.
     """
-    fs, halos = drawn[name]
+    fs, halos, _bars = drawn[name]
     taps = [line.box for line in _ink(fs) if line.kind == "tap"]
     cut = [
         f"({box[0]:.0f}, {box[1]:.0f})-({box[2]:.0f}, {box[3]:.0f})"
@@ -179,7 +247,7 @@ def test_the_corpus_has_impulse_lines_to_check(drawn):
     draw them in quantity are still in it."""
     counted = {
         name: sum(1 for line in _ink(fs) if line.kind == "tap")
-        for name, (fs, _halos) in drawn.items()
+        for name, (fs, _halos, _bars) in drawn.items()
     }
     assert counted["11_ethanol_pid"] > 15, counted
     assert counted["14_tank_farm"] > 10, counted
@@ -189,6 +257,109 @@ def test_the_corpus_has_halos_to_check(drawn):
     """The check above is vacuous on a sheet that draws no halo, and every one of
     them is read out of the rendered SVG by a regular expression that a change to
     the emitted markup could quietly stop matching."""
-    counted = {name: len(halos) for name, (_fs, halos) in drawn.items()}
+    counted = {name: len(halos) for name, (_fs, halos, _bars) in drawn.items()}
     assert all(counted.values()), counted
     assert counted["11_ethanol_pid"] > 50, counted
+
+
+# --- and the same question from the other side: the flange marks --------------
+
+
+@pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
+def test_no_flange_mark_lands_on_a_symbol_it_is_not_the_joint_for(drawn, name):
+    """A flange face is drawn hard against the thing it stands off, and on a
+    crowded run the thing it lands on may not be that thing.
+
+    The clearance is ``FLANGE_STANDOFF - FLANGE_GAP / 2``, small on purpose --
+    the mark says the joint is *outside* the equipment, so a face that drifted in
+    would read as part of the shell. Marking both sides of every valve and
+    in-line fitting has moved these off the open approaches to a vessel and into
+    the middle of a run: on ``11_ethanol_pid``'s CV-303 station a reducer, a
+    control valve and an isolation valve stand within thirty units of each
+    other, each contributing two faces, and nothing before this had measured one
+    against the artwork beside it.
+
+    **The unit the mark is the joint for is excluded, and that is #243's
+    box-versus-ink distinction rather than a hole in the check.** Every other
+    unit is weighed against :func:`unit_box` because a bounding box is a safe
+    over-estimate of where a symbol is -- a label kept out of the box is kept off
+    the artwork whatever the artwork does inside it. For the mark's *own* unit
+    the over-estimate is not safe to assert on, because the mark is deliberately
+    drawn at that unit's nozzle: ``RB-301``'s bottom nozzles sit 4,5 units up
+    inside a box whose lower edge is set by the tube sheet, so both of its drain
+    flanges are inside the box and clear of every line in it, correctly. What can
+    be said about that unit is said below.
+    """
+    fs, _halos_, bars = drawn[name]
+    symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    over = [
+        f"{u.tag or u.kind} at ({box[0]:.0f}, {box[1]:.0f})"
+        for face in bars
+        for u, box in symbols
+        if u is not face.port.owner and _overlaps(face.box, _inked(box))
+    ]
+    assert not over, f"{name}: flange face over the ink of " + "; ".join(sorted(set(over)))
+
+
+@pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
+def test_a_flange_mark_is_drawn_on_the_outside_of_its_own_nozzle(drawn, name):
+    """The half of the check above that the mark's own unit can still be held to,
+    and it is a statement about *direction* rather than about clearance.
+
+    ``FLANGE_STANDOFF`` steps the pair along the run from the nozzle it marks.
+    Which way along is the whole of what makes it a joint: stepped outward it
+    says the branch is bolted to the shell, stepped inward it is a pair of ticks
+    drawn across the vessel. So the mark has to end up further from the middle
+    of its unit than its own nozzle is, and that holds whatever the symbol does
+    between the two -- which is what lets it be asserted where a clearance
+    against :func:`unit_box` could not be.
+    """
+    from pandid.portgeom import port_point
+
+    fs, _halos_, bars = drawn[name]
+    inward = []
+    for face in bars:
+        u = face.port.owner
+        if u.frame is None:
+            continue
+        x0, y0, x1, y1 = unit_box(u, u.frame)
+        mid = ((x0 + x1) / 2, (y0 + y1) / 2)
+        nozzle = port_point(u, u.frame, face.port.name)
+        if math.dist(face.at, mid) <= math.dist(nozzle, mid):
+            inward.append(f"{u.tag or u.kind}.{face.port.name}")
+    assert not inward, f"{name}: flange stepped inward at " + "; ".join(sorted(set(inward)))
+
+
+@pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
+def test_no_flange_mark_lands_on_a_tag_or_a_line_number(drawn, name):
+    """The complaint #256 answered from the label pass's side, asserted from the
+    mark's.
+
+    A halo is opaque and drawn after the artwork, so a plate that lands on a
+    flange face deletes it and the sheet has stopped saying the joint is bolted.
+    :func:`~pandid.render.svg.stream_numbers` seeds every mark as an obstacle for
+    exactly that reason; this is the check that it is still doing so, over every
+    sheet rather than over the one that prompted it.
+    """
+    fs, halos, bars = drawn[name]
+    hit = [
+        f"({face.box[0]:.0f}, {face.box[1]:.0f})"
+        for face in bars
+        for halo in halos
+        if _overlaps(face.box, halo)
+    ]
+    assert not hit, f"{name}: a halo deletes the flange face at " + "; ".join(sorted(set(hit)))
+
+
+def test_the_corpus_has_flange_marks_to_check(drawn):
+    """Both checks above are vacuous on a sheet that marks no joints, and only
+    one sheet in the corpus marks any. If ``11_ethanol_pid`` stops asking for
+    them -- or if the corpus stops being *rendered* with the option, which is how
+    they were invisible here in the first place -- the two say nothing."""
+    counted = {name: len(bars) for name, (_fs, _halos_, bars) in drawn.items()}
+    # Two faces per mark, and every equipment nozzle plus both sides of every
+    # valve and in-line fitting on the densest sheet in the repo.
+    assert counted["11_ethanol_pid"] > 80, counted
+    assert all(n % 2 == 0 for n in counted.values()), (
+        "a flange is a pair of faces and they are drawn together"
+    )

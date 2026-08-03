@@ -63,11 +63,17 @@ DEFAULT_LOOP_NUMBER_START = 101
 #: components, not equipment. Two rules turn on the distinction and neither may
 #: be allowed to drift from the other. :meth:`Flowsheet.renumber_streams` reads
 #: it to carry one line number through a valve, because the pipe either side of
-#: a valve is the same pipe. :func:`~pandid.render.svg.flange_marks` reads it to
-#: decide a joint is *not* an equipment nozzle, because a flange mark says how a
-#: branch leaves a vessel and a valve part-way along a run is not a branch. Both
-#: are the same underlying fact -- that these interrupt a line without ending
-#: it -- so they ask one set rather than each keeping its own copy.
+#: a valve is the same pipe. :func:`~pandid.render.svg.flanged_joint` reads it
+#: to decide an end is not an equipment nozzle, because a flange mark at a
+#: nozzle says how a branch leaves a vessel and a valve part-way along a run is
+#: not a branch. Both are the same underlying fact -- that these interrupt a
+#: line without ending it -- so they ask one set rather than each keeping its
+#: own copy.
+#:
+#: What is *not* the same fact, and has its own set for that reason, is which of
+#: these get bolted into the line: a valve and an in-line fitting are bodies you
+#: break the run to pull, and a reducer and a tee are welded fittings. See
+#: :data:`~pandid.render.svg._INLINE_BODIES`, which is a strict subset of this.
 INLINE_KINDS = frozenset({"valve", "reducer", "fitting", "tee"})
 
 
@@ -754,9 +760,12 @@ class Flowsheet:
         sheet's ``connections`` for this run alone: ``"flanged"`` marks both,
         ``"none"`` marks neither, and a ``(source, dest)`` pair -- in the order
         the two were just named -- states them apart. Left unset the line
-        follows the sheet. Only a joint at an equipment nozzle is ever marked,
-        and only on a ``diagram="p&id"`` sheet; see
-        :meth:`render`.
+        follows the sheet. It takes any member of
+        :data:`~pandid.render.svg.CONNECTIONS`, so a single run can be marked at
+        its nozzles alone on a sheet that flanges its valves, and the other way
+        round. What is never marked either way is a boundary flag, an instrument
+        or a signal line -- there is no joint to describe -- and nothing is
+        marked at all except on a ``diagram="p&id"`` sheet; see :meth:`render`.
 
         Raises :class:`ValueError` if any validation rule is violated.
         """
@@ -1070,13 +1079,22 @@ class Flowsheet:
         ``jump_direction`` selects which of two crossing lines gets the
         semicircle hop: ``"vertical"`` or ``"horizontal"``.
 
-        ``connections`` says how the sheet's joints are made up: ``"flanged"``
-        marks the double tick where a line meets an equipment nozzle, ``"none"``
-        (the default) marks nothing. Only a P&ID marks joints, per
-        ISO 15519-2 Table 5, so this draws nothing on a PFD; and only an
-        equipment nozzle is a joint, so inline valves and fittings, boundary
-        flags, instruments and signal lines are never marked. One line may say
-        otherwise with ``connect(..., ends=...)``.
+        ``connections`` says how the sheet's joints are made up, as the double
+        tick across the run:
+
+        * ``"none"`` (the default) marks nothing;
+        * ``"flanged"`` marks every equipment nozzle **and both sides of every
+          valve and in-line fitting**, which is how a body is got out of a line;
+        * ``"flanged-at-nozzles"`` marks the nozzles only and leaves the bodies
+          in the run unmarked, which is what ``P&ID_301.pdf`` draws.
+
+        Reducers and tees are welded fittings and take no mark under either.
+        Boundary flags, instruments and signal lines are never marked: there is
+        no joint to describe. Only a P&ID marks joints at all, per ISO 15519-2
+        Table 5, so this draws nothing on a PFD. Which bodies are flanged is a
+        drafting choice and no standard on disk settles it; see
+        :func:`~pandid.render.svg.flanged_joint`. One line may say otherwise
+        with ``connect(..., ends=...)``.
 
         ``debug`` draws the coordinate overlay under the diagram, which is
         scaffolding for whoever is writing the placement rather than part of the
@@ -1221,9 +1239,11 @@ class Flowsheet:
                 ``"pid"``. A P&ID draws its process lines without arrowheads.
             page_size: Draw on a sheet of exactly this standard size, e.g.
                 ``"A3"``; omit to size the sheet to the drawing.
-            connections: ``"none"`` (the default) or ``"flanged"``, which marks
-                the double tick where a line meets an equipment nozzle. A P&ID
-                only; one line may say otherwise with ``connect(ends=...)``.
+            connections: ``"none"`` (the default), ``"flanged"`` -- the double
+                tick at every equipment nozzle and both sides of every valve and
+                in-line fitting -- or ``"flanged-at-nozzles"`` for the nozzles
+                alone. A P&ID only; one line may say otherwise with
+                ``connect(ends=...)``.
             jump_direction: Which crossing lines hop, ``"vertical"`` or ``"horizontal"``.
             debug: Draw the coordinate overlay under the diagram: the grid, every
                 ``pin()`` anchor and every port. ``True`` for the default
