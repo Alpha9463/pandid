@@ -839,8 +839,15 @@ class Valve(_NormallyPositioned):
         units.Valve("HV-101", variant="globe")                        # plain globe valve
         units.Valve("CV-303", variant="control")                      # control valve
         units.Valve("CV-303", variant="gate", actuator="diaphragm")   # the same drawing
+        units.Valve("CV-303", variant="control", actuator="diaphragm")  # and the same again
         units.Valve("XV-201", variant="butterfly", actuator="diaphragm")
         units.Valve("SV-401", variant="solenoid")                     # = actuator="solenoid"
+
+    The fourth of those spells out what the second is shorthand for, and it is
+    **allowed**: a shorthand's own actuator, named alongside it, is one true
+    thing said twice rather than two contradictory ones. What is refused is a
+    *disagreement* -- ``variant="control", actuator="motor"`` is two operators
+    and one drawing, and there is no telling which the author meant.
 
     **The stencil set draws pairings, not parts.** Every actuated valve draw.io
     ships is one fused shape -- "Pneumatic Operated" is a bowtie with a dome on
@@ -953,15 +960,32 @@ class Valve(_NormallyPositioned):
                 f"what strokes the valve; what the valve *is* -- the body -- is "
                 f"variant."
             )
-        # ``control`` and the rest already name a body with an operator on it,
-        # so a second answer to the same question is a contradiction rather than
-        # a refinement, and the two spellings are not merged silently: an author
-        # who wrote both meant one of them and this package cannot tell which.
-        if variant in set(ACTUATED.values()):
+        # ``control`` and the rest already name a body with an operator on it, so
+        # the question ``actuator`` asks has an answer before it is asked. Read
+        # that answer back out of the same table, and the two cases part:
+        #
+        # - **agreeing.** ``variant='control', actuator='diaphragm'`` is one true
+        #   thing said twice, by an engineer being explicit about the valve they
+        #   have. There is nothing to choose between and nothing to guess, so it
+        #   resolves to the variant it already named;
+        # - **disagreeing.** ``variant='control', actuator='motor'`` is two
+        #   operators and one drawing. That is a real contradiction, and the two
+        #   spellings are not merged silently: the author meant one of them and
+        #   this package cannot tell which.
+        #
+        # Derived rather than tabulated, so :data:`~pandid.render.symbols.ACTUATED`
+        # stays the one place a pairing is written down: a second table naming
+        # what each variant is fitted with is that fact in two places, which is
+        # what :attr:`Block._faces` argues will one day disagree with itself.
+        fitted = {a for (_, a), drawn in ACTUATED.items() if drawn == variant}
+        if fitted:
+            if actuator in fitted:
+                return variant
             raise ValueError(
-                f"{name}: variant {variant!r} already draws a valve with an "
-                f"operator on it, so it cannot also take actuator={actuator!r}. "
-                f"Name the body and the actuator (variant='gate', "
+                f"{name}: variant {variant!r} already draws a valve with a "
+                f"{', '.join(repr(a) for a in sorted(fitted))} operator on it, so it "
+                f"cannot also take actuator={actuator!r} -- one drawing, two "
+                f"operators. Name the body and the actuator (variant='gate', "
                 f"actuator={actuator!r}), or the pairing on its own "
                 f"(variant={variant!r})."
             )

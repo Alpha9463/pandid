@@ -323,6 +323,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   check asserts that every example has a scenario at all, so a new sheet cannot
   arrive unguarded.
 
+- **An example writes the draw.io export.** `fs.render("sheet.drawio")` was
+  documented in `README.md`, in `docs/api.md` and in `scripts/drawio_samples.py`,
+  and appeared in none of the fourteen examples — so the one place a reader goes
+  to see a call being made was the one place the export was absent.
+  `examples/11_ethanol_pid.py` now writes `ethanol_pid.drawio` beside its SVG,
+  one `fs.render()` with the same arguments as the line above it.
+
+  One example and not fourteen. The export is a single call whose second
+  appearance teaches nothing the first did not, and the sheet worth opening in
+  an editor is the one with everything on it: 11 is the A3 page, the zone
+  border, the title strip with its revision history, the legend, the equipment
+  list, the notes box, twenty instrument taps, the pneumatic hatching and
+  sixteen line numbers. It is the same argument `scripts/drawio_samples.py`
+  already makes for keeping its own sample set to four.
+
+  What it writes is gitignored, like every other file an example emits, and it
+  is byte-for-byte `drawio-samples/11_ethanol_pid.drawio` — the committed sample
+  is made from the same flowsheet with the same options.
+
+  `scripts/gallery.py` passes a `.drawio` write over rather than counting it: the
+  gallery is one SVG per example and refuses a file that draws two sheets, and an
+  example that also exports draws one sheet twice, in two formats.
+
 ### Changed
 
 - **A tank's fill is a menu, and its default moved to the shell (#226).** Every
@@ -431,6 +454,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   was refused: a composed symbol has no `drawio_shape`, and the draw.io export
   would hand back a traced picture where every other valve is a native editable
   stencil.
+
+- **Naming a pairing's own actuator alongside it is allowed.** `#136` left
+  `Valve(variant="control", actuator="diaphragm")` raising, on the grounds that
+  `control` already answers what strokes the valve. But `control` *is* the
+  general body under a diaphragm, so an engineer who writes both has said one
+  true thing twice, not two contradictory things — and being explicit and
+  correct was an error.
+
+  It now resolves to the variant it already named. Every pairing accepts the
+  operator its own drawing carries, read back out of
+  `pandid.render.symbols.ACTUATED` rather than tabulated a second time:
+
+  | `variant` | accepts `actuator=` |
+  | --- | --- |
+  | `control` | `diaphragm` |
+  | `butterfly_pneumatic` | `diaphragm` |
+  | `motor` | `motor` |
+  | `solenoid` | `solenoid` |
+  | `hydraulic` | `hydraulic` |
+  | `manual` | `handwheel` |
+
+  A *disagreement* still raises, because it is a real one — one drawing cannot
+  carry two operators, and the author meant one of them:
+
+  ```python
+  units.Valve("CV-303", variant="control", actuator="diaphragm")   # the same valve, twice
+  units.Valve("CV-303", variant="control", actuator="motor")
+  # ValueError: CV-303: variant 'control' already draws a valve with a 'diaphragm'
+  # operator on it, so it cannot also take actuator='motor' -- one drawing, two
+  # operators.
+  ```
+
+  Nothing else moves. A spec carries `variant` and never carried `actuator`, so
+  the round trip is unchanged; and `VARIANT_ALIASES` is applied *after* the pair
+  is resolved, so `devices.ControlValve`'s `default` still reaches the resolver
+  as the bare body and `ControlValve(actuator="diaphragm")` goes on working.
 
 - **One drawing, one nozzle vocabulary (#138).** `Separator(variant="cyclone")`,
   `("gravity")` and `("electrostatic")` draw `overflow` and `underflow`, which

@@ -19,7 +19,9 @@ flowsheet the script built rather than the file it writes, and draws it under
 the example's own stem — so there is no copy and no rename to get wrong. Run an
 example yourself and it still writes its own name into `examples/` (gitignored):
 `03_distillation_train.py` writes `distillation_train.svg`, and
-`01_ammonia_loop.py` writes `ammonia_auto.svg`.
+`01_ammonia_loop.py` writes `ammonia_auto.svg`. `11` writes an
+`ethanol_pid.drawio` as well, which is the draw.io export and not a second
+sheet; the generator passes that write over.
 
 The PNGs are rasterized from the *committed* SVGs, through
 `pandid.render.export` (the `[pdf]` extra), so each sheet and its raster always
@@ -247,6 +249,13 @@ at all four places the trip acts. `via()` pins the routes of the lines that carr
 balloons, since an attached instrument hangs off the *routed* path and would move
 with a line the router was free to re-bend. Nothing on the sheet is pinned by a
 measured nozzle offset: `pin(port=…)` asks each symbol where its own nozzle sits.
+
+It is also the one example that shows the **draw.io export**: a second
+`fs.render()` on the same flowsheet with the same arguments and a `.drawio` name
+writes the editable model, which is
+[`drawio-samples/11_ethanol_pid.drawio`](../../drawio-samples/11_ethanol_pid.drawio)
+committed. Every flowsheet exports; this is the sheet the line is written on
+because it is the densest, so it is the one worth opening in the editor.
 
 ## 12 · Block flow diagram
 
