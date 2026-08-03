@@ -44,8 +44,9 @@ The format::
       - {variable: F}                # no number: takes the next one
 
     instruments:
-      - {type: LIC, number: 101, variant: panel,
-         on: V-101, at: S, offset: 115, port_faces: {sig_out: W}}
+      - {type: LIC, number: 101, display: central,
+         near: LT-101, at: S, offset: 115, port_faces: {sig_out: W}}
+      - {balloon_of: FE-101, at: N, offset: 38}   # the element's own tag
 
     streams:
       - {from: [Raw Feed, outlet], to: [ST-101, inlet],
@@ -278,11 +279,13 @@ _RETIRED_KEYS = {
 _PIN_KEYS = {"x", "y", "col", "row", "orientation", "mirrored"}
 _UNIT_KEYS = {
     "kind", "name", "variant", "description", "reference", "width", "height",
-    "label_pos", "new_line_number", "pin", "port_faces", "balloon",
+    "label_pos", "new_line_number", "pin", "port_faces",
 }
-#: What a unit's ``balloon:`` mapping may set. The tag is the unit's own
-#: -- that is the whole of what the balloon is for -- so it is not in it.
-_BALLOON_KEYS = {"at", "offset", "angle", "variant", "display"}
+#: What a primary element's balloon entry may set, beside the
+#: ``balloon_of`` naming the element whose tag it carries. Not ``type``
+#: or ``number``: the tag is the element's, which is the whole of what
+#: the balloon is for.
+_BALLOON_KEYS = {"balloon_of", "at", "offset", "angle", "variant", "display"}
 _INSTRUMENT_KEYS = {
     "type", "number", "variant", "display", "description", "reference", "width",
     "height", "label_pos", "sensing", "acting_on", "near", "on", "at", "offset",
@@ -398,7 +401,13 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
     pending = []
     for i, entry in enumerate(_sequence(data.get("instruments", []), "instruments")):
         where_i = f"instruments[{i}]"
-        pending.append((_read_instrument(fs, entry, where_i), _mapping(entry, where_i), where_i))
+        mapping = _mapping(entry, where_i)
+        # A primary element's balloon is anchored to a unit that already
+        # exists, so it needs none of the deferral below.
+        if "balloon_of" in mapping:
+            _read_balloon(fs, mapping, where_i)
+            continue
+        pending.append((_read_instrument(fs, entry, where_i), mapping, where_i))
 
     for i, entry in enumerate(_sequence(data.get("streams", []), "streams")):
         _read_stream(fs, entry, f"streams[{i}]")
@@ -600,31 +609,36 @@ def _read_common(fs: Flowsheet, unit: Unit, data: Mapping[str, Any], where: str)
         _read_pin(unit, data["pin"], f"{where}.pin")
     if "port_faces" in data:
         _read_port_faces(unit, data["port_faces"], f"{where}.port_faces")
-    if "balloon" in data:
-        _read_balloon(fs, unit, data["balloon"], f"{where}.balloon")
 
 
-def _read_balloon(fs: Flowsheet, unit: Unit, entry: Any, where: str) -> None:
-    """Draw this unit's tag in a balloon; see ``Flowsheet.add_balloon``.
+def _read_balloon(fs: Flowsheet, entry: Mapping[str, Any], where: str) -> Instrument:
+    """A primary element's balloon; see ``Flowsheet.add_balloon``.
 
-    On the *element's* entry and not as an instrument of its own, because
-    the balloon has no tag of its own to be an entry under: it carries
-    the element's.
+    An instrument entry rather than a key on the element's, even though
+    it carries the element's tag, because a spec is read back in the
+    order it was written and this is the order the balloon was made in.
     """
-    data = _mapping(entry, where)
-    _check_keys(data, _BALLOON_KEYS, where)
+    _check_keys(entry, _BALLOON_KEYS, where)
+    name = _text(entry["balloon_of"], f"{where}.balloon_of")
+    element = next((u for u in fs.units if u.name == name), None)
+    if element is None:
+        raise SpecError(
+            f"{where}.balloon_of names {name!r}, which is not a unit on this sheet. "
+            f"A balloon carries the tag of the element it is drawn for, so that "
+            f"element has to be in the 'units:' section"
+        )
     kwargs: dict[str, Any] = {}
-    if "at" in data:
-        at = data["at"]
+    if "at" in entry:
+        at = entry["at"]
         kwargs["at"] = at if isinstance(at, str) else _number(at, f"{where}.at")
     for key in ("offset", "angle"):
-        if key in data:
-            kwargs[key] = _number(data[key], f"{where}.{key}")
+        if key in entry:
+            kwargs[key] = _number(entry[key], f"{where}.{key}")
     for key in ("variant", "display"):
-        if key in data:
-            kwargs[key] = _text(data[key], f"{where}.{key}")
+        if key in entry:
+            kwargs[key] = _text(entry[key], f"{where}.{key}")
     try:
-        fs.add_balloon(unit, **kwargs)
+        return fs.add_balloon(element, **kwargs)
     except (TypeError, ValueError) as e:
         raise _fail_from(e, where) from None
 
@@ -1053,11 +1067,7 @@ def to_dict(fs: Flowsheet) -> dict:
         ]
 
     equipment = [u for u in fs.units if not isinstance(u, Instrument)]
-    # A primary element's balloon is written on the element's own entry,
-    # since it carries the element's tag and has none of its own to be
-    # an entry under; see :func:`_read_balloon`.
-    instruments = [u for u in fs.units
-                   if isinstance(u, Instrument) and u._marks is None]
+    instruments = [u for u in fs.units if isinstance(u, Instrument)]
     if equipment:
         spec["units"] = [_write_unit(u) for u in equipment]
     # A sheet that declared no loop writes no section, so a spec written
@@ -1127,17 +1137,6 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
     # is written instead.
     entry: dict[str, Any] = {"kind": kind, "name": unit.tag or unit.name}
     _write_common(unit, entry)
-    if unit.balloon is not None:
-        balloon: dict[str, Any] = {"at": unit.balloon.at}
-        if unit.balloon.offset != 46.0:
-            balloon["offset"] = unit.balloon.offset
-        if unit.balloon.angle != 90.0:
-            balloon["angle"] = unit.balloon.angle
-        if unit.balloon.symbol_type != "default":
-            balloon["variant"] = unit.balloon.symbol_type
-        if unit.balloon.display != "field":
-            balloon["display"] = unit.balloon.display
-        entry["balloon"] = balloon
     if isinstance(unit, unit_types.Block):
         # The faces, which carry the count with them. Written as the
         # bare count where every connection is on its default face,
@@ -1212,7 +1211,13 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
 
 
 def _write_instrument(inst: Instrument) -> dict[str, Any]:
-    entry: dict[str, Any] = {"type": inst.type, "number": inst.number}
+    # A primary element's balloon carries the element's tag rather than
+    # one of its own, so it is written by naming the element; see
+    # :func:`_read_balloon`.
+    entry: dict[str, Any] = (
+        {"balloon_of": inst._marks.name} if inst._marks is not None
+        else {"type": inst.type, "number": inst.number}
+    )
     _write_common(inst, entry)
     # The two axes apart again. ``_write_common`` wrote the registry's
     # spelling, which folds them together, and reading that back would
@@ -1227,6 +1232,13 @@ def _write_instrument(inst: Instrument) -> dict[str, Any]:
                    for codes in [inst.quadrants.get(letter, ())] if codes}
         if by_name:
             entry["quadrants"] = by_name
+    if inst._marks is not None:
+        entry["at"] = inst.at
+        if inst.offset != 46.0:
+            entry["offset"] = inst.offset
+        if inst.angle != 90.0:
+            entry["angle"] = inst.angle
+        return entry
     if inst.host is not None:
         # Name a stream by the port it leaves, not by its number:
         # auto-numbering owns that name and re-derives it as the sheet
