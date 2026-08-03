@@ -8,8 +8,7 @@ flowsheet, in pure Python with no runtime dependencies.
 <sub>[`examples/11_ethanol_pid.py`](https://github.com/Alpha9463/pandid/blob/main/examples/11_ethanol_pid.py): instrumentation, five control loops, hand-isolated valve stations, line numbers, a zone-ruled A3 frame, a title block and a general-notes box. See the [gallery](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md) for the rest.</sub>
 
 You describe what connects to what. The engine lays out the equipment, routes
-every stream, and draws industry-standard symbols. The name is how "P&ID" is
-said out loud, and it is both the distribution name and the import name.
+every stream, and draws industry-standard symbols.
 
 ## Install
 
@@ -24,9 +23,8 @@ pip install 'pandid[yaml]'   # optional YAML spec reader (Flowsheet.from_yaml)
 ```
 
 The `pdf` extra is wheels the whole way down (svglib, ReportLab, pypdfium2,
-Pillow), so it needs no system libraries, no package manager and no compiler on
-Windows, Linux or macOS. `.svg` needs none of it: the engine itself has zero
-runtime dependencies.
+Pillow), so it needs no system libraries and no compiler on any platform.
+`.svg` needs none of it: the engine has zero runtime dependencies.
 
 From a checkout, `pip install -e '.[dev]'` adds pytest, ruff and mypy.
 
@@ -179,8 +177,8 @@ control valve sits in, twelve units and twelve streams, in one call.
 ## Declaring a flowsheet as data
 
 An equipment list and a stream table are data, and usually already exist in a
-spreadsheet, a YAML file or a simulator export. Hand the engine a plain mapping
-instead of retyping it as Python.
+spreadsheet or a simulator export. Hand the engine a plain mapping instead of
+retyping it as Python.
 
 ```python
 from pandid import Flowsheet
@@ -203,7 +201,7 @@ documents every section and key.
 ## Command line
 
 Installing the package installs a `pandid` command, so a spec file becomes a
-drawing without opening Python. `python -m pandid` runs the same thing from a
+drawing without opening Python. `python -m pandid` is the same thing from a
 checkout.
 
 ```bash
@@ -221,7 +219,7 @@ spec. See the
 ## Examples
 
 Runnable scripts in [`examples/`](https://github.com/Alpha9463/pandid/tree/main/examples),
-each usable from the repo root or from `examples/` itself. Every one is
+each usable from the repo root or from `examples/` itself, and every one
 rendered in the
 [gallery](https://github.com/Alpha9463/pandid/blob/main/docs/gallery/README.md).
 

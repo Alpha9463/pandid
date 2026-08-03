@@ -1,16 +1,17 @@
-"""Let the examples run straight from a source checkout, from either directory.
+"""Let the examples run from a source checkout, from either directory.
 
 ``python examples/03_distillation_train.py`` and
 ``cd examples && python 03_distillation_train.py`` both work:
 
-- Python puts the *script's* directory on ``sys.path``, not the repo root, so an
-  un-installed checkout cannot ``import pandid``. This adds the repo root, but only
-  when ``pandid`` is not already importable; an installed copy always wins.
-- ``out()`` resolves an output filename next to the examples, so a rendered
-  drawing lands in the same place no matter where you ran the script from.
+- Python puts the *script's* directory on ``sys.path``, not the repo
+  root, so an un-installed checkout cannot ``import pandid``. This adds
+  the repo root, but only when ``pandid`` is not already importable; an
+  installed copy always wins.
+- ``out()`` resolves an output filename next to the examples, so a
+  rendered drawing lands in the same place wherever you ran it from.
 
 Not needed once the package is installed (``pip install pandid`` or
-``pip install -e .``); it just keeps the examples runnable without that step.
+``pip install -e .``).
 """
 
 import sys

@@ -1,10 +1,11 @@
 """
 Example 7: Feed conditioning and metering skid
 
-Exercises the inline fittings and actuated valves: feed is strained, pumped,
-metered through a rotameter, throttled by a motor-operated valve, held in a
-surge vessel protected by a relief valve, and checked through a sight glass on
-the way out. Everything sits on one spine, so the runs are straight.
+Exercises the inline fittings and actuated valves: feed is strained,
+pumped, metered through a rotameter, throttled by a motor-operated
+valve, held in a surge vessel protected by a relief valve, and checked
+through a sight glass on the way out. Everything sits on one spine, so
+the runs are straight.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -16,7 +17,7 @@ from pandid.portgeom import port_offset
 def main():
     fs = Flowsheet("Feed Metering Skid")
 
-    # --- Equipment -------------------------------------------------------
+    # --- Equipment ----------------------------------------------------
     feed = fs.add(Feed("Raw Feed", reference="PFD-100"))
     strainer = fs.add(Fitting("ST-101", variant="strainer",
                               description="Suction Strainer"))
@@ -34,13 +35,11 @@ def main():
                            description="Sight Glass"))
     prod = fs.add(Product("To Unit 200", reference="PFD-200"))
 
-    # --- Placement -------------------------------------------------------
-    # Pinned by nozzle, not by corner: pin(port=...) asks each symbol where its
-    # own nozzle sits, so nothing here writes down half a valve body. A
-    # boundary flag is pinned at the tip of its arrow.
-    #
-    # Two elevations, because the pump's discharge nozzle sits above its
-    # suction and lifts the spine with it.
+    # --- Placement ----------------------------------------------------
+    # Pinned by nozzle, not by corner: pin(port=...) asks each symbol
+    # where its own nozzle sits. A boundary flag is pinned at its arrow
+    # tip. Two elevations, because the pump's discharge nozzle sits
+    # above its suction.
     suction_y = 300
     discharge_y = 280
 
@@ -48,20 +47,21 @@ def main():
     strainer.pin(port="inlet", x=190, y=suction_y)
     pump.pin(port="suction", x=280, y=suction_y)
     meter.pin(port="inlet", x=430, y=discharge_y)
-    # Flipped so the motor operator faces down, on the controller's side of the
-    # line. A flip moves the ports within the box and the offset is read after
-    # it, so the valve still lands on the run.
+    # Flipped so the motor operator faces down, on the controller's
+    # side. A flip moves the ports within the box and the offset is read
+    # after it, so the valve still lands on the run.
     fv.pin(port="inlet", x=540, y=discharge_y, mirrored="y")
     surge.pin(port="inlet", x=680, y=discharge_y)
     glass.pin(port="inlet", x=850, y=discharge_y)
     prod.pin(port="inlet", x=980, y=discharge_y)
 
-    # Two pins: how high the PSV stands is a free choice and stays a corner,
-    # while the axis its riser has to land on is read off the vessel's nozzle.
+    # Two pins: how high the PSV stands is a free choice and stays a
+    # corner, while the axis its riser lands on is read off the vessel's
+    # nozzle.
     psv.pin(y=110).pin(port="inlet", x=680 + port_offset(surge, "vent")[0])
     flare.pin(port="inlet", x=900, y=110 + port_offset(psv, "outlet")[1])
 
-    # --- Connections -----------------------------------------------------
+    # --- Connections --------------------------------------------------
     fs.connect(feed.outlet, strainer.inlet)
     fs.connect(strainer.outlet, pump.suction)
     fs.connect(pump.discharge, meter.inlet)
@@ -73,9 +73,9 @@ def main():
     fs.connect(surge.vent, psv.inlet)
     fs.connect(psv.outlet, flare.inlet)
 
-    # Hung below the vessel rather than beside it: the east side is the outlet
-    # run, and an instrument placed into equipment is a hard validation error.
-    # A balloon has no fixed sides, so the engine picks the face itself.
+    # Hung below the vessel rather than beside it: the east side is the
+    # outlet run, and an instrument placed into equipment fails
+    # validation.
     lic = fs.add_instrument("LIC", 101, on=surge, at="S", offset=115,
                             variant="panel")
     fs.connect(lic.sig_out, fv.actuator, kind="electric")

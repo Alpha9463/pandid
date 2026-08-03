@@ -1,14 +1,15 @@
 """
 Example 6: Distillation column with reflux and reboiler loops
 
-The column stands tall on the left, its overhead condenser high and to the
-right with the reflux drum beneath it, and the kettle reboiler off the bottom
-of the tower. Both loops close on the column's ``reflux_in`` and ``boilup_in``
-nozzles, and the bottoms leaves from the reboiler's own weir draw.
+The column stands tall on the left, its overhead condenser high and to
+the right with the reflux drum beneath it, and the kettle reboiler off
+the bottom of the tower. Both loops close on the column's ``reflux_in``
+and ``boilup_in`` nozzles, and the bottoms leaves from the reboiler's
+own weir draw.
 
-That arrangement is a drawing convention rather than something a topological
-layout can infer, so the equipment is pinned. Routing, stream numbering and
-labels are automatic.
+That arrangement is a drawing convention rather than something a
+topological layout can infer, so the equipment is pinned. Routing,
+stream numbering and labels are automatic.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -20,16 +21,17 @@ from pandid.portgeom import port_offset
 def main():
     fs = Flowsheet("Column Overhead System")
 
-    # --- Equipment -------------------------------------------------------
+    # --- Equipment ----------------------------------------------------
     feed = fs.add(Feed("Feed", reference="PFD-100"))
     col = fs.add(Column("T-701", description="Main Fractionator"))
 
-    # width/height stay close to each symbol's native proportions: scaling one
-    # far past its drawn aspect is what makes a sheet look wrong.
+    # width/height stay close to each symbol's native proportions:
+    # scaling one far past its drawn aspect is what makes a sheet look
+    # wrong.
     cond = fs.add(HeatExchanger("E-701", variant="straight_tubes", width=120,
                                 height=36, description="Overhead Condenser"))
-    # The drum's inlet is authored on three faces and the engine picks the top
-    # one unaided, so nothing here has to override it.
+    # The drum's inlet is authored on three faces and the engine picks
+    # the top one unaided, so nothing here has to override it.
     drum = fs.add(Vessel("V-701", variant="horizontal", width=130, height=42,
                          description="Reflux Drum"))
     vent = fs.add(Product("Vent Gas", reference="PFD-900"))
@@ -40,42 +42,44 @@ def main():
                                description="Kettle Reboiler"))
     bot = fs.add(Product("Bottoms", reference="PFD-300"))
 
-    # --- Placement -------------------------------------------------------
-    # A port sits at a fixed fraction of its symbol's box, so lining two items
-    # up means matching those fractions rather than measuring the artwork.
+    # --- Placement ----------------------------------------------------
+    # A port sits at a fixed fraction of its symbol's box, so lining two
+    # items up means matching those fractions rather than measuring.
     col_x, col_y = 300, 260
     col.pin(x=col_x, y=col_y)
-    # The feed nozzle's elevation is asked of the symbol rather than measured;
-    # the flag's tip is 25 below where the flag itself is pinned.
+    # The feed nozzle's elevation is asked of the symbol rather than
+    # measured; the flag's tip is 25 below where the flag itself is
+    # pinned.
     feed.pin(x=90, y=col_y + port_offset(col, "feed")[1] - 25)
 
-    # Mirrored so vapour enters the top shell nozzle at x + 0.25w and the
-    # condensate leaves the bottom one at x + 0.75w, over the drum.
+    # Mirrored so vapour enters the top shell nozzle at x + 0.25w and
+    # the condensate leaves the bottom one at x + 0.75w, over the drum.
     cond_x, cond_y, cond_w = 560, 70, 120
     cond.pin(x=cond_x, y=cond_y, mirrored="x")
     cond_drain_x = cond_x + 0.75 * cond_w
 
-    # Drum hung so its top inlet (20/91.5 along the shell) sits directly under
-    # the condenser drain, so that run is then a straight drop.
+    # Drum hung so its top inlet (20/91.5 along the shell) sits directly
+    # under the condenser drain, which makes that run a straight drop.
     drum_w, drum_y = 130, 170
     drum.pin(x=cond_drain_x - (20 / 91.5) * drum_w, y=drum_y)
     drum_x = cond_drain_x - (20 / 91.5) * drum_w
     drum_draw_x = drum_x + (68 / 91.5) * drum_w        # bottom liquid draw
     vent.pin(x=880, y=100)                             # flag tip clears the condenser
 
-    # Turned a quarter turn: inlet up, both outlets down. Placed so its inlet is
-    # under the drum's draw (another straight drop), and high enough that reflux
-    # drops to the tower's reflux nozzle rather than having to climb back up.
+    # Turned a quarter turn: inlet up, both outlets down. Placed so its
+    # inlet is under the drum's draw, and high enough that reflux drops
+    # to the tower's reflux nozzle rather than climbing back up.
     split_y = 240
     split.pin(x=drum_draw_x - 25, y=split_y, orientation=90)
     dist.pin(x=900, y=315)
 
-    # Kettle off the tower bottom. Its shell inlet faces down, so the sump line
-    # drops out of the tower, runs across and rises into the nozzle.
+    # Kettle off the tower bottom. Its shell inlet faces down, so the
+    # sump line drops out of the tower, runs across and rises into the
+    # nozzle.
     reb.pin(x=660, y=512)
     bot.pin(x=900, y=620)                              # below the kettle's draw
 
-    # --- Connections -----------------------------------------------------
+    # --- Connections --------------------------------------------------
     fs.connect(feed.outlet, col.feed)
 
     fs.connect(col.distillate, cond.shell_in)
@@ -83,11 +87,11 @@ def main():
     fs.connect(drum.vent, vent.inlet)
     fs.connect(drum.outlet, split.inlet)
     fs.connect(split.out_1, dist.inlet)
-    fs.connect(split.out_2, col.reflux_in, draw_as_recycle=True)   # reflux to the tower
+    fs.connect(split.out_2, col.reflux_in, draw_as_recycle=True)
 
-    fs.connect(col.bottoms, reb.shell_in)                     # sump into the kettle
-    fs.connect(reb.shell_out, col.boilup_in, draw_as_recycle=True)  # boilup to the tower
-    fs.connect(reb.bottoms, bot.inlet)                        # over the weir, off the sheet
+    fs.connect(col.bottoms, reb.shell_in)
+    fs.connect(reb.shell_out, col.boilup_in, draw_as_recycle=True)
+    fs.connect(reb.bottoms, bot.inlet)
 
     fs.render(out("column_reflux.svg"))
     print("Generated column_reflux.svg")

@@ -1,14 +1,16 @@
 """
 Example 5: Reactor loop with recycle and purge (fully automatic)
 
-No pins and no via() waypoints: the engine lays out and routes everything from
-the topology alone. It exercises:
+No pins and no via() waypoints: the engine lays out and routes
+everything from the topology alone. It exercises:
 
-- automatic recycle detection (the splitter -> mixer edge is torn and routed as
-  a recycle lane across the sheet),
-- a purge split (one splitter outlet leaves as product, the other recycles),
-- spine straightening: the main process line (feed -> mixer -> compressor ->
-  cooler -> separator -> splitter) is aligned onto one straight horizontal axis.
+- automatic recycle detection (the splitter -> mixer edge is torn and
+  routed as a recycle lane across the sheet),
+- a purge split (one splitter outlet leaves as product, the other
+  recycles),
+- spine straightening: the main process line (feed -> mixer ->
+  compressor -> cooler -> separator -> splitter) is aligned onto one
+  straight horizontal axis.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
