@@ -1899,17 +1899,24 @@ def _too_small(sheet: _Sheet, need_w: float, need_h: float,
     )
 
 
-# The title strip and stream table are placed by the same band arithmetic as the
-# boxes the caller docked, but neither is an object of the caller's, so each
-# stands in the columns as a sentinel. Naming them is what an error that has to
-# say *which* piece of furniture will not fit needs.
-TITLE, STREAM = "\x00title", "\x00stream"
-_FURNITURE_NAMES = {TITLE: "the title strip", STREAM: "the stream table"}
+# The title strip is placed by the same band arithmetic as the boxes the caller
+# docked, but it is not an object of the caller's -- a zone-ruled sheet rules a
+# strip whether or not a title block was filled in -- so it stands in the
+# columns as a sentinel. Naming it is what an error that has to say *which*
+# piece of furniture will not fit needs.
+#
+# The stream table used to need one too and no longer does: it is a
+# :class:`~pandid.render.furniture.StreamTable`, an object both backends
+# measure and dock, so it stands in the columns as itself.
+TITLE = "\x00title"
+_FURNITURE_NAMES = {TITLE: "the title strip"}
 
 
 def _furniture_name(obj) -> str:
     if isinstance(obj, str):
         return _FURNITURE_NAMES.get(obj, obj)
+    if isinstance(obj, F.StreamTable):
+        return "the stream table"
     title = getattr(obj, "title", "")
     return f"the {title!r} box" if title else "an untitled annotation box"
 
@@ -2065,9 +2072,9 @@ class SvgRenderer:
             dx0 = dy0 = 0.0
             dx1, dy1 = nominal.width, nominal.height
 
-        # 2. Which streams get a table column (unique material streams only).
-        table_streams = self._table_streams(fs) if show_stream_table else []
-        st_layout = self._stream_table_layout(fs, table_streams) if table_streams else None
+        # 2. The stream table, measured. Shared with the draw.io exporter, which
+        #    docks and rules the same one; see F.stream_table_layout.
+        st_layout = F.stream_table_layout(fs) if show_stream_table else None
 
         # 3. Place furniture around the diagram and size the sheet.
         margin = 55.0
@@ -2108,8 +2115,8 @@ class SvgRenderer:
             # Plain sheet: optional stream table docked below the diagram, left.
             if st_layout:
                 top = dy1 + 24
-                furniture.extend(self._draw_stream_table(st_layout, dx0, top))
-                grow(dx0, top, dx0 + st_layout["w"], top + st_layout["h"])
+                furniture.extend(F.draw_stream_table(st_layout, dx0, top))
+                grow(dx0, top, dx0 + st_layout.w, top + st_layout.h)
             frame_x, frame_y = U[0] - margin, U[1] - margin
             canvas_width = (U[2] - U[0]) + 2 * margin
             canvas_height = (U[3] - U[1]) + 2 * margin
@@ -2253,10 +2260,10 @@ class SvgRenderer:
             furniture.extend(F.draw_table(a, x, y) if isinstance(a, TableBox)
                              else F.draw_annotation(a, x, y, report=report))
 
-        # Title strip + stream table are bottom furniture. Represent them as
-        # sentinel "boxes" (see TITLE / STREAM) at the foot of the bottom-right
-        # / bottom-left columns so the band maths sizes the frame around them
-        # too.
+        # Title strip + stream table are bottom furniture, at the foot of the
+        # bottom-right / bottom-left columns so the band maths sizes the frame
+        # around them too. The strip stands in as a sentinel (see TITLE); the
+        # stream table is a measured object and stands in as itself.
         strip = fs.title_block is not None or border == "zone"
         tb = fs.title_block or TitleBlock()
         ts_w, ts_h = F.measure_title_strip(tb)
@@ -2268,7 +2275,7 @@ class SvgRenderer:
         if strip:
             items.append((TITLE, "bottom-right", ts_w, ts_h))
         if st_layout:
-            items.append((STREAM, "bottom-left", st_layout["w"], st_layout["h"]))
+            items.append((st_layout, "bottom-left", st_layout.w, st_layout.h))
 
         placed, (ix, iy, iw, ih), free = F.dock(
             items, (dx0, dy0, dx1, dy1), sheet=sheet,
@@ -2285,8 +2292,8 @@ class SvgRenderer:
                 furniture.extend(
                     F.draw_title_strip(tb, name, date, x + w, y + h, fit_scale=fit,
                                        report=report))
-            elif obj is STREAM:
-                furniture.extend(self._draw_stream_table(st_layout, x, y))
+            elif isinstance(obj, F.StreamTable):
+                furniture.extend(F.draw_stream_table(obj, x, y))
             else:
                 draw_box(obj, x, y)
 
@@ -2305,130 +2312,16 @@ class SvgRenderer:
         that region."""
         free_w = sheet.width - 2 * margin
         free_h = sheet.height - 2 * margin
-        table_h = (st_layout["h"] + 24) if st_layout else 0.0
-        if free_w <= 0 or free_h - table_h <= 0 or (st_layout and st_layout["w"] > free_w):
+        table_h = (st_layout.h + 24) if st_layout else 0.0
+        if free_w <= 0 or free_h - table_h <= 0 or (st_layout and st_layout.w > free_w):
             raise _too_small(sheet,
-                             2 * margin + (st_layout["w"] if st_layout else 0.0),
+                             2 * margin + (st_layout.w if st_layout else 0.0),
                              2 * margin + table_h,
                              "the stream table" if st_layout else "")
         if st_layout:
-            furniture.extend(self._draw_stream_table(
-                st_layout, margin, sheet.height - margin - st_layout["h"]))
+            furniture.extend(F.draw_stream_table(
+                st_layout, margin, sheet.height - margin - st_layout.h))
         return (margin, margin, free_w, free_h - table_h)
-
-    @staticmethod
-    def _cell_text(s, key) -> str:
-        """What one stream's cell draws for one property row.
-
-        The single place the placeholder for a missing value is decided, so the
-        column that is *measured* is the column that is drawn.
-        """
-        val = s.properties.get(key, "-")
-        return "-" if val in (None, "") else str(val)
-
-    def _table_streams(self, fs):
-        streams, seen = [], set()
-        for s in fs.streams:
-            if s.kind in _SIGNAL_KINDS or s.name in seen:
-                continue
-            seen.add(s.name)
-            streams.append(s)
-        return streams
-
-    def _stream_table_layout(self, fs, streams):
-        # property rows in first-seen order (dict preserves insertion order)
-        order, seen = [], set()
-        for s in streams:
-            for k in s.properties:
-                if k not in seen:
-                    seen.add(k)
-                    order.append(k)
-        sec_before: dict[str, str] = {}
-        for key, label in (getattr(fs, "stream_table_sections", []) or []):
-            sec_before.setdefault(key, label)
-
-        n = len(streams)
-        size = 10.5 if n <= 18 else max(8.0, 190.0 / n)
-        row_h = 20.0 if n <= 18 else max(15.0, size + 5)
-        disp = []  # ('section', label) | ('data', key)
-        for k in order:
-            if k in sec_before:
-                disp.append(("section", sec_before[k]))
-            disp.append(("data", k))
-        # The corner cell has to be true of every column under it, so the table
-        # only calls itself a line-number table when every line drawn in it is
-        # identified that way.
-        heading = ("Line Number" if all(s.has_line_number for s in streams)
-                   else "Stream Number")
-
-        # Every column is sized to what goes in it. The table's width is a
-        # layout *output* (it is placed at whatever it measures, and the sheet
-        # is grown or the page is refused around it), so there is no fixed cell
-        # here to abbreviate into: a stream table that cannot show
-        # "0.0441 kg/kg total" is not a stream table. A minimum keeps a table of
-        # short values from ruling columns too narrow to read as columns.
-        GUTTER = 14.0                     # the same either side of any cell
-        labels = [heading] + [key for kind, key in disp if kind == "data"]
-        label_w = max(122.0, max(F.text_width(t, size, bold=True)
-                                 for t in labels) + GUTTER)
-        values = [self._cell_text(s, key) for kind, key in disp if kind == "data"
-                  for s in streams]
-        name_w = max(52.0,
-                     max((F.text_width(s.name, size, bold=True) for s in streams),
-                         default=0.0) + GUTTER,
-                     max((F.text_width(v, size) for v in values), default=0.0) + GUTTER)
-        # A section header spans the whole table, so it is the total width it
-        # constrains rather than any one column; the row label column is the
-        # only one free to take up the slack.
-        sections = [label for kind, label in disp if kind == "section"]
-        span = max((F.text_width(t, size, bold=True) for t in sections),
-                   default=0.0) + GUTTER
-        label_w = max(label_w, span - name_w * n)
-        return dict(streams=streams, disp=disp, size=size, row_h=row_h,
-                    label_w=label_w, name_w=name_w, heading=heading,
-                    w=label_w + name_w * n, h=row_h * (1 + len(disp)))
-
-    def _draw_stream_table(self, L, left, top):
-        streams = L["streams"]
-        size, row_h, label_w, name_w = L["size"], L["row_h"], L["label_w"], L["name_w"]
-        out = ['<g id="stream_table">']
-
-        def cell(x, y, w, text, *, fill, bold=False, anchor="middle"):
-            out.append(f'  <rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{row_h:.1f}" '
-                       f'fill="{fill}" stroke="black" stroke-width="0.75"/>')
-            if anchor == "start":
-                tx = x + 5
-            elif anchor == "end":
-                tx = x + w - 5
-            else:
-                tx = x + w / 2
-            wt = ' font-weight="bold"' if bold else ''
-            out.append(f'  <text x="{tx:.1f}" y="{y + row_h / 2 + size / 3:.1f}" '
-                       f'font-family="{F.FONT}" font-size="{size:.1f}"{wt} '
-                       f'text-anchor="{anchor}">{html.escape(str(text))}</text>')
-
-        # header row: the corner heading + each stream's number or line number
-        y = top
-        cell(left, y, label_w, L["heading"], fill="#eee", bold=True, anchor="start")
-        cx = left + label_w
-        for s in streams:
-            cell(cx, y, name_w, s.name, fill="#eee", bold=True)
-            cx += name_w
-        y += row_h
-        for kind, key in L["disp"]:
-            if kind == "section":
-                cell(left, y, label_w + name_w * len(streams), key,
-                     fill="#f4f4f4", bold=True, anchor="start")
-                y += row_h
-                continue
-            cell(left, y, label_w, key, fill="#f9f9f9", bold=True, anchor="start")
-            cx = left + label_w
-            for s in streams:
-                cell(cx, y, name_w, self._cell_text(s, key), fill="white")
-                cx += name_w
-            y += row_h
-        out.append('</g>')
-        return out
 
     # ------------------------------------------------------------------ defs
 
