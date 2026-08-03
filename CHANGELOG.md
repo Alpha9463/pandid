@@ -584,6 +584,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A fail-position mark's halo erased an adjacent impulse line (#223).** The
+  letters PIP PIC001 4.2.4.6(1) puts directly below a valve are drawn on an
+  opaque plate in the last pass of all, and the only thing that plate had ever
+  stepped past was the equipment tag. A face has three things on it.
+  `examples/14` hangs a trip square below each receipt valve, so the square's
+  impulse line leaves the same face the mark sits on and the mark deleted it —
+  the only mark on the sheet joining the trip to the valve it strokes. The
+  example shipped with `fail="closed"` taken off both valves and a general note
+  in words instead; both are back and the note is gone.
+
+  The mark now steps **along** its face, over the same ranked cost `_erases`
+  already applied to the equipment tag — a symbol, then an impulse line, then
+  pipe — with obstacle boxes grown by #243's `_PLATE_CLEARANCE`, so no second
+  mechanism was invented. Along and not further out, which is the whole of the
+  geometry: stepping out is what clears a tag, and an impulse line leaves the
+  face going the way the mark would be pushed. The candidates are the exact
+  distances that clear each obstacle and the nearest one that is clear wins, so
+  the mark moves as little as the paper allows. `examples/14` hangs its two trip
+  squares 46 units below the valve instead of 26, because a mark written under a
+  valve needs the paper under the valve.
+
 - **A line number's plate erased half of an outline it sat flush against
   (#243).** Label placement built its obstacle set from `unit_box`, the symbol's
   *geometric* box. An outline is stroked centred on that box, so half the pen

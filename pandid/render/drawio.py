@@ -724,7 +724,8 @@ def _tag_pass(fs, registry) -> "_Tags":
             items.append(sheet._nc_label_item(u, f, x, y, w, h, tag_box))
         letters = fail_marking(u)
         if letters:
-            items.append(sheet._fail_label_item(u, f, x, y, w, h, letters, tag_box))
+            items.append(sheet._fail_label_item(u, f, x, y, w, h, letters, tag_box,
+                                                ink, symbols))
     return _Tags(at, [b for b in map(_unit_label_box, items) if b is not None])
 
 

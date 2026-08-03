@@ -1696,9 +1696,15 @@ def _tank_farm() -> Flowsheet:
     vap_in = fs.add(units.Feed("Tanker Vapour Return", reference="P&ID-611"))
     vru_out = fs.add(units.Product("Vapour Recovery Unit", reference="P&ID-609"))
 
-    xv601 = fs.add(units.Valve("XV-601", variant="solenoid", description="MS Receipt Trip Valve"))
+    xv601 = fs.add(
+        units.Valve(
+            "XV-601", variant="solenoid", fail="closed", description="MS Receipt Trip Valve"
+        )
+    )
     xv602 = fs.add(
-        units.Valve("XV-602", variant="solenoid", description="Ethanol Receipt Trip Valve")
+        units.Valve(
+            "XV-602", variant="solenoid", fail="closed", description="Ethanol Receipt Trip Valve"
+        )
     )
     hv601 = fs.add(units.Valve("HV-601", variant="gate", description="TK-601 Root Valve"))
     ej601 = fs.add(
@@ -1929,8 +1935,8 @@ def _tank_farm() -> Flowsheet:
     lsh612 = fs.add_instrument("LSHH", 612, on=tk602, at="E", offset=40)
     fs.add_instrument("Z", 1, on=lsh611, at="N", offset=40, variant="sis")
     fs.add_instrument("Z", 1, on=lsh612, at="N", offset=40, variant="sis")
-    fs.add_instrument("Z", 1, on=xv601, at="S", offset=26, variant="sis")
-    fs.add_instrument("Z", 1, on=xv602, at="S", offset=26, variant="sis")
+    fs.add_instrument("Z", 1, on=xv601, at="S", offset=46, variant="sis")
+    fs.add_instrument("Z", 1, on=xv602, at="S", offset=46, variant="sis")
 
     pt603 = fs.add_instrument("PT", lpg_press, on=v603, at="E", offset=30)
     fs.add_instrument("PI", lpg_press, on=pt603, at="N", offset=40, variant="shared")
@@ -2003,7 +2009,6 @@ def _tank_farm() -> Flowsheet:
                 "rated. VT-601 is the vapour system's only opening to atmosphere.",
                 "SB-601 gives TK-602 positive isolation from the blend header.",
                 "TK-602 is filled through an internal downcomer carried to the floor.",
-                "XV-601 and XV-602 fail closed.",
             ],
             title="GENERAL NOTES",
             numbered=False,

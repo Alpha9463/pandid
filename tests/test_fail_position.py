@@ -301,6 +301,48 @@ def test_the_letters_step_past_a_tag_on_the_riser_side_too():
     assert ">FC</text>" in fs.to_svg()
 
 
+def test_the_letters_step_off_an_impulse_line_leaving_the_same_face():
+    """Issue #223, and the geometry is ``examples/14``'s receipt trip valves.
+
+    A trip square hung below a valve is joined to it by a line leaving the same
+    face PIP PIC001 4.2.4.6(1) puts the letters on, and the letters are drawn on
+    an opaque plate in the last pass of all, so ``FC`` deleted the only mark on
+    the sheet joining the trip to the valve it strokes. The example shipped with
+    the fail position taken off and a note in words instead.
+
+    The step is *sideways*, along the face: stepping further out -- which is
+    what clears a tag -- follows the line down instead of getting off it.
+    """
+    from pandid.portgeom import unit_box
+    from pandid.render.svg import SvgRenderer, _ink, _meets, _unit_label_box
+
+    fs = Flowsheet("a trip square below a failing valve")
+    feed = fs.add(units.Feed("FEED"))
+    valve = fs.add(units.Valve("XV-601", variant="solenoid", fail="closed"))
+    product = fs.add(units.Product("PROD"))
+    fs.connect(feed.outlet, valve.inlet)
+    fs.connect(valve.outlet, product.inlet)
+    fs.add_instrument("Z", 1, on=valve, at="S", offset=26, variant="sis")
+    fs.layout()
+    svg = fs.to_svg()
+
+    assert ">FC</text>" in svg, "the mark is drawn"
+    ink = _ink(fs)
+    taps = [line for line in ink if line.kind == "tap"]
+    assert len(taps) == 1, "and the square is joined to the valve by one line"
+
+    frame = valve.frame
+    symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    plate = _unit_label_box(
+        SvgRenderer()._fail_label_item(
+            valve, frame, frame.x, frame.y, frame.w, frame.h, "FC", None, ink, symbols
+        )
+    )
+    assert not _meets(plate, taps[0].box), "and the plate is clear of it"
+    assert plate[1] > frame.y + frame.h, "still below the valve"
+    assert plate[0] < frame.x + frame.w, "and still lying against its body"
+
+
 # ------------------------------------------------------------- the spec layer
 
 

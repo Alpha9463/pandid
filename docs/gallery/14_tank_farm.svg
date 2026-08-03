@@ -108,16 +108,15 @@
     <text x="1369.6" y="133.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Motor Spirit Transfer Pump</text>
     <text x="1320.6" y="151.0" font-family="sans-serif" font-size="11.0" text-anchor="start" font-weight="bold" fill="black">P-602</text>
     <text x="1369.6" y="151.0" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Ethanol Blend Pump</text>
-    <rect x="24.0" y="941.5" width="455.4" height="157.0" fill="white" stroke="black" stroke-width="1.5"/>
-    <text x="251.7" y="958.5" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">GENERAL NOTES</text>
-    <line x1="24.0" y1="964.5" x2="479.4" y2="964.5" stroke="black" stroke-width="1"/>
-    <text x="33.0" y="978.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Z-1: receipt shutdown on tank high-high level.</text>
-    <text x="33.0" y="996.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">LSHH-611/612 are independent of the gauging transmitters they back up.</text>
-    <text x="33.0" y="1014.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">FA-601 is deflagration rated; FA-602, on the rack return, is detonation</text>
-    <text x="33.0" y="1032.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">rated. VT-601 is the vapour system&#x27;s only opening to atmosphere.</text>
-    <text x="33.0" y="1050.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">SB-601 gives TK-602 positive isolation from the blend header.</text>
-    <text x="33.0" y="1068.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">TK-602 is filled through an internal downcomer carried to the floor.</text>
-    <text x="33.0" y="1086.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">XV-601 and XV-602 fail closed.</text>
+    <rect x="24.0" y="959.5" width="455.4" height="139.0" fill="white" stroke="black" stroke-width="1.5"/>
+    <text x="251.7" y="976.5" font-family="sans-serif" font-size="12.0" text-anchor="middle" font-weight="bold" fill="black">GENERAL NOTES</text>
+    <line x1="24.0" y1="982.5" x2="479.4" y2="982.5" stroke="black" stroke-width="1"/>
+    <text x="33.0" y="996.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">Z-1: receipt shutdown on tank high-high level.</text>
+    <text x="33.0" y="1014.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">LSHH-611/612 are independent of the gauging transmitters they back up.</text>
+    <text x="33.0" y="1032.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">FA-601 is deflagration rated; FA-602, on the rack return, is detonation</text>
+    <text x="33.0" y="1050.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">rated. VT-601 is the vapour system&#x27;s only opening to atmosphere.</text>
+    <text x="33.0" y="1068.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">SB-601 gives TK-602 positive isolation from the blend header.</text>
+    <text x="33.0" y="1086.5" font-family="sans-serif" font-size="11.0" text-anchor="start" fill="black">TK-602 is filled through an internal downcomer carried to the floor.</text>
     <rect x="911.4" y="1018.5" width="652.0" height="80.0" fill="white" stroke="black" stroke-width="2"/>
     <line x1="1211.4" y1="1018.5" x2="1211.4" y2="1098.5" stroke="black" stroke-width="1.5"/>
     <line x1="1311.4" y1="1018.5" x2="1311.4" y2="1098.5" stroke="black" stroke-width="1.5"/>
@@ -196,7 +195,7 @@
     <symbol id="sym_vent_breather" viewBox="0 0 25.0 15.0" overflow="visible"><g transform="scale(0.5)"><rect x="0.0" y="0.0" width="50.0" height="20.0" fill="none" stroke="#111" stroke-width="4.0"/><path d="M 25.0 20.0 L 25.0 30.0 M 0.0 0.0 L 25.0 20.0 L 50.0 0.0 M 0.0 20.0 L 25.0 0.0 L 50.0 20.0" fill="none" stroke="#111" stroke-width="4.0"/></g></symbol>
     <symbol id="sym_vessel_legs_s60x120" viewBox="0 0 60 120" overflow="visible"><rect x="0" y="85.760391" width="12" height="34.229829" fill="none" stroke="#111" stroke-width="2"/><rect x="48" y="85.760391" width="12" height="34.229829" fill="none" stroke="#111" stroke-width="2"/><path d="M 60 7.520782 L 60 85.760391 A 30 7.523032 0 0 1 30 93.283423 A 30 7.523032 0 0 1 0 85.760391 L 0 7.520782 A 30 7.523032 0 0 1 30 -0.002249 A 30 7.523032 0 0 1 60 7.520782 Z" fill="none" stroke="#111" stroke-width="2"/><path d="M 0 7.520782 L 60 7.520782 M 0 85.760391 L 60 85.760391" fill="none" stroke="#111" stroke-width="2"/></symbol>
   </defs>
-  <g id="drawing" transform="translate(83.85, 186.83) scale(0.806649)">
+  <g id="drawing" transform="translate(65.82, 186.32) scale(0.827142)">
   <g id="units">
     <use href="#sym_tank_floating_roof_s190x140" x="360" y="215" width="190" height="140" />
     <use href="#sym_tank_s180x150" x="680" y="205" width="180" height="150" />
@@ -345,8 +344,8 @@
     <line x1="860" y1="280" x2="900" y2="280" stroke="black" stroke-width="1" />
     <line x1="582" y1="263" x2="582" y2="223" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
     <line x1="900" y1="258" x2="900" y2="218" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
-    <line x1="262.25" y1="177.3" x2="262.25" y2="203.3" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
-    <line x1="512.25" y1="117.3" x2="512.25" y2="143.3" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
+    <line x1="262.25" y1="177.3" x2="262.25" y2="223.3" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
+    <line x1="512.25" y1="117.3" x2="512.25" y2="163.3" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
     <line x1="1230" y1="272.5" x2="1260" y2="272.5" stroke="black" stroke-width="1" />
     <line x1="1260" y1="250.5" x2="1260" y2="210.5" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
     <line x1="1352.5" y1="635.1" x2="1352.5" y2="570" stroke="black" stroke-width="1" />
@@ -375,10 +374,10 @@
     <text x="582.0" y="230.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">1</text>
     <use href="#sym_instrument_sis" x="880" y="198" width="40.0" height="40.0" />
     <text x="900.0" y="225.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">1</text>
-    <use href="#sym_instrument_sis" x="242.25" y="183.3" width="40.0" height="40.0" />
-    <text x="262.25" y="210.29999999999998" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">1</text>
-    <use href="#sym_instrument_sis" x="492.25" y="123.3" width="40.0" height="40.0" />
-    <text x="512.25" y="150.3" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">1</text>
+    <use href="#sym_instrument_sis" x="242.25" y="203.3" width="40.0" height="40.0" />
+    <text x="262.25" y="230.29999999999998" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">1</text>
+    <use href="#sym_instrument_sis" x="492.25" y="143.3" width="40.0" height="40.0" />
+    <text x="512.25" y="170.3" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">1</text>
     <use href="#sym_instrument" x="1238" y="250.5" width="44.0" height="44.0" />
     <text x="1260.0" y="268.5" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">PT</text>
     <text x="1260.0" y="282.5" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">603</text>
@@ -410,8 +409,12 @@
     <text x="964.0" y="465.34065934065933" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">P-602</text>
     <rect x="238.4" y="133.1" width="47.6" height="15.0" fill="white" />
     <text x="262.25" y="145.1" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">XV-601</text>
+    <rect x="265.2" y="184.8" width="21.2" height="15.0" fill="white" />
+    <text x="275.85" y="192.29999999999998" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FC</text>
     <rect x="488.4" y="73.1" width="47.6" height="15.0" fill="white" />
     <text x="512.25" y="85.1" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">XV-602</text>
+    <rect x="515.2" y="124.8" width="21.2" height="15.0" fill="white" />
+    <text x="525.85" y="132.3" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FC</text>
     <rect x="483.4" y="635.5" width="47.6" height="15.0" fill="white" />
     <text x="507.25" y="647.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HV-601</text>
     <rect x="541.2" y="633.0" width="47.6" height="15.0" fill="white" />

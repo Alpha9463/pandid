@@ -123,14 +123,10 @@ def main():
     vru_out = fs.add(Product("Vapour Recovery Unit", reference="P&ID-609"))
 
     # --- In-line: motor spirit -------------------------------------------
-    # Both receipt valves fail closed, and both say so in the notes rather than
-    # on the valve. fail="closed" puts the FC mark on the same face the trip
-    # square hangs on, and the mark's halo then deletes the impulse line joining
-    # the two -- #223. The square is the more important of the pair, so the mark
-    # comes off; put it back when #223 is fixed and drop the note.
-    xv601 = fs.add(Valve("XV-601", variant="solenoid",
+    # Both receipt valves fail closed on the trip, and say so on the valve.
+    xv601 = fs.add(Valve("XV-601", variant="solenoid", fail="closed",
                          description="MS Receipt Trip Valve"))
-    xv602 = fs.add(Valve("XV-602", variant="solenoid",
+    xv602 = fs.add(Valve("XV-602", variant="solenoid", fail="closed",
                          description="Ethanol Receipt Trip Valve"))
     hv601 = fs.add(Valve("HV-601", variant="gate", description="TK-601 Root Valve"))
     ej601 = fs.add(Fitting("EJ-601", variant="expansion_joint",
@@ -368,8 +364,10 @@ def main():
     # than wired across the sheet from each switch to each valve.
     fs.add_instrument("Z", 1, on=lsh611, at="N", offset=40, variant="sis")
     fs.add_instrument("Z", 1, on=lsh612, at="N", offset=40, variant="sis")
-    fs.add_instrument("Z", 1, on=xv601, at="S", offset=26, variant="sis")
-    fs.add_instrument("Z", 1, on=xv602, at="S", offset=26, variant="sis")
+    # 46 and not 26: FC is written directly below each valve (PIP PIC001
+    # 4.2.4.6) and the square has to hang below the mark, not on it.
+    fs.add_instrument("Z", 1, on=xv601, at="S", offset=46, variant="sis")
+    fs.add_instrument("Z", 1, on=xv602, at="S", offset=46, variant="sis")
 
     pt603 = fs.add_instrument("PT", lpg_press, on=v603, at="E", offset=30)
     fs.add_instrument("PI", lpg_press, on=pt603, at="N", offset=40, variant="shared")
@@ -450,9 +448,6 @@ def main():
         "rated. VT-601 is the vapour system's only opening to atmosphere.",
         "SB-601 gives TK-602 positive isolation from the blend header.",
         "TK-602 is filled through an internal downcomer carried to the floor.",
-        # Stands in for a mark the sheet cannot yet draw; delete it when #223
-        # lands and fail="closed" goes back on XV-601 and XV-602.
-        "XV-601 and XV-602 fail closed.",
     ], title="GENERAL NOTES", numbered=False, align="bottom-left"))
     fs.add_annotation(legend({
         "MS": "Motor Spirit",
