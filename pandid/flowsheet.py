@@ -1078,7 +1078,8 @@ class Flowsheet:
 
     def to_drawio(self, *, diagram: str | None = None,
                   page_size: str | None = None, border: str | None = None,
-                  jump_direction: str = "vertical", check: bool = True) -> str:
+                  jump_direction: str = "vertical",
+                  show_stream_table: bool = False, check: bool = True) -> str:
         """Render the flowsheet to a draw.io (``.drawio``) document string,
         running ``layout()`` and ``route()`` first if they have not been run yet.
 
@@ -1129,9 +1130,14 @@ class Flowsheet:
         style key on the edge that carries it, and settles ties between two
         crossing lines by z-order, so the export states both.
 
-        The stream table and the debug overlay have no counterpart here and
-        :meth:`render` refuses them for a ``.drawio`` path rather than accepting
-        and ignoring them.
+        ``show_stream_table`` docks the stream property table at the foot of the
+        sheet, as :meth:`to_svg` does: one column per unique material stream,
+        one row per property, and the section headings ``stream_table_sections``
+        asks for. It comes out as a real draw.io table too, ruled across and
+        down the way the sheet rules it.
+
+        The debug overlay has no counterpart here and :meth:`render` refuses it
+        for a ``.drawio`` path rather than accepting and ignoring it.
         """
         if any(u.frame is None for u in self.units):
             self.layout()
@@ -1150,7 +1156,8 @@ class Flowsheet:
         from pandid.render.drawio import DrawioRenderer
         return DrawioRenderer().render(self, diagram=diagram,
                                        page_size=page_size, border=border,
-                                       jump_direction=jump_direction)
+                                       jump_direction=jump_direction,
+                                       show_stream_table=show_stream_table)
 
     def render(self, path: str | Path, *, show_stream_table: bool = False,
                border: str | None = None,
@@ -1184,48 +1191,54 @@ class Flowsheet:
         """
         ext = Path(path).suffix.lower()
         if ext == ".drawio":
-            # A .drawio file is a model on an unbounded canvas, not a sheet, so
-            # the options that describe a sheet have nothing to land on. Refused
-            # rather than ignored: a caller who asked for A3 and a zone border
-            # and got neither has been told something false about the file they
-            # now hold. Named one by one, since the fix is to drop that argument.
+            # One option is refused for a .drawio path, and it is refused rather
+            # than ignored: a caller who asked for something and got a file
+            # without it has been told something false about the file they now
+            # hold.
             #
-            # ``page_size`` and ``border`` are no longer among them: a
-            # .drawio file can carry the page draw.io is to rule and the frame
-            # ruled on it, so asking for A3 and a zone border now gets A3 and a
-            # zone border. See to_drawio() for the caveat the grid comes with.
+            # This list used to have four more in it, and every one of the four
+            # left on the same terms -- the reason given had not been *checked*.
+            # ``page_size`` and ``border`` were said to have nothing to land on,
+            # and a .drawio file carries both a page and a frame ruled on it.
+            # ``jump_direction`` was said to be draw.io's own decision, and a
+            # jump is a per-connector style that defaults to off, so the export
+            # had no jumps at all rather than jumps we disagreed with. And
+            # ``show_stream_table`` was said to have no sheet furniture to dock
+            # to, which stopped being true when the title strip, the legend, the
+            # equipment list and the notes all went through ``furniture.dock``
+            # in the exporter; what was actually missing was that the stream
+            # table had never been lifted out of the SVG renderer, so the
+            # exporter had no way to ask for one. It has now
+            # (``furniture.stream_table_layout``), and it docks and rules it
+            # where the sheet does.
             #
-            # ``jump_direction`` is no longer among them either, and the
-            # sentence that put it here was wrong twice over. draw.io does not
-            # decide its own line jumps: a jump is a per-connector style that
-            # defaults to *off*, which is why the export had none at all rather
-            # than jumps we disagreed with. And the direction is expressible,
-            # because which of two crossing lines hops is settled by which
-            # carries the style and by z-order in the file -- both of which the
-            # exporter writes. See :func:`pandid.render.drawio._hops`.
+            # ``debug`` is not that kind of claim and does not expire. The
+            # overlay is scaffolding for whoever is writing a placement -- the
+            # grid, every pin() anchor, every port -- and it is deliberately
+            # *not* part of the drawing. Exporting it would put it into an
+            # editable model as ordinary cells a reader would then have to
+            # delete by hand.
             #
-            # The two that remain have no counterpart at all. A stream table is
-            # sheet furniture this exporter has no measurement for; and the
-            # debug overlay is scaffolding for whoever is writing a placement
-            # rather than part of the drawing. Named one by one, since the fix
-            # is to drop that argument.
+            # Still a list because the shape is right for the question, and
+            # still ``given != default`` rather than ``is not False``: ``debug``
+            # takes a number as well as a flag, and ``debug=0`` is not a request
+            # for an overlay.
             sheet_only = [
                 name for name, given, default in (
-                    ("show_stream_table", show_stream_table, False),
                     ("debug", debug, False),
                 ) if given != default
             ]
             if sheet_only:
                 raise ValueError(
                     f"{', '.join(sheet_only)} describe(s) a drawing sheet that "
-                    f"a .drawio file has no counterpart for: there is no sheet "
-                    f"furniture to dock a stream table to, and the coordinate "
+                    f"a .drawio file has no counterpart for: the coordinate "
                     f"overlay is scaffolding rather than drawing. Render the "
                     f"sheet to .svg/.pdf/.png, or drop these arguments"
                 )
             Path(path).write_text(
                 self.to_drawio(diagram=diagram, page_size=page_size,
                                border=border, jump_direction=jump_direction,
+                               show_stream_table=show_stream_table,
                                check=check), encoding="utf-8")
             return
 

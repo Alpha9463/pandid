@@ -848,7 +848,8 @@ class DrawioRenderer:
 
     def render(self, fs: "Flowsheet", *, diagram: "str | None" = None,
                page_size: "str | None" = None, border: "str | None" = None,
-               jump_direction: str = "vertical", **opts) -> str:
+               jump_direction: str = "vertical",
+               show_stream_table: bool = False, **opts) -> str:
         """Render the flowsheet to a draw.io document.
 
         ``diagram`` says which drawing this is, in the spelling
@@ -874,10 +875,14 @@ class DrawioRenderer:
         edges *and* as the order those edges are written in, since z-order is
         what breaks the tie. See :func:`_hops`.
 
-        The stream table and the debug overlay remain refused. A stream table is
-        furniture this exporter has no measurement for, and the overlay is
-        scaffolding for whoever is writing a placement rather than part of the
-        drawing.
+        ``show_stream_table`` docks the stream property table at the foot of the
+        sheet and rules it as the grid it is, exactly as :meth:`SvgRenderer
+        .render` does with the same argument: both backends measure it with
+        :func:`~pandid.render.furniture.stream_table_layout`, so the columns are
+        the same columns and the section headings fall in the same places.
+
+        The debug overlay remains refused. It is scaffolding for whoever is
+        writing a placement rather than part of the drawing.
         """
         from pandid.render.svg import _page, _resolve_sheet
 
@@ -892,7 +897,7 @@ class DrawioRenderer:
         # Sheet furniture first: a later cell draws over an earlier one, and the
         # boxes are behind the drawing on the sheet. The border is behind even
         # those, which is the order _place_furniture splices it in at.
-        furniture, frame, fit = self._furniture(fs, sheet)
+        furniture, frame, fit = self._furniture(fs, sheet, show_stream_table)
         body.extend(self._border(frame, border))
         body.extend(furniture)
         # Then equipment, then the runs between it, then the balloons -- which is
@@ -1677,9 +1682,9 @@ class DrawioRenderer:
                     x1, y1 = max(x1, px), max(y1, py)
         return (x0, y0, x1, y1)
 
-    def _furniture(self, fs, sheet=None):
-        """Title block, annotations and table boxes, docked where the sheet docks
-        them and ruled as the tables they are.
+    def _furniture(self, fs, sheet=None, show_stream_table: bool = False):
+        """Title block, annotations, table boxes and the stream table, docked
+        where the sheet docks them and ruled as the tables they are.
 
         **Docked, not stacked.** Where a box lands is
         :func:`pandid.render.furniture.dock`'s answer and no longer this file's:
@@ -1705,10 +1710,10 @@ class DrawioRenderer:
         ``shape=tableRow`` children carrying ``shape=partialRectangle`` cells,
         which open as an editable grid with draggable column rules rather than as
         one string of text with ``<br>`` in it. Every equipment list, legend,
-        note list and :class:`~pandid.document.TableBox` goes out as one. A box
-        whose rows are plain strings is not tabular and stays a box: ruling a
-        single column into a grid would be inventing structure the author did not
-        write.
+        note list, :class:`~pandid.document.TableBox` and stream table goes out
+        as one. A box whose rows are plain strings is not tabular and stays a
+        box: ruling a single column into a grid would be inventing structure the
+        author did not write.
 
         **Ruled where the sheet rules it, though, and not everywhere a grid
         could be ruled.** A table's rows and cells are what make it editable;
@@ -1731,6 +1736,14 @@ class DrawioRenderer:
             w, h = (F.measure_table(a) if isinstance(a, TableBox)
                     else F.measure_annotation(a))
             items.append((a, a.align, w, h))
+        # Last into the bottom-left column, which is where the sheet puts it:
+        # `put_bottom` stacks upward from the frame edge, so the table sits
+        # against the foot of the sheet with anything else docked there above
+        # it. The measurement is the sheet's own -- there is one stream table
+        # and both backends ask the same function for it.
+        table = F.stream_table_layout(fs) if show_stream_table else None
+        if table is not None:
+            items.append((table, "bottom-left", table.w, table.h))
 
         inner = self._drawing_box(fs)
         placed, frame, free = F.dock(
@@ -1810,6 +1823,8 @@ class DrawioRenderer:
 
         if isinstance(obj, TitleBlock):
             return self._title_strip(cid, obj, x, y, w, h, name, date, scale)
+        if isinstance(obj, F.StreamTable):
+            return _stream_table(cid, obj, x, y)
         title = getattr(obj, "title", "") or ""
         if isinstance(obj, TableBox):
             size, _ncol, col_w, _row_h = F._table_layout(obj)
@@ -2463,7 +2478,8 @@ def columns(rows, sizes, total: float, bold=None) -> list[float]:
 def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
            start: float = 0.0, *, header_last: bool = False,
            font: float = 11.0, col_keys=(), row_h: "float | None" = None,
-           heights=None, keys: str = "") -> list[str]:
+           heights=None, keys: str = "", row_widths=None,
+           cell_keys=None) -> list[str]:
     """A ruled grid, as draw.io's own table: container, rows, cells.
 
     ``widths`` are absolute column widths and must sum to ``w``; they come from
@@ -2522,6 +2538,23 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
     for one it rules lighter. They go on the container, which is where a table
     draws its own row and column lines from (``TableShape.paintTableForeground``
     reads ``rowLines``/``columnLines`` off exactly this style).
+
+    ``row_widths`` rules each row's cells at *stated* widths rather than at one
+    set of column widths, and it is what lets a row hold a **different number of
+    cells** from the row above it: the cell count of a row is the length of its
+    own width list. A stream table's section heading is the case -- one cell
+    spanning the whole table, which is the single rectangle the sheet strokes
+    for it and what a merged cell is in this format. A table rules a column line
+    at a cell's edge, so a row of one cell is a row with no column line in it,
+    which is again what the sheet draws.
+
+    ``cell_keys`` states each cell's own style, ``[row][column]``. It is for a
+    table whose cells are not uniform across a row -- a stream table fills its
+    heading row, its row labels and its values three different greys and sets
+    two of the three left rather than centred. It replaces the row-level
+    heading/body style rather than being added to it, because a caller that
+    states what every cell is filled with does not want a default underneath it
+    saying something else first.
     """
     body = [row for row in rows]
     if headers:
@@ -2539,6 +2572,10 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
     widths = _distribute(list(widths)[:ncol] or [1.0] * ncol, w)
     if len(widths) < ncol:
         widths = _distribute([1.0] * ncol, w)
+    # Each row's own widths get the same treatment the shared ones do: rounded
+    # to the precision they are written at, with the last cell taking the
+    # remainder, so a ragged row still meets the table's right-hand rule.
+    ragged = [_distribute(rw, w) for rw in row_widths] if row_widths else None
     rows_h = _distribute(list(heights) if heights else [1.0] * len(body),
                          h - start) if body else []
 
@@ -2554,7 +2591,9 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
     ry = start
     for r, cells in enumerate(body):
         rh = rows_h[r]
-        head = _TABLE_HEAD if r == head_at else _TABLE_BODY
+        cw = ragged[r] if ragged else widths
+        head = "" if cell_keys is not None else (
+            _TABLE_HEAD if r == head_at else _TABLE_BODY)
         out += [
             f'        <mxCell id="{cid}-r{r}" value="" style={_attr(_TABLE_ROW)} '
             f'vertex="1" parent="{cid}">',
@@ -2563,23 +2602,95 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
             '        </mxCell>',
         ]
         cx = 0.0
-        for c in range(ncol):
+        for c in range(len(cw)):
             value = str(cells[c]) if c < len(cells) else ""
-            extra = col_keys[c] if c < len(col_keys) else ""
+            extra = (cell_keys[r][c] if cell_keys is not None
+                     else col_keys[c] if c < len(col_keys) else "")
             out += [
                 f'        <mxCell id="{cid}-r{r}-c{c}" value={_attr(value)} '
                 f'style={_attr(cell + head + extra)} vertex="1" '
                 f'parent="{cid}-r{r}">',
-                f'          <mxGeometry x="{_num(cx)}" width="{_num(widths[c])}" '
+                f'          <mxGeometry x="{_num(cx)}" width="{_num(cw[c])}" '
                 f'height="{_num(rh)}" as="geometry">',
-                f'            <mxRectangle width="{_num(widths[c])}" '
+                f'            <mxRectangle width="{_num(cw[c])}" '
                 f'height="{_num(rh)}" as="alternateBounds" />',
                 '          </mxGeometry>',
                 '        </mxCell>',
             ]
-            cx += widths[c]
+            cx += cw[c]
         ry += rh
     return out
+
+
+def _fill(colour: str) -> str:
+    """A sheet fill, as draw.io states one.
+
+    The sheet writes its greys the short way (``#eee``) and its paper by name
+    (``white``), which is CSS and is what an SVG consumer reads. A ``.drawio``
+    file is read by draw.io's own colour handling before it is ever read by a
+    browser, so both are written out in the six-digit form its style strings and
+    its colour picker are written in. The colour itself does not change: the
+    fill is the sheet's, said the other way.
+    """
+    if colour == "white":
+        return "#ffffff"
+    if len(colour) == 4 and colour.startswith("#"):
+        return "#" + "".join(c * 2 for c in colour[1:])
+    return colour
+
+
+def _stream_cell(cell) -> str:
+    """One :class:`~pandid.render.furniture.StreamCell`'s own style.
+
+    Three things per cell, all of them the layout's rather than this file's: the
+    grey it is filled with, whether it is set bold, and which way it is set. The
+    sheet insets text against a rule by
+    :data:`~pandid.render.furniture._STREAM_PAD`; a draw.io cell insets its own
+    label by :data:`_TEXT_INSET` before any ``spacingLeft`` is added, so what is
+    stated here is the difference and a row label starts the same distance in
+    from its rule in either backend.
+    """
+    if cell.anchor == "start":
+        align = f"align=left;spacingLeft={_num(F._STREAM_PAD - _TEXT_INSET)};"
+    else:
+        align = "align=center;"
+    return (f"fillColor={_fill(cell.fill)};" + align
+            + ("fontStyle=1;" if cell.bold else ""))
+
+
+def _stream_table(cid: str, table, x, y) -> list[str]:
+    """The stream property table, as draw.io's own table.
+
+    It is a grid on the sheet -- read across for one property, down for one
+    stream -- so it is a grid here: a ``shape=table`` a reader can widen a
+    column of, rather than lettering arranged to look like one.
+
+    **Ruled where the sheet rules it.** Every cell of a stream table is stroked
+    on all four sides (:func:`~pandid.render.furniture.draw_stream_table`
+    strokes a rectangle apiece), so a rule between every row and every column is
+    the sheet's own answer and draw.io's ``rowLines``/``columnLines`` defaults
+    are right here -- unlike the revision grid, where the default put six lines
+    into a strip the sheet rules none across. The *weight* is not draw.io's
+    default: the sheet rules this grid at
+    :data:`~pandid.render.furniture._CELL_RULE`, the lighter of its two weights,
+    and left unsaid the container would rule the whole table at 1.
+
+    The section headings come through as themselves. ``fs.stream_table_sections``
+    puts a full-width heading row into the table before a named property, and
+    the sheet strokes that as one rectangle across the whole grid; here it is
+    one cell across the whole row (see :func:`_table`'s ``row_widths``), which
+    is the same rectangle and is what a merged cell is in this format. A table
+    rules its column lines at its cells' own edges, so the row that has one cell
+    is ruled the way the sheet rules it: across, and not down.
+    """
+    values = [[c.text for c in row] for row in table.rows]
+    widths = [[c.w for c in row] for row in table.rows]
+    return _table(cid, "", [], values, x, y, table.w, table.h, widths[0],
+                  font=table.size, row_h=table.row_h,
+                  keys=f"strokeWidth={F._CELL_RULE:g};",
+                  row_widths=widths,
+                  cell_keys=[[_stream_cell(c) for c in row]
+                             for row in table.rows])
 
 
 def _text_box(cid: str, title: str, rows, x, y, w, h, font: float = 11.0,
