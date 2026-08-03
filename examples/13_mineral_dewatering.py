@@ -2,29 +2,21 @@
 Example 13: Mineral Concentrate Dewatering A400, a solids-handling PFD
 
 The first sheet in the gallery that is not a fluids plant. A flotation
-concentrate arrives as a dilute slurry and leaves as a dry, magnetics-free
-powder, and everything between those two flags is a solid-liquid or a
-solid-gas separation: a thickener, a vacuum belt filter, a rotary dryer, the
-cyclone that takes the dried product back out of the gas that dried it, and
-the scrubber that cleans what is left before it reaches the stack. Crushing,
-grinding and flotation are upstream of the concentrate flag and off this
-sheet.
+concentrate arrives as a dilute slurry and leaves as a dry,
+magnetics-free powder, and everything between those two flags is a
+solid-liquid or a solid-gas separation: a thickener, a vacuum belt
+filter, a rotary dryer, the cyclone that takes the dried product back
+out of the gas that dried it, and the scrubber that cleans what is left
+before it reaches the stack.
 
-**Drawn as a PFD**, at ISO 15519-2 §4.2's earliest issue: an equipment list, a
-stream table sectioned into a "Mass Fraction" block, a utilities summary and an
-arrowhead on every process line, with no instrument balloon, signal line or
-valve anywhere on it. ``professional_examples/PFD_301.pdf`` and ``PFD_302.pdf``
-are the models on disk.
+Drawn as a PFD -- an equipment list, a stream table sectioned into a
+"Mass Fraction" block, a utilities summary and an arrowhead on every
+process line, with no instrument balloon, signal line or valve anywhere
+on it.
 
-**Nothing is turned.** ISO 15519-1 §11.4.2 names the cyclone separator, symbol
-X 2618, as one of the drawings gravity fixes the attitude of. Seven of the
-symbols here carry ``gravity_fixed=True`` in the registry and would be refused
-if they were.
-
-**Sized to the drawing, not to a page**, as ``03`` and ``08`` are rather than
-the fixed-A3 sheets: twenty-four streams side by side is a wider table than A3
-takes beside a utilities summary. ``page_size="A2"`` draws the same sheet on
-real paper.
+Sized to the drawing rather than to a page: twenty-four streams side by
+side is a wider table than A3 takes beside a utilities summary.
+``page_size="A2"`` draws the same sheet on real paper.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -53,10 +45,9 @@ from pandid import (
 from pandid.document import Revision, TableBox, TitleBlock, equipment_list
 from pandid.portgeom import port_offset
 
-# --- Stream property table -------------------------------------------------
-# Rows render in first-seen key order, so every stream below carries the same
-# keys in the same order and an empty value renders as "-". The numbers are an
-# illustrative balance that closes on total flow, not a simulation.
+# --- Stream property table --------------------------------------------
+# Rows render in first-seen key order, so every stream below carries the
+# same keys and an empty value renders as "-".
 PROPERTY_ROWS = (
     "Temperature (C)", "Pressure (bara)", "Total Flow (t/h)", "Solids (% w/w)",
     "Water", "Concentrate", "Tramp Metal", "Flocculant", "Air / Flue Gas",
@@ -87,8 +78,7 @@ PROPERTIES = {
     "S-412": ("15", "1.0", "30.5", "", "", "", "", "", "1.000", ""),
     "S-413": ("15", "2.0", "0.43", "", "", "", "", "", "", "1.000"),
     "S-414": ("650", "0.99", "30.93", "", "0.031", "", "", "", "0.969", ""),
-    # Temperature deliberately blank, which renders as "-": the two inlets
-    # either side of this column are what a dryer datasheet quotes.
+    # Temperature deliberately blank, which renders as "-".
     "S-415": ("", "0.98", "99.83", "62.8", "0.072", "0.6280", "5.0E-05", "",
               "0.300", ""),
     "S-416": ("115", "0.98", "99.83", "62.8", "0.072", "0.6280", "5.0E-05", "",
@@ -113,121 +103,112 @@ PROPERTIES = {
 def main():
     fs = Flowsheet("Mineral Concentrate Dewatering A400")
 
-    # --- Flocculant make-up ----------------------------------------------
+    # --- Flocculant make-up -------------------------------------------
     water = fs.add(Feed("Raw Water", reference="PCD-402"))
-    # Not in ``document._MAJOR_EQUIPMENT``, so it spends no row of the
-    # equipment list, like the tees and reducers below.
+    # Not in ``document._MAJOR_EQUIPMENT``, so it spends no equipment-
+    # list row, like the tees and reducers below.
     funnel = fs.add(Funnel("FN-401",
                            description="Flocculant Charging Funnel"))
     charge = fs.add(Tee(branch="inlet"))
-    # The stirrer this tank has is not drawn: ``Tank`` has no agitated variant,
-    # and ``Reactor``, which draws one, is the wrong symbol for a reagent tank.
+    # ``Tank`` has no agitated variant and ``Reactor``, which draws one,
+    # is the wrong symbol for a reagent tank, so the stirrer is not
+    # drawn.
     tank = fs.add(Tank("TK-401", variant="conical_bottom",
                        description="Flocculant Make-up Tank"))
-    # Both its connections are drawn on the crown of the head, which is what
-    # shapes the piping around it in the placement block below.
     dose = fs.add(PeristalticPump(
         "P-402", description="Flocculant Dosing Pump"))
 
-    # --- Thickening -------------------------------------------------------
+    # --- Thickening ---------------------------------------------------
     concentrate = fs.add(Feed("Flotation Concentrate",
                               reference="PFD-302"))
     floc = fs.add(Tee(branch="inlet"))
-    # ``overflow`` is the high draw off the launder wall and ``underflow`` the
-    # low one out of the apex, which is what the stencil draws.
+    # ``overflow`` is the high draw off the launder wall and
+    # ``underflow`` the low one out of the apex, which is what the
+    # stencil draws.
     thickener = fs.add(GravitySeparator(
         "TH-401", description="Concentrate Thickener"))
     overflow = fs.add(Product("Recovered Water", reference="PCD-402"))
 
-    # --- Filtration -------------------------------------------------------
+    # --- Filtration ---------------------------------------------------
     underflow_pump = fs.add(ScrewPump(
         "P-401", description="Thickener Underflow Pump"))
-    # ``large_end="outlet"`` is what turns the second one into an expander;
-    # neither carries a row in the equipment list.
+    # ``large_end="outlet"`` turns the second one into an expander.
     suction_red = fs.add(Reducer("RD-401", variant="eccentric",
                                  description="P-401 Suction Reducer"))
     disch_red = fs.add(Reducer("RD-402", variant="concentric",
                                large_end="outlet",
                                description="P-401 Discharge Expander"))
-    # Left as a variant: no class in ``pandid.devices`` covers the liquid belt
-    # filter. ``DustCollector`` has a ``belt`` variant, but it aliases to
-    # ``gas_belt`` -- a different symbol, and a gas casing.
-    #
-    # The vacuum package is bought with the filter and drawn on the vendor's
-    # sheet, so only the cake and the filtrate cross this one.
+    # Left as a variant: no class in ``pandid.devices`` covers the
+    # liquid belt filter, and ``DustCollector``'s ``belt`` aliases to
+    # ``gas_belt``, a different symbol on a gas casing.
     belt_filter = fs.add(Filter("FL-401", variant="belt", width=60,
                                 height=110,
                                 description="Concentrate Belt Filter"))
-    # A Tee is drawn as nothing at all and carries no tag. This one splits;
-    # the four ``branch="inlet"`` tees elsewhere on the sheet combine, and are
-    # drawn identically, since a tee does not know which way its branch runs.
+    # This tee splits; the four ``branch="inlet"`` tees elsewhere
+    # combine, and are drawn identically, since a tee does not know
+    # which way its branch runs.
     cake_tee = fs.add(Tee())
     filtrate = fs.add(Product("Filtrate", reference="PCD-402"))
-    # Cake is dropped onto a belt, not piped into it, so the tail nozzle comes
-    # off the top face rather than off the end.
+    # Cake is dropped onto a belt, not piped into it, so the tail nozzle
+    # comes off the top face rather than off the end.
     conveyor = fs.add(Conveyor("CV-401", length=150,
                                description="Filter Cake Conveyor"))
     conveyor.nozzle("feed", "N")
 
-    # --- Drying -----------------------------------------------------------
+    # --- Drying -------------------------------------------------------
     air = fs.add(Feed("Ambient Air"))
     gas = fs.add(Feed("Natural Gas", reference="PCD-403"))
-    # ``Furnace`` and not ``Heater``: the difference between the two classes is
-    # the ``fuel`` nozzle, and the fuel line is why this item is here.
+    # ``Furnace`` and not ``Heater``: the difference between the two
+    # classes is the ``fuel`` nozzle, and the fuel line is why this item
+    # is here.
     heater = fs.add(Furnace("FH-401", description="Dryer Air Heater"))
-    # The dryer's feed breeching is bought and tagged with the dryer, so it is
-    # a tee rather than an item of its own.
+    # The dryer's feed breeching is bought and tagged with the dryer, so
+    # it is a tee rather than an item of its own.
     breeching = fs.add(Tee(branch="inlet"))
-    # **Two nozzles where the plant has four.** A rotary dryer has a solids
-    # chute and a gas inlet at the feed hood and the same pair at the
-    # discharge; ``units.Dryer`` declares only ``feed`` and ``product``, so
-    # each pair shares one connection. Firing co-current is what makes that
-    # pairing the right one. It costs the drawing S-416, which carries the
-    # whole product in the gas where a real drum's carries only entrained
-    # fines. A ``Dryer`` with gas nozzles of its own is the fix, and this
-    # sheet wants redrawing around them when it has them.
+    # **Two nozzles where the plant has four.** ``units.Dryer`` declares
+    # only ``feed`` and ``product``, so the solids chute and the gas
+    # duct at each end share one connection. It costs the drawing S-416,
+    # which carries the whole product in the gas. A ``Dryer`` with gas
+    # nozzles of its own is the fix, and this sheet wants redrawing
+    # around them.
     dryer = fs.add(Dryer("DR-401",
                          description="Concentrate Rotary Dryer"))
 
-    # --- Product recovery and dust capture --------------------------------
-    # Neither draw is named for which one is wanted, so here the product is
-    # the ``underflow`` and the gas still to be cleaned is the ``overflow``.
+    # --- Product recovery and dust capture ----------------------------
+    # Neither draw is named for which one is wanted, so the product is
+    # the ``underflow`` and the gas still to be cleaned is the
+    # ``overflow``.
     cyclone = fs.add(Cyclone(
         "CY-401", description="Product Recovery Cyclone"))
     scrub_water = fs.add(Feed("Scrubbing Water", reference="PCD-402"))
     scrub_tee = fs.add(Tee(branch="inlet"))
-    # The water ties in on the duct upstream rather than on the body, so the
-    # tee above carries it and the vessel takes one feed.
+    # The water ties in on the duct upstream rather than on the body, so
+    # the tee above carries it and the vessel takes one feed.
     scrubber = fs.add(Scrubber(
         "SC-401", description="Dryer Exhaust Scrubber"))
     effluent = fs.add(Product("Scrubber Effluent", reference="PCD-402"))
-    # Induced draught, so the fan is last and FH-401's air inlet is a plain
-    # flag rather than a second machine.
+    # Induced draught, so the fan is last and FH-401's air inlet is a
+    # plain flag rather than a second machine.
     fan = fs.add(Blower("BL-401", description="Dryer Exhaust Fan"))
-    # A Vent draws real piping rather than an off-page flag. Like the funnel
-    # and the reducers it is a line item and is scheduled nowhere.
+    # A Vent draws real piping rather than an off-page flag.
     stack = fs.add(Vent("VE-401", variant="exhaust_head", width=45,
                         height=36,
                         description="Dryer Exhaust Head"))
 
-    # The stencil draws the reject leaving the apex rather than lifted off the
-    # top, which is a suspended magnet drawn upside down. Read ``underflow`` as
-    # the reject leg, which is what the low draw of every mechanical separator
-    # in the registry is.
-    #
-    # variant= stated rather than defaulted: MagneticSeparator draws both the
-    # permanent and the electromagnetic body, and this sheet means the former.
+    # Read ``underflow`` as the reject leg: the stencil draws the reject
+    # leaving the apex. variant= is stated rather than defaulted, since
+    # MagneticSeparator draws both bodies and this sheet means the
+    # permanent one.
     magnet = fs.add(MagneticSeparator(
         "MS-401", variant="permanent_magnet",
         description="Product Magnetic Separator"))
     product = fs.add(Product("Dry Concentrate", reference="PFD-402"))
     tramp = fs.add(Product("Tramp Metal"))
 
-    # --- Placement --------------------------------------------------------
-    # Positioned by nozzle, not by corner: a port sits at a fixed fraction of
-    # its symbol's box. A tee is a 12-unit square with a port on the middle of
-    # each face it uses, so half its width is the offset from a junction to
-    # the corner it is pinned by.
+    # --- Placement ----------------------------------------------------
+    # A tee is a 12-unit square with a port on the middle of each face
+    # it uses, so half its width is the offset from a junction to the
+    # corner it is pinned by.
     tee_w = 12.0
     feed_y = 140.0                      # the concentrate feed line
     water_y = 230.0                     # the make-up water line, below it
@@ -236,59 +217,57 @@ def main():
     concentrate.pin(port="outlet", x=90, y=feed_y)
     water.pin(port="outlet", x=90, y=water_y)
 
-    # The powder drops into the fill line, so the funnel stands over the tee
-    # with its stem on the branch's centreline.
+    # The powder drops into the fill line, so the funnel stands over the
+    # tee with its stem on the branch's centreline.
     charge.pin(mirrored="y").pin(port="inlet", x=130, y=water_y)
     funnel.pin(port="outlet", x=charge.pin_.x + tee_w / 2, y=water_y - 20)
 
     tank.pin(port="inlet", x=200, y=260)
-    # Both the pump's connections are on its crown, so the discharge riser has
-    # to clear the tank on its way to the dosing point. That is what puts the
-    # pump east of the shell rather than under it.
+    # Both the pump's connections are on its crown, so the discharge
+    # riser has to clear the tank. That is what puts the pump east of
+    # the shell.
     dose.pin(port="discharge", x=dose_x, y=430)
 
     floc.pin(port="branch", x=dose_x, y=feed_y + tee_w / 2)
     thickener.pin(port="feed", x=380, y=feed_y)
     overflow.pin(port="inlet", x=520, y=feed_y)     # dead level off the launder
 
-    # The eccentric reducer's outlet sits 2.4 units above its inlet, which is
-    # where the .4 in the via() coordinate below comes from.
+    # The eccentric reducer's outlet sits 2.4 units above its inlet,
+    # which is where the .4 in the via() coordinate below comes from.
     suction_y = 330.0
     underflow_pump.pin(port="suction", x=520.7, y=suction_y)
-    # Both reducers stand a spool clear of the pump, and the gap is the label's
-    # rather than the piping's: a reducer's tag plate is three times the width
-    # of the fitting, so hard against the casing it takes a bite out of P-401
-    # and trips the halo invariants. Each is set at the middle of the one clear
-    # window it has.
+    # Both reducers stand a spool clear of the pump, and the gap is the
+    # label's rather than the piping's: a reducer's tag plate is three
+    # times the width of the fitting, so hard against the casing it
+    # trips the halo invariants.
     suction_red.pin(port="outlet", x=478, y=suction_y)
     disch_red.pin(port="inlet", x=624, y=suction_y)
     belt_filter.pin(port="inlet", x=670, y=suction_y)
 
     cake_tee.pin(port="inlet", x=740, y=suction_y)
-    # Set west of FH-401's tag rather than under the dryer. The burner's plate
-    # is written above its box and is wider than the box is, so a flag any
-    # further east has that plate through its own outline; the gas riser into
-    # the burner's underside rules out writing the tag below it instead.
+    # Set west of FH-401's tag rather than under the dryer: the burner's
+    # plate is wider than its box, so a flag further east has that plate
+    # through its own outline.
     filtrate.pin(port="inlet", x=770, y=560)
 
-    # The belt runs under the cake leg, so the cake drops onto its tail rather
-    # than being piped into its end, and throws off into the breeching.
+    # The belt runs under the cake leg, so the cake drops onto its tail
+    # and throws off into the breeching.
     belt_y, dryer_y = 480.0, 490.0
     conveyor.pin(port="feed", x=cake_tee.pin_.x + tee_w + 38, y=belt_y)
     breeching.pin(port="inlet", x=950, y=dryer_y)
     dryer.pin(port="feed", x=1000, y=dryer_y)
 
-    # The burner sits at grade under the feed end. Its fuel arrives from below,
-    # which is the only face the stencil's fuel nozzle offers.
+    # The burner sits at grade under the feed end. Its fuel arrives from
+    # below, the only face the stencil's fuel nozzle offers.
     heater.pin(port="inlet", x=860, y=654.5)
     air.pin(port="outlet", x=790, y=654.5)   # clear of the burner wall
     gas.pin(port="outlet", x=750, y=740)
     hot_gas_x = breeching.pin_.x + tee_w / 2
 
     cyclone.pin(port="feed", x=1180, y=322)
-    # Above the gas riser rather than beside it: the scrub-water line crosses
-    # the duct's line of travel, and the only place on this sheet where it can
-    # do that without crossing the duct itself is over the top of it.
+    # Above the gas riser rather than beside it: the scrub-water line
+    # has to cross the duct's line of travel without crossing the duct
+    # itself.
     scrub_tee.pin(mirrored="y").pin(port="inlet", x=1255, y=132)
     scrub_water.pin(port="outlet", x=1180, y=85)
     scrubber.pin(port="feed", x=1300, y=132)
@@ -301,12 +280,11 @@ def main():
     product.pin(port="inlet", x=1430, y=532)
     tramp.pin(port="inlet", x=1430, y=680)
 
-    # --- Connections ------------------------------------------------------
-    # Declared in stream-number order, which is the order the table reads. A
-    # number is drawn once, on the first segment declared, so a service that
-    # runs through more than one item starts with the run the number belongs
-    # on. Every tee here ends a number, unlike ``10``'s reflux tee, because
-    # each of the five changes what the stream downstream of it is.
+    # --- Connections --------------------------------------------------
+    # Declared in stream-number order, which is the order the table
+    # reads. A number is drawn once, on the first segment declared, so a
+    # service that runs through more than one item starts with the run
+    # it belongs on.
     fs.connect(concentrate.outlet, floc.inlet, name="S-401")
 
     fs.connect(water.outlet, charge.inlet, name="S-402")
@@ -319,9 +297,8 @@ def main():
 
     fs.connect(thickener.overflow, overflow.inlet, name="S-407")
 
-    # Straight down out of the cone. Left to itself the router steps the riser
-    # 34 units east on its way past the thickener's skirt, and it lands in the
-    # only clear window RD-401's tag has.
+    # Straight down out of the cone. Left to itself the router steps the
+    # riser 34 units east past the thickener's skirt, into RD-401's tag.
     fs.connect(thickener.underflow, suction_red.inlet, name="S-408").via(
         [(420, 332.4)])
     fs.connect(suction_red.outlet, underflow_pump.suction, name="S-408")
@@ -337,9 +314,8 @@ def main():
 
     fs.connect(air.outlet, heater.inlet, name="S-412")
     fs.connect(gas.outlet, heater.fuel, name="S-413").via([(900, 740)])
-    # Pinned by hand: left to itself the router takes the burner duct the long
-    # way round the dryer. Up the east side of the breeching and straight into
-    # the branch is the run the plant has.
+    # Pinned by hand: left to itself the router takes the burner duct
+    # the long way round the dryer.
     fs.connect(heater.outlet, breeching.branch, name="S-414").via(
         [(hot_gas_x, 654.5 + 25)])
 
@@ -364,9 +340,9 @@ def main():
             s.properties = dict(zip(PROPERTY_ROWS, values))
     fs.stream_table_sections = [("Water", "Mass Fraction")]
 
-    # --- Title strip ------------------------------------------------------
-    # The date is stated rather than left blank, so the sheet renders the same
-    # today as it did at issue.
+    # --- Title strip --------------------------------------------------
+    # date= is stated rather than left blank: left blank, the renderer
+    # fills in today's.
     fs.title_block = TitleBlock(
         title="Mineral Dewatering",
         subtitle="A400 Process Flow Diagram 1",
@@ -383,10 +359,10 @@ def main():
         ],
     )
 
-    # --- Sheet furniture --------------------------------------------------
-    # include= is named row by row in process order rather than in declaration
-    # order. The five tees, the funnel, the two reducers and the exhaust head
-    # are left out: all nine are bulk items bought by the line.
+    # --- Sheet furniture ----------------------------------------------
+    # include= is named row by row in process order. The five tees, the
+    # funnel, the two reducers and the exhaust head are left out: all
+    # nine are bulk items bought by the line.
     fs.add_annotation(equipment_list(fs, align="top", include=[
         "TK-401", "P-402", "TH-401", "P-401", "FL-401", "CV-401", "FH-401",
         "DR-401", "CY-401", "MS-401", "SC-401", "BL-401",

@@ -1,73 +1,29 @@
 """
-Example 14: Product Storage and Road Loading A600, a bulk liquid tank farm
+Example 14: Product Storage and Road Loading A600, a tank farm
 
-Three storage vessels, the transfer system that draws them down, the rack that
-loads road tankers off it, and the vapour system that takes back what the
-loading displaces. Nothing is heated, cooled, reacted or separated, so the
-sheet is dense in line hardware the reactor-and-column examples never reach
-for: two strainer bodies, a spectacle blind, a compensator, both reducer
-bodies, two flame arrestors and a conservation vent.
+Three storage vessels, the transfer system that draws them down, the
+rack that loads road tankers off it, and the vapour system that takes
+back what the loading displaces. Nothing is heated, cooled, reacted or
+separated, so the sheet is dense in line hardware the reactor-and-column
+examples never reach for: two strainer bodies, a spectacle blind, a
+compensator, both reducer bodies, two flame arrestors and a conservation
+vent.
 
-Motor spirit sits under an external floating roof, denatured ethanol under a
-fixed one and butane in a sphere -- three roofs for three vapour pressures.
-The first two are pumped to the rack and blended to E10 on ratio control; the
-third needs no pump, since the sphere's own pressure is above what the loading
-arm works at and ``PCV-606`` lets it down. Every litre loaded displaces a litre
-of vapour, which is returned to the knock-out drum ``V-604`` and passed to a
-recovery unit rather than vented at the rack.
+Motor spirit sits under an external floating roof, denatured ethanol
+under a fixed one and butane in a sphere. The first two are pumped to
+the rack and blended to E10 on ratio control; the third needs no pump,
+since the sphere's own pressure is above what the loading arm works at
+and ``PCV-606`` lets it down. Loading vapour is returned to the
+knock-out drum ``V-604`` rather than vented at the rack.
 
-It is a P&ID because almost all of it is line hardware, and ISO 15519-2 puts
-line hardware on one diagram type and not the other: its Table 4 (p. 17), the
-PFD, names no valve body, reducer or fitting, while its Table 5 (p. 19), the
-P&ID, opens with "specific graphical symbols for process equipment incl. prime
-movers ..., valves incl. actuators, connections, etc." and adds "pipe reducers
-for change of dimensions, compensators, flow straighteners, mixing paths,
-etc.". The same table is why ``P-602`` is drawn as the gear pump it is:
-"supplementary information on graphical symbols, if needed, e.g. connections
-represent equipment of specific function e.g. gear pump". CHEE4001 p.2 gives
-the rest -- "Miscellaneous: vents, drains, special fittings, sampling lines,
-reducers, etc".
-
-The overfill trip is the sheet's safety case and is drawn as a separate system
-rather than as an alarm on the gauge. CHEE4001 p.20: "For potentially hazardous
-situations it is better practice to specify a separate trip system", and, of a
-safety-related alarm, "where they are involved in protecting against
-mal-operation by the control system they should be independent of the devices
-they are monitoring". The same page reserves high-high for SIS actions, which
-is why the switches are ``LSHH`` and not ``LSH``.
-
-**Layout.** ISO 15519-1 §12.1 is a *shall* -- connecting lines "straight with a
-minimum of bends and crossovers" -- and §13.2 (p. 28) recommends that "the
-direction of the main flow should be from left to right or from top to bottom".
-Both are what the elevations are chosen for: the receipt to the *furthest* tank
-takes the *highest* run and the draw from the *nearest* tank the *lowest*, so
-every drop falls through empty paper and the sheet carries no process crossing.
-All four feeds enter on the west edge and all three products leave on the east,
-the vapour return included, so the main flow reads left to right everywhere.
-§13.1's vertical view is why the tanks sit above the pumps and §11.4.2 is why
-none of them is turned -- it names symbol 2061, *Open tank*, as a symbol "where
-gravity is a functionality", which "must not be turned". Boundary flags sit on
-the east or west edge, which is CHEE4001 p.2's preference "to show off-page
-connectors horizontally and at the edge of a P&ID".
-
-**How the three vessels are filled**, since each is filled differently and none
-of it is a default. ``TK-601``'s roof floats on the liquid, so there is no fixed
-roof to weld a nozzle to and the receipt lands on the shell. ``TK-602`` takes
-its ethanol over the top through an internal downcomer carried to the floor,
-which is what the crown nozzle is asked for by name and what the notes say.
-``V-603`` fills low on the shell and draws from the nozzle drawn under its
-belly, its crown left to the relief and the vapour connection.
-
-Every vessel here carries five nozzles and none of them is piped for all five: a
-declared nozzle is offered rather than asserted, so ``TK-602``'s conservation
-vent and ``V-603``'s fire-case relief are drawings this sheet does not make.
-CHEE4001 p.8 names the second duty exactly, for "protection against exposure of
-a pressure vessel to fire ... usually the case with storage vessels for
-non-refrigerated liquefied compressible gases at ambient temperatures".
-
-Nothing in ISO 15519-1, ISO 15519-2 or the CHEE4001 guidelines covers flame
-arrestors, conservation vents, floating roofs, tank venting or tank filling at
-all, so those choices are engineering and are attributed to nothing.
+The overfill trip is drawn as a separate system rather than as an alarm
+on the gauge, which is why the switches are ``LSHH`` and not ``LSH``.
+Each of the three vessels is filled differently and none of it is a
+default: ``TK-601``'s roof floats, so the receipt lands on the shell;
+``TK-602`` takes its ethanol over the top through an internal downcomer;
+``V-603`` fills low on the shell. Every vessel carries five nozzles and
+none is piped for all five -- a declared nozzle is offered rather than
+asserted.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -85,20 +41,19 @@ def main():
         loop_number_start=601,
     )
 
-    # --- Control loops ---------------------------------------------------
-    # add_loop() with the number left out takes the next from loop_number_start,
-    # so the series is L-601, L-602, P-603, F-604, F-605 in the order these five
-    # lines read. Nothing re-derives them afterwards: from here on each number is
-    # as fixed as a typed one.
+    # --- Control loops ------------------------------------------------
+    # add_loop() with the number left out takes the next from
+    # loop_number_start, in the order these five lines read.
     ms_level = fs.add_loop("L")      # L-601, TK-601 level
     eth_level = fs.add_loop("L")     # L-602, TK-602 level
     lpg_press = fs.add_loop("P")     # P-603, V-603 pressure
     load_flow = fs.add_loop("F")     # F-604, loading rate
     blend_flow = fs.add_loop("F")    # F-605, ethanol blend ratio
 
-    # --- Storage ---------------------------------------------------------
-    # label_pos="center" on all three: each carries a vent, a relief or a fill on
-    # the crown, and a tag written above the tank would be written across them.
+    # --- Storage ------------------------------------------------------
+    # label_pos="center" on all three: each carries a vent, a relief or
+    # a fill on the crown that a tag written above would be written
+    # across.
     tk601 = fs.add(Tank("TK-601", variant="floating_roof", width=190, height=140,
                         label_pos="center", description="Motor Spirit Storage Tank"))
     tk602 = fs.add(Tank("TK-602", width=180, height=150, label_pos="center",
@@ -108,12 +63,12 @@ def main():
     v604 = fs.add(Vessel("V-604", variant="legs", width=60, height=120,
                          description="Loading Vapour Knock-Out Drum"))
 
-    # --- Rotating --------------------------------------------------------
+    # --- Rotating -----------------------------------------------------
     p601 = fs.add(Pump("P-601", description="Motor Spirit Transfer Pump"))
     p602 = fs.add(Pump("P-602", variant="gear", width=48, height=76,
                        description="Ethanol Blend Pump"))
 
-    # --- Boundary --------------------------------------------------------
+    # --- Boundary -----------------------------------------------------
     ms_in = fs.add(Feed("Motor Spirit", reference="P&ID-501"))
     eth_in = fs.add(Feed("Denatured Ethanol", reference="PFD-302"))
     lpg_in = fs.add(Feed("Butane", reference="P&ID-503"))
@@ -122,8 +77,8 @@ def main():
     vap_in = fs.add(Feed("Tanker Vapour Return", reference="P&ID-611"))
     vru_out = fs.add(Product("Vapour Recovery Unit", reference="P&ID-609"))
 
-    # --- In-line: motor spirit -------------------------------------------
-    # Both receipt valves fail closed on the trip, and say so on the valve.
+    # --- In-line: motor spirit ----------------------------------------
+    # Both receipt valves fail closed on the trip, and say so.
     xv601 = fs.add(Valve("XV-601", variant="solenoid", fail="closed",
                          description="MS Receipt Trip Valve"))
     xv602 = fs.add(Valve("XV-602", variant="solenoid", fail="closed",
@@ -133,16 +88,15 @@ def main():
                            description="TK-601 Nozzle Compensator"))
     st601 = fs.add(Fitting("ST-601", variant="strainer_basket",
                            description="P-601 Suction Strainer"))
-    # large_end="outlet" is what makes RD-602 an expansion: the same fitting
-    # piped round the other way rather than a second symbol, so the run still
-    # goes inlet to outlet through both.
+    # large_end="outlet" is what makes RD-602 an expansion: the same
+    # fitting piped round the other way rather than a second symbol.
     rd601 = fs.add(Reducer("RD-601", variant="eccentric",
                            description="P-601 Suction Reducer"))
     rd602 = fs.add(Reducer("RD-602", variant="concentric", large_end="outlet",
                            description="P-601 Discharge Expander"))
     nrv601 = fs.add(Valve("NRV-601", variant="check", description="P-601 Non-Return Valve"))
 
-    # --- In-line: ethanol ------------------------------------------------
+    # --- In-line: ethanol ---------------------------------------------
     hv603 = fs.add(Valve("HV-603", variant="gate", description="TK-602 Root Valve"))
     sb601 = fs.add(Fitting("SB-601", variant="blind", description="TK-602 Spectacle Blind"))
     t_rec = fs.add(Tee(branch="inlet"))
@@ -156,28 +110,27 @@ def main():
                          description="Ethanol Blend Valve"))
     nrv602 = fs.add(Valve("NRV-602", variant="check", description="P-602 Non-Return Valve"))
 
-    # --- In-line: butane -------------------------------------------------
+    # --- In-line: butane ----------------------------------------------
     hv605 = fs.add(Valve("HV-605", variant="gate", description="V-603 Root Valve"))
     pcv606 = fs.add(Valve("PCV-606", variant="regulator",
                           description="Butane Let-Down Regulator"))
     hv608 = fs.add(Valve("HV-608", variant="ball", description="LPG Loading Arm Valve"))
 
-    # --- In-line: the loading rack ---------------------------------------
+    # --- In-line: the loading rack ------------------------------------
     t_blend = fs.add(Tee(branch="inlet"))
     t_blend.new_line_number = True
-    # label_pos="bottom" keeps FE-604's tag clear of FT-604, which stands over it.
+    # label_pos="bottom" keeps FE-604's tag clear of FT-604 above it.
     fe604 = fs.add(Fitting(load_flow.element("FE"), variant="positive_displacement",
                            label_pos="bottom", description="Loading Meter"))
     cv604 = fs.add(Valve(load_flow.tag("CV"), variant="control",
                          description="Loading Rate Valve"))
     hv604 = fs.add(Valve("HV-604", variant="ball", description="E10 Loading Arm Valve"))
-    # HOS and not HS. ISO 15519-2 Table 2 (p. 11) gives H as a process variable,
-    # "Human observation", and S as a control function, "Switching (open loop)",
-    # so HS-601 is a well-formed letter code string and tagged this hose as an
-    # instrument. HOS breaks at the second letter, which is neither.
+    # HOS and not HS: HS-601 is a well-formed instrument letter code and
+    # would tag this hose as an instrument. HOS breaks at the second
+    # letter.
     hos601 = fs.add(Fitting("HOS-601", variant="hose", description="E10 Loading Hose"))
 
-    # --- In-line: the vapour system --------------------------------------
+    # --- In-line: the vapour system -----------------------------------
     fa602 = fs.add(Fitting("FA-602", variant="flame_arrestor_detonation_proof",
                            description="Vapour Return Flame Arrestor"))
     hv607 = fs.add(Valve("HV-607", variant="butterfly", description="Vapour Header Valve"))
@@ -185,17 +138,16 @@ def main():
                            description="V-604 Vent Flame Arrestor"))
     vt601 = fs.add(Vent("VT-601", variant="breather", description="V-604 Conservation Vent"))
 
-    # --- Placement -------------------------------------------------------
-    # Pinned by nozzle, not by corner: every device is placed with pin(port=...),
-    # which asks the symbol where its own nozzle sits, so no rescaling of the
-    # artwork can leave a valve off its run.
+    # --- Placement ----------------------------------------------------
+    # Pinned by nozzle, not by corner: pin(port=...) asks the symbol
+    # where its own nozzle sits, so no rescaling of the artwork can
+    # leave a valve off its run.
     tk601.pin(x=360, y=215)
     tk602.pin(x=680, y=205)
     v603.pin(x=1090, y=180)
 
-    # TK-602 is the only one of the three filled over the top, and it says so:
-    # the crown is an alternate on a fixed-roof tank and the shell is the
-    # default, so a sheet that wants the downcomer arrangement asks for it.
+    # The crown is an alternate on a fixed-roof tank and the shell is
+    # the default, so the downcomer arrangement has to be asked for.
     tk602.nozzle("inlet", "N")
 
     ms_drop_x = 340.0
@@ -203,8 +155,9 @@ def main():
     ms_draw_x = 360 + port_offset(tk601, "outlet")[0]
     eth_fill_x = 680 + port_offset(tk602, "inlet")[0]
     eth_draw_x = 680 + port_offset(tk602, "outlet")[0]
-    # The sphere fills low on the west shell and draws from the nozzle under its
-    # belly, so the receipt drops clear of the vessel and comes in level.
+    # The sphere fills low on the west shell and draws from under its
+    # belly, so the receipt drops clear of the vessel and comes in
+    # level.
     lpg_fill_y = 180 + port_offset(v603, "inlet")[1]
     lpg_draw_x = 1090 + port_offset(v603, "outlet")[0]
 
@@ -224,11 +177,10 @@ def main():
     ej601.pin(port="inlet", x=560, y=ms_run_y)
     st601.pin(port="inlet", x=605, y=ms_run_y)
     rd601.pin(port="inlet", x=665, y=ms_run_y)
-    # RD-601 is the eccentric body, so its two nozzles are not on one centreline
-    # and pinning the pump on ms_run_y put a step in the line immediately
-    # downstream of it. The pump is pinned at the *reducer's outlet* elevation
-    # instead, asked of the symbol rather than measured off the drawing, so the
-    # suction is straight from the strainer to the pump nozzle.
+    # RD-601 is the eccentric body, so its two nozzles are not on one
+    # centreline. The pump is pinned at the *reducer's outlet*
+    # elevation, asked of the symbol, so the suction runs straight into
+    # its nozzle.
     ms_suction_y = ms_run_y + port_offset(rd601, "outlet")[1] - port_offset(rd601, "inlet")[1]
     p601.pin(port="suction", x=705, y=ms_suction_y)
     ms_disch_y = ms_suction_y + port_offset(p601, "discharge")[1] - port_offset(p601, "suction")[1]
@@ -262,11 +214,10 @@ def main():
     hos601.pin(port="inlet", x=1505, y=blend_y)
     e10_out.pin(port="inlet", x=1560, y=blend_y)
 
-    # The return enters on the west edge with the other three feeds and reads
-    # left to right into V-604, which un-mirrored puts the drum's inlet and
-    # outlet on one centreline: both flags sit on vap_y and the run is straight
-    # from edge to edge. HV-607 and FA-602 are walked back from the drum by
-    # their own widths, so the two gaps hold whatever the artwork measures.
+    # V-604 un-mirrored puts its inlet and outlet on one centreline, so
+    # both flags sit on vap_y and the run is straight from edge to edge.
+    # HV-607 and FA-602 are walked back from the drum by their own
+    # widths, so the two gaps hold whatever the artwork measures.
     vap_y = 830.0
     drum_x, vap_gap = 1255.0, 52.0
     fa602_x = drum_x - vap_gap - port_offset(fa602, "outlet")[0]
@@ -281,7 +232,7 @@ def main():
     vt601.pin(port="inlet", x=vent_x, y=vent_y - 68)
     vru_out.pin(port="inlet", x=1560, y=vap_y)
 
-    # --- Process lines ---------------------------------------------------
+    # --- Process lines ------------------------------------------------
     fs.connect(ms_in.outlet, xv601.inlet, service="MS", sequence=601, size=200,
                schedule=40, spec="CS")
     fs.connect(xv601.outlet, tk601.inlet).via(
@@ -343,39 +294,36 @@ def main():
                schedule=40, spec="CS")
     fs.connect(fa601.outlet, vt601.inlet)
 
-    # --- Instruments -----------------------------------------------------
-    # The alarms these indicators carry are not drawn. ISO 15519-2 5.2.5 is a
-    # shall -- "Letter code combinations with modifiers H and L shall be
-    # represented outside the PCI symbol" -- and pandid cannot yet write a code
-    # string beside a balloon (#137, #169), so they are left off rather than
-    # drawn as balloons that would compete with the trip below.
+    # --- Instruments --------------------------------------------------
+    # The alarms these indicators carry are not drawn: pandid cannot yet
+    # write a letter code string beside a balloon.
     lt601 = fs.add_instrument("LT", ms_level, on=tk601, at="W", offset=62)
     fs.add_instrument("LI", ms_level, on=lt601, at="S", offset=50, variant="shared")
     lt602 = fs.add_instrument("LT", eth_level, on=tk602, at="W", offset=32)
     fs.add_instrument("LI", eth_level, on=lt602, at="S", offset=50, variant="shared")
 
-    # Both switches keep literal numbers. What they initiate is Z-1, which
-    # carries the trip's number and not theirs, so declaring L-611 would put a
-    # loop of exactly one balloon in fs.loops that the drawing does not contain.
+    # Both switches keep literal numbers. What they initiate is Z-1,
+    # which carries the trip's number and not theirs, so declaring L-611
+    # would put a loop of exactly one balloon in fs.loops.
     lsh611 = fs.add_instrument("LSHH", 611, on=tk601, at="E", offset=32)
     lsh612 = fs.add_instrument("LSHH", 612, on=tk602, at="E", offset=40)
-    # Instrument(variant="sis") is the one symbol allowed to carry its tag more
-    # than once, so Z-1 is drawn at each of the four points it acts on rather
-    # than wired across the sheet from each switch to each valve.
+    # Instrument(variant="sis") is the one symbol allowed to carry its
+    # tag more than once, so Z-1 is drawn at each of the four points it
+    # acts on.
     fs.add_instrument("Z", 1, on=lsh611, at="N", offset=40, variant="sis")
     fs.add_instrument("Z", 1, on=lsh612, at="N", offset=40, variant="sis")
-    # 46 and not 26: FC is written directly below each valve (PIP PIC001
-    # 4.2.4.6) and the square has to hang below the mark, not on it.
+    # 46 and not 26: FC is written directly below each valve, so the
+    # square has to hang below that mark rather than on it.
     fs.add_instrument("Z", 1, on=xv601, at="S", offset=46, variant="sis")
     fs.add_instrument("Z", 1, on=xv602, at="S", offset=46, variant="sis")
 
     pt603 = fs.add_instrument("PT", lpg_press, on=v603, at="E", offset=30)
     fs.add_instrument("PI", lpg_press, on=pt603, at="N", offset=40, variant="shared")
 
-    # The balloon over a valve is centred on the valve's own face, so the axis
-    # the cascade is routed down is half the valve wide -- not the actuator's
-    # offset, which is a hair off centre and would put a 0.05 px slope in a
-    # signal line.
+    # The balloon over a valve is centred on the valve's own face, so
+    # the axis the cascade routes down is half the valve wide -- not the
+    # actuator's offset, which would put a 0.05 px slope in a signal
+    # line.
     cv604_axis = 1400 + resolve_size(cv604)[0] / 2
     cv605_axis = 1140 + resolve_size(cv605)[0] / 2
     fe604_top = blend_y - port_offset(fe604, "inlet")[1]
@@ -390,10 +338,10 @@ def main():
     fs.connect(ft604.sig_out, fic604.sig_in, kind="electric")
     fs.connect(fic604.sig_out, cv604.actuator, kind="pneumatic")
 
-    # The blend is ratio control, so FIC-605 takes its setpoint from FIC-604.
-    # kind="software" and not a wire: both faceplates are functions of the same
-    # DCS and nothing runs between them in the field. Its route is given by hand
-    # because the router leaves FIC-604 through its last free face instead.
+    # Ratio control, so FIC-605 takes its setpoint from FIC-604.
+    # kind="software" and not a wire: both faceplates are functions of
+    # the same DCS. The route is given by hand because the router leaves
+    # FIC-604 through its last free face instead.
     ft605 = fs.add_instrument("FT", blend_flow, on=fe605, at="N", offset=fe605_top - balloon_row_y)
     fic605 = fs.add_instrument("FIC", blend_flow, on=cv605, at="N", variant="shared",
                                offset=cv605_top - balloon_row_y)
@@ -404,15 +352,10 @@ def main():
         [(cv604_axis, cascade_y), (cv605_axis, cascade_y)])
     fs.connect(fic605.sig_out, cv605.actuator, kind="pneumatic")
 
-    # --- Sheet furniture -------------------------------------------------
-    # scale="NTS" rather than left blank: a blank cell makes the sheet report the
-    # ratio it was fitted at, and CHEE4001 p.2 is flat about that -- "Do not
-    # represent the real length of pipes on P&IDs. P&ID is a 'Not to Scale'
-    # (NTS) drawing." The date is stated for the same reason a fixture pins one:
-    # left blank the renderer fills in today's.
-    #
-    # All three sets of initials are fictional, as they are on 03 and 09. AA is
-    # the repo's author.
+    # --- Sheet furniture ----------------------------------------------
+    # scale= and date= are stated rather than left blank: left blank,
+    # the renderer fills in the ratio it fitted the sheet at and today's
+    # date.
     fs.title_block = TitleBlock(
         title="Tank Farm and Loading",
         subtitle="A600 Process & Instrumentation Diagram 1",
@@ -437,10 +380,8 @@ def main():
               ("P-602", "Ethanol Blend Pump")],
         align="top-right",
     ))
-    # Unnumbered, because a number in a notes box is a flag note drawn on the
-    # line it applies to and nothing here puts a reference on a line. Each note
-    # states something the drawing cannot: a symbol key belongs in the LEGEND
-    # box and where the trip squares are is visible.
+    # Unnumbered: a number in a notes box is a flag note drawn on the
+    # line it applies to, and nothing here puts a reference on a line.
     fs.add_annotation(notes([
         "Z-1: receipt shutdown on tank high-high level.",
         "LSHH-611/612 are independent of the gauging transmitters they back up.",

@@ -1,25 +1,25 @@
 """
 Example 8: Building a flowsheet from data
 
-Every other example writes Python. This one writes *data*: one plain mapping,
-the same thing you would keep in a YAML or JSON file next to the equipment list
-it came from, handed to ``Flowsheet.from_dict``. Nothing else about the engine
-changes; layout, routing and stream numbering all run exactly as before.
+Every other example writes Python. This one writes *data*: one plain
+mapping, the same thing you would keep in a YAML or JSON file, handed to
+``Flowsheet.from_dict``. Layout, routing and stream numbering run
+exactly as before.
 
     fs = Flowsheet.from_dict(SPEC)      # a dict, from anywhere
     fs = Flowsheet.from_json("bfw.json")
     fs = Flowsheet.from_yaml("bfw.yaml")   # needs: pip install 'pandid[yaml]'
     spec = fs.to_dict()                 # writes the same spec back out
 
-The process is a boiler feedwater package: makeup water is strained and joins
-returning condensate in the pump suction header, a spillback keeps the pump
-above its minimum flow, and the deaerator's level controller throttles the feed
-to the boiler.
+The process is a boiler feedwater package: makeup water is strained and
+joins returning condensate in the pump suction header, a spillback keeps
+the pump above its minimum flow, and the deaerator's level controller
+throttles the feed to the boiler.
 
-Placement is left to the engine, because that is the point of authoring from
-data: the spec is an equipment list and a connectivity list, not coordinates.
-It does carry ``pin`` (with ``orientation``, ``mirrored`` and ``col``/``row``)
-and ``port_faces``; see the README and examples 03, 06 and 07.
+Placement is left to the engine, because that is the point of authoring
+from data: the spec is an equipment list and a connectivity list, not
+coordinates. It does carry ``pin`` (with ``orientation``, ``mirrored``
+and ``col``/``row``) and ``port_faces``.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -28,9 +28,10 @@ from pandid import Flowsheet
 
 SPEC = {
     "name": "Boiler Feedwater Package",
-    # --- Equipment list --------------------------------------------------
-    # ``kind`` is the equipment class, ``variant`` the drawn style within it,
-    # ``reference`` the off-page drawing a boundary flag points at.
+    # --- Equipment list -----------------------------------------------
+    # ``kind`` is the equipment class, ``variant`` the drawn style
+    # within it, ``reference`` the off-page drawing a boundary flag
+    # points at.
     "units": [
         {"kind": "Feed", "name": "Makeup Water", "reference": "PFD-100"},
         {"kind": "Fitting", "name": "ST-201", "variant": "strainer",
@@ -41,25 +42,25 @@ SPEC = {
         {"kind": "Splitter", "name": "SP-201", "n_outlets": 2, "description": "Minimum-Flow Tee"},
         {"kind": "Valve", "name": "FV-201", "variant": "control",
          "description": "Minimum-Flow Spillback Valve"},
-        # The drum is fed over the top tray rather than through its left head,
-        # so its inlet is moved to the north face.
+        # Fed over the top tray rather than through its left head, so
+        # the inlet is moved to the north face.
         {"kind": "Vessel", "name": "V-201", "variant": "horizontal", "width": 150, "height": 48,
          "description": "Deaerator Drum", "port_faces": {"inlet": "N"}},
         {"kind": "Vent", "name": "VT-201", "description": "Deaerator Vent Stack"},
-        # Only the transform is pinned; where the valve goes is still the
-        # engine's decision. Flipped so the actuator faces the controller.
+        # Only the transform is pinned; where the valve goes is still
+        # the engine's decision.
         {"kind": "Valve", "name": "CV-201", "variant": "control",
          "description": "Deaerator Level Control Valve", "pin": {"mirrored": "y"}},
         {"kind": "Product", "name": "To Boiler", "reference": "PFD-500"},
     ],
-    # --- Instrumentation -------------------------------------------------
-    # ``on``/``at``/``offset`` anchor each balloon to its host; ``port_faces``
-    # picks which side of the circle a signal leaves from, since a balloon is
-    # round and has no natural in/out side.
+    # --- Instrumentation ----------------------------------------------
+    # ``on``/``at``/``offset`` anchor each balloon to its host;
+    # ``port_faces`` picks which side of the circle a signal leaves
+    # from, since a balloon is round and has no natural in/out side.
     "instruments": [
         {"type": "LT", "number": 201, "description": "Deaerator Level Transmitter",
          "on": "V-201", "at": "S", "offset": 58, "port_faces": {"sig_out": "S"}},
-        # Directly below the transmitter, so the measurement is a straight drop.
+        # Directly below the transmitter: a straight drop.
         {"type": "LIC", "number": 201, "variant": "panel",
          "description": "Deaerator Level Control", "on": "V-201", "at": "S",
          "offset": 140, "port_faces": {"sig_in": "N"}},
@@ -67,9 +68,9 @@ SPEC = {
          "on": "CV-201", "at": "S", "offset": 58,
          "port_faces": {"sig_in": "W", "sig_out": "N"}},
     ],
-    # --- Stream table ----------------------------------------------------
-    # Each connection is a pair of named nozzles plus the properties of that
-    # line; values carry their own units.
+    # --- Stream table -------------------------------------------------
+    # Each connection is a pair of named nozzles plus the properties of
+    # that line; values carry their own units.
     "streams": [
         {"from": ["Makeup Water", "outlet"], "to": ["ST-201", "inlet"],
          "properties": {"Temperature": "25 C", "Pressure": "4.0 barg",
@@ -92,8 +93,9 @@ SPEC = {
         {"from": ["SP-201", "out_1"], "to": ["FV-201", "inlet"],
          "properties": {"Temperature": "77 C", "Pressure": "11.6 barg",
                         "Mass Flow": "6.0 t/h", "Dissolved O2": "1600 ppb"}},
-        # The spillback closes the loop, so nominate it as the tear: without the
-        # hint the cycle could be broken at the pump instead.
+        # The spillback closes the loop, so nominate it as the tear:
+        # without the hint the cycle could be broken at the pump
+        # instead.
         {"from": ["FV-201", "outlet"], "to": ["M-201", "in_1"], "draw_as_recycle": True,
          "properties": {"Temperature": "77 C", "Pressure": "3.4 barg",
                         "Mass Flow": "6.0 t/h", "Dissolved O2": "1600 ppb"}},
@@ -106,14 +108,14 @@ SPEC = {
         {"from": ["CV-201", "outlet"], "to": ["To Boiler", "inlet"],
          "properties": {"Temperature": "105 C", "Pressure": "0.1 barg",
                         "Mass Flow": "59.7 t/h", "Dissolved O2": "7 ppb"}},
-        # Signal lines are streams too, and ``kind`` is what draws them dashed
-        # or ticked rather than solid.
+        # Signal lines are streams too, and ``kind`` is what draws them
+        # dashed or ticked rather than solid.
         {"from": ["LT-201", "sig_out"], "to": ["LIC-201", "sig_in"], "kind": "electric"},
         {"from": ["LIC-201", "sig_out"], "to": ["LV-201", "sig_in"], "kind": "electric"},
         {"from": ["LV-201", "sig_out"], "to": ["CV-201", "actuator"], "kind": "pneumatic"},
     ],
     "stream_table_sections": [["Dissolved O2", "Water Quality"]],
-    # --- Sheet furniture -------------------------------------------------
+    # --- Sheet furniture ----------------------------------------------
     "title_block": {
         "title": "Utilities U200",
         "subtitle": "Boiler Feedwater Package",
@@ -149,8 +151,8 @@ SPEC = {
 def main():
     fs = Flowsheet.from_dict(SPEC)
 
-    # The format round-trips, so a sheet tweaked in Python can be written back
-    # out: ``json.dump(fs.to_dict(), f)``.
+    # The format round-trips, so a sheet tweaked in Python can be
+    # written back out: ``json.dump(fs.to_dict(), f)``.
     assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
 
     fs.render(out("from_data.svg"), show_stream_table=True, border="zone")
