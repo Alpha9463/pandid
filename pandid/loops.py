@@ -1,72 +1,48 @@
-"""Control loops: the measured variable and number an instrument tag opens with.
+"""Control loops: the variable and number an instrument tag opens with.
 
-A loop is a *namespace*, not a drawn thing. It has no frame and no ports, it
-never enters :attr:`~pandid.flowsheet.Flowsheet.units`, and so it reaches no
-equipment list and nothing in layout, routing or rendering has to know it
-exists. What it owns is the number, and what it checks is the first letter of
-every balloon tagged from it:
+A loop is a *namespace*, not a drawn thing. It has no frame and no
+ports, it never enters :attr:`~pandid.flowsheet.Flowsheet.units`, and so
+it reaches no equipment list and nothing in layout, routing or rendering
+has to know it exists. What it owns is the number, and what it checks is
+the first letter of every balloon tagged from it::
 
     loop = fs.add_loop("F", 303)
     fe = fs.add(units.Fitting(loop.element("FE"), variant="venturi"))
     ft = fs.add_instrument("FT", loop, on=line, at=0.5, offset=95)
-    fic = fs.add_instrument("FIC", loop, on=ft, at="N", offset=90, variant="shared")
+    fic = fs.add_instrument("FIC", loop, on=ft, at="N", offset=90,
+                            variant="shared")
     cv = fs.add(units.Valve(loop.tag("CV"), variant="control"))
 
-The number is typed once. The measured-variable letter is still typed on every
-balloon and checked against the loop at the call site, and that redundancy is the
-point: a loop that *supplied* the letter would have every balloon agreeing by
-construction, so an ``FIC`` reading a ``TT`` would become unrepresentable rather
-than detected, and the check would have nothing left to check.
+The number is typed once. The measured-variable letter is still typed on
+every balloon and checked against the loop at the call site, so an
+``FIC`` reading a ``TT`` is detected rather than made unrepresentable.
 
-Two of those four members are not balloons, and they join through two different
-methods because they are lettered by two different rules. A **primary element**
--- the venturi in the line -- is lettered from the measured variable exactly as
-a balloon is, so :meth:`Loop.element` composes its tag and applies the same
-check. A **final control element** is not: the reference sheet spells every
-control valve ``CV-`` whatever it strokes, so there is nothing about
-``CV-303``'s letters a first-letter rule could hold true, and
-:meth:`Loop.tag` composes without one.
-
-The distinction is in the two names rather than in a flag on one of them,
-because it is a distinction between two pieces of equipment and not between two
-strictnesses. An author reaching for either already knows which they have in
-hand; the method they reach for asks that and nothing more, and a check nobody
-has to remember to switch on is the only kind that catches what nobody noticed.
+The two members that are not balloons join through two methods, because
+they are lettered by two rules. A **primary element** -- the venturi in
+the line -- is lettered from the measured variable exactly as a balloon
+is, so :meth:`Loop.element` composes its tag and applies the same check.
+A **final control element** is not: the reference sheet spells every
+control valve ``CV-`` whatever it strokes, so :meth:`Loop.tag` composes
+without a check.
 
 A loop is identified by the **pair**, not by the number. ``FIC-101`` and
-``LIC-101`` are two loops on one sheet, which is the ordinary convention and
-what :file:`examples/04_control_loop.py` draws, so nothing may recover loops by
+``LIC-101`` are two loops on one sheet, so nothing may recover loops by
 grouping tags on the number alone.
 
-Loops allocate once and never renumber, unlike streams. A stream number is
-engine output and :meth:`~pandid.flowsheet.Flowsheet.renumber_streams` re-derives
-it on every ``connect()``; a loop number is author intent that leaves the
-drawing and lands in a DCS database, on a valve nameplate and in a
-cause-and-effect chart, so the engine never rewrites one.
+Loops allocate once and never renumber, unlike streams. A stream number
+is engine output and
+:meth:`~pandid.flowsheet.Flowsheet.renumber_streams` re-derives it on
+every ``connect()``; a loop number is author intent that lands in a DCS
+database, on a valve nameplate and in a cause-and-effect chart.
 
-That argument is about a number which has *left*, and nothing leaves a draft.
-Before the sheet is issued there is a stage where the numbers and the count of
-loops are both still moving, and typing a literal at every ``add_loop`` is the
-churn that stage is made of: add a loop near the top of a sheet whose series
-runs in reading order and every number below it is retyped by hand, on a
-drawing whose whole point is that a number is typed once. So the number may be
-left out -- ``fs.add_loop("F")`` -- and the sheet allocates the next one from a
-single counter running across measured variables.
-
-Allocation does not weaken "allocate once"; it is where the once happens. The
-counter runs at *declaration*, so the number is fixed by the line that declares
-the loop exactly as a typed one is, and from that instant it is the loop's
-number and nothing re-derives it: not a render, not a ``connect()``, not
-another ``add_loop`` further down the file. What is deferred is only who types
-the digits, and only until the draft settles.
-
-The freeze is :meth:`~pandid.flowsheet.Flowsheet.to_dict`, which writes
-``loops: [{variable, number}]`` with the number spelled out, allocated or
-typed, because by then the distinction has stopped existing -- it is just the
-loop's number. Reading that spec back gives a sheet whose numbers are nailed
-down and whose counter is untouched, which is what an issued sheet is, and the
-DCS argument above governs from there on. Auto-numbering is the draft stage;
-``to_dict()`` is the issue.
+The number may still be left out -- ``fs.add_loop("F")`` -- and the
+sheet allocates the next one from a single counter running across
+measured variables. The counter runs at *declaration*, so the number is
+fixed by the line that declares the loop and nothing re-derives it
+afterwards. :meth:`~pandid.flowsheet.Flowsheet.to_dict` writes
+``loops: [{variable, number}]`` with the number spelled out either way,
+so reading that spec back gives a sheet whose numbers are nailed down
+and whose counter is untouched.
 """
 
 from __future__ import annotations
@@ -75,12 +51,11 @@ from __future__ import annotations
 class Loop:
     """One control loop: a measured-variable letter and a number.
 
-    Built by :meth:`~pandid.flowsheet.Flowsheet.add_loop` rather than directly,
-    so the sheet it belongs to is the thing that refuses a duplicate. The number
-    is required *here* and optional there for the same reason: a series belongs
-    to a sheet, so the sheet is the only thing that can say what comes next. By
-    the time a loop exists it has a number, and nothing downstream can tell, or
-    needs to tell, whether it was typed or counted.
+    Built by :meth:`~pandid.flowsheet.Flowsheet.add_loop` rather than
+    directly, so the sheet refuses a duplicate. The number is required
+    *here* and optional there because a series belongs to a sheet: by
+    the time a loop exists it has a number, and nothing downstream can
+    tell whether it was typed or counted.
     """
 
     def __init__(self, variable: str, number: str | int):
@@ -106,46 +81,33 @@ class Loop:
     def name(self) -> str:
         """The loop's identity as a string (``"F-303"``).
 
-        Not a tag: no instrument carries it, because a member's tag opens with
-        the measured variable and continues with its own function letters.
+        Not a tag: no instrument carries it, because a member's tag
+        opens with the measured variable and continues with its own
+        function letters.
         """
         return f"{self.variable}-{self.number}"
 
     def tag(self, letters: str) -> str:
-        """The tag a **final control element** of this loop carries
-        (``loop.tag("CV")`` -> ``"CV-303"``).
+        """The tag a **final control element** carries.
 
-        This is how anything not lettered from the measured variable joins a
-        loop. Loop 303's final element is a :class:`~pandid.units.Valve`; it is
-        not minted by :meth:`~pandid.flowsheet.Flowsheet.add_instrument`, and
-        the returned string is an ordinary tag, so every unit class joins on the
-        same terms.
+        ``loop.tag("CV")`` gives ``"CV-303"``. This is how anything not
+        lettered from the measured variable joins a loop: the returned
+        string is an ordinary tag, so every unit class joins on the same
+        terms.
 
-        The measured-variable check is *not* applied here, and cannot be for a
-        final element. It is the check
-        :meth:`~pandid.flowsheet.Flowsheet.add_instrument` makes, because it is
-        a rule about a **functional letter string**: an instrument's first
-        letter is what it measures. A final control element is not tagged that
-        way. The reference sheet spells every control valve ``CV-...`` whatever
-        it strokes -- ``LIC-306`` drives ``CV-306`` and ``PIC-301`` drives
-        ``CV-301-1`` -- so a final element's letters do not track its loop.
+        The measured-variable check is *not* applied, and cannot be. The
+        reference sheet spells every control valve ``CV-...`` whatever
+        it strokes -- ``LIC-306`` drives ``CV-306``, ``PIC-301`` drives
+        ``CV-301-1`` -- so a final element's letters do not track its
+        loop.
 
-        Its **number** does, and that is the half this supplies. CHEE4001 p.11
-        labels the control valve of a flow loop ``Loop No.`` alongside the
-        element, the transmitter and the controller, all four numbered 504, and
-        p.13 gives the rule they follow: "A loop number is assigned to each
-        group of components required to perform the desired function of the
-        monitor or control scheme." The valve is in the group. So the number is
-        what membership is written with, and the signal edge into the actuator
-        is what it is drawn with.
+        Its **number** does, and that is the half this supplies.
+        CHEE4001 p.13: "A loop number is assigned to each group of
+        components required to perform the desired function of the
+        monitor or control scheme." The valve is in the group.
 
-        **A primary element goes through** :meth:`element` **instead**, and that
-        is issue #203. Both are units rather than balloons and both used to come
-        through here, but only one of them is lettered from the measured
-        variable, so ``flow_loop.tag("TE")`` quietly composed ``TE-303`` while
-        ``add_instrument("TT", flow_loop)`` had always raised. Nothing about a
-        control valve's letters can be checked; everything about an element's
-        can.
+        **A primary element goes through** :meth:`element` **instead**;
+        see issue #203.
         """
         letters = letters.strip()
         if not letters:
@@ -156,31 +118,20 @@ class Loop:
         return f"{letters}-{self.number}"
 
     def element(self, letters: str) -> str:
-        """The tag a **primary element** of this loop carries, checked
-        (``loop.element("FE")`` -> ``"FE-303"``).
+        """The tag a **primary element** carries, checked.
 
-        A primary element is the thing in the pipe the measurement is taken from
-        -- an orifice plate, a venturi, a coriolis meter -- and it is lettered
-        from the measured variable exactly as a balloon is: ``F`` for flow, then
-        ``E`` for element. So the check :meth:`check` makes for a balloon is the
-        check this makes, and on a flow loop ``element("TE")`` raises where
-        :meth:`tag` had composed ``TE-303`` and said nothing (issue #203).
+        ``loop.element("FE")`` gives ``"FE-303"``. A primary element is
+        the thing in the pipe the measurement is taken from -- an
+        orifice plate, a venturi, a coriolis meter -- and it is lettered
+        from the measured variable exactly as a balloon is, so this
+        makes the same check :meth:`check` does. On a flow loop
+        ``element("TE")`` raises where :meth:`tag` composed ``TE-303``
+        silently (issue #203).
 
-        **Why a second name and not a flag on** :meth:`tag`. The two calls tag
-        two different pieces of equipment, and an engineer writing the sheet
-        knows perfectly well which one is in their hands -- an element in the
-        line, or the valve at the end of the loop. Putting that in the method
-        name asks for the fact they already have and gives back the check that
-        follows from it. Putting it in ``tag(letters, check=...)`` puts the same
-        fact in a parameter that says nothing about the equipment, has to pick
-        one default for both, and is passed by nobody: whichever way it
-        defaulted, the safe call would be the one an author had to remember to
-        write, which is exactly backwards for a check whose purpose is to catch
-        what an author did not notice.
-
-        The rule is the measured variable and nothing else, so a restriction
-        orifice ``FO`` and a sight glass ``FG`` on a flow loop are as welcome
-        here as ``FE``. What is refused is a *different variable*.
+        The rule is the measured variable and nothing else, so a
+        restriction orifice ``FO`` and a sight glass ``FG`` on a flow
+        loop are as welcome as ``FE``. What is refused is a *different
+        variable*.
         """
         letters = letters.strip()
         if not letters:
@@ -202,12 +153,12 @@ class Loop:
         return f"{letters}-{self.number}"
 
     def check(self, letters: str) -> None:
-        """Raise unless *letters* opens with this loop's measured variable.
+        """Raise unless *letters* opens with the measured variable.
 
-        The rule an instrument balloon is held to. Called from
-        :meth:`~pandid.flowsheet.Flowsheet.add_instrument`, where the letters
-        are typed, so a ``TT`` put on a flow loop fails at that line rather than
-        turning up as a finding at render time.
+        The rule an instrument balloon is held to, called from
+        :meth:`~pandid.flowsheet.Flowsheet.add_instrument` where the
+        letters are typed, so a ``TT`` put on a flow loop fails at that
+        line rather than as a finding at render time.
         """
         first = letters.strip()[:1]
         if not first:
