@@ -672,7 +672,7 @@ class _Tags(NamedTuple):
     plates: list
 
 
-def _tag_pass(fs, registry) -> "_Tags":
+def _tag_pass(fs, registry, joints=None) -> "_Tags":
     """Run the sheet's equipment-tag placement, without drawing anything.
 
     :meth:`SvgRenderer._tag_item` is the search and it is called here rather
@@ -698,11 +698,18 @@ def _tag_pass(fs, registry) -> "_Tags":
     """
     import html as _html
 
-    from pandid.render.svg import SvgRenderer, _ink, _unit_label_box
+    from pandid.render.svg import SvgRenderer, _ink, _unit_label_box, flange_boxes
 
     sheet = SvgRenderer(registry)
     ink = _ink(fs)
     symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
+    # ``joints`` is the sheet's answer about its connections, and it is threaded
+    # in for the same reason ``ink`` is: on a flanged sheet the marks are ink the
+    # tag has to step off, and a pass told about the lines and the symbols but
+    # not about those places one tag here and another one there. See
+    # :func:`~pandid.render.svg.flange_boxes`. ``None`` on a sheet that marks no
+    # joints, and then this adds nothing.
+    symbols += [(None, b) for b in flange_boxes(fs, joints)]
     at: dict = {}
     items: list = []
     for u in fs.units:
@@ -916,13 +923,13 @@ class DrawioRenderer:
         # The sheet's equipment-tag pass, run once: it settles where every tag
         # lands *and* hands the line-number search the plates it has to step
         # clear of. See :class:`_Tags`.
-        tags = _tag_pass(fs, self.registry)
+        joints = sheet_connections(diagram, connections)
+        tags = _tag_pass(fs, self.registry, joints)
         balloons: list[str] = []
         for i, u in enumerate(fs.units):
             (balloons if u.kind == "instrument" else body).extend(
                 self._vertex(u, i, fit, tags))
-        body.extend(self._edges(fs, arrows, fit, tags, jump_direction,
-                                sheet_connections(diagram, connections)))
+        body.extend(self._edges(fs, arrows, fit, tags, jump_direction, joints))
         # Instrumentation goes on over the lines, as it does on the sheet: the
         # tap runs from the plant to the balloon and the balloon's opaque body
         # then knocks out both it and any process line an in-line element
@@ -2261,8 +2268,8 @@ def _flanges(edge_id: str, s, points, ends, ink: str, fit: "_Fit") -> list[str]:
     not a flange's: the mark stands **off** the nozzle by
     :data:`~pandid.render.svg.FLANGE_STANDOFF`, and there is no marker property
     that displaces one along its line. And a line has two ends but wants marks
-    on however many of them are equipment, which ``startArrow``/``endArrow``
-    cannot express independently of the head.
+    on however many of them take one, which ``startArrow``/``endArrow`` cannot
+    express independently of the head.
 
     So it gets its own cells, by the same mechanism :func:`_hatches` uses and
     for the same reason -- a child vertex on the edge, placed by arc length

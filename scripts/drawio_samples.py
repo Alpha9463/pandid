@@ -82,10 +82,14 @@ def _gallery():
 #: option it cannot honour, so passing them straight through would simply raise,
 #: and passing them through a silent filter would write a sample that is not the
 #: sheet without saying so. `03`, `08`, `09`, `10` and `13` all ask for a stream
-#: table, which the exporter now docks and rules like the sheet does. What is
-#: left to drop is `02`'s debug overlay, which is scaffolding rather than
-#: drawing. See `DrawioRenderer.render`.
-_EXPORTED = ("diagram", "page_size", "border", "show_stream_table")
+#: table, which the exporter now docks and rules like the sheet does.
+#: `connections` was missing from this list while the exporter honoured it, so
+#: the committed sample of the one flanged sheet in the corpus was the only
+#: picture of it a reader could open and its joints were not in it. What is left
+#: to drop is `02`'s debug overlay, which is scaffolding rather than drawing.
+#: See `DrawioRenderer.render`, and `_DRAWIO_KWARGS` in `tests/test_drawio.py`,
+#: which is the same list and has to stay the same list.
+_EXPORTED = ("diagram", "page_size", "border", "show_stream_table", "connections")
 
 
 def sample(stem: str) -> "tuple[str, list[str]]":

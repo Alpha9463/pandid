@@ -154,7 +154,21 @@ CORPUS["10_ethanol_pfd"] = lambda: _example("10_ethanol_pfd")
 CORPUS["11_ethanol_pid"] = lambda: _example("11_ethanol_pid")
 CORPUS["crowded_number"] = _crowded_number
 
-_RENDER_OPTS = ("page_size", "border", "diagram", "jump_direction", "show_stream_table")
+#: The options a corpus sheet is redrawn with here, which have to be the options
+#: it ships with or these checks are run on a picture nobody sees.
+#: ``connections`` was missing and the omission was invisible: the flange marks
+#: are ink the number search dodges and the leader clearance counts, and 11 is
+#: the only flanged sheet in the corpus, so dropping it ran every check in this
+#: file and in ``test_halo_invariants`` against the one sheet that carries them
+#: with them turned off.
+_RENDER_OPTS = (
+    "page_size",
+    "border",
+    "diagram",
+    "jump_direction",
+    "show_stream_table",
+    "connections",
+)
 
 
 # --- reading the drawn sheet --------------------------------------------------

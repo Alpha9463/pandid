@@ -8,15 +8,15 @@ diagram rather than the flow diagram. It is the densest sheet in the
 repo.
 
 What a P&ID adds over the PFD of the same unit: no arrowheads
-(``diagram="p&id"``); the flange pair where a line meets an equipment
-nozzle (``connections="flanged"``); line numbers instead of stream
-numbers, one per valve station rather than one per valve; the field
-devices, with four control valves drawn as the **station** each is
-installed in (``fs.add_valve_station()``, see :mod:`pandid.stations`);
-five loops closing on a real final control element, with the tower-top
-temperature cascaded onto the reflux flow; and a repeated trip square,
-``Instrument(variant="sis")`` being the one symbol allowed to carry its
-tag more than once.
+(``diagram="p&id"``); the flange pair at every equipment nozzle and
+either side of every valve (``connections="flanged"``); line numbers
+instead of stream numbers, one per valve station rather than one per
+valve; the field devices, with four control valves drawn as the
+**station** each is installed in (``fs.add_valve_station()``, see
+:mod:`pandid.stations`); five loops closing on a real final control
+element, with the tower-top temperature cascaded onto the reflux flow;
+and a repeated trip square, ``Instrument(variant="sis")`` being the one
+symbol allowed to carry its tag more than once.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -394,8 +394,9 @@ def main():
         "NC": "Normally Closed (darkened valve body)",
     }, align="top-left"))
 
-    # connections="flanged" marks the double tick where a line meets an
-    # equipment nozzle.
+    # connections="flanged" marks the double tick at every equipment
+    # nozzle and either side of every valve and in-line fitting.
+    # "flanged-at-nozzles" marks the nozzles alone.
     fs.render(out("ethanol_pid.svg"), page_size="A3", border="zone",
               diagram="p&id", connections="flanged")
     # The same sheet and the same arguments, as an editable draw.io

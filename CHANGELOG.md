@@ -10,8 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **A P&ID can draw its flanged connections without a unit for every flange.**
-  `render(connections="flanged")` marks the double tick where a line meets an
-  equipment nozzle, and `connect(ends=...)` says it for one line. Until now the
+  `render(connections="flanged")` marks the double tick at every equipment
+  nozzle and both sides of every valve and in-line fitting;
+  `connections="flanged-at-nozzles"` marks the nozzles alone; and
+  `connect(ends=...)` says either of them for one line. Until now the
   mark existed only as `Fitting(name, variant="flange")` -- a tagged unit that
   had to be named, added, pinned and wired into the run, so `T-301`'s four
   pressure taps alone wanted eight of them, each carrying a tag that named
@@ -21,24 +23,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a joint is bolted rather than welded. So it belongs where the arrowhead is: a
   property of how a connection is drawn, not an item among the valve bodies.
 
-  Where it goes is `professional_examples/P&ID_301.pdf`'s rule, read off the
-  drawing. Every piped branch off a shell carries it -- all four of `D-301`'s
-  nozzles, both of `RB-301`'s level-bridle taps, each of `HX-301`'s four,
-  `T-301`'s `-160-SS` feed and its pressure taps -- and nothing else does. The
-  gate valves either side of `CV-305` carry none, the drains carry none, the
-  boundary flags carry none. So the mark belongs to the nozzle, and inline
-  valves and fittings, boundary flags, instruments and signal lines are one
-  exclusion rather than four.
+  Two things are never marked under either setting, because there is no joint to
+  describe: a boundary flag, which is a reference to another drawing, and an
+  instrument or a signal line, which terminates a tap rather than a pipe.
+  Reducers and tees are not marked either -- they are butt-welded fittings, as
+  much *pipe* as the pipe on each side.
+
+  **Whether a valve is flanged is a drafting choice, and this library declines to
+  settle it.** The word *flange* appears nowhere in ISO 15519-1:2010 or
+  ISO 15519-2:2015: §12.4 *Joints* in Part 1 governs the joining of connecting
+  *lines* on the paper, the dot at a T-junction, and §6.3.1 of Part 2 hands
+  symbols to the ISO 14617 series, which registers symbols rather than placing
+  them. No clause requires a flange at a valve and none forbids one. So both
+  conventions are offered by name. `"flanged"` takes the plain word because that
+  is what the plain word means to a reader -- all of them, valves included, which
+  is how a body is got out of a line. `"flanged-at-nozzles"` is what
+  `professional_examples/P&ID_301.pdf` draws: every piped branch off a shell
+  carries the mark -- all four of `D-301`'s nozzles, both of `RB-301`'s
+  level-bridle taps, each of `HX-301`'s four, `T-301`'s `-160-SS` feed and its
+  pressure taps -- and the gate valves either side of `CV-305` carry none. That
+  is evidence of what one drawing office drew, not of what a standard demands,
+  which is why it is a setting and not the rule.
 
   The default is `"none"`, because drawing every joint flanged is a claim about
-  the piping that a library must not make on the author's behalf. A line states
-  its own with `ends="flanged"`, `ends="none"` or a `(source, dest)` pair in the
-  order it was connected; left unset it follows the sheet. It survives a spec
+  the piping that a library must not make on the author's behalf, and `"none"` is
+  not `"welded"` -- it is the drawing declining to say. A line states its own with
+  `ends=` taking any of the three values, or a `(source, dest)` pair in the order
+  it was connected; left unset it follows the sheet. It survives a spec
   round-trip.
 
-  A PFD draws none, whatever it is asked. ISO 15519-2:2015 Table 5 (p. 19) lists
-  *connections* among the specific graphical symbols a P&ID carries as basic
-  information; Table 4 (p. 17) gives the PFD only general symbols for them.
+  A PFD draws none, whatever it is asked, and *that* clause is quotable.
+  ISO 15519-2:2015 Table 5 (p. 19) lists *connections* among the specific
+  graphical symbols a P&ID carries as basic information; Table 4 (p. 17) gives
+  the PFD only general symbols for them.
 
   The draw.io export draws the same marks in the same places, from the same
   function -- but not through the arrowhead's path, which could not carry them.
