@@ -54,18 +54,22 @@ SPEC = {
         {"kind": "Product", "name": "To Boiler", "reference": "PFD-500"},
     ],
     # --- Instrumentation ----------------------------------------------
-    # ``on``/``at``/``offset`` anchor each balloon to its host;
-    # ``port_faces`` picks which side of the circle a signal leaves
+    # ``sensing``/``acting_on``/``near`` anchor each balloon and say
+    # what it has to do with what it is anchored to: the first two draw
+    # a line between them, ``near`` draws none. ``at``/``offset`` place
+    # it. ``port_faces`` picks which side of the circle a signal leaves
     # from, since a balloon is round and has no natural in/out side.
     "instruments": [
         {"type": "LT", "number": 201, "description": "Deaerator Level Transmitter",
-         "on": "V-201", "at": "S", "offset": 58, "port_faces": {"sig_out": "S"}},
-        # Directly below the transmitter: a straight drop.
-        {"type": "LIC", "number": 201, "variant": "panel",
-         "description": "Deaerator Level Control", "on": "V-201", "at": "S",
+         "sensing": "V-201", "at": "S", "offset": 58, "port_faces": {"sig_out": "S"}},
+        # Directly below the transmitter: a straight drop. ``near`` and
+        # not ``sensing``, so no second line is drawn from the drum past
+        # LT-201 to a controller in the control room.
+        {"type": "LIC", "number": 201, "display": "central",
+         "description": "Deaerator Level Control", "near": "V-201", "at": "S",
          "offset": 140, "port_faces": {"sig_in": "N"}},
         {"type": "LV", "number": 201, "description": "Level Valve I/P Transducer",
-         "on": "CV-201", "at": "S", "offset": 58,
+         "acting_on": "CV-201", "at": "S", "offset": 58,
          "port_faces": {"sig_in": "W", "sig_out": "N"}},
     ],
     # --- Stream table -------------------------------------------------

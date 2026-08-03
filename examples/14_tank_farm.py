@@ -168,9 +168,15 @@ def main():
     xv602.pin(port="inlet", x=500, y=eth_recv_y)
     lpg_in.pin(port="outlet", x=200, y=lpg_recv_y)
 
-    lpg_run_y, eth_run_y, ms_run_y = 390.0, 510.0, 665.0
+    # The ethanol run stands 40 lower than the geometry alone wants, so
+    # that FE-605's balloon and FT-605's stack between the run and the
+    # cascade row without either touching the other.
+    lpg_run_y, eth_run_y, ms_run_y = 390.0, 550.0, 665.0
     lpg_drop_x = 1040.0
-    balloon_row_y, low_row_y, psv_run_y = 462.0, 570.0, 600.0
+    # low_row_y carries FT-604 and stands 45 clear of FE-604's own
+    # balloon, which stands clear of the meter: two balloons and an
+    # impulse line have to fit between the row and the run.
+    balloon_row_y, low_row_y, psv_run_y = 462.0, 564.0, 620.0
     cascade_y = 422.0
 
     hv601.pin(port="inlet", x=495, y=ms_run_y)
@@ -295,30 +301,35 @@ def main():
     fs.connect(fa601.outlet, vt601.inlet)
 
     # --- Instruments --------------------------------------------------
-    # The alarms these indicators carry are not drawn: pandid cannot yet
-    # write a letter code string beside a balloon.
-    lt601 = fs.add_instrument("LT", ms_level, on=tk601, at="W", offset=62)
-    fs.add_instrument("LI", ms_level, on=lt601, at="S", offset=50, variant="shared")
-    lt602 = fs.add_instrument("LT", eth_level, on=tk602, at="W", offset=32)
-    fs.add_instrument("LI", eth_level, on=lt602, at="S", offset=50, variant="shared")
+    # Each indicator carries its alarms as lettering in its own
+    # quadrants: high above the centre line, low below, no second
+    # balloon and no face spent.
+    lt601 = fs.add_instrument("LT", ms_level, sensing=tk601, at="W", offset=62)
+    fs.add_instrument("LI", ms_level, near=lt601, at="S", offset=50,
+                      variant="shared").annotate(high="LAH", low="LAL")
+    lt602 = fs.add_instrument("LT", eth_level, sensing=tk602, at="W", offset=32)
+    fs.add_instrument("LI", eth_level, near=lt602, at="S", offset=50,
+                      variant="shared").annotate(high="LAH", low="LAL")
 
     # Both switches keep literal numbers. What they initiate is Z-1,
     # which carries the trip's number and not theirs, so declaring L-611
     # would put a loop of exactly one balloon in fs.loops.
-    lsh611 = fs.add_instrument("LSHH", 611, on=tk601, at="E", offset=32)
-    lsh612 = fs.add_instrument("LSHH", 612, on=tk602, at="E", offset=40)
+    lsh611 = fs.add_instrument("LSHH", 611, sensing=tk601, at="E", offset=32)
+    lsh612 = fs.add_instrument("LSHH", 612, sensing=tk602, at="E", offset=40)
     # Instrument(variant="sis") is the one symbol allowed to carry its
     # tag more than once, so Z-1 is drawn at each of the four points it
-    # acts on.
-    fs.add_instrument("Z", 1, on=lsh611, at="N", offset=40, variant="sis")
-    fs.add_instrument("Z", 1, on=lsh612, at="N", offset=40, variant="sis")
+    # touches -- and it reads the two switches and strokes the two
+    # valves, which is sensing= against acting_on=.
+    fs.add_instrument("Z", 1, sensing=lsh611, at="N", offset=40, variant="sis")
+    fs.add_instrument("Z", 1, sensing=lsh612, at="N", offset=40, variant="sis")
     # 46 and not 26: FC is written directly below each valve, so the
     # square has to hang below that mark rather than on it.
-    fs.add_instrument("Z", 1, on=xv601, at="S", offset=46, variant="sis")
-    fs.add_instrument("Z", 1, on=xv602, at="S", offset=46, variant="sis")
+    fs.add_instrument("Z", 1, acting_on=xv601, at="S", offset=46, variant="sis")
+    fs.add_instrument("Z", 1, acting_on=xv602, at="S", offset=46, variant="sis")
 
-    pt603 = fs.add_instrument("PT", lpg_press, on=v603, at="E", offset=30)
-    fs.add_instrument("PI", lpg_press, on=pt603, at="N", offset=40, variant="shared")
+    pt603 = fs.add_instrument("PT", lpg_press, sensing=v603, at="E", offset=30)
+    fs.add_instrument("PI", lpg_press, near=pt603, at="N", offset=40,
+                      variant="shared").annotate(high="PAH")
 
     # The balloon over a valve is centred on the valve's own face, so
     # the axis the cascade routes down is half the valve wide -- not the
@@ -331,8 +342,12 @@ def main():
     fe605_top = eth_run_y - port_offset(fe605, "inlet")[1]
     cv605_top = eth_run_y - port_offset(cv605, "inlet")[1]
 
-    ft604 = fs.add_instrument("FT", load_flow, on=fe604, at="N", offset=fe604_top - low_row_y)
-    fic604 = fs.add_instrument("FIC", load_flow, on=cv604, at="N", variant="shared",
+    # Each element's tag goes in a balloon standing on its impulse line,
+    # with the transmitter's own balloon touching it above: the meter
+    # bodies carry no lettering at all, as P&ID_301 draws them.
+    fe604_b = fs.add_balloon(fe604, at="N", offset=fe604_top - low_row_y - 45)
+    ft604 = fs.add_instrument("FT", load_flow, near=fe604_b, at="N", offset=23)
+    fic604 = fs.add_instrument("FIC", load_flow, near=cv604, at="N", variant="shared",
                                offset=cv604_top - balloon_row_y)
     fic604.nozzle("sig_out", "S")
     fs.connect(ft604.sig_out, fic604.sig_in, kind="electric")
@@ -342,8 +357,9 @@ def main():
     # kind="software" and not a wire: both faceplates are functions of
     # the same DCS. The route is given by hand because the router leaves
     # FIC-604 through its last free face instead.
-    ft605 = fs.add_instrument("FT", blend_flow, on=fe605, at="N", offset=fe605_top - balloon_row_y)
-    fic605 = fs.add_instrument("FIC", blend_flow, on=cv605, at="N", variant="shared",
+    fe605_b = fs.add_balloon(fe605, at="N", offset=fe605_top - balloon_row_y - 45)
+    ft605 = fs.add_instrument("FT", blend_flow, near=fe605_b, at="N", offset=23)
+    fic605 = fs.add_instrument("FIC", blend_flow, near=cv605, at="N", variant="shared",
                                offset=cv605_top - balloon_row_y)
     fic605.nozzle("sig_out", "S")
     fic605.nozzle("sig_in", "N")

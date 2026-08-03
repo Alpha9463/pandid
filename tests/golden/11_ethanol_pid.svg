@@ -172,7 +172,7 @@
     <symbol id="sym_valve_solenoid_ty" viewBox="0 0 24.5 22.2" overflow="visible"><g transform="scale(0.25)"><path d="M 0.0 89.0 L 0.0 30.0 L 98.0 89.0 L 98.0 30.0 Z" fill="none" stroke="#111" stroke-width="8.0"/><rect x="19.0" y="0.0" width="60.0" height="30.0" fill="none" stroke="#111" stroke-width="8.0"/><path d="M 49.0 15.0 L 49.0 59.0 M 19.0 15.0 L 79.0 15.0" fill="none" stroke="#111" stroke-width="8.0"/><g transform="translate(0, 20.2) scale(1, -1)"><text x="49.0" y="16.4" font-family="sans-serif" font-size="18.0" text-anchor="middle" fill="white" stroke="white" stroke-width="4.5" stroke-linejoin="round">S</text></g><g transform="translate(0, 20.2) scale(1, -1)"><text x="49.0" y="16.4" font-family="sans-serif" font-size="18.0" text-anchor="middle" fill="#111">S</text></g></g></symbol>
     <symbol id="sym_vessel_horizontal_s130x42" viewBox="0 0 130 42" overflow="visible"><path d="M 8.197814 42 L 121.859016 42 A 21 8.196678 90 0 0 130.055694 21 A 21 8.196678 90 0 0 121.859016 0 L 8.197814 0 A 21 8.196678 90 0 0 0.001137 21 A 21 8.196678 90 0 0 8.197814 42 Z M 8.197814 0 L 8.197814 42 M 121.859016 0 L 121.859016 42" fill="none" stroke="#111" stroke-width="2"/></symbol>
   </defs>
-  <g id="drawing" transform="translate(53.44, 281.29) scale(0.85088)">
+  <g id="drawing" transform="translate(46.6, 274.77) scale(0.858731)">
   <g id="units">
     <use href="#sym_column" x="470" y="300" width="100.0" height="200.0" />
     <use href="#sym_hex_straight_tubes_s130x40" x="1010" y="210" width="130" height="40" />
@@ -488,15 +488,15 @@
     <line x1="865.7" y1="99.6" x2="875.7" y2="105.6" stroke="black" stroke-width="1" />
     <line x1="865.7" y1="103.6" x2="875.7" y2="109.6" stroke="black" stroke-width="1" />
     <path d="M 622.0,257.425 L 678.0,257.425" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
-    <path d="M 652.0,340.0 L 700.0,340.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
-    <path d="M 700.0,279.425 L 700.0,293.0 L 722.0,293.0 L 722.0,318.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="9,3,2,3" />
-    <path d="M 744.0,340.0 L 865.8,340.0 L 865.8,390.0 A 5 5 0 0 1 865.8,400.0 L 865.8,427.6" fill="none" stroke="black" stroke-width="1" />
-    <line x1="779.1" y1="345.0" x2="785.1" y2="335.0" stroke="black" stroke-width="1" />
-    <line x1="783.1" y1="345.0" x2="789.1" y2="335.0" stroke="black" stroke-width="1" />
-    <line x1="819.7" y1="345.0" x2="825.7" y2="335.0" stroke="black" stroke-width="1" />
-    <line x1="823.7" y1="345.0" x2="829.7" y2="335.0" stroke="black" stroke-width="1" />
-    <line x1="860.8" y1="378.3" x2="870.8" y2="384.3" stroke="black" stroke-width="1" />
-    <line x1="860.8" y1="382.3" x2="870.8" y2="388.3" stroke="black" stroke-width="1" />
+    <path d="M 652.0,347.0 L 700.0,347.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
+    <path d="M 700.0,279.425 L 700.0,300.0 L 722.0,300.0 L 722.0,325.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="9,3,2,3" />
+    <path d="M 744.0,347.0 L 865.8,347.0 L 865.8,390.0 A 5 5 0 0 1 865.8,400.0 L 865.8,427.6" fill="none" stroke="black" stroke-width="1" />
+    <line x1="779.1" y1="352.0" x2="785.1" y2="342.0" stroke="black" stroke-width="1" />
+    <line x1="783.1" y1="352.0" x2="789.1" y2="342.0" stroke="black" stroke-width="1" />
+    <line x1="819.7" y1="352.0" x2="825.7" y2="342.0" stroke="black" stroke-width="1" />
+    <line x1="823.7" y1="352.0" x2="829.7" y2="342.0" stroke="black" stroke-width="1" />
+    <line x1="860.8" y1="381.8" x2="870.8" y2="387.8" stroke="black" stroke-width="1" />
+    <line x1="860.8" y1="385.8" x2="870.8" y2="391.8" stroke="black" stroke-width="1" />
     <path d="M 1226.0846994535518,301.0 L 1277.25,301.0 L 1277.25,403.0 L 1302.25,403.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 1324.25,425.0 L 1324.25,460.0 A 5 5 0 0 1 1324.25,470.0 L 1324.25,472.6 L 1324.2,472.6 L 1324.2,497.6" fill="none" stroke="black" stroke-width="1" />
     <line x1="1319.2" y1="443.3" x2="1329.2" y2="449.3" stroke="black" stroke-width="1" />
@@ -560,15 +560,11 @@
     <line x1="414.34" y1="405" x2="414.34" y2="347" stroke="black" stroke-width="1" />
     <line x1="1260" y1="230" x2="1260" y2="175" stroke="black" stroke-width="1" />
     <line x1="595.62" y1="130" x2="595.62" y2="45" stroke="black" stroke-width="1" />
-    <line x1="870.75" y1="23" x2="870.75" y2="-23" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
-    <line x1="892.75" y1="45" x2="938.75" y2="45" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
     <line x1="530.12" y1="130" x2="530.12" y2="45" stroke="black" stroke-width="1" />
     <line x1="530.12" y1="23" x2="530.12" y2="-17" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
     <line x1="520" y1="257.43" x2="600" y2="257.43" stroke="black" stroke-width="1" />
-    <line x1="630" y1="430" x2="630" y2="340" stroke="black" stroke-width="1" />
+    <line x1="630" y1="430" x2="630" y2="392" stroke="black" stroke-width="1" />
     <line x1="1144.08" y1="301" x2="1204.08" y2="301" stroke="black" stroke-width="1" />
-    <line x1="1324.25" y1="381" x2="1324.25" y2="335" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
-    <line x1="1346.25" y1="403" x2="1392.25" y2="403" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
     <line x1="1277.25" y1="356.73" x2="1237.25" y2="356.73" stroke="black" stroke-width="1" stroke-dasharray="5,4" />
     <line x1="520" y1="521.73" x2="435" y2="521.73" stroke="black" stroke-width="1" />
     <line x1="797.92" y1="563.35" x2="867.92" y2="563.35" stroke="black" stroke-width="1" />
@@ -594,12 +590,6 @@
     <use href="#sym_instrument_shared" x="848.75" y="23" width="44.0" height="44.0" />
     <text x="870.75" y="35.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">PIC</text>
     <text x="870.75" y="56.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">301</text>
-    <use href="#sym_instrument_shared" x="848.75" y="-45" width="44.0" height="44.0" />
-    <text x="870.75" y="-33.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">PAH</text>
-    <text x="870.75" y="-12.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">301</text>
-    <use href="#sym_instrument_shared" x="916.75" y="23" width="44.0" height="44.0" />
-    <text x="938.75" y="35.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">PAL</text>
-    <text x="938.75" y="56.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">301</text>
     <use href="#sym_instrument" x="508.12" y="23" width="44.0" height="44.0" />
     <text x="530.125" y="41.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">PT</text>
     <text x="530.125" y="55.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">318</text>
@@ -611,24 +601,21 @@
     <use href="#sym_instrument_shared" x="678" y="235.43" width="44.0" height="44.0" />
     <text x="700.0" y="247.425" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">TIC</text>
     <text x="700.0" y="268.425" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">302</text>
-    <use href="#sym_instrument" x="608" y="318" width="44.0" height="44.0" />
-    <text x="630.0" y="336.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FT</text>
-    <text x="630.0" y="350.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">303</text>
-    <use href="#sym_instrument_shared" x="700" y="318" width="44.0" height="44.0" />
-    <text x="722.0" y="330.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FIC</text>
-    <text x="722.0" y="351.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">303</text>
+    <use href="#sym_instrument" x="608" y="370" width="44.0" height="44.0" />
+    <text x="630.0" y="388.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FE</text>
+    <text x="630.0" y="402.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">303</text>
+    <use href="#sym_instrument" x="608" y="325" width="44.0" height="44.0" />
+    <text x="630.0" y="343.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FT</text>
+    <text x="630.0" y="357.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">303</text>
+    <use href="#sym_instrument_shared" x="700" y="325" width="44.0" height="44.0" />
+    <text x="722.0" y="337.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FIC</text>
+    <text x="722.0" y="358.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">303</text>
     <use href="#sym_instrument" x="1182.08" y="279" width="44.0" height="44.0" />
     <text x="1204.0846994535518" y="297.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">LT</text>
     <text x="1204.0846994535518" y="311.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">304</text>
     <use href="#sym_instrument_shared" x="1302.25" y="381" width="44.0" height="44.0" />
     <text x="1324.25" y="393.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">LIC</text>
     <text x="1324.25" y="414.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">304</text>
-    <use href="#sym_instrument_shared" x="1302.25" y="313" width="44.0" height="44.0" />
-    <text x="1324.25" y="325.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">LAH</text>
-    <text x="1324.25" y="346.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">304</text>
-    <use href="#sym_instrument_shared" x="1370.25" y="381" width="44.0" height="44.0" />
-    <text x="1392.25" y="393.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">LAL</text>
-    <text x="1392.25" y="414.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">304</text>
     <use href="#sym_instrument_sis" x="1217.25" y="336.73" width="40.0" height="40.0" />
     <text x="1237.25" y="363.73387978142074" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">1</text>
     <use href="#sym_instrument" x="413" y="499.73" width="44.0" height="44.0" />
@@ -673,8 +660,6 @@
     <text x="332.25" y="212.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HV-311</text>
     <rect x="308.4" y="710.5" width="47.6" height="15.0" fill="white" />
     <text x="332.25" y="722.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">HV-315</text>
-    <rect x="606.2" y="457.5" width="47.6" height="15.0" fill="white" />
-    <text x="630.0" y="465.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">FE-303</text>
     <rect x="840.4" y="144.9" width="60.8" height="15.0" fill="white" />
     <text x="870.75" y="152.4" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CV-301-1</text>
     <rect x="704.6" y="100.5" width="54.2" height="15.0" fill="white" />
@@ -739,6 +724,18 @@
     <text x="362.25" y="597.8909090909091" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">RD-308A</text>
     <rect x="432.1" y="585.9" width="54.2" height="15.0" fill="white" />
     <text x="459.25" y="597.8909090909091" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">RD-308B</text>
+    <rect x="897.8" y="27.0" width="27.8" height="15.0" fill="white" />
+    <text x="897.75" y="34.5" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">PAH</text>
+    <rect x="897.8" y="48.0" width="27.8" height="15.0" fill="white" />
+    <text x="897.75" y="55.5" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">PAL</text>
+    <rect x="727.0" y="239.4" width="27.8" height="15.0" fill="white" />
+    <text x="727.0" y="246.925" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">TAH</text>
+    <rect x="727.0" y="260.4" width="27.8" height="15.0" fill="white" />
+    <text x="727.0" y="267.925" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">TAL</text>
+    <rect x="1351.2" y="385.0" width="27.8" height="15.0" fill="white" />
+    <text x="1351.25" y="392.5" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">LAH</text>
+    <rect x="1351.2" y="406.0" width="27.8" height="15.0" fill="white" />
+    <text x="1351.25" y="413.5" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">LAL</text>
   </g>
   </g>
 </svg>
