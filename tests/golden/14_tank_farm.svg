@@ -165,7 +165,7 @@
     <symbol id="sym_fitting_strainer_basket" viewBox="0 0 25.0 22.5" overflow="visible"><g transform="scale(0.5)"><path d="M 40.0 0.0 L 40.0 30.0 A 15.0 15.0 0.0 0 1 25.0 45.0 A 15.0 15.0 0.0 0 1 10.0 30.0 L 10.0 0.0 Z M 50.0 15.0 L 50.0 35.0 M 0.0 15.0 L 0.0 35.0 M 0.0 25.0 L 10.0 25.0 M 40.0 25.0 L 50.0 25.0" fill="none" stroke="#111" stroke-width="4.0"/></g></symbol>
     <symbol id="sym_fitting_strainer_y" viewBox="0 0 25.0 17.0" overflow="visible"><g transform="scale(0.5)"><path d="M 0.0 10.0 L 50.0 10.0 M 50.0 0.0 L 50.0 20.0 M 0.0 0.0 L 0.0 20.0 M 25.0 10.0 L 45.0 30.0 M 40.0 34.0 L 50.0 25.5" fill="none" stroke="#111" stroke-width="4.0"/></g></symbol>
     <symbol id="sym_instrument" viewBox="0 0 44.0 44.0" overflow="visible"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/></symbol>
-    <symbol id="sym_instrument_shared" viewBox="0 0 44.0 44.0" overflow="visible"><rect x="1" y="1" width="42" height="42" fill="white" stroke="black" stroke-width="2"/><circle cx="22" cy="22" r="20" fill="none" stroke="black" stroke-width="2"/></symbol>
+    <symbol id="sym_instrument_shared" viewBox="0 0 44.0 44.0" overflow="visible"><rect x="1" y="1" width="42" height="42" fill="white" stroke="black" stroke-width="2"/><circle cx="22" cy="22" r="20" fill="none" stroke="black" stroke-width="2"/><line x1="2" y1="22" x2="42" y2="22" stroke="black" stroke-width="1.5"/></symbol>
     <symbol id="sym_instrument_sis" viewBox="0 0 40.0 40.0" overflow="visible"><rect x="1" y="1" width="38" height="38" fill="white" stroke="black" stroke-width="2"/><polygon points="20,1 39,20 20,39 1,20" fill="none" stroke="black" stroke-width="2"/></symbol>
     <symbol id="sym_pump" viewBox="0 0 70.0 67.0" overflow="visible"><path d="M 12.0 54.0 L 0.0 67.0 L 60.0 67.0 L 48.0 54.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.6 25.0 A 30.0 30.0 0.0 0 1 30.0 0.0 L 70.0 0.0 L 70.0 20.0 L 58.45 20.0 A 30.0 30.0 0.0 0 1 51.8587 50.8297 A 30.0 30.0 0.0 0 1 21.3414 58.7425 A 30.0 30.0 0.0 0 1 0.6 35.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 21.4 25.0 A 10.0 10.0 0.0 1 1 21.4 35.0" fill="none" stroke="#111" stroke-width="2.0"/></symbol>
     <symbol id="sym_pump_gear_s48x76" viewBox="0 0 48 76" overflow="visible"><path d="M 12.631579 68.483516 L 6.315789 76 L 41.684211 76 L 35.284211 68.483516" fill="none" stroke="#111" stroke-width="2"/><path d="M 40.842105 8.351648 L 40.842105 62.637363 A 16.842105 8.351648 0 0 1 24 70.989011 A 16.842105 8.351648 0 0 1 7.157895 62.637363 L 7.157895 8.351648 A 16.842105 8.351648 0 0 1 24 0 A 16.842105 8.351648 0 0 1 40.842105 8.351648 Z" fill="none" stroke="#111" stroke-width="2"/><ellipse cx="24" cy="19.208791" rx="13.473684" ry="13.362637" fill="none" stroke="#111" stroke-width="2"/><ellipse cx="24" cy="50.10989" rx="13.473684" ry="13.362637" fill="none" stroke="#111" stroke-width="2"/><path d="M 48 26.307692 L 48 43.010989 M 40.842105 34.659341 L 48 34.659341 M 0 26.725275 L 0 43.428571 M 0 34.659341 L 7.157895 34.659341" fill="none" stroke="#111" stroke-width="2"/></symbol>
@@ -347,14 +347,14 @@
     <text x="298.0" y="281.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">LT</text>
     <text x="298.0" y="295.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">601</text>
     <use href="#sym_instrument_shared" x="276" y="335" width="44.0" height="44.0" />
-    <text x="298.0" y="353.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">LI</text>
-    <text x="298.0" y="367.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">601</text>
+    <text x="298.0" y="347.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">LI</text>
+    <text x="298.0" y="368.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">601</text>
     <use href="#sym_instrument" x="626" y="258" width="44.0" height="44.0" />
     <text x="648.0" y="276.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">LT</text>
     <text x="648.0" y="290.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">602</text>
     <use href="#sym_instrument_shared" x="626" y="330" width="44.0" height="44.0" />
-    <text x="648.0" y="348.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">LI</text>
-    <text x="648.0" y="362.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">602</text>
+    <text x="648.0" y="342.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">LI</text>
+    <text x="648.0" y="363.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">602</text>
     <use href="#sym_instrument" x="560" y="263" width="44.0" height="44.0" />
     <text x="582.0" y="281.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">LSHH</text>
     <text x="582.0" y="295.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">611</text>
@@ -373,20 +373,20 @@
     <text x="1260.0" y="268.5" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">PT</text>
     <text x="1260.0" y="282.5" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">603</text>
     <use href="#sym_instrument_shared" x="1238" y="188.5" width="44.0" height="44.0" />
-    <text x="1260.0" y="206.5" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">PI</text>
-    <text x="1260.0" y="220.5" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">603</text>
+    <text x="1260.0" y="200.5" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">PI</text>
+    <text x="1260.0" y="221.5" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">603</text>
     <use href="#sym_instrument" x="1330.5" y="548" width="44.0" height="44.0" />
     <text x="1352.5" y="566.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FT</text>
     <text x="1352.5" y="580.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">604</text>
     <use href="#sym_instrument_shared" x="1390.25" y="440" width="44.0" height="44.0" />
-    <text x="1412.25" y="458.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FIC</text>
-    <text x="1412.25" y="472.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">604</text>
+    <text x="1412.25" y="452.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FIC</text>
+    <text x="1412.25" y="473.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">604</text>
     <use href="#sym_instrument" x="1070.5" y="440" width="44.0" height="44.0" />
     <text x="1092.5" y="458.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FT</text>
     <text x="1092.5" y="472.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">605</text>
     <use href="#sym_instrument_shared" x="1130.25" y="440" width="44.0" height="44.0" />
-    <text x="1152.25" y="458.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FIC</text>
-    <text x="1152.25" y="472.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">605</text>
+    <text x="1152.25" y="452.0" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">FIC</text>
+    <text x="1152.25" y="473.0" font-family="sans-serif" font-size="11" text-anchor="middle" dominant-baseline="middle">605</text>
   </g>
   <g id="unit_labels">
     <text x="455.0" y="285.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">TK-601</text>

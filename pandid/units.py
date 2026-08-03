@@ -1782,9 +1782,9 @@ class Instrument(Unit):
 
     Naming the units instead lets the engine pick both ends:
     ``fs.connect(ft305, fic305, kind="electric")``. Variants:
-    ``"default"`` (field balloon), ``"panel"``, ``"aux"``, ``"shared"``
-    (a circle in a square: shared display and shared control, which ISA-5.1 no
-    longer reads as "DCS"),
+    ``"default"`` (field balloon), ``"panel"`` (one location bar), ``"aux"``
+    (two), ``"shared"`` (a circle in a square, with one bar: shared display and
+    shared control, which ISA-5.1 no longer reads as "DCS"),
     ``"computer"``, ``"sis"`` (a diamond in a square: ANSI/ISA-5.1-2009
     Table 5.1.1 column B, the safety-instrumented-system symbol an issued sheet
     draws a trip with, also spelled ``"logic"``) and ``"interlock"`` (a plain

@@ -584,6 +584,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`variant="shared"` drew no location bar (#181).** ISO 15519-2 Table 1 (p. 7)
+  tabulates the *additional graphic* a PCI symbol carries: "None: Information
+  available on field mounted instrument/display" against "Horizontal single full
+  line: Information available in central control system". A shared display is
+  the central control system, so a squared balloon with no bar stated the one
+  thing about a DCS point that is certainly false. All forty balloons on
+  `professional_examples/P&ID_301.pdf` carry a bar, twelve of them
+  circle-in-square; CHEE4001 p.13 says the same in words — of the single solid
+  line, "the instrument is located inside the main control room, also indicating
+  that it is accessible and visible to the operator".
+
+  The bar runs the *circle's* full diameter through its exact vertical centre,
+  which is that sheet's geometry to three figures, and the square stays what it
+  was: a statement about what the function is rather than where it lives. The
+  tag is set above and below it, where ISO 15519-2 5.1.2 puts the letters and
+  the number anyway. Examples 04, 11 and 14 move, and so do their goldens and
+  gallery files.
+
+  What is not done here is the wider half of that issue: `variant` still
+  collapses the symbol type and the location into one enum, so there is no way
+  to ask for a plain circle in a panel. Separating them is an API change and
+  wants a deprecation of its own.
+
 - **A fail-position mark's halo erased an adjacent impulse line (#223).** The
   letters PIP PIC001 4.2.4.6(1) puts directly below a valve are drawn on an
   opaque plate in the last pass of all, and the only thing that plate had ever

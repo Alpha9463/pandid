@@ -544,7 +544,8 @@ _APPROXIMATIONS = {
         fill=_BALLOON_FILL),
     ("instrument", "shared"): _Approximation(
         "ellipse", "the square around the balloon that puts the function in a "
-                   "shared display", fill=_BALLOON_FILL),
+                   "shared display, and the bar that puts it in the control room",
+        fill=_BALLOON_FILL),
     ("instrument", "computer"): _Approximation(
         # The computer hexagon, drawn as one.
         "hexagon", "", fill=_BALLOON_FILL),

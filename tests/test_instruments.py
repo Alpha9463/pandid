@@ -556,14 +556,17 @@ def test_balloon_ports_have_no_face_of_their_own_but_equipment_nozzles_do():
 
 
 def test_a_barred_balloons_tag_clears_its_location_bar():
-    """The panel and aux variants draw a location bar across the middle of the
-    circle, right where the tag letters would otherwise sit. ISA-5.1 puts the
-    letters wholly above the bar and the number wholly below."""
+    """The panel, aux and shared variants draw a location bar across the middle
+    of the circle, right where the tag letters would otherwise sit. ISO 15519-2
+    5.1.2 (p. 8) puts the letters above it and the number below: "Letter codes
+    for process variables and control functions ... shall be placed in the upper
+    part of the symbol and reference designation in the lower part of the
+    symbol"."""
     import re
 
     from pandid.render.symbols import default_registry
 
-    for variant, bars in (("panel", (22.0,)), ("aux", (19.0, 25.0))):
+    for variant, bars in (("panel", (22.0,)), ("aux", (19.0, 25.0)), ("shared", (22.0,))):
         fs = Flowsheet(f"bar-{variant}")
         inst = fs.add_instrument("LIC", 101, variant=variant).pin(x=200, y=200)
         fs.layout()
@@ -581,6 +584,35 @@ def test_a_barred_balloons_tag_clears_its_location_bar():
         # 12pt letters and an 11pt number, centred on their baselines.
         assert ys["LIC"] + 6 <= min(band), f"{variant}: letters run into the bar"
         assert ys["101"] - 5.5 >= max(band), f"{variant}: number runs into the bar"
+
+
+def test_every_shared_display_balloon_carries_a_location_bar():
+    """Issue #181. A shared display is the central control system, and ISO
+    15519-2 Table 1 (p. 7) has one graphic for saying so -- a horizontal single
+    full line, "Information available in central control system", against
+    "None: Information available on field mounted instrument/display". A square
+    with no bar therefore stated the one thing about a DCS point that is
+    certainly false. All forty balloons on ``professional_examples/P&ID_301.pdf``
+    carry a bar, twelve of them circle-in-square.
+
+    The geometry is that sheet's: the bar runs the *circle's* full diameter
+    through its exact vertical centre, not the square's. The square is a
+    separate statement, about what the function is rather than where it lives.
+    """
+    import re
+
+    from pandid.render.symbols import default_registry
+
+    sym = default_registry.get("instrument", "shared")
+    circle = re.search(r'<circle cx="([\d.]+)" cy="([\d.]+)" r="([\d.]+)"', sym.svg)
+    bar = re.search(r'<line x1="([\d.]+)" y1="([\d.]+)" x2="([\d.]+)" y2="([\d.]+)"', sym.svg)
+    assert bar, "the shared balloon draws a location bar"
+    cx, cy, r = (float(g) for g in circle.groups())
+    x1, y1, x2, y2 = (float(g) for g in bar.groups())
+    assert y1 == y2 == cy, "horizontal, on the circle's centre line"
+    assert (x1, x2) == (cx - r, cx + r), "and the circle's full diameter"
+    # And the square is still there: the bar is an addition, not a replacement.
+    assert "<rect" in sym.svg
 
 
 def test_a_short_pneumatic_run_still_gets_its_cross_hatch():

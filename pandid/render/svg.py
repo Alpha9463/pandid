@@ -22,7 +22,15 @@ _SYMBOL_TEXT = re.compile(
     r'<text\b[^>]*?\bx="(-?[\d.]+)"[^>]*?\by="(-?[\d.]+)"[^>]*?>.*?</text>', re.S)
 # Balloon variants whose symbol draws a location bar across the middle (see the
 # instrument symbols in pandid.render.symbols): their tag text has to clear it.
-_BARRED_BALLOONS = {"panel", "aux"}
+#
+# ``shared`` joined them for #181. It is the one variant that carries a bar
+# *and* a square, and the pair is not a contradiction: ISO 15519-2 Table 1
+# (p. 7) makes the bar an "additional graphic" answering where the information
+# lives -- one full line is "Information available in central control system" --
+# while the square answers what the function is, and a shared display is a
+# control-room function by definition. All forty balloons on
+# ``professional_examples/P&ID_301.pdf`` carry one, twelve of them squared.
+_BARRED_BALLOONS = {"panel", "aux", "shared"}
 # Variants drawn as a diamond (ISA-5.1-2009 Table 5.1.1 column B and Table 5.1.2
 # items 3-5): they carry the interlock number alone, and it has to sit where the
 # sloping sides leave room for it rather than in the middle of the box.

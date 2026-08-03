@@ -1611,7 +1611,7 @@ class SymbolRegistry:
         # unit name by the renderer, so the symbol is just the balloon + its
         # location bar. Ports: pv (process connection, bottom), in/out (signals).
         # Variants: default (bare field balloon), panel (single bar), aux (double bar),
-        # shared (balloon-in-square = DCS/shared display), computer (hexagon),
+        # shared (balloon-in-square + single bar = DCS/shared display), computer (hexagon),
         # sis / logic (diamond-in-square = safety instrumented system),
         # interlock (plain diamond = interlock logic function).
         # ====================================================================
@@ -1645,8 +1645,45 @@ class SymbolRegistry:
             svg='<g id="sym_instrument_aux"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="19" x2="43" y2="19" stroke="black" stroke-width="1.5"/><line x1="1" y1="25" x2="43" y2="25" stroke="black" stroke-width="1.5"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
             faceless_ports=_inst_faceless, label_pos="center", stretchable=False), "aux")
+        # The bar is issue #181. ISO 15519-2 Table 1 (p. 7) tabulates the
+        # *additional graphic* a PCI symbol carries and what each one says --
+        # "None: Information available on field mounted instrument/display",
+        # "Horizontal single full line: Information available in central control
+        # system", "Horizontal double full line: Information available in
+        # subsidiary control system" -- and 5.1.1 on the same page says what the
+        # column is for: "The geographical availability or origin of information
+        # inside or outside the PCI symbol are illustrated by means of
+        # additional graphics within the PCI symbol". A shared display *is* the
+        # central control system, so a squared balloon with no bar states the
+        # one thing about it that is certainly false. CHEE4001 p.13 puts the
+        # same pair together in as many words: of the single solid line, "the
+        # instrument is located inside the main control room, also indicating
+        # that it is accessible and visible to the operator. Examples:
+        # controllers and indicators", and of the symbol, "A circle within a
+        # square shows that the instrument has some controlling function. The
+        # circle represents a smooth control process, such as a distributed
+        # control system (DCS)".
+        #
+        # `professional_examples/P&ID_301.pdf` draws it and settles the
+        # geometry: all forty of its balloons carry a bar, twelve of them
+        # circle-in-square, and on every one the bar runs the circle's full
+        # diameter through the exact vertical centre -- 17,01 pt of bar on a
+        # 17,01 pt circle -- with the letters wholly above it and the number
+        # wholly below, which is where ISO 15519-2 5.1.2 puts them anyway:
+        # "Letter codes for process variables and control functions ... shall be
+        # placed in the upper part of the symbol and reference designation in
+        # the lower part of the symbol". So the bar spans the *circle*, 2..42,
+        # and not the square around it; the square is a second statement, about
+        # what the instrument does rather than where it is.
+        #
+        # 1,5 and not the outline's 2, which is this package's answer for a
+        # location bar rather than that sheet's: `panel` and `aux` above are
+        # drawn that way, and a reader who has learnt one bar has learnt all
+        # three. P&ID_301 draws bar and outline at one weight (0,24 pt each).
+        # That is a difference between this package and that sheet, and it is a
+        # difference of house style spent consistently, not one of meaning.
         self.register("instrument", Symbol(
-            svg='<g id="sym_instrument_shared"><rect x="1" y="1" width="42" height="42" fill="white" stroke="black" stroke-width="2"/><circle cx="22" cy="22" r="20" fill="none" stroke="black" stroke-width="2"/></g>',
+            svg='<g id="sym_instrument_shared"><rect x="1" y="1" width="42" height="42" fill="white" stroke="black" stroke-width="2"/><circle cx="22" cy="22" r="20" fill="none" stroke="black" stroke-width="2"/><line x1="2" y1="22" x2="42" y2="22" stroke="black" stroke-width="1.5"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
             faceless_ports=_inst_faceless, label_pos="center", stretchable=False), "shared")
         self.register("instrument", Symbol(
