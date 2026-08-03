@@ -8,8 +8,9 @@ the first letter of every balloon tagged from it::
 
     loop = fs.add_loop("F", 303)
     fe = fs.add(units.Fitting(loop.element("FE"), variant="venturi"))
-    ft = fs.add_instrument("FT", loop, on=line, at=0.5, offset=95)
-    fic = fs.add_instrument("FIC", loop, on=ft, at="N", offset=90,
+    fs.add_balloon(fe, at="N", offset=38)
+    ft = fs.add_instrument("FT", loop, near=fe.balloon, at="N", offset=23)
+    fic = fs.add_instrument("FIC", loop, near=ft, at="E", offset=70,
                             variant="shared")
     cv = fs.add(units.Valve(loop.tag("CV"), variant="control"))
 

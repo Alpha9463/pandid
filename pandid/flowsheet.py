@@ -394,7 +394,7 @@ class Flowsheet:
 
             loop = fs.add_loop("F", 303)
             fe = fs.add(units.Fitting(loop.element("FE"), variant="venturi"))
-            ft = fs.add_instrument("FT", loop, on=line, at=0.5, offset=95)
+            ft = fs.add_instrument("FT", loop, sensing=fe, at="N", offset=70)
             cv = fs.add(units.Valve(loop.tag("CV"), variant="control"))
 
         A member that is not a balloon joins through one of two methods, chosen

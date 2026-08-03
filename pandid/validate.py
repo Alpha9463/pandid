@@ -590,8 +590,8 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         for s in fs.streams:
             # A signal line carries a measurement, not a fluid, so it
             # has no elevation to be off. Its balloon end is placed by
-            # ``add_instrument(on=..., offset=...)`` rather than by a
-            # pin.
+            # ``add_instrument``'s anchor and ``offset=`` rather than by
+            # a pin.
             if s.kind in SIGNAL_KINDS:
                 continue
             su, du = s.source.owner, s.dest.owner
