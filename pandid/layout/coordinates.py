@@ -1,12 +1,13 @@
 """Phase 3/4: Coordinate Assignment.
 
-Maps each unit's grid rank (``_slot.col``/``_slot.row``) to absolute pixel
-coordinates, honoring any pinned ``x``/``y``, then emits the resolved
-:class:`~pandid.geometry.Frame` the router and renderer consume.
+Maps each unit's grid rank (``_slot.col``/``_slot.row``) to absolute
+pixel coordinates, honoring any pinned ``x``/``y``, then emits the
+resolved :class:`~pandid.geometry.Frame` the router and renderer
+consume.
 
-:func:`assign_labels` closes the run but is a separate phase the engine calls
-after :mod:`pandid.layout.faces` has chosen the movable ports' faces, since a label
-dodges the faces the nozzles actually leave from.
+:func:`assign_labels` closes the run but is a separate phase the engine
+calls after :mod:`pandid.layout.faces` has chosen the movable ports'
+faces, since a label dodges the faces the nozzles actually leave from.
 """
 
 from typing import TYPE_CHECKING
@@ -16,13 +17,13 @@ if TYPE_CHECKING:
 
 X_GAP = 150
 Y_GAP = 120
-ROW_GAP = 70   # vertical gap between row bands (added to the taller row's height)
+ROW_GAP = 70   # gap between row bands, over the taller row
 MARGIN_X = 50
 MARGIN_Y = 50
 
 
 def assign_coordinates(fs: "Flowsheet") -> None:
-    """Map (col, row) ranks to absolute (x, y) pixel coordinates and emit frames."""
+    """Map (col, row) ranks to pixel coordinates and emit frames."""
     from pandid.geometry import Frame
     from pandid.layout.attach import free_streams, free_units, place_attached
     from pandid.portgeom import resolve_port
@@ -30,7 +31,8 @@ def assign_coordinates(fs: "Flowsheet") -> None:
     units = free_units(fs)
     streams = free_streams(fs)
 
-    # Max resolved width of units in each column (widths already on the slot).
+    # Max resolved width of units in each column (widths already on the
+    # slot).
     col_widths: dict[int, float] = {}
     for u in units:
         col = u._slot.col or 0
@@ -43,12 +45,13 @@ def assign_coordinates(fs: "Flowsheet") -> None:
         x_pos[col] = curr_x
         curr_x += col_widths[col] + 100.0  # 100px routing gap minimum
 
-    # Center each row's units on a common horizontal flow axis (rather than
-    # top-aligning), so equipment of different heights lines up on one spine: a
-    # short mixer and a tall column share a centerline, minimizing the vertical
-    # jog between their connecting ports.
+    # Center each row's units on a common horizontal flow axis (rather
+    # than top-aligning), so equipment of different heights lines up on
+    # one spine: a short mixer and a tall column share a centerline,
+    # minimizing the vertical jog between their connecting ports.
     max_row = max((u._slot.row or 0 for u in units if u._slot.y is None), default=-1)
-    row_height: dict[int, float] = {r: 50.0 for r in range(max_row + 1)}  # empty rows keep a default band
+    # Empty rows keep a default band.
+    row_height: dict[int, float] = {r: 50.0 for r in range(max_row + 1)}
     for u in units:
         if u._slot.y is None:
             r = u._slot.row or 0
@@ -62,25 +65,27 @@ def assign_coordinates(fs: "Flowsheet") -> None:
     unpinned_y = set()
     for u in units:
         s = u._slot
-        # If the user pinned x / y, keep them; otherwise derive from the grid.
+        # If the user pinned x / y, keep them; otherwise derive from the
+        # grid.
         if s.x is None:
             s.x = x_pos.get(s.col or 0, MARGIN_X)
         if s.y is None:
             s.y = row_axis[s.row or 0] - s.h / 2.0
             unpinned_y.add(u)
 
-    # Post-pass: straighten the process spine. Walk units left-to-right and,
-    # where a unit has a single horizontal process connection to a neighbour in
-    # another column, shift it vertically so the two ports share an absolute
-    # height, turning staircase jogs into straight runs (and clean L's for
-    # single-stream Feed/Product terminals). Anything that would overlap a
-    # neighbour in the same column is left on the row axis.
-    # The slot carries the same box the Frame will (size and transform), so the
-    # port resolver answers here exactly as it will once the frames are emitted.
-    # That is the point: a target read off the symbol instead ignores the resize,
-    # the mirror and any nozzle() choice, and aims at the wrong height.
+    # Post-pass: straighten the process spine. Walk units left-to-right
+    # and, where a unit has a single horizontal process connection to a
+    # neighbour in another column, shift it vertically so the two ports
+    # share an absolute height, turning staircase jogs into straight
+    # runs (and clean L's for single-stream Feed/Product terminals).
+    # Anything that would overlap a neighbour in the same column is left
+    # on the row axis. The slot carries the same box the Frame will
+    # (size and transform), so the port resolver answers here exactly as
+    # it will once the frames are emitted. That is the point: a target
+    # read off the symbol instead ignores the resize, the mirror and any
+    # nozzle() choice, and aims at the wrong height.
     def _target_y(other_u, other_port):
-        """Absolute Y to aim a straight run at, honouring N/S escape lanes."""
+        """Absolute Y to aim a run at, honouring N/S escape lanes."""
         s = other_u._slot
         (_, py), _, d = resolve_port(other_u, s, other_port.name)
         if d == "N":
@@ -113,16 +118,16 @@ def assign_coordinates(fs: "Flowsheet") -> None:
                 continue
             bucket = ups if (pair[1]._slot.col or 0) < (s.col or 0) else downs
             bucket.append(pair)
-        # A single upstream anchor chains the spine; fall back to a single
-        # downstream one so terminals (Feed) still align.
+        # A single upstream anchor chains the spine; fall back to a
+        # single downstream one so terminals (Feed) still align.
         anchor = ups[0] if len(ups) == 1 else (downs[0] if not ups and len(downs) == 1 else None)
         if anchor is None:
             continue
         my_port, other_u, other_port = anchor
         if other_u._slot is None or other_u._slot.y is None:
             continue
-        # Only straighten horizontal runs: the port must face the neighbour
-        # sideways (E/W); vertical ports keep the row axis.
+        # Only straighten horizontal runs: the port must face the
+        # neighbour sideways (E/W); vertical ports keep the row axis.
         (_, my_y), _, my_d = resolve_port(u, s, my_port.name)
         if my_d not in ("E", "W"):
             continue
@@ -130,8 +135,8 @@ def assign_coordinates(fs: "Flowsheet") -> None:
         if not _overlaps(u, s, new_y):
             s.y = new_y
 
-    # Emit the resolved frame for every ranked unit; attached instruments take
-    # theirs from their host instead.
+    # Emit the resolved frame for every ranked unit; attached
+    # instruments take theirs from their host instead.
     for u in units:
         s = u._slot
         u.frame = Frame(
@@ -149,14 +154,15 @@ LABEL_SIDES = ("top", "bottom", "right", "left")
 
 
 def free_label_sides(u) -> list[str]:
-    """The sides of a unit's box no connected nozzle leaves from, best first.
+    """The sides of a box no connected nozzle leaves, best first.
 
-    Read off :mod:`pandid.portgeom`, so the faces this reports free are the faces
-    the router and the renderer will actually see empty. The renderer asks the
-    same question again once the sheet is routed, because a face free of nozzles
-    can still have a passing line or an impulse line across it, and neither of
-    those exists yet while layout runs. This is the half of the answer that does:
-    a nozzle is geometry, and geometry is settled here.
+    Read off :mod:`pandid.portgeom`, so the faces this reports free are
+    the faces the router and the renderer will actually see empty. The
+    renderer asks the same question again once the sheet is routed,
+    because a face free of nozzles can still have a passing line or an
+    impulse line across it, and neither of those exists yet while layout
+    runs. This is the half of the answer that does: a nozzle is
+    geometry, and geometry is settled here.
     """
     from pandid.portgeom import port_anchor
 
@@ -172,11 +178,12 @@ def free_label_sides(u) -> list[str]:
 
 
 def assign_labels(fs: "Flowsheet") -> None:
-    """Resolve each unit's label side, avoiding faces a connected port occupies.
+    """Resolve each label side, avoiding faces a live port holds.
 
-    Explicit user ``label_pos`` or a symbol default wins; otherwise the label
-    goes to the first free face in top → bottom → right → left order, so a stream
-    leaving (say) a pump's top nozzle does not run through its label.
+    Explicit user ``label_pos`` or a symbol default wins; otherwise the
+    label goes to the first free face in top → bottom → right → left
+    order, so a stream leaving (say) a pump's top nozzle does not run
+    through its label.
     """
     from pandid.render.symbols import default_registry
 

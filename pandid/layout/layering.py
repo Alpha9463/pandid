@@ -10,7 +10,8 @@ if TYPE_CHECKING:
 def assign_layers(fs: "Flowsheet") -> None:
     """Assign a column rank to each unit using longest-path algorithm.
 
-    Operates on the pre-seeded ``_slot`` scratch state (see ``_seed_slots``).
+    Operates on the pre-seeded ``_slot`` scratch state (see
+    ``_seed_slots``).
     """
     from pandid.layout.attach import free_streams, free_units
 
@@ -61,6 +62,7 @@ def assign_layers(fs: "Flowsheet") -> None:
         if u._slot.col is None:
             u._slot.col = ranks[u]
 
-    # Virtual-node insertion for long edges (spanning > 1 rank) would go here in
-    # full Sugiyama crossing reduction. Crossing reduction runs directly on the
-    # units instead, leaving edge geometry to the orthogonal router.
+    # Virtual-node insertion for long edges (spanning > 1 rank) would go
+    # here in full Sugiyama crossing reduction. Crossing reduction runs
+    # directly on the units instead, leaving edge geometry to the
+    # orthogonal router.

@@ -89,69 +89,72 @@ DEVICES = {
     # centrifugal are different machines with different curves, bought
     # separately and listed separately, even though the flowsheet sees the same
     # suction and discharge on all six.
-    ("pump", "default"): ("CentrifugalPump", """Centrifugal pump: the volute-and-impeller machine most process duty runs on.
+    ("pump", "default"): ("CentrifugalPump", """Centrifugal pump: the volute-and-impeller workhorse.
 
-    What ``Pump`` draws when it is asked for by name, under the name a schedule
-    calls it. Head falls as flow rises, so it throttles on a control valve
-    rather than on a relief; contrast :class:`GearPump` and :class:`ScrewPump`,
-    which are positive displacement and do not.
-    """),
+    What ``Pump`` draws when it is asked for by name, under the name a
+    schedule calls it. Head falls as flow rises, so it throttles on a
+    control valve rather than on a relief; contrast :class:`GearPump`
+    and :class:`ScrewPump`, which are positive displacement and do not.
+"""),
     ("pump", "gear"): ("GearPump", """Gear pump: positive displacement, for viscous or metered duty.
 
-    Two meshing gears carry fluid round the casing, so flow is set by speed and
-    is very nearly independent of discharge pressure. That is why a positive
-    displacement pump is protected by a relief valve and a centrifugal is not:
-    a closed discharge has nowhere to go.
-    """),
-    ("pump", "screw"): ("ScrewPump", """Screw pump: positive displacement, for viscous, shear-sensitive duty.
+    Two meshing gears carry fluid round the casing, so flow is set by
+    speed and is very nearly independent of discharge pressure. That is
+    why a positive displacement pump is protected by a relief valve and
+    a centrifugal is not: a closed discharge has nowhere to go.
+"""),
+    ("pump", "screw"): ("ScrewPump", """Screw pump: positive displacement, for viscous duty.
 
-    One or more screws in a close-fitting barrel, moving a smooth, pulsation-free
-    flow along the axis. The same relief-valve rule as :class:`GearPump`.
-    """),
-    ("pump", "peristaltic"): ("PeristalticPump", """Peristaltic (hose) pump: rollers squeeze a tube, so nothing wets the pump.
+    One or more screws in a close-fitting barrel, moving a smooth,
+    pulsation-free flow along the axis. The same relief-valve rule as
+    :class:`GearPump`.
+"""),
+    ("pump", "peristaltic"): ("PeristalticPump", """Peristaltic pump: rollers squeeze a tube, wetting nothing.
 
-    The metering pump for a slurry or a reagent that must not meet a seal or an
-    impeller: the fluid touches the hose and nothing else. Both connections
-    leave the top of the head, which is where the stencil draws the tube.
-    """),
+    The metering pump for a slurry or a reagent that must not meet a
+    seal or an impeller: the fluid touches the hose and nothing else.
+    Both connections leave the top of the head, which is where the
+    stencil draws the tube.
+"""),
     ("pump", "submersible"): ("SubmersiblePump", """Submersible (sump) pump: it stands in the liquid it pumps.
 
-    The suction is the strainer plate it sits on rather than a piped nozzle, so
-    the drawing is piped from underneath; the discharge is the riser out of the
-    casing.
-    """),
+    The suction is the strainer plate it sits on rather than a piped
+    nozzle, so the drawing is piped from underneath; the discharge is
+    the riser out of the casing.
+"""),
     ("pump", "vacuum"): ("VacuumPump", """Vacuum pump: the machine that pulls a system below atmospheric.
 
-    Drawn as a pump rather than as a compressor because that is the stencil the
-    set files it under; a liquid-ring machine doing the same duty is
-    :class:`LiquidRingCompressor`.
-    """),
+    Drawn as a pump rather than as a compressor because that is the
+    stencil the set files it under; a liquid-ring machine doing the same
+    duty is :class:`LiquidRingCompressor`.
+"""),
 
     # --- Compressors -------------------------------------------------------
     ("compressor", "default"): ("CentrifugalCompressor", """Centrifugal compressor: dynamic compression, for large gas flows.
 
-    What ``Compressor`` draws when it is asked for by name. Its stable range is
-    bounded by surge at low flow, which is what the anti-surge recycle round one
-    is for; a reciprocating machine has no such limit and needs no such line.
-    """),
-    ("compressor", "reciprocating"): ("ReciprocatingCompressor", """Reciprocating compressor: positive displacement, for high ratio or low flow.
+    What ``Compressor`` draws when it is asked for by name. Its stable
+    range is bounded by surge at low flow, which is what the anti-surge
+    recycle round one is for; a reciprocating machine has no such limit
+    and needs no such line.
+"""),
+    ("compressor", "reciprocating"): ("ReciprocatingCompressor", """Reciprocating compressor: for high ratio or low flow.
 
-    A piston in a cylinder, so the discharge pulses and the ratio is set by
-    geometry rather than by speed. Like every positive displacement machine it
-    is protected by a relief valve on the discharge.
-    """),
-    ("compressor", "rotary"): ("RotaryCompressor", """Rotary compressor: screws or lobes, positive displacement and oil-free duty.
+    A piston in a cylinder, so the discharge pulses and the ratio is set
+    by geometry rather than by speed. Like every positive displacement
+    machine it is protected by a relief valve on the discharge.
+"""),
+    ("compressor", "rotary"): ("RotaryCompressor", """Rotary compressor: screws or lobes, and oil-free duty.
 
-    The plant-air and blower-service machine: steady flow, modest ratio, and no
-    valves to pulse.
-    """),
-    ("compressor", "liquid_ring"): ("LiquidRingCompressor", """Liquid-ring compressor or vacuum pump: a rotating liquid seal does the work.
+    The plant-air and blower-service machine: steady flow, modest ratio,
+    and no valves to pulse.
+"""),
+    ("compressor", "liquid_ring"): ("LiquidRingCompressor", """Liquid-ring compressor: a rotating liquid seal does the work.
 
-    Wet, tolerant of carryover and inherently cool, which is why it is the
-    machine on a vacuum system handling condensable or dirty vapour. It carries
-    a service liquid, which the sheet draws as an ordinary connection to the
-    machine rather than as a nozzle of its own.
-    """),
+    Wet, tolerant of carryover and inherently cool, which is why it is
+    the machine on a vacuum system handling condensable or dirty vapour.
+    It carries a service liquid, which the sheet draws as an ordinary
+    connection to the machine rather than as a nozzle of its own.
+"""),
 
     # --- Heat exchangers ---------------------------------------------------
     #
@@ -161,70 +164,74 @@ DEVICES = {
     # borrow the vocabulary. See HeatExchanger._VARIANT_PORTS.
     ("hex", "default"): ("ShellAndTubeExchanger", """Shell-and-tube exchanger: a tube bundle inside a shell.
 
-    The default exchanger and the one most of the family's drawings are styles
-    of: the ISO circle-and-zigzag (``default``, ``shell_tube``), the U-tube and
-    hairpin bundles that turn round inside the shell (``u_tube``, ``hairpin``),
-    the horizontal elevation a real sheet draws (``straight_tubes``) and the
-    finned bundle in the same casing (``finned``).
+    The default exchanger and the one most of the family's drawings are
+    styles of: the ISO circle-and-zigzag (``default``, ``shell_tube``),
+    the U-tube and hairpin bundles that turn round inside the shell
+    (``u_tube``, ``hairpin``), the horizontal elevation a real sheet
+    draws (``straight_tubes``) and the finned bundle in the same casing
+    (``finned``).
 
-    Nozzles are named for the **side of the equipment** they sit on, never for
-    the duty the stream carries: which fluid runs in the shell and which in the
-    tubes is a design decision worth recording, and hot and cold invert between
-    operating cases while the nozzle stays where it is.
-    """),
-    ("hex", "double_pipe"): ("DoublePipeExchanger", """Double-pipe exchanger: one pipe inside another, drawn as a hairpin.
+    Nozzles are named for the **side of the equipment** they sit on,
+    never for the duty the stream carries: which fluid runs in the shell
+    and which in the tubes is a design decision worth recording, and hot
+    and cold invert between operating cases while the nozzle stays where
+    it is.
+"""),
+    ("hex", "double_pipe"): ("DoublePipeExchanger", """Double-pipe exchanger: a pipe in a pipe, drawn as a hairpin.
 
-    The small-duty exchanger, and the one whose two sides really are a tube and
-    an annulus. Both fluids enter at the same end and turn round at the far one,
-    so neither side has an east nozzle.
-    """),
-    ("hex", "kettle"): ("KettleReboiler", """Kettle reboiler: a shell-and-tube bundle in an enlarged shell with a weir.
+    The small-duty exchanger, and the one whose two sides really are a
+    tube and an annulus. Both fluids enter at the same end and turn
+    round at the far one, so neither side has an east nozzle.
+"""),
+    ("hex", "kettle"): ("KettleReboiler", """Kettle reboiler: a bundle in an enlarged shell, with a weir.
 
-    The one exchanger with a nozzle more. ``bottoms`` is the draw at the weir
-    end: what does not boil overflows the plate and leaves the bottom of the
-    shell, which is where a tower's bottoms product physically gets off the
-    sheet. The draw belongs on the exchanger, not on an invented splitter in the
-    sump line.
+    The one exchanger with a nozzle more. ``bottoms`` is the draw at the
+    weir end: what does not boil overflows the plate and leaves the
+    bottom of the shell, which is where a tower's bottoms product
+    physically gets off the sheet. The draw belongs on the exchanger,
+    not on an invented splitter in the sump line.
 
-    The heating medium is the **tube** side; the process boils in the shell. The
-    stencil draws one channel-head opening, so ``tube_out`` takes the shell's far
-    dished head.
-    """),
-    ("hex", "condenser"): ("Condenser", """Condenser: the shell-and-tube exchanger that takes an overhead vapour to liquid.
+    The heating medium is the **tube** side; the process boils in the
+    shell. The stencil draws one channel-head opening, so ``tube_out``
+    takes the shell's far dished head.
+"""),
+    ("hex", "condenser"): ("Condenser", """Condenser: the exchanger taking an overhead vapour to liquid.
 
-    The circle-and-zigzag with the heat-removed arrow across it, so the sides
-    read the same way as the rest of the shell-and-tube family. For the
-    single-stream utility symbol, where the cooling medium is a connection
-    rather than a side, reach for :class:`pandid.units.Cooler` instead.
-    """),
-    ("hex", "air_cooled"): ("AirCooledExchanger", """Air-cooled (fin-fan) exchanger: a finned tube bundle with air blown over it.
+    The circle-and-zigzag with the heat-removed arrow across it, so the
+    sides read the same way as the rest of the shell-and-tube family.
+    For the single-stream utility symbol, where the cooling medium is a
+    connection rather than a side, reach for
+    :class:`pandid.units.Cooler` instead.
+"""),
+    ("hex", "air_cooled"): ("AirCooledExchanger", """Air-cooled exchanger: a finned bundle with air blown over it.
 
-    The only piped side is the tube bundle. There is no shell, so the nozzles
-    say so: ``air_in`` and ``air_out`` are the induced-draft bay's own faces,
-    under the bundle and out through the fan, and neither is a pipe. That is
-    why this is a class and not a style -- an exchanger with no shell cannot
-    carry ``shell_in``.
-    """),
-    ("hex", "plate"): ("PlateExchanger", """Plate exchanger: a gasketed or brazed pack of plates, two circuits through it.
+    The only piped side is the tube bundle. There is no shell, so the
+    nozzles say so: ``air_in`` and ``air_out`` are the induced-draft
+    bay's own faces, under the bundle and out through the fan, and
+    neither is a pipe. That is why this is a class and not a style -- an
+    exchanger with no shell cannot carry ``shell_in``.
+"""),
+    ("hex", "plate"): ("PlateExchanger", """Plate exchanger: a pack of plates, two circuits through it.
 
     Neither circuit is a shell or a tube and the two are physically
-    interchangeable, so they are **lettered** rather than named: ``side_a`` and
-    ``side_b``, each following the diagonal the artwork actually draws.
-    """),
+    interchangeable, so they are **lettered** rather than named:
+    ``side_a`` and ``side_b``, each following the diagonal the artwork
+    actually draws.
+"""),
     ("hex", "spiral"): ("SpiralExchanger", """Spiral exchanger: two channels coiled about a common centre.
 
-    Lettered sides for :class:`PlateExchanger`'s reason: neither channel is a
-    shell or a tube. The self-cleaning geometry is what puts one in fouling or
-    slurry duty.
-    """),
-    ("hex", "thin_film"): ("ThinFilmEvaporator", """Thin-film (wiped-film) evaporator: a rotor spreads the feed on a heated wall.
+    Lettered sides for :class:`PlateExchanger`'s reason: neither channel
+    is a shell or a tube. The self-cleaning geometry is what puts one in
+    fouling or slurry duty.
+"""),
+    ("hex", "thin_film"): ("ThinFilmEvaporator", """Thin-film evaporator: a rotor spreads feed on a heated wall.
 
-    The one evaporator in the set, and the one exchanger whose two sides are a
-    **jacket** and a **product** side. Product runs top to bottom -- onto the
-    wiper at the top, concentrate out of the cone apex -- and the heating medium
-    goes through the jacket, which is why neither pair borrows the shell-and-tube
-    names.
-    """),
+    The one evaporator in the set, and the one exchanger whose two sides
+    are a **jacket** and a **product** side. Product runs top to bottom
+    -- onto the wiper at the top, concentrate out of the cone apex --
+    and the heating medium goes through the jacket, which is why neither
+    pair borrows the shell-and-tube names.
+"""),
 
     # --- Separators --------------------------------------------------------
     #
@@ -232,122 +239,131 @@ DEVICES = {
     # or magnetism rather than into phases, and three more collect *dust*. See
     # the module docstring of pandid/devices.py for the port vocabulary that
     # follows from that, and for what it costs.
-    ("separator", "cyclone"): ("Cyclone", """Cyclone separator: a vortex throws the heavy phase to the wall and down the cone.
+    ("separator", "cyclone"): ("Cyclone", """Cyclone separator: a vortex throws the heavy phase down.
 
-    The gas-solid workhorse -- off a spray dryer, a fluidised bed, a mill -- and
-    the hydrocyclone in a classifying duty. ISO 15519-1 symbol X 2618, and one
-    of the two the standard names as symbols gravity fixes the attitude of: the
-    apex points down and the drawing says nothing true turned.
+    The gas-solid workhorse -- off a spray dryer, a fluidised bed, a
+    mill -- and the hydrocyclone in a classifying duty. ISO 15519-1
+    symbol X 2618, and one of the two the standard names as symbols
+    gravity fixes the attitude of: the apex points down and the drawing
+    says nothing true turned.
 
-    The draws are ``overflow`` and ``underflow``, not ``vapor`` and ``liquid``:
-    what leaves the apex is a catch, and calling a hopper full of dust a liquid
-    is the bend this class exists to stop. ``Separator(variant="cyclone")``
-    draws the same pair as of 0.1.2; see the module docstring.
-    """),
-    ("separator", "gravity"): ("GravitySeparator", """Gravity separator (settling chamber): velocity drops and the heavy phase falls out.
+    The draws are ``overflow`` and ``underflow``, not ``vapor`` and
+    ``liquid``: what leaves the apex is a catch, and calling a hopper
+    full of dust a liquid is the bend this class exists to stop.
+    ``Separator(variant="cyclone")`` draws the same pair as of 0.1.2;
+    see the module docstring.
+"""),
+    ("separator", "gravity"): ("GravitySeparator", """Gravity separator: velocity drops and the heavy phase falls.
 
-    The crudest gas-solid separator there is, and usually the first stage ahead
-    of a cyclone or a filter. ``overflow`` and ``underflow`` for
-    :class:`Cyclone`'s reason.
-    """),
-    ("separator", "electrostatic"): ("ElectrostaticPrecipitator", """Electrostatic precipitator: charged particles migrate to a collecting plate.
+    The crudest gas-solid separator there is, and usually the first
+    stage ahead of a cyclone or a filter. ``overflow`` and ``underflow``
+    for :class:`Cyclone`'s reason.
+"""),
+    ("separator", "electrostatic"): ("ElectrostaticPrecipitator", """Electrostatic precipitator: charged particles migrate to a plate.
 
-    The high-efficiency dust collector on a flue-gas or a kiln duty, rapped
-    clear into the hopper below. ``overflow`` and ``underflow`` for
-    :class:`Cyclone`'s reason.
-    """),
-    ("separator", "sifter"): ("Screen", """Screen: a deck that sorts a solid by size, the oversize over and the fines through.
+    The high-efficiency dust collector on a flue-gas or a kiln duty,
+    rapped clear into the hopper below. ``overflow`` and ``underflow``
+    for :class:`Cyclone`'s reason.
+"""),
+    ("separator", "sifter"): ("Screen", """Screen: a deck sorting by size, oversize over and fines through.
 
     Named ``Screen`` rather than ``Sifter`` because that is the word a
-    specification uses and the word an engineer searches for, and because the
-    one drawing stands for both duties a screen is bought for: **scalping**,
-    taking a little oversize off a lot of product, and **sizing**, cutting a feed
-    into fractions. Which of the two draws is the product is a fact about the
-    service and not about the machine, which is why the nozzles name the two
-    positions and not the contents.
-    """),
-    ("separator", "impact"): ("ImpactSeparator", """Impact separator: a baffle the stream is thrown at, so inertia does the sorting.
+    specification uses and the word an engineer searches for, and
+    because the one drawing stands for both duties a screen is bought
+    for: **scalping**, taking a little oversize off a lot of product,
+    and **sizing**, cutting a feed into fractions. Which of the two
+    draws is the product is a fact about the service and not about the
+    machine, which is why the nozzles name the two positions and not the
+    contents.
+"""),
+    ("separator", "impact"): ("ImpactSeparator", """Impact separator: a baffle to throw the stream at.
 
-    The knock-out on a pneumatic conveying line or a vent, where the heavy
-    fraction cannot follow the gas round the baffle.
-    """),
+    The knock-out on a pneumatic conveying line or a vent, where the
+    heavy fraction cannot follow the gas round the baffle.
+"""),
     ("separator", "permanent_magnet"): ("MagneticSeparator", """Magnetic separator: tramp metal pulled out of a solids stream.
 
-    One class over both drawings, because the choice between a **permanent**
-    magnet (``default``) and an **electromagnet** (``electromagnetic``) is a
-    matter of how the field is made, not of what the machine does or of how it
-    is piped: same body, same hopper, same two draws.
-    """),
+    One class over both drawings, because the choice between a
+    **permanent** magnet (``default``) and an **electromagnet**
+    (``electromagnetic``) is a matter of how the field is made, not of
+    what the machine does or of how it is piped: same body, same hopper,
+    same two draws.
+"""),
     ("separator", "scrubber"): ("Scrubber", """Wet scrubber: a wash liquid takes the contaminant out of a gas.
 
-    Cleaned gas off the side, dirty scrubbing liquid out of the hopper, which
-    really is a vapour and a liquid -- so unlike the collectors above this one
-    keeps ``vapor`` and ``liquid``. A scrubber cleans a gas rather than
-    classifying a solid.
-    """),
-    ("separator", "knockout"): ("KnockoutDrum", """Knock-out drum: a vertical drum with a demister pad, ahead of a compressor or a flare.
+    Cleaned gas off the side, dirty scrubbing liquid out of the hopper,
+    which really is a vapour and a liquid -- so unlike the collectors
+    above this one keeps ``vapor`` and ``liquid``. A scrubber cleans a
+    gas rather than classifying a solid.
+"""),
+    ("separator", "knockout"): ("KnockoutDrum", """Knock-out drum: an upright drum with a demister pad.
 
-    A mesh pad and a level gauge are both *drawn internals*, which the rule
-    calls a variant -- and this is one of the two places the rule is
-    deliberately overruled, because "knock-out drum" is the term a P&ID, a
-    datasheet and a search box all use, and a class nobody can find is worth
-    nothing. It is therefore near enough a duplicate of ``Separator``, and that
-    is accepted.
+    A mesh pad and a level gauge are both *drawn internals*, which the
+    rule calls a variant -- and this is one of the two places the rule
+    is deliberately overruled, because "knock-out drum" is the term a
+    P&ID, a datasheet and a search box all use, and a class nobody can
+    find is worth nothing. It is therefore near enough a duplicate of
+    ``Separator``, and that is accepted.
 
     The gauge is *drawn*, not declared, so a level instrument added with
-    :meth:`~pandid.flowsheet.Flowsheet.add_instrument` puts its own ISA-5.1
-    balloon beside it and the sheet says the level is measured twice.
-    """),
+    :meth:`~pandid.flowsheet.Flowsheet.add_instrument` puts its own
+    ISA-5.1 balloon beside it and the sheet says the level is measured
+    twice.
+"""),
 
     # --- Filters -----------------------------------------------------------
     ("filter", "gas"): ("DustCollector", """Dust collector: a gas filter with a hopper under the medium.
 
-    One class over the three gas casings the stencil set draws -- bag, candle or
-    cartridge elements (``default``), a granular bed (``fixed_bed``) and a cloth
-    on rollers (``belt``) -- because choosing between them is a statement about
-    the **medium**, which is what a variant is for, and all three are piped
-    alike.
+    One class over the three gas casings the stencil set draws -- bag,
+    candle or cartridge elements (``default``), a granular bed
+    (``fixed_bed``) and a cloth on rollers (``belt``) -- because
+    choosing between them is a statement about the **medium**, which is
+    what a variant is for, and all three are piped alike.
 
-    Not called ``Baghouse``. That is the commonest member and the word most
-    often reached for, but the same stencil stands for candle and cartridge
-    filters, and a class named for one of the three would be wrong about the
-    other two. The term is here in the docstring so a search finds it.
-    """),
-    ("filter", "rotary"): ("RotaryDrumFilter", """Rotary drum (or disc) filter: a drum turns through the slurry under vacuum.
+    Not called ``Baghouse``. That is the commonest member and the word
+    most often reached for, but the same stencil stands for candle and
+    cartridge filters, and a class named for one of the three would be
+    wrong about the other two. The term is here in the docstring so a
+    search finds it.
+"""),
+    ("filter", "rotary"): ("RotaryDrumFilter", """Rotary drum filter: a drum turns through slurry under vacuum.
 
     Cake builds on the submerged face and is lifted off at the top. The
-    ``scraper`` variant is the same drum with the knife that lifts the cake
-    drawn on it, which is the whole of the difference between the two shapes.
-    """),
-    ("filter", "press"): ("FilterPress", """Filter press: a pack of plates squeezed together, filtrate out and cake retained.
+    ``scraper`` variant is the same drum with the knife that lifts the
+    cake drawn on it, which is the whole of the difference between the
+    two shapes.
+"""),
+    ("filter", "press"): ("FilterPress", """Filter press: plates squeezed together, filtrate out, cake in.
 
-    A batch machine on a continuous sheet, which is exactly why it is worth its
-    own row on an equipment list.
-    """),
+    A batch machine on a continuous sheet, which is exactly why it is
+    worth its own row on an equipment list.
+"""),
     ("filter", "ion_exchange"): ("IonExchanger", """Ion exchanger: a resin bed between two retention screens.
 
-    The vessel every demineraliser or softener train is drawn with. A filter by
-    drawing and by piping; what it removes is dissolved rather than suspended.
-    """),
+    The vessel every demineraliser or softener train is drawn with. A
+    filter by drawing and by piping; what it removes is dissolved rather
+    than suspended.
+"""),
 
     # --- Dryers ------------------------------------------------------------
-    ("dryer", "default"): ("RotaryDryer", """Rotary drum (tumbling) dryer: a turning drum with hot gas through it.
+    ("dryer", "default"): ("RotaryDryer", """Rotary drum dryer: a turning drum with hot gas through it.
 
-    The bulk-solids dryer, and what ``Dryer`` draws when it is asked for by
-    name.
-    """),
-    ("dryer", "fluidized_bed"): ("FluidizedBedDryer", """Fluidised-bed dryer: gas up through a distributor holds the solids in suspension.
+    The bulk-solids dryer, and what ``Dryer`` draws when it is asked for
+    by name.
+"""),
+    ("dryer", "fluidized_bed"): ("FluidizedBedDryer", """Fluidised-bed dryer: gas up through a distributor holds the bed.
 
-    Even temperature and a high transfer rate, at the price of a bed that has to
-    stay fluidised. The bed is a layer on its plate, so the symbol is one gravity
-    fixes the attitude of.
-    """),
-    ("dryer", "spray"): ("SprayDryer", """Spray dryer: a feed atomised into a hot gas, powder out of the floor.
+    Even temperature and a high transfer rate, at the price of a bed
+    that has to stay fluidised. The bed is a layer on its plate, so the
+    symbol is one gravity fixes the attitude of.
+"""),
+    ("dryer", "spray"): ("SprayDryer", """Spray dryer: feed atomised into hot gas, powder off the floor.
 
-    Fed through the atomiser in its roof and drawn top to bottom rather than
-    across, which is why the artwork must not be turned. The cyclone downstream
-    of one is where the product is usually recovered; see :class:`Cyclone`.
-    """),
+    Fed through the atomiser in its roof and drawn top to bottom rather
+    than across, which is why the artwork must not be turned. The
+    cyclone downstream of one is where the product is usually recovered;
+    see :class:`Cyclone`.
+"""),
 
     # --- Valves ------------------------------------------------------------
     #
@@ -360,56 +376,60 @@ DEVICES = {
     # ``Valve(variant="ball")`` has always been.
     ("valve", "control"): ("ControlValve", """Control valve: the final element a loop's output lands on.
 
-    The valve a controller modulates, drawn the way **ISO 15519-2 Table A.3**
-    builds it: a body with a diaphragm actuator on top of it. ``default`` is the
-    general body every sheet's CVs are drawn on; ``butterfly_pneumatic`` is the
-    same actuator on a butterfly disc, and is reached as
+    The valve a controller modulates, drawn the way **ISO 15519-2 Table
+    A.3** builds it: a body with a diaphragm actuator on top of it.
+    ``default`` is the general body every sheet's CVs are drawn on;
+    ``butterfly_pneumatic`` is the same actuator on a butterfly disc,
+    and is reached as
     ``ControlValve(variant="butterfly", actuator="diaphragm")`` too.
 
-    It is the one valve family that regularly declares ``fail=``, where it goes
-    when its air is lost, and it may **not** be shown normally closed -- PIP
-    PIC001 clause 4.2.2.10, because a darkened control valve on an issued sheet
-    reads as a block valve someone has closed. Say ``fail="closed"`` instead.
-    """),
+    It is the one valve family that regularly declares ``fail=``, where
+    it goes when its air is lost, and it may **not** be shown normally
+    closed -- PIP PIC001 clause 4.2.2.10, because a darkened control
+    valve on an issued sheet reads as a block valve someone has closed.
+    Say ``fail="closed"`` instead.
+"""),
     ("valve", "solenoid"): ("SolenoidValve", """Solenoid valve: an electrically operated on/off valve.
 
-    The valve a trip acts through, and the pilot on a larger actuator. On/off
-    rather than modulating, so it takes a ``fail`` position and it may be shown
-    normally closed, which is how a dump or a purge valve is drawn.
-    """),
-    ("valve", "relief"): ("ReliefValve", """Pressure relief valve: it opens on its own when the set pressure is reached.
+    The valve a trip acts through, and the pilot on a larger actuator.
+    On/off rather than modulating, so it takes a ``fail`` position and
+    it may be shown normally closed, which is how a dump or a purge
+    valve is drawn.
+"""),
+    ("valve", "relief"): ("ReliefValve", """Pressure relief valve: it opens itself at the set pressure.
 
-    The PSV/PRV a protected system is drawn with, in either of the two bodies
-    the stencil set draws (``default`` is the bonnet-on-a-stem relief; ``psv``
-    is the spring-loaded angle body a real sheet draws). Worked by the process
-    itself, so it has no actuating energy to lose and declares no ``fail``, and
-    PIP PIC001 4.2.2.10 forbids showing it normally closed.
-    """),
-    ("valve", "regulator"): ("PressureRegulator", """Self-acting pressure regulator: the process works its own diaphragm.
+    The PSV/PRV a protected system is drawn with, in either of the two
+    bodies the stencil set draws (``default`` is the bonnet-on-a-stem
+    relief; ``psv`` is the spring-loaded angle body a real sheet draws).
+    Worked by the process itself, so it has no actuating energy to lose
+    and declares no ``fail``, and PIP PIC001 4.2.2.10 forbids showing it
+    normally closed.
+"""),
+    ("valve", "regulator"): ("PressureRegulator", """Self-acting regulator: the process works its own diaphragm.
 
     A back-pressure or a reducing regulator, holding a pressure with no
-    controller and no signal. Its "actuator" connection is the external pilot
-    line rather than a signal terminus. No ``fail`` position for
+    controller and no signal. Its "actuator" connection is the external
+    pilot line rather than a signal terminus. No ``fail`` position for
     :class:`ReliefValve`'s reason, and no NC mark for the same clause.
-    """),
-    ("valve", "motor"): ("MotorOperatedValve", """Motor-operated valve (MOV): a block valve driven by an electric actuator.
+"""),
+    ("valve", "motor"): ("MotorOperatedValve", """Motor-operated valve: a block valve on an electric actuator.
 
-    Stroked open or shut from the control system rather than modulated, which is
-    why it takes a ``fail`` position and, unlike a control valve, may be shown
-    normally closed.
-    """),
+    Stroked open or shut from the control system rather than modulated,
+    which is why it takes a ``fail`` position and, unlike a control
+    valve, may be shown normally closed.
+"""),
     ("valve", "check"): ("CheckValve", """Check valve: it passes flow one way and shuts against the other.
 
-    Worked by the flow itself. **It has no actuator**, so this class does not
-    declare one: a check valve is not something a controller output can land on,
-    and a signal line drawn to one is a mistake worth refusing rather than
-    drawing. That missing nozzle is the whole reason this is a class and not a
-    body style.
+    Worked by the flow itself. **It has no actuator**, so this class
+    does not declare one: a check valve is not something a controller
+    output can land on, and a signal line drawn to one is a mistake
+    worth refusing rather than drawing. That missing nozzle is the whole
+    reason this is a class and not a body style.
 
-    Its arrow lives inside the outline and would be swallowed by a darkened
-    body, so a normally closed one draws the letters ``NC`` beside it instead
-    (PIP PIC001 clause 4.2.2.8).
-    """),
+    Its arrow lives inside the outline and would be swallowed by a
+    darkened body, so a normally closed one draws the letters ``NC``
+    beside it instead (PIP PIC001 clause 4.2.2.8).
+"""),
 
     # --- In-line fittings --------------------------------------------------
     #
@@ -417,52 +437,56 @@ DEVICES = {
     # declarable property differ". Exactly two clear it, and the other
     # twenty-five stay what they have always been: styles of a pair of faces on
     # a line.
-    ("fitting", "blind"): ("SpectacleBlind", """Spectacle blind (figure-8 blind): two discs on a tie, one bored and one solid.
+    ("fitting", "blind"): ("SpectacleBlind", """Spectacle blind: two discs on a tie, one bored and one solid.
 
-    The one fitting with a **declarable property**, which is what makes it a
-    class. Which disc is in the line is the whole of what the symbol says, and
-    the stencil set draws both states:
+    The one fitting with a **declarable property**, which is what makes
+    it a class. Which disc is in the line is the whole of what the
+    symbol says, and the stencil set draws both states:
 
-    - ``normal_position="open"`` (the default) puts the **ring** in the line,
-      with the solid disc parked above it: the line is through.
-    - ``normal_position="closed"`` puts the **solid** disc in the line: blanked.
+    - ``normal_position="open"`` (the default) puts the **ring** in the
+      line, with the solid disc parked above it: the line is through.
+    - ``normal_position="closed"`` puts the **solid** disc in the line:
+      blanked.
 
-    A change of shape, not a mark added to one, so a blind is never shown in a
-    position by inference.
-    """),
+    A change of shape, not a mark added to one, so a blind is never
+    shown in a position by inference.
+"""),
     ("fitting", "venturi"): ("FlowElement", """Primary flow element: the device in the run an FE balloon reads.
 
-    One class over the twelve the stencil set draws, because to the flowsheet
-    they are the same thing -- a pair of faces on a line -- and the choice
-    between them is the metering principle: a differential-pressure profile
-    (``default``/``venturi``, ``flow_nozzle``, ``v_cone``, ``wedge``, ``target``,
-    ``pitot``, ``averaging_pitot``) or a meter body (``coriolis``, ``vortex``,
+    One class over the twelve the stencil set draws, because to the
+    flowsheet they are the same thing -- a pair of faces on a line --
+    and the choice between them is the metering principle: a
+    differential-pressure profile (``default``/``venturi``,
+    ``flow_nozzle``, ``v_cone``, ``wedge``, ``target``, ``pitot``,
+    ``averaging_pitot``) or a meter body (``coriolis``, ``vortex``,
     ``ultrasonic``, ``turbine_meter``, ``positive_displacement``).
 
-    It is a class rather than a style of ``Fitting`` because it is what an
-    equipment or instrument schedule lists, which is the whole argument for the
-    layer: a strainer and a venturi are the same shape of thing to the drawing
-    and different rows on the list.
+    It is a class rather than a style of ``Fitting`` because it is what
+    an equipment or instrument schedule lists, which is the whole
+    argument for the layer: a strainer and a venturi are the same shape
+    of thing to the drawing and different rows on the list.
 
     Hang the balloon on one with
-    :meth:`~pandid.flowsheet.Flowsheet.add_instrument`. The restriction orifice
-    and the rotameter are **not** here: the first restricts rather than measures,
-    and the second carries its own indication, so both stay
-    ``Fitting`` variants where the class docstring already lists them.
-    """),
+    :meth:`~pandid.flowsheet.Flowsheet.add_instrument`. The restriction
+    orifice and the rotameter are **not** here: the first restricts
+    rather than measures, and the second carries its own indication, so
+    both stay ``Fitting`` variants where the class docstring already
+    lists them.
+"""),
 
     # --- Reactors ----------------------------------------------------------
-    ("reactor", "default"): ("StirredTankReactor", """Stirred-tank reactor (CSTR): a charge vessel with a top-entering agitator.
+    ("reactor", "default"): ("StirredTankReactor", """Stirred-tank reactor: a charge vessel with a top agitator.
 
-    An agitator is a *drawn internal*, which the rule calls a variant -- and
-    this is the second of the two places the rule is deliberately overruled, for
-    :class:`KnockoutDrum`'s reason: "stirred tank reactor" and "CSTR" are what a
-    process engineer searches for, and it is what ``Reactor`` already draws when
-    it is asked for by name. A near-duplicate of its base, accepted.
+    An agitator is a *drawn internal*, which the rule calls a variant --
+    and this is the second of the two places the rule is deliberately
+    overruled, for :class:`KnockoutDrum`'s reason: "stirred tank
+    reactor" and "CSTR" are what a process engineer searches for, and it
+    is what ``Reactor`` already draws when it is asked for by name. A
+    near-duplicate of its base, accepted.
 
-    ``n_feeds`` gives the vessel more than one charge nozzle, exactly as it does
-    on :class:`pandid.units.Reactor`.
-    """),
+    ``n_feeds`` gives the vessel more than one charge nozzle, exactly as
+    it does on :class:`pandid.units.Reactor`.
+"""),
 }
 
 
@@ -814,54 +838,53 @@ def spec_of(class_name: str, kind: str, home: str, doc: str) -> dict:
     }
 
 
-HEADER = '''"""Equipment classes: what a piece of plant *is*, over the drawing it is made of.
+HEADER = '''"""Equipment classes: what a piece of plant *is*, over its drawing.
 
 GENERATED by scripts/gen_devices.py. Do not edit by hand.
 
-:mod:`pandid.units` models equipment as a ``kind`` and a ``variant``, which is
-what the symbol registry is keyed by and what a sheet is drawn from. This module
-is the other half of that: one class per device the registry draws, so that
+:mod:`pandid.units` models equipment as a ``kind`` and a ``variant``,
+which is what the symbol registry is keyed by and what a sheet is drawn
+from. This module is the other half: one class per device the registry
+draws, so that
 
-    * an engineer looking for a cyclone finds :class:`Cyclone`, rather than
-      having to know that it is spelled ``Separator(variant="cyclone")``;
-    * a type checker can answer ``cyclone.underflow``, because the nozzles are
-      declared on the class instead of depending on a string;
+    * an engineer looking for a cyclone finds :class:`Cyclone` rather
+      than having to know it is ``Separator(variant="cyclone")``;
+    * a type checker can answer ``cyclone.underflow``, because the
+      nozzles are declared on the class and not held in a string;
     * an equipment list reads as equipment.
 
-The rule the split follows is that **a class is what the equipment is and
-``variant=`` is how it is drawn**: a variant becomes a class when it names a
-distinct scheduled item, and stays a variant when it names a support, a roof, a
-cladding, an attitude, a drawn internal, a certification rating or a body style.
-So a gate valve and a ball valve are one class and two variants, while a check
-valve is a class of its own -- it has no actuator, and that is a fact about the
-device rather than about its picture.
+The split follows **a class is what the equipment is and ``variant=``
+is how it is drawn**: a variant becomes a class when it names a distinct
+scheduled item, and stays a variant when it names a support, a roof, a
+cladding, an attitude, a drawn internal, a certification rating or a
+body style. So a gate valve and a ball valve are one class and two
+variants, while a check valve is a class of its own -- it has no
+actuator, and that is a fact about the device rather than its picture.
 
-The low-level form is not going anywhere. ``Separator(variant="cyclone")`` stays
-supported indefinitely, and it is the only way to reach the ninety-odd drawings
-that never get a class of their own; ``pandid.render.symbols.default_registry``
-is still the whole catalogue.
+The low-level form is not going anywhere.
+``Separator(variant="cyclone")`` stays supported indefinitely, and it is
+the only way to reach the ninety-odd drawings that never get a class of
+their own; ``pandid.render.symbols.default_registry`` is still the whole
+catalogue.
 
 **One drawing, one nozzle vocabulary.** :class:`Cyclone`,
-:class:`GravitySeparator` and :class:`ElectrostaticPrecipitator` collect *dust*,
-and their drawings have anchored the catch ``liquid`` since 0.1.0. All three
-classes call it ``underflow``, and the gas draw ``overflow``, which is what
-classification and solid-liquid separation call them and what the sibling
-mechanical separators already ship with.
+:class:`GravitySeparator` and :class:`ElectrostaticPrecipitator` collect
+*dust*, and their drawings have anchored the catch ``liquid`` since
+0.1.0. All three classes call it ``underflow`` and the gas draw
+``overflow``, which is what classification and solid-liquid separation
+call them.
 
-Up to 0.1.1 ``Separator(variant="cyclone")`` kept ``vapor``/``liquid``, and this
-docstring recorded the split as the permanent cost of correcting the names
-without a break: one drawing answering to two vocabularies, and which you got
-depended on which class you constructed. As of 0.1.2 it does not. The low-level
-form draws ``overflow`` and ``underflow`` too, the old pair resolves for one
-release with a :class:`DeprecationWarning` and a ``deprecated`` finding on
-``fs.validate()``, and it is gone in 0.1.3. The artwork is untouched throughout:
-the anchors it shipped with are mapped in
-:attr:`pandid.units.Separator._VARIANT_ANCHORS`, which is why nothing on any
-sheet moved.
+``Separator(variant="cyclone")`` draws the same pair. The ``vapor``/
+``liquid`` spelling it carried up to 0.1.1 still resolves, with a
+:class:`DeprecationWarning` and a ``deprecated`` finding on
+``fs.validate()``, and is gone in 0.1.3. The artwork is untouched: the
+anchors it shipped with are mapped in
+:attr:`pandid.units.Separator._VARIANT_ANCHORS`.
 
-Not star-imported into :mod:`pandid.units`: this module imports its bases from
-there, so that would be a genuine cycle. ``from pandid import devices``, or take
-the names off the package, which re-exports them all.
+Not star-imported into :mod:`pandid.units`: this module imports its
+bases from there, so that would be a genuine cycle. Use ``from pandid
+import devices``, or take the names off the package, which re-exports
+them all.
 """
 
 from pandid.ports import Port

@@ -2,21 +2,21 @@
 
 The model keeps two distinct things apart:
 
-- :class:`Pin` is the user's *intent*: "put this unit at column 2" or "pin it to
-  exactly (x, y)". Set only through :meth:`pandid.units.Unit.pin`. Never written by
-  the engine.
-- :class:`Frame` is the *result*: the resolved pixel box (and grid rank) the
-  layout engine computes. Written only by the layout engine, read by the router
-  and renderer. Recomputed from the :class:`Pin` on every layout run, so layout
-  is idempotent.
+- :class:`Pin` is the user's *intent*: "put this unit at column 2" or
+  "pin it to exactly (x, y)". Set only through
+  :meth:`pandid.units.Unit.pin`. Never written by the engine.
+- :class:`Frame` is the *result*: the resolved pixel box (and grid rank)
+  the layout engine computes. Written only by the layout engine, read by
+  the router and renderer. Recomputed from the :class:`Pin` on every
+  layout run, so layout is idempotent.
 
 :class:`Route` is the resolved orthogonal path of a stream.
 """
 
 from dataclasses import dataclass, field
 
-# Quarter turns are the only rotations a P&ID sheet uses: anything else would
-# tilt the text and break the orthogonal routing grid.
+# Quarter turns are the only rotations a P&ID sheet uses: anything else
+# would tilt the text and break the orthogonal routing grid.
 _QUARTER_TURNS = (0, 90, 180, 270)
 
 
@@ -36,9 +36,10 @@ def normalize_orientation(value) -> int:
 def normalize_mirror(value) -> tuple[bool, bool]:
     """Resolve a mirror spec to ``(mirror_x, mirror_y)``.
 
-    ``mirror_x`` flips left↔right (swapping the E and W faces), ``mirror_y``
-    flips top↔bottom (swapping N and S). Accepts ``True`` (shorthand for the
-    left↔right flip), or one of ``"x"``/``"horizontal"``, ``"y"``/``"vertical"``,
+    ``mirror_x`` flips left↔right (swapping the E and W faces),
+    ``mirror_y`` flips top↔bottom (swapping N and S). Accepts ``True``
+    (shorthand for the left↔right flip), or one of
+    ``"x"``/``"horizontal"``, ``"y"``/``"vertical"``,
     ``"xy"``/``"both"``.
     """
     if value is None or value is False:
@@ -63,11 +64,13 @@ def normalize_mirror(value) -> tuple[bool, bool]:
 class Pin:
     """User-specified placement *intent* for a Unit.
 
-    Any subset of fields may be given. Grid intent (``col``/``row``) and absolute
-    intent (``x``/``y``) may be mixed; absolute wins for whichever axis it sets.
+    Any subset of fields may be given. Grid intent (``col``/``row``) and
+    absolute intent (``x``/``y``) may be mixed; absolute wins for
+    whichever axis it sets.
 
-    ``orientation`` is a clockwise quarter turn in degrees; ``mirrored`` /
-    ``mirror_y`` flip the symbol left↔right and top↔bottom respectively.
+    ``orientation`` is a clockwise quarter turn in degrees; ``mirrored``
+    / ``mirror_y`` flip the symbol left↔right and top↔bottom
+    respectively.
     """
     col: int | None = None
     row: int | None = None
@@ -92,9 +95,10 @@ class Pin:
 class Frame:
     """Resolved geometry of a Unit, produced by the layout engine.
 
-    Read-only by convention: callers (router, renderer) consume it but never
-    mutate it. ``x``/``y`` are the top-left pixel corner; ``w``/``h`` the
-    resolved size; ``col``/``row`` the grid rank the solver assigned.
+    Read-only by convention: callers (router, renderer) consume it but
+    never mutate it. ``x``/``y`` are the top-left pixel corner;
+    ``w``/``h`` the resolved size; ``col``/``row`` the grid rank the
+    solver assigned.
     """
     x: float
     y: float
@@ -105,11 +109,12 @@ class Frame:
     orientation: float = 0.0
     mirrored: bool = False
     mirror_y: bool = False
-    label_pos: str | None = None  # resolved label side: top/bottom/left/right
-    # Faces the engine picked for movable ports (see pandid.layout.faces), keyed by
-    # port name. A *result*, so it belongs here and not on the unit: the unit
-    # carries only what the author asked for, and a layout run that started from
-    # a previous run's pick would not be idempotent.
+    label_pos: str | None = None  # top/bottom/left/right
+    # Faces the engine picked for movable ports (see
+    # pandid.layout.faces), keyed by port name. A *result*, so it
+    # belongs here and not on the unit: the unit carries only what the
+    # author asked for, and a layout run that started from a previous
+    # run's pick would not be idempotent.
     port_faces: dict[str, str] = field(default_factory=dict)
 
     @property
@@ -133,9 +138,9 @@ class Frame:
 class _Slot:
     """Internal, mutable solver scratch state for one unit.
 
-    The layout engine seeds this from the unit's :class:`Pin` and fills in the
-    missing ``col``/``row``/``x``/``y`` across its phases, then emits a concrete
-    :class:`Frame`. Not part of the public API.
+    The layout engine seeds this from the unit's :class:`Pin` and fills
+    in the missing ``col``/``row``/``x``/``y`` across its phases, then
+    emits a concrete :class:`Frame`. Not part of the public API.
     """
     w: float
     h: float
@@ -150,7 +155,7 @@ class _Slot:
 
 @dataclass
 class Route:
-    """Resolved orthogonal path of a Stream (absolute pixel waypoints)."""
+    """A Stream's resolved path, in absolute pixel waypoints."""
     waypoints: list[tuple[float, float]] = field(default_factory=list)
     lane: int | None = None
     manual: bool = False
