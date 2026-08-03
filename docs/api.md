@@ -1777,7 +1777,8 @@ fy  = fs.add_instrument("FY", 101, variant="computer")    # computing relay
 
 ```text
 fs.add_loop(variable: str, number: str | int | None = None) -> Loop
-loop.tag(letters: str) -> str
+loop.element(letters: str) -> str   # a primary element: checks the first letter
+loop.tag(letters: str) -> str       # a final control element: does not
 loop.variable   # the measured-variable letter, upper-cased
 loop.number     # the loop number, as text
 loop.name       # "F-303", the loop's identity as a string
@@ -1790,7 +1791,7 @@ place of a literal.
 
 ```python
 loop = fs.add_loop("F", 303)
-fe  = fs.add(units.Fitting(loop.tag("FE"), variant="venturi"))
+fe  = fs.add(units.Fitting(loop.element("FE"), variant="venturi"))
 ft  = fs.add_instrument("FT",  loop, on=fe, at="N", offset=90)
 fic = fs.add_instrument("FIC", loop, on=ft, at="E", offset=70, variant="shared")
 cv  = fs.add(units.Valve(loop.tag("CV"), variant="control"))
@@ -1809,13 +1810,25 @@ six loops and leaves ten balloons on literal numbers.
   loop, raising `ValueError` at that line: `add_instrument("TT", loop)` on an F
   loop names the loop's variable and what was passed. The redundancy is what
   makes the check possible at all.
-- **`loop.tag(letters)`** returns a tag string, so a `Fitting`, a `Valve` or any
-  other class joins on the same terms. It composes and does not check the first
-  letter: a final control element is not tagged from the measured variable, and
-  a sheet spelling every control valve `CV-` gives `tag()` nothing to check. Its
-  number is another matter and does come from the loop, which is the half `tag()`
-  supplies — CHEE4001 p.13 assigns one number to the whole group of components a
-  control scheme needs, and the valve is in the group.
+- **A member that is not a balloon joins by naming what it is.** Both methods
+  return a tag string, so a `Fitting`, a `Valve` or any other class joins on the
+  same terms, and which of the two you call is which piece of equipment you have
+  in hand.
+  - **`loop.element(letters)`** is the **primary element** — the orifice plate,
+    the venturi, the coriolis meter. It is lettered from the measured variable
+    exactly as a balloon is, so it gets the same check: `element("TE")` on an F
+    loop raises and names `FE`.
+  - **`loop.tag(letters)`** is the **final control element**, and composes
+    without a check because there is nothing to check. A sheet spells every
+    control valve `CV-` whatever it strokes, so the letters do not track the
+    loop. The number does, which is the half `tag()` supplies — CHEE4001 p.13
+    assigns one number to the whole group of components a control scheme needs,
+    and the valve is in the group.
+
+  The distinction is in the two names and not in a `check=` flag on one of them,
+  because it is a distinction between two pieces of equipment rather than
+  between two strictnesses — and because a flag would have to default one way
+  for both, leaving the safe call the one you had to remember to write.
 - **A loop is a namespace, not a unit.** It has no frame and no ports, is never
   in `fs.units`, draws nothing and reaches no equipment list.
 - **A loop number is allocated once and never renumbered**, unlike a stream

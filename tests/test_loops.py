@@ -242,6 +242,63 @@ def test_loop_tag_still_refuses_an_empty_tag():
         fs.add_loop("F", 303).tag("  ")
 
 
+# --- a primary element, which is lettered from the measured variable (#203) ----
+
+
+def test_loop_element_composes_a_primary_elements_tag():
+    fs = Flowsheet("elements")
+    assert fs.add_loop("F", 303).element("FE") == "FE-303"
+    assert fs.add_loop("L", 304).element("LE") == "LE-304"
+
+
+def test_loop_element_holds_a_primary_element_to_the_measured_variable():
+    """The whole of issue #203. ``add_instrument("TT", flow_loop)`` had raised
+    at the line that wrote it since the loop existed, and ``tag("TE")`` on the
+    same loop quietly composed a temperature element on a flow loop -- the same
+    mistake caught on one route in and not the other. A primary element is
+    lettered from the measured variable exactly as a balloon is."""
+    fs = Flowsheet("wrong variable")
+    loop = fs.add_loop("F", 303)
+    assert loop.tag("TE") == "TE-303", "tag() still composes anything: that is its job"
+    with pytest.raises(ValueError) as excinfo:
+        loop.element("TE")
+    message = str(excinfo.value)
+    assert "loop F-303 measures 'F'" in message, "names the loop's variable"
+    assert "'TE' opens with 'T'" in message, "and what was passed"
+    assert "FE" in message, "and the tag this loop's element would carry"
+
+
+def test_the_wrong_method_names_the_right_one():
+    """A control valve reaching for ``element()`` is the mistake this method
+    invites, and the message has to send it back to ``tag()`` rather than
+    leaving an author to conclude the valve is on the wrong loop."""
+    fs = Flowsheet("a valve down the wrong route")
+    with pytest.raises(ValueError) as excinfo:
+        fs.add_loop("F", 303).element("CV")
+    message = str(excinfo.value)
+    assert "loop.tag('CV')" in message, "names the call that composes a final element"
+    assert "final control element" in message, "and what one is"
+
+
+def test_loop_element_checks_only_the_measured_variable():
+    """A restriction orifice and a sight glass are lettered from the measured
+    variable too, so the rule is the *first* letter and not a second one that
+    has to be ``E``."""
+    loop = Flowsheet("function letters").add_loop("F", 303)
+    assert [loop.element(t) for t in ("FE", "FO", "FG")] == ["FE-303", "FO-303", "FG-303"]
+
+
+def test_loop_element_matches_the_letter_case_insensitively():
+    loop = Flowsheet("case").add_loop("f", 303)
+    assert loop.element("fe") == "fe-303", "the tag is the author's, the check is the loop's"
+
+
+def test_loop_element_refuses_an_empty_tag():
+    fs = Flowsheet("empty element")
+    with pytest.raises(ValueError, match="was given an empty tag"):
+        fs.add_loop("F", 303).element("  ")
+
+
 # --- the first-letter check ---------------------------------------------------
 
 

@@ -365,9 +365,15 @@ class Flowsheet:
         ``TT`` put on a flow loop raises at that line::
 
             loop = fs.add_loop("F", 303)
-            fs.add_instrument("FE", loop, on=line, at=0.5, offset=0)
+            fe = fs.add(units.Fitting(loop.element("FE"), variant="venturi"))
             ft = fs.add_instrument("FT", loop, on=line, at=0.5, offset=95)
             cv = fs.add(units.Valve(loop.tag("CV"), variant="control"))
+
+        A member that is not a balloon joins through one of two methods, chosen
+        by which piece of equipment it is: :meth:`~pandid.loops.Loop.element`
+        for a primary element, which is lettered from the measured variable and
+        so is held to it, and :meth:`~pandid.loops.Loop.tag` for a final control
+        element, which is not lettered that way and so cannot be.
 
         A loop draws nothing, is never in :attr:`units`, and reaches no
         equipment list; see :mod:`pandid.loops`. Instruments that are in no loop

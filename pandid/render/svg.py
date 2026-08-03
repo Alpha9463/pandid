@@ -22,7 +22,15 @@ _SYMBOL_TEXT = re.compile(
     r'<text\b[^>]*?\bx="(-?[\d.]+)"[^>]*?\by="(-?[\d.]+)"[^>]*?>.*?</text>', re.S)
 # Balloon variants whose symbol draws a location bar across the middle (see the
 # instrument symbols in pandid.render.symbols): their tag text has to clear it.
-_BARRED_BALLOONS = {"panel", "aux"}
+#
+# ``shared`` joined them for #181. It is the one variant that carries a bar
+# *and* a square, and the pair is not a contradiction: ISO 15519-2 Table 1
+# (p. 7) makes the bar an "additional graphic" answering where the information
+# lives -- one full line is "Information available in central control system" --
+# while the square answers what the function is, and a shared display is a
+# control-room function by definition. All forty balloons on
+# ``professional_examples/P&ID_301.pdf`` carry one, twelve of them squared.
+_BARRED_BALLOONS = {"panel", "aux", "shared"}
 # Variants drawn as a diamond (ISA-5.1-2009 Table 5.1.1 column B and Table 5.1.2
 # items 3-5): they carry the interlock number alone, and it has to sit where the
 # sloping sides leave room for it rather than in the middle of the box.
@@ -443,6 +451,83 @@ def _covering(box, occupied, symbols=(), limit=None) -> "tuple[int, int]":
             if limit is not None and (hits, n) > limit:
                 break
     return hits, n
+
+
+def _step_aside(item, room: float, ink=(), others=()):
+    """Slide a valve's position mark **along its own face** until it takes
+    nothing away, and return where it ended up.
+
+    This is issue #223, and the shortest statement of it is that the mark had
+    exactly one thing it stepped past -- the equipment tag -- and a face has
+    three. ``examples/14``'s XV-601 hangs its trip square below the valve and
+    fails closed, so PIP PIC001 4.2.4.6(1) puts ``FC`` directly below the body
+    and the square's impulse line runs from the same face to the same place; the
+    letters' plate is opaque and drawn last, so the sheet lost the only mark on
+    it joining the trip to the valve it strokes. The example shipped with the
+    fail position taken off and a note in words instead.
+
+    That is the wrong way round. A halo exists so lettering stays legible over
+    ink it crosses, and an impulse line is not ink a mark may cross: ISO 15519-2
+    §5.1.1 makes the connection between a PCI symbol and the process a *shall*,
+    and it is a couple of centimetres long, so a bite out of it is the whole
+    statement. :func:`_erases` already ranks exactly that -- a symbol, then an
+    impulse line, then pipe -- for the equipment tag, and nothing had ever asked
+    it about a position mark.
+
+    **Along the face, and not out from it**, which is the one thing this move
+    does that the tag step above it does not. Stepping further *out* is what
+    clears a tag, because a tag on the same face is centred on it and as wide as
+    the symbol; it is no use at all against an impulse line, which leaves that
+    same face and runs the way the mark would be going, so the letters would
+    follow it down however far they were pushed. Sideways is the direction that
+    gets off it.
+
+    Nothing new decides how far to stand off. The candidates are the exact
+    distances that clear each obstacle by :data:`_PLATE_CLEARANCE`, which is
+    #243's answer to the same question asked of a line number's plate, taken
+    whole; the nearest one that :func:`_erases` then scores clear of everything
+    wins, so the mark moves as little as the paper allows and the base position
+    is tried first and kept where it is already clear. A tie -- and a plate
+    astride a line it has to get off produces one every time, the two ways round
+    being the same distance -- goes the way the tag step goes, right and down,
+    so the two moves this method makes never disagree about which way is out.
+
+    *room* is how far the caller will let it go, and the caller states it,
+    because the bound is about what the mark still reads as belonging to and
+    only the caller knows what the mark is. It is not the tag's bound. A tag is
+    held to half its symbol's face (:meth:`SvgRenderer._tag_item`) because past
+    that it starts reading as the neighbour's, and a tag is written on a face
+    that is mostly free. Two letters against a 24-unit valve body are a plate 21
+    wide on a face 24 long, and half of it is not enough room to get out from
+    under anything: there is no position in that band that a line down the
+    middle of the face does not still meet.
+    """
+    box = _unit_label_box(item)
+    if box is None or not (ink or others):
+        return item
+    lx, ly, anchor, baseline, lpos, text = item
+    # Which way the face runs, not which way the label was pushed out along it:
+    # a left or right face runs up and down, so the mark slides in y.
+    vertical = lpos in ("left", "right")
+    lo, hi = (box[1], box[3]) if vertical else (box[0], box[2])
+    a, b = (1, 3) if vertical else (0, 2)
+    shifts = {0.0}
+    for o in [*others, *(line.box for line in ink)]:
+        shifts.add(o[a] - _PLATE_CLEARANCE - hi)
+        shifts.add(o[b] + _PLATE_CLEARANCE - lo)
+
+    clear = (0, 0, 0)
+    best, damage = item, _erases(box, ink, others)
+    for d in sorted(shifts, key=lambda d: (abs(d), -d)):
+        if damage == clear:
+            break
+        if abs(d) > room:
+            continue
+        spot = ((lx, ly + d) if vertical else (lx + d, ly)) + (anchor, baseline, lpos, text)
+        cost = _erases(_unit_label_box(spot), ink, others)
+        if cost < damage:
+            best, damage = spot, cost
+    return best
 
 
 def _label_anchors(cx: float, cy: float, span: float, hw: float, hh: float, vertical: bool):
@@ -2563,7 +2648,8 @@ class SvgRenderer:
                 letters = fail_marking(u)
                 if letters:
                     label_items.append(
-                        self._fail_label_item(u, f, x, y, u_width, u_height, letters, tag_box))
+                        self._fail_label_item(u, f, x, y, u_width, u_height, letters,
+                                              tag_box, ink, symbols))
         lines.append('  </g>')
         return lines
 
@@ -2808,7 +2894,8 @@ class SvgRenderer:
             item = (lx + tag[2] - nc[0] + 6, ly, anchor, baseline, lpos, text)
         return item
 
-    def _fail_label_item(self, u, f, x, y, u_width, u_height, letters, tag_box=None):
+    def _fail_label_item(self, u, f, x, y, u_width, u_height, letters, tag_box=None,
+                         ink=(), symbols=()):
         """The fail position, in letters, beside the valve body.
 
         The letters are **ANSI/ISA-5.1-2009 Table 5.4.4** Method B, which **PIP
@@ -2847,14 +2934,29 @@ class SvgRenderer:
         that tag actually landed (see :meth:`_tag_item`), resolved from the frame
         when a caller has not already done so.
 
-        Nothing steps past a *neighbouring* unit, which is the one case to place
-        around by hand. ``pin(mirrored="y")`` turns a valve's artwork over and
-        puts its actuator underneath, so its signal lead then arrives through
-        the space PIP reserves for these letters; a balloon hung directly below
-        such a valve is in the same space. Neither is a placement the standard
-        contemplates, since it words the rule for an actuator drawn on top. Put
-        the balloon on another side, or leave the valve the way up its symbol is
-        drawn.
+        A tag is not the only thing on that face, and treating it as though it
+        were is issue #223: the letters then step *out* past the tag and land on
+        the impulse line joining the valve to the trip square hung below it,
+        which their plate deletes. So the ink and the neighbouring symbols are
+        asked too, by :func:`_step_aside`, which slides the mark **along** the
+        face rather than out from it -- the one direction that gets it off a
+        line leaving that same face -- and holds it to half the face so PIP's
+        "directly below" survives the move. ``ink`` and ``symbols`` are the
+        sheet's, in the two forms :meth:`_tag_item` takes them: a mark placed
+        with neither still steps past its tag and nothing else, which is what
+        every caller outside a full render wants.
+
+        The two moves compose in the order the sheet has them: out past the tag
+        first, because that one is settled by a box the mark cannot share at
+        all, then sideways off whatever the outward step landed on. The tag goes
+        into the sideways pass's obstacles as well, so the slide cannot walk
+        back onto what the step just cleared.
+
+        This does not extend to the ``NC`` abbreviation, and the difference is
+        the one :meth:`_nc_label_item` already rests on. ISO 15519-1 §11.4.5
+        fixes that mark to a *corner*, and a corner has nowhere to slide to that
+        is still the corner; these letters are fixed to a *face*, and a face is
+        a length of paper with room along it.
         """
         # 90 and 270 both stand the run on end; 0 and 180 both leave it flat.
         upright = int(getattr(f, "orientation", 0) or 0) in (90, 270)
@@ -2874,7 +2976,26 @@ class SvgRenderer:
                 item = (lx + tag[2] - fail[0] + 6, ly, anchor, baseline, lpos, text)
             else:
                 item = (lx, ly + tag[3] - fail[1] + 4, anchor, baseline, lpos, text)
-        return item
+        # This unit's own box is left out for the reason _tag_item leaves it
+        # out: the mark is placed a fixed clear distance off its own symbol and
+        # never lands on it, and counting it would score every candidate equally
+        # badly and so choose between none of them.
+        others = [_obstacle(b) for v, b in symbols if v is not u]
+        if tag is not None:
+            others.append(tag)
+        # How far along the face the letters may go: until the near edge of
+        # their plate reaches the far end of the face. That is the distance at
+        # which the mark stops lying against the body at all, and lying against
+        # it is what attaches a mark to a symbol -- the same reading ISO
+        # 15519-1 §7.2.5 asks of a line number, which :func:`_along` measures.
+        # The search takes the *smallest* clearing step, so the bound is only
+        # ever reached by a mark with nowhere at all to go; where that happens
+        # the face is genuinely spoken for and the placement is one to make by
+        # hand, as the last paragraph above says.
+        plate = _unit_label_box(item)
+        face, along = ((u_height, plate[3] - plate[1]) if upright
+                       else (u_width, plate[2] - plate[0]))
+        return _step_aside(item, (face + along) / 2, ink, others)
 
     def _draw_unit_labels(self, items):
         """Final pass: equipment tags on white halos, over every stream line.

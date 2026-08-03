@@ -100,7 +100,8 @@ def main():
     # loop.tag() composes without checking the first letter and cannot: a final
     # element is not tagged from the measured variable. Its *number* does track
     # the loop, which is the half tag() supplies. The check valve behind it is
-    # in no loop and types its own.
+    # in no loop and types its own. A primary element goes through
+    # loop.element(), which does check -- see FE-303 below.
     cv306 = fs.add(Valve(level306.tag("CV"), variant="control",
                          description="Bottoms Control Valve"))
     nrv306 = fs.add(Valve("NRV-306", variant="check",
@@ -109,7 +110,7 @@ def main():
     hv315 = fs.add(Valve("HV-315", description="HX-301 Cooling Water Block Valve"))
     # label_pos="bottom" because FT-303 stands over this element, and an impulse
     # line drawn up through the tag would be knocked out by the tag's own halo.
-    fe303 = fs.add(Fitting(flow303.tag("FE"), variant="venturi", label_pos="bottom",
+    fe303 = fs.add(Fitting(flow303.element("FE"), variant="venturi", label_pos="bottom",
                            description="Reflux Flow Element"))
     # The size steps down 100 -> 40 across it, so the run's number breaks here.
     t_draw = fs.add(Tee())

@@ -28,6 +28,21 @@ and broke its circle in two places, and HV-301C's ate the left edge of
 PIC-301's square. Every test in the suite passed, because nothing had ever
 looked.
 
+**And no halo breaks an impulse line**, which is issue #223. That is a weaker
+statement than the one above and is worth having for a different reason: a line
+broken by a halo is still that line, which is why a stream label is allowed to
+sit *in* the run it names, but an impulse line is two centimetres of tubing that
+exists only to say where a transmitter measures, and ISO 15519-2 §5.1.1 (p. 7)
+makes the connection between a PCI symbol and the process a *shall* -- "Exchange
+of information between the process system and the control system shall be
+represented within the process control information (PCI) symbol". Delete a
+length of one and the sheet has stopped saying it. :func:`~pandid.render.svg._erases`
+has ranked impulse lines above pipe since #194, and the defect was that a
+valve's fail-position mark never consulted it: ``examples/14``'s XV-601 hangs a
+trip square below the valve and fails closed, so PIP PIC001 4.2.4.6(1) put
+``FC`` on the same face the square's line leaves, and the example shipped with
+the fail position taken off and a note in words instead.
+
 **And a symbol's box is not a symbol's ink**, which is issue #243 and why the
 first check below measures the second and not the first.
 :func:`~pandid.portgeom.unit_box` reports the geometry; the outline is stroked
@@ -45,7 +60,7 @@ import re
 import pytest
 
 from pandid.portgeom import unit_box
-from pandid.render.svg import _PLATE_CLEARANCE, _SYMBOL_STROKE, _obstacle
+from pandid.render.svg import _PLATE_CLEARANCE, _SYMBOL_STROKE, _ink, _obstacle
 
 from test_label_invariants import CORPUS, _RENDER_OPTS
 
@@ -135,6 +150,39 @@ def test_no_halo_is_written_hard_against_an_outline(drawn, name):
     assert not crowded, f"{name}: halo within {_PLATE_CLEARANCE}u of " + "; ".join(
         sorted(set(crowded))
     )
+
+
+@pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
+def test_no_halo_lands_on_an_impulse_line(drawn, name):
+    """The connection between a balloon and the process it reads (#223).
+
+    Measured off :func:`~pandid.render.svg._ink`, which is the same padded
+    rectangle the placement search dodges, so a hit here is a hit there and not
+    a difference of a rounding. Pipe is deliberately not measured: a line number
+    written in its own run is a convention, and this file is about what a halo
+    may *not* take away.
+    """
+    fs, halos = drawn[name]
+    taps = [line.box for line in _ink(fs) if line.kind == "tap"]
+    cut = [
+        f"({box[0]:.0f}, {box[1]:.0f})-({box[2]:.0f}, {box[3]:.0f})"
+        for halo in halos
+        for box in taps
+        if _overlaps(halo, box)
+    ]
+    assert not cut, f"{name}: halo over the impulse line at " + "; ".join(sorted(set(cut)))
+
+
+def test_the_corpus_has_impulse_lines_to_check(drawn):
+    """Ten of the fifteen sheets draw none at all, so the check above is
+    vacuous over most of the corpus and says nothing unless the two sheets that
+    draw them in quantity are still in it."""
+    counted = {
+        name: sum(1 for line in _ink(fs) if line.kind == "tap")
+        for name, (fs, _halos) in drawn.items()
+    }
+    assert counted["11_ethanol_pid"] > 15, counted
+    assert counted["14_tank_farm"] > 10, counted
 
 
 def test_the_corpus_has_halos_to_check(drawn):

@@ -346,6 +346,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gallery is one SVG per example and refuses a file that draws two sheets, and an
   example that also exports draws one sheet twice, in two formats.
 
+- **`loop.element()`, for a primary element (#203).** `Loop.check()` holds every
+  balloon to its loop's measured variable and `add_instrument` calls it, so
+  `add_instrument("TT", flow_loop)` raised at the line that wrote it. `tag()`
+  composed without checking, so `flow_loop.tag("TE")` quietly yielded `TE-303` —
+  a temperature element on a flow loop, the same mistake caught on one route in
+  and not the other.
+
+  A primary element is lettered from the measured variable exactly as a balloon
+  is; a final control element is not, and a sheet spelling every control valve
+  `CV-` gives a first-letter rule nothing to hold true. So the two now go
+  through two methods rather than through one method and a flag:
+  `loop.element("FE")` checks and `loop.tag("CV")` does not. The distinction is
+  between two pieces of equipment rather than between two strictnesses, an
+  author reaching for either already knows which they have in hand, and a
+  `check=` parameter would have to default one way for both — leaving the safe
+  call the one you had to remember to write. `element("CV")` names `tag("CV")`
+  in its message, so the wrong route says what the right one is. `docs/api.md`
+  and examples 04, 11 and 14 tag their elements the new way; `tag()` is
+  unchanged and nothing that used it for a final element moves.
+
 ### Changed
 
 - **A tank's fill is a menu, and its default moved to the shell (#226).** Every
@@ -583,6 +603,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rejected nothing: every balloon's first letter already agreed with its loop.
 
 ### Fixed
+
+- **`variant="shared"` drew no location bar (#181).** ISO 15519-2 Table 1 (p. 7)
+  tabulates the *additional graphic* a PCI symbol carries: "None: Information
+  available on field mounted instrument/display" against "Horizontal single full
+  line: Information available in central control system". A shared display is
+  the central control system, so a squared balloon with no bar stated the one
+  thing about a DCS point that is certainly false. All forty balloons on
+  `professional_examples/P&ID_301.pdf` carry a bar, twelve of them
+  circle-in-square; CHEE4001 p.13 says the same in words — of the single solid
+  line, "the instrument is located inside the main control room, also indicating
+  that it is accessible and visible to the operator".
+
+  The bar runs the *circle's* full diameter through its exact vertical centre,
+  which is that sheet's geometry to three figures, and the square stays what it
+  was: a statement about what the function is rather than where it lives. The
+  tag is set above and below it, where ISO 15519-2 5.1.2 puts the letters and
+  the number anyway. Examples 04, 11 and 14 move, and so do their goldens and
+  gallery files.
+
+  What is not done here is the wider half of that issue: `variant` still
+  collapses the symbol type and the location into one enum, so there is no way
+  to ask for a plain circle in a panel. Separating them is an API change and
+  wants a deprecation of its own.
+
+- **A fail-position mark's halo erased an adjacent impulse line (#223).** The
+  letters PIP PIC001 4.2.4.6(1) puts directly below a valve are drawn on an
+  opaque plate in the last pass of all, and the only thing that plate had ever
+  stepped past was the equipment tag. A face has three things on it.
+  `examples/14` hangs a trip square below each receipt valve, so the square's
+  impulse line leaves the same face the mark sits on and the mark deleted it —
+  the only mark on the sheet joining the trip to the valve it strokes. The
+  example shipped with `fail="closed"` taken off both valves and a general note
+  in words instead; both are back and the note is gone.
+
+  The mark now steps **along** its face, over the same ranked cost `_erases`
+  already applied to the equipment tag — a symbol, then an impulse line, then
+  pipe — with obstacle boxes grown by #243's `_PLATE_CLEARANCE`, so no second
+  mechanism was invented. Along and not further out, which is the whole of the
+  geometry: stepping out is what clears a tag, and an impulse line leaves the
+  face going the way the mark would be pushed. The candidates are the exact
+  distances that clear each obstacle and the nearest one that is clear wins, so
+  the mark moves as little as the paper allows. `examples/14` hangs its two trip
+  squares 46 units below the valve instead of 26, because a mark written under a
+  valve needs the paper under the valve.
 
 - **A line number's plate erased half of an outline it sat flush against
   (#243).** Label placement built its obstacle set from `unit_box`, the symbol's
