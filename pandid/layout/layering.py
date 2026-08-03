@@ -51,10 +51,10 @@ def assign_layers(fs: "Flowsheet") -> None:
             pinned.add(head[u])
 
     queue = deque([g for g in in_degree if in_degree[g] == 0])
-    visited_count = 0
+    order = []
     while queue:
         g = queue.popleft()
-        visited_count += 1
+        order.append(g)
 
         for h in adj[g]:
             # The rank of h must be at least rank(g) + 1
@@ -65,8 +65,10 @@ def assign_layers(fs: "Flowsheet") -> None:
             if in_degree[h] == 0:
                 queue.append(h)
 
-    if visited_count < len(in_degree):
+    if len(order) < len(in_degree):
         raise ValueError("Cycle detected in forward streams. Phase 0 failed.")
+
+    _remove_slack(adj, order, ranks, pinned)
 
     # Write ranks back to the solver slot
     for u in units:
@@ -77,6 +79,32 @@ def assign_layers(fs: "Flowsheet") -> None:
     # here in full Sugiyama crossing reduction. Crossing reduction runs
     # directly on the units instead, leaving edge geometry to the
     # orthogonal router.
+
+
+def _remove_slack(adj: dict, order: list, ranks: dict, pinned: set) -> None:
+    """Slide every rank as far right as its own connections allow.
+
+    Longest path ranks by *distance from a source*, which is the left
+    edge of the drawing rather than anything on the sheet, so a branch
+    that joins the spine late starts as far left as the spine does and
+    then runs the width of the page to reach it. A cooling water flag
+    lands in column 0 and crosses under nine units to get to the
+    exchanger it serves; the blower that strips a degasser eight columns
+    along starts beside the raw water tank.
+
+    Removing the slack is Sugiyama's own answer, and it is safe by
+    construction: a rank only moves *right*, and only to one short of
+    its nearest successor, so every edge it is on stays a forward edge
+    of length at least one and no predecessor can be violated. Ranks are
+    visited in reverse topological order, so each is measured against
+    successors that are already final. A pinned column is an answer
+    already given, and a rank with nothing downstream of it is as far
+    right as the sheet goes.
+    """
+    for g in reversed(order):
+        if g in pinned or not adj[g]:
+            continue
+        ranks[g] = min(ranks[h] for h in adj[g]) - 1
 
 
 def _share_columns(units: list, flow: list["Stream"],

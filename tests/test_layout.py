@@ -301,3 +301,48 @@ def test_a_stacked_sheet_lays_out_the_same_way_twice():
     first = {u.name: (u.frame.x, u.frame.y) for u in fs.units}
     fs.layout()
     assert {u.name: (u.frame.x, u.frame.y) for u in fs.units} == first
+
+
+# --- slack removal ------------------------------------------------------------
+
+
+def test_a_branch_ranks_beside_the_spine_it_joins():
+    """Longest path measures from the left edge of the drawing.
+
+    A blower feeding a tower eight units along starts beside the first
+    unit of the train and runs the width of the page to reach it. Removing
+    the slack puts it one column short of the tower instead.
+    """
+    fs = Flowsheet("slack")
+    water = fs.add(U.Feed("Water"))
+    a = fs.add(U.Filter("F-1"))
+    b = fs.add(U.Filter("F-2"))
+    tower = fs.add(U.Column("D-1"))
+    air = fs.add(U.Feed("Air"))
+    blower = fs.add(U.Blower("B-1"))
+    fs.connect(water.outlet, a.inlet)
+    fs.connect(a.outlet, b.inlet)
+    fs.connect(b.outlet, tower.feed)
+    fs.connect(air.outlet, blower.suction)
+    fs.connect(blower.discharge, tower.boilup_in)
+    fs.layout()
+
+    assert blower._slot.col == tower._slot.col - 1
+    assert air._slot.col == blower._slot.col - 1
+
+
+def test_slack_removal_leaves_a_pinned_column_alone():
+    fs = Flowsheet("pinned slack")
+    feed = fs.add(U.Feed("Feed"))
+    pump = fs.add(U.Pump("P-1"))
+    drum = fs.add(U.Vessel("V-1"))
+    fs.connect(feed.outlet, pump.suction)
+    fs.connect(pump.discharge, drum.inlet)
+    feed.pin(col=0)
+    drum.pin(col=6)
+    fs.layout()
+
+    assert feed._slot.col == 0
+    assert drum._slot.col == 6
+    # The pump has slack between them and takes the tight end of it.
+    assert pump._slot.col == 5
