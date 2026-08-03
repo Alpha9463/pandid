@@ -278,3 +278,41 @@ examples never reach for.
 Every loop number here is *allocated*: `add_loop("L")` is written without a
 number and the sheet counts out L-601, L-602, P-603, F-604, F-605 in declaration
 order, which no other sheet in the gallery demonstrates.
+
+## 15 · Condensing turbine and vacuum system
+
+[`examples/15_condensing_turbine.py`](../../examples/15_condensing_turbine.py) ·
+[SVG](15_condensing_turbine.svg)
+
+![Condensing turbine and vacuum system](15_condensing_turbine.png)
+
+The first instrumented sheet the engine lays out on its own: two loops, a
+shared-display controller, an auxiliary-location gauge board and an interlock
+diamond, and not one `pin()`. Every balloon states only which face of its host
+it hangs off and how far out; where the equipment under it goes, and where the
+signal lines run, is the engine's answer.
+
+HP steam is dried in `S-701`, expands through `ST-701` and condenses in the
+air-cooled `E-701` into the receiver `V-701`, which the steam-jet ejector
+`EJ-701` holds under vacuum. It brings eleven `(kind, variant)` symbols into the
+gallery that were registered and never drawn, including the turbine, the ejector
+and the heater — the three equipment kinds that had never appeared at all.
+
+## 16 · Demineralised water plant
+
+[`examples/16_demineralised_water.py`](../../examples/16_demineralised_water.py) ·
+[SVG](16_demineralised_water.svg)
+
+![Demineralised water plant](16_demineralised_water.png)
+
+The other auto-laid-out sheet, and the one that shows a title strip and an
+`equipment_list()` docked onto a drawing nobody placed. Raw water runs through a
+multimedia filter, an activated carbon bed and a cation exchanger; the packed
+degasser `D-801` is stripped with blower air before the anion exchanger and the
+mixed bed.
+
+Its shape is the engine's, not an author's: `B-801` sits under the tower it
+serves rather than beside the raw water tank, because ranking pulls a branch up
+against the spine it joins instead of leaving it at the sheet's left edge. Eight
+more previously-undrawn symbols — the packed column, three filter bodies, both
+tank ends, the duplex strainer and the handwheel globe valve.

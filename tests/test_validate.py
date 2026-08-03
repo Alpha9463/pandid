@@ -536,7 +536,7 @@ def test_a_spec_built_sheet_is_checked_too():
 @pytest.mark.parametrize(
     "build,bare",
     [
-        # The false positives, one per family, taken from what the fourteen shipped
+        # The false positives, one per family, taken from what the sixteen shipped
         # examples actually leave open. Each is a nozzle its *class* declares --
         # offered to every instance whether a sheet uses it or not -- so leaving it
         # open is a drawing decision and not a count that went unmet.
@@ -551,7 +551,7 @@ def test_a_spec_built_sheet_is_checked_too():
     ],
 )
 def test_a_nozzle_the_class_declares_is_never_counted(build, bare):
-    """252 ports carry no stream across the fourteen shipped examples and every
+    """276 ports carry no stream across the sixteen shipped examples and every
     one of them is one of these. The drain valve is the plainest: "a drain runs
     down to a funnel on the floor, which is not on this sheet, so the leg ends
     at the valve", in ``add_valve_station``'s own words, and its outlet is bare
@@ -645,10 +645,12 @@ def test_every_counted_family_answers_to_the_naming_rule(build, stem, size):
 
 
 def test_nothing_shipped_leaves_a_counted_nozzle_open():
-    """The acceptance test, over the drawings this package stands behind. 36
-    counted nozzles across eight of the shipped sheets, and every one of them
+    """The acceptance test, over the drawings this package stands behind. 39
+    counted nozzles across nine of the shipped sheets, and every one of them
     piped -- so the rule is exercised by the corpus rather than merely silent on
-    it. The thirty-sixth is ``14_tank_farm``'s two-inlet blend tee."""
+    it. ``14_tank_farm`` contributes one, the second signal output its cascade
+    master mints; ``15_condensing_turbine`` three, a two-outlet steam splitter
+    and the same second output on its level controller."""
     from tests.test_golden import SCENARIOS
 
     offenders, counted = [], 0
@@ -658,7 +660,7 @@ def test_nothing_shipped_leaves_a_counted_nozzle_open():
         counted += sum(_family_members(u) for u in fs.units)
         offenders += [f"{name}: {w.message}" for w in fs.warnings if w.code == "nozzle-unconnected"]
     assert offenders == []
-    assert counted == 36
+    assert counted == 39
 
 
 def _family_members(unit):
@@ -717,7 +719,7 @@ def test_a_default_mixer_is_not_a_finding():
     clearance rather than as a multiple of the head. Two heads 20px apart leave
     8px of paper, four times the weight the sheet draws a process line at, and a
     reader resolves them without effort. A floor that reported this would fire
-    on five of the fourteen shipped examples -- 01, 03, 05 and 10 carry a mixer at
+    on five of the sixteen shipped examples -- 01, 03, 05 and 10 carry a mixer at
     this same 20px pitch, and 08's takes three feeds 17.5px apart -- and be
     wrong about all five: the tightest of them still leaves 5.5px of paper, over
     the 4px ISO 128-20:1996 4.4 asks for."""

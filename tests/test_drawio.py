@@ -2303,7 +2303,7 @@ SHEETS = gallery.sheets()
 
 @pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
 def test_every_example_exports_a_document_that_matches_its_sheet(stem):
-    """Fourteen real sheets -- ``gallery.sheets()``, counted rather than
+    """Sixteen real sheets -- ``gallery.sheets()``, counted rather than
     remembered: parsed back, with every box, waypoint and shape reference held
     against the drawing the same flowsheet renders."""
     fs, kwargs = gallery.flowsheet(stem)

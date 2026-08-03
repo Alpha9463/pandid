@@ -2599,14 +2599,13 @@ class Block(Unit):
     are the connections, :attr:`input_faces` and :attr:`output_faces`
     the sides they are on.
 
-    **Pin a block flow diagram.** The layout engine ranks units by flow
-    order and has no notion that a connection on the north wants its
-    source *above*, so a BFD left to lay itself out routes those streams
-    up and over the sheet -- long climbs, crowded runs and line jumps
-    where there should be none. That is issue #168 in
-    :mod:`pandid.layout` rather than a fault here.
-    ``examples/12_block_flow_diagram.py`` is a worked, pinned sheet to
-    start from.
+    **A face is a placement, and the engine reads it.** A connection on
+    the north puts its peer in the row above and in the same column, one
+    on the south puts it below, so a block flow diagram lays itself out
+    without a coordinate anywhere. See :mod:`pandid.layout.stacking`.
+    ``examples/12_block_flow_diagram.py`` is pinned all the same: a
+    hand-placed BFD says which sections the reader takes in a row, which
+    is not something the ranking can know.
 
     **A face names the box's own side, not the reader's.** ``"N"`` is
     the top of the block as declared; a :meth:`pin` that turns or

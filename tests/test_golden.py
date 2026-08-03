@@ -2051,6 +2051,192 @@ def _tank_farm() -> Flowsheet:
     return fs
 
 
+def _condensing_turbine() -> Flowsheet:
+    fs = Flowsheet("Condensing Turbine and Vacuum System")
+
+    hp_steam = fs.add(units.Feed("HP Steam", reference="PFD-700"))
+    s701 = fs.add(units.Separator("S-701", variant="knockout", description="HP Steam Separator"))
+    gv701 = fs.add(units.Valve("GV-701", variant="globe", description="MP Steam Isolation Valve"))
+    trap = fs.add(units.Product("Steam Trap Drain", reference="PFD-800"))
+    tv701 = fs.add(
+        units.Valve(
+            "TV-701",
+            variant="hydraulic",
+            fail="closed",
+            description="Turbine Trip and Throttle Valve",
+        )
+    )
+    st701 = fs.add(units.Turbine("ST-701", description="Condensing Steam Turbine"))
+    e701 = fs.add(
+        units.HeatExchanger("E-701", variant="air_cooled", description="Air-Cooled Condenser")
+    )
+
+    ej701 = fs.add(units.Ejector("EJ-701", description="Condenser Air Ejector"))
+    v701 = fs.add(units.Vessel("V-701", variant="dished", description="Condensate Receiver"))
+    sp701 = fs.add(units.Splitter("SP-701", n_outlets=2))
+    vt701 = fs.add(units.Vent("VT-701", description="Non-Condensibles Vent"))
+
+    p701 = fs.add(units.Pump("P-701A/B", description="Condensate Pump"))
+    e702 = fs.add(units.Heater("E-702", description="LP Feedwater Heater"))
+    mp_steam = fs.add(units.Feed("MP Steam", reference="PFD-700"))
+
+    level = fs.add_loop("L", 701)
+    lv701 = fs.add(
+        units.Valve(
+            level.tag("LV"),
+            variant="control",
+            fail="open",
+            description="Receiver Level Control Valve",
+        )
+    )
+    xv701 = fs.add(
+        units.Valve(
+            "XV-701",
+            variant="butterfly_pneumatic",
+            fail="closed",
+            description="Low-Level Trip Valve",
+        )
+    )
+    deaerator = fs.add(units.Product("To Deaerator", reference="PFD-800"))
+
+    fs.connect(hp_steam.outlet, s701.feed)
+    fs.connect(s701.liquid, trap.inlet)
+    fs.connect(s701.vapor, tv701.inlet)
+    fs.connect(tv701.outlet, st701.inlet)
+    exhaust = fs.connect(st701.outlet, e701.tube_in)
+    fs.connect(e701.tube_out, v701.inlet)
+
+    fs.connect(v701.vent, ej701.suction)
+    fs.connect(sp701.out_1, ej701.motive)
+    fs.connect(ej701.discharge, vt701.inlet)
+
+    fs.connect(v701.outlet, p701.suction)
+    fs.connect(p701.discharge, e702.inlet)
+    fs.connect(mp_steam.outlet, gv701.inlet)
+    fs.connect(gv701.outlet, sp701.inlet)
+    fs.connect(sp701.out_2, e702.utility_in)
+    fs.connect(e702.outlet, lv701.inlet)
+    fs.connect(lv701.outlet, xv701.inlet)
+    fs.connect(xv701.outlet, deaerator.inlet)
+
+    lt701 = fs.add_instrument("LT", level, sensing=v701, at="S", offset=55)
+    lic701 = fs.add_instrument("LIC", level, near=lv701, at="N", offset=110, variant="shared")
+    trip = fs.add_instrument(
+        "ZSL",
+        701,
+        near=lic701,
+        at="N",
+        offset=70,
+        variant="interlock",
+        description="Low-Level Trip",
+    )
+    fs.connect(lt701.sig_out, lic701.pv, kind="electric")
+    fs.connect(lic701.sig_out, lv701.actuator, kind="pneumatic")
+    fs.connect(lic701.sig_out, trip.sig_in, kind="electric")
+    fs.connect(trip.sig_out, xv701.actuator, kind="electric")
+
+    vacuum = fs.add_loop("P", 702)
+    pt702 = fs.add_instrument("PT", vacuum, sensing=exhaust, at=0.5, offset=60)
+    pi702 = fs.add_instrument(
+        "PI",
+        vacuum,
+        near=pt702,
+        at="N",
+        offset=65,
+        display="subsidiary",
+        description="Local Gauge Board",
+    )
+    fs.connect(pt702.sig_out, pi702.sig_in, kind="electric")
+    return fs
+
+
+def _demineralised_water() -> Flowsheet:
+    fs = Flowsheet("Demineralised Water Plant")
+
+    raw = fs.add(units.Feed("Raw Water", reference="PFD-100"))
+    t801 = fs.add(
+        units.Tank("T-801", variant="dished_roof_conical_bottom", description="Raw Water Tank")
+    )
+    st801 = fs.add(
+        units.Fitting(
+            "ST-801", variant="strainer_duplex", description="Transfer Pump Suction Strainer"
+        )
+    )
+    p801 = fs.add(units.Pump("P-801A/B", description="Raw Water Transfer Pump"))
+    f801 = fs.add(units.Filter("F-801", description="Multimedia Filter"))
+    f802 = fs.add(units.Filter("F-802", variant="fixed_bed", description="Activated Carbon Filter"))
+    ix801 = fs.add(units.Filter("IX-801", variant="ion_exchange", description="Cation Exchanger"))
+
+    d801 = fs.add(units.Column("D-801", variant="packed", description="Degasser Tower"))
+    air = fs.add(units.Feed("Stripping Air"))
+    b801 = fs.add(units.Blower("B-801", description="Degasser Air Blower"))
+    vt801 = fs.add(units.Vent("VT-801", description="Degasser Vent"))
+
+    p802 = fs.add(units.Pump("P-802A/B", description="Degassed Water Pump"))
+    ix802 = fs.add(units.Filter("IX-802", variant="ion_exchange", description="Anion Exchanger"))
+    ix803 = fs.add(units.Filter("IX-803", variant="ion_exchange", description="Mixed Bed Polisher"))
+    t802 = fs.add(units.Tank("T-802", variant="conical", description="Demineralised Water Tank"))
+    hv801 = fs.add(units.Valve("HV-801", variant="manual", description="Demin Water Outlet Valve"))
+    header = fs.add(units.Product("To Demin Water Header", reference="PFD-200"))
+
+    fs.connect(raw.outlet, t801.inlet)
+    fs.connect(t801.outlet, st801.inlet)
+    fs.connect(st801.outlet, p801.suction)
+    fs.connect(p801.discharge, f801.inlet)
+    fs.connect(f801.outlet, f802.inlet)
+    fs.connect(f802.outlet, ix801.inlet)
+
+    fs.connect(ix801.outlet, d801.feed)
+    fs.connect(air.outlet, b801.suction)
+    fs.connect(b801.discharge, d801.boilup_in)
+    fs.connect(d801.distillate, vt801.inlet)
+    fs.connect(d801.bottoms, p802.suction)
+
+    fs.connect(p802.discharge, ix802.inlet)
+    fs.connect(ix802.outlet, ix803.inlet)
+    fs.connect(ix803.outlet, t802.inlet)
+    fs.connect(t802.outlet, hv801.inlet)
+    fs.connect(hv801.outlet, header.inlet)
+
+    fs.title_block = TitleBlock(
+        title="Demineralised Water",
+        subtitle="U800 Process Flow Diagram",
+        drawing_number="PFD-801",
+        company="PANDID",
+        status="ISSUED FOR REVIEW",
+        sheet="1",
+        of_sheets="1",
+        date="03/08/26",
+        drawn_by="AA",
+        checked_by="JS",
+        approved_by="RL",
+        revisions=[
+            Revision("A", "24/07/26", "Issued for internal review", "AA"),
+            Revision("B", "03/08/26", "Issued For Review", "AA", "JS", "RL"),
+        ],
+    )
+    fs.add_annotation(
+        equipment_list(
+            fs,
+            align="top",
+            include=[
+                "T-801",
+                "P-801A/B",
+                "F-801",
+                "F-802",
+                "IX-801",
+                "D-801",
+                "B-801",
+                "P-802A/B",
+                "IX-802",
+                "IX-803",
+                "T-802",
+            ],
+        )
+    )
+    return fs
+
+
 SCENARIOS = {
     "01_ammonia_loop": (_ammonia_loop, {}),
     # 02 is the manual-placement example and is the one sheet drawn with the
@@ -2119,6 +2305,19 @@ SCENARIOS = {
         _tank_farm,
         {"border": "zone", "page_size": "A3", "diagram": "p&id"},
     ),
+    # 15 and 16 are the two sheets the engine lays out end to end: no
+    # pin() anywhere on either. 15 is the first auto-laid-out scenario
+    # carrying instrumentation -- two loops, a shared-display controller,
+    # an auxiliary-location gauge and an interlock diamond, every balloon
+    # placed off a host and routed after the boxes settled. It is also the
+    # only scenario drawing a turbine, an ejector, a heater or an
+    # air-cooled exchanger.
+    "15_condensing_turbine": (_condensing_turbine, {"diagram": "p&id"}),
+    # 16 is the ion-exchange train: the only scenario drawing a packed
+    # column, a plain or fixed-bed filter or an ion exchanger, and the
+    # only auto-laid-out sheet carrying a title strip and an equipment
+    # list. It states its own title-block date, so nothing here is pinned.
+    "16_demineralised_water": (_demineralised_water, {"border": "zone"}),
 }
 
 
@@ -2140,7 +2339,7 @@ def _normalize(svg: str) -> str:
     compare equal.
 
     **The provenance block.** Every sheet says what drew it, version included,
-    which means every release would otherwise rewrite all fourteen fixtures --
+    which means every release would otherwise rewrite all sixteen fixtures --
     and the gallery with them -- for a reason that is not about any drawing. The
     contents of the block are dropped here, which is why the renderer fences it
     between two marker comments: this is a slice between two known lines, not a
@@ -2219,7 +2418,7 @@ def test_a_version_bump_does_not_move_a_fixture(monkeypatch):
 
     Every sheet now says what drew it, version included, so without
     :func:`_normalize`'s rule a one-line change to ``pandid.__version__`` would
-    rewrite all fourteen fixtures for a reason that is about none of the
+    rewrite all sixteen fixtures for a reason that is about none of the
     drawings. This is that rule, checked rather than asserted in a comment.
 
     Three claims, and the first is what stops the other two being vacuous: the

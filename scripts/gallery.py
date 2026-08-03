@@ -24,7 +24,7 @@ checkout first on ``sys.path`` and then refuses to run unless that is where
 
 **It never has to rename anything.** Each example writes a name of its own into
 ``examples/`` (``01_ammonia_loop.py`` writes ``ammonia_auto.svg``), so copying
-the output in was a rename, done by hand, fourteen times. Instead of running the
+the output in was a rename, done by hand, sixteen times. Instead of running the
 scripts and copying files, this imports each one with ``Flowsheet.render``
 stubbed, catching the flowsheet and the keyword arguments it was about to be
 drawn with, and renders it here under the example's own stem. Nothing is written
@@ -72,9 +72,9 @@ GALLERY = ROOT / "docs" / "gallery"
 # At 1600 the darkest ink in that lettering is mid-grey; the strings are legible
 # as shapes and not as letters. 2400 puts every sheet at or near black, and the
 # inked fraction of the cell stops climbing there -- at 3000 it is flat or a
-# shade lower, which is more anti-aliasing rather than more letter. Fourteen
-# PNGs weigh 1.45 MiB at 1600, 2.38 at 2400 and 3.11 at 3000, so the 0.93 MiB
-# from 1600 to 2400 buys a readable title block and the next 0.73 buys very
+# shade lower, which is more anti-aliasing rather than more letter. Sixteen
+# PNGs weigh 1.56 MiB at 1600, 2.56 at 2400 and 3.35 at 3000, so the 1.00 MiB
+# from 1600 to 2400 buys a readable title block and the next 0.79 buys very
 # little. (The darkest-pixel table above is per sheet and does not move with the
 # size of the corpus; the weights do, and are re-measured with it.)
 #

@@ -1,6 +1,6 @@
 """``docs/gallery/``: the committed sheets, against the examples they came from.
 
-The gallery is generated -- fourteen examples rendered to SVG and rasterised to
+The gallery is generated -- sixteen examples rendered to SVG and rasterised to
 PNG by ``scripts/gallery.py`` -- and until this file existed nothing held it to
 its source. It drifted, and drifted invisibly: ``04_control_loop.svg`` sat on
 ``main`` through a dozen rendering PRs showing a sheet 526 px tall with an
@@ -11,7 +11,7 @@ re-rasterise is coming"; what was missing was anything that noticed it had not.
 That is the same gap ``_vendored_symbols.py`` had before #150 and ``docs/api.md``
 had before #179, and this is the same answer: regenerate and compare.
 
-**Why the whole gallery, on every push.** Rendering all fourteen sheets costs
+**Why the whole gallery, on every push.** Rendering all sixteen sheets costs
 about 5 s, four fifths of it example 11 and most of the rest example 14 --
 measured, not assumed. That is small
 enough that the two cheaper designs both cost more than they save. Checking only
@@ -70,8 +70,8 @@ def rendered():
     """Every example rendered once, keyed by sheet name.
 
     Module-scoped because the corpus is the expensive part of this file and
-    every test below wants all of it: rendered per-test it would be fourteen
-    renders a test rather than fourteen in total.
+    every test below wants all of it: rendered per-test it would be sixteen
+    renders a test rather than sixteen in total.
     """
     return {stem: gallery.render(stem) for stem in SHEETS}
 
