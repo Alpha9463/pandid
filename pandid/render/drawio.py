@@ -1461,7 +1461,7 @@ class DrawioRenderer:
         # tags the sheet seeds it with, so the search is offered the same paper.
         # See :func:`_number_geometry` and :class:`_Tags`.
         numbers = {number.name: number
-                   for number in stream_numbers(fs, list(tags.plates))}
+                   for number in stream_numbers(fs, list(tags.plates), joints)}
         polylines = {n: stream_polyline(s) for n, s in enumerate(fs.streams)}
         order, hops = _hops(polylines, direction)
         labelled: set = set()

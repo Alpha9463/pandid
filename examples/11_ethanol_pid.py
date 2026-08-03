@@ -8,7 +8,8 @@ It is modelled on ``professional_examples/P&ID_301.pdf``, the course exemplar,
 and is the densest sheet in the repo.
 
 What a P&ID adds over the PFD of the same unit: no arrowheads
-(``diagram="p&id"``); line numbers instead of stream numbers, one per valve
+(``diagram="p&id"``); the flange pair where a line meets an equipment nozzle
+(``connections="flanged"``); line numbers instead of stream numbers, one per valve
 station rather than one per valve; the field devices, with four control valves
 drawn as the **station** each is installed in (``fs.add_valve_station()``, see
 :mod:`pandid.stations`); five loops closing on a real final control element,
@@ -443,12 +444,14 @@ def main():
         "NC": "Normally Closed (darkened valve body)",
     }, align="top-left"))
 
+    # connections="flanged" marks the double tick where a line meets an
+    # equipment nozzle, as the exemplar does at every branch off a shell.
     fs.render(out("ethanol_pid.svg"), page_size="A3", border="zone",
-              diagram="p&id")
+              diagram="p&id", connections="flanged")
     # The same sheet and the same arguments, as an editable draw.io model rather
     # than a finished drawing. Every flowsheet exports; this is the densest one.
     fs.render(out("ethanol_pid.drawio"), page_size="A3", border="zone",
-              diagram="p&id")
+              diagram="p&id", connections="flanged")
     print("Generated ethanol_pid.svg and ethanol_pid.drawio")
     for issue in fs.validate():
         print(f"  {issue}")

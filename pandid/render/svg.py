@@ -653,7 +653,17 @@ def _cutting(leader, occupied, limit: int) -> int:
     return n
 
 
-def _leader(box, seg, occupied) -> "tuple[tuple, int]":
+def _near_segment(p, a, b, tol: float = 0.5) -> bool:
+    """Does *p* sit on the segment ``a``-``b``, to within *tol*?"""
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    span = dx * dx + dy * dy
+    if not span:
+        return math.hypot(p[0] - a[0], p[1] - a[1]) <= tol
+    t = max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / span))
+    return math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy)) <= tol
+
+
+def _leader(box, seg, occupied, keep_out: float = 0.0) -> "tuple[tuple, int]":
     """How a label's halo at *box* is joined to the run *seg* names.
 
     Returns ``((start, end), crossings)``: the leader, the end being the point
@@ -703,6 +713,16 @@ def _leader(box, seg, occupied) -> "tuple[tuple, int]":
     degrees; it stays oblique, which is all the slope has to be, and the second
     key above is what spends the freedom the sweep has on getting back towards
     45 rather than on nothing.
+
+    ``keep_out`` extends that clearance by whatever the run's ends are *marked*
+    with, and is the same clause rather than a new one: the clearance exists so
+    a head does not land where the run meets what it serves, and on a flanged
+    sheet the joint is drawn, so landing on it points at the joint exactly as
+    landing at the end points at the vessel. It is measured off the run's ends
+    before the inset, which is what lets a short spool between two vessels --
+    ``AE-304-150-80-SS`` on ``11_ethanol_pid``, thirty units with a flange pair
+    at each end -- put the head in the clear middle instead of on the upper
+    pair, which is where it went when the marks were ink nothing could see.
     """
     (sx1, sy1), (sx2, sy2) = seg
     vertical = abs(sx2 - sx1) < abs(sy2 - sy1)
@@ -715,6 +735,11 @@ def _leader(box, seg, occupied) -> "tuple[tuple, int]":
     v0, v1 = (box[0], box[2]) if vertical else (box[1], box[3])
     v = v0 if abs(v0 - at) < abs(v1 - at) else v1
     gap = abs(v - at)
+    # Only where the run can spare it: a mark on a run too short to hold both
+    # its marks and a landing has to be landed near anyway, and a band inverted
+    # by its own clearance would put the head off the run altogether.
+    if keep_out and hi - lo > 3 * keep_out:
+        lo, hi = lo + keep_out, hi - keep_out
     inset = min(_LABEL_CLEAR, (hi - lo) / 3)
     near, far = lo + inset, hi - inset
 
@@ -817,7 +842,8 @@ class StreamNumber(NamedTuple):
     leader: "tuple | None"
 
 
-def stream_numbers(fs, placed: list) -> "list[StreamNumber]":
+def stream_numbers(fs, placed: list,
+                   joints: "str | None" = None) -> "list[StreamNumber]":
     """Where every line number on the sheet goes.
 
     Lifted out of :meth:`SvgRenderer._draw_streams` for the reason
@@ -852,6 +878,22 @@ def stream_numbers(fs, placed: list) -> "list[StreamNumber]":
         _obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None
     ]
 
+    # A flange mark is a symbol on a run, so it goes in with the symbols: the
+    # search dodges it exactly as it dodges a valve body, and both the halo and
+    # the leader are scored against it. It has to be here rather than nowhere,
+    # because the mark is drawn hard against a nozzle and a leader wants the
+    # clear middle of a segment -- on the short spool between a condenser and
+    # the drum beneath it, "the clear middle" was the two units between the two
+    # flanges, and the number's leader landed on one of them. Nothing else on
+    # the sheet is ink the label pass cannot see, and this was very nearly the
+    # exception.
+    for s in fs.streams:
+        for fx, fy, _angle, _at in flange_marks(s, stream_polyline(s),
+                                                resolve_connections(s, joints)):
+            half = max(FLANGE_TICK, FLANGE_GAP) / 2
+            symbols.append(
+                _obstacle((fx - half, fy - half, fx + half, fy + half)))
+
     # A number names a *run*, and a run survives the valves and fittings in it:
     # renumber_streams() gives every segment of one the same name and the sheet
     # writes it once, on the longest piece.
@@ -871,10 +913,19 @@ def stream_numbers(fs, placed: list) -> "list[StreamNumber]":
         if not longest_seg:
             continue
         labeled_names.add(s.name)
-        label_items.append((longest_seg, s.name, s.color or "black"))
+        # How much of the segment its own flange marks take, if it carries any:
+        # the mark's standoff plus its half-width, which is where the near bar
+        # ends. Nought on a run whose longest piece is in the middle of it,
+        # since the marks are at the nozzles and nowhere else.
+        (mx1, my1), (mx2, my2) = longest_seg
+        keep = FLANGE_STANDOFF + FLANGE_GAP / 2 if any(
+            _near_segment((m.x, m.y), (mx1, my1), (mx2, my2))
+            for m in flange_marks(s, points, resolve_connections(s, joints))
+        ) else 0.0
+        label_items.append((longest_seg, s.name, s.color or "black", keep))
 
     out: list[StreamNumber] = []
-    for seg, name, color in label_items:
+    for seg, name, color, keep in label_items:
         (sx1, sy1), (sx2, sy2) = seg
         hw, hh = len(name) * _HALO_CHAR + _HALO_PAD, _HALO_DEEP
         cx, cy = (sx1 + sx2) / 2, (sy1 + sy2) / 2
@@ -948,7 +999,7 @@ def stream_numbers(fs, placed: list) -> "list[StreamNumber]":
             if damage is not None and hits > damage[:2]:
                 continue
             lead, cut = ((None, 0) if _along(box, vertical, run_lo, run_hi)
-                         else _leader(box, seg, everything))
+                         else _leader(box, seg, everything, keep))
             cost = (*hits, cut)
             if damage is None or cost < damage:
                 spot, damage, leader = (ux, uy), cost, lead
@@ -3279,7 +3330,7 @@ class SvgRenderer:
             b for b in map(_unit_label_box, unit_labels) if b is not None
         ]
 
-        for number in stream_numbers(fs, placed):
+        for number in stream_numbers(fs, placed, joints):
             tx, ty, name, color = number.x, number.y, number.name, number.color
             bx0, by0, bx1, by1 = number.box
             lines.append(f'    <rect x="{bx0:.1f}" y="{by0:.1f}" '
