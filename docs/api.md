@@ -463,8 +463,10 @@ approximated with draw.io's built-in shapes:
 
 The sheet's own drawing conventions survive the export: the semicircle a
 crossing line hops with, the cross-hatching on a pneumatic signal line, the fine
-tap line from a process line to the balloon reading it, and the stream numbers
-where the sheet searched for clear paper to write them, leaders and all. Sheet
+tap line from a process line to the balloon reading it, the letter codes
+[`annotate()`](#letter-codes-outside-the-symbol) writes outside a balloon, each in
+the quadrant the sheet put it in, and the stream numbers where the sheet
+searched for clear paper to write them, leaders and all. Sheet
 furniture docks where the sheet docks it, and anything ruled — an equipment
 list, a legend, a note list, a `TableBox`, the stream table — comes out as a
 real draw.io table with rows and cells rather than as one block of text.

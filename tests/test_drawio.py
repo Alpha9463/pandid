@@ -1132,6 +1132,62 @@ def test_a_line_number_beside_its_run_carries_a_perpendicular_offset():
     assert sum(1 for d in offsets if d > 1.0) >= len(offsets) // 2
 
 
+def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported():
+    """The information-loss check, over every sheet that letters a code.
+
+    ISO 15519-2 §5.2.5 makes a high or low function *lettering* beside the
+    symbol rather than a balloon of its own, and lettering outside a symbol
+    belongs to no cell: it is not a unit's label and not a line's. So the
+    exporter, which builds every label from one of those two, wrote none of
+    them -- `PAH`, `PAL`, `TAH`, `TAL`, `LAH` and `LAL` were on the rendered
+    `11_ethanol_pid` and in none of the six thousand lines of its `.drawio`.
+    Six alarms said on the sheet and not said in the file a reader opens.
+
+    The quadrant is checked with the text, because half of what a code says is
+    where it is: §5.1.3 puts a high function above the centre line and a low one
+    below, so a pair exported into one quadrant is a different statement about
+    the plant. `quadrant_labels` is the placement both backends read, and the
+    export is held to it through the same fit its geometry rides.
+    """
+    from pandid.render.drawio import _TEXT_INSET
+    from pandid.render.svg import quadrant_labels
+
+    written = {}
+    for stem in SHEETS:
+        fs, kwargs = gallery.flowsheet(stem)
+        svg = fs.to_svg(**kwargs)
+        cells = _drawio_cells(fs, kwargs)
+        _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
+        codes = quadrant_labels(fs)
+        written[stem] = {item[5] for item in codes}
+        for n, (lx, ly, anchor, _baseline, _lpos, text) in enumerate(codes):
+            assert f">{text}</text>" in svg, f"{stem}: the sheet letters no {text}"
+            cell = cells.get(f"q{n}")
+            assert cell is not None, f"{stem}: {text} reached no cell in the export"
+            assert cell.get("value") == html.unescape(text)
+            style = _style(cell)
+            geometry = cell.find("mxGeometry")
+            x, y = float(geometry.get("x")), float(geometry.get("y"))
+            w, h = float(geometry.get("width")), float(geometry.get("height"))
+            # The sheet states an anchored string; draw.io states a box inset by
+            # two units on every side. Undoing that inset recovers the point the
+            # sheet placed, and the quadrant with it.
+            edge = x + w - _TEXT_INSET if style["align"] == "right" else x + _TEXT_INSET
+            assert (edge, y + h / 2) == pytest.approx(fit.at(lx, ly), abs=0.01), (
+                f"{stem}: {text} is exported out of its quadrant"
+            )
+            # A code is written in a two-unit gap beside a balloon, so it is
+            # haloed for the lines it could not step off, as the sheet haloes it.
+            assert style["labelBackgroundColor"] == "#ffffff"
+
+    # Vacuous on the eleven sheets that annotate nothing, so the three that do
+    # are named. `tests/test_halo_invariants.py` counts the same codes from the
+    # sheet's side; this is the pair of them the export was losing.
+    assert written["11_ethanol_pid"] == {"PAH", "PAL", "TAH", "TAL", "LAH", "LAL"}
+    assert written["04_control_loop"] == {"LAH", "LAL"}
+    assert written["14_tank_farm"] == {"LAH", "LAL", "PAH"}
+
+
 # ---------------------------------------------------------------------------
 
 

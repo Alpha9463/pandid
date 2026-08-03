@@ -42,6 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   line-number pass are both told where the codes landed, so nothing is written
   across one.
 
+  The draw.io export writes them as well, one text cell each on the sheet's own
+  halo, in the quadrant the sheet put it in. Lettering outside a symbol belongs
+  to no cell — it is neither a unit's label nor a line's — and the exporter
+  builds every label from one of those two, so without this the alarms were
+  drawn on the sheet and absent from the file a reader opens.
+
 - **A primary element and its balloon share one tag (#249).**
   `fs.add_balloon(element)` draws an element's tag in a balloon on a short
   impulse line and leaves the fitting itself unlettered, which is how a P&ID

@@ -624,9 +624,17 @@ class _Tags(NamedTuple):
     ``09_line_numbers`` and ``13_mineral_dewatering``. Each strikes its
     tag, which is enough to lose it, and the sheet writes none of them
     there.
+
+    ``codes`` is every letter code written *outside* a balloon, placed:
+    :func:`~pandid.render.svg.quadrant_labels`' own items. They are a
+    third thing here because they are a third thing on the sheet -- a
+    code is neither a unit's label nor a line's, so nothing in this
+    exporter carried one and six alarms went out of ``11_ethanol_pid``
+    unlettered. See :func:`_quadrant_cell`.
     """
     at: dict
     plates: list
+    codes: list
 
 
 def _tag_pass(fs, registry, joints=None) -> "_Tags":
@@ -659,7 +667,8 @@ def _tag_pass(fs, registry, joints=None) -> "_Tags":
     """
     import html as _html
 
-    from pandid.render.svg import SvgRenderer, _ink, _unit_label_box, flange_boxes
+    from pandid.render.svg import (SvgRenderer, _ink, _unit_label_box,
+                                   flange_boxes, quadrant_labels)
 
     sheet = SvgRenderer(registry)
     ink = _ink(fs)
@@ -672,6 +681,12 @@ def _tag_pass(fs, registry, joints=None) -> "_Tags":
     # ``None`` on a sheet that marks no joints, and then this adds
     # nothing.
     symbols += [(None, b) for b in flange_boxes(fs, joints)]
+    # A letter code outside a balloon is placed before either label pass
+    # runs, so both are told where it went; ``SvgRenderer._draw_units``
+    # seeds itself with the same boxes and this pass has to see the same
+    # paper taken, or the two settle a crowded tag on different sides.
+    codes = quadrant_labels(fs)
+    symbols += [(None, b) for b in map(_unit_label_box, codes) if b is not None]
     at: dict = {}
     items: list = []
     for u in fs.units:
@@ -699,7 +714,47 @@ def _tag_pass(fs, registry, joints=None) -> "_Tags":
         if letters:
             items.append(sheet._fail_label_item(u, f, x, y, w, h, letters, tag_box,
                                                 ink, symbols))
-    return _Tags(at, [b for b in map(_unit_label_box, items) if b is not None])
+    return _Tags(at, [b for b in map(_unit_label_box, items) if b is not None],
+                 codes)
+
+
+def _quadrant_cell(cid: str, item, fit: "_Fit") -> list[str]:
+    """One letter code written outside a balloon, as a text cell.
+
+    ``item`` is :func:`~pandid.render.svg.quadrant_labels`' own, so the
+    code is exported into the quadrant the sheet drew it in rather than
+    into a second opinion about where ISO 15519-2 §5.1.3 puts it.
+
+    A cell of its own because a draw.io cell carries **one** label and
+    the balloon's is its tag. The anchor becomes a box and an ``align``
+    the way :func:`_strip_label` makes one -- see :data:`_TEXT_INSET` --
+    and ``labelBackgroundColor`` is the halo the sheet letters a code
+    on; see :data:`_NUMBER_KEYS`.
+
+    The text arrives escaped, the sheet having written it into SVG, and
+    :func:`_attr` escapes what it is handed: unescaped here so that it
+    is escaped exactly once.
+    """
+    import html as _html
+
+    lx, ly, anchor, _baseline, _lpos, text = item
+    value = _html.unescape(text)
+    size = fit.length(_TAG_TYPE)
+    x, y = fit.at(lx, ly)
+    box_w = F.text_width(value, size) + 2 * _TEXT_INSET
+    box_h = _line_box(size) + 2 * _TEXT_INSET
+    left, align = ((x + _TEXT_INSET - box_w, "right") if anchor == "end"
+                   else (x - _TEXT_INSET, "left"))
+    style = ("text;html=1;strokeColor=none;fillColor=none;"
+             f"labelBackgroundColor=#ffffff;align={align};"
+             f"verticalAlign=middle;fontSize={size:g};fontColor={_LINE_INK};")
+    return [
+        f'        <mxCell id="{cid}" value={_attr(value)} style={_attr(style)} '
+        f'vertex="1" parent="1">',
+        f'          <mxGeometry x="{_num(left)}" y="{_num(y - box_h / 2)}" '
+        f'width="{_num(box_w)}" height="{_num(box_h)}" as="geometry" />',
+        '        </mxCell>',
+    ]
 
 
 def _drawn_type(nominal: float, fit: "_Fit", *, lines: int = 1, box=None) -> str:
@@ -913,6 +968,12 @@ class DrawioRenderer:
         # order, same reason.
         body.extend(self._taps(fs, fit))
         body.extend(balloons)
+        # The codes lettered outside the balloons go on last, over
+        # everything, exactly as `_draw_unit_labels` puts them on the
+        # sheet: a code is written on paper the search cleared for it,
+        # and it is haloed for the lines it could not clear.
+        for n, code in enumerate(tags.codes):
+            body.extend(_quadrant_cell(f"q{n}", code, fit))
 
         # **The page and the page *view* are two separate statements.**
         # Function names are the anchors below; both repositories move.
