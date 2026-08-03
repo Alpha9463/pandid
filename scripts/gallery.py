@@ -136,11 +136,11 @@ def flowsheet(stem: str) -> "tuple[Flowsheet, dict]":
     the capture. ``tests/test_drawio.py`` is that caller: a draw.io export is
     made from a flowsheet and has no SVG anywhere in it.
 
-    A ``.drawio`` write is passed over rather than caught. ``11`` writes one
-    beside its SVG, because the export is a one-liner and an example is where a
-    reader looks for one; what that call writes is the *same drawing in a second
-    format*, not a second sheet. Caught, it would trip the count below on a file
-    that draws exactly one.
+    A ``.drawio`` write is passed over rather than caught. ``03`` and ``11``
+    write one beside their SVG, because the export is a one-liner and an example
+    is where a reader looks for one; what those calls write is the *same drawing
+    in a second format*, not a second sheet. Caught, they would trip the count
+    below on files that draw exactly one.
     """
     caught: list[tuple[Flowsheet, dict]] = []
     original = Flowsheet.render

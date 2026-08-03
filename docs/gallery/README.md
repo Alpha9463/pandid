@@ -19,9 +19,9 @@ flowsheet the script built rather than the file it writes, and draws it under
 the example's own stem — so there is no copy and no rename to get wrong. Run an
 example yourself and it still writes its own name into `examples/` (gitignored):
 `03_distillation_train.py` writes `distillation_train.svg`, and
-`01_ammonia_loop.py` writes `ammonia_auto.svg`. `11` writes an
-`ethanol_pid.drawio` as well, which is the draw.io export and not a second
-sheet; the generator passes that write over.
+`01_ammonia_loop.py` writes `ammonia_auto.svg`. `03` and `11` write a
+`.drawio` as well, which is the draw.io export and not a second sheet; the
+generator passes that write over.
 
 The PNGs are rasterized from the *committed* SVGs, through
 `pandid.render.export` (the `[pdf]` extra), so each sheet and its raster always
@@ -80,6 +80,12 @@ built from each unit's `description`, numbered `notes()`, and a `legend()`. Alon
 section header injected via `stream_table_sections`. Two columns, their
 overheads and bottoms pumps, a bottoms splitter, and a recycle through FV-200
 back to the feed mixer. Boundary flags carry off-page `reference`s.
+
+A second `fs.render()` with the same arguments and a `.drawio` name writes
+[`drawio-samples/03_distillation_train.drawio`](../../drawio-samples/03_distillation_train.drawio).
+It is the one sheet in the sample set that draws a stream table: 21 columns,
+each a stream, with the section heading spanning all of them, exported as a real
+draw.io table rather than as a picture of one.
 
 ## 04 · Control loop
 
@@ -250,12 +256,13 @@ balloons, since an attached instrument hangs off the *routed* path and would mov
 with a line the router was free to re-bend. Nothing on the sheet is pinned by a
 measured nozzle offset: `pin(port=…)` asks each symbol where its own nozzle sits.
 
-It is also the one example that shows the **draw.io export**: a second
-`fs.render()` on the same flowsheet with the same arguments and a `.drawio` name
-writes the editable model, which is
+It also shows the **draw.io export**: a second `fs.render()` on the same
+flowsheet with the same arguments and a `.drawio` name writes the editable
+model, which is
 [`drawio-samples/11_ethanol_pid.drawio`](../../drawio-samples/11_ethanol_pid.drawio)
-committed. Every flowsheet exports; this is the sheet the line is written on
-because it is the densest, so it is the one worth opening in the editor.
+committed. Every flowsheet exports; the line is written on this sheet and on
+`03` because between them they are the two worth opening in the editor -- this
+one for being the densest drawing, that one for its stream table.
 
 ## 12 · Block flow diagram
 
