@@ -527,7 +527,7 @@ def test_the_pages_quote_the_registry_they_are_describing():
     pixel count that happens to be the same number.
 
     The size of the *example* corpus is not pinned this way. It is spelled as an
-    English word ("the fourteen shipped examples") in a dozen docstrings whose
+    English word ("the sixteen shipped examples") in a dozen docstrings whose
     sentences differ, and a regex over those is a worse thing to maintain than
     the sentences. What holds that number honest instead is that every corpus
     measurement is taken by a test over ``SCENARIOS``, which is built from the

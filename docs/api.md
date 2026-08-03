@@ -879,13 +879,13 @@ face, north on a west or east one. A mirrored block therefore draws that same
 first member on the right of the sheet, exactly as the face itself follows the
 box.
 
-> **Pin a block flow diagram.** The layout engine ranks units by process flow
-> order and does not yet know that a connection on the north face wants its
-> source *above* it ([#168](https://github.com/Alpha9463/pandid/issues/168)), so
-> a BFD left to lay itself out sends those streams up and over the sheet.
-> [`examples/12_block_flow_diagram.py`](../examples/12_block_flow_diagram.py)
-> shows the pinned output, which is what a BFD wants anyway: the reader is meant
-> to see the plant in a row.
+> **A BFD lays itself out.** A connection on the north face puts its peer in
+> the row above and in the same column, and one on the south puts it below, so a
+> utility in from the top and a waste stream out of the bottom each reach their
+> nozzle in one turn.
+> [`examples/12_block_flow_diagram.py`](../examples/12_block_flow_diagram.py) is
+> pinned all the same, because a hand-placed BFD says something the ranking
+> cannot: which sections the reader is meant to take in a row.
 
 **A face names the box's own side, not the reader's.** This is the one place
 `Block` departs from [`nozzle()`](#nozzle), which everywhere else takes the
@@ -2707,7 +2707,7 @@ fs.to_svg()
 The rule is stated as the **clearance**, not as a multiple of the head, and the
 difference matters: at the default 20 pitch those same two heads have 8 units of
 paper between them — four line-widths — and read without effort, so nothing is
-reported. Only one unit on the fourteen shipped examples is inside the floor:
+reported. Only one unit on the sixteen shipped examples is inside the floor:
 `10_ethanol_pfd`'s `M-301`, whose two feeds land 14.5px apart.
 
 The cure is the box, and the message does the arithmetic: the drawn pitch is
@@ -2774,10 +2774,10 @@ instead of the 17.5 apart that `n_inlets=3` would have given them.
 **Only counted nozzles.** A `vent`, a `relief`, a `drain`, a `duty`, an
 exchanger's other side, a drain valve's outlet — every fixed nozzle a class
 declares is offered to every instance whether the sheet uses it or not, and
-leaving one open is a drawing decision. Across the fourteen examples in
-`examples/` 252 ports carry no stream and every one of them is one of those:
-165 signal connections, 26 exchanger utility sides, 14 duties, 14 reliefs,
-14 drains, 11 vents and 8 station drain outlets. None is reported.
+leaving one open is a drawing decision. Across the sixteen examples in
+`examples/` 276 ports carry no stream and every one of them is one of those:
+176 signal connections, 26 exchanger utility sides, 17 reliefs, 17 drains,
+15 duties, 13 vents and 8 station drain outlets. None is reported.
 What is reported is a *count that went unmet*, which is why the singular
 spelling is silent too — a one-feed column's nozzle is called `feed`, not
 `feed_1`, and no number was ever written down for it.

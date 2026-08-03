@@ -361,15 +361,16 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     # came from: a loop over ``(1, 2, 3)`` wiring ``in_2``, ``in_3`` and
     # ``in_4``.
     #
-    # **The narrowness is the measurement.** Across the fourteen shipped
-    # examples 252 ports carry no stream and every one is legitimate --
-    # 165 signal connections, 26 dry exchanger sides, 14 duties, 14
-    # reliefs, 14 drains, 11 vents, 8 station drain legs that end off
-    # the sheet. A nozzle a class *declares* is offered whether the
-    # sheet uses it or not, and leaving one open is a drawing decision.
-    # A **numbered** nozzle is not offered, it is asked for:
-    # ``n_inlets=4`` is a number the author wrote, so a bare member of
-    # that family is that number not being met. None of the 252 is one.
+    # **The narrowness is the measurement.** Across the sixteen shipped
+    # examples 276 ports carry no stream and every one is legitimate --
+    # 176 signal connections, 26 dry exchanger sides, 17 reliefs, 17
+    # drains, 15 duties, 13 vents, 8 station drain legs that end off the
+    # sheet, and 4 more single dry sides. A nozzle a class *declares* is
+    # offered whether the sheet uses it or not, and leaving one open is a
+    # drawing decision. A **numbered** nozzle is not offered, it is asked
+    # for: ``n_inlets=4`` is a number the author wrote, so a bare member
+    # of that family is that number not being met. None of the 276 is
+    # one.
     #
     # It shows on the paper too. A family is spread evenly for however
     # many members it has, connected or not, so a mixer with

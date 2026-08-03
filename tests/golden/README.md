@@ -78,7 +78,7 @@ the process's string-hash seed, not on anything about the diagram — confirmed 
 rendering the same flowsheet under several `PYTHONHASHSEED` values and diffing.
 
 **The provenance block.** Every rendered sheet says what drew it, version
-included. Left alone, bumping `pandid.__version__` would rewrite all fourteen
+included. Left alone, bumping `pandid.__version__` would rewrite all sixteen
 fixtures for a reason that is about none of the drawings, and cutting a release
 would be a diff of every artefact in the repository. The renderer therefore
 fences the block between `<!-- pandid:provenance -->` and

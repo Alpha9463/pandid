@@ -239,6 +239,8 @@ rendered in the
 | `12_block_flow_diagram.py` | the drawing a level above the PFD: one `Block` per plant section, connections on all four sides, every box sized to its own name and nozzles |
 | `13_mineral_dewatering.py` | a solids circuit as a PFD: thickener, belt filter, conveyor, rotary dryer, recovery cyclone, scrubber, magnetic separator, and tees that *combine* rather than split |
 | `14_tank_farm.py` | a bulk liquid storage terminal: floating-roof, fixed-roof and pressure storage, a loading rack, a vapour system with its flame arrestors, and loop numbers allocated rather than typed |
+| `15_condensing_turbine.py` | an instrumented sheet the engine lays out on its own: a turbine, an air-cooled condenser, a steam-jet ejector, two loops and an interlock, with no `pin()` anywhere |
+| `16_demineralised_water.py` | an ion-exchange train laid out automatically under a title strip and an equipment list, with a packed degasser stripped by blower air |
 
 ## Contributing
 
