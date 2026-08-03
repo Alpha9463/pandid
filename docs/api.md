@@ -852,23 +852,13 @@ face, north on a west or east one. A mirrored block therefore draws that same
 first member on the right of the sheet, exactly as the face itself follows the
 box.
 
-[`examples/12_block_flow_diagram.py`](../examples/12_block_flow_diagram.py) is
-the sheet it was added for: a recycle returning from the right into a south wall
-whose other connection is a purge has to enter on the right, or it runs the width
-of the sheet to reach back past the purge's drop.
-
-`inputs=` / `outputs=` stay the constructor's names — "the inputs are on these
-faces" is what the argument says.
-
 > **Pin a block flow diagram.** The layout engine ranks units by process flow
 > order and does not yet know that a connection on the north face wants its
 > source *above* it ([#168](https://github.com/Alpha9463/pandid/issues/168)), so
-> a BFD left to lay itself out sends those streams up and over the sheet — long
-> climbs, runs closer together than the pitch the block keeps at the nozzle, and
-> line jumps where there should be none. Pinned output is what
+> a BFD left to lay itself out sends those streams up and over the sheet.
 > [`examples/12_block_flow_diagram.py`](../examples/12_block_flow_diagram.py)
-> shows, and it is what a BFD wants anyway: the reader is meant to see the plant
-> in a row.
+> shows the pinned output, which is what a BFD wants anyway: the reader is meant
+> to see the plant in a row.
 
 **A face names the box's own side, not the reader's.** This is the one place
 `Block` departs from [`nozzle()`](#nozzle), which everywhere else takes the
@@ -892,9 +882,8 @@ because a quarter turn draws the box's upright faces *across* the sheet and can
 put a run on the shorter axis. A refused call leaves the block as it was.
 
 A width given also wins over the name, which then hangs out of both ends of the
-box. Every label here is written on an opaque halo, so an overhanging one
-**erases whatever is drawn beside it** rather than merely looking untidy. Leave
-`width` off and it cannot happen.
+box. Labels are written on an opaque halo, so an overhanging one **erases
+whatever is drawn beside it**. Leave `width` off and it cannot happen.
 
 A block is **not** scheduled: `equipment_list()` skips it, because a box
 standing for a whole section is not a purchasable item. `include=` still takes
