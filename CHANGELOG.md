@@ -455,6 +455,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   would hand back a traced picture where every other valve is a native editable
   stencil.
 
+- **Naming a pairing's own actuator alongside it is allowed.** `#136` left
+  `Valve(variant="control", actuator="diaphragm")` raising, on the grounds that
+  `control` already answers what strokes the valve. But `control` *is* the
+  general body under a diaphragm, so an engineer who writes both has said one
+  true thing twice, not two contradictory things — and being explicit and
+  correct was an error.
+
+  It now resolves to the variant it already named. Every pairing accepts the
+  operator its own drawing carries, read back out of
+  `pandid.render.symbols.ACTUATED` rather than tabulated a second time:
+
+  | `variant` | accepts `actuator=` |
+  | --- | --- |
+  | `control` | `diaphragm` |
+  | `butterfly_pneumatic` | `diaphragm` |
+  | `motor` | `motor` |
+  | `solenoid` | `solenoid` |
+  | `hydraulic` | `hydraulic` |
+  | `manual` | `handwheel` |
+
+  A *disagreement* still raises, because it is a real one — one drawing cannot
+  carry two operators, and the author meant one of them:
+
+  ```python
+  units.Valve("CV-303", variant="control", actuator="diaphragm")   # the same valve, twice
+  units.Valve("CV-303", variant="control", actuator="motor")
+  # ValueError: CV-303: variant 'control' already draws a valve with a 'diaphragm'
+  # operator on it, so it cannot also take actuator='motor' -- one drawing, two
+  # operators.
+  ```
+
+  Nothing else moves. A spec carries `variant` and never carried `actuator`, so
+  the round trip is unchanged; and `VARIANT_ALIASES` is applied *after* the pair
+  is resolved, so `devices.ControlValve`'s `default` still reaches the resolver
+  as the bare body and `ControlValve(actuator="diaphragm")` goes on working.
+
 - **One drawing, one nozzle vocabulary (#138).** `Separator(variant="cyclone")`,
   `("gravity")` and `("electrostatic")` draw `overflow` and `underflow`, which
   is what `devices.Cyclone`, `devices.GravitySeparator` and

@@ -125,11 +125,54 @@ def test_an_unknown_actuator_names_the_ones_there_are():
         U.Valve("CV-1", variant="gate", actuator="piston")
 
 
-def test_a_pairing_cannot_be_given_a_second_operator():
-    """``control`` already answers "what strokes it", so a second answer is a
-    contradiction rather than a refinement and is not merged silently."""
-    with pytest.raises(ValueError, match=r"already draws a valve with an operator"):
+def test_a_pairing_may_be_told_the_actuator_it_already_has():
+    """An engineer being explicit and correct is not an error.
+
+    ``variant="control"`` is the shorthand for a general body under a diaphragm,
+    so ``actuator="diaphragm"`` written beside it is that same fact typed a
+    second time. One true thing said twice is one true thing; there is nothing
+    to choose between and nothing to guess, so it resolves to the variant it
+    already named.
+    """
+    assert U.Valve("CV-303", variant="control", actuator="diaphragm").variant == "control"
+
+
+def test_a_pairing_cannot_be_given_a_different_operator():
+    """Naming a *second* operator is the contradiction, and it still raises.
+
+    Two operators and one drawing: the author meant one of them and this package
+    cannot tell which. The message names the one the variant already draws, since
+    that is the half the reader did not type.
+    """
+    with pytest.raises(
+        ValueError, match=r"variant 'control' already draws a valve with a 'diaphragm' operator"
+    ):
         U.Valve("CV-1", variant="control", actuator="motor")
+    with pytest.raises(ValueError, match=r"one drawing, two operators"):
+        U.Valve("HV-1", variant="manual", actuator="diaphragm")
+
+
+#: ``(variant, actuator)`` for every pairing, read back out of :data:`ACTUATED`
+#: rather than typed here: the agreement rule is *the same table*, in the other
+#: direction, so a test with its own copy of it would agree with a broken rule.
+_FITTED = sorted({(drawn, act) for (_, act), drawn in ACTUATED.items()})
+_MISMATCHED = sorted(
+    (drawn, act)
+    for drawn in {d for d, _ in _FITTED}
+    for act in ACTUATORS
+    if (drawn, act) not in set(_FITTED)
+)
+
+
+@pytest.mark.parametrize("variant,actuator", _FITTED, ids=[f"{v}-{a}" for v, a in _FITTED])
+def test_a_pairing_and_its_own_operator_resolve_to_the_pairing(variant, actuator):
+    assert U.Valve("V-1", variant=variant, actuator=actuator).variant == variant
+
+
+@pytest.mark.parametrize("variant,actuator", _MISMATCHED, ids=[f"{v}-{a}" for v, a in _MISMATCHED])
+def test_a_pairing_and_somebody_else_s_operator_raise(variant, actuator):
+    with pytest.raises(ValueError, match=r"one drawing, two operators"):
+        U.Valve("V-1", variant=variant, actuator=actuator)
 
 
 def test_the_actuator_is_keyword_only():
@@ -148,6 +191,21 @@ def test_the_pairing_is_not_stored_beside_the_drawing():
     fs.add(U.Valve("CV-1", variant="butterfly", actuator="diaphragm"))
     rebuilt = Flowsheet.from_dict(spec.to_dict(fs))
     assert rebuilt.units[0].variant == "butterfly_pneumatic"
+
+
+def test_the_agreeing_pair_round_trips_too():
+    """A spec has one axis, ``variant``, and never carried ``actuator``: the pair
+    is a spelling and only the drawing is written out. So the valve an engineer
+    typed both halves of comes back as the pairing, and reading a sheet back is
+    not where a legal constructor call turns into a refused one."""
+    from pandid import spec
+
+    fs = Flowsheet("round trip")
+    fs.add(U.Valve("CV-303", variant="control", actuator="diaphragm"))
+    written = spec.to_dict(fs)
+    assert written["units"][0]["variant"] == "control"
+    assert "actuator" not in written["units"][0]
+    assert Flowsheet.from_dict(written).units[0].variant == "control"
 
 
 # --- what the rest of the package reads off it -------------------------------
@@ -193,6 +251,21 @@ def test_the_device_class_draws_the_actuator_too():
     )
 
 
+def test_a_device_class_takes_the_actuator_its_own_name_implies():
+    """``VARIANT_ALIASES`` is applied *after* the pair is resolved, so a device
+    class's ``default`` reaches ``_resolve`` as the bare body and the agreement
+    rule never sees it. What it does see is an author who named the class and the
+    variant and the actuator, all three saying the same thing."""
+    assert devices.ControlValve("CV-1", actuator="diaphragm").variant == "control"
+    assert (
+        devices.ControlValve("CV-2", variant="control", actuator="diaphragm").variant == "control"
+    )
+    assert devices.SolenoidValve("XV-1", variant="solenoid", actuator="solenoid").variant == (
+        "solenoid"
+    )
+    assert devices.MotorOperatedValve("HV-1", variant="motor", actuator="motor").variant == "motor"
+
+
 # --- the retired spelling ----------------------------------------------------
 
 
@@ -200,6 +273,15 @@ def test_the_medium_is_no_longer_a_kind_of_valve():
     with pytest.warns(DeprecationWarning, match=r"Valve\(variant='pneumatic'\)"):
         valve = U.Valve("CV-1", variant="pneumatic")
     assert valve.variant == "control", "and it still draws, for one release"
+
+
+def test_the_retired_spelling_takes_the_actuator_it_resolves_to():
+    """The retirement rewrites the variant before the pair is weighed, so the
+    agreement is judged on ``control`` -- the drawing -- and not on the spelling
+    that is on its way out."""
+    with pytest.warns(DeprecationWarning):
+        valve = U.Valve("CV-1", variant="pneumatic", actuator="diaphragm")
+    assert valve.variant == "control"
 
 
 def test_the_retired_spelling_reports_on_validate():
