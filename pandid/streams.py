@@ -57,6 +57,14 @@ class Stream:
     route: Route | None = None
     color: str | None = None
     dasharray: str | None = None
+    # How this line's two joints are made up, overriding the sheet's
+    # `connections` for this run alone. One name for both ends, or a
+    # (source, dest) pair in the order they were connected to state them apart.
+    # None inherits, which is what lets one flanged line sit on an unmarked
+    # sheet and one unmarked line on a flanged one. Resolved by
+    # pandid.render.svg.resolve_connections(), which is also where the P&ID-only
+    # rule that outranks all of this lives.
+    ends: "str | tuple[str, str] | None" = None
     auto_named: bool = True  # False if the caller passed an explicit name
     # Line-number components. The author supplies all but `sequence`, which
     # auto-numbering fills; see Flowsheet.renumber_streams().

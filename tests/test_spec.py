@@ -825,3 +825,43 @@ def test_a_callable_naming_scheme_cannot_be_written_out():
     fs = Flowsheet("T", stream_naming_scheme=lambda n: f"S{n:03d}")
     with pytest.raises(SpecError, match="callable stream_naming_scheme"):
         fs.to_dict()
+
+
+def _two_vessels(**stream):
+    return {
+        "name": "T",
+        "units": [{"name": "V-1", "kind": "vessel"}, {"name": "V-2", "kind": "vessel"}],
+        "streams": [{"from": ["V-1", "outlet"], "to": ["V-2", "inlet"], **stream}],
+    }
+
+
+def test_a_streams_joints_survive_a_round_trip():
+    """A joint stated on one line is the author overruling the sheet, so losing
+    it on reload redraws that line as whatever the sheet says instead."""
+    fs = Flowsheet.from_dict(_two_vessels(ends="flanged"))
+    assert fs.streams[0].ends == "flanged"
+    assert fs.to_dict()["streams"][0]["ends"] == "flanged"
+    # ...and a line that says nothing writes nothing, so an unmarked sheet's
+    # spec does not grow a key per stream.
+    assert "ends" not in Flowsheet.from_dict(_two_vessels()).to_dict()["streams"][0]
+
+
+def test_two_joints_stated_apart_survive_a_round_trip_in_order():
+    fs = Flowsheet.from_dict(_two_vessels(ends=["flanged", "none"]))
+    assert fs.streams[0].ends == ("flanged", "none")
+    # Out as a list, which is what YAML and JSON both write a pair as.
+    assert fs.to_dict()["streams"][0]["ends"] == ["flanged", "none"]
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("welded", "flanged"),  # a joint with no mark in this package
+        (["flanged", "none", "flanged"], "two-item"),  # a stream has two ends
+        (5, "two-item"),
+    ],
+)
+def test_a_joint_the_package_cannot_draw_is_refused_with_the_ones_it_can(value, expected):
+    with pytest.raises((SpecError, ValueError)) as e:
+        Flowsheet.from_dict(_two_vessels(ends=value))
+    assert expected in str(e.value)

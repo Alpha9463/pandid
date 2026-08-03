@@ -2068,7 +2068,10 @@ SCENARIOS = {
         _ethanol_pfd,
         {"show_stream_table": True, "border": "zone", "page_size": "A3"},
     ),
-    "11_ethanol_pid": (_ethanol_pid, {"border": "zone", "page_size": "A3", "diagram": "p&id"}),
+    "11_ethanol_pid": (
+        _ethanol_pid,
+        {"border": "zone", "page_size": "A3", "diagram": "p&id", "connections": "flanged"},
+    ),
     # 12 is the block flow diagram, the one drawing a level above the PFD and
     # the only scenario with process connections on the north and south faces.
     # It is what guards the sizing rule as a *drawing* rather than as an

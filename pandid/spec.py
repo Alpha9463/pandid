@@ -283,6 +283,7 @@ _INSTRUMENT_KEYS = {
 _LOOP_KEYS = {"variable", "number"}
 _STREAM_KEYS = {
     "from", "to", "kind", "name", "draw_as_recycle", "properties", "via", "color", "dasharray",
+    "ends",
     *LINE_NUMBER_FIELDS,
 }
 _COMPONENT_KEYS = {"name", "formula"}
@@ -691,6 +692,8 @@ def _read_stream(fs: Flowsheet, entry: Any, where: str) -> Stream:
         kwargs["name"] = _text(data["name"], f"{where}.name")
     if "draw_as_recycle" in data:
         kwargs["draw_as_recycle"] = _flag(data["draw_as_recycle"], f"{where}.draw_as_recycle")
+    if "ends" in data:
+        kwargs["ends"] = _read_ends(data["ends"], f"{where}.ends")
     for key in LINE_NUMBER_FIELDS:
         if key in data:
             kwargs[key] = _component(data[key], f"{where}.{key}")
@@ -707,6 +710,23 @@ def _read_stream(fs: Flowsheet, entry: Any, where: str) -> Stream:
     if "via" in data:
         stream.via(_read_waypoints(data["via"], f"{where}.via"))
     return stream
+
+
+def _read_ends(entry: Any, where: str) -> "str | tuple[str, str]":
+    """How a line's two joints are made up: one name, or ``[source, dest]``.
+
+    The name itself is not checked here. ``connect()`` checks it against
+    :data:`~pandid.render.svg.CONNECTIONS` and raises with the accepted
+    spellings in the message, and one list of them beats two.
+    """
+    if isinstance(entry, str):
+        return entry
+    if isinstance(entry, (list, tuple)) and len(entry) == 2:
+        return (_text(entry[0], f"{where}[0]"), _text(entry[1], f"{where}[1]"))
+    raise SpecError(
+        f"{where} must be a connection name for both ends or a two-item "
+        f"[source, dest] list, got {entry!r}"
+    )
 
 
 def _read_properties(entry: Any, where: str) -> dict[str, str | float]:
@@ -1143,6 +1163,11 @@ def _write_stream(stream: Stream) -> dict[str, Any]:
     for key in ("color", "dasharray"):
         if getattr(stream, key) is not None:
             entry[key] = getattr(stream, key)
+    if stream.ends is not None:
+        # A pair goes out as a list, which is what it came in as and what YAML
+        # writes anyway; one name for both ends stays one name.
+        entry["ends"] = (stream.ends if isinstance(stream.ends, str)
+                         else list(stream.ends))
     if stream.route is not None and stream.route.manual:
         entry["via"] = [list(point) for point in stream.route.waypoints]
     if stream.properties:

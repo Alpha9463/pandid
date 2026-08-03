@@ -1061,7 +1061,7 @@ def test_a_line_number_is_written_where_the_sheet_writes_it():
     equipment tags lay down.
     """
     from pandid.render.drawio import _tag_pass
-    from pandid.render.svg import stream_numbers
+    from pandid.render.svg import sheet_connections, stream_numbers
 
     for stem in SHEETS:
         fs, kwargs = gallery.flowsheet(stem)
@@ -1069,7 +1069,10 @@ def test_a_line_number_is_written_where_the_sheet_writes_it():
         cells = _drawio_cells(fs, kwargs)
         _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
         plates = _tag_pass(fs, default_registry).plates
-        wanted = {number.name: number for number in stream_numbers(fs, plates)}
+        # The sheet's own joints, because a flange mark is ink the number search
+        # dodges: asking without them is asking about a different drawing.
+        joints = sheet_connections(kwargs.get("diagram"), kwargs.get("connections"))
+        wanted = {number.name: number for number in stream_numbers(fs, plates, joints)}
         checked = 0
         for n, s in enumerate(fs.streams):
             cell = cells[f"s{n}"]
@@ -1373,7 +1376,13 @@ def test_a_tables_parts_add_up_at_the_precision_they_are_written_at(nrows):
 #: puts the widest tables in the corpus under every check that walks a table's
 #: cells: twenty-one stream columns on ``03`` and twenty-four on ``13``, against
 #: the four and five of a legend or an equipment list.
-_DRAWIO_KWARGS = ("diagram", "page_size", "border", "show_stream_table")
+#:
+#: ``connections`` earned its place the hard way: it moves a flange onto a run,
+#: a flange is ink the line-number search dodges, and dropping it exported
+#: ``AE-304-150-80-SS``'s leader to a landing the sheet had moved it off. The
+#: check is whether two backends draw one drawing, so it has to be given the
+#: arguments that drawing was made with.
+_DRAWIO_KWARGS = ("diagram", "page_size", "border", "show_stream_table", "connections")
 
 
 def _drawio_cells(fs, kwargs) -> dict:

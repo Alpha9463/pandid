@@ -426,3 +426,153 @@ def test_exported_pdf_lands_on_a_page_of_exactly_that_size(tmp_path, name, mm):
     _fs().render(str(out), page_size=name, border="zone", diagram="p&id")
     width_pt, height_pt = _pdf_page_pt(out.read_bytes())
     assert (width_pt / 72 * 25.4, height_pt / 72 * 25.4) == pytest.approx(mm, abs=0.01)
+
+
+# --- connections: the joint where a line meets an equipment nozzle ------------
+
+#: One flange face: a bar of exactly FLANGE_TICK across the run, at the pipe's
+#: own pen. Restated rather than imported for the reason the sheet sizes above
+#: are: an edit to the constant must show up here as a failure, not be absorbed.
+_FLANGE_BAR = re.compile(
+    r'<line x1="([\d.-]+)" y1="([\d.-]+)" x2="([\d.-]+)" y2="([\d.-]+)" '
+    r'stroke="[^"]+" stroke-width="2" />'
+)
+
+
+def _marks(svg: str) -> int:
+    """How many flange *pairs* the sheet drew."""
+    import math
+
+    bars = [
+        m
+        for m in _FLANGE_BAR.findall(svg)
+        if abs(math.dist((float(m[0]), float(m[1])), (float(m[2]), float(m[3]))) - 12.5) < 0.2
+    ]
+    assert len(bars) % 2 == 0, "a flange is a pair of faces and they are drawn together"
+    return len(bars) // 2
+
+
+def _joints() -> Flowsheet:
+    """A vessel to a pump to a product flag, with a hand valve in the run.
+
+    Four joints a mark could go on and only two that take one, which is the
+    whole rule in one sheet: the boundary flag is a reference to another
+    drawing, and the valve is in the run rather than at the end of it.
+    """
+    fs = Flowsheet("joints")
+    v = fs.add(U.Vessel("V-1"))
+    hv = fs.add(U.Valve("HV-1"))
+    p = fs.add(U.Pump("P-1"))
+    prod = fs.add(U.Product("P"))
+    fs.connect(v.outlet, hv.inlet)
+    fs.connect(hv.outlet, p.suction)
+    fs.connect(p.discharge, prod.inlet)
+    return fs
+
+
+def test_a_sheet_marks_no_joints_unless_it_is_asked_to():
+    """The honest default. Drawing every joint flanged is a claim about the
+    piping, and nobody made it."""
+    assert _marks(_joints().to_svg(diagram="p&id")) == 0
+    assert _marks(_joints().to_svg(diagram="p&id", connections="none")) == 0
+
+
+def test_a_flanged_sheet_marks_the_equipment_nozzles_and_nothing_else():
+    """P&ID_301 flanges every piped branch off a shell and nothing else: not the
+    gate valves either side of CV-305, not the drains, not the boundary flags."""
+    svg = _joints().to_svg(diagram="p&id", connections="flanged")
+    # V-1's nozzle, and the pump's two. The valve's two ends are in the run and
+    # the product flag is a sheet reference, so neither is a joint.
+    assert _marks(svg) == 3
+
+
+def test_a_pfd_marks_no_joints_however_it_is_asked():
+    """ISO 15519-2:2015 Table 5 (p. 19) lists "connections" among the *specific*
+    graphical symbols a P&ID carries as basic information; Table 4 (p. 17) gives
+    the PFD only "general graphical symbols for connections". A flange face is
+    as specific as a connection gets, so a PFD does not draw one."""
+    assert _marks(_joints().to_svg(connections="flanged")) == 0
+    assert _marks(_joints().to_svg(diagram="pfd", connections="flanged")) == 0
+
+
+def test_a_stream_may_say_the_opposite_of_its_sheet_either_way_round():
+    """The default matters, so the override has to work in both directions: a
+    mostly-welded sheet with one flanged joint and a mostly-flanged sheet with
+    one welded joint are both drawings somebody makes."""
+    welded = _joints()
+    welded.streams[0].ends = "flanged"
+    assert _marks(welded.to_svg(diagram="p&id")) == 1  # V-1's nozzle only
+
+    flanged = _joints()
+    flanged.streams[0].ends = "none"
+    assert _marks(flanged.to_svg(diagram="p&id", connections="flanged")) == 2
+
+
+def test_a_stream_states_its_two_ends_apart_in_the_order_it_was_connected():
+    fs = Flowsheet("pair")
+    a = fs.add(U.Vessel("V-1"))
+    b = fs.add(U.Vessel("V-2"))
+    s = fs.connect(a.outlet, b.inlet, ends=("flanged", "none"))
+    assert _marks(fs.to_svg(diagram="p&id")) == 1
+    s.ends = ("none", "flanged")
+    assert _marks(fs.to_svg(diagram="p&id")) == 1
+    s.ends = ("flanged", "flanged")
+    assert _marks(fs.to_svg(diagram="p&id")) == 2
+    s.ends = None  # back to inheriting, and the sheet says nothing
+    assert _marks(fs.to_svg(diagram="p&id")) == 0
+
+
+def test_a_signal_line_has_no_joint_to_describe():
+    """ISA-5.1 draws a signal as a line to a balloon. There is no pipe, so there
+    is nothing for a flange to be a fact about."""
+    fs = _loop()
+    assert _marks(fs.to_svg(diagram="p&id", connections="flanged")) == 0
+
+
+def test_the_mark_stands_off_the_nozzle_the_way_the_head_does():
+    """Just outside the outline, on the stream, and clear of the artwork: the
+    near face sits FLANGE_STANDOFF - FLANGE_GAP/2 out and no bar touches the
+    box it is drawn against."""
+    from pandid.portgeom import unit_box
+    from pandid.render.svg import FLANGE_GAP, FLANGE_STANDOFF, FLANGE_TICK
+
+    fs = _joints()
+    svg = fs.to_svg(diagram="p&id", connections="flanged")
+    assert FLANGE_STANDOFF - FLANGE_GAP / 2 > 0, "the near face is outside the nozzle"
+    boxes = [unit_box(u, u.frame) for u in fs.units if u.frame is not None]
+    for x1, y1, x2, y2 in _FLANGE_BAR.findall(svg):
+        bar = (
+            min(float(x1), float(x2)),
+            min(float(y1), float(y2)),
+            max(float(x1), float(x2)),
+            float(max(float(y1), float(y2))),
+        )
+        assert abs((bar[2] - bar[0]) + (bar[3] - bar[1]) - FLANGE_TICK) < 0.2
+        for bx0, by0, bx1, by1 in boxes:
+            assert bar[2] <= bx0 or bar[0] >= bx1 or bar[3] <= by0 or bar[1] >= by1, (
+                "a flange bar is drawn across a symbol it should be standing off"
+            )
+
+
+@pytest.mark.parametrize("value", ["welded", "bolted", "socket"])
+def test_a_joint_this_package_cannot_draw_raises_naming_the_ones_it_can(value):
+    with pytest.raises(ValueError) as excinfo:
+        _joints().to_svg(diagram="p&id", connections=value)
+    assert "none" in str(excinfo.value) and "flanged" in str(excinfo.value)
+    # ...and the same message for a stream that says it, raised when it is said
+    # rather than when the sheet is drawn.
+    fs = Flowsheet("t")
+    a, b = fs.add(U.Vessel("V-1")), fs.add(U.Vessel("V-2"))
+    with pytest.raises(ValueError) as excinfo:
+        fs.connect(a.outlet, b.inlet, ends=value)
+    assert "none" in str(excinfo.value) and "flanged" in str(excinfo.value)
+
+
+def test_connections_reaches_render_and_the_drawio_export_too(tmp_path):
+    out = tmp_path / "sheet.svg"
+    _joints().render(str(out), diagram="p&id", connections="flanged")
+    assert _marks(out.read_text(encoding="utf-8")) == 3
+    # The export draws the same three, as its own cells: draw.io has no flange
+    # in its arrow vocabulary, so they cannot ride the arrowhead's style keys.
+    model = _joints().to_drawio(diagram="p&id", connections="flanged")
+    assert model.count("shape=line;rotation=") == 6  # two faces per mark

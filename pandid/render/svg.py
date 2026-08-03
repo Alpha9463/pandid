@@ -653,7 +653,17 @@ def _cutting(leader, occupied, limit: int) -> int:
     return n
 
 
-def _leader(box, seg, occupied) -> "tuple[tuple, int]":
+def _near_segment(p, a, b, tol: float = 0.5) -> bool:
+    """Does *p* sit on the segment ``a``-``b``, to within *tol*?"""
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    span = dx * dx + dy * dy
+    if not span:
+        return math.hypot(p[0] - a[0], p[1] - a[1]) <= tol
+    t = max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / span))
+    return math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy)) <= tol
+
+
+def _leader(box, seg, occupied, keep_out: float = 0.0) -> "tuple[tuple, int]":
     """How a label's halo at *box* is joined to the run *seg* names.
 
     Returns ``((start, end), crossings)``: the leader, the end being the point
@@ -703,6 +713,16 @@ def _leader(box, seg, occupied) -> "tuple[tuple, int]":
     degrees; it stays oblique, which is all the slope has to be, and the second
     key above is what spends the freedom the sweep has on getting back towards
     45 rather than on nothing.
+
+    ``keep_out`` extends that clearance by whatever the run's ends are *marked*
+    with, and is the same clause rather than a new one: the clearance exists so
+    a head does not land where the run meets what it serves, and on a flanged
+    sheet the joint is drawn, so landing on it points at the joint exactly as
+    landing at the end points at the vessel. It is measured off the run's ends
+    before the inset, which is what lets a short spool between two vessels --
+    ``AE-304-150-80-SS`` on ``11_ethanol_pid``, thirty units with a flange pair
+    at each end -- put the head in the clear middle instead of on the upper
+    pair, which is where it went when the marks were ink nothing could see.
     """
     (sx1, sy1), (sx2, sy2) = seg
     vertical = abs(sx2 - sx1) < abs(sy2 - sy1)
@@ -715,6 +735,11 @@ def _leader(box, seg, occupied) -> "tuple[tuple, int]":
     v0, v1 = (box[0], box[2]) if vertical else (box[1], box[3])
     v = v0 if abs(v0 - at) < abs(v1 - at) else v1
     gap = abs(v - at)
+    # Only where the run can spare it: a mark on a run too short to hold both
+    # its marks and a landing has to be landed near anyway, and a band inverted
+    # by its own clearance would put the head off the run altogether.
+    if keep_out and hi - lo > 3 * keep_out:
+        lo, hi = lo + keep_out, hi - keep_out
     inset = min(_LABEL_CLEAR, (hi - lo) / 3)
     near, far = lo + inset, hi - inset
 
@@ -817,7 +842,8 @@ class StreamNumber(NamedTuple):
     leader: "tuple | None"
 
 
-def stream_numbers(fs, placed: list) -> "list[StreamNumber]":
+def stream_numbers(fs, placed: list,
+                   joints: "str | None" = None) -> "list[StreamNumber]":
     """Where every line number on the sheet goes.
 
     Lifted out of :meth:`SvgRenderer._draw_streams` for the reason
@@ -852,6 +878,22 @@ def stream_numbers(fs, placed: list) -> "list[StreamNumber]":
         _obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None
     ]
 
+    # A flange mark is a symbol on a run, so it goes in with the symbols: the
+    # search dodges it exactly as it dodges a valve body, and both the halo and
+    # the leader are scored against it. It has to be here rather than nowhere,
+    # because the mark is drawn hard against a nozzle and a leader wants the
+    # clear middle of a segment -- on the short spool between a condenser and
+    # the drum beneath it, "the clear middle" was the two units between the two
+    # flanges, and the number's leader landed on one of them. Nothing else on
+    # the sheet is ink the label pass cannot see, and this was very nearly the
+    # exception.
+    for s in fs.streams:
+        for fx, fy, _angle, _at in flange_marks(s, stream_polyline(s),
+                                                resolve_connections(s, joints)):
+            half = max(FLANGE_TICK, FLANGE_GAP) / 2
+            symbols.append(
+                _obstacle((fx - half, fy - half, fx + half, fy + half)))
+
     # A number names a *run*, and a run survives the valves and fittings in it:
     # renumber_streams() gives every segment of one the same name and the sheet
     # writes it once, on the longest piece.
@@ -871,10 +913,19 @@ def stream_numbers(fs, placed: list) -> "list[StreamNumber]":
         if not longest_seg:
             continue
         labeled_names.add(s.name)
-        label_items.append((longest_seg, s.name, s.color or "black"))
+        # How much of the segment its own flange marks take, if it carries any:
+        # the mark's standoff plus its half-width, which is where the near bar
+        # ends. Nought on a run whose longest piece is in the middle of it,
+        # since the marks are at the nozzles and nowhere else.
+        (mx1, my1), (mx2, my2) = longest_seg
+        keep = FLANGE_STANDOFF + FLANGE_GAP / 2 if any(
+            _near_segment((m.x, m.y), (mx1, my1), (mx2, my2))
+            for m in flange_marks(s, points, resolve_connections(s, joints))
+        ) else 0.0
+        label_items.append((longest_seg, s.name, s.color or "black", keep))
 
     out: list[StreamNumber] = []
-    for seg, name, color in label_items:
+    for seg, name, color, keep in label_items:
         (sx1, sy1), (sx2, sy2) = seg
         hw, hh = len(name) * _HALO_CHAR + _HALO_PAD, _HALO_DEEP
         cx, cy = (sx1 + sx2) / 2, (sy1 + sy2) / 2
@@ -948,7 +999,7 @@ def stream_numbers(fs, placed: list) -> "list[StreamNumber]":
             if damage is not None and hits > damage[:2]:
                 continue
             lead, cut = ((None, 0) if _along(box, vertical, run_lo, run_hi)
-                         else _leader(box, seg, everything))
+                         else _leader(box, seg, everything, keep))
             cost = (*hits, cut)
             if damage is None or cost < damage:
                 spot, damage, leader = (ux, uy), cost, lead
@@ -1091,6 +1142,140 @@ def pneumatic_marks(points) -> "list[Hatch]":
             out.append(Hatch(px1 + (px2 - px1) * t, py1 + (py2 - py1) * t,
                              horiz, walked + span * t))
         walked += span
+    return out
+
+
+#: What a drawing may say about the joints where its lines meet equipment.
+#: A two-value tuple rather than a bool for the reason ``Valve.NORMAL_POSITIONS``
+#: is one: the joint's make-up is an enumeration the plant has more entries in
+#: (threaded, socket-welded, a spec break) and not a switch with two settings.
+#: ``"none"`` is not ``"welded"``. It is the drawing declining to say, which is
+#: what an unmarked line has always meant and the only honest default: a library
+#: that marked every joint flanged would be making a claim about piping nobody
+#: gave it.
+CONNECTIONS = ("none", "flanged")
+
+#: The flanged-connection mark, in the proportions the vendored draw.io stencil
+#: draws it in: ``('fitting', 'flange')`` in :mod:`._vendored_symbols` is two
+#: bars 5.0 apart and 12.5 long, at the weight of the pipe. Held to those exact
+#: numbers so the sheet and an export that places the stencil are one mark
+#: rather than two drawings of one, and so the same pair is recognisable whether
+#: an author drew it as a convention here or pinned a ``Fitting`` unit there.
+#:
+#: Against P&ID_301 the proportions check out: its ticks are 8.5pt long, 2.13pt
+#: apart, at a ~0.85pt pen. The gap is 1.5 pen widths there and 1.5 pen widths
+#: here (5.0 apart less a 2.0 stroke), which is what makes the two bars read as
+#: one mark instead of two ticks that happen to be near each other.
+FLANGE_TICK = 12.5
+FLANGE_GAP = 5.0
+
+#: How far the pair's *centre* stands off the nozzle, along the run. Enough that
+#: the near bar clears the outline it is drawn against rather than sitting on
+#: it: the mark says the joint is outside the equipment, and a bar overlapping
+#: the shell reads as part of the shell.
+FLANGE_STANDOFF = 5.0
+
+
+class Flange(NamedTuple):
+    """One flanged-connection mark on a stream.
+
+    ``angle`` is the direction of the *run* at the mark in degrees, not the
+    direction the bars are stroked in; the bars are drawn across it. It is
+    carried rather than recovered because the draw.io exporter cannot re-derive
+    it -- mxGraph has no auto-orientation for a shape on an edge -- and two
+    derivations of one angle is the drift :func:`pneumatic_marks` exists to
+    avoid. ``along`` is arc length from the source end, for the same reason it
+    is on :class:`Hatch`.
+    """
+    x: float
+    y: float
+    angle: float
+    along: float
+
+
+def flanged_joint(port) -> bool:
+    """Is this end of a stream a joint at an *equipment* nozzle?
+
+    P&ID_301 is unambiguous about where the mark goes and, just as usefully,
+    about where it does not. Every piped branch off a shell carries it: all four
+    of D-301's nozzles, both of RB-301's level-bridle taps, each of HX-301's
+    four, T-301's ``-160-SS`` feed and its pressure taps. Nothing else on the
+    sheet does. The gate valves either side of CV-305 carry none. The drains the
+    bottom nozzles run down to carry none. The boundary flags carry none.
+
+    So the mark belongs to the *nozzle*, not to the line and not to the valve:
+    it is how the drawing says this branch is bolted to the vessel rather than
+    welded to it. Three kinds of end are therefore not joints at all --
+
+    * an inline component (:data:`~pandid.flowsheet.INLINE_KINDS`), because a
+      valve part-way along a run is not a branch off anything;
+    * a boundary flag, because a ``Feed`` or a ``Product`` is a reference to
+      another sheet and a reference has no flange faces;
+    * an instrument, because what a balloon terminates is a tap or a signal.
+
+    -- and that is one rule, not two. The worry it answers is that excluding
+    inline bodies leaves a sheet half-flanged, ``shell | -- valve`` where a run
+    between two vessels gets marks at both ends: but ``shell | -- valve`` is
+    precisely what P&ID_301 draws at every one of HX-301's drains, and it reads
+    correctly, because the reader is being told about the nozzle and not about
+    the valve. A second setting to flange inline bodies would only let an author
+    draw the thing the reference declines to.
+    """
+    from pandid.flowsheet import INLINE_KINDS
+
+    return port.owner.kind not in INLINE_KINDS | {"feed", "product", "instrument"}
+
+
+def flange_marks(s, points, ends) -> "list[Flange]":
+    """Every flanged-connection mark one stream carries, in drawing order.
+
+    ``ends`` is the resolved ``(source, dest)`` pair, each a member of
+    :data:`CONNECTIONS`; resolving it against the sheet is
+    :func:`resolve_connections`' job, so this asks only whether the geometry and
+    the flowsheet agree that a mark belongs.
+
+    A signal line never carries one. ISA-5.1 draws a signal as a line to a
+    balloon, and a flange is a fact about pipe: there is no joint to describe.
+
+    Shared with the draw.io exporter for the reason :func:`pneumatic_marks` is:
+    a mark placed by one rule on the sheet and a second rule in the export is
+    two drawings, and this one lands hard against a vessel outline where a few
+    units either way is the difference between a joint and a collision.
+    """
+    if len(points) < 2 or s.kind in _SIGNAL_KINDS:
+        return []
+
+    spans = [math.hypot(bx - ax, by - ay)
+             for (ax, ay), (bx, by) in zip(points, points[1:])]
+    total = sum(spans)
+
+    out: list[Flange] = []
+    for at_dest, want in enumerate(ends):
+        if want != "flanged":
+            continue
+        port = s.dest if at_dest else s.source
+        if not flanged_joint(port):
+            continue
+
+        # The mark stands off the nozzle *along the line*, which is the same
+        # placement the arrowhead has and stated the same way: the run's own
+        # direction at the end it terminates, taken from the last two points of
+        # the polyline the pipe is drawn through.
+        tip = points[-1] if at_dest else points[0]
+        neighbour = points[-2] if at_dest else points[1]
+        span = spans[-1] if at_dest else spans[0]
+
+        # No room, no mark. The pair needs its standoff plus its own half-width
+        # of straight run to sit on; a nozzle whose first segment is shorter
+        # than that would take the mark round the turn beyond it, and a flange
+        # drawn across a corner is worse than one the reader does not get.
+        if span < FLANGE_STANDOFF + FLANGE_GAP / 2:
+            continue
+
+        ux, uy = (neighbour[0] - tip[0]) / span, (neighbour[1] - tip[1]) / span
+        cx, cy = tip[0] + ux * FLANGE_STANDOFF, tip[1] + uy * FLANGE_STANDOFF
+        along = total - FLANGE_STANDOFF if at_dest else FLANGE_STANDOFF
+        out.append(Flange(cx, cy, math.degrees(math.atan2(uy, ux)), along))
     return out
 
 
@@ -1859,6 +2044,74 @@ def draws_arrowheads(diagram: "str | None") -> bool:
     return _resolve_sheet(None, diagram)[1] != "p&id"
 
 
+def check_connections(value) -> None:
+    """Reject a joint this package has no mark for, naming the ones it has.
+
+    Takes the sheet's spelling or a stream's: a stream may state its two ends
+    separately, so a pair is as valid a value as a name and is checked a name
+    at a time.
+    """
+    for name in ((value,) if isinstance(value, str) else tuple(value)):
+        if name not in CONNECTIONS:
+            raise ValueError(
+                f"Unknown connections {name!r}; use one of "
+                f"{', '.join(CONNECTIONS)}."
+            )
+
+
+def sheet_connections(diagram: "str | None",
+                      connections: "str | None") -> "str | None":
+    """The joint a sheet marks by default, or ``None`` if it marks none at all.
+
+    The ``None`` is the load-bearing part and is not the same answer as
+    ``"none"``. ``"none"`` is a P&ID that has been asked about its joints and
+    has declined to say, so one line on it may still say otherwise; ``None`` is
+    a drawing on which the question does not arise, and nothing a stream states
+    can reopen it.
+
+    That distinction is ISO 15519-2:2015's, not this package's. Table 5 (p. 19)
+    lists, as *basic* information for a P&ID, "specific graphical symbols for
+    process equipment incl. prime movers (electrical motors, combustion motors,
+    turbines, etc.), valves incl. actuators, **connections**, etc."; Table 4
+    (p. 17) gives the PFD only "general graphical symbols for connections". A
+    flange face is as specific as a connection gets. A PFD that drew one would
+    be answering a question -- how is this bolted up? -- that the drawing it is
+    has not been asked, so ``connections="flanged"`` on a PFD draws nothing,
+    exactly as ``diagram`` already overrules everything about arrowheads.
+
+    Public and asked rather than open-coded for the reason
+    :func:`draws_arrowheads` is: the draw.io exporter needs the same answer and
+    is not the renderer.
+    """
+    if connections is not None:
+        check_connections(connections)
+    if _resolve_sheet(None, diagram)[1] != "p&id":
+        return None
+    return connections or "none"
+
+
+def resolve_connections(s, default: "str | None") -> "tuple[str, str]":
+    """What one stream says about its own two joints, ``(source, dest)``.
+
+    ``Stream.ends`` unset means "whatever the sheet said", the same shape a
+    valve station's ``tag_scheme`` override takes and for the same reason: what
+    an author states on one line has to be able to say the *opposite* of the
+    sheet, both ways round, or a mostly-welded sheet with three flanged joints
+    and a mostly-flanged sheet with three welded ones cannot both be written.
+    So an unset stream inherits and a set one wins, including winning with
+    ``"none"``.
+
+    A pair states the two ends apart, in the order they were connected, because
+    that is the order the author already typed them in: ``connect(a, b)`` then
+    ``ends=("flanged", "none")`` is the joint at *a* flanged and the joint at
+    *b* not. Nothing else would have to be remembered.
+    """
+    if default is None:
+        return ("none", "none")
+    ends = getattr(s, "ends", None) or default
+    return (ends, ends) if isinstance(ends, str) else (ends[0], ends[1])
+
+
 def _fit_scale(dw: float, dh: float, free) -> float:
     """The uniform scale that puts a ``dw`` x ``dh`` drawing inside *free*.
 
@@ -2012,7 +2265,8 @@ class SvgRenderer:
     def render(self, fs: "Flowsheet", *, jump_direction: str = "vertical",
                show_stream_table: bool = False,
                border: "str | None" = None, diagram: "str | None" = None,
-               page_size: "str | None" = None, debug: "bool | float" = False,
+               page_size: "str | None" = None, connections: "str | None" = None,
+               debug: "bool | float" = False,
                **opts) -> str:
         """Render the flowsheet to SVG.
 
@@ -2049,6 +2303,7 @@ class SvgRenderer:
         grid = _debug.resolve_spacing(debug)
         border, diagram = _resolve_sheet(border, diagram)
         arrows = draws_arrowheads(diagram)
+        joints = sheet_connections(diagram, connections)
         sheet = _page(page_size)
 
         # 1. Diagram bounding box: union of every unit's drawn box and every
@@ -2175,7 +2430,7 @@ class SvgRenderer:
             [] if grid is not None else None)
         drawing.extend(self._draw_units(fs, unit_labels, balloons, ink))
         drawing.extend(self._draw_streams(fs, jump_direction, unit_labels, arrows,
-                                          plates))
+                                          plates, joints))
         # Instrumentation goes on over the lines: an impulse line runs from the
         # tap to the balloon, and the balloon's opaque body then knocks out both
         # it and any process line an in-line element straddles.
@@ -2925,8 +3180,12 @@ class SvgRenderer:
         return arrows and wears_arrowhead(s, self.registry)
 
     def _draw_streams(self, fs, jump_direction, unit_labels, arrows=True,
-                      plates=None):
+                      plates=None, joints=None):
         """Draw every run, and the line numbers written on and beside them.
+
+        ``joints`` is the sheet's :func:`sheet_connections` answer -- the joint
+        every line takes unless it says otherwise, or ``None`` on a drawing that
+        marks no joints at all.
 
         ``plates`` is an out-parameter, filled -- when a caller supplies a list
         -- with every opaque white rectangle this pass and the equipment-tag
@@ -2998,6 +3257,25 @@ class SvgRenderer:
                 f'stroke="{color}" stroke-width="{width}"{dash}{marker} />'
             )
 
+            # The joint marks, drawn over the line rather than instead of it:
+            # the pipe runs into the nozzle and the flange faces sit across it,
+            # which is what P&ID_301 draws and what makes the mark read as
+            # hardware on the run instead of a gap in it.
+            for fx, fy, angle, _at in flange_marks(s, points,
+                                                   resolve_connections(s, joints)):
+                rad = math.radians(angle)
+                # Along the run for the offset between the two faces, across it
+                # for the bars themselves.
+                ax, ay = math.cos(rad) * FLANGE_GAP / 2, math.sin(rad) * FLANGE_GAP / 2
+                bx, by = -math.sin(rad) * FLANGE_TICK / 2, math.cos(rad) * FLANGE_TICK / 2
+                for sign in (-1, 1):
+                    mx, my = fx + ax * sign, fy + ay * sign
+                    lines.append(
+                        f'    <line x1="{mx - bx:.1f}" y1="{my - by:.1f}" '
+                        f'x2="{mx + bx:.1f}" y2="{my + by:.1f}" '
+                        f'stroke="{color}" stroke-width="{_PROCESS_STROKE}" />'
+                    )
+
             if s.kind == "pneumatic":
                 # The mark is drawn at the weight of the line it marks. A
                 # supplementary symbol on a connection is a graphical symbol
@@ -3052,7 +3330,7 @@ class SvgRenderer:
             b for b in map(_unit_label_box, unit_labels) if b is not None
         ]
 
-        for number in stream_numbers(fs, placed):
+        for number in stream_numbers(fs, placed, joints):
             tx, ty, name, color = number.x, number.y, number.name, number.color
             bx0, by0, bx1, by1 = number.box
             lines.append(f'    <rect x="{bx0:.1f}" y="{by0:.1f}" '

@@ -59,6 +59,17 @@ DEFAULT_STREAM_NUMBER_START = 1
 #: that prompt by making every draft sheet unshowable in the meantime.
 DEFAULT_LOOP_NUMBER_START = 101
 
+#: The unit kinds that sit *in* a run rather than at the end of one: piping
+#: components, not equipment. Two rules turn on the distinction and neither may
+#: be allowed to drift from the other. :meth:`Flowsheet.renumber_streams` reads
+#: it to carry one line number through a valve, because the pipe either side of
+#: a valve is the same pipe. :func:`~pandid.render.svg.flange_marks` reads it to
+#: decide a joint is *not* an equipment nozzle, because a flange mark says how a
+#: branch leaves a vessel and a valve part-way along a run is not a branch. Both
+#: are the same underlying fact -- that these interrupt a line without ending
+#: it -- so they ask one set rather than each keeping its own copy.
+INLINE_KINDS = frozenset({"valve", "reducer", "fitting", "tee"})
+
 
 def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream) -> str:
     """Assemble one stream's line number from the components the author set.
@@ -713,7 +724,8 @@ class Flowsheet:
                 size: str | float | None = None, schedule: str | float | None = None,
                 service: str | float | None = None,
                 sequence: str | float | None = None, spec: str | float | None = None,
-                insulation: str | float | None = None) -> Stream:
+                insulation: str | float | None = None,
+                ends: "str | tuple[str, str] | None" = None) -> Stream:
         """Create a stream connecting *src* (outlet port) to *dst* (inlet port).
 
         The returned stream already carries the number it will be drawn with;
@@ -738,8 +750,19 @@ class Flowsheet:
         bore, ``schedule`` the wall it is bought to at that bore, and ``spec``
         the piping class or material the line is built to.
 
+        ``ends`` says how this line's joints are made up and overrides the
+        sheet's ``connections`` for this run alone: ``"flanged"`` marks both,
+        ``"none"`` marks neither, and a ``(source, dest)`` pair -- in the order
+        the two were just named -- states them apart. Left unset the line
+        follows the sheet. Only a joint at an equipment nozzle is ever marked,
+        and only on a ``diagram="p&id"`` sheet; see
+        :meth:`render`.
+
         Raises :class:`ValueError` if any validation rule is violated.
         """
+        if ends is not None:
+            from pandid.render.svg import check_connections
+            check_connections(ends)
         if kind not in STREAM_KINDS:
             raise ValueError(
                 f"Stream kind must be one of {sorted(STREAM_KINDS)}, got {kind!r}"
@@ -805,6 +828,7 @@ class Flowsheet:
             sequence=sequence,
             spec=spec,
             insulation=insulation,
+            ends=ends,
         )
         src.stream = stream
         dst.stream = stream
@@ -918,7 +942,7 @@ class Flowsheet:
         drawn, follow, and unlabelled signal lines come last. One sequence
         covers all three so no two streams answer to the same name.
         """
-        _INLINE = {"valve", "reducer", "fitting", "tee"}
+        _INLINE = INLINE_KINDS
         material = [s for s in self.streams if s.kind == "material"]
         pos = {id(s): i for i, s in enumerate(material)}  # Stream is unhashable
         parent = list(range(len(material)))
@@ -1022,6 +1046,7 @@ class Flowsheet:
     def to_svg(self, *, show_stream_table: bool = False,
                border: str | None = None,
                diagram: str | None = None, page_size: str | None = None,
+               connections: str | None = None,
                jump_direction: str = "vertical", debug: bool | float = False,
                check: bool = True) -> str:
         """Render the flowsheet to an SVG string, running ``layout()`` and
@@ -1044,6 +1069,14 @@ class Flowsheet:
         leaves; omit it to size the sheet to the drawing instead.
         ``jump_direction`` selects which of two crossing lines gets the
         semicircle hop: ``"vertical"`` or ``"horizontal"``.
+
+        ``connections`` says how the sheet's joints are made up: ``"flanged"``
+        marks the double tick where a line meets an equipment nozzle, ``"none"``
+        (the default) marks nothing. Only a P&ID marks joints, per
+        ISO 15519-2 Table 5, so this draws nothing on a PFD; and only an
+        equipment nozzle is a joint, so inline valves and fittings, boundary
+        flags, instruments and signal lines are never marked. One line may say
+        otherwise with ``connect(..., ends=...)``.
 
         ``debug`` draws the coordinate overlay under the diagram, which is
         scaffolding for whoever is writing the placement rather than part of the
@@ -1073,11 +1106,12 @@ class Flowsheet:
         return SvgRenderer().render(
             self, show_stream_table=show_stream_table,
             border=border, diagram=diagram, page_size=page_size,
-            jump_direction=jump_direction, debug=debug
+            connections=connections, jump_direction=jump_direction, debug=debug
         )
 
     def to_drawio(self, *, diagram: str | None = None,
                   page_size: str | None = None, border: str | None = None,
+                  connections: str | None = None,
                   jump_direction: str = "vertical",
                   show_stream_table: bool = False, check: bool = True) -> str:
         """Render the flowsheet to a draw.io (``.drawio``) document string,
@@ -1099,7 +1133,9 @@ class Flowsheet:
 
         ``diagram`` says which drawing this is, exactly as :meth:`to_svg` takes
         it: a P&ID exports its process lines without arrowheads. ``check``
-        validates first, on the same terms.
+        validates first, on the same terms. ``connections`` marks the joints,
+        also exactly as :meth:`to_svg` takes it, and in the same places -- the
+        two backends ask one function where a flange goes.
 
         Sheet furniture (the title block and any annotation boxes) is docked by
         the same arithmetic the sheet docks it with, and anything columnar -- an
@@ -1156,12 +1192,14 @@ class Flowsheet:
         from pandid.render.drawio import DrawioRenderer
         return DrawioRenderer().render(self, diagram=diagram,
                                        page_size=page_size, border=border,
+                                       connections=connections,
                                        jump_direction=jump_direction,
                                        show_stream_table=show_stream_table)
 
     def render(self, path: str | Path, *, show_stream_table: bool = False,
                border: str | None = None,
                diagram: str | None = None, page_size: str | None = None,
+               connections: str | None = None,
                jump_direction: str = "vertical", debug: bool | float = False,
                check: bool = True) -> None:
         """Render the flowsheet and write it to *path*.
@@ -1183,6 +1221,9 @@ class Flowsheet:
                 ``"pid"``. A P&ID draws its process lines without arrowheads.
             page_size: Draw on a sheet of exactly this standard size, e.g.
                 ``"A3"``; omit to size the sheet to the drawing.
+            connections: ``"none"`` (the default) or ``"flanged"``, which marks
+                the double tick where a line meets an equipment nozzle. A P&ID
+                only; one line may say otherwise with ``connect(ends=...)``.
             jump_direction: Which crossing lines hop, ``"vertical"`` or ``"horizontal"``.
             debug: Draw the coordinate overlay under the diagram: the grid, every
                 ``pin()`` anchor and every port. ``True`` for the default
@@ -1237,15 +1278,16 @@ class Flowsheet:
                 )
             Path(path).write_text(
                 self.to_drawio(diagram=diagram, page_size=page_size,
-                               border=border, jump_direction=jump_direction,
+                               border=border, connections=connections,
+                               jump_direction=jump_direction,
                                show_stream_table=show_stream_table,
                                check=check), encoding="utf-8")
             return
 
         svg = self.to_svg(
             show_stream_table=show_stream_table, border=border,
-            diagram=diagram, page_size=page_size, jump_direction=jump_direction,
-            debug=debug, check=check,
+            diagram=diagram, page_size=page_size, connections=connections,
+            jump_direction=jump_direction, debug=debug, check=check,
         )
         if ext in ("", ".svg"):
             Path(path).write_text(svg, encoding="utf-8")

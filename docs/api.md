@@ -120,7 +120,8 @@ connect(src: Port | Unit, dst: Port | Unit, *,
         name: str | None = None,
         draw_as_recycle: bool = False,
         size=None, schedule=None, service=None, sequence=None, spec=None,
-        insulation=None) -> Stream
+        insulation=None,
+        ends: str | tuple[str, str] | None = None) -> Stream
 ```
 Creates the stream. Both units must already be on this flowsheet, and neither
 port may already carry a stream. Each of those raises `ValueError`.
@@ -170,6 +171,10 @@ loop is ambiguous.
 components, given as text or a number. Supplying any of them identifies the line
 by its line number instead of a stream number. `sequence` is filled by
 auto-numbering unless it is given here. See [Line numbers](#line-numbers).
+
+`ends` says how this line's joints are made up and overrides the sheet's
+`connections` for this run alone. See
+[Flanged connections](#flanged-connections).
 
 ```text
 add_component(component: Component) -> Component
@@ -248,6 +253,7 @@ _repr_svg_() -> str              # Jupyter renders a flowsheet inline
 |---|---|---|
 | `border` | `"none"`, `"zone"` | `"zone"` rules the sheet with the ASME-style zone-lettered drawing frame. Anything else raises `ValueError` |
 | `diagram` | `"pfd"` (the default), `"p&id"` | which drawing this is. A P&ID draws its process lines without arrowheads |
+| `connections` | `"none"` (the default), `"flanged"` | `"flanged"` marks the double tick where a line meets an equipment nozzle. A P&ID only; a PFD draws none whatever this says |
 | `show_stream_table` | `bool` | draws the stream property table (one column per unique material stream) |
 | `check` | `bool` | run `validate()` first; errors raise, warnings collect |
 | `page_size` | `None`, `"A4"`, `"A3"`, `"A2"`, `"A1"`, `"A0"` | `None` (the default) sizes the sheet to the drawing; a name draws a sheet of exactly that size |
@@ -307,6 +313,45 @@ draws a body of its own, a valve or a reducer or a fitting, gives the head
 something to land against and keeps it; the rule is
 [`Symbol.bare_run`](#the-symbol), so it is the artwork that answers rather than
 the class.
+
+### Flanged connections
+
+**A P&ID can mark its joints.** `connections="flanged"` draws the double tick
+where a line meets an equipment nozzle, which is how the drawing says the joint
+is bolted rather than welded:
+
+```python
+fs.render("sheet.svg", diagram="p&id", connections="flanged")
+```
+
+The default is `"none"`, and it is the honest one: an unmarked joint is what a
+sheet has always drawn, and marking every joint flanged would be a claim about
+the piping that nobody made.
+
+Only an **equipment nozzle** is a joint. A valve or a fitting in the middle of a
+run is not a branch off anything; a `Feed` or a `Product` is a reference to
+another drawing and has no flange faces; an instrument terminates a tap or a
+signal, not a pipe. None of them is marked, and that is the whole rule rather
+than a list of exceptions — it is also what `professional_examples/P&ID_301.pdf`
+draws, where every piped branch off a shell carries the mark and the gate valves
+either side of `CV-305` carry none.
+
+Only a P&ID marks them. ISO 15519-2:2015 Table 5 (p. 19) lists *connections*
+among the specific graphical symbols a P&ID carries as basic information, where
+Table 4 (p. 17) gives the PFD only general symbols for them, so
+`connections="flanged"` on a PFD draws nothing.
+
+One line can say the opposite of its sheet, in either direction:
+
+```python
+fs.connect(t301.bottom, p301.suction, ends="flanged")          # on a plain sheet
+fs.connect(t301.bottom, p301.suction, ends="none")             # on a flanged one
+fs.connect(t301.bottom, p301.suction, ends=("flanged", "none"))  # one end only
+```
+
+A pair states the two ends apart, in the order they were just connected. Left
+unset, the line follows the sheet. `examples/11_ethanol_pid.py` draws the whole
+sheet flanged.
 
 `border` and `diagram` are independent, and both spellings of each are accepted
 case-insensitively (`"P&ID"`, `"p&id"`, `"pid"`). A PFD carries the zone frame
@@ -1585,6 +1630,7 @@ single placement and raises. The choice is re-checked against any later `pin()`.
 | `properties` | `dict[str, str \| float]` | free-form; rendered by the stream table verbatim |
 | `color` | `str \| None` | SVG stroke colour override |
 | `dasharray` | `str \| None` | SVG `stroke-dasharray` override |
+| `ends` | `str \| tuple[str, str] \| None` | how this line's joints are made up, overriding the sheet's `connections`. One name for both ends or a `(source, dest)` pair; `None` inherits |
 | `route` | `Route \| None` | resolved waypoints; written by the router |
 
 ```text

@@ -9,6 +9,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A P&ID can draw its flanged connections without a unit for every flange.**
+  `render(connections="flanged")` marks the double tick where a line meets an
+  equipment nozzle, and `connect(ends=...)` says it for one line. Until now the
+  mark existed only as `Fitting(name, variant="flange")` -- a tagged unit that
+  had to be named, added, pinned and wired into the run, so `T-301`'s four
+  pressure taps alone wanted eight of them, each carrying a tag that named
+  nothing anybody had specified.
+
+  A flange at a nozzle is not an equipment-list item; it is how the drawing says
+  a joint is bolted rather than welded. So it belongs where the arrowhead is: a
+  property of how a connection is drawn, not an item among the valve bodies.
+
+  Where it goes is `professional_examples/P&ID_301.pdf`'s rule, read off the
+  drawing. Every piped branch off a shell carries it -- all four of `D-301`'s
+  nozzles, both of `RB-301`'s level-bridle taps, each of `HX-301`'s four,
+  `T-301`'s `-160-SS` feed and its pressure taps -- and nothing else does. The
+  gate valves either side of `CV-305` carry none, the drains carry none, the
+  boundary flags carry none. So the mark belongs to the nozzle, and inline
+  valves and fittings, boundary flags, instruments and signal lines are one
+  exclusion rather than four.
+
+  The default is `"none"`, because drawing every joint flanged is a claim about
+  the piping that a library must not make on the author's behalf. A line states
+  its own with `ends="flanged"`, `ends="none"` or a `(source, dest)` pair in the
+  order it was connected; left unset it follows the sheet. It survives a spec
+  round-trip.
+
+  A PFD draws none, whatever it is asked. ISO 15519-2:2015 Table 5 (p. 19) lists
+  *connections* among the specific graphical symbols a P&ID carries as basic
+  information; Table 4 (p. 17) gives the PFD only general symbols for them.
+
+  The draw.io export draws the same marks in the same places, from the same
+  function -- but not through the arrowhead's path, which could not carry them.
+  draw.io's arrow vocabulary is `mxMarker`'s registry, which has no flange in it
+  and no way to register one from a file, and a terminal marker is drawn *at*
+  the end point, where a flange stands off it. They are their own cells on the
+  edge, by the mechanism the pneumatic hatch already uses.
+
+  `examples/11_ethanol_pid.py` draws its whole sheet flanged.
+
 - **Every rendered file says what drew it.** An SVG opened straight into
   `<!-- Background -->` and said nothing about its origin; a draw.io export said
   `agent="pandid"` with no version, so a reader could not tell 0.1.0 output from
@@ -684,6 +724,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the mark moves as little as the paper allows. `examples/14` hangs its two trip
   squares 46 units below the valve instead of 26, because a mark written under a
   valve needs the paper under the valve.
+
+- **A line number no longer lands on a mark it cannot see.** A leader head is
+  kept clear of the ends of a run, because a head landing there points at the
+  vessel as readily as at the pipe; a drawn joint is the same misreading, and
+  the clearance now counts it. On the thirty-unit spool between `C-301` and the
+  drum beneath it, `AE-304-150-80-SS`'s head moved off the upper flange pair and
+  into the clear middle. Flange marks also joined the ink the number's own halo
+  dodges, which moved `AE-309-100-80-SS` off one.
 
 - **A line number's plate erased half of an outline it sat flush against
   (#243).** Label placement built its obstacle set from `unit_box`, the symbol's

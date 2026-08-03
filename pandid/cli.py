@@ -108,6 +108,7 @@ def _draw(args: argparse.Namespace) -> int:
         page_size=args.page_size,
         border=args.border,
         diagram=args.diagram,
+        connections=args.connections,
         show_stream_table=args.stream_table,
         jump_direction=args.jump_direction,
         debug=args.debug if args.debug is not None else False,
@@ -239,6 +240,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--diagram", choices=("pfd", "p&id"), default="pfd",
         help="which drawing this is; a P&ID draws its process lines without "
              "arrowheads (default: pfd)",
+    )
+    draw.add_argument(
+        "--connections", choices=("none", "flanged"), default="none",
+        help="mark the joints where lines meet equipment nozzles; a P&ID only "
+             "(default: none)",
     )
     draw.add_argument(
         "--stream-table", action="store_true",
