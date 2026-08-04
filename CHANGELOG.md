@@ -264,6 +264,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The butane sphere's shell was drawn through both its crown nozzles
+  (#268).** Converted stencils were rendered with transparent fills, but
+  draw.io fills these shapes with the page colour and their authors draw for
+  it: a body is the last `<fillstroke>` in the shape and covers the nozzles,
+  legs and vanes behind it. Bodies are opaque now, on the sheet and on the
+  draw.io export; sheets 02, 03, 06, 10, 11, 14 and 15 move.
+
 - **A `.drawio` export with no `page_size` was cropped across several sheets
   when draw.io exported it to PDF.** With no `pageWidth`/`pageHeight` written,
   draw.io bounded the PDF with its locale-dependent default page; PNG and SVG

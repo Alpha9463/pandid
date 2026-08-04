@@ -23,6 +23,8 @@ from pandid.render.symbols import NC_DARKENS, NC_FORBIDDEN, closed_marking
 from pandid.render.symbols import default_registry as registry
 
 BODY_FILL = 'fill="#111"'
+#: What that body carries before it is darkened, and what a bored disc keeps.
+PAPER_FILL = 'fill="white"'
 
 
 def _line(*valves):
@@ -119,12 +121,12 @@ def test_a_darkened_globe_is_not_confusable_with_an_ordinary_one():
     any position, black once the body is darkened."""
     globe = registry.get("valve", "globe")
     closed = registry.for_unit(units.Valve("HV-1", variant="globe", normal_position="closed"))
-    # The seat is one filled element inside an outline drawn fill="none"; the
-    # darkened body is that outline itself filled.
+    # The seat is one filled element inside an outline left on the paper; the
+    # darkened body is that outline itself inked.
     assert globe.svg.count(BODY_FILL) == 1
-    assert 'fill="none"' in globe.svg
+    assert PAPER_FILL in globe.svg
     assert closed.svg.count(BODY_FILL) == 2
-    assert closed.svg.count('fill="none"') == globe.svg.count('fill="none"') - 1
+    assert closed.svg.count(PAPER_FILL) == globe.svg.count(PAPER_FILL) - 1
 
 
 # ----------------------------------------------------- control / relief valves
@@ -280,7 +282,7 @@ def test_the_disc_in_the_line_is_bored_when_open_and_solid_when_closed():
     shut = registry.for_unit(units.Fitting("SB-2", variant="blind", normal_position="closed"))
     line = open_blind.ports["inlet"][1]
     assert open_blind.ports["outlet"][1] == line, "both faces are on the one disc"
-    for sym, in_line, parked in ((open_blind, "none", "#111"), (shut, "#111", "none")):
+    for sym, in_line, parked in ((open_blind, "white", "#111"), (shut, "#111", "white")):
         discs = _discs(sym)
         assert len(discs) == 2, "a figure-8 is two discs"
         assert discs.pop(line) == in_line

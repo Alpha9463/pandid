@@ -117,12 +117,15 @@ def _arc_to_path(x0, y0, rx, ry, phi_deg, fa, fs, x, y):
 #: every solid shape is this colour and nothing else is.
 INK = "#111"
 
-#: What the fill colour starts at. mxGraph paints a fill in the shape's
-#: ``fillColor``, which in draw.io defaults to the page's own white; on a
-#: monochrome sheet the equivalent is to let the paper through, which is what
-#: every outline in this library already does. It is a *state*, not a constant:
-#: <fillcolor> below is how a stencil asks for a solid shape instead.
-DEFAULT_FILL = "none"
+#: What the fill colour starts at: the paper. No P&ID palette in
+#: draw.io's Sidebar-PID.js names a ``fillColor``, so each of these
+#: shapes takes ``fillColor=default`` from styles/default.xml, which
+#: ``Graph.replaceDefaultColors`` resolves to the page's own colour.
+#: The stencils are drawn expecting it: a body is the last
+#: <fillstroke> in the shape and covers the nozzles, legs and vanes
+#: behind it. A *state*, not a constant: <fillcolor> is how a stencil
+#: asks for something else.
+DEFAULT_FILL = "white"
 
 # Which of the two the mxGraph paint ops apply, as (fills, strokes). What each
 # one is painted *with* is the current fill colour and the ink: a paint op
@@ -140,9 +143,11 @@ def _fill_colour(named):
     mxGraph takes a real colour here, plus the keywords ``"none"`` and
     ``"stroke"``. The sheet has one ink, so the only distinction that survives
     is transparent versus solid: every colour a stencil names for a fill is
-    naming the thing it wants drawn solid.
+    naming the thing it wants drawn solid. ``"none"`` is a stencil turning
+    the fill off, which is not the same as never having set one, so it
+    comes out transparent rather than :data:`DEFAULT_FILL`.
     """
-    return DEFAULT_FILL if (named or "none").strip().lower() == "none" else INK
+    return "none" if (named or "none").strip().lower() == "none" else INK
 
 
 def _num(el, attr, default=0.0):

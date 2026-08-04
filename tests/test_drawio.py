@@ -866,13 +866,25 @@ def test_a_balloon_carries_its_letters_over_its_number():
 
 
 def test_only_the_balloons_are_drawn_opaque():
-    """Everything else on the sheet is an outline that lets the paper through,
-    which is what ``scripts/mxgraph_to_svg.py`` converts every stencil under."""
+    """Among the shapes this file draws itself, everything else is an outline
+    that lets the paper through. A vendored stencil is not one of them: the
+    test below is what fills those."""
     from pandid.render.drawio import _APPROXIMATIONS as table
 
     for (kind, variant), approx in table.items():
         expected = "#ffffff" if kind == "instrument" else "none"
         assert approx.fill == expected, f"{kind}/{variant} fills with {approx.fill!r}"
+
+
+def test_a_vendored_stencil_exports_on_the_paper():
+    """draw.io redraws these from its own copy, and no P&ID palette in
+    it names a ``fillColor``, so the shape takes the page colour --
+    which its own body relies on to cover the nozzles drawn before it.
+    Written ``none``, the sphere's shell ran through both crown nozzles
+    on the export as well as on the sheet (#268)."""
+    style = _one_unit(units.Tank("V-1", variant="sphere"), x=100, y=100)
+    assert style["shape"] == "mxgraph.pid.vessels.storage_sphere"
+    assert style["fillColor"] == "#ffffff"
 
 
 def test_a_mirrored_expander_is_the_reducer_drawn_as_vendored():
