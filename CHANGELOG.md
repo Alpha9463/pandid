@@ -145,6 +145,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`examples/11_ethanol_pid.py` draws loops 305 and 308 in full (#212).**
+  `CV-305` and `CV-308` had no element, transmitter or controller behind them,
+  so the README's lead sheet was not the drawing it redraws. Both are now
+  cascades off `LIC-304` and `TIC-307`, and the declared series runs 301–308
+  with no gap.
+
 - **A balloon says what it has to do with the thing it is placed against
   (#137).** `add_instrument(on=…)` meant both "put the balloon here" and "draw
   an edge from here", so sheets stated relationships nobody had specified.

@@ -13,13 +13,13 @@ either side of every valve (``connections="flanged"``); line numbers
 instead of stream numbers, one per valve station rather than one per
 valve; the field devices, with four control valves drawn as the
 **station** each is installed in (``fs.add_valve_station()``, see
-:mod:`pandid.stations`); five loops closing on a real final control
-element, with the tower-top temperature cascaded onto the reflux flow;
-the alarms lettered in their controllers' own quadrants instead of drawn
-as balloons of their own; the reflux flow element's tag moved into a
-balloon so the venturi carries none; and a repeated trip square,
-``Instrument(variant="sis")`` being the one symbol allowed to carry its
-tag more than once.
+:mod:`pandid.stations`); eight loops, five of them closing on a real
+final control element and three of those five taking their setpoint from
+a temperature or a level rather than from the panel; the alarms lettered
+in their controllers' own quadrants instead of drawn as balloons of
+their own; each flow element's tag moved into a balloon so the venturi
+carries none; and a repeated trip square, ``Instrument(variant="sis")``
+being the one symbol allowed to carry its tag more than once.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
@@ -44,11 +44,13 @@ def main():
     # letters and the handle checks the first of them, so a TT put on a
     # flow loop raises at the line that wrote it.
     press301 = fs.add_loop("P", 301)    # tower overhead pressure
-    temp302 = fs.add_loop("T", 302)     # tower top temperature, the cascade master
+    temp302 = fs.add_loop("T", 302)     # tower top temperature, a cascade master
     flow303 = fs.add_loop("F", 303)     # reflux flow, its slave
-    level304 = fs.add_loop("L", 304)    # reflux drum level
+    level304 = fs.add_loop("L", 304)    # reflux drum level, a cascade master
+    flow305 = fs.add_loop("F", 305)     # distillate flow, its slave
     level306 = fs.add_loop("L", 306)    # kettle level
-    temp307 = fs.add_loop("T", 307)     # reboiler return temperature
+    temp307 = fs.add_loop("T", 307)     # reboiler return temperature, a master
+    flow308 = fs.add_loop("F", 308)     # steam flow, its slave
 
     # --- Equipment ----------------------------------------------------
     # label_pos="center": the overhead leaves the top centre, so a tag
@@ -90,11 +92,15 @@ def main():
                           description="Bottoms Non-Return Valve"))
     hv311 = fs.add(Valve("HV-311", description="C-301 Cooling Water Block Valve"))
     hv315 = fs.add(Valve("HV-315", description="HX-301 Cooling Water Block Valve"))
-    # No label_pos: this element's tag goes in a balloon rather than
+    # No label_pos: an element's tag goes in a balloon rather than
     # beside the symbol, so nothing is written against the venturi at
     # all. See add_balloon() below.
     fe303 = fs.add(Fitting(flow303.element("FE"), variant="venturi",
                            description="Reflux Flow Element"))
+    fe305 = fs.add(Fitting(flow305.element("FE"), variant="venturi",
+                           description="Distillate Flow Element"))
+    fe308 = fs.add(Fitting(flow308.element("FE"), variant="venturi",
+                           description="Steam Flow Element"))
     # The size steps down 100 -> 40, so the number breaks here.
     t_draw = fs.add(Tee())
     t_draw.new_line_number = True
@@ -150,21 +156,29 @@ def main():
     t_draw.pin(orientation=90)
     t_draw.pin(port="inlet", x=drum_draw_x).pin(port="branch", y=reflux_run_y)
 
-    # gap=26 tightens this station: the drum's draw is at one end and
-    # the sheet edge at the other, with no room to move either.
+    # gap=22 tightens this station: the drum's draw is at one end, the
+    # sheet edge at the other, and FE-305 stands between the station and
+    # the boundary flag.
     dist_y = 510.0
     st305 = fs.add_valve_station(
-        "CV-305", x=1147, y=dist_y, gap=26, bypass_over="reduction",
+        flow305.tag("CV"), x=1147, y=dist_y, gap=22, bypass_over="reduction",
         description="Distillate", service="AE", sequence=305, size=40, schedule=80, spec="SS")
+    fe305.pin(port="inlet", x=1495, y=dist_y)
     ae_prod.pin(port="inlet", x=1540, y=dist_y)
 
     reb.pin(x=700, y=580)
     steam_y = 580 + port_offset(reb, "tube_in")[1]
-    steam.pin(port="outlet", x=200, y=steam_y)
-    # TIC-307's output crosses this station's leg, so the bypass valve
+    # The header steps back to 130 so FE-308 stands ahead of the
+    # station: the run behind it is the reboiler's, and the paper over
+    # it belongs to the bypass. Only this flag moves; the boundary is
+    # already ragged, the feed's own box reaching further west than
+    # either cooling-water tie-in.
+    steam.pin(port="outlet", x=130, y=steam_y)
+    fe308.pin(port="inlet", x=150, y=steam_y)
+    # FIC-308's output crosses this station's leg, so the bypass valve
     # moves to the far end rather than sitting under the crossing.
     st308 = fs.add_valve_station(
-        "CV-308", x=217.5, y=steam_y, bypass_over="downstream_isolation",
+        flow308.tag("CV"), x=217.5, y=steam_y, bypass_over="downstream_isolation",
         description="Steam", service="HPS", sequence=308, size=100, schedule=80, spec="CS")
     condensate.pin(port="inlet", x=1540, y=580 + port_offset(reb, "tube_out")[1])
 
@@ -219,7 +233,8 @@ def main():
 
     fs.connect(t_draw.outlet, st305.inlet, service="AE", sequence=305, size=40,
                schedule=80, spec="SS")
-    fs.connect(st305.outlet, ae_prod.inlet)
+    fs.connect(st305.outlet, fe305.inlet)
+    fs.connect(fe305.outlet, ae_prod.inlet)
 
     sump_x = 700 + port_offset(reb, "shell_in")[0]
     boilup_x = 700 + port_offset(reb, "shell_out")[0]
@@ -228,8 +243,9 @@ def main():
     boilup = fs.connect(reb.shell_out, col.boilup_in, service="FB", sequence=310,
                         size=300, schedule=160, spec="SS",
                         draw_as_recycle=True).via([(boilup_x, 535), (595, 535), (595, boilup_y)])
-    fs.connect(steam.outlet, st308.inlet, service="HPS", sequence=308, size=100,
+    fs.connect(steam.outlet, fe308.inlet, service="HPS", sequence=308, size=100,
                schedule=80, spec="CS")
+    fs.connect(fe308.outlet, st308.inlet)
     fs.connect(st308.outlet, reb.tube_in)
     fs.connect(reb.tube_out, condensate.inlet, service="HPR", sequence=317, size=80,
                schedule=80, spec="CS")
@@ -311,40 +327,53 @@ def main():
     fs.connect(tic302.sig_out, fic303.sig_in, kind="software")
     fs.connect(fic303.sig_out, st303.control.actuator, kind="pneumatic")
 
-    # --- Loop 304: reflux drum level on the distillate valve ----------
-    # The faceplate stands over the valve it drives; the cooling-water
-    # return crosses 49 px above the transmitter's own row and a balloon
-    # is 44 of those, so there is no room for it up there.
+    # --- Loops 304/305: reflux drum level onto the distillate flow ----
+    # Both faceplates stand over the valve, master above slave, so the
+    # setpoint drops one balloon and the output drops onto the actuator.
     lt304 = fs.add_instrument("LT", level304, sensing=drum, at="E", offset=60)
-    lic304_row_y = 403.0
+    lic304_row_y = 325.0
+    fic305_row_y = 417.0        # FT-305's row, so the measurement is straight
     cv305_top = dist_y - port_offset(st305.control, "inlet")[1]
+    fic305 = fs.add_instrument("FIC", flow305, near=st305.control, at="N",
+                               variant="shared", offset=cv305_top - fic305_row_y)
     lic304 = fs.add_instrument("LIC", level304, near=st305.control, at="N",
                                variant="shared", offset=cv305_top - lic304_row_y)
     lic304.nozzle("sig_out", "S")
     lic304.annotate(high="LAH", low="LAL")
-    # Teed off the measurement. angle=-90 branches west off the drop the
-    # run makes on its way to the west face.
-    level = fs.connect(lt304.sig_out, lic304.sig_in, kind="electric")
-    fs.add_instrument("Z", 1, sensing=level, at=0.6, offset=40, angle=-90,
-                      variant="sis")
-    # Straight onto the actuator: this sheet leaves loops 305 and 308
-    # out, so the master is wired to the valve. The same shortening is
-    # taken on TIC-307/CV-308 below.
-    fs.connect(lic304.sig_out, st305.control.actuator, kind="pneumatic")
+    fic305.nozzle("pv", "E")     # the element stands east, down the run
+    fic305.nozzle("sig_out", "S")
+    fs.connect(lt304.sig_out, lic304.sig_in, kind="electric")
+    # On the transmitter and not teed off its run, as the sheet's other
+    # two shutdown taps are: stacking two faceplates over the valve
+    # leaves that run too short to tee off.
+    fs.add_instrument("Z", 1, sensing=lt304, at="S", offset=44, variant="sis")
+    fe305_b = fs.add_balloon(fe305, at="N", offset=38)
+    ft305 = fs.add_instrument("FT", flow305, near=fe305_b, at="N", offset=23)
+    fs.connect(ft305.sig_out, fic305.pv, kind="electric")
+    fs.connect(lic304.sig_out, fic305.sig_in, kind="software")
+    fs.connect(fic305.sig_out, st305.control.actuator, kind="pneumatic")
 
-    # --- Loop 307: reboiler return temperature on the steam valve -----
+    # --- Loops 307/308: reboiler return temperature onto the steam ----
     tt307 = fs.add_instrument("TT", temp307, sensing=sump, at=0.05, offset=85,
                               angle=-90)
     tic307 = fs.add_instrument("TIC", temp307, near=tt307, at="W", offset=96,
                                variant="shared")
-    tic307.nozzle("sig_out", "S")
+    tic307.nozzle("sig_out", "W")   # the slave it sets stands beside it
     fs.add_instrument("TI", 321, sensing=boilup, at=0.05, offset=70, angle=-90)
     # The transmitter and not the controller: a trip reading the
     # controller reads what it last asked the valve for, so it stops
     # working the moment the loop is put on manual.
     fs.add_instrument("Z", 1, sensing=tt307, at="N", offset=40, variant="sis")
     fs.connect(tt307.sig_out, tic307.sig_in, kind="electric")
-    fs.connect(tic307.sig_out, st308.control.actuator, kind="pneumatic")
+
+    fe308_b = fs.add_balloon(fe308, at="N", offset=38)
+    ft308 = fs.add_instrument("FT", flow308, near=fe308_b, at="N", offset=23)
+    fic308 = fs.add_instrument("FIC", flow308, near=ft308, at="E", offset=60,
+                               variant="shared")
+    fic308.nozzle("sig_out", "S")   # the valve it strokes stands below and right
+    fs.connect(ft308.sig_out, fic308.pv, kind="electric")
+    fs.connect(tic307.sig_out, fic308.sig_in, kind="software")
+    fs.connect(fic308.sig_out, st308.control.actuator, kind="pneumatic")
 
     # --- Loop 306: kettle level on the bottoms draw -------------------
     lt306 = fs.add_instrument("LT", level306, sensing=reb, at="S", offset=68)
