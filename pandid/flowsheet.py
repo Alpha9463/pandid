@@ -1,7 +1,8 @@
-"""The top-level container and the single source of truth for connectivity.
+"""The top-level container, and the truth about connectivity.
 
-Units are added with ``add()``; streams are created only through ``connect()``,
-which validates the connection and enforces the one-stream-per-port rule.
+Units are added with ``add()``; streams are created only through
+``connect()``, which validates the connection and enforces the
+one-stream-per-port rule.
 """
 
 from __future__ import annotations
@@ -28,53 +29,36 @@ if TYPE_CHECKING:
 
 _ENERGY_ROLES = {"energy", "utility"}
 
-#: Size, service, sequence and spec: the four parts almost every site's line
-#: number opens with. Insulation and schedule are available to a scheme that
-#: wants them, and are left out of the default because most sheets carry
-#: neither: a site that quotes the schedule on the line rather than leaving it
-#: to the piping class names ``{schedule}`` in a scheme of its own.
+#: Size, service, sequence and spec: the four parts almost every site's
+#: line number opens with. ``{insulation}`` and ``{schedule}`` are there
+#: for a scheme that names them.
 DEFAULT_LINE_NUMBERING_SCHEME = "{size}-{service}-{sequence}-{spec}"
 
-#: Line sequences conventionally start well clear of 1, so the drawing reads
-#: 1001 rather than 1 out of the box.
+#: Line sequences conventionally start well clear of 1, so the drawing
+#: reads 1001 rather than 1 out of the box.
 DEFAULT_LINE_NUMBER_START = 1001
 
-#: Where ``S{n}`` starts counting. One, because that is the number the engine
-#: has always begun at and every shipped example draws ``S1`` first; the
-#: setting only names what was already true, so a sheet that says nothing is
-#: numbered exactly as it was.
+#: Where ``S{n}`` starts counting.
 DEFAULT_STREAM_NUMBER_START = 1
 
-#: Where :meth:`Flowsheet.add_loop` starts counting when it is left to allocate.
-#: A three-digit unit-100 number rather than a bare 1, for the reason
-#: :data:`DEFAULT_LINE_NUMBER_START` is 1001 and not 1: what comes out of here
-#: is an engineering document, and ``FIC-1`` is not a tag anyone writes on a
-#: P&ID. Both sheets in the corpus that number loops use three digits --
-#: :file:`examples/04_control_loop.py` runs the 100 series and
-#: :file:`examples/11_ethanol_pid.py` the 300 -- because the series belongs to a
-#: plant area, so an author still has to say which area this sheet is, exactly
-#: as they do for a line sequence. All the default decides is what the drawing
-#: reads like until they do, and a plausible ``FIC-101`` beats a ``FIC-1`` a
-#: reviewer would stop on as broken. A bare 1 would be the louder prompt to set
-#: it deliberately, which is a real argument and the one this loses to: it buys
-#: that prompt by making every draft sheet unshowable in the meantime.
+#: Where :meth:`Flowsheet.add_loop` starts counting when it is left to
+#: allocate. Three digits because a loop series belongs to a plant area,
+#: so an author still has to say which area this sheet is, exactly as
+#: they do for a line sequence; this only decides what the drawing reads
+#: like until they do.
 DEFAULT_LOOP_NUMBER_START = 101
 
-#: The unit kinds that sit *in* a run rather than at the end of one: piping
-#: components, not equipment. Two rules turn on the distinction and neither may
-#: be allowed to drift from the other. :meth:`Flowsheet.renumber_streams` reads
-#: it to carry one line number through a valve, because the pipe either side of
-#: a valve is the same pipe. :func:`~pandid.render.svg.flanged_joint` reads it
-#: to decide an end is not an equipment nozzle, because a flange mark at a
-#: nozzle says how a branch leaves a vessel and a valve part-way along a run is
-#: not a branch. Both are the same underlying fact -- that these interrupt a
-#: line without ending it -- so they ask one set rather than each keeping its
-#: own copy.
+#: The unit kinds that sit *in* a run rather than at the end of one:
+#: piping components, not equipment. Two rules turn on the one fact that
+#: these interrupt a line without ending it, and ask this set rather
+#: than each keeping a copy -- :meth:`Flowsheet.renumber_streams`
+#: carries one line number through a valve, and
+#: :func:`~pandid.render.svg.flanged_joint` reads an end as something
+#: other than an equipment nozzle.
 #:
-#: What is *not* the same fact, and has its own set for that reason, is which of
-#: these get bolted into the line: a valve and an in-line fitting are bodies you
-#: break the run to pull, and a reducer and a tee are welded fittings. See
-#: :data:`~pandid.render.svg._INLINE_BODIES`, which is a strict subset of this.
+#: Which of these get *bolted* into the line is a different fact with a
+#: set of its own: see :data:`~pandid.render.svg._INLINE_BODIES`, a
+#: strict subset of this one.
 INLINE_KINDS = frozenset({"valve", "reducer", "fitting", "tee"})
 
 _RETIRED_ON = Deprecation(
@@ -85,12 +69,12 @@ _RETIRED_ON = Deprecation(
 
 
 def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream) -> str:
-    """Assemble one stream's line number from the components the author set.
+    """Assemble a line number from the components the author set.
 
-    A component left unset drops out, and so does the text introducing it, so a
-    line with no spec reads ``6"-P-1001`` rather than ``6"-P-1001-``. A format
-    spec still applies, which is how a site pads its sequence:
-    ``"{size}-{service}-{sequence:0>4}"``.
+    A component left unset drops out, and so does the text introducing
+    it, so a line with no spec reads ``6"-P-1001`` rather than
+    ``6"-P-1001-``. A format spec still applies, which is how a site
+    pads its sequence: ``"{size}-{service}-{sequence:0>4}"``.
     """
     if callable(scheme):
         return scheme(stream)
@@ -127,23 +111,18 @@ def _spell(port: "Port") -> str:
 
 
 def _signal_end(end: "Port | Unit", kind: str, which: str) -> "Port":
-    """The connection at one end of a stream, where the caller named a unit.
+    """The connection at one end, where the caller named a unit.
 
-    ``fs.connect(ft305, fic305, kind="electric")`` is the spelling this exists
-    for, and the argument for it is that on a signal line the nozzle is not
-    information. A process line's nozzle is the whole question -- a column has a
-    feed, an overhead and a bottoms and they are three different sheets -- so
-    piping always names it. An instrument balloon is a circle whose connections
-    are declared faceless precisely because a signal may meet it anywhere, and
-    it now mints one per line, so "which connection" has exactly one sensible
-    answer and making the author write it down is making them repeat the
-    engine. The same is true at the other end: a control valve has one signal
-    connection, its stem.
+    ``fs.connect(ft305, fic305, kind="electric")`` is the spelling this
+    exists for: a signal may meet a balloon anywhere, and the balloon
+    mints a connection per line, so there is one sensible answer.
+    Process piping always names its nozzle, since which nozzle is the
+    whole question.
 
-    Where a unit has several, this refuses rather than picking. Two signal
-    connections that are not a pool are two different things (a valve station's
-    control valve and its own instruments), and guessing between them draws a
-    line to the wrong device and says nothing.
+    Where a unit has several signal connections, this refuses rather
+    than picking. Two that are not a pool are two different things (a
+    valve station's control valve and its own instruments), and guessing
+    between them draws a line to the wrong device.
     """
     from pandid.ports import Port
     from pandid.units import Instrument, Unit
@@ -163,9 +142,10 @@ def _signal_end(end: "Port | Unit", kind: str, which: str) -> "Port":
             f"(kind one of {sorted(SIGNAL_KINDS)}) may be drawn to the unit"
         )
     if isinstance(end, Instrument):
-        # The pool, and never ``pv``: an instrument's tap on the process is a
-        # different kind of edge from a line between two instruments, and it is
-        # named where it is meant. See :class:`pandid.units.Instrument`.
+        # The pool, and never ``pv``: an instrument's tap on the process
+        # is a different kind of edge from a line between two
+        # instruments, and it is named where it is meant. See
+        # :class:`pandid.units.Instrument`.
         return end.sig_out if which == "source" else end.sig_in
     signals = [port for port in end.ports.values() if port.role == "signal"]
     if len(signals) == 1:
@@ -185,11 +165,10 @@ def _signal_end(end: "Port | Unit", kind: str, which: str) -> "Port":
 def _check_signal_pairing(src: "Port", dst: "Port", kind: str) -> None:
     """Raise unless the stream's kind matches what its two ports are.
 
-    A signal port is a terminal for a measurement or a command: a valve's stem,
-    an instrument's tap and its two signal connections. Nothing flows through
-    one, so a signal line runs between two of them and process fluid runs
-    between two nozzles. Unchecked, the sheet draws a process pipe into a valve
-    top, or a control signal between two pumps, and claims both are real.
+    A signal port is a terminal for a measurement or a command: a
+    valve's stem, an instrument's tap and its two signal connections.
+    Nothing flows through one, so a signal line runs between two of them
+    and process fluid between two nozzles.
     """
     signal_ends = [p for p in (src, dst) if p.role == "signal"]
     if len(signal_ends) == 1:
@@ -212,16 +191,15 @@ def _check_signal_pairing(src: "Port", dst: "Port", kind: str) -> None:
         )
 
 
-# What :meth:`Flowsheet.add` hands back: the very class it was given, not the
-# base. ``fs.add(units.Pump("P-101"))`` is how every sheet is written, so a
-# plain ``-> Unit`` would throw the subclass away at the one call each unit
-# passes through, and with it the nozzle declarations
-# :mod:`pandid.units` makes (``pump.suction``).
+# What :meth:`Flowsheet.add` hands back: the very class it was given,
+# not the base. A plain ``-> Unit`` would throw the subclass away at
+# the one call each unit passes through, and with it every nozzle
+# :mod:`pandid.units` declares (``fs.add(Pump(...)).suction``).
 _UnitT = TypeVar("_UnitT", bound="Unit")
 
 
 class Flowsheet:
-    """A process flow diagram's topology: units, streams, and components."""
+    """A diagram's topology: units, streams and components."""
 
     def __init__(
         self, name: str, *,
@@ -236,83 +214,78 @@ class Flowsheet:
     ):
         self.name = name
         self.stream_naming_scheme = stream_naming_scheme
-        # The ``{n}`` in ``stream_naming_scheme``, offset. Its neighbour below
-        # is a different number on a different label and the two are worth
-        # keeping apart: `line_number_start` moves the ``sequence`` *component*
-        # of a LINE number, the ``1001`` inside ``6"-P-1001-A1A``, which is a
-        # piping identity a line list is kept in; this moves the whole of a
-        # STREAM number, the ``S1`` a PFD draws in a flag and a stream table
-        # keys its columns on. A sheet can want one and not the other -- a PFD
-        # numbering S100 upward carries no line numbers at all -- so neither
-        # can stand in for the other. Until this existed the only way to reach
-        # the offset was to hand ``stream_naming_scheme`` a callable, which is
-        # a whole naming convention supplied to move a number by 99.
+        # The ``{n}`` in ``stream_naming_scheme``, offset. Not its
+        # neighbour below, which moves a different number on a different
+        # label: `line_number_start` moves the ``sequence`` *component*
+        # of a LINE number, the ``1001`` inside ``6"-P-1001-A1A``, where
+        # this moves the whole of a STREAM number, the ``S1`` a PFD
+        # draws in a flag and a stream table keys its columns on. A PFD
+        # numbering S100 upward carries no line numbers at all.
         self.stream_number_start = stream_number_start
         self.line_numbering_scheme = line_numbering_scheme
         self.line_number_start = line_number_start
-        # Where `add_loop()` starts counting when the author leaves the number
-        # to it. See that method for why the counter is one series for the
-        # sheet and why it is naive.
+        # Where `add_loop()` starts counting when the author leaves the
+        # number to it. See that method for why the counter is naive.
         self.loop_number_start = loop_number_start
-        # How many numbers `add_loop()` has handed out. That plus the start is
-        # the whole of the counter, kept as two fields rather than one running
-        # total so the start stays the authoritative setting: it is what
-        # `to_dict()` writes and what an author moves, and a total seeded from
-        # it at construction would quietly ignore a later move.
+        # How many numbers `add_loop()` has handed out. Two fields
+        # rather than one running total so the start stays
+        # authoritative: it is what `to_dict()` writes and what an
+        # author moves, and a total seeded from it at construction would
+        # ignore a later move.
         self._loops_allocated = 0
-        # How a valve station spells its members' tags out of its control
-        # valve's. A drawing office convention, like the two schemes above, so
-        # it is set here for a whole sheet and overridable per station.
+        # How a valve station spells its members' tags out of its
+        # control valve's. Set here for a whole sheet, overridable per
+        # station.
         self.valve_station_tag_scheme = valve_station_tag_scheme
-        # Let the layout engine pick which face a movable port is piped from,
-        # given where its peer landed (see :mod:`pandid.layout.faces`). Turn it off
-        # to pin every port to its symbol's own nozzle plus whatever
-        # :meth:`~pandid.units.Unit.nozzle` named, which is what a sheet already
-        # tuned by hand wants.
+        # Let the layout engine pick which face a movable port is piped
+        # from, given where its peer landed (see
+        # :mod:`pandid.layout.faces`). Turn it off to pin every port to
+        # its symbol's own nozzle plus whatever
+        # :meth:`~pandid.units.Unit.nozzle` named.
         self.auto_faces = auto_faces
         self.units: list = []
         self.streams: list[Stream] = []
         self.components: list = []
-        # Declared control loops, in declaration order. A loop is a namespace
-        # and not a drawn thing, so it is kept apart from `units`: layout,
-        # routing, validation, the renderer and the equipment list all iterate
-        # `units` unconditionally and none of them has anything to do with it.
+        # Declared control loops, in declaration order. Kept apart from
+        # `units`: layout, routing, validation, the renderer and the
+        # equipment list all iterate `units` unconditionally, and a loop
+        # draws nothing.
         self.loops: list["Loop"] = []
-        self.warnings: list = []  # soft validation findings from the last render
-        # Did the last route() settle its attached instruments, or run out of
-        # passes still moving them? Read by validate(), which is what carries
-        # the answer onto `warnings` and in front of the author.
+        self.warnings: list = []  # soft findings from the last render
+        # Did the last route() settle its attached instruments, or run
+        # out of passes still moving them? Read by validate(), which
+        # carries the answer onto `warnings`.
         self.route_converged: bool = True
-        # The sheet's own metadata; a block set here is a title strip drawn.
+        # The sheet's own metadata; a block set here is a title strip
+        # drawn.
         self.title_block: "TitleBlock | None" = None
-        # Generic titled boxes (equipment list, notes, legend, tables) docked to
-        # the sheet corners, drawn wherever they are added. See pandid.document.
+        # Generic titled boxes (equipment list, notes, legend, tables)
+        # docked to the sheet corners. See pandid.document.
         self.annotations: list = []
-        # Section headers to inject into the stream table: (before_key, label).
+        # Section headers to inject into the stream table: (before_key,
+        # label).
         self.stream_table_sections: list[tuple[str, str]] = []
 
     def add_annotation(self, annotation):
-        """Register a sheet-furniture box (Annotation / TableBox). Chainable."""
+        """Register a furniture box (Annotation/TableBox). Chainable."""
         self.annotations.append(annotation)
         return annotation
 
     def add(self, unit: _UnitT) -> _UnitT:
-        """Register a unit on this flowsheet. Returns the unit for chaining.
+        """Register a unit. Returns the unit, for chaining.
 
-        A tag names one item, so a tag already on the sheet is refused. The
-        exceptions are the symbols that stand for one thing shown in several
-        places: an interlock square is one piece of logic drawn at every place
-        it acts, and a utility header flag
-        (``Feed``/``Product`` with ``header=True``) is one service drawn at
-        every place it is tapped. A sheet that cannot draw the square four
-        times cannot draw the interlock, and one that cannot draw ``CWSH``
-        twice cannot show cooling water reaching two coolers. A
-        :class:`~pandid.units.Tee` repeats for the opposite reason: it draws no
-        tag at all, so there is nothing on the sheet for two of them to confuse.
+        A tag names one item, so a tag already on the sheet is refused.
+        The exceptions are the symbols that stand for one thing shown in
+        several places: an interlock square, one piece of logic drawn at
+        every place it acts, and a utility header flag (``Feed`` or
+        ``Product`` with ``header=True``), one service drawn at every
+        place it is tapped. A :class:`~pandid.units.Tee` repeats for the
+        opposite reason: it draws no tag at all.
 
         Such a repeat is accepted and given a name of its own (``I-1``,
-        ``I-1 (2)``), so the unit that a stream, a spec entry or an equipment
-        list means is never in doubt, while the tag drawn stays ``I-1``.
+        ``I-1 (2)``), so the unit that a stream, a spec entry or an
+        equipment list means is never in doubt, while the tag drawn
+        stays ``I-1``.
         """
         if unit in self.units:
             raise ValueError(
@@ -343,9 +316,8 @@ class Flowsheet:
                 f"{unit!r} is already on flowsheet {unit.flowsheet.name!r}"
             )
         if clash is not None:
-            # The tag is what repeats and so what the fresh name is derived
-            # from. A tee draws none, so its name stands in: it is already the
-            # only handle anything has on that junction.
+            # The tag is what repeats and so what the fresh name is
+            # derived from. A tee draws none, so its name stands in.
             unit.name = self._repeat_name(unit.tag or unit.name)
         unit.flowsheet = self
         self.units.append(unit)
@@ -354,10 +326,11 @@ class Flowsheet:
     def _repeat_name(self, tag: str) -> str:
         """A free name for one more drawing of a repeated tag.
 
-        The tag is what the sheet draws and what repeats; the name is what the
-        flowsheet is addressed by, so it stays unique and stays derived from the
-        tag: second, third and fourth square of ``I-1`` become ``I-1 (2)``,
-        ``I-1 (3)``, ``I-1 (4)``, in the order they are added.
+        The tag is what the sheet draws and what repeats; the name is
+        what the flowsheet is addressed by, so it stays unique and stays
+        derived from the tag: second, third and fourth square of ``I-1``
+        become ``I-1 (2)``, ``I-1 (3)``, ``I-1 (4)``, in the order they
+        are added.
         """
         taken = {u.name for u in self.units}
         n = 2
@@ -366,78 +339,71 @@ class Flowsheet:
         return f"{tag} ({n})"
 
     def add_loop(self, variable: str, number: str | int | None = None) -> "Loop":
-        """Declare a control loop and return the handle its members are tagged from.
+        """Declare a control loop and return its handle.
 
-        ``variable`` is the ISA measured-variable letter (``"F"``, ``"L"``,
-        ``"T"``) and ``number`` the loop number. A loop is identified by the
-        **pair**: ``add_loop("F", 101)`` and ``add_loop("L", 101)`` are two
-        loops on one sheet, which is what most sheets draw.
+        ``variable`` is the ISA measured-variable letter (``"F"``,
+        ``"L"``, ``"T"``) and ``number`` the loop number. A loop is
+        identified by the **pair**: ``add_loop("F", 101)`` and
+        ``add_loop("L", 101)`` are two loops on one sheet.
 
-        Leave ``number`` out and the sheet allocates the next one, counting from
-        ``loop_number_start``, so a draft that is still gaining and losing loops
-        is not also retyping numbers::
+        Leave ``number`` out and the sheet allocates the next one,
+        counting from ``loop_number_start``::
 
             fs = Flowsheet("A300", loop_number_start=301)
             press = fs.add_loop("P")   # P-301
             temp = fs.add_loop("T")    # T-302
             flow = fs.add_loop("F")    # F-303
 
-        One series for the sheet, climbing through whichever measured variable
-        was declared next, and allocation happens here, at the declaration, so
-        the order the numbers come out in is the order the file reads in.
-        Allocated and typed numbers mix freely; :meth:`to_dict` writes both as
-        literals, which is what freezes a draft.
+        One series for the sheet, climbing through whichever measured
+        variable was declared next, and allocated here at the
+        declaration, so the order the numbers come out in is the order
+        the file reads in. Allocated and typed numbers mix freely;
+        :meth:`to_dict` writes both as literals, which is what freezes a
+        draft.
 
-        The loop replaces the number, not the letters. Each member still types
-        its own functional letters and the loop checks the first of them, so a
-        ``TT`` put on a flow loop raises at that line::
+        The loop replaces the number, not the letters. Each member still
+        types its own functional letters and the loop checks the first
+        of them, so a ``TT`` put on a flow loop raises at that line::
 
             loop = fs.add_loop("F", 303)
-            fe = fs.add(units.Fitting(loop.element("FE"), variant="venturi"))
-            ft = fs.add_instrument("FT", loop, sensing=fe, at="N", offset=70)
+            fe = fs.add(units.Fitting(loop.element("FE"),
+                                      variant="venturi"))
+            ft = fs.add_instrument("FT", loop, sensing=fe, at="N",
+                                   offset=70)
             cv = fs.add(units.Valve(loop.tag("CV"), variant="control"))
 
-        A member that is not a balloon joins through one of two methods, chosen
-        by which piece of equipment it is: :meth:`~pandid.loops.Loop.element`
-        for a primary element, which is lettered from the measured variable and
-        so is held to it, and :meth:`~pandid.loops.Loop.tag` for a final control
-        element, which is not lettered that way and so cannot be.
+        A member that is not a balloon joins through one of two methods,
+        chosen by which piece of equipment it is:
+        :meth:`~pandid.loops.Loop.element` for a primary element, which
+        is lettered from the measured variable and so is held to it, and
+        :meth:`~pandid.loops.Loop.tag` for a final control element,
+        which is not lettered that way and so cannot be.
 
         A loop draws nothing, is never in :attr:`units`, and reaches no
-        equipment list; see :mod:`pandid.loops`. Instruments that are in no loop
-        keep taking a literal number. An indicator standing on its own and a
-        repeated interlock square with no measured variable at all are both
-        correct as they stand.
+        equipment list; see :mod:`pandid.loops`. Instruments that are in
+        no loop keep taking a literal number.
 
-        Unlike a stream number, a loop number allocates once and is never
-        rewritten afterwards, however it was arrived at: it leaves the drawing
-        for the DCS. See :mod:`pandid.loops`.
+        Unlike a stream number, a loop number allocates once and is
+        never rewritten afterwards, however it was arrived at: it leaves
+        the drawing for the DCS.
         """
         from pandid.loops import Loop
 
-        # ONE series for the sheet, not one counter per measured variable.
-        # P&ID_301 runs P-301, T-302, F-303, L-304, F-305, L-306, T-307, F-308,
-        # F-311, T-312: a single series climbing through whichever variable came
-        # next, and the sheet's own notes block says "Note that instrument
-        # number are unique to this drawing". A counter per variable would put
-        # F-301, T-301 and L-301 on one sheet the moment three variables were
-        # declared. That is legal -- a loop is the pair, and `add_loop("F", 101)`
-        # beside `add_loop("L", 101)` is still two loops here -- but it is not
-        # what the reference draws, and it costs the number the one job it does
-        # in a control room, which is to be short for the loop: "loop 304" stops
-        # naming a loop the moment three of them answer to it.
+        # ONE series for the sheet, not one counter per measured
+        # variable: ``professional_examples/P&ID_301.pdf`` runs P-301,
+        # T-302, F-303, L-304 and on, a single series climbing through
+        # whichever variable came next, and its notes block says "Note
+        # that instrument number are unique to this drawing".
         #
-        # And it is a NAIVE counter: no reservation list, no skipping past
-        # numbers already typed, no collision search. Nothing outside `loops`
-        # spends a number for it to dodge. A final control element takes its
-        # loop's number rather than one of its own -- CHEE4001 p.11 numbers a
-        # flow loop's element, transmitter, controller and valve all 504, and
-        # p.13 gives the rule: "A loop number is assigned to each group of
-        # components required to perform the desired function of the monitor or
-        # control scheme" -- so the group is the thing that consumes a number,
-        # and the loop set is the list of groups. Even the single-member groups:
-        # the tail of P&ID_301 (FE-313, PI-316, TI-319, LI-322) is loops of one
-        # by that rule, so a lone indicator is a legitimate `add_loop`.
+        # And a NAIVE counter: no reservation list, no skipping past
+        # numbers already typed, no collision search. That holds only
+        # while nothing outside `loops` spends a number for it to dodge,
+        # which is CHEE4001 p.13: "A loop number is assigned to each
+        # group of components required to perform the desired function
+        # of the monitor or control scheme". The group consumes the
+        # number, so p.11 letters a flow loop's element, transmitter,
+        # controller and valve all 504, and a lone indicator is a group
+        # of one.
         allocated = number is None
         if number is None:  # the same test twice, so the narrowing survives to Loop()
             number = self.loop_number_start + self._loops_allocated
@@ -446,12 +412,9 @@ class Flowsheet:
                       if (existing.variable, existing.number) == (loop.variable, loop.number)),
                      None)
         if clash is not None:
-            # The one thing a naive counter can walk into: a number typed by
-            # hand, on this variable, in the stretch the counter is climbing
-            # through. It is not resolved silently in either direction --
-            # stepping over the typed number would put a hole in the series
-            # nothing asked for, and taking it would mint a second F-303 -- so
-            # the sheet says which two numbers met, at the line that did it.
+            # The one thing a naive counter can walk into: a number
+            # typed by hand, on this variable, in the stretch the
+            # counter is climbing through.
             if allocated:
                 raise ValueError(
                     f"loop {loop.name} took {number}, the next number in this sheet's "
@@ -468,9 +431,9 @@ class Flowsheet:
                 f"add_loop() returned. Two loops may share a number if they measure "
                 f"different variables (F-101 and L-101)"
             )
-        # After every raise above, so a rejected declaration burns nothing: a
-        # bad letter or a clash leaves the next `add_loop()` the number this one
-        # was reaching for.
+        # After every raise above, so a rejected declaration burns
+        # nothing: a bad letter or a clash leaves the next `add_loop()`
+        # the number this one was reaching for.
         if allocated:
             self._loops_allocated += 1
         self.loops.append(loop)
@@ -483,38 +446,43 @@ class Flowsheet:
                        on: "Stream | Unit | None" = None, at: float | str | None = None,
                        offset: float = 45.0, angle: float = 90.0,
                        variant: str = "default", **kwargs) -> "Instrument":
-        """Add an ISA-5.1 instrument balloon, anchored to something on the sheet.
+        """Add an ISA-5.1 instrument balloon, anchored to the sheet.
 
-        ``type`` is the functional letter string and ``number`` the loop number;
-        together they make the tag (``add_instrument("FT", 101)`` -> ``FT-101``).
-        ``number`` also takes a :class:`~pandid.loops.Loop` from :meth:`add_loop`,
-        which supplies the number and checks ``type`` against the loop's measured
-        variable, raising here rather than warning at render time.
+        ``type`` is the functional letter string and ``number`` the loop
+        number; together they make the tag (``add_instrument("FT",
+        101)`` -> ``FT-101``). ``number`` also takes a
+        :class:`~pandid.loops.Loop` from :meth:`add_loop`, which
+        supplies the number and checks ``type`` against the loop's
+        measured variable, raising here rather than warning at render
+        time.
 
-        **Three ways to name the anchor, and they say different things.** Each
-        takes a :class:`~pandid.streams.Stream` or a :class:`~pandid.units.Unit`
-        and places the balloon against it; what they differ on is whether the
-        sheet then draws a line between the two.
+        **Three ways to name the anchor, and they say different
+        things.** Each takes a :class:`~pandid.streams.Stream` or a
+        :class:`~pandid.units.Unit` and places the balloon against it;
+        what they differ on is whether the sheet then draws a line
+        between the two.
 
-        - ``sensing=`` -- the balloon takes its reading from here. Drawn: an
-          impulse line where the host holds the fluid being measured and the
-          balloon is a field device, a fine dashed instrument connection
-          otherwise.
-        - ``acting_on=`` -- the balloon commands this. A trip square under the
-          valve it strokes. Drawn dashed: nothing is piped from a logic solver.
-        - ``near=`` -- neither. The balloon is only *placed* here, and nothing
-          is drawn between them. A control-room faceplate hung over the valve
-          it drives is near it; what reaches the actuator is a signal, stated
-          with :meth:`connect` and routed like one.
+        - ``sensing=`` -- the balloon takes its reading from here.
+          Drawn: an impulse line where the host holds the fluid being
+          measured and the balloon is a field device, a fine dashed
+          instrument connection otherwise.
+        - ``acting_on=`` -- the balloon commands this. A trip square
+          under the valve it strokes. Drawn dashed: nothing is piped
+          from a logic solver.
+        - ``near=`` -- neither. The balloon is only *placed* here, and
+          nothing is drawn between them. A control-room faceplate hung
+          over the valve it drives is near it; what reaches the actuator
+          is a signal, stated with :meth:`connect` and routed like one.
 
-        ``at``/``offset``/``angle`` locate the balloon against whichever was
-        named; see :meth:`~pandid.units.Instrument.attach`. With no anchor at
-        all the balloon is laid out like any other unit.
+        ``at``/``offset``/``angle`` locate the balloon against whichever
+        was named; see :meth:`~pandid.units.Instrument.attach`. With no
+        anchor at all the balloon is laid out like any other unit.
 
         >>> s = fs.connect(feed.outlet, fv.inlet)
-        >>> ft = fs.add_instrument("FT", 101, sensing=s, at=0.4, offset=60)
-        >>> fic = fs.add_instrument("FIC", 101, near=ft, at="N", offset=70,
-        ...                         display="central")
+        >>> ft = fs.add_instrument("FT", 101, sensing=s, at=0.4,
+        ...                        offset=60)
+        >>> fic = fs.add_instrument("FIC", 101, near=ft, at="N",
+        ...                         offset=70, display="central")
         >>> fs.connect(ft.sig_out, fic.sig_in, kind="electric")
         """
         from pandid.loops import Loop
@@ -533,11 +501,11 @@ class Flowsheet:
         return inst
 
     def _anchor(self, inst: "Instrument", sensing, acting_on, near, on):
-        """The one anchor an ``add_instrument`` call named, and what it means.
+        """The one anchor an ``add_instrument`` call named, and its use.
 
-        Returns ``(host, relation)``, or ``(None, "sensing")`` for a balloon
-        that named none. Retiring ``on=`` happens here rather than in
-        :meth:`~pandid.units.Instrument.attach`, since ``attach`` takes the
+        Returns ``(host, relation)``, or ``(None, "sensing")`` for a
+        balloon that named none. Retiring ``on=`` happens here rather
+        than in :meth:`~pandid.units.Instrument.attach`, which takes the
         relation already decided.
         """
         given = [("sensing", sensing), ("acting_on", acting_on), ("near", near)]
@@ -569,40 +537,41 @@ class Flowsheet:
     def add_balloon(self, element: "Unit", *, at: float | str | None = None,
                     offset: float = 46.0, angle: float = 90.0,
                     variant: str = "default", **kwargs) -> "Instrument":
-        """Draw *element*'s tag in a balloon beside it instead of against it.
+        """Draw *element*'s tag in a balloon beside it, not against it.
 
-        A primary element is **one instrument shown as two marks**: the thing
-        in the pipe, and the balloon that carries its tag. CHEE4001 p.10 is
-        what settles that it is one instrument -- "Primary element (E):
-        instrument that measures a process variable (e.g. orifice plates,
-        thermocouples)" -- and ``professional_examples/P&ID_301.pdf`` is what
-        settles the drawing: its venturi carries **no lettering at all**, an
-        ``FE 303`` balloon hangs under it on a short impulse line, and
-        ``FT 303`` sits immediately below that::
+        A primary element is **one instrument shown as two marks**: the
+        thing in the pipe, and the balloon that carries its tag.
+        CHEE4001 p.10 settles that it is one instrument -- "Primary
+        element (E): instrument that measures a process variable (e.g.
+        orifice plates, thermocouples)" -- and
+        ``professional_examples/P&ID_301.pdf`` settles the drawing: its
+        venturi carries **no lettering at all**, an ``FE 303`` balloon
+        hangs under it on a short impulse line, and ``FT 303`` sits
+        immediately below that::
 
-            fe303 = fs.add(units.Fitting(flow303.element("FE"), variant="venturi"))
+            fe303 = fs.add(units.Fitting(flow303.element("FE"),
+                                         variant="venturi"))
             fs.add_balloon(fe303, at="S", offset=46)
             ft303 = fs.add_instrument("FT", flow303, near=fe303.balloon,
                                       at="S", offset=45)
 
-        The tag is typed once, on the element, and moves to the balloon: the
-        element stops drawing lettering of its own, so the sheet shows
-        ``FE-303`` exactly once. Both objects answer to it, which is why the
-        pair joins the sheet's existing "one thing, several marks" exemption
-        rather than needing a second tag invented for one of them (issue
-        #249). The element keeps the plain name, since it is the item an
-        equipment list schedules; the balloon is named ``FE-303 (2)``, as a
-        repeated trip square is.
+        The tag is typed once, on the element, and moves to the balloon:
+        the element stops drawing lettering of its own, so the sheet
+        shows ``FE-303`` exactly once. Both objects answer to it, which
+        is why the pair joins the sheet's "one thing, several marks"
+        exemption (issue #249). The element keeps the plain name, since
+        it is the item an equipment list schedules; the balloon is named
+        ``FE-303 (2)``, as a repeated trip square is.
 
         ``at``/``offset``/``angle`` place the balloon exactly as
-        :meth:`add_instrument` does, and the relation is ``sensing``: the
-        balloon reads the element, so a solid impulse line is drawn between
-        them. The default ``offset`` is the reference sheet's, whose FE
-        balloon centre stands 1,05 balloon diameters off the process line.
+        :meth:`add_instrument` does, and the relation is ``sensing``, so
+        a solid impulse line is drawn between them. The default
+        ``offset`` is the reference sheet's, whose FE balloon centre
+        stands 1,05 balloon diameters off the process line.
 
         Raises:
-            ValueError: if *element* already has a balloon, or is not on this
-                flowsheet, or carries no tag to move.
+            ValueError: if *element* already has a balloon, or is not on
+                this flowsheet, or carries no tag to move.
         """
         from pandid.units import Instrument
 
@@ -627,8 +596,8 @@ class Flowsheet:
                 f"lettered from its loop, e.g. Fitting(loop.element('FE'))"
             )
         inst = Instrument(element.tag, variant=variant, **kwargs)
-        # Set before add(), which is where the shared tag is either allowed
-        # or refused; see Instrument.repeats.
+        # Set before add(), which is where the shared tag is either
+        # allowed or refused; see Instrument.repeats.
         inst._marks = element
         self.add(inst)
         element.balloon = inst
@@ -651,69 +620,75 @@ class Flowsheet:
     ) -> "ValveStation":
         """Build the standard assembly a control valve is installed in.
 
-        Two isolation valves, two drain valves, one bypass valve on a leg tapped
-        outside the isolations, and a size change at each end: the arrangement
-        the CHEE4001/7103 guidelines draw and :mod:`pandid.stations` quotes. The
-        units are added, tagged, described, pinned along a run at ``y`` and
-        wired to each other; what is left for the author is the piping either
-        side of it, which is what :attr:`~pandid.stations.ValveStation.inlet` and
+        Two isolation valves, two drain valves, one bypass valve on a
+        leg tapped outside the isolations, and a size change at each
+        end: the arrangement the CHEE4001/7103 guidelines draw and
+        :mod:`pandid.stations` quotes. The units are added, tagged,
+        described, pinned along a run at ``y`` and wired to each other;
+        what is left for the author is the piping either side of it,
+        which is what :attr:`~pandid.stations.ValveStation.inlet` and
         :attr:`~pandid.stations.ValveStation.outlet` are for::
 
-            station = fs.add_valve_station("CV-303", x=670, y=440, mirrored=True,
-                                           description="Reflux", service="AE",
-                                           sequence=303, size=80, schedule=80,
-                                           spec="SS")
-            fs.connect(t_draw.branch, station.inlet, service="AE", sequence=303,
-                       size=80, schedule=80, spec="SS")
+            station = fs.add_valve_station(
+                "CV-303", x=670, y=440, mirrored=True,
+                description="Reflux", service="AE", sequence=303,
+                size=80, schedule=80, spec="SS")
+            fs.connect(t_draw.branch, station.inlet, service="AE",
+                       sequence=303, size=80, schedule=80, spec="SS")
             fs.connect(station.outlet, fe303.inlet)
 
-        The returned :class:`~pandid.stations.ValveStation` is a handle, not a
-        unit: it draws nothing, reaches no equipment list, and its members are
-        ordinary units that can be re-pinned, re-tagged or instrumented.
+        The returned :class:`~pandid.stations.ValveStation` is a handle,
+        not a unit: it draws nothing, reaches no equipment list, and its
+        members are ordinary units that can be re-pinned, re-tagged or
+        instrumented.
 
         Args:
-            tag: The control valve's tag, and what the other members' tags are
-                derived from.
-            x: Left edge of the drawn station; ``y`` is the run's **centreline**,
-                so each device lands on the line whatever its artwork measures.
-                Give both or neither; without them the members lay out like any
-                other units, which is a legal sheet but not a station-shaped one.
-            mirrored: Pipe the run east to west. The station still occupies
-                ``x`` rightwards; what reverses is which end the flow enters.
+            tag: The control valve's tag, and what the other members'
+                tags are derived from.
+            x: Left edge of the drawn station; ``y`` is the run's
+                **centreline**, so each device lands on the line
+                whatever its artwork measures. Give both or neither;
+                without them the members lay out like any other units.
+            mirrored: Pipe the run east to west. The station still
+                occupies ``x`` rightwards; what reverses is which end
+                the flow enters.
             variant: The control valve's variant.
-            number: The number the members are tagged from, defaulting to the
-                one in ``tag``. The escape hatch for a control valve whose own
-                number is not what its station is numbered by: ``CV-301-1`` with
-                ``number=301`` gives ``HV-301A``, not ``HV-301-1A``.
+            number: The number the members are tagged from, defaulting
+                to the one in ``tag``. The escape hatch for a control
+                valve whose own number is not what its station is
+                numbered by: ``CV-301-1`` with ``number=301`` gives
+                ``HV-301A``, not ``HV-301-1A``.
             isolation: Draw the two isolation valves.
             reducers: Draw the reduction in and the expansion out.
-            bypass: Draw the bypass leg and its normally closed throttling valve.
+            bypass: Draw the bypass leg and its normally closed
+                throttling valve.
             drains: How many drain valves, 0, 1 or 2. One goes upstream.
-            description: The service in words. Each member's description is this
-                plus what it does: ``"Reflux Isolation Valve"``.
+            description: The service in words. Each member's description
+                is this plus what it does: ``"Reflux Isolation Valve"``.
             bypass_over: The member the bypass valve stands over, one of
-                :data:`~pandid.stations.BYPASS_ANCHORS`; by default it sits in
-                the middle of its own leg, which is where the reference figure
-                draws it. Move it when something else already crosses there: a
-                controller's output dropping onto the actuator, most often.
-            tag_scheme: Overrides :attr:`valve_station_tag_scheme` for this
-                station only.
+                :data:`~pandid.stations.BYPASS_ANCHORS`; by default it
+                sits in the middle of its own leg, where the reference
+                figure draws it. Move it when something else already
+                crosses there, most often a controller's output dropping
+                onto the actuator.
+            tag_scheme: Overrides :attr:`valve_station_tag_scheme` for
+                this station only.
             gap: Edge to edge between devices along the run.
             bypass_rise: How far the bypass leg stands off the run.
             drain_drop: How far a drain leg hangs below it.
-            size, schedule, service, sequence, spec, insulation: The line
-                number's components, put on the bypass and drain branches. A
-                branch off a tee starts a number of its own, and a bypass is the
-                same service, size and spec as the run it goes round, so the
-                station's own number is what they take. The run through the
-                station carries the number of whatever is connected to
-                :attr:`inlet`.
+            size, schedule, service, sequence, spec, insulation: The
+                line number's components, put on the bypass and drain
+                branches. A branch off a tee starts a number of its own,
+                and a bypass is the same service, size and spec as the
+                run it goes round. The run through the station carries
+                the number of whatever is connected to :attr:`inlet`.
 
         Raises:
-            ValueError: for a station that cannot mean what it says: a bypass
-                with nothing to bypass around, a drain count that is not 0, 1 or
-                2, one of ``x``/``y`` without the other, or a ``bypass_over``
-                naming a member this station was told to leave out.
+            ValueError: for a station that cannot mean what it says: a
+                bypass with nothing to bypass around, a drain count that
+                is not 0, 1 or 2, one of ``x``/``y`` without the other,
+                or a ``bypass_over`` naming a member this station was
+                told to leave out.
         """
         from pandid.portgeom import port_offset, resolve_size
         from pandid.stations import (
@@ -786,9 +761,9 @@ class Flowsheet:
         t_dra = tee() if dr_a is not None else None
         t_drb = tee() if dr_b is not None else None
 
-        # The order the fluid meets them, which is the order the figure draws
-        # them and the order the streams below are made in. A mirrored station
-        # is this run drawn the other way round, not a different one.
+        # The order the fluid meets them, which is the order the figure
+        # draws them and the order the streams below are made in. A
+        # mirrored station is this run drawn the other way round.
         run = [u for u in (t_bya, iso_a, t_dra, red, control, exp, t_drb, iso_b, t_byb)
                if u is not None]
         anchors = {"upstream_isolation": iso_a, "downstream_isolation": iso_b,
@@ -811,8 +786,8 @@ class Flowsheet:
             for junction, drain in ((t_dra, dr_a), (t_drb, dr_b)):
                 if junction is None or drain is None:
                     continue
-                # A drain runs down to a funnel on the floor, which is not on
-                # this sheet, so the leg ends at the valve.
+                # A drain runs down to a funnel on the floor, which is
+                # not on this sheet, so the leg ends at the valve.
                 drain.pin(orientation=90)
                 drain.pin(port="inlet",
                           x=left[id(junction)] + port_offset(junction, "branch")[0],
@@ -822,8 +797,8 @@ class Flowsheet:
                 if target is not None:
                     centre = left[id(target)] + resolve_size(target)[0] / 2
                 else:
-                    # Nothing named, so the middle of its own leg, which is
-                    # where the reference figure draws it.
+                    # Nothing named, so the middle of its own leg, which
+                    # is where the reference figure draws it.
                     centre = sum(left[id(t)] + port_offset(t, "branch")[0]
                                  for t in (t_bya, t_byb)) / 2
                 byp.pin(mirrored="x" if mirrored else False)
@@ -831,7 +806,7 @@ class Flowsheet:
                 byp.pin(port="inlet", y=y - bypass_rise)
 
         def branch_line(src: "Port", dst: "Port") -> Stream:
-            """A leg off the run, carrying the station's own line number."""
+            """A leg off the run, on the station's own line number."""
             return self.connect(src, dst, size=size, schedule=schedule, service=service,
                                 sequence=sequence, spec=spec, insulation=insulation)
 
@@ -860,7 +835,7 @@ class Flowsheet:
         )
 
     def add_component(self, component: "Component") -> "Component":
-        """Register a chemical component. Returns the component for chaining."""
+        """Register a chemical component. Returns it, for chaining."""
         self.components.append(component)
         return component
 
@@ -871,40 +846,42 @@ class Flowsheet:
                 sequence: str | float | None = None, spec: str | float | None = None,
                 insulation: str | float | None = None,
                 ends: "str | tuple[str, str] | None" = None) -> Stream:
-        """Create a stream connecting *src* (outlet port) to *dst* (inlet port).
+        """Create a stream from *src* (an outlet) to *dst* (an inlet).
 
-        The returned stream already carries the number it will be drawn with;
-        see :meth:`renumber_streams`.
+        The returned stream already carries the number it will be drawn
+        with; see :meth:`renumber_streams`.
 
-        ``kind`` has to match what the two ports are: a signal kind runs between
-        two signal connections (a valve's ``actuator``, an instrument's ``pv``
-        and ``sig_in``/``sig_out``) and a process kind between two process
-        nozzles. Mixing them draws a pipe into a valve stem or a control signal
-        between two pumps.
+        ``kind`` has to match what the two ports are: a signal kind runs
+        between two signal connections (a valve's ``actuator``, an
+        instrument's ``pv`` and ``sig_in``/``sig_out``) and a process
+        kind between two process nozzles.
 
-        For a signal line either end may be the **unit** instead of one of its
-        connections, and this picks the connection: an instrument mints a free
-        one and anything else with a single signal connection offers that one
-        (``fs.connect(ft305, fic305, kind="electric")``). Process piping always
-        names its nozzles, since which nozzle is the whole question.
+        For a signal line either end may be the **unit** instead of one
+        of its connections, and this picks the connection: an instrument
+        mints a free one and anything else with a single signal
+        connection offers that one (``fs.connect(ft305, fic305,
+        kind="electric")``). Process piping always names its nozzles,
+        since which nozzle is the whole question.
 
-        ``size``/``schedule``/``service``/``spec``/``insulation`` are the
-        line-number components; supplying any of them draws this line with its
-        line number instead of a stream number. ``sequence`` is filled by
-        auto-numbering unless it is given here. ``size`` is the line's nominal
-        bore, ``schedule`` the wall it is bought to at that bore, and ``spec``
-        the piping class or material the line is built to.
+        ``size``/``schedule``/``service``/``spec``/``insulation`` are
+        the line-number components; supplying any of them draws this
+        line with its line number instead of a stream number.
+        ``sequence`` is filled by auto-numbering unless it is given
+        here. ``size`` is the line's nominal bore, ``schedule`` the wall
+        it is bought to at that bore, and ``spec`` the piping class or
+        material it is built to.
 
-        ``ends`` says how this line's joints are made up and overrides the
-        sheet's ``connections`` for this run alone: ``"flanged"`` marks both,
-        ``"none"`` marks neither, and a ``(source, dest)`` pair -- in the order
-        the two were just named -- states them apart. Left unset the line
-        follows the sheet. It takes any member of
-        :data:`~pandid.render.svg.CONNECTIONS`, so a single run can be marked at
-        its nozzles alone on a sheet that flanges its valves, and the other way
-        round. What is never marked either way is a boundary flag, an instrument
-        or a signal line -- there is no joint to describe -- and nothing is
-        marked at all except on a ``diagram="p&id"`` sheet; see :meth:`render`.
+        ``ends`` says how this line's joints are made up and overrides
+        the sheet's ``connections`` for this run alone: ``"flanged"``
+        marks both, ``"none"`` marks neither, and a ``(source, dest)``
+        pair -- in the order the two were just named -- states them
+        apart. Left unset the line follows the sheet. It takes any
+        member of :data:`~pandid.render.svg.CONNECTIONS`, so a single
+        run can be marked at its nozzles alone on a sheet that flanges
+        its valves, and the other way round. Never marked either way: a
+        boundary flag, an instrument or a signal line, there being no
+        joint to describe. Nothing is marked at all except on a
+        ``diagram="p&id"`` sheet; see :meth:`render`.
 
         Raises :class:`ValueError` if any validation rule is violated.
         """
@@ -918,14 +895,14 @@ class Flowsheet:
         src = _signal_end(src, kind, "source")
         dst = _signal_end(dst, kind, "destination")
 
-        # Process nozzles only. Fluid enters a nozzle or it leaves one, and a
-        # sheet that says otherwise is wrong about the plant, so the guard stays
-        # exactly as it was for them. A signal connection has no such fact to be
-        # right or wrong about: the same alarm terminal is fed on one sheet and
-        # trips from it on another, and which it is here is which end of the line
-        # it took. That is now read off ``Stream.source``/``Stream.dest``, which
-        # is exact because a port holds at most one stream, rather than declared
-        # in advance and enforced here. See :class:`pandid.units.Instrument`.
+        # Process nozzles only. Fluid enters a nozzle or it leaves one,
+        # and a sheet that says otherwise is wrong about the plant. A
+        # signal connection has no such fact to be right or wrong about
+        # -- the same alarm terminal is fed on one sheet and trips from
+        # it on another -- so its direction is read off
+        # ``Stream.source``/``Stream.dest``, which is exact because a
+        # port holds at most one stream. See
+        # :class:`pandid.units.Instrument`.
         if src.role != "signal" and src.direction != "outlet":
             raise ValueError(
                 f"source port {src.owner.name}.{src.name} must be an outlet, "
@@ -941,16 +918,17 @@ class Flowsheet:
                 "both units must be added to this flowsheet before connecting"
             )
         _check_signal_pairing(src, dst, kind)
-        # A connection already spoken for is a mistake on every nozzle but one:
-        # an instrument balloon's signal connections are a *pool*, so a second
-        # line off ``sig_out`` is the split-range case and gets a member of its
-        # own rather than an error. The unit answers, because which of its
-        # connections are plural is a fact about the equipment.
+        # A connection already spoken for is a mistake on every nozzle
+        # but one: an instrument balloon's signal connections are a
+        # *pool*, so a second line off ``sig_out`` is the split-range
+        # case and gets a member of its own. The unit answers, because
+        # which of its connections are plural is a fact about the
+        # equipment.
         #
-        # Both ends are asked before either is taken, and both refusals are made
-        # before either is minted, so a call that raises leaves the sheet exactly
-        # as it found it -- a balloon carrying a spare nozzle no line reaches is
-        # a drawing changed by an error.
+        # Both refusals are made before either port is taken, so a call
+        # that raises leaves the sheet as it found it: a balloon left
+        # carrying a spare nozzle no line reaches is a drawing changed
+        # by an error.
         for port in (src, dst):
             if port.stream is not None and not port.owner.has_another_port(port):
                 raise ValueError(
@@ -964,7 +942,7 @@ class Flowsheet:
             kind = "energy"
 
         stream = Stream(
-            name=name or "",  # an auto-named stream is numbered by renumber_streams()
+            name=name or "",  # auto-named: renumber_streams() numbers it
             source=src,
             dest=dst,
             kind=kind,
@@ -981,9 +959,9 @@ class Flowsheet:
         src.stream = stream
         dst.stream = stream
         self.streams.append(stream)
-        # The number a caller reads off the returned stream, into a report, a
-        # stream table or a label of their own, has to be the number that gets
-        # drawn, so numbering is settled here rather than at render time.
+        # The number a caller reads off the returned stream has to be
+        # the number that gets drawn, so numbering is settled here
+        # rather than at render time.
         self.renumber_streams()
         return stream
 
@@ -991,21 +969,22 @@ class Flowsheet:
     def from_dict(cls, spec: dict) -> "Flowsheet":
         """Build a flowsheet from a declarative spec ``dict``.
 
-        See :mod:`pandid.spec` for the format. Raises :class:`pandid.spec.SpecError`
-        (a :class:`ValueError`) naming the offending entry.
+        See :mod:`pandid.spec` for the format. Raises
+        :class:`pandid.spec.SpecError` (a :class:`ValueError`) naming
+        the offending entry.
         """
         from pandid.spec import from_dict as _from_dict
         return _from_dict(spec)
 
     @classmethod
     def from_json(cls, path: str | Path) -> "Flowsheet":
-        """Build a flowsheet from a JSON spec file. See :mod:`pandid.spec`."""
+        """Build a flowsheet from JSON. See :mod:`pandid.spec`."""
         from pandid.spec import from_json as _from_json
         return _from_json(path)
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "Flowsheet":
-        """Build a flowsheet from a YAML spec file (needs the ``yaml`` extra).
+        """Build a flowsheet from YAML (needs the ``yaml`` extra).
 
         See :mod:`pandid.spec`.
         """
@@ -1013,7 +992,7 @@ class Flowsheet:
         return _from_yaml(path)
 
     def to_dict(self) -> dict:
-        """Serialize the flowsheet to a JSON-safe declarative spec ``dict``.
+        """Serialize to a JSON-safe declarative spec ``dict``.
 
         Round-trips: ``Flowsheet.from_dict(fs.to_dict())`` rebuilds an
         equivalent flowsheet. See :mod:`pandid.spec` for the format.
@@ -1022,21 +1001,22 @@ class Flowsheet:
         return _to_dict(self)
 
     def layout(self, engine=None) -> None:
-        """Run the automatic layout engine to generate unit coordinates."""
+        """Run the layout engine to generate unit coordinates."""
         if engine is None:
             from pandid.layout import default_layout_engine
             engine = default_layout_engine
         engine.layout(self)
 
     def route(self, router=None) -> None:
-        """Run the automatic routing engine to generate orthogonal stream paths.
+        """Run the router to generate orthogonal stream paths.
 
-        Runs :meth:`layout` first if any unit still lacks a resolved frame, since
-        routing needs geometry to work against.
+        Runs :meth:`layout` first if any unit still lacks a resolved
+        frame, since routing needs geometry to work against.
 
-        Attached instruments are placed and the sheet re-routed until the two
-        agree, up to :data:`~pandid.layout.attach.MAX_PLACEMENT_PASSES`. A sheet
-        that never settles leaves ``route_converged`` false, which
+        Attached instruments are placed and the sheet re-routed until
+        the two agree, up to
+        :data:`~pandid.layout.attach.MAX_PLACEMENT_PASSES`. A sheet that
+        never settles leaves ``route_converged`` false, which
         :meth:`validate` reports as a warning.
         """
         if any(u.frame is None for u in self.units):
@@ -1046,18 +1026,13 @@ class Flowsheet:
             router = DefaultRouter()
         from pandid.layout.attach import MAX_PLACEMENT_PASSES, place_attached
         router.route(self)
-        # An attached balloon hangs off its host's *routed* path, so where it
-        # finally lands is only known once that path exists. Layout placed it on
-        # the straight port-to-port line, which is already right for a straight
-        # run; when the router bent the line, re-place it and re-route the
-        # signal lines that now leave from somewhere else.
-        #
-        # That re-route can move a balloon again, because the box it now
-        # occupies is an obstacle in a place the last pass had clear, so the two
-        # chase each other to a fixed point rather than trading a fixed two
-        # turns. The loop always ends on a route, whether it converged or ran
-        # out of passes, so the waypoints describe the balloons where they now
-        # are and no signal line is left pointing at where one used to be.
+        # An attached balloon hangs off its host's *routed* path, so
+        # where it lands is only known once that path exists; and
+        # re-placing it can move the next one, because the box it now
+        # occupies is an obstacle in a place the last pass had clear.
+        # Hence a fixed point rather than a fixed two passes. The loop
+        # always ends on a route, converged or not, so no signal line is
+        # left pointing at where a balloon used to be.
         self.route_converged = False
         for _ in range(MAX_PLACEMENT_PASSES):
             if not place_attached(self):
@@ -1066,33 +1041,37 @@ class Flowsheet:
             router.route(self)
 
     def renumber_streams(self) -> None:
-        """Assign stream numbers, carrying one number through inline fittings.
+        """Assign stream numbers, carrying one through inline fittings.
 
-        Runs on every :meth:`connect` and again before rendering, so the name on
-        the stream object a caller holds is the name that gets drawn.
+        Runs on every :meth:`connect` and again before rendering, so the
+        name on the stream object a caller holds is the name that gets
+        drawn.
 
-        Valves, reducers, fittings and tees are inline: a stream keeps its
-        number as it passes through them (set ``unit.new_line_number = True`` to
-        break the number at an important valve). Explicitly-named streams keep
-        their name and lend it to their whole inline group. What carries the
-        number through is the ``inlet`` to ``outlet`` run, so a tee's *branch*
-        takes a number of its own: the bypass leg or drain off a station is its
-        own line, and the run it leaves carries straight on.
+        Valves, reducers, fittings and tees are inline: a stream keeps
+        its number as it passes through them (set ``unit.new_line_number
+        = True`` to break the number at an important valve).
+        Explicitly-named streams keep their name and lend it to their
+        whole inline group. What carries the number through is the
+        ``inlet`` to ``outlet`` run, so a tee's *branch* takes a number
+        of its own: the bypass leg or drain off a station is its own
+        line, and the run it leaves carries straight on.
 
-        A line carrying line-number components is named by its line number
-        rather than its stream number, on the same terms: the first segment of a
-        group that carries components supplies them for the whole group, so a
-        line number survives an inline valve and breaks at one that sets
-        ``new_line_number``, which is exactly where the spec breaks.
+        A line carrying line-number components is named by its line
+        number rather than its stream number, on the same terms: the
+        first segment of a group that carries components supplies them
+        for the whole group, so a line number survives an inline valve
+        and breaks at one that sets ``new_line_number``, which is
+        exactly where the spec breaks.
 
-        Process streams take the low numbers because they are the ones drawn on
-        the sheet and quoted in the stream table; energy streams, which are also
-        drawn, follow, and unlabelled signal lines come last. One sequence
-        covers all three so no two streams answer to the same name.
+        Process streams take the low numbers, being the ones drawn on
+        the sheet and quoted in the stream table; energy streams, also
+        drawn, follow, and unlabelled signal lines come last. One
+        sequence covers all three so no two streams answer to the same
+        name.
         """
         _INLINE = INLINE_KINDS
         material = [s for s in self.streams if s.kind == "material"]
-        pos = {id(s): i for i, s in enumerate(material)}  # Stream is unhashable
+        pos = {id(s): i for i, s in enumerate(material)}  # Stream: unhashable
         parent = list(range(len(material)))
 
         def find(i):
@@ -1101,12 +1080,10 @@ class Flowsheet:
                 i = parent[i]
             return i
 
-        # The run through an inline device is its ``inlet`` to its ``outlet``,
-        # named rather than counted: a tee has a third process connection and
-        # counting cannot say which two of the three are the run. The two names
-        # are the whole of what every inline kind has in common, and on a valve,
-        # a reducer or a fitting they are its only process nozzles, so this is
-        # the same joining those kinds already had.
+        # The run through an inline device is its ``inlet`` to its
+        # ``outlet``, named rather than counted: a tee has a third
+        # process connection and counting cannot say which two of the
+        # three are the run.
         for u in self.units:
             if u.kind in _INLINE and not getattr(u, "new_line_number", False):
                 run = [u.ports.get("inlet"), u.ports.get("outlet")]
@@ -1124,28 +1101,27 @@ class Flowsheet:
         n = 0
 
         def next_name(group: list[Stream]) -> str:
-            """Take the next number for one group of segments sharing a name."""
+            """The next number for segments that share a name."""
             nonlocal n
             n += 1
-            # One count, two starts. `n` is the group's place in the sequence
-            # and both numbers are read off it, each from its own offset,
-            # because a line sequence and a stream number are different labels
-            # on different lists (see `stream_number_start` in `__init__`).
+            # One count, two starts. `n` is the group's place in the
+            # sequence and both numbers are read off it, each from its
+            # own offset, because a line sequence and a stream number
+            # are different labels on different lists (see
+            # `stream_number_start` in `__init__`).
             sequence = str(self.line_number_start + n - 1)
             number = self.stream_number_start + n - 1
             for s in group:
-                # A sequence the author put there outranks the one numbering
-                # would assign, however often numbering re-runs.
+                # A sequence the author put there outranks the one
+                # numbering would assign, however often it re-runs.
                 if s.sequence is None or s.sequence == s._auto_sequence:
                     s.sequence = s._auto_sequence = sequence
             carrier = next((s for s in group if s.has_line_number), None)
             if carrier is not None:
                 return _format_line_number(self.line_numbering_scheme, carrier)
             # The offset is applied to the number, not inside the format
-            # string, so a callable scheme is handed the same ``n`` a format
-            # string interpolates. Sending the raw count to one and the offset
-            # count to the other would make `stream_number_start` do nothing on
-            # exactly the sheets that had been reaching for it by hand.
+            # string, so a callable scheme is handed the same ``n`` a
+            # format string interpolates.
             return (self.stream_naming_scheme(number)
                     if callable(self.stream_naming_scheme)
                     else self.stream_naming_scheme.format(n=number))
@@ -1165,27 +1141,27 @@ class Flowsheet:
             if s.auto_named:
                 s.name = group_name[find(i)]
 
-        # Energy before signals: `sorted` is stable, so each kind keeps its
-        # creation order within the tail of the sequence.
+        # Energy before signals: `sorted` is stable, so each kind keeps
+        # its creation order within the tail of the sequence.
         for s in sorted((s for s in self.streams if s.kind != "material"),
                         key=lambda s: s.kind != "energy"):
             if s.auto_named:
                 s.name = next_name([s])
 
     def validate(self, *, diagram: str | None = None) -> list:
-        """Return validation issues for the flowsheet (errors first, then warnings).
+        """Validation issues, errors first, then warnings.
 
-        See :mod:`pandid.validate`. Errors are contradictions the engine cannot
-        honor (overlapping pins, off-sheet coords); warnings are imperfections
-        (a route crossing a unit body, a large detour).
+        See :mod:`pandid.validate`. Errors are contradictions the engine
+        cannot honor (overlapping pins, off-sheet coords); warnings are
+        imperfections (a route crossing a unit body, a large detour).
 
-        ``diagram`` names the drawing the findings are about, in the spelling
-        :meth:`to_svg` takes it: ``"pfd"`` (the default) or ``"p&id"``. Almost
-        nothing here depends on it, since a flowsheet is a flowsheet either way.
-        One finding does: a P&ID draws no arrowheads, so nozzles pitched inside
-        the head they would carry on a PFD are not a defect on a sheet that
-        draws no head to crowd. ``render()`` passes the drawing it is making, so
-        the warnings left on ``fs.warnings`` are about the sheet that came out.
+        ``diagram`` names the drawing the findings are about, in the
+        spelling :meth:`to_svg` takes it: ``"pfd"`` (the default) or
+        ``"p&id"``. One finding depends on it: a P&ID draws no
+        arrowheads, so nozzles pitched inside the head they would carry
+        on a PFD are not a defect there. ``render()`` passes the drawing
+        it is making, so the warnings left on ``fs.warnings`` are about
+        the sheet that came out.
         """
         from pandid.render.svg import draws_arrowheads
         from pandid.validate import validate as _validate
@@ -1197,53 +1173,57 @@ class Flowsheet:
                connections: str | None = None,
                jump_direction: str = "vertical", debug: bool | float = False,
                check: bool = True) -> str:
-        """Render the flowsheet to an SVG string, running ``layout()`` and
-        ``route()`` first if they have not been run yet.
+        """Render to an SVG string, running ``layout()`` and ``route()``
+        first if they have not been run yet.
 
-        ``border`` rules the sheet: ``"zone"`` for the ASME-style zone-ruled
-        drawing frame, ``"none"`` (the default) for a plain edge. The title
-        block and annotation boxes attached to this flowsheet are drawn either
-        way.
+        ``border`` rules the sheet: ``"zone"`` for the ASME-style
+        zone-ruled drawing frame, ``"none"`` (the default) for a plain
+        edge. The title block and annotation boxes attached to this
+        flowsheet are drawn either way.
 
-        ``diagram`` says which drawing this is: ``"pfd"`` (the default) or
-        ``"p&id"``, also spelled ``"pid"``. A P&ID draws its process lines
-        without arrowheads, since flow direction is read off the equipment and
-        the line list rather than off an arrow on every run. The two are
-        independent: the frame is sheet furniture and a PFD carries the
-        zone-ruled one as readily as a P&ID does.
+        ``diagram`` says which drawing this is: ``"pfd"`` (the default)
+        or ``"p&id"``, also spelled ``"pid"``. A P&ID draws its process
+        lines without arrowheads, since flow direction is read off the
+        equipment and the line list rather than off an arrow on every
+        run. The two are independent: the frame is sheet furniture and a
+        PFD carries the zone-ruled one as readily as a P&ID does.
 
-        ``page_size`` draws a sheet of exactly that standard size (``"A4"``
-        through ``"A0"``), fitting the drawing into what the sheet furniture
-        leaves; omit it to size the sheet to the drawing instead.
-        ``jump_direction`` selects which of two crossing lines gets the
-        semicircle hop: ``"vertical"`` or ``"horizontal"``.
+        ``page_size`` draws a sheet of exactly that standard size
+        (``"A4"`` through ``"A0"``), fitting the drawing into what the
+        sheet furniture leaves; omit it to size the sheet to the drawing
+        instead. ``jump_direction`` selects which of two crossing lines
+        gets the semicircle hop: ``"vertical"`` or ``"horizontal"``.
 
-        ``connections`` says how the sheet's joints are made up, as the double
-        tick across the run:
+        ``connections`` says how the sheet's joints are made up, as the
+        double tick across the run:
 
         * ``"none"`` (the default) marks nothing;
-        * ``"flanged"`` marks every equipment nozzle **and both sides of every
-          valve and in-line fitting**, which is how a body is got out of a line;
-        * ``"flanged-at-nozzles"`` marks the nozzles only and leaves the bodies
-          in the run unmarked, which is what ``P&ID_301.pdf`` draws.
+        * ``"flanged"`` marks every equipment nozzle **and both sides of
+          every valve and in-line fitting**, which is how a body is got
+          out of a line;
+        * ``"flanged-at-nozzles"`` marks the nozzles only and leaves the
+          bodies in the run unmarked, which is what ``P&ID_301.pdf``
+          draws.
 
-        Reducers and tees are welded fittings and take no mark under either.
-        Boundary flags, instruments and signal lines are never marked: there is
-        no joint to describe. Only a P&ID marks joints at all, per ISO 15519-2
-        Table 5, so this draws nothing on a PFD. Which bodies are flanged is a
-        drafting choice and no standard on disk settles it; see
-        :func:`~pandid.render.svg.flanged_joint`. One line may say otherwise
-        with ``connect(..., ends=...)``.
+        Reducers and tees are welded fittings and take no mark under
+        either. Boundary flags, instruments and signal lines are never
+        marked: there is no joint to describe. Only a P&ID marks joints
+        at all, per ISO 15519-2 Table 5, so this draws nothing on a PFD.
+        Which bodies are flanged is a drafting choice and no standard on
+        disk settles it; see :func:`~pandid.render.svg.flanged_joint`.
+        One line may say otherwise with ``connect(..., ends=...)``.
 
-        ``debug`` draws the coordinate overlay under the diagram, which is
-        scaffolding for whoever is writing the placement rather than part of the
-        drawing: a ruled grid carrying its own coordinates, a marker on the point
-        every ``pin(x=, y=)`` sets, and a marker on every port. ``True`` rules
-        the grid at its default 50-unit spacing and a number sets that spacing.
-        Off by default, and no sheet issued to anyone should have it on.
+        ``debug`` draws the coordinate overlay under the diagram: a
+        ruled grid carrying its own coordinates, a marker on the point
+        every ``pin(x=, y=)`` sets, and a marker on every port. ``True``
+        rules the grid at its default 50-unit spacing and a number sets
+        that spacing. It is scaffolding for whoever is writing the
+        placement rather than part of the drawing, and is off by
+        default.
 
-        When ``check`` is true, validation runs first: any *error* raises
-        :class:`ValueError`, and *warnings* are collected on ``self.warnings``.
+        When ``check`` is true, validation runs first: any *error*
+        raises :class:`ValueError`, and *warnings* are collected on
+        ``self.warnings``.
         """
         if any(u.frame is None for u in self.units):
             self.layout()
@@ -1271,66 +1251,71 @@ class Flowsheet:
                   connections: str | None = None,
                   jump_direction: str = "vertical",
                   show_stream_table: bool = False, check: bool = True) -> str:
-        """Render the flowsheet to a draw.io (``.drawio``) document string,
-        running ``layout()`` and ``route()`` first if they have not been run yet.
+        """Render to a draw.io (``.drawio``) document string, running
+        ``layout()`` and ``route()`` first if they have not been run
+        yet.
 
-        The drawing comes out as a *model* rather than a picture: every unit is a
-        draw.io shape and every stream an edge between two of its connection
-        points, so an author can open it in draw.io / diagrams.net and move
-        blocks and lines by hand. It is also the route to Visio, which draw.io
-        exports natively.
+        The drawing comes out as a *model* rather than a picture: every
+        unit is a draw.io shape and every stream an edge between two of
+        its connection points, so an author can open it in draw.io /
+        diagrams.net and move blocks and lines by hand. It is also the
+        route to Visio, which draw.io exports natively.
 
-        The equipment symbols are draw.io's own P&ID stencils (see ``NOTICE``),
-        so the file *references* them rather than carrying a tracing: what opens
-        is a native, editable shape. The fifteen symbols this library draws
-        itself -- the instrument balloons, the junctions, the off-page flags, the
-        conveyor -- have no draw.io stencil behind them and are approximated with
-        draw.io's built-in shapes; :mod:`pandid.render.drawio` names each one and
+        The equipment symbols are draw.io's own P&ID stencils (see
+        ``NOTICE``), so the file *references* them rather than carrying
+        a tracing: what opens is a native, editable shape. The fifteen
+        symbols this library draws itself -- the instrument balloons,
+        the junctions, the off-page flags, the conveyor -- have no
+        draw.io stencil behind them and are approximated with draw.io's
+        built-in shapes; :mod:`pandid.render.drawio` names each one and
         what the approximation loses.
 
-        ``diagram`` says which drawing this is, exactly as :meth:`to_svg` takes
-        it: a P&ID exports its process lines without arrowheads. ``check``
-        validates first, on the same terms. ``connections`` marks the joints,
-        also exactly as :meth:`to_svg` takes it, and in the same places -- the
-        two backends ask one function where a flange goes.
+        ``diagram`` says which drawing this is, exactly as
+        :meth:`to_svg` takes it: a P&ID exports its process lines
+        without arrowheads. ``check`` validates first, on the same
+        terms. ``connections`` marks the joints, also exactly as
+        :meth:`to_svg` takes it, and in the same places -- the two
+        backends ask one function where a flange goes.
 
-        Sheet furniture (the title block and any annotation boxes) is docked by
-        the same arithmetic the sheet docks it with, and anything columnar -- an
-        equipment list, a legend, a numbered note list, a
-        :class:`~pandid.document.TableBox` -- comes out as a real draw.io table
-        with rows and cells rather than as one block of text.
+        Sheet furniture (the title block and any annotation boxes) is
+        docked by the same arithmetic the sheet docks it with, and
+        anything columnar -- an equipment list, a legend, a numbered
+        note list, a :class:`~pandid.document.TableBox` -- comes out as
+        a real draw.io table with rows and cells rather than one block
+        of text.
 
         ``page_size`` puts the model on paper, exactly as it does for
-        :meth:`to_svg`: the file carries the page for draw.io to rule, the
-        furniture docks to that page rather than to the drawing's own bounds,
-        and the drawing is fitted into what the furniture leaves. Omit it and
-        the drawing keeps its own coordinates on an unbounded canvas, which is
-        what a model is.
+        :meth:`to_svg`: the file carries the page for draw.io to rule,
+        the furniture docks to that page rather than to the drawing's
+        own bounds, and the drawing is fitted into what the furniture
+        leaves. Omit it and the drawing keeps its own coordinates on an
+        unbounded canvas, which is what a model is.
 
-        ``border`` rules that page. ``"zone"`` draws the frame, the sheet edge
-        and the lettered band between them. One caveat the author should know,
-        and it is the reason this was argued over rather than simply added: a
-        zone grid is an *address space* (ISO 15519-1 Clause 9), and
-        :attr:`pandid.units._Boundary.reference` is where this library writes
-        addresses into it. Those hold while the sheet holds. In an editable
-        model they do not -- move a column and it is in a different zone from
-        the one every reference names -- so what is exported is a **snapshot of
-        the grid**, true of the drawing as it left pandid.
+        ``border`` rules that page. ``"zone"`` draws the frame, the
+        sheet edge and the lettered band between them, with one caveat:
+        a zone grid is an *address space* (ISO 15519-1 Clause 9) and
+        :attr:`pandid.units._Boundary.reference` writes addresses into
+        it. In an editable model those do not hold -- move a column and
+        it is in a different zone from the one every reference names --
+        so what is exported is a **snapshot of the grid**, true of the
+        drawing as it left pandid.
 
         ``jump_direction`` selects which of two crossing lines gets the
-        semicircle hop, exactly as it does on the sheet: ``"vertical"``, the
-        default, hops the vertical runs. draw.io draws the hop itself from a
-        style key on the edge that carries it, and settles ties between two
-        crossing lines by z-order, so the export states both.
+        semicircle hop, exactly as it does on the sheet: ``"vertical"``,
+        the default, hops the vertical runs. draw.io draws the hop
+        itself from a style key on the edge that carries it, and settles
+        ties between two crossing lines by z-order, so the export states
+        both.
 
-        ``show_stream_table`` docks the stream property table at the foot of the
-        sheet, as :meth:`to_svg` does: one column per unique material stream,
-        one row per property, and the section headings ``stream_table_sections``
-        asks for. It comes out as a real draw.io table too, ruled across and
-        down the way the sheet rules it.
+        ``show_stream_table`` docks the stream property table at the
+        foot of the sheet, as :meth:`to_svg` does: one column per unique
+        material stream, one row per property, and the section headings
+        ``stream_table_sections`` asks for. It comes out as a real
+        draw.io table too, ruled across and down the way the sheet rules
+        it.
 
-        The debug overlay has no counterpart here and :meth:`render` refuses it
-        for a ``.drawio`` path rather than accepting and ignoring it.
+        The debug overlay has no counterpart here and :meth:`render`
+        refuses it for a ``.drawio`` path rather than ignoring it.
         """
         if any(u.frame is None for u in self.units):
             self.layout()
@@ -1365,64 +1350,49 @@ class Flowsheet:
 
         - ``.svg``: pure-Python, always available.
         - ``.pdf`` / ``.png``: require the optional export backend
-          (``pip install 'pandid[pdf]'``), which ships as wheels and needs no
-          system libraries. See :mod:`pandid.render.export`.
-        - ``.drawio``: the editable draw.io / diagrams.net model, and through
-          draw.io's own exporter the way to Visio. See :meth:`to_drawio`.
+          (``pip install 'pandid[pdf]'``), which ships as wheels and
+          needs no system libraries. See :mod:`pandid.render.export`.
+        - ``.drawio``: the editable draw.io / diagrams.net model, and
+          through draw.io's own exporter the way to Visio. See
+          :meth:`to_drawio`.
 
         Args:
             path: Output file path; its extension selects the format.
-            show_stream_table: Draw a property table of all streams at the bottom.
-            border: ``"none"`` or ``"zone"`` (the zone-ruled drawing frame).
+            show_stream_table: Draw a property table of all streams at
+                the bottom.
+            border: ``"none"`` or ``"zone"`` (the zone-ruled frame).
             diagram: ``"pfd"`` (the default) or ``"p&id"``, also spelled
-                ``"pid"``. A P&ID draws its process lines without arrowheads.
-            page_size: Draw on a sheet of exactly this standard size, e.g.
-                ``"A3"``; omit to size the sheet to the drawing.
-            connections: ``"none"`` (the default), ``"flanged"`` -- the double
-                tick at every equipment nozzle and both sides of every valve and
-                in-line fitting -- or ``"flanged-at-nozzles"`` for the nozzles
-                alone. A P&ID only; one line may say otherwise with
+                ``"pid"``. A P&ID draws no arrowheads on process lines.
+            page_size: Draw on a sheet of exactly this standard size,
+                e.g. ``"A3"``; omit to size the sheet to the drawing.
+            connections: ``"none"`` (the default), ``"flanged"`` -- the
+                double tick at every equipment nozzle and both sides of
+                every valve and in-line fitting -- or
+                ``"flanged-at-nozzles"`` for the nozzles alone. A P&ID
+                only; one line may say otherwise with
                 ``connect(ends=...)``.
-            jump_direction: Which crossing lines hop, ``"vertical"`` or ``"horizontal"``.
-            debug: Draw the coordinate overlay under the diagram: the grid, every
-                ``pin()`` anchor and every port. ``True`` for the default
-                spacing, a number to set it. Off by default.
-            check: Validate first; errors raise, warnings collect on ``warnings``.
+            jump_direction: Which crossing lines hop, ``"vertical"`` or
+                ``"horizontal"``.
+            debug: Draw the coordinate overlay under the diagram: the
+                grid, every ``pin()`` anchor and every port. ``True``
+                for the default spacing, a number to set it. Off by
+                default.
+            check: Validate first; errors raise, warnings collect on
+                ``warnings``.
         """
         ext = Path(path).suffix.lower()
         if ext == ".drawio":
-            # One option is refused for a .drawio path, and it is refused rather
-            # than ignored: a caller who asked for something and got a file
-            # without it has been told something false about the file they now
-            # hold.
+            # Refused rather than ignored: a caller who asked for
+            # something and got a file without it has been told
+            # something false about the file they now hold. The overlay
+            # is scaffolding for whoever is writing a placement and
+            # deliberately not part of the drawing, so exporting it
+            # would put it into an editable model as ordinary cells a
+            # reader would have to delete by hand.
             #
-            # This list used to have four more in it, and every one of the four
-            # left on the same terms -- the reason given had not been *checked*.
-            # ``page_size`` and ``border`` were said to have nothing to land on,
-            # and a .drawio file carries both a page and a frame ruled on it.
-            # ``jump_direction`` was said to be draw.io's own decision, and a
-            # jump is a per-connector style that defaults to off, so the export
-            # had no jumps at all rather than jumps we disagreed with. And
-            # ``show_stream_table`` was said to have no sheet furniture to dock
-            # to, which stopped being true when the title strip, the legend, the
-            # equipment list and the notes all went through ``furniture.dock``
-            # in the exporter; what was actually missing was that the stream
-            # table had never been lifted out of the SVG renderer, so the
-            # exporter had no way to ask for one. It has now
-            # (``furniture.stream_table_layout``), and it docks and rules it
-            # where the sheet does.
-            #
-            # ``debug`` is not that kind of claim and does not expire. The
-            # overlay is scaffolding for whoever is writing a placement -- the
-            # grid, every pin() anchor, every port -- and it is deliberately
-            # *not* part of the drawing. Exporting it would put it into an
-            # editable model as ordinary cells a reader would then have to
-            # delete by hand.
-            #
-            # Still a list because the shape is right for the question, and
-            # still ``given != default`` rather than ``is not False``: ``debug``
-            # takes a number as well as a flag, and ``debug=0`` is not a request
-            # for an overlay.
+            # ``given != default`` and not ``is not False``: ``debug``
+            # takes a number as well as a flag, and ``debug=0`` is not a
+            # request for an overlay.
             sheet_only = [
                 name for name, given, default in (
                     ("debug", debug, False),
@@ -1460,11 +1430,11 @@ class Flowsheet:
             )
 
     def _repr_svg_(self) -> str:
-        """IPython/Jupyter integration: display the diagram inline in notebooks."""
+        """IPython/Jupyter: display the diagram inline in a notebook."""
         return self.to_svg()
 
     def show(self) -> None:
-        """Render the flowsheet and open it in the default web browser."""
+        """Render, and open the result in the default web browser."""
         import tempfile
         import webbrowser
         import os
