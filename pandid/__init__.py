@@ -21,7 +21,7 @@ hatch that reaches the drawings no class of their own is named for.
 # time (`[tool.hatch.version]`), so the distribution metadata cannot disagree
 # with what `import pandid` reports, and a source checkout reports the same string
 # without the package having to be installed.
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 from pandid.components import Component
 from pandid.flowsheet import Flowsheet
