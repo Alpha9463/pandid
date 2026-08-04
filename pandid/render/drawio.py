@@ -187,12 +187,18 @@ if TYPE_CHECKING:
 #: which is not part of the installed package.
 _INK = "#111"
 
-#: What the fill starts at. Also ``mxgraph_to_svg``'s: a monochrome
-#: sheet lets the paper through, and a stencil that wants a part of
-#: itself solid says so with its own ``<fillcolor>``, which draw.io
-#: reads out of the stencil and not out of the style. So this is the
-#: state the converted artwork was drawn under, said back.
+#: What the fill starts at, for everything this file draws itself: a
+#: monochrome sheet lets the paper through.
 _NO_FILL = "none"
+
+#: What a *vendored stencil* is filled with, which is not that. draw.io
+#: draws its shape, and no P&ID palette in it names a ``fillColor``, so
+#: the page colour is what the artwork was authored under: its body is
+#: the last ``<fillstroke>`` in the shape and covers the nozzles behind
+#: it. See ``scripts/mxgraph_to_svg.DEFAULT_FILL``, the same colour for
+#: the same reason. Written ``none`` here, the sphere's shell ran
+#: through both its crown nozzles on the export as well as the sheet.
+_PAPER = "#ffffff"
 
 #: No ink at all. The same word, and it works for the same reason:
 #: draw.io's ``mxStylesheet.getCellStyle`` *deletes* a key whose value
@@ -1181,7 +1187,7 @@ class DrawioRenderer:
             # symbol lighter than the pipes around it. See
             # :data:`_SYMBOL_STROKE`.
             keys = [f"shape={sym.drawio_shape}", "outlineConnect=0",
-                    f"strokeColor={_INK}", f"fillColor={sym.drawio_fill or _NO_FILL}",
+                    f"strokeColor={_INK}", f"fillColor={sym.drawio_fill or _PAPER}",
                     weight]
             return keys
         # The stand-in, or draw.io's default vertex. Its mirror, where

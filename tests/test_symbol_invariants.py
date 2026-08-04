@@ -1873,14 +1873,14 @@ def _painted(ops: str) -> list[str]:
 
 
 def test_a_fill_takes_the_paper_until_the_stencil_asks_for_ink():
-    """The sheet is monochrome and its outlines are transparent, so the fill
-    colour starts at "none" -- for <fill> exactly as for <fillstroke>, since
-    both paint the same canvas state. A bare <fill> is a background wash, and
-    a wash in no colour draws nothing at all rather than an invisible element
-    for some later reader to mistake for ink."""
-    assert _painted("<fillstroke/>") == ["none"]
+    """The fill colour starts at the paper, which is what draw.io fills these
+    shapes with -- for <fill> exactly as for <fillstroke>, since both paint the
+    same canvas state. A bare <fill> is that background wash and it is opaque:
+    a stencil draws its body last and expects it to cover the nozzles and legs
+    behind it. <stroke> paints no fill whatever the state is."""
+    assert _painted("<fillstroke/>") == ["white"]
     assert _painted("<stroke/>") == ["none"]
-    assert _painted("<fill/>") == []
+    assert _painted("<fill/>") == ["white"]
 
 
 def test_fillcolor_is_how_a_stencil_asks_for_a_solid_shape():
@@ -1889,7 +1889,8 @@ def test_fillcolor_is_how_a_stencil_asks_for_a_solid_shape():
     incapable of a solid would trade one wrong drawing for another."""
     assert _painted('<fillcolor color="#000000"/><fillstroke/>') == ["#111"]
     assert _painted('<fillcolor color="#000000"/><fill/>') == ["#111"]
-    # mxGraph's two keywords: "stroke" means the ink, "none" the paper.
+    # mxGraph's two keywords: "stroke" means the ink, "none" transparent --
+    # which is the stencil turning the fill off, not the state it started in.
     assert _painted('<fillcolor color="stroke"/><fillstroke/>') == ["#111"]
     assert _painted('<fillcolor color="none"/><fillstroke/>') == ["none"]
 
@@ -1901,7 +1902,20 @@ def test_save_and_restore_bracket_the_fill_colour():
     assert _converted_fills(
         '<save/><rect x="0" y="0" w="4" h="4"/><fillcolor color="#000000"/><fillstroke/>'
         '<restore/><rect x="5" y="5" w="4" h="4"/><fillstroke/>'
-    ) == ["#111", "none"]
+    ) == ["#111", "white"]
+
+
+def test_the_sphere_draws_its_shell_over_its_nozzles():
+    """The symbol the fill is most load-bearing on. Its crown stubs
+    straddle the shell -- each 12-unit box spans y 0..12 and the shell
+    is at y 11.6 under the left one's outer edge -- so the arc crosses
+    the box for its whole width and read as a crack in the vessel
+    (#268). The stencil answers that by painting the shell last and
+    filled, which trims each stub at the shell."""
+    svg = default_registry.get("tank", "sphere").svg
+    assert svg.rindex("<ellipse") > svg.rindex("<rect"), "the shell is drawn last"
+    shell = re.search(r"<ellipse[^>]*>", svg)
+    assert 'fill="white"' in shell.group(0), "and is opaque, so it covers them"
 
 
 # ---------------------------------------------------------------------------

@@ -1028,6 +1028,12 @@ _BODY_INK = "#111"
 #: the wrong shape filled, silently and plausibly.
 _FIRST_PATH = re.compile(r"<path\b[^>]*>")
 
+#: What that body is filled with before it is darkened: the paper a
+#: stencil is converted on, as ``scripts/mxgraph_to_svg.DEFAULT_FILL``.
+#: Darkening is that fill swapped for ink, so it is what the swap looks
+#: for, and a body that does not carry it is not a body.
+_BODY_PAPER = 'fill="white"'
+
 
 def closed_marking(unit, registry=None) -> str:
     """How a unit's normally closed position is drawn, ``""`` when it is
@@ -1089,14 +1095,14 @@ def darkened(sym: Symbol) -> Symbol:
     aspect -- is the same valve.
     """
     head = _FIRST_PATH.search(sym.svg)
-    if head is None or 'fill="none"' not in head.group(0):
+    if head is None or _BODY_PAPER not in head.group(0):
         raise ValueError(
-            f"{sym.symbol_id()}: cannot be darkened -- its first <path> is not an "
-            f"unfilled body. A symbol whose body is not the first path it draws "
-            f"does not belong in NC_DARKENS; PIP PIC001 4.2.2.8's NC abbreviation "
-            f"is what such a valve states its position with."
+            f"{sym.symbol_id()}: cannot be darkened -- its first <path> is not a "
+            f"paper-filled body. A symbol whose body is not the first path it "
+            f"draws does not belong in NC_DARKENS; PIP PIC001 4.2.2.8's NC "
+            f"abbreviation is what such a valve states its position with."
         )
-    filled = head.group(0).replace('fill="none"', f'fill="{_BODY_INK}"', 1)
+    filled = head.group(0).replace(_BODY_PAPER, f'fill="{_BODY_INK}"', 1)
     svg = sym.svg[:head.start()] + filled + sym.svg[head.end():]
     return Symbol(
         svg=re.sub(r'id="([^"]*)"', r'id="\1_nc"', svg, count=1),
