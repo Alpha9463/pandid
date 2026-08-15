@@ -67,7 +67,9 @@ written by the layout engine), which is what makes `layout()` idempotent.
 `pandid/render/_vendored_symbols.py`, converting mxGraph stencil XML to SVG via
 `scripts/mxgraph_to_svg.py`. `scripts/symbol_sheet.py` renders a catalogue.
 `scripts/gen_devices.py` generates the equipment classes into `pandid/devices.py`
-from the registry those symbols are in.
+from the registry those symbols are in. `scripts/route_bench.py` times `layout()`
+and `route()` over the examples, which is where a geometry change shows up as
+runtime.
 
 ---
 

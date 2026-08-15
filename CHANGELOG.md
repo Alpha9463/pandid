@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Routing a dense sheet is an order of magnitude faster.** The visibility
+  graph scanned every obstacle for every grid point and every candidate edge.
+  `examples/11_ethanol_pid.py` lays a 394x283 lane grid over 146 obstacles, so
+  that is 16 million rectangle tests before the search has started, and under a
+  profiler 99% of `route()` was spent building the graph rather than searching
+  it. The obstacles are now indexed against the lanes once — an interval per
+  row and per column — and every test is asked of only the few that can reach
+  the point or the segment in hand. `route()` on that sheet falls from 2.4s to
+  0.2s, and across all sixteen examples from 3.4s to 0.3s. It is the same graph
+  and the same search: every golden fixture and every gallery sheet is byte for
+  byte what it was. `scripts/route_bench.py` prints the numbers.
+
 ### Removed
 
 **Breaking.** The six spellings 0.1.2 deprecated are gone in 0.1.3, which is

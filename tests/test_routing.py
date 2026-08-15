@@ -1,7 +1,7 @@
 from pandid.flowsheet import Flowsheet
-from pandid.units import Feed, Product
+from pandid.units import Feed, HeatExchanger, Product, Pump, Valve, Vessel
 from pandid.routing import get_outward_dir
-from pandid.routing.visibility import Rect, VisibilityGraph
+from pandid.routing.visibility import Rect, VisibilityGraph, clear_gaps
 
 
 def test_rect_intersection():
@@ -17,6 +17,85 @@ def test_rect_intersection():
     assert r.intersects_segment(10, 5, 10, 25)
     # Segment completely outside
     assert not r.intersects_segment(5, 5, 25, 5)
+
+
+def test_clear_gaps_closes_the_run_a_span_reaches_into():
+    lane = [0.0, 10.0, 20.0, 30.0, 40.0]
+    # Gap k lies between lane[k] and lane[k + 1]. A span reaching into the two
+    # middle gaps closes both and leaves the ones either side open.
+    assert clear_gaps(lane, [(15.0, 25.0)]) == [True, False, False, True]
+    # Touching a node is not reaching past it: the test is strict on both ends.
+    assert clear_gaps(lane, [(20.0, 30.0)]) == [True, True, False, True]
+    assert clear_gaps(lane, [(0.0, 10.0)]) == [False, True, True, True]
+    # Spans clear of the lane's ends, and spans over the whole of it.
+    assert clear_gaps(lane, [(50.0, 60.0)]) == [True] * 4
+    assert clear_gaps(lane, [(-5.0, 45.0)]) == [False] * 4
+    assert clear_gaps(lane, []) == [True] * 4
+    # A lane with nothing to travel between has no gaps to report on.
+    assert clear_gaps([7.0], [(0.0, 10.0)]) == []
+    assert clear_gaps([], [(0.0, 10.0)]) == []
+
+
+def test_the_obstacle_index_sees_what_an_exhaustive_scan_sees():
+    """The graph narrows each test to the obstacles that can be in the way.
+
+    It indexes them against the lane grid instead of scanning the whole list
+    for every point and every candidate edge, which is what routing spent
+    nearly all of its time on. The narrowing has to be exactly that: the same
+    nodes, and the same adjacency in the same order, as ``Rect.contains`` and
+    ``Rect.intersects_segment`` give when asked about every obstacle. Order is
+    part of it -- A* breaks equal-cost ties by the order neighbours were
+    inserted -- so a re-ordered adjacency list re-routes the sheet.
+
+    The units are pinned rather than laid out, with labels on all four sides
+    and positions chosen so lanes land on obstacle edges: containment is strict
+    and the segment test is not, so an index that confused the two would pass
+    on a sheet whose lanes all fall clear.
+    """
+    fs = Flowsheet("obstacle index")
+    feed = fs.add(Feed("Raw Feed")).pin(x=40, y=200)
+    pump = fs.add(Pump("P-101", label_pos="bottom")).pin(x=180, y=180)
+    hx = fs.add(HeatExchanger("E-101", width=120, height=60, label_pos="left")).pin(x=320, y=170)
+    # x=440 is E-101's right edge (320 + 120) and y=290 its label band's, so the
+    # lanes those obstacles put on the grid fall on this vessel's own.
+    drum = fs.add(Vessel("V-101", width=90, height=140, label_pos="right")).pin(x=440, y=290)
+    valve = fs.add(Valve("FV-101", label_pos="top")).pin(x=620, y=200)
+    prod = fs.add(Product("To Unit 200")).pin(x=760, y=200)
+
+    fs.connect(feed.outlet, pump.suction)
+    fs.connect(pump.discharge, hx.tube_in)
+    fs.connect(hx.tube_out, drum.inlet)
+    fs.connect(drum.outlet, valve.inlet)
+    fs.connect(valve.outlet, prod.inlet)
+    fs.layout()
+
+    graph = VisibilityGraph(fs, margin=15.0)
+    assert len(graph.obstacles) >= 8 and len(graph.nodes) >= 500  # not a vacuous corpus
+
+    scanned_nodes = {
+        (x, y)
+        for x in graph.xs
+        for y in graph.ys
+        if not any(o.contains(x, y) for o in graph.obstacles)
+    }
+    assert graph.nodes == scanned_nodes
+
+    scanned_edges = {n: [] for n in scanned_nodes}
+    for y in graph.ys:
+        valid_x = [x for x in graph.xs if (x, y) in scanned_nodes]
+        for i in range(len(valid_x) - 1):
+            x1, x2 = valid_x[i], valid_x[i + 1]
+            if not any(o.intersects_segment(x1, y, x2, y) for o in graph.obstacles):
+                scanned_edges[(x1, y)].append((x2, y))
+                scanned_edges[(x2, y)].append((x1, y))
+    for x in graph.xs:
+        valid_y = [y for y in graph.ys if (x, y) in scanned_nodes]
+        for i in range(len(valid_y) - 1):
+            y1, y2 = valid_y[i], valid_y[i + 1]
+            if not any(o.intersects_segment(x, y1, x, y2) for o in graph.obstacles):
+                scanned_edges[(x, y1)].append((x, y2))
+                scanned_edges[(x, y2)].append((x, y1))
+    assert graph.edges == scanned_edges
 
 
 def test_outward_dir():
