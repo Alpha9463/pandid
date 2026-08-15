@@ -211,30 +211,27 @@ def test_a_refused_call_does_not_warn_either():
     assert caught == []
 
 
-def test_the_shipped_deprecations_stay_on_the_sheet_that_made_them():
-    """All three 0.1.2 ships, end to end, and a second sheet that sees none.
+def test_a_deprecation_stays_on_the_sheet_that_made_it():
+    """#207, end to end: a second sheet in the same process sees none of it.
 
-    The real ones rather than the stand-in, because #207 is about what a
-    process holding more than one sheet reports. Held to a count and to the
-    sentences the warnings carried, not to spellings written out here, so the
-    release that deletes them thins this test rather than reddening it.
+    Through the stand-in, because 0.1.3 ships no deprecation of its own -- the
+    six 0.1.2 declared were deleted in it, which is the one-release rule
+    working rather than a gap in this file.
     """
     used = Flowsheet("used")
     feed = used.add(U.Feed("F"))
-    cyclone = used.add(U.Separator("CY-401", variant="cyclone"))
+    pump = used.add(_OldPump("P-101"))
     prod = used.add(U.Product("P"))
-    used.connect(feed.outlet, cyclone.feed)
-    used.connect(cyclone.overflow, prod.inlet)
+    used.connect(feed.outlet, pump.suction)
 
     with pytest.warns(DeprecationWarning) as caught:
-        cyclone.vapor  # -> .overflow
-        cyclone.liquid  # -> .underflow
-        used.add(U.Valve("CV-303", variant="pneumatic"))  # -> variant='control'
+        RETIRED.warn(prod, where=prod.name)
+        RETIRED.warn(used)
     warned = sorted(str(w.message) for w in caught)
-    assert len(warned) == 3
+    assert len(warned) == 2
 
     reported = sorted(i.message for i in used.validate() if i.code == CODE)
-    assert reported == warned
+    assert reported == sorted([*warned, RETIRED.message("P-101")])
 
     untouched = Flowsheet("untouched")
     assert [i for i in untouched.validate() if i.code == CODE] == []
@@ -292,8 +289,8 @@ def test_no_deprecation_has_outlived_its_release():
     Every deprecation the package declares names a release that has not shipped.
     One that names the current version or an older one should have been deleted
     in that release, and this is what says so before a user finds it still
-    there. It stopped being vacuous when #138 retired the dust collectors' phase
-    draws, which are the first declarations to walk through this gate.
+    there. The six 0.1.2 declared are what it walked through the gate; 0.1.3
+    deleted them and declares none of its own.
     """
     from pandid import __version__
 
@@ -313,13 +310,11 @@ def test_no_deprecation_has_outlived_its_release():
 
 
 def test_declarations_finds_a_module_constant():
-    """The walker itself, proved twice over.
+    """The walker itself, against a module declaring one the way a real one is.
 
-    Against this module, whose stand-in is declared the way a real one is; and
-    against ``pandid``, which now has real ones to find. The first is what makes
-    the test able to fail on its own terms -- a package that declared none could
-    not show that a declaration *would* be found -- and the second is what says
-    the walker reaches the package it is pointed at.
+    ``declarations()`` walks :mod:`pandid` and this module is not in it, so the
+    same recognition is done here on this module's own namespace: a constant of
+    this type, found by walking what a module holds.
     """
     import sys
 
@@ -327,15 +322,12 @@ def test_declarations_finds_a_module_constant():
     found = {name: value for name, value in vars(module).items() if isinstance(value, Deprecation)}
     assert found == {"RETIRED": RETIRED}
 
-    # Keyed by where each is reachable from, so a constant imported into a
-    # second module appears twice. Asserted by suffix for that reason.
-    declared = declarations()
-    assert declared, "the walker found nothing in a package that declares some"
-    assert {where.rsplit(".", 1)[1] for where in declared} == {
-        "_RETIRED_VAPOR_DRAW",
-        "_RETIRED_LIQUID_DRAW",
-        "_RETIRED_PNEUMATIC",
-        "_RETIRED_PANEL",
-        "_RETIRED_AUX",
-        "_RETIRED_ON",
-    }
+
+def test_the_package_declares_no_deprecation_today():
+    """0.1.3 deleted the six 0.1.2 announced and retires nothing new, so the
+    walker over ``pandid`` finds none. Written out rather than left implied,
+    because an empty answer is also what a broken walker returns:
+    :func:`test_declarations_finds_a_module_constant` is what says it can find
+    one at all.
+    """
+    assert declarations() == {}

@@ -288,11 +288,10 @@ _UNIT_KEYS = {
 _BALLOON_KEYS = {"balloon_of", "at", "offset", "angle", "variant", "display"}
 _INSTRUMENT_KEYS = {
     "type", "number", "variant", "display", "description", "reference", "width",
-    "height", "label_pos", "sensing", "acting_on", "near", "on", "at", "offset",
+    "height", "label_pos", "sensing", "acting_on", "near", "at", "offset",
     "angle", "pin", "port_faces", "quadrants",
 }
-#: The three ways an instrument entry names its anchor. ``on`` is the
-#: retired spelling of ``sensing``; see :data:`pandid.flowsheet._RETIRED_ON`.
+#: The three ways an instrument entry names its anchor.
 _ANCHOR_KEYS = ("sensing", "acting_on", "near")
 #: The quadrant each ``quadrants:`` key writes into. The spec spells the
 #: argument names :meth:`pandid.units.Instrument.annotate` takes, not
@@ -694,12 +693,6 @@ def _find_port(unit: Unit, name: Any, where: str) -> Port:
             return unit.signal_port(name)
         except KeyError:
             pass
-    # A spec file is a stored artifact, so it may name a nozzle by a
-    # spelling this release has retired. ``_current_name`` warns and
-    # hands back the current name; anything else comes back unchanged
-    # and is refused below.
-    if isinstance(name, str):
-        name = unit._current_name(name)
     if not isinstance(name, str) or name not in unit.ports:
         raise SpecError(
             f"{where}: {type(unit).__name__} {unit.name!r} has no port {name!r}"
@@ -819,7 +812,7 @@ def _read_waypoints(entry: Any, where: str) -> list[tuple[float, float]]:
 
 
 def _read_host(fs: Flowsheet, entry: Any, where: str) -> Stream | Unit:
-    """Resolve an instrument's ``on:``: a unit or stream, or a port."""
+    """Resolve an instrument's anchor: a unit or stream, or a port."""
     if isinstance(entry, str):
         unit = next((u for u in fs.units if u.name == entry), None)
         stream = next((s for s in fs.streams if s.name == entry), None)
@@ -848,20 +841,8 @@ def _read_host(fs: Flowsheet, entry: Any, where: str) -> Stream | Unit:
 
 def _attach_instrument(fs: Flowsheet, inst: Instrument, data: Mapping[str, Any],
                        where: str) -> None:
-    from pandid.flowsheet import _RETIRED_ON
-
     where = f"{where} {inst.name!r}"
     named = [key for key in _ANCHOR_KEYS if key in data]
-    if "on" in data:
-        if named:
-            raise SpecError(
-                f"{where}: 'on' is the retired spelling of "
-                f"{', '.join(repr(k) for k in named)}, so both together ask for two "
-                f"anchors. Drop the 'on'"
-            )
-        _RETIRED_ON.warn(inst, where=inst.name)
-        named = ["sensing"]
-        data = {**data, "sensing": data["on"]}
     if len(named) > 1:
         raise SpecError(
             f"{where}: a balloon is anchored to one thing, and this entry named "
@@ -1220,8 +1201,9 @@ def _write_instrument(inst: Instrument) -> dict[str, Any]:
     )
     _write_common(inst, entry)
     # The two axes apart again. ``_write_common`` wrote the registry's
-    # spelling, which folds them together, and reading that back would
-    # trigger a retired one on a sheet nobody had edited.
+    # spelling, which folds them together, and ``panel`` and ``aux``
+    # fold to a ``variant`` the constructor refuses: reading such a file
+    # back would raise on a sheet nobody had edited.
     entry.pop("variant", None)
     if inst.symbol_type != "default":
         entry["variant"] = inst.symbol_type
@@ -1355,9 +1337,9 @@ _YAML_LOADER: Any = None
 def _core_schema_loader(yaml_module) -> Any:
     """A safe loader restricted to the YAML **1.2** core schema.
 
-    PyYAML implements YAML 1.1, where ``on``, ``off``, ``yes`` and
-    ``no`` are booleans and an unquoted date is a ``datetime.date``.
-    That silently turns an instrument's ``on:`` key into ``True`` and a
+    PyYAML implements YAML 1.1, where ``on``, ``off``, ``yes``, ``no``
+    and ``N`` are booleans and an unquoted date is a ``datetime.date``.
+    That silently turns a balloon's ``at: N`` into ``False`` and a
     revision's ``date:`` into an object: two traps sprung by writing the
     format exactly as documented. YAML 1.2 dropped both, and only
     ``true``/``false`` are booleans here.

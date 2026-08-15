@@ -25,7 +25,6 @@ from collections.abc import Sequence
 from difflib import get_close_matches
 from typing import TYPE_CHECKING, Any, TypeVar
 
-from pandid.deprecation import Deprecation
 from pandid.geometry import Frame, Pin, _Slot
 from pandid.ports import Port
 
@@ -342,7 +341,6 @@ class Unit:
         the same nozzle to the same point twice is the same placement
         twice rather than a device walking off its run.
         """
-        port_name = self._current_name(port_name)
         if port_name not in self.ports:
             raise KeyError(
                 f"{type(self).__name__} {self.name!r} has no port {port_name!r} to "
@@ -376,7 +374,6 @@ class Unit:
         """
         from pandid.portgeom import port_faces
 
-        port_name = self._current_name(port_name)
         if port_name not in self.ports:
             raise KeyError(
                 f"{type(self).__name__} {self.name!r} has no port {port_name!r}; "
@@ -452,62 +449,9 @@ class Unit:
         """
         return type(self).PORT_ANCHORS.get(port_name, port_name)
 
-    def _retired_ports(self) -> dict[str, tuple[str, Deprecation]]:
-        """Nozzle names this unit still answers to, and what each is.
-
-        Empty except on a class that has renamed a draw, and empty there
-        for every variant that did not have the old name. Asked of the
-        *unit* for that second reason: :class:`Separator`'s rename is
-        true of three of its eleven drawings.
-
-        Each value pairs the current name with the
-        :class:`~pandid.deprecation.Deprecation` that announces it, so
-        the nozzle returned and the nozzle named in the warning cannot
-        drift apart.
-        """
-        return {}
-
-    def _retired_port(self, name: str, stacklevel: int = 4) -> Port | None:
-        """The nozzle a retired name still reaches, ``None`` if not one.
-
-        Every way to a nozzle *by name* goes through here --
-        ``sep.vapor``, ``sep.port("vapor")``, ``nozzle()``,
-        ``pin(port=...)`` and the spec reader. ``sep.ports["vapor"]``
-        does not: it is the dict itself.
-
-        *stacklevel* is 4 rather than
-        :meth:`~pandid.deprecation.Deprecation.warn`'s default 3,
-        because there is one frame more than it assumes: ``warn``, this
-        method, the accessor that called it, then the author's line. A
-        caller with a frame of its own in between passes 5.
-        """
-        retired = self._retired_ports().get(name)
-        if retired is None:
-            return None
-        current, notice = retired
-        notice.warn(self, where=self.name, stacklevel=stacklevel)
-        return self.ports[current]
-
-    def _current_name(self, port_name: str) -> str:
-        """``port_name``, or what it is called now if it is retired.
-
-        For the entry points that carry a name rather than a
-        :class:`~pandid.ports.Port`: :meth:`nozzle`, :meth:`pin`'s
-        ``port=`` and :func:`pandid.spec._find_port`. A name that is not
-        retired comes back unchanged, typos included, so each of them
-        still raises where it did.
-        """
-        if port_name in self.ports:
-            return port_name
-        retired = self._retired_port(port_name, stacklevel=5)
-        return port_name if retired is None else retired.name
-
     def port(self, name: str) -> Port:
         if name in self.ports:
             return self.ports[name]
-        retired = self._retired_port(name)
-        if retired is not None:
-            return retired
         raise KeyError(
             f"{type(self).__name__!r} has no port named {name!r}; "
             f"available ports: {sorted(self.ports)}"
@@ -534,12 +478,6 @@ class Unit:
             # typos a message listing the real ports.
             ports = self.__dict__.get("ports")
             if ports is not None and not name.startswith("_"):
-                # A renamed nozzle is reachable by its old name for one
-                # release. Looked up here rather than kept in ``ports``,
-                # so the sheet's own nozzle list is the new vocabulary.
-                retired = self._retired_port(name)
-                if retired is not None:
-                    return retired
                 raise AttributeError(
                     f"{type(self).__name__} {self.__dict__.get('name', '?')!r} has no "
                     f"attribute or port {name!r}; available ports: {sorted(ports)}"
@@ -717,24 +655,6 @@ class _NormallyPositioned(Unit):
         """
 
 
-#: ``variant='pneumatic'`` retired in 0.1.2: it names a signal medium
-#: rather than a body, and as of 0.1.2 it draws the same symbol
-#: ``control`` does.
-#:
-#: A module constant, which is the only shape
-#: :func:`pandid.deprecation.declarations` enumerates and so the only
-#: one a retirement can be held to a release by.
-#:
-#: ``butterfly_pneumatic`` is kept: it names a body with an actuator on
-#: it, and it is the only spelling for its drawing. Reach it either way,
-#: or as ``variant='butterfly', actuator='diaphragm'``.
-_RETIRED_PNEUMATIC = Deprecation(
-    what="Valve(variant='pneumatic')",
-    instead="Valve(variant='control')",
-    removed_in="0.1.3",
-)
-
-
 class Valve(_NormallyPositioned):
     """Control or let-down valve.
 
@@ -829,9 +749,6 @@ class Valve(_NormallyPositioned):
         """
         from pandid.render.symbols import ACTUATED, ACTUATORS, actuated_variant
 
-        if variant == "pneumatic":
-            _RETIRED_PNEUMATIC.warn(self, where=name)
-            variant = "control"
         if not actuator:
             return variant
         if actuator not in ACTUATORS:
@@ -1552,22 +1469,12 @@ _BALLOON_SHAPES = {drawn: shape for (shape, _display), drawn in _BALLOON_SYMBOLS
 #: distributed control system (DCS)."
 _IMPLIED_DISPLAY = {"shared": "central"}
 
-_RETIRED_PANEL = Deprecation(
-    what="Instrument(variant='panel')",
-    instead="Instrument(display='central')",
-    removed_in="0.1.3",
-)
-
-_RETIRED_AUX = Deprecation(
-    what="Instrument(variant='aux')",
-    instead="Instrument(display='subsidiary')",
-    removed_in="0.1.3",
-)
-
-#: The two variants that were a location wearing a symbol type's
-#: clothes, and the display each of them meant.
-_RETIRED_DISPLAYS = {"panel": (_RETIRED_PANEL, "central"),
-                     "aux": (_RETIRED_AUX, "subsidiary")}
+#: The two spellings that were a location wearing a symbol type's
+#: clothes, and the display each of them meant. Removed in 0.1.3 and
+#: refused by name, because each is also the registered *artwork* the
+#: pair above resolves to: a ``variant`` left to the registry would draw
+#: the bar while the balloon went on saying it was in the field.
+_DISPLAY_VARIANTS = {"panel": "central", "aux": "subsidiary"}
 
 
 class Instrument(Unit):
@@ -1657,7 +1564,7 @@ class Instrument(Unit):
         #: The symbol type the author asked for, kept apart from
         #: :attr:`~Unit.variant` because the registry's spelling folds
         #: the display into it. This is the half ``to_dict`` writes, so
-        #: a sheet read back never triggers a retired spelling.
+        #: a sheet read back never names a variant that is refused.
         self.symbol_type = _BALLOON_SHAPES.get(variant, variant)
         # The drawn tag, kept apart from the name because a repeated
         # square needs a name of its own to be addressed by. See
@@ -1692,21 +1599,15 @@ class Instrument(Unit):
         instrument does* -- and the registry answers both with one
         variant name. This is where the two meet, so that the rest of
         the package sees a variant and nothing else, exactly as
-        :meth:`Valve._resolved_variant` folds a body and an actuator
-        into one.
+        :meth:`Valve._resolve` folds a body and an actuator into one.
         """
-        retired = _RETIRED_DISPLAYS.get(variant)
-        if retired is not None:
-            notice, implied = retired
-            notice.warn(self, where=name)
-            if display is not None and display != implied:
-                raise ValueError(
-                    f"{name}: variant={variant!r} already says the information is in "
-                    f"the {implied} control system, and display={display!r} says it is "
-                    f"somewhere else. variant={variant!r} is retired for this reason; "
-                    f"state the location once, as display={display!r}"
-                )
-            variant, display = "default", implied
+        meant = _DISPLAY_VARIANTS.get(variant)
+        if meant is not None:
+            raise ValueError(
+                f"{name}: variant={variant!r} says where the information is "
+                f"available, which is the display= axis: write "
+                f"display={meant!r}. What the instrument *does* is variant="
+            )
         if display is None:
             display = _IMPLIED_DISPLAY.get(variant, "field")
         if display not in DISPLAYS:
@@ -2212,23 +2113,6 @@ class Reactor(Unit):
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
 
 
-#: The two draws the dust collectors renamed in 0.1.2, one declaration
-#: each. Module constants, because
-#: :func:`pandid.deprecation.declarations` finds them that way and no
-#: other. One per nozzle, so a finding names only the call the author
-#: actually wrote.
-_RETIRED_VAPOR_DRAW = Deprecation(
-    what="Separator(variant='cyclone'|'gravity'|'electrostatic').vapor",
-    instead=".overflow",
-    removed_in="0.1.3",
-)
-_RETIRED_LIQUID_DRAW = Deprecation(
-    what="Separator(variant='cyclone'|'gravity'|'electrostatic').liquid",
-    instead=".underflow",
-    removed_in="0.1.3",
-)
-
-
 class Separator(Unit):
     """Flash drum or phase separator.
 
@@ -2264,11 +2148,9 @@ class Separator(Unit):
     its product from the underflow, and the identical cyclone on a vent
     line throws that same catch away.
 
-    The three collectors called their catch ``liquid`` up to 0.1.1. The
-    old pair still resolves for 0.1.2 with a :class:`DeprecationWarning`
-    and a ``deprecated`` finding on
-    :meth:`~pandid.flowsheet.Flowsheet.validate`, and goes in 0.1.3; see
-    :meth:`_retired_ports`.
+    The three collectors called their catch ``vapor`` and ``liquid`` up
+    to 0.1.1, ``overflow`` and ``underflow`` since 0.1.2. The old pair
+    is gone as of 0.1.3: a sheet written against it raises.
 
     Every variant is drawn one way up and reported as ``gravity-turned``
     by :meth:`~pandid.flowsheet.Flowsheet.validate` if turned, which is
@@ -2342,19 +2224,10 @@ class Separator(Unit):
     #: anchor what they are asked for, and a class-wide dict would send
     #: a sifter's ``overflow`` to a ``vapor`` anchor its stencil does
     #: not have -- which is a nozzle on the centre of the box.
-    #:
-    #: It doubles as the list of variants that renamed anything, which
-    #: is what :meth:`_retired_ports` reads it for.
     _VARIANT_ANCHORS = {
         "cyclone": {"overflow": "vapor", "underflow": "liquid"},
         "gravity": {"overflow": "vapor", "underflow": "liquid"},
         "electrostatic": {"overflow": "vapor", "underflow": "liquid"},
-    }
-    #: The old draw names, what each reaches now, and the notice it
-    #: carries.
-    _RETIRED_DRAWS = {
-        "vapor": ("overflow", _RETIRED_VAPOR_DRAW),
-        "liquid": ("underflow", _RETIRED_LIQUID_DRAW),
     }
 
     def _symbol_anchor(self, port_name: str) -> str:
@@ -2366,16 +2239,6 @@ class Separator(Unit):
         """
         renamed = self._VARIANT_ANCHORS.get(self.variant, {})
         return renamed.get(port_name) or super()._symbol_anchor(port_name)
-
-    def _retired_ports(self) -> dict[str, tuple[str, Deprecation]]:
-        """``vapor`` and ``liquid``, on the variants renaming them.
-
-        Answered from ``self.variant``: a flash drum, a knockout drum
-        and a wet scrubber still *have* a ``vapor`` and a ``liquid``, so
-        a class-wide answer would retire the correct vocabulary along
-        with the wrong one.
-        """
-        return self._RETIRED_DRAWS if self.variant in self._VARIANT_ANCHORS else {}
 
     @classmethod
     def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:

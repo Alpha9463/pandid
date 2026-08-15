@@ -10,7 +10,6 @@ from pathlib import Path
 from string import Formatter
 from typing import Callable, TYPE_CHECKING, TypeVar
 
-from pandid.deprecation import Deprecation
 from pandid.stations import (
     DEFAULT_BYPASS_RISE,
     DEFAULT_DRAIN_DROP,
@@ -60,12 +59,6 @@ DEFAULT_LOOP_NUMBER_START = 101
 #: set of its own: see :data:`~pandid.render.svg._INLINE_BODIES`, a
 #: strict subset of this one.
 INLINE_KINDS = frozenset({"valve", "reducer", "fitting", "tee"})
-
-_RETIRED_ON = Deprecation(
-    what="add_instrument(on=...)",
-    instead="add_instrument(sensing=...), acting_on= or near=",
-    removed_in="0.1.3",
-)
 
 
 def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream) -> str:
@@ -443,7 +436,7 @@ class Flowsheet:
                        sensing: "Stream | Unit | None" = None,
                        acting_on: "Stream | Unit | None" = None,
                        near: "Stream | Unit | None" = None,
-                       on: "Stream | Unit | None" = None, at: float | str | None = None,
+                       at: float | str | None = None,
                        offset: float = 45.0, angle: float = 90.0,
                        variant: str = "default", **kwargs) -> "Instrument":
         """Add an ISA-5.1 instrument balloon, anchored to the sheet.
@@ -494,32 +487,20 @@ class Flowsheet:
         inst = Instrument(type, number, variant=variant, **kwargs)
         # Resolved before the balloon joins the sheet, so a call refused
         # for naming two anchors leaves nothing behind to be drawn.
-        host, relation = self._anchor(inst, sensing, acting_on, near, on)
+        host, relation = self._anchor(inst, sensing, acting_on, near)
         self.add(inst)
         if host is not None:
             inst.attach(host, at=at, offset=offset, angle=angle, relation=relation)
         return inst
 
-    def _anchor(self, inst: "Instrument", sensing, acting_on, near, on):
+    def _anchor(self, inst: "Instrument", sensing, acting_on, near):
         """The one anchor an ``add_instrument`` call named, and its use.
 
         Returns ``(host, relation)``, or ``(None, "sensing")`` for a
-        balloon that named none. Retiring ``on=`` happens here rather
-        than in :meth:`~pandid.units.Instrument.attach`, which takes the
-        relation already decided.
+        balloon that named none.
         """
         given = [("sensing", sensing), ("acting_on", acting_on), ("near", near)]
         named = [(relation, host) for relation, host in given if host is not None]
-        if on is not None and named:
-            spellings = " and ".join(f"{relation}=" for relation, _ in named)
-            raise ValueError(
-                f"{inst.name}: on= is the retired spelling of sensing=, and this "
-                f"call also names {spellings}, so it asks for two anchors. Drop "
-                f"the on="
-            )
-        if on is not None:
-            _RETIRED_ON.warn(self, where=inst.name)
-            named = [("sensing", on)]
         if len(named) > 1:
             spellings = ", ".join(f"{relation}=" for relation, _ in named)
             raise ValueError(

@@ -591,17 +591,11 @@ def test_from_yaml(tmp_path):
 
 
 @pytest.mark.skipif(not _HAS_YAML, reason="PyYAML is an optional extra")
-@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_yaml_reads_the_keys_that_were_written(tmp_path):
-    """YAML 1.1 makes ``on:`` the boolean True, ``N`` the boolean False and a
-    bare date a date object.
+    """YAML 1.1 makes ``N`` the boolean False and a bare date a date object.
 
-    All three traps are sprung by writing the format exactly as documented, so
-    the loader follows the YAML 1.2 core schema instead. ``on:`` is retired in
-    favour of ``sensing:`` and is written here anyway: while a spelling is
-    accepted it has to be *readable*, and a loader that turned it into ``True``
-    would give a file nobody had edited an error naming a key it does not
-    contain.
+    Both traps are sprung by writing the format exactly as documented, so the
+    loader follows the YAML 1.2 core schema instead.
     """
     path = tmp_path / "fs.yaml"
     path.write_text(
@@ -610,7 +604,7 @@ def test_yaml_reads_the_keys_that_were_written(tmp_path):
         "instruments:\n"
         "  - type: LIC\n"
         "    number: 101\n"
-        "    on: V-1\n"
+        "    sensing: V-1\n"
         "    at: N\n"
         "title_block: {revisions: [{rev: A, date: 2026-05-18}]}\n",
         encoding="utf-8",
@@ -656,13 +650,12 @@ def test_unknown_port_lists_that_unit_s_ports():
     assert "available ports: ['discharge', 'suction']" in message
 
 
-def test_a_spec_file_may_still_name_a_retired_port():
-    """A spec file is a stored artifact, which is what the window is for.
-
-    ``Separator(variant="cyclone")`` called its draws ``vapor`` and ``liquid``
-    up to 0.1.1, so a file written then names them. It reads, resolving to the
-    nozzles they were renamed to, and warns; ``to_dict`` writes the new names,
-    so reading and re-writing such a file is what upgrades it.
+@pytest.mark.parametrize("name", ["liquid", "vapour"])
+def test_a_spec_file_naming_a_removed_port_is_refused(name):
+    """``Separator(variant="cyclone")`` called its draws ``vapor`` and
+    ``liquid`` up to 0.1.1 and ``overflow``/``underflow`` since; the old pair
+    was read for 0.1.2 and is gone in 0.1.3. A file written then gets the
+    message any other name off the unit gets, which names the nozzles it has.
     """
     spec = {
         "name": "an 0.1.1 file",
@@ -670,29 +663,12 @@ def test_a_spec_file_may_still_name_a_retired_port():
             {"kind": "Separator", "name": "CY-401", "variant": "cyclone"},
             {"kind": "Product", "name": "Dust"},
         ],
-        "streams": [{"from": ["CY-401", "liquid"], "to": ["Dust", "inlet"]}],
-    }
-    with pytest.warns(DeprecationWarning, match="use .underflow"):
-        fs = Flowsheet.from_dict(spec)
-    assert fs.streams[0].source.name == "underflow"
-    assert fs.to_dict()["streams"][0]["from"] == ["CY-401", "underflow"]
-
-
-def test_a_retired_port_name_does_not_soften_the_error_for_a_real_typo():
-    """The lookup is a rename table, not a fuzzy match: a name that is not on it
-    is refused with the message it always got."""
-    spec = {
-        "name": "T",
-        "units": [
-            {"kind": "Separator", "name": "CY-401", "variant": "cyclone"},
-            {"kind": "Product", "name": "Dust"},
-        ],
-        "streams": [{"from": ["CY-401", "vapour"], "to": ["Dust", "inlet"]}],
+        "streams": [{"from": ["CY-401", name], "to": ["Dust", "inlet"]}],
     }
     with pytest.raises(SpecError) as excinfo:
         Flowsheet.from_dict(spec)
     message = str(excinfo.value)
-    assert "has no port 'vapour'" in message
+    assert f"has no port {name!r}" in message
     assert "available ports: ['feed', 'overflow', 'underflow']" in message
 
 

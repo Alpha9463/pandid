@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+**Breaking.** The six spellings 0.1.2 deprecated are gone in 0.1.3, which is
+the release each of their warnings named. Every replacement draws what the old
+spelling drew, so no sheet moves; what changes is that the old spelling now
+raises where it used to warn.
+
+- **`add_instrument(on=…)`, and `on:` in a spec (#137).** Use `sensing=`,
+  `acting_on=` or `near=`; `on=` meant `sensing=`. The call raises
+  `TypeError`, and `on:` in a spec is an unknown key.
+
+- **`Instrument(variant="panel")` and `Instrument(variant="aux")` (#181).**
+  Use `display="central"` and `display="subsidiary"`. Both raise `ValueError`
+  naming the `display=` to write. Refused by name rather than left to the
+  registry, which still draws those two symbols under those two names.
+
+- **`Valve(variant="pneumatic")` (#136).** Use `Valve(variant="control")`, or
+  spell the pairing out as `Valve(variant="gate", actuator="diaphragm")`. No
+  `pneumatic` artwork is registered, so it is refused at render like any other
+  variant the registry has not got. `butterfly_pneumatic` is kept.
+
+- **`vapor` and `liquid` on a dust-collecting separator.** On
+  `Separator(variant="cyclone")`, `("gravity")` and `("electrostatic")`, use
+  `overflow` and `underflow`. Attribute access raises `AttributeError`;
+  `port()`, `nozzle()` and `pin(port=…)` raise `KeyError`; a spec file's
+  endpoint raises `SpecError`. Each names the nozzles the unit has. Nothing
+  changes for a drum or a scrubber, which keep `vapor` and `liquid`.
+
+`pandid.deprecation` and the `deprecated` finding stay: they are what the next
+retirement is declared with. Nothing is deprecated in this release.
+
 ## [0.1.2] - 2026-08-05
 
 ### Added

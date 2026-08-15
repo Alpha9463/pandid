@@ -97,15 +97,22 @@ def test_every_generated_class_names_its_variants():
     assert silent == []
 
 
-# ``Instrument(variant='panel')`` and ``'aux'`` are two of the shipped
-# spellings and are on their way out, which is precisely a claim these two
-# sweeps have to keep making: a retired spelling still constructs and still
-# draws for the release it is retired in. The warning is the deprecation
-# working, so it is filtered rather than avoided.
-_RETIRED = pytest.mark.filterwarnings("ignore::DeprecationWarning")
+#: ``panel`` and ``aux`` are registered *artwork* whose constructor spelling is
+#: ``display=``: they say where the information is available, which is not a
+#: symbol type, and naming one as a ``variant`` was removed in 0.1.3. Both
+#: drawings still ship and both are still swept, asked for the way they are
+#: asked for.
+_DISPLAY_VARIANTS = {"panel": "central", "aux": "subsidiary"}
 
 
-@_RETIRED
+def _shipped(cls, variant):
+    """One unit of ``(class, variant)``, however that variant is reached."""
+    display = _DISPLAY_VARIANTS.get(variant)
+    if cls is units.Instrument and display is not None:
+        return cls("X-1", display=display)
+    return cls("X-1", variant=variant)
+
+
 @pytest.mark.parametrize(("cls", "variant"), _shipped_cases(), ids=_CASE_IDS)
 def test_every_shipped_variant_still_constructs(cls, variant):
     """Construction is not where a shipped ``Kind(variant=...)`` can fail.
@@ -113,10 +120,9 @@ def test_every_shipped_variant_still_constructs(cls, variant):
     Every unit takes its name as the first positional argument, so one call
     builds any of them; the variant is the only thing varying here.
     """
-    assert cls("X-1", variant=variant).variant == variant
+    assert _shipped(cls, variant).variant == variant
 
 
-@_RETIRED
 @pytest.mark.parametrize(("cls", "variant"), _shipped_cases(), ids=_CASE_IDS)
 def test_a_shipped_variant_resolves_the_nozzles_it_always_did(cls, variant):
     """The ports, against the expression that built them before this change.
@@ -129,7 +135,7 @@ def test_a_shipped_variant_resolves_the_nozzles_it_always_did(cls, variant):
     nozzles whatever the variant, since a variant is a second drawing of one
     functional type, so its answer is the class's own default-variant instance.
     """
-    built = set(cls("X-1", variant=variant).ports)
+    built = set(_shipped(cls, variant).ports)
     if cls is units.HeatExchanger:
         table = cls._VARIANT_PORTS.get(variant, cls._SHELL_AND_TUBE)
         assert built == {spec[0] for spec in table}

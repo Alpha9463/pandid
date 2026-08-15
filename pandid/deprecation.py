@@ -1,9 +1,9 @@
 """Retiring an API: one declaration, two signals.
 
 A deprecated spelling lives for exactly one release: it works throughout
-the release it is announced in and is deleted in the next -- deprecated
-in 0.1.2, gone in 0.1.3. ``CONTRIBUTING.md`` states the rule; this
-module makes it cost one line to obey.
+the release it is announced in and is deleted in the next -- the six
+announced in 0.1.2 were gone in 0.1.3. ``CONTRIBUTING.md`` states the
+rule; this module makes it cost one line to obey.
 
 Two signals come out of one declaration:
 
@@ -18,16 +18,21 @@ sentence and hands the same string to ``warnings.warn`` and to the
 :class:`~pandid.validate.Issue` it records::
 
     RETIRED = Deprecation(
-        what="Valve(variant='control')",
-        instead="Valve(variant='globe')",
-        removed_in="0.1.3",
+        what="Pump(cooled=True)",
+        instead="Pump(jacket='cooling')",
+        removed_in="0.2.0",
     )
 
-    class Valve(Unit):
-        def __init__(self, name, variant="default", **kwargs):
+    class Pump(Unit):
+        def __init__(self, name, cooled=False, **kwargs):
             ...
-            if variant == "control":
+            if cooled:
                 RETIRED.warn(self, where=name)
+
+Invented, both halves of it: an example naming a spelling the library
+really has is one real retirement away from teaching the reverse of what
+the library does. ``tests/test_deprecation.py`` exercises the mechanism
+through this same pair, for the same reason.
 
 A deprecation is declared as a **module constant beside the code that
 honours it**, so the sentence an author reads sits next to the branch

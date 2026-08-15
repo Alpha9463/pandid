@@ -1301,116 +1301,34 @@ def test_an_element_on_another_sheet_is_refused():
         Flowsheet("elsewhere").add_balloon(fe)
 
 
-# --- the retired spellings ----------------------------------------------------
+# --- the removed spellings ----------------------------------------------------
 
 
 def test_the_anchor_no_longer_leaves_the_relationship_to_be_guessed():
-    """``on=`` said where and nothing else, so it is read as the commonest of
-    the three things it used to mean, and still draws what it always drew."""
-    fs = Flowsheet("retired")
+    """``on=`` said where and nothing else -- position, relationship and the
+    line drawn between the two, all from one word. Retired in 0.1.2 for
+    ``sensing=``, ``acting_on=`` and ``near=``, and gone in 0.1.3."""
+    fs = Flowsheet("removed")
     drum = fs.add(U.Vessel("V-101")).pin(x=300, y=140)
-    with pytest.warns(DeprecationWarning, match=r"add_instrument\(on=\.\.\.\)"):
-        inst = fs.add_instrument("LX", 101, on=drum, at="E", offset=70)
-    assert (inst.host, inst.relation) == (drum, "sensing")
-
-
-def test_the_retired_anchor_draws_the_line_it_always_drew():
-    """The whole sheet, byte for byte, against the same sheet written the new
-    way: a deprecation is a spelling going, not a drawing moving."""
-    fs = Flowsheet("relation")  # the name _drum() gives it, so the two compare
-    feed = fs.add(U.Feed("Feed")).pin(x=60, y=170)
-    drum = fs.add(U.Vessel("V-101")).pin(x=300, y=140)
-    prod = fs.add(U.Product("Product")).pin(x=600, y=170)
-    fs.connect(feed.outlet, drum.inlet)
-    fs.connect(drum.outlet, prod.inlet)
-    with pytest.warns(DeprecationWarning):
+    with pytest.raises(TypeError, match="'on'"):
         fs.add_instrument("LX", 101, on=drum, at="E", offset=70)
-    fs.route()
-    sensed, _ = _drum("sensing")
-    assert _tap_styles(fs) == _tap_styles(sensed) == {"LX-101": "solid"}
-    assert fs.to_svg() == sensed.to_svg()
-
-
-def test_the_retired_anchor_reports_on_validate():
-    """The second signal: ``DeprecationWarning`` is filtered out of most
-    programs, and ``fs.validate()`` is what an author is told to run."""
-    from pandid.deprecation import CODE
-
-    fs = Flowsheet("retired")
-    drum = fs.add(U.Vessel("V-101")).pin(x=300, y=140)
-    with pytest.warns(DeprecationWarning):
-        fs.add_instrument("LX", 101, on=drum, at="E", offset=70)
-    found = [i for i in fs.validate() if i.code == CODE]
-    assert len(found) == 1
-    assert "use add_instrument(sensing=...), acting_on= or near=" in found[0].message
-
-
-def test_the_retired_anchor_and_a_new_one_together_are_two_anchors():
-    """``on=`` is one of the three under another name, so naming it beside one
-    of them asks for two placements exactly as naming two of them does."""
-    fs = Flowsheet("both")
-    drum = fs.add(U.Vessel("V-101"))
-    valve = fs.add(U.Valve("FV-101", variant="control"))
-    with pytest.raises(ValueError, match="Drop the on="):
-        fs.add_instrument("LX", 101, on=drum, sensing=valve)
-    with pytest.raises(ValueError, match="Drop the on="):
-        fs.add_instrument("LX", 102, on=drum, near=valve)
 
 
 @pytest.mark.parametrize("variant,display", [("panel", "central"), ("aux", "subsidiary")])
 def test_a_location_is_no_longer_a_kind_of_balloon(variant, display):
-    """Both named where the information was available, which is Table 1's
-    additional graphic and not an outline. The drawing is untouched: the pair
-    resolves to the variant that used to be asked for by name."""
-    with pytest.warns(DeprecationWarning, match=rf"Instrument\(variant='{variant}'\)"):
-        inst = U.Instrument("LIC", 101, variant=variant)
-    assert inst.variant == variant, "and it still draws, for one release"
+    """Both named where the information is available, which is Table 1's
+    additional graphic and not an outline. Retired in 0.1.2 and gone in 0.1.3;
+    the drawing is untouched and is reached by the axis it belongs to.
+    """
+    with pytest.raises(ValueError, match=f"display={display!r}"):
+        U.Instrument("LIC", 101, variant=variant)
+    inst = U.Instrument("LIC", 101, display=display)
+    assert inst.variant == variant
     assert (inst.symbol_type, inst.display) == ("default", display)
 
 
-@pytest.mark.parametrize("variant,display", [("panel", "central"), ("aux", "subsidiary")])
-def test_the_retired_display_draws_the_sheet_the_new_one_draws(variant, display):
-    """Byte for byte, so no golden moves and no sheet already authored does."""
-
-    def sheet(**kwargs):
-        fs = Flowsheet("bar")
-        fs.add_instrument("LIC", 101, **kwargs).pin(x=200, y=200)
-        fs.layout()
-        return fs.to_svg(check=False)
-
-    with pytest.warns(DeprecationWarning):
-        retired = sheet(variant=variant)
-    assert retired == sheet(display=display)
-
-
-def test_the_retired_display_reports_on_validate():
-    from pandid.deprecation import CODE
-
-    fs = Flowsheet("retired")
-    with pytest.warns(DeprecationWarning):
-        fs.add_instrument("LIC", 101, variant="panel")
-    found = [i for i in fs.validate() if i.code == CODE]
-    assert len(found) == 1
-    assert "use Instrument(display='central')" in found[0].message
-
-
-def test_the_retired_display_will_not_be_contradicted():
-    """``variant='panel'`` already said where the information is, so a
-    ``display=`` saying somewhere else is two answers to one question -- and
-    that is the reason the spelling is going."""
-    with (
-        pytest.warns(DeprecationWarning),
-        pytest.raises(ValueError, match="state the location once"),
-    ):
-        U.Instrument("LIC", 101, variant="panel", display="subsidiary")
-
-
-def test_the_square_is_not_a_retired_spelling():
+def test_the_square_is_not_a_removed_spelling():
     """``variant='shared'`` is a symbol type and stays. Only the two that were a
-    location wearing a symbol type's name were retired, and a sweep over the
-    whole of the registry's balloons would have taken this with them."""
-    import warnings
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
-        assert U.Instrument("FIC", 301, variant="shared").variant == "shared"
+    location wearing a symbol type's name went, and a sweep over the whole of
+    the registry's balloons would have taken this with them."""
+    assert U.Instrument("FIC", 301, variant="shared").variant == "shared"
