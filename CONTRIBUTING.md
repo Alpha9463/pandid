@@ -307,9 +307,10 @@ commit its two files in the same PR, add a section for it to
 When a call turns out to be the wrong shape, fix the shape and retire the old
 one. Don't keep a wrong API alive for compatibility.
 
-**A deprecation lives for one release.** Deprecated in 0.1.2, deleted in 0.1.3.
-That is the whole window, and it is short on purpose: two spellings of one thing
-are two things to test, to document, and to keep drawing the same sheet.
+**A deprecation lives for one release.** The six announced in 0.1.2 were deleted
+in 0.1.3. That is the whole window, and it is short on purpose: two spellings of
+one thing are two things to test, to document, and to keep drawing the same
+sheet.
 
 Declare it as a module constant beside the code that honours it:
 
@@ -317,18 +318,22 @@ Declare it as a module constant beside the code that honours it:
 from pandid.deprecation import Deprecation
 
 RETIRED = Deprecation(
-    what="Valve(variant='control')",    # the call an author types today
-    instead="Valve(variant='globe')",   # the call they type instead
-    removed_in="0.1.3",                 # the release after this one
+    what="Pump(cooled=True)",           # the call an author types today
+    instead="Pump(jacket='cooling')",   # the call they type instead
+    removed_in="0.2.0",                 # the release after the announcing one
 )
 
 
-class Valve(Unit):
-    def __init__(self, name, variant="default", **kwargs):
+class Pump(Unit):
+    def __init__(self, name, cooled=False, **kwargs):
         ...
-        if variant == "control":
+        if cooled:
             RETIRED.warn(self, where=name)
 ```
+
+Both halves of that pair are invented. An example naming a spelling the library
+really has is one real retirement away from teaching the reverse of what the
+library does.
 
 That one call emits both signals: a standard `DeprecationWarning`, and a
 `deprecated` finding on `fs.validate()`. Both are the same sentence, built once,

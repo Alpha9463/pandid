@@ -1599,8 +1599,7 @@ class Instrument(Unit):
         instrument does* -- and the registry answers both with one
         variant name. This is where the two meet, so that the rest of
         the package sees a variant and nothing else, exactly as
-        :meth:`Valve._resolved_variant` folds a body and an actuator
-        into one.
+        :meth:`Valve._resolve` folds a body and an actuator into one.
         """
         meant = _DISPLAY_VARIANTS.get(variant)
         if meant is not None:
