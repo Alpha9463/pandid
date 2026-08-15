@@ -800,9 +800,8 @@ Three of them do something the name does not say:
 - `Cyclone`, `GravitySeparator` and `ElectrostaticPrecipitator` collect *dust*,
   and name their draws `overflow` and `underflow` for it. So does
   `Separator(variant="cyclone")`, as of 0.1.2: it called them `vapor` and
-  `liquid` up to 0.1.1, and those two names go on reaching the same nozzles
-  until 0.1.3 with a `DeprecationWarning` and a `deprecated` finding on
-  `validate()`. One drawing, one vocabulary, whichever class you built.
+  `liquid` up to 0.1.1, and those two names were removed in 0.1.3. One drawing,
+  one vocabulary, whichever class you built.
 
 ### `Block`: the block flow diagram
 
@@ -1324,7 +1323,7 @@ first listed is what the class draws when it is built by name alone.
 | `Column` | `column` | `default` (plain shell), `packed` |
 | `Reducer` | `reducer` | `default` (the concentric trapezoid), `concentric`, `eccentric`, plus `large_end`, which points the cone |
 | `Vent` | `vent` | `default` (stack with a weather cap), `exhaust_head`, `breather` |
-| `Instrument` | `instrument` | `default` (a circle), `shared` (a circle in a square), `computer` (a hexagon), `sis` (a diamond in a square, also spelled `logic`), `interlock` (a plain diamond). Where the information is available is the separate [`display`](#where-the-information-is) axis; `panel` and `aux` are that axis in this column and are deprecated |
+| `Instrument` | `instrument` | `default` (a circle), `shared` (a circle in a square), `computer` (a hexagon), `sis` (a diamond in a square, also spelled `logic`), `interlock` (a plain diamond). Where the information is available is the separate [`display`](#where-the-information-is) axis; `panel` and `aux` are that axis in this column and are reached as `display="central"` and `display="subsidiary"` |
 | `Heater`, `Cooler`, `Furnace`, `Turbine`, `Blower`, `Ejector`, `Funnel`, `Conveyor`, `Mixer`, `Splitter`, `Tee`, `Block`, `Feed`, `Product` | each its own | `default` only |
 
 `HeatExchanger(variant="kettle")` carries a fifth nozzle, `bottoms`. It is the
@@ -1863,7 +1862,7 @@ display being the control room by definition; a shape and a display with no
 artwork between them raises and names the pairs that are drawn.
 
 `variant="panel"` and `variant="aux"` were this axis wearing `variant`'s name.
-They still work, warn, and are removed in 0.1.3; write `display="central"` and
+They were removed in 0.1.3 and raise; write `display="central"` and
 `display="subsidiary"`, which draw the same two symbols.
 
 ### Control loops
@@ -2109,7 +2108,7 @@ fs.add_instrument("Z", 1, acting_on=xv, at="S", offset=46, variant="sis")
 ```
 
 `on=` was all three at once — it bought a position and drew an edge nobody asked
-for. It still works, warns, and is removed in 0.1.3; it means `sensing=`.
+for. It was removed in 0.1.3; it meant `sensing=`.
 
 - The host is a `Stream` or a `Unit`. Anything else raises `TypeError`, and
   anchoring a balloon to itself raises `ValueError`.
@@ -2604,7 +2603,7 @@ default outside `__main__`, so the finding is the one you can rely on seeing.
 Both are built from one declaration and always read the same:
 
 ```text
-[warning] deprecated: CY-401: Separator(variant='cyclone'|'gravity'|'electrostatic').vapor is deprecated and is removed in pandid 0.1.3; use .overflow
+[warning] deprecated: P-101: Pump(cooled=True) is deprecated and is removed in pandid 0.2.0; use Pump(jacket='cooling')
 ```
 
 A deprecation lives for one release. It works throughout the release that
@@ -2612,9 +2611,10 @@ announces it and is deleted in the next, so the message always names a release
 that has not shipped yet. The CHANGELOG lists it under `### Deprecated` when it
 is announced and under `### Removed` when it goes.
 
-**In flight now**, all going in 0.1.3:
+**Nothing is in flight today.** The six spellings 0.1.2 announced were removed
+in 0.1.3:
 
-| Deprecated | Type instead |
+| Removed in 0.1.3 | Type instead |
 |---|---|
 | `Separator(variant="cyclone"\|"gravity"\|"electrostatic").vapor` | `.overflow` |
 | the same three separators' `.liquid` | `.underflow` |
@@ -2623,20 +2623,8 @@ is announced and under `### Removed` when it goes.
 | `Instrument(variant="panel")` | `Instrument(display="central")` |
 | `Instrument(variant="aux")` | `Instrument(display="subsidiary")` |
 
-Those three separator drawings collect dust, and their two draws are `overflow`
-and `underflow` like every other separator that sorts rather than separating
-into phases. The old names still reach the same nozzles through attribute
-access, `port()`, `nozzle()`, `pin(port=…)` and a spec file's endpoints —
-everything but `unit.ports["vapor"]`, which is the dict itself. A drum or a wet
-scrubber keeps `vapor` and `liquid`; nothing about those is deprecated.
-
-`on=` said two things at once and an author reaching for one of them silently
-got the other; the three that replace it each say which
-[relation](#anchoring-a-balloon) is meant, and `on=` means `sensing=`.
-`panel` and `aux` were a *location* wearing `variant`'s name, which is what left
-no way to ask for a squared balloon in a subsidiary system or a hexagon in the
-control room; they are the [`display`](#where-the-information-is) axis and draw
-the same two symbols under it.
+A drum or a wet scrubber keeps `vapor` and `liquid`; only the three drawings
+that collect dust renamed theirs.
 
 The finding rides on the object the call was made on, so a unit deprecated
 during construction is reported even though it was not on a flowsheet yet. A
@@ -3070,8 +3058,7 @@ that last form, since auto-numbered stream names are rewritten at render time.
 `at`, `offset`, `angle`, `variant`, `display` and `port_faces` behave as in
 [`add_instrument()`](#instrumentation), and `quadrants` is a mapping of
 [`annotate()`](#letter-codes-outside-the-symbol)'s own argument names. An
-instrument that names no anchor is laid out like any other unit. `on` is the
-retired spelling of `sensing`.
+instrument that names no anchor is laid out like any other unit.
 
 A primary element's balloon is written on the **element's** entry, as
 `balloon: {at, offset, angle, variant, display}`, since it carries the element's

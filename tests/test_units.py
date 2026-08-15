@@ -1,5 +1,4 @@
 import re
-import warnings
 
 import pytest
 from pandid.units import Unit
@@ -253,89 +252,36 @@ def test_a_separator_that_collects_dust_draws_an_overflow_and_an_underflow(varia
 
 
 @pytest.mark.parametrize("variant", _COLLECTORS)
-@pytest.mark.parametrize(("retired", "current"), [("vapor", "overflow"), ("liquid", "underflow")])
-def test_a_collectors_old_draw_name_still_reaches_the_nozzle_it_named(variant, retired, current):
-    """Both ways in, because a sheet written at 0.1.0 used whichever it liked.
+@pytest.mark.parametrize("removed", ["vapor", "liquid"])
+def test_a_collectors_old_draw_name_no_longer_reaches_a_nozzle(variant, removed):
+    """The old pair was read for 0.1.2 and is gone in 0.1.3.
 
-    The same ``Port`` object, not a copy: the rename is a name, so a sheet that
-    reaches the nozzle by the old one draws exactly what it drew before.
+    Every by-name way in, because a sheet written at 0.1.1 used whichever it
+    liked, and each answers the way it answers any other name the unit has not
+    got: the nozzle list, and nothing about a deprecation.
     """
     sep = U.Separator("CY-401", variant=variant)
-    with pytest.warns(DeprecationWarning):
-        assert getattr(sep, retired) is sep.ports[current]
-    with pytest.warns(DeprecationWarning):
-        assert sep.port(retired) is sep.ports[current]
-
-
-@pytest.mark.parametrize("variant", _COLLECTORS)
-def test_a_retired_draw_name_says_what_to_type_instead(variant):
-    """A finding that only says "this is deprecated" leaves the reader with the
-    same file and no next line to type, so the sentence ends on the new name."""
-    sep = U.Separator("CY-401", variant=variant)
-    with pytest.warns(DeprecationWarning, match=r"CY-401: .*\.vapor is deprecated") as caught:
-        sep.vapor
-    message = str(caught[0].message)
-    assert "removed in pandid 0.1.3" in message
-    assert message.endswith("use .overflow")
-
-
-def test_a_sheet_written_against_the_old_draw_names_still_draws():
-    """The one thing a deprecation window is for, end to end.
-
-    Every by-name entry point a 0.1.1 sheet could have used -- attribute,
-    ``port()``, ``pin(port=…)`` and ``nozzle()`` -- on one flowsheet that then
-    renders. A window that let the sheet build and refused to place it would be
-    no window at all.
-    """
-    from pandid import Flowsheet
-
-    fs = Flowsheet("a 0.1.1 sheet")
-    feed = fs.add(U.Feed("Gas"))
-    cy = fs.add(U.Separator("CY-401", variant="cyclone"))
-    clean = fs.add(U.Product("Clean Gas"))
-    dust = fs.add(U.Product("Dust"))
-    with pytest.warns(DeprecationWarning):
-        fs.connect(feed.outlet, cy.feed)
-        fs.connect(cy.vapor, clean.inlet)
-        fs.connect(cy.port("liquid"), dust.inlet)
-        cy.nozzle("vapor", "N")
-        cy.pin(port="liquid", x=300, y=400)
-    assert "<svg" in fs.to_svg()
-
-
-def test_the_old_draw_names_are_reported_by_validate():
-    """Because ``fs.validate()`` is what an author is told to run, and Python
-    hides a ``DeprecationWarning`` by default outside ``__main__``. One finding
-    per distinct sentence: two nozzles renamed, two things to fix."""
-    from pandid import Flowsheet
-
-    fs = Flowsheet("a 0.1.1 sheet")
-    cy = fs.add(U.Separator("CY-401", variant="cyclone"))
-    dust = fs.add(U.Product("Dust"))
-    with pytest.warns(DeprecationWarning):
-        fs.connect(cy.liquid, dust.inlet)
-        cy.port("vapor")
-        cy.port("vapor")  # ...and the same sentence twice is still one finding
-
-    findings = [issue for issue in fs.validate() if issue.code == "deprecated"]
-    assert len(findings) == 2
-    assert all(issue.message.startswith("CY-401: ") for issue in findings)
-    assert {issue.message.rsplit("use ", 1)[1] for issue in findings} == {".overflow", ".underflow"}
+    with pytest.raises(AttributeError, match="overflow"):
+        getattr(sep, removed)
+    with pytest.raises(KeyError, match="overflow"):
+        sep.port(removed)
+    with pytest.raises(KeyError, match="overflow"):
+        sep.nozzle(removed, "N")
+    with pytest.raises(KeyError, match="overflow"):
+        sep.pin(port=removed, x=300, y=400)
 
 
 @pytest.mark.parametrize("variant", ["default", "horizontal", "knockout", "scrubber"])
-def test_a_phase_separators_draws_are_not_deprecated(variant):
+def test_a_phase_separator_keeps_the_draws_it_always_named(variant):
     """The half of the retirement that would be easy to get wrong.
 
     A flash drum's ``vapor`` is the vapour leaving it. Retiring the name on the
-    class rather than on the three drawings that misused it would have deprecated
-    the correct vocabulary along with the wrong one.
+    class rather than on the three drawings that misused it would have taken
+    the correct vocabulary with the wrong one.
     """
     sep = U.Separator("V-101", variant=variant)
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
-        assert sep.vapor is sep.ports["vapor"]
-        assert sep.port("liquid") is sep.ports["liquid"]
+    assert sep.vapor is sep.ports["vapor"]
+    assert sep.port("liquid") is sep.ports["liquid"]
 
 
 @pytest.mark.parametrize("variant", ["sifter", "impact", "permanent_magnet", "electromagnetic"])

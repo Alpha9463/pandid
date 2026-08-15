@@ -23,7 +23,6 @@ once).
 import pytest
 
 from pandid import Flowsheet, devices, units as U
-from pandid.deprecation import CODE
 from pandid.render.symbols import ACTUATED, ACTUATORS, default_registry
 
 # The dome and its stem, out of the "Pneumatic Operated" stencil: two quarter
@@ -266,45 +265,26 @@ def test_a_device_class_takes_the_actuator_its_own_name_implies():
     assert devices.MotorOperatedValve("HV-1", variant="motor", actuator="motor").variant == "motor"
 
 
-# --- the retired spelling ----------------------------------------------------
+# --- the removed spelling ----------------------------------------------------
 
 
 def test_the_medium_is_no_longer_a_kind_of_valve():
-    with pytest.warns(DeprecationWarning, match=r"Valve\(variant='pneumatic'\)"):
-        valve = U.Valve("CV-1", variant="pneumatic")
-    assert valve.variant == "control", "and it still draws, for one release"
-
-
-def test_the_retired_spelling_takes_the_actuator_it_resolves_to():
-    """The retirement rewrites the variant before the pair is weighed, so the
-    agreement is judged on ``control`` -- the drawing -- and not on the spelling
-    that is on its way out."""
-    with pytest.warns(DeprecationWarning):
-        valve = U.Valve("CV-1", variant="pneumatic", actuator="diaphragm")
-    assert valve.variant == "control"
-
-
-def test_the_retired_spelling_reports_on_validate():
-    """The second signal: ``DeprecationWarning`` is filtered out of most
-    programs, and ``fs.validate()`` is what an author is told to run."""
-    fs = Flowsheet("retired")
-    with pytest.warns(DeprecationWarning):
-        fs.add(U.Valve("CV-1", variant="pneumatic")).pin(x=100, y=100)
-    found = [i for i in fs.validate() if i.code == CODE]
-    assert len(found) == 1
-    assert "use Valve(variant='control')" in found[0].message
+    """``pneumatic`` named a signal medium rather than a body, and by 0.1.2
+    drew what ``control`` draws. It was retired in 0.1.2 and is gone: the
+    registry has no such artwork, and says so where it says so for any other
+    variant it does not have."""
+    fs = Flowsheet("removed")
+    fs.add(U.Valve("CV-1", variant="pneumatic")).pin(x=100, y=100)
+    with pytest.raises(ValueError, match="valve has no variant 'pneumatic'"):
+        fs.to_svg()
 
 
 def test_the_compound_body_name_survives_the_same_argument():
     """``butterfly_pneumatic`` names a *body* with an actuator on it, which is a
     valve you can point at on a rack, and it is the only spelling for its
-    drawing. ``pneumatic`` alone named neither a body nor a duty, and by 0.1.2
-    named the same drawing as ``control``."""
-    import warnings
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", DeprecationWarning)
-        assert U.Valve("XV-1", variant="butterfly_pneumatic").variant == ("butterfly_pneumatic")
+    drawing. A sweep over every variant carrying the word would have taken it
+    with the one that went."""
+    assert U.Valve("XV-1", variant="butterfly_pneumatic").variant == "butterfly_pneumatic"
 
 
 def test_the_actuator_vocabulary_is_what_can_be_drawn():
