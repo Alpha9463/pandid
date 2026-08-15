@@ -43,5 +43,8 @@ renders/
 # Reference drawings (third-party coursework; kept local, not redistributed)
 professional_examples/
 
+# Purchased standards (BSI/ISO).
+standards/
+
 # Agent worktrees (created per-run under .claude/, never part of the project)
 .claude/worktrees/
