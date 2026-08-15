@@ -249,6 +249,13 @@ class Flowsheet:
         # out of passes still moving them? Read by validate(), which
         # carries the answer onto `warnings`.
         self.route_converged: bool = True
+        # The attached instruments the last placement sweep could put
+        # nowhere, because nothing in their host chain ever resolved.
+        # Set by `pandid.layout.attach.place_attached`, which is the
+        # only thing that knows; read by validate(), which reports each
+        # as `instrument-unplaced`. Empty until layout has run, so a
+        # balloon that is merely waiting for layout is not a finding.
+        self.unplaced_instruments: list = []
         # The sheet's own metadata; a block set here is a title strip
         # drawn.
         self.title_block: "TitleBlock | None" = None

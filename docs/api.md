@@ -2581,6 +2581,7 @@ making, so the warnings left on `fs.warnings` are about the sheet that came out.
 | `unit-overlap` | error | two units' drawn boxes overlap |
 | `coincident-ports` | error | two connected ports on one unit resolve to the same point |
 | `coincident-ports` | warning | …and one of them is a port the symbol never anchored, so it fell back to the centre of the box. No shipped symbol has such a gap, so this covers symbols registered from outside the package |
+| `instrument-unplaced` | error | an attached balloon whose host chain never resolves, so layout could put it nowhere and the sheet cannot be drawn; see [Routing and instrument placement](#routing-and-instrument-placement) |
 | `route-crosses-unit` | warning | a stream passes through a unit body it does not connect to |
 | `route-detour` | warning | a route is more than 3× its direct span |
 | `letter-sequence` | warning | a tag spells its control-function letters out of the order ISO 15519-2:2015 §5.2.4 requires (I, R, C, S, M, Z, A), so `FCI` where `FIC` was meant. One finding per tag, and the message names the tag it would have been |
@@ -2593,7 +2594,9 @@ making, so the warnings left on `fs.warnings` are about the sheet that came out.
 
 Errors raise from `to_svg()`/`render()` unless you pass `check=False`. Warnings
 never raise, and collect on `fs.warnings` after each render. Geometric checks
-need resolved frames, so they are skipped before layout has run.
+need resolved frames, so they are made over the units that have one: before
+layout that is none of them, and after it a balloon layout could not place is
+the one unit skipped rather than the whole sheet.
 
 ### Deprecated API
 
@@ -2797,6 +2800,14 @@ running out still leaves each line drawn to the balloon it belongs to.
 earns a `route-not-settled` warning: the drawing is coherent, but which of the
 arrangements it caught is arbitrary, so the sheet is not reproducible until the
 balloon-carrying lines are pinned with [`via()`](#streams).
+
+A balloon takes its position from its host, so a chain of them has to end on
+something the layout places. One that does not — two balloons attached to each
+other, or a balloon tapping a line whose own end is such a balloon — can be put
+nowhere. Placement leaves those on `fs.unplaced_instruments` and `validate()`
+reports each as an `instrument-unplaced` error, naming the host it is waiting
+on. It is an error rather than a warning because the renderer will not draw a
+unit with no frame, so there is no sheet to warn about.
 
 ### Symbols that must not be turned
 

@@ -132,6 +132,11 @@ def place_attached(fs: "Flowsheet") -> bool:
 
     Returns True if any balloon moved, which is the signal that the
     lines running to it are stale and have to be routed again.
+
+    The balloons no host could position are left on
+    ``fs.unplaced_instruments``, since this sweep is the only thing that
+    knows which they are. :func:`pandid.validate.validate` reads them
+    back as ``instrument-unplaced``.
     """
     from pandid.geometry import Frame
     from pandid.portgeom import resolve_size
@@ -178,5 +183,15 @@ def place_attached(fs: "Flowsheet") -> bool:
             pending.remove(inst)
             progressed = True
         if not progressed:
-            break  # host frame unresolved (attachment cycle)
+            # A sweep that placed nothing will place nothing next time
+            # either: what is left hangs off a host that is itself
+            # waiting, so the chain closes on itself. Stopping is right;
+            # stopping *quietly* was the defect. Each survivor keeps
+            # ``frame = None``, which no later phase fills in and the
+            # renderer refuses outright, so the sheet has an instrument
+            # on it that cannot be drawn.
+            break
+    # Set on every call, placed or not, so this is the last sweep's
+    # answer rather than an accumulation across the route() fixed point.
+    fs.unplaced_instruments = list(pending)
     return moved

@@ -897,3 +897,105 @@ def test_every_registered_symbol_is_quiet_on_a_nozzle_pinned_run(kind, variant):
     prod.pin(x=700, port="inlet", y=port_point(unit, unit.frame, outs[0])[1])
     fs.layout()
     assert _off_elevation(fs) == []
+
+
+# --- a balloon nothing could place --------------------------------------------
+
+
+def _unplaced(fs, **kw):
+    return [i for i in fs.validate(**kw) if i.code == "instrument-unplaced"]
+
+
+def _cyclic_balloons(pump_x=400, pump_y=100):
+    """Two balloons hung off each other, over a run that is otherwise fine.
+
+    ``place_attached`` resolves a host before whatever hangs on it, so a pair
+    that hosts each other is a chain with no end: neither is ever placed, both
+    keep ``frame = None``, and the sweep stops once a pass places nothing. That
+    give-up is the silent failure this section is about.
+
+    *pump_x*/*pump_y* put P-1 clear of T-1 or on top of it, so one builder
+    serves both the finding itself and the sheet it used to blind.
+    """
+    fs = Flowsheet("cycle")
+    tank = fs.add(U.Tank("T-1")).pin(x=100, y=100)
+    pump = fs.add(U.Pump("P-1")).pin(x=pump_x, y=pump_y)
+    fs.connect(tank.outlet, pump.suction)
+    lt = fs.add_instrument("LT", 1, near=tank)
+    lic = fs.add_instrument("LIC", 1, near=tank, display="central")
+    lt.attach(lic, relation="near")
+    lic.attach(lt, relation="near")
+    return fs
+
+
+def test_a_balloon_no_host_could_place_is_reported():
+    """The give-up path used to return without a word, leaving two instruments
+    on the model that appear on no sheet and in no finding."""
+    fs = _cyclic_balloons()
+    fs.layout()
+    issues = _unplaced(fs)
+    assert [i.severity for i in issues] == ["error", "error"]
+    assert sorted(i.message.split()[0] for i in issues) == ["LIC-1", "LT-1"]
+    # Each names the host it is waiting on, so the cycle is readable off the
+    # two messages rather than guessed at.
+    assert "hangs off LIC-1, which is unplaced itself" in issues[0].message
+    assert "hangs off LT-1, which is unplaced itself" in issues[1].message
+    # And what to do about it, the way the surrounding findings do.
+    assert "LT-1.attach(<stream or unit>)" in issues[0].message
+
+
+def test_an_unplaced_balloon_does_not_blind_the_rest_of_the_sheet():
+    """The regression that matters. T-1 and P-1 are pinned on top of each other,
+    which is a hard error; one unplaceable balloon used to take the whole
+    geometric block down with it and hand back a clean bill of health."""
+    fs = _cyclic_balloons(pump_x=110, pump_y=110)
+    fs.layout()
+    codes = [i.code for i in fs.validate()]
+    assert "unit-overlap" in codes
+    assert codes.count("instrument-unplaced") == 2
+
+
+def test_a_sheet_that_places_its_balloons_reports_nothing_here():
+    """The other half: the finding must not fire on the ordinary case, where a
+    balloon hangs off a unit the ranker positions."""
+    fs = Flowsheet("placed")
+    tank = fs.add(U.Tank("T-1"))
+    pump = fs.add(U.Pump("P-1"))
+    fs.connect(tank.outlet, pump.suction)
+    lt = fs.add_instrument("LT", 1, near=tank)
+    fs.add_instrument("LIC", 1, near=lt, display="central")
+    fs.layout()
+    assert fs.unplaced_instruments == []
+    assert _unplaced(fs) == []
+
+
+def test_it_is_not_reported_before_layout_has_run():
+    """``frame is None`` alone cannot tell "layout has not run" from "layout gave
+    up", which is why the sweep records the ones it gave up on rather than
+    validate() looking for frameless units. A sheet nobody has laid out yet has
+    no unplaceable balloons on it, only unplaced ones."""
+    fs = _cyclic_balloons()
+    assert _unplaced(fs) == []
+
+
+def test_a_balloon_tapping_a_line_with_an_unplaced_end_names_the_line():
+    """A stream host is not placed itself; what stops it anchoring a balloon is
+    an end that never was, so the message names that rather than claiming the
+    line is unplaced."""
+    fs = _cyclic_balloons()
+    by_name = {u.name: u for u in fs.units}
+    sig = fs.connect(by_name["LT-1"].sig_out, by_name["LIC-1"].sig_in, kind="electric")
+    fs.add_instrument("LY", 1, sensing=sig)
+    fs.layout()
+    ly = [i for i in _unplaced(fs) if i.message.startswith("LY-1")]
+    assert len(ly) == 1
+    assert f"hangs off stream {sig.name}, which has an end nothing placed" in ly[0].message
+
+
+def test_render_refuses_the_sheet_by_the_finding_and_not_the_bounding_box():
+    """An error, not a warning: the renderer will not draw a frameless unit at
+    all, so there is no drawing to warn about. Raising it from validate() names
+    the balloon and the cure in place of a bare "lacks a frame"."""
+    fs = _cyclic_balloons()
+    with pytest.raises(ValueError, match="instrument-unplaced"):
+        fs.to_svg()
