@@ -1035,12 +1035,24 @@ def _compose_onto(unit, *groups) -> None:
 #: :func:`pandid.deprecation.declarations` can enumerate: a declaration
 #: built inline, or hidden inside a container, outlives its release
 #: quietly. The dict below is only the lookup that finds them.
+#:
+#: **Both carry a note, because neither is a drop-in.** The support is
+#: the same construction either way, but the shell it stands on is not:
+#: measured, ``variant='legs'`` and ``variant='skirted'`` are 40 x 122,7
+#: on draw.io's "Vessel (Dished Ends)" with the support in the artwork,
+#: while ``supports=`` puts the ISO group-26 element under the 62 x 125
+#: shell every other vessel keyword draws. A sheet moves at the next
+#: render, and an author told only "use X" was not told that.
 VESSEL_VARIANT_LEGS = Deprecation(
     what="Vessel(variant='legs')", instead="Vessel(supports='leg')",
-    removed_in="0.2.0")
+    removed_in="0.2.0",
+    note="the drawing changes -- a pair of ISO item 26.1 C2005 legs under the "
+         "standard vessel shell, where this one has its own drawn in")
 VESSEL_VARIANT_SKIRTED = Deprecation(
     what="Vessel(variant='skirted')", instead="Vessel(supports='skirt')",
-    removed_in="0.2.0")
+    removed_in="0.2.0",
+    note="the drawing changes -- ISO item 26.3 C2007's skirt under the standard "
+         "vessel shell, where this one has its own drawn in")
 
 _VESSEL_SUPPORT_VARIANTS = {
     "legs": VESSEL_VARIANT_LEGS,
@@ -2319,9 +2331,32 @@ def _feed_names(n_feeds: int, owner: str) -> list[str]:
 _UNSTATED: Any = object()
 
 
+#: ``plain`` draws a bed ISO does not draw. Its band is filled with
+#: **one-way 45-degree hatching** between two solid rules; ISO 10628-2
+#: item 27.8 X8141 -- the only packed bed in group 27, and group 27 has
+#: exactly eight items -- is a **crossed X between two long-dashed**
+#: rules. No item in the group is a hatch. So the variant is a bed drawn
+#: with a mark that has no registration number, next to a keyword that
+#: draws the one that has.
+#:
+#: **Not a drop-in, and the message says so.** Measured: ``plain`` is
+#: 40 x 95,4 on draw.io's "Vessel (Dished Ends)"; the composed form is
+#: 62 x 100 on the vessel ``variant="default"`` draws. Different shell,
+#: different mark. ``Vessel(variant='legs')`` is the warning here -- it
+#: is deprecated in favour of ``supports='leg'`` and the two are 40 x
+#: 122,7 with no parts against 62 x 125 with two, which the sentence an
+#: author reads does not mention.
+#:
+#: Retired rather than kept, because a body is what ``variant=`` chooses
+#: and ``plain``'s body is the plain dished-end shell three other
+#: spellings already draw. What it adds is its contents, which is the
+#: word being spent twice: a ``plain`` reactor cannot also be jacketed,
+#: and cannot hold trays or a fluidised bed.
 REACTOR_VARIANT_PLAIN = Deprecation(
     what="Reactor(variant='plain')", instead="Reactor(internals='packing')",
-    removed_in="0.2.0")
+    removed_in="0.2.0",
+    note="the drawing changes -- ISO item 27.8 X8141's crossed bed on the "
+         "standard vessel shell, in place of this one's diagonal hatch")
 
 
 class Reactor(Unit):

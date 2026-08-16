@@ -109,13 +109,33 @@ class Deprecation:
             on the line the author types next.
         removed_in: The release the old spelling stops working in.
             Always the release after the one it is announced in.
+        note: What the author will find has changed besides the
+            spelling, where the replacement is not a drop-in. Empty by
+            default, because a deprecation should name an *equivalent*
+            call and most do; see below for the one that must not.
+
+    When the replacement is not a drop-in
+    -------------------------------------
+    A deprecation is a promise that the sentence it prints is enough to
+    act on, and "use X instead" read against a drawing that is not the
+    old one is a promise broken silently: the sheet changes shape at the
+    next render and the author was told it was a rename.
+
+    :attr:`note` is where that is said, and it goes **before** the
+    replacement so the sentence still ends on the line the author types.
+    Leave it empty and nothing is claimed but the substitution, which is
+    what an equivalent spelling wants; fill it in and the author is
+    warned before they act.
     """
 
     what: str
     instead: str
     removed_in: str
+    note: str = ""
 
     def __post_init__(self) -> None:
+        # ``note`` is not here: empty is its default and its ordinary
+        # value, since most replacements are drop-ins and claim nothing.
         for field, value in (("what", self.what), ("instead", self.instead),
                              ("removed_in", self.removed_in)):
             if not str(value).strip():
@@ -132,11 +152,14 @@ class Deprecation:
         unit tag, a stream name -- and is left out when the call named
         nothing in particular. It goes in front, as every other finding
         in :mod:`pandid.validate` puts it. The replacement comes last,
-        so the sentence ends on the line the author types next.
+        so the sentence ends on the line the author types next -- which
+        is why :attr:`note`, where there is one, goes in between rather
+        than at the end.
         """
         lead = f"{where}: " if where else ""
+        caveat = f"{self.note.rstrip('. ')}, so " if self.note else ""
         return (f"{lead}{self.what} is deprecated and is removed in pandid "
-                f"{self.removed_in}; use {self.instead}")
+                f"{self.removed_in}; {caveat}use {self.instead}")
 
     def warn(self, carrier: object, *, where: str = "",
              stacklevel: int = 3) -> None:

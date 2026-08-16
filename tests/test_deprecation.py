@@ -283,6 +283,102 @@ def test_where_is_optional():
     )
 
 
+def test_a_replacement_that_is_not_a_drop_in_says_so_before_it_is_named():
+    """ "Use X instead" is a promise, and a promise about a *different* drawing
+    has to be kept out loud.
+
+    The caveat goes in the middle rather than at the end, so the sentence still
+    finishes on the line the author types next -- which is the whole reason the
+    replacement comes last.
+    """
+    moved = Deprecation(
+        what="Pump(cooled=True)",
+        instead="Pump(jacket='cooling')",
+        removed_in="99.0.0",
+        note="the drawing changes -- a jacket band round the casing",
+    )
+    assert moved.message("P-101") == (
+        "P-101: Pump(cooled=True) is deprecated and is removed in pandid 99.0.0; "
+        "the drawing changes -- a jacket band round the casing, "
+        "so use Pump(jacket='cooling')"
+    )
+
+
+#: Every declaration the package makes, beside the two calls it is about, so a
+#: test can put the drawings side by side. Written out rather than built by
+#: evaluating ``what`` and ``instead``: those strings exist for an author to
+#: find in their own file, and turning them back into calls would test that a
+#: sentence round-trips rather than that it is true.
+_RETIRED_PAIRS = [
+    (
+        U.VESSEL_VARIANT_LEGS,
+        lambda: U.Vessel("D-1", variant="legs"),
+        lambda: U.Vessel("D-1", supports="leg"),
+    ),
+    (
+        U.VESSEL_VARIANT_SKIRTED,
+        lambda: U.Vessel("D-1", variant="skirted"),
+        lambda: U.Vessel("D-1", supports="skirt"),
+    ),
+    (
+        U.REACTOR_VARIANT_PLAIN,
+        lambda: U.Reactor("R-1", variant="plain"),
+        lambda: U.Reactor("R-1", internals="packing"),
+    ),
+    (
+        U.SEPARATOR_VARIANT_GRAVITY,
+        lambda: U.Separator("V-1", variant="gravity"),
+        lambda: U.Separator("V-1", characteristic="gravity"),
+    ),
+    (
+        U.SEPARATOR_VARIANT_ELECTROSTATIC,
+        lambda: U.Separator("V-1", variant="electrostatic"),
+        lambda: U.Separator("V-1", characteristic="electrostatic"),
+    ),
+    (
+        U.SEPARATOR_VARIANT_ELECTROMAGNETIC,
+        lambda: U.Separator("V-1", variant="electromagnetic"),
+        lambda: U.Separator("V-1", characteristic="electromagnetic"),
+    ),
+]
+
+
+def _drawing(make):
+    """One call's whole drawing: the artwork and the box it is drawn in."""
+    from pandid.render.symbols import default_registry
+
+    symbol = default_registry.for_unit(make())
+    return symbol.svg, symbol.width, symbol.height
+
+
+@pytest.mark.parametrize(
+    ("declared", "before", "after"), _RETIRED_PAIRS, ids=[d.what for d, _, _ in _RETIRED_PAIRS]
+)
+def test_a_declaration_carries_a_note_exactly_where_the_drawing_moves(declared, before, after):
+    """An empty note is a claim, not an absence: it says the replacement draws
+    what the old spelling drew.
+
+    So the two are held to each other. Three of the six really are drop-ins --
+    a separator's characteristic resolves to byte-identical artwork whichever
+    word asks for it -- and three move the sheet, because ``variant=`` drew its
+    support or its bed into the body and the keyword puts an ISO part on the
+    standard shell instead. A deprecation that silently changed the drawing is
+    the failure this is here to stop, and it stays stopped for a seventh.
+    """
+    moved = _drawing(before) != _drawing(after)
+    assert bool(declared.note) == moved, (
+        f"{declared.what}: the drawing "
+        f"{'moves' if moved else 'does not move'}, so the note should be "
+        f"{'filled in' if moved else 'empty'}"
+    )
+
+
+def test_every_declaration_is_in_the_table_above():
+    """The pairs are hand-written, so a seventh declaration has to be added to
+    them rather than skipped by them."""
+    assert {id(d) for d, _, _ in _RETIRED_PAIRS} == {id(d) for d in declarations().values()}
+
+
 def test_no_deprecation_has_outlived_its_release():
     """The one-release rule, enforced instead of remembered.
 

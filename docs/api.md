@@ -2734,8 +2734,30 @@ announces it and is deleted in the next, so the message always names a release
 that has not shipped yet. The CHANGELOG lists it under `### Deprecated` when it
 is announced and under `### Removed` when it goes.
 
-**Nothing is in flight today.** The six spellings 0.1.2 announced were removed
-in 0.1.3:
+**Six are in flight**, all announced in 0.1.3 and all removed in 0.2.0. Each is
+a `variant=` that named a *part* rather than a body, moved to the keyword that
+names the part:
+
+| Deprecated | Type instead | Does the drawing change? |
+|---|---|---|
+| `Vessel(variant="legs")` | `Vessel(supports="leg")` | yes — the ISO element goes under the standard 62 × 125 shell, not the 40 × 122.7 one |
+| `Vessel(variant="skirted")` | `Vessel(supports="skirt")` | yes, the same way |
+| `Reactor(variant="plain")` | `Reactor(internals="packing")` | yes — ISO item 27.8 X8141's crossed bed replaces a diagonal hatch that is no ISO mark, on the standard shell |
+| `Separator(variant="gravity")` | `Separator(characteristic="gravity")` | no |
+| `Separator(variant="electrostatic")` | `Separator(characteristic="electrostatic")` | no |
+| `Separator(variant="electromagnetic")` | `Separator(characteristic="electromagnetic")` | no |
+
+**A warning says which.** Where the replacement is not a drop-in, the message
+carries the change before it names the call:
+
+```text
+[warning] deprecated: R-101: Reactor(variant='plain') is deprecated and is removed in pandid 0.2.0; the drawing changes -- ISO item 27.8 X8141's crossed bed on the standard vessel shell, in place of this one's diagonal hatch, so use Reactor(internals='packing')
+```
+
+Where it is a drop-in the message says nothing extra, and that silence is the
+claim that the two draw the same symbol.
+
+The six spellings 0.1.2 announced were removed in 0.1.3:
 
 | Removed in 0.1.3 | Type instead |
 |---|---|

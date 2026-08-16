@@ -290,6 +290,16 @@ So a sheet on one of the three does move, and it moves when the author edits it
 rather than at 0.2.0. `examples/14_tank_farm.py` is the worked case: see the
 entry under **Changed**.
 
+**And the warning says so.** A deprecation is a promise that the sentence it
+prints is enough to act on, and "use X instead" pointing at a symbol that is
+not the old one is that promise broken silently: the release notes said the
+sheet moves, and the author reading the finding was told it was a rename.
+`Deprecation` takes a `note` for it, printed before the replacement so the
+sentence still ends on the line to type. An empty note is now a claim in its
+own right — it says the two spellings draw the same thing — and
+`tests/test_deprecation.py` puts every pair of drawings side by side and holds
+each declaration to whichever it is.
+
 - **`Vessel(variant="legs")` → `Vessel(supports="leg")`** and
   **`Vessel(variant="skirted")` → `Vessel(supports="skirt")`.** ISO group 1
   items 1.16–1.19 are a vessel outline plus a group-26 element, composed;
@@ -297,13 +307,27 @@ entry under **Changed**.
   which is why a bracket and a ring were unreachable. As a keyword it works on
   every vessel variant, so a jacketed vessel can now stand on legs.
 
-- **`Reactor(variant="plain")` → `Reactor(internals="packing")`.** The stencil
-  draws a charge vessel with a packed bed hatched into it, which is that
-  composition drawn whole.
+  *The drawing changes.* The support is the same construction either way, but
+  the shell under it is not: the variants are 40 × 122.7 with the support in
+  the body artwork, and the keyword puts the ISO element under the 62 × 125
+  shell every other vessel keyword draws.
+
+- **`Reactor(variant="plain")` → `Reactor(internals="packing")`.**
+
+  *The drawing changes, and this is the one that was drawn wrong.* The variant
+  fills its bed with **one-way 45° hatching between two solid rules**. ISO
+  10628-2 item 27.8 X8141 — the only packed bed in group 27, and group 27 has
+  exactly eight items — is a **crossed X between two long-dashed rules**, which
+  is what `internals="packing"` draws. No item in the group is a hatch, so the
+  variant was a bed drawn with a mark that has no registration number, standing
+  next to the keyword that draws the one that has. The shell changes too, from
+  40 × 95.4 to the 62 × 100 `variant="default"` draws.
 
 - **`Separator(variant="gravity")`, `"electrostatic"` and `"electromagnetic"` →
   `Separator(characteristic=…)`.** The three group-8 rows whose every mark is a
-  numbered group-29 part.
+  numbered group-29 part. These three **are** drop-ins: variant and keyword
+  resolve to byte-identical artwork under the same ISO registration number, so
+  they carry no note and no sheet moves.
 
 **`Separator(variant="cyclone")` is not deprecated and is not going.** ISO
 14617-1 §4.5 names X2618 by registration number as a symbol in its own right,
