@@ -279,6 +279,15 @@ class Flowsheet:
         # and the first `add()` is what makes it stale.
         self._layout_stale = False
         self._route_stale = False
+        # What the last full numbering pass worked out, kept so that
+        # `connect()` can name the one stream it just added instead of
+        # re-deriving every name on the sheet. See `_number_appended`,
+        # which is the only reader, and `renumber_streams`, which is the
+        # only writer. `None` until a pass has run.
+        self._groups: "list[list[Stream]] | None" = None
+        self._group_names: list[str] = []
+        self._group_of: dict[int, int] = {}  # id(Stream) -> its group
+        self._tail: list[Stream] = []  # the lines numbered after the runs
         # The sheet's own metadata; a block set here is a title strip
         # drawn.
         self.title_block: "TitleBlock | None" = None
@@ -1010,8 +1019,11 @@ class Flowsheet:
         self._invalidate_layout()
         # The number a caller reads off the returned stream has to be
         # the number that gets drawn, so numbering is settled here
-        # rather than at render time.
-        self.renumber_streams()
+        # rather than at render time. One stream's worth of it where
+        # that is all the append moved, since a full pass per connect()
+        # is what made building a sheet quadratic in its own size.
+        if not self._number_appended(stream):
+            self.renumber_streams()
         return stream
 
     @classmethod
@@ -1211,35 +1223,9 @@ class Flowsheet:
         ``stream-name-reused``, which is the only place the two readings
         of a shared name can be told apart.
         """
-        n = 0
-
-        def next_name(group: list[Stream]) -> str:
-            """The next number for segments that share a name."""
-            nonlocal n
-            n += 1
-            # One count, two starts. `n` is the group's place in the
-            # sequence and both numbers are read off it, each from its
-            # own offset, because a line sequence and a stream number
-            # are different labels on different lists (see
-            # `stream_number_start` in `__init__`).
-            sequence = str(self.line_number_start + n - 1)
-            number = self.stream_number_start + n - 1
-            for s in group:
-                # A sequence the author put there outranks the one
-                # numbering would assign, however often it re-runs.
-                if s.sequence is None or s.sequence == s._auto_sequence:
-                    s.sequence = s._auto_sequence = sequence
-            carrier = next((s for s in group if s.has_line_number), None)
-            if carrier is not None:
-                return _format_line_number(self.line_numbering_scheme, carrier)
-            # The offset is applied to the number, not inside the format
-            # string, so a callable scheme is handed the same ``n`` a
-            # format string interpolates.
-            return (self.stream_naming_scheme(number)
-                    if callable(self.stream_naming_scheme)
-                    else self.stream_naming_scheme.format(n=number))
-
-        for group in self._stream_groups():
+        groups = self._stream_groups()
+        names = []
+        for place, group in enumerate(groups, 1):
             # Every group takes the next place in the sequence, named
             # groups included, and an explicit name says what that place
             # is *called* rather than taking the group out of the count.
@@ -1259,21 +1245,181 @@ class Flowsheet:
             # third number the counter reaches -- so `validate()`
             # reports one as `stream-name-reused`. This removes the case
             # the engine creates by itself.
-            name = next_name(group)
-            # An explicit name on any segment names its whole group.
-            named = next((s.name for s in group if not s.auto_named), None)
-            if named is not None:
-                name = named
-            for s in group:
-                if s.auto_named:
-                    s.name = name
+            names.append(self._name_group(group, place))
+        self._tail = [s for s in self.streams if s.kind != "material"]
+        self._number_tail(len(groups))
+        # What the next `connect()` names one new stream against, in
+        # place of running all of this again. See `_number_appended`.
+        self._groups, self._group_names = groups, names
+        self._group_of = {id(s): i for i, g in enumerate(groups) for s in g}
 
-        # Energy before signals: `sorted` is stable, so each kind keeps
-        # its creation order within the tail of the sequence.
-        for s in sorted((s for s in self.streams if s.kind != "material"),
-                        key=lambda s: s.kind != "energy"):
+    def _number_appended(self, stream: "Stream") -> bool:
+        """Name the stream :meth:`connect` just added, on its own.
+
+        Answers whether it managed it. ``False`` means the append moves
+        names that were already handed out, and the caller owes the
+        sheet a full :meth:`renumber_streams`.
+
+        **Why this exists.** Numbering runs on every ``connect()``, so
+        that the name on the object a caller is handed back is the name
+        that gets drawn. A full pass is linear in the sheet -- every
+        unit, to find the inline runs, and every stream -- so running
+        one per ``connect()`` made building a sheet quadratic in its own
+        size: 200 streams cost 0.05s and 1600 cost 3.3s, and 4.6s of a
+        4.7s build was inside numbering. Appending one stream leaves
+        almost every name exactly as it was, and this works out which.
+
+        Three shapes, and only the first two are cheap:
+
+        - **A run of its own.** Nothing joins it, so it becomes the last
+          group and takes the next place. No earlier group moves.
+        - **The next segment of a run already drawn.** It joins one
+          group through an inline device and that group keeps its place,
+          so at most that group's own segments are renamed -- which
+          happens when the new segment brings a name or a line number
+          the run did not have.
+        - **A join between two runs.** Two groups become one, so every
+          group after the second one moves down a place and the whole
+          sheet is renumbered. Reported as ``False``.
+
+        The non-material tail is numbered after the process runs, so it
+        moves whenever the count of those does -- which is the first
+        shape and no other.
+
+        Every name still comes out of :meth:`_name_group`, the same call
+        the full pass makes, so the two cannot drift. What this decides
+        is *which* groups need naming again, never what they are called.
+        """
+        groups, index = self._groups, self._group_of
+        if groups is None:  # no pass has run, so there is nothing to add to
+            return False
+
+        if stream.kind != "material":
+            # Not part of any process run: it lands in the tail, and the
+            # tail is short and cheap to lay out again from the front.
+            self._tail.append(stream)
+            self._number_tail(len(groups))
+            return True
+
+        joined = self._joined_groups(stream, index)
+        if joined is None or len(joined) > 1:
+            return False
+
+        if joined:
+            where = joined[0]
+            group = groups[where]
+            group.append(stream)
+            index[id(stream)] = where
+            # Named from the group's own segments rather than from the
+            # cached name, so a run whose new segment carries a line
+            # number the rest of it lacked is renamed here and not left
+            # for the next render to notice.
+            self._group_names[where] = self._name_group(group, where + 1)
+            return True
+
+        groups.append([stream])
+        index[id(stream)] = len(groups) - 1
+        self._group_names.append(self._name_group([stream], len(groups)))
+        # One more process run means one more place used, so everything
+        # numbered behind them shifts.
+        self._number_tail(len(groups))
+        return True
+
+    def _joined_groups(self, stream: "Stream", index: dict) -> "list[int] | None":
+        """The groups a newly connected material stream runs into.
+
+        ``None`` where the answer cannot be trusted -- a neighbour the
+        cache has no group for -- which sends the caller to a full pass.
+
+        The run through an inline device is its ``inlet`` to its
+        ``outlet``, the same rule :meth:`_stream_groups` applies, so a
+        tee's *branch* joins nothing and starts a line of its own.
+        """
+        found: list[int] = []
+        for port in (stream.source, stream.dest):
+            unit = port.owner
+            if unit.kind not in INLINE_KINDS or getattr(unit, "new_line_number", False):
+                continue
+            inlet, outlet = unit.ports.get("inlet"), unit.ports.get("outlet")
+            if port is inlet:
+                peer = outlet
+            elif port is outlet:
+                peer = inlet
+            else:
+                continue  # a branch, not the run
+            if peer is None or peer.stream is None or peer.stream is stream:
+                continue
+            if peer.stream.kind != "material":
+                continue
+            where = index.get(id(peer.stream))
+            if where is None:
+                return None
+            if where not in found:
+                found.append(where)
+        return found
+
+    def _name_group(self, group: "list[Stream]", place: int) -> str:
+        """Name the segments of one group, holding *place* in the series.
+
+        Where a group's name is decided, and the only place: the full
+        pass calls it for every group and :meth:`_number_appended` for
+        the one group a new stream lands in, so the fast path cannot
+        drift from the slow one. Answers the name it settled on, which
+        is what the caller caches.
+
+        *place* is 1-based and is the group's position in the sequence,
+        not an index into anything.
+        """
+        # One count, two starts. `place` is the group's position and
+        # both numbers are read off it, each from its own offset,
+        # because a line sequence and a stream number are different
+        # labels on different lists (see `stream_number_start` in
+        # `__init__`).
+        sequence = str(self.line_number_start + place - 1)
+        number = self.stream_number_start + place - 1
+        for s in group:
+            # A sequence the author put there outranks the one numbering
+            # would assign, however often it re-runs.
+            if s.sequence is None or s.sequence == s._auto_sequence:
+                s.sequence = s._auto_sequence = sequence
+        # An explicit name on any segment names its whole group.
+        name = next((s.name for s in group if not s.auto_named), None)
+        if name is None:
+            carrier = next((s for s in group if s.has_line_number), None)
+            name = (_format_line_number(self.line_numbering_scheme, carrier)
+                    if carrier is not None else
+                    # The offset is applied to the number, not inside the
+                    # format string, so a callable scheme is handed the
+                    # same count a format string interpolates.
+                    self.stream_naming_scheme(number)
+                    if callable(self.stream_naming_scheme)
+                    else self.stream_naming_scheme.format(n=number))
+        for s in group:
             if s.auto_named:
-                s.name = next_name([s])
+                s.name = name
+        return name
+
+    def _number_tail(self, used: int) -> int:
+        """Number the lines that are not material, after the *used*
+        places the process runs took. Answers the new total.
+
+        Energy before signals: ``sorted`` is stable, so each kind keeps
+        its creation order within the tail of the sequence. Only a line
+        the counter names takes a place, which is why an explicitly
+        named duty consumes none.
+
+        Read off ``_tail`` rather than filtered out of ``streams``, so a
+        sheet with no duty or signal line on it does no work here at
+        all. Every ``connect()`` that starts a new run calls this --
+        one more run means one more place used, and everything behind
+        them moves -- and a filter would have made that a scan of the
+        whole sheet, which is the cost this is here to avoid.
+        """
+        for s in sorted(self._tail, key=lambda s: s.kind != "energy"):
+            if s.auto_named:
+                used += 1
+                self._name_group([s], used)
+        return used
 
     def validate(self, *, diagram: str | None = None) -> list:
         """Validation issues, errors first, then warnings.
