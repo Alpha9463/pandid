@@ -36,7 +36,10 @@ def order_within_layers(fs: "Flowsheet") -> None:
         _stack_rows(every, satellites)
         return
 
-    max_col = max(cols.keys())
+    # The sweeps run between the columns that exist, which a pin can put
+    # left of zero. Counting from zero instead leaves both sweeps empty
+    # on such a sheet -- no ordering done, and nothing said about it.
+    min_col, max_col = min(cols.keys()), max(cols.keys())
 
     # 0. Identify user-pinned rows before anything is overwritten
     pinned_rows = {}
@@ -91,7 +94,7 @@ def order_within_layers(fs: "Flowsheet") -> None:
 
     for _ in range(4):
         # Down sweep (left to right)
-        for col_idx in range(1, max_col + 1):
+        for col_idx in range(min_col + 1, max_col + 1):
             if col_idx not in cols:
                 continue
 
@@ -115,7 +118,7 @@ def order_within_layers(fs: "Flowsheet") -> None:
             assign_closest_available(unpinned, target_barys, occupied)
 
         # Up sweep (right to left)
-        for col_idx in range(max_col - 1, -1, -1):
+        for col_idx in range(max_col - 1, min_col - 1, -1):
             if col_idx not in cols:
                 continue
 
@@ -192,7 +195,7 @@ def _stack_rows(every: list["Unit"], satellites: dict["Unit", "Stack"]) -> None:
             for u in pending:
                 _free_row(every, u)
             break
-    _rebase(every)
+    _rebase(every, satellites)
 
 
 def _slot(u: "Unit") -> "_Slot":
@@ -215,7 +218,7 @@ def _free_row(every: list["Unit"], u: "Unit") -> None:
     _slot(u).row = next(r for r in range(len(every) + 1) if r not in taken)
 
 
-def _rebase(every: list["Unit"]) -> None:
+def _rebase(every: list["Unit"], satellites: dict["Unit", "Stack"]) -> None:
     """Slide the rows back down to zero, which the bands count from.
 
     A north satellite over a unit on the top row lands above it, and the
@@ -233,7 +236,7 @@ def _rebase(every: list["Unit"]) -> None:
     if not rows or min(rows) >= 0:
         return
     if any(u.pin_ is not None and u.pin_.row is not None for u in every):
-        for u in every:
+        for u in satellites:
             row = _slot(u).row
             if row is not None and row < 0:
                 _free_row(every, u)

@@ -49,16 +49,24 @@ def assign_coordinates(fs: "Flowsheet") -> None:
     # than top-aligning), so equipment of different heights lines up on
     # one spine: a short mixer and a tall column share a centerline,
     # minimizing the vertical jog between their connecting ports.
-    max_row = max((u._slot.row or 0 for u in units if u._slot.y is None), default=-1)
+    # Bands are built for every row the sheet names, and a pin can name
+    # one above row 0: ``pin(row=-1)`` is the band over it, which is
+    # where a header belongs. Counting up from zero left nothing there
+    # to look up. Row 0 still anchors the top margin where no row goes
+    # above it, so a pin to row 2 keeps the two empty bands it asked
+    # for.
+    banded = [u._slot.row or 0 for u in units if u._slot.y is None]
+    min_row = min([0, *banded])
+    max_row = max(banded, default=-1)
     # Empty rows keep a default band.
-    row_height: dict[int, float] = {r: 50.0 for r in range(max_row + 1)}
+    row_height: dict[int, float] = {r: 50.0 for r in range(min_row, max_row + 1)}
     for u in units:
         if u._slot.y is None:
             r = u._slot.row or 0
             row_height[r] = max(row_height[r], u._slot.h)
     row_axis: dict[int, float] = {}
     cursor: float = MARGIN_Y
-    for r in range(max_row + 1):
+    for r in range(min_row, max_row + 1):
         row_axis[r] = cursor + row_height[r] / 2.0
         cursor += row_height[r] + ROW_GAP
 

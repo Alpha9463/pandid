@@ -346,3 +346,96 @@ def test_slack_removal_leaves_a_pinned_column_alone():
     assert drum._slot.col == 6
     # The pump has slack between them and takes the tight end of it.
     assert pump._slot.col == 5
+
+
+def test_slack_removal_keeps_a_rank_right_of_its_own_upstream():
+    """Sliding a rank right is safe. A pinned successor slid it left.
+
+    ``P-2`` took one column short of ``P-3``'s pin and landed four
+    columns *behind* the pump feeding it, at a column left of the page.
+    Two pins this far apart cannot both be honoured with a forward edge
+    between them, and the one that gives is the derived rank.
+    """
+    fs = Flowsheet("conflicting pins")
+    a = fs.add(U.Pump("P-1"))
+    b = fs.add(U.Pump("P-2"))
+    c = fs.add(U.Pump("P-3"))
+    fs.connect(a.discharge, b.suction)
+    fs.connect(b.discharge, c.suction)
+    a.pin(col=3)
+    c.pin(col=0)
+    fs.layout()
+
+    assert a.frame.col == 3
+    assert c.frame.col == 0
+    assert b.frame.col > a.frame.col
+    assert min(u.frame.col for u in fs.units) >= 0
+
+
+# --- rows and columns left of the origin ---------------------------------------
+
+
+def test_a_row_pinned_above_the_first_band_draws():
+    """``pin(row=-1)`` names the band over row 0, which is a real place.
+
+    The coordinate pass counted its bands up from zero, so the pin
+    indexed a band that was never built and the sheet raised
+    ``KeyError`` instead of drawing.
+    """
+    fs = Flowsheet("negative row")
+    top = fs.add(U.Feed("Top"))
+    bottom = fs.add(U.Feed("Bottom"))
+    mixer = fs.add(U.Mixer("M-1"))
+    fs.connect(top.outlet, mixer.in_1)
+    fs.connect(bottom.outlet, mixer.in_2)
+    top.pin(row=-1)
+    bottom.pin(row=2)
+    fs.layout()
+
+    assert top.frame.row == -1
+    assert bottom.frame.row == 2
+    # The band above row 0 is drawn above it, and on the page.
+    assert 0 <= top.frame.y < bottom.frame.y
+
+
+def test_crossing_reduction_runs_left_of_column_zero():
+    """The barycentre swept ``range(1, max_col + 1)``.
+
+    A sheet pinned to the left of column 0 has ``max_col == 0``, which
+    makes that range and its mirror both empty: every sweep became a
+    no-op and the sheet came out unordered with nothing reported.
+    """
+    fs = Flowsheet("negative column")
+    a, b, c = (fs.add(U.Block(n, inputs=1, outputs=1)) for n in "ABC")
+    x, y, z = (fs.add(U.Block(n, inputs=1, outputs=1)) for n in "XYZ")
+    for src, dest in ((a, z), (b, y), (c, x)):
+        fs.connect(src.out_1, dest.in_1)
+        src.pin(col=-1)
+    fs.layout()
+
+    # Each sink follows the source feeding it, so no run crosses another.
+    assert [z.frame.row, y.frame.row, x.frame.row] == [0, 1, 2]
+
+
+def test_a_pinned_row_survives_a_sheet_that_stacks_above_it():
+    """The rebase drops the stacking constraint, not the author's pin.
+
+    ``Air`` on the north face lands a row above the block, which is a
+    row below zero here, and the rebase cannot renumber the bands out
+    from under a pin. It walked every unit rather than the satellites,
+    so the pinned product was renumbered too.
+    """
+    fs = Flowsheet("pinned row over a stack")
+    ng = fs.add(U.Feed("Natural Gas"))
+    air = fs.add(U.Feed("Air"))
+    sec = fs.add(U.Block("Sec", inputs=["W", "N"], outputs=["E"]))
+    prod = fs.add(U.Product("Syngas"))
+    fs.connect(ng.outlet, sec.in_1)
+    fs.connect(air.outlet, sec.in_2)
+    fs.connect(sec.out_1, prod.inlet)
+    prod.pin(row=-1)
+    fs.layout()
+
+    assert prod.frame.row == -1
+    # Air is the constraint that gives: it takes a free row instead.
+    assert air.frame.row >= 0
