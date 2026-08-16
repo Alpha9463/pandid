@@ -3097,11 +3097,11 @@ def _absorber_stripper() -> Flowsheet:
     fs.add_annotation(
         TableBox(
             title="UTILITIES SUMMARY",
-            headers=["Utility", "Unit No.", "Duty (kW)", "Flow (kg/s)", "T_in", "T_out"],
+            headers=["Utility", "Unit No.", "Duty (kW)", "Flow (kg/s)", "T_in (C)", "T_out (C)"],
             rows=[
-                ["LP Steam", "E-403", "24700", "11.30", "152 C", "151 C"],
-                ["Cooling Water", "E-402", "-4540", "72.4", "25 C", "40 C"],
-                ["Cooling Water", "E-404", "-12310", "196.3", "25 C", "40 C"],
+                ["LP Steam", "E-403", "24700", "11.30", "152", "151"],
+                ["Cooling Water", "E-402", "-4540", "72.4", "25", "40"],
+                ["Cooling Water", "E-404", "-12310", "196.3", "25", "40"],
             ],
             col_align=["l", "l", "r", "r", "c", "c"],
             align="bottom-right",
