@@ -1483,8 +1483,10 @@ def _mineral_dewatering() -> Flowsheet:
 
     concentrate = fs.add(units.Feed("Flotation Concentrate", reference="PFD-302"))
     floc = fs.add(units.Tee(branch="inlet"))
+    # ``characteristic="gravity"``, not the retired ``variant="gravity"``:
+    # the same drawing to the character, so this golden does not move.
     thickener = fs.add(
-        units.Separator("TH-401", variant="gravity", description="Concentrate Thickener")
+        units.Separator("TH-401", characteristic="gravity", description="Concentrate Thickener")
     )
     overflow = fs.add(units.Product("Recovered Water", reference="PCD-402"))
 
@@ -1750,7 +1752,7 @@ def _tank_farm() -> Flowsheet:
     v604 = fs.add(
         units.Vessel(
             "V-604",
-            variant="legs",
+            supports="leg",
             width=60,
             height=120,
             description="Loading Vapour Knock-Out Drum",
