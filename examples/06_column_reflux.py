@@ -23,7 +23,12 @@ def main():
 
     # --- Equipment ----------------------------------------------------
     feed = fs.add(Feed("Feed", reference="PFD-100"))
-    col = fs.add(Column("T-701", description="Main Fractionator"))
+    # Baffle trays: a main fractionator takes a hot, wide-boiling,
+    # coke-forming feed, and a shed deck is what goes in there because
+    # it has no perforation to plug and no valve to stick. They are
+    # inefficient, so the tower is few decks and tall sections.
+    col = fs.add(Column("T-701", internals="baffle_tray", trays=10,
+                        description="Main Fractionator"))
 
     # width/height stay close to each symbol's native proportions:
     # scaling one far past its drawn aspect is what makes a sheet look

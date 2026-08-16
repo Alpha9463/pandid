@@ -103,7 +103,9 @@ def _distillation_train() -> Flowsheet:
     mixer = fs.add(units.Mixer("M-100", n_inlets=2, description="Feed Mixer Drum"))
     feed_valve = fs.add(units.Valve("FV-100"))
     preheater = fs.add(units.HeatExchanger("E-100", description="Feed Preheater"))
-    col1 = fs.add(units.Column("T-100", description="Light Ends Column"))
+    col1 = fs.add(
+        units.Column("T-100", internals="valve_tray", trays=14, description="Light Ends Column")
+    )
     c1_ovhd = fs.add(units.HeatExchanger("E-101", description="T-100 Overhead Condenser"))
     c1_drum = fs.add(
         units.Vessel(
@@ -118,7 +120,9 @@ def _distillation_train() -> Flowsheet:
     )
     c1_prod = fs.add(units.Product("Light Product", reference="PFD-1002"))
     pump1 = fs.add(units.Pump("P-100A/B", description="T-100 Bottoms Pump"))
-    col2 = fs.add(units.Column("T-200", description="Product Column"))
+    col2 = fs.add(
+        units.Column("T-200", internals="sieve_tray", trays=18, description="Product Column")
+    )
     c2_ovhd = fs.add(units.HeatExchanger("E-201", description="T-200 Overhead Condenser"))
     c2_drum = fs.add(
         units.Vessel(
@@ -359,7 +363,9 @@ def _reactor_recycle() -> Flowsheet:
 def _column_reflux() -> Flowsheet:
     fs = Flowsheet("Column Overhead System")
     feed = fs.add(units.Feed("Feed", reference="PFD-100"))
-    col = fs.add(units.Column("T-701", description="Main Fractionator"))
+    col = fs.add(
+        units.Column("T-701", internals="baffle_tray", trays=10, description="Main Fractionator")
+    )
     cond = fs.add(
         units.HeatExchanger(
             "E-701",
@@ -681,7 +687,15 @@ def _ethanol_pfd() -> Flowsheet:
     water = fs.add(units.Feed("RO Water", reference="PCD-301"))
 
     col = fs.add(
-        units.Column("T-301", width=110, height=250, label_pos="center", description="Beer Column")
+        units.Column(
+            "T-301",
+            internals="sieve_tray",
+            trays=18,
+            width=110,
+            height=250,
+            label_pos="center",
+            description="Beer Column",
+        )
     )
     cond = fs.add(
         units.HeatExchanger(
@@ -897,7 +911,15 @@ def _ethanol_pid() -> Flowsheet:
     temp307 = fs.add_loop("T", 307)
     flow308 = fs.add_loop("F", 308)
 
-    col = fs.add(units.Column("T-301", label_pos="center", description="Beer Column"))
+    col = fs.add(
+        units.Column(
+            "T-301",
+            internals="sieve_tray",
+            trays=18,
+            label_pos="center",
+            description="Beer Column",
+        )
+    )
     cond = fs.add(
         units.HeatExchanger(
             "C-301",

@@ -37,7 +37,12 @@ def main():
     preheater = fs.add(HeatExchanger("E-100", description="Feed Preheater"))
 
     # Column 1. The tee carries no tag and no equipment-list row.
-    col1 = fs.add(Column("T-100", description="Light Ends Column"))
+    # Valve trays: light ends are clean, so nothing here needs a deck
+    # that resists fouling -- but the cut swings with the upstream
+    # unit's rate, and a movable valve holds its efficiency down to the
+    # low vapour load a sieve deck would weep at.
+    col1 = fs.add(Column("T-100", internals="valve_tray", trays=14,
+                         description="Light Ends Column"))
     c1_ovhd = fs.add(HeatExchanger("E-101", description="T-100 Overhead Condenser"))
     c1_drum = fs.add(Vessel("V-101", variant="horizontal", width=130, height=42,
                             description="T-100 Reflux Drum"))
@@ -49,7 +54,12 @@ def main():
     pump1 = fs.add(Pump("P-100A/B", description="T-100 Bottoms Pump"))
 
     # Column 2, with the same two circuits on it.
-    col2 = fs.add(Column("T-200", description="Product Column"))
+    # Sieve trays: this one is base-loaded off T-100's bottoms at a
+    # steady rate on a clean feed, so the turndown a valve deck is
+    # bought for is never used and the perforated deck is the cheapest
+    # way to the capacity.
+    col2 = fs.add(Column("T-200", internals="sieve_tray", trays=18,
+                         description="Product Column"))
     c2_ovhd = fs.add(HeatExchanger("E-201", description="T-200 Overhead Condenser"))
     c2_drum = fs.add(Vessel("V-201", variant="horizontal", width=130, height=42,
                             description="T-200 Reflux Drum"))

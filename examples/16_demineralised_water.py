@@ -45,6 +45,11 @@ def main():
                          description="Activated Carbon Filter"))
     ix801 = fs.add(IonExchanger("IX-801", description="Cation Exchanger"))
 
+    # Packing, not a deck: a CO2 stripper wants surface area and the
+    # lowest pressure drop the blower can push air through, and it has
+    # no separation to hold on spec. ``variant="packed"`` is the body
+    # that draws its own two beds on their support grids, so it takes no
+    # ``internals=`` -- composing one onto it would draw a third bed.
     d801 = fs.add(Column("D-801", variant="packed",
                          description="Degasser Tower"))
     air = fs.add(Feed("Stripping Air"))
