@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Four new examples**, drawn as what their equipment calls for: a jacketed
+  stirred reactor train (`17`), a fixed-bed reactor with recycle (`18`), an
+  absorber and its regenerator (`19`) and a two-bed molecular sieve dryer
+  (`20`). `18` and `20` draw the same ISO item 27.8 bed as a catalytic
+  converter and as an adsorber.
+
 - Screw conveyor and bucket elevator (straight and Z-form):
   `Conveyor(variant="screw")`, `Elevator()`, `Elevator(variant="z_form")`.
   The screw is sized by `length=`, as the belt is.

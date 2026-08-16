@@ -2907,7 +2907,7 @@ fs.to_svg()
 The rule is stated as the **clearance**, not as a multiple of the head, and the
 difference matters: at the default 20 pitch those same two heads have 8 units of
 paper between them — four line-widths — and read without effort, so nothing is
-reported. Only one unit on the sixteen shipped examples is inside the floor:
+reported. Only one unit on the twenty shipped examples is inside the floor:
 `10_ethanol_pfd`'s `M-301`, whose two feeds land 14.5px apart.
 
 The cure is the box, and the message does the arithmetic: the drawn pitch is
@@ -2977,10 +2977,13 @@ every fixed nozzle a class declares is offered to every instance whether the
 sheet uses it or not, and leaving one open is a drawing decision. Declaring one
 per variant rather than per class changes nothing here: a press run without a
 displacement wash is a real machine, and a sheet that lets the cake fall to a
-bin off the drawing is a real sheet. Across the sixteen examples in
-`examples/` 276 ports carry no stream and every one of them is one of those:
-176 signal connections, 26 exchanger utility sides, 17 reliefs, 17 drains,
-15 duties, 13 vents and 8 station drain outlets. None is reported.
+bin off the drawing is a real sheet. Across the twenty examples in
+`examples/` 433 ports carry no stream and every one of them is one of those:
+302 signal connections, 31 exchanger utility sides, 24 duties, 18 reliefs,
+18 drains, 14 vents, 8 station drain outlets, and 18 further nozzles a class
+offers and a service did not need -- four agitator drives, an ion exchanger's
+regenerant pair, a filter press's wash and cake, and a handful of spare
+vessel and column nozzles. None is reported.
 What is reported is a *count that went unmet*, which is why the singular
 spelling is silent too — a one-feed column's nozzle is called `feed`, not
 `feed_1`, and no number was ever written down for it.
