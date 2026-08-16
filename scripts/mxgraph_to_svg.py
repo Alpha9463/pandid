@@ -9,10 +9,18 @@ they map straight onto an SVG ``viewBox="0 0 w h"``.
 
 A paint op names the operation, not the colour: what a fill comes out as is the
 canvas's current fill colour, which <fillcolor> sets and <save>/<restore>
-bracket. That is how a stencil says a part of itself is solid (a damper's
-pivot, a flow arrow's head) and, being state rather than a property of the op,
-it is also why a plain <fill> is a *background wash* in the shape's own fill
-colour rather than a request for black.
+bracket. The pen is state in exactly the same way -- <dashed>, <dashpattern>,
+<strokewidth> and <linecap> set it, and <save>/<restore> bracket it too. That is
+how a stencil says a part of itself is solid (a damper's pivot, a flow arrow's
+head) or open (a filter's screen, a strainer's mesh) and, being state rather
+than a property of the op, it is also why a plain <fill> is a *background wash*
+in the shape's own fill colour rather than a request for black.
+
+**Every directive is answered.** A directive this converter does not act on is
+named in :data:`DECLINED` with the reason; anything else stops the conversion.
+There is no falling off the end: a dropped directive is a drawing that says
+something other than the stencil said, and the drop is silent at every later
+stage (issue #291).
 
 `convert_shape(shape_el)` returns (inner_svg, width, height, constraints, aspect)
 where constraints is ``{name: (x_abs, y_abs)}`` from the stencil's <connections>
@@ -136,6 +144,37 @@ _PAINT = {
     "fill": (True, False),
 }
 
+#: What mxGraph dashes with when a stencil turns dashes on and names no pattern.
+#: The numbers are multiples of the pen width, not lengths; see :func:`_pen`.
+DEFAULT_DASH_PATTERN = "3 3"
+
+#: Directives this converter reads and deliberately does not act on, with the
+#: reason it does not. A directive named here changes nothing about what the
+#: drawing says; one that is neither named here nor handled in
+#: :func:`convert_shape` stops the conversion.
+#:
+#: That is the whole point of the table. Until #291 the dispatch was an
+#: if/elif chain with no else, so seven directives fell off the end without a
+#: word: twelve shipped symbols lost the dashed screen that is the only thing
+#: telling a filter from a plain drum and a strainer from a plate, while the
+#: draw.io backend went on referencing the original stencil and drawing it
+#: dashed. One flowsheet, two drawings, disagreeing about the equipment.
+DECLINED = {
+    "linejoin": (
+        "how a corner is finished, not what the drawing says. The library holds "
+        "every symbol to SVG's own join, so a stencil-derived shape does not "
+        "finish its corners differently from the hand-drawn one beside it."
+    ),
+    "miterlimit": (
+        "the length a mitre may run out to before it is bevelled, which is the "
+        "same corner-finishing decision as <linejoin> above."
+    ),
+    "fontcolor": (
+        "a P&ID is drawn in one ink (see INK), so lettering is that ink and "
+        "nothing else -- the same reduction _fill_colour makes for fills."
+    ),
+}
+
 
 def _fill_colour(named):
     """The fill a stencil's ``<fillcolor color=...>`` asks for.
@@ -152,6 +191,40 @@ def _fill_colour(named):
 
 def _num(el, attr, default=0.0):
     return float(el.get(attr, default))
+
+
+def _fmt(v):
+    """A number written as short as it can be without changing it."""
+    return f"{v:.4f}".rstrip("0").rstrip(".") or "0"
+
+
+def _pen(state):
+    """The SVG stroke properties the canvas state currently asks for.
+
+    ``stroke-width`` always, because every stroke in the library declares one;
+    the rest only where the stencil moved the pen off SVG's own default, so a
+    shape that never touches it comes out exactly as it did before any of this
+    existed.
+
+    A dash pattern is in **pen widths**, not in units: mxGraph multiplies each
+    number by the current stroke width, which is why one ``pattern="2 2"``
+    serves stencils drawn on a 40-unit module and on a 200-unit one alike. The
+    multiplication is done here for the same reason -- pandid draws these
+    symbols far smaller than draw.io does, and a dash measured in units would
+    come out as a grey smear on a strainer 10 units wide.
+    """
+    sw = state["stroke_width"]
+    out = f' stroke-width="{sw}"'
+    if state["dashed"]:
+        pattern = " ".join(_fmt(float(n) * sw) for n in state["dash_pattern"].split())
+        out += f' stroke-dasharray="{pattern}"'
+    # A zero-length dash is a DOT, and only under a round cap: butt caps draw
+    # nothing at all for it. That is how "Strainer (Cone)" asks for its
+    # dash-dot screen ("6 3 0 3"), so the cap is load-bearing here rather than
+    # a nicety, which is why it is acted on where <linejoin> is declined.
+    if state["linecap"] != "butt":
+        out += f' stroke-linecap="{state["linecap"]}"'
+    return out
 
 
 # mxGraph anchors a <text> by its own box, SVG by the baseline, so each valign
@@ -215,10 +288,11 @@ DEFAULT_ASPECT = "variable"
 def convert_shape(shape_el, stroke_width=2.0):
     """Convert one <shape> element to (inner_svg, w, h, constraints, aspect).
 
-    ``stroke_width`` is emitted verbatim on every stroked element (in the
-    shape's own units). At a symbol's native scale this equals the sheet's line
-    weight; for a symbol later scaled by ``s``, pass ``stroke_width = 2 / s`` so
-    the rendered line still lands at 2px.
+    ``stroke_width`` is emitted on every stroked element (in the shape's own
+    units). At a symbol's native scale this equals the sheet's line weight; for
+    a symbol later scaled by ``s``, pass ``stroke_width = 2 / s`` so the
+    rendered line still lands at 2px. It is also the ceiling a stencil's own
+    <strokewidth> is held to, and the unit a dash pattern is measured in.
 
     ``aspect`` is the stencil author's own statement about resizing:
     ``"variable"`` for a shape that may be stretched to fill whatever box it is
@@ -239,8 +313,17 @@ def convert_shape(shape_el, stroke_width=2.0):
 
     out = []
     pending = []   # geometry accumulated since the last paint op
-    font_size = 12.0
-    fill = DEFAULT_FILL   # canvas state, as mxGraph keeps it
+    # The canvas state, as mxGraph keeps it: the fill, the pen and the font,
+    # all read at paint time and all bracketed by <save>/<restore>.
+    fresh = {
+        "fill": DEFAULT_FILL,
+        "font_size": 12.0,
+        "stroke_width": stroke_width,
+        "dashed": False,
+        "dash_pattern": DEFAULT_DASH_PATTERN,
+        "linecap": "butt",
+    }
+    state = dict(fresh)
     saved = []            # <save>/<restore> stack for that state
 
     def flush(op):
@@ -248,7 +331,7 @@ def convert_shape(shape_el, stroke_width=2.0):
         if not pending:
             return
         fills, strokes = _PAINT.get(op, (False, True))
-        paint = fill if fills else "none"
+        paint = state["fill"] if fills else "none"
         stroke = INK if strokes else "none"
         if paint == "none" and stroke == "none":
             # Neither filled nor stroked: mxGraph draws nothing, so nor does
@@ -256,7 +339,7 @@ def convert_shape(shape_el, stroke_width=2.0):
             # the SVG for every later reader of it to mistake for ink.
             pending = []
             return
-        sw = f' stroke-width="{stroke_width}"' if stroke != "none" else ""
+        sw = _pen(state) if stroke != "none" else ""
         for kind, data in pending:
             if kind == "path":
                 out.append(f'<path d="{data}" fill="{paint}" stroke="{stroke}"{sw}/>')
@@ -299,20 +382,49 @@ def convert_shape(shape_el, stroke_width=2.0):
                 pending.append(("line", (_num(el, "x1"), _num(el, "y1"),
                                          _num(el, "x2"), _num(el, "y2"))))
             elif t == "fontsize":
-                font_size = _num(el, "size", 12)
+                state["font_size"] = _num(el, "size", 12)
             elif t == "fillcolor":
                 # Canvas state, read at paint time: the stencils set it after
                 # the geometry it applies to and before the op that paints it.
-                fill = _fill_colour(el.get("color"))
+                state["fill"] = _fill_colour(el.get("color"))
+            elif t == "dashed":
+                state["dashed"] = el.get("dashed", "1") == "1"
+            elif t == "dashpattern":
+                state["dash_pattern"] = el.get("pattern") or DEFAULT_DASH_PATTERN
+            elif t == "strokewidth":
+                # The stencil's number is in its own units, as every coordinate
+                # here is, so it lands in this SVG's user space unchanged.
+                #
+                # Capped at the sheet's own weight, which is what
+                # ``stroke_width`` is. A P&ID is drawn at one line weight and a
+                # symbol's own detail may be FINER than it (that is what these
+                # numbers are usually for, and the library holds every symbol to
+                # exactly that: the heaviest pen in a drawing is the sheet's).
+                # A stencil asking for a heavier line is asking for a second
+                # weight on a monochrome single-weight sheet, and ISO 15519-1
+                # 6.2 has no name for one -- draw.io's own base is 1px and
+                # pandid's is 2, so a stencil written to stand out against the
+                # thinner pen would come out heavier still against this one.
+                state["stroke_width"] = min(_num(el, "width", stroke_width), stroke_width)
+            elif t == "linecap":
+                state["linecap"] = el.get("cap", "butt")
             elif t == "save":
-                saved.append(fill)
+                saved.append(dict(state))
             elif t == "restore":
-                fill = saved.pop() if saved else DEFAULT_FILL
+                state = saved.pop() if saved else dict(fresh)
             elif t == "text":
                 # <text> paints itself, so it never joins the pending geometry.
-                out.append(_text_svg(el, font_size))
+                out.append(_text_svg(el, state["font_size"]))
             elif t in _PAINT:
                 flush(t)
+            elif t not in DECLINED:
+                raise ValueError(
+                    f"{shape_el.get('name', '?')!r}: <{t}> is a stencil directive "
+                    f"this converter neither draws nor declines, so the shape it "
+                    f"describes would come out saying something the stencil did "
+                    f"not say. Handle it in convert_shape, or name it in DECLINED "
+                    f"with the reason it changes no ink."
+                )
     flush("stroke")  # paint anything left
 
     return "".join(out), w, h, constraints, aspect

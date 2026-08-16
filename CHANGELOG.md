@@ -609,6 +609,10 @@ reader would otherwise take them for working code.
   `location_reference(zone=...)` in the mirrored region of the sheet. Sheets
   drawn with the border move: the labels change, no geometry does.
 
+- **Twelve filter and strainer symbols draw their dashed screen again.** The
+  stencil converter had been dropping the directive that says so; a directive
+  it does not handle now stops the conversion instead of vanishing.
+
 - **A composition that grows the box left its port series behind.**
   `PortSeries` places its members in absolute coordinates along a face, and
   `compose` carried it across untouched — so a part drawn *above* a body left a
