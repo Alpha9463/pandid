@@ -75,10 +75,12 @@ def test_units_all_lists_every_public_unit_class():
     place a class added tomorrow and left out is a *failure* rather than a
     silently smaller API.
 
-    ``_Boundary`` and ``_NormallyPositioned`` are the two the rule excludes.
-    Neither is a piece of plant: one is what Feed and Product share and the
-    other is what a valve and a damper share, and a name nobody constructs is a
-    name nobody should be offered.
+    ``_Boundary``, ``_NormallyPositioned`` and ``_CrushingMachine`` are the
+    three the rule excludes. None is a piece of plant: the first is what Feed
+    and Product share, the second what a valve and a damper share, and the
+    third what a crusher and a mill share -- ISO 10628-2 group 11's two
+    nozzles, which are the same two on all twelve of its rows. A name nobody
+    constructs is a name nobody should be offered.
     """
     declared = {
         name
@@ -90,7 +92,7 @@ def test_units_all_lists_every_public_unit_class():
     public = {name for name in declared if not name.startswith("_")}
 
     assert public == set(U.__all__)
-    assert declared - public == {"_Boundary", "_NormallyPositioned"}
+    assert declared - public == {"_Boundary", "_NormallyPositioned", "_CrushingMachine"}
 
 
 def test_every_unit_class_is_on_the_package():

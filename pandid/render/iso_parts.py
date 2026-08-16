@@ -1017,6 +1017,44 @@ def support_overlays(name: str, registry=None) -> tuple:
             Overlay(26, name, 0.76, _SUPPORT_TOP, 0.10, _SUPPORT_DROP))
 
 
+#: The group-11 body's box, in grid modules. Read off every one of the
+#: twelve rows: top edge x 7..17, bottom edge x 9..15, y 4..10. The
+#: crusher and mill drawings in :mod:`pandid.render.symbols` are built at
+#: :data:`M` units to the module, so this box *is* their box and a
+#: fraction of one is a fraction of the other.
+CRUSHER_MODULES_W, CRUSHER_MODULES_H = 10.0, 6.0
+
+#: How wide 29.14's arrows are drawn **inside a mill**, in modules. Its
+#: own row (and so the part) draws them 3 M across; ISO item 11.12 draws
+#: them 2 M across, inside the drum. The part is squeezed to match,
+#: because the row is the drawing this reproduces.
+_VIBRATION_IN_MILL = 2 * M
+
+
+def crushing_overlays(name: str, registry=None) -> tuple:
+    """``name``'s characteristic, centred in an ISO group-11 body.
+
+    **One rule for all nine**, rather than a rectangle each: Table 2
+    centres every mark on the body's box -- x 12 and y 7 of a box running
+    x 7..17 and y 4..10 -- and draws it at exactly the size its own
+    group-29 row draws it at. So the placement follows from the part's
+    declared box and nothing has to be measured twice. Checked mark by
+    mark against rows 11.3 to 11.12; :data:`_VIBRATION_IN_MILL` is the
+    one size the standard changes and it is stated there.
+
+    The one departure is the **jaw**, item 11.5: Table 2 shifts it half a
+    module left, to x 9..14 rather than 9,5..14,5, so that a mark of odd
+    width still lands on grid dots. pandid's bodies are not drawn on the
+    2,5 mm grid -- there are no dots to land on -- so it is centred with
+    the other eight, which is half a module on a ten-module box.
+    """
+    from pandid.render.symbols import Overlay
+    part = _part(29, name, registry)
+    width = _VIBRATION_IN_MILL if name == "vibration" else part.width
+    w, h = width / M / CRUSHER_MODULES_W, part.height / M / CRUSHER_MODULES_H
+    return (Overlay(29, name, (1 - w) / 2, (1 - h) / 2, w, h),)
+
+
 def characteristic_overlays(name: str, registry=None) -> tuple:
     """``name``'s characteristic, inside a separating vessel.
 

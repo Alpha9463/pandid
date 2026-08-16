@@ -598,7 +598,7 @@ def test_a_composed_symbol_renders_through_the_svg_backend():
 # ------------------------------------------------- what the registry composes
 
 
-def test_the_registry_composes_exactly_the_three_ISO_gives_a_number_to():
+def test_the_registry_composes_exactly_the_rows_ISO_gives_a_number_to():
     """A composition the *registry* ships is a composition **ISO tabulates**.
 
     Two kinds of composition exist and only one of them belongs here. The one
@@ -608,9 +608,14 @@ def test_the_registry_composes_exactly_the_three_ISO_gives_a_number_to():
     registration number has a fixed answer, and a fixed answer belongs in the
     registry beside every other fixed drawing.
 
-    Three, all in ISO 10628-2 group 8, all one separating vessel carrying one
-    group-29 characteristic. The list is spelled out rather than counted so
-    that a fourth arriving has to be argued for here.
+    Twelve, in two families. Three are ISO 10628-2 group 8: one separating
+    vessel carrying one group-29 characteristic. The other nine are group 11,
+    the crushing and grinding machines: one crusher or mill body carrying one
+    group-29 characteristic, which is the same shape of row and the reason
+    closing that group cost two drawings instead of eleven.
+
+    The list is spelled out rather than counted so that a thirteenth arriving
+    has to be argued for here.
     """
     composed = {
         f"{kind}/{variant}": sym.iso_reg
@@ -621,7 +626,52 @@ def test_the_registry_composes_exactly_the_three_ISO_gives_a_number_to():
         "separator/gravity": "X8031",
         "separator/electrostatic": "X8125",
         "separator/electromagnetic": "X8126",
+        "crusher/hammer": "X8045",
+        "crusher/impact": "X8046",
+        "crusher/jaw": "X8047",
+        "crusher/roller": "X8048",
+        "crusher/cone": "X8049",
+        "mill/hammer": "X8050",
+        "mill/impact": "X8051",
+        "mill/roller": "X8053",
+        "mill/vibration": "X8054",
     }
+
+
+def test_the_two_group_11_bodies_are_the_outline_table_2_draws():
+    """The trapezoid, and the one mark each that tells a crusher from a mill.
+
+    Measured off rows 11.2 and 11.8 in grid modules and written here in drawing
+    units at ten to the module, which is the scale
+    ``symbols._CRUSHER_W`` x ``_CRUSHER_H`` is built at:
+
+    * the shared trapezoid, 10 M across the top and 6 M across the bottom over a
+      6 M depth -- (0,0) (100,0) (80,60) (20,60);
+    * the **crusher's** two verticals at x 20 and x 80, which are ISO's x 9 and
+      x 15, running the full depth;
+    * the **mill's** two chords, each striking the top edge 2,5 M in from a
+      corner and falling 4 down for 3 across to the wall at (10/13, 30/13) M.
+
+    Neither mark is in group 29, which is why both are body rather than part and
+    why this is a geometry check rather than a composition one. The numbers are
+    spelled out so that a redraw has to be argued against the page.
+    """
+    trapezoid = "M 0 0 L 100 0 L 80 60 L 20 60 Z"
+    crusher = default_registry.get("crusher")
+    mill = default_registry.get("mill")
+    for sym in (crusher, mill):
+        assert (sym.width, sym.height) == (100.0, 60.0)
+        assert trapezoid in sym.svg
+        # Fed at the mouth, discharging at the throat, and nothing else. See
+        # ``units._CrushingMachine`` on why there is no drive.
+        assert sym.ports == {"feed": (50.0, 0.0), "discharge": (50.0, 60.0)}
+    assert "M 20 0 L 20 60 M 80 0 L 80 60" in crusher.svg
+    assert "M 25 0 L 7.6923 23.0769 M 75 0 L 92.3077 23.0769" in mill.svg
+    # The vibration mill is the same body with X8054's drum on it, which is the
+    # only reason ``mill/vibration`` can claim that number; see
+    # ``symbols._VIBRATION_DRUM``.
+    drum = default_registry.get("mill", "vibration")
+    assert '<circle cx="50" cy="30" r="20"' in drum.svg
 
 
 def test_the_cyclone_is_not_composed():
@@ -662,26 +712,41 @@ def test_the_parts_that_ship_are_available_and_unused():
     assert agitator.svg != machine.svg and not machine.overlays
 
 
-def test_only_a_composition_claims_a_registration_number():
-    """Filling one in is a conformance claim about that symbol's geometry, and
-    one made by assumption is worse than none -- so the 154 whole drawings
-    still claim nothing, and the backfill is its own change, against Table 2,
-    one drawing at a time.
+#: The whole drawings that claim a registration number, and the only ones.
+#:
+#: Every other one of the library's vendored drawings claims nothing, and that
+#: is the point of the field: filling one in is a conformance claim about that
+#: symbol's geometry, and one made by assumption is worse than none. The
+#: backfill over the vendored set is still its own change, against Table 2, one
+#: drawing at a time.
+#:
+#: These two are not backfill. Neither existed before the Table 2 row was
+#: measured -- ``crusher/default`` *is* item 11.2 and ``mill/default`` *is*
+#: item 11.8, drawn from the rows and from nothing else -- so the claim is the
+#: same kind of claim a composition makes, and is checkable the same way.
+_NUMBERED_WHOLE_DRAWINGS = {"crusher/default": "X8085", "mill/default": "X8086"}
 
-    A composition is the exception, and is why the field exists. It is only
-    ever built because the standard composes at that point, so the row it
-    reproduces is known at the moment it is built: a separating vessel carrying
-    item 29.2 *is* X8125, and saying so is what makes the composition checkable
-    rather than plausible.
+
+def test_a_registration_number_is_claimed_by_a_composition_or_by_a_measured_body():
+    """A composition is why the field exists. It is only ever built because the
+    standard composes at that point, so the row it reproduces is known at the
+    moment it is built: a separating vessel carrying item 29.2 *is* X8125, and
+    saying so is what makes the composition checkable rather than plausible.
+
+    :data:`_NUMBERED_WHOLE_DRAWINGS` is the other way in, and it is deliberately
+    a list rather than a rule: a whole drawing may say which row it is only
+    where somebody drew it *from* that row. Vendoring a stencil and guessing at
+    its number is what this still refuses.
     """
     numbered = {
         f"{kind}/{variant}": sym
         for (kind, variant), sym in default_registry._symbols.items()
         if sym.iso_reg
     }
-    assert all(sym.overlays for sym in numbered.values()), (
-        "a whole drawing claimed a registration number; that is the backfill, "
-        "and it wants its own change"
+    whole = {name: sym.iso_reg for name, sym in numbered.items() if not sym.overlays}
+    assert whole == _NUMBERED_WHOLE_DRAWINGS, (
+        "a whole drawing claimed a registration number without being drawn from "
+        "the row; that is the backfill, and it wants its own change"
     )
 
 

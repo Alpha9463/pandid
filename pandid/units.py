@@ -39,7 +39,8 @@ __all__ = [
     "Feed", "Product", "Pump", "Compressor", "Blower", "Valve", "Vessel", "Tank",
     "HeatExchanger", "Heater", "Cooler", "Reactor", "Separator", "Column",
     "Mixer", "Splitter", "Tee", "Reducer", "Fitting", "Ejector", "Vent", "Funnel",
-    "Furnace", "Turbine", "Filter", "Dryer", "Conveyor", "Instrument", "Block",
+    "Furnace", "Turbine", "Filter", "Dryer", "Crusher", "Mill", "Conveyor",
+    "Instrument", "Block",
 ]
 
 # Only a signal port may carry a signal line and only a process one may
@@ -1710,6 +1711,93 @@ class Dryer(Unit):
 
     kind = "dryer"
     PORTS = [("feed", "inlet", "feed"), ("product", "outlet", "process")]
+
+
+class _CrushingMachine(Unit):
+    """ISO 10628-2 group 11: a machine that makes the feed smaller.
+
+    Two nozzles, and the same two for every variant of both subclasses,
+    because Table 2 draws the same two connection ticks on every one of
+    the group's twelve rows: one on the centre line above the top edge
+    and one below the bottom edge. Ore goes in the top and falls out of
+    the bottom.
+
+    ``feed`` and ``discharge`` are :class:`Conveyor`'s names, which is
+    deliberate -- a crusher is fed by a belt and discharges onto one, and
+    the two units either side of that chute should not call the same
+    thing by two words.
+
+    **There is no ``drive``**, and it is worth saying why rather than
+    leaving it to be noticed. Every one of these is motor-driven, and
+    ISO draws exactly one motor in the whole of Table 2: item 1.27 X8006,
+    the stirred vessel, where the motor sits on the agitator's own shaft
+    and the standard registers the composition. Group 11 draws no motor
+    and no third tick, so a ``drive`` here would be a nozzle pandid
+    invented, on a body ISO has already said how to connect. An author
+    who wants the drive on the sheet draws the motor as its own tagged
+    unit, which is what the other seven group-20 machines are for.
+    """
+
+    feed: Port
+    discharge: Port
+
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+
+
+class Crusher(_CrushingMachine):
+    """Crusher: coarse size reduction, ISO 10628-2 item 11.2 X8085.
+
+    The trapezoid every group-11 row is drawn on, with the crusher's own
+    two full-depth verticals inside it. ``variant=`` names the ISO
+    group-29 characteristic that says how it breaks the feed, and each
+    one is the body carrying that mark::
+
+        Crusher("CR-101")                    # 11.2  X8085  general
+        Crusher("CR-102", variant="jaw")     # 11.5  X8047
+        Crusher("CR-103", variant="cone")    # 11.7  X8049
+        Crusher("CR-104", variant="hammer")  # 11.3  X8045
+        Crusher("CR-105", variant="impact")  # 11.4  X8046
+        Crusher("CR-106", variant="roller")  # 11.6  X8048
+
+    Five characteristics, and they are the five ISO gives a crusher.
+    ``vibration`` is a mill's (11.12) and is refused here, because Table 2
+    has no vibrating crusher -- the registry says so, by name, with the
+    list of the ones there are.
+
+    Drawn one way up and reported as ``gravity-turned`` by
+    :meth:`~pandid.flowsheet.Flowsheet.validate` if turned: the feed
+    comes in the top and the product falls out of the bottom, which is
+    ISO 15519-1 §11.4.2's exception.
+    """
+
+    kind = "crusher"
+
+
+class Mill(_CrushingMachine):
+    """Mill or pulveriser: fine grinding, ISO 10628-2 item 11.8 X8086.
+
+    The same trapezoid as :class:`Crusher`, with the mill's own two
+    chords across the top corners instead of the crusher's verticals.
+    That pair of marks is the whole of what tells the two machines apart
+    on an ISO sheet, and it is why they are two classes: an engineer
+    orders a crusher or a mill, never "a group-11 machine"::
+
+        Mill("ML-101")                       # 11.8   X8086  general
+        Mill("ML-102", variant="hammer")     # 11.9   X8050
+        Mill("ML-103", variant="impact")     # 11.10  X8051
+        Mill("ML-104", variant="roller")     # 11.11  X8053
+        Mill("ML-105", variant="vibration")  # 11.12  X8054
+
+    A **ball or rod mill** is drawn as the general mill: ISO 10628-2 has
+    no item for either, and the four characteristics above are the four
+    it does give, so the tumbling mill of a grinding circuit takes the
+    plain body and says what it is in its description.
+
+    ``jaw`` and ``cone`` are a crusher's (11.5, 11.7) and are refused
+    here for the reason ``vibration`` is refused there.
+    """
+
+    kind = "mill"
 
 
 class Conveyor(Unit):

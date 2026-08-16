@@ -386,6 +386,73 @@ DEVICES = {
     see :class:`Cyclone`.
 """),
 
+    # --- Crushers and mills -------------------------------------------------
+    #
+    # Nine classes over nine drawings, and every one of the nine is a body
+    # carrying one ISO group-29 characteristic -- the same shape of row the
+    # three composed separators are, and classed for the same reason. A jaw
+    # crusher and a cone crusher are not one machine with two internals fitted:
+    # they are two purchases, two datasheets and two rows on an equipment list,
+    # and the mark inside the outline is what says which was bought.
+    #
+    # ``crusher/default`` and ``mill/default`` stay on their base classes, which
+    # is where a machine whose type is not being stated belongs.
+    ("crusher", "jaw"): ("JawCrusher", """Jaw crusher: a swing jaw worked by an eccentric.
+
+    The primary crusher of a hard-rock circuit -- run-of-mine ore in at
+    the top, one product size out of the bottom. ISO 10628-2 item 11.5
+    X8047: the crusher body carrying item 29.9 C2036.
+"""),
+    ("crusher", "cone"): ("ConeCrusher", """Cone crusher: a gyrating head inside a fixed bowl.
+
+    Secondary and tertiary duty behind a jaw, and where a gyratory
+    crusher is drawn too. ISO 10628-2 item 11.7 X8049: the crusher body
+    carrying item 29.12 C2038.
+"""),
+    ("crusher", "hammer"): ("HammerCrusher", """Hammer crusher: swing hammers on a rotor, against a breaker plate.
+
+    For friable and medium-hard feed -- limestone, gypsum, coal. ISO
+    10628-2 item 11.3 X8045: the crusher body carrying item 29.7 C2034.
+"""),
+    ("crusher", "impact"): ("ImpactCrusher", """Impact crusher: blow bars on a rotor throwing feed at aprons.
+
+    Breaks on impact rather than by compression, so it makes a cubical
+    product and more fines than a jaw. ISO 10628-2 item 11.4 X8046: the
+    crusher body carrying item 29.8 C2035.
+"""),
+    ("crusher", "roller"): ("RollerCrusher", """Roll crusher: two counter-rotating rolls with a nip between them.
+
+    A closely sized product from a friable feed, and the sizer of a coal
+    or bauxite circuit. ISO 10628-2 item 11.6 X8048: the crusher body
+    carrying item 29.11 C2037.
+"""),
+    ("mill", "hammer"): ("HammerMill", """Hammer mill: swing hammers against a screen.
+
+    The same hammers as a hammer crusher in a machine ground for a
+    finer product, which is the whole difference ISO draws between the
+    two bodies. Item 11.9 X8050: the mill body carrying item 29.7 C2034.
+"""),
+    ("mill", "impact"): ("ImpactMill", """Impact mill, pin mill: a rotor throwing feed at a liner.
+
+    Fine grinding of soft and friable solids. ISO 10628-2 item 11.10
+    X8051: the mill body carrying item 29.8 C2035.
+"""),
+    ("mill", "roller"): ("RollerMill", """Roller mill: rolls running on a table or against a ring.
+
+    The horizontal-rotation roller mill of a cement or coal circuit.
+    ISO 10628-2 item 11.11 X8053: the mill body carrying item 29.11
+    C2037.
+"""),
+    ("mill", "vibration"): ("VibratingMill", """Vibrating mill: a charged drum shaken rather than tumbled.
+
+    Fine and ultrafine grinding in a small footprint. ISO 10628-2 item
+    11.12 X8054, and the one group-11 row that is not a body and a mark
+    alone: the drawing puts the two arrows of item 29.14 (3831) inside a
+    drum the standard gives no number of its own, so the drum is drawn
+    as part of the body. See
+    ``pandid.render.symbols._VIBRATION_DRUM``.
+"""),
+
     # --- Valves ------------------------------------------------------------
     #
     # Six classes over twenty-three drawings, split on BEHAVIOUR rather than on
@@ -601,6 +668,8 @@ STAYS_ON_BASE = {
     ("blower", "default"): "Blower's own drawing",
     ("conveyor", "default"): "Conveyor's own drawing",
     ("cooler", "default"): "Cooler's own drawing",
+    ("crusher", "default"): "Crusher's own drawing (ISO item 11.2, no characteristic)",
+    ("mill", "default"): "Mill's own drawing (ISO item 11.8, no characteristic)",
     ("ejector", "default"): "Ejector's own drawing",
     ("filter", "default"): "Filter's own drawing (bag, candle or cartridge elements)",
     ("funnel", "default"): "Funnel's own drawing",
