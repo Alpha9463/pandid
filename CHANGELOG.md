@@ -68,6 +68,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   byte the same drawing: every golden fixture and every gallery sheet is
   unmoved. `scripts/renumber_bench.py` prints the numbers.
 
+- **Three comments in the routing and geometry layers describe the code under
+  them.** `find_path`'s docstring said a path "must arrive heading the
+  opposite direction" at the goal port, while the loop bans only arriving from
+  *behind* and the comment beside it sets out why entering from the side is
+  allowed: 53 of the 232 arrivals across the examples are the case the
+  docstring called impossible. `portgeom`'s module docstring claimed that every
+  function there takes a resolved box rather than reading `unit.frame` —
+  `port_faces`, `resolve_size` and `port_offset` all fall back to it — and that
+  everything there wraps `resolve_port`, where three do and the rest are its
+  peers. And `ink_box` returned early on a non-positive symbol box, a guard
+  that prevented nothing: its only caller divides by those two values the
+  moment it has the answer, so a zero raised `ZeroDivisionError` either way.
+
 ### Removed
 
 **Breaking.** The six spellings 0.1.2 deprecated are gone in 0.1.3, which is
@@ -98,6 +111,26 @@ raises where it used to warn.
 
 `pandid.deprecation` and the `deprecated` finding stay: they are what the next
 retirement is declared with. Nothing is deprecated in this release.
+
+Two branches inside the router that could not change a drawing are gone as
+well. Neither is API and no sheet moves; both are recorded because the next
+reader would otherwise take them for working code.
+
+- **The A\* boundary penalty.** It charged 2000 for an edge running along an
+  obstacle's edge, and no such edge ever reached it: `Rect.intersects_segment`
+  bounds an obstacle inclusively, so a run exactly on `x_min` or `y_max`
+  counts as intersecting it and the visibility graph never builds the edge.
+  Counted over the whole corpus it fired 0 times in 815,416 axis-aligned
+  edges. Preferring a lane off the boundary means letting those edges exist
+  first, which is a change to `visibility.py`.
+
+- **The halved heuristic on recycle streams.** `h = h / 2.0` was there to
+  "explore the longer recycle lanes", but scaling an admissible heuristic
+  cannot change which path A\* returns — only how greedily it looks for it.
+  The recycle paths across the sixteen examples are identical without it, and
+  the search does 42% less work getting them (16,312 pushes against 23,137).
+  A real preference for the recycle lanes has to be a change to `cost`, as the
+  off-lane charge beside it is.
 
 ### Fixed
 
