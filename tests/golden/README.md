@@ -48,6 +48,22 @@ than leaving it — and the only one whose stream table is wider than the drawin
 above it, so it is what pins a sheet sized to fit furniture the diagram does not
 set the width of. Its title block states its own date, so it needs no pinning.
 
+`17_stirred_reactor_train`, `18_fixed_bed_recycle` and `20_molecular_sieve_dryer`
+are what pin the **composition layer** as drawings. `17` is the only fixture with
+a group-28 agitator, its drive motor or a jacketed body on it; `18` and `20` draw
+ISO item 27.8's packed bed in a reactor and in a pair of adsorbers, which is the
+same mark twice and is exactly the claim `docs/api.md` makes in prose. `18` also
+holds `internals=` to leaving the default agitator out — a stirrer appearing
+through the catalyst would move that fixture and nothing else. `19_absorber_stripper`
+puts two group-27 internals on one sheet, a valve deck and a packed bed, so a
+change that stopped telling two towers apart shows up as a drawing.
+
+`17` is the fourth fixture on a fixed `page_size="A3"`, `18` the third laid out
+end to end with no `pin()` on it and the first of those to carry line numbers,
+and `20` the only one with a repeated *logic* square — eight of them, one at each
+valve one sequence strokes. All four state their own title-block dates, so none
+of them is pinned.
+
 The flowsheets are rebuilt inline in `test_golden.py` rather than by running
 `examples/*.py` directly: those scripts write into `examples/` (a side
 effect a test suite shouldn't have) and `03`'s and `08`'s `TitleBlock`s leave
@@ -78,7 +94,7 @@ the process's string-hash seed, not on anything about the diagram — confirmed 
 rendering the same flowsheet under several `PYTHONHASHSEED` values and diffing.
 
 **The provenance block.** Every rendered sheet says what drew it, version
-included. Left alone, bumping `pandid.__version__` would rewrite all sixteen
+included. Left alone, bumping `pandid.__version__` would rewrite all twenty
 fixtures for a reason that is about none of the drawings, and cutting a release
 would be a diff of every artefact in the repository. The renderer therefore
 fences the block between `<!-- pandid:provenance -->` and

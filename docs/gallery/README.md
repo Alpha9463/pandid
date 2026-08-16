@@ -316,3 +316,79 @@ serves rather than beside the raw water tank, because ranking pulls a branch up
 against the spine it joins instead of leaving it at the sheet's left edge. Eight
 more previously-undrawn symbols — the packed column, three filter bodies, both
 tank ends, the duplex strainer and the handwheel globe valve.
+
+## 17 · Stirred reactor train
+
+[`examples/17_stirred_reactor_train.py`](../../examples/17_stirred_reactor_train.py) ·
+[SVG](17_stirred_reactor_train.svg)
+
+![Stirred reactor train](17_stirred_reactor_train.png)
+
+The composition layer drawn as plant. `R-101` is
+`Reactor(variant="jacketed", agitator="turbine")` — a dished-end shell, ISO item
+28.4's stirrer inside it and item 20.6's drive motor on the shaft above, none of
+which is a symbol of its own. Propylene oxide and process water are metered,
+mixed and charged; the hydrolysis is exothermic, so the reactor temperature sets
+the jacket cooling-water flow through a cascade, and a runaway trip shuts the
+feed and opens the quench on two measurements of its own.
+
+The fourth A3 sheet and the densest instrumented one after 11: five loops, an
+alarm pair lettered in three balloons' own quadrants, and one interlock square
+drawn at each of the four places it acts.
+
+## 18 · Fixed-bed reactor with recycle
+
+[`examples/18_fixed_bed_recycle.py`](../../examples/18_fixed_bed_recycle.py) ·
+[SVG](18_fixed_bed_recycle.svg)
+
+![Fixed-bed reactor with recycle](18_fixed_bed_recycle.png)
+
+A methanol synthesis loop: make-up gas compressed in, heated against the
+converter effluent, fired to reaction temperature, reacted over the packed bed
+`R-301`, separated, and the unreacted remainder sent round again behind a purge
+that holds the loop pressure.
+
+`Reactor(internals="packing")` is ISO item 27.8's crossed bed in the same shell
+example 17's reactor and example 20's molecular sieve are drawn from — and
+naming `internals=` is what leaves the default agitator out, so no stirrer is
+drawn through the catalyst. Nothing is pinned: the engine tears the recycle,
+lays the loop out as a forward train and draws the return as a lane across the
+foot of the sheet.
+
+## 19 · Absorber and stripper
+
+[`examples/19_absorber_stripper.py`](../../examples/19_absorber_stripper.py) ·
+[SVG](19_absorber_stripper.svg)
+
+![Absorber and stripper](19_absorber_stripper.png)
+
+Two columns on one PFD, and they are not the same tower. `T-401` contacts sour
+gas with lean MDEA at 66 bara on `internals="valve_tray"`, where turndown and
+fouling decide the deck; `T-402` strips the acid gas back off just above
+atmospheric on `internals="packing"`, where pressure drop is the design, because
+every millibar across the tower raises the reboiler's bubble point. ISO gives an
+absorber and a regenerator no symbols of their own, so what tells them apart
+here is what is drawn inside them.
+
+Twenty streams in a sectioned table, a lean/rich cross exchanger, a kettle
+reboiler, and the one control valve a PFD earns: the 64-bar break between the
+two towers.
+
+## 20 · Molecular sieve dryer
+
+[`examples/20_molecular_sieve_dryer.py`](../../examples/20_molecular_sieve_dryer.py) ·
+[SVG](20_molecular_sieve_dryer.svg)
+
+![Molecular sieve dryer](20_molecular_sieve_dryer.png)
+
+Two beds, one on line and one regenerating, and eight switching valves that swap
+them. `V-501A` and `V-501B` are the *same call* twice over —
+`Column(internals="packing", trays=1)` — and the same drawing as example 18's
+catalytic converter: a packed bed, an adsorber and a molecular sieve are one
+mark in ISO 10628-2, told apart by the tag beside it.
+
+Wet gas runs down through the on-line bed and hot regeneration gas up through
+the other, which is what puts the driest gas last against the end the next cycle
+has to hold on specification. `KY-501` is one logic function drawn at each of
+the eight valves it strokes, and the only repeated square in the gallery that is
+not a trip.

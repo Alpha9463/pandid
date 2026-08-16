@@ -2304,6 +2304,1165 @@ def _demineralised_water() -> Flowsheet:
     return fs
 
 
+_AMINE_PROPERTY_ROWS = (
+    "Temperature (C)",
+    "Pressure (bara)",
+    "Vapour Fraction",
+    "Total Flow (kg/s)",
+    "Methane",
+    "Ethane",
+    "CO2",
+    "H2S",
+    "MDEA",
+    "Water",
+)
+
+_AMINE_PROPERTIES = {
+    "S-401": ("40", "66.0", "1.000", "30.00", "0.900", "0.040", "0.050", "0.010", "", ""),
+    "S-402": ("46", "65.4", "1.000", "28.31", "0.953", "0.042", "0.003", "2.0E-06", "", "0.002"),
+    "S-403": ("45", "68.0", "0.000", "120.0", "", "", "1.20E-03", "1.0E-04", "0.449", "0.550"),
+    "S-404": ("62", "65.8", "0.000", "121.7", "", "", "0.0136", "2.55E-03", "0.443", "0.542"),
+    "S-405": ("97", "1.90", "0.012", "121.7", "", "", "0.0136", "2.55E-03", "0.443", "0.542"),
+    "S-406": ("104", "1.85", "1.000", "6.02", "", "", "0.276", "0.052", "", "0.672"),
+    "S-407": ("50", "1.80", "0.286", "6.02", "", "", "0.276", "0.052", "", "0.672"),
+    "S-408": ("50", "1.75", "1.000", "1.72", "", "", "0.850", "0.110", "", "0.040"),
+    "S-409": ("50", "1.80", "0.000", "4.30", "", "", "0.047", "0.029", "", "0.924"),
+    "S-410": ("122", "2.00", "0.000", "148.5", "", "", "1.42E-03", "1.2E-04", "0.363", "0.636"),
+    "S-411": ("124", "2.02", "1.000", "28.5", "", "", "5.0E-03", "4.0E-04", "", "0.995"),
+    "S-412": ("122", "2.00", "0.000", "120.0", "", "", "1.20E-03", "1.0E-04", "0.449", "0.550"),
+    "S-413": ("75", "1.60", "0.000", "120.0", "", "", "1.20E-03", "1.0E-04", "0.449", "0.550"),
+    "S-414": ("76", "70.0", "0.000", "120.0", "", "", "1.20E-03", "1.0E-04", "0.449", "0.550"),
+    "S-415": ("152", "5.00", "1.000", "11.30", "", "", "", "", "", "1.000"),
+    "S-416": ("151", "4.90", "0.000", "11.30", "", "", "", "", "", "1.000"),
+    "S-417": ("25", "4.00", "0.000", "72.4", "", "", "", "", "", "1.000"),
+    "S-418": ("40", "3.40", "0.000", "72.4", "", "", "", "", "", "1.000"),
+    "S-419": ("25", "4.00", "0.000", "196.3", "", "", "", "", "", "1.000"),
+    "S-420": ("40", "3.40", "0.000", "196.3", "", "", "", "", "", "1.000"),
+}
+
+
+def _stirred_reactor_train() -> Flowsheet:
+    """Example 17 -- the jacketed CSTR, and the composition layer drawn as plant.
+
+    The only scenario with an agitator, a drive motor or a jacketed body on it,
+    and the one that pins ISO items 28.4 and 20.6 composed onto a vessel. Its
+    title block states its own date, so nothing here is pinned.
+    """
+    fs = Flowsheet("Propylene Glycol Reaction A200", line_number_start=201)
+
+    flow201 = fs.add_loop("F", 201)
+    temp202 = fs.add_loop("T", 202)
+    level203 = fs.add_loop("L", 203)
+    press204 = fs.add_loop("P", 204)
+    flow205 = fs.add_loop("F", 205)
+
+    rx = fs.add(
+        units.Reactor(
+            "R-101",
+            variant="jacketed",
+            agitator="turbine",
+            width=130,
+            height=360,
+            description="Propylene Glycol Reactor",
+        )
+    )
+    cooler = fs.add(
+        units.HeatExchanger(
+            "E-201", variant="straight_tubes", width=130, height=40, description="Product Cooler"
+        )
+    )
+    pump = fs.add(units.Pump("P-201A/B", description="Propylene Oxide Charge Pump"))
+
+    po_feed = fs.add(units.Feed("Propylene Oxide", reference="P&ID-101"))
+    water = fs.add(units.Feed("Process Water", reference="P&ID-101"))
+    quench = fs.add(units.Feed("QWSH", header=True))
+    cws_jkt = fs.add(units.Feed("CWSH", header=True))
+    cws_cool = fs.add(units.Feed("CWSH", header=True))
+    cwr_cool = fs.add(units.Product("CWRH", header=True))
+    vent_gas = fs.add(units.Product("To Vent Scrubber", reference="P&ID-902"))
+    glycol = fs.add(units.Product("Crude Propylene Glycol", reference="P&ID-301"))
+
+    xv201 = fs.add(
+        units.Valve(
+            "XV-201", variant="solenoid", fail="closed", description="Reactor Feed Trip Valve"
+        )
+    )
+    fe201 = fs.add(
+        units.Fitting(
+            flow201.element("FE"), variant="venturi", description="Propylene Oxide Flow Element"
+        )
+    )
+    cv201 = fs.add(
+        units.Valve(
+            flow201.tag("CV"),
+            variant="control",
+            fail="closed",
+            description="Propylene Oxide Control Valve",
+        )
+    )
+    hv202 = fs.add(units.Valve("HV-202", description="Process Water Block Valve"))
+    charge = fs.add(units.Tee(branch="inlet"))
+    mixer = fs.add(
+        units.Fitting("M-201", variant="static_mixer", description="Reactor Charge Static Mixer")
+    )
+    dump = fs.add(units.Tee(branch="inlet"))
+    xv206 = fs.add(
+        units.Valve("XV-206", variant="solenoid", fail="open", description="Reactor Quench Valve")
+    )
+    cv204 = fs.add(
+        units.Valve(
+            press204.tag("CV"),
+            variant="control",
+            fail="open",
+            description="Reactor Vent Control Valve",
+        )
+    )
+    cv203 = fs.add(
+        units.Valve(
+            level203.tag("CV"),
+            variant="control",
+            fail="closed",
+            description="Product Draw Control Valve",
+        )
+    )
+    hv205 = fs.add(units.Valve("HV-205", description="Jacket Cooling Water Block Valve"))
+    fe205 = fs.add(
+        units.Fitting(
+            flow205.element("FE"),
+            variant="venturi",
+            description="Jacket Cooling Water Flow Element",
+        )
+    )
+    cv205 = fs.add(
+        units.Valve(
+            flow205.tag("CV"),
+            variant="control",
+            fail="open",
+            description="Jacket Cooling Water Control Valve",
+        )
+    )
+    hv207 = fs.add(units.Valve("HV-207", description="E-201 Cooling Water Block Valve"))
+
+    rx_x, rx_y = 640.0, 230.0
+    rx.pin(x=rx_x, y=rx_y)
+    charge_y = rx_y + port_offset(rx, "feed")[1]
+    jacket_y = rx_y + port_offset(rx, "duty")[1]
+    vent_y = rx_y + port_offset(rx, "vent")[1]
+    draw_x = rx_x + port_offset(rx, "outlet")[0]
+
+    pump.pin(x=150).pin(port="discharge", y=charge_y)
+    po_feed.pin(port="outlet", x=80, y=pump.pin_.y + port_offset(pump, "suction")[1])
+    xv201.pin(mirrored="y").pin(port="inlet", x=340, y=charge_y)
+    fe201.pin(port="inlet", x=410, y=charge_y)
+    cv201.pin(port="inlet", x=470, y=charge_y)
+    charge.pin(port="inlet", x=520, y=charge_y)
+    mixer.pin(port="inlet", x=545, y=charge_y)
+    dump.pin(port="inlet", x=590, y=charge_y)
+
+    water_run_y = 620.0
+    water.pin(port="outlet", x=80, y=water_run_y)
+    hv202.pin(port="inlet", x=300, y=water_run_y)
+
+    quench_run_y = 740.0
+    quench.pin(port="outlet", x=80, y=quench_run_y)
+    xv206.pin(mirrored="y").pin(port="inlet", x=340, y=quench_run_y)
+
+    vent_run_y = 120.0
+    vent_riser_x = 1000.0
+    cv204.pin(port="inlet", x=1150, y=vent_run_y)
+    vent_gas.pin(port="inlet", x=1540, y=vent_run_y)
+
+    cws_jkt.pin(mirrored=True).pin(port="outlet", x=1540, y=jacket_y)
+    hv205.pin(mirrored=True).pin(port="inlet", x=1420, y=jacket_y)
+    fe205.pin(mirrored=True).pin(port="inlet", x=1300, y=jacket_y)
+    cv205.pin(mirrored=True).pin(port="inlet", x=1150, y=jacket_y)
+
+    product_y = 720.0
+    cv203.pin(port="inlet", x=880, y=product_y)
+    cooler.pin(x=1040).pin(port="tube_in", y=product_y)
+    shell_in_x = cooler.pin_.x + port_offset(cooler, "shell_in")[0]
+    shell_out_x = cooler.pin_.x + port_offset(cooler, "shell_out")[0]
+    cws_cool.pin(port="outlet", x=shell_in_x, y=590)
+    hv207.pin(orientation=90).pin(port="inlet", x=shell_in_x, y=640)
+    cwr_cool.pin(port="inlet", x=shell_out_x, y=850)
+    glycol.pin(port="inlet", x=1540, y=product_y)
+
+    fs.connect(po_feed.outlet, pump.suction, size=80, service="PO", sequence=201, spec="SS")
+    fs.connect(pump.discharge, xv201.inlet, size=50, service="PO", sequence=202, spec="SS")
+    fs.connect(xv201.outlet, fe201.inlet)
+    fs.connect(fe201.outlet, cv201.inlet)
+    fs.connect(cv201.outlet, charge.inlet)
+    fs.connect(water.outlet, hv202.inlet, size=50, service="PW", sequence=203, spec="CS")
+    fs.connect(hv202.outlet, charge.branch)
+    fs.connect(charge.outlet, mixer.inlet, size=80, service="RC", sequence=204, spec="SS")
+    fs.connect(mixer.outlet, dump.inlet)
+    fs.connect(dump.outlet, rx.feed)
+
+    fs.connect(quench.outlet, xv206.inlet, size=80, service="QWS", sequence=205, spec="CS")
+    fs.connect(xv206.outlet, dump.branch)
+
+    off_gas = fs.connect(rx.vent, cv204.inlet, size=100, service="VG", sequence=206, spec="SS").via(
+        [(vent_riser_x, vent_y), (vent_riser_x, vent_run_y)]
+    )
+    fs.connect(cv204.outlet, vent_gas.inlet)
+
+    fs.connect(cws_jkt.outlet, hv205.inlet, size=150, service="CWS", sequence=207, spec="CS")
+    fs.connect(hv205.outlet, fe205.inlet)
+    fs.connect(fe205.outlet, cv205.inlet)
+    fs.connect(cv205.outlet, rx.duty)
+
+    draw = fs.connect(rx.outlet, cv203.inlet, size=100, service="PG", sequence=208, spec="SS").via(
+        [(draw_x, product_y)]
+    )
+    fs.connect(cv203.outlet, cooler.tube_in)
+    fs.connect(cooler.tube_out, glycol.inlet, size=100, service="PG", sequence=211, spec="SS")
+    fs.connect(cws_cool.outlet, hv207.inlet, size=100, service="CWS", sequence=209, spec="CS")
+    fs.connect(hv207.outlet, cooler.shell_in)
+    fs.connect(cooler.shell_out, cwr_cool.inlet, size=100, service="CWR", sequence=210, spec="CS")
+
+    fe201_b = fs.add_balloon(fe201, at="N", offset=38)
+    ft201 = fs.add_instrument("FT", flow201, near=fe201_b, at="N", offset=23)
+    fic201 = fs.add_instrument("FIC", flow201, near=ft201, at="N", offset=60, variant="shared")
+    fic201.nozzle("sig_out", "E")
+    fs.connect(ft201.sig_out, fic201.pv, kind="electric")
+    fs.connect(fic201.sig_out, cv201.actuator, kind="pneumatic")
+
+    tt202 = fs.add_instrument("TT", temp202, sensing=rx, at="E", offset=80)
+    tic202 = fs.add_instrument("TIC", temp202, near=tt202, at="S", offset=130, variant="shared")
+    tic202.nozzle("sig_out", "E")
+    tic202.annotate(high="TAH", low="TAL")
+    fs.connect(tt202.sig_out, tic202.sig_in, kind="electric")
+
+    fe205_b = fs.add_balloon(fe205, at="N", offset=38)
+    ft205 = fs.add_instrument("FT", flow205, near=fe205_b, at="N", offset=23)
+    fic205 = fs.add_instrument("FIC", flow205, near=ft205, at="W", offset=90, variant="shared")
+    fic205.nozzle("sig_out", "S")
+    fs.connect(ft205.sig_out, fic205.pv, kind="electric")
+    fs.connect(tic202.sig_out, fic205.sig_in, kind="software")
+    fs.connect(fic205.sig_out, cv205.actuator, kind="pneumatic")
+
+    lt203 = fs.add_instrument("LT", level203, sensing=rx, at="W", offset=90)
+    lic203 = fs.add_instrument("LIC", level203, near=lt203, at="N", offset=90, variant="shared")
+    lic203.nozzle("sig_out", "E")
+    lic203.annotate(high="LAH", low="LAL")
+    fs.connect(lt203.sig_out, lic203.sig_in, kind="electric")
+    fs.connect(lic203.sig_out, cv203.actuator, kind="pneumatic")
+
+    pt204 = fs.add_instrument("PT", press204, sensing=off_gas, at=0.6, offset=70, angle=-90)
+    pic204 = fs.add_instrument("PIC", press204, near=pt204, at="E", offset=90, variant="shared")
+    pic204.nozzle("sig_out", "E")
+    pic204.annotate(high="PAH")
+    fs.connect(pt204.sig_out, pic204.sig_in, kind="electric")
+    fs.connect(pic204.sig_out, cv204.actuator, kind="pneumatic")
+
+    tt207 = fs.add_instrument("TT", 207, sensing=draw, at=0.12, offset=90)
+    si208 = fs.add_instrument("ST", 208, sensing=rx, at="N", offset=70)
+    fs.add_instrument("Z", 1, sensing=tt207, at="E", offset=44, variant="sis")
+    fs.add_instrument("Z", 1, sensing=si208, at="N", offset=40, variant="sis")
+    fs.add_instrument("Z", 1, acting_on=xv201, at="N", offset=34, variant="sis")
+    fs.add_instrument("Z", 1, acting_on=xv206, at="N", offset=34, variant="sis")
+
+    fs.title_block = TitleBlock(
+        title="Propylene Glycol Reaction",
+        subtitle="A200 Process & Instrumentation Diagram 1",
+        drawing_number="P&ID-201",
+        company="PANDID",
+        status="ISSUED FOR REVIEW",
+        sheet="1",
+        of_sheets="1",
+        scale="NTS",
+        date="04/02/26",
+        drawn_by="AA",
+        checked_by="JS",
+        approved_by="RL",
+        revisions=[
+            Revision("A", "16/01/26", "Issued for internal review", "AA"),
+            Revision("B", "04/02/26", "Issued For Review", "AA", "JS", "RL"),
+        ],
+    )
+    fs.add_annotation(
+        equipment_list(
+            fs,
+            align="top-right",
+            include=[
+                "R-101",
+                "P-201A/B",
+                "E-201",
+            ],
+        )
+    )
+    fs.add_annotation(
+        notes(
+            [
+                "Z-1: reactor runaway trip. TT-207 and ST-208 are its own "
+                "measurements, independent of TIC-202.",
+                "Z-1 shuts XV-201 and opens XV-206 together; the quench is sized "
+                "for the full reactor inventory.",
+                "R-101 jacket cooling water return is on P&ID-202.",
+            ],
+            title="GENERAL NOTES",
+            numbered=False,
+            align="bottom-left",
+        )
+    )
+    fs.add_annotation(
+        legend(
+            {
+                "SS": "Stainless Steel 316L",
+                "CS": "Carbon Steel A106-B",
+                "PO": "Propylene Oxide",
+                "PW": "Process Water",
+                "RC": "Reactor Charge",
+                "PG": "Propylene Glycol",
+                "VG": "Reactor Vent Gas",
+                "CWSH": "Cooling Water Supply Header",
+                "CWRH": "Cooling Water Return Header",
+                "QWSH": "Quench Water Supply Header",
+            },
+            align="top-left",
+        )
+    )
+    return fs
+
+
+def _fixed_bed_recycle() -> Flowsheet:
+    """Example 18 -- a packed catalytic converter in a synthesis loop.
+
+    The only scenario drawing ISO item 27.8's bed in a reactor, and so what
+    holds ``internals=`` to leaving the default agitator out. Laid out end to
+    end by the engine, with the recycle torn and drawn as a lane across the
+    sheet; it states its own title-block date.
+    """
+    fs = Flowsheet("Methanol Synthesis Loop A300", line_number_start=301)
+
+    flow301 = fs.add_loop("F", 301)
+    temp302 = fs.add_loop("T", 302)
+    flow303 = fs.add_loop("F", 303)
+    press304 = fs.add_loop("P", 304)
+    level305 = fs.add_loop("L", 305)
+
+    rx = fs.add(
+        units.Reactor(
+            "R-301", internals="packing", width=90, height=200, description="Methanol Converter"
+        )
+    )
+    fehe = fs.add(
+        units.HeatExchanger(
+            "E-301",
+            variant="straight_tubes",
+            width=120,
+            height=36,
+            description="Feed / Effluent Exchanger",
+        )
+    )
+    heater = fs.add(units.Furnace("H-301", description="Converter Fired Heater"))
+    cooler = fs.add(
+        units.HeatExchanger(
+            "E-302", variant="straight_tubes", width=120, height=36, description="Product Condenser"
+        )
+    )
+    sep = fs.add(
+        units.Separator("V-301", variant="knockout", description="Crude Methanol Separator")
+    )
+    makeup_k = fs.add(units.Compressor("K-301", description="Make-up Gas Compressor"))
+    recycle_k = fs.add(units.Compressor("K-302", description="Recycle Gas Compressor"))
+
+    syngas = fs.add(units.Feed("Synthesis Gas", reference="P&ID-201"))
+    fuel = fs.add(units.Feed("FGSH", header=True))
+    cws = fs.add(units.Feed("CWSH", header=True))
+    cwr = fs.add(units.Product("CWRH", header=True))
+    purge_gas = fs.add(units.Product("Purge to Fuel Gas", reference="P&ID-901"))
+    crude = fs.add(units.Product("Crude Methanol", reference="P&ID-401"))
+
+    mix = fs.add(units.Tee(branch="inlet"))
+    purge_tee = fs.add(units.Tee())
+
+    fe301 = fs.add(
+        units.Fitting(
+            flow301.element("FE"), variant="orifice", description="Make-up Gas Flow Element"
+        )
+    )
+    cv301 = fs.add(
+        units.Valve(
+            flow301.tag("CV"),
+            variant="control",
+            fail="closed",
+            description="Make-up Gas Control Valve",
+        )
+    )
+    fe303 = fs.add(
+        units.Fitting(flow303.element("FE"), variant="orifice", description="Fuel Gas Flow Element")
+    )
+    xv307 = fs.add(
+        units.Valve(
+            "XV-307", variant="solenoid", fail="closed", description="Fired Heater Fuel Trip Valve"
+        )
+    )
+    cv303 = fs.add(
+        units.Valve(
+            flow303.tag("CV"),
+            variant="control",
+            fail="closed",
+            description="Fuel Gas Control Valve",
+        )
+    )
+    cv304 = fs.add(
+        units.Valve(
+            press304.tag("CV"),
+            variant="control",
+            fail="open",
+            description="Loop Purge Control Valve",
+        )
+    )
+    cv305 = fs.add(
+        units.Valve(
+            level305.tag("CV"),
+            variant="control",
+            fail="closed",
+            description="Crude Methanol Control Valve",
+        )
+    )
+
+    fs.connect(syngas.outlet, fe301.inlet, size=300, service="SG", sequence=301, spec="CS")
+    fs.connect(fe301.outlet, cv301.inlet)
+    fs.connect(cv301.outlet, makeup_k.suction)
+    fs.connect(makeup_k.discharge, mix.inlet, size=200, service="SG", sequence=302, spec="CS")
+
+    fs.connect(mix.outlet, fehe.tube_in, size=350, service="LG", sequence=303, spec="CS")
+    fs.connect(fehe.tube_out, heater.inlet, size=350, service="LG", sequence=314, spec="CS")
+    inlet_line = fs.connect(heater.outlet, rx.feed, size=350, service="LG", sequence=304, spec="LT")
+    fs.connect(rx.outlet, fehe.shell_in, size=350, service="LG", sequence=305, spec="LT")
+    fs.connect(fehe.shell_out, cooler.tube_in, size=350, service="LG", sequence=306, spec="CS")
+    fs.connect(cooler.tube_out, sep.feed, size=350, service="LG", sequence=315, spec="CS")
+
+    fs.connect(sep.liquid, cv305.inlet, size=100, service="CM", sequence=307, spec="SS")
+    fs.connect(cv305.outlet, crude.inlet)
+
+    loop_gas = fs.connect(
+        sep.vapor, purge_tee.inlet, size=350, service="LG", sequence=308, spec="CS"
+    )
+    fs.connect(purge_tee.outlet, cv304.inlet, size=80, service="PG", sequence=309, spec="CS")
+    fs.connect(cv304.outlet, purge_gas.inlet)
+    fs.connect(purge_tee.branch, recycle_k.suction, size=350, service="LG", sequence=316, spec="CS")
+    fs.connect(
+        recycle_k.discharge,
+        mix.branch,
+        size=350,
+        service="LG",
+        sequence=310,
+        spec="CS",
+        draw_as_recycle=True,
+    )
+
+    fs.connect(fuel.outlet, fe303.inlet, size=80, service="FG", sequence=311, spec="CS")
+    fs.connect(fe303.outlet, xv307.inlet)
+    fs.connect(xv307.outlet, cv303.inlet)
+    fs.connect(cv303.outlet, heater.fuel)
+
+    fs.connect(cws.outlet, cooler.shell_in, size=250, service="CWS", sequence=312, spec="CS")
+    fs.connect(cooler.shell_out, cwr.inlet, size=250, service="CWR", sequence=313, spec="CS")
+
+    fe301_b = fs.add_balloon(fe301, at="N", offset=38)
+    ft301 = fs.add_instrument("FT", flow301, near=fe301_b, at="N", offset=23)
+    fic301 = fs.add_instrument("FIC", flow301, near=ft301, at="N", offset=60, variant="shared")
+    fs.connect(ft301.sig_out, fic301.pv, kind="electric")
+    fs.connect(fic301.sig_out, cv301.actuator, kind="pneumatic")
+
+    tt302 = fs.add_instrument("TT", temp302, sensing=inlet_line, at=0.5, offset=60)
+    tic302 = fs.add_instrument("TIC", temp302, near=tt302, at="N", offset=70, variant="shared")
+    tic302.annotate(high="TAH")
+    fs.connect(tt302.sig_out, tic302.sig_in, kind="electric")
+
+    fe303_b = fs.add_balloon(fe303, at="N", offset=38)
+    ft303 = fs.add_instrument("FT", flow303, near=fe303_b, at="N", offset=23)
+    fic303 = fs.add_instrument("FIC", flow303, near=ft303, at="N", offset=60, variant="shared")
+    fs.connect(ft303.sig_out, fic303.pv, kind="electric")
+    fs.connect(tic302.sig_out, fic303.sig_in, kind="software")
+    fs.connect(fic303.sig_out, cv303.actuator, kind="pneumatic")
+
+    pt304 = fs.add_instrument("PT", press304, sensing=loop_gas, at=0.4, offset=60)
+    pic304 = fs.add_instrument("PIC", press304, near=pt304, at="N", offset=70, variant="shared")
+    pic304.annotate(high="PAH", low="PAL")
+    fs.connect(pt304.sig_out, pic304.sig_in, kind="electric")
+    fs.connect(pic304.sig_out, cv304.actuator, kind="pneumatic")
+
+    lt305 = fs.add_instrument("LT", level305, sensing=sep, at="E", offset=60)
+    lic305 = fs.add_instrument("LIC", level305, near=lt305, at="S", offset=70, variant="shared")
+    lic305.annotate(high="LAH", low="LAL")
+    fs.connect(lt305.sig_out, lic305.sig_in, kind="electric")
+    fs.connect(lic305.sig_out, cv305.actuator, kind="pneumatic")
+
+    fs.add_instrument("TI", 306, sensing=rx, at="W", offset=60)
+    tt307 = fs.add_instrument("TT", 307, sensing=rx, at="E", offset=60)
+    fs.add_instrument("Z", 1, sensing=tt307, at="E", offset=44, variant="sis")
+    fs.add_instrument("Z", 1, acting_on=xv307, at="N", offset=34, variant="sis")
+
+    fs.title_block = TitleBlock(
+        title="Methanol Synthesis Loop",
+        subtitle="A300 Process & Instrumentation Diagram 1",
+        drawing_number="P&ID-301",
+        company="PANDID",
+        status="ISSUED FOR REVIEW",
+        sheet="1",
+        of_sheets="1",
+        scale="NTS",
+        date="18/02/26",
+        drawn_by="AA",
+        checked_by="JS",
+        approved_by="RL",
+        revisions=[
+            Revision("A", "29/01/26", "Issued for internal review", "AA"),
+            Revision("B", "18/02/26", "Issued For Review", "AA", "JS", "RL"),
+        ],
+    )
+    fs.add_annotation(
+        equipment_list(
+            fs,
+            align="top-right",
+            include=[
+                "K-301",
+                "E-301",
+                "H-301",
+                "R-301",
+                "E-302",
+                "V-301",
+                "K-302",
+            ],
+        )
+    )
+    fs.add_annotation(
+        notes(
+            [
+                "Z-1: converter high bed temperature. TT-307 is its own "
+                "measurement, independent of TIC-302.",
+                "H-301 flue gas and combustion air are on P&ID-302.",
+                "Per-pass conversion is 5 to 7 %; the recycle ratio is 5:1 on molar flow.",
+            ],
+            title="GENERAL NOTES",
+            numbered=False,
+            align="bottom-left",
+        )
+    )
+    fs.add_annotation(
+        legend(
+            {
+                "CS": "Carbon Steel A106-B",
+                "LT": "Low Temperature Carbon Steel A333-6",
+                "SS": "Stainless Steel 316L",
+                "SG": "Make-up Synthesis Gas",
+                "LG": "Loop Gas",
+                "PG": "Purge Gas",
+                "CM": "Crude Methanol",
+                "FGSH": "Fuel Gas Supply Header",
+                "CWSH": "Cooling Water Supply Header",
+                "CWRH": "Cooling Water Return Header",
+            },
+            align="top-left",
+        )
+    )
+    return fs
+
+
+def _absorber_stripper() -> Flowsheet:
+    """Example 19 -- two columns on one PFD, with different internals.
+
+    An absorber on valve trays and its regenerator on packing, which is what
+    pins two group-27 internals against each other on one sheet. It is also the
+    only scenario with a plain kettle reboiler feeding a lean/rich exchanger,
+    and it states its own title-block date.
+    """
+    fs = Flowsheet("Amine Sweetening A400")
+
+    contactor = fs.add(
+        units.Column(
+            "T-401",
+            internals="valve_tray",
+            trays=20,
+            width=110,
+            height=340,
+            label_pos="center",
+            description="Amine Contactor",
+        )
+    ).pin(mirrored=True)
+    regen = fs.add(
+        units.Column(
+            "T-402",
+            internals="packing",
+            trays=2,
+            width=110,
+            height=300,
+            label_pos="center",
+            description="Amine Regenerator",
+        )
+    )
+
+    cross = fs.add(
+        units.HeatExchanger(
+            "E-401",
+            variant="straight_tubes",
+            width=140,
+            height=44,
+            description="Lean / Rich Exchanger",
+        )
+    )
+    ovhd = fs.add(
+        units.HeatExchanger(
+            "E-402",
+            variant="condenser",
+            width=70,
+            height=70,
+            description="Regenerator Overhead Condenser",
+        )
+    )
+    drum = fs.add(
+        units.Vessel("V-401", variant="horizontal", width=120, height=40, description="Reflux Drum")
+    )
+    reboiler = fs.add(
+        units.HeatExchanger(
+            "E-403", variant="kettle", width=130, height=46, description="Regenerator Reboiler"
+        )
+    )
+    trim = fs.add(
+        units.HeatExchanger(
+            "E-404", variant="straight_tubes", width=130, height=40, description="Lean Amine Cooler"
+        )
+    )
+    lean_pump = fs.add(units.Pump("P-401A/B", description="Lean Solvent Pump"))
+    reflux_pump = fs.add(units.Pump("P-402A/B", description="Reflux Pump"))
+
+    letdown = fs.add(
+        units.Valve("LV-401", variant="control", description="Rich Amine Level Control Valve")
+    )
+
+    sour = fs.add(units.Feed("Sour Gas", reference="PFD-301"))
+    steam = fs.add(units.Feed("LP Steam", reference="PFD-901"))
+    cws_ovhd = fs.add(units.Feed("CWS", header=True))
+    cws_trim = fs.add(units.Feed("CWS", header=True))
+    sweet = fs.add(units.Product("Sweet Gas", reference="PFD-501"))
+    acid = fs.add(units.Product("Acid Gas to SRU", reference="PFD-601"))
+    condensate = fs.add(units.Product("Steam Condensate", reference="PFD-901"))
+    cwr_ovhd = fs.add(units.Product("CWR", header=True))
+    cwr_trim = fs.add(units.Product("CWR", header=True))
+
+    contactor.pin(x=300, y=250)
+    lean_in_y = 250 + port_offset(contactor, "reflux_in")[1]
+    gas_in_y = 250 + port_offset(contactor, "boilup_in")[1]
+    contactor_axis = 300 + port_offset(contactor, "distillate")[0]
+    sour.pin(port="outlet", x=120, y=gas_in_y)
+    sweet.pin(port="inlet", x=contactor_axis, y=140)
+
+    rich_y = 822.0
+    letdown.pin(port="inlet", x=460, y=rich_y)
+    cross.pin(x=620).pin(port="tube_in", y=rich_y)
+    cross_shell_in_x = cross.pin_.x + port_offset(cross, "shell_in")[0]
+    cross_shell_out_x = cross.pin_.x + port_offset(cross, "shell_out")[0]
+    rich_riser_x = 880.0
+
+    regen.pin(x=980, y=290)
+    regen_axis = 980 + port_offset(regen, "distillate")[0]
+    regen_feed_y = 290 + port_offset(regen, "feed")[1]
+    reflux_in_y = 290 + port_offset(regen, "reflux_in")[1]
+    boilup_in_y = 290 + port_offset(regen, "boilup_in")[1]
+
+    ovhd.pin(mirrored="y").pin(port="shell_in", x=regen_axis, y=201)
+    ovhd_drain_y = ovhd.pin_.y + port_offset(ovhd, "shell_out")[1]
+    cw_ovhd_y = ovhd.pin_.y + port_offset(ovhd, "tube_in")[1]
+    drum.pin(port="inlet", x=1200, y=ovhd_drain_y)
+    drum_draw_x = drum.pin_.x + port_offset(drum, "outlet")[0]
+    drum_vent_x = drum.pin_.x + port_offset(drum, "vent")[0]
+    reflux_run_y = 240.0
+    reflux_pump.pin(x=1350).pin(port="suction", y=reflux_run_y)
+    reflux_riser_x = 1480.0
+
+    reboiler.pin(x=1400, y=640)
+    sump_x = 1400 + port_offset(reboiler, "shell_in")[0]
+    boilup_x = 1400 + port_offset(reboiler, "shell_out")[0]
+    lean_draw_x = 1400 + port_offset(reboiler, "bottoms")[0]
+    steam_y = 640 + port_offset(reboiler, "tube_in")[1]
+    condensate_y = 640 + port_offset(reboiler, "tube_out")[1]
+    sump_run_y = 730.0
+    lean_run_y = 770.0
+
+    steam.pin(port="outlet", x=1230, y=steam_y)
+    condensate.pin(port="inlet", x=1700, y=condensate_y)
+    cws_ovhd.pin(port="outlet", x=880, y=cw_ovhd_y)
+    cwr_ovhd.pin(port="inlet", x=1700, y=cw_ovhd_y)
+    acid.pin(port="inlet", x=1700, y=60)
+
+    return_y = 900.0
+    lean_pump.pin(mirrored=True).pin(port="suction", x=600, y=return_y)
+    pump_out_y = lean_pump.pin_.y + port_offset(lean_pump, "discharge")[1]
+    trim.pin(x=370, y=960)
+    trim_shell_in_x = trim.pin_.x + port_offset(trim, "shell_in")[0]
+    trim_shell_out_x = trim.pin_.x + port_offset(trim, "shell_out")[0]
+    cw_trim_y = trim.pin_.y + port_offset(trim, "tube_in")[1]
+    cws_trim.pin(port="outlet", x=250, y=cw_trim_y)
+    cwr_trim.pin(port="inlet", x=760, y=cw_trim_y)
+    lean_riser_x = 150.0
+    lean_return_y = 1040.0
+
+    fs.connect(sour.outlet, contactor.boilup_in, name="S-401")
+    fs.connect(contactor.distillate, sweet.inlet, name="S-402")
+
+    fs.connect(contactor.bottoms, letdown.inlet, name="S-404").via([(contactor_axis, rich_y)])
+    fs.connect(letdown.outlet, cross.tube_in, name="S-404")
+    fs.connect(cross.tube_out, regen.feed, name="S-405").via(
+        [(rich_riser_x, rich_y), (rich_riser_x, regen_feed_y)]
+    )
+
+    fs.connect(regen.distillate, ovhd.shell_in, name="S-406")
+    fs.connect(ovhd.shell_out, drum.inlet, name="S-407").via([(regen_axis, ovhd_drain_y)])
+    fs.connect(drum.vent, acid.inlet, name="S-408").via([(drum_vent_x, 60)])
+    fs.connect(drum.outlet, reflux_pump.suction, name="S-409").via([(drum_draw_x, reflux_run_y)])
+    fs.connect(reflux_pump.discharge, regen.reflux_in, name="S-409", draw_as_recycle=True).via(
+        [
+            (reflux_riser_x, reflux_pump.pin_.y + port_offset(reflux_pump, "discharge")[1]),
+            (reflux_riser_x, reflux_in_y),
+        ]
+    )
+
+    fs.connect(regen.bottoms, reboiler.shell_in, name="S-410").via(
+        [(regen_axis, sump_run_y), (sump_x, sump_run_y)]
+    )
+    fs.connect(reboiler.shell_out, regen.boilup_in, name="S-411", draw_as_recycle=True).via(
+        [(boilup_x, boilup_in_y)]
+    )
+
+    fs.connect(reboiler.bottoms, cross.shell_in, name="S-412").via(
+        [(lean_draw_x, lean_run_y), (cross_shell_in_x, lean_run_y)]
+    )
+    fs.connect(cross.shell_out, lean_pump.suction, name="S-413").via(
+        [(cross_shell_out_x, return_y)]
+    )
+    fs.connect(lean_pump.discharge, trim.shell_in, name="S-414").via(
+        [(trim_shell_in_x, pump_out_y)]
+    )
+    fs.connect(trim.shell_out, contactor.reflux_in, name="S-403", draw_as_recycle=True).via(
+        [
+            (trim_shell_out_x, lean_return_y),
+            (lean_riser_x, lean_return_y),
+            (lean_riser_x, lean_in_y),
+        ]
+    )
+
+    fs.connect(steam.outlet, reboiler.tube_in, name="S-415")
+    fs.connect(reboiler.tube_out, condensate.inlet, name="S-416")
+    fs.connect(cws_ovhd.outlet, ovhd.tube_in, name="S-417")
+    fs.connect(ovhd.tube_out, cwr_ovhd.inlet, name="S-418")
+    fs.connect(cws_trim.outlet, trim.tube_in, name="S-419")
+    fs.connect(trim.tube_out, cwr_trim.inlet, name="S-420")
+
+    for s in fs.streams:
+        values = _AMINE_PROPERTIES.get(s.name)
+        if values is not None:
+            s.properties = dict(zip(_AMINE_PROPERTY_ROWS, values))
+    fs.stream_table_sections = [("Methane", "Mass Fraction")]
+
+    fs.title_block = TitleBlock(
+        title="Amine Sweetening",
+        subtitle="A400 Process Flow Diagram 1",
+        drawing_number="PFD-401",
+        company="PANDID",
+        status="ISSUED FOR REVIEW",
+        sheet="1",
+        of_sheets="1",
+        scale="NTS",
+        date="03/03/26",
+        drawn_by="AA",
+        checked_by="JS",
+        approved_by="RL",
+        revisions=[
+            Revision("A", "12/02/26", "Issued for internal review", "AA"),
+            Revision("B", "03/03/26", "Issued For Review", "AA", "JS", "RL"),
+        ],
+    )
+
+    fs.add_annotation(
+        equipment_list(
+            fs,
+            align="top",
+            include=[
+                "T-401",
+                "E-401",
+                "T-402",
+                "E-402",
+                "V-401",
+                "P-402A/B",
+                "E-403",
+                "P-401A/B",
+                "E-404",
+            ],
+        )
+    )
+    fs.add_annotation(
+        TableBox(
+            title="UTILITIES SUMMARY",
+            headers=["Utility", "Unit No.", "Duty (kW)", "Flow (kg/s)", "T_in", "T_out"],
+            rows=[
+                ["LP Steam", "E-403", "24700", "11.30", "152 C", "151 C"],
+                ["Cooling Water", "E-402", "-4540", "72.4", "25 C", "40 C"],
+                ["Cooling Water", "E-404", "-12310", "196.3", "25 C", "40 C"],
+            ],
+            col_align=["l", "l", "r", "r", "c", "c"],
+            align="bottom-right",
+        )
+    )
+    return fs
+
+
+def _molecular_sieve_dryer() -> Flowsheet:
+    """Example 20 -- two identical adsorbers and the valves that switch them.
+
+    The same shell and the same group-27 bed as example 18's converter, drawn
+    twice and told apart by its tag, with eight solenoid switching valves and
+    the one repeated logic square in the corpus. It states its own title-block
+    date.
+    """
+    fs = Flowsheet("Gas Dehydration A500", line_number_start=501)
+
+    temp503 = fs.add_loop("T", 503)
+    level504 = fs.add_loop("L", 504)
+
+    bed_a = fs.add(
+        units.Column(
+            "V-501A",
+            internals="packing",
+            trays=1,
+            width=90,
+            height=200,
+            label_pos="center",
+            description="Molecular Sieve Drier A",
+        )
+    )
+    bed_b = fs.add(
+        units.Column(
+            "V-501B",
+            internals="packing",
+            trays=1,
+            width=90,
+            height=200,
+            label_pos="center",
+            description="Molecular Sieve Drier B",
+        )
+    )
+
+    heater = fs.add(units.Furnace("H-501", description="Regeneration Gas Heater"))
+    regen_cooler = fs.add(
+        units.HeatExchanger("E-501", variant="air_cooled", description="Regeneration Gas Cooler")
+    )
+    regen_sep = fs.add(
+        units.Separator("V-502", variant="knockout", description="Regeneration Gas Separator")
+    )
+    regen_k = fs.add(units.Compressor("K-501", description="Regeneration Gas Blower"))
+
+    wet_gas = fs.add(units.Feed("Wet Feed Gas", reference="P&ID-401"))
+    fuel = fs.add(units.Feed("FGSH", header=True))
+    dry_gas = fs.add(units.Product("Dry Gas to NGL Recovery", reference="P&ID-601"))
+    water = fs.add(units.Product("Free Water to Disposal", reference="P&ID-902"))
+
+    xv501a = fs.add(
+        units.Valve(
+            "XV-501A", variant="solenoid", fail="closed", description="V-501A Wet Gas Inlet Valve"
+        )
+    )
+    xv501b = fs.add(
+        units.Valve(
+            "XV-501B", variant="solenoid", fail="closed", description="V-501B Wet Gas Inlet Valve"
+        )
+    )
+    xv502a = fs.add(
+        units.Valve(
+            "XV-502A", variant="solenoid", fail="closed", description="V-501A Dry Gas Outlet Valve"
+        )
+    )
+    xv502b = fs.add(
+        units.Valve(
+            "XV-502B", variant="solenoid", fail="closed", description="V-501B Dry Gas Outlet Valve"
+        )
+    )
+    xv503a = fs.add(
+        units.Valve(
+            "XV-503A",
+            variant="solenoid",
+            fail="closed",
+            description="V-501A Regeneration Gas Inlet Valve",
+        )
+    )
+    xv503b = fs.add(
+        units.Valve(
+            "XV-503B",
+            variant="solenoid",
+            fail="closed",
+            description="V-501B Regeneration Gas Inlet Valve",
+        )
+    )
+    xv504a = fs.add(
+        units.Valve(
+            "XV-504A",
+            variant="solenoid",
+            fail="closed",
+            description="V-501A Regeneration Gas Outlet Valve",
+        )
+    )
+    xv504b = fs.add(
+        units.Valve(
+            "XV-504B",
+            variant="solenoid",
+            fail="closed",
+            description="V-501B Regeneration Gas Outlet Valve",
+        )
+    )
+
+    cv503 = fs.add(
+        units.Valve(
+            temp503.tag("CV"),
+            variant="control",
+            fail="closed",
+            description="H-501 Fuel Gas Control Valve",
+        )
+    )
+    cv504 = fs.add(
+        units.Valve(
+            level504.tag("CV"),
+            variant="control",
+            fail="closed",
+            description="V-502 Water Draw Control Valve",
+        )
+    )
+
+    t_wet_in = fs.add(units.Tee(branch="inlet"))
+    t_wet_a = fs.add(units.Tee())
+    t_dry = fs.add(units.Tee(branch="inlet"))
+    t_regen_out = fs.add(units.Tee(branch="inlet"))
+    t_regen_in = fs.add(units.Tee())
+    t_slip = fs.add(units.Tee())
+
+    regen_out_y = 130.0
+    wet_y = 220.0
+    bed_y = 300.0
+    regen_in_y = 590.0
+    dry_y = 700.0
+    regen_run_y = 900.0
+
+    bed_a.pin(mirrored=True).pin(x=460, y=bed_y)
+    bed_b.pin(x=940, y=bed_y)
+    a_axis = 460 + port_offset(bed_a, "distillate")[0]
+    b_axis = 940 + port_offset(bed_b, "distillate")[0]
+    top_in_y = bed_y + port_offset(bed_a, "reflux_in")[1]
+    bot_in_y = bed_y + port_offset(bed_a, "boilup_in")[1]
+    a_leg_x, b_leg_x = 380.0, 1110.0
+
+    wet_gas.pin(port="outlet", x=120, y=wet_y)
+    t_wet_in.pin(mirrored="y").pin(port="branch", x=250).pin(port="outlet", y=wet_y)
+    t_wet_a.pin(port="inlet", x=a_leg_x - 6, y=wet_y)
+    xv501a.pin(port="inlet", x=400, y=top_in_y)
+    xv501b.pin(mirrored=True).pin(port="inlet", x=1090, y=top_in_y)
+
+    xv502a.pin(orientation=90).pin(port="inlet", x=a_axis, y=640)
+    xv502b.pin(orientation=90).pin(port="inlet", x=b_axis, y=640)
+    xv504a.pin(orientation=270).pin(port="inlet", x=a_axis, y=190)
+    xv504b.pin(orientation=270).pin(port="inlet", x=b_axis, y=190)
+    xv503a.pin(port="inlet", x=400, y=bot_in_y)
+    xv503b.pin(mirrored=True).pin(port="inlet", x=1090, y=bot_in_y)
+
+    t_dry.pin(mirrored="y").pin(port="branch", x=b_axis).pin(port="outlet", y=dry_y)
+    t_regen_out.pin(port="branch", x=b_axis).pin(port="outlet", y=regen_out_y)
+    t_regen_in.pin(mirrored="y").pin(port="branch", x=a_leg_x).pin(port="outlet", y=regen_in_y)
+    t_slip.pin(port="inlet", x=1250, y=dry_y)
+    dry_gas.pin(port="inlet", x=1560, y=dry_y)
+
+    heater.pin(mirrored=True).pin(port="inlet", x=420, y=regen_run_y)
+    heater_out_y = heater.pin_.y + port_offset(heater, "outlet")[1]
+    fuel_x = heater.pin_.x + port_offset(heater, "fuel")[0]
+    fuel.pin(port="outlet", x=140, y=1030)
+    cv503.pin(port="inlet", x=250, y=1030)
+
+    regen_cooler.pin(port="tube_in", x=1250, y=regen_out_y)
+    regen_sep.pin(port="feed", x=1440, y=regen_out_y)
+    sep_vapor_x = regen_sep.pin_.x + port_offset(regen_sep, "vapor")[0]
+    sep_liquid_x = regen_sep.pin_.x + port_offset(regen_sep, "liquid")[0]
+    regen_k.pin(port="suction", x=1620, y=60)
+    cv504.pin(port="inlet", x=1520, y=310)
+    water.pin(port="inlet", x=1700, y=310)
+
+    fs.connect(wet_gas.outlet, t_wet_in.inlet, size=400, service="WG", sequence=501, spec="CS")
+    fs.connect(t_wet_in.outlet, t_wet_a.inlet, size=400, service="WG", sequence=502, spec="CS")
+    fs.connect(t_wet_a.branch, xv501a.inlet, size=400, service="WG", sequence=516, spec="CS").via(
+        [(a_leg_x, wet_y), (a_leg_x, top_in_y)]
+    )
+    fs.connect(xv501a.outlet, bed_a.reflux_in)
+    fs.connect(t_wet_a.outlet, xv501b.inlet, size=400, service="WG", sequence=517, spec="CS").via(
+        [(b_leg_x, wet_y), (b_leg_x, top_in_y)]
+    )
+    fs.connect(xv501b.outlet, bed_b.reflux_in)
+
+    fs.connect(bed_a.bottoms, xv502a.inlet, size=400, service="DG", sequence=503, spec="CS")
+    fs.connect(xv502a.outlet, t_dry.inlet).via([(a_axis, dry_y)])
+    fs.connect(bed_b.bottoms, xv502b.inlet, size=400, service="DG", sequence=504, spec="CS")
+    fs.connect(xv502b.outlet, t_dry.branch)
+    dry_header = fs.connect(
+        t_dry.outlet, t_slip.inlet, size=400, service="DG", sequence=505, spec="CS"
+    )
+    fs.connect(t_slip.outlet, dry_gas.inlet, size=400, service="DG", sequence=520, spec="CS")
+
+    fs.connect(t_slip.branch, heater.inlet, size=200, service="RG", sequence=506, spec="CS").via(
+        [(1256, regen_run_y), (420, regen_run_y)]
+    )
+    fs.connect(fuel.outlet, cv503.inlet, size=50, service="FG", sequence=507, spec="CS")
+    fs.connect(cv503.outlet, heater.fuel).via([(fuel_x, 1030)])
+
+    hot_regen = fs.connect(
+        heater.outlet, t_regen_in.inlet, size=200, service="RG", sequence=508, spec="LT"
+    ).via([(200, heater_out_y), (200, regen_in_y)])
+    fs.connect(
+        t_regen_in.branch, xv503a.inlet, size=200, service="RG", sequence=518, spec="LT"
+    ).via([(a_leg_x, bot_in_y)])
+    fs.connect(xv503a.outlet, bed_a.boilup_in)
+    fs.connect(
+        t_regen_in.outlet, xv503b.inlet, size=200, service="RG", sequence=519, spec="LT"
+    ).via([(b_leg_x, regen_in_y), (b_leg_x, bot_in_y)])
+    fs.connect(xv503b.outlet, bed_b.boilup_in)
+
+    fs.connect(bed_a.distillate, xv504a.inlet, size=200, service="RG", sequence=509, spec="LT")
+    fs.connect(xv504a.outlet, t_regen_out.inlet).via([(a_axis, regen_out_y)])
+    fs.connect(bed_b.distillate, xv504b.inlet, size=200, service="RG", sequence=510, spec="LT")
+    fs.connect(xv504b.outlet, t_regen_out.branch)
+    fs.connect(
+        t_regen_out.outlet, regen_cooler.tube_in, size=200, service="RG", sequence=511, spec="LT"
+    )
+
+    fs.connect(
+        regen_cooler.tube_out, regen_sep.feed, size=200, service="RG", sequence=512, spec="CS"
+    )
+    fs.connect(regen_sep.liquid, cv504.inlet, size=50, service="PW", sequence=513, spec="CS").via(
+        [(sep_liquid_x, 310)]
+    )
+    fs.connect(cv504.outlet, water.inlet)
+    fs.connect(
+        regen_sep.vapor, regen_k.suction, size=200, service="RG", sequence=514, spec="CS"
+    ).via([(sep_vapor_x, 60)])
+    fs.connect(
+        regen_k.discharge,
+        t_wet_in.branch,
+        size=200,
+        service="RG",
+        sequence=515,
+        spec="CS",
+        draw_as_recycle=True,
+    ).via([(1690, 20), (250, 20)])
+
+    kc501 = fs.add_instrument(
+        "KC",
+        501,
+        near=bed_a,
+        at="W",
+        offset=170,
+        variant="shared",
+        description="Drier Switching Sequence",
+    )
+    kc501.annotate(high="KAH")
+    for valve, face in (
+        (xv501a, "N"),
+        (xv501b, "N"),
+        (xv502a, "W"),
+        (xv502b, "W"),
+        (xv503a, "N"),
+        (xv503b, "N"),
+        (xv504a, "W"),
+        (xv504b, "W"),
+    ):
+        fs.add_instrument("KY", 501, acting_on=valve, at=face, offset=34, variant="logic")
+
+    tt503 = fs.add_instrument("TT", temp503, sensing=hot_regen, at=0.5, offset=70)
+    tic503 = fs.add_instrument("TIC", temp503, near=tt503, at="S", offset=70, variant="shared")
+    tic503.annotate(high="TAH")
+    fs.connect(tt503.sig_out, tic503.sig_in, kind="electric")
+    fs.connect(tic503.sig_out, cv503.actuator, kind="pneumatic")
+
+    lt504 = fs.add_instrument("LT", level504, sensing=regen_sep, at="E", offset=60)
+    lic504 = fs.add_instrument("LIC", level504, near=lt504, at="S", offset=70, variant="shared")
+    lic504.annotate(high="LAH", low="LAL")
+    fs.connect(lt504.sig_out, lic504.sig_in, kind="electric")
+    fs.connect(lic504.sig_out, cv504.actuator, kind="pneumatic")
+
+    at502 = fs.add_instrument("AT", 502, sensing=dry_header, at=0.4, offset=60, angle=-90)
+    ai502 = fs.add_instrument(
+        "AI",
+        502,
+        near=at502,
+        at="S",
+        offset=60,
+        variant="shared",
+        description="Dry Gas Moisture Analyser",
+    )
+    ai502.annotate(high="AAH")
+    fs.connect(at502.sig_out, ai502.sig_in, kind="electric")
+
+    fs.title_block = TitleBlock(
+        title="Gas Dehydration",
+        subtitle="A500 Process & Instrumentation Diagram 1",
+        drawing_number="P&ID-501",
+        company="PANDID",
+        status="ISSUED FOR REVIEW",
+        sheet="1",
+        of_sheets="1",
+        scale="NTS",
+        date="24/03/26",
+        drawn_by="AA",
+        checked_by="JS",
+        approved_by="RL",
+        revisions=[
+            Revision("A", "05/03/26", "Issued for internal review", "AA"),
+            Revision("B", "24/03/26", "Issued For Review", "AA", "JS", "RL"),
+        ],
+    )
+    fs.add_annotation(
+        equipment_list(
+            fs,
+            align="top-right",
+            include=[
+                "V-501A",
+                "V-501B",
+                "H-501",
+                "E-501",
+                "V-502",
+                "K-501",
+            ],
+        )
+    )
+    fs.add_annotation(
+        notes(
+            [
+                "KY-501 is one logic function drawn at each valve it strokes; "
+                "the sequence is KC-501.",
+                "Cycle: 8 h adsorption, 5 h heating, 2 h cooling, 1 h standby. "
+                "AAH-502 shortens the adsorption step.",
+                "V-501A and V-501B are identical vessels. Neither drawing says "
+                "which is on line; the sequence does.",
+            ],
+            title="GENERAL NOTES",
+            numbered=False,
+            align="bottom-left",
+        )
+    )
+    fs.add_annotation(
+        legend(
+            {
+                "CS": "Carbon Steel A106-B",
+                "LT": "Low Temperature Carbon Steel A333-6",
+                "WG": "Wet Feed Gas",
+                "DG": "Dry Gas",
+                "RG": "Regeneration Gas",
+                "FG": "Fuel Gas",
+                "PW": "Produced Water",
+                "FGSH": "Fuel Gas Supply Header",
+            },
+            align="top-left",
+        )
+    )
+    return fs
+
+
 SCENARIOS = {
     "01_ammonia_loop": (_ammonia_loop, {}),
     # 02 is the manual-placement example and is the one sheet drawn with the
@@ -2385,6 +3544,32 @@ SCENARIOS = {
     # only auto-laid-out sheet carrying a title strip and an equipment
     # list. It states its own title-block date, so nothing here is pinned.
     "16_demineralised_water": (_demineralised_water, {"border": "zone"}),
+    # 17 is the jacketed stirred reactor: the composition layer drawn as plant,
+    # and the only scenario carrying an agitator, a drive motor or a jacketed
+    # body. It is the fourth sheet on a fixed A3 page.
+    "17_stirred_reactor_train": (
+        _stirred_reactor_train,
+        {"border": "zone", "page_size": "A3", "diagram": "p&id"},
+    ),
+    # 18 is the synthesis loop: a packed catalytic converter, a fired heater and
+    # a recycle the engine tears and draws as a lane. It is the third sheet laid
+    # out end to end with no pin() on it, and the first of those to carry line
+    # numbers.
+    "18_fixed_bed_recycle": (_fixed_bed_recycle, {"border": "zone", "diagram": "p&id"}),
+    # 19 is the amine pair: two columns on one PFD with a different group-27
+    # internal in each, which is what holds "an absorber and a regenerator are
+    # not the same service" to a drawing rather than to a docstring.
+    "19_absorber_stripper": (
+        _absorber_stripper,
+        {"show_stream_table": True, "border": "zone"},
+    ),
+    # 20 is the molecular sieve pair: the same shell and the same bed as 18's
+    # converter, drawn twice, and the only scenario with eight on/off valves on
+    # one switching sequence or a repeated logic square.
+    "20_molecular_sieve_dryer": (
+        _molecular_sieve_dryer,
+        {"border": "zone", "diagram": "p&id"},
+    ),
 }
 
 
@@ -2406,7 +3591,7 @@ def _normalize(svg: str) -> str:
     compare equal.
 
     **The provenance block.** Every sheet says what drew it, version included,
-    which means every release would otherwise rewrite all sixteen fixtures --
+    which means every release would otherwise rewrite all twenty fixtures --
     and the gallery with them -- for a reason that is not about any drawing. The
     contents of the block are dropped here, which is why the renderer fences it
     between two marker comments: this is a slice between two known lines, not a
@@ -2485,7 +3670,7 @@ def test_a_version_bump_does_not_move_a_fixture(monkeypatch):
 
     Every sheet now says what drew it, version included, so without
     :func:`_normalize`'s rule a one-line change to ``pandid.__version__`` would
-    rewrite all sixteen fixtures for a reason that is about none of the
+    rewrite all twenty fixtures for a reason that is about none of the
     drawings. This is that rule, checked rather than asserted in a comment.
 
     Three claims, and the first is what stops the other two being vacuous: the

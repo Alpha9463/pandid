@@ -359,8 +359,8 @@ def test_a_port_label_is_not_written_under_the_unit_tags_halo():
 
 
 #: How many labels a sheet is allowed to leave sitting under something. Zero
-#: everywhere the drawing has room, which is twelve of the fifteen sheets
-#: swept; the three below are where it genuinely runs out.
+#: everywhere the drawing has room, which is twelve of the nineteen sheets
+#: swept; the eight below are where it genuinely runs out.
 #:
 #: ``11_ethanol_pid`` writes 364 labels on a forty-unit P&ID whose markers are
 #: twenty units apart and whose labels are sixty units long, so some of them
@@ -375,6 +375,15 @@ def test_a_port_label_is_not_written_under_the_unit_tags_halo():
 #: transmitter above it, which is what makes the primary element and its reading
 #: read as one column, and leaves the two markers closer than a label is tall.
 #:
+#: ``17_stirred_reactor_train`` puts a tee, a static mixer and a second tee on
+#: 70 units of charge line, which is closer than a port label is long.
+#: ``18_fixed_bed_recycle`` is laid out by the engine, and the recycle machine
+#: it places carries its tag over its own suction marker.
+#: ``19_absorber_stripper`` drains its overhead condenser into a reflux drum at
+#: the same elevation, so the drain's marker and the drum's inlet share a row.
+#: ``20_molecular_sieve_dryer`` hangs a sequence square off each of eight
+#: switching valves; two of the sixteen markers that makes land under lettering.
+#:
 #: 04 and 14 both grew when the letter codes ISO 15519-2 5.2.5 writes outside a
 #: symbol arrived: a code is haloed lettering like any tag, so it is one more
 #: thing an overlay marker can land under, and the sheets that letter the most
@@ -386,6 +395,10 @@ _CROWDED = {
     "11_ethanol_pid": 50,
     "12_block_flow_diagram": 4,
     "14_tank_farm": 14,
+    "17_stirred_reactor_train": 6,
+    "18_fixed_bed_recycle": 5,
+    "19_absorber_stripper": 4,
+    "20_molecular_sieve_dryer": 5,
 }
 
 

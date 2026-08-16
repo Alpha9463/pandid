@@ -24,8 +24,8 @@ checkout first on ``sys.path`` and then refuses to run unless that is where
 
 **It never has to rename anything.** Each example writes a name of its own into
 ``examples/`` (``01_ammonia_loop.py`` writes ``ammonia_auto.svg``), so copying
-the output in was a rename, done by hand, sixteen times. Instead of running the
-scripts and copying files, this imports each one with ``Flowsheet.render``
+the output in was a rename, done by hand, once per example. Instead of running
+the scripts and copying files, this imports each one with ``Flowsheet.render``
 stubbed, catching the flowsheet and the keyword arguments it was about to be
 drawn with, and renders it here under the example's own stem. Nothing is written
 into ``examples/`` and there is no mapping to get wrong.
