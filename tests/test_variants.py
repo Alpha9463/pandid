@@ -127,7 +127,7 @@ def test_every_shipped_variant_still_constructs(cls, variant):
 def test_a_shipped_variant_resolves_the_nozzles_it_always_did(cls, variant):
     """The ports, against the expression that built them before this change.
 
-    Three rules cover the whole library. The three variant-port classes append
+    Three rules cover the whole library. The four variant-port classes append
     ``_VARIANT_PORTS.get(variant, <their default>)`` after
     ``super().__init__()``, which is spelled out here from their own tables
     rather than taken from ``_variant_ports``, so the assertion is independent
@@ -147,6 +147,9 @@ def test_a_shipped_variant_resolves_the_nozzles_it_always_did(cls, variant):
         assert built == {spec[0] for spec in table}
     elif cls is units.Separator:
         table = cls._VARIANT_PORTS.get(variant, cls._PHASES)
+        assert built == {spec[0] for spec in table}
+    elif cls is units.Filter:
+        table = cls._VARIANT_PORTS.get(variant, cls._CLARIFYING)
         assert built == {spec[0] for spec in table}
     elif cls is units.Reactor:
         table = cls._VARIANT_PORTS.get(variant, cls._VESSEL)

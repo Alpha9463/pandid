@@ -561,7 +561,7 @@ Each entry is `port` *(direction / role)*.
 | `Heater` | `heater` | `inlet` *(in)*, `outlet` *(out)*, `utility_in` *(in/energy)* |
 | `Cooler` | `cooler` | `inlet` *(in)*, `outlet` *(out)*, `utility_out` *(out/energy)* |
 | `Furnace` | `furnace` | `inlet` *(in)*, `outlet` *(out)*, `fuel` *(in/feed)* |
-| `Filter` | `filter` | `inlet` *(in)*, `outlet` *(out)* |
+| `Filter` | `filter` | `inlet` *(in)*, `outlet` *(out)* on the five that clarify — the medium keeps the solids and is cleaned offline (`default`, `fixed_bed`, `gas`, `gas_fixed_bed`, `gas_belt`). The four that form a cake add `wash_in` *(in/utility)* and `cake` *(out)*: `press`, `belt`, `rotary`, `rotary_scraper`. `ion_exchange` takes a regenerant rather than a wash, and names it: `regenerant_in` *(in/utility)*, `spent_regenerant` *(out)*; see [Variants](#variants) |
 | `Dryer` | `dryer` | `feed` *(in/feed)*, `product` *(out)* |
 | `Conveyor` | `conveyor` | `feed` *(in/feed)*, `discharge` *(out)* |
 | `Reducer` | `reducer` | `inlet` *(in)*, `outlet` *(out)* |
@@ -778,9 +778,9 @@ base has not, `-` one it drops. The bases are in the [Port table](#port-table).
 | `Scrubber` | `separator` | `Separator` | |
 | `KnockoutDrum` | `separator` | `Separator` | |
 | `DustCollector` | `filter` | `Filter` | |
-| `RotaryDrumFilter` | `filter` | `Filter` | |
-| `FilterPress` | `filter` | `Filter` | |
-| `IonExchanger` | `filter` | `Filter` | |
+| `RotaryDrumFilter` | `filter` | `Filter` | `+wash_in` `+cake` |
+| `FilterPress` | `filter` | `Filter` | `+wash_in` `+cake` |
+| `IonExchanger` | `filter` | `Filter` | `+regenerant_in` `+spent_regenerant` |
 | `RotaryDryer` | `dryer` | `Dryer` | |
 | `FluidizedBedDryer` | `dryer` | `Dryer` | |
 | `SprayDryer` | `dryer` | `Dryer` | |
@@ -2919,9 +2919,12 @@ three lines that are drawn land 11.7 apart around a hole where `in_1` is,
 instead of the 17.5 apart that `n_inlets=3` would have given them.
 
 **Only counted nozzles.** A `vent`, a `relief`, a `drain`, a `duty`, an
-exchanger's other side, a drain valve's outlet — every fixed nozzle a class
-declares is offered to every instance whether the sheet uses it or not, and
-leaving one open is a drawing decision. Across the sixteen examples in
+exchanger's other side, a drain valve's outlet, a filter press's `wash_in` —
+every fixed nozzle a class declares is offered to every instance whether the
+sheet uses it or not, and leaving one open is a drawing decision. Declaring one
+per variant rather than per class changes nothing here: a press run without a
+displacement wash is a real machine, and a sheet that lets the cake fall to a
+bin off the drawing is a real sheet. Across the sixteen examples in
 `examples/` 276 ports carry no stream and every one of them is one of those:
 176 signal connections, 26 exchanger utility sides, 17 reliefs, 17 drains,
 15 duties, 13 vents and 8 station drain outlets. None is reported.

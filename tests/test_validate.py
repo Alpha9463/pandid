@@ -548,6 +548,14 @@ def test_a_spec_built_sheet_is_checked_too():
         (lambda fs: fs.add(U.Valve("HV-1")), "outlet"),  # a drain leg
         (lambda fs: fs.add(U.Separator("S-1")), "vapor"),
         (lambda fs: fs.add(U.Ejector("EJ-1")), "motive"),
+        # The wash and the cake a cake-forming filter offers. Both are per
+        # variant rather than per class, which is a second way of being
+        # declared and not a count: no number was written down, so there is
+        # nothing for a bare one to have failed to meet.
+        (lambda fs: fs.add(U.Filter("F-1", variant="press")), "wash_in"),
+        (lambda fs: fs.add(U.Filter("F-1", variant="press")), "cake"),
+        (lambda fs: fs.add(U.Filter("F-1", variant="ion_exchange")), "regenerant_in"),
+        (lambda fs: fs.add(U.Filter("F-1", variant="ion_exchange")), "spent_regenerant"),
     ],
 )
 def test_a_nozzle_the_class_declares_is_never_counted(build, bare):
@@ -560,6 +568,27 @@ def test_a_nozzle_the_class_declares_is_never_counted(build, bare):
     unit = build(fs)
     assert unit.ports[bare].stream is None
     assert _unpiped(fs) == []
+
+
+def test_a_press_that_takes_no_wash_is_a_clean_sheet():
+    """The whole sheet, not just this finding, on the case adding the nozzles
+    could have broken.
+
+    Plenty of presses are run without a displacement wash, and plenty of sheets
+    draw the filtrate and let the cake fall to a bin off the drawing. Neither
+    author asked for a wash line, so neither should be told about one -- and a
+    warning nobody can act on is how a checker stops being read.
+    """
+    fs = Flowsheet("press")
+    press = fs.add(U.Filter("F-301", variant="press"))
+    fs.connect(fs.add(U.Feed("Slurry")).outlet, press.port("inlet"))
+    fs.connect(press.port("outlet"), fs.add(U.Product("Filtrate")).inlet)
+    assert [n for n in press.ports if press.ports[n].stream is None] == ["wash_in", "cake"]
+    assert fs.validate() == []
+    # ...and piping the cake and still no wash is equally quiet, which is the
+    # commoner sheet of the two.
+    fs.connect(press.port("cake"), fs.add(U.Product("Cake")).inlet)
+    assert fs.validate() == []
 
 
 def test_a_numbered_signal_family_is_out_of_scope():

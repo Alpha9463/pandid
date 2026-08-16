@@ -1081,7 +1081,7 @@ def register_vendored(registry):
     registry.register('filter', Symbol(
         svg='<g id="sym_filter_press"><rect x="0.0" y="0.0" width="100.0" height="50.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 10.0 10.0 L 10.0 40.0 M 30.0 10.0 L 30.0 40.0 M 50.0 10.0 L 50.0 40.0 M 70.0 10.0 L 70.0 40.0 M 90.0 10.0 L 90.0 40.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 20.0 0.0 L 20.0 50.0 M 40.0 0.0 L 40.0 50.0 M 60.0 0.0 L 60.0 50.0 M 80.0 0.0 L 80.0 50.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=50.0,
-        ports={'inlet': (0.0, 25.0), 'outlet': (100.0, 25.0)},
+        ports={'inlet': (0.0, 25.0), 'wash_in': (25.0, 0.0), 'outlet': (100.0, 25.0), 'cake': (50.0, 50.0)},
         drawio_shape='mxgraph.pid.filters.press_filter',
     ), 'press')
 
@@ -1089,7 +1089,7 @@ def register_vendored(registry):
     registry.register('filter', Symbol(
         svg='<g id="sym_filter_rotary"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 13.0 31.5 A 22.0 22.0 0.0 0 1 37.0 31.5" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 80.0 L 50.0 80.0 M 0.0 20.0 L 50.0 20.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="25.0" cy="50.0" rx="15.0" ry="15.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=50.0, height=100.0,
-        ports={'inlet': (0.0, 50.0), 'outlet': (50.0, 50.0)},
+        ports={'inlet': (0.0, 50.0), 'wash_in': (25.0, 0.0), 'outlet': (50.0, 50.0), 'cake': (25.0, 100.0)},
         drawio_shape='mxgraph.pid.filters.liquid_filter_(rotary,_drum_or_disc)',
     ), 'rotary')
 
@@ -1097,7 +1097,7 @@ def register_vendored(registry):
     registry.register('filter', Symbol(
         svg='<g id="sym_filter_rotary_scraper"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 6.0 31.5 A 22.0 22.0 0.0 0 1 30.0 31.5 M 55.0 65.0 L 33.0 65.0 L 33.0 50.0 L 47.0 65.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 80.0 L 50.0 80.0 M 0.0 20.0 L 50.0 20.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="18.0" cy="50.0" rx="15.0" ry="15.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=55.0, height=100.0,
-        ports={'inlet': (0.0, 50.0), 'outlet': (50.0, 50.0)},
+        ports={'inlet': (0.0, 50.0), 'wash_in': (25.0, 0.0), 'outlet': (50.0, 50.0), 'cake': (25.0, 100.0)},
         drawio_shape='mxgraph.pid.filters.liquid_filter_(rotary,_drum_or_disc,_scraper)',
     ), 'rotary_scraper')
 
@@ -1105,7 +1105,7 @@ def register_vendored(registry):
     registry.register('filter', Symbol(
         svg='<g id="sym_filter_ion_exchange"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.0 20.0 L 50.0 20.0 M 0.0 80.0 L 50.0 80.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=50.0, height=100.0,
-        ports={'inlet': (0.0, 50.0), 'outlet': (50.0, 50.0)},
+        ports={'inlet': (0.0, 50.0), 'regenerant_in': (25.0, 0.0), 'outlet': (50.0, 50.0), 'spent_regenerant': (25.0, 100.0)},
         drawio_shape='mxgraph.pid.filters.liquid_filter_(ion_exchanger)',
     ), 'ion_exchange')
 
@@ -1131,7 +1131,7 @@ def register_vendored(registry):
     registry.register('filter', Symbol(
         svg='<g id="sym_filter_belt"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><ellipse cx="6.0" cy="65.0" rx="6.0" ry="6.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="44.0" cy="65.0" rx="6.0" ry="6.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 80.0 L 50.0 80.0 M 0.0 20.0 L 50.0 20.0 M 6.0 59.0 L 44.0 59.0 M 6.0 71.0 L 44.0 71.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=50.0, height=100.0,
-        ports={'inlet': (0.0, 50.0), 'outlet': (50.0, 50.0)},
+        ports={'inlet': (0.0, 50.0), 'wash_in': (25.0, 0.0), 'outlet': (50.0, 50.0), 'cake': (25.0, 100.0)},
         drawio_shape='mxgraph.pid.filters.liquid_filter_(belt,_roll)',
     ), 'belt')
 

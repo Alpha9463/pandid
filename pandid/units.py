@@ -1574,13 +1574,132 @@ class Turbine(Unit):
 
 
 class Filter(Unit):
-    """Filter (liquid or gas)."""
+    """Filter (liquid or gas), in three shapes of nozzle set.
 
+    **Clarifying** is the default and the plain reading of the word: one
+    in, one out. The solids are held in the medium and taken out offline
+    when it is changed, backwashed or blown down, so nothing leaves the
+    symbol but the filtrate. ``default`` (bag, candle or cartridge
+    elements), ``fixed_bed`` and the three gas casings ``gas``,
+    ``gas_fixed_bed`` and ``gas_belt`` are all of them.
+
+    **Cake-forming** is the other half of the family, and it is two
+    streams more::
+
+        Filter("F-101", variant="press")
+          .inlet      slurry in
+          .wash_in    wash water in
+          .outlet     filtrate out
+          .cake       cake out
+
+    A press separates a slurry into **two products**, and the cake is
+    the one it is bought for. Drawing it as the filtrate is the sheet
+    saying the solids leave in the liquid line, which is the opposite of
+    what the machine does. ``wash_in`` is the **displacement wash** that
+    pushes mother liquor out of the cake before it is discharged --
+    standard on a plate-and-frame press, on a rotary drum vacuum filter
+    (sprays over the drum) and on a belt filter (discrete wash zones),
+    which is exactly the four variants that carry it: ``press``,
+    ``belt``, ``rotary`` and ``rotary_scraper``.
+
+    **``ion_exchange`` is neither**, because what it takes is not wash
+    water. A resin bed is restored by running acid, caustic or brine
+    through it, and what comes back out is that reagent loaded with the
+    ions it has stripped: ``regenerant_in`` and ``spent_regenerant``.
+    Calling either of those a wash would put the wrong fluid on the
+    line list and the wrong material on the pipe spec.
+
+    Both extra nozzles are **offered, not required**. A sheet that pipes
+    the cake and leaves the wash open draws three lines and no fourth,
+    and :meth:`~pandid.flowsheet.Flowsheet.validate` says nothing about
+    it: an unconnected nozzle a class declares is a drawing decision,
+    and only a *numbered* one is a count that has to be met.
+    """
+
+    # The clarifying pair only, since ``_VARIANT_PORTS`` defaults to
+    # ``_CLARIFYING``. ``wash_in`` and ``cake`` are absent for the reason
+    # :class:`HeatExchanger` leaves out ``bottoms``: declaring them here
+    # would say every filter has a cake draw and make a bag filter's
+    # ``f.cake`` type-check clean. The generated per-variant classes --
+    # :class:`~pandid.devices.FilterPress`,
+    # :class:`~pandid.devices.RotaryDrumFilter`,
+    # :class:`~pandid.devices.IonExchanger` -- declare their own and are
+    # where a checker can see them; off one, reach a nozzle by
+    # ``f.port("cake")``.
     inlet: Port
     outlet: Port
 
     kind = "filter"
-    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+    # Empty because which nozzles a filter has depends on its variant,
+    # and Unit.__init__ reads PORTS before a variant is in hand.
+    # _VARIANT_PORTS below is the declaration and __init__ lays it down,
+    # exactly as :class:`HeatExchanger` and :class:`Separator` do.
+    PORTS: list[tuple[str, str, str]] = []
+    #: One in, one out: the medium keeps the solids and is cleaned
+    #: offline. The default, and what five of the ten variants are.
+    _CLARIFYING = [
+        ("inlet", "inlet", "process"),
+        ("outlet", "outlet", "process"),
+    ]
+    #: Slurry in, filtrate and cake out, with the wash that displaces
+    #: mother liquor from the cake before it is discharged.
+    #:
+    #: ``utility`` for the wash and ``process`` for the cake. The wash is
+    #: a service fluid supplied to the machine, which is the role
+    #: :class:`Ejector`'s motive steam already carries; a line only
+    #: becomes an energy stream when *both* its ends are energy or
+    #: utility, so wash water off a header flag stays material and stays
+    #: in the stream table, where a flow that big belongs. The cake has
+    #: no word of its own in the role vocabulary -- it is wet solids --
+    #: so it takes ``process``, on
+    #: :data:`Separator._OVER_AND_UNDER`'s reasoning.
+    _CAKE_FORMING = [
+        ("inlet", "inlet", "process"),
+        ("wash_in", "inlet", "utility"),
+        ("outlet", "outlet", "process"),
+        ("cake", "outlet", "process"),
+    ]
+    #: The ion exchanger's own pair. Same two positions on the drawing as
+    #: the wash and the cake, and deliberately not the same two words: a
+    #: regenerant is acid, caustic or brine, and the outlet is named for
+    #: what it carries away rather than for the side it leaves by.
+    _REGENERATED = [
+        ("inlet", "inlet", "process"),
+        ("regenerant_in", "inlet", "utility"),
+        ("outlet", "outlet", "process"),
+        ("spent_regenerant", "outlet", "process"),
+    ]
+    #: The nozzles each variant has, keyed by variant, defaulting to
+    #: :data:`_CLARIFYING`. The five absent ones are the five that really
+    #: do clarify: the two bag/candle/cartridge casings, the two granular
+    #: beds and the gas belt, whose catch is dust in a hopper rather than
+    #: a cake taken off a medium.
+    _VARIANT_PORTS = {
+        "press": _CAKE_FORMING,
+        "belt": _CAKE_FORMING,
+        "rotary": _CAKE_FORMING,
+        "rotary_scraper": _CAKE_FORMING,
+        "ion_exchange": _REGENERATED,
+    }
+
+    @classmethod
+    def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
+        """The nozzles a *variant* adds; none if the class declares any.
+
+        The same one line :meth:`HeatExchanger._variant_ports` is.
+        """
+        return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._CLARIFYING)
+
+    def __init__(self, name: str, variant: str = "default",
+                 width: float | None = None, height: float | None = None,
+                 label_pos: str | None = None, description: str = "",
+                 reference: str = ""):
+        super().__init__(name, variant=variant, width=width, height=height,
+                         label_pos=label_pos, description=description,
+                         reference=reference)
+        # ``self.variant`` rather than the argument; see HeatExchanger.
+        for spec in self._variant_ports(self.variant):
+            self._add_port(*spec)
 
 
 class Dryer(Unit):

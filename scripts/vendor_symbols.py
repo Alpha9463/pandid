@@ -1226,12 +1226,37 @@ KIND_MAP = {
                                         {"feed": "W", "overflow": "E", "underflow": "S"}),
     # Filter styles. Press Filter's own W/E anchors sit on opposite *corners* of
     # the box, so both faces are placed on the plate pack's mid-height instead.
+    #
+    # The wash and the cake, on the four casings that form one (``press``,
+    # ``rotary``, ``rotary_scraper``, ``belt`` -- see Filter._CAKE_FORMING),
+    # are placed by one rule the equipment states for itself: **the wash comes
+    # down from above and the cake falls out of the floor**. A displacement wash
+    # is sprayed onto the cake from over it on all four machines, and a cake is
+    # wet solids, which leave a filter the way solids leave anything. So the two
+    # take N and S, which is also the pair of faces every one of these casings
+    # has left free -- the family is piped across, W to E.
+    #
+    # ``ion_exchange`` takes the same two points under its own two names. Its
+    # regenerant is distributed over the bed and its spent regenerant leaves
+    # through the underdrain, which is N and S for the same physical reason and
+    # not for a shared one.
     ("filter", "gas"):    ("filters", "Gas Filter (Bag, Candle, Cartridge)",
                            {"inlet": "W", "outlet": "E"}),
+    # The plate pack lies down: 100 x 50, fed at one end and drained at the
+    # other. The wash port is on the roof over the feed end, between the two
+    # full-height plate lines at x = 20 and x = 40 so it lands on casing rather
+    # than on ink; the cake drops out of the middle of the pack, where the
+    # plates part, and x = 50 clears the same lines at 40 and 60.
     ("filter", "press"):  ("filters", "Press Filter",
-                           {"inlet": ("W", 25.0), "outlet": ("E", 25.0)}),
+                           {"inlet": ("W", 25.0), "wash_in": ("N", 25.0),
+                            "outlet": ("E", 25.0), "cake": ("S", 50.0)}),
+    # The drum turns through the trough drawn at y 80 and the cake builds on the
+    # submerged face. Wash sprays land on top of the drum -- the ellipse is
+    # centred (25, 50) with r = 15, so (25, 0) is directly over it -- and the
+    # discharged cake falls through the casing floor.
     ("filter", "rotary"): ("filters", "Liquid Filter (Rotary, Drum or Disc)",
-                           {"inlet": ("W", 50.0), "outlet": "E"}),
+                           {"inlet": ("W", 50.0), "wash_in": ("N", 25.0),
+                            "outlet": "E", "cake": ("S", 25.0)}),
     # The same drum with the knife that lifts the cake off it. That knife is the
     # whole of what tells the two drawings apart, and the drum is set 7 units
     # left to make room for its arm.
@@ -1246,15 +1271,33 @@ KIND_MAP = {
     # leaving a nozzle a twentieth of a unit outside the equipment for the next
     # reader to measure. Nothing widens the west side, so the inlet keeps the
     # box's own face there.
+    #
+    # The wash and the cake take ``rotary``'s two points unchanged, for the
+    # reason the outlet takes its own: this pair is one machine drawn with and
+    # without its knife, so it is piped alike and a sheet can swap one for the
+    # other without moving a run. Neither needs the outlet's ``AT`` -- the arm
+    # widens the box sideways only, so the roof and the floor of the bounding
+    # box are the casing's own, and the two edge specs land on ink. The drum is
+    # set 7 left (centred x = 18, r = 15, so it spans 3..33) and (25, 0) is
+    # still over it.
     ("filter", "rotary_scraper"): ("filters", "Liquid Filter (Rotary, Drum or Disc, Scraper)",
-                                   {"inlet": ("W", 50.0), "outlet": ("AT", 50.0, 50.0)}),
+                                   {"inlet": ("W", 50.0), "wash_in": ("N", 25.0),
+                                    "outlet": ("AT", 50.0, 50.0),
+                                    "cake": ("S", 25.0)}),
     # Ion exchanger: the resin bed between its two retention screens, the water
     # treatment vessel every demineraliser train is drawn with. The stencil
     # names only N and S, but the whole 50 x 100 casing is stroked, so the side
     # walls carry the same W/E faces the rest of the filters use: a change of
     # variant is a change of artwork, not of piping.
+    #
+    # The regeneration pair is the vertical one, and the bed's own two screens
+    # say where it goes: the resin sits between them at y 20 and y 80, so the
+    # regenerant distributor is above the top screen and the underdrain that
+    # takes the spent regenerant away is below the bottom one.
     ("filter", "ion_exchange"): ("filters", "Liquid Filter (Ion Exchanger)",
-                                 {"inlet": ("W", 50.0), "outlet": ("E", 50.0)}),
+                                 {"inlet": ("W", 50.0), "regenerant_in": ("N", 25.0),
+                                  "outlet": ("E", 50.0),
+                                  "spent_regenerant": ("S", 25.0)}),
     # Two more media, each drawn twice by the stencil set: once in a liquid
     # casing and once in a gas one. The gas half of a pair adds the hopper below
     # the medium and changes nothing else, and that hopper is the reason both
@@ -1280,8 +1323,15 @@ KIND_MAP = {
     # Belt / roll: the medium is a cloth running between two rollers, drawn low
     # in the casing at y 59..71, so nozzles at mid-height clear it rather than
     # being piped into the roll.
+    #
+    # The liquid one is the only member of this quartet that forms a cake, and
+    # it takes the same N/S pair the presses and drums do: a belt filter washes
+    # in discrete zones, from sprays over the cloth, and throws the cake off the
+    # head roller to fall clear underneath. The gas one sheds dust into the
+    # hopper drawn under its belt instead, so it stays a two-nozzle clarifier.
     ("filter", "belt"):          ("filters", "Liquid Filter (Belt, Roll)",
-                                  {"inlet": ("W", 50.0), "outlet": "E"}),
+                                  {"inlet": ("W", 50.0), "wash_in": ("N", 25.0),
+                                   "outlet": "E", "cake": ("S", 25.0)}),
     ("filter", "gas_belt"):      ("filters", "Gas Filter (Belt, Roll)",
                                   {"inlet": "W", "outlet": ("E", 50.0)}),
     # Drier styles. A spray drier is fed through the atomiser in its roof and
