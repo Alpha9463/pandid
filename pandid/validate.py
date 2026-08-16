@@ -10,14 +10,17 @@ Separates two kinds of problems:
   order no standard uses, a nozzle a count asked for has no line on it).
   Collected on ``fs.warnings`` for the caller; never fatal.
 
-Geometric checks need resolved frames, so they are skipped until layout
-has run.
+Geometric checks need resolved frames, and are made over the units that
+have one. Not over the whole sheet or none of it: a balloon layout could
+not place is one unit without geometry rather than a sheet without any,
+and gating the block on the whole list let a single one of them hide
+every overlap on an otherwise fully placed drawing.
 
-Most findings are made by inspecting the finished flowsheet. Two are
-collected from where an earlier phase parked them:
-``route-not-settled``, which only ``route()`` can know, and
-``deprecated``, which leaves no trace in the topology or the geometry.
-See :mod:`pandid.deprecation`.
+Most findings are made by inspecting the finished flowsheet. Three are
+collected from where an earlier phase parked them: ``route-not-settled``
+and ``instrument-unplaced``, which only ``route()`` and ``layout()`` can
+know, and ``deprecated``, which leaves no trace in the topology or the
+geometry. See :mod:`pandid.deprecation`.
 """
 
 from __future__ import annotations
@@ -250,7 +253,7 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     from pandid.render.symbols import (ARROWHEAD, MIN_HEAD_CLEARANCE,
                                        MIN_NOZZLE_PITCH, default_registry,
                                        wears_arrowhead)
-    from pandid.streams import SIGNAL_KINDS
+    from pandid.streams import SIGNAL_KINDS, Stream
     from pandid.units import Instrument
 
     errors: list[Issue] = []
@@ -276,6 +279,40 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             f"attached instruments were still moving after {MAX_PLACEMENT_PASSES} "
             "routing passes; a balloon may sit slightly off the line it taps. "
             "Pin the balloon-carrying lines with via() to settle it"))
+
+    # --- a balloon nothing could place (recorded by layout, not
+    # --- recomputed here) --- An attached instrument takes its frame
+    # from its host, so a chain of them has to end on something the
+    # ranker positions. One that does not is left frameless by
+    # :func:`~pandid.layout.attach.place_attached`, which sweeps until a
+    # pass places nothing and then stops.
+    #
+    # Read from where that sweep parked it rather than looked for here,
+    # because ``frame is None`` on its own does not say which of two
+    # things happened: layout has not run, or layout ran and gave up.
+    # Only the sweep can tell them apart, and a sheet validated before
+    # layout must not be told its balloons are unplaceable.
+    #
+    # Hard, not soft. There is no drawing to warn about: the renderer
+    # refuses a frameless unit outright, so the instrument the author
+    # asked for reaches no sheet. Saying it here names the balloon and
+    # the cure, in place of a bare "lacks a frame" out of the middle of
+    # a bounding-box sweep.
+    for u in fs.unplaced_instruments:
+        # A stream host is not placed itself; what stops it anchoring a
+        # balloon is an end that never was, so name the thing that is
+        # actually missing in each case.
+        where = (f"stream {u.host.name}, which has an end nothing placed"
+                 if isinstance(u.host, Stream) else
+                 f"{u.host.name}, which is unplaced itself")
+        errors.append(Issue(
+            "error", "instrument-unplaced",
+            f"{u.name} has no position on the sheet: it hangs off {where}. An "
+            f"attached balloon takes its frame from its host, so a chain of "
+            f"them has to end on something the layout places, and this one "
+            f"closes on itself. Attach {u.name} to the line or the equipment "
+            f"it reads, {u.name}.attach(<stream or unit>), or build it with no "
+            f"anchor at all, which lays it out like any other unit"))
 
     # --- pin sanity (no frames required) ---
     for u in fs.units:
@@ -432,8 +469,20 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 f"{n} connections and draws {piped}. {cure}"))
 
     # --- geometric checks (need resolved frames) ---
-    if fs.units and all(u.frame is not None for u in fs.units):
-        boxes = [(u, unit_box(u, u.frame)) for u in fs.units]
+    # Over the units that have one, not over the whole sheet or none of
+    # it. Before layout nothing is placed and there is nothing to check;
+    # after it the only frameless unit is a balloon reported above as
+    # ``instrument-unplaced``, and one of those used to take every
+    # overlap, coincidence and crowded face on the sheet down with it --
+    # including for the units that placed perfectly.
+    placed = [u for u in fs.units if u.frame is not None]
+    if placed:
+        boxes = [(u, unit_box(u, u.frame)) for u in placed]
+        # A stream with an unplaced end has no drawn path, so there is
+        # no line to measure a crossing, a detour or an elevation
+        # against.
+        drawn = [s for s in fs.streams if s.source.owner.frame is not None
+                 and s.dest.owner.frame is not None]
 
         # Hard: overlapping unit bodies.
         for i in range(len(boxes)):
@@ -449,7 +498,7 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         # the only half that can see it: a symbol may legitimately offer
         # one face to two faceless connections, and which placement each
         # port took is a property of the finished sheet.
-        for u in fs.units:
+        for u in placed:
             seen: dict[tuple[float, ...], str] = {}
             for name, port in u.ports.items():
                 if port.stream is None:
@@ -502,7 +551,7 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         # Moving a nozzle is offered only where the symbol has another
         # face for it. Everything this fires on today is placed by a
         # port series, and a series declares one face.
-        for u in fs.units if arrows else ():
+        for u in placed if arrows else ():
             heads: dict[str, list[tuple[float, str]]] = {}
             for name, port in u.ports.items():
                 s = port.stream
@@ -553,7 +602,7 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
 
         # Soft: a route passing through a unit body it does not connect
         # to, and grossly indirect routes.
-        for s in fs.streams:
+        for s in drawn:
             if not (s.route and s.route.waypoints):
                 continue
             src_u, dst_u = s.source.owner, s.dest.owner
@@ -588,7 +637,7 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         # subtly wrong.
         #
         # ``pin(port=...)`` is the cure, so the message names it.
-        for s in fs.streams:
+        for s in drawn:
             # A signal line carries a measurement, not a fluid, so it
             # has no elevation to be off. Its balloon end is placed by
             # ``add_instrument``'s anchor and ``offset=`` rather than by

@@ -52,6 +52,20 @@ raises where it used to warn.
 `pandid.deprecation` and the `deprecated` finding stay: they are what the next
 retirement is declared with. Nothing is deprecated in this release.
 
+### Fixed
+
+- **A balloon nothing could place made `validate()` silent about the whole
+  sheet.** Instrument placement gives up when a pass places nothing — two
+  balloons attached to each other have a host chain with no end — and it gave
+  up without a word, leaving the balloons frameless. Geometric checks were
+  gated on *every* unit having a frame, so one such balloon skipped
+  unit-overlap, coincident-ports and nozzles-crowded for every other unit on
+  the sheet, and a drawing with overlapping equipment on it came back clean.
+  Placement now records what it could not place, `validate()` reports each as
+  an `instrument-unplaced` error naming the host it waits on, and the
+  geometric checks are made over the units that have a frame rather than all
+  or none.
+
 ## [0.1.2] - 2026-08-05
 
 ### Added
