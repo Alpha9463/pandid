@@ -1,3 +1,4 @@
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
 from typing import Optional, Set, Tuple, List, Dict, TYPE_CHECKING
 
@@ -23,6 +24,32 @@ class Rect:
         if y1 == y2:
             return self.y_min <= y1 <= self.y_max and max(x1, x2) > self.x_min and min(x1, x2) < self.x_max
         return False
+
+
+def clear_gaps(lane: List[float], spans: List[Tuple[float, float]]) -> List[bool]:
+    """Which gaps between consecutive nodes on a lane no obstacle reaches into.
+
+    ``lane`` is the ordered coordinates of the lane's valid nodes, and ``spans``
+    the ``(min, max)`` of the obstacles already known to touch the lane, taken
+    along the axis it runs. Gap *k*, between ``lane[k]`` and ``lane[k + 1]``, is
+    closed when some span has ``lane[k + 1] > min and lane[k] < max``: the half
+    of :meth:`Rect.intersects_segment` the caller has not already settled by
+    selecting the spans.
+
+    A span closes a *contiguous* run of gaps -- the ones bisection puts either
+    side of it -- so marking that run costs one pass over the lane's own
+    obstacles, where testing each gap costs a pass over every obstacle on the
+    sheet for every gap on every lane.
+    """
+    clear = [True] * max(len(lane) - 1, 0)
+    for lo, hi in spans:
+        # ``lane[k + 1] > lo`` from the first coordinate past ``lo``, and
+        # ``lane[k] < hi`` up to the last one before ``hi``.
+        first = max(bisect_right(lane, lo) - 1, 0)
+        last = min(bisect_left(lane, hi), len(clear))
+        for k in range(first, last):
+            clear[k] = False
+    return clear
 
 
 # Outward direction -> the axis it travels along, and its sign along that axis.
@@ -236,31 +263,67 @@ class VisibilityGraph:
 
         self.xs = sorted(list(x_set))
         self.ys = sorted(list(y_set))
+        xs, ys = self.xs, self.ys
 
-        # Valid nodes are those that are not strictly inside any obstacle
-        self.nodes: Set[Tuple[float, float]] = set()
-        for x in self.xs:
-            for y in self.ys:
-                if not any(o.contains(x, y) for o in self.obstacles):
-                    self.nodes.add((x, y))
+        # The lanes and the obstacles are both settled here, so the obstacles
+        # are indexed against the lanes once and every test below is asked of
+        # only the few that can reach the point or the segment in hand. What
+        # decides is still Rect's own two predicates -- each step below names
+        # the half of one it stands in for -- so this is the same graph, built
+        # without the scan that dominated it. Example 11 lays a 394x283 grid
+        # over 146 obstacles: the node pass alone was 16 million rectangle
+        # tests, and under a profiler 99% of route() was graph construction.
+
+        # A node is invalid when an obstacle strictly contains it. Strict on
+        # both axes means one obstacle rules out one contiguous block of the
+        # grid, which bisection finds outright, and nothing outside those
+        # blocks is looked at at all. The blocked coordinates are kept per
+        # lane because that is the form the two edge passes want them in.
+        blocked_on_row: List[Set[float]] = [set() for _ in ys]   # x's, per y
+        blocked_on_col: List[Set[float]] = [set() for _ in xs]   # y's, per x
+        for o in self.obstacles:
+            i0, i1 = bisect_right(xs, o.x_min), bisect_left(xs, o.x_max)
+            j0, j1 = bisect_right(ys, o.y_min), bisect_left(ys, o.y_max)
+            inside_x, inside_y = xs[i0:i1], ys[j0:j1]
+            for j in range(j0, j1):
+                blocked_on_row[j].update(inside_x)
+            for i in range(i0, i1):
+                blocked_on_col[i].update(inside_y)
+
+        self.nodes: Set[Tuple[float, float]] = {
+            (x, y) for j, y in enumerate(ys) for x in xs if x not in blocked_on_row[j]
+        }
 
         # Build adjacency list
         self.edges: Dict[Tuple[float, float], List[Tuple[float, float]]] = {n: [] for n in self.nodes}
 
+        # A run along a lane is blocked by an obstacle whose span *touches*
+        # that lane: intersects_segment is inclusive there, a segment along an
+        # obstacle's edge being no lane to route on, so these bands are closed
+        # where the node test above is open. One pass over the obstacles
+        # leaves every lane holding the spans that reach it.
+        row_spans: List[List[Tuple[float, float]]] = [[] for _ in ys]  # (x_min, x_max), per y
+        col_spans: List[List[Tuple[float, float]]] = [[] for _ in xs]  # (y_min, y_max), per x
+        for o in self.obstacles:
+            for j in range(bisect_left(ys, o.y_min), bisect_right(ys, o.y_max)):
+                row_spans[j].append((o.x_min, o.x_max))
+            for i in range(bisect_left(xs, o.x_min), bisect_right(xs, o.x_max)):
+                col_spans[i].append((o.y_min, o.y_max))
+
         # Horizontal edges
-        for y in self.ys:
-            valid_x = [x for x in self.xs if (x, y) in self.nodes]
-            for i in range(len(valid_x) - 1):
-                x1, x2 = valid_x[i], valid_x[i+1]
-                if not any(o.intersects_segment(x1, y, x2, y) for o in self.obstacles):
+        for j, y in enumerate(ys):
+            valid_x = [x for x in xs if x not in blocked_on_row[j]]
+            for k, clear in enumerate(clear_gaps(valid_x, row_spans[j])):
+                if clear:
+                    x1, x2 = valid_x[k], valid_x[k+1]
                     self.edges[(x1, y)].append((x2, y))
                     self.edges[(x2, y)].append((x1, y))
 
         # Vertical edges
-        for x in self.xs:
-            valid_y = [y for y in self.ys if (x, y) in self.nodes]
-            for i in range(len(valid_y) - 1):
-                y1, y2 = valid_y[i], valid_y[i+1]
-                if not any(o.intersects_segment(x, y1, x, y2) for o in self.obstacles):
+        for i, x in enumerate(xs):
+            valid_y = [y for y in ys if y not in blocked_on_col[i]]
+            for k, clear in enumerate(clear_gaps(valid_y, col_spans[i])):
+                if clear:
+                    y1, y2 = valid_y[k], valid_y[k+1]
                     self.edges[(x, y1)].append((x, y2))
                     self.edges[(x, y2)].append((x, y1))
