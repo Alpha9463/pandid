@@ -54,6 +54,29 @@ retirement is declared with. Nothing is deprecated in this release.
 
 ### Fixed
 
+- **Auto-numbering walked over the stream names an author had already
+  used.** A group named by hand consumed nothing from the number series, so on
+  a `stream_number_start=100` sheet `connect(..., name="S100")` followed by a
+  plain `connect()` numbered the second stream `S100` as well. The stream table
+  is one column per distinct name, so the two runs shared a column and one of
+  them was not tabulated at all, while both drew the same label — and nothing
+  said so. A named group now takes a place in the sequence rather than skipping
+  one, which also lines the series up with the sheet: the fourth run drawn is
+  the fourth number whether or not the three before it were named by hand. No
+  golden fixture or gallery sheet moves, none of the sixteen examples mixing
+  the two ways of naming.
+
+  Counting cannot close it completely, because a name is free text and
+  `name="S102"` on that same sheet still meets the third number the counter
+  reaches. `validate()` reports what is left as `stream-name-reused`, naming
+  the run that took the counted name and what to do about it. Only a name
+  *auto-numbering* chose is reported: a run drawn in several `connect()` calls
+  is one stream and is meant to carry one label — `examples/10_ethanol_pfd.py`
+  draws `S-305` over five of them and `examples/11_ethanol_pid.py` gives four
+  pairs of segments one line number each — and a duplicate an author typed
+  cannot be told from one they meant. A counted name can: nobody chose it, and
+  the counter's one promise is that it is free.
+
 - **A balloon nothing could place made `validate()` silent about the whole
   sheet.** Instrument placement gives up when a pass places nothing — two
   balloons attached to each other have a host chain with no end — and it gave

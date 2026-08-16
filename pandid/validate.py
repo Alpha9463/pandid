@@ -468,6 +468,75 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 f"{'is' if piped == 1 else 'are'} piped, so the sheet asserts "
                 f"{n} connections and draws {piped}. {cure}"))
 
+    # --- a counted number landing on a name already taken (no frames
+    # --- required) --- The stream table is one column per distinct
+    # name, so two streams answering to one name are drawn as two lines
+    # and tabulated as one: a column, and the properties in it,
+    # disappear off the sheet. Both lines also carry the same label, so
+    # the drawing asserts they are the same stream.
+    #
+    # **Only a name the counter invented is reported**, and that
+    # narrowness is the whole check. Sharing a name is ordinary: a run
+    # drawn in several `connect` calls is one stream and is meant to be
+    # labelled once, and `examples/10_ethanol_pfd.py` draws `S-305` over
+    # five of them while `examples/11_ethanol_pid.py` gives four pairs
+    # of segments one line number each. Neither is a defect and neither
+    # can be told from a mistyped duplicate, because both are the author
+    # writing one name twice on purpose.
+    #
+    # `renumber_streams`'s grouping does not separate them either: those
+    # nine shipped runs sit across two to four groups apiece, since what
+    # joins two segments into a group is an inline valve or fitting and
+    # a condenser, a drum or a pump is not one.
+    #
+    # What *is* separable is a name nobody chose. A group with no
+    # explicit name and no line-number components is named by counting,
+    # and the count's one promise -- `renumber_streams`, and
+    # `docs/api.md` under "Stream numbering" -- is that it hands out a
+    # name no other stream answers to. A counted name that collides is
+    # that promise broken, whoever caused it, and there is no reading of
+    # it the author intended.
+    #
+    # Soft, not hard: every line is drawn and the sheet is readable, and
+    # the cure is a rename the author has to choose. What was wrong with
+    # it before was the silence.
+    counted: dict[str, list] = {}
+    taken: dict[str, int] = {}
+    for group in fs._stream_groups():
+        # The group's name comes from the counter only when nobody named
+        # it: an explicit `name=` outranks the count, and line-number
+        # components build a name out of what the author wrote down.
+        chosen = any(not s.auto_named or s.has_line_number for s in group)
+        name = group[0].name
+        taken[name] = taken.get(name, 0) + 1
+        if not chosen:
+            counted.setdefault(name, []).append(group)
+    # A signal or duty line is numbered off the same counter and shares
+    # the sequence with the process runs, so it can be collided with too.
+    for s in fs.streams:
+        if s.kind == "material":
+            continue
+        taken[s.name] = taken.get(s.name, 0) + 1
+        if s.auto_named and not s.has_line_number:
+            counted.setdefault(s.name, []).append([s])
+    for name, groups in counted.items():
+        if taken[name] < 2:
+            continue
+        # Name the ends of the counted runs, so an author looking at a
+        # sheet of identical labels knows which one to go to.
+        where = _and([f"{g[0].source.owner.name} to {g[-1].dest.owner.name}"
+                      for g in groups[:2]])
+        plural = "run" if len(groups) == 1 else "runs"
+        warnings.append(Issue(
+            "warning", "stream-name-reused",
+            f"{taken[name]} streams answer to {name!r}, and auto-numbering "
+            f"chose it for the {plural} {where}. The stream table is one column "
+            f"per name, so those runs share a column and one of them is not "
+            f"tabulated at all, while both are drawn with the same label. "
+            f"Name the counted run yourself, connect(..., name=...), or move "
+            f"the series clear of the names already in use with "
+            f"Flowsheet(stream_number_start=...)"))
+
     # --- geometric checks (need resolved frames) ---
     # Over the units that have one, not over the whole sheet or none of
     # it. Before layout nothing is placed and there is nothing to check;
