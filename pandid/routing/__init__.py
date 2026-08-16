@@ -1,3 +1,4 @@
+import math
 import warnings
 from typing import Protocol, TYPE_CHECKING
 
@@ -49,11 +50,37 @@ def _clamp_projection(
     return cand if cand in nodes else proj
 
 
+def _refuse_non_finite_geometry(fs: "Flowsheet") -> None:
+    """Refuse a sheet carrying a NaN or an infinity in its geometry.
+
+    Such a coordinate does not stay where it was put. It reaches the
+    visibility graph as a lane and as an obstacle edge, and from there the
+    search, where it is fatal: every comparison against NaN is false, so A*'s
+    ``visited`` prune settles nothing, every state re-expands and the render
+    never returns. Caught here, before the graph is built, because this is the
+    last place that can name the unit carrying it.
+    """
+    for unit in fs.units:
+        frame = unit.frame
+        if frame is None:
+            continue
+        for field in ("x", "y", "w", "h"):
+            value = getattr(frame, field, 0.0)
+            if not math.isfinite(value):
+                raise ValueError(
+                    f"{unit.name} has a non-finite {field}={value!r}, which "
+                    f"nothing on the sheet can be measured against. Check the "
+                    f"pin() that placed it and the width and height it was "
+                    f"given."
+                )
+
+
 class DefaultRouter:
     def route(self, fs: "Flowsheet") -> None:
         from pandid.routing.visibility import VisibilityGraph, share_escape_room
         from pandid.routing.astar import find_path
 
+        _refuse_non_finite_geometry(fs)
         graph = VisibilityGraph(fs, margin=15.0)
         edge_penalties: dict[tuple[tuple[float, float], tuple[float, float]], float] = {}
 

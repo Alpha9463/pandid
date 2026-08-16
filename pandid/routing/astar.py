@@ -1,8 +1,27 @@
 import heapq
+import math
 from typing import List, Tuple, Dict, Optional
 from pandid.routing.visibility import VisibilityGraph
 
 BEND_PENALTY = 500.0
+
+# What the search is allowed to spend before it is called a bug rather than a
+# hard sheet. A* terminates because ``visited`` settles each state at most
+# once, and that argument holds only while the costs compare: a single NaN
+# coordinate makes ``visited[state] <= g`` false for ever, so every state
+# re-expands and the queue's paths grow until the process dies. A ceiling makes
+# termination unconditional rather than conditional on the numbers.
+#
+# The budget is the larger of a flat floor and a per-node allowance, because
+# the two bind at opposite ends. A small graph is cheap to re-cross, so its
+# cost per node is high -- the worst of 14,107 real searches across the suite
+# and the examples expands 9.5 states per node, on a graph of 219. A large
+# graph is never crossed more than a fraction of the way: that same corpus
+# never expands more than 2,411 states in total, on a graph of 3,082. So the
+# floor carries the small graphs and the allowance carries the large, and each
+# leaves about twenty times the worst measured demand.
+MAX_EXPANSIONS_PER_NODE = 16
+MIN_EXPANSION_BUDGET = 50_000
 
 OPPOSITE = {"N": "S", "S": "N", "E": "W", "W": "E"}
 
@@ -41,10 +60,25 @@ def find_path(
         the port's projected escape node, so this only seeds the travel direction;
         it is not re-imposed on the first step.
     goal_dir: The OUTWARD normal direction of the destination port. The path must arrive heading the opposite direction.
+
+    Raises ``ValueError`` on a non-finite endpoint, and ``RuntimeError`` on a
+    search that will not settle within its expansion budget. Both beat the
+    alternative, which is a render that never returns at all.
     """
+    for role, point in (("start", start), ("goal", goal)):
+        if not (math.isfinite(point[0]) and math.isfinite(point[1])):
+            raise ValueError(
+                f"cannot route from a non-finite {role} {point!r}: every "
+                f"comparison against it is false, so the search would settle "
+                f"no state and never return."
+            )
+
     if edge_penalties is None:
         edge_penalties = {}
-        
+
+    budget = max(MIN_EXPANSION_BUDGET, MAX_EXPANSIONS_PER_NODE * len(graph.nodes))
+    expansions = 0
+
     # Priority queue: (f_score, g_score, counter, current_node, current_dir, path)
     # The counter breaks ties so equal (f, g) entries never fall through to
     # comparing the node tuples themselves.
@@ -58,8 +92,17 @@ def find_path(
     counter = 1
     
     while queue:
+        expansions += 1
+        if expansions > budget:
+            raise RuntimeError(
+                f"routing {start} -> {goal} expanded {expansions} states over "
+                f"{len(graph.nodes)} graph nodes, past the {budget} this graph "
+                f"is allowed, without settling. The search is not converging: "
+                f"suspect a coordinate that does not compare, or a cost that "
+                f"keeps falling."
+            )
         f, g, _, current, cur_dir, path = heapq.heappop(queue)
-        
+
         if current == goal:
             return path
             

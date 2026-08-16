@@ -217,6 +217,23 @@ retirement is declared with. Nothing is deprecated in this release.
   then reads as a horizontal run on a track the stream does not occupy. The
   fallback drops a point that repeats the one before it.
 
+- **A non-finite coordinate no longer hangs the render.** `pin(x=float("nan"))`
+  — or an infinity, or a non-finite width — made `to_svg()`, `to_drawio()` and
+  `render()` never return, on a sheet `validate()` was already reporting as
+  `pin-not-finite`. A\* terminates because `visited[state] <= g` settles each
+  state at most once, and that comparison is false for every NaN: nothing was
+  settled, every state re-expanded, and the queue's growing paths ate memory
+  until the process died. The router now refuses such a sheet before it builds
+  the visibility graph, with a `ValueError` naming the unit and the coordinate,
+  which is the last point either can be named.
+
+  Termination no longer rests on the numbers behaving, either. `find_path`
+  refuses a non-finite endpoint outright and will not expand more than
+  `MAX_EXPANSIONS_PER_NODE` states per graph node — eight, where the hardest of
+  323 real searches across the sixteen examples expands 0.85 — raising rather
+  than looping. A search that will not converge is a bug worth a traceback,
+  not a drawing that never arrives.
+
 ### Security
 
 - **A spec file could put script into the sheet drawn from it.** `Stream.color`
