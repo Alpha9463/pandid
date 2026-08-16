@@ -3143,6 +3143,18 @@ for `Mixer` / `Splitter`, `n_feeds` for `Column` / `Reactor`, `length` for
 for `Fitting`'s `blind`, and `fail` (`open` / `closed` / `last` / `drift_open` /
 `drift_closed` / `indeterminate`) for an actuated `Valve`.
 
+[What a body carries](#what-a-body-carries) is stated by the same keywords the
+constructors take: `supports` for a `Vessel`, `agitator` and `internals` for a
+`Reactor`, `internals` and `trays` for a `Column`, and `characteristic` for a
+`Separator`. `null` asks for a bare body, which is not the same as leaving the
+key out — a `Column` that says nothing is drawn with the trays a column draws.
+
+```yaml
+- {kind: Column, name: T-101, internals: valve_tray, trays: 30}
+- {kind: Reactor, name: R-201, internals: packing, agitator: null}
+- {kind: Vessel, name: D-301, supports: skirt}
+```
+
 ### The `pin` and `port_faces` keys
 
 `pin` mirrors [`pin()`](#pin) with `x`/`y` (absolute), `col`/`row` (grid),
