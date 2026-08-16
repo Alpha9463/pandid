@@ -83,6 +83,32 @@ retirement is declared with. Nothing is deprecated in this release.
 
 ### Fixed
 
+- **A render validated the sheet after building it, so a sheet the validator
+  would refuse reached the engine anyway.** `to_svg()`, `to_drawio()` and
+  `render()` all documented validation as running first and all ran
+  `layout()`, then `route()`, then `validate()`. `pin(x=float("nan"))` is the
+  case that shows what that cost: `pin-not-finite` names the contradiction
+  exactly, and the same coordinate is one the router starts from and does not
+  come back from — so on the default `check=True` the render never returned
+  and the finding was made about a drawing nobody could obtain.
+
+  The checks now run in two halves. `validate.model_issues()` reads what the
+  author wrote down — `pin-not-finite`, `pin-out-of-bounds`, `gravity-turned`,
+  `letter-sequence`, `nozzle-unconnected`, `stream-name-reused`, `deprecated`
+  — and runs *before* any geometry; `validate.geometry_issues()` reads the
+  frames and routes and runs once they exist. An error from either half
+  raises, so a model error raises before a coordinate has been resolved.
+  Warnings from both land on `fs.warnings` together.
+
+  The split is an order and not a subset: `fs.validate()` still answers with
+  every finding, errors first, and `check=False` still skips all of them. Most
+  rules are geometric and could not move — an overlap needs two boxes — so
+  each was classified rather than the call relocated wholesale. `gravity-turned`
+  went with the model half because a quarter turn is intent: `Pin` is the only
+  thing that sets one and layout copies it onto the `Frame` unchanged. No
+  golden fixture or gallery sheet moves; this reorders checks and draws nothing
+  differently.
+
 - **Auto-numbering walked over the stream names an author had already
   used.** A group named by hand consumed nothing from the number series, so on
   a `stream_number_start=100` sheet `connect(..., name="S100")` followed by a

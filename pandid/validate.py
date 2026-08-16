@@ -10,6 +10,25 @@ Separates two kinds of problems:
   order no standard uses, a nozzle a count asked for has no line on it).
   Collected on ``fs.warnings`` for the caller; never fatal.
 
+The findings are made in two halves, and :func:`validate` is both of
+them run in turn:
+
+- :func:`model_issues` reads what the author wrote down -- pins, tags,
+  nozzle counts, stream names -- and touches neither a
+  :class:`~pandid.geometry.Frame` nor a :class:`~pandid.geometry.Route`.
+  It answers on a sheet that has never been laid out.
+- :func:`geometry_issues` reads the resolved geometry: overlaps,
+  coincident nozzles, crossings, detours, elevations.
+
+The split exists so a render can check the model **before** it builds
+any geometry, which is the order every render entry point documents.
+``pin(x=nan)`` is the case that forced it: ``pin-not-finite`` names that
+contradiction exactly, and the same coordinate is one the router starts
+from and never comes back from, so validating after ``route()`` made a
+perfect finding about a drawing nobody could obtain.
+:meth:`pandid.flowsheet.Flowsheet._prepare_to_draw` is where the order
+is written down.
+
 Geometric checks need resolved frames, and are made over the units that
 have one. Not over the whole sheet or none of it: a balloon layout could
 not place is one unit without geometry rather than a sheet without any,
@@ -235,25 +254,25 @@ def _crowded(heads: list[tuple[float, str]], floor: float
     return next((p for p in pairs if _TOL < p[0] < floor), None)
 
 
-def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
-    """Return all validation issues for the flowsheet (errors first).
+def model_issues(fs: "Flowsheet") -> list["Issue"]:
+    """The findings that read the model alone (errors first).
 
-    ``arrows`` says whether the drawing being checked puts an arrowhead
-    on the end of a process line, which a PFD does and a P&ID does not.
-    It is a property of the *render* rather than of the flowsheet, and
-    it is a boolean rather than a diagram name so that the spelling of
-    that name stays one question, asked in
-    :func:`pandid.render.svg.draws_arrowheads`.
-    :meth:`pandid.flowsheet.Flowsheet.validate` resolves it.
+    Nothing here touches a :class:`~pandid.geometry.Frame` or a
+    :class:`~pandid.geometry.Route`, so every one of these answers on a
+    sheet that has never been laid out -- which is exactly where a
+    render asks them, before it hands the sheet to an engine that has to
+    assume the coordinates in it are numbers.
+
+    ``gravity-turned`` belongs here and not with the geometry because a
+    quarter turn is *intent*: :class:`~pandid.geometry.Pin` is the only
+    thing that sets one, and layout copies it onto the
+    :class:`~pandid.geometry.Frame` unchanged
+    (:mod:`pandid.layout`), so the pin and the frame cannot disagree
+    about it. The check still prefers the frame where there is one,
+    since that is the placement that got drawn.
     """
     from pandid.deprecation import findings as deprecation_findings
-    from pandid.layout.attach import MAX_PLACEMENT_PASSES
-    from pandid.portgeom import (is_anchored, port_faces, port_point,
-                                 resolve_port, unit_box)
-    from pandid.render.symbols import (ARROWHEAD, MIN_HEAD_CLEARANCE,
-                                       MIN_NOZZLE_PITCH, default_registry,
-                                       wears_arrowhead)
-    from pandid.streams import SIGNAL_KINDS, Stream
+    from pandid.render.symbols import default_registry
     from pandid.units import Instrument
 
     errors: list[Issue] = []
@@ -266,55 +285,7 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     # it happens and this reads it back.
     warnings.extend(deprecation_findings(fs))
 
-    # --- routing settled? (reported by route(), not recomputed here)
-    # --- Placing an instrument moves an obstacle and routing around an
-    # obstacle moves an instrument, so a dense sheet can trade between
-    # two arrangements instead of settling on one. The drawing is still
-    # coherent -- the lines are drawn to where the balloons are -- but
-    # which arrangement it caught is arbitrary, and the author cannot
-    # see that without being told.
-    if not fs.route_converged:
-        warnings.append(Issue(
-            "warning", "route-not-settled",
-            f"attached instruments were still moving after {MAX_PLACEMENT_PASSES} "
-            "routing passes; a balloon may sit slightly off the line it taps. "
-            "Pin the balloon-carrying lines with via() to settle it"))
-
-    # --- a balloon nothing could place (recorded by layout, not
-    # --- recomputed here) --- An attached instrument takes its frame
-    # from its host, so a chain of them has to end on something the
-    # ranker positions. One that does not is left frameless by
-    # :func:`~pandid.layout.attach.place_attached`, which sweeps until a
-    # pass places nothing and then stops.
-    #
-    # Read from where that sweep parked it rather than looked for here,
-    # because ``frame is None`` on its own does not say which of two
-    # things happened: layout has not run, or layout ran and gave up.
-    # Only the sweep can tell them apart, and a sheet validated before
-    # layout must not be told its balloons are unplaceable.
-    #
-    # Hard, not soft. There is no drawing to warn about: the renderer
-    # refuses a frameless unit outright, so the instrument the author
-    # asked for reaches no sheet. Saying it here names the balloon and
-    # the cure, in place of a bare "lacks a frame" out of the middle of
-    # a bounding-box sweep.
-    for u in fs.unplaced_instruments:
-        # A stream host is not placed itself; what stops it anchoring a
-        # balloon is an end that never was, so name the thing that is
-        # actually missing in each case.
-        where = (f"stream {u.host.name}, which has an end nothing placed"
-                 if isinstance(u.host, Stream) else
-                 f"{u.host.name}, which is unplaced itself")
-        errors.append(Issue(
-            "error", "instrument-unplaced",
-            f"{u.name} has no position on the sheet: it hangs off {where}. An "
-            f"attached balloon takes its frame from its host, so a chain of "
-            f"them has to end on something the layout places, and this one "
-            f"closes on itself. Attach {u.name} to the line or the equipment "
-            f"it reads, {u.name}.attach(<stream or unit>), or build it with no "
-            f"anchor at all, which lays it out like any other unit"))
-
-    # --- pin sanity (no frames required) ---
+    # --- pin sanity ---
     for u in fs.units:
         pin = u.pin_
         if pin is None:
@@ -329,8 +300,8 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 errors.append(Issue("error", "pin-out-of-bounds",
                                     f"{u.name} pinned {axis}={v} is negative (off-sheet)"))
 
-    # --- turned symbols whose function is gravity (no frames required)
-    # --- ISO 15519-1:2010 §11.4.2, *Orientation of graphical symbols*:
+    # --- turned symbols whose function is gravity ---
+    # ISO 15519-1:2010 §11.4.2, *Orientation of graphical symbols*:
     #
     #     Exceptions for turning are symbols representing
     #     components or devices where gravity is a functionality,
@@ -374,7 +345,7 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             + (f". Use variant={lying!r}, which is that equipment drawn lying "
                f"down rather than the upright one turned" if lying else "")))
 
-    # --- tag spelling (no frames required) --- Soft, not hard: the
+    # --- tag spelling --- Soft, not hard: the
     # letters still read, and a sheet whose house style differs from
     # ISO's is not a sheet the engine should refuse to draw. One finding
     # per tag, so an interlock square drawn four times says it once.
@@ -392,7 +363,7 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             f"{u.tag} spells its control functions {u.type!r}; ISO 15519-2:2015 5.2.4 "
             f"orders them {sequence}, so this tag reads {ordered!r}"))
 
-    # --- a counted nozzle with no line on it (no frames required) ---
+    # --- a counted nozzle with no line on it ---
     # The sheet draws a unit taking four streams and shows three, so it
     # asserts a stream that does not exist. Issue #183 is the defect it
     # came from: a loop over ``(1, 2, 3)`` wiring ``in_2``, ``in_3`` and
@@ -468,8 +439,8 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 f"{'is' if piped == 1 else 'are'} piped, so the sheet asserts "
                 f"{n} connections and draws {piped}. {cure}"))
 
-    # --- a counted number landing on a name already taken (no frames
-    # --- required) --- The stream table is one column per distinct
+    # --- a counted number landing on a name already taken ---
+    # The stream table is one column per distinct
     # name, so two streams answering to one name are drawn as two lines
     # and tabulated as one: a column, and the properties in it,
     # disappear off the sheet. Both lines also carry the same label, so
@@ -536,6 +507,87 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             f"Name the counted run yourself, connect(..., name=...), or move "
             f"the series clear of the names already in use with "
             f"Flowsheet(stream_number_start=...)"))
+
+    return errors + warnings
+
+
+def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
+    """The findings that read the resolved geometry (errors first).
+
+    Everything here needs frames, routes, or a note an earlier phase
+    left behind, so none of it can be asked of a sheet before
+    :meth:`~pandid.flowsheet.Flowsheet.layout` and
+    :meth:`~pandid.flowsheet.Flowsheet.route` have run. Asked early it
+    is silent rather than wrong: ``route_converged`` starts true and
+    ``unplaced_instruments`` starts empty, so a sheet that has not been
+    laid out is told nothing about placements nothing has attempted.
+
+    ``arrows`` says whether the drawing being checked puts an arrowhead
+    on the end of a process line, which a PFD does and a P&ID does not.
+    It is a property of the *render* rather than of the flowsheet, and
+    it is a boolean rather than a diagram name so that the spelling of
+    that name stays one question, asked in
+    :func:`pandid.render.svg.draws_arrowheads`.
+    :meth:`pandid.flowsheet.Flowsheet.validate` resolves it.
+    """
+    from pandid.layout.attach import MAX_PLACEMENT_PASSES
+    from pandid.portgeom import (is_anchored, port_faces, port_point,
+                                 resolve_port, unit_box)
+    from pandid.render.symbols import (ARROWHEAD, MIN_HEAD_CLEARANCE,
+                                       MIN_NOZZLE_PITCH, default_registry,
+                                       wears_arrowhead)
+    from pandid.streams import SIGNAL_KINDS, Stream
+
+    errors: list[Issue] = []
+    warnings: list[Issue] = []
+
+    # --- routing settled? (reported by route(), not recomputed here)
+    # --- Placing an instrument moves an obstacle and routing around an
+    # obstacle moves an instrument, so a dense sheet can trade between
+    # two arrangements instead of settling on one. The drawing is still
+    # coherent -- the lines are drawn to where the balloons are -- but
+    # which arrangement it caught is arbitrary, and the author cannot
+    # see that without being told.
+    if not fs.route_converged:
+        warnings.append(Issue(
+            "warning", "route-not-settled",
+            f"attached instruments were still moving after {MAX_PLACEMENT_PASSES} "
+            "routing passes; a balloon may sit slightly off the line it taps. "
+            "Pin the balloon-carrying lines with via() to settle it"))
+
+    # --- a balloon nothing could place (recorded by layout, not
+    # --- recomputed here) --- An attached instrument takes its frame
+    # from its host, so a chain of them has to end on something the
+    # ranker positions. One that does not is left frameless by
+    # :func:`~pandid.layout.attach.place_attached`, which sweeps until a
+    # pass places nothing and then stops.
+    #
+    # Read from where that sweep parked it rather than looked for here,
+    # because ``frame is None`` on its own does not say which of two
+    # things happened: layout has not run, or layout ran and gave up.
+    # Only the sweep can tell them apart, and a sheet validated before
+    # layout must not be told its balloons are unplaceable.
+    #
+    # Hard, not soft. There is no drawing to warn about: the renderer
+    # refuses a frameless unit outright, so the instrument the author
+    # asked for reaches no sheet. Saying it here names the balloon and
+    # the cure, in place of a bare "lacks a frame" out of the middle of
+    # a bounding-box sweep.
+    for u in fs.unplaced_instruments:
+        # A stream host is not placed itself; what stops it anchoring a
+        # balloon is an end that never was, so name the thing that is
+        # actually missing in each case.
+        where = (f"stream {u.host.name}, which has an end nothing placed"
+                 if isinstance(u.host, Stream) else
+                 f"{u.host.name}, which is unplaced itself")
+        errors.append(Issue(
+            "error", "instrument-unplaced",
+            f"{u.name} has no position on the sheet: it hangs off {where}. An "
+            f"attached balloon takes its frame from its host, so a chain of "
+            f"them has to end on something the layout places, and this one "
+            f"closes on itself. Attach {u.name} to the line or the equipment "
+            f"it reads, {u.name}.attach(<stream or unit>), or build it with no "
+            f"anchor at all, which lays it out like any other unit"))
 
     # --- geometric checks (need resolved frames) ---
     # Over the units that have one, not over the whole sheet or none of
@@ -745,3 +797,20 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 f"{dev.name}.pin(port={port!r}, y={target:g})"))
 
     return errors + warnings
+
+
+def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
+    """Return all validation issues for the flowsheet (errors first).
+
+    Both halves -- :func:`model_issues` and :func:`geometry_issues` --
+    over the sheet as it stands, which is what a caller asking "what is
+    wrong with this?" means. A render asks the two separately and at
+    different moments; see
+    :meth:`pandid.flowsheet.Flowsheet._prepare_to_draw`.
+
+    ``arrows`` is :func:`geometry_issues`' argument and is passed
+    straight through.
+    """
+    found = model_issues(fs) + geometry_issues(fs, arrows=arrows)
+    return ([i for i in found if i.severity == "error"]
+            + [i for i in found if i.severity == "warning"])
