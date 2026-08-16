@@ -1660,9 +1660,11 @@ fs.connect(feed.outlet, hx.tube_in).via([(130, 65), (130, 110)])
 
 ### Stream numbering
 
-`renumber_streams()` runs automatically inside `connect()` and again inside
-`to_svg()`, so the number on the stream object you hold is the number the sheet
-gets drawn with, and `s.name` can go straight into a report. A stream keeps its
+Numbering settles inside `connect()` and again inside `to_svg()`, so the number
+on the stream object you hold is the number the sheet gets drawn with, and
+`s.name` can go straight into a report. `connect()` names the one line it just
+added rather than re-deriving the whole sheet — the result is the same, and
+`renumber_streams()` re-derives all of it whenever you want it to. A stream keeps its
 number as it passes through an inline valve, reducer or fitting. Set
 `unit.new_line_number = True` to break the number at a unit that matters, which
 renumbers the flowsheet there and then. Explicitly named streams are never

@@ -230,3 +230,156 @@ def test_signals_unnumbered_and_no_arrow():
     svg = fs.to_svg()
     # the signal name is not drawn as an inline label
     assert f">{sig.name}<" not in svg
+
+
+# --- numbering one appended stream rather than the whole sheet -----------
+# connect() names the stream it just added instead of re-deriving every
+# name on the sheet, which is what made building one quadratic in its own
+# size. These pin the equivalence: whatever connect() leaves behind has to
+# be exactly what a full pass would have produced, on every shape of sheet
+# there is. renumber_streams() is idempotent and authoritative, so running
+# one and finding nothing moved is the whole check.
+
+
+def _settled(fs) -> bool:
+    """True when a full pass would change nothing connect() left behind."""
+    before = [(s.name, s.sequence) for s in fs.streams]
+    fs.renumber_streams()
+    return [(s.name, s.sequence) for s in fs.streams] == before
+
+
+def test_a_join_between_two_runs_renumbers_the_sheet():
+    """The one shape the fast path cannot take: a stream landing between
+    two runs already numbered makes them one, so every group behind the
+    second moves down a place."""
+    fs = Flowsheet("merge")
+    f = fs.add(U.Feed("F"))
+    v1, v2 = fs.add(U.Valve("FV-1")), fs.add(U.Valve("FV-2"))
+    t1 = fs.add(U.Tank("T-1"))
+    tail = fs.connect(v1.outlet, t1.inlet)  # a run hanging off FV-1's outlet
+    head = fs.connect(f.outlet, v2.inlet)  # another, into FV-2's inlet
+    assert (tail.name, head.name) == ("S1", "S2")
+    bridge = fs.connect(v2.outlet, v1.inlet)  # joins both through both valves
+    assert tail.name == head.name == bridge.name == "S1"  # now one run
+    assert _settled(fs)
+
+
+def test_a_later_segment_can_rename_the_run_it_joins():
+    """A segment carrying a line number the rest of the run lacked names
+    the whole run, so the group is named again from its own segments and
+    not left on the cached name."""
+    fs = Flowsheet("rename")
+    f = fs.add(U.Feed("F"))
+    v = fs.add(U.Valve("FV-1"))
+    p = fs.add(U.Product("P"))
+    first = fs.connect(f.outlet, v.inlet)
+    assert first.name == "S1"
+    fs.connect(v.outlet, p.inlet, size='6"', service="P", spec="A1A")
+    assert first.name == '6"-P-1001-A1A'  # renamed by the segment behind it
+    assert _settled(fs)
+
+
+def test_an_explicit_name_on_a_later_segment_names_the_run():
+    fs = Flowsheet("rename-explicit")
+    f = fs.add(U.Feed("F"))
+    v = fs.add(U.Valve("FV-1"))
+    p = fs.add(U.Product("P"))
+    first = fs.connect(f.outlet, v.inlet)
+    fs.connect(v.outlet, p.inlet, name="LINE-A")
+    assert first.name == "LINE-A"
+    assert _settled(fs)
+
+
+def test_a_tees_branch_starts_a_line_of_its_own():
+    fs = Flowsheet("branch")
+    f = fs.add(U.Feed("F"))
+    tee = fs.add(U.Tee("T-1"))
+    p, d = fs.add(U.Product("P")), fs.add(U.Product("D"))
+    run_in = fs.connect(f.outlet, tee.inlet)
+    run_out = fs.connect(tee.outlet, p.inlet)
+    branch = fs.connect(tee.branch, d.inlet)
+    assert run_in.name == run_out.name == "S1"
+    assert branch.name == "S2"
+    assert _settled(fs)
+
+
+def test_a_duty_line_added_after_the_process_runs_settles():
+    fs = Flowsheet("tail")
+    f = fs.add(U.Feed("F"))
+    heater = fs.add(U.Heater("E-1"))
+    cooler = fs.add(U.Cooler("C-1"))
+    p = fs.add(U.Product("P"))
+    fs.connect(f.outlet, heater.inlet)
+    duty = fs.connect(cooler.utility_out, heater.utility_in)
+    assert duty.kind == "energy"
+    last = fs.connect(heater.outlet, p.inlet)  # a process run behind the duty
+    assert (last.name, duty.name) == ("S2", "S3")  # the duty shifted up
+    assert _settled(fs)
+
+
+def _fuzz_sheet(check: bool):
+    """A sheet built the way a script builds one: inline devices, tee
+    branches, hand-written names, line numbers, duty lines and breaks set
+    after the run was numbered.
+
+    With *check*, a full pass runs after every append and has to find
+    nothing to move. Without it the appends chain, so the sheet comes out
+    of 120 incremental steps and no full pass at all -- which is what a
+    real build does, and the only way to catch a cache that drifts a
+    little further from the truth each time.
+    """
+    import random
+
+    rng = random.Random(20260816)
+    fs = Flowsheet("fuzz", stream_number_start=100)
+    free = [fs.add(U.Feed("F")).outlet]  # outlets with no line on them yet
+    made = []
+    for i in range(120):
+        kind = rng.choice(["valve", "fitting", "tee", "tank", "heater"])
+        if kind == "valve":
+            u = fs.add(U.Valve(f"FV-{i}"))
+        elif kind == "fitting":
+            u = fs.add(U.Fitting(f"ST-{i}", variant="strainer"))
+        elif kind == "tee":
+            u = fs.add(U.Tee(f"TE-{i}"))
+        elif kind == "heater":
+            u = fs.add(U.Heater(f"E-{i}"))
+        else:
+            u = fs.add(U.Tank(f"T-{i}"))
+        opts: dict = {}
+        roll = rng.random()
+        if roll < 0.15:
+            opts["name"] = f"HAND-{i}"
+        elif roll < 0.3:
+            opts.update(size='6"', service="P", spec="A1A")
+        # A port carries one line, so each is spent as it is used; which
+        # one comes next is what varies the shape of the tree.
+        src = free.pop(rng.randrange(len(free)))
+        fs.connect(src, u.inlet, **opts)
+        made.append(u)
+        assert not check or _settled(fs), f"append {i} ({kind}) moved"
+        free.append(u.outlet)
+        if "branch" in u.ports:
+            free.append(u.branch)
+        if kind == "heater":  # a duty line, numbered in the tail
+            cooler = fs.add(U.Cooler(f"C-{i}"))
+            fs.connect(cooler.utility_out, u.utility_in)
+            assert not check or _settled(fs), f"duty {i} moved"
+        if rng.random() < 0.1:  # a break set after the run was numbered
+            rng.choice(made).new_line_number = True
+            assert not check or _settled(fs), f"break {i} moved"
+    assert len(fs.streams) > 120
+    return fs
+
+
+def test_every_shape_of_append_agrees_with_a_full_pass():
+    """The differential check, one append at a time, so a disagreement
+    names the step that caused it."""
+    _fuzz_sheet(check=True)
+
+
+def test_a_sheet_built_by_appending_alone_agrees_with_a_full_pass():
+    """And the same sheet built the way a script builds one, with no full
+    pass anywhere in the middle to put a drifting cache right."""
+    fs = _fuzz_sheet(check=False)
+    assert _settled(fs)

@@ -21,6 +21,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the same search: every golden fixture and every gallery sheet is byte for
   byte what it was. `scripts/route_bench.py` prints the numbers.
 
+- **Building a large sheet is no longer quadratic in its own size.** Stream
+  numbering runs on every `connect()`, because the name on the stream you are
+  handed back has to be the name that gets drawn — but it re-derived every name
+  on the sheet to do it, walking every unit to find the inline runs and every
+  stream to name them. That is linear work per connection and quadratic over a
+  build: 200 streams cost 0.02s of it and 1600 cost 1.17s, with 4.6s of a 4.7s
+  build inside numbering. `connect()` now names the line it just added.
+  Appending one leaves almost every name alone, and there are only three shapes
+  it can take: a run of its own, which becomes the last group; the next segment
+  of a run already drawn, which renames at most that run; or a join between two
+  runs, which really does renumber the sheet and says so. Every name still
+  comes out of the same call the full pass makes, so the two cannot drift, and
+  `renumber_streams()` re-derives everything as before. The connect loop over
+  1600 streams falls from 1.17s to 0.005s, and the cost of adding one line is
+  flat from 200 streams to 3200 instead of growing with the sheet. Byte for
+  byte the same drawing: every golden fixture and every gallery sheet is
+  unmoved. `scripts/renumber_bench.py` prints the numbers.
+
 ### Removed
 
 **Breaking.** The six spellings 0.1.2 deprecated are gone in 0.1.3, which is
