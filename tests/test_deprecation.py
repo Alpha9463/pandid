@@ -11,7 +11,7 @@ import warnings
 
 import pytest
 
-from pandid import Flowsheet, units as U
+from pandid import Flowsheet, devices as D, units as U
 from pandid.deprecation import CODE, Deprecation, declarations
 
 # Every DeprecationWarning raised in this file is one this file deliberately
@@ -340,6 +340,91 @@ def test_the_package_declares_exactly_the_variant_keywords_it_is_retiring():
         "SEPARATOR_VARIANT_ELECTROSTATIC",
         "SEPARATOR_VARIANT_ELECTROMAGNETIC",
     }
+
+
+# --- a warning is about the word the author wrote ----------------------------
+
+
+#: The two convenience classes whose ``VARIANT_ALIASES`` map ``default`` onto a
+#: retired spelling, with the ``Separator`` variant each resolves to. They are
+#: the only place in the package where what an author wrote and what the unit
+#: ends up carrying can differ *across a deprecation*, so they are what the
+#: guard has to be checked against.
+ALIASED_TO_A_RETIRED_VARIANT = [
+    (D.GravitySeparator, "gravity"),
+    (D.ElectrostaticPrecipitator, "electrostatic"),
+]
+
+
+@pytest.mark.parametrize(
+    "cls,resolved",
+    ALIASED_TO_A_RETIRED_VARIANT,
+    ids=[c.__name__ for c, _ in ALIASED_TO_A_RETIRED_VARIANT],
+)
+def test_a_convenience_class_is_not_told_off_for_a_word_it_wrote_for_you(cls, resolved):
+    """``GravitySeparator("V-1")`` names no variant at all.
+
+    ``VARIANT_ALIASES`` then maps ``default`` onto ``gravity`` -- which is the
+    class's whole job -- and the unit carries the resolved spelling from there
+    on. Reading *that* to decide whether to warn asked the wrong question: it
+    scolded an author for a word the class had written on their behalf, and
+    told them to swap the class they had deliberately picked for
+    ``Separator(characteristic='gravity')``, which draws the same symbol with
+    the wrong nozzle names.
+
+    The drawing is unaffected either way, which is what made it quiet: the unit
+    still resolves to the same variant and the same characteristic.
+    """
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        unit = cls("V-1")
+    assert [w for w in caught if issubclass(w.category, DeprecationWarning)] == []
+    assert unit.variant == resolved
+    assert unit.characteristic == resolved
+
+
+@pytest.mark.parametrize(
+    "cls,resolved",
+    ALIASED_TO_A_RETIRED_VARIANT,
+    ids=[c.__name__ for c, _ in ALIASED_TO_A_RETIRED_VARIANT],
+)
+def test_the_retired_spelling_still_warns_on_the_class_it_was_retired_on(cls, resolved):
+    """The other direction, and the one that makes the fix a fix rather than a
+    deletion: ``Separator(variant="gravity")`` is exactly what was retired, and
+    it still says so.
+
+    Typed on the convenience class it warns too, because the author still typed
+    the retired word -- what the guard now refuses to do is invent it for them.
+    """
+    with pytest.warns(DeprecationWarning, match=f"Separator\\(variant='{resolved}'\\)"):
+        U.Separator("V-1", variant=resolved)
+    with pytest.warns(DeprecationWarning, match=f"Separator\\(variant='{resolved}'\\)"):
+        cls("V-1", variant=resolved)
+
+
+@pytest.mark.parametrize(
+    "cls,resolved",
+    ALIASED_TO_A_RETIRED_VARIANT,
+    ids=[c.__name__ for c, _ in ALIASED_TO_A_RETIRED_VARIANT],
+)
+def test_the_keyword_that_replaces_it_is_silent_too(cls, resolved):
+    """The spelling the warning recommends must not itself warn, or the advice
+    is a loop. Checked here rather than assumed, since it goes through the same
+    guard by the other branch."""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        U.Separator("V-1", characteristic=resolved)
+    assert [w for w in caught if issubclass(w.category, DeprecationWarning)] == []
+
+
+def test_a_silenced_class_reports_nothing_on_a_sheet_either():
+    """The warning and the ``validate()`` finding are one declaration, so a
+    convenience class that has stopped warning must have stopped reporting --
+    otherwise the sheet still carries the scolding the author never earned."""
+    fs = Flowsheet("aliased")
+    fs.add(D.GravitySeparator("V-1"))
+    fs.add(D.ElectrostaticPrecipitator("V-2"))
+    assert [f for f in fs.validate() if f.code == CODE] == []
 
 
 def test_the_cyclone_is_not_among_them():

@@ -327,6 +327,27 @@ reader would otherwise take them for working code.
 
 ### Fixed
 
+- **`GravitySeparator` and `ElectrostaticPrecipitator` scolded their authors
+  for a word they never wrote.** Both classes exist to spell one variant for
+  you — `VARIANT_ALIASES` maps `default` onto `gravity` and `electrostatic` —
+  and the guard that decides whether to warn read the variant *after* that
+  mapping. So `GravitySeparator("V-1")` reported
+  `Separator(variant='gravity') is deprecated … use
+  Separator(characteristic='gravity')`, about a variant the author had not
+  named, recommending they abandon the class they had picked for one that
+  draws the same symbol under different nozzle names.
+
+  A deprecation table is keyed by the spelling being *retired*, so the only
+  question it can answer is what the author typed. It now reads that.
+  `Separator(variant="gravity")` still warns, and so does the retired word
+  typed on the convenience class; what has stopped is the package inventing it.
+  The same correction goes on `Vessel`'s and `Reactor`'s guards, which read the
+  resolved spelling for the same wrong reason and are a no-op today only
+  because nothing aliases into a retired support yet.
+
+  `examples/13_mineral_dewatering.py` was one of the two examples emitting a
+  deprecation warning, and it emits none now without a line of it changing.
+
 - **The spec format could not express a composed unit, and quietly downgraded
   one.** The keywords above landed on four equipment classes without
   `pandid/spec.py` learning them, so `to_dict()` wrote a skirted vessel as

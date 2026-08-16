@@ -1138,9 +1138,24 @@ class Vessel(Unit):
         super().__init__(name, variant=variant, width=width, height=height,
                          label_pos=label_pos, description=description,
                          reference=reference)
-        # ``self.variant`` rather than the argument; see HeatExchanger.
-        if self.variant in _VESSEL_SUPPORT_VARIANTS:
-            _VESSEL_SUPPORT_VARIANTS[self.variant].warn(self, where=name)
+        # **The argument, not ``self.variant``** -- the opposite of what
+        # ``_variant_ports`` a few lines down in HeatExchanger wants, and
+        # for the opposite reason. A ports table is keyed the way the
+        # *registry* spells a variant, so it has to be read with the
+        # spelling :attr:`~Unit.VARIANT_ALIASES` settled on. A
+        # deprecation table is keyed by the spelling being **retired**,
+        # and the only question it answers is what the author typed.
+        #
+        # Reading ``self.variant`` here asks the second question with the
+        # first one's answer, and a convenience class is where the two
+        # come apart: ``GravitySeparator("V-1")`` aliases ``default`` to
+        # ``gravity`` and so was told off for a word it did not write and
+        # a rewrite it cannot make. Nothing aliases into a retired
+        # *support* today, so this line is a correction rather than a
+        # behaviour change -- but it is the same line, and leaving it
+        # right side up is what stops the next alias reintroducing it.
+        if variant in _VESSEL_SUPPORT_VARIANTS:
+            _VESSEL_SUPPORT_VARIANTS[variant].warn(self, where=name)
         self.supports = supports
         from pandid.render.iso_parts import support_overlays
         _compose_onto(self, () if supports is None else support_overlays(supports))
@@ -2429,7 +2444,9 @@ class Reactor(Unit):
         super().__init__(name, variant=variant, width=width, height=height,
                          label_pos=label_pos, description=description,
                          reference=reference)
-        if self.variant == "plain":
+        # The argument, not ``self.variant``: a deprecation is about the
+        # word the author typed. See :meth:`Vessel.__init__`.
+        if variant == "plain":
             REACTOR_VARIANT_PLAIN.warn(self, where=name)
         if agitator is _UNSTATED:
             agitator = self.composition_defaults(self.variant)["agitator"]
@@ -2688,8 +2705,18 @@ class Separator(Unit):
         super().__init__(name, variant=variant, width=width, height=height,
                          label_pos=label_pos, description=description,
                          reference=reference)
-        if characteristic is None and self.variant in self._CHARACTERISTICS:
-            _SEPARATOR_CHARACTERISTIC_VARIANTS[self.variant].warn(self, where=name)
+        # The argument, not ``self.variant``: a deprecation is about the
+        # word the author typed, and this is the class where the two came
+        # apart. :class:`~pandid.devices.GravitySeparator` and
+        # :class:`~pandid.devices.ElectrostaticPrecipitator` alias
+        # ``default`` to the retired spelling, so reading the resolved
+        # one told a ``GravitySeparator("V-1")`` author to write
+        # ``Separator(characteristic='gravity')`` instead of the class
+        # they had already picked -- for a variant they never named. See
+        # :meth:`Vessel.__init__` for why a deprecation table and a ports
+        # table want opposite spellings.
+        if characteristic is None and variant in self._CHARACTERISTICS:
+            _SEPARATOR_CHARACTERISTIC_VARIANTS[variant].warn(self, where=name)
         self.characteristic = (
             self.variant if self.variant in self._CHARACTERISTICS else None)
         # ``self.variant`` rather than the argument; see HeatExchanger.
