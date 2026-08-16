@@ -9,6 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The ISO 10628-2 groups 26–29 artwork.** Twenty-five supplementary symbols,
+  in `pandid/render/iso_parts.py`: four supports (leg, bracket, skirt, ring),
+  all eight internals (tray, tray with baffle, bubble-cap, valve, sieve, filter
+  insert, fluidised bed, packing), all ten agitators, and the three
+  characteristics — gravity, electrostatic, electromagnetic — the standard is
+  shown composing onto a separating vessel. Until now the package had no
+  agitator at all, which is why it could not draw a stirred tank, and no tray,
+  which is why it could not draw a distillation column.
+
+  Original drawings, built to the construction ISO states rather than traced
+  from its figures: measured off Table 2 in grid modules and re-drawn on
+  `iso_parts.M`, the same 2,5 mm module ISO 14617-1 §4.3 lays its own artwork
+  out on. Each part names the Table 2 row it claims to be, so the claim is
+  checkable; `tests/test_iso_parts.py` holds all twenty-five to it.
+
+  They are drawn at half the weight of an equipment outline, which is ISO
+  10628-1 §5.3.1's split between b) equipment symbols and c) the in-line detail
+  band, and is what makes a tray read as detail inside a shell rather than as a
+  second shell.
+
+  One correction to note. The agitator shafts are **solid**. Table 2 draws a
+  short thin stroke one module above each agitator, which reads as the top of a
+  dashed shaft; clause 5 says it marks a preferred connection and "is not a
+  part of the graphical symbol", and every shaft under it is a single stroke.
+
+  Nothing is composed yet — a part is now *available* to be overlaid, and the
+  keywords that ask for one follow. No golden fixture and no gallery sheet
+  moves. `python scripts/symbol_sheet.py --parts out.svg` draws the set on its
+  grid for review, with worked compositions under it.
+
 - **A symbol can be composed from a body and ISO 10628-2's supplementary
   parts.** Groups 1–25 of that standard's Table 1 name whole apparatus; groups
   26–29 name the parts you overlay onto one — supports and manholes, trays and
@@ -25,9 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the body into it.
 
   Nothing is composed yet. Every one of the 157 registered symbols is a body
-  with zero parts, no artwork for groups 26–29 ships in this release, and no
-  golden fixture or gallery sheet moves. The artwork, and the keywords that ask
-  for it, follow.
+  with zero parts, and no golden fixture or gallery sheet moves. The artwork is
+  the entry above; the keywords that ask for it follow.
 
   Two things go with it. A part must name the Table 2 row it claims to be —
   subject group, item number and registration number — because composing is

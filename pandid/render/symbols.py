@@ -2388,5 +2388,13 @@ class SymbolRegistry:
         from pandid.render._vendored_symbols import register_vendored
         register_vendored(self)
 
+        # The ISO 10628-2 groups 26-29 supplementary symbols. Not
+        # symbols: a part is only ever combinable and lives in its own
+        # namespace, so registering them adds nothing to the catalogue
+        # and changes no drawing. Registered after the whole symbols
+        # because a part is only ever overlaid on one.
+        from pandid.render.iso_parts import register_parts
+        register_parts(self)
+
 
 default_registry = SymbolRegistry()
