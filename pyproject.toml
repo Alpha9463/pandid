@@ -62,7 +62,9 @@ Issues = "https://github.com/Alpha9463/pandid/issues"
 # list -- see the module docstring for the binary cairosvg could not bring.
 pdf = ["svglib>=2.0", "reportlab>=4.4.3", "pypdfium2>=4", "pillow>=9"]
 yaml = ["PyYAML>=6"]      # enables Flowsheet.from_yaml(); from_dict/from_json need nothing
-dev = ["pytest>=7", "ruff==0.15.14", "mypy>=1.8", "PyYAML>=6"]
+# hatchling is the build backend above; it is here as well so that the sdist
+# test in tests/test_packaging.py has something to build with instead of skipping.
+dev = ["pytest>=7", "ruff==0.15.14", "mypy>=1.8", "PyYAML>=6", "hatchling"]
 
 [tool.hatch.version]
 path = "pandid/__init__.py"
@@ -72,9 +74,42 @@ packages = ["pandid"]        # ships pandid/py.typed with it, so installers see 
 
 # The sdist is the buildable, testable source: package, tests (goldens included,
 # so the regression suite runs from the tarball), examples, docs and the stencil
-# vendoring pipeline. Only editor/agent scratch is dropped.
+# vendoring pipeline. Only editor/agent scratch, local output and the material
+# that must never leave this machine is dropped.
+#
+# Every one of those paths is named here rather than left to hatchling's
+# `ignore-vcs = false` default, which reads .gitignore. .gitignore is a file, and
+# a build does not always have one: `git archive`, a CI step that cleans the tree,
+# a contributor building from an unpacked copy, or anyone setting
+# `ignore-vcs = true` all remove it. The purchased BS EN ISO 10628 / BS ISO 14617 /
+# BS ISO 15519 PDFs under standards/ and the third-party drawings under
+# professional_examples/ cannot be redistributed, so their exclusion has to hold
+# without it. tests/test_packaging.py builds an sdist from a tree with no
+# .gitignore and fails if a PDF comes out.
 [tool.hatch.build.targets.sdist]
-exclude = [".claude"]
+exclude = [
+    # Never redistributable.
+    "standards",              # purchased BSI/ISO standards (PDF)
+    "professional_examples",  # third-party reference drawings (PDF)
+    # Local working files: agent/editor scratch, caches, environments, output.
+    ".claude",
+    ".superpowers",
+    ".agents",
+    ".venv",
+    "venv",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    "__pycache__",
+    "*.py[cod]",
+    "build",
+    "dist",
+    "*.egg-info",
+    "renders",                # local render output
+    "test_diagram.svg",       # scratch render at the repo root
+    "skills-lock.json",
+    "uv.lock",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

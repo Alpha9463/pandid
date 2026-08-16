@@ -41,6 +41,29 @@ jobs:
           python -m build
       - name: Check the metadata PyPI will render
         run: twine check --strict dist/*
+      # The purchased BSI/ISO standards may not be redistributed and PyPI has no
+      # undo, so the last thing before the upload job is a look inside what it
+      # would upload. pyproject.toml excludes them and tests/test_packaging.py
+      # builds an sdist to prove it; this is the check on the actual artifacts.
+      - name: No artifact may carry a PDF
+        run: |
+          python - <<'PY'
+          import glob, sys, tarfile, zipfile
+
+          leaks = []
+          for path in sorted(glob.glob("dist/*.tar.gz")):
+              with tarfile.open(path) as tar:
+                  leaks += [f"{path}: {n}" for n in tar.getnames() if n.lower().endswith(".pdf")]
+          for path in sorted(glob.glob("dist/*.whl")):
+              with zipfile.ZipFile(path) as whl:
+                  leaks += [f"{path}: {n}" for n in whl.namelist() if n.lower().endswith(".pdf")]
+          if leaks:
+              print("::error::a build artifact carries a PDF; nothing under standards/ or "
+                    "professional_examples/ may be published")
+              print("\n".join(leaks))
+              sys.exit(1)
+          print("no PDF in any artifact")
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: dist
