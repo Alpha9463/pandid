@@ -787,16 +787,21 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
 
 
 # ----------------------------------------------------------------
-# Zone-ruled drawing border (ASME-style: A.. bottom→top, 1.. right→left)
+# Zone-ruled drawing border (A.. top→down, 1.. left→right)
 #
-# This is a drawing-frame zone reference in the ASME idiom, not an ISO
-# 5457 grid. ISO 5457 §4.4 runs letters top down and numerals left to
-# right at a fixed 50 mm pitch with the field counts of its Table 2, and
-# §4.3/§4.5 add centring and trimming marks. None of that is drawn here:
-# the band is a constant in drawing units and the field count is chosen
-# to suit the sheet. ISO 15519-1 §5.1.2, the clause that applies to a
-# diagram, asks for the centring marks only on a document prepared for
-# microfilming.
+# The direction is ISO 5457 §4.4's: letters run top down and numerals
+# left to right, so the grid's origin is the top-left corner. That is
+# the whole of the reference's meaning -- ISO 15519-1 Clause 9 composes
+# an address out of it (see :func:`pandid.document.location_reference`),
+# and an address space that runs the other way names the wrong corner of
+# the sheet.
+#
+# What is *not* ISO 5457 is the ruling. §4.4 fixes a 50 mm pitch and the
+# field counts of its Table 2, and §4.3/§4.5 add centring and trimming
+# marks. Neither is drawn here: the band is a constant in drawing units
+# and the field count is chosen to suit the sheet. ISO 15519-1 §5.1.2,
+# the clause that applies to a diagram, asks for the centring marks only
+# on a document prepared for microfilming.
 # ----------------------------------------------------------------
 
 # Width of the lettered/numbered band between the drawing frame and the
@@ -861,21 +866,22 @@ def zone_layout(ix: float, iy: float, iw: float, ih: float,
     rows = max(3, min(8, round(ih / 165)))
     parts: list[tuple] = []
     letters = string.ascii_uppercase
-    # columns: numbers 1..cols, right→left, on the top and bottom bands
+    # columns: numbers 1..cols left→right, on the top and bottom bands
     for c in range(cols):
         x0 = ix + iw * c / cols
         x1 = ix + iw * (c + 1) / cols
-        num = str(cols - c)
+        num = str(c + 1)
         if c:
             parts.append(("rule", x0, oy, x0, iy))
             parts.append(("rule", x0, iy + ih, x0, oy + oh))
         parts.append(("label", (x0 + x1) / 2, oy + band / 2, num))
         parts.append(("label", (x0 + x1) / 2, oy + oh - band / 2, num))
-    # rows: letters A.. bottom→top, on the left and right bands
+    # rows: letters A.. top→down, on the left and right bands. y grows
+    # downwards here, so row 0 is the top band and takes the A.
     for r in range(rows):
         y0 = iy + ih * r / rows
         y1 = iy + ih * (r + 1) / rows
-        letter = letters[rows - 1 - r]
+        letter = letters[r]
         if r:
             parts.append(("rule", ox, y0, ix, y0))
             parts.append(("rule", ix + iw, y0, ox + ow, y0))

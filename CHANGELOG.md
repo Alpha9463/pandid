@@ -603,6 +603,12 @@ reader would otherwise take them for working code.
   assigned. It was documented read-only and was a plain attribute, so writing
   it moved the word and left the nozzle where it was.
 
+- **The zone grid ran backwards.** `border="zone"` now letters A.. from the top
+  down and numbers 1.. from the left, ISO 5457 §4.4's direction, so zone A1 is
+  the top-left corner. It ran the other way on both axes, which put every
+  `location_reference(zone=...)` in the mirrored region of the sheet. Sheets
+  drawn with the border move: the labels change, no geometry does.
+
 - **A composition that grows the box left its port series behind.**
   `PortSeries` places its members in absolute coordinates along a face, and
   `compose` carried it across untouched — so a part drawn *above* a body left a

@@ -1542,10 +1542,12 @@ class Flowsheet:
         first if they have not been run yet, or if anything changed
         since they were.
 
-        ``border`` rules the sheet: ``"zone"`` for the ASME-style
-        zone-ruled drawing frame, ``"none"`` (the default) for a plain
-        edge. The title block and annotation boxes attached to this
-        flowsheet are drawn either way.
+        ``border`` rules the sheet: ``"zone"`` for the zone-ruled
+        drawing frame, ``"none"`` (the default) for a plain edge. The
+        grid runs ISO 5457 §4.4's way -- letters A.. top down, numerals
+        1.. left to right, so zone A1 is the top-left corner. The title
+        block and annotation boxes attached to this flowsheet are drawn
+        either way.
 
         ``diagram`` says which drawing this is: ``"pfd"`` (the default)
         or ``"p&id"``, also spelled ``"pid"``. A P&ID draws its process
