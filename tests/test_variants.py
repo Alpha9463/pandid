@@ -142,6 +142,18 @@ def test_a_shipped_variant_resolves_the_nozzles_it_always_did(cls, variant):
     elif cls is units.Separator:
         table = cls._VARIANT_PORTS.get(variant, cls._PHASES)
         assert built == {spec[0] for spec in table}
+    elif cls is units.Reactor:
+        # A reactor's nozzles now depend on the variant twice over: on the
+        # table, as the two classes above, and on whether the body is one an
+        # agitator is fitted to -- because the agitator is a *part*, and a
+        # part's ``drive`` exists exactly when the part does. Both halves are
+        # spelled out from the class's own tables rather than read off the
+        # instance, so this stays independent of what it checks.
+        table = cls._VARIANT_PORTS.get(variant, cls._VESSEL)
+        want = {spec[0] for spec in table} | {"feed"}
+        if variant in cls._STIRRED:
+            want |= {"drive"}
+        assert built == want
     else:
         assert built == set(cls("X-1").ports)
 

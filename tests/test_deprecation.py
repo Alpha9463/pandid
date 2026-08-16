@@ -323,11 +323,21 @@ def test_declarations_finds_a_module_constant():
     assert found == {"RETIRED": RETIRED}
 
 
-def test_the_package_declares_no_deprecation_today():
-    """0.1.3 deleted the six 0.1.2 announced and retires nothing new, so the
-    walker over ``pandid`` finds none. Written out rather than left implied,
-    because an empty answer is also what a broken walker returns:
-    :func:`test_declarations_finds_a_module_constant` is what says it can find
-    one at all.
+def test_the_package_declares_exactly_the_variants_a_keyword_replaced():
+    """Six spellings, all of them a ``variant=`` that names a *part* rather than
+    a drawing, and each pointing at the keyword that now names it.
+
+    Written out rather than counted, because the walker is what would go quiet
+    if a declaration were built inline at the call instead of as a module
+    constant, and an empty answer is also what a broken walker returns.
     """
-    assert declarations() == {}
+    found = {(d.what, d.instead) for d in declarations().values()}
+    assert found == {
+        ("Reactor(variant='plain')", "Reactor(internals='packing')"),
+        ("Vessel(variant='legs')", "Vessel(supports='leg')"),
+        ("Vessel(variant='skirted')", "Vessel(supports='skirt')"),
+        ("Separator(variant='gravity')", "Separator(characteristic='gravity')"),
+        ("Separator(variant='electrostatic')", "Separator(characteristic='electrostatic')"),
+        ("Separator(variant='electromagnetic')",
+         "Separator(characteristic='electromagnetic')"),
+    }

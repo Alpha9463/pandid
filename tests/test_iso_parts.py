@@ -106,11 +106,24 @@ def test_a_part_is_asked_for_by_group_and_name(part):
     assert default_registry.part(part.iso.group, part.name) is part
 
 
-def test_no_symbol_composes_yet():
-    """Registering the artwork makes it available to be overlaid; putting it on
-    a unit is the next change. Until then every drawing the library ships is
-    the one it has always been, and ``tests/golden`` cannot have moved."""
-    assert [s for s in default_registry._symbols.values() if s.overlays] == []
+def test_the_registry_composes_only_where_iso_gives_the_result_a_number():
+    """Three registered drawings are compositions, and all three are ISO group-8
+    rows the standard tabulates with a registration number of its own: 8.3
+    X8031, 8.6 X8125 and 8.8 X8126, each the shared separating vessel carrying
+    one group-29 characteristic.
+
+    Everything else a unit composes -- an agitator in a reactor, decks in a
+    column, supports under a vessel -- is built per unit from that unit's
+    keywords and never reaches the registry, because the combinations are the
+    point of it. ``tests/test_composition.py`` holds the same line from the
+    other side.
+    """
+    composed = {f"{kind}/{variant}": sym.iso_reg
+                for (kind, variant), sym in default_registry._symbols.items()
+                if sym.overlays}
+    assert composed == {"separator/gravity": "X8031",
+                        "separator/electrostatic": "X8125",
+                        "separator/electromagnetic": "X8126"}
 
 
 # --- how they are drawn -------------------------------------------------------
@@ -185,19 +198,33 @@ def test_only_an_agitator_brings_a_connection(part):
 
 
 @pytest.mark.parametrize("part", PARTS, ids=IDS)
-def test_a_mark_whose_form_is_its_meaning_is_not_stretched(part):
-    """Groups 28 and 29 are ten agitators and fourteen characteristics that
-    differ in nothing but the shape of the mark, so squashing one destroys the
-    only thing it says. Groups 26 and 27 are lines that follow the body."""
-    assert part.stretchable == (part.iso.group in (26, 27))
+def test_every_part_stretches_with_the_body_it_is_drawn_in(part):
+    """``stretchable=False`` does not mean "draw this carefully".
+
+    It means letterbox the *whole composed symbol* and centre it in the box the
+    author asked for, since there is no way to hold one group still inside a
+    group that is being stretched -- and a body centred in its box has its own
+    nozzles floating in the whitespace beside it, which is issue #225. Holding
+    a vessel rigid to protect a four-module impeller trades a nozzle that lands
+    on ink for a blade that keeps its proportions, and that is the wrong way
+    round. What keeps a part legible is the rectangle it is handed, which
+    ``iso_parts``'s placement helpers make about the part's own aspect.
+    """
+    assert part.stretchable
 
 
 def test_the_settling_arrow_fixes_the_body_it_is_drawn_in():
     """Item 29.1 is the statement that gravity does the work, which is the case
-    ISO 14617-1 §4.5's prohibition on turning exists for; flipped, the same
-    arrow says the heavy phase rises."""
+    ISO 14617-1 §4.5's prohibition on *turning* exists for.
+
+    It is deliberately not ``directional``, which in this renderer means "hold
+    the artwork still under a flip and move only the nozzles" and is sound only
+    where the rest of the drawing is symmetric. The arrow's body is a hopper:
+    held still under a vertical flip, its feed nozzle lands in the air beside
+    the cone.
+    """
     arrow = default_registry.part(29, "gravity")
-    assert arrow.gravity_fixed and arrow.directional
+    assert arrow.gravity_fixed and not arrow.directional
 
 
 # --- composed onto a body -----------------------------------------------------
@@ -264,13 +291,16 @@ def test_an_agitators_drive_lands_on_the_body_and_the_bodys_nozzles_survive():
     assert out.ports["drive"] == (pytest.approx(40.0), pytest.approx(10.0))
 
 
-def test_a_composed_body_is_unstretchable_once_it_carries_an_agitator():
+def test_a_composed_body_stretches_exactly_as_the_bare_one_does():
+    """Which is what lets a unit be given a ``width``/``height`` and still have
+    its nozzles land on ink. Composing changes what is drawn inside the box and
+    nothing about the box."""
     host = body()
     out = compose(
         host,
         [(Overlay(28, "propeller", 0.3, 0.05, 0.4, 0.8), default_registry.part(28, "propeller"))],
     )
-    assert host.stretchable and not out.stretchable
+    assert host.stretchable and out.stretchable
 
 
 def test_a_column_of_trays_is_n_overlays_and_not_a_count():

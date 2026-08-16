@@ -350,13 +350,44 @@ KIND_MAP = {
                             "reflux_in": ("E", 16.975), "boilup_in": ("E", 84.875),
                             "condenser_duty": ("E", 31.525),
                             "reboiler_duty": ("E", 70.325)}),
+    # The stirred tank: the same plain dished-head cylinder the vessel, the
+    # flash drum and the column are cut from, in the drum's 62 x 100 box, with
+    # a group-28 agitator composed into it (``pandid.units.Reactor``). That is
+    # ISO item 1.27 X8006's construction -- a dished-end vessel, an agitator on
+    # a shaft through the top head, and a drive above it -- rather than the
+    # "Mixing Reactor" stencil's rectangle-with-a-V-bottom and its motor box
+    # perched outside the shell. That stencil is kept, under ``mixing`` below.
+    #
+    # The nozzles are the drum's, in the drum's places: the product out of the
+    # bottom head, the duty on the straight east wall (which spans y 7.5..92.5)
+    # and the charge nozzles down the west one. The vent takes the crown at
+    # (46.5, 1), which is where ``vessel/default`` puts its relief and is the
+    # mirror of it -- on the head, and a clear 15.5 from the agitator's shaft,
+    # which comes down the centre line at x 31.
+    ("reactor", "default"): ("vessels", "Pressurized Vessel",
+                             {"feed": ("SERIES", "W", 100.0, 28.0, 0.32),
+                              "outlet": ("S", 50.0), "duty": ("E", 100.0),
+                              "vent": ("AT", 75.0, 2.0)}),
+    # The rejected drawing, kept under a name that says what it is rather than
+    # deleted: a box with a stirrer perched on it is still what some plants
+    # draw, and a reader with an old sheet needs to be able to reproduce it.
+    #
     # vent sits on the vessel's top edge, clear of the agitator shaft at x 24..26.
     # The charge nozzles spread along the straight west wall, which spans
     # y 32.4..77.4: the vessel is dished below that and open above it.
-    ("reactor", "default"): ("vessels", "Mixing Reactor",
-                             {"feed": ("SERIES", "W", 48.2, 14, 0.32),
-                              "outlet": "S", "duty": "E",
-                              "vent": ("AT", 40.0, 32.4)}),
+    ("reactor", "mixing"): ("vessels", "Mixing Reactor",
+                            {"feed": ("SERIES", "W", 48.2, 14, 0.32),
+                             "outlet": "S", "duty": "E",
+                             "vent": ("AT", 40.0, 32.4)}),
+    # The jacketed stirred tank, ISO item 1.27 X8006 itself: the same shell with
+    # the heating/cooling jacket wrapped round it. Shares its stencil with
+    # ``vessel/jacketed``, because a jacketed reactor and a jacketed vessel are
+    # one piece of equipment with different contents. The duty connection is the
+    # jacket's, so it takes the jacket band rather than the shell wall.
+    ("reactor", "jacketed"): ("vessels", "Vessel (Dished Ends, Heating-Cooling Jacket)",
+                              {"feed": ("SERIES", "W", 47.7, 14, 0.32),
+                               "outlet": ("S", 26.0), "duty": ("E", 47.7),
+                               "vent": ("AT", 14.0, 1.5)}),
     # The flash drum: the same plain dished-head cylinder the vessel and the
     # column are drawn from, with the phases named. ``vessel``/``horizontal``
     # and ``separator``/``horizontal`` are already one stencil ("Drum or
@@ -1136,16 +1167,26 @@ KIND_MAP = {
                                    "vapor": ("N", 30.0),
                                    "liquid": ("S", 68.0)}),
     ("separator", "cyclone"): ("separators", "Separator (Cyclone)", {"feed": "W", "vapor": "N", "liquid": "S"}),
-    ("separator", "gravity"): ("separators", "Gravity Separator, Settling Chamber",
-                               {"feed": "W", "vapor": "E", "liquid": "S"}),
     # Gas-cleaning vessels: hopper-bottomed box, gas across the top and the
     # collected phase out of the apex at (40, 120). The scrubber's wash-liquid
     # header is drawn on the centreline, so the clean gas leaves sideways rather
     # than through the top face.
     ("separator", "scrubber"): ("separators", "Separator (Wet Scrubber)",
                                 {"feed": "W", "vapor": "E", "liquid": "S"}),
-    ("separator", "electrostatic"): ("separators", "Separator (Electrostatic Precipitator)",
-                                     {"feed": "W", "vapor": "E", "liquid": "S"}),
+    # ``gravity``, ``electrostatic`` and ``electromagnetic`` are NOT vendored.
+    # All three are this same hopper-bottomed body carrying one ISO 10628-2
+    # group-29 characteristic -- items 8.3 X8031, 8.6 X8125 and 8.8 X8126 --
+    # and the standard composes them itself, so pandid composes them too:
+    # ``pandid.render.symbols`` builds each from ``separator/vessel`` and the
+    # part, and ``pandid/render/iso_parts.py`` holds the three marks. Vendoring
+    # a stencil for them as well would put a second drawing of each in the
+    # library with nothing to say which is the live one, which is the fault
+    # ``column/default`` already had.
+    #
+    # The five that stay vendored below stay because ISO gives each a distinct
+    # registered symbol: there is no vortex, no baffle, no spray and no
+    # permanent magnet anywhere in group 29 to compose them from.
+    #
     # The mechanical separators, which sort by size, inertia or magnetism rather
     # than into phases. All four are the same body as the two above, anchor for
     # anchor: 80 x 120, W (0, 12) and E (80, 12) on the two side walls (which
@@ -1166,8 +1207,6 @@ KIND_MAP = {
                               {"feed": "W", "overflow": "E", "underflow": "S"}),
     ("separator", "permanent_magnet"): ("separators", "Separator (Permanent Magnet)",
                                         {"feed": "W", "overflow": "E", "underflow": "S"}),
-    ("separator", "electromagnetic"): ("separators", "Separator (Electromagnetic)",
-                                       {"feed": "W", "overflow": "E", "underflow": "S"}),
     # Filter styles. Press Filter's own W/E anchors sit on opposite *corners* of
     # the box, so both faces are placed on the plate pack's mid-height instead.
     ("filter", "gas"):    ("filters", "Gas Filter (Bag, Candle, Cartridge)",
@@ -1452,8 +1491,6 @@ GRAVITY_FIXED = {
     # fact that fixes them is the same fact.
     ("separator", "default"):       "vapour disengages off the top, liquid draws off the bottom",
     ("separator", "cyclone"):       "ISO 15519-1 symbol X 2618; apex points down",
-    ("separator", "electrostatic"): "hopper bottom, collected phase out of the apex",
-    ("separator", "gravity"):       "settling chamber; the arrow in it points down",
     ("separator", "horizontal"):    "vapour disengages off the top, liquid draws off the bottom",
     ("separator", "knockout"):      "demister on top, vapour up and liquid down",
     ("separator", "scrubber"):      "hopper bottom under a wash-liquid header",
@@ -1465,7 +1502,6 @@ GRAVITY_FIXED = {
     ("separator", "sifter"):           "screen deck over a hopper; the undersize falls through it",
     ("separator", "impact"):           "hopper bottom under the baffle, collected phase out of the apex",
     ("separator", "permanent_magnet"): "hopper bottom, separated fraction out of the apex",
-    ("separator", "electromagnetic"):  "hopper bottom, separated fraction out of the apex",
     # ISO's other example, 2061: Open tank. Every variant holds a liquid with a
     # free surface, fills at the roof and drains at the low point; the floating
     # roof is drawn floating on that surface. On the three hopper-bottomed ones
@@ -1508,8 +1544,10 @@ GRAVITY_FIXED = {
     ("column", "packed"):  "packed beds rest on their support grids",
     # A charge vessel: the agitator hangs into it from above and the contents
     # drain out of the dished bottom, with the off-gas taken from the top.
-    ("reactor", "default"): "top-entering agitator over a dished bottom",
-    ("reactor", "plain"):   "vent on the top head, outlet in the floor",
+    ("reactor", "default"):  "top-entering agitator over a dished bottom",
+    ("reactor", "mixing"):   "top-entering agitator over a conical bottom",
+    ("reactor", "jacketed"): "top-entering agitator over a dished bottom, inside its jacket",
+    ("reactor", "plain"):    "vent on the top head, outlet in the floor",
     # Open ends. What leaves a vent rises, and what would otherwise fall into it
     # is what the weather cap and the exhaust head's V-bottom drain are for; a
     # funnel is charged by pouring into it. Turned, each of these is drawn as
@@ -1721,6 +1759,13 @@ SCALE = {"valve": 0.25, "fitting": 0.25,
          # are the same size of equipment, and the tower beside them is the
          # slender one.
          ("separator", "default"): (0.62, 0.5),
+         # The stirred tank takes the same reproportioning for the same reason:
+         # it is the same "Pressurized Vessel" stencil, and a reactor, a surge
+         # drum and a flash drum are one size of equipment with the tower beside
+         # them the slender one. 62 x 100 is also within four units of the box
+         # the "Mixing Reactor" stencil occupied (50 x 96,4), so the change is
+         # to what a reactor looks like rather than to how much room it takes.
+         ("reactor", "default"): (0.62, 0.5),
          # 62 x 200. The packed tower is drawn 14 x 97, at 1:6.9, which is far
          # slenderer than anything else on the sheet and would come out 14px
          # wide. The height is the column's own 200, so every nozzle keeps the

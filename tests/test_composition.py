@@ -567,18 +567,25 @@ def test_a_composed_symbol_renders_through_the_svg_backend():
 # ---------------------------------------------------------------- no change
 
 
-def test_no_shipped_symbol_carries_a_part():
-    """Every drawing in the library is a body with zero parts.
+def test_only_the_three_iso_composes_are_composed_in_the_registry():
+    """A composition the *standard* tabulates is a drawing the library ships.
 
-    Which is the whole claim of this change: the mechanism arrives and nothing
-    the library draws is composed with it yet, so no sheet can have moved.
+    Three of them, all in ISO group 8: item 8.3 X8031, 8.6 X8125 and 8.8 X8126,
+    each the shared separating vessel carrying one group-29 characteristic.
+    Every other registered drawing is whole, including the five group-8 rows
+    ISO gives distinct registered symbols to -- the cyclone above all.
+
+    A composition the *author* configures is built per unit instead, from the
+    keywords on ``Reactor`` and its siblings, and never appears here: the
+    combinations are the point of it.
     """
-    composed = [
+    composed = sorted(
         f"{kind}/{variant}"
         for (kind, variant), sym in default_registry._symbols.items()
         if sym.overlays
-    ]
-    assert composed == []
+    )
+    assert composed == ["separator/electromagnetic", "separator/electrostatic",
+                        "separator/gravity"]
 
 
 def test_the_parts_that_ship_are_available_and_unused():
@@ -603,11 +610,15 @@ def test_the_parts_that_ship_are_available_and_unused():
     assert agitator.svg != machine.svg and not machine.overlays
 
 
-def test_no_shipped_symbol_claims_a_registration_number_yet():
-    """Filling one in is a conformance claim about that symbol's geometry, and
-    one made by assumption is worse than none. The backfill is its own change,
-    against Table 2, one drawing at a time."""
-    assert not [s for s in default_registry._symbols.values() if s.iso_reg]
+def test_only_a_composition_claims_a_registration_number_so_far():
+    """Filling one in is a conformance claim about that drawing's geometry, and
+    one made by assumption is worse than none. The three that claim one are the
+    three built *by* composing the parts ISO says they are composed of, so the
+    claim is the construction rather than an assumption about it. The backfill
+    over the other 157 is still its own change, against Table 2, one at a time.
+    """
+    claimed = {sym.iso_reg for sym in default_registry._symbols.values() if sym.iso_reg}
+    assert claimed == {"X8031", "X8125", "X8126"}
 
 
 def test_a_built_to_size_drawing_does_not_capture_its_kinds_other_variants():
@@ -638,16 +649,30 @@ def test_a_built_to_size_drawing_does_not_capture_its_kinds_other_variants():
 
 
 def test_a_reactor_declares_its_nozzles_per_variant():
-    """The prerequisite for the reactors that are not vertical vessels.
+    """The reactors that are not vertical vessels, and what they cost.
 
     A tubular reactor is a pipe with a bed in it: no vapour space, so no
-    ``vent`` to connect. ``_VARIANT_PORTS`` is where that will be said, and it
-    is empty today so every reactor has exactly the nozzles it always had.
+    ``vent`` to connect, and a nozzle nothing is ever routed to is one an
+    author has to be told to ignore. ``_VARIANT_PORTS`` is where that is said.
+
+    ``drive`` is the other half and is not in that table, deliberately: it is
+    the *agitator part* that brings it, and which part is fitted is chosen per
+    unit rather than per variant.
     """
-    assert units.Reactor._VARIANT_PORTS == {}
+    assert list(units.Reactor._VARIANT_PORTS) == ["tubular"]
     assert [name for name, _, _ in units.Reactor._variant_ports("default")] == [
         "outlet",
         "vent",
         "duty",
     ]
-    assert list(units.Reactor("R-101").ports) == ["outlet", "vent", "duty", "feed"]
+    assert [name for name, _, _ in units.Reactor._variant_ports("tubular")] == [
+        "outlet",
+        "duty",
+    ]
+    assert list(units.Reactor("R-101").ports) == ["outlet", "vent", "duty", "drive", "feed"]
+    assert list(units.Reactor("R-102", agitator=None).ports) == [
+        "outlet", "vent", "duty", "feed",
+    ]
+    assert list(units.Reactor("R-103", variant="tubular", agitator=None).ports) == [
+        "outlet", "duty", "feed",
+    ]

@@ -1612,7 +1612,7 @@ def _at_part_scale(svg: str, scale: float) -> str:
 
 
 def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
-            iso_reg: str = "") -> Symbol:
+            iso_reg: str = "", drawio_shape: str = "") -> Symbol:
     """``body`` with its supplementary parts painted over it.
 
     One :class:`Symbol` out, so nothing downstream learns a second kind
@@ -1659,14 +1659,25 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
 
     draw.io
     -------
-    The composed symbol carries no ``drawio_shape``. A stencil reference
-    names *one* shape and draw.io draws whatever that name resolves to,
-    so a composed reactor exported under its body's reference would come
-    out as a bare vessel -- the right outline, silently missing the thing
-    that made it a reactor. Naming nothing is what makes the two backends
-    disagree loudly instead of quietly, and :attr:`Symbol.overlays` is
-    what the exporter reads to draw the parts instead. See the report on
-    this change for the sequencing.
+    The composed symbol carries **no** ``drawio_shape`` unless the caller
+    states one. A stencil reference names *one* shape and draw.io draws
+    whatever that name resolves to, so a composed reactor exported under
+    its body's reference would come out as a bare vessel -- the right
+    outline, silently missing the thing that made it a reactor. Defaulting
+    to nothing is what makes the two backends disagree loudly instead of
+    quietly, and :attr:`Symbol.overlays` is what the exporter reads to
+    draw the parts instead.
+
+    *drawio_shape* is the exception, and it is an exception the caller has
+    to make in as many words: a stencil that draws **the whole
+    composition**, body and parts together. Three of them exist -- the
+    stencil set ships the gravity separator, the electrostatic
+    precipitator and the electromagnetic separator as single shapes, and
+    each is exactly one separating vessel carrying one group-29 mark. The
+    hazard the empty default guards against is a *body's* reference being
+    reused for a body-plus-parts drawing; stating a reference for the
+    finished drawing is the opposite of that, and is what keeps those
+    three exporting as the shapes draw.io already has for them.
     """
     match = _GROUP.match(body.svg)
     if match is None:
@@ -1781,8 +1792,10 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
         bare_run=body.bare_run,
         gravity_fixed=body.gravity_fixed or any(p.gravity_fixed for p, *_ in placed),
         directional=body.directional or any(p.directional for p, *_ in placed),
-        # Deliberately not the body's; see the docstring.
-        drawio_shape="", drawio_flip_h=body.drawio_flip_h, drawio_fill=body.drawio_fill,
+        # Deliberately not the body's; see the docstring. Empty unless
+        # the caller named a stencil that draws the whole composition.
+        drawio_shape=drawio_shape,
+        drawio_flip_h=body.drawio_flip_h, drawio_fill=body.drawio_fill,
         overlays=tuple(overlay for overlay, _ in parts),
         # *Not* the body's. A composition is a different symbol from the
         # thing it was composed onto, so carrying the body's number
@@ -2382,6 +2395,62 @@ class SymbolRegistry:
             ports=_logic_ports),
             "interlock")
 
+        # ISO 10628-2 item 8.1 X8081's separating vessel, without the
+        # fork of arrows that item draws inside it: the outline all
+        # thirteen group-8 rows share, and so the body the three that
+        # compose are composed onto (:meth:`_register_composed`). A
+        # rectangle over a V, 8 M wide by 8 M and a 4 M apex, which is
+        # what every vendored separator stencil in the set already draws
+        # to the unit -- so the three compositions land on exactly the
+        # outline the five that stay whole are drawn with, and a sheet
+        # carrying both reads as one family.
+        #
+        # Not a device: it is a body, and what a separator *is* is the
+        # characteristic inside it. ``scripts/gen_devices.py`` claims it
+        # under that word.
+        self.register("separator", Symbol(
+            svg='<g id="sym_separator_vessel">'
+                '<path d="M 0 0 L 80 0 L 80 80 L 40 120 L 0 80 Z" '
+                'fill="white" stroke="#111" stroke-width="2"/></g>',
+            width=80.0, height=120.0,
+            ports={"feed": (0.0, 12.0), "vapor": (80.0, 12.0), "liquid": (40.0, 120.0)},
+            # The hopper collects out of its apex; turned, the apex is a
+            # roof and nothing falls into it. Every group-8 drawing in
+            # the library is fixed for this reason.
+            gravity_fixed=True,
+        ), "vessel")
+
+        # The tubular reactor, a PFR: the one reactor that is not a
+        # vertical vessel, and the one ISO 10628-2 has no symbol for at
+        # all -- group 1 is vessels and none of them is a horizontal
+        # shell with a tube pass in it. Built to item 3.7's construction
+        # instead (reg 2514, "heat exchanger with coil-shaped tubes"),
+        # which is the nearest thing the standard does draw: a shell
+        # with a serpentine tube inside it. A PFR is a jacketed tube, so
+        # that is the right ancestor.
+        #
+        # 12 M x 4 M, and the shell is a plain rectangle rather than the
+        # dished cylinder every vertical vessel here is. Both walls are
+        # then straight for their whole height, which is what a charge
+        # nozzle down the west face needs: on a dished end only the apex
+        # is on the box edge, so a second feed would land in the air
+        # beside the head.
+        self.register("reactor", Symbol(
+            svg='<g id="sym_reactor_tubular">'
+                '<rect x="0" y="0" width="120" height="40" fill="white" '
+                'stroke="#111" stroke-width="2"/>'
+                # The tube pass: three passes turned at the ends, drawn
+                # at the detail weight the internals of every other
+                # symbol are (ISO 10628-1 5.3.1 c).
+                '<path d="M 15 10 L 105 10 A 5 5 0 0 1 105 20 L 15 20 '
+                'A 5 5 0 0 0 15 30 L 105 30" fill="none" stroke="#111" '
+                'stroke-width="1"/></g>',
+            width=120.0, height=40.0,
+            ports={"outlet": (120.0, 20.0), "duty": (60.0, 0.0)},
+            port_series=(PortSeries(prefix="feed_", face="W", pitch=10.0,
+                                    extent=0.5, at=20.0, singular="feed"),),
+        ), "tubular")
+
         # Vendored draw.io symbols (Apache-2.0): registered last so they
         # override the hand-drawn defaults for shared kinds and add
         # variants.
@@ -2395,6 +2464,57 @@ class SymbolRegistry:
         # because a part is only ever overlaid on one.
         from pandid.render.iso_parts import register_parts
         register_parts(self)
+        self._register_composed()
+
+    def _register_composed(self):
+        """The symbols ISO composes and gives a registration number to.
+
+        Two kinds of composition ship. One the *author* configures --
+        which agitator, how many trays -- is built per unit from the
+        keywords on :class:`~pandid.units.Reactor` and its siblings, and
+        cannot be enumerated here because the combinations are the point.
+        The other is a composition **the standard itself tabulates as a
+        symbol example, with a number of its own**, and that one is a
+        drawing the library ships: it has a fixed answer, and a fixed
+        answer belongs in the registry where every other fixed drawing
+        is.
+
+        Three of them, all in ISO group 8, all one separating vessel
+        carrying one group-29 characteristic:
+
+        =====  ======  ==============================================
+        item   reg     body + part
+        =====  ======  ==============================================
+        8.3    X8031   separating vessel + 29.1 C2028 gravity
+        8.6    X8125   separating vessel + 29.2 C2030 electrostatic
+        8.8    X8126   separating vessel + 29.3 C2031 electromagnetic
+        =====  ======  ==============================================
+
+        The other five group-8 drawings pandid ships stay vendored
+        whole, because ISO gives each of them a distinct registered
+        symbol and group 29 has nothing to build them from: no vortex
+        (8.10 X2618, the cyclone), no baffle (8.2 X2616), no spray (8.5
+        X2621, and so not 8.7 X8033 either) and no permanent magnet (8.9
+        X8127).
+        """
+        from pandid.render.iso_parts import characteristic_overlays
+
+        vessel = self.get("separator", "vessel")
+        # ...and the draw.io stencil that draws the finished composition,
+        # body and mark together, which is a different claim from the
+        # body's own reference and is why ``compose`` takes it explicitly.
+        for name, reg, shape in (
+            ("gravity", "X8031", "mxgraph.pid.separators.gravity_separator"),
+            ("electrostatic", "X8125",
+             "mxgraph.pid.separators.separator_(electrostatic_precipitator)"),
+            ("electromagnetic", "X8126",
+             "mxgraph.pid.separators.separator_(electromagnetic)"),
+        ):
+            overlays = characteristic_overlays(name, registry=self)
+            self.register("separator", compose(
+                vessel, [(o, self.part(o.group, o.name)) for o in overlays],
+                iso_reg=reg, drawio_shape=shape,
+            ), name)
 
 
 default_registry = SymbolRegistry()

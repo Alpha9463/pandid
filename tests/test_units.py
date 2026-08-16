@@ -78,7 +78,10 @@ def test_fixed_port_units_have_expected_ports():
         "reboiler_duty",
         "condenser_duty",
     }
-    assert set(U.Reactor("R").ports) == {"feed", "outlet", "vent", "duty"}
+    # ``drive`` is the agitator's shaft where it leaves the top head, and a
+    # plain Reactor is a stirred tank, so it has one.
+    assert set(U.Reactor("R").ports) == {"feed", "outlet", "vent", "duty", "drive"}
+    assert set(U.Reactor("R", agitator=None).ports) == {"feed", "outlet", "vent", "duty"}
 
 
 def test_column_return_nozzles_close_the_internal_loops():
@@ -302,11 +305,18 @@ def test_a_mechanical_separator_draws_an_overflow_and_an_underflow(variant):
         sep.vapor
 
 
-@pytest.mark.parametrize("variant", ["sifter", "impact", "permanent_magnet", "electromagnetic"])
+@pytest.mark.parametrize("variant", ["sifter", "impact", "permanent_magnet"])
 def test_a_mechanical_separators_nozzles_land_where_the_stencil_anchors_are(variant):
     """The names are only true if the overflow really is the high draw and the
-    underflow the low one. All four share the electrostatic precipitator's body
-    anchor for anchor, so the map is the same three points on every one."""
+    underflow the low one. All three share one body anchor for anchor, so the
+    map is the same three points on every one.
+
+    ``electromagnetic`` was a fourth until it stopped being a stencil: it is now
+    the separating vessel composed with ISO item 29.3 C2031, and a composed body
+    anchors what the body anchors. Its two draws are still a high one and a low
+    one in the same two places -- ``Separator._VARIANT_ANCHORS`` is what routes
+    ``overflow`` to the body's ``vapor`` -- and the test above still covers the
+    names."""
     from pandid.render.symbols import default_registry
 
     symbol = default_registry.get("separator", variant)

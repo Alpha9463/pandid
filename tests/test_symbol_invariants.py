@@ -1460,7 +1460,13 @@ def test_a_lone_member_lands_where_the_fixed_nozzle_did():
     from pandid.portgeom import _drawn_placements, resolve_size
 
     for unit, want in (
-        (U.Reactor("R"), (0.0, 48.2)),
+        # ``default`` is now the dished-end stirred tank, whose shell is 100
+        # tall, so the lone feed is at its half-height rather than at the
+        # 48.2 the "Mixing Reactor" stencil's was. The claim is unchanged and
+        # ``mixing`` below is the proof: the drawing that had 48.2 still has
+        # it, and what moved is which drawing ``Reactor("R")`` asks for.
+        (U.Reactor("R"), (0.0, 50.0)),
+        (U.Reactor("R", variant="mixing"), (0.0, 48.2)),
         (U.Reactor("R", variant="plain"), (0.0, 30.0)),
     ):
         w, h = resolve_size(unit)

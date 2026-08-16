@@ -595,6 +595,19 @@ STAYS_ON_BASE = {
     ("vessel", "default"): "Vessel's own drawing",
     ("column", "default"): "Column's own drawing",
     ("reactor", "plain"): "body style: the same charge vessel without the agitator",
+    # The other three reactor bodies. A jacket is a cladding, exactly as it is
+    # on a vessel; ``mixing`` is the rectangle-with-a-V-bottom ``default`` used
+    # to draw, kept under a name that says so; and a tubular reactor is a body
+    # style too -- what makes a reactor a PFR rather than a CSTR is the shell it
+    # is drawn in and the internals in it, both of which a Reactor states.
+    ("reactor", "jacketed"): "cladding: a heating/cooling jacket",
+    ("reactor", "mixing"): "body style: a conical-bottomed mixing vessel",
+    ("reactor", "tubular"): "body style: a horizontal shell with a tube pass",
+    # The separating vessel with nothing in it. What a separator *is* is the
+    # characteristic drawn inside it (ISO 10628-2 group 29), and this is the
+    # body those are composed onto, so it is the one drawing in the family that
+    # names no equipment at all.
+    ("separator", "vessel"): "a body, not a device: the characteristic names the separator",
     # Refused by name; see REFUSED_KINDS.
     ("feed", "default"): "a boundary flag, not equipment",
     ("product", "default"): "a boundary flag, not equipment",

@@ -155,6 +155,9 @@ GRAVITY_FIXED = {
     ("separator", "impact"),
     ("separator", "permanent_magnet"),
     ("separator", "electromagnetic"),
+    # and the bare body the three composed ones are built on, which is the
+    # hopper itself and so the reason all of them are here
+    ("separator", "vessel"),
     # a free liquid surface -- ISO's 2061
     ("tank", "default"),
     ("tank", "conical"),
@@ -181,6 +184,8 @@ GRAVITY_FIXED = {
     ("column", "default"),
     ("column", "packed"),
     ("reactor", "default"),
+    ("reactor", "jacketed"),
+    ("reactor", "mixing"),
     ("reactor", "plain"),
     # open ends: what leaves rises, what would fall in must not
     ("vent", "default"),

@@ -61,15 +61,37 @@ symbol. ``tests/test_iso_parts.py`` holds this module to it.
 
 Which parts may be stretched
 ----------------------------
-``stretchable=False`` where the *form* of the mark is what distinguishes
-it from its siblings, since squashing it then destroys the only thing it
-says: the ten group-28 agitators differ in nothing but the shape at the
-foot of the shaft, and the group-29 characteristics differ in nothing but
-the mark. Group 26's supports and group 27's decks are lines that follow
-the body they are drawn in and are stretched with it. ISO 14617-1 §4.4
-draws the line in the same place -- proportions may be modified, but "the
-extent of modification of the symbol shape shall not make it impossible
-to recognize the symbol".
+**Every part stretches**, and that is a decision with a cost on each
+side rather than an oversight.
+
+The argument for holding the ten agitators rigid is real: they differ in
+nothing but the shape at the foot of the shaft -- a bow-tie, an ogee, a
+disc on edge, a three-cell rotor -- and ISO 14617-1 §4.4 bounds
+reshaping by "shall not make it impossible to recognize the symbol". But
+``stretchable=False`` does not mean "draw this part carefully". It means
+**letterbox the whole composed symbol and centre it in the box the author
+asked for**, because there is no way to hold one group still inside a
+group that is being stretched -- and a body centred in its box has its
+own nozzles floating in the whitespace beside it, which is issue #225 and
+the reported defect that put ``variable`` aspect on these stencils in the
+first place. Holding a vessel rigid to protect a four-module impeller
+trades a nozzle that lands on ink for a blade that keeps its proportions.
+
+So the parts stretch with the body, and what keeps them legible is the
+*rectangle they are given*: :func:`agitator_overlays` and its siblings
+below hand each part a rectangle of about its own aspect, so the stretch
+a part actually sees is the stretch the body sees and nothing more.
+
+A note on ``directional``, which reads like a claim about the mark and
+is not. It tells the renderer to **hold the artwork still under a flip
+and move only the nozzles**, which is sound only where the rest of the
+drawing is symmetric -- a cooler's circle and zigzag, where the
+arrowhead is the whole difference from a heater. A settling arrow's body
+is a hopper, so a body carrying it cannot honour that instruction: held
+still under a vertical flip, its feed nozzle lands in the air beside the
+cone. So no part here sets it, and what says the arrow's body may not be
+turned is ``gravity_fixed``, which is ISO 14617-1 §4.5's own word for
+it.
 
 Ports
 -----
@@ -174,7 +196,6 @@ def _build() -> tuple:
             # head to a motor drawn above the vessel, so the drive is a
             # real connection at a real place on the drawing.
             ports={"drive": (_AG_X, 0.0)},
-            stretchable=False,
             # Turned, the drive comes in from the side and the blade
             # hangs sideways in a vessel that is still upright; flipped,
             # the blade is on top and the drive underneath. Neither is
@@ -418,12 +439,11 @@ def _build() -> tuple:
                f'<line x1="{M:g}" y1="0" x2="{M:g}" y2="{5 * M:g}" {_INK}/>'
                f'<polygon points="{M:g},{6 * M:g} {0.73 * M:g},{5 * M:g} '
                f'{1.27 * M:g},{5 * M:g}" {_SOLID_INK}/>'),
-        width=2 * M, height=6 * M, stretchable=False,
+        width=2 * M, height=6 * M,
         # The arrow *is* the statement that gravity does the work here,
         # so this is the case ISO 14617-1 §4.5's prohibition on turning
-        # was written for -- and flipped, the same arrow says the heavy
-        # phase rises.
-        gravity_fixed=True, directional=True)
+        # was written for.
+        gravity_fixed=True)
 
     electrostatic = OverlayPart(
         name="electrostatic", iso=IsoPart(29, "29.2", "C2030", "Electrostatic type"),
@@ -434,7 +454,7 @@ def _build() -> tuple:
                f'M {2 * M:g} 0 L {2 * M:g} {2 * M:g}" {_INK}/>'
                f'<path d="M 0 {M:g} L {M:g} {M:g} '
                f'M {2 * M:g} {M:g} L {3 * M:g} {M:g}" {_INK}/>'),
-        width=3 * M, height=2 * M, stretchable=False)
+        width=3 * M, height=2 * M)
 
     electromagnetic = OverlayPart(
         name="electromagnetic", iso=IsoPart(29, "29.3", "C2031", "Electromagnetic type"),
@@ -446,7 +466,7 @@ def _build() -> tuple:
                f'A {M:g} {M:g} 0 0 1 {4.5 * M:g} {M:g} '
                f'A {M:g} {M:g} 0 0 1 {6.5 * M:g} {M:g} '
                f'L {7 * M:g} {M:g}" {_INK}/>'),
-        width=7 * M, height=M, stretchable=False)
+        width=7 * M, height=M)
 
     return (
         leg, bracket, skirt, ring,
@@ -481,3 +501,134 @@ def register_parts(registry) -> None:
     """
     for part in parts():
         registry.register_part(part)
+
+
+# ----------------------------------------------------------------
+# Where a part goes on a vertical vessel.
+#
+# The unit keywords -- ``Reactor(agitator=)``, ``Column(internals=)``,
+# ``Vessel(supports=)``, ``Separator(characteristic=)`` -- all end here,
+# because "an agitator hangs from the top head with its blade low in the
+# liquid" is a fact about the equipment and not about any one class.
+#
+# Two rules make the arithmetic below work whatever body it is placed
+# on, which matters because ``Overlay`` states fractions of the body's
+# box and the four callers have four differently proportioned bodies.
+#
+# **A part that may not be reshaped is given a rectangle it cannot fill.**
+# ``compose`` letterboxes such a part -- it takes the smaller of the two
+# scales and centres what is left over -- so a rectangle *wider* than the
+# part's own aspect comes out height-limited and centred on the
+# rectangle's vertical axis. Every rectangle below is therefore centred
+# on the body and generously wide, and the part lands on the body's
+# centre line at the height asked for, whatever the body's aspect is.
+# A rectangle *taller* than the aspect would do the opposite and centre
+# the part vertically, which is how an agitator ends up with its drive
+# floating below the head it is meant to come through.
+#
+# **A part that may be reshaped is given a rectangle of about its own
+# aspect anyway.** Nothing enforces it, and a deck stretched two to one
+# is still a deck -- but a bubble cap stretched two to one is a smear.
+# ----------------------------------------------------------------
+
+#: Where the internals live, as fractions of a vertical body's height:
+#: below the top head and its nozzles, above the bottom head and its
+#: draw-off. ISO draws the trays of item 2.6 X8011 between the head
+#: tangents; these are inside that, because pandid's shells carry a
+#: reflux and a boil-up return where ISO's row carries nothing.
+_INTERNALS_TOP, _INTERNALS_BOTTOM = 0.16, 0.86
+
+#: A deck's rectangle: four-fifths of the width, and a height in the
+#: same 5:1 the deck frame is drawn in so the bubble cap stays a cap.
+_DECK_INSET = 0.10
+_DECK_BAND = 0.08
+
+
+def _part(group: int, name: str, registry=None):
+    """The registered part, or a ValueError naming the ones there are.
+
+    *registry* is passed by the one caller that has no default registry
+    to ask -- ``SymbolRegistry._register_composed``, which runs while
+    that registry is still being built. Everyone else asks the library's.
+    """
+    if registry is None:
+        from pandid.render.symbols import default_registry as registry
+    return registry.part(group, name)
+
+
+def agitator_overlays(name: str, registry=None) -> tuple:
+    """``name``'s agitator, hung from the top head of a vertical body.
+
+    One overlay. The shaft's top is the top of the rectangle and so the
+    crown of the body's top head, which is where ISO item 1.27 (X8006)
+    runs it: up *through* the head to a motor drawn above the vessel. The
+    blade lands about three-quarters down, low in the liquid.
+    """
+    from pandid.render.symbols import Overlay
+    _part(28, name, registry)
+    return (Overlay(28, name, 0.25, 0.0, 0.50, 0.76),)
+
+
+def internals_overlays(name: str, count: int = 1, registry=None) -> tuple:
+    """``count`` of ``name``, stacked down a vertical body.
+
+    A deck repeats: ``count`` decks are ``count`` overlays evenly spaced
+    down the internals band, which is what makes a thirty-tray column
+    thirty placements rather than a number in a drawing. A bed does not:
+    ISO draws one packed bed filling the space it occupies, so ``count``
+    beds are ``count`` bands stacked down it -- which is item 2.9
+    X8016's two beds, drawn by asking for two.
+    """
+    from pandid.render.symbols import Overlay
+    part = _part(27, name, registry)
+    if count < 1:
+        raise ValueError(
+            f"a column with {count} of an internal has none of it; leave the "
+            f"internal out to draw a bare shell"
+        )
+    top, bottom = _INTERNALS_TOP, _INTERNALS_BOTTOM
+    span = bottom - top
+    if part.height <= 2 * M:
+        # A deck: a line at a height, repeated.
+        pitch = span / count
+        return tuple(
+            Overlay(27, name, _DECK_INSET, top + (i + 0.5) * pitch - _DECK_BAND / 2,
+                    1 - 2 * _DECK_INSET, _DECK_BAND)
+            for i in range(count))
+    # A bed: a band with a gap above and below it, repeated.
+    band = span / count
+    return tuple(
+        Overlay(27, name, _DECK_INSET, top + i * band + band * 0.1,
+                1 - 2 * _DECK_INSET, band * 0.8)
+        for i in range(count))
+
+
+def support_overlays(name: str, registry=None) -> tuple:
+    """``name``'s supports, standing under a vertical body.
+
+    Two legs or two brackets, one either side; one skirt or one ring,
+    spanning it. The rectangles reach below the body's box, which is
+    what supports do and what ``compose`` grows the composed box to
+    hold. ISO group 1 items 1.16-1.19 are this composition drawn out:
+    one vessel outline and one group-26 element each.
+    """
+    from pandid.render.symbols import Overlay
+    _part(26, name, registry)
+    if name in ("skirt", "ring"):
+        return (Overlay(26, name, 0.18, 0.92, 0.64, 0.24),)
+    return (Overlay(26, name, 0.18, 0.92, 0.08, 0.30),
+            Overlay(26, name, 0.74, 0.92, 0.08, 0.30))
+
+
+def characteristic_overlays(name: str, registry=None) -> tuple:
+    """``name``'s characteristic, centred in a separating vessel.
+
+    One overlay, placed where ISO's own group-8 rows place it: the
+    settling arrow (29.1) runs most of the vessel's depth, and the two
+    field marks (29.2, 29.3) sit across its middle.
+    """
+    from pandid.render.symbols import Overlay
+    _part(29, name, registry)
+    if name == "gravity":
+        return (Overlay(29, name, 0.30, 0.08, 0.40, 0.50),)
+    return (Overlay(29, name, 0.12, 0.46, 0.76, 0.20),)

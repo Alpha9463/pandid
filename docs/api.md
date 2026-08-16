@@ -499,7 +499,7 @@ from pandid import units
 sifter = units.Separator("SC-101", variant="sifter")
 ```
 
-`units.Kind(variant=…)` is the escape hatch. 93 of the 157 registered drawings
+`units.Kind(variant=…)` is the escape hatch. 97 of the 161 registered drawings
 get no class of their own, and this is how you reach them; see
 [Variants](#variants) for the list. Where a class exists, name it.
 
@@ -554,7 +554,7 @@ Each entry is `port` *(direction / role)*.
 | `Tank` | `tank` | the same five as `Vessel` |
 | `Separator` | `separator` | `feed` *(in)*, `vapor` *(out/vapor)*, `liquid` *(out/liquid)* on the four variants whose draws really are phases — the drum (`default`, `horizontal`, `knockout`) and the wet `scrubber`. The other seven sort or collect rather than separating into phases, and name the two draws their artwork has: `feed` *(in/feed)*, `overflow` *(out)*, `underflow` *(out)*; see [Variants](#variants) |
 | `Column` | `column` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*, `reflux_in` *(in/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*, `condenser_duty` *(out/energy)*; the feeds are [`feeds`](#the-family-as-a-sequence) |
-| `Reactor` | `reactor` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `outlet` *(out)*, `vent` *(out/vapor)*, `duty` *(in/energy)*; the feeds are [`feeds`](#the-family-as-a-sequence) |
+| `Reactor` | `reactor` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `outlet` *(out)*, `vent` *(out/vapor)* (not on `tubular`), `duty` *(in/energy)*, `drive` *(in/energy)* when an `agitator=` is fitted; the feeds are [`feeds`](#the-family-as-a-sequence) |
 | `HeatExchanger` | `hex` | `shell_in`, `shell_out`, `tube_in`, `tube_out`; `kettle` adds `bottoms` *(out/liquid)*. Four variants name their sides differently; see [Variants](#variants) |
 | `Heater` | `heater` | `inlet` *(in)*, `outlet` *(out)*, `utility_in` *(in/energy)* |
 | `Cooler` | `cooler` | `inlet` *(in)*, `outlet` *(out)*, `utility_out` *(out/energy)* |
@@ -1297,7 +1297,7 @@ first listed is what the class draws when it is built by name alone.
 | `MagneticSeparator` | `separator` | `permanent_magnet` (as `default`), `electromagnetic` |
 | `Scrubber` | `separator` | `scrubber` (as `default`) |
 | `KnockoutDrum` | `separator` | `knockout` (as `default`) |
-| `Separator` | `separator` | `default` (the plain vertical drum, the shell `Vessel` and `Column` share), `horizontal` (the same drum lying down) |
+| `Separator` | `separator` | `default` (the plain vertical drum, the shell `Vessel` and `Column` share), `horizontal` (the same drum lying down), `vessel` (the bare separating vessel the three composed characteristics are drawn on) |
 | `DustCollector` | `filter` | `gas` (as `default`), `gas_fixed_bed` (as `fixed_bed`), `gas_belt` (as `belt`) |
 | `RotaryDrumFilter` | `filter` | `rotary` (as `default`), `rotary_scraper` (as `scraper`) |
 | `FilterPress` | `filter` | `press` (as `default`) |
@@ -1317,7 +1317,7 @@ first listed is what the class draws when it is built by name alone.
 | `FlowElement` | `fitting` | `venturi` (as `default`), `flow_nozzle`, `coriolis`, `vortex`, `ultrasonic`, `turbine_meter`, `positive_displacement`, `v_cone`, `wedge`, `target`, `pitot`, `averaging_pitot` |
 | `Fitting` | `fitting` | `default` (flanged connection), `flange`, `strainer`, `strainer_cone`, `strainer_y`, `strainer_basket`, `strainer_duplex`, `orifice`, `rotameter`, `rupture_disc`, `sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `bellows`, `damper`, `spool`, `static_mixer`, `hose`, `coupling`, `clamped_coupling`, `flame_arrestor`, `flame_arrestor_explosion_proof`, `flame_arrestor_detonation_proof`, `flame_arrestor_fire_resistant` |
 | `StirredTankReactor` | `reactor` | `default` |
-| `Reactor` | `reactor` | `plain` (the same charge vessel without the agitator) |
+| `Reactor` | `reactor` | `plain` (the same charge vessel without the agitator), `mixing` (the conical-bottomed mixing vessel a plain `Reactor` used to draw), `jacketed` (the same shell inside a heating/cooling jacket), `tubular` (a horizontal shell with a tube pass, for a PFR) |
 | `Vessel` | `vessel` | `default`, `dished`, `jacketed`, `skirted`, `legs`, `insulated`, `electrical_heating`, `swaged`, `dome`, `horizontal`<br>`dished`, `skirted` and `legs` are one shell on brackets, a skirt or a pair of legs; `jacketed` and `insulated` are that shell clad, and offer the same nozzles in the same places, so swapping one for another moves no run. `swaged` is the vessel drawn in two diameters, the wider one below |
 | `Tank` | `tank` | named for the roof: `default` (dished), `conical`, `floating_roof`, plus `sphere`<br>and for the bottom where it is a cone rather than a floor: `conical_bottom` (under a flat roof), `conical_ends` (a cone at each end), `dished_roof_conical_bottom`. On those three the `outlet` is on the cone's apex, which is where the tank actually drains |
 | `Column` | `column` | `default` (plain shell), `packed` |
@@ -2864,7 +2864,7 @@ What a flip may not do is reverse an arrow the artwork carries — see
 below, which is handled by drawing rather than by refusing, for exactly the
 reason this paragraph gives.
 
-The 41 marked symbols, and what in each one's artwork only means one thing one
+The 44 marked symbols, and what in each one's artwork only means one thing one
 way up:
 
 | Symbols | Why |
@@ -3609,7 +3609,7 @@ against one. What it follows, feature by feature:
 - **Symbols where gravity is a functionality** are not turned. **ISO 15519-1
   §11.4.2** excepts them from the general permission to turn and mirror: *"for
   example symbol 2061: Open tank or symbol X 2618: Cyclone separator … Such
-  symbols must not be turned."* 41 registered symbols carry
+  symbols must not be turned."* 44 registered symbols carry
   `Symbol.gravity_fixed`, and
   [Symbols that must not be turned](#symbols-that-must-not-be-turned) lists them.
 
