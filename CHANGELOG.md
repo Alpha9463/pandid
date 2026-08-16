@@ -310,22 +310,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Deprecated
 
-Six `variant=` spellings that named a **part** rather than a body, each moved
+Seven `variant=` spellings that named a **part** rather than a body, each moved
 to the keyword that names the part. All work throughout 0.1.3 and are removed
 in 0.2.0.
 
-**Three of the six redraw, and that is the point of them.** The keyword builds
+- **`Reactor(variant="mixing")` → `Reactor(agitator="disc")`.** The seventh, and
+  the loosest fit of them, because `mixing` names a body as well as its
+  contents: draw.io's "Mixing Reactor" is a cone-bottomed rectangle with a
+  capsule perched on top for the motor and two flat plates for the impeller,
+  all of it drawn into the body artwork.
+
+  **Not equivalent, and redundant anyway.** ISO draws an agitated vessel
+  exactly once — item 1.27 X8006 — and it is the dished-end one. Group 1 has 29
+  rows; 1.8 to 1.11 are cone-bottomed and carry no agitator, 1.27 carries the
+  agitator and is dished, and nothing in the group is both. So this variant
+  reproduces no tabulated item. It also spends `variant=` on the contents on
+  the one row where that word is already contested: `Reactor._STIRRED` has to
+  exclude `mixing` precisely because its stirrer is in the artwork and a
+  composed one would make two, so a `mixing` reactor cannot take a stirrer of
+  its own, cannot be jacketed, and cannot hold a bed or trays.
+
+  The sharpest of it: **its drawn motor connects to nothing.** The agitator
+  resolves to `None`, so no `drive` nozzle is ever added, and the sheet shows a
+  driver an author cannot route power to. `Reactor(agitator="disc")` draws the
+  motor *and* the nozzle. `disc` rather than the bare default because `mixing`'s
+  two flat plates are nearest item 28.9 C2026.
+
+**Four of the seven redraw, and that is the point of them.** The keyword builds
 ISO's own composition — a vessel outline with a group-26 element under it, which
 is what items 1.16–1.19 are — where the `variant=` spelling reached a vendored
 draw.io stencil approximating the same equipment. So `Vessel(supports="leg")`,
 `Vessel(supports="skirt")` and `Reactor(internals="packing")` are the standard's
 drawing rather than the stencil's: a slightly wider shell, and the support or the
 bed drawn to ISO's construction at ISO 10628-1 §5.3.1 c)'s detail weight rather
-than at the outline's. Same equipment, same nozzles, a sheet that moves. The
-three `Separator(characteristic=…)` spellings are the other kind — the same
-drawing to the character, since that body was already composed.
+than at the outline's. Same equipment, same nozzles, a sheet that moves.
+`Reactor(agitator="disc")` is the fourth and goes further, since it replaces the
+body as well. The three `Separator(characteristic=…)` spellings are the other
+kind — the same drawing to the character, since that body was already composed.
 
-So a sheet on one of the three does move, and it moves when the author edits it
+So a sheet on one of the four does move, and it moves when the author edits it
 rather than at 0.2.0. `examples/14_tank_farm.py` is the worked case: see the
 entry under **Changed**.
 
