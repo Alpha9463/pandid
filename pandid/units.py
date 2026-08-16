@@ -40,7 +40,7 @@ __all__ = [
     "HeatExchanger", "Heater", "Cooler", "Reactor", "Separator", "Column",
     "Mixer", "Splitter", "Tee", "Reducer", "Fitting", "Ejector", "Vent", "Funnel",
     "Furnace", "Turbine", "Filter", "Dryer", "Crusher", "Mill", "Conveyor",
-    "Instrument", "Block",
+    "Elevator", "Instrument", "Block",
 ]
 
 # Only a signal port may carry a signal line and only a process one may
@@ -1801,20 +1801,31 @@ class Mill(_CrushingMachine):
 
 
 class Conveyor(Unit):
-    """Belt conveyor: bulk solids carried tail end to head end.
+    """Conveyor: bulk solids carried tail end to head end.
 
-    ``length`` is the belt run, and the unit's only size: the symbol is
-    a straight bar between two rollers of fixed size, so a longer
-    conveyor grows the bar and the rollers stay round. ``width`` and
-    ``height`` would stretch the rollers with the box, so they are
-    refused. A quarter turn stands the belt on end, where the length is
-    its height.
+    ``variant="default"`` is the belt (ISO 10628-2 item 18.2, 3821) and
+    ``variant="screw"`` the enclosed screw (item 18.5 X8063)::
 
-    ``feed`` is the tail end. Material is dropped onto a belt rather
-    than piped into it, so the nozzle can be taken from the top face as
-    well as the end. ``discharge`` is the head end, where the belt
-    throws off; it can be taken from the underside too, for the chute
-    that catches what comes over.
+        Conveyor("CV-101")                                # belt
+        Conveyor("CV-102", variant="screw", length=140)   # screw
+
+    ``length`` is the run, and the unit's only size, for both. The
+    symbol is *built* to it rather than scaled to it, so a longer belt
+    grows the straight run and its rollers stay round, and a longer
+    screw gets more turns of the flight at the same pitch rather than
+    one stretched turn. ``width`` and ``height`` size the drawn box
+    instead and are refused. A quarter turn stands either on end, where
+    the length is its height.
+
+    **Where the nozzles are differs between the two, because the
+    machines differ.** A belt is open: material is dropped onto it and
+    thrown off the end, so ``feed`` is the tail roller and ``discharge``
+    the head, each also offered on the face the chute would come from. A
+    screw runs enclosed in a trough and is loaded and discharged through
+    spouts, so its ``feed`` is on the **top** near the tail and its
+    ``discharge`` on the **underside** near the head, with the two ends
+    offered instead. Both follow the connection ticks Table 2 draws on
+    the two rows.
     """
 
     feed: Port
@@ -1834,11 +1845,11 @@ class Conveyor(Unit):
         if width is not None or height is not None:
             given = width if width is not None else height
             raise ValueError(
-                f"{name}: a Conveyor is sized by length=, the belt run between "
-                f"its two rollers, and that one number is the only authority on "
-                f"how long the belt is. width= and height= size the drawn box "
-                f"instead, which would stretch the rollers out of round. Pass "
-                f"length={given!r}."
+                f"{name}: a Conveyor is sized by length=, the run between its "
+                f"two ends, and that one number is the only authority on how "
+                f"long it is. width= and height= size the drawn box instead, "
+                f"which would stretch a belt's rollers out of round and a "
+                f"screw's flight off its pitch. Pass length={given!r}."
             )
         super().__init__(name, variant=variant, label_pos=label_pos,
                          description=description, reference=reference)
@@ -1846,20 +1857,69 @@ class Conveyor(Unit):
 
     @property
     def length(self) -> float:
-        """The belt run, tail roller to head roller, in drawn units.
+        """The run, tail end to head end, in drawn units.
 
-        The symbol is built to it rather than scaled to it, so the
-        rollers are the same circles however long the belt is.
+        The symbol is built to it rather than scaled to it, so a belt's
+        rollers are the same circles and a screw's turns the same turns
+        however long the machine is.
         """
         return self._length
 
     @length.setter
     def length(self, value: float) -> None:
-        from pandid.render.symbols import CONVEYOR_MIN_LENGTH, conveyor_too_short
+        """The shortest run each variant can be drawn in is its own.
 
-        if value < CONVEYOR_MIN_LENGTH:
+        A belt is bounded by its two rollers overlapping and a screw by
+        one whole turn of the flight not fitting; the two numbers are
+        equal by arithmetic, and the two *sentences* are not, so the
+        error comes from whichever drawing is being asked for. A reader
+        told about rollers goes looking for rollers.
+        """
+        from pandid.render.symbols import (
+            CONVEYOR_MIN_LENGTH, SCREW_MIN_LENGTH, conveyor_too_short,
+            screw_too_short,
+        )
+
+        if self.variant == "screw":
+            if value < SCREW_MIN_LENGTH:
+                raise screw_too_short(value, self.name)
+        elif value < CONVEYOR_MIN_LENGTH:
             raise conveyor_too_short(value, self.name)
         self._length = float(value)
+
+
+class Elevator(Unit):
+    """Bucket elevator: solids lifted in buckets on a belt.
+
+    ISO 10628-2 item 18.7 X8065, and ``variant="z_form"`` its item 18.8
+    X8066 -- the same machine with a horizontal run at each end, which
+    is what carries material along as well as up::
+
+        Elevator("BE-301")
+        Elevator("BE-302", variant="z_form")
+
+    ``feed`` is the boot, low, and ``discharge`` the head, high: a
+    machine that takes material in at the bottom and delivers it at the
+    top is the whole of what an elevator is for, and the nozzles say so.
+    On the straight elevator the row's own vertical chute directions are
+    offered as the north and south faces beside them; see
+    ``symbols._BUCKET_ELEVATOR`` for why they are not the home nozzles.
+
+    There is no ``length``. A conveyor's run is a number an author
+    states and an elevator's lift is not -- it follows from the two
+    elevations it connects, which the sheet already shows -- so both
+    drawings are fixed and a taller machine is the same symbol.
+
+    Drawn one way up and reported as ``gravity-turned`` by
+    :meth:`~pandid.flowsheet.Flowsheet.validate` if turned. Upside down
+    it is a machine that lowers material, which is not this one.
+    """
+
+    feed: Port
+    discharge: Port
+
+    kind = "elevator"
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
 
 def split_tag(type: str, number: str | int = "") -> tuple[str, str]:

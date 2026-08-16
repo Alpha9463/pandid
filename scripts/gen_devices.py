@@ -453,6 +453,23 @@ DEVICES = {
     ``pandid.render.symbols._VIBRATION_DRUM``.
 """),
 
+    # --- Solids conveying ---------------------------------------------------
+    #
+    # A screw conveyor is a different purchase from a belt -- different
+    # supplier, different datasheet, different failure modes -- so it is a
+    # class. The two bucket elevators are one purchase in two arrangements,
+    # which is a body style, so both stay on ``Elevator``.
+    ("conveyor", "screw"): ("ScrewConveyor", """Screw conveyor: a flighted shaft turning in a closed trough.
+
+    Short runs of dusty, hot or hazardous solids, where the enclosure
+    is the point. Fed through a spout on top near the tail and
+    discharged through one underneath near the head, which is where
+    ISO 10628-2 item 18.5 X8063 draws its two connections.
+
+    Sized by ``length=``, as every conveyor is; a longer trough gets
+    more turns of the flight rather than a longer one.
+"""),
+
     # --- Valves ------------------------------------------------------------
     #
     # Six classes over twenty-three drawings, split on BEHAVIOUR rather than on
@@ -670,6 +687,8 @@ STAYS_ON_BASE = {
     ("cooler", "default"): "Cooler's own drawing",
     ("crusher", "default"): "Crusher's own drawing (ISO item 11.2, no characteristic)",
     ("mill", "default"): "Mill's own drawing (ISO item 11.8, no characteristic)",
+    ("elevator", "default"): "Elevator's own drawing (ISO item 18.7, the straight lift)",
+    ("elevator", "z_form"): "body style: the same lift with a run at each end",
     ("ejector", "default"): "Ejector's own drawing",
     ("filter", "default"): "Filter's own drawing (bag, candle or cartridge elements)",
     ("funnel", "default"): "Funnel's own drawing",

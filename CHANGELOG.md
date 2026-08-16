@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Screw conveyor and bucket elevator (straight and Z-form):
+  `Conveyor(variant="screw")`, `Elevator()`, `Elevator(variant="z_form")`.
+  The screw is sized by `length=`, as the belt is.
+
 - **Crushers and mills.** ISO 10628-2 group 11, all eleven drawings the
   standard tabulates, and the size-reduction end of a flowsheet that had no
   symbol at all until now:

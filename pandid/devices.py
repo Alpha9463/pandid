@@ -50,6 +50,7 @@ them all.
 from pandid.ports import Port
 from pandid.units import (
     Compressor,
+    Conveyor,
     Crusher,
     Dryer,
     Filter,
@@ -105,6 +106,7 @@ __all__ = [
     "ImpactMill",
     "RollerMill",
     "VibratingMill",
+    "ScrewConveyor",
     "ControlValve",
     "SolenoidValve",
     "ReliefValve",
@@ -1019,6 +1021,27 @@ class VibratingMill(Mill):
     kind = "mill"
     VARIANTS = ("default", "vibration")
     VARIANT_ALIASES = {"default": "vibration"}
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+
+    feed: Port
+    discharge: Port
+
+
+class ScrewConveyor(Conveyor):
+    """Screw conveyor: a flighted shaft turning in a closed trough.
+
+    Short runs of dusty, hot or hazardous solids, where the enclosure
+    is the point. Fed through a spout on top near the tail and
+    discharged through one underneath near the head, which is where
+    ISO 10628-2 item 18.5 X8063 draws its two connections.
+
+    Sized by ``length=``, as every conveyor is; a longer trough gets
+    more turns of the flight rather than a longer one.
+    """
+
+    kind = "conveyor"
+    VARIANTS = ("default", "screw")
+    VARIANT_ALIASES = {"default": "screw"}
     PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     feed: Port
