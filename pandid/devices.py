@@ -50,10 +50,12 @@ them all.
 from pandid.ports import Port
 from pandid.units import (
     Compressor,
+    Crusher,
     Dryer,
     Filter,
     Fitting,
     HeatExchanger,
+    Mill,
     Pump,
     Reactor,
     Separator,
@@ -94,6 +96,15 @@ __all__ = [
     "RotaryDryer",
     "FluidizedBedDryer",
     "SprayDryer",
+    "JawCrusher",
+    "ConeCrusher",
+    "HammerCrusher",
+    "ImpactCrusher",
+    "RollerCrusher",
+    "HammerMill",
+    "ImpactMill",
+    "RollerMill",
+    "VibratingMill",
     "ControlValve",
     "SolenoidValve",
     "ReliefValve",
@@ -858,6 +869,160 @@ class SprayDryer(Dryer):
 
     feed: Port
     product: Port
+
+
+class JawCrusher(Crusher):
+    """Jaw crusher: a swing jaw worked by an eccentric.
+
+    The primary crusher of a hard-rock circuit -- run-of-mine ore in at
+    the top, one product size out of the bottom. ISO 10628-2 item 11.5
+    X8047: the crusher body carrying item 29.9 C2036.
+    """
+
+    kind = "crusher"
+    VARIANTS = ("default", "jaw")
+    VARIANT_ALIASES = {"default": "jaw"}
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+
+    feed: Port
+    discharge: Port
+
+
+class ConeCrusher(Crusher):
+    """Cone crusher: a gyrating head inside a fixed bowl.
+
+    Secondary and tertiary duty behind a jaw, and where a gyratory
+    crusher is drawn too. ISO 10628-2 item 11.7 X8049: the crusher body
+    carrying item 29.12 C2038.
+    """
+
+    kind = "crusher"
+    VARIANTS = ("default", "cone")
+    VARIANT_ALIASES = {"default": "cone"}
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+
+    feed: Port
+    discharge: Port
+
+
+class HammerCrusher(Crusher):
+    """Hammer crusher: swing hammers on a rotor, against a breaker plate.
+
+    For friable and medium-hard feed -- limestone, gypsum, coal. ISO
+    10628-2 item 11.3 X8045: the crusher body carrying item 29.7 C2034.
+    """
+
+    kind = "crusher"
+    VARIANTS = ("default", "hammer")
+    VARIANT_ALIASES = {"default": "hammer"}
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+
+    feed: Port
+    discharge: Port
+
+
+class ImpactCrusher(Crusher):
+    """Impact crusher: blow bars on a rotor throwing feed at aprons.
+
+    Breaks on impact rather than by compression, so it makes a cubical
+    product and more fines than a jaw. ISO 10628-2 item 11.4 X8046: the
+    crusher body carrying item 29.8 C2035.
+    """
+
+    kind = "crusher"
+    VARIANTS = ("default", "impact")
+    VARIANT_ALIASES = {"default": "impact"}
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+
+    feed: Port
+    discharge: Port
+
+
+class RollerCrusher(Crusher):
+    """Roll crusher: two counter-rotating rolls with a nip between them.
+
+    A closely sized product from a friable feed, and the sizer of a coal
+    or bauxite circuit. ISO 10628-2 item 11.6 X8048: the crusher body
+    carrying item 29.11 C2037.
+    """
+
+    kind = "crusher"
+    VARIANTS = ("default", "roller")
+    VARIANT_ALIASES = {"default": "roller"}
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+
+    feed: Port
+    discharge: Port
+
+
+class HammerMill(Mill):
+    """Hammer mill: swing hammers against a screen.
+
+    The same hammers as a hammer crusher in a machine ground for a
+    finer product, which is the whole difference ISO draws between the
+    two bodies. Item 11.9 X8050: the mill body carrying item 29.7 C2034.
+    """
+
+    kind = "mill"
+    VARIANTS = ("default", "hammer")
+    VARIANT_ALIASES = {"default": "hammer"}
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+
+    feed: Port
+    discharge: Port
+
+
+class ImpactMill(Mill):
+    """Impact mill, pin mill: a rotor throwing feed at a liner.
+
+    Fine grinding of soft and friable solids. ISO 10628-2 item 11.10
+    X8051: the mill body carrying item 29.8 C2035.
+    """
+
+    kind = "mill"
+    VARIANTS = ("default", "impact")
+    VARIANT_ALIASES = {"default": "impact"}
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+
+    feed: Port
+    discharge: Port
+
+
+class RollerMill(Mill):
+    """Roller mill: rolls running on a table or against a ring.
+
+    The horizontal-rotation roller mill of a cement or coal circuit.
+    ISO 10628-2 item 11.11 X8053: the mill body carrying item 29.11
+    C2037.
+    """
+
+    kind = "mill"
+    VARIANTS = ("default", "roller")
+    VARIANT_ALIASES = {"default": "roller"}
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+
+    feed: Port
+    discharge: Port
+
+
+class VibratingMill(Mill):
+    """Vibrating mill: a charged drum shaken rather than tumbled.
+
+    Fine and ultrafine grinding in a small footprint. ISO 10628-2 item
+    11.12 X8054, and the one group-11 row that is not a body and a mark
+    alone: the drawing puts the two arrows of item 29.14 (3831) inside a
+    drum the standard gives no number of its own, so the drum is drawn
+    as part of the body. See
+    ``pandid.render.symbols._VIBRATION_DRUM``.
+    """
+
+    kind = "mill"
+    VARIANTS = ("default", "vibration")
+    VARIANT_ALIASES = {"default": "vibration"}
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+
+    feed: Port
+    discharge: Port
 
 
 class ControlValve(Valve):

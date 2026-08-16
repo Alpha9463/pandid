@@ -192,6 +192,21 @@ GRAVITY_FIXED = {
     # solids that fall
     ("dryer", "spray"),
     ("dryer", "fluidized_bed"),
+    # ISO group 11's twelve rows are one trapezoid, wide at the top and narrow
+    # at the bottom, with a connection tick above it and another below: ore in
+    # at the mouth, product out of the throat. Turned, the machine is fed from
+    # its discharge.
+    ("crusher", "default"),
+    ("crusher", "cone"),
+    ("crusher", "hammer"),
+    ("crusher", "impact"),
+    ("crusher", "jaw"),
+    ("crusher", "roller"),
+    ("mill", "default"),
+    ("mill", "hammer"),
+    ("mill", "impact"),
+    ("mill", "roller"),
+    ("mill", "vibration"),
     # the three gas filters, each drawn with a dust hopper under its medium
     ("filter", "gas"),
     ("filter", "gas_fixed_bed"),

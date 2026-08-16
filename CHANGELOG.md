@@ -9,6 +9,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Crushers and mills.** ISO 10628-2 group 11, all eleven drawings the
+  standard tabulates, and the size-reduction end of a flowsheet that had no
+  symbol at all until now:
+
+  ```python
+  from pandid import Crusher, Mill, JawCrusher, HammerMill
+
+  Crusher("CR-101", variant="jaw")     # or JawCrusher("CR-101")
+  Mill("ML-201", variant="hammer")     # or HammerMill("ML-201")
+  ```
+
+  Two nozzles, `feed` and `discharge`, and the same two on every variant of
+  both: Table 2 draws one connection tick above the outline and one below it
+  on all twelve of the group's rows, so ore goes in the top and product falls
+  out of the bottom. They are `Conveyor`'s two names, because a crusher is fed
+  by a belt and discharges onto one. There is deliberately **no `drive`** — ISO
+  draws a motor in exactly one row of Table 2 (item 1.27, the stirred vessel),
+  and a drive nozzle here would be one pandid invented.
+
+  `Crusher` draws item 11.2 X8085 and `Mill` item 11.8 X8086: one trapezoid,
+  wide at the mouth and narrow at the throat, with the crusher's two full-depth
+  jaws or the mill's two chamfered top corners inside it. Both are marked
+  [must not be turned](docs/api.md#symbols-that-must-not-be-turned) for the
+  reason a hopper is.
+
+  The nine specific machines are that body **composed** with the ISO group-29
+  characteristic that says how it breaks the feed — artwork that already
+  shipped — so closing the group cost two drawings rather than eleven:
+  `JawCrusher` (11.5), `ConeCrusher` (11.7), `HammerCrusher` (11.3),
+  `ImpactCrusher` (11.4) and `RollerCrusher` (11.6); `HammerMill` (11.9),
+  `ImpactMill` (11.10), `RollerMill` (11.11) and `VibratingMill` (11.12).
+  A **ball or rod mill** is drawn as the plain `Mill`: the standard tabulates
+  neither.
+
+  Item 11.1 X8084, the general crushing/grinding machine, is deliberately not
+  drawn. It means "a crusher or a mill, unspecified", and an author who is
+  writing the tag knows which machine is on order.
+
+  `crusher/default` and `mill/default` are the first whole drawings in the
+  library to carry a `Symbol.iso_reg`, because they are the first drawn *from*
+  a Table 2 row rather than vendored and matched to one afterwards.
+
+  These are the eleven symbols draw.io has no stencil for; each exports as a
+  documented rectangle, with the composed mark still drawn as a child cell.
+
 - **A filter that makes a cake can now draw it.** A press separates a slurry
   into two products, and until now only one of them had a nozzle — so the cake
   had to be drawn as the filtrate, which is the sheet saying the solids leave

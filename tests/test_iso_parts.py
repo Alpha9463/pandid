@@ -132,15 +132,21 @@ def test_each_group_ships_the_items_it_was_drawn_for():
     assert default_registry.part_names(20) == ["motor"]
 
 
-def test_the_marks_beyond_the_composed_three_are_artwork_only():
-    """Drawing 29.4 to 29.14 registered eleven parts and no keyword.
+def test_a_mark_is_a_separator_keyword_only_where_iso_composes_a_separator():
+    """``Separator(characteristic=)`` names the three rows ISO itself composes
+    and numbers in group 8, and artwork alone does not add a fourth: a mark is a
+    keyword only once someone can point at the Table 1 row the composition *is*.
 
-    ``Separator(characteristic=)`` names the three rows ISO itself composes and
-    numbers, and adding artwork does not add a fourth: a mark is a keyword only
-    once someone can point at the Table 1 row the composition *is*. The eleven
-    crushing marks have no such row here yet -- their bodies are group 11, which
-    pandid draws from whole stencils -- so they are available to compose with
-    and not yet composed.
+    Six of the eleven crushing marks now have such a row, and it is in **group
+    11** -- ``crusher/jaw`` is item 11.5 X8047, ``mill/vibration`` is 11.12
+    X8054, and so on. That is what put them in the registry, and it is a claim
+    about a crusher body rather than about a separating vessel: a settling
+    chamber with a pair of gearwheels in it is not a symbol ISO has.
+
+    ``crushing``, ``jet``, ``liquid``, ``disc`` and ``gear`` are the five with
+    no composed row anywhere yet -- 11.1 X8084 is not drawn (see
+    ``SymbolRegistry._register_crushing_machines``) and 29.10, 29.13, 29.4 and
+    29.6 are marks Table 2 uses only in rows pandid has no body for.
     """
     from pandid.units import Separator
 
@@ -149,6 +155,75 @@ def test_the_marks_beyond_the_composed_three_are_artwork_only():
         assert default_registry.part(29, name)
         with pytest.raises(ValueError):
             Separator("V-901", characteristic=name)
+
+
+def test_every_group_11_row_composes_the_mark_table_2_draws_in_it():
+    """The nine composed group-11 drawings, each against the part it carries.
+
+    Read off rows 11.3 to 11.12: the mark is the same glyph its own group-29 row
+    draws, at the same size, centred on the body's box. So this checks the pair
+    -- which characteristic, on which body -- rather than the geometry, which
+    ``crushing_overlays`` derives and the row below pins.
+    """
+    carried = {}
+    for (kind, variant), sym in default_registry._symbols.items():
+        if kind in ("crusher", "mill") and sym.overlays:
+            assert len(sym.overlays) == 1, f"{kind}/{variant} carries more than one mark"
+            carried[f"{kind}/{variant}"] = (sym.overlays[0].group, sym.overlays[0].name)
+    assert carried == {
+        "crusher/hammer": (29, "hammer"),  # 11.3  X8045 + 29.7  C2034
+        "crusher/impact": (29, "impact"),  # 11.4  X8046 + 29.8  C2035
+        "crusher/jaw": (29, "jaw"),  # 11.5  X8047 + 29.9  C2036
+        "crusher/roller": (29, "roller"),  # 11.6  X8048 + 29.11 C2037
+        "crusher/cone": (29, "cone"),  # 11.7  X8049 + 29.12 C2038
+        "mill/hammer": (29, "hammer"),  # 11.9  X8050 + 29.7  C2034
+        "mill/impact": (29, "impact"),  # 11.10 X8051 + 29.8  C2035
+        "mill/roller": (29, "roller"),  # 11.11 X8053 + 29.11 C2037
+        "mill/vibration": (29, "vibration"),  # 11.12 X8054 + 29.14 3831
+    }
+
+
+@pytest.mark.parametrize(
+    "name, modules",
+    [
+        ("crushing", (4, 4)),
+        ("hammer", (3, 3)),
+        ("impact", (4, 4)),
+        ("jaw", (5, 2)),
+        ("roller", (4, 2)),
+        ("cone", (4, 3)),
+    ],
+)
+def test_a_crushing_mark_lands_on_the_modules_table_2_draws_it_in(name, modules):
+    """Measured off rows 11.1 and 11.3 to 11.11, against a body box of x 7..17
+    and y 4..10 -- ten modules by six.
+
+    Every one of them is **centred**, and its size is its own group-29 row's, so
+    the rectangle ``crushing_overlays`` hands ``compose`` is fully determined by
+    the part's declared box. This is that arithmetic held to the modules
+    counted on the page: a mark that grew a module would still centre, and
+    would be the wrong size for the row it claims to be.
+    """
+    from pandid.render.iso_parts import CRUSHER_MODULES_H, CRUSHER_MODULES_W, crushing_overlays
+
+    w, h = modules
+    (overlay,) = crushing_overlays(name)
+    assert (overlay.w * CRUSHER_MODULES_W, overlay.h * CRUSHER_MODULES_H) == (w, h)
+    assert overlay.x == pytest.approx((CRUSHER_MODULES_W - w) / 2 / CRUSHER_MODULES_W)
+    assert overlay.y == pytest.approx((CRUSHER_MODULES_H - h) / 2 / CRUSHER_MODULES_H)
+
+
+def test_the_vibration_mark_is_squeezed_the_way_the_mill_row_squeezes_it():
+    """Item 29.14's own row draws the two arrows 3 M across; item 11.12 draws
+    them 2 M across, inside the drum. Both are the same part, and the row being
+    reproduced is 11.12's -- so ``mill/vibration`` is the one composition whose
+    mark is not at its own row's width, and it is deliberate.
+    """
+    from pandid.render.iso_parts import M, CRUSHER_MODULES_W, crushing_overlays
+
+    assert default_registry.part(29, "vibration").width == 3 * M
+    (overlay,) = crushing_overlays("vibration")
+    assert overlay.w * CRUSHER_MODULES_W == 2
 
 
 @pytest.mark.parametrize("part", PARTS, ids=IDS)

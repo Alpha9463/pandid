@@ -630,6 +630,37 @@ _APPROXIMATIONS = {
         None, "the V bottom the collected phase draws off through"),
     ("separator", "electromagnetic"): _Approximation(
         None, "the V bottom the collected phase draws off through"),
+    # ISO group 11. The vendored set has no crusher and no mill under any
+    # name, and the nearest built-in to a trapezoid is a rectangle: there
+    # is no ``trapezoid`` in mxGraph's own shapes or in draw.io's
+    # ``Shapes.js``, and naming a *stencil* for it is the silent-miss
+    # this whole table exists to avoid. So the mouth-and-throat outline
+    # goes, and with it the mark that says which of the two machines this
+    # is -- which is why both sentences below name it. The group-29
+    # characteristic inside is **not** lost on the nine composed
+    # variants: it is emitted as a child cell, as every composed part is.
+    ("crusher", "default"): _Approximation(
+        None, "the trapezoid outline and the two jaws drawn down it"),
+    ("crusher", "cone"): _Approximation(
+        None, "the trapezoid outline and the two jaws drawn down it"),
+    ("crusher", "hammer"): _Approximation(
+        None, "the trapezoid outline and the two jaws drawn down it"),
+    ("crusher", "impact"): _Approximation(
+        None, "the trapezoid outline and the two jaws drawn down it"),
+    ("crusher", "jaw"): _Approximation(
+        None, "the trapezoid outline and the two jaws drawn down it"),
+    ("crusher", "roller"): _Approximation(
+        None, "the trapezoid outline and the two jaws drawn down it"),
+    ("mill", "default"): _Approximation(
+        None, "the trapezoid outline and its chamfered top corners"),
+    ("mill", "hammer"): _Approximation(
+        None, "the trapezoid outline and its chamfered top corners"),
+    ("mill", "impact"): _Approximation(
+        None, "the trapezoid outline and its chamfered top corners"),
+    ("mill", "roller"): _Approximation(
+        None, "the trapezoid outline and its chamfered top corners"),
+    ("mill", "vibration"): _Approximation(
+        None, "the trapezoid outline, its chamfered top corners and the drum"),
 }
 
 #: What draw.io is asked for to draw one ISO 10628-2 supplementary part,

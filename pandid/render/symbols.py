@@ -1974,6 +1974,118 @@ _SEPARATING_VESSEL = Symbol(
 )
 
 
+#: ISO 10628-2 Table 2 group 11's outline, in drawing units.
+#:
+#: **Measured off rows 11.1 to 11.12, in grid modules:** top edge x 7..17
+#: at y 4, bottom edge x 9..15 at y 10. A 10 M x 6 M box holding a
+#: trapezoid 10 M across the top, 6 M across the bottom and 6 M deep.
+#: All twelve rows draw it and none of them draws anything else outside
+#: it, so it is the family's shared shape the way
+#: :data:`_SEPARATING_VESSEL` is group 8's.
+#:
+#: Drawn at :data:`~pandid.render.iso_parts.M` = 10 units to the module,
+#: so the box is 100 x 60 and **every coordinate below is its module
+#: count times ten** -- which is what keeps the group-29 marks composed
+#: into it undistorted, since a mark's rectangle is stated as a fraction
+#: of this box and the box has the standard's own proportions.
+_CRUSHER_W, _CRUSHER_H = 100.0, 60.0
+
+#: The trapezoid itself, as an SVG path. Not a symbol: **ISO tabulates no
+#: bare trapezoid**, and every one of the twelve rows adds something
+#: inside it, so registering the empty outline would put a drawing in the
+#: catalogue the standard does not have.
+_CRUSHER_OUTLINE = (
+    f'<path d="M 0 0 L {_CRUSHER_W:g} 0 L {_CRUSHER_W * 0.8:g} {_CRUSHER_H:g} '
+    f'L {_CRUSHER_W * 0.2:g} {_CRUSHER_H:g} Z" '
+    f'fill="white" stroke="#111" stroke-width="2"/>'
+)
+
+#: Where the mill's corner chord meets the sloping wall, in drawing
+#: units. The chord strikes the top edge 2,5 M in from the corner and
+#: falls **4 down for every 3 across** until it meets the wall; the wall
+#: runs (0,0) to (2,6) in modules, so x = y/3, and solving the two gives
+#: the foot at (10/13, 30/13) M. Read off row 11.8 and confirmed
+#: unchanged on 11.9 to 11.12.
+_MILL_CHORD_X, _MILL_CHORD_Y = 100 / 13, 300 / 13
+
+#: The nozzles every group-11 row draws, and the only two. Table 2 puts a
+#: connection tick on the centre line above the top edge and another
+#: below the bottom edge, and puts **no tick anywhere else on any of the
+#: twelve rows** -- so a crusher is fed from above and discharges below,
+#: and there is no drive connection to declare. Item 1.27's motor is the
+#: one drive ISO draws, and group 11 does not draw it; see
+#: :mod:`pandid.render.iso_parts` on ports.
+_CRUSHER_PORTS = {"feed": (_CRUSHER_W / 2, 0.0),
+                  "discharge": (_CRUSHER_W / 2, _CRUSHER_H)}
+
+
+def _crushing_machine(name: str, reg: str, *detail: str) -> Symbol:
+    """One group-11 body: the shared trapezoid plus what tells it apart.
+
+    A hopper takes its feed from above and drops its product out of the
+    bottom, and upside down it does neither, so every one of these is
+    ``gravity_fixed`` -- ISO 15519-1 §11.4.2's exception again, and the
+    same claim :data:`_SEPARATING_VESSEL` makes.
+
+    No ``drawio_shape``: the vendored stencil set has no crusher and no
+    mill under any name, which is why this is drawn here at all.
+
+    ``reg`` is empty for a body that reproduces no tabulated row, and is
+    the row's registration number otherwise -- the first two whole
+    drawings in the library to carry one. See
+    ``tests/test_composition.py`` for why that is not the backfill it
+    looks like.
+    """
+    return Symbol(
+        svg=f'<g id="sym_{name}">{_CRUSHER_OUTLINE}'
+            + "".join(detail) + "</g>",
+        width=_CRUSHER_W, height=_CRUSHER_H,
+        ports=dict(_CRUSHER_PORTS),
+        gravity_fixed=True,
+        iso_reg=reg,
+    )
+
+
+#: The crusher's own mark, ISO item 11.2 X8085: **two full-depth
+#: verticals** at x 9 and x 15, rising from the bottom corners to the top
+#: edge. Measured off row 11.2 and carried unchanged by 11.3 to 11.7.
+#: Drawn at the outline's weight because Table 2 draws it at the
+#: outline's weight, and because it is the body -- there is no group-29
+#: characteristic anything like it, so it is not a part and cannot be
+#: composed on.
+_CRUSHER_JAWS = (
+    f'<path d="M {_CRUSHER_W * 0.2:g} 0 L {_CRUSHER_W * 0.2:g} {_CRUSHER_H:g} '
+    f'M {_CRUSHER_W * 0.8:g} 0 L {_CRUSHER_W * 0.8:g} {_CRUSHER_H:g}" '
+    f'fill="none" stroke="#111" stroke-width="2"/>'
+)
+
+#: The mill's own mark, ISO item 11.8 X8086: **two chords cutting the top
+#: corners**, mirrored about the centre line. See :data:`_MILL_CHORD_X`
+#: for the construction. Carried unchanged by 11.9 to 11.12, and, like
+#: the crusher's verticals, nowhere in group 29 -- so also body and not
+#: part.
+_MILL_CHAMFERS = (
+    f'<path d="M 25 0 L {_MILL_CHORD_X:.4f} {_MILL_CHORD_Y:.4f} '
+    f'M 75 0 L {_CRUSHER_W - _MILL_CHORD_X:.4f} {_MILL_CHORD_Y:.4f}" '
+    f'fill="none" stroke="#111" stroke-width="2"/>'
+)
+
+#: The vibration mill's drum, ISO item 11.12 X8054: a 4 M circle on the
+#: body's centre, with 29.14's two arrows inside it.
+#:
+#: **It is body, not part, and that is the whole reason this constant
+#: exists.** Group 29 has no circle, so the drum has no registration
+#: number of its own and cannot be an :class:`OverlayPart`; but X8054
+#: draws it, so a mill carrying only 29.14 would not be X8054. Putting it
+#: in a body of its own -- unregistered, composed onto once -- is what
+#: lets the composed drawing claim the number honestly. Compare
+#: :data:`_SEPARATING_VESSEL`, which exists for the same reason.
+_VIBRATION_DRUM = (
+    f'<circle cx="{_CRUSHER_W / 2:g}" cy="{_CRUSHER_H / 2:g}" r="20" '
+    f'fill="none" stroke="#111" stroke-width="2"/>'
+)
+
+
 class SymbolRegistry:
     def __init__(self):
         self._symbols: dict[tuple[str, str], Symbol] = {}
@@ -2607,6 +2719,7 @@ class SymbolRegistry:
         from pandid.render.iso_parts import register_parts
         register_parts(self)
         self._register_composed()
+        self._register_crushing_machines()
 
     def _register_composed(self):
         """The three drawings ISO composes and gives a number of its own.
@@ -2671,6 +2784,84 @@ class SymbolRegistry:
                 [(o, self.part(o.group, o.name)) for o in overlays],
                 iso_reg=reg,
             ), name)
+
+    def _register_crushing_machines(self):
+        """ISO 10628-2 Table 2 group 11, all twelve rows of it.
+
+        The group is one trapezoid (:data:`_CRUSHER_OUTLINE`) drawn
+        twelve times, and the rows differ in two layers:
+
+        1. **The body's own mark**, which says whether the machine
+           crushes or grinds. 11.2 X8085 the crusher draws two full-depth
+           verticals, 11.8 X8086 the mill draws two chords across the top
+           corners, and 11.1 X8084 the general machine draws neither.
+           Neither mark appears anywhere in group 29, so neither is a
+           part, and the two bodies are whole registered drawings.
+        2. **A group-29 characteristic** inside it, which says *how*. Nine
+           of the twelve rows carry one, every one of them already drawn
+           in :mod:`pandid.render.iso_parts`, and each is centred on the
+           body's box at the size its own group-29 row draws it. So the
+           nine are compositions, and closing this group cost two bodies
+           rather than eleven drawings.
+
+        Item 11.1 X8084 is **deliberately not registered.** It is the
+        bare trapezoid carrying 29.5 crushing, and it means "a crusher or
+        a mill, unspecified" -- which is not a thing a sheet says, because
+        the author writing it knows which machine is on order.
+        :class:`~pandid.units.Crusher` and :class:`~pandid.units.Mill` ask
+        for one or the other, so registering X8084 would put a drawing in
+        the catalogue that no class can reach.
+
+        Item 11.12 X8054 is the one row that is not a body plus a part
+        alone: it draws a 4 M drum around 29.14's arrows, and a drum has
+        no group-29 number. :data:`_VIBRATION_DRUM` is why the number can
+        still be claimed -- see it.
+
+        ==============  ======  =====================================
+        item            reg     body + part
+        ==============  ======  =====================================
+        11.2            X8085   crusher, no mark
+        11.3            X8045   crusher + 29.7 C2034 hammer
+        11.4            X8046   crusher + 29.8 C2035 impact
+        11.5            X8047   crusher + 29.9 C2036 jaw
+        11.6            X8048   crusher + 29.11 C2037 roller
+        11.7            X8049   crusher + 29.12 C2038 cone
+        11.8            X8086   mill, no mark
+        11.9            X8050   mill + 29.7 C2034 hammer
+        11.10           X8051   mill + 29.8 C2035 impact
+        11.11           X8053   mill + 29.11 C2037 roller
+        11.12           X8054   mill and drum + 29.14 3831 vibration
+        ==============  ======  =====================================
+        """
+        from pandid.render.iso_parts import crushing_overlays
+
+        crusher = _crushing_machine("crusher", "X8085", _CRUSHER_JAWS)
+        mill = _crushing_machine("mill", "X8086", _MILL_CHAMFERS)
+        # The drum body. Registered nowhere and numbered nothing: it
+        # exists to be composed onto once, and X8054 is the *composition*
+        # rather than the body. That is _SEPARATING_VESSEL's job too.
+        drum = _crushing_machine("mill_vibration", "", _MILL_CHAMFERS, _VIBRATION_DRUM)
+        self.register("crusher", crusher)
+        self.register("mill", mill)
+
+        for kind, body, marks in (
+            ("crusher", crusher, (("hammer", "X8045"), ("impact", "X8046"),
+                                  ("jaw", "X8047"), ("roller", "X8048"),
+                                  ("cone", "X8049"))),
+            ("mill", mill, (("hammer", "X8050"), ("impact", "X8051"),
+                            ("roller", "X8053"))),
+            ("mill", drum, (("vibration", "X8054"),)),
+        ):
+            for name, reg in marks:
+                # ``registry=self``: this runs inside ``__init__``, so the
+                # module-level ``default_registry`` the helper would
+                # otherwise ask is the object still being built.
+                overlays = crushing_overlays(name, registry=self)
+                self.register(kind, compose(
+                    body,
+                    [(o, self.part(o.group, o.name)) for o in overlays],
+                    iso_reg=reg,
+                ), name)
 
 
 default_registry = SymbolRegistry()
