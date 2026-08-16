@@ -29,9 +29,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a different group-27 internal in it, so an absorber, a stripper, an adsorber
   and a molecular sieve are one drawing told apart by its tag.
 
-  An agitator brings a `drive` nozzle, at the top of the shaft where ISO item
-  1.27 X8006 draws the motor; a reactor without one has no `drive`. Trays,
-  supports and characteristics are marks no line reaches and bring nothing.
+  An agitator brings its motor and a `drive` nozzle on it; a reactor without
+  one has neither. Trays, supports and characteristics are marks no line
+  reaches and bring nothing.
+
+- **A stirred vessel is drawn with the motor that turns it.** ISO item 1.27
+  X8006 is one row and three marks — a dished-end vessel, a group-28 stirrer,
+  and item 20.6 C0082's electric motor above the top head on the stirrer's own
+  shaft — and pandid drew the first two. Now it draws all three:
+  `Reactor("R-101")` is a circle marked **M** over the crown, on a shaft
+  continuous from the motor's underside down to the blade.
+
+  **Always, and there is no keyword.** Group 1 has 29 rows, exactly one carries
+  an agitator, and it carries the motor too — so a stirred tank with nothing
+  turning it is not a symbol the standard has. pandid was already behaving as
+  though the motor existed: `drive` was justified in two docstrings by "ISO
+  draws the shaft running up to a motor above the vessel", and the motor was
+  not drawn.
+
+  The motor is item **20.6**, and ISO group 20 is DRIVES — whole machines, the
+  one thing `IsoPart` refuses to overlay. It is admitted by *item* rather than
+  by group, in `symbols.COMPOSED_APPARATUS`, and the licence is item 1.27
+  itself: the standard composes the motor onto the vessel and registers the
+  result, exactly as items 8.3, 8.6 and 8.8 license the three composed
+  separators. Group 20's other seven rows — a turbine, a gear, a generator —
+  are still refused, and so is the cyclone.
+
+  **Sheets with a stirred `Reactor` move.** The motor is drawn above the
+  vessel, so the drawing is about a third taller than the shell and every one
+  of the body's nozzles sits lower in the box. `drive` moves from the top of
+  the shaft to the top of the motor, which is now the top of the drawing;
+  examples 01, 05 and 10 are redrawn.
+
+- **A stirred reactor's `vent` is on the shell, not on the crown.** ISO item
+  1.27 draws a top head carrying nothing but the shaft, and pandid's geometry
+  agrees from the other side: a nozzle leaves by the box edge it is nearest, a
+  motor makes the box a third taller than the shell, and every point on the
+  crown of a vessel taller than it is wide is then nearer a side wall than the
+  top — so a vent left up there would take its stream out through the shell.
+  `reactor/default` moves it to the straight east wall just below the tangent
+  line and `reactor/jacketed` to the shell wall just above the jacket band.
+  Both are on drawn stroke, and both are stable under any later growth of the
+  box.
 
 - **`Reactor(variant="tubular")`, a plug-flow reactor**, and
   `Reactor(variant="jacketed")`, the stirred tank inside a heating jacket that
@@ -387,6 +426,15 @@ reader would otherwise take them for working code.
   off-lane charge beside it is.
 
 ### Fixed
+
+- **A composition that grows the box left its port series behind.**
+  `PortSeries` places its members in absolute coordinates along a face, and
+  `compose` carried it across untouched — so a part drawn *above* a body left a
+  stirred tank's charge nozzle at the middle of the box rather than the middle
+  of the shell, a fifth of the way down instead of half way. The series now
+  moves with the ink and its `extent` is re-expressed against the longer face.
+  Nothing had hit this: the supports are the only other parts that leave the
+  body's box, and they leave it downwards.
 
 - **A packed-bed reactor came out with a stirrer in the bed.**
   `Reactor(internals="packing")` drew the crossed-X packed bed *and* the

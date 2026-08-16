@@ -205,7 +205,14 @@ by a reader, and so a mark with no number cannot become a part at all. If you
 are unsure whether something composes, leave it a distinct symbol and say so in
 the PR. A false composition is worse than a missed one.
 
-**The artwork lives in `pandid/render/iso_parts.py`** — thirty-six parts, all
+The two halves of that rule part company exactly once, and
+`symbols.COMPOSED_APPARATUS` is where: item 20.6 is an electric motor, group 20
+is DRIVES, and item 1.27 X8006 draws it above a stirred vessel and registers
+the result. So it composes on the standard's own authority. The admission lists
+*items*, not groups, precisely so it cannot become a licence for the rest of
+group 20 — and a second entry needs a tabulated row of its own, named there.
+
+**The artwork lives in `pandid/render/iso_parts.py`** — thirty-seven parts, all
 original, all built to the construction Table 2 states rather than traced from
 its figures. Review a change to it with
 

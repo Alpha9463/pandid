@@ -341,7 +341,14 @@ def test_a_body_carrying_two_parts_keeps_both_and_their_order():
     unit = units.Reactor("R-301", internals="fluidised_bed", agitator="turbine")
     entry, rebuilt = _round_trip(unit)
     assert (entry["internals"], entry["agitator"]) == ("fluidised_bed", "turbine")
-    assert _drawn(unit) == [(27, "fluidised_bed", False), (28, "turbine", False)]
+    # ...and the motor on the end of the stirrer's shaft, which comes with it:
+    # ISO item 1.27 X8006 draws the two together and there is no keyword for
+    # the second, so nothing about it is written down either.
+    assert _drawn(unit) == [
+        (27, "fluidised_bed", False),
+        (28, "turbine", False),
+        (20, "motor", False),
+    ]
     assert _drawn(rebuilt) == _drawn(unit)
     assert _artwork(rebuilt) == _artwork(unit)
 
@@ -371,8 +378,8 @@ def test_a_unit_that_composes_nothing_gains_nothing(make):
 @pytest.mark.parametrize(
     ("make", "drawn"),
     [
-        (lambda: units.Reactor("R-101"), (28, "agitator")),
-        (lambda: units.Column("T-101"), (27, "tray")),
+        (lambda: units.Reactor("R-101"), {(28, "agitator"), (20, "motor")}),
+        (lambda: units.Column("T-101"), {(27, "tray")}),
     ],
 )
 def test_the_part_a_class_draws_by_itself_is_not_written_down(make, drawn):
@@ -380,11 +387,15 @@ def test_the_part_a_class_draws_by_itself_is_not_written_down(make, drawn):
 
     Only what differs from a default is written, here as everywhere else in the
     format, so the entry for an ordinary reactor is the entry it always was.
+
+    The reactor draws *two* parts and still writes nothing: the motor is item
+    1.27 X8006's, it arrives with the stirrer, and a part no keyword asks for
+    is a part no keyword records.
     """
     unit = make()
     entry, rebuilt = _round_trip(unit)
     assert set(entry) == {"kind", "name"}
-    assert {(group, name) for group, name, _ in _drawn(unit)} == {drawn}
+    assert {(group, name) for group, name, _ in _drawn(unit)} == drawn
     assert _drawn(rebuilt) == _drawn(unit)
 
 

@@ -1495,11 +1495,18 @@ and no stirrer. Name one anyway where the vessel really has both:
 `Reactor("R-203", agitator="turbine", internals="packing")` is a stirred slurry
 reactor and is drawn with the stirrer in the bed.
 
-**An agitator brings a nozzle.** ISO item 1.27 X8006 runs the stirrer's shaft up
-through the top head to a motor above the vessel, so a `Reactor` with an
-agitator has a `drive` connection at the top of that shaft and one without has
-none. Trays, supports and characteristics are marks that no line ever reaches
-and bring nothing.
+**An agitator is drawn with the motor that turns it, and the motor brings a
+nozzle.** ISO item 1.27 X8006 is a vessel, a group-28 stirrer, and item 20.6's
+electric motor above the top head on the stirrer's own shaft — so
+`agitator=` draws both, and there is no keyword to ask for the motor or to
+leave it out. A `Reactor` with an agitator has a `drive` connection at the top
+of the motor, and one without has none. Trays, supports and characteristics are
+marks that no line ever reaches and bring nothing.
+
+The motor is drawn *above* the vessel, so a stirred `Reactor`'s drawing is
+about a third taller than its shell and its nozzles sit lower in the box than a
+bare one's. Its `vent` is on the shell just under the top head rather than on
+the crown, because the crown carries the shaft.
 
 **`trays=` counts whatever `internals=` names** — decks for a deck, beds for a
 bed. `Column("T-104", internals="packing", trays=2)` is a two-bed absorber. An
@@ -1515,6 +1522,12 @@ clearest case: group 29 has no vortex to compose one from, and ISO 14617-1 §4.5
 names X2618 by registration number as a symbol in its own right, so
 `Separator(variant="cyclone")` is the way to ask for a hydrocyclone and is not
 going anywhere.
+
+The stirred vessel's motor is the one thing composed from outside those four
+groups, and it is composed on the standard's own authority rather than in spite
+of it: item 20.6 is a *drive*, a whole machine, and item 1.27 X8006 draws it
+inside another symbol and registers the result. Nothing else in group 20
+follows it — a turbine or a generator is a unit with a tag of its own.
 
 ---
 

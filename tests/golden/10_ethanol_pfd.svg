@@ -490,7 +490,7 @@
     <symbol id="sym_hex_kettle_s120x44" viewBox="0 0 120 44" overflow="visible"><path d="M 5.901639 20 L 21.639344 20 L 21.639344 40 L 5.901639 40 A 10 5.901639 90 0 1 0 30 A 10 5.901639 90 0 1 5.901639 20 M 25.57377 20 L 34.754098 20 L 54.42623 0 L 113.442623 0 A 20 6.557377 90 0 1 120 20 A 20 6.557377 90 0 1 113.442623 40 L 25.57377 40 Z M 5.901639 20 L 5.901639 40 M 54.42623 0 L 54.42623 40 M 113.442623 0 L 113.442623 40" fill="white" stroke="#111" stroke-width="2"/><rect x="21.639344" y="16" width="3.934426" height="28" fill="white" stroke="#111" stroke-width="2"/></symbol>
     <symbol id="sym_hex_straight_tubes_s150x45" viewBox="0 0 100.0 30.0" overflow="visible"><rect x="0.0" y="0.0" width="100.0" height="30.0" fill="white" stroke="#111" stroke-width="1.33333"/><path d="M 15.0 0.0 L 15.0 30.0 M 85.0 0.0 L 85.0 30.0 M 85.0 7.5 L 15.0 7.5 M 85.0 15.0 L 15.0 15.0 M 85.0 22.5 L 15.0 22.5" fill="none" stroke="#111" stroke-width="1.33333"/></symbol>
     <symbol id="sym_mixer" viewBox="0 0 50.0 50.0" overflow="visible"><polygon points="0,0 50,25 0,50" fill="none" stroke="black" stroke-width="2"/></symbol>
-    <symbol id="sym_reactor_c77394cc3_s80x100" viewBox="0 0 80 100" overflow="visible"><path d="M 0 7.5 A 40 7.5 0 0 1 40 0 A 40 7.5 0 0 1 80 7.5 L 80 92.5 A 40 7.5 0 0 1 40 100 A 40 7.5 0 0 1 0 92.5 Z" fill="white" stroke="#111" stroke-width="1.999941"/><line x1="40" y1="0" x2="40" y2="66.5" fill="none" stroke="black" stroke-width="1.000004"/><path d="M 20.8 57 L 20.8 76 M 20.8 57 L 59.2 76 M 59.2 57 L 59.2 76" fill="none" stroke="black" stroke-width="1.000004"/></symbol>
+    <symbol id="sym_reactor_cace69d09_s80x100" viewBox="0 0 80 100" overflow="visible"><path d="M 0 29.806083 A 40 5.691399 0 0 1 40 24.114684 A 40 5.691399 0 0 1 80 29.806083 L 80 94.308601 A 40 5.691399 0 0 1 40 100 A 40 5.691399 0 0 1 0 94.308601 Z" fill="white" stroke="#111" stroke-width="1.999941"/><line x1="40" y1="15.682991" x2="40" y2="73.524524" fill="none" stroke="black" stroke-width="1.000001"/><path d="M 20.8 65.261448 L 20.8 81.7876 M 20.8 65.261448 L 59.2 81.7876 M 59.2 65.261448 L 59.2 81.7876" fill="none" stroke="black" stroke-width="1.000001"/><ellipse cx="40.000052" cy="7.841488" rx="13.333342" ry="7.841488" fill="none" stroke="black" stroke-width="0.999999"/><path d="M 35.000048 11.762232 L 35.000048 3.920744 L 40.000052 7.841488 L 45.000055 3.920744 L 45.000055 11.762232" fill="none" stroke="black" stroke-width="0.999999"/></symbol>
     <symbol id="sym_tee" viewBox="0 0 12.0 12.0" overflow="visible"><path d="M 0 6 L 12 6 M 6 6 L 6 12" fill="none" stroke="black" stroke-width="2"/></symbol>
     <symbol id="sym_vessel_horizontal_s110x36" viewBox="0 0 110 36" overflow="visible"><path d="M 6.936612 36 L 103.111475 36 A 18 6.93565 90 0 0 110.047126 18 A 18 6.93565 90 0 0 103.111475 0 L 6.936612 0 A 18 6.93565 90 0 0 0.000962 18 A 18 6.93565 90 0 0 6.936612 36 Z M 6.936612 0 L 6.936612 36 M 103.111475 0 L 103.111475 36" fill="white" stroke="#111" stroke-width="2"/></symbol>
   </defs>
@@ -511,7 +511,7 @@
     <use href="#sym_tee" x="775.75" y="217.75" width="12.0" height="12.0" transform="rotate(90, 781.75, 223.75)" />
     <use href="#sym_hex_kettle_s120x44" x="640" y="420" width="120" height="44" />
     <use href="#sym_hex_straight_tubes_s150x45" x="900" y="510" width="150" height="45" />
-    <use href="#sym_reactor_c77394cc3_s80x100" x="560" y="620" width="80" height="100" />
+    <use href="#sym_reactor_cace69d09_s80x100" x="560" y="620" width="80" height="100" />
     <use href="#sym_mixer" x="1120" y="517.5" width="50.0" height="50.0" />
     <use href="#sym_filter_press_s120x60" x="1250" y="512.5" width="120" height="60" />
     <use href="#sym_tee" x="1400" y="536.5" width="12.0" height="12.0" />
@@ -528,8 +528,8 @@
   </g>
   <g id="streams">
     <path d="M 190.0,311.25 L 430.0,311.25" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 190.0,570.0 L 535.0,570.0 L 535.0,663.0 L 560.0,663.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 190.0,677.3 L 535.0,677.3 L 535.0,677.0 L 560.0,677.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 190.0,570.0 L 535.0,570.0 L 535.0,676.7453529940383 L 560.0,676.7453529940383" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 190.0,677.3 L 535.0,677.3 L 535.0,687.3692972395788 L 560.0,687.3692972395788" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 781.7486338797814,229.75 L 781.7486338797814,275.0 L 1330,275.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 485.0,180.0 L 485.0,112.08" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 485.0,63.92 L 485.0,31.0 L 675.0,31.0 L 675.0,118.0 L 700.0,118.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />

@@ -13,9 +13,9 @@ and nothing else on this sheet would show it. Purely for inspection, not part
 of the package.
 
 ``--parts`` draws the other half of the library instead: the ISO 10628-2
-groups 26-29 supplementary symbols (``pandid/render/iso_parts.py``), which the
-default sheet cannot show because a part is not a symbol and is not in the
-registry a symbol lookup reads. Each cell names the Table 2 item and
+groups 26-29 supplementary symbols and item 20.6's motor
+(``pandid/render/iso_parts.py``), which the default sheet cannot show because a
+part is not a symbol and is not in the registry a symbol lookup reads. Each cell names the Table 2 item and
 registration number it claims to be, so a reader with the standard can check
 the drawing against the row. Below the parts, a grid of the compositions the library
 ships: each is built through the unit keyword printed under it and read back
@@ -165,7 +165,7 @@ def part_sheet(out: pathlib.Path):
          f'viewBox="0 0 {W} {H}">',
          f'<rect width="{W}" height="{H}" fill="white"/>',
          '<text x="20" y="34" font-family="sans-serif" font-size="20" '
-         f'font-weight="bold">ISO 10628-2 Table 2 groups 26-29: {len(parts)} parts</text>',
+         f'font-weight="bold">ISO 10628-2 Table 2 parts: {len(parts)} drawings</text>',
          '<text x="20" y="52" font-family="sans-serif" font-size="11" fill="#777">'
          'original artwork built to the standard&#8217;s construction; '
          'grid ticks are one 2,5 mm module apart</text>']

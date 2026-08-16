@@ -62,7 +62,7 @@ child cell per part**, each placed by the same fractions of the body's
 box the SVG uses (:meth:`DrawioRenderer._overlay_cells`), so the two
 backends draw the same parts in the same places from one set of numbers.
 The ten group-28 agitators name draw.io's own ``mxgraph.pid.agitators``
-stencils; the other twenty-six parts have :data:`_PART_APPROXIMATIONS`,
+stencils; the other twenty-seven parts have :data:`_PART_APPROXIMATIONS`,
 which is :data:`_APPROXIMATIONS` for parts and carries the same sentence
 each about what its stand-in loses.
 
@@ -689,6 +689,11 @@ _PART_APPROXIMATIONS = {
     (27, "packing"): _Approximation(
         "partialRectangle", "the X across the bed",
         keys=("left=0", "right=0", "dashed=1", "dashPattern=8 4")),
+    # ---- group 20, drives ----
+    # A circle with an M in it. ``ellipse`` draws the circle; the letter
+    # would have to be the cell's own ``value``, and that is the tag
+    # column -- a child cell lettered "M" would read as a second unit.
+    (20, "motor"): _Approximation("ellipse", "the M inside the circle"),
     # ---- group 29, internal characteristics ----
     # A down arrow. draw.io's triangle turned south is its head; the shaft
     # above it has no built-in that is not a second cell.

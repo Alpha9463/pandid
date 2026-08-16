@@ -1,4 +1,8 @@
-"""The ISO 10628-2 groups 26-29 artwork, held to the table it claims to be.
+"""The ISO 10628-2 part artwork, held to the table it claims to be.
+
+Groups 26-29, and item 20.6 the motor -- which is not a part at all, and is
+drawn here because item 1.27 X8006 draws it above a stirred vessel and
+registers the composition. ``symbols.COMPOSED_APPARATUS`` is the admission.
 
 ``tests/test_composition.py`` holds the *mechanism* -- what ``compose`` does
 with a body and a part. This file holds the *drawings*: that each one names a
@@ -55,6 +59,11 @@ TABLE_2 = {
     (28, "propeller"): ("28.8", "C2025", "Agitator, propeller type"),
     (28, "disc"): ("28.9", "C2026", "Agitator, disc type"),
     (28, "turbine"): ("28.10", "C2027", "Agitator, turbine type"),
+    # Not a part, and here on the standard's own authority rather than on the
+    # rule the other thirty-six are here on: group 20 is DRIVES, and item 1.27
+    # X8006 draws this one above a stirred vessel. See
+    # ``symbols.COMPOSED_APPARATUS``.
+    (20, "motor"): ("20.6", "C0082", "Electric motor (general)"),
     (29, "gravity"): ("29.1", "C2028", "Gravity type, settling type"),
     (29, "electrostatic"): ("29.2", "C2030", "Electrostatic type"),
     (29, "electromagnetic"): ("29.3", "C2031", "Electromagnetic type"),
@@ -115,8 +124,12 @@ def test_each_group_ships_the_items_it_was_drawn_for():
     is why ISO 8.10 X2618 is a symbol of its own, and no spray, which is why
     8.7 X8033 cannot be composed either.
     """
-    counts = {g: len(default_registry.part_names(g)) for g in (26, 27, 28, 29)}
-    assert counts == {26: 4, 27: 8, 28: 10, 29: 14}
+    counts = {g: len(default_registry.part_names(g)) for g in (20, 26, 27, 28, 29)}
+    assert counts == {20: 1, 26: 4, 27: 8, 28: 10, 29: 14}
+    # One of group 20's eight, and the only one ISO draws inside another
+    # apparatus. The other seven -- turbine, gear, generator -- are machines
+    # that carry a tag of their own, and pandid draws those as whole symbols.
+    assert default_registry.part_names(20) == ["motor"]
 
 
 def test_the_marks_beyond_the_composed_three_are_artwork_only():
@@ -144,7 +157,7 @@ def test_a_part_is_asked_for_by_group_and_name(part):
 
 
 def test_every_part_that_draw_io_has_a_shape_for_names_it():
-    """Ten of the thirty-six, and they are draw.io's whole agitator set.
+    """Ten of the thirty-seven, and they are draw.io's whole agitator set.
 
     ``mxgraph.pid.agitators`` has exactly ten shapes and they are ISO group
     28's ten, item for item -- so a composed reactor exports with a real
@@ -220,12 +233,18 @@ def test_only_the_two_iso_dash_pitches_are_used():
 
 
 @pytest.mark.parametrize("part", PARTS, ids=IDS)
-def test_only_an_agitator_brings_a_connection(part):
-    """ISO item 1.27 (X8006) runs the stirrer's shaft up through the top head
-    to a motor drawn above the vessel, so an agitator's drive is a real
-    connection at a real place. A tray and a settling arrow are marks inside a
-    body that no line ever reaches."""
-    if part.iso.group == 28:
+def test_only_the_motor_brings_a_connection(part):
+    """``drive`` is where the power arrives, and on ISO item 1.27 (X8006) that
+    is the motor: the shaft under it is welded to it, not connected to it. A
+    tray, a settling arrow and a stirrer are marks inside or under a body that
+    no line ever reaches.
+
+    The ten agitators anchored this until the motor was drawn, which was right
+    while the top of the shaft was the top of the drawing. It is not any more --
+    the crown is mid-shaft -- and a nozzle left there would be nearest a *side*
+    of the grown box and would take its stream out through the shell.
+    """
+    if part.iso.group == 20:
         assert set(part.ports) == {"drive"}
         assert part.ports["drive"] == (part.width / 2, 0.0)
     else:
@@ -322,21 +341,51 @@ def test_a_part_is_drawn_at_its_declared_weight_however_it_is_scaled(part):
     assert f'stroke-width="{_SYMBOL_STROKE:g}"' in out.svg
 
 
-def test_an_agitators_drive_lands_on_the_body_and_the_bodys_nozzles_survive():
-    """The rectangle is the agitator's own 1:2 aspect, which is what a caller
-    has to give an unstretchable part: ``compose`` letterboxes one that is not
-    stretchable, so a taller rectangle would centre the shaft in it and leave
-    the drive floating below the head it is meant to come through."""
+def test_a_motors_drive_lands_on_the_body_and_the_bodys_nozzles_survive():
+    """A part *adds* a connection to the body's rather than replacing one, and
+    the added one lands where the part's own coordinate says it does."""
     host = body()
-    # 0,4 x 80 = 32 wide and 0,32 x 200 = 64 tall, which is the part's own
-    # 4 M x 8 M at 0,8 and so has nothing left over to centre.
     out = compose(
-        host, [(Overlay(28, "turbine", 0.3, 0.05, 0.4, 0.32), default_registry.part(28, "turbine"))]
+        host, [(Overlay(20, "motor", 0.3, -0.2, 0.4, 0.16), default_registry.part(20, "motor"))]
     )
     assert set(out.ports) == {"inlet", "outlet", "drive"}
-    # 0.3 of 80 wide, plus half of the 0.4-wide rectangle: the shaft's top,
-    # on the centre line the caller placed it on, at the rectangle's own top.
-    assert out.ports["drive"] == (pytest.approx(40.0), pytest.approx(10.0))
+    # The motor is drawn entirely above the body -- its rectangle runs from
+    # -0,2 to -0,04 of a 200-tall box -- so the box grows by the 40 units its
+    # top edge hangs off the top and everything shifts down into it.
+    assert (out.width, out.height) == (80.0, 240.0)
+    # The drive is at the top of the motor, so it lands on the composed
+    # drawing's own top edge, on the centre line of the rectangle it was given.
+    assert out.ports["drive"] == (pytest.approx(40.0), pytest.approx(0.0))
+    assert out.ports["inlet"] == (0.0, host.ports["inlet"][1] + 40.0)
+
+
+def test_a_stirred_vessel_is_drawn_with_the_motor_that_turns_it():
+    """ISO item 1.27 X8006 is one row and three marks: the vessel, a group-28
+    stirrer, and item 20.6's motor above the top head on the stirrer's own
+    shaft. So ``agitator=`` places two parts, and there is no keyword for the
+    second -- group 1 has 29 rows, exactly one carries an agitator, and it
+    carries the motor too.
+
+    The numbers are 1.27's, read against its 6 M x 9 M body box: the motor is
+    2 M across a 6 M shell and sits 1 M clear of a 9 M body's crown, with the
+    shaft one continuous stroke from its underside down to the blade.
+    """
+    stirrer, motor = iso_parts.agitator_overlays("turbine", "reactor", "default")
+    assert (stirrer.group, stirrer.name) == (28, "turbine")
+    assert (motor.group, motor.name) == (20, "motor")
+    reactor = default_registry.get("reactor", "default")
+    # A third of the shell's width, centred on it...
+    assert motor.w == pytest.approx(1 / 3)
+    assert motor.x + motor.w / 2 == pytest.approx(0.5)
+    # ...and round, which is the one thing a fraction of a box cannot say by
+    # itself: the height is derived from the body it is being placed on.
+    assert motor.h * reactor.height == pytest.approx(motor.w * reactor.width)
+    # A ninth of the body's height of clear air between the two, with the
+    # stirrer's rectangle reaching up to meet the circle exactly.
+    assert motor.y + motor.h == pytest.approx(-1 / 9)
+    assert stirrer.y == pytest.approx(-1 / 9)
+    # The blade did not move: only the top edge went negative.
+    assert stirrer.y + stirrer.h == pytest.approx(0.76)
 
 
 def test_a_composed_body_stretches_exactly_as_the_bare_one_does():

@@ -319,7 +319,7 @@ def register_vendored(registry):
     registry.register('reactor', Symbol(
         svg='<g id="sym_reactor"><g transform="scale(0.62, 0.5)"><path d="M 0.0 15.0 A 50.0 15.0 0.0 0 1 50.0 0.0 A 50.0 15.0 0.0 0 1 100.0 15.0 L 100.0 185.0 A 50.0 15.0 0.0 0 1 50.0 200.0 A 50.0 15.0 0.0 0 1 0.0 185.0 Z" fill="white" stroke="#111" stroke-width="3.592"/></g></g>',
         width=62.0, height=100.0,
-        ports={'outlet': (31.0, 100.0), 'duty': (62.0, 50.0), 'vent': (46.5, 1.0)},
+        ports={'outlet': (31.0, 100.0), 'duty': (62.0, 50.0), 'vent': (62.0, 10.0)},
         drawio_shape='mxgraph.pid.vessels.pressurized_vessel',
         # must not be turned: top-entering agitator over a dished bottom
         gravity_fixed=True,
@@ -341,7 +341,7 @@ def register_vendored(registry):
     registry.register('reactor', Symbol(
         svg='<g id="sym_reactor_jacketed"><path d="M 46.0 7.69 L 46.0 87.69 A 20.0 7.6923 0.0 0 1 26.0 95.3823 A 20.0 7.6923 0.0 0 1 6.0 87.69 L 6.0 7.69 A 20.0 7.6923 0.0 0 1 26.0 -0.0023 A 20.0 7.6923 0.0 0 1 46.0 7.69 Z M 6.0 7.69 L 46.0 7.69 M 6.0 87.69 L 46.0 87.69" fill="white" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="12.69" width="6.0" height="70.0" fill="white" stroke="#111" stroke-width="2.0"/><rect x="46.0" y="12.69" width="6.0" height="70.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
         width=52.0, height=95.4,
-        ports={'outlet': (26.0, 95.4), 'duty': (52.0, 47.7), 'vent': (14.0, 1.5)},
+        ports={'outlet': (26.0, 95.4), 'duty': (52.0, 47.7), 'vent': (46.0, 10.0)},
         drawio_shape='mxgraph.pid.vessels.vessel_(dished_ends,_heating-cooling_jacket)',
         # must not be turned: top-entering agitator over a dished bottom, inside its jacket
         gravity_fixed=True,
