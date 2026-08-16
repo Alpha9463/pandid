@@ -239,7 +239,14 @@ class Flowsheet:
         # equipment list all iterate `units` unconditionally, and a loop
         # draws nothing.
         self.loops: list["Loop"] = []
-        self.warnings: list = []  # soft findings from the last render
+        # Soft findings from the last render, and only from it:
+        # `_prepare_to_draw` empties this before each one. A caller who
+        # wants two renders' findings copies the list after each --
+        # accumulating them here would leave no way to tell a finding
+        # about the drawing in hand from one about a drawing that has
+        # since been fixed, and `check=False` would report an older
+        # render's list as though it were this one's.
+        self.warnings: list = []
         # Did the last route() settle its attached instruments, or run
         # out of passes still moving them? Read by validate(), which
         # carries the answer onto `warnings`.
@@ -1183,11 +1190,21 @@ class Flowsheet:
         list is one sheet's findings rather than one phase's.
 
         ``check=False`` skips both halves and resolves the geometry
-        alone, which is what it has always meant.
+        alone, which is what it has always meant. It does **not** leave
+        the previous render's findings standing: ``warnings`` is emptied
+        here either way, so an empty list after a ``check=False`` render
+        means nothing was found rather than nothing was looked for.
         """
         from pandid.render.svg import draws_arrowheads
         from pandid.validate import geometry_issues, model_issues
 
+        # ``warnings`` describes *this* render. Emptied at the top rather
+        # than assigned at the bottom, because only the `check` branch
+        # assigns it and the renderers append to it afterwards, so a
+        # `check=False` render used to answer with the last checked
+        # render's findings and a caller could not tell that list from an
+        # honestly empty one.
+        self.warnings = []
         # Before the model check, not after: `stream-name-reused` reads
         # the names, and `new_line_number` set after the last connect()
         # regroups the runs and so changes them.

@@ -1284,3 +1284,94 @@ def test_warnings_from_both_halves_land_on_the_sheet_together():
     fs.to_svg()
     assert "letter-sequence" in [w.code for w in fs.warnings]
     assert all(w.severity == "warning" for w in fs.warnings)
+
+
+# --- what the sheet drew but nothing said -------------------------------------
+
+
+def test_a_kind_with_no_artwork_is_named_rather_than_drawn_blank():
+    """Two spellings of one mistake were handled oppositely.
+
+    An unregistered *variant* of a registered kind raises and names the
+    catalogue; the same typo one key up drew an empty 60x60 box with no ports,
+    under an id that looks like the author's symbol, and said nothing.
+    """
+
+    class Widget(U.Unit):
+        kind = "pumpp"
+
+    fs = Flowsheet("blank")
+    fs.add(Widget("X-1"))
+    fs.add(Widget("X-2"))
+    fs.to_svg()
+    found = [w for w in fs.warnings if w.code == "symbol-kind-unknown"]
+    # One per kind, not one per unit: two Widgets are one thing to fix.
+    assert len(found) == 1
+    assert "X-1" in found[0].message
+    assert "'pumpp'" in found[0].message
+    assert "did you mean 'pump'?" in found[0].message
+    assert "60x60" in found[0].message
+
+    # ...and the registered kinds are not accused of anything.
+    clean = Flowsheet("clean-kinds")
+    f = clean.add(U.Feed("F"))
+    p = clean.add(U.Product("P"))
+    clean.connect(f.outlet, p.inlet)
+    clean.to_svg()
+    assert "symbol-kind-unknown" not in [w.code for w in clean.warnings]
+
+
+def test_a_block_letters_its_name_out_of_a_box_it_was_given():
+    """A width the author set wins outright, so the name overflows it.
+
+    ``block_symbol`` widens a box it sizes itself, so this can only reach a
+    block given a ``width`` of its own -- and a section name centred on a
+    120-wide box hangs a long way out of each side of it, silently.
+    """
+    fs = Flowsheet("bfd")
+    a = fs.add(U.Block("Fermentation and Beer Stripping Section", width=120))
+    b = fs.add(U.Block("Recovery"))
+    fs.connect(a.out_1, b.in_1)
+    fs.to_svg()
+    found = [w for w in fs.warnings if w.code == "label-overruns-symbol"]
+    assert len(found) == 1
+    assert "Fermentation and Beer Stripping Section" in found[0].message
+    assert "120" in found[0].message
+
+
+def test_a_block_that_sizes_itself_always_fits_its_name():
+    """The other half of the rule, so the check cannot be firing on everything."""
+    fs = Flowsheet("bfd-auto")
+    a = fs.add(U.Block("Fermentation and Beer Stripping Section"))
+    b = fs.add(U.Block("Recovery"))
+    fs.connect(a.out_1, b.in_1)
+    fs.to_svg()
+    assert "label-overruns-symbol" not in [w.code for w in fs.warnings]
+
+
+def test_warnings_describe_the_last_render_and_nothing_earlier():
+    """``fs.warnings`` was only ever *assigned* inside ``if check:``.
+
+    So after a ``check=False`` render it still held the previous render's
+    findings, and a caller could not tell a stale list from an empty one.
+    """
+    fs = Flowsheet("stale")
+    f = fs.add(U.Feed("F")).pin(x=60, y=100)
+    p = fs.add(U.Product("P")).pin(x=400, y=100)
+    fs.connect(f.outlet, p.inlet)
+    fs.add_instrument("FCI", 1, near=f)  # out of ISO 15519-2 order
+
+    fs.to_svg()
+    assert "letter-sequence" in [w.code for w in fs.warnings]
+    # A caller who wants two renders' findings keeps them; the sheet does not.
+    kept = list(fs.warnings)
+
+    fs.to_svg(check=False)
+    assert fs.warnings == []
+    assert kept, "the copy is the caller's, and is untouched by the next render"
+
+    # ...and a checked render fills it again rather than appending to a list
+    # that has been growing since the first one.
+    fs.to_svg()
+    fs.to_svg()
+    assert [w.code for w in fs.warnings].count("letter-sequence") == 1

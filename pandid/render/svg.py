@@ -2312,9 +2312,27 @@ def _scale_text(s: float) -> str:
     return "1:1" if s >= 1.0 else f"1:{1 / s:.3g}"
 
 
-# Findings this renderer raises about text that did not fit the cell
-# drawn for it, as against the validator's findings about the diagram.
+# Findings a renderer raises about text that did not fit the cell drawn
+# for it, as against the validator's findings about the diagram.
 _FIT_CODES = ("text-truncated", "text-overruns-cell")
+
+
+def fit_issue(field: str, text: str, drawn: str) -> Issue:
+    """One :data:`_FIT_CODES` finding, from what a cell was given and
+    what it drew.
+
+    The shape :data:`~pandid.render.furniture.Reporter` reports in, made
+    into an :class:`~pandid.validate.Issue` here rather than in each
+    backend: the draw.io exporter measures the same title strip with the
+    same functions, so the sentence a reader gets must not depend on
+    which file they exported.
+    """
+    if drawn != text:
+        return Issue("warning", "text-truncated",
+                     f"{field} was truncated to fit its cell: "
+                     f"{text!r} drawn as {drawn!r}")
+    return Issue("warning", "text-overruns-cell",
+                 f"{field} is wider than the cell it is drawn in: {text!r}")
 
 
 def _too_small(sheet: _Sheet, need_w: float, need_h: float,
@@ -2523,13 +2541,7 @@ class SvgRenderer:
         fit_issues: list[Issue] = []
 
         def report(field: str, text: str, drawn: str) -> None:
-            fit_issues.append(
-                Issue("warning", "text-truncated",
-                      f"{field} was truncated to fit its cell: "
-                      f"{text!r} drawn as {drawn!r}")
-                if drawn != text else
-                Issue("warning", "text-overruns-cell",
-                      f"{field} is wider than the cell it is drawn in: {text!r}"))
+            fit_issues.append(fit_issue(field, text, drawn))
 
         # Furniture belongs to the sheet, not to the border: a title
         # block or a docked box is drawn because it was supplied. A zone

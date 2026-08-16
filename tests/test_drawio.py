@@ -239,6 +239,92 @@ def test_a_referenced_stencil_is_always_variable_aspect():
 
 
 # ---------------------------------------------------------------------------
+# ...and the sentence is said, not merely written down.
+# ---------------------------------------------------------------------------
+
+
+def _codes(fs: Flowsheet) -> list[str]:
+    return [w.code for w in fs.warnings]
+
+
+def test_a_stand_in_says_on_fs_warnings_what_it_lost():
+    """``_Approximation.lost`` was written for every stand-in and read by nothing.
+
+    A ``Conveyor`` exports as a bare rectangle -- the belt and its two rollers
+    gone -- and ``fs.warnings`` was empty, which is the same answer an export
+    that lost nothing gives.
+    """
+    fs = Flowsheet("lost")
+    feed = fs.add(units.Feed("F"))
+    belt = fs.add(units.Conveyor("CV-101"))
+    prod = fs.add(units.Product("P"))
+    fs.connect(feed.outlet, belt.feed)
+    fs.connect(belt.discharge, prod.inlet)
+
+    fs.to_drawio()
+    said = [w for w in fs.warnings if w.code == "drawio-approximated"]
+    assert len(said) == 1
+    assert "CV-101" in said[0].message
+    assert _APPROXIMATIONS[("conveyor", "default")].lost in said[0].message
+
+    # The SVG loses nothing, so it says nothing -- and a second export replaces
+    # the first export's findings rather than stacking a second copy on them.
+    fs.to_svg()
+    assert "drawio-approximated" not in _codes(fs)
+    fs.to_drawio()
+    fs.to_drawio()
+    assert _codes(fs).count("drawio-approximated") == 1
+
+
+def test_a_stand_in_that_loses_nothing_says_nothing():
+    """``lost`` is empty where the built-in really is the drawing.
+
+    Eleven of the thirty entries claim to lose nothing -- a mixer, a splitter, a
+    tee, the boundary flags, the plain balloons -- and a warning against one of
+    those would be noise that teaches a reader to skip the list.
+    """
+    assert not _APPROXIMATIONS[("feed", "default")].lost, "the premise has moved"
+    fs = Flowsheet("exact")
+    feed = fs.add(units.Feed("F"))
+    prod = fs.add(units.Product("P"))
+    fs.connect(feed.outlet, prod.inlet)
+    fs.to_drawio()
+    assert "drawio-approximated" not in _codes(fs)
+
+
+def test_the_export_reports_a_title_block_cell_it_had_to_abbreviate():
+    """The sheet has said so since the cells were ruled; the export had not.
+
+    A ``.drawio`` file carrying a *wrong drawing number* on an issued sheet is
+    the cost, and it is one argument at one call site: both backends measure the
+    same strip with the same functions.
+    """
+    from pandid.document import TitleBlock
+
+    def sheet() -> Flowsheet:
+        fs = Flowsheet("strip")
+        feed = fs.add(units.Feed("F"))
+        prod = fs.add(units.Product("P"))
+        fs.connect(feed.outlet, prod.inlet)
+        fs.title_block = TitleBlock(
+            title="T",
+            drawing_number="PFD-A300-0001-REV-C-SHEET-1-OF-9-LONG",
+            status="ISSUED FOR CONSTRUCTION AND PROCUREMENT",
+        )
+        return fs
+
+    svg_sheet, drawio_sheet = sheet(), sheet()
+    svg_sheet.to_svg(page_size="A3")
+    drawio_sheet.to_drawio(page_size="A3")
+    truncated = [w for w in drawio_sheet.warnings if w.code == "text-truncated"]
+    assert {w.message for w in svg_sheet.warnings if w.code == "text-truncated"} == {
+        w.message for w in truncated
+    }
+    assert any("drawing_number" in w.message for w in truncated)
+    assert any("status" in w.message for w in truncated)
+
+
+# ---------------------------------------------------------------------------
 # A sheet carrying one of everything.
 # ---------------------------------------------------------------------------
 

@@ -356,7 +356,24 @@ def test_include_builds_a_schedule_of_its_own():
         ("FV-200", "Valve"),
         ("FV-100", "Feed Control Valve"),
     ]
-    assert _schedule(fs, include=["P-999"]) == []
+
+
+def test_include_refuses_a_tag_the_flowsheet_does_not_have():
+    """Naming a row asserts it exists, so a typo is a mistake and not a filter.
+
+    ``include=["P-101", "P-1O2"]`` -- letter O for zero -- used to draw a
+    schedule one line short of what it was asked for and say nothing about it,
+    on a sheet whose whole purpose is to list the equipment.
+    """
+    fs = Flowsheet("Valves")
+    fs.add(U.Pump("P-101", description="Feed Pump"))
+    with pytest.raises(ValueError) as excinfo:
+        _schedule(fs, include=["P-101", "P-1O2"])
+    message = str(excinfo.value)
+    assert "P-1O2" in message
+    assert "did you mean 'P-101'?" in message
+    # ...and the rows that do exist are still taken, in the order named.
+    assert _schedule(fs, include=["P-101"]) == [("P-101", "Feed Pump")]
 
 
 def test_stream_table_section_header():

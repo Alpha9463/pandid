@@ -536,6 +536,21 @@ reader would otherwise take them for working code.
 
 ### Fixed
 
+- **Six things the render dropped without saying so.** A draw.io stand-in that
+  does not draw all of a symbol now reports what it lost
+  (`drawio-approximated`); a title-block cell the `.drawio` export had to
+  abbreviate says which field, as the SVG already did; a `kind` no symbol is
+  registered for is named rather than drawn as a blank box
+  (`symbol-kind-unknown`); a `Block` whose name is wider than the `width` it was
+  given says so (`label-overruns-symbol`); and
+  `equipment_list(include=["P-1O2"])` raises `ValueError` naming the tag instead
+  of dropping the row.
+
+- **`fs.warnings` describes the last render and nothing earlier.** It is emptied
+  at the start of every render, `check=False` included, so an empty list means
+  nothing was found rather than nothing was looked for. Copy it if you want two
+  renders' findings.
+
 - **A composition that grows the box left its port series behind.**
   `PortSeries` places its members in absolute coordinates along a face, and
   `compose` carried it across untouched — so a part drawn *above* a body left a

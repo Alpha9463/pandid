@@ -73,7 +73,7 @@ neither stands in for the other.
 | `components` | `list[Component]` | |
 | `loops` | `list[Loop]` | declared control loops, in declaration order; never in `units` |
 | `auto_faces` | `bool` | engine picks movable ports' faces; default `True` |
-| `warnings` | `list[Issue]` | soft findings from the last render |
+| `warnings` | `list[Issue]` | soft findings from the last render, and only from it: emptied at the start of every render |
 | `title_block` | `TitleBlock \| None` | drawn whenever it is set |
 | `annotations` | `list` | sheet furniture boxes, drawn whenever they are added |
 | `stream_table_sections` | `list[tuple[str, str]]` | `(before_key, header_label)` |
@@ -462,6 +462,21 @@ approximated with draw.io's built-in shapes:
 | feed / product flag | a rectangle | the arrow point; the tag and the off-page reference are kept |
 | conveyor | a rectangle | the belt and its rollers |
 | block | a rectangle | nothing |
+
+Every row of that table with something in the last column is **reported**, as a
+`drawio-approximated` warning on `fs.warnings` naming the unit and what its
+stand-in lost. The rows that lose nothing say nothing. A title-block cell the
+strip had to abbreviate is reported too, in the same words the rendered sheet
+uses — an issued `.drawio` file carrying a shortened drawing number now says
+which field it shortened:
+
+```python
+fs.to_drawio(page_size="A3")
+for w in fs.warnings:
+    print(w)
+# [warning] drawio-approximated: CV-101 has no draw.io stencil and is exported
+#     as a stand-in, which loses the belt and its two rollers
+```
 
 The sheet's own drawing conventions survive the export: the semicircle a
 crossing line hops with, the cross-hatching on a pneumatic signal line, the fine
@@ -923,7 +938,9 @@ put a run on the shorter axis. A refused call leaves the block as it was.
 
 A width given also wins over the name, which then hangs out of both ends of the
 box. Labels are written on an opaque halo, so an overhanging one **erases
-whatever is drawn beside it**. Leave `width` off and it cannot happen.
+whatever is drawn beside it**. The render says so, as a `label-overruns-symbol`
+warning on `fs.warnings` naming the block and the width it needed. Leave `width`
+off and it cannot happen.
 
 A block is **not** scheduled: `equipment_list()` skips it, because a box
 standing for a whole section is not a purchasable item. `include=` still takes
@@ -2507,7 +2524,8 @@ fs.title_block = TitleBlock(title="Transfer and Relief U100", scale="NTS")
 The strip is fixed geometry, so a value too long for its cell is trimmed with an
 ellipsis rather than run across the rule into the cell beside it. The render
 says which field it trimmed, on `fs.warnings`, naming the field and quoting the
-value in full:
+value in full — `to_drawio()` as well as `to_svg()`, in the same words, since
+both measure one strip with one set of cell widths:
 
 ```python
 fs.title_block = TitleBlock(title="Ethanol Purification A300")
@@ -2574,7 +2592,9 @@ called (`E-101` reads `Heat Exchanger`).
 `include=[…]` names the rows explicitly instead, in the order given, and takes
 whatever it names. That is how a valve schedule, a real drawing in its own
 right, is built from the same flowsheet. A tag that is not on the flowsheet
-contributes no row.
+raises `ValueError`, naming it and the nearest tag that is: naming a row asserts
+it exists, and `include=["P-101", "P-1O2"]` used to draw a schedule one line
+short and say nothing.
 
 ```python
 from pandid.document import equipment_list, legend, notes
@@ -2719,9 +2739,15 @@ making, so the warnings left on `fs.warnings` are about the sheet that came out.
 | `stream-name-reused` | warning | auto-numbering picked a name another stream already answers to, so the two share one stream-table column and one of them is not tabulated at all. Only a *counted* name is reported: a run drawn in several `connect()` calls shares its name on purpose. See [Stream numbering](#stream-numbering) |
 | `route-not-settled` | warning | routing and instrument placement never agreed and `route()` ran out of passes; see [Routing and instrument placement](#routing-and-instrument-placement) |
 | `deprecated` | warning | the sheet was built with a spelling that is being retired. The message names the replacement and the release the old one stops working in; see [Deprecated API](#deprecated-api) |
+| `symbol-kind-unknown` | warning | a unit whose `kind` no symbol is registered for. It is drawn as a blank 60×60 box with no ports, which is what a `Unit` subclass from outside the package legitimately gets — and also what a misspelt `kind` gets. One finding per kind, with the nearest registered name |
+| `label-overruns-symbol` | warning | a `Block` given a `width` of its own too narrow for the name it letters inside the box, so the name is drawn out through both sides. A block left to size itself always fits |
+| `drawio-approximated` | warning | `to_drawio()` only: a symbol draw.io has no stencil for, exported as a built-in stand-in that does not draw all of it. The message names the unit and what the stand-in loses; see [Editing the sheet by hand](#editing-the-sheet-by-hand) |
 
 Errors raise from `to_svg()`/`render()` unless you pass `check=False`. Warnings
-never raise, and collect on `fs.warnings` after each render. Geometric checks
+never raise, and collect on `fs.warnings` after each render. That list describes
+**the last render and nothing earlier**: it is emptied at the start of every
+render, `check=False` included, so an empty list means nothing was found rather
+than nothing was looked for. Copy it if you want two renders' findings. Geometric checks
 need resolved frames, so they are made over the units that have one: before
 layout that is none of them, and after it a balloon layout could not place is
 the one unit skipped rather than the whole sheet.
@@ -2731,14 +2757,15 @@ the one unit skipped rather than the whole sheet.
 The findings split in two, and a render makes them at two different moments:
 
 1. **Model checks**, before anything is laid out or routed:
-   `pin-not-finite`, `pin-out-of-bounds`, `gravity-turned`,
-   `letter-sequence`, `nozzle-unconnected`, `stream-name-reused` and
-   `deprecated`. Every one of these is a property of what you wrote down.
+   `pin-not-finite`, `pin-out-of-bounds`, `symbol-kind-unknown`,
+   `gravity-turned`, `letter-sequence`, `nozzle-unconnected`,
+   `stream-name-reused` and `deprecated`. Every one of these is a property of
+   what you wrote down.
 2. `layout()` and `route()`.
 3. **Geometric checks**, over the frames and routes those produced:
    `unit-overlap`, `coincident-ports`, `nozzles-crowded`,
    `route-crosses-unit`, `route-detour`, `run-off-elevation`,
-   `instrument-unplaced` and `route-not-settled`.
+   `label-overruns-symbol`, `instrument-unplaced` and `route-not-settled`.
 
 An error from either half raises, so a model error raises before any geometry
 exists. That is the point of the order: `pin(x=float("nan"))` is a
@@ -3447,8 +3474,10 @@ Everything a shipped class has, a custom one has: `pin()`, `nozzle()`,
 
 ### The symbol
 
-Without a symbol the unit draws a generic box (below). To draw it properly,
-register a `Symbol` under the same `kind`:
+Without a symbol the unit draws a generic box (below) and every render says so,
+as a `symbol-kind-unknown` warning naming the unit and the kind — a blank box is
+also what a *misspelt* `kind` gets, and the two are the same file. To draw it
+properly, register a `Symbol` under the same `kind`:
 
 ```python
 from pandid.render.symbols import Symbol, default_registry
