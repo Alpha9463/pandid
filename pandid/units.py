@@ -142,6 +142,39 @@ class Unit:
     #: overrides it because it mints nozzles per signal connection.
     PORT_ANCHORS: dict[str, str] = {}
 
+    #: The composition keywords this class takes, each mapped to what it
+    #: means when the author states none. ``variant=`` chooses the
+    #: **body**; these choose the ISO 10628-2 supplementary parts drawn
+    #: in it, so a class that composes lists one entry per keyword and a
+    #: class that does not leaves this empty.
+    #:
+    #: **One declaration, read by everything that has to enumerate
+    #: them**: the constructor below, and both directions of
+    #: :mod:`pandid.spec`. That is the whole point of it. The keywords
+    #: shipped with the spec format knowing nothing about them, so
+    #: ``to_dict`` wrote none of them and ``from_dict`` put the class's
+    #: own part back in their place -- a different drawing, drawn without
+    #: complaint, with both directions agreeing that nothing had been
+    #: lost. A list restated in the serializer is what let that happen,
+    #: so there is no list to restate.
+    #:
+    #: A default of :data:`_UNSTATED` means the class works the answer
+    #: out from the variant; :meth:`composition_defaults` is where it
+    #: does, and is what a serializer asks rather than this.
+    COMPOSITION: dict[str, Any] = {}
+
+    #: The composition keyword this class folds into :attr:`variant`,
+    #: where it has one. ``Separator(characteristic="gravity")`` carries
+    #: ``variant == "gravity"`` afterwards, because the mark inside a
+    #: separating vessel *is* which drawing it is.
+    #:
+    #: Named here so a serializer can write the keyword the author typed
+    #: rather than the variant it folded to. The two are not
+    #: interchangeable on the way back in: the variant spelling is
+    #: deprecated, so a sheet written through it warns today and is
+    #: refused at 0.2.0. See :func:`pandid.spec._write_composition`.
+    COMPOSITION_VARIANT: str = ""
+
     #: The layout engine's solver scratch, seeded from :attr:`pin_` at
     #: the start of every run by ``pandid.layout._seed_slots`` and read
     #: by nothing outside that package. Declared rather than initialised
@@ -169,6 +202,22 @@ class Unit:
             if "PORTS" in klass.__dict__:
                 return list(klass.__dict__["PORTS"])
         return []
+
+    @classmethod
+    def composition_defaults(cls, variant: str) -> dict[str, Any]:
+        """What each composition keyword means on *variant*, unstated.
+
+        :attr:`COMPOSITION` as it stands, for a class whose defaults are
+        the same whichever body is drawn. A class whose defaults depend
+        on the body overrides this and **its constructor asks here**
+        rather than working the answer out for itself, so the rule is
+        written once and a serializer reading it back gets the same
+        answer the constructor did.
+
+        Never returns :data:`_UNSTATED`: a class that declares one owes
+        an override that resolves it.
+        """
+        return dict(cls.COMPOSITION)
 
     @classmethod
     def _generic_class(cls) -> type["Unit"] | None:
@@ -1075,6 +1124,11 @@ class Vessel(Unit):
         ("relief", "outlet", "process"),
         ("drain", "outlet", "liquid"),
     ]
+
+    #: A vessel stands on nothing unless it is told what it stands on,
+    #: whichever shell is drawn: the four group-26 elements go under or
+    #: against every one of the ten variants.
+    COMPOSITION = {"supports": None}
 
     def __init__(self, name: str, variant: str = "default",
                  supports: str | None = None,
@@ -2342,6 +2396,22 @@ class Reactor(Unit):
     #: tubular shell nor ``plain``'s hatched bed is stirred at all.
     _STIRRED = ("default", "jacketed")
 
+    #: The agitator depends on the body and the internals do not, so one
+    #: of the two is :data:`_UNSTATED` and resolved below.
+    COMPOSITION = {"agitator": _UNSTATED, "internals": None}
+
+    @classmethod
+    def composition_defaults(cls, variant: str) -> dict[str, Any]:
+        """A stirred body gets item 28.1; the rest get nothing.
+
+        The only place :attr:`_STIRRED` is read. ``__init__`` asks here,
+        so "a reactor is a stirred tank unless it says otherwise" is one
+        sentence rather than one in the constructor and another wherever
+        a reactor has to be written down.
+        """
+        return {**super().composition_defaults(variant),
+                "agitator": "agitator" if variant in cls._STIRRED else None}
+
     @classmethod
     def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
         """The nozzles a *variant* adds; none if the class declares any.
@@ -2362,7 +2432,7 @@ class Reactor(Unit):
         if self.variant == "plain":
             REACTOR_VARIANT_PLAIN.warn(self, where=name)
         if agitator is _UNSTATED:
-            agitator = "agitator" if self.variant in self._STIRRED else None
+            agitator = self.composition_defaults(self.variant)["agitator"]
         self.agitator = agitator
         self.internals = internals
         # Before the feeds, so the declaration order the drawing is read
@@ -2568,6 +2638,12 @@ class Separator(Unit):
     #: :meth:`pandid.render.symbols.SymbolRegistry._register_composed`.
     _CHARACTERISTICS = ("gravity", "electrostatic", "electromagnetic")
 
+    #: A separating vessel carries no mark unless one is named. The
+    #: constructor then folds the name into :attr:`variant`, which is
+    #: what :attr:`COMPOSITION_VARIANT` below says out loud.
+    COMPOSITION = {"characteristic": None}
+    COMPOSITION_VARIANT = "characteristic"
+
     def _symbol_anchor(self, port_name: str) -> str:
         """The name this separator's art anchors ``port_name`` under.
 
@@ -2701,6 +2777,20 @@ class Column(Unit):
     #: grids in its own artwork and would come out with a third.
     _BARE = ("default",)
 
+    #: The internals depend on the body and the count does not: eight is
+    #: eight of whatever is drawn, and of nothing where nothing is.
+    COMPOSITION = {"internals": _UNSTATED, "trays": DEFAULT_TRAYS}
+
+    @classmethod
+    def composition_defaults(cls, variant: str) -> dict[str, Any]:
+        """A bare shell gets item 27.1; a drawn-in one gets nothing.
+
+        The only place :attr:`_BARE` is read; see
+        :meth:`Reactor.composition_defaults` for why it is a method.
+        """
+        return {**super().composition_defaults(variant),
+                "internals": "tray" if variant in cls._BARE else None}
+
     def __init__(self, name: str, n_feeds: int = 1, variant: str = "default",
                  internals: str | None = _UNSTATED, trays: int = DEFAULT_TRAYS,
                  width: float | None = None, height: float | None = None,
@@ -2711,7 +2801,7 @@ class Column(Unit):
                          label_pos=label_pos, description=description,
                          reference=reference)
         if internals is _UNSTATED:
-            internals = "tray" if self.variant in self._BARE else None
+            internals = self.composition_defaults(self.variant)["internals"]
         self.internals = internals
         self.trays = trays
         from pandid.render.iso_parts import internals_overlays

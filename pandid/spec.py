@@ -38,6 +38,9 @@ The format::
       - {kind: Vessel, name: V-101, variant: horizontal,
          width: 130, height: 42, port_faces: {inlet: N},
          pin: {x: 680, y: 210, mirrored: y}}
+      - {kind: Vessel, name: D-301, supports: skirt}   # what it stands on
+      - {kind: Reactor, name: R-201, internals: packing, agitator: null}
+      - {kind: Column, name: T-101, internals: valve_tray, trays: 30}
 
     loops:
       - {variable: L, number: 101}   # a loop draws nothing itself
@@ -185,6 +188,33 @@ def _faces(value: Any, where: str) -> int | list[str]:
     if isinstance(value, bool) or isinstance(value, int):
         return _integer(value, where)
     return [_text(face, f"{where}[{i}]") for i, face in enumerate(_sequence(value, where))]
+
+
+def _composed(value: Any, default: Any, where: str) -> Any:
+    """One composition keyword's value: a part's name, or a count of them.
+
+    Which of the two it is comes off the class's own default rather than
+    a table here, so ``trays: 30`` is a whole number and
+    ``agitator: turbine`` names a group-28 stirrer without this function
+    knowing either keyword. The name itself goes straight to the class,
+    which owns the vocabulary and the message for a name that is not in
+    it.
+
+    ``null`` is a **statement**, and the reason this is not just
+    :func:`_text`. A column told ``internals: null`` is a bare shell
+    somebody asked for on purpose, where one that says nothing at all is
+    drawn with the trays its class draws; the two have to stay
+    distinguishable or a shell comes back with eight decks in it.
+    """
+    if isinstance(default, int) and not isinstance(default, bool):
+        return _integer(value, where)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise SpecError(
+            f"{where} must be the name of a part, or null for none at all, got {value!r}"
+        )
+    return value
 
 
 def _component(value: Any, where: str) -> str | float:
@@ -356,6 +386,33 @@ _KIND_ORDER = {
 _KIND_FLAGS = {
     "header": ("Feed", "Product"),
 }
+#: The composition keywords, keyed the same way and **derived rather
+#: than listed**: every one of them is an entry in the
+#: :attr:`~pandid.units.Unit.COMPOSITION` of the class that declares it,
+#: so a keyword added to a class arrives in the spec format with it.
+#:
+#: Listing them here a second time is exactly how the format came to be
+#: unable to express a composed unit at all. They landed on four classes
+#: and none of the tables above heard about them, so ``to_dict`` wrote
+#: ``{kind, name}`` for a skirted vessel and ``from_dict`` read it back
+#: as a vessel standing on nothing -- a different drawing, and one no
+#: comparison of the two specs could see, because the state was dropped
+#: on the way *out* and both directions therefore agreed.
+#: :data:`_BALLOON_KEYS`'s comment is the same lesson learned on the
+#: instrument side.
+#:
+#: Only the class that *declares* the keyword is named, as the tables
+#: above name theirs: ``_takes`` matches by inheritance, so every device
+#: subclass takes what its base takes.
+_KIND_COMPOSITION: dict[str, tuple[str, ...]] = {}
+for _name, _cls in _CLASSES.items():
+    for _key in _cls.__dict__.get("COMPOSITION", {}):
+        _KIND_COMPOSITION[_key] = tuple(sorted((*_KIND_COMPOSITION.get(_key, ()), _name)))
+#: Every table above whose keys are constructor arguments only some
+#: classes take, in one mapping: what a unit entry may carry beyond
+#: :data:`_UNIT_KEYS`, and which classes may carry it.
+_KIND_KEYS = {**_VARIABLE_PORTS, **_KIND_SIZES, **_KIND_TEXT, **_KIND_FLAGS,
+              **_KIND_FACES, **_KIND_ORDER, **_KIND_COMPOSITION}
 
 
 def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
@@ -465,8 +522,7 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
     where = f"{where} {name!r}"
 
     allowed = set(_UNIT_KEYS)
-    for key, owners in {**_VARIABLE_PORTS, **_KIND_SIZES, **_KIND_TEXT,
-                        **_KIND_FLAGS, **_KIND_FACES, **_KIND_ORDER}.items():
+    for key, owners in _KIND_KEYS.items():
         # By inheritance, not by name: the tables above name the class
         # that *declares* the argument, and a ControlValve is a Valve.
         # Matching on the name would refuse every device class an
@@ -500,6 +556,13 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
     for key in _KIND_FACES:
         if key in data:
             kwargs[key] = _faces(data[key], f"{where}.{key}")
+    # The parts drawn *in* the body, where ``variant`` above chose the
+    # body. The class's own default says which of the two shapes a value
+    # takes, so nothing here has to know that ``trays`` counts and the
+    # rest name.
+    for key, default in cls.COMPOSITION.items():
+        if key in data:
+            kwargs[key] = _composed(data[key], default, f"{where}.{key}")
     try:
         unit = cls(name, **kwargs)
     except ValueError as e:
@@ -1100,6 +1163,40 @@ def _write_common(unit: Unit, entry: dict[str, Any]) -> dict[str, Any]:
     return entry
 
 
+def _write_composition(unit: Unit, entry: dict[str, Any]) -> dict[str, Any]:
+    """The parts asked for, where they are not the ones the class draws.
+
+    Written the way everything else here is -- only what differs from a
+    default -- and the defaults come from the class, through the same
+    call its constructor makes. They have to: a reactor's agitator and a
+    column's internals follow from the *body*, since a stirred shell
+    gets a stirrer and a tubular one does not, so a table here would be
+    that rule written down a second time and free to disagree with the
+    first.
+
+    ``None`` is written out as ``null`` rather than left off. A stated
+    empty is not an unstated one -- ``Column(internals=None)`` is a bare
+    shell somebody asked for -- and leaving it off is what read back as
+    the eight decks a column draws when nobody says otherwise.
+    """
+    cls = type(unit)
+    for key, default in cls.composition_defaults(unit.variant).items():
+        value = getattr(unit, key)
+        if value != default:
+            entry[key] = value
+    # Where the class folds a keyword into the variant, the two are one
+    # word and only one of them may be written. It is the keyword: the
+    # variant spelling of a separator's characteristic is deprecated and
+    # goes at 0.2.0, so writing the fold back out would hand the reader
+    # a warning today and a refusal then -- on a sheet nobody had
+    # edited. ``_write_instrument`` drops a folded variant for the same
+    # reason and by the same means.
+    folded = cls.COMPOSITION_VARIANT
+    if folded and entry.get(folded) is not None:
+        entry.pop("variant", None)
+    return entry
+
+
 def _write_placement(unit: Unit, entry: dict[str, Any]) -> dict[str, Any]:
     if unit.pin_ is not None:
         pin: dict[str, Any] = {}
@@ -1134,6 +1231,7 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
     # is written instead.
     entry: dict[str, Any] = {"kind": kind, "name": unit.tag or unit.name}
     _write_common(unit, entry)
+    _write_composition(unit, entry)
     if isinstance(unit, unit_types.Block):
         # The faces, which carry the count with them. Written as the
         # bare count where every connection is on its default face,

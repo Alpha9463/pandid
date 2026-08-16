@@ -285,6 +285,40 @@ reader would otherwise take them for working code.
 
 ### Fixed
 
+- **The spec format could not express a composed unit, and quietly downgraded
+  one.** The keywords above landed on four equipment classes without
+  `pandid/spec.py` learning them, so `to_dict()` wrote a skirted vessel as
+  `{kind, name}` and `from_dict()` read it back as a vessel standing on
+  nothing. Every one of them was lost: `Reactor(agitator="anchor")` came back
+  stirred by the general item 28.1, `Column(internals="sieve_tray", trays=18)`
+  came back as the eight generic decks a column draws when nobody says
+  otherwise, and `Column(internals=None)` — a bare shell asked for on purpose —
+  came back with those same eight in it.
+
+  The state was dropped on the way **out**, which is why nothing caught it: the
+  file and the flowsheet read back from it agreed exactly, and only the drawing
+  had changed. It is the failure the balloon round trip had, so it is closed the
+  same way — the keywords are now declared once, on the class that takes them,
+  as `Unit.COMPOSITION`, and both directions of the spec read that declaration
+  rather than a list of their own. `Unit.composition_defaults()` says what each
+  keyword means on a given body, and the constructors ask it too, so "a reactor
+  is a stirred tank unless it says otherwise" is one sentence rather than one in
+  the constructor and another in the serializer.
+
+  A stated `null` now survives as a statement: a body told `internals: null` is
+  drawn bare, where one that says nothing keeps the part its class draws. Only
+  what differs from that default is written, as everywhere else in the format,
+  so an ordinary reactor's entry is the entry it always was.
+
+  `Separator(characteristic=)` is written as itself and no longer as the
+  `variant=` it folds into. The fold is how the drawing is found, but the
+  variant spelling of it is deprecated and goes at 0.2.0 — so a sheet written
+  out and read back warned today and would have been refused then, without
+  anybody having edited it.
+
+  No golden fixture or gallery sheet moves: this is what a flowsheet is written
+  down as, and nothing about how one is drawn.
+
 - **A render validated the sheet after building it, so a sheet the validator
   would refuse reached the engine anyway.** `to_svg()`, `to_drawio()` and
   `render()` all documented validation as running first and all ran

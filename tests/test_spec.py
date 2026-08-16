@@ -9,6 +9,7 @@ feature. A bare ValueError is a bug report waiting to happen.
 
 import json
 import sys
+import warnings
 
 import pytest
 
@@ -237,6 +238,290 @@ def test_a_feed_count_on_a_kind_with_no_feed_family_is_rejected():
     with pytest.raises(SpecError) as excinfo:
         Flowsheet.from_dict({"name": "T", "units": [{"kind": "Pump", "name": "P-1", "n_feeds": 2}]})
     assert "only a Column or a Reactor takes 'n_feeds', not a Pump" in str(excinfo.value)
+
+
+# --- composition: what a body carries -----------------------------------------
+#
+# ``variant`` chooses the body and these keywords choose the ISO 10628-2 parts
+# drawn in it. Every assertion below is on the **resolved symbol's overlays**,
+# never on a count of them, because a count is what let the regression through:
+# a reactor whose anchor stirrer had been swapped for the general one draws one
+# overlay either way. Nor is a comparison of the two specs enough -- the
+# keywords were dropped on the way *out*, so both directions agreed on a file
+# that had already lost the drawing.
+
+
+def _drawn(unit):
+    """The parts really drawn on a unit: group, name and hand, in order."""
+    from pandid.render.symbols import default_registry
+
+    return [(o.group, o.name, o.mirror) for o in default_registry.for_unit(unit).overlays]
+
+
+def _artwork(unit):
+    """The composed drawing itself, which settles placement as well as parts."""
+    from pandid.render.symbols import default_registry
+
+    return default_registry.for_unit(unit).svg
+
+
+def _round_trip(unit):
+    """One unit out through ``to_dict`` and back: its entry, and the unit read."""
+    fs = Flowsheet("T")
+    fs.add(unit)
+    spec = fs.to_dict()
+    assert json.loads(json.dumps(spec)) == spec, "spec must be JSON-safe"
+    return spec["units"][0], Flowsheet.from_dict(spec).units[0]
+
+
+@pytest.mark.parametrize(
+    ("make", "expected"),
+    [
+        (lambda: units.Vessel("D-301", supports="skirt"), {"supports": "skirt"}),
+        # Chiral, and drawn as a mirrored pair: a hand lost is a lug on one wall.
+        (lambda: units.Vessel("D-302", supports="bracket"), {"supports": "bracket"}),
+        (lambda: units.Reactor("R-101", agitator="anchor"), {"agitator": "anchor"}),
+        (
+            lambda: units.Reactor("R-201", internals="packing", agitator=None),
+            {"agitator": None, "internals": "packing"},
+        ),
+        (
+            lambda: units.Column("T-101", internals="valve_tray", trays=30),
+            {"internals": "valve_tray", "trays": 30},
+        ),
+        (
+            lambda: units.Separator("V-201", characteristic="gravity"),
+            {"characteristic": "gravity"},
+        ),
+    ],
+)
+def test_every_composition_keyword_round_trips(make, expected):
+    """Each keyword is written under its own name and read back as itself.
+
+    The entry is compared whole, so a keyword that arrived as something else --
+    a separator's characteristic folded back into ``variant`` -- fails here
+    rather than in the drawing.
+    """
+    unit = make()
+    entry, rebuilt = _round_trip(unit)
+    assert {key: value for key, value in entry.items() if key not in ("kind", "name")} == expected
+    assert _drawn(rebuilt) == _drawn(unit)
+    assert _artwork(rebuilt) == _artwork(unit)
+
+
+def test_a_columns_tray_count_survives_the_trip():
+    """Eighteen sieve trays, and eighteen of them.
+
+    The count and the part are two ways to lose the same tower: dropping
+    ``internals`` draws generic decks and dropping ``trays`` draws the eight ISO
+    item 2.6 X8011 does, so the tower came back as eight generic decks with
+    neither direction of the spec able to see it.
+    """
+    unit = units.Column("T-102", internals="sieve_tray", trays=18)
+    entry, rebuilt = _round_trip(unit)
+    assert (entry["internals"], entry["trays"]) == ("sieve_tray", 18)
+    assert _drawn(unit) == [(27, "sieve_tray", False)] * 18
+    assert (rebuilt.internals, rebuilt.trays) == ("sieve_tray", 18)
+    assert _drawn(rebuilt) == _drawn(unit)
+    assert _artwork(rebuilt) == _artwork(unit)
+
+
+def test_a_body_carrying_two_parts_keeps_both_and_their_order():
+    """The bed first and the stirrer over it.
+
+    Order is drawing order, so the shaft is drawn on top of whatever it turns in
+    rather than under it; a round trip that kept both parts and swapped them
+    would draw the reactor inside out.
+    """
+    unit = units.Reactor("R-301", internals="fluidised_bed", agitator="turbine")
+    entry, rebuilt = _round_trip(unit)
+    assert (entry["internals"], entry["agitator"]) == ("fluidised_bed", "turbine")
+    assert _drawn(unit) == [(27, "fluidised_bed", False), (28, "turbine", False)]
+    assert _drawn(rebuilt) == _drawn(unit)
+    assert _artwork(rebuilt) == _artwork(unit)
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        lambda: units.Pump("P-101"),  # a kind that cannot compose at all
+        lambda: units.Vessel("D-101"),  # one that can, and was not asked to
+        lambda: units.Separator("V-101"),
+        lambda: units.Tank("TK-101"),
+    ],
+)
+def test_a_unit_that_composes_nothing_gains_nothing(make):
+    """The other half of the round trip, and the one a golden would catch late.
+
+    A writer that stated every keyword would put a part on a plain drum, and a
+    reader that defaulted one would do the same on the way back.
+    """
+    unit = make()
+    entry, rebuilt = _round_trip(unit)
+    assert set(entry) == {"kind", "name"}
+    assert _drawn(unit) == []
+    assert _drawn(rebuilt) == []
+
+
+@pytest.mark.parametrize(
+    ("make", "drawn"),
+    [
+        (lambda: units.Reactor("R-101"), (28, "agitator")),
+        (lambda: units.Column("T-101"), (27, "tray")),
+    ],
+)
+def test_the_part_a_class_draws_by_itself_is_not_written_down(make, drawn):
+    """A reactor is a stirred tank and a column has trays without being told.
+
+    Only what differs from a default is written, here as everywhere else in the
+    format, so the entry for an ordinary reactor is the entry it always was.
+    """
+    unit = make()
+    entry, rebuilt = _round_trip(unit)
+    assert set(entry) == {"kind", "name"}
+    assert {(group, name) for group, name, _ in _drawn(unit)} == {drawn}
+    assert _drawn(rebuilt) == _drawn(unit)
+
+
+@pytest.mark.parametrize(
+    ("make", "key"),
+    [
+        (lambda: units.Column("T-105", internals=None), "internals"),
+        (lambda: units.Reactor("R-105", agitator=None), "agitator"),
+    ],
+)
+def test_a_body_asked_for_bare_comes_back_bare(make, key):
+    """Stated empty is not the same as not stated, and ``null`` is how it is said.
+
+    Leave the keyword off and the class puts its own part back: a bare shell
+    reads as the eight decks a column draws when nobody says otherwise.
+    """
+    unit = make()
+    entry, rebuilt = _round_trip(unit)
+    assert entry[key] is None
+    assert _drawn(unit) == []
+    assert _drawn(rebuilt) == []
+
+
+def test_a_separators_characteristic_is_written_as_itself_not_as_the_variant():
+    """The fold into ``variant`` is an implementation detail, and a time bomb.
+
+    ``characteristic=`` sets ``variant=`` because the mark inside a separating
+    vessel *is* which drawing it is. Writing the fold back out hands the reader
+    a spelling deprecated with ``removed_in="0.2.0"``, so a sheet nobody had
+    edited warns today and is refused then. ``_write_instrument`` drops a folded
+    variant for the same reason.
+    """
+    entry, _ = _round_trip(units.Separator("V-201", characteristic="gravity"))
+    assert entry == {"kind": "Separator", "name": "V-201", "characteristic": "gravity"}
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        rebuilt = Flowsheet.from_dict({"name": "T", "units": [entry]}).units[0]
+    assert (rebuilt.characteristic, rebuilt.variant) == ("gravity", "gravity")
+
+
+def test_composition_keywords_read_from_a_hand_written_spec():
+    fs = Flowsheet.from_dict(
+        {
+            "name": "T",
+            "units": [
+                {"kind": "Column", "name": "T-101", "internals": "bubble_cap_tray", "trays": 12},
+                {"kind": "Vessel", "name": "D-301", "supports": "leg"},
+                {"kind": "Reactor", "name": "R-201", "internals": "packing", "agitator": None},
+            ],
+        }
+    )
+    column, vessel, reactor = fs.units
+    assert (column.internals, column.trays) == ("bubble_cap_tray", 12)
+    assert vessel.supports == "leg"
+    assert (reactor.internals, reactor.agitator) == ("packing", None)
+    assert _drawn(column) == [(27, "bubble_cap_tray", False)] * 12
+    assert _drawn(vessel) == [(26, "leg", False), (26, "leg", False)]
+
+
+def test_a_composition_keyword_on_a_kind_with_no_such_part_is_rejected():
+    with pytest.raises(SpecError) as excinfo:
+        Flowsheet.from_dict(_spec(units=[{"kind": "Pump", "name": "P-1", "supports": "skirt"}]))
+    assert "only a Vessel takes 'supports', not a Pump" in str(excinfo.value)
+
+
+def test_a_part_no_such_group_has_names_the_ones_it_does():
+    """Resolved where the author typed it, not when the sheet is finally drawn."""
+    with pytest.raises(SpecError) as excinfo:
+        Flowsheet.from_dict(
+            {"name": "T", "units": [{"kind": "Reactor", "name": "R-1", "agitator": "turbin"}]}
+        )
+    assert "turbine" in str(excinfo.value)
+
+
+def test_a_part_that_is_not_a_name_is_told_how_to_ask_for_none():
+    with pytest.raises(SpecError) as excinfo:
+        Flowsheet.from_dict(
+            {"name": "T", "units": [{"kind": "Vessel", "name": "V-1", "supports": 3}]}
+        )
+    assert "must be the name of a part, or null for none at all" in str(excinfo.value)
+
+
+def test_a_tray_count_that_is_not_a_number_is_refused():
+    with pytest.raises(SpecError) as excinfo:
+        Flowsheet.from_dict(
+            {"name": "T", "units": [{"kind": "Column", "name": "T-1", "trays": "twelve"}]}
+        )
+    assert "must be a whole number" in str(excinfo.value)
+
+
+def test_no_constructor_argument_is_unreachable_from_a_spec():
+    """The guard the composition keywords went without.
+
+    Five keywords landed on four equipment classes and none of this module's
+    tables heard about them, so ``to_dict`` wrote a composed unit as
+    ``{kind, name}`` and ``from_dict`` read the class's own part back in their
+    place -- a different drawing, and one no comparison of the two specs could
+    see. Derived from the constructors rather than listed, because a list
+    restated is exactly what drifted: an argument added to a class tomorrow
+    fails here on the day it lands.
+
+    ``Instrument`` is excluded because it has a section of its own, a tag and an
+    attachment instead of a kind, and ``_INSTRUMENT_KEYS`` to match.
+
+    ``Valve(actuator=)`` is excluded because it is a **spelling of** ``variant``
+    and nothing more: the constructor resolves the body and the operator to the
+    one registered variant that draws both -- ``variant="gate",
+    actuator="diaphragm"`` *is* ``variant="control"`` -- and leaves nothing
+    behind under its own name, since ``valve.actuator`` is the signal
+    connection. The spec already writes that variant, so the argument is
+    reachable, just not by that word. Contrast ``Separator(characteristic=)``,
+    which folds the same way but *is* kept on the unit and whose variant
+    spelling is deprecated, so it has to be written as itself.
+    """
+    import inspect
+
+    from pandid import spec as spec_module
+
+    known = set(spec_module._UNIT_KEYS) | set(spec_module._KIND_KEYS) | {"actuator"}
+    for name, cls in spec_module._CLASSES.items():
+        if name == "Instrument":
+            continue
+        for argument in inspect.signature(cls.__init__).parameters:
+            if argument == "self":
+                continue
+            assert argument in known, f"{name}({argument}=...) can be neither written nor read"
+
+
+def test_no_class_leaves_a_variant_dependent_default_unresolved():
+    """``_UNSTATED`` is a sentinel, and the writer compares against it.
+
+    A class that declares one and forgets the ``composition_defaults`` override
+    would write the sentinel object itself into the file, which is neither
+    JSON-safe nor anything the reader could take back.
+    """
+    from pandid import spec as spec_module
+    from pandid.render.symbols import default_registry
+    from pandid.units import _UNSTATED
+
+    for cls in spec_module._CLASSES.values():
+        for variant in default_registry.variants(cls.kind) or ["default"]:
+            assert _UNSTATED not in cls.composition_defaults(variant).values()
 
 
 def test_pin_absolute_and_grid():
