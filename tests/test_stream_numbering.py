@@ -79,9 +79,46 @@ def test_explicit_names_are_never_renumbered():
     prod = fs.add(U.Product("P"))
     named = fs.connect(f.outlet, p.suction, name="100-BFW-01")
     auto = fs.connect(p.discharge, prod.inlet)
-    assert (named.name, auto.name) == ("100-BFW-01", "S1")
+    # The named run keeps its name and takes the first place in the
+    # series, so the auto run behind it is the second stream drawn and
+    # is numbered as one.
+    assert (named.name, auto.name) == ("100-BFW-01", "S2")
     fs.to_svg()
-    assert (named.name, auto.name) == ("100-BFW-01", "S1")
+    assert (named.name, auto.name) == ("100-BFW-01", "S2")
+
+
+def test_an_explicit_name_consumes_its_number():
+    """A named run holds its place in the series instead of skipping it.
+
+    The counter used to pass over a named group entirely, so the auto
+    series walked over whatever names the author had already used: here
+    the second stream would be handed ``S100``, which the first one is
+    called. Both streams then drew the same label and the stream table
+    -- which is one column per distinct name -- lost one of them
+    outright, with nothing said about it.
+    """
+    fs = Flowsheet("c", stream_number_start=100)
+    f1, f2 = fs.add(U.Feed("F1")), fs.add(U.Feed("F2"))
+    m = fs.add(U.Mixer("M-1", n_inlets=2))
+    prod = fs.add(U.Product("P"))
+    named = fs.connect(f1.outlet, m.inlets[0], name="S100")
+    auto = fs.connect(f2.outlet, m.inlets[1])
+    out = fs.connect(m.outlet, prod.inlet)
+    assert (named.name, auto.name, out.name) == ("S100", "S101", "S102")
+    assert len({s.name for s in fs.streams}) == 3
+
+
+def test_a_named_group_consumes_one_number_not_one_per_segment():
+    """The place belongs to the run, not to each segment of it."""
+    fs = Flowsheet("g")
+    f = fs.add(U.Feed("F"))
+    v = fs.add(U.Valve("FV-1"))
+    p = fs.add(U.Pump("P-1"))
+    prod = fs.add(U.Product("P"))
+    fs.connect(f.outlet, v.inlet, name="LINE-A")
+    fs.connect(v.outlet, p.suction, name="LINE-A")  # same run, through the valve
+    auto = fs.connect(p.discharge, prod.inlet)
+    assert auto.name == "S2"  # not S3: the two segments are one group
 
 
 def test_new_line_number_set_after_connecting_renumbers():

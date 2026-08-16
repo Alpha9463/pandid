@@ -999,3 +999,97 @@ def test_render_refuses_the_sheet_by_the_finding_and_not_the_bounding_box():
     fs = _cyclic_balloons()
     with pytest.raises(ValueError, match="instrument-unplaced"):
         fs.to_svg()
+
+
+# --- stream-name-reused ---------------------------------------------------
+# Two streams answering to one name lose a stream-table column between
+# them, since the table is one column per distinct name. Sharing a name
+# is ordinary, though -- a run drawn in several connect() calls is one
+# stream, meant to be labelled once -- so only a name *auto-numbering*
+# chose is reported: nobody asked for that one, and the counter's whole
+# promise is that it hands out a free one.
+
+
+def _reused(fs) -> list:
+    return [i for i in fs.validate() if i.code == "stream-name-reused"]
+
+
+def _collided() -> Flowsheet:
+    """A sheet whose explicit name sits on a number the counter reaches.
+
+    The half of the defect numbering cannot fix: a name is free text, so
+    ``S102`` on a ``stream_number_start=100`` sheet meets the third
+    number however carefully the series is counted.
+    """
+    fs = Flowsheet("collide", stream_number_start=100)
+    feeds = [fs.add(U.Feed(f"F{i}")) for i in range(3)]
+    m = fs.add(U.Mixer("M-1", n_inlets=3))
+    fs.connect(feeds[0].outlet, m.inlets[0], name="S102")  # the third number
+    fs.connect(feeds[1].outlet, m.inlets[1])
+    fs.connect(feeds[2].outlet, m.inlets[2])
+    return fs
+
+
+def test_a_counted_name_landing_on_a_used_one_is_reported():
+    found = _reused(_collided())
+    assert len(found) == 1
+    assert "2 streams answer to 'S102'" in found[0].message
+    assert "F2 to M-1" in found[0].message  # which run took the counted name
+
+
+def test_the_reused_name_costs_a_stream_table_column():
+    """The finding's whole content: the table is keyed by name, so two
+    runs sharing one are tabulated as one and a column of properties is
+    absent from the sheet."""
+    from pandid.render.furniture import _table_streams
+
+    fs = _collided()
+    assert len(_table_streams(fs)) == len(fs.streams) - 1
+    assert _reused(fs)
+
+
+def test_the_collision_is_soft_so_the_sheet_still_draws():
+    """Every line is drawn and the sheet reads; what was wrong with it
+    was the silence. The cure is a rename only the author can choose."""
+    fs = _collided()
+    assert [i.severity for i in _reused(fs)] == ["warning"]
+    fs.to_svg()  # does not raise
+
+
+def test_a_run_drawn_in_segments_is_not_a_collision():
+    """``examples/10_ethanol_pfd.py``'s S-305 spans five connect() calls
+    around a reflux circuit. Its segments are one stream deliberately
+    labelled once, and the equipment between them is not inline, so they
+    do not even share a numbering group."""
+    fs = Flowsheet("segments")
+    f = fs.add(U.Feed("F"))
+    hx = fs.add(U.HeatExchanger("E-1"))
+    p = fs.add(U.Product("P"))
+    fs.connect(f.outlet, hx.tube_in, name="S-305")
+    fs.connect(hx.tube_out, p.inlet, name="S-305")
+    assert len(fs._stream_groups()) == 2  # two groups, one name, no finding
+    assert _reused(fs) == []
+
+
+def test_one_line_number_on_two_runs_is_not_a_collision():
+    """A line number is built out of components the author wrote down,
+    so two runs carrying it are the author naming one line twice --
+    which ``examples/11_ethanol_pid.py`` does four times."""
+    fs = Flowsheet("lines")
+    f = fs.add(U.Feed("F"))
+    hx = fs.add(U.HeatExchanger("E-1"))
+    p = fs.add(U.Product("P"))
+    a = fs.connect(f.outlet, hx.tube_in, size=6, service="P", spec="A1A", sequence=1001)
+    b = fs.connect(hx.tube_out, p.inlet, size=6, service="P", spec="A1A", sequence=1001)
+    assert a.name == b.name  # same components, same line number
+    assert _reused(fs) == []
+
+
+def test_a_plainly_numbered_sheet_reports_nothing():
+    fs = Flowsheet("plain")
+    f = fs.add(U.Feed("F"))
+    v = fs.add(U.Valve("FV-1"))
+    p = fs.add(U.Product("P"))
+    fs.connect(f.outlet, v.inlet)
+    fs.connect(v.outlet, p.inlet)
+    assert _reused(fs) == []

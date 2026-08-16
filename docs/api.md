@@ -1669,8 +1669,23 @@ renumbers the flowsheet there and then. Explicitly named streams are never
 renumbered, and an explicit name on one segment names its whole group.
 
 Process streams take the low numbers, energy streams (also drawn) follow, and
-unlabelled signal lines come last. One sequence covers all three, so no two streams answer
-to the same name and an energy or signal line never consumes a process number.
+unlabelled signal lines come last. One sequence covers all three, so a counted
+name is never handed out twice and an energy or signal line never consumes a
+process number.
+
+A named run takes a place in that sequence rather than skipping one, so the
+fourth run you draw is the fourth number whether or not the three before it were
+named by hand. Without that the counter walked over the names already in use:
+on a `stream_number_start=100` sheet, `connect(..., name="S100")` followed by a
+plain `connect()` numbered the second stream `S100` too.
+
+Naming two runs the same yourself stays legal — a stream drawn in several
+`connect()` calls is one stream and is meant to carry one label, which is how
+`examples/10_ethanol_pfd.py` draws `S-305` over five of them. What you cannot
+do is have auto-numbering choose a name that is already taken, and `validate()`
+reports that as [`stream-name-reused`](#validation): the stream table is one
+column per distinct name, so two runs sharing one are tabulated as one and a
+column of properties goes missing.
 
 ### Line numbers
 
@@ -2589,6 +2604,7 @@ making, so the warnings left on `fs.warnings` are about the sheet that came out.
 | `run-off-elevation` | warning | two connected nozzles on one horizontal run are *almost* level, missing by less than the shorter symbol is tall, so the line steps into a device and back out; see [Runs at one elevation](#runs-at-one-elevation) |
 | `nozzles-crowded` | warning | two nozzles on one face both wear an arrowhead and are pitched closer than ISO 128-20 lets two parallel lines come, so the strip of paper between the heads is too thin to survive reproduction. One finding per face, and the message names the box that would fix it. Not made for a P&ID, which draws no heads. See [Nozzles and the arrowheads they carry](#nozzles-and-the-arrowheads-they-carry) |
 | `nozzle-unconnected` | warning | a nozzle whose existence a count asked for (`n_inlets=`, `n_outlets=`, `n_feeds=`, `inputs=`, `outputs=`) carries no stream, so the sheet asserts a connection that is not drawn. One finding per family; only counted nozzles, and only process ones. See [Nozzles nothing is piped to](#nozzles-nothing-is-piped-to) |
+| `stream-name-reused` | warning | auto-numbering picked a name another stream already answers to, so the two share one stream-table column and one of them is not tabulated at all. Only a *counted* name is reported: a run drawn in several `connect()` calls shares its name on purpose. See [Stream numbering](#stream-numbering) |
 | `route-not-settled` | warning | routing and instrument placement never agreed and `route()` ran out of passes; see [Routing and instrument placement](#routing-and-instrument-placement) |
 | `deprecated` | warning | the sheet was built with a spelling that is being retired. The message names the replacement and the release the old one stops working in; see [Deprecated API](#deprecated-api) |
 

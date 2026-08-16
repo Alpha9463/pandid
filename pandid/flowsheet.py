@@ -1123,36 +1123,31 @@ class Flowsheet:
         if self._route_stale or any(s.route is None for s in self.streams):
             self.route()
 
-    def renumber_streams(self) -> None:
-        """Assign stream numbers, carrying one through inline fittings.
+    def _stream_groups(self) -> "list[list[Stream]]":
+        """The material streams, gathered into the runs that share a name.
 
-        Runs on every :meth:`connect` and again before rendering, so the
-        name on the stream object a caller holds is the name that gets
-        drawn.
+        One list per group, each in the order its segments were
+        connected, and the groups themselves in the order their first
+        segment was. A group is a run through inline devices -- the
+        thing :meth:`renumber_streams` hands a single number to -- so a
+        sheet with no valve in it answers one single-element list per
+        stream.
 
-        Valves, reducers, fittings and tees are inline: a stream keeps
-        its number as it passes through them (set ``unit.new_line_number
-        = True`` to break the number at an important valve).
-        Explicitly-named streams keep their name and lend it to their
-        whole inline group. What carries the number through is the
-        ``inlet`` to ``outlet`` run, so a tee's *branch* takes a number
-        of its own: the bypass leg or drain off a station is its own
-        line, and the run it leaves carries straight on.
+        Split out because two callers have to agree on what "one
+        stream" means and there must not be two answers.
+        :meth:`renumber_streams` numbers a group; :func:`pandid.validate
+        <pandid.validate.validate>` asks whether two streams that answer
+        to one name are one run drawn in segments or two runs that
+        collided, and the grouping is the only thing that can tell them
+        apart.
 
-        A line carrying line-number components is named by its line
-        number rather than its stream number, on the same terms: the
-        first segment of a group that carries components supplies them
-        for the whole group, so a line number survives an inline valve
-        and breaks at one that sets ``new_line_number``, which is
-        exactly where the spec breaks.
-
-        Process streams take the low numbers, being the ones drawn on
-        the sheet and quoted in the stream table; energy streams, also
-        drawn, follow, and unlabelled signal lines come last. One
-        sequence covers all three so no two streams answer to the same
-        name.
+        Note what a group is **not**: it is not every segment an author
+        gave one name to. ``examples/10_ethanol_pfd.py`` draws ``S-305``
+        over five ``connect`` calls round a reflux circuit whose
+        intervening equipment is a condenser and a drum, neither of them
+        inline, so those five sit in four groups. Sharing a name across
+        groups is ordinary and is not on its own a finding.
         """
-        _INLINE = INLINE_KINDS
         material = [s for s in self.streams if s.kind == "material"]
         pos = {id(s): i for i, s in enumerate(material)}  # Stream: unhashable
         parent = list(range(len(material)))
@@ -1168,19 +1163,54 @@ class Flowsheet:
         # process connection and counting cannot say which two of the
         # three are the run.
         for u in self.units:
-            if u.kind in _INLINE and not getattr(u, "new_line_number", False):
+            if u.kind in INLINE_KINDS and not getattr(u, "new_line_number", False):
                 run = [u.ports.get("inlet"), u.ports.get("outlet")]
                 ends = [pos[id(p.stream)] for p in run
                         if p is not None and p.stream is not None and id(p.stream) in pos]
                 if len(ends) == 2:
                     parent[find(ends[0])] = find(ends[1])
 
-        # An explicit name on any segment names its whole group.
-        explicit: dict = {}
+        groups: dict = {}  # insertion-ordered, so first-appearance order
         for i, s in enumerate(material):
-            if not s.auto_named:
-                explicit.setdefault(find(i), s.name)
+            groups.setdefault(find(i), []).append(s)
+        return list(groups.values())
 
+    def renumber_streams(self) -> None:
+        """Assign stream numbers, carrying one through inline fittings.
+
+        Runs on every :meth:`connect` and again before rendering, so the
+        name on the stream object a caller holds is the name that gets
+        drawn.
+
+        Valves, reducers, fittings and tees are inline: a stream keeps
+        its number as it passes through them (set ``unit.new_line_number
+        = True`` to break the number at an important valve).
+        Explicitly-named streams keep their name and lend it to their
+        whole inline group, but still take a place in the sequence --
+        see :meth:`_stream_groups`, which decides what one group is.
+        What carries the number through is the ``inlet`` to ``outlet``
+        run, so a tee's *branch* takes a number of its own: the bypass
+        leg or drain off a station is its own line, and the run it
+        leaves carries straight on.
+
+        A line carrying line-number components is named by its line
+        number rather than its stream number, on the same terms: the
+        first segment of a group that carries components supplies them
+        for the whole group, so a line number survives an inline valve
+        and breaks at one that sets ``new_line_number``, which is
+        exactly where the spec breaks.
+
+        Process streams take the low numbers, being the ones drawn on
+        the sheet and quoted in the stream table; energy streams, also
+        drawn, follow, and unlabelled signal lines come last. One
+        sequence covers all three, so a name this counts out is never
+        counted out twice.
+
+        It can still *land* on one an author already used, since a name
+        is free text; :func:`pandid.validate.validate` reports that as
+        ``stream-name-reused``, which is the only place the two readings
+        of a shared name can be told apart.
+        """
         n = 0
 
         def next_name(group: list[Stream]) -> str:
@@ -1209,20 +1239,34 @@ class Flowsheet:
                     if callable(self.stream_naming_scheme)
                     else self.stream_naming_scheme.format(n=number))
 
-        segments: dict = {}
-        for i, s in enumerate(material):
-            segments.setdefault(find(i), []).append(s)
-
-        group_name: dict = {}
-        for i in range(len(material)):  # first-appearance order
-            r = find(i)
-            if r in group_name:
-                continue
-            group_name[r] = explicit[r] if r in explicit else next_name(segments[r])
-
-        for i, s in enumerate(material):
-            if s.auto_named:
-                s.name = group_name[find(i)]
+        for group in self._stream_groups():
+            # Every group takes the next place in the sequence, named
+            # groups included, and an explicit name says what that place
+            # is *called* rather than taking the group out of the count.
+            # A named group that consumed nothing let the counter walk
+            # over the names it holds: on a `stream_number_start=100`
+            # sheet, `connect(..., name="S100")` followed by three plain
+            # connects drew S100 twice and dropped a stream-table
+            # column, because the counter was still on its first number
+            # when the second group asked for one.
+            #
+            # Counting them lines the series up with the sheet as well:
+            # the fourth run drawn takes the fourth number, whether or
+            # not the three before it were named by hand.
+            #
+            # It does not make a collision impossible -- a name is free
+            # text, and `name="S102"` on that same sheet still meets the
+            # third number the counter reaches -- so `validate()`
+            # reports one as `stream-name-reused`. This removes the case
+            # the engine creates by itself.
+            name = next_name(group)
+            # An explicit name on any segment names its whole group.
+            named = next((s.name for s in group if not s.auto_named), None)
+            if named is not None:
+                name = named
+            for s in group:
+                if s.auto_named:
+                    s.name = name
 
         # Energy before signals: `sorted` is stable, so each kind keeps
         # its creation order within the tail of the sequence.
