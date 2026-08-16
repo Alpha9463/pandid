@@ -326,6 +326,11 @@ _RETIRED_PAIRS = [
         lambda: U.Reactor("R-1", internals="packing"),
     ),
     (
+        U.REACTOR_VARIANT_MIXING,
+        lambda: U.Reactor("R-1", variant="mixing"),
+        lambda: U.Reactor("R-1", agitator="disc"),
+    ),
+    (
         U.SEPARATOR_VARIANT_GRAVITY,
         lambda: U.Separator("V-1", variant="gravity"),
         lambda: U.Separator("V-1", characteristic="gravity"),
@@ -420,18 +425,26 @@ def test_declarations_finds_a_module_constant():
 
 
 def test_the_package_declares_exactly_the_variant_keywords_it_is_retiring():
-    """Six spellings, all one retirement: a ``variant=`` that named a *part*
+    """Seven spellings, all one retirement: a ``variant=`` that named a *part*
     rather than a body, moved to the keyword that names the part.
+
+    ``mixing`` is the seventh and is the loosest fit of them, because it names a
+    body as well as its contents. It is retired for the same reason all the same:
+    the contents are what it is *for* -- ``Reactor._STIRRED`` has to exclude it
+    so the composed stirrer does not make two -- and no ISO row draws a
+    cone-bottomed agitated vessel, so the body it also names is a body the
+    standard does not have.
 
     Spelled out rather than counted. A deprecation is a promise to delete
     something one release later, and the list of what has been promised is the
-    thing a release has to be read against -- so a seventh arriving has to be
+    thing a release has to be read against -- so an eighth arriving has to be
     added here, and one quietly disappearing fails.
     """
     assert {name.rsplit(".", 1)[-1] for name in declarations()} == {
         "VESSEL_VARIANT_LEGS",
         "VESSEL_VARIANT_SKIRTED",
         "REACTOR_VARIANT_PLAIN",
+        "REACTOR_VARIANT_MIXING",
         "SEPARATOR_VARIANT_GRAVITY",
         "SEPARATOR_VARIANT_ELECTROSTATIC",
         "SEPARATOR_VARIANT_ELECTROMAGNETIC",

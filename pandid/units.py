@@ -2359,6 +2359,44 @@ REACTOR_VARIANT_PLAIN = Deprecation(
          "standard vessel shell, in place of this one's diagonal hatch")
 
 
+#: ``mixing`` is draw.io's "Mixing Reactor": a cone-bottomed rectangle with a
+#: capsule perched on top of it for the motor, two flat plates for the
+#: impeller, and the whole assembly drawn into the body artwork. It is the
+#: drawing ``default`` used to be, and it was kept under a name that says so.
+#:
+#: **Not equivalent to the composed form, and not pretending to be.** The
+#: replacement is ISO item 1.27 X8006: a dished-end cylinder, a group-28
+#: stirrer, and item 20.6 C0082's circle marked M above the head. Body,
+#: driver mark and stirrer all differ, and so does the box -- 50 x 96,4
+#: against 62 x 131,8. Retired anyway, because it is **redundant**:
+#:
+#: 1. **ISO draws an agitated vessel exactly once**, at item 1.27, and it is
+#:    the dished-end one. Group 1 has 29 rows; 1.8 to 1.11 are cone-bottomed
+#:    and carry no agitator, and 1.27 carries the agitator and is dished.
+#:    There is no cone-bottomed agitated vessel in the standard, so this
+#:    variant reproduces no tabulated item.
+#: 2. **It spends ``variant=`` on the contents, on the one row where that word
+#:    is already contested.** :data:`Reactor._STIRRED` has to exclude it
+#:    precisely because the stirrer is in the artwork and a composed one would
+#:    make two -- so a ``mixing`` reactor cannot take a stirrer of its own,
+#:    cannot be jacketed, and cannot hold a bed or trays. That is the failure
+#:    the four keywords were added to end.
+#: 3. **Its drawn motor connects to nothing.** The agitator resolves to
+#:    ``None`` here, so no ``drive`` is ever added, and the sheet shows a
+#:    driver an author cannot route power to. ``Reactor(agitator='disc')``
+#:    draws the motor *and* the nozzle.
+#:
+#: ``disc`` rather than the bare default because ``mixing``'s two flat plates
+#: are nearest item 28.9, C2026, "Agitator, disc type".
+REACTOR_VARIANT_MIXING = Deprecation(
+    what="Reactor(variant='mixing')", instead="Reactor(agitator='disc')",
+    removed_in="0.2.0",
+    note="the drawing changes -- ISO item 1.27 X8006's dished-end shell with a "
+         "group-28 stirrer and the motor that turns it, in place of this one's "
+         "cone-bottomed box and the capsule on top of it; the cone goes, and "
+         "the stirrer becomes one you can choose and route a drive to")
+
+
 class Reactor(Unit):
     """Generic reactor: CSTR, PFR, packed bed, fluidised bed.
 
@@ -2522,6 +2560,8 @@ class Reactor(Unit):
         # word the author typed. See :meth:`Vessel.__init__`.
         if variant == "plain":
             REACTOR_VARIANT_PLAIN.warn(self, where=name)
+        elif variant == "mixing":
+            REACTOR_VARIANT_MIXING.warn(self, where=name)
         if agitator is _UNSTATED:
             agitator = self.composition_defaults(
                 self.variant, {"internals": internals})["agitator"]

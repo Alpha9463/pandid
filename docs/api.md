@@ -1320,7 +1320,7 @@ first listed is what the class draws when it is built by name alone.
 | `FlowElement` | `fitting` | `venturi` (as `default`), `flow_nozzle`, `coriolis`, `vortex`, `ultrasonic`, `turbine_meter`, `positive_displacement`, `v_cone`, `wedge`, `target`, `pitot`, `averaging_pitot` |
 | `Fitting` | `fitting` | `default` (flanged connection), `flange`, `strainer`, `strainer_cone`, `strainer_y`, `strainer_basket`, `strainer_duplex`, `orifice`, `rotameter`, `rupture_disc`, `sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `bellows`, `damper`, `spool`, `static_mixer`, `hose`, `coupling`, `clamped_coupling`, `flame_arrestor`, `flame_arrestor_explosion_proof`, `flame_arrestor_detonation_proof`, `flame_arrestor_fire_resistant` |
 | `StirredTankReactor` | `reactor` | `default` |
-| `Reactor` | `reactor` | bodies: `plain` (a charge vessel with a packed bed hatched into it), `mixing` (a conical-bottomed mixing vessel with the stirrer drawn on top of it), `jacketed` (the dished-end shell inside a heating/cooling jacket), `tubular` (a horizontal shell with a tube pass: a PFR)<br>what is *inside* a reactor is [`agitator=` and `internals=`](#what-a-body-carries) rather than a variant, so a packed bed and a fluidised bed are the plain stirred body with a group-27 internal in it |
+| `Reactor` | `reactor` | bodies: `plain` (a charge vessel with a packed bed hatched into it), `mixing` (a conical-bottomed mixing vessel with the stirrer drawn on top of it), `jacketed` (the dished-end shell inside a heating/cooling jacket), `tubular` (a horizontal shell with a tube pass: a PFR)<br>what is *inside* a reactor is [`agitator=` and `internals=`](#what-a-body-carries) rather than a variant, so a packed bed and a fluidised bed are the plain stirred body with a group-27 internal in it. `plain` and `mixing` are both [deprecated](#deprecated-api) for saying what is inside with the word that chooses the body |
 | `Vessel` | `vessel` | `default`, `dished`, `jacketed`, `skirted`, `legs`, `insulated`, `electrical_heating`, `swaged`, `dome`, `horizontal`<br>`dished`, `skirted` and `legs` are one shell on brackets, a skirt or a pair of legs; `jacketed` and `insulated` are that shell clad, and offer the same nozzles in the same places, so swapping one for another moves no run. `swaged` is the vessel drawn in two diameters, the wider one below |
 | `Tank` | `tank` | named for the roof: `default` (dished), `conical`, `floating_roof`, plus `sphere`<br>and for the bottom where it is a cone rather than a floor: `conical_bottom` (under a flat roof), `conical_ends` (a cone at each end), `dished_roof_conical_bottom`. On those three the `outlet` is on the cone's apex, which is where the tank actually drains |
 | `Column` | `column` | `default` (plain shell), `packed` |
@@ -2747,15 +2747,16 @@ announces it and is deleted in the next, so the message always names a release
 that has not shipped yet. The CHANGELOG lists it under `### Deprecated` when it
 is announced and under `### Removed` when it goes.
 
-**Six are in flight**, all announced in 0.1.3 and all removed in 0.2.0. Each is
-a `variant=` that named a *part* rather than a body, moved to the keyword that
-names the part:
+**Seven are in flight**, all announced in 0.1.3 and all removed in 0.2.0. Each
+is a `variant=` that named a *part* rather than a body, moved to the keyword
+that names the part:
 
 | Deprecated | Type instead | Does the drawing change? |
 |---|---|---|
 | `Vessel(variant="legs")` | `Vessel(supports="leg")` | yes — the ISO element goes under the standard 62 × 125 shell, not the 40 × 122.7 one |
 | `Vessel(variant="skirted")` | `Vessel(supports="skirt")` | yes, the same way |
 | `Reactor(variant="plain")` | `Reactor(internals="packing")` | yes — ISO item 27.8 X8141's crossed bed replaces a diagonal hatch that is no ISO mark, on the standard shell |
+| `Reactor(variant="mixing")` | `Reactor(agitator="disc")` | yes — ISO item 1.27 X8006's dished-end shell, group-28 stirrer and motor replace a cone-bottomed box with a capsule on top; no ISO row draws a cone-bottomed agitated vessel |
 | `Separator(variant="gravity")` | `Separator(characteristic="gravity")` | no |
 | `Separator(variant="electrostatic")` | `Separator(characteristic="electrostatic")` | no |
 | `Separator(variant="electromagnetic")` | `Separator(characteristic="electromagnetic")` | no |
