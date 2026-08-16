@@ -473,6 +473,93 @@ def test_a_sheet_using_the_whole_instrument_vocabulary_round_trips():
     assert controller.quadrants["d"] == ("FAL",)
 
 
+def test_a_balloons_placement_reaches_the_file_and_comes_back():
+    """A pinned balloon is a balloon the author put somewhere on purpose.
+
+    The assertions are on the rebuilt *object*, and deliberately not on the two
+    dicts. The writer used to leave the balloon branch before it wrote the
+    placement down, so the pin and the port faces reached neither the file nor
+    the reader -- and a field that neither direction carries makes the sheet
+    read back compare *equal* to the file it came from while the drawing has
+    moved. Comparing specs is blind to exactly this, which is why it is not the
+    test.
+    """
+    fs = Flowsheet("placed")
+    fe = fs.add(units.Fitting("FE-303", variant="venturi")).pin(x=300, y=195)
+    balloon = fs.add_balloon(fe, at="S")
+    balloon.pin(x=300, y=320)
+    balloon.nozzle("pv", "N")
+
+    entry = fs.to_dict()["instruments"][0]
+    assert entry["pin"] == {"x": 300, "y": 320}, "the balloon's pin is not in the file"
+    assert entry["port_faces"] == {"pv": "N"}
+
+    rebuilt = Flowsheet.from_dict(fs.to_dict())
+    back = next(u for u in rebuilt.units if u.name == balloon.name)
+    assert back.pin_ == balloon.pin_, "the balloon came back somewhere else"
+    assert back._port_faces == balloon._port_faces, "the impulse line comes off another face"
+
+
+def test_a_balloon_carrying_every_field_it_takes_round_trips():
+    """Whatever ``add_balloon`` accepts has to survive being written down.
+
+    Its keywords go straight into the balloon, so one reaches the spec with a
+    description, a size, a label position, a display and lettering in its
+    quadrants on it -- all written by the same code that writes them for any
+    other unit. The reader's key list knew only about the placement, so a
+    balloon given any of them was refused by its own writer's output.
+    """
+    fs = Flowsheet("vocabulary")
+    fe = fs.add(units.Fitting("FE-303", variant="venturi")).pin(x=300, y=195)
+    balloon = fs.add_balloon(
+        fe,
+        at="N",
+        offset=38,
+        angle=75,
+        variant="shared",
+        display="central",
+        description="Venturi meter",
+        width=44,
+        height=44,
+        label_pos="E",
+    )
+    balloon.annotate(safety="SIL 2", variable="pH", high="FAH", low="FAL")
+    balloon.new_line_number = True
+    balloon.pin(x=300, y=90)
+
+    spec = fs.to_dict()
+    rebuilt = Flowsheet.from_dict(spec)
+    assert rebuilt.to_dict() == spec
+    back = next(u for u in rebuilt.units if u.name == balloon.name)
+    for field in (
+        "description",
+        "width",
+        "height",
+        "label_pos",
+        "new_line_number",
+        "symbol_type",
+        "display",
+        "at",
+        "offset",
+        "angle",
+        "quadrants",
+        "pin_",
+        "relation",
+        "tag",
+    ):
+        assert getattr(back, field) == getattr(balloon, field), f"{field} was lost"
+
+
+def test_an_instruments_new_line_number_is_read_back():
+    """The flag is written for an instrument exactly as it is for any other
+    unit, so the reader has to accept the key its own writer emits."""
+    fs = Flowsheet.from_dict(
+        _spec(instruments=[{"type": "PI", "number": 7, "new_line_number": True}])
+    )
+    assert fs.units[-1].new_line_number is True
+    assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
+
+
 def test_an_entry_naming_two_anchors_is_refused():
     """A balloon is placed against one thing. Two keywords are two placements,
     and the reader says which two rather than silently taking the first."""

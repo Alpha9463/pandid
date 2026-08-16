@@ -66,6 +66,21 @@ retirement is declared with. Nothing is deprecated in this release.
   geometric checks are made over the units that have a frame rather than all
   or none.
 
+- **A primary element's balloon round-trips through a spec.** `to_dict()` wrote
+  a balloon's description, size, label position and quadrant lettering, and
+  `from_dict()` then refused every one of them as an unknown key: a sheet built
+  with `fs.add_balloon(fe, description="Venturi meter")` could be written to a
+  file that would not load. The reader now takes the same fields for a balloon
+  as it does for any other instrument, less the tag and the anchor, which
+  `balloon_of` already names.
+
+- **A balloon that was pinned stays where it was put.** The writer left the
+  balloon out of the pass that records placement, so `pin()` and `nozzle()` on
+  a balloon never reached the file. Because neither direction carried them, a
+  sheet read back from its own spec compared *equal* to it while the drawing
+  had moved. `new_line_number` on any instrument had the matching hole on the
+  read side, and is accepted now too.
+
 ## [0.1.2] - 2026-08-05
 
 ### Added

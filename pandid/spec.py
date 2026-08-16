@@ -281,18 +281,21 @@ _UNIT_KEYS = {
     "kind", "name", "variant", "description", "reference", "width", "height",
     "label_pos", "new_line_number", "pin", "port_faces",
 }
-#: What a primary element's balloon entry may set, beside the
-#: ``balloon_of`` naming the element whose tag it carries. Not ``type``
-#: or ``number``: the tag is the element's, which is the whole of what
-#: the balloon is for.
-_BALLOON_KEYS = {"balloon_of", "at", "offset", "angle", "variant", "display"}
 _INSTRUMENT_KEYS = {
     "type", "number", "variant", "display", "description", "reference", "width",
-    "height", "label_pos", "sensing", "acting_on", "near", "at", "offset",
-    "angle", "pin", "port_faces", "quadrants",
+    "height", "label_pos", "new_line_number", "sensing", "acting_on", "near",
+    "at", "offset", "angle", "pin", "port_faces", "quadrants",
 }
 #: The three ways an instrument entry names its anchor.
 _ANCHOR_KEYS = ("sensing", "acting_on", "near")
+#: What a primary element's balloon entry may set. Everything an
+#: instrument entry may, less the tag and the anchor: the tag is the
+#: element's, which is the whole of what a balloon is for, and the
+#: anchor is that element too, named once by ``balloon_of``. Derived
+#: rather than listed a second time, because listing it a second time
+#: is what let the writer grow fields -- ``description``, ``width``,
+#: ``quadrants`` -- that the balloon reader then refused to read back.
+_BALLOON_KEYS = ({"balloon_of"} | _INSTRUMENT_KEYS) - {"type", "number", *_ANCHOR_KEYS}
 #: The quadrant each ``quadrants:`` key writes into. The spec spells the
 #: argument names :meth:`pandid.units.Instrument.annotate` takes, not
 #: ISO's letters, so a spec and the call it round-trips read the same.
@@ -630,16 +633,29 @@ def _read_balloon(fs: Flowsheet, entry: Mapping[str, Any], where: str) -> Instru
     if "at" in entry:
         at = entry["at"]
         kwargs["at"] = at if isinstance(at, str) else _number(at, f"{where}.at")
-    for key in ("offset", "angle"):
+    for key in ("offset", "angle", "width", "height"):
         if key in entry:
             kwargs[key] = _number(entry[key], f"{where}.{key}")
-    for key in ("variant", "display"):
+    for key in ("variant", "display", "description", "reference", "label_pos"):
         if key in entry:
             kwargs[key] = _text(entry[key], f"{where}.{key}")
     try:
-        return fs.add_balloon(element, **kwargs)
+        inst = fs.add_balloon(element, **kwargs)
     except (TypeError, ValueError) as e:
         raise _fail_from(e, where) from None
+    # The rest afterwards rather than through the call: ``add_balloon``
+    # is what makes the balloon and puts it on the sheet, so these are
+    # set on the object it hands back. ``_read_common``, which does the
+    # same for every other unit, is not usable here for that reason.
+    if "new_line_number" in entry:
+        inst.new_line_number = _flag(entry["new_line_number"], f"{where}.new_line_number")
+    if "quadrants" in entry:
+        _annotate_instrument(inst, entry["quadrants"], f"{where}.quadrants")
+    if "pin" in entry:
+        _read_pin(inst, entry["pin"], f"{where}.pin")
+    if "port_faces" in entry:
+        _read_port_faces(inst, entry["port_faces"], f"{where}.port_faces")
+    return inst
 
 
 def _read_pin(unit: Unit, entry: Any, where: str) -> None:
@@ -1220,7 +1236,13 @@ def _write_instrument(inst: Instrument) -> dict[str, Any]:
             entry["offset"] = inst.offset
         if inst.angle != 90.0:
             entry["angle"] = inst.angle
-        return entry
+        # Down the same road as every other unit. A balloon that was
+        # pinned or had a nozzle turned is placed where the author put
+        # it, and leaving here without writing that dropped it in a way
+        # no comparison could see: neither direction carried it, so
+        # ``to_dict`` of the sheet read back matched the file it came
+        # from while the drawing had moved.
+        return _write_placement(inst, entry)
     if inst.host is not None:
         # Name a stream by the port it leaves, not by its number:
         # auto-numbering owns that name and re-derives it as the sheet
