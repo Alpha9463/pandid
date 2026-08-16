@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A symbol can be composed from a body and ISO 10628-2's supplementary
+  parts.** Groups 1–25 of that standard's Table 1 name whole apparatus; groups
+  26–29 name the parts you overlay onto one — supports and manholes, trays and
+  packing, the ten agitators, and the characteristic that says what settles or
+  precipitates inside a body. Clause 5 makes composing from them a `shall` for
+  any symbol the standard does not tabulate, and every pandid symbol was an
+  atomic SVG string with no way to. `Symbol` now carries `overlays`, a part
+  registry sits beside the symbol registry, and `compose()` resolves the two
+  into one cached `Symbol` the renderer places exactly as it places any other.
+  A part is placed in *fractions* of the body's box, so it survives the body
+  being resized; a part whose shape carries meaning keeps its aspect and holds
+  the whole composition to its own; and a part drawn outside the body — ISO
+  item 1.27 hangs a drive motor above the top head — grows the box and moves
+  the body into it.
+
+  Nothing is composed yet. Every one of the 157 registered symbols is a body
+  with zero parts, no artwork for groups 26–29 ships in this release, and no
+  golden fixture or gallery sheet moves. The artwork, and the keywords that ask
+  for it, follow.
+
+  Two things go with it. A part must name the Table 2 row it claims to be —
+  subject group, item number and registration number — because composing is
+  only ever justified by the standard composing at that point, and a mark with
+  no registered number is not a supplementary symbol. `Symbol` gains an
+  optional `iso_reg` for the same traceability, left empty everywhere until
+  each drawing has been checked against the standard one at a time.
+
 ### Changed
 
 - **Routing a dense sheet is an order of magnitude faster.** The visibility

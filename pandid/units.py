@@ -2175,11 +2175,37 @@ class Reactor(Unit):
     feed: Port
 
     kind = "reactor"
-    PORTS = [
+    # Empty because which nozzles a reactor has depends on its variant,
+    # and Unit.__init__ reads PORTS before a variant is in hand.
+    # _VARIANT_PORTS below is the declaration and __init__ lays it down,
+    # exactly as :class:`HeatExchanger` and :class:`Separator` do.
+    PORTS: list[tuple[str, str, str]] = []
+    # The stirred vessel, and the default: a charge nozzle down the
+    # shell, the product out of the bottom, the off-gas off the top and
+    # a duty connection for the jacket or coil.
+    _VESSEL = [
         ("outlet", "outlet", "process"),
         ("vent", "outlet", "vapor"),
         ("duty", "inlet", "energy"),
     ]
+    #: The nozzles each variant has, keyed by variant, defaulting to
+    #: :data:`_VESSEL`. Empty today, because both registered drawings are
+    #: vertical vessels -- but the reactors that are not are exactly the
+    #: ones this table exists for. A tubular reactor is a pipe with a
+    #: bed in it: it has no vapour space, so it has no ``vent`` to
+    #: connect, and a nozzle nothing is ever routed to is a nozzle an
+    #: author has to be told to ignore. Its natural pair is an inlet and
+    #: an outlet at opposite ends rather than a charge nozzle in the
+    #: shell and a draw in the floor.
+    _VARIANT_PORTS: dict[str, list[tuple[str, str, str]]] = {}
+
+    @classmethod
+    def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
+        """The nozzles a *variant* adds; none if the class declares any.
+
+        The same one line :meth:`HeatExchanger._variant_ports` is.
+        """
+        return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._VESSEL)
 
     def __init__(self, name: str, n_feeds: int = 1, variant: str = "default",
                  width: float | None = None, height: float | None = None,
@@ -2189,6 +2215,12 @@ class Reactor(Unit):
         super().__init__(name, variant=variant, width=width, height=height,
                          label_pos=label_pos, description=description,
                          reference=reference)
+        # Before the feeds, so the declaration order the drawing is read
+        # in -- product, off-gas, duty, then the charge nozzles down the
+        # shell -- is the order it was in when PORTS held the first
+        # three. ``self.variant``, not the argument; see HeatExchanger.
+        for spec in self._variant_ports(self.variant):
+            self._add_port(*spec)
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
 
 
