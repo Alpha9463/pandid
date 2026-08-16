@@ -1643,8 +1643,8 @@ single placement and raises. The choice is re-checked against any later `pin()`.
 | `has_line_number` | `bool` | **read-only**, true once a component other than `sequence` is set |
 | `is_recycle` | `bool` | **read-only**, computed by cycle detection during layout |
 | `properties` | `dict[str, str \| float]` | free-form; rendered by the stream table verbatim |
-| `color` | `str \| None` | SVG stroke colour override |
-| `dasharray` | `str \| None` | SVG `stroke-dasharray` override |
+| `color` | `str \| None` | SVG stroke colour override: a name, `#0a7`, or `rgb(0, 170, 119)`. Anything else raises |
+| `dasharray` | `str \| None` | SVG `stroke-dasharray` override: lengths in drawing units (`"7,4"`), or `"none"`. Anything else raises |
 | `ends` | `str \| tuple[str, str] \| None` | how this line's joints are made up, overriding the sheet's `connections`. One name for both ends or a `(source, dest)` pair; `None` inherits |
 | `route` | `Route \| None` | resolved waypoints; written by the router |
 

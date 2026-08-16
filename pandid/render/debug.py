@@ -56,9 +56,10 @@ format this package writes. See :mod:`pandid.render.export`.
 
 from __future__ import annotations
 
-import html
 import math
 from typing import TYPE_CHECKING, NamedTuple, Sequence
+
+from pandid.render.escape import escaped
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -215,7 +216,7 @@ def _text(x: float, y: float, body: str, size: float, fill: str,
     """
     return (f'    <text x="{_n(x)}" y="{_n(y)}" font-family="{_FONT}" '
             f'font-size="{size:.2f}" text-anchor="{anchor}" fill="{fill}">'
-            f'{html.escape(body)}</text>')
+            f'{escaped(body)}</text>')
 
 
 def _rule(x1: float, y1: float, x2: float, y2: float, colour: str,

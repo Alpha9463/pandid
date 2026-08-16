@@ -165,6 +165,7 @@ from pandid.portgeom import port_point, unit_box
 from pandid.render import furniture as F
 from pandid.render import generator
 from pandid.render import svg as _svg
+from pandid.render.escape import escaped, writable
 from pandid.render.svg import (_DIAMOND_BALLOONS, _furniture_name, _LEADER_HEAD,
                                _scale_text, _too_small,
                                _SIGNAL_DASH, _PROCESS_STROKE,
@@ -660,10 +661,11 @@ def _tag_pass(fs, registry, joints=None) -> "_Tags":
     :meth:`~SvgRenderer._fail_label_item`) and the halo each lands on
     (``_unit_label_box``) are the sheet's own.
 
-    The text is ``html.escape``'d before it is measured because the
-    sheet measures the escaped string -- ``_unit_label_box`` sizes a
-    halo from ``len(text)``, and an ampersand in a tag is five
-    characters to it.
+    The text goes through :func:`~pandid.render.escape.escaped` before
+    it is measured because the sheet measures the escaped string --
+    ``_unit_label_box`` sizes a halo from ``len(text)``, and an
+    ampersand in a tag is five characters to it. The same function as
+    the sheet's, so the two passes measure the same string.
 
     Three kinds of unit are skipped, and each for the reason the sheet
     skips it: an instrument writes its tag *inside* its balloon, so
@@ -671,8 +673,6 @@ def _tag_pass(fs, registry, joints=None) -> "_Tags":
     pennant, likewise; and a unit with no tag -- the pipe tee is the
     only one today -- is labelled nowhere at all.
     """
-    import html as _html
-
     from pandid.render.svg import (SvgRenderer, _ink, _unit_label_box,
                                    flange_boxes, quadrant_labels)
 
@@ -702,7 +702,7 @@ def _tag_pass(fs, registry, joints=None) -> "_Tags":
         x, y, w, h = f.x, f.y, f.w, f.h
         tag_box = None
         if u.tag:
-            item = sheet._tag_item(u, f, x, y, w, h, _html.escape(u.tag),
+            item = sheet._tag_item(u, f, x, y, w, h, escaped(u.tag),
                                    ink, symbols)
             tag_box = _unit_label_box(item)
             items.append(item)
@@ -806,8 +806,14 @@ def _attr(value) -> str:
     and its number has to arrive at the HTML parser as a tag, which
     means leaving this function as ``&lt;br&gt;`` and no further.
     Escaping the five and only the five is what does that.
+
+    What it does share with :func:`~pandid.render.escape.escaped` is the
+    removal first. A character XML 1.0 §2.2 has no spelling for -- a
+    ``NUL`` in a tag read out of a spec file -- cannot be escaped into
+    legality by any of the five substitutions, and one of them in one
+    attribute makes the whole document unreadable to draw.io.
     """
-    text = str(value)
+    text = writable(value)
     for char, entity in (("&", "&amp;"), ("<", "&lt;"), (">", "&gt;"),
                          ('"', "&quot;"), ("'", "&apos;")):
         text = text.replace(char, entity)
