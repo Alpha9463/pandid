@@ -361,16 +361,39 @@ def equipment_list(fs, *, title="EQUIPMENT LIST", align="top-right",
     ``include`` names the rows explicitly instead, in the order given,
     and takes whatever it names. That is how a valve or instrument
     schedule, a real drawing in its own right, gets built from the same
-    flowsheet. A tag that is not on the flowsheet contributes no row.
+    flowsheet.
 
     ``align`` / ``position`` / ``margin`` place the box (see
     :class:`Annotation`).
+
+    Raises :class:`ValueError` if ``include`` names a tag the flowsheet
+    does not have. Naming a row is an assertion that it exists, and a
+    schedule silently one line short is a schedule an author reads as
+    complete -- ``include=["P-101", "P-1O2"]``, letter O for zero, drew
+    one row and said nothing. It is refused rather than warned about
+    because the check is exact and immediate: this function has the
+    flowsheet in hand, and ``fs.warnings`` describes a *render*, which
+    has not happened yet and will clear the list when it does.
     """
     if include is None:
         chosen = [u for u in fs.units if u.kind in _MAJOR_EQUIPMENT]
     else:
         by_name = {u.name: u for u in fs.units}
-        chosen = [by_name[tag] for tag in include if tag in by_name]
+        missing = [tag for tag in include if tag not in by_name]
+        if missing:
+            from difflib import get_close_matches
+
+            hints = []
+            for tag in missing:
+                close = get_close_matches(tag, list(by_name), n=1, cutoff=0.6)
+                hints.append(f"{tag!r}" + (f" (did you mean {close[0]!r}?)" if close else ""))
+            raise ValueError(
+                f"equipment_list(include=...) names {', '.join(hints)}, which "
+                f"{'is' if len(missing) == 1 else 'are'} not on this flowsheet. "
+                f"A named row is one the schedule asserts exists; add the unit, or "
+                f"drop the tag from include=."
+            )
+        chosen = [by_name[tag] for tag in include]
     rows = [(u.name, _describe(u)) for u in chosen]
     return Annotation(title=title, rows=rows, align=align,
                       position=position, margin=margin, width=width)

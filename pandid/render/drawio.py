@@ -48,8 +48,16 @@ what its stand-in loses; the stand-ins are draw.io *built-ins* rather
 than stencils, so a reference there cannot fail to resolve the way a
 stencil key could. Sheet furniture is docked where the sheet docks it
 and ruled the way the sheet rules it
-(:meth:`DrawioRenderer._furniture`). Nothing on the sheet is silently
-absent.
+(:meth:`DrawioRenderer._furniture`).
+
+**Nothing on the sheet is silently absent.** Written down is not the
+same as said, so every one of those sentences is *reported*: a stand-in
+that loses something names the unit and what it lost on
+``fs.warnings`` (:data:`APPROXIMATED`), and a title-block cell that had
+to abbreviate its value says so there too, in the words the rendered
+sheet uses and through the same
+:data:`~pandid.render.furniture.Reporter`. An export that says nothing
+lost nothing.
 
 **A composed symbol is a group of cells, not a shape.** A body carrying
 ISO 10628-2 supplementary parts -- an agitator in a reactor, trays in a
@@ -186,16 +194,18 @@ from pandid.render import furniture as F
 from pandid.render import generator
 from pandid.render import svg as _svg
 from pandid.render.escape import escaped, writable
-from pandid.render.svg import (_DIAMOND_BALLOONS, _furniture_name, _LEADER_HEAD,
-                               _scale_text, _too_small,
+from pandid.render.svg import (_DIAMOND_BALLOONS, _FIT_CODES, _furniture_name,
+                               _LEADER_HEAD, _scale_text, _too_small,
                                _SIGNAL_DASH, _PROCESS_STROKE,
-                               _SIGNAL_STROKE, _TAP_DASH, HOP_R, NUMBER_TYPE, boundary_flag,
+                               _SIGNAL_STROKE, _TAP_DASH, fit_issue, HOP_R,
+                               NUMBER_TYPE, boundary_flag,
                                draws_arrowheads, flange_marks, impulse_tap,
                                resolve_connections, sheet_connections,
                                stream_numbers, stream_polyline, tap_lines)
 from pandid.render.symbols import (ARROWHEAD, closed_marking, fail_marking,
                                    wears_arrowhead)
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
+from pandid.validate import Issue
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
@@ -511,6 +521,22 @@ class _Approximation(NamedTuple):
     weight: float = _SYMBOL_STROKE
     keys: tuple = ()
     inscribed: "str | None" = None
+
+
+#: The code every ``lost`` sentence is reported under.
+#:
+#: ``lost`` is written down for each stand-in and was read by nothing:
+#: a ``Conveyor`` exported as a bare rectangle, the belt and its two
+#: rollers gone, and ``fs.warnings == []``. A stand-in is a deliberate
+#: approximation and not an error -- the module docstring's claim is that
+#: it is not a *silent* one -- so it is a warning naming the unit and the
+#: sentence beside its entry in :data:`_APPROXIMATIONS`.
+APPROXIMATED = "drawio-approximated"
+
+#: The codes this backend puts on ``fs.warnings`` itself, as against the
+#: validator's findings about the diagram. Replaced rather than added to
+#: on each export, the way ``SvgRenderer.render`` replaces its own.
+_EXPORT_CODES = (*_FIT_CODES, APPROXIMATED)
 
 
 #: Every symbol this library draws itself, and what draw.io is asked for
@@ -1074,6 +1100,24 @@ class DrawioRenderer:
     def __init__(self, registry=None):
         from pandid.render.symbols import default_registry
         self.registry = registry or default_registry
+        # What this export could not carry across, collected as it is
+        # written and handed to the flowsheet at the end of
+        # :meth:`render`. A list rather than a callback because the
+        # methods that find these are deep in the cell writers and a
+        # renderer is built fresh for each render
+        # (:meth:`~pandid.flowsheet.Flowsheet.to_drawio`).
+        self._findings: list = []
+
+    def _report(self, field: str, text: str, drawn: str) -> None:
+        """A cell that could not hold what it was given
+        (:data:`~pandid.render.furniture.Reporter`).
+
+        The same sentence the sheet's own renderer produces, from the
+        same function: the two backends measure one strip with one set of
+        cell widths, so which file was exported must not change what the
+        author is told about it.
+        """
+        self._findings.append(fit_issue(field, text, drawn))
 
     # --------------------------------------------------- document
 
@@ -1132,6 +1176,7 @@ class DrawioRenderer:
         from pandid.render.svg import _page, _resolve_sheet
 
         arrows = draws_arrowheads(diagram)
+        self._findings = []
         for u in fs.units:
             if u.frame is None:
                 raise ValueError(f"Unit '{u.name}' lacks a frame even after layout was run.")
@@ -1244,6 +1289,14 @@ class DrawioRenderer:
         # here would make every re-export a diff of one line that means
         # nothing.
         page = hashlib.sha256(fs.name.encode("utf-8")).hexdigest()[:16]
+        # What this export could not carry across joins the validator's
+        # findings, exactly as ``SvgRenderer.render`` puts the sheet's
+        # there: one list, whichever document was asked for. Findings
+        # from an earlier export are dropped rather than added to -- a
+        # drawing number shortened and re-exported must stop warning
+        # about the old one.
+        fs.warnings = [w for w in fs.warnings
+                       if getattr(w, "code", "") not in _EXPORT_CODES] + self._findings
         return "\n".join([
             '<?xml version="1.0" encoding="UTF-8"?>',
             # ``agent`` is where draw.io writes the user-agent string of
@@ -1597,6 +1650,15 @@ class DrawioRenderer:
         one cell per supplementary part: see :meth:`_overlay_cells`.
         """
         sym = self.registry.for_unit(u)
+        approx = self._approximation(u, sym)
+        if approx is not None and approx.lost:
+            # A stand-in with nothing in its ``lost`` sentence loses
+            # nothing -- a ring support really is three sides of a
+            # rectangle -- so only the ones that do are reported.
+            self._findings.append(Issue(
+                "warning", APPROXIMATED,
+                f"{u.name} has no draw.io stencil and is exported as a stand-in, "
+                f"which loses {approx.lost}"))
         x0, y0, x1, y1 = fit.box(self._cell_box(u))
         placement, _, _ = self._placement(u, sym)
         text, label_keys, (dx, dy) = self._label(u, fit, tags)
@@ -1613,12 +1675,12 @@ class DrawioRenderer:
             f'style={_attr(style)} vertex="1" parent="1">',
             *body,
             '        </mxCell>',
-            *self._inscribed(cid, self._approximation(u, sym), x1 - x0, y1 - y0, fit),
-            *self._overlay_cells(cid, sym, x1 - x0, y1 - y0, fit),
+            *self._inscribed(cid, approx, x1 - x0, y1 - y0, fit),
+            *self._overlay_cells(cid, sym, x1 - x0, y1 - y0, fit, u.name),
         ]
 
     def _overlay_cells(self, cid: str, sym, w: float, h: float,
-                       fit: "_Fit") -> list[str]:
+                       fit: "_Fit", owner: str = "") -> list[str]:
         """One cell per ISO supplementary part, grouped under the body's.
 
         **This is what a composed symbol exports as.** A composition names
@@ -1663,6 +1725,15 @@ class DrawioRenderer:
                 keys = [] if approx is None or approx.shape is None else [
                     f"shape={approx.shape}"]
                 keys += [] if approx is None else list(approx.keys)
+                if approx is not None and approx.lost:
+                    # The body's rule, one level down: a part stood in
+                    # for by a built-in that does not draw all of it
+                    # says so, naming the unit it is drawn on.
+                    self._findings.append(Issue(
+                        "warning", APPROXIMATED,
+                        f"{owner or cid}: the {overlay.name} part has no draw.io "
+                        f"stencil and is exported as a stand-in, which loses "
+                        f"{approx.lost}"))
             # A chiral part's second hand. The SVG reflects the artwork
             # about its rectangle's own centre line and so does this: the
             # child's box is the same box either way, and only what is
@@ -2390,8 +2461,17 @@ class DrawioRenderer:
         double-clicks a text label and there is no column rule to drag.
         Every field is still a cell of its own with its own id, and so
         is every rule.
+
+        ``report`` is why the layout is asked for by name rather than
+        with the arguments alone. The strip is fixed geometry and a value
+        too long for its cell is abbreviated to an ellipsis, which tells
+        a reader that something was cut and tells the program that
+        supplied it nothing -- so an issued sheet exported to draw.io
+        carried a *wrong drawing number* silently. The sheet has said so
+        since the cells were ruled; this says it too, in the same words.
         """
-        strip = F.title_strip_layout(block, name, date, x + w, y + h, scale)
+        strip = F.title_strip_layout(block, name, date, x + w, y + h, scale,
+                                     report=self._report)
         bx, by, bw, bh = strip.box
         # Flush to the frame, exactly as the sheet's own strip is:
         # `_strip_size` reports the sheet's rectangle and `dock` puts

@@ -271,6 +271,9 @@ def model_issues(fs: "Flowsheet") -> list["Issue"]:
     about it. The check still prefers the frame where there is one,
     since that is the placement that got drawn.
     """
+    from difflib import get_close_matches
+
+    from pandid import units
     from pandid.deprecation import findings as deprecation_findings
     from pandid.render.symbols import default_registry
     from pandid.units import Instrument
@@ -299,6 +302,39 @@ def model_issues(fs: "Flowsheet") -> list["Issue"]:
             elif v < 0:
                 errors.append(Issue("error", "pin-out-of-bounds",
                                     f"{u.name} pinned {axis}={v} is negative (off-sheet)"))
+
+    # --- a kind the symbol library has no artwork for ---
+    # ``SymbolRegistry.get`` answers an unregistered *kind* with a blank
+    # 60x60 box under the id ``sym_generic``. That is deliberate for a
+    # `Unit` subclass from outside this package, which has no artwork to
+    # find; what it is not is a way of saying so. The two spellings of
+    # one mistake were handled oppositely -- an unregistered *variant* of
+    # a registered kind raises and names the catalogue, and the same typo
+    # one key up drew an empty rectangle with no ports on the sheet, in
+    # both backends, with nothing on ``fs.warnings``.
+    #
+    # Made here rather than in the registry because ``get`` is asked for
+    # a symbol on every port resolution, so one unit would report the
+    # same loss a dozen times in a render, and because the finding is
+    # about the *unit*, which the registry never sees.
+    catalogue = sorted({getattr(units, name).kind for name in units.__all__
+                        if default_registry.variants(getattr(units, name).kind)})
+    unknown: set[str] = set()
+    for u in fs.units:
+        if default_registry.variants(u.kind) or u.kind in unknown:
+            continue
+        unknown.add(u.kind)
+        # The registry's own answer for this kind, measured rather than
+        # restated: what the sheet draws is what the finding describes.
+        blank = default_registry.get(u.kind)
+        close = get_close_matches(u.kind, catalogue, n=1, cutoff=0.6)
+        warnings.append(Issue(
+            "warning", "symbol-kind-unknown",
+            f"{u.name} is a {u.kind!r}, which no symbol is registered for"
+            + (f" (did you mean {close[0]!r}?)" if close else "")
+            + f"; it is drawn as a blank {blank.width:g}x{blank.height:g} box with "
+              f"no ports. Register artwork for it with "
+              f"default_registry.register({u.kind!r}, Symbol(...))"))
 
     # --- turned symbols whose function is gravity ---
     # ISO 15519-1:2010 §11.4.2, *Orientation of graphical symbols*:
@@ -533,10 +569,11 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     from pandid.layout.attach import MAX_PLACEMENT_PASSES
     from pandid.portgeom import (is_anchored, port_faces, port_point,
                                  resolve_port, unit_box)
-    from pandid.render.symbols import (ARROWHEAD, MIN_HEAD_CLEARANCE,
-                                       MIN_NOZZLE_PITCH, default_registry,
-                                       wears_arrowhead)
+    from pandid.render.symbols import (_LABEL_EM, _LABEL_PAD, ARROWHEAD,
+                                       MIN_HEAD_CLEARANCE, MIN_NOZZLE_PITCH,
+                                       default_registry, wears_arrowhead)
     from pandid.streams import SIGNAL_KINDS, Stream
+    from pandid.units import Block
 
     errors: list[Issue] = []
     warnings: list[Issue] = []
@@ -604,6 +641,34 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         # against.
         drawn = [s for s in fs.streams if s.source.owner.frame is not None
                  and s.dest.owner.frame is not None]
+
+        # A block letters its name *inside* its box, so a box too narrow
+        # for the name draws the name out through both sides of it and
+        # across whatever is beside it. `block_symbol` widens a box it
+        # sizes itself, which is why this can only happen to a block
+        # given a `width` of its own -- and an explicit width wins
+        # outright, so the drawing is what the author asked for and the
+        # finding is soft. It had no channel at all: the renderer has a
+        # `text-overruns-cell` code for exactly this shape of defect and
+        # only sheet furniture ever raised it.
+        #
+        # Under its own code, not `text-overruns-cell`: `SvgRenderer`
+        # replaces every finding under one of those with its own before
+        # returning, so a finding made here under that code would be
+        # deleted by the render it is about.
+        for u, box in boxes:
+            if not isinstance(u, Block) or not u.tag:
+                continue
+            room = box[2] - box[0]
+            needed = _LABEL_EM * len(str(u.tag)) + _LABEL_PAD
+            if room + _TOL >= needed:
+                continue
+            warnings.append(Issue(
+                "warning", "label-overruns-symbol",
+                f"{u.name} letters {str(u.tag)!r} inside a box {room:g} units wide, "
+                f"and the name needs {needed:g}: it is drawn about "
+                f"{(needed - room) / 2:.0f} units out through each side. Widen the "
+                f"block, or leave width= unset and let it size itself to the name"))
 
         # Hard: overlapping unit bodies.
         for i in range(len(boxes)):
