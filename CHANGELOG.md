@@ -100,6 +100,33 @@ retirement is declared with. Nothing is deprecated in this release.
   from its current nozzle to the old path, as a diagonal. No shipped sheet
   moves.
 
+- **A row pinned above the sheet crashed the coordinate pass.** `pin(row=-1)`
+  names the band over row 0, and the bands were built counting up from 0, so
+  the pin indexed a band that was never made and `layout()` raised
+  `KeyError: -1`. The bands now run from the first row the sheet names. Row 0
+  still anchors the top margin where nothing goes above it, so `pin(row=2)`
+  keeps the two empty bands it asks for.
+
+- **A pinned column dragged the rank feeding it off the page.** Slack removal
+  slid each rank to one short of its nearest successor, which is a move to the
+  *left* when that successor is pinned: `A → B → C` with `A.pin(col=3)` and
+  `C.pin(col=0)` put `B` in column −1, four columns behind the unit feeding it.
+  A rank now only moves right, which is the invariant the pass was written for.
+  Two pins with a longer chain between them than the gap they leave cannot both
+  be honoured, and the derived rank is the one that holds its ground.
+
+- **A column left of 0 switched crossing reduction off without saying so.** The
+  barycentre sweeps counted from column 0, so a sheet pinned to the left of it
+  had an empty range in both directions: all four passes ran over nothing and
+  the sheet came out in insertion order. The sweeps now run between the columns
+  that exist.
+
+- **Rebasing a stacked sheet overwrote the row the author pinned.** Where a
+  north or south connection lands a unit below row 0 and a pin fixes the bands,
+  the stacking constraint is dropped so the pin can stand. The loop that did it
+  walked every unit rather than the stacked ones, so a `pin(row=-1)` was itself
+  renumbered.
+
 ## [0.1.2] - 2026-08-05
 
 ### Added

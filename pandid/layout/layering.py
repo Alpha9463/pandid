@@ -93,18 +93,26 @@ def _remove_slack(adj: dict, order: list, ranks: dict, pinned: set) -> None:
     along starts beside the raw water tank.
 
     Removing the slack is Sugiyama's own answer, and it is safe by
-    construction: a rank only moves *right*, and only to one short of
-    its nearest successor, so every edge it is on stays a forward edge
-    of length at least one and no predecessor can be violated. Ranks are
-    visited in reverse topological order, so each is measured against
-    successors that are already final. A pinned column is an answer
-    already given, and a rank with nothing downstream of it is as far
-    right as the sheet goes.
+    construction only so long as a rank moves *right*: it goes to one
+    short of its nearest successor, so every edge it is on stays a
+    forward edge of length at least one and no predecessor can be
+    violated. Ranks are visited in reverse topological order, so each is
+    measured against successors that are already final. A pinned column
+    is an answer already given, and a rank with nothing downstream of it
+    is as far right as the sheet goes.
+
+    A pin *downstream* is the one case where one short of the nearest
+    successor is to the left, and a rank that moves left is a rank
+    dragged behind the units feeding it -- off the page entirely, where
+    the pin sits in column 0. Two pins with a chain between them longer
+    than the gap they leave cannot both be honoured; the derived rank
+    holds its longest-path column and the edge into the pin is the one
+    that comes out short.
     """
     for g in reversed(order):
         if g in pinned or not adj[g]:
             continue
-        ranks[g] = min(ranks[h] for h in adj[g]) - 1
+        ranks[g] = max(ranks[g], min(ranks[h] for h in adj[g]) - 1)
 
 
 def _share_columns(units: list, flow: list["Stream"],
