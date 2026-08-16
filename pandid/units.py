@@ -1422,12 +1422,34 @@ class Tee(Unit):
             )
         super().__init__(name or self.DEFAULT_NAME, variant=variant, width=width,
                          height=height, description=description, reference=reference)
-        #: ``"outlet"`` for a takeoff, ``"inlet"`` for a return.
-        #: Read-only after construction: the port is already built, and
-        #: turning one direction into the other silently disconnects
-        #: what is on it.
-        self.branch_direction = branch
         self._add_port("branch", branch, "process")
+
+    @property
+    def branch_direction(self) -> str:
+        """``"outlet"`` for a takeoff, ``"inlet"`` for a return.
+
+        Read off the port rather than kept beside it. It was a plain
+        attribute until #292, set once in ``__init__`` and free to be
+        assigned afterwards -- which moved the word and not the nozzle,
+        so a tee could report a return while its branch went on taking
+        flow off the run, and :mod:`pandid.spec` wrote the word into the
+        file. A sheet read back then had the branch running the other
+        way from the sheet that was written.
+
+        Derived, that cannot happen: there is one fact and the
+        serialiser and the router read the same one.
+        """
+        return self.ports["branch"].direction
+
+    @branch_direction.setter
+    def branch_direction(self, value: str) -> None:
+        raise AttributeError(
+            f"{self.name}: branch_direction is read-only. The branch nozzle is "
+            f"already built and may already have a line on it, so turning one "
+            f"direction into the other would leave that line running the wrong "
+            f"way with nothing said about it. Build the tee you want: "
+            f"Tee({self.name!r}, branch={value!r})"
+        )
 
     @property
     def tag(self) -> str:
@@ -2063,7 +2085,19 @@ class Instrument(Unit):
                  label_pos: str | None = None, description: str = "", reference: str = "",
                  display: str | None = None):
         letters, num = split_tag(type, number)
-        name = f"{type}-{number}" if number != "" and number is not None else type
+        # Built from the SPLIT, not from the arguments. ``split_tag``
+        # promises that ("FT", 101), "FT-101" and "FT101" are one
+        # request, and until #292 the name was worked out beside it
+        # rather than from it: the un-hyphenated spelling came out
+        # ``name == tag == "FT101"`` while the balloon drew ``FT`` over
+        # ``101``, so the equipment list, every cross-reference and the
+        # spec round trip carried a tag no other spelling of the same
+        # request produced -- and reading that file back re-derived
+        # "FT-101" from the type and number, renaming the instrument.
+        # Joined the same way ``split_tag`` takes it apart, so all three
+        # spellings converge; ``letters + num`` is what a tag that is
+        # all letters or all digits comes out as.
+        name = f"{letters}-{num}" if letters and num else letters + num
         #: Which of :data:`DISPLAYS` this balloon states. Set by the
         #: resolver below, which is also what turns the pair into the
         #: one variant the registry, the exporter and :mod:`pandid.spec`
