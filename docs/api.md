@@ -1461,7 +1461,7 @@ anything the standard does not tabulate itself. So what a piece of equipment
 
 ```python
 Reactor("R-101", agitator="turbine")                     # a stirred tank
-Reactor("R-201", internals="packing", agitator=None)     # a packed bed
+Reactor("R-201", internals="packing")                    # a packed bed
 Column("T-101", internals="valve_tray", trays=30)        # a valve-tray tower
 Vessel("D-301", supports="skirt")                        # a skirted drum
 Separator("V-201", characteristic="gravity")             # a settling chamber
@@ -1487,6 +1487,13 @@ stirred tank and gets item 28.1; one told `agitator=None` is a bare shell
 somebody asked for. The same goes for a `Column`, which is drawn with eight
 trays unless it is told otherwise — the count and the pitch ISO item 2.6 X8011
 draws.
+
+**Naming `internals=` leaves the agitator out.** A packed bed is not stirred, a
+fluidised bed is mixed by its own fluidisation and a trayed vessel is not a tank
+with a paddle in it, so `Reactor("R-201", internals="packing")` draws the bed
+and no stirrer. Name one anyway where the vessel really has both:
+`Reactor("R-203", agitator="turbine", internals="packing")` is a stirred slurry
+reactor and is drawn with the stirrer in the bed.
 
 **An agitator brings a nozzle.** ISO item 1.27 X8006 runs the stirrer's shaft up
 through the top head to a motor above the vessel, so a `Reactor` with an

@@ -717,3 +717,106 @@ def test_only_the_agitator_brings_the_drive():
     assert "drive" not in units.Reactor("R-201", agitator=None).ports
     # The body's own nozzles are unchanged either way, and in order.
     assert list(units.Reactor("R-101").ports) == ["outlet", "vent", "duty", "drive", "feed"]
+
+
+def drawn(unit):
+    """The parts on a unit's drawing, by identity rather than by number.
+
+    ``(group, name)`` and not a count: a test that counted would pass on a
+    reactor drawn with the wrong stirrer, and the whole subject here is
+    *which* part ends up on the body.
+
+    Read off the composed :class:`~pandid.render.symbols.Symbol` rather than
+    off ``unit.overlays``, because those are two different routes to a
+    composition and only the symbol is both. A separator's characteristic is
+    composed in the registry, under the ISO registration number of the row it
+    reproduces; everything else is composed per unit.
+    """
+    return [(overlay.group, overlay.name) for overlay in default_registry.for_unit(unit).overlays]
+
+
+@pytest.mark.parametrize(
+    "internals", ["packing", "fluidised_bed", "sieve_tray", "tray", "filter_insert"]
+)
+@pytest.mark.parametrize("variant", ["default", "jacketed"])
+def test_naming_internals_leaves_out_the_agitator_nobody_asked_for(variant, internals):
+    """A reactor with a bed in it is not a stirred tank.
+
+    ``agitator=`` defaults to item 28.1 on the two stirred bodies, which is
+    right for a reactor described only by its body -- and wrong the moment the
+    author says what is inside it. A packed bed is not stirred, a fluidised bed
+    is mixed by its own fluidisation, and a trayed vessel is not a tank with a
+    paddle in it; drawing one anyway put a stirrer through the bed it would
+    have had to turn in.
+    """
+    unit = units.Reactor("R-201", variant=variant, internals=internals)
+    assert drawn(unit) == [(27, internals)]
+    assert unit.agitator is None
+    # The drive is the agitator's, so it goes with it.
+    assert "drive" not in unit.ports
+
+
+def test_an_agitator_the_author_named_survives_its_internals():
+    """A stirred slurry reactor is a real vessel, and this is how it is asked
+    for.
+
+    The suppression is of the *default*, not of the keyword: what is being read
+    is whether the author said anything, which is the one thing the
+    :data:`~pandid.units._UNSTATED` sentinel exists to record. Order is drawing
+    order -- the bed first, the stirrer over it -- so the shaft is drawn on top
+    of what it turns in.
+    """
+    unit = units.Reactor("R-203", agitator="turbine", internals="packing")
+    assert drawn(unit) == [(27, "packing"), (28, "turbine")]
+    assert (unit.agitator, unit.internals) == ("turbine", "packing")
+    assert "drive" in unit.ports
+
+
+def test_the_reactor_forms_that_did_not_change():
+    """The three spellings the suppression must leave exactly where they were.
+
+    A rule about one keyword that moves another keyword's drawing is a rule
+    that has escaped its subject, so the neighbours are asserted rather than
+    assumed.
+    """
+    # Nothing said at all: still the stirred tank a reactor is by default.
+    assert drawn(units.Reactor("R-101")) == [(28, "agitator")]
+    # Said, and said empty: still the bare shell somebody asked for.
+    assert drawn(units.Reactor("R-102", agitator=None)) == []
+    # Said, and said something: still that stirrer.
+    assert drawn(units.Reactor("R-103", agitator="anchor")) == [(28, "anchor")]
+
+
+def test_the_agitator_default_is_the_same_answer_wherever_it_is_asked_for():
+    """The constructor and a serializer read one rule, not two.
+
+    :meth:`~pandid.units.Unit.composition_defaults` is that rule, and
+    ``pandid.spec._write_composition`` asks it the same question the
+    constructor did -- so a keyword left off a spec reads back as the drawing
+    it was written from. A default worked out in the constructor alone would
+    have written ``agitator: null`` onto every packed-bed reactor instead.
+    """
+    for internals, expected in (("packing", None), (None, "agitator")):
+        stated = {"agitator": units._UNSTATED, "internals": internals}
+        assert units.Reactor.composition_defaults("default", stated)["agitator"] == expected
+        assert units.Reactor("R-1", internals=internals).agitator == expected
+
+
+def test_a_class_with_one_composition_keyword_has_nothing_to_suppress():
+    """Only a reactor composes from two parts at once.
+
+    A column's ``trays`` is a count rather than a part, and a vessel and a
+    separator take one keyword each, so there is no second part for a first to
+    rule out. Asserted rather than left implied: the suppression is a rule
+    about keywords *together*, and the classes it does not apply to are as much
+    a part of it as the one it does.
+    """
+    two_parts = {
+        cls.__name__
+        for cls in (units.Reactor, units.Column, units.Vessel, units.Separator)
+        if len([key for key in cls.COMPOSITION if key != "trays"]) > 1
+    }
+    assert two_parts == {"Reactor"}
+    assert drawn(units.Column("T-104", internals="packing", trays=2)) == [(27, "packing")] * 2
+    assert drawn(units.Vessel("D-301", supports="skirt")) == [(26, "skirt")]
+    assert drawn(units.Separator("V-201", characteristic="gravity")) == [(29, "gravity")]

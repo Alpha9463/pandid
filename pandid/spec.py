@@ -1178,9 +1178,17 @@ def _write_composition(unit: Unit, entry: dict[str, Any]) -> dict[str, Any]:
     empty is not an unstated one -- ``Column(internals=None)`` is a bare
     shell somebody asked for -- and leaving it off is what read back as
     the eight decks a column draws when nobody says otherwise.
+
+    The unit's own composition goes back in, because one part can rule
+    another out: a reactor with internals has no agitator unless one was
+    asked for, so the default for ``agitator`` is only knowable
+    alongside ``internals``. Asking without it would write
+    ``agitator: null`` onto every packed-bed reactor -- true, and noise,
+    since reading the file back suppresses it again anyway.
     """
     cls = type(unit)
-    for key, default in cls.composition_defaults(unit.variant).items():
+    stated = {key: getattr(unit, key) for key in cls.COMPOSITION}
+    for key, default in cls.composition_defaults(unit.variant, stated).items():
         value = getattr(unit, key)
         if value != default:
             entry[key] = value

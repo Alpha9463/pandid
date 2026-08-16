@@ -281,9 +281,14 @@ def _round_trip(unit):
         # Chiral, and drawn as a mirrored pair: a hand lost is a lug on one wall.
         (lambda: units.Vessel("D-302", supports="bracket"), {"supports": "bracket"}),
         (lambda: units.Reactor("R-101", agitator="anchor"), {"agitator": "anchor"}),
+        # No ``agitator`` in the entry: a reactor with internals is not
+        # stirred unless it says so, so the empty agitator *is* the
+        # default here and writing it would be noise. The stated empty
+        # that is not a default still gets its ``null`` -- see
+        # ``test_a_body_asked_for_bare_comes_back_bare``.
         (
-            lambda: units.Reactor("R-201", internals="packing", agitator=None),
-            {"agitator": None, "internals": "packing"},
+            lambda: units.Reactor("R-201", internals="packing"),
+            {"internals": "packing"},
         ),
         (
             lambda: units.Column("T-101", internals="valve_tray", trays=30),
