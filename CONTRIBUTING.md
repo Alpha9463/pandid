@@ -205,6 +205,36 @@ by a reader, and so a mark with no number cannot become a part at all. If you
 are unsure whether something composes, leave it a distinct symbol and say so in
 the PR. A false composition is worse than a missed one.
 
+**The artwork lives in `pandid/render/iso_parts.py`** — twenty-five parts, all
+original, all built to the construction Table 2 states rather than traced from
+its figures. Review a change to it with
+
+```bash
+python scripts/symbol_sheet.py --parts out.svg
+```
+
+which draws each part on the 2,5 mm module grid it was laid out on, labelled
+with the item and registration number it claims, and then a strip of worked
+compositions on real bodies.
+
+Three conventions to keep if you add one.
+
+- **Draw on the module.** `iso_parts.M` is ISO 14617-1 §4.3's 2,5 mm grid in
+  drawing units. Every vertex of every Table 2 symbol lands on it, so yours
+  should, and a reader can then check your drawing by counting grid dots.
+- **Draw at `PART_STROKE`, not at the outline's weight.** ISO 10628-1 §5.3.1
+  splits the weights by what is being drawn: b) equipment outlines at 0,5 mm,
+  c) the in-line detail band at 0,25 mm. A tray deck is detail inside an
+  outline, and `compose` divides the declared width by the scale so it stays
+  0,25 mm however the body is resized.
+- **Do not draw the connection ticks.** Table 2 puts a short thin stroke a
+  module away from most symbols; clause 5 column 3 says it marks a preferred
+  connection and "is not a part of the graphical symbol". On the agitator rows
+  it sits directly above the shaft, which makes the shaft *look* dashed on the
+  page. It is not — every group-28 shaft is one solid stroke, and
+  `test_no_agitator_shaft_is_dashed` is there because that misreading has
+  already been made once. State the connection in `ports` instead.
+
 ## 2. Every port must land on drawn ink
 
 A nozzle floating in whitespace draws a stream that fails to touch its

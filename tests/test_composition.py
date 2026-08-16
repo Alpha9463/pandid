@@ -375,8 +375,17 @@ def test_the_body_keeps_its_faceless_and_series_declarations():
 
 @pytest.fixture
 def registry():
-    """A registry of its own, with the four parts above in it."""
+    """A registry of its own, with the four parts above in it and nothing else.
+
+    The shipped ISO artwork is cleared out first, deliberately. These tests are
+    about the *mechanism* -- what a key is, what a miss reports -- and the four
+    placeholders above are the smallest thing that exercises it. Leaving the
+    real twenty-five in would make "the registered group 27 parts" a list this
+    file has to be kept in step with, for no gain: ``tests/test_iso_parts.py``
+    is where the shipped set is held to Table 2.
+    """
     reg = SymbolRegistry()
+    reg._parts.clear()
     reg.register("composition_test", body())
     for iso in (TRAY, PACKING, TURBINE, SETTLING):
         reg.register_part(part(iso))
@@ -536,10 +545,13 @@ def test_a_composed_symbol_renders_through_the_svg_backend():
         PORTS = [("feed", "inlet", "feed"), ("bottoms", "outlet", "liquid")]
 
     default_registry.register(Body.kind, body())
-    default_registry.register_part(part(TRAY))
     try:
         fs = Flowsheet("composition")
         unit = Body("X-1")
+        # The shipped item 27.1 C2044, not a placeholder: the artwork exists
+        # now, and a registry-level test that swapped it for a stand-in would
+        # have to put the real one back afterwards or take it out of the
+        # library for every test that ran after this one.
         unit.overlays = (Overlay(27, "tray", 0.1, 0.5, 0.8, 0.05),)
         fs.add(unit)
         fs.layout()
@@ -549,7 +561,6 @@ def test_a_composed_symbol_renders_through_the_svg_backend():
         assert "<line" in svg
     finally:
         default_registry._symbols.pop((Body.kind, "default"), None)
-        default_registry._parts.pop((27, "tray"), None)
         default_registry._composed.clear()
 
 
@@ -570,9 +581,26 @@ def test_no_shipped_symbol_carries_a_part():
     assert composed == []
 
 
-def test_no_part_ships_yet():
-    """The artwork for groups 26-29 is the next change, not this one."""
-    assert default_registry.parts() == []
+def test_the_parts_that_ship_are_available_and_unused():
+    """The artwork for groups 26-29 has since landed in
+    ``pandid/render/iso_parts.py``, and ``tests/test_iso_parts.py`` is where it
+    is held to Table 2 row by row.
+
+    What this file still asserts is the half that has not changed: registering
+    a part makes it *available* to be overlaid, in a namespace of its own that
+    the symbol lookup never reads. So no lookup, no sheet and no golden can
+    have moved -- which is what the test above says from the other side.
+
+    One name proves the namespaces are separate rather than merely disjoint by
+    luck: ``turbine`` is both a group-28 agitator and a kind of machine, and
+    the two are different drawings that neither shadow nor collide with each
+    other.
+    """
+    assert default_registry.parts()
+    agitator = default_registry.part(28, "turbine")
+    machine = default_registry.get("turbine")
+    assert agitator.iso.reg == "C2027"
+    assert agitator.svg != machine.svg and not machine.overlays
 
 
 def test_no_shipped_symbol_claims_a_registration_number_yet():
