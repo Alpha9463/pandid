@@ -136,6 +136,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **No example is written in a deprecated spelling any more, and one sheet
+  redraws for it.** The two that were: `examples/14_tank_farm.py`'s knock-out
+  drum V-604, and the thickener in `13_mineral_dewatering.py`'s golden fixture.
+
+  The thickener is a rename and nothing else — `Separator(characteristic=…)`
+  draws that body to the character, so `tests/golden/13_mineral_dewatering.svg`
+  does not move.
+
+  V-604 is a **redraw**, and deliberately: `Vessel(supports="leg")` composes
+  ISO item 1.16 X8002 — a dished-end vessel with two item 26.1 C2005 channel
+  legs under it — where `variant="legs"` reached draw.io's
+  `vessel_(dished_ends,_legs)` stencil. The drum keeps its five nozzles in the
+  same places and every line into it, and it gains a shell drawn to the
+  standard's construction with the legs open at the top where the vessel closes
+  them, at the detail weight rather than the outline's. Thirty lines of
+  `tests/golden/14_tank_farm.svg` move: V-604's symbol, its two nozzle stubs,
+  its two labels and the sheet's own fit scale, which shifts 0,15 % because the
+  drawing's bounds changed. Nothing else on the sheet does.
+
+  A deprecated spelling in an example is a recommendation, and this one had
+  until 0.2.0 to become a refusal. Moving it now is the sheet moving while
+  somebody is looking at it.
+
 - **`reactor/default` is a stirred tank drawn as a stirred tank.** It was
   draw.io's "Mixing Reactor": a rectangle with a V bottom and the stirrer's
   motor perched in a box outside the shell. It is now the same dished-end
@@ -250,8 +273,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Six `variant=` spellings that named a **part** rather than a body, each moved
 to the keyword that names the part. All work throughout 0.1.3 and are removed
-in 0.2.0; each draws what it always drew, so no sheet moves until it is
-deleted.
+in 0.2.0.
+
+**Three of the six redraw, and that is the point of them.** The keyword builds
+ISO's own composition — a vessel outline with a group-26 element under it, which
+is what items 1.16–1.19 are — where the `variant=` spelling reached a vendored
+draw.io stencil approximating the same equipment. So `Vessel(supports="leg")`,
+`Vessel(supports="skirt")` and `Reactor(internals="packing")` are the standard's
+drawing rather than the stencil's: a slightly wider shell, and the support or the
+bed drawn to ISO's construction at ISO 10628-1 §5.3.1 c)'s detail weight rather
+than at the outline's. Same equipment, same nozzles, a sheet that moves. The
+three `Separator(characteristic=…)` spellings are the other kind — the same
+drawing to the character, since that body was already composed.
+
+So a sheet on one of the three does move, and it moves when the author edits it
+rather than at 0.2.0. `examples/14_tank_farm.py` is the worked case: see the
+entry under **Changed**.
 
 - **`Vessel(variant="legs")` → `Vessel(supports="leg")`** and
   **`Vessel(variant="skirted")` → `Vessel(supports="skirt")`.** ISO group 1

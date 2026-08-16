@@ -60,7 +60,10 @@ def main():
                         description="Denatured Ethanol Storage Tank"))
     v603 = fs.add(Tank("V-603", variant="sphere", width=140, height=185,
                        label_pos="center", description="Butane Storage Sphere"))
-    v604 = fs.add(Vessel("V-604", variant="legs", width=60, height=120,
+    # ``supports="leg"`` rather than the retired ``variant="legs"``: the
+    # drum stands on ISO item 26.1's channel-section legs, composed under
+    # the shell the way item 1.16 X8002 draws them.
+    v604 = fs.add(Vessel("V-604", supports="leg", width=60, height=120,
                          description="Loading Vapour Knock-Out Drum"))
 
     # --- Rotating -----------------------------------------------------
