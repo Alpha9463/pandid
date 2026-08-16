@@ -805,6 +805,13 @@ reader would otherwise take them for working code.
 
 ### Security
 
+- **The sdist now names what it must not ship.** `standards/`,
+  `professional_examples/`, `renders/`, `.venv/`, `test_diagram.svg`,
+  `skills-lock.json`, `uv.lock` and the agent scratch directories are excluded
+  by name in `pyproject.toml` rather than inherited from `.gitignore`.
+  `tests/test_packaging.py` builds an sdist from a tree with no `.gitignore` and
+  fails if a PDF comes out; the release workflow checks the real artifacts too.
+
 - **A spec file could put script into the sheet drawn from it.** `Stream.color`
   and `Stream.dasharray` reached their SVG attributes unescaped, so
   `color: 'black" onload="alert(1)'` in a `.yaml` closed the attribute and
