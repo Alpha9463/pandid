@@ -405,6 +405,22 @@ class Overlay:
         y: Top edge, as a fraction of the body's height.
         w: Width, as a fraction of the body's width.
         h: Height, as a fraction of the body's height.
+        mirror: Draw the part reflected left to right on its rectangle.
+
+    Why a mirror, and only in this direction
+    ----------------------------------------
+    Two of Table 2's four group-26 supports are **chiral**: the standard
+    draws item 26.2's bracket and item 26.4's ring against a wall on one
+    side, and a vessel standing on either wants a pair, one per wall. The
+    parts are drawn in the hand Table 2 draws them in, so the other hand
+    has to come from somewhere, and a placement flag is the cheaper of
+    the two answers -- a second registered part would be a *second
+    registration number* for a symbol the standard numbers once, which is
+    exactly the false identity :class:`IsoPart` exists to stop.
+
+    Left to right only, because that is the whole of the case. A support
+    turned upside down is not a support, and a mark that means something
+    different upside down is what :attr:`OverlayPart.directional` is for.
     """
 
     group: int
@@ -413,6 +429,7 @@ class Overlay:
     y: float
     w: float
     h: float
+    mirror: bool = False
 
     def __post_init__(self) -> None:
         if self.w <= 0 or self.h <= 0:
@@ -563,6 +580,23 @@ class Symbol:
     # they are rather than as draw.io style text.
     drawio_flip_h: bool = False
     drawio_fill: str = ""
+    # The stencil that draws the **body** of a composition, for a symbol
+    # that has one. Never :attr:`drawio_shape`, and the two are different
+    # claims: ``drawio_shape`` says *this drawing is that stencil*, which
+    # a composition is not, while this says *the outline under the parts
+    # is that stencil, and the parts are somewhere else*.
+    #
+    # :mod:`pandid.render.drawio` is the only reader, and it draws the
+    # body from this and one child cell per :attr:`overlays` entry. That
+    # is what stops the strainer divergence: a composed reactor exported
+    # under the vessel's own ``drawio_shape`` would come out as a bare
+    # vessel, the right outline silently missing the thing that made it a
+    # reactor, whereas a body cell with the agitator beside it is the
+    # drawing the sheet has.
+    #
+    # Written by :func:`compose` from the body's own reference, and empty
+    # where the body is drawn here rather than vendored.
+    drawio_body_shape: str = ""
     # The supplementary parts this drawing carries, in the order they are
     # painted over the body. Empty for a symbol drawn whole, which is
     # every symbol the registry ships today: a body with no parts is the
@@ -1664,9 +1698,15 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
     so a composed reactor exported under its body's reference would come
     out as a bare vessel -- the right outline, silently missing the thing
     that made it a reactor. Naming nothing is what makes the two backends
-    disagree loudly instead of quietly, and :attr:`Symbol.overlays` is
-    what the exporter reads to draw the parts instead. See the report on
-    this change for the sequencing.
+    disagree loudly instead of quietly.
+
+    What the exporter reads instead is :attr:`Symbol.overlays` for the
+    parts and :attr:`Symbol.drawio_body_shape` for the outline under
+    them, and it emits **one cell per part, grouped under the body's**.
+    The body's reference is carried across to that second field rather
+    than dropped, because it is still true of the body -- and stating it
+    under a name that says "body" is what keeps it from being read as a
+    statement about the whole drawing.
     """
     match = _GROUP.match(body.svg)
     if match is None:
@@ -1690,11 +1730,11 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
             scale = min(sx, sy)
             rx, ry = rx + (rw - scale * part.width) / 2, ry + (rh - scale * part.height) / 2
             sx = sy = scale
-        placed.append((part, rx, ry, sx, sy))
+        placed.append((part, rx, ry, sx, sy, overlay.mirror))
 
     xs = [0.0, body.width]
     ys = [0.0, body.height]
-    for part, rx, ry, sx, sy in placed:
+    for part, rx, ry, sx, sy, _ in placed:
         xs += [rx, rx + sx * part.width]
         ys += [ry, ry + sy * part.height]
     # The shift that puts the union's top-left corner back on the origin.
@@ -1708,15 +1748,24 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
 
     art = [inner if (ox, oy) == (0.0, 0.0)
            else f'<g transform="translate({ox:g},{oy:g})">{inner}</g>']
-    for part, rx, ry, sx, sy in placed:
+    for part, rx, ry, sx, sy, mirror in placed:
         contents = _GROUP.match(part.svg).group(2)  # type: ignore[union-attr]
+        # A mirrored part is reflected about its rectangle's own vertical
+        # centre line, so the reflection stays inside the rectangle it
+        # was given rather than swinging across the body. Written as a
+        # translate to the rectangle's *right* edge and a negative x
+        # scale, which is the same two numbers the port below is mapped
+        # through.
+        left = rx + ox + (sx * part.width if mirror else 0.0)
         # One number for a stroke that has two scales: the geometric mean
         # is what pandid.render.svg._pen_scale settles an uneven
         # placement with, and a part scaled unevenly is the same
         # question. A part that may not be reshaped never reaches it --
-        # its two scales were made equal above.
+        # its two scales were made equal above. The mirror contributes no
+        # magnitude, hence the absolute value.
         art.append(
-            f'<g transform="translate({rx + ox:g},{ry + oy:g}) scale({sx:g},{sy:g})">'
+            f'<g transform="translate({left:g},{ry + oy:g}) '
+            f'scale({-sx if mirror else sx:g},{sy:g})">'
             f'{_at_part_scale(contents, math.sqrt(abs(sx * sy)))}</g>'
         )
 
@@ -1746,7 +1795,7 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
                     f"of the body. Place the part inside the body's box, or give the "
                     f"body a drawing whose box already holds it"
                 )
-    for part, rx, ry, sx, sy in placed:
+    for part, rx, ry, sx, sy, mirror in placed:
         for name, (px, py) in part.ports.items():
             if name in ports:
                 raise ValueError(
@@ -1755,7 +1804,10 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
                     f"connections and never replaces them, since two nozzles under "
                     f"one name draw a stream to whichever survived the merge"
                 )
-            ports[name] = (round(rx + ox + sx * px, 4), round(ry + oy + sy * py, 4))
+            # Through the same transform the artwork went through, so a
+            # nozzle on a mirrored part stays on the ink it was drawn on.
+            along = (part.width - px) if mirror else px
+            ports[name] = (round(rx + ox + sx * along, 4), round(ry + oy + sy * py, 4))
 
     return Symbol(
         svg=head + "".join(art) + tail,
@@ -1781,8 +1833,12 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
         bare_run=body.bare_run,
         gravity_fixed=body.gravity_fixed or any(p.gravity_fixed for p, *_ in placed),
         directional=body.directional or any(p.directional for p, *_ in placed),
-        # Deliberately not the body's; see the docstring.
-        drawio_shape="", drawio_flip_h=body.drawio_flip_h, drawio_fill=body.drawio_fill,
+        # Deliberately not the body's; see the docstring. The body's own
+        # reference moves to the field that says it is the body's, which
+        # is where the exporter looks for it.
+        drawio_shape="",
+        drawio_body_shape=body.drawio_shape or body.drawio_body_shape,
+        drawio_flip_h=body.drawio_flip_h, drawio_fill=body.drawio_fill,
         overlays=tuple(overlay for overlay, _ in parts),
         # *Not* the body's. A composition is a different symbol from the
         # thing it was composed onto, so carrying the body's number
@@ -1793,6 +1849,40 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
         # X8125 -- and the caller that knows which one states it.
         iso_reg=iso_reg,
     )
+
+
+#: ISO 10628-2 Table 2's separating vessel: the outline every group-8 row
+#: except the cyclone is drawn on, with nothing inside it.
+#:
+#: **Measured off Table 2 item 8.3, in grid modules:** walls at x 9 and
+#: 15, top edge at y 1, walls down to y 7, then (9,7) -> (12,10) ->
+#: (15,7). A 6 M x 6 M rectangle over a 3 M V, 6 M x 9 M overall. The
+#: draw.io separator stencils are all 80 x 120 with the shoulder at 80,
+#: which is that ratio exactly -- so a composed separator lands on the
+#: same outline as the five that stay vendored whole, and a sheet
+#: carrying both reads as one family.
+#:
+#: **Not registered as a variant**, deliberately. The bare outline is not
+#: a tabulated symbol: ISO's general separator is item 8.1 X8081, which
+#: draws a fork of two arrows inside this outline, so offering the empty
+#: body under a variant name would put a symbol in the catalogue that the
+#: standard does not have. It is a body, and the only things built on it
+#: are the three compositions in
+#: :meth:`SymbolRegistry._register_composed`.
+_SEPARATING_VESSEL = Symbol(
+    svg='<g id="sym_separator_vessel">'
+        '<path d="M 0 0 L 80 0 L 80 80 L 40 120 L 0 80 Z" '
+        'fill="white" stroke="#111" stroke-width="2"/></g>',
+    width=80.0, height=120.0,
+    # The anchors the four mechanical separators already use, coordinate
+    # for coordinate: the feed high on the west wall, the high draw
+    # opposite it, the collected phase out of the apex.
+    ports={"feed": (0.0, 12.0), "vapor": (80.0, 12.0), "liquid": (40.0, 120.0)},
+    # A hopper collects out of its apex; turned, the apex is a roof and
+    # nothing falls into it. Every group-8 drawing in the library is
+    # fixed for this reason -- ISO 15519-1 §11.4.2's exception.
+    gravity_fixed=True,
+)
 
 
 class SymbolRegistry:
@@ -2382,6 +2472,38 @@ class SymbolRegistry:
             ports=_logic_ports),
             "interlock")
 
+        # The tubular reactor: a PFR, and the one reactor that is not a
+        # vertical vessel. ISO 10628-2 has no reactor group and no
+        # tubular-reactor symbol -- group 1 is vessels, and none of them
+        # is a horizontal shell with a tube pass in it -- so this is
+        # built to item 3.7's construction instead (reg 2514, "heat
+        # exchanger with coil-shaped tubes"), which is the nearest thing
+        # the standard does draw: a shell with a serpentine tube inside
+        # it. A PFR is a jacketed tube, so that is the right ancestor.
+        #
+        # 12 M x 4 M, and the shell is a plain rectangle rather than the
+        # dished cylinder every vertical vessel here is. Both walls are
+        # then straight for their whole height, which is what a charge
+        # nozzle down the west face needs: on a dished end only the apex
+        # is on the box edge, so a second feed would land in the air
+        # beside the head.
+        #
+        # The tube pass is drawn at ``iso_parts.PART_STROKE``, the
+        # in-line detail weight ISO 10628-1:2014 §5.3.1 c) rules the
+        # internals of a symbol at, against the outline's §5.3.1 b).
+        self.register("reactor", Symbol(
+            svg='<g id="sym_reactor_tubular">'
+                '<rect x="0" y="0" width="120" height="40" fill="white" '
+                'stroke="#111" stroke-width="2"/>'
+                '<path d="M 15 10 L 105 10 A 5 5 0 0 1 105 20 L 15 20 '
+                'A 5 5 0 0 0 15 30 L 105 30" fill="none" stroke="#111" '
+                'stroke-width="1"/></g>',
+            width=120.0, height=40.0,
+            ports={"outlet": (120.0, 20.0), "duty": (60.0, 0.0)},
+            port_series=(PortSeries(prefix="feed_", face="W", pitch=10.0,
+                                    extent=0.5, at=20.0, singular="feed"),),
+        ), "tubular")
+
         # Vendored draw.io symbols (Apache-2.0): registered last so they
         # override the hand-drawn defaults for shared kinds and add
         # variants.
@@ -2395,6 +2517,65 @@ class SymbolRegistry:
         # because a part is only ever overlaid on one.
         from pandid.render.iso_parts import register_parts
         register_parts(self)
+        self._register_composed()
+
+    def _register_composed(self):
+        """The three drawings ISO composes and gives a number of its own.
+
+        Two kinds of composition ship. One the **author** configures --
+        which agitator, how many trays -- is built per unit from the
+        keywords on :class:`~pandid.units.Reactor` and its siblings, and
+        cannot be enumerated here because the combinations are the point.
+        The other is a composition the **standard itself** tabulates as a
+        symbol example with a registration number, and that one has a
+        fixed answer, so it belongs in the registry where every other
+        fixed drawing is.
+
+        Three of them, all in ISO 10628-2 group 8, all one separating
+        vessel (:data:`_SEPARATING_VESSEL`) carrying one group-29
+        characteristic:
+
+        =====  ======  ==============================================
+        item   reg     body + part
+        =====  ======  ==============================================
+        8.3    X8031   separating vessel + 29.1 C2028 gravity
+        8.6    X8125   separating vessel + 29.2 C2030 electrostatic
+        8.8    X8126   separating vessel + 29.3 C2031 electromagnetic
+        =====  ======  ==============================================
+
+        The five group-8 drawings pandid ships beside them stay vendored
+        whole, because ISO gives each a distinct registered symbol and
+        group 29 has nothing to build them out of: **no vortex** (8.10
+        X2618, the cyclone -- which ISO 14617-1 §4.5 names by number as a
+        symbol in its own right), no baffle (8.2 X2616), no spray (8.5
+        X2621, and so not 8.7 X8033 either) and no permanent magnet (8.9
+        X8127). Item 8.4's wet scrubber would need item 29.10's double
+        arc, which is not drawn yet.
+
+        The cost, stated because it is real: the three lose their draw.io
+        stencils. Each of the three *is* a stencil in draw.io's P&ID set,
+        but the outline underneath them is not, so the exporter draws the
+        body as a rectangle with the mark as a child cell rather than as
+        the shape draw.io has for the pair. Naming the whole-composition
+        stencil here instead would put a ``drawio_shape`` on a composed
+        symbol, which is the one thing :func:`compose` refuses -- and the
+        refusal is what stops a *body's* reference being reused for a
+        body-plus-parts drawing, which is the far commoner and far
+        quieter error.
+        """
+        from pandid.render.iso_parts import characteristic_overlays
+
+        for name, reg in (("gravity", "X8031"), ("electrostatic", "X8125"),
+                          ("electromagnetic", "X8126")):
+            # ``registry=self``: this runs inside ``__init__``, so the
+            # module's ``default_registry`` the helper would otherwise
+            # ask is the object still being built.
+            overlays = characteristic_overlays(name, registry=self)
+            self.register("separator", compose(
+                _SEPARATING_VESSEL,
+                [(o, self.part(o.group, o.name)) for o in overlays],
+                iso_reg=reg,
+            ), name)
 
 
 default_registry = SymbolRegistry()

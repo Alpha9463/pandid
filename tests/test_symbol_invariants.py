@@ -1455,12 +1455,21 @@ def test_a_lone_member_lands_where_the_fixed_nozzle_did():
     feed moves the first one on every drawing already issued.
 
     The column is the one family this does not hold for, and the test below is
-    why: its pre-family nozzle was not somewhere its family could be centred."""
+    why: its pre-family nozzle was not somewhere its family could be centred.
+
+    The number for ``default`` is the *body's*, and the body changed with this
+    drawing: the stirred tank is now the same dished-end cylinder the vessel and
+    the flash drum are cut from (62 x 100), so its charge nozzle is at the middle
+    of the straight wall rather than at the middle of the "Mixing Reactor"
+    stencil's. What the check is for is unchanged -- the lone feed lands where a
+    single fixed nozzle would, and adding a second does not move it -- and the
+    ``mixing`` row below is the old body, still answering the old number."""
     from pandid import units as U
     from pandid.portgeom import _drawn_placements, resolve_size
 
     for unit, want in (
-        (U.Reactor("R"), (0.0, 48.2)),
+        (U.Reactor("R"), (0.0, 50.0)),
+        (U.Reactor("R", variant="mixing"), (0.0, 48.2)),
         (U.Reactor("R", variant="plain"), (0.0, 30.0)),
     ):
         w, h = resolve_size(unit)

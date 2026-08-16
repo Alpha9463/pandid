@@ -9,6 +9,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A reactor, a column, a vessel and a separator now say what is *inside*
+  them.** Four keywords, one per ISO 10628-2 part group, each naming a
+  supplementary symbol the standard tabulates:
+
+  ```python
+  Reactor("R-101", agitator="turbine")                    # ten group-28 stirrers
+  Reactor("R-201", internals="packing", agitator=None)    # a packed bed
+  Column("T-101", internals="valve_tray", trays=30)       # eight group-27 internals
+  Vessel("D-301", supports="skirt")                       # four group-26 supports
+  Separator("V-201", characteristic="gravity")            # three group-29 marks
+  ```
+
+  `variant=` goes on choosing the **body**; these choose what is drawn in it,
+  and the two were previously the same word. That is why a `Reactor` could not
+  be jacketed *and* packed, and why a jacketed `Vessel` could not stand on
+  legs: `variant=` had already been spent. It is also what ISO does — its
+  group 2 is not a vocabulary of towers, it is one shell drawn eight times with
+  a different group-27 internal in it, so an absorber, a stripper, an adsorber
+  and a molecular sieve are one drawing told apart by its tag.
+
+  An agitator brings a `drive` nozzle, at the top of the shaft where ISO item
+  1.27 X8006 draws the motor; a reactor without one has no `drive`. Trays,
+  supports and characteristics are marks no line reaches and bring nothing.
+
+- **`Reactor(variant="tubular")`, a plug-flow reactor**, and
+  `Reactor(variant="jacketed")`, the stirred tank inside a heating jacket that
+  is ISO item 1.27 X8006 itself. The tubular shell is original artwork — ISO
+  has no tubular-reactor symbol and neither has draw.io's P&ID set, so it is
+  built to item 3.7 reg 2514's construction, a shell with a serpentine tube in
+  it. **It has no `vent`**: a pipe with a bed in it has no vapour space, and a
+  nozzle nothing is ever routed to is a nozzle an author has to be told to
+  ignore.
+
+- **Three symbols that carry an ISO registration number.** Items 8.3 X8031,
+  8.6 X8125 and 8.8 X8126 are now built by composition rather than vendored —
+  one separating vessel carrying one group-29 characteristic each, which is
+  what the standard draws — and each records the number of the row it
+  reproduces in `Symbol.iso_reg`. They are the first three of the library's
+  160 drawings to claim one; the rest is a backfill of its own.
+
+- **draw.io exports a composition as a group of cells.** A composed symbol
+  names no stencil — a `shape=` names *one* drawing, so a stirred tank exported
+  under the vessel's own reference would come out a bare vessel with the thing
+  that made it a reactor silently gone. It is drawn as the body's cell with one
+  child cell per part, each at the same fraction of the body's box the sheet
+  uses, and the ten agitators name draw.io's own `mxgraph.pid.agitators`
+  shapes. `tests/test_drawio.py` holds both backends to drawing the same parts
+  in the same places.
+
 - **The ISO 10628-2 groups 26–29 artwork.** Twenty-five supplementary symbols,
   in `pandid/render/iso_parts.py`: four supports (leg, bracket, skirt, ring),
   all eight internals (tray, tray with baffle, bubble-cap, valve, sieve, filter
@@ -34,10 +83,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dashed shaft; clause 5 says it marks a preferred connection and "is not a
   part of the graphical symbol", and every shaft under it is a single stroke.
 
-  Nothing is composed yet — a part is now *available* to be overlaid, and the
-  keywords that ask for one follow. No golden fixture and no gallery sheet
-  moves. `python scripts/symbol_sheet.py --parts out.svg` draws the set on its
-  grid for review, with worked compositions under it.
+  `python scripts/symbol_sheet.py --parts out.svg` draws the set on its grid
+  for review, with every composition the library ships under it.
 
 - **A symbol can be composed from a body and ISO 10628-2's supplementary
   parts.** Groups 1–25 of that standard's Table 1 name whole apparatus; groups
@@ -54,9 +101,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   item 1.27 hangs a drive motor above the top head — grows the box and moves
   the body into it.
 
-  Nothing is composed yet. Every one of the 157 registered symbols is a body
-  with zero parts, and no golden fixture or gallery sheet moves. The artwork is
-  the entry above; the keywords that ask for it follow.
+  The artwork is the entry above and the keywords that ask for it are the
+  entry above that; between them they are what makes a reactor a stirred tank
+  and a column a tray column.
 
   Two things go with it. A part must name the Table 2 row it claims to be —
   subject group, item number and registration number — because composing is
@@ -66,6 +113,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each drawing has been checked against the standard one at a time.
 
 ### Changed
+
+- **`reactor/default` is a stirred tank drawn as a stirred tank.** It was
+  draw.io's "Mixing Reactor": a rectangle with a V bottom and the stirrer's
+  motor perched in a box outside the shell. It is now the same dished-end
+  cylinder the vessel, the flash drum and the column are cut from, with the
+  agitator on a shaft through the top head — ISO item 1.27 X8006's
+  construction, measured off Table 2. The old drawing is kept, under
+  `Reactor(variant="mixing")`, because it is still what some plants draw.
+
+- **`column/default` is drawn with trays.** The package held a hand-drawn tray
+  column that `_vendored_symbols.py` silently registered over with a plain
+  "Pressurized Vessel" capsule, so every distillation column pandid has ever
+  drawn came out as a bare drum with no internals at all — the dead code was
+  the more conformant of the two. A `Column` now composes eight ISO item 27.1
+  trays onto the shell, which is the count and the pitch ISO item 2.6 X8011
+  draws, at half the shell's line weight. `Column(internals=None)` is the bare
+  shell for anyone who wants it, and `column/packed` is unchanged: it draws its
+  beds in its own artwork.
+
+- **Seven golden sheets move**, and only where one of the above is on them:
+  `01_ammonia_loop` and `05_reactor_recycle` (a reactor), `03_distillation_train`,
+  `06_column_reflux` and `11_ethanol_pid` (a column), `10_ethanol_pfd` (both) and
+  `13_mineral_dewatering` (a gravity separator). Nothing else on any of them
+  changes.
+
+- **A supplementary part stretches with the body it is drawn in**, where the
+  agitators and the characteristics had been declared unstretchable. That flag
+  does not mean "draw this part carefully": it letterboxes the part on its
+  rectangle *and* makes the whole composed symbol unstretchable. The first
+  lifted a stirred tank's `drive` eight units clear of the head it comes
+  through; the second would have centred a reactor in the box its author asked
+  for while every stencilled neighbour beside it filled one. draw.io's own ten
+  agitator stencils — the same ten ISO items — are every one of them
+  `aspect="variable"`.
+
+  For the same reason no part declares `directional`. That flag holds the
+  artwork still under a flip and moves only the nozzles, which is sound only
+  where the artwork under the moved nozzle is the artwork that was under the
+  original: a settling arrow's body is a hopper, and held still under a
+  vertical flip its feed nozzle lands twenty units below the cone. What says a
+  settling chamber may not be turned is `gravity_fixed`, which is ISO 14617-1
+  §4.5's own word for it, and it is unchanged.
+
+- **`Overlay` can mirror a part.** Table 2 draws item 26.2's support bracket
+  and item 26.4's support ring against a wall on one side, and a vessel
+  standing on either wants a pair. A second registered part would have been a
+  second registration number for a symbol ISO numbers once.
 
 - **Routing a dense sheet is an order of magnitude faster.** The visibility
   graph scanned every obstacle for every grid point and every candidate edge.
@@ -109,6 +203,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   peers. And `ink_box` returned early on a non-positive symbol box, a guard
   that prevented nothing: its only caller divides by those two values the
   moment it has the answer, so a zero raised `ZeroDivisionError` either way.
+
+### Deprecated
+
+Six `variant=` spellings that named a **part** rather than a body, each moved
+to the keyword that names the part. All work throughout 0.1.3 and are removed
+in 0.2.0; each draws what it always drew, so no sheet moves until it is
+deleted.
+
+- **`Vessel(variant="legs")` → `Vessel(supports="leg")`** and
+  **`Vessel(variant="skirted")` → `Vessel(supports="skirt")`.** ISO group 1
+  items 1.16–1.19 are a vessel outline plus a group-26 element, composed;
+  pandid vendored whichever two of the four the stencil set happened to ship,
+  which is why a bracket and a ring were unreachable. As a keyword it works on
+  every vessel variant, so a jacketed vessel can now stand on legs.
+
+- **`Reactor(variant="plain")` → `Reactor(internals="packing")`.** The stencil
+  draws a charge vessel with a packed bed hatched into it, which is that
+  composition drawn whole.
+
+- **`Separator(variant="gravity")`, `"electrostatic"` and `"electromagnetic"` →
+  `Separator(characteristic=…)`.** The three group-8 rows whose every mark is a
+  numbered group-29 part.
+
+**`Separator(variant="cyclone")` is not deprecated and is not going.** ISO
+14617-1 §4.5 names X2618 by registration number as a symbol in its own right,
+and group 29 has no vortex to compose one from, so a hydrocyclone is a distinct
+drawing and `variant=` is the right way to ask for it. The same holds for the
+sifter, the impact separator, the permanent magnet and the wet scrubber.
 
 ### Removed
 

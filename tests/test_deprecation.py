@@ -323,11 +323,28 @@ def test_declarations_finds_a_module_constant():
     assert found == {"RETIRED": RETIRED}
 
 
-def test_the_package_declares_no_deprecation_today():
-    """0.1.3 deleted the six 0.1.2 announced and retires nothing new, so the
-    walker over ``pandid`` finds none. Written out rather than left implied,
-    because an empty answer is also what a broken walker returns:
-    :func:`test_declarations_finds_a_module_constant` is what says it can find
-    one at all.
+def test_the_package_declares_exactly_the_variant_keywords_it_is_retiring():
+    """Six spellings, all one retirement: a ``variant=`` that named a *part*
+    rather than a body, moved to the keyword that names the part.
+
+    Spelled out rather than counted. A deprecation is a promise to delete
+    something one release later, and the list of what has been promised is the
+    thing a release has to be read against -- so a seventh arriving has to be
+    added here, and one quietly disappearing fails.
     """
-    assert declarations() == {}
+    assert {name.rsplit(".", 1)[-1] for name in declarations()} == {
+        "VESSEL_VARIANT_LEGS",
+        "VESSEL_VARIANT_SKIRTED",
+        "REACTOR_VARIANT_PLAIN",
+        "SEPARATOR_VARIANT_GRAVITY",
+        "SEPARATOR_VARIANT_ELECTROSTATIC",
+        "SEPARATOR_VARIANT_ELECTROMAGNETIC",
+    }
+
+
+def test_the_cyclone_is_not_among_them():
+    """``Separator(variant="cyclone")`` is the one drawing in group 8 that ISO
+    14617-1 §4.5 names by registration number as a symbol in its own right, and
+    group 29 has no vortex to compose one from. It is not a body plus a mark,
+    so there is no keyword to move it to and nothing to deprecate."""
+    assert not [d for d in declarations().values() if "cyclone" in d.what]

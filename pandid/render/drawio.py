@@ -51,6 +51,21 @@ and ruled the way the sheet rules it
 (:meth:`DrawioRenderer._furniture`). Nothing on the sheet is silently
 absent.
 
+**A composed symbol is a group of cells, not a shape.** A body carrying
+ISO 10628-2 supplementary parts -- an agitator in a reactor, trays in a
+column, a settling arrow in a separating vessel -- names no stencil of
+its own, and that is deliberate: a stencil reference names *one* shape,
+so a stirred tank exported under the vessel's own reference would come
+out a bare vessel, the right outline with the thing that made it a
+reactor silently gone. It is drawn instead as **the body's cell with one
+child cell per part**, each placed by the same fractions of the body's
+box the SVG uses (:meth:`DrawioRenderer._overlay_cells`), so the two
+backends draw the same parts in the same places from one set of numbers.
+The ten group-28 agitators name draw.io's own ``mxgraph.pid.agitators``
+stencils; the other fifteen parts have :data:`_PART_APPROXIMATIONS`,
+which is :data:`_APPROXIMATIONS` for parts and carries the same sentence
+each about what its stand-in loses.
+
 **A model, or a sheet.** Given ``page_size`` this stops being a drawing
 on an unbounded canvas and becomes paper: the file states the page, the
 furniture docks to it rather than to the drawing's own bounds, and the
@@ -162,6 +177,11 @@ from datetime import datetime
 from typing import NamedTuple, TYPE_CHECKING
 
 from pandid.portgeom import port_point, unit_box
+# ISO 10628-1 5.3.1 c)'s in-line detail band, half the outline weight
+# below: imported rather than repeated, since the sheet draws a part and
+# its body at exactly that ratio and an export at another one is a second
+# drawing.
+from pandid.render.iso_parts import PART_STROKE as _PART_STROKE
 from pandid.render import furniture as F
 from pandid.render import generator
 from pandid.render import svg as _svg
@@ -589,6 +609,98 @@ _APPROXIMATIONS = {
     # diagram's block is one rectangle, and draw.io's default vertex is
     # one rectangle.
     ("block", "default"): _Approximation(None, ""),
+    # A shell with a serpentine tube pass, drawn here because ISO has no
+    # tubular-reactor symbol and neither has draw.io's P&ID set: its
+    # nearest shape is a heat exchanger, which is a different piece of
+    # equipment on a P&ID.
+    ("reactor", "tubular"): _Approximation(
+        None, "the tube pass inside the shell"),
+    # ISO's separating vessel with one group-29 characteristic in it --
+    # items 8.3, 8.6 and 8.8, built by composition (see
+    # ``SymbolRegistry._register_composed``). The **mark** is not lost:
+    # it is emitted as a child cell, as every composed part is. What the
+    # rectangle loses is the body's V bottom, and it loses it because
+    # draw.io has a stencil for each of these three *complete* but none
+    # for the outline underneath them -- and a composed symbol may not
+    # name a stencil, which is what stops a body's reference being reused
+    # for a body-plus-parts drawing.
+    ("separator", "gravity"): _Approximation(
+        None, "the V bottom the collected phase draws off through"),
+    ("separator", "electrostatic"): _Approximation(
+        None, "the V bottom the collected phase draws off through"),
+    ("separator", "electromagnetic"): _Approximation(
+        None, "the V bottom the collected phase draws off through"),
+}
+
+#: What draw.io is asked for to draw one ISO 10628-2 supplementary part,
+#: for the parts draw.io has no shape of its own for.
+#:
+#: The ten group-28 agitators are **not** here and want nothing here:
+#: draw.io ships ``mxgraph.pid.agitators``, which is those ten items and
+#: nothing else, so each part names its own stencil
+#: (:attr:`~pandid.render.symbols.OverlayPart.drawio_shape`) and the
+#: export draws a real agitator.
+#:
+#: The other fifteen are stood in for by built-ins, on
+#: :data:`_APPROXIMATIONS`' rule and for its reason -- a built-in is
+#: compiled into draw.io and so cannot fail to resolve.
+#: ``partialRectangle`` earns its place four times over: it draws a
+#: rectangle with only the sides it is asked for, which is exactly what a
+#: channel-section leg, a support ring, a skirt and a pair of
+#: precipitator plates each are.
+_PART_APPROXIMATIONS = {
+    # ---- group 26, apparatus elements ----
+    # A channel section closed at the foot and open at the top, which is
+    # three sides of a rectangle. Nothing lost.
+    (26, "leg"): _Approximation("partialRectangle", "", keys=("top=0",)),
+    # A gusset: a foot, a hypotenuse, and the wall it bears on. draw.io's
+    # triangle is isoceles and points east, so a quarter turn stands it on
+    # its foot at the cost of the right angle.
+    (26, "bracket"): _Approximation(
+        "triangle", "the gusset's right angle: draw.io's triangle is isoceles",
+        keys=("direction=north",)),
+    # Two walls, open between them, with a foot turned in at each base.
+    (26, "skirt"): _Approximation(
+        "partialRectangle", "the two feet turned in at the base ring",
+        keys=("top=0", "bottom=0")),
+    # A 4 M x 1 M ledge, closed on three sides and open against the wall.
+    # Nothing lost.
+    (26, "ring"): _Approximation("partialRectangle", "", keys=("right=0",)),
+    # ---- group 27, internals ----
+    # A deck is a line across the shell and ``line`` is a line across the
+    # cell; what varies between the six is what stands on the deck.
+    (27, "tray"): _Approximation("line", ""),
+    (27, "baffle_tray"): _Approximation("line", "the riser at the deck's end"),
+    (27, "bubble_cap_tray"): _Approximation("line", "the cap over the deck's opening"),
+    (27, "valve_tray"): _Approximation("line", "the valve lifted clear of the deck"),
+    # These two are told apart from a plain deck, and from each other, by
+    # nothing but their dash pattern, so the pattern is the whole of what
+    # has to survive.
+    (27, "sieve_tray"): _Approximation(
+        "line", "", keys=("dashed=1", "dashPattern=8 4")),
+    (27, "filter_insert"): _Approximation(
+        "line", "", keys=("dashed=1", "dashPattern=8 4 4 4")),
+    # A field of dots. The box is the bed's extent, which is the part of it
+    # a reader needs; the texture has no built-in.
+    (27, "fluidised_bed"): _Approximation(
+        None, "the staggered field of dots; the box is the bed's extent"),
+    # A bed between two dashed support lines with a large X across it. The
+    # bounds are drawn and the X is not.
+    (27, "packing"): _Approximation(
+        "partialRectangle", "the X across the bed",
+        keys=("left=0", "right=0", "dashed=1", "dashPattern=8 4")),
+    # ---- group 29, internal characteristics ----
+    # A down arrow. draw.io's triangle turned south is its head; the shaft
+    # above it has no built-in that is not a second cell.
+    (29, "gravity"): _Approximation(
+        "triangle", "the arrow's shaft above its head", keys=("direction=south",)),
+    # Two plates a module apart, which is two sides of a rectangle.
+    (29, "electrostatic"): _Approximation(
+        "partialRectangle", "the leads going out from the two plates",
+        keys=("top=0", "bottom=0")),
+    # A coil standing on a baseline. The baseline is drawn.
+    (29, "electromagnetic"): _Approximation(
+        "line", "the three turns standing on the coil's baseline"),
 }
 
 #: A rough character width and line height for the furniture boxes,
@@ -1095,8 +1207,15 @@ class DrawioRenderer:
         :class:`~pandid.units.Unit` subclass from outside this package,
         which draws a generic box on the sheet and gets draw.io's
         default vertex here, the same statement either way.
+
+        A **composition** whose body was vendored is in the first case,
+        not the second: it carries the body's reference under
+        :attr:`~pandid.render.symbols.Symbol.drawio_body_shape`, the
+        body's stencil draws the outline, and the parts are child cells
+        (:meth:`_overlay_cells`). One whose body was drawn here falls
+        through to the table like any other hand-drawn symbol.
         """
-        if sym.drawio_shape:
+        if sym.drawio_shape or sym.drawio_body_shape:
             return None
         return _APPROXIMATIONS.get((u.kind, getattr(u, "variant", "default")))
 
@@ -1179,7 +1298,14 @@ class DrawioRenderer:
         weight = f"strokeWidth={fit.length(_SYMBOL_STROKE):g}"
         if u.kind in ("feed", "product"):
             return self._flag_shape(u, fit)
-        if sym.drawio_shape:
+        # A composition names no stencil of its own -- that is what stops
+        # a body's reference being reused for a body-plus-parts drawing,
+        # which would export a stirred tank as a bare vessel. What it does
+        # carry is the stencil that draws its *body*, and that one is true
+        # of the cell this method is styling, because the parts get cells
+        # of their own beside it (:meth:`_overlay_cells`).
+        stencil = sym.drawio_shape or sym.drawio_body_shape
+        if stencil:
             # A vendored stencil: name it and let draw.io draw its own
             # artwork. `outlineConnect=0` is what draw.io's own P&ID
             # palette sets, and it matters here more than there: it
@@ -1192,7 +1318,7 @@ class DrawioRenderer:
             # the cell said nothing, so draw.io's default 1 drew every
             # symbol lighter than the pipes around it. See
             # :data:`_SYMBOL_STROKE`.
-            keys = [f"shape={sym.drawio_shape}", "outlineConnect=0",
+            keys = [f"shape={stencil}", "outlineConnect=0",
                     f"strokeColor={_INK}", f"fillColor={sym.drawio_fill or _PAPER}",
                     weight]
             return keys
@@ -1384,7 +1510,8 @@ class DrawioRenderer:
         else's line is.
 
         A symbol that is **two outlines** gets a second cell, inscribed
-        in the first: see :meth:`_inscribed`.
+        in the first: see :meth:`_inscribed`. A **composed** symbol gets
+        one cell per supplementary part: see :meth:`_overlay_cells`.
         """
         sym = self.registry.for_unit(u)
         x0, y0, x1, y1 = fit.box(self._cell_box(u))
@@ -1404,7 +1531,75 @@ class DrawioRenderer:
             *body,
             '        </mxCell>',
             *self._inscribed(cid, self._approximation(u, sym), x1 - x0, y1 - y0, fit),
+            *self._overlay_cells(cid, sym, x1 - x0, y1 - y0, fit),
         ]
+
+    def _overlay_cells(self, cid: str, sym, w: float, h: float,
+                       fit: "_Fit") -> list[str]:
+        """One cell per ISO supplementary part, grouped under the body's.
+
+        **This is what a composed symbol exports as.** A composition names
+        no stencil (:func:`pandid.render.symbols.compose` clears it),
+        because a stencil reference names *one* shape and draw.io draws
+        whatever that name resolves to -- so a stirred tank exported under
+        the vessel's own reference would come out a bare vessel, the right
+        outline with the thing that made it a reactor silently gone.
+        Instead the cell above draws the body and each part gets a cell of
+        its own inside it.
+
+        The geometry is the composition's own arithmetic, unchanged: an
+        :class:`~pandid.render.symbols.Overlay` states its rectangle as
+        **fractions of the body's box**, a child's geometry is relative to
+        its parent's, and the parent's box *is* the body's box -- so
+        multiplying the four fractions by the cell's width and height is
+        the whole conversion, and the two backends place a part by one set
+        of numbers. ``tests/test_drawio.py`` measures that against the SVG.
+
+        The pair holds together under editing for the reasons
+        :meth:`_inscribed` sets out: a child moves with its parent and
+        ``Graph.isRecursiveVertexResize`` scales it with its parent, so a
+        reader who drags or resizes a column takes its trays with it.
+        ``connectable=0`` keeps a stream from landing on a tray instead of
+        on the nozzle it was routed to, and ``movable=0`` keeps a reader
+        who grabs the middle of a vessel from dragging its agitator out of
+        it.
+
+        The pen is the part's and not the body's: ISO 10628-1 §5.3.1 puts
+        an outline at 0,5 mm and the detail inside it at 0,25, and the
+        sheet draws them at exactly that ratio (:data:`_PART_STROKE`).
+        """
+        if not sym.overlays:
+            return []
+        out: list[str] = []
+        for i, overlay in enumerate(sym.overlays):
+            part = self.registry.part(overlay.group, overlay.name)
+            approx = _PART_APPROXIMATIONS.get((overlay.group, overlay.name))
+            if part.drawio_shape:
+                keys = [f"shape={part.drawio_shape}"]
+            else:
+                keys = [] if approx is None or approx.shape is None else [
+                    f"shape={approx.shape}"]
+                keys += [] if approx is None else list(approx.keys)
+            # A chiral part's second hand. The SVG reflects the artwork
+            # about its rectangle's own centre line and so does this: the
+            # child's box is the same box either way, and only what is
+            # drawn inside it turns round.
+            if overlay.mirror:
+                keys.append("flipH=1")
+            style = ";".join([
+                "html=1", "rounded=0", *keys,
+                f"strokeColor={_INK}", f"fillColor={_NO_FILL}",
+                f"strokeWidth={fit.length(_PART_STROKE):g}",
+                "connectable=0", "movable=0"]) + ";"
+            out += [
+                f'        <mxCell id="{cid}-p{i}" value="" style={_attr(style)} '
+                f'vertex="1" parent="{cid}">',
+                f'          <mxGeometry x="{_num(overlay.x * w)}" '
+                f'y="{_num(overlay.y * h)}" width="{_num(overlay.w * w)}" '
+                f'height="{_num(overlay.h * h)}" as="geometry" />',
+                '        </mxCell>',
+            ]
+        return out
 
     @staticmethod
     def _inscribed(cid: str, approx: "_Approximation | None",

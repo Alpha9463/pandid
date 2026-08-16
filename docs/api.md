@@ -501,7 +501,7 @@ from pandid import units
 sifter = units.Separator("SC-101", variant="sifter")
 ```
 
-`units.Kind(variant=…)` is the escape hatch. 93 of the 157 registered drawings
+`units.Kind(variant=…)` is the escape hatch. 96 of the 160 registered drawings
 get no class of their own, and this is how you reach them; see
 [Variants](#variants) for the list. Where a class exists, name it.
 
@@ -556,7 +556,7 @@ Each entry is `port` *(direction / role)*.
 | `Tank` | `tank` | the same five as `Vessel` |
 | `Separator` | `separator` | `feed` *(in)*, `vapor` *(out/vapor)*, `liquid` *(out/liquid)* on the four variants whose draws really are phases — the drum (`default`, `horizontal`, `knockout`) and the wet `scrubber`. The other seven sort or collect rather than separating into phases, and name the two draws their artwork has: `feed` *(in/feed)*, `overflow` *(out)*, `underflow` *(out)*; see [Variants](#variants) |
 | `Column` | `column` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*, `reflux_in` *(in/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*, `condenser_duty` *(out/energy)*; the feeds are [`feeds`](#the-family-as-a-sequence) |
-| `Reactor` | `reactor` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `outlet` *(out)*, `vent` *(out/vapor)*, `duty` *(in/energy)*; the feeds are [`feeds`](#the-family-as-a-sequence) |
+| `Reactor` | `reactor` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `outlet` *(out)*, `vent` *(out/vapor)*, `duty` *(in/energy)*, and `drive` *(in/energy)* where it has an [`agitator=`](#what-a-body-carries) to be driven; `variant="tubular"` is a PFR and has no vapour space, so it has no `vent`. The feeds are [`feeds`](#the-family-as-a-sequence) |
 | `HeatExchanger` | `hex` | `shell_in`, `shell_out`, `tube_in`, `tube_out`; `kettle` adds `bottoms` *(out/liquid)*. Four variants name their sides differently; see [Variants](#variants) |
 | `Heater` | `heater` | `inlet` *(in)*, `outlet` *(out)*, `utility_in` *(in/energy)* |
 | `Cooler` | `cooler` | `inlet` *(in)*, `outlet` *(out)*, `utility_out` *(out/energy)* |
@@ -612,10 +612,11 @@ units.Mixer(name, n_inlets=2, variant="default", width=None, height=None,
             description="")
 units.Splitter(name, n_outlets=2, variant="default", width=None, height=None,
                description="")
-units.Column(name, n_feeds=1, variant="default", width=None, height=None,
-             label_pos=None, description="")
-units.Reactor(name, n_feeds=1, variant="default", width=None, height=None,
-              label_pos=None, description="")
+units.Column(name, n_feeds=1, variant="default", internals="tray", trays=8,
+             width=None, height=None, label_pos=None, description="")
+units.Reactor(name, n_feeds=1, variant="default", agitator="agitator",
+              internals=None, width=None, height=None, label_pos=None,
+              description="")
 ```
 
 (`Mixer` and `Splitter` do not accept `label_pos`, unlike the fixed-port
@@ -1319,7 +1320,7 @@ first listed is what the class draws when it is built by name alone.
 | `FlowElement` | `fitting` | `venturi` (as `default`), `flow_nozzle`, `coriolis`, `vortex`, `ultrasonic`, `turbine_meter`, `positive_displacement`, `v_cone`, `wedge`, `target`, `pitot`, `averaging_pitot` |
 | `Fitting` | `fitting` | `default` (flanged connection), `flange`, `strainer`, `strainer_cone`, `strainer_y`, `strainer_basket`, `strainer_duplex`, `orifice`, `rotameter`, `rupture_disc`, `sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `bellows`, `damper`, `spool`, `static_mixer`, `hose`, `coupling`, `clamped_coupling`, `flame_arrestor`, `flame_arrestor_explosion_proof`, `flame_arrestor_detonation_proof`, `flame_arrestor_fire_resistant` |
 | `StirredTankReactor` | `reactor` | `default` |
-| `Reactor` | `reactor` | `plain` (the same charge vessel without the agitator) |
+| `Reactor` | `reactor` | bodies: `plain` (a charge vessel with a packed bed hatched into it), `mixing` (a conical-bottomed mixing vessel with the stirrer drawn on top of it), `jacketed` (the dished-end shell inside a heating/cooling jacket), `tubular` (a horizontal shell with a tube pass: a PFR)<br>what is *inside* a reactor is [`agitator=` and `internals=`](#what-a-body-carries) rather than a variant, so a packed bed and a fluidised bed are the plain stirred body with a group-27 internal in it |
 | `Vessel` | `vessel` | `default`, `dished`, `jacketed`, `skirted`, `legs`, `insulated`, `electrical_heating`, `swaged`, `dome`, `horizontal`<br>`dished`, `skirted` and `legs` are one shell on brackets, a skirt or a pair of legs; `jacketed` and `insulated` are that shell clad, and offer the same nozzles in the same places, so swapping one for another moves no run. `swaged` is the vessel drawn in two diameters, the wider one below |
 | `Tank` | `tank` | named for the roof: `default` (dished), `conical`, `floating_roof`, plus `sphere`<br>and for the bottom where it is a cone rather than a floor: `conical_bottom` (under a flat roof), `conical_ends` (a cone at each end), `dished_roof_conical_bottom`. On those three the `outlet` is on the cone's apex, which is where the tank actually drains |
 | `Column` | `column` | `default` (plain shell), `packed` |
@@ -1442,6 +1443,71 @@ draws its tag as plain text beside the symbol rather than in a balloon.
 `bleed` is the small drain valve tapped off a header and runs down the page,
 `inlet` on N and `outlet` on S, with `actuator` set over beside the tap so it
 does not stack on the inlet.
+
+### What a body carries
+
+ISO 10628-2 has no reactor symbol and no absorber symbol. Its Table 2 has
+**vessels**, and then four groups of *supplementary symbols* — the parts you put
+in a vessel — and clause 5 makes composing a symbol out of them a `shall` for
+anything the standard does not tabulate itself. So what a piece of equipment
+*is* is often the part inside it, and four keywords say which part:
+
+| keyword | ISO group | on |
+|---|---|---|
+| `agitator=` | 28, agitators and stirrers | `Reactor` |
+| `internals=` | 27, internals | `Reactor`, `Column` |
+| `supports=` | 26, apparatus elements | `Vessel` |
+| `characteristic=` | 29, internal characteristics | `Separator` |
+
+```python
+Reactor("R-101", agitator="turbine")                     # a stirred tank
+Reactor("R-201", internals="packing", agitator=None)     # a packed bed
+Column("T-101", internals="valve_tray", trays=30)        # a valve-tray tower
+Vessel("D-301", supports="skirt")                        # a skirted drum
+Separator("V-201", characteristic="gravity")             # a settling chamber
+```
+
+`variant=` still chooses the **body** — the outline the part is drawn in. The
+two answer different questions, and reaching for `variant=` to say what is
+inside a vessel is what the keywords replace: `Reactor(variant="plain")` could
+not also be jacketed, and a jacketed `Vessel` could not also stand on legs,
+because `variant=` had already been spent.
+
+**The names, all of them ISO's**
+
+| keyword | names |
+|---|---|
+| `agitator=` | `agitator` (28.1, the general one and the default), `flat_blade`, `gate_paddle`, `cross_beam`, `anchor`, `helical`, `impeller`, `propeller`, `disc`, `turbine` |
+| `internals=` | `tray` (27.1, and a `Column`'s default), `baffle_tray`, `bubble_cap_tray`, `valve_tray`, `sieve_tray`, `filter_insert`, `fluidised_bed`, `packing` |
+| `supports=` | `leg` (26.1), `bracket` (26.2), `skirt` (26.3), `ring` (26.4) |
+| `characteristic=` | `gravity` (29.1), `electrostatic` (29.2), `electromagnetic` (29.3) |
+
+**Not stated is not the same as stated empty.** A `Reactor` left alone is a
+stirred tank and gets item 28.1; one told `agitator=None` is a bare shell
+somebody asked for. The same goes for a `Column`, which is drawn with eight
+trays unless it is told otherwise — the count and the pitch ISO item 2.6 X8011
+draws.
+
+**An agitator brings a nozzle.** ISO item 1.27 X8006 runs the stirrer's shaft up
+through the top head to a motor above the vessel, so a `Reactor` with an
+agitator has a `drive` connection at the top of that shaft and one without has
+none. Trays, supports and characteristics are marks that no line ever reaches
+and bring nothing.
+
+**`trays=` counts whatever `internals=` names** — decks for a deck, beds for a
+bed. `Column("T-104", internals="packing", trays=2)` is a two-bed absorber. An
+absorber, a stripper, a scrubbing tower, an adsorber and a molecular sieve are
+not distinct drawings and ISO gives them no symbols: each is this shell carrying
+whichever internal it really contains, told apart by its tag.
+
+**Where composition stops.** A composition is only justified where every mark
+that distinguishes the drawing is a numbered Table 2 part. Three of the eleven
+separators pass that test — items 8.3 X8031, 8.6 X8125 and 8.8 X8126 — and the
+rest are distinct registered symbols reached by `variant=`. The cyclone is the
+clearest case: group 29 has no vortex to compose one from, and ISO 14617-1 §4.5
+names X2618 by registration number as a symbol in its own right, so
+`Separator(variant="cyclone")` is the way to ask for a hydrocyclone and is not
+going anywhere.
 
 ---
 
@@ -2895,7 +2961,7 @@ What a flip may not do is reverse an arrow the artwork carries — see
 below, which is handled by drawing rather than by refusing, for exactly the
 reason this paragraph gives.
 
-The 41 marked symbols, and what in each one's artwork only means one thing one
+The 43 marked symbols, and what in each one's artwork only means one thing one
 way up:
 
 | Symbols | Why |
@@ -3640,7 +3706,7 @@ against one. What it follows, feature by feature:
 - **Symbols where gravity is a functionality** are not turned. **ISO 15519-1
   §11.4.2** excepts them from the general permission to turn and mirror: *"for
   example symbol 2061: Open tank or symbol X 2618: Cyclone separator … Such
-  symbols must not be turned."* 41 registered symbols carry
+  symbols must not be turned."* 43 registered symbols carry
   `Symbol.gravity_fixed`, and
   [Symbols that must not be turned](#symbols-that-must-not-be-turned) lists them.
 

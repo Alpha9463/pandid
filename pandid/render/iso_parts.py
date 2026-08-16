@@ -8,10 +8,12 @@ tabulate. :mod:`pandid.render.symbols` has the mechanism -- ``IsoPart``,
 ``Overlay``, ``OverlayPart`` and ``compose`` -- and this module is the
 artwork it was waiting for.
 
-Nothing here is drawn by any unit yet. Registering a part makes it
-*available* to be overlaid; the keyword that puts one on a reactor or a
-column is a separate change, and until it lands every symbol the library
-ships is the drawing it has always been.
+The bottom of this file is the other half: **where each part goes on a
+body**, as fractions of that body's box. ``Reactor(agitator=)``,
+``Column(internals=)``, ``Vessel(supports=)`` and
+``Separator(characteristic=)`` all end in one of the four helpers there,
+because "an agitator hangs from the top head with its blade low in the
+liquid" is a fact about the equipment and not about any one unit class.
 
 Provenance
 ----------
@@ -59,17 +61,57 @@ the shaft is dashed. **It is not.** Every group-28 shaft in Table 2 is a
 single solid stroke; the break is the gap between the tick and the
 symbol. ``tests/test_iso_parts.py`` holds this module to it.
 
-Which parts may be stretched
-----------------------------
-``stretchable=False`` where the *form* of the mark is what distinguishes
-it from its siblings, since squashing it then destroys the only thing it
-says: the ten group-28 agitators differ in nothing but the shape at the
-foot of the shaft, and the group-29 characteristics differ in nothing but
-the mark. Group 26's supports and group 27's decks are lines that follow
-the body they are drawn in and are stretched with it. ISO 14617-1 §4.4
-draws the line in the same place -- proportions may be modified, but "the
-extent of modification of the symbol shape shall not make it impossible
-to recognize the symbol".
+Every part stretches, and two flags say why not
+-----------------------------------------------
+**No part sets ``stretchable=False``**, and that is a correction to this
+module as it first shipped rather than an oversight. The case for holding
+the ten agitators rigid is real -- they differ in nothing but the shape at
+the foot of the shaft, and ISO 14617-1 §4.4 bounds reshaping by "shall
+not make it impossible to recognize the symbol". But the flag does not
+mean *draw this part carefully*. It means two other things, and both are
+about the body rather than the part:
+
+1. **Letterbox the part on its rectangle**, keeping its aspect and
+   centring what is left over. A part's rectangle is stated in fractions
+   of the body's box, so its *aspect* is the body's aspect times those
+   fractions -- and which of the two scales binds therefore depends on
+   the body. On a 62 x 100 stirred tank the width binds, and the letterbox
+   centres the agitator **vertically**, which lifts the shaft's top eight
+   units clear of the head and leaves the ``drive`` nozzle floating in
+   the vapour space above the liquid it is meant to come through.
+   ``tests/test_symbol_invariants`` measured exactly that.
+2. **Make the whole composed symbol unstretchable**, since there is no
+   way to hold one group still inside a group that is being stretched.
+   So a stirred tank given a box would be letterboxed and centred in it
+   -- and its neighbours on the same sheet, drawn from whole stencils,
+   would not.
+
+Two further facts settle it. draw.io's own ``mxgraph.pid.agitators`` set
+draws these same ten items and declares every one of them
+``aspect="variable"``; and this module now *names* those stencils, so a
+part that refused to stretch would have the two backends sizing one
+drawing by two rules -- which is the divergence the cross-backend test
+exists to catch. The parts stretch, and what keeps them legible is the
+rectangle they are given: the helpers at the foot of this file hand each
+part a rectangle of about its own aspect, so the stretch a part sees is
+the stretch the body sees and nothing more.
+
+``directional`` is gone for the same kind of reason
+---------------------------------------------------
+It reads like a claim about the mark and is not. It tells the renderer to
+**hold the artwork still under a flip and move only the nozzles**
+(:func:`pandid.render.svg._upright_artwork`), which is sound only where
+the artwork under the moved nozzle is the same as the artwork under the
+original -- a cooler's circle and zigzag, where the arrowhead is the whole
+difference from a heater.
+
+A part cannot make that promise on a body's behalf. A settling arrow's
+body is a hopper: held still under a vertical flip, its feed nozzle moves
+from the shoulder to twenty units below the cone and lands in mid-air. An
+agitator's body is a vessel, and its ``drive`` moves off the crown onto
+the bottom head. So no part here sets it, and what says the arrow's body
+may not be turned is ``gravity_fixed`` -- ISO 14617-1 §4.5's own word for
+it, and a prohibition rather than a rendering instruction.
 
 Ports
 -----
@@ -134,6 +176,12 @@ _DECK_Y = M
 AGITATOR_W, AGITATOR_H = 4 * M, 8 * M
 _AG_X = AGITATOR_W / 2
 
+#: draw.io's own agitator stencil set, which has exactly ten shapes and
+#: they are ISO group 28's ten, item for item. Naming them is what lets a
+#: composed reactor export with a real agitator on it; see
+#: :func:`_build`'s ``agitator`` helper.
+_AG = "mxgraph.pid.agitators."
+
 
 def _g(name: str, *body: str) -> str:
     """One part's artwork, wrapped as ``compose`` requires.
@@ -161,26 +209,34 @@ def _build() -> tuple:
             name=name, iso=IsoPart(27, item, reg, descriptor),
             svg=_g(f"27_{name}", *ink), width=DECK_W, height=DECK_H)
 
-    def agitator(name, item, reg, descriptor, shaft_to, *blade):
+    def agitator(name, item, reg, descriptor, stencil, shaft_to, *blade):
         """A group-28 agitator: the shaft down to ``shaft_to``, then its
-        blade, in the common agitator frame."""
+        blade, in the common agitator frame.
+
+        ``stencil`` is the shape in draw.io's own ``mxgraph.pid.agitators``
+        set that draws this same ISO item, which is the whole of that set:
+        it has ten shapes and they are group 28's ten, item for item. So a
+        composed reactor exports with a real agitator on it rather than an
+        approximation of one. ``tests/test_drawio.py`` derives the keys
+        from the stencil XML and holds these to them.
+        """
         return OverlayPart(
             name=name, iso=IsoPart(28, item, reg, descriptor),
             svg=_g(f"28_{name}",
                    f'<line x1="{_AG_X:g}" y1="0" x2="{_AG_X:g}" y2="{shaft_to:g}" {_INK}/>',
                    *blade),
-            width=AGITATOR_W, height=AGITATOR_H,
+            width=AGITATOR_W, height=AGITATOR_H, drawio_shape=stencil,
             # ISO item 1.27 (X8006) runs the shaft up through the top
             # head to a motor drawn above the vessel, so the drive is a
             # real connection at a real place on the drawing.
             ports={"drive": (_AG_X, 0.0)},
-            stretchable=False,
             # Turned, the drive comes in from the side and the blade
-            # hangs sideways in a vessel that is still upright; flipped,
-            # the blade is on top and the drive underneath. Neither is
-            # the equipment this draws, so ISO 14617-1 §4.5 applies to
-            # the body carrying it even where the bare body was free.
-            gravity_fixed=True, directional=True)
+            # hangs sideways in a vessel that is still upright. That is
+            # not the equipment this draws, so ISO 14617-1 §4.5 applies
+            # to the body carrying it even where the bare body was free.
+            # See the module docstring for why the flip is *not* also
+            # declared here.
+            gravity_fixed=True)
 
     # ------------------------------------------------------------
     # Group 26 -- apparatus elements
@@ -311,7 +367,8 @@ def _build() -> tuple:
     # ------------------------------------------------------------
 
     agitator_general = agitator(
-        "agitator", "28.1", "2672", "Agitator (general), stirrer (general)", 7 * M,
+        "agitator", "28.1", "2672", "Agitator (general), stirrer (general)",
+        _AG + "agitator,_stirrer", 7 * M,
         # Two 2 M verticals 4 M apart with a diagonal falling between
         # them: the general stirrer, and the item every other one is a
         # specialisation of.
@@ -320,12 +377,14 @@ def _build() -> tuple:
         f'M {4 * M:g} {6 * M:g} L {4 * M:g} {8 * M:g}" {_INK}/>')
 
     flat_blade = agitator(
-        "flat_blade", "28.2", "C2019", "Agitator, flat-blade paddle type", 4 * M,
+        "flat_blade", "28.2", "C2019", "Agitator, flat-blade paddle type",
+        _AG + "agitator_(flate-blade_paddle)", 4 * M,
         # A 4 M square hanging off the shaft's foot.
         f'<rect x="0" y="{4 * M:g}" width="{4 * M:g}" height="{4 * M:g}" {_INK}/>')
 
     gate_paddle = agitator(
-        "gate_paddle", "28.3", "C2020", "Agitator, gate paddle type", 8 * M,
+        "gate_paddle", "28.3", "C2020", "Agitator, gate paddle type",
+        _AG + "agitator_(gat_paddle)", 8 * M,
         # A 4 M x 2 M gate divided by the shaft, each half crossed by a
         # diagonal.
         f'<rect x="0" y="{6 * M:g}" width="{4 * M:g}" height="{2 * M:g}" {_INK}/>'
@@ -333,13 +392,15 @@ def _build() -> tuple:
         f'M {2 * M:g} {8 * M:g} L {4 * M:g} {6 * M:g}" {_INK}/>')
 
     cross_beam = agitator(
-        "cross_beam", "28.4", "C2021", "Agitator, cross-beam type", 8 * M,
+        "cross_beam", "28.4", "C2021", "Agitator, cross-beam type",
+        _AG + "agitator_(cross-beam)", 8 * M,
         # Two 4 M beams 2 M apart, threaded on the shaft.
         f'<path d="M 0 {6 * M:g} L {4 * M:g} {6 * M:g} '
         f'M 0 {8 * M:g} L {4 * M:g} {8 * M:g}" {_INK}/>')
 
     anchor = agitator(
-        "anchor", "28.5", "C2022", "Agitator, anchor type", 8 * M,
+        "anchor", "28.5", "C2022", "Agitator, anchor type",
+        _AG + "agitator_(anchor)", 8 * M,
         # Two 1,5 M arms dropping to an arc that sweeps 1 M below their
         # feet: the blade that follows a dished bottom head.
         f'<path d="M 0 {5.5 * M:g} L 0 {7 * M:g} '
@@ -347,7 +408,8 @@ def _build() -> tuple:
         f'L {4 * M:g} {5.5 * M:g}" {_INK}/>')
 
     helical = agitator(
-        "helical", "28.6", "C2023", "Agitator, helical type", 7.5 * M,
+        "helical", "28.6", "C2023", "Agitator, helical type",
+        _AG + "agitator_(helical)", 7.5 * M,
         # A helix seen edge on: three strokes across 4 M, descending 1 M
         # each, which is how Table 2 flattens a ribbon into two
         # dimensions.
@@ -355,7 +417,8 @@ def _build() -> tuple:
         f'L {4 * M:g} {8 * M:g}" {_INK}/>')
 
     impeller = agitator(
-        "impeller", "28.7", "C2024", "Agitator, impeller type", 7.5 * M,
+        "impeller", "28.7", "C2024", "Agitator, impeller type",
+        _AG + "agitator_(impeller)", 7.5 * M,
         # A single blade in profile: an ogee about 4 M across and 1 M
         # deep, with the straight blade section crossing the shaft.
         f'<path d="M 0 {8 * M:g} C {0.2 * M:g} {7.2 * M:g} {M:g} {7.1 * M:g} '
@@ -364,7 +427,8 @@ def _build() -> tuple:
         f'<path d="M {1.4 * M:g} {7.8 * M:g} L {2.6 * M:g} {7.2 * M:g}" {_INK}/>')
 
     propeller = agitator(
-        "propeller", "28.8", "C2025", "Agitator, propeller type", 7.5 * M,
+        "propeller", "28.8", "C2025", "Agitator, propeller type",
+        _AG + "agitator_(propeller)", 7.5 * M,
         # The bow tie: two lobes meeting on the shaft, 4 M across and 1 M
         # deep, with the blades crossing inside them.
         f'<path d="M {2 * M:g} {7.5 * M:g} C {1.4 * M:g} {6.8 * M:g} '
@@ -377,7 +441,8 @@ def _build() -> tuple:
         f'M {3.3 * M:g} {7.05 * M:g} L {0.7 * M:g} {7.95 * M:g}" {_INK}/>')
 
     disc = agitator(
-        "disc", "28.9", "C2026", "Agitator, disc type", 7 * M,
+        "disc", "28.9", "C2026", "Agitator, disc type",
+        _AG + "agitator_(disc)", 7 * M,
         # The disc seen edge on: a 1 M x 2 M plate each side of the
         # shaft, joined across it by the hub.
         f'<rect x="0" y="{6 * M:g}" width="{M:g}" height="{2 * M:g}" {_INK}/>'
@@ -385,7 +450,8 @@ def _build() -> tuple:
         f'<path d="M {M:g} {7 * M:g} L {3 * M:g} {7 * M:g}" {_INK}/>')
 
     turbine = agitator(
-        "turbine", "28.10", "C2027", "Agitator, turbine type", 8 * M,
+        "turbine", "28.10", "C2027", "Agitator, turbine type",
+        _AG + "agitator_(turbine)", 8 * M,
         # A 4 M x 2 M rotor split into three: the 2 M hub the shaft runs
         # into, and a 1 M blade each side of it.
         f'<rect x="0" y="{6 * M:g}" width="{4 * M:g}" height="{2 * M:g}" {_INK}/>'
@@ -418,12 +484,14 @@ def _build() -> tuple:
                f'<line x1="{M:g}" y1="0" x2="{M:g}" y2="{5 * M:g}" {_INK}/>'
                f'<polygon points="{M:g},{6 * M:g} {0.73 * M:g},{5 * M:g} '
                f'{1.27 * M:g},{5 * M:g}" {_SOLID_INK}/>'),
-        width=2 * M, height=6 * M, stretchable=False,
+        width=2 * M, height=6 * M,
         # The arrow *is* the statement that gravity does the work here,
         # so this is the case ISO 14617-1 §4.5's prohibition on turning
-        # was written for -- and flipped, the same arrow says the heavy
-        # phase rises.
-        gravity_fixed=True, directional=True)
+        # was written for. Flipped, the same arrow says the heavy phase
+        # rises -- which is a reason to leave the drawing alone and not,
+        # as this part first claimed, a reason to set ``directional``;
+        # see the module docstring.
+        gravity_fixed=True)
 
     electrostatic = OverlayPart(
         name="electrostatic", iso=IsoPart(29, "29.2", "C2030", "Electrostatic type"),
@@ -434,7 +502,7 @@ def _build() -> tuple:
                f'M {2 * M:g} 0 L {2 * M:g} {2 * M:g}" {_INK}/>'
                f'<path d="M 0 {M:g} L {M:g} {M:g} '
                f'M {2 * M:g} {M:g} L {3 * M:g} {M:g}" {_INK}/>'),
-        width=3 * M, height=2 * M, stretchable=False)
+        width=3 * M, height=2 * M)
 
     electromagnetic = OverlayPart(
         name="electromagnetic", iso=IsoPart(29, "29.3", "C2031", "Electromagnetic type"),
@@ -446,7 +514,7 @@ def _build() -> tuple:
                f'A {M:g} {M:g} 0 0 1 {4.5 * M:g} {M:g} '
                f'A {M:g} {M:g} 0 0 1 {6.5 * M:g} {M:g} '
                f'L {7 * M:g} {M:g}" {_INK}/>'),
-        width=7 * M, height=M, stretchable=False)
+        width=7 * M, height=M)
 
     return (
         leg, bracket, skirt, ring,
@@ -481,3 +549,203 @@ def register_parts(registry) -> None:
     """
     for part in parts():
         registry.register_part(part)
+
+
+# ----------------------------------------------------------------
+# Where a part goes on a body.
+#
+# The four unit keywords -- ``Reactor(agitator=)``, ``Column(internals=)``,
+# ``Vessel(supports=)``, ``Separator(characteristic=)`` -- all end here,
+# because "an agitator hangs from the top head with its blade low in the
+# liquid" is a fact about the equipment and not about any one class.
+#
+# **Every rectangle below is read off Table 2 and converted to fractions
+# of the body's box**, which is the coordinate ``Overlay`` is stated in.
+# The conversion needs the item the placement was measured on, so each
+# helper names it. The bodies pandid draws are not the standard's own
+# proportions to the last module -- a vendored stencil is 62 x 100 where
+# ISO's vessel is 8 M x 12 M -- so a *fraction* transfers where a module
+# count would not.
+#
+# Every part fills the rectangle it is given (see the module docstring on
+# why none of them letterboxes), so a rectangle is a placement and a
+# proportion at once and both have to be right. A deck stretched two to
+# one is still a deck; a bubble cap stretched two to one is a smear. The
+# rectangles below are therefore about the part's own aspect on the body
+# each is placed on, and where a body is far from that shape it is the
+# body that is unusual rather than the number here.
+# ----------------------------------------------------------------
+
+
+def _part(group: int, name: str, registry=None):
+    """The registered part, or a ValueError naming the ones there are.
+
+    *registry* is passed by the one caller with no default registry to
+    ask -- ``SymbolRegistry._register_composed``, which runs while that
+    registry is still being built. Everyone else asks the library's.
+
+    Called for its exception. Resolving the name here is what makes
+    ``Reactor("R-101", agitator="turbin")`` raise on the line the author
+    typed rather than when the sheet is finally rendered.
+    """
+    if registry is None:
+        from pandid.render.symbols import default_registry as registry
+    return registry.part(group, name)
+
+
+def agitator_overlays(name: str, registry=None) -> tuple:
+    """``name``'s agitator, hung from the top head of a vertical body.
+
+    One overlay, placed as **ISO item 1.27 X8006** places it. Measured
+    off that row: the shaft runs from a module above the top head's
+    crown down to the blade; the blade is **48 % of the shell's width**,
+    centred on it, and sits between **62 % and 86 % of the way down the
+    straight side**.
+
+    Here the shaft starts at the very top of the body's box, which is the
+    crown of its top head, because that is where the ``drive`` nozzle has
+    to land: ISO draws the shaft running *through* the head to a motor
+    above the vessel, so the connection is on the crown and not inside
+    the shell. The blade then lands about three-quarters down, low in the
+    liquid, which is where the standard draws it.
+    """
+    from pandid.render.symbols import Overlay
+    _part(28, name, registry)
+    return (Overlay(28, name, 0.26, 0.0, 0.48, 0.76),)
+
+
+#: Where a column's internals live, as fractions of a vertical body's
+#: height. Read off **ISO item 2.6 X8011**, the tray column: its shell is
+#: 8 M x 18 M overall with a 16 M straight side, and its eight decks sit
+#: at y 6, 8, ... 20 on a body spanning y 4 to 22 -- so the first deck is
+#: at (6-4)/18 and the last at (20-4)/18 of the box.
+_INTERNALS_TOP, _INTERNALS_BOTTOM = 0.11, 0.89
+
+#: How much of the body's height one deck's rectangle is given. A deck is
+#: a line, so the number decides nothing about the drawing except how
+#: much room a bubble cap or a valve has to stand up in; ISO's own decks
+#: are drawn in a 2 M band on an 18 M body.
+_DECK_BAND = 2.0 / 18.0
+
+#: How far a deck is held off the shell wall, as a fraction of the body's
+#: width. **Zero**: ISO item 2.6 runs every deck wall to wall, and a
+#: tray that stops short of the shell is a tray with a gap the vapour
+#: would go round.
+_DECK_INSET = 0.0
+
+
+def internals_overlays(name: str, count: int = 1, registry=None) -> tuple:
+    """``count`` of ``name``, stacked down a vertical body.
+
+    A **deck** repeats: ``count`` decks are ``count`` overlays evenly
+    spaced down the internals band, which is what makes a thirty-tray
+    column thirty placements rather than a number in a drawing.
+
+    A **bed** does not. ISO draws one packed bed filling the space it
+    occupies, so ``count`` beds are ``count`` bands stacked down that
+    same span with a gap between them -- which is a two-bed absorber,
+    drawn by asking for two.
+
+    Which of the two a part is comes off its own frame: every group-27
+    deck is drawn in the 10 M x 2 M frame :data:`DECK_H` names, and the
+    two beds are drawn in boxes of their own that are taller than it.
+    """
+    from pandid.render.symbols import Overlay
+    part = _part(27, name, registry)
+    if count < 1:
+        raise ValueError(
+            f"a body with {count} of an internal has none of it; pass "
+            f"internals=None to draw a bare shell"
+        )
+    top, span = _INTERNALS_TOP, _INTERNALS_BOTTOM - _INTERNALS_TOP
+    width = 1.0 - 2 * _DECK_INSET
+    if part.height <= DECK_H:
+        # A deck: a line at a height, repeated. The band is centred on
+        # each deck's own share of the span, so the decks are evenly
+        # pitched and the top and bottom ones are half a pitch inside
+        # the span rather than sitting on its ends.
+        pitch = span / count
+        return tuple(
+            Overlay(27, name, _DECK_INSET,
+                    top + (i + 0.5) * pitch - _DECK_BAND / 2, width, _DECK_BAND)
+            for i in range(count))
+    # A bed: a band with a tenth of its height clear above and below, so
+    # two beds read as two rather than as one tall one.
+    band = span / count
+    return tuple(
+        Overlay(27, name, _DECK_INSET, top + (i + 0.1) * band, width, band * 0.8)
+        for i in range(count))
+
+
+#: How far below the body's box a support reaches, and how wide a leg is,
+#: as fractions of the body's box. A support is drawn *under* the vessel,
+#: so the rectangle starts just inside the bottom of the box and runs out
+#: of it; ``compose`` grows the composed box to hold it and moves the
+#: body down into it.
+_SUPPORT_TOP, _SUPPORT_DROP = 0.97, 0.28
+
+
+def support_overlays(name: str, registry=None) -> tuple:
+    """``name``'s supports, standing under or beside a vertical body.
+
+    ISO group 1 items 1.16 to 1.19 are this composition drawn out -- one
+    vessel outline and one group-26 element each -- so what varies is
+    only where the element goes, and that follows from what the element
+    is:
+
+    - a **leg** (26.1, a 1 M x 5 M channel) is one of a pair under the
+      two walls;
+    - a **skirt** (26.3, two walls 8 M apart) is one, spanning the body,
+      because the item already draws both of its sides;
+    - a **bracket** (26.2) and a **ring** (26.4) are **chiral**: Table 2
+      draws each against a wall on one side. Both are drawn as a pair
+      with the second mirrored, which is what :attr:`Overlay.mirror` is
+      for, and both sit **on the shell wall** rather than under the
+      floor, since that is what they bear on. A ring in particular is a
+      4 M x 1 M ledge and reads as a ledge only when it is against
+      something.
+    """
+    from pandid.render.symbols import Overlay
+    _part(26, name, registry)
+    if name == "skirt":
+        return (Overlay(26, name, 0.20, _SUPPORT_TOP, 0.60, _SUPPORT_DROP),)
+    if name in ("bracket", "ring"):
+        # **Outside the box, not inside it.** Both bear on the *outer*
+        # face of the shell, so each rectangle starts at a wall and runs
+        # away from the body; ``compose`` grows the composed box to hold
+        # the pair and moves the body into it.
+        #
+        # Table 2 draws both with the wall on their **right**, so the
+        # unmirrored hand goes on the west wall and the mirror on the
+        # east. Two-thirds of the way down the shell, which is where
+        # draw.io's own "Vessel (Dished Ends, Ring)" puts the same pair
+        # of lugs.
+        depth, drop = 0.20, 0.10 if name == "ring" else 0.18
+        return (Overlay(26, name, -depth, 0.62, depth, drop),
+                Overlay(26, name, 1.0, 0.62, depth, drop, mirror=True))
+    return (Overlay(26, name, 0.14, _SUPPORT_TOP, 0.10, _SUPPORT_DROP),
+            Overlay(26, name, 0.76, _SUPPORT_TOP, 0.10, _SUPPORT_DROP))
+
+
+def characteristic_overlays(name: str, registry=None) -> tuple:
+    """``name``'s characteristic, inside a separating vessel.
+
+    Placed where ISO's own group-8 rows place it, measured against the
+    6 M x 9 M outline those rows share (walls at x 9 and 15, top edge at
+    y 1, apex at y 10):
+
+    - **29.1** the settling arrow, item 8.3 X8031: on the centre line,
+      from the top edge down to y 6 -- half the body's depth, head and
+      all.
+    - **29.2** and **29.3**, items 8.6 X8125 and 8.8 X8126: across the
+      body's middle, the plates at y 5 to 7 and the coil on y 5.
+    """
+    from pandid.render.symbols import Overlay
+    _part(29, name, registry)
+    if name == "gravity":
+        # x 11..13 of 9..15, y 1..6 of 1..10.
+        return (Overlay(29, name, 1 / 3, 0.0, 1 / 3, 5 / 9),)
+    # x 10..14 of 9..15, y 4..7 of 1..10 -- a module of air above and
+    # below the mark, so a wide body letterboxes it on its own height
+    # rather than on the walls.
+    return (Overlay(29, name, 1 / 6, 1 / 3, 2 / 3, 1 / 3),)

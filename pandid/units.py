@@ -25,6 +25,7 @@ from collections.abc import Sequence
 from difflib import get_close_matches
 from typing import TYPE_CHECKING, Any, TypeVar
 
+from pandid.deprecation import Deprecation
 from pandid.geometry import Frame, Pin, _Slot
 from pandid.ports import Port
 
@@ -940,6 +941,51 @@ class Valve(_NormallyPositioned):
             )
 
 
+def _compose_onto(unit, *groups) -> None:
+    """Set ``unit.overlays`` from the parts its keywords asked for.
+
+    One place, because the four kinds that compose need the same two
+    things: the overlays flattened in the order they were asked for, and
+    **nothing set at all where nothing was asked for**. The second is
+    what keeps a unit that composes nothing indistinguishable from one
+    that cannot -- ``SymbolRegistry.for_unit`` reads
+    ``getattr(unit, "overlays", ())`` and short-circuits on the empty
+    tuple -- and so keeps every drawing nobody asked to change exactly
+    where it was.
+    """
+    overlays = tuple(overlay for group in groups for overlay in group)
+    if overlays:
+        unit.overlays = overlays
+
+
+#: The two vessel variants that are a vessel plus an ISO group-26
+#: support, and so the two the keyword replaces. ISO group 1 items
+#: 1.16-1.19 are this composition drawn out -- one vessel outline and one
+#: support each -- and pandid vendored whichever two of the four the
+#: stencil set happened to ship, which is why a bracket and a ring were
+#: unreachable and now are not.
+#:
+#: The other eight vessel variants are **not** supports and are not
+#: deprecated: a jacket, an insulation band, an electrical heater and a
+#: swaged shell are none of them a group-26 element.
+#:
+#: One module constant each, because that is what
+#: :func:`pandid.deprecation.declarations` can enumerate: a declaration
+#: built inline, or hidden inside a container, outlives its release
+#: quietly. The dict below is only the lookup that finds them.
+VESSEL_VARIANT_LEGS = Deprecation(
+    what="Vessel(variant='legs')", instead="Vessel(supports='leg')",
+    removed_in="0.2.0")
+VESSEL_VARIANT_SKIRTED = Deprecation(
+    what="Vessel(variant='skirted')", instead="Vessel(supports='skirt')",
+    removed_in="0.2.0")
+
+_VESSEL_SUPPORT_VARIANTS = {
+    "legs": VESSEL_VARIANT_LEGS,
+    "skirted": VESSEL_VARIANT_SKIRTED,
+}
+
+
 class Vessel(Unit):
     """Generic pressure vessel: holdup, not phase separation.
 
@@ -979,6 +1025,22 @@ class Vessel(Unit):
     than a number. Nothing here is reported by ``nozzle-unconnected``,
     which reads only numbered nozzles; see issue #215 for drawing a
     spare nozzle blanked.
+
+    What it stands on
+    -----------------
+    ``supports=`` names one of the four ISO 10628-2 group-26 apparatus
+    elements and draws it under or against the shell::
+
+        Vessel("D-301", supports="skirt")     # 26.3 C2007
+        Vessel("D-302", supports="leg")       # 26.1 C2005, a pair
+        Vessel("D-303", supports="bracket")   # 26.2 C2006, a pair
+        Vessel("D-304", supports="ring")      # 26.4 C2008, a pair
+
+    That is what ISO group 1 items 1.16 to 1.19 are: one vessel outline
+    and one group-26 element each, composed. It works on **every** vessel
+    variant, which the two variants it replaces did not -- a jacketed
+    vessel could not stand on legs, because ``variant=`` had already been
+    spent on the jacket.
     """
 
     inlet: Port
@@ -1013,6 +1075,21 @@ class Vessel(Unit):
         ("relief", "outlet", "process"),
         ("drain", "outlet", "liquid"),
     ]
+
+    def __init__(self, name: str, variant: str = "default",
+                 supports: str | None = None,
+                 width: float | None = None, height: float | None = None,
+                 label_pos: str | None = None, description: str = "",
+                 reference: str = ""):
+        super().__init__(name, variant=variant, width=width, height=height,
+                         label_pos=label_pos, description=description,
+                         reference=reference)
+        # ``self.variant`` rather than the argument; see HeatExchanger.
+        if self.variant in _VESSEL_SUPPORT_VARIANTS:
+            _VESSEL_SUPPORT_VARIANTS[self.variant].warn(self, where=name)
+        self.supports = supports
+        from pandid.render.iso_parts import support_overlays
+        _compose_onto(self, () if supports is None else support_overlays(supports))
 
 
 class Tank(Unit):
@@ -2153,18 +2230,68 @@ def _feed_names(n_feeds: int, owner: str) -> list[str]:
     return ["feed"] if n_feeds == 1 else [f"feed_{i}" for i in range(1, n_feeds + 1)]
 
 
+#: Not stated is not the same as stated empty. A ``Reactor`` left alone
+#: is a stirred tank and gets its agitator; one told ``agitator=None`` is
+#: a bare shell somebody asked for on purpose. Every composition keyword
+#: with a non-empty default tells the two apart this way.
+_UNSTATED: Any = object()
+
+
+REACTOR_VARIANT_PLAIN = Deprecation(
+    what="Reactor(variant='plain')", instead="Reactor(internals='packing')",
+    removed_in="0.2.0")
+
+
 class Reactor(Unit):
-    """Generic reactor (CSTR, PFR, etc.).
+    """Generic reactor: CSTR, PFR, packed bed, fluidised bed.
 
     ``vent`` is the off-gas connection at the top of the vessel.
     ``n_feeds`` gives the vessel more than one charge nozzle: ``feed_1``
     ... ``feed_n``, spread down the shell top to bottom, in place of the
     single ``feed``.
+
+    What kind of reactor it is
+    --------------------------
+    ISO 10628-2 has no reactor group and no reactor symbol. What it has
+    is a vessel and the parts you put in one, so that is what pandid
+    takes: **the body is ``variant=``, and what is inside it is
+    ``agitator=`` and ``internals=``**::
+
+        Reactor("R-101")                                   # a CSTR
+        Reactor("R-102", agitator="turbine")
+        Reactor("R-103", variant="jacketed")               # jacketed CSTR
+        Reactor("R-201", internals="packing", agitator=None)       # a PBR
+        Reactor("R-202", internals="fluidised_bed", agitator=None) # a FBR
+        Reactor("R-301", variant="tubular", agitator=None)         # a PFR
+
+    - ``agitator=`` names one of the ten ISO group-28 stirrers:
+      ``"agitator"`` (the general one, and the default on a stirred
+      body), ``"turbine"``, ``"propeller"``, ``"anchor"``, ``"helical"``,
+      ``"flat_blade"``, ``"gate_paddle"``, ``"cross_beam"``,
+      ``"impeller"``, ``"disc"``. It hangs from the top head on a shaft
+      through it and brings a ``drive`` connection at the top of that
+      shaft, which is where ISO item 1.27 X8006 draws the motor.
+    - ``internals=`` names one of the eight ISO group-27 internals. Two
+      of them make a reactor a different reactor: ``"packing"`` is a
+      packed bed and ``"fluidised_bed"`` is a fluidised bed.
+
+    Either may be ``None``, which draws that much of the shell bare.
+
+    ``variant=`` chooses the **body**: ``"default"`` the dished-end
+    stirred tank, ``"jacketed"`` the same inside a heating jacket,
+    ``"tubular"`` the horizontal shell of a plug-flow reactor, and
+    ``"mixing"`` the rectangle-with-a-V-bottom that ``"default"`` used to
+    draw.
     """
 
     outlet: Port
     vent: Port
     duty: Port
+    # The agitator's shaft where it leaves the top head, present only on
+    # a reactor that has one. Declared here for the same reason ``feeds``
+    # is: ``__init__`` adds it, and without the annotation it is
+    # invisible to mypy and to editor completion.
+    drive: Port
     # Every charge nozzle, in declaration order and so top to bottom
     # down the shell, whether the count spelled them ``feed`` or
     # ``feed_1`` ... ``feed_n`` (see :func:`_feed_names`).
@@ -2197,7 +2324,23 @@ class Reactor(Unit):
     #: author has to be told to ignore. Its natural pair is an inlet and
     #: an outlet at opposite ends rather than a charge nozzle in the
     #: shell and a draw in the floor.
-    _VARIANT_PORTS: dict[str, list[tuple[str, str, str]]] = {}
+    _VARIANT_PORTS: dict[str, list[tuple[str, str, str]]] = {
+        # ...and that is what ``tubular`` is. No vapour space, so no
+        # off-gas to take: the ``vent`` the other three carry would be a
+        # nozzle nothing is ever routed to, which is a nozzle an author
+        # has to be told to ignore.
+        "tubular": [
+            ("outlet", "outlet", "process"),
+            ("duty", "inlet", "energy"),
+        ],
+    }
+
+    #: The bodies an agitator is fitted to when the author names none. A
+    #: stirred tank is what a reactor is unless it says otherwise, so the
+    #: two dished-end vessels get one -- but ``mixing`` draws a stirrer in
+    #: its own artwork and would come out with two, and neither the
+    #: tubular shell nor ``plain``'s hatched bed is stirred at all.
+    _STIRRED = ("default", "jacketed")
 
     @classmethod
     def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
@@ -2208,6 +2351,7 @@ class Reactor(Unit):
         return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._VESSEL)
 
     def __init__(self, name: str, n_feeds: int = 1, variant: str = "default",
+                 agitator: str | None = _UNSTATED, internals: str | None = None,
                  width: float | None = None, height: float | None = None,
                  label_pos: str | None = None, description: str = "",
                  reference: str = ""):
@@ -2215,13 +2359,64 @@ class Reactor(Unit):
         super().__init__(name, variant=variant, width=width, height=height,
                          label_pos=label_pos, description=description,
                          reference=reference)
+        if self.variant == "plain":
+            REACTOR_VARIANT_PLAIN.warn(self, where=name)
+        if agitator is _UNSTATED:
+            agitator = "agitator" if self.variant in self._STIRRED else None
+        self.agitator = agitator
+        self.internals = internals
         # Before the feeds, so the declaration order the drawing is read
         # in -- product, off-gas, duty, then the charge nozzles down the
         # shell -- is the order it was in when PORTS held the first
         # three. ``self.variant``, not the argument; see HeatExchanger.
         for spec in self._variant_ports(self.variant):
             self._add_port(*spec)
+        # The bed first, then the stirrer over it, so the shaft is drawn
+        # on top of whatever it turns in rather than under it.
+        from pandid.render.iso_parts import agitator_overlays, internals_overlays
+        _compose_onto(
+            self,
+            () if internals is None else internals_overlays(internals),
+            () if agitator is None else agitator_overlays(agitator),
+        )
+        # The drive is the *agitator's*, so it exists exactly when the
+        # agitator does. Declared here rather than in ``_VARIANT_PORTS``
+        # because the part brings it and the part is chosen per unit,
+        # where a variant's nozzles are the same for every unit that
+        # names it.
+        if agitator is not None:
+            self.drive = self._add_port("drive", "inlet", "energy")
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
+
+
+#: One per composable characteristic, so the sentence an author reads
+#: names the spelling they should type rather than a family -- and one
+#: module constant each, so :func:`pandid.deprecation.declarations` can
+#: find them. Spelled out rather than built in a comprehension for the
+#: same reason: a name a walker cannot see is a retirement nobody is told
+#: about.
+#:
+#: **The cyclone is not here and is not deprecated.** ISO 14617-1 §4.5
+#: names X2618 by registration number as a symbol in its own right and
+#: group 29 has no vortex to compose one from, so ``variant="cyclone"``
+#: is the only way to ask for a hydrocyclone and stays the right way.
+#: The same goes for the sifter, the impact separator, the permanent
+#: magnet and the scrubber.
+SEPARATOR_VARIANT_GRAVITY = Deprecation(
+    what="Separator(variant='gravity')",
+    instead="Separator(characteristic='gravity')", removed_in="0.2.0")
+SEPARATOR_VARIANT_ELECTROSTATIC = Deprecation(
+    what="Separator(variant='electrostatic')",
+    instead="Separator(characteristic='electrostatic')", removed_in="0.2.0")
+SEPARATOR_VARIANT_ELECTROMAGNETIC = Deprecation(
+    what="Separator(variant='electromagnetic')",
+    instead="Separator(characteristic='electromagnetic')", removed_in="0.2.0")
+
+_SEPARATOR_CHARACTERISTIC_VARIANTS = {
+    "gravity": SEPARATOR_VARIANT_GRAVITY,
+    "electrostatic": SEPARATOR_VARIANT_ELECTROSTATIC,
+    "electromagnetic": SEPARATOR_VARIANT_ELECTROMAGNETIC,
+}
 
 
 class Separator(Unit):
@@ -2267,6 +2462,23 @@ class Separator(Unit):
     by :meth:`~pandid.flowsheet.Flowsheet.validate` if turned, which is
     ISO 15519-1 §11.4.2's exception for symbols where gravity is a
     functionality.
+
+    How it separates
+    ----------------
+    ``characteristic=`` names one of the three ISO 10628-2 group-29
+    internal characteristics the standard composes a separating vessel
+    from -- the mark inside the body that says what does the work::
+
+        Separator("V-201", characteristic="gravity")          # 8.3 X8031
+        Separator("V-202", characteristic="electrostatic")    # 8.6 X8125
+        Separator("V-203", characteristic="electromagnetic")  # 8.8 X8126
+
+    Three, and only three, because those are the three group-8 rows whose
+    every mark is a numbered part. **A cyclone is not one of them**: it
+    is X2618, a registered symbol in its own right whose helical vortex
+    appears nowhere in group 29, so it stays ``variant="cyclone"``. So do
+    the sifter, the impact separator, the permanent magnet and the
+    scrubber.
     """
 
     # The phase draws only, since ``_VARIANT_PORTS`` defaults to
@@ -2339,7 +2551,22 @@ class Separator(Unit):
         "cyclone": {"overflow": "vapor", "underflow": "liquid"},
         "gravity": {"overflow": "vapor", "underflow": "liquid"},
         "electrostatic": {"overflow": "vapor", "underflow": "liquid"},
+        # ``electromagnetic`` joins the three above now that it is drawn
+        # by composition rather than from its own stencil. Its stencil
+        # anchored ``overflow`` and ``underflow`` directly; the
+        # separating vessel the composition is built on anchors what the
+        # other two composed drawings anchor, since it is one body
+        # carrying three different marks and a body has one set of
+        # nozzles.
+        "electromagnetic": {"overflow": "vapor", "underflow": "liquid"},
     }
+
+    #: The three drawings that are the shared separating vessel carrying
+    #: one ISO group-29 characteristic, and so the three the keyword
+    #: names. The registry builds each by composition and records the
+    #: registration number ISO gives the result; see
+    #: :meth:`pandid.render.symbols.SymbolRegistry._register_composed`.
+    _CHARACTERISTICS = ("gravity", "electrostatic", "electromagnetic")
 
     def _symbol_anchor(self, port_name: str) -> str:
         """The name this separator's art anchors ``port_name`` under.
@@ -2360,15 +2587,46 @@ class Separator(Unit):
         return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._PHASES)
 
     def __init__(self, name: str, variant: str = "default",
+                 characteristic: str | None = None,
                  width: float | None = None, height: float | None = None,
                  label_pos: str | None = None, description: str = "",
                  reference: str = ""):
+        if characteristic is not None:
+            if variant != "default":
+                raise ValueError(
+                    f"{name}: characteristic={characteristic!r} and variant={variant!r} "
+                    f"both choose the drawing, and they disagree. The characteristic is "
+                    f"the mark inside the separating vessel, so it *is* the variant: "
+                    f"drop one of the two"
+                )
+            if characteristic not in self._CHARACTERISTICS:
+                raise ValueError(
+                    f"{name}: {characteristic!r} is not an ISO 10628-2 group-29 "
+                    f"characteristic pandid composes a separator from; it draws "
+                    f"{', '.join(repr(c) for c in self._CHARACTERISTICS)}. A cyclone, a "
+                    f"sifter, an impact separator, a permanent magnet and a scrubber "
+                    f"are distinct registered symbols rather than a body plus a mark, "
+                    f"so each is a variant= of its own"
+                )
+            variant = characteristic
         super().__init__(name, variant=variant, width=width, height=height,
                          label_pos=label_pos, description=description,
                          reference=reference)
+        if characteristic is None and self.variant in self._CHARACTERISTICS:
+            _SEPARATOR_CHARACTERISTIC_VARIANTS[self.variant].warn(self, where=name)
+        self.characteristic = (
+            self.variant if self.variant in self._CHARACTERISTICS else None)
         # ``self.variant`` rather than the argument; see HeatExchanger.
         for spec in self._variant_ports(self.variant):
             self._add_port(*spec)
+
+
+#: How many decks a tower is drawn with when the author does not say.
+#: A number, because a drawing has to pick one and no number is the real
+#: tray count anyway -- a forty-tray column is not drawn with forty lines
+#: on any sheet. **Eight**, which is what ISO 10628-2 item 2.6 X8011
+#: draws: eight decks at a 2 M pitch down a 16 M straight side.
+DEFAULT_TRAYS = 8
 
 
 class Column(Unit):
@@ -2384,6 +2642,34 @@ class Column(Unit):
     tower its entrainer. They are ``feed_1`` ... ``feed_n``, spread down
     the shell in declaration order, so ``feed_1`` is the highest; the
     single-feed column keeps the plain ``feed``.
+
+    What is inside it
+    -----------------
+    **A column is drawn with trays.** ISO 10628-2's group 2 is not a
+    separate vocabulary of towers; it is one dished-end shell carrying
+    one group-27 internal, drawn eight times. So ``internals=`` is what
+    makes this tower one tower rather than another, and ``trays=`` is how
+    many of them are drawn::
+
+        Column("T-101")                                    # a tray tower
+        Column("T-102", internals="bubble_cap_tray", trays=12)
+        Column("T-103", internals="valve_tray", trays=30)
+        Column("T-104", internals="packing", trays=2)      # two beds
+        Column("T-105", internals=None)                    # a bare shell
+
+    The eight names are ISO's: ``"tray"`` (27.1, and the default),
+    ``"baffle_tray"``, ``"bubble_cap_tray"``, ``"valve_tray"``,
+    ``"sieve_tray"``, ``"filter_insert"``, ``"fluidised_bed"`` and
+    ``"packing"``.
+
+    ``trays=`` counts whatever ``internals=`` names: decks for a deck,
+    beds for a bed. The default is :data:`DEFAULT_TRAYS`, which is the
+    eight ISO item 2.6 X8011 draws.
+
+    An absorber, a stripper, a scrubbing tower, an adsorber and a
+    molecular sieve are **not distinct drawings** and ISO gives them no
+    symbols. Each is this shell carrying whichever internal it really
+    contains, told apart by its tag.
     """
 
     distillate: Port
@@ -2410,7 +2696,13 @@ class Column(Unit):
         ("condenser_duty", "outlet", "energy"),
     ]
 
+    #: The bodies an internal is drawn into when the author names none.
+    #: Only the general shell: ``packed`` draws two beds on their support
+    #: grids in its own artwork and would come out with a third.
+    _BARE = ("default",)
+
     def __init__(self, name: str, n_feeds: int = 1, variant: str = "default",
+                 internals: str | None = _UNSTATED, trays: int = DEFAULT_TRAYS,
                  width: float | None = None, height: float | None = None,
                  label_pos: str | None = None, description: str = "",
                  reference: str = ""):
@@ -2418,6 +2710,13 @@ class Column(Unit):
         super().__init__(name, variant=variant, width=width, height=height,
                          label_pos=label_pos, description=description,
                          reference=reference)
+        if internals is _UNSTATED:
+            internals = "tray" if self.variant in self._BARE else None
+        self.internals = internals
+        self.trays = trays
+        from pandid.render.iso_parts import internals_overlays
+        _compose_onto(self, () if internals is None
+                      else internals_overlays(internals, trays))
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
 
 

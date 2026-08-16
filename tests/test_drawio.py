@@ -43,7 +43,7 @@ import pytest
 from pandid import units
 from pandid.flowsheet import Flowsheet
 from pandid.portgeom import port_point, unit_box
-from pandid.render.drawio import _APPROXIMATIONS, DrawioRenderer
+from pandid.render.drawio import _APPROXIMATIONS, _PART_APPROXIMATIONS, DrawioRenderer
 from pandid.render.svg import (
     _page,
     _PROCESS_STROKE,
@@ -54,7 +54,7 @@ from pandid.render.svg import (
     stream_polyline,
     tap_lines,
 )
-from pandid.render.symbols import ARROWHEAD, Symbol, default_registry, expander
+from pandid.render.symbols import ARROWHEAD, _GROUP, Symbol, default_registry, expander
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 STENCILS = ROOT / "scripts" / "vendor_data" / "drawio"
@@ -2870,4 +2870,179 @@ def test_the_committed_sample_is_what_the_exporter_emits(stem):
     document, _dropped = samples.sample(stem)
     assert committed.read_text(encoding="utf-8") == document, (
         f"{committed.name} is stale; run python scripts/drawio_samples.py"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Compositions: the two backends drawing the same thing.
+# ---------------------------------------------------------------------------
+
+
+#: One of every composed drawing the library can put on a sheet, each built the
+#: way an author builds it. The registry's three (ISO items 8.3, 8.6 and 8.8)
+#: are reached through ``characteristic=``; the rest are per-unit compositions
+#: that no walk over ``default_registry._symbols`` can find, which is exactly
+#: why they are listed here.
+def _composed_units():
+    return [
+        units.Reactor("R-101"),
+        units.Reactor("R-102", agitator="turbine"),
+        units.Reactor("R-103", variant="jacketed", agitator="propeller"),
+        units.Reactor("R-201", internals="packing", agitator=None),
+        units.Reactor("R-202", internals="fluidised_bed", agitator="anchor"),
+        units.Column("T-101"),
+        units.Column("T-102", internals="bubble_cap_tray", trays=6),
+        units.Column("T-103", internals="packing", trays=2),
+        units.Vessel("D-301", supports="leg"),
+        units.Vessel("D-302", supports="skirt"),
+        units.Vessel("D-303", supports="bracket"),
+        units.Vessel("D-304", supports="ring"),
+        units.Separator("V-201", characteristic="gravity"),
+        units.Separator("V-202", characteristic="electrostatic"),
+        units.Separator("V-203", characteristic="electromagnetic"),
+    ]
+
+
+COMPOSED_IDS = [f"{u.kind}/{u.name}" for u in _composed_units()]
+
+
+@pytest.fixture(scope="module")
+def composed_sheet() -> Flowsheet:
+    """Every composed drawing, pinned on a grid and exported once."""
+    fs = Flowsheet("compositions")
+    for i, unit in enumerate(_composed_units()):
+        fs.add(unit).pin(x=(i % 5) * 400.0, y=(i // 5) * 400.0)
+    fs.layout()
+    return fs
+
+
+def test_a_composed_symbol_names_no_stencil_of_its_own(composed_sheet):
+    """The rule the whole arrangement turns on.
+
+    A ``shape=`` names *one* drawing and draw.io draws whatever that name
+    resolves to, so a stirred tank exported under the vessel's own reference
+    would come out a bare vessel: the right outline, silently missing the thing
+    that made it a reactor. That is the strainer divergence the render audit
+    found, and clearing the reference is what makes it loud instead of quiet.
+    """
+    for unit in composed_sheet.units:
+        sym = default_registry.for_unit(unit)
+        assert sym.overlays, f"{unit.name} is not composed; the fixture is wrong"
+        assert sym.drawio_shape == "", (
+            f"{unit.name} carries a stencil reference for the whole composition"
+        )
+
+
+@pytest.mark.parametrize("index", range(len(COMPOSED_IDS)), ids=COMPOSED_IDS)
+def test_both_backends_draw_the_same_parts_in_the_same_places(composed_sheet, index):
+    """**The cross-backend check.** For every composed symbol, the SVG and the
+    draw.io file draw one part per overlay, and each in the same rectangle.
+
+    The two backends get there differently and that is the point. The SVG bakes
+    each part into the composed ``<defs>`` entry as a ``<g transform="translate
+    (...) scale(...)">``; the exporter emits a child ``<mxCell>`` whose
+    ``<mxGeometry>`` is relative to the parent cell. What they share is the
+    arithmetic -- an ``Overlay`` states its rectangle as fractions of the body's
+    box, and the body's box is the cell -- so the check is that both landed on
+    the fractions the composition declares.
+
+    Without this, a composed reactor could go on exporting as an empty vessel
+    with nothing to say so: the sheet would still open and every symbol would
+    still be there.
+    """
+    unit = composed_sheet.units[index]
+    sym = default_registry.for_unit(unit)
+    cells = _cells(composed_sheet, check=False)
+    cid = next(
+        k
+        for k, cell in cells.items()
+        if cell.get("value") == unit.name and cell.get("vertex") == "1"
+    )
+    parent = cells[cid].find("mxGeometry")
+    w, h = float(parent.get("width")), float(parent.get("height"))
+
+    children = [cell for key, cell in cells.items() if key.startswith(f"{cid}-p")]
+    assert len(children) == len(sym.overlays), (
+        f"{unit.name}: the sheet draws {len(sym.overlays)} parts and the export "
+        f"draws {len(children)}"
+    )
+    # ...and the SVG's own count, so this is three drawings agreeing and not two.
+    inner = _GROUP.match(sym.svg).group(2)
+    assert inner.count("<g transform=") >= len(sym.overlays)
+
+    for overlay, cell in zip(sym.overlays, children):
+        box = cell.find("mxGeometry")
+        got = tuple(float(box.get(k)) for k in ("x", "y", "width", "height"))
+        want = (overlay.x * w, overlay.y * h, overlay.w * w, overlay.h * h)
+        assert got == pytest.approx(want, abs=0.02), (
+            f"{unit.name}: part {overlay.group}/{overlay.name} is at {got} in the "
+            f"export and at {want} on the sheet"
+        )
+        assert _style(cell)["movable"] == "0" and _style(cell)["connectable"] == "0"
+
+
+def test_a_composed_symbol_still_draws_its_body(composed_sheet):
+    """The parts are not the drawing; the body under them is most of it.
+
+    A composition whose body was vendored keeps that stencil -- under
+    ``drawio_body_shape``, which is a claim about the outline rather than about
+    the whole symbol -- and one whose body is drawn here falls through to
+    ``_APPROXIMATIONS`` like any other hand-drawn symbol. Either way the parent
+    cell says *something*, and a parent that named nothing would export the
+    body as an undocumented rectangle.
+    """
+    cells = _cells(composed_sheet, check=False)
+    for unit in composed_sheet.units:
+        sym = default_registry.for_unit(unit)
+        cell = next(
+            c for k, c in cells.items() if c.get("value") == unit.name and c.get("vertex") == "1"
+        )
+        style = _style(cell)
+        if sym.drawio_body_shape:
+            assert style.get("shape") == sym.drawio_body_shape
+        else:
+            key = (unit.kind, getattr(unit, "variant", "default"))
+            assert key in _APPROXIMATIONS, f"{key} exports as an undocumented box"
+
+
+@pytest.mark.parametrize(
+    "part",
+    sorted(default_registry.parts(), key=lambda p: p.key()),
+    ids=lambda p: f"{p.iso.group}/{p.name}",
+)
+def test_every_part_resolves_to_a_stencil_or_a_documented_built_in(part):
+    """A part's shape reference has the same two ways of being wrong a symbol's
+    does, and the same two answers.
+
+    The ten group-28 agitators name draw.io's own ``mxgraph.pid.agitators``
+    stencils, which is that set entire -- ten shapes, ISO group 28's ten. Those
+    keys are written by hand in ``pandid/render/iso_parts.py`` rather than
+    derived by the generator, so they are held here against the stencil XML: a
+    re-vendor that renames a shape fails this rather than exporting a rectangle.
+
+    Everything else takes a built-in, with the sentence saying what it loses.
+    """
+    if part.drawio_shape:
+        assert part.drawio_shape in STENCIL_KEYS, (
+            f"{part.iso.group}/{part.name} names {part.drawio_shape!r}, which no "
+            f"vendored stencil defines"
+        )
+        assert part.key() not in _PART_APPROXIMATIONS, (
+            "approximating a part that has a stencil throws the real shape away"
+        )
+        return
+    assert part.key() in _PART_APPROXIMATIONS, (
+        f"{part.iso.group}/{part.name} has neither a stencil nor an entry in "
+        f"pandid.render.drawio._PART_APPROXIMATIONS, so it would export as an "
+        f"undocumented rectangle"
+    )
+    assert _PART_APPROXIMATIONS[part.key()].shape in _BUILTIN_SHAPES
+
+
+def test_the_part_table_names_only_parts_that_exist():
+    """The table is data, and stale data here is a silently wrong drawing."""
+    registered = {p.key() for p in default_registry.parts()}
+    assert set(_PART_APPROXIMATIONS) <= registered, (
+        f"_PART_APPROXIMATIONS names parts nobody registers: "
+        f"{sorted(set(_PART_APPROXIMATIONS) - registered)}"
     )
