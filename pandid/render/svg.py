@@ -1,13 +1,13 @@
 """SVG rendering backend."""
 
 from typing import NamedTuple, TYPE_CHECKING
-import html
 import math
 import re
 from datetime import datetime
 from functools import lru_cache
 
 from pandid.render import furniture as F
+from pandid.render.escape import escaped, ident
 from pandid.render.symbols import (ARROWHEAD, closed_marking, fail_marking,
                                    wears_arrowhead)
 from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
@@ -407,7 +407,7 @@ def _quadrant_block(box, codes, side: int) -> list:
         (lx,
          cy + _QUADRANTS[name][1] * (_QUADRANT_BAND + _QUADRANT_PITCH / 2
                                      + i * _QUADRANT_PITCH),
-         anchor, "middle", lpos, html.escape(code))
+         anchor, "middle", lpos, escaped(code))
         for name in codes
         for i, code in enumerate(codes[name])
     ]
@@ -1444,6 +1444,27 @@ def _arrowhead(start, end) -> str:
             f"L {bx - px:.1f},{by - py:.1f} Z")
 
 
+def arrow_marker_id(color: str) -> str:
+    """The ``<marker>`` id the arrowhead in *colour* is defined under.
+
+    One function for the definition and for the ``url(#...)`` that
+    reaches it, so the two cannot drift, over
+    :func:`~pandid.render.escape.ident`, which is what makes the answer
+    a legal XML name whatever the colour is spelled like. A hex triple
+    loses its ``#`` first because ``#0a7`` and ``0a7`` are the same
+    colour to a reader and only one of them is a name -- and because
+    that is the id these sheets have always carried.
+
+    ``rgb(0, 170, 119)`` is the case that used to break: pasted whole it
+    gives ``arrow_rgb(0,_170,_119)``, which a browser rejects as an id,
+    drops the definition for, and then draws the line without its head.
+    Nothing warns, and a PDF export -- which resolves the reference
+    itself rather than through the document -- still shows the head, so
+    the two outputs disagree about the drawing.
+    """
+    return ident("arrow", color.lstrip("#"))
+
+
 def _unit_label_box(item) -> "tuple[float, float, float, float] | None":
     """Halo rect of an equipment tag.
 
@@ -2387,7 +2408,7 @@ def _provenance(fs: "Flowsheet") -> list[str]:
     title = _sheet_title(fs)
     lines = []
     if title:
-        lines.append(f"  <title>{html.escape(title)}</title>")
+        lines.append(f"  <title>{escaped(title)}</title>")
     lines.append(PROVENANCE_OPEN)
     # The colon is not a style choice: an XML comment may not contain
     # "--" anywhere (XML 1.0 §2.5), so "pandid 0.1.2 -- https://..."
@@ -2398,9 +2419,9 @@ def _provenance(fs: "Flowsheet") -> list[str]:
     # ``rdf:about=""`` is the RDF spelling of "this document" -- the
     # file, not the plant it draws.
     lines.append('      <rdf:Description rdf:about="">')
-    lines.append(f"        <dc:creator>{html.escape(who)}</dc:creator>")
+    lines.append(f"        <dc:creator>{escaped(who)}</dc:creator>")
     if title:
-        lines.append(f"        <dc:title>{html.escape(title)}</dc:title>")
+        lines.append(f"        <dc:title>{escaped(title)}</dc:title>")
     lines.append("      </rdf:Description>")
     lines.append("    </rdf:RDF>")
     lines.append("  </metadata>")
@@ -2792,12 +2813,18 @@ class SvgRenderer:
         :func:`_pen_scale`) or was redrawn at outright (see
         :func:`_fold`), and the counter-transform that keeps a symbol's
         lettering readable or its arrow pointing the way it was drawn.
+
+        Through :func:`~pandid.render.escape.ident` for the reason
+        :func:`arrow_marker_id` is: a ``kind`` is a key the author of a
+        custom unit chooses, and every one this library ships is already
+        a name, so the sanitising is a no-op on every sheet it draws and
+        the guard is there for the kind nobody has written yet.
         """
         variant = getattr(u, 'variant', 'default')
         sym = self.registry.for_unit(u)
-        sym_id = f"sym_{u.kind}" if variant == "default" else f"sym_{u.kind}_{variant}"
-        sym_id += sym.id_suffix + _size_tag(sym, u)
-        return sym_id + _xform_tag(*self._baked_xform(u))
+        body = u.kind if variant == "default" else f"{u.kind}_{variant}"
+        body += sym.id_suffix + _size_tag(sym, u) + _xform_tag(*self._baked_xform(u))
+        return ident("sym", body)
 
     def _defs(self, fs, arrows=True):
         lines = []
@@ -2810,13 +2837,13 @@ class SvgRenderer:
         # A sheet that draws no arrowhead defines none: only process
         # lines ever wore one, so on a P&ID the whole set is dead.
         for c in used_colors if arrows else ():
-            marker_id = f'arrow_{c.replace("#", "").replace(" ", "_")}'
             lines.append(
-                f'    <marker id="{marker_id}" viewBox="0 0 10 10" refX="10" refY="5" '
+                f'    <marker id="{arrow_marker_id(c)}" viewBox="0 0 10 10" '
+                f'refX="10" refY="5" '
                 f'markerWidth="{ARROWHEAD:g}" markerHeight="{ARROWHEAD:g}" '
                 f'markerUnits="userSpaceOnUse" orient="auto-start-reverse">'
             )
-            lines.append(f'      <path d="M 0 0 L 10 5 L 0 10 z" fill="{c}" />')
+            lines.append(f'      <path d="M 0 0 L 10 5 L 0 10 z" fill="{escaped(c)}" />')
             lines.append('    </marker>')
 
         # A symbol carrying its own lettering, or a directional mark,
@@ -2925,7 +2952,7 @@ class SvgRenderer:
             # square, a utility header flag) is drawn with the tag it
             # shares and named apart only so the flowsheet can address
             # each drawing of it.
-            safe_name = html.escape(u.tag)
+            safe_name = escaped(u.tag)
 
             if u.kind in ("feed", "product"):
                 lines.extend(self._draw_boundary(u, f, x, y, safe_name))
@@ -3044,7 +3071,7 @@ class SvgRenderer:
         out = [f'    <polygon points="{points}" fill="transparent" stroke="black" stroke-width="2" />']
         if ref:
             out.append(f'    <text x="{tx}" y="{y + 21}" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">{safe_name}</text>')
-            out.append(f'    <text x="{tx}" y="{y + 33}" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">{html.escape(ref)}</text>')
+            out.append(f'    <text x="{tx}" y="{y + 33}" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">{escaped(ref)}</text>')
         else:
             out.append(f'    <text x="{tx}" y="{y + 25}" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">{safe_name}</text>')
         return out
@@ -3074,11 +3101,11 @@ class SvgRenderer:
             # number's bottom corners clear the edges.
             return [f'    <text x="{cx}" y="{cy + 7}" font-family="sans-serif" '
                     f'font-size="11" text-anchor="middle" '
-                    f'dominant-baseline="middle">{html.escape(bot or top)}</text>']
+                    f'dominant-baseline="middle">{escaped(bot or top)}</text>']
         if not top:
             return [f'    <text x="{cx}" y="{cy}" font-family="sans-serif" '
                     f'font-size="12" text-anchor="middle" '
-                    f'dominant-baseline="middle">{html.escape(bot or top)}</text>']
+                    f'dominant-baseline="middle">{escaped(bot or top)}</text>']
         # The location bar says *where* the instrument lives and is
         # drawn across the middle, exactly where the letters would
         # otherwise sit. ISA-5.1 puts the letters wholly above the bar
@@ -3087,11 +3114,11 @@ class SvgRenderer:
         letters_dy, number_dy = (-10, 11) if variant in _BARRED_BALLOONS else (-4, 10)
         out = [f'    <text x="{cx}" y="{cy + letters_dy}" font-family="sans-serif" '
                f'font-size="12" font-weight="bold" text-anchor="middle" '
-               f'dominant-baseline="middle">{html.escape(top.upper())}</text>']
+               f'dominant-baseline="middle">{escaped(top.upper())}</text>']
         if bot:
             out.append(f'    <text x="{cx}" y="{cy + number_dy}" font-family="sans-serif" '
                        f'font-size="11" text-anchor="middle" '
-                       f'dominant-baseline="middle">{html.escape(bot)}</text>')
+                       f'dominant-baseline="middle">{escaped(bot)}</text>')
         return out
 
     def _label_place(self, lpos, x, y, u_width, u_height):
@@ -3230,7 +3257,7 @@ class SvgRenderer:
         """
         item = (*self._label_place("top_right", x, y, u_width, u_height), "top_right", "NC")
         tag = tag_box if tag_box is not None else _unit_label_box(self._unit_label_item(
-            u, f, x, y, u_width, u_height, html.escape(u.tag)))
+            u, f, x, y, u_width, u_height, escaped(u.tag)))
         nc = _unit_label_box(item)
         if tag is not None and nc is not None and (
                 tag[0] < nc[2] and tag[2] > nc[0] and tag[1] < nc[3] and tag[3] > nc[1]):
@@ -3297,7 +3324,7 @@ class SvgRenderer:
         lpos = "right" if upright else "bottom"
         item = (*self._label_place(lpos, x, y, u_width, u_height), lpos, letters)
         tag = tag_box if tag_box is not None else _unit_label_box(self._unit_label_item(
-            u, f, x, y, u_width, u_height, html.escape(u.tag)))
+            u, f, x, y, u_width, u_height, escaped(u.tag)))
         fail = _unit_label_box(item)
         if tag is not None and fail is not None and (
                 tag[0] < fail[2] and tag[2] > fail[0] and tag[1] < fail[3] and tag[3] > fail[1]):
@@ -3403,12 +3430,21 @@ class SvgRenderer:
 
         lines = ['  <g id="streams">']
         for s, points in stream_geoms:
-            color = s.color or "black"
-            marker_id = f'arrow_{color.replace("#", "").replace(" ", "_")}'
+            paint = s.color or "black"
+            # The same call ``_defs`` defines the marker under: one
+            # function, so the reference and the definition are one
+            # string rather than two spellings that agree today.
+            marker_id = arrow_marker_id(paint)
+            # Escaped once, here, rather than at each of the attributes
+            # it is written into below. A checked colour
+            # (:func:`pandid.streams.check_color`) has nothing left in
+            # it to escape, and that is the point of doing it anyway:
+            # the sink is where the guarantee is cheap to read off.
+            color = escaped(paint)
             is_signal = s.kind in _SIGNAL_KINDS
             dash = ""
             if s.dasharray:
-                dash = f' stroke-dasharray="{s.dasharray}"'
+                dash = f' stroke-dasharray="{escaped(s.dasharray)}"'
             elif s.kind in _SIGNAL_DASH:
                 dash = f' stroke-dasharray="{_SIGNAL_DASH[s.kind]}"'
 
@@ -3504,7 +3540,8 @@ class SvgRenderer:
         ]
 
         for number in stream_numbers(fs, placed, joints):
-            tx, ty, name, color = number.x, number.y, number.name, number.color
+            tx, ty, name = number.x, number.y, number.name
+            color = escaped(number.color)
             bx0, by0, bx1, by1 = number.box
             lines.append(f'    <rect x="{bx0:.1f}" y="{by0:.1f}" '
                          f'width="{bx1 - bx0:.1f}" height="{by1 - by0:.1f}" fill="white" />')
@@ -3513,7 +3550,7 @@ class SvgRenderer:
                 f'    <text x="{tx:.1f}" y="{ty:.1f}" font-family="sans-serif" '
                 f'font-size="{NUMBER_TYPE}" '
                 f'text-anchor="middle" dominant-baseline="middle" '
-                f'fill="{color}"{turn}>{html.escape(name)}</text>'
+                f'fill="{color}"{turn}>{escaped(name)}</text>'
             )
             if number.leader is not None:
                 (ax0, ay0), (ax1, ay1) = number.leader

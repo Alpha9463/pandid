@@ -20,9 +20,10 @@ anchor).
 
 from __future__ import annotations
 
-import html
 import string
 from typing import Callable, NamedTuple
+
+from pandid.render.escape import escaped
 
 # Rough advance width of the sans-serif the renderer uses, as a fraction
 # of the font size. Slightly generous so auto-sized boxes never clip
@@ -81,15 +82,11 @@ def check_fit(s, room: float, size: float, bold: bool = False, *,
     return s
 
 
-def _esc(s) -> str:
-    return html.escape(str(s))
-
-
 def _text(x, y, s, size, *, anchor="start", bold=False, fill="black", baseline=None):
     wt = ' font-weight="bold"' if bold else ""
     bl = f' dominant-baseline="{baseline}"' if baseline else ""
     return (f'<text x="{x:.1f}" y="{y:.1f}" font-family="{FONT}" font-size="{size:.1f}"'
-            f' text-anchor="{anchor}"{wt}{bl} fill="{fill}">{_esc(s)}</text>')
+            f' text-anchor="{anchor}"{wt}{bl} fill="{fill}">{escaped(s)}</text>')
 
 
 # ----------------------------------------------------------------
@@ -453,7 +450,7 @@ def draw_stream_table(table: StreamTable, left: float, top: float) -> list[str]:
             out.append(f'  <text x="{tx:.1f}" '
                        f'y="{y + table.row_h / 2 + table.size / 3:.1f}" '
                        f'font-family="{FONT}" font-size="{table.size:.1f}"{wt} '
-                       f'text-anchor="{c.anchor}">{_esc(c.text)}</text>')
+                       f'text-anchor="{c.anchor}">{escaped(c.text)}</text>')
             x += c.w
         y += table.row_h
     out.append('</g>')

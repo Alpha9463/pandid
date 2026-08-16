@@ -127,6 +127,55 @@ retirement is declared with. Nothing is deprecated in this release.
   walked every unit rather than the stacked ones, so a `pin(row=-1)` was itself
   renumbered.
 
+### Security
+
+- **A spec file could put script into the sheet drawn from it.** `Stream.color`
+  and `Stream.dasharray` reached their SVG attributes unescaped, so
+  `color: 'black" onload="alert(1)'` in a `.yaml` closed the attribute and
+  opened an event handler on the `<path>` — and an SVG is opened in a browser.
+  Every string a user fills in now goes through one escaper
+  (`pandid.render.escape`) on its way into either document, attribute values
+  and text nodes alike: unit names, tags, descriptions, off-page references,
+  instrument letters, loop numbers, stream names and line-number components,
+  stream properties, every title-block and revision cell, and the title, rows,
+  headers and cells of every annotation, note, legend and table.
+
+  It also drops the characters XML has no spelling for. A `NUL` or a `BEL` in a
+  tag cannot be escaped into legality — XML 1.0 §2.2 admits tab, newline and
+  carriage return and nothing else below `U+0020`, numeric references included
+  — and one of them anywhere made the whole file unopenable, in both backends.
+  A control character has no glyph, so nothing a drawing could have shown is
+  lost by leaving it out.
+
+  `tests/test_escape.py` is the property, not a list of cases: twelve shapes of
+  hostile string through every field, on both backends, asserting each render
+  parses, carries no attribute the value invented, and leaves every `url(#…)`
+  and `href="#…"` pointing at an id that exists.
+
+- **An id built from a colour was not always an id.** The arrowhead marker was
+  named by pasting the colour into a string, so `color="rgb(1,2,3)"` minted
+  `arrow_rgb(1,2,3)` — a legal attribute value and not a legal XML name. A
+  browser drops the definition and draws the line with no arrowhead, while a
+  PDF export, which resolves the reference itself, still draws one: two files
+  disagreeing about the drawing, with nothing said. Marker ids and `<symbol>`
+  ids are now minted by one function that answers with a name whatever it is
+  given, and the `url(#…)` and `href="#…"` reaching them are written from the
+  same call, so a definition and its reference cannot disagree. Where
+  sanitising would be lossy a digest of the original is appended, so two
+  colours never land on one definition. `arrow_black` and `arrow_0a7` are
+  unchanged, and no golden or gallery sheet moves.
+
+- **A colour that is not a colour is now refused, not escaped.** Escaping
+  `black" onload="alert(1)` leaves a well-formed document whose `stroke` is a
+  string no renderer recognises — and an unrecognised paint is *ignored*, so
+  the line is drawn with no stroke at all and disappears off a drawing whose
+  whole job is to say what is connected to what. `Stream.color` and
+  `Stream.dasharray` are checked as they are set, against the shapes SVG writes
+  one in, and the `ValueError` names the field, the line and what to write
+  instead. The shape is what makes the value safe to put in an SVG attribute
+  and in a draw.io `style=` key; a misspelled keyword is a typo rather than an
+  injection and is left to `validate()`. See `pandid.streams.check_color`.
+
 ## [0.1.2] - 2026-08-05
 
 ### Added
