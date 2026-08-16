@@ -1,3 +1,5 @@
+import math
+import warnings
 from typing import Protocol, TYPE_CHECKING
 
 from pandid.geometry import Route
@@ -48,11 +50,37 @@ def _clamp_projection(
     return cand if cand in nodes else proj
 
 
+def _refuse_non_finite_geometry(fs: "Flowsheet") -> None:
+    """Refuse a sheet carrying a NaN or an infinity in its geometry.
+
+    Such a coordinate does not stay where it was put. It reaches the
+    visibility graph as a lane and as an obstacle edge, and from there the
+    search, where it is fatal: every comparison against NaN is false, so A*'s
+    ``visited`` prune settles nothing, every state re-expands and the render
+    never returns. Caught here, before the graph is built, because this is the
+    last place that can name the unit carrying it.
+    """
+    for unit in fs.units:
+        frame = unit.frame
+        if frame is None:
+            continue
+        for field in ("x", "y", "w", "h"):
+            value = getattr(frame, field, 0.0)
+            if not math.isfinite(value):
+                raise ValueError(
+                    f"{unit.name} has a non-finite {field}={value!r}, which "
+                    f"nothing on the sheet can be measured against. Check the "
+                    f"pin() that placed it and the width and height it was "
+                    f"given."
+                )
+
+
 class DefaultRouter:
     def route(self, fs: "Flowsheet") -> None:
         from pandid.routing.visibility import VisibilityGraph, share_escape_room
         from pandid.routing.astar import find_path
 
+        _refuse_non_finite_geometry(fs)
         graph = VisibilityGraph(fs, margin=15.0)
         edge_penalties: dict[tuple[tuple[float, float], tuple[float, float]], float] = {}
 
@@ -62,14 +90,38 @@ class DefaultRouter:
 
             src_u = stream.source.owner
             dst_u = stream.dest.owner
-            assert src_u is not None and dst_u is not None
+            # Not an ``assert``: ``python -O`` strips those, and the line below
+            # would then fail with an AttributeError naming none of this.
+            if src_u is None or dst_u is None:
+                orphan = stream.source if src_u is None else stream.dest
+                raise ValueError(
+                    f"stream {stream.name!r} cannot be routed: port "
+                    f"{orphan.name!r} belongs to no unit."
+                )
 
+            # The three ways a stream drops out below all leave ``stream.route``
+            # None, which draws no line and sends every later render back
+            # through routing again. Say so rather than skip in silence.
             if src_u.frame is None or dst_u.frame is None:
+                unplaced = src_u if src_u.frame is None else dst_u
+                warnings.warn(
+                    f"stream {stream.name!r} is left unrouted: {unplaced.name!r} "
+                    f"has no frame, so there is no geometry to route between. "
+                    f"Call layout() before route().",
+                    stacklevel=2,
+                )
                 continue
 
             start = graph.port_anchors.get((src_u.name, stream.source.name))
             goal = graph.port_anchors.get((dst_u.name, stream.dest.name))
-            if not start or not goal:
+            if start is None or goal is None:
+                missing = (f"{src_u.name}.{stream.source.name}" if start is None
+                           else f"{dst_u.name}.{stream.dest.name}")
+                warnings.warn(
+                    f"stream {stream.name!r} is left unrouted: the visibility "
+                    f"graph carries no anchor for port {missing}.",
+                    stacklevel=2,
+                )
                 continue
 
             start_dir = graph.port_dirs.get((src_u.name, stream.source.name))
@@ -100,9 +152,18 @@ class DefaultRouter:
                     edge_penalties[(u_node, v_node)] = edge_penalties.get((u_node, v_node), 0.0) + 2000.0
                     edge_penalties[(v_node, u_node)] = edge_penalties.get((v_node, u_node), 0.0) + 2000.0
             else:
-                # Fallback to an orthogonal L-shape through the projection points.
-                mid_point = (goal_proj[0], start_proj[1])
-                path = [start, start_proj, mid_point, goal_proj, goal]
+                # Fallback to an orthogonal L-shape through the projection
+                # points, dropping any corner that repeats the point before it.
+                # Two projections already in one column put the corner on top of
+                # ``start_proj``, and the simplifier below keeps both verbatim
+                # (it never drops a projection point), leaving a zero-length
+                # segment that the separation pass then reads as a horizontal
+                # run on a track the stream does not occupy.
+                corner = (goal_proj[0], start_proj[1])
+                path = [start]
+                for point in (start_proj, corner, goal_proj, goal):
+                    if point != path[-1]:
+                        path.append(point)
 
             # Simplify (remove collinear intermediate points), but never drop the
             # projection points that guarantee a clean port exit/entry.

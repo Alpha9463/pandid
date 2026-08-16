@@ -1,6 +1,10 @@
+import pytest
+
 from pandid.flowsheet import Flowsheet
 from pandid.units import Feed, HeatExchanger, Product, Pump, Valve, Vessel
 from pandid.routing import get_outward_dir
+from pandid.routing import astar
+from pandid.routing.astar import find_path
 from pandid.routing.visibility import Rect, VisibilityGraph, clear_gaps
 
 
@@ -118,10 +122,22 @@ def test_router_integration():
     fs.route()
 
     assert s.route is not None
-    assert isinstance(s.route.waypoints, list)
-    # Diagonally offset ports cannot be joined by one straight line: the run has
-    # to step orthogonally.
-    assert len(s.route.waypoints) >= 1
+    wp = s.route.waypoints
+    # Asserting only that the list exists passes on a router that found nothing
+    # at all, so say what the run has to be: it starts on one nozzle, ends on
+    # the other, and every segment lies on an axis. Diagonally offset ports
+    # cannot be joined by one straight line, so it also has to turn.
+    graph = VisibilityGraph(fs, margin=15.0)
+    assert wp[0] == pytest.approx(graph.port_anchors[("F", "outlet")])
+    assert wp[-1] == pytest.approx(graph.port_anchors[("P", "inlet")])
+    for (x1, y1), (x2, y2) in zip(wp, wp[1:]):
+        assert abs(x1 - x2) < 0.5 or abs(y1 - y2) < 0.5, f"diagonal segment in {wp}"
+    turns = {
+        ("E" if x2 > x1 else "W") if abs(x1 - x2) >= 0.5 else ("S" if y2 > y1 else "N")
+        for (x1, y1), (x2, y2) in zip(wp, wp[1:])
+        if abs(x1 - x2) >= 0.5 or abs(y1 - y2) >= 0.5
+    }
+    assert len(turns) >= 2, f"expected an orthogonal step, got {wp}"
 
 
 def test_no_obstacle_intersection():
@@ -151,10 +167,11 @@ def test_no_obstacle_intersection():
     sx, sy = v.frame.x + spx, v.frame.y + spy
     dx, dy = c.frame.x + dpx, c.frame.y + dpy
 
-    if s.route.waypoints:
-        pts = [(sx, sy)] + s.route.waypoints + [(dx, dy)]
-    else:
-        pts = [(sx, sy), (dx, dy)]
+    # A route with no waypoints used to fall through to a bare source-to-dest
+    # straight line and be checked against the obstacles as though the router
+    # had drawn it, so a router that found nothing passed this test.
+    assert s.route is not None and s.route.waypoints, "V1 -> C1 was not routed"
+    pts = [(sx, sy)] + s.route.waypoints + [(dx, dy)]
 
     for i in range(len(pts) - 1):
         x1, y1 = pts[i]
@@ -176,3 +193,67 @@ def test_no_obstacle_intersection():
             assert not obs.intersects_segment(x1, y1, x2, y2), (
                 f"Segment {pts[i]}->{pts[i + 1]} intersects obstacle {obs}"
             )
+
+
+def _straight_run(bad=None):
+    """Feed to product through a heat exchanger, optionally misplaced."""
+    fs = Flowsheet("Non-finite")
+    feed = fs.add(Feed("Raw Feed")).pin(x=0, y=100)
+    hx = fs.add(HeatExchanger("E-101"))
+    prod = fs.add(Product("To Unit 200")).pin(x=400, y=100)
+    fs.connect(feed.outlet, hx.shell_in)
+    fs.connect(hx.shell_out, prod.inlet)
+    hx.pin(x=200.0 if bad is None else bad, y=100.0)
+    return fs
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_a_non_finite_placement_is_refused_rather_than_routed_for_ever(bad):
+    """A coordinate that does not compare used to hang the render outright.
+
+    A* terminates because ``visited[state] <= g`` settles each state at most
+    once, and that comparison is false for every NaN: nothing was settled,
+    every state re-expanded, and the queue's paths grew until the process
+    died. ``route()`` never came back, so neither did ``to_svg()``.
+
+    This test cannot itself hang: the sheet is refused before the graph is
+    built, which is also the last point that can name the unit at fault.
+    """
+    with pytest.raises(ValueError, match="E-101 has a non-finite x="):
+        _straight_run(bad).route()
+
+
+def test_the_search_is_bounded_by_the_size_of_the_graph():
+    """Termination may not rest on the coordinates being well behaved.
+
+    The endpoint check catches what we know how to name; the expansion ceiling
+    is what makes termination unconditional, so a graph poisoned somewhere
+    nobody thought to look raises instead of spinning. Driven by taking the
+    budget away rather than by finding a pathological sheet, so the test costs
+    what any other does.
+    """
+    fs = _straight_run()
+    fs.layout()
+    original = (astar.MAX_EXPANSIONS_PER_NODE, astar.MIN_EXPANSION_BUDGET)
+    astar.MAX_EXPANSIONS_PER_NODE, astar.MIN_EXPANSION_BUDGET = 0, 0
+    try:
+        with pytest.raises(RuntimeError, match="not converging"):
+            fs.route()
+    finally:
+        astar.MAX_EXPANSIONS_PER_NODE, astar.MIN_EXPANSION_BUDGET = original
+
+    # The same sheet routes with the budget it is actually given.
+    fs = _straight_run()
+    fs.route()
+    assert all(s.route and s.route.waypoints for s in fs.streams)
+
+
+def test_find_path_names_the_endpoint_it_cannot_search_from():
+    fs = _straight_run()
+    fs.layout()
+    graph = VisibilityGraph(fs, margin=15.0)
+    node = next(iter(graph.nodes))
+    with pytest.raises(ValueError, match="non-finite start"):
+        find_path(graph, (float("nan"), 0.0), node)
+    with pytest.raises(ValueError, match="non-finite goal"):
+        find_path(graph, node, (0.0, float("inf")))

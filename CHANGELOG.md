@@ -179,6 +179,61 @@ retirement is declared with. Nothing is deprecated in this release.
   walked every unit rather than the stacked ones, so a `pin(row=-1)` was itself
   renumbered.
 
+- **A stream that jogs between its nozzles was dragged off one of them.** The
+  pass that separates parallel runs resolved a cluster one track per *stream*,
+  taking the first port-attached run's height as the whole stream's. A stream
+  whose two nozzles sit a few pixels apart contributes two port-attached runs
+  at two heights, so the second was pulled onto the first one's track: the jog
+  collapsed to a zero-length segment and the run that held the nozzle left it.
+  Each port-attached run now claims its own track. A run that is free to move
+  and whose own stream is pinned in the same cluster still joins that nozzle,
+  which is what un-doubles the line, so no shipped sheet moves. The pass also
+  works in runs now — a maximal chain of collinear segments — rather than in
+  single segments, so a line the simplifier kept in two pieces cannot be
+  offset into a diagonal.
+
+- **The separation pass could resolve two runs closer than its own minimum.**
+  It measured each run's track to the nearest pixel and then applied
+  `target - track` to the unrounded waypoint, so a run settled up to half a
+  pixel off the slot it was given: three runs placed on a 6px grid finished
+  5.2px apart, closer than the spacing the pass exists to enforce. Tracks are
+  the raw coordinate now, and candidate slots are compared at the spacing
+  exactly instead of with half a pixel of slack.
+
+- **Routing says why it left a stream undrawn.** Three paths out of the router
+  dropped a stream with no line and no word, and each leaves `stream.route`
+  None, which draws nothing and sends every later render back through routing.
+  A port with no owning unit was caught by an `assert` — stripped under
+  `python -O`, where it became an `AttributeError` naming none of this — and
+  now raises a `ValueError` naming the port. A unit with no frame and a port
+  with no anchor were skipped silently and now warn, naming the stream and
+  what is missing.
+
+- **The fallback route no longer leaves a zero-length segment behind.** When
+  the search finds no path at all, the router falls back to an L through the
+  two escape projections. Where those share a column the corner lands on top
+  of the first of them, and the simplifier keeps both — it never drops a
+  projection point — leaving a zero-length segment that the separation pass
+  then reads as a horizontal run on a track the stream does not occupy. The
+  fallback drops a point that repeats the one before it.
+
+- **A non-finite coordinate no longer hangs the render.** `pin(x=float("nan"))`
+  — or an infinity, or a non-finite width — made `to_svg()`, `to_drawio()` and
+  `render()` never return, on a sheet `validate()` was already reporting as
+  `pin-not-finite`. A\* terminates because `visited[state] <= g` settles each
+  state at most once, and that comparison is false for every NaN: nothing was
+  settled, every state re-expanded, and the queue's growing paths ate memory
+  until the process died. The router now refuses such a sheet before it builds
+  the visibility graph, with a `ValueError` naming the unit and the coordinate,
+  which is the last point either can be named.
+
+  Termination no longer rests on the numbers behaving, either. `find_path`
+  refuses a non-finite endpoint outright and will not expand more than
+  `MAX_EXPANSIONS_PER_NODE` states per graph node — eight, where the hardest of
+  323 real searches across the sixteen examples expands 0.85 — raising rather
+  than looping. A search that will not converge is a bug worth a traceback,
+  not a drawing that never arrives.
+
 ### Security
 
 - **A spec file could put script into the sheet drawn from it.** `Stream.color`

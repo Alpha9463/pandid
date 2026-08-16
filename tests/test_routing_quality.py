@@ -379,3 +379,59 @@ def test_separation_only_moves_runs_that_actually_collide():
 
     stacked = [s.route.waypoints[1][1] for s in streams[2:]]
     assert abs(stacked[0] - stacked[1]) >= 6, f"coincident runs left stacked: {stacked}"
+
+
+def test_a_stream_jogging_between_its_nozzles_keeps_both_of_them():
+    # The pass may move a run off its lane; it may never move one off a nozzle.
+    # A stream whose two ports sit 6px apart in y contributes *two* port-attached
+    # runs to one cluster. Resolving the cluster one track per stream instead of
+    # one per run pins the second run to the first one's track: the last segment
+    # walks off its nozzle and the jog collapses to a zero-length segment.
+    fs = Flowsheet("Offset Nozzles")
+    fa = fs.add(U.Feed("Raw")).pin(x=0, y=100)
+    pa = fs.add(U.Product("To Unit 200")).pin(x=300, y=106)
+    fb = fs.add(U.Feed("Utility")).pin(x=0, y=300)
+    pb = fs.add(U.Product("To Sump")).pin(x=300, y=400)
+    jog = fs.connect(fa.outlet, pa.inlet)
+    other = fs.connect(fb.outlet, pb.inlet)
+    # Both of the jog's horizontals are port-attached, at 100 and at 106.
+    jog.via([(0, 100), (100, 100), (100, 106), (200, 106)])
+    # An interior run of another stream, laid across the same corridor 1px off.
+    other.via([(0, 300), (50, 300), (50, 101), (150, 101), (150, 400), (200, 400)])
+    fs.layout()
+    fs.route()
+
+    wp = jog.route.waypoints
+    assert wp[0][1] == 100 and wp[1][1] == 100, f"source nozzle run moved: {wp}"
+    assert wp[-1][1] == 106 and wp[-2][1] == 106, f"dest nozzle run moved: {wp}"
+    assert not [i for i in range(len(wp) - 1) if wp[i] == wp[i + 1]], (
+        f"the jog was flattened onto one track: {wp}"
+    )
+
+    # The run that was free to move is the one that moved, clear of both nozzles.
+    moved = other.route.waypoints[2][1]
+    assert min(abs(moved - 100), abs(moved - 106)) >= 6, (
+        f"the free run was left on a nozzle track: {moved}"
+    )
+
+
+def test_separated_runs_end_up_at_least_the_minimum_apart():
+    # The resolver picks target tracks a spacing apart, so rounding the track it
+    # measures from while offsetting the waypoint it does not leaves each run up
+    # to half a pixel off its slot -- enough to close a resolved pair back below
+    # the minimum the resolver was enforcing.
+    fs = Flowsheet("Fractional Lanes")
+    streams = []
+    for i, y in enumerate((100.4, 99.6, 100.0)):
+        f = fs.add(U.Feed(f"F-{i}")).pin(x=0, y=300 + 40 * i)
+        p = fs.add(U.Product(f"P-{i}")).pin(x=600, y=300 + 40 * i)
+        s = fs.connect(f.outlet, p.inlet)
+        # The shared horizontal is interior, so all three are free to move.
+        s.via([(50 + i, 300 + 40 * i), (50 + i, y), (500 + i, y), (500 + i, 300 + 40 * i)])
+        streams.append(s)
+    fs.layout()
+    fs.route()
+
+    ys = sorted(s.route.waypoints[1][1] for s in streams)
+    gaps = [b - a for a, b in zip(ys, ys[1:])]
+    assert all(gap >= 6 for gap in gaps), f"resolved runs left {gaps} apart: {ys}"
