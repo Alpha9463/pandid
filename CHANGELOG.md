@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   ```python
   Reactor("R-101", agitator="turbine")                    # ten group-28 stirrers
-  Reactor("R-201", internals="packing", agitator=None)    # a packed bed
+  Reactor("R-201", internals="packing")                   # a packed bed
   Column("T-101", internals="valve_tray", trays=30)       # eight group-27 internals
   Vessel("D-301", supports="skirt")                       # four group-26 supports
   Separator("V-201", characteristic="gravity")            # three group-29 marks
@@ -363,6 +363,28 @@ reader would otherwise take them for working code.
   off-lane charge beside it is.
 
 ### Fixed
+
+- **A packed-bed reactor came out with a stirrer in the bed.**
+  `Reactor(internals="packing")` drew the crossed-X packed bed *and* the
+  default agitator, because the agitator's default was worked out from the
+  body alone and a dished-end shell is a stirred tank. So was
+  `internals="fluidised_bed"`, which is mixed by its own fluidisation, and
+  `internals="sieve_tray"`, which is a trayed vessel. None of the three is a
+  stirred tank, and all three were drawn with a shaft running down through
+  what it would have had to turn in.
+
+  Naming `internals=` now leaves out the agitator **default**, and only the
+  default: `Reactor(agitator="turbine", internals="packing")` is a stirred
+  slurry reactor and still draws both. The distinction is between an author
+  who said nothing and one who said something, which is what the constructor's
+  sentinel already recorded, so it is read rather than restated — and it is
+  read in `Unit.composition_defaults()`, where the serializer asks the same
+  question the constructor does. A spec written from a packed-bed reactor
+  therefore carries `internals` alone rather than `internals` plus a redundant
+  `agitator: null`, and reads back as the same drawing.
+
+  A `Column`, a `Vessel` and a `Separator` compose from one keyword each, so
+  none of them has a second part to be ruled out by and none of them changes.
 
 - **`GravitySeparator` and `ElectrostaticPrecipitator` scolded their authors
   for a word they never wrote.** Both classes exist to spell one variant for

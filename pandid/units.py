@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from difflib import get_close_matches
 from typing import TYPE_CHECKING, Any, TypeVar
 
@@ -159,8 +159,9 @@ class Unit:
     #: so there is no list to restate.
     #:
     #: A default of :data:`_UNSTATED` means the class works the answer
-    #: out from the variant; :meth:`composition_defaults` is where it
-    #: does, and is what a serializer asks rather than this.
+    #: out from the body and from the parts the author *did* name;
+    #: :meth:`composition_defaults` is where it does, and is what a
+    #: serializer asks rather than this.
     COMPOSITION: dict[str, Any] = {}
 
     #: The composition keyword this class folds into :attr:`variant`,
@@ -204,7 +205,9 @@ class Unit:
         return []
 
     @classmethod
-    def composition_defaults(cls, variant: str) -> dict[str, Any]:
+    def composition_defaults(cls, variant: str,
+                             stated: Mapping[str, Any] | None = None
+                             ) -> dict[str, Any]:
         """What each composition keyword means on *variant*, unstated.
 
         :attr:`COMPOSITION` as it stands, for a class whose defaults are
@@ -213,6 +216,16 @@ class Unit:
         rather than working the answer out for itself, so the rule is
         written once and a serializer reading it back gets the same
         answer the constructor did.
+
+        *stated* is every composition keyword's value as it stands --
+        what the author named, where the constructor is asking, and what
+        the unit ended up carrying, where a serializer is. The two are
+        the same value for any keyword whose own default does not depend
+        on a sibling, which is every keyword read through here. It
+        exists because one part can rule another out: a reactor the
+        author has put internals in is not a stirred tank, so its
+        agitator default is *no agitator*, and that is a fact about the
+        keywords together rather than about the body.
 
         Never returns :data:`_UNSTATED`: a class that declares one owes
         an override that resolves it.
@@ -2326,12 +2339,12 @@ class Reactor(Unit):
     takes: **the body is ``variant=``, and what is inside it is
     ``agitator=`` and ``internals=``**::
 
-        Reactor("R-101")                                   # a CSTR
+        Reactor("R-101")                              # a CSTR
         Reactor("R-102", agitator="turbine")
-        Reactor("R-103", variant="jacketed")               # jacketed CSTR
-        Reactor("R-201", internals="packing", agitator=None)       # a PBR
-        Reactor("R-202", internals="fluidised_bed", agitator=None) # a FBR
-        Reactor("R-301", variant="tubular", agitator=None)         # a PFR
+        Reactor("R-103", variant="jacketed")          # jacketed CSTR
+        Reactor("R-201", internals="packing")         # a PBR
+        Reactor("R-202", internals="fluidised_bed")   # a FBR
+        Reactor("R-301", variant="tubular")           # a PFR
 
     - ``agitator=`` names one of the ten ISO group-28 stirrers:
       ``"agitator"`` (the general one, and the default on a stirred
@@ -2345,6 +2358,12 @@ class Reactor(Unit):
       packed bed and ``"fluidised_bed"`` is a fluidised bed.
 
     Either may be ``None``, which draws that much of the shell bare.
+
+    **Naming internals leaves out the agitator**, because a packed bed,
+    a fluidised bed and a set of trays are all ways of not being a
+    stirred tank. Name one anyway where the vessel really has both --
+    ``Reactor("R-203", agitator="turbine", internals="packing")`` is a
+    stirred slurry reactor and is drawn with the stirrer in the bed.
 
     ``variant=`` chooses the **body**: ``"default"`` the dished-end
     stirred tank, ``"jacketed"`` the same inside a heating jacket,
@@ -2411,21 +2430,37 @@ class Reactor(Unit):
     #: tubular shell nor ``plain``'s hatched bed is stirred at all.
     _STIRRED = ("default", "jacketed")
 
-    #: The agitator depends on the body and the internals do not, so one
-    #: of the two is :data:`_UNSTATED` and resolved below.
+    #: The agitator depends on the body and on the internals; the
+    #: internals depend on neither. So one of the two is
+    #: :data:`_UNSTATED` and resolved below.
     COMPOSITION = {"agitator": _UNSTATED, "internals": None}
 
     @classmethod
-    def composition_defaults(cls, variant: str) -> dict[str, Any]:
-        """A stirred body gets item 28.1; the rest get nothing.
+    def composition_defaults(cls, variant: str,
+                             stated: Mapping[str, Any] | None = None
+                             ) -> dict[str, Any]:
+        """A stirred body gets item 28.1; the rest get nothing, and so
+        does a body the author has put internals in.
 
         The only place :attr:`_STIRRED` is read. ``__init__`` asks here,
         so "a reactor is a stirred tank unless it says otherwise" is one
         sentence rather than one in the constructor and another wherever
         a reactor has to be written down.
+
+        **Naming internals is saying otherwise.** A packed bed is not
+        stirred, a fluidised bed is mixed by its own fluidisation, and a
+        trayed vessel is not a tank with a paddle in it -- so an
+        unstated agitator on any of them is a stirrer nobody asked for,
+        drawn through the bed it would have to turn in. An agitator the
+        author *does* name still wins, because a stirred slurry reactor
+        is a real vessel and ``agitator="turbine", internals="packing"``
+        is how it is asked for. The whole distinction is stated once, by
+        whether the constructor was handed :data:`_UNSTATED`.
         """
-        return {**super().composition_defaults(variant),
-                "agitator": "agitator" if variant in cls._STIRRED else None}
+        return {**super().composition_defaults(variant, stated),
+                "agitator": "agitator"
+                if variant in cls._STIRRED and (stated or {}).get("internals") is None
+                else None}
 
     @classmethod
     def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
@@ -2449,7 +2484,8 @@ class Reactor(Unit):
         if variant == "plain":
             REACTOR_VARIANT_PLAIN.warn(self, where=name)
         if agitator is _UNSTATED:
-            agitator = self.composition_defaults(self.variant)["agitator"]
+            agitator = self.composition_defaults(
+                self.variant, {"internals": internals})["agitator"]
         self.agitator = agitator
         self.internals = internals
         # Before the feeds, so the declaration order the drawing is read
@@ -2809,13 +2845,21 @@ class Column(Unit):
     COMPOSITION = {"internals": _UNSTATED, "trays": DEFAULT_TRAYS}
 
     @classmethod
-    def composition_defaults(cls, variant: str) -> dict[str, Any]:
+    def composition_defaults(cls, variant: str,
+                             stated: Mapping[str, Any] | None = None
+                             ) -> dict[str, Any]:
         """A bare shell gets item 27.1; a drawn-in one gets nothing.
 
         The only place :attr:`_BARE` is read; see
         :meth:`Reactor.composition_defaults` for why it is a method.
+
+        *stated* is not read here and a column has nothing for it to
+        say: ``trays`` is a count rather than a part, so there is no
+        second part for the internals to be ruled out by. The same goes
+        for :class:`Vessel` and :class:`Separator`, which compose from
+        one keyword each. A reactor is the only class with two.
         """
-        return {**super().composition_defaults(variant),
+        return {**super().composition_defaults(variant, stated),
                 "internals": "tray" if variant in cls._BARE else None}
 
     def __init__(self, name: str, n_feeds: int = 1, variant: str = "default",
