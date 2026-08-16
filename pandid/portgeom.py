@@ -5,16 +5,23 @@ positions *here*, so the drawn diagram and the routed paths can never
 disagree: the renderer cannot forget a mirror flip the router applied
 and leave a mirrored unit's streams visually disconnected.
 
-:func:`resolve_port` is the single authority: it answers a port's drawn
-point, its routing anchor and its face together, and everything else
-here is a wrapper over it. Deriving any one of the three somewhere else
-is the bug. Which of a port's declared faces it puts the ink on comes
-from :func:`chosen_face`, so there is one precedence (the author's, then
-the engine's, then the symbol's) and one place stating it.
+:func:`resolve_port` is the single authority on where a port is: it
+answers the port's drawn point, its routing anchor and its face
+together, and :func:`port_point`, :func:`port_anchor` and
+:func:`port_offset` are wrappers over it. The rest are its peers, not
+its wrappers -- sizing, the symbol-to-box transform, the ink box, the
+face a coordinate comes out of -- and are what it is built from.
+Deriving a port's point, anchor or face anywhere else is the bug. Which
+of a port's declared faces it puts the ink on comes from
+:func:`chosen_face`, so there is one precedence (the author's, then the
+engine's, then the symbol's) and one place stating it.
 
-All functions take a resolved box explicitly (``w``, ``h``,
-``mirrored``) rather than reading ``unit.frame``, so they work both
-during layout (on a ``_Slot``) and afterwards (on a ``Frame``).
+The placement is a parameter rather than something read off the unit, so
+these work during layout (on a ``_Slot``) and afterwards (on a
+``Frame``) alike. Where it is optional -- :func:`port_faces`,
+:func:`resolve_size`, :func:`port_offset` -- it falls back to the unit's
+own pin, then its frame; a caller about to change either must pass its
+candidate, since the committed one describes a sheet on its way out.
 """
 
 from __future__ import annotations
@@ -100,7 +107,7 @@ def ink_box(bw: float, bh: float, w: float, h: float, stretchable: bool = True
     prevent: the nozzle lands out in the letterbox and its stream stops
     short of the equipment.
     """
-    if stretchable or bw <= 0 or bh <= 0:
+    if stretchable:
         return 0.0, 0.0, w, h
     scale = min(w / bw, h / bh)
     iw, ih = bw * scale, bh * scale

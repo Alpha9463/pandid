@@ -59,7 +59,15 @@ def find_path(
     start_dir: The OUTWARD normal direction of the source port. ``start`` is already
         the port's projected escape node, so this only seeds the travel direction;
         it is not re-imposed on the first step.
-    goal_dir: The OUTWARD normal direction of the destination port. The path must arrive heading the opposite direction.
+    goal_dir: The OUTWARD normal direction of the destination port. The path may
+        arrive head-on or from either side; only arriving from *behind* -- that
+        is, travelling along the outward normal, which means coming through the
+        unit body -- is banned. See the goal-approach comment in the loop.
+
+    The heuristic is not weighted for recycle streams. Scaling an admissible
+    heuristic cannot change which path A* returns, only how greedily it looks
+    for it; a genuine preference for the recycle lanes has to be a change to
+    ``cost``, as the off-lane charge below is.
 
     Raises ``ValueError`` on a non-finite endpoint, and ``RuntimeError`` on a
     search that will not settle within its expansion budget. Both beat the
@@ -144,20 +152,12 @@ def find_path(
             dist = abs(neighbor[0] - current[0]) + abs(neighbor[1] - current[1])
             cost = g + dist + edge_penalties.get((current, neighbor), 0.0)
             
-            # Boundary penalty: penalize edges that lie exactly on an obstacle boundary
-            if current[0] == neighbor[0]: # vertical
-                for o in graph.obstacles:
-                    if current[0] == o.x_min or current[0] == o.x_max:
-                        if max(current[1], neighbor[1]) > o.y_min and min(current[1], neighbor[1]) < o.y_max:
-                            cost += 2000
-                            break
-            elif current[1] == neighbor[1]: # horizontal
-                for o in graph.obstacles:
-                    if current[1] == o.y_min or current[1] == o.y_max:
-                        if max(current[0], neighbor[0]) > o.x_min and min(current[0], neighbor[0]) < o.x_max:
-                            cost += 2000
-                            break
-                            
+            # No edge offered here lies along an obstacle boundary, so there is
+            # nothing to charge one for. ``Rect.intersects_segment`` bounds the
+            # obstacle inclusively: a run exactly on ``x_min`` or ``y_max``
+            # counts as intersecting it, and the visibility graph never builds
+            # the edge. Pricing a boundary-hugging lane means letting those
+            # edges exist first, which is a change to ``visibility.py``.
             bend_cost = BEND_PENALTY
             if is_recycle:
                 bend_cost = BEND_PENALTY / 2.0
@@ -178,9 +178,7 @@ def find_path(
                 cost += bend_cost
                 
             h = heuristic(neighbor, goal)
-            if is_recycle:
-                h = h / 2.0  # reduce heuristic slightly so it explores the longer recycle lanes
-            
+
             counter += 1
             heapq.heappush(queue, (cost + h, cost, counter, neighbor, ndir, path + [neighbor]))
             
