@@ -205,7 +205,7 @@ by a reader, and so a mark with no number cannot become a part at all. If you
 are unsure whether something composes, leave it a distinct symbol and say so in
 the PR. A false composition is worse than a missed one.
 
-**The artwork lives in `pandid/render/iso_parts.py`** — twenty-five parts, all
+**The artwork lives in `pandid/render/iso_parts.py`** — thirty-six parts, all
 original, all built to the construction Table 2 states rather than traced from
 its figures. Review a change to it with
 

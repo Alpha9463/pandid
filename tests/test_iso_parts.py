@@ -58,6 +58,20 @@ TABLE_2 = {
     (29, "gravity"): ("29.1", "C2028", "Gravity type, settling type"),
     (29, "electrostatic"): ("29.2", "C2030", "Electrostatic type"),
     (29, "electromagnetic"): ("29.3", "C2031", "Electromagnetic type"),
+    (29, "disc"): ("29.4", "C2033", "Disc type"),
+    (29, "crushing"): ("29.5", "C0240", "Crushing"),
+    # Three digits, not four. Table 2 prints it that way and this table
+    # is quoted from Table 2, so "correcting" it here to C0240's shape
+    # would be the failing test rather than the fix.
+    (29, "gear"): ("29.6", "C024", "Gear type, gearwheels type"),
+    (29, "hammer"): ("29.7", "C2034", "Hammer type"),
+    (29, "impact"): ("29.8", "C2035", "Impact type"),
+    (29, "jaw"): ("29.9", "C2036", "Jaw type"),
+    (29, "liquid"): ("29.10", "321", "Liquid type, wet type"),
+    (29, "roller"): ("29.11", "C2037", "Roller type"),
+    (29, "cone"): ("29.12", "C2038", "Cone type"),
+    (29, "jet"): ("29.13", "X8176", "Jet type"),
+    (29, "vibration"): ("29.14", "3831", "Vibration type"),
 }
 
 PARTS = iso_parts.parts()
@@ -87,18 +101,41 @@ def test_the_parts_are_exactly_the_table_2_rows_they_claim():
 
 
 def test_each_group_ships_the_items_it_was_drawn_for():
-    """26's four supports, 27's eight internals, 28's ten agitators, and the
-    three group-29 characteristics whose composition onto ISO group 8's
-    separating vessel is verified glyph for glyph (8.3, 8.6, 8.8).
+    """26's four supports, 27's eight internals, 28's ten agitators, and all
+    fourteen group-29 characteristics.
 
-    The other eleven group-29 items and group 26's manhole and socket are
-    deliberately absent, not overlooked: a part is drawn when something
-    composes from it. Two of the absences carry an argument -- group 29 has no
-    vortex, which is why ISO 8.10 X2618 is a symbol of its own, and no spray,
-    which is why 8.7 X8033 cannot be composed either.
+    Group 26's manhole and socket are deliberately absent, not overlooked: both
+    are drawn *on the vessel wall*, and where a wall is depends on the body.
+
+    Three of the fourteen are the ones ISO composes onto its own group-8
+    separating vessel and gives a registration number to (8.3, 8.6, 8.8), and
+    those three are still all that ``Separator(characteristic=)`` names -- see
+    :func:`test_the_marks_beyond_the_composed_three_are_artwork_only`. Two
+    group-29 *absences* still carry an argument: the group has no vortex, which
+    is why ISO 8.10 X2618 is a symbol of its own, and no spray, which is why
+    8.7 X8033 cannot be composed either.
     """
     counts = {g: len(default_registry.part_names(g)) for g in (26, 27, 28, 29)}
-    assert counts == {26: 4, 27: 8, 28: 10, 29: 3}
+    assert counts == {26: 4, 27: 8, 28: 10, 29: 14}
+
+
+def test_the_marks_beyond_the_composed_three_are_artwork_only():
+    """Drawing 29.4 to 29.14 registered eleven parts and no keyword.
+
+    ``Separator(characteristic=)`` names the three rows ISO itself composes and
+    numbers, and adding artwork does not add a fourth: a mark is a keyword only
+    once someone can point at the Table 1 row the composition *is*. The eleven
+    crushing marks have no such row here yet -- their bodies are group 11, which
+    pandid draws from whole stencils -- so they are available to compose with
+    and not yet composed.
+    """
+    from pandid.units import Separator
+
+    assert Separator._CHARACTERISTICS == ("gravity", "electrostatic", "electromagnetic")
+    for name in ("crushing", "hammer", "jet"):
+        assert default_registry.part(29, name)
+        with pytest.raises(ValueError):
+            Separator("V-901", characteristic=name)
 
 
 @pytest.mark.parametrize("part", PARTS, ids=IDS)
@@ -107,7 +144,7 @@ def test_a_part_is_asked_for_by_group_and_name(part):
 
 
 def test_every_part_that_draw_io_has_a_shape_for_names_it():
-    """Ten of the twenty-five, and they are draw.io's whole agitator set.
+    """Ten of the thirty-six, and they are draw.io's whole agitator set.
 
     ``mxgraph.pid.agitators`` has exactly ten shapes and they are ISO group
     28's ten, item for item -- so a composed reactor exports with a real

@@ -58,20 +58,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shapes. `tests/test_drawio.py` holds both backends to drawing the same parts
   in the same places.
 
-- **The ISO 10628-2 groups 26–29 artwork.** Twenty-five supplementary symbols,
+- **ISO 10628-2 group 29 is complete: all fourteen internal characteristics.**
+  The eleven the artwork below was missing — 29.4 disc, 29.5 crushing, 29.6
+  gear, 29.7 hammer, 29.8 impact, 29.9 jaw, 29.10 liquid/wet, 29.11 roller,
+  29.12 cone, 29.13 jet and 29.14 vibration — measured off Table 2 and drawn
+  the same way as the rest, on the 2,5 mm module grid and at the detail weight.
+
+  Eleven marks that say how a machine *crushes*, where the first three say how
+  a vessel *separates*, which is why Table 2 files all fourteen under one
+  heading. `python scripts/symbol_sheet.py --parts out.svg` draws the group.
+
+  **This adds artwork, not keywords, and moves no drawing.**
+  `Separator(characteristic=)` still names the three rows ISO itself composes
+  and gives a registration number to; the other eleven are available to compose
+  with and nothing composes them yet, because the bodies they belong in are
+  Table 1 group 11's crushing and grinding machines and pandid draws those from
+  whole stencils. Registering a part adds nothing to the symbol catalogue, so
+  no sheet, no golden and no gallery page changes.
+
+  One number is quoted as printed rather than repaired: 29.6's registration
+  number is **C024**, three digits where every sibling in the group has four.
+  That is what the standard prints.
+
+- **The ISO 10628-2 groups 26–29 artwork.** Thirty-six supplementary symbols,
   in `pandid/render/iso_parts.py`: four supports (leg, bracket, skirt, ring),
   all eight internals (tray, tray with baffle, bubble-cap, valve, sieve, filter
-  insert, fluidised bed, packing), all ten agitators, and the three
-  characteristics — gravity, electrostatic, electromagnetic — the standard is
-  shown composing onto a separating vessel. Until now the package had no
-  agitator at all, which is why it could not draw a stirred tank, and no tray,
-  which is why it could not draw a distillation column.
+  insert, fluidised bed, packing), all ten agitators, and all fourteen
+  characteristics, of which gravity, electrostatic and electromagnetic are the
+  three the standard is shown composing onto a separating vessel. Until now the
+  package had no agitator at all, which is why it could not draw a stirred
+  tank, and no tray, which is why it could not draw a distillation column.
 
   Original drawings, built to the construction ISO states rather than traced
   from its figures: measured off Table 2 in grid modules and re-drawn on
   `iso_parts.M`, the same 2,5 mm module ISO 14617-1 §4.3 lays its own artwork
   out on. Each part names the Table 2 row it claims to be, so the claim is
-  checkable; `tests/test_iso_parts.py` holds all twenty-five to it.
+  checkable; `tests/test_iso_parts.py` holds all thirty-six to it.
 
   They are drawn at half the weight of an equipment outline, which is ISO
   10628-1 §5.3.1's split between b) equipment symbols and c) the in-line detail
