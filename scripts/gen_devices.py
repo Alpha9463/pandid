@@ -332,17 +332,38 @@ DEVICES = {
     ``scraper`` variant is the same drum with the knife that lifts the
     cake drawn on it, which is the whole of the difference between the
     two shapes.
+
+    Four connections, because the machine makes **two products**:
+    ``inlet`` is the slurry, ``outlet`` the filtrate, ``cake`` what is
+    lifted off the drum, and ``wash_in`` the sprays over the top of it
+    that displace mother liquor before the knife reaches. Both drawings
+    take them at the same points, so swapping one for the other moves no
+    run.
 """),
-    ("filter", "press"): ("FilterPress", """Filter press: plates squeezed together, filtrate out, cake in.
+    ("filter", "press"): ("FilterPress", """Filter press: plates squeezed together, slurry in, two products out.
 
     A batch machine on a continuous sheet, which is exactly why it is
     worth its own row on an equipment list.
+
+    ``outlet`` is the filtrate and ``cake`` is what the plates hold,
+    discharged downward when they part -- and it is usually the product
+    the press was bought for, so it is a line of its own rather than
+    something the filtrate has to stand in for. ``wash_in`` is the
+    displacement wash that pushes mother liquor out of the cake before
+    the press is opened.
 """),
     ("filter", "ion_exchange"): ("IonExchanger", """Ion exchanger: a resin bed between two retention screens.
 
     The vessel every demineraliser or softener train is drawn with. A
     filter by drawing and by piping; what it removes is dissolved rather
     than suspended.
+
+    That is also why its extra pair is not the cake filters' one. A
+    resin is restored by running acid, caustic or brine through it, so
+    the connections are ``regenerant_in``, above the bed, and
+    ``spent_regenerant``, out of the underdrain: the reagent loaded with
+    what it has stripped. Calling either a wash would put the wrong
+    fluid on the line list.
 """),
 
     # --- Dryers ------------------------------------------------------------
@@ -752,8 +773,9 @@ def ports_for(base: type, variant: str) -> list[tuple[str, str, str]]:
     """The nozzles a generated class declares, taken from the live base class.
 
     ``_declared_ports()`` is the class-level list and ``_variant_ports()`` the
-    per-variant one that :class:`~pandid.units.HeatExchanger` and
-    :class:`~pandid.units.Separator` lay down after it. Neither includes a
+    per-variant one that :class:`~pandid.units.HeatExchanger`,
+    :class:`~pandid.units.Separator`, :class:`~pandid.units.Reactor` and
+    :class:`~pandid.units.Filter` lay down after it. Neither includes a
     nozzle the base's ``__init__`` adds by hand -- a Reactor's ``feed`` -- which
     is exactly right: a subclass restating one would hand ``_add_port`` a name
     it already has and be refused at construction.

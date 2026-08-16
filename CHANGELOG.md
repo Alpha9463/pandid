@@ -9,6 +9,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A filter that makes a cake can now draw it.** A press separates a slurry
+  into two products, and until now only one of them had a nozzle — so the cake
+  had to be drawn as the filtrate, which is the sheet saying the solids leave
+  in the liquid line:
+
+  ```python
+  press = Filter("F-301", variant="press")
+  fs.connect(slurry.outlet,       press.port("inlet"))
+  fs.connect(wash_water.outlet,   press.port("wash_in"))    # new
+  fs.connect(press.port("outlet"), filtrate.inlet)
+  fs.connect(press.port("cake"),   cake_bin.inlet)          # new
+  ```
+
+  `wash_in` is the **displacement wash** that pushes mother liquor out of the
+  cake before it is discharged, which is standard practice on the four casings
+  that carry the pair: `press`, `belt`, `rotary` and `rotary_scraper`, reached
+  by name as `FilterPress` and `RotaryDrumFilter`.
+
+  The other five variants are unchanged and stay two nozzles. `default`,
+  `fixed_bed`, `gas`, `gas_fixed_bed` and `gas_belt` **clarify**: the solids
+  are held in the medium and come out when it is changed, backwashed or blown
+  down, which is not a line on the sheet.
+
+  **`ion_exchange` gets its own pair, not the wash.** A resin bed is restored by
+  running acid, caustic or brine through it, so `IonExchanger` takes
+  `regenerant_in` and returns `spent_regenerant` — the reagent carrying the
+  ions it has stripped. Naming that line a wash would put water on the line
+  list where the pipe has to be rubber-lined.
+
+  **No drawing moves.** The artwork is untouched; the four new anchors are
+  points on it that nothing was piped to before, and an unconnected nozzle is
+  not drawn. The wash comes down onto the cake from above and the cake leaves
+  through the floor on all four — a press discharges downward when the plates
+  part, a drum filter's sprays land on top of the drum, a belt filter washes
+  onto the cloth — and the ion exchanger's regenerant enters over its bed and
+  its spent regenerant leaves through the underdrain.
+
+  Both extra nozzles are **offered, not required**: `validate()` says nothing
+  about a press with no wash line, on the same rule that keeps it quiet about
+  an unpiped vent or relief.
+
 - **A reactor, a column, a vessel and a separator now say what is *inside*
   them.** Four keywords, one per ISO 10628-2 part group, each naming a
   supplementary symbol the standard tabulates:

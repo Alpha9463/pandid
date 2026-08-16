@@ -185,6 +185,74 @@ def test_exchanger_side_nozzles_round_trip():
     assert Flowsheet.from_dict(written).to_dict() == written
 
 
+def test_a_filters_wash_and_cake_round_trip():
+    """The nozzles a filter has depend on its variant, exactly as an
+    exchanger's do -- and per-variant ports are a different axis from the
+    composition keywords the spec learned in 0.1.3.
+
+    Nothing writes a port list: what carries these four across is ``variant``,
+    which is written because it is not ``default``, and the constructor laying
+    the table down again on the way back. The trip is made from a built sheet
+    rather than from a hand-written spec so the *writer* is under test too; a
+    dropped variant would read back as a two-nozzle bag filter and take the wash
+    and the cake with it.
+    """
+    fs = Flowsheet("dewatering")
+    slurry = fs.add(units.Feed("Slurry"))
+    wash = fs.add(units.Feed("Wash Water"))
+    press = fs.add(units.Filter("F-301", variant="press"))
+    filtrate = fs.add(units.Product("Filtrate"))
+    solids = fs.add(units.Product("Cake"))
+    fs.connect(slurry.outlet, press.port("inlet"))
+    fs.connect(wash.outlet, press.port("wash_in"))
+    fs.connect(press.port("outlet"), filtrate.inlet)
+    fs.connect(press.port("cake"), solids.inlet)
+
+    spec = fs.to_dict()
+    assert json.loads(json.dumps(spec)) == spec, "spec must be JSON-safe"
+    assert [(s["from"], s["to"]) for s in spec["streams"]] == [
+        (["Slurry", "outlet"], ["F-301", "inlet"]),
+        (["Wash Water", "outlet"], ["F-301", "wash_in"]),
+        (["F-301", "outlet"], ["Filtrate", "inlet"]),
+        (["F-301", "cake"], ["Cake", "inlet"]),
+    ]
+
+    rebuilt = Flowsheet.from_dict(spec)
+    back = next(u for u in rebuilt.units if u.name == "F-301")
+    assert sorted(back.ports) == ["cake", "inlet", "outlet", "wash_in"]
+    # Both new ones came back carrying a stream, not merely existing.
+    assert back.port("wash_in").stream is not None
+    assert back.port("cake").stream is not None
+    assert rebuilt.to_dict() == spec
+    assert rebuilt.to_svg() == fs.to_svg()
+
+
+def test_an_ion_exchangers_regenerant_round_trips():
+    """The variant that is its own case has to survive the trip under its own
+    two names. Reading it back as a filter press would offer ``wash_in`` and
+    silently lose the line.
+    """
+    fs = Flowsheet("demin")
+    regen = fs.add(units.Feed("Caustic"))
+    ix = fs.add(units.Filter("F-802", variant="ion_exchange"))
+    waste = fs.add(units.Product("To Neutralisation"))
+    fs.connect(regen.outlet, ix.port("regenerant_in"))
+    fs.connect(ix.port("spent_regenerant"), waste.inlet)
+
+    spec = fs.to_dict()
+    rebuilt = Flowsheet.from_dict(spec)
+    back = next(u for u in rebuilt.units if u.name == "F-802")
+    assert sorted(back.ports) == [
+        "inlet",
+        "outlet",
+        "regenerant_in",
+        "spent_regenerant",
+    ]
+    assert back.port("regenerant_in").stream is not None
+    assert back.port("spent_regenerant").stream is not None
+    assert rebuilt.to_dict() == spec
+
+
 def test_a_column_or_reactor_feed_count_round_trips():
     fs = Flowsheet.from_dict(
         {

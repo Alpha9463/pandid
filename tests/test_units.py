@@ -340,6 +340,133 @@ def test_a_separator_variant_nobody_declared_still_gets_the_flash_drums_nozzles(
     assert _nozzles(U.Separator("V-9", variant="not_a_variant")) == _FLASH_DRUM_NOZZLES
 
 
+#: The four casings that take a cake off a medium and have to get rid of it.
+_CAKE_FILTERS = ["press", "belt", "rotary", "rotary_scraper"]
+
+#: The five that do not. Solids stay in the medium and come out offline, so one
+#: in and one out is the whole of the piping.
+_CLARIFYING_FILTERS = ["default", "fixed_bed", "gas", "gas_fixed_bed", "gas_belt"]
+
+
+@pytest.mark.parametrize("variant", _CAKE_FILTERS)
+def test_a_filter_that_forms_a_cake_draws_the_cake_and_takes_a_wash(variant):
+    """A press separates a slurry into **two products**, and the cake is the one
+    it was bought for. With one outlet the sheet had to draw it as the filtrate,
+    which is the drawing saying the solids leave in the liquid line.
+
+    ``wash_in`` is the displacement wash that pushes mother liquor out of the
+    cake before it is discharged -- standard on all four of these -- and it
+    takes ``utility`` for the reason an ejector's motive steam does: a service
+    fluid supplied to the machine. The cake takes ``process``, because the role
+    vocabulary has no word for wet solids, on the same reasoning the mechanical
+    separators' draws are named by.
+
+    Written out rather than read off ``_VARIANT_PORTS``, so this is the released
+    API and not a restatement of the table that builds it.
+    """
+    assert _nozzles(U.Filter("F-101", variant=variant)) == [
+        ("inlet", "inlet", "process"),
+        ("wash_in", "inlet", "utility"),
+        ("outlet", "outlet", "process"),
+        ("cake", "outlet", "process"),
+    ]
+
+
+@pytest.mark.parametrize("variant", _CLARIFYING_FILTERS)
+def test_a_clarifying_filter_keeps_the_two_nozzles_it_always_had(variant):
+    """The other half of the split, and the half that must not move.
+
+    A bag filter, a sand bed and the three gas casings hold their solids in the
+    medium; what comes off them comes off when the medium is changed, backwashed
+    or blown down, which is not a line on the sheet. Giving these four nozzles
+    would draw a cake connection nothing is ever piped to.
+    """
+    filt = U.Filter("F-101", variant=variant)
+    assert _nozzles(filt) == [
+        ("inlet", "inlet", "process"),
+        ("outlet", "outlet", "process"),
+    ]
+    with pytest.raises(AttributeError, match="available ports"):
+        filt.cake
+
+
+def test_an_ion_exchanger_names_its_regenerant_rather_than_borrowing_a_wash():
+    """The variant that is neither family, and the reason it is neither.
+
+    What restores a resin bed is acid, caustic or brine, and what leaves is that
+    reagent carrying the ions it has stripped. ``wash_in`` on that line would put
+    water on the line list where the pipe has to be rubber-lined for 30% HCl, so
+    the pair is named for what it really carries.
+    """
+    ix = U.Filter("F-801", variant="ion_exchange")
+    assert _nozzles(ix) == [
+        ("inlet", "inlet", "process"),
+        ("regenerant_in", "inlet", "utility"),
+        ("outlet", "outlet", "process"),
+        ("spent_regenerant", "outlet", "process"),
+    ]
+    for borrowed in ("wash_in", "cake"):
+        with pytest.raises(KeyError, match="regenerant_in"):
+            ix.port(borrowed)
+
+
+def test_a_filter_variant_nobody_declared_still_gets_the_clarifying_pair():
+    """The port table falls back rather than guessing, as the exchanger's and
+    the separator's do. Whether the variant name is real at all is the symbol
+    registry's question, asked at render."""
+    assert _nozzles(U.Filter("F-9", variant="not_a_variant")) == [
+        ("inlet", "inlet", "process"),
+        ("outlet", "outlet", "process"),
+    ]
+
+
+@pytest.mark.parametrize("variant", _CAKE_FILTERS + ["ion_exchange"])
+def test_every_new_filter_nozzle_lands_somewhere_the_artwork_anchors(variant):
+    """A nozzle the drawing does not place falls back to the centre of the box,
+    where every other unplaced one lands too, and two streams stack on one point
+    without anything being raised.
+
+    The positions are the equipment's own. The wash and the regenerant come down
+    from above; the cake and the spent regenerant leave downward, one because
+    solids fall and the other through the underdrain below the bed. So both are
+    on the horizontal casing walls the family leaves free -- these symbols are
+    all piped across, west to east.
+    """
+    from pandid.portgeom import is_anchored
+    from pandid.render.symbols import default_registry
+
+    filt = U.Filter("F-1", variant=variant)
+    symbol = default_registry.get("filter", variant)
+    for name in filt.ports:
+        assert is_anchored(filt, name), f"filter/{variant} does not anchor {name!r}"
+    inlet_x, _ = symbol.ports["inlet"]
+    into, out = (
+        ("wash_in", "cake") if variant in _CAKE_FILTERS else ("regenerant_in", "spent_regenerant")
+    )
+    # The one on top is at y = 0 and the one underneath at the floor, and both
+    # are inboard of the wall the feed comes in at.
+    assert symbol.ports[into][1] == 0.0
+    assert symbol.ports[out][1] == symbol.height
+    assert symbol.ports[into][0] > inlet_x
+    assert symbol.ports[out][0] > inlet_x
+
+
+def test_the_two_rotary_drums_are_piped_alike():
+    """One machine drawn with and without the knife that lifts its cake.
+
+    ``vendor_symbols`` already pins the filtrate outlet to the casing wall on
+    the scraper drawing rather than letting it drift onto the arm, so that a
+    sheet swapping one for the other moves no run. The wash and the cake follow
+    that: same names, same points, five units of bounding box apart.
+    """
+    from pandid.render.symbols import default_registry
+
+    plain = default_registry.get("filter", "rotary")
+    scraper = default_registry.get("filter", "rotary_scraper")
+    assert plain.ports == scraper.ports
+    assert (plain.width, scraper.width) == (50.0, 55.0)
+
+
 def test_mixer_variable_inlets():
     m = U.Mixer("M", n_inlets=3)
     assert set(m.ports) == {"in_1", "in_2", "in_3", "outlet"}

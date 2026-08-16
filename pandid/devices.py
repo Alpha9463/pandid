@@ -724,31 +724,59 @@ class RotaryDrumFilter(Filter):
     ``scraper`` variant is the same drum with the knife that lifts the
     cake drawn on it, which is the whole of the difference between the
     two shapes.
+
+    Four connections, because the machine makes **two products**:
+    ``inlet`` is the slurry, ``outlet`` the filtrate, ``cake`` what is
+    lifted off the drum, and ``wash_in`` the sprays over the top of it
+    that displace mother liquor before the knife reaches. Both drawings
+    take them at the same points, so swapping one for the other moves no
+    run.
     """
 
     kind = "filter"
     VARIANTS = ("default", "scraper", "rotary", "rotary_scraper")
     VARIANT_ALIASES = {"default": "rotary", "scraper": "rotary_scraper"}
-    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+    PORTS = [
+        ("inlet", "inlet", "process"),
+        ("wash_in", "inlet", "utility"),
+        ("outlet", "outlet", "process"),
+        ("cake", "outlet", "process"),
+    ]
 
     inlet: Port
+    wash_in: Port
     outlet: Port
+    cake: Port
 
 
 class FilterPress(Filter):
-    """Filter press: plates squeezed together, filtrate out, cake in.
+    """Filter press: plates squeezed together, slurry in, two products out.
 
     A batch machine on a continuous sheet, which is exactly why it is
     worth its own row on an equipment list.
+
+    ``outlet`` is the filtrate and ``cake`` is what the plates hold,
+    discharged downward when they part -- and it is usually the product
+    the press was bought for, so it is a line of its own rather than
+    something the filtrate has to stand in for. ``wash_in`` is the
+    displacement wash that pushes mother liquor out of the cake before
+    the press is opened.
     """
 
     kind = "filter"
     VARIANTS = ("default", "press")
     VARIANT_ALIASES = {"default": "press"}
-    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+    PORTS = [
+        ("inlet", "inlet", "process"),
+        ("wash_in", "inlet", "utility"),
+        ("outlet", "outlet", "process"),
+        ("cake", "outlet", "process"),
+    ]
 
     inlet: Port
+    wash_in: Port
     outlet: Port
+    cake: Port
 
 
 class IonExchanger(Filter):
@@ -757,15 +785,29 @@ class IonExchanger(Filter):
     The vessel every demineraliser or softener train is drawn with. A
     filter by drawing and by piping; what it removes is dissolved rather
     than suspended.
+
+    That is also why its extra pair is not the cake filters' one. A
+    resin is restored by running acid, caustic or brine through it, so
+    the connections are ``regenerant_in``, above the bed, and
+    ``spent_regenerant``, out of the underdrain: the reagent loaded with
+    what it has stripped. Calling either a wash would put the wrong
+    fluid on the line list.
     """
 
     kind = "filter"
     VARIANTS = ("default", "ion_exchange")
     VARIANT_ALIASES = {"default": "ion_exchange"}
-    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
+    PORTS = [
+        ("inlet", "inlet", "process"),
+        ("regenerant_in", "inlet", "utility"),
+        ("outlet", "outlet", "process"),
+        ("spent_regenerant", "outlet", "process"),
+    ]
 
     inlet: Port
+    regenerant_in: Port
     outlet: Port
+    spent_regenerant: Port
 
 
 class RotaryDryer(Dryer):
