@@ -219,8 +219,8 @@ to_svg(*, show_stream_table: bool = False,
        check: bool = True) -> str
 ```
 Returns the SVG string, running `layout()` and `route()` first if they have not
-run. With `check=True`, validation errors raise `ValueError` and warnings land
-on `fs.warnings`.
+run, or if the sheet changed since they did. With `check=True`, validation
+errors raise `ValueError` and warnings land on `fs.warnings`.
 
 ```text
 to_drawio(*, diagram: str | None = None,

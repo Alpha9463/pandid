@@ -81,6 +81,25 @@ retirement is declared with. Nothing is deprecated in this release.
   had moved. `new_line_number` on any instrument had the matching hole on the
   read side, and is accepted now too.
 
+- **An edit made after a render reaches the next one.** `to_svg()`,
+  `to_drawio()` and `render()` decided whether to lay the sheet out by asking
+  whether any unit still lacked a frame, and that is true only before the very
+  first layout. So from the second render on, every change was drawn from the
+  first render's geometry and the file came out byte-identical — a `pin()`, an
+  `add()`, a `connect()`, a `nozzle()`, a new `width`, `variant` or
+  `label_pos`. A notebook, which draws through `_repr_svg_`, baked the
+  placement it happened to display first.
+
+  The flowsheet now records that its geometry is stale and re-runs whichever
+  stage is. A sheet nobody changed is still laid out and routed once and no
+  more, which is what the old guard was buying.
+
+- **`layout()` called by hand takes the routes with it.** A route is measured
+  against the frames, so replacing the frames left every run describing the
+  sheet it was routed for: `render → pin() → layout() → render` drew each line
+  from its current nozzle to the old path, as a diagonal. No shipped sheet
+  moves.
+
 ## [0.1.2] - 2026-08-05
 
 ### Added

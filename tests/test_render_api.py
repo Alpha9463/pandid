@@ -670,3 +670,188 @@ def test_connections_reaches_render_and_the_drawio_export_too(tmp_path):
     # that is not "none" as the sheet's own default.
     narrow = _joints().to_drawio(diagram="p&id", connections="flanged-at-nozzles")
     assert narrow.count("shape=line;rotation=") == 6
+
+
+# --- stale geometry: an edit made after a render reaches the next one ---------
+#
+# A Frame and a Route are computed once and kept, because laying a sheet out and
+# routing it costs far more than drawing it. The guard deciding whether to
+# recompute used to be ``frame is None``, which is true only before the very
+# first layout -- so from the second render on, every edit was silently absent
+# from the file that came out, and a notebook baked the placement it happened to
+# display first. The flowsheet now records that its geometry is stale and the
+# entry points ask that instead.
+#
+# Both halves are tested here: that a change gets through, and that a sheet
+# nobody changed still pays nothing, which is what the old guard was protecting.
+
+
+def _unit(fs: Flowsheet, name: str):
+    return next(u for u in fs.units if u.name == name)
+
+
+def _heated() -> Flowsheet:
+    """A feed, a heater and a product, placed by the engine."""
+    fs = Flowsheet("stale")
+    feed = fs.add(U.Feed("F"))
+    heater = fs.add(U.Heater("H-1"))
+    prod = fs.add(U.Product("P"))
+    fs.connect(feed.outlet, heater.inlet)
+    fs.connect(heater.outlet, prod.inlet)
+    return fs
+
+
+def _mutable() -> Flowsheet:
+    """One sheet carrying everything ``MUTATIONS`` below reaches for.
+
+    Every numbered nozzle is piped and ``P-3`` is the one spare: an
+    unconnected nozzle is a warning of its own, and a fixture that always
+    warns hides the warning a change breaks.
+    """
+    fs = Flowsheet("mutable")
+    feed = fs.add(U.Feed("F"))
+    valve = fs.add(U.Valve("HV-1"))
+    tank = fs.add(U.Tank("T-1"))
+    block = fs.add(U.Block("B-1", inputs=["W", "S"], outputs=["E", "S"]))
+    steam = fs.add(U.Feed("Steam"))
+    prod = fs.add(U.Product("P-1"))
+    drain = fs.add(U.Product("P-2"))
+    fs.add(U.Product("P-3"))
+    fs.connect(feed.outlet, valve.inlet)
+    fs.connect(valve.outlet, tank.inlet)
+    fs.connect(tank.outlet, block.in_1)
+    fs.connect(steam.outlet, block.in_2)
+    fs.connect(block.out_1, prod.inlet)
+    fs.connect(block.out_2, drain.inlet)
+    fs.add_instrument("PI", 101, sensing=fs.streams[0])
+    return fs
+
+
+def _stages(monkeypatch) -> dict:
+    """Count the ``layout()`` and ``route()`` runs from here on.
+
+    Counted on the class rather than timed, because what is being held is
+    an exact property -- an unchanged sheet re-runs *neither* stage --
+    and a stopwatch could only say it got faster.
+    """
+    runs = {"layout": 0, "route": 0}
+    for stage in list(runs):
+        original = getattr(Flowsheet, stage)
+
+        def counted(self, *args, _stage=stage, _original=original, **kwargs):
+            runs[_stage] += 1
+            return _original(self, *args, **kwargs)
+
+        monkeypatch.setattr(Flowsheet, stage, counted)
+    return runs
+
+
+def test_a_pin_made_after_a_render_reaches_the_next_one():
+    fs = _heated()
+    heater = _unit(fs, "H-1")
+    before = fs.to_svg()
+    heater.pin(x=600, y=400)
+    after = fs.to_svg()
+    assert (heater.frame.x, heater.frame.y) == (600, 400)
+    assert after != before
+
+
+def test_the_drawio_export_and_render_see_that_pin_too(tmp_path):
+    """The three entry points share one rule, so they answer alike."""
+    fs = _heated()
+    before = fs.to_drawio()
+    _unit(fs, "H-1").pin(x=600, y=400)
+    assert fs.to_drawio() != before
+
+    fs, out = _heated(), tmp_path / "sheet.svg"
+    fs.render(str(out))
+    was = out.read_text(encoding="utf-8")
+    _unit(fs, "H-1").pin(x=600, y=400)
+    fs.render(str(out))
+    assert out.read_text(encoding="utf-8") != was
+
+
+def test_rendering_an_unchanged_sheet_again_lays_it_out_no_further(monkeypatch, tmp_path):
+    """The property the old guard was buying, and the reason the fix is a
+    dirty flag rather than an unconditional re-layout."""
+    fs = _heated()
+    first = fs.to_svg()
+    runs = _stages(monkeypatch)
+    assert fs.to_svg() == first
+    fs.to_drawio()
+    fs.render(str(tmp_path / "sheet.svg"))
+    assert runs == {"layout": 0, "route": 0}
+
+
+def test_a_hand_called_layout_takes_the_routes_with_it():
+    """A route is computed against the frames, so replacing the frames
+    strands every route on the sheet they were measured from.
+
+    ``render -> pin -> layout -> render`` is the sequence: the boxes move
+    and the runs do not, and what gets drawn is the current nozzle joined
+    to the old path -- a diagonal, which no P&ID line may be. See
+    ``tests/test_route_invariants.py`` for the invariant itself.
+    """
+    from pandid.layout.attach import stream_path
+
+    fs = _heated()
+    fs.to_svg()
+    _unit(fs, "H-1").pin(x=600, y=400)
+    fs.layout()
+    fs.to_svg()
+
+    sloping = []
+    for s in fs.streams:
+        points = stream_path(s)
+        for (x1, y1), (x2, y2) in zip(points, points[1:]):
+            if abs(x1 - x2) > 0.01 and abs(y1 - y2) > 0.01:
+                sloping.append(f"{s.name} runs ({x1:.0f}, {y1:.0f}) -> ({x2:.0f}, {y2:.0f})")
+    assert not sloping, "; ".join(sloping)
+
+
+#: Every way to change a sheet that can move a drawn box or a routed run.
+#: Each is applied to a sheet already rendered once, and each has to leave
+#: it saying so. ``add_loop()`` is deliberately absent: a loop draws
+#: nothing and is never in ``units``.
+MUTATIONS = {
+    "pin": lambda fs: _unit(fs, "HV-1").pin(x=300, y=300),
+    "add": lambda fs: fs.add(U.Vessel("V-9")),
+    "connect": lambda fs: fs.connect(_unit(fs, "T-1").vent, _unit(fs, "P-3").inlet),
+    "add_instrument": lambda fs: fs.add_instrument("TI", 102, near=_unit(fs, "HV-1")),
+    "add_balloon": lambda fs: fs.add_balloon(_unit(fs, "HV-1")),
+    "add_valve_station": lambda fs: fs.add_valve_station("CV-9", x=900, y=900),
+    "nozzle": lambda fs: _unit(fs, "T-1").nozzle("inlet", "N"),
+    "block_nozzle": lambda fs: _unit(fs, "B-1").nozzle("in_2", "N"),
+    "block_order_on": lambda fs: _unit(fs, "B-1").order_on(
+        "S", list(_unit(fs, "B-1").ports_on("S"))[::-1]
+    ),
+    "attach": lambda fs: _unit(fs, "PI-101").attach(fs.streams[0], at=0.8, offset=70),
+    "width": lambda fs: setattr(_unit(fs, "T-1"), "width", 90),
+    "height": lambda fs: setattr(_unit(fs, "T-1"), "height", 90),
+    "variant": lambda fs: setattr(_unit(fs, "HV-1"), "variant", "ball"),
+    "label_pos": lambda fs: setattr(_unit(fs, "HV-1"), "label_pos", "bottom"),
+    "name": lambda fs: setattr(_unit(fs, "HV-1"), "name", "HV-1-A-VERY-LONG-TAG"),
+    "normal_position": lambda fs: setattr(_unit(fs, "HV-1"), "normal_position", "closed"),
+    "new_line_number": lambda fs: setattr(_unit(fs, "HV-1"), "new_line_number", True),
+    "auto_faces": lambda fs: setattr(fs, "auto_faces", False),
+}
+
+
+@pytest.mark.parametrize("mutation", list(MUTATIONS), ids=list(MUTATIONS))
+def test_every_mutation_that_can_move_something_marks_the_sheet_stale(mutation):
+    fs = _mutable()
+    fs.to_svg()
+    assert not fs.warnings, "the fixture stopped being a clean sheet"
+    assert (fs._layout_stale, fs._route_stale) == (False, False)
+    MUTATIONS[mutation](fs)
+    assert fs._layout_stale, f"{mutation} left the frames looking current"
+    assert fs._route_stale, f"{mutation} left the routes looking current"
+
+
+@pytest.mark.parametrize("mutation", ["add", "connect", "nozzle", "width", "variant", "name"])
+def test_a_change_that_is_not_a_pin_reaches_the_drawing(mutation):
+    """The flag above is the mechanism; this is what it is for."""
+    fs = _mutable()
+    before = fs.to_svg()
+    MUTATIONS[mutation](fs)
+    assert fs.to_svg() != before
