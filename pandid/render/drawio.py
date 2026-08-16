@@ -62,7 +62,7 @@ child cell per part**, each placed by the same fractions of the body's
 box the SVG uses (:meth:`DrawioRenderer._overlay_cells`), so the two
 backends draw the same parts in the same places from one set of numbers.
 The ten group-28 agitators name draw.io's own ``mxgraph.pid.agitators``
-stencils; the other fifteen parts have :data:`_PART_APPROXIMATIONS`,
+stencils; the other twenty-six parts have :data:`_PART_APPROXIMATIONS`,
 which is :data:`_APPROXIMATIONS` for parts and carries the same sentence
 each about what its stand-in loses.
 
@@ -701,6 +701,42 @@ _PART_APPROXIMATIONS = {
     # A coil standing on a baseline. The baseline is drawn.
     (29, "electromagnetic"): _Approximation(
         "line", "the three turns standing on the coil's baseline"),
+    # 29.4 to 29.14, the eleven marks that say how a machine crushes.
+    # Nine of them are combinations of lines, circles and an X that no
+    # built-in draws, so they take draw.io's default rectangle and what
+    # it gives is the mark's extent -- the same answer 27.7's field of
+    # dots takes, and for the same reason.
+    (29, "disc"): _Approximation(
+        None, "the shaft, its two plates and the arms between them; "
+              "the box is the rotor's extent"),
+    (29, "crushing"): _Approximation(None, "the X between the box's corners"),
+    # A rectangle for the pair rather than an ``ellipse``: one oval
+    # filling a box twice as wide as it is tall is a different drawing,
+    # not a reduced one, and it would export 29.6 and 29.11 -- which
+    # differ only in whether the two wheels overlap -- as the same oval.
+    (29, "gear"): _Approximation(None, "the two meshing wheels; the box is the pair's extent"),
+    (29, "hammer"): _Approximation(
+        None, "the four hammers on their rotor; the box is the rotor's extent"),
+    (29, "impact"): _Approximation(
+        None, "the rotor at the centre and the four arms out to the corners"),
+    # A line into a circle, and the line is drawn -- the same trade
+    # 27.2's baffle tray and 29.3's coil both take.
+    (29, "jaw"): _Approximation("line", "the circle the jaw's line runs into"),
+    # The mark *is* a line; only the two dips scalloped out of it go.
+    (29, "liquid"): _Approximation("line", "the two dips scalloped out of the line"),
+    (29, "roller"): _Approximation(None, "the two rolls; the box is the pair's extent"),
+    # A trapezoid, and draw.io has no trapezoid built in. Its triangle
+    # is isoceles and points east, so a quarter turn stands it on the
+    # wide base at the cost of the flat top.
+    (29, "cone"): _Approximation(
+        "triangle", "the trapezoid's flat top: draw.io's triangle comes to a point",
+        keys=("direction=north",)),
+    # The one of the eleven a built-in draws outright: the mark's
+    # outline is a circle filling its box.
+    (29, "jet"): _Approximation(
+        "ellipse", "the diameter and the two chords drawn across the circle"),
+    (29, "vibration"): _Approximation(
+        None, "the two arrows and the opposite ways they point"),
 }
 
 #: A rough character width and line height for the furniture boxes,

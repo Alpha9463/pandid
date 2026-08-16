@@ -12,7 +12,7 @@ Two things this file is careful about.
 **The mechanism is tested on parts built here, not on the shipped artwork.**
 That is deliberate rather than a gap: a suite that leaned on shipped parts
 would go quiet the day one was renamed, and this file's subject is the rule and
-the arithmetic. ``tests/test_iso_parts.py`` is where the twenty-five drawings
+the arithmetic. ``tests/test_iso_parts.py`` is where the thirty-six drawings
 are held to Table 2 row by row, and ``tests/test_drawio.py`` is where the two
 backends are held to each other.
 
@@ -385,7 +385,7 @@ def registry():
     The shipped ISO artwork is cleared out first, deliberately. These tests are
     about the *mechanism* -- what a key is, what a miss reports -- and the four
     placeholders above are the smallest thing that exercises it. Leaving the
-    real twenty-five in would make "the registered group 27 parts" a list this
+    real thirty-six in would make "the registered group 27 parts" a list this
     file has to be kept in step with, for no gain: ``tests/test_iso_parts.py``
     is where the shipped set is held to Table 2.
     """

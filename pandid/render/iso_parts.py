@@ -134,6 +134,8 @@ dataclasses before this file had finished defining anything. Deferring
 the import is what lets either module be the one imported first.
 """
 
+import math
+
 #: The ISO 14617-1 §4.3 grid module, in pandid drawing units. Table 2's
 #: artwork is laid out on a 2,5 mm dotted grid and every vertex lands on
 #: it, so the coordinates below are whole multiples of this and can be
@@ -151,6 +153,12 @@ PART_STROKE = 1.0
 # from the outline they are drawn inside.
 _INK = f'fill="none" stroke="black" stroke-width="{PART_STROKE:g}"'
 _SOLID_INK = 'fill="black" stroke="none"'
+
+# cos 45 degrees, which is also sin 45: how far along each axis a
+# diagonal has gone when it leaves a circle of radius 1. Item 29.8's
+# four arms start on the rim of its rotor rather than at the centre,
+# which is the only thing telling that mark from 29.5's plain X.
+_SQ2 = math.sqrt(2) / 2
 
 # ISO's own dash pitches, measured off Table 2 in modules and written
 # here in units. 27.5's sieve deck is a 2 M dash with a 1 M gap; 27.6's
@@ -461,19 +469,36 @@ def _build() -> tuple:
     # ------------------------------------------------------------
     # Group 29 -- internal characteristics and built-in components
     #
-    # The mark that says how a body does its separating. Table 2 has
-    # fourteen; the three below are the three whose composition onto
-    # group 8's separating vessel is verified glyph for glyph -- item 8.3
-    # X8031 is the body carrying 29.1, 8.6 X8125 carries 29.2, and 8.8
-    # X8126 carries 29.3.
+    # The mark that says how a body does its separating, and -- for most
+    # of the group -- how it does its crushing. All fourteen of Table 2's
+    # items are here.
     #
-    # The other eleven are drawn when something composes from them, and
-    # not before. Two absences are load-bearing rather than incidental:
-    # there is **no vortex or cyclone item in group 29**, which is why
-    # ISO 8.10 X2618 is a symbol in its own right and not a body plus a
-    # characteristic; and there is no spray, which is why 8.7 X8033 -- a
-    # body carrying both a spray mark and 29.2 -- cannot be composed
-    # either, its spray having no group 26-29 number to be a part under.
+    # The first three are the three whose composition onto group 8's
+    # separating vessel is verified glyph for glyph: item 8.3 X8031 is
+    # the body carrying 29.1, 8.6 X8125 carries 29.2, and 8.8 X8126
+    # carries 29.3. Those three are what ``Separator(characteristic=)``
+    # names, and it still names only those three -- registering the other
+    # eleven adds artwork, not keywords, and moves no drawing.
+    #
+    # The other eleven are 29.4 to 29.14, and the group's own heading is
+    # why they belong here rather than under a mill: Table 2 files them as
+    # *characteristics*, marks that say what the machine does inside its
+    # outline, exactly as the first three do. The bodies they go in are
+    # Table 1 group 11, CRUSHING/GRINDING MACHINES.
+    #
+    # Two absences from the fourteen are load-bearing rather than
+    # incidental: there is **no vortex or cyclone item in group 29**,
+    # which is why ISO 8.10 X2618 is a symbol in its own right and not a
+    # body plus a characteristic; and there is no spray, which is why
+    # 8.7 X8033 -- a body carrying both a spray mark and 29.2 -- cannot be
+    # composed either, its spray having no group 26-29 number to be a
+    # part under.
+    #
+    # Only 29.1 says which way is down, so only 29.1 is
+    # ``gravity_fixed``. A crushing X and a pair of gearwheels read the
+    # same whichever way up the machine is drawn, and 29.14's two arrows
+    # are each other's mirror, so none of the eleven has a claim to make
+    # about the body's orientation.
     # ------------------------------------------------------------
 
     gravity = OverlayPart(
@@ -516,6 +541,156 @@ def _build() -> tuple:
                f'L {7 * M:g} {M:g}" {_INK}/>'),
         width=7 * M, height=M)
 
+    # ``disc_type`` rather than ``disc``: 28.9 above is *also* called
+    # disc, and both keep the standard's own word. They are different
+    # parts in different groups, which is what ``(group, name)`` keys
+    # are for -- as ``turbine`` the agitator and ``turbine`` the machine
+    # already are on the symbol side.
+    disc_type = OverlayPart(
+        name="disc", iso=IsoPart(29, "29.4", "C2033", "Disc type"),
+        # A bladed disc rotor seen edge on, in an 8 M x 5 M box. A shaft
+        # down the middle to y 5 M; two 4 M plates crossing it, at y 3 M
+        # and at its foot; and between them at y 4 M a pair of 3 M arms
+        # that stop 1 M short of the shaft on either side, so the box's
+        # full 8 M width is theirs and the plates' is not.
+        svg=_g("29_disc",
+               f'<line x1="{4 * M:g}" y1="0" x2="{4 * M:g}" y2="{5 * M:g}" {_INK}/>'
+               f'<line x1="{2 * M:g}" y1="{3 * M:g}" x2="{6 * M:g}" y2="{3 * M:g}" {_INK}/>'
+               f'<line x1="{2 * M:g}" y1="{5 * M:g}" x2="{6 * M:g}" y2="{5 * M:g}" {_INK}/>'
+               f'<line x1="0" y1="{4 * M:g}" x2="{3 * M:g}" y2="{4 * M:g}" {_INK}/>'
+               f'<line x1="{5 * M:g}" y1="{4 * M:g}" x2="{8 * M:g}" y2="{4 * M:g}" {_INK}/>'),
+        width=8 * M, height=5 * M)
+
+    crushing = OverlayPart(
+        name="crushing", iso=IsoPart(29, "29.5", "C0240", "Crushing"),
+        # A plain X, corner to corner of a 4 M box -- the same
+        # construction 27.8 packing draws across its bed, at its own
+        # size and with no bounding lines.
+        svg=_g("29_crushing",
+               f'<path d="M 0 0 L {4 * M:g} {4 * M:g} '
+               f'M {4 * M:g} 0 L 0 {4 * M:g}" {_INK}/>'),
+        width=4 * M, height=4 * M)
+
+    gear = OverlayPart(
+        name="gear",
+        # C024 is three digits where every sibling in the group has
+        # four. That is how Table 2 prints it, checked against the row
+        # twice, and ``_REG_NO`` allows three or four for exactly this
+        # kind of reason. Recorded as printed rather than repaired.
+        iso=IsoPart(29, "29.6", "C024", "Gear type, gearwheels type"),
+        # Two 2 M wheels meshing: centres 1,5 M apart, so they overlap
+        # by half a module. The pair is 3,5 M across and the row's grid
+        # box is 4 M, so the centres sit 0,75 M either side of the box's
+        # middle and a quarter module of air is left at each end. 29.11
+        # below is the same two wheels moved apart until they only
+        # touch, which is the whole of what Table 2 draws between them.
+        svg=_g("29_gear",
+               f'<circle cx="{1.25 * M:g}" cy="{M:g}" r="{M:g}" {_INK}/>'
+               f'<circle cx="{2.75 * M:g}" cy="{M:g}" r="{M:g}" {_INK}/>'),
+        width=4 * M, height=2 * M)
+
+    hammer = OverlayPart(
+        name="hammer", iso=IsoPart(29, "29.7", "C2034", "Hammer type"),
+        # Four hammers swinging off a rotor, in a 3 M box. The rotor is
+        # an X through the centre whose arms run one module in each
+        # direction; each arm is then capped by a 1 M x 1 M crossbar at
+        # right angles to it -- the hammer head -- and every one of the
+        # eight cap ends lands on a grid dot on the box's edge.
+        svg=_g("29_hammer",
+               f'<path d="M {0.5 * M:g} {0.5 * M:g} L {2.5 * M:g} {2.5 * M:g} '
+               f'M {0.5 * M:g} {2.5 * M:g} L {2.5 * M:g} {0.5 * M:g}" {_INK}/>'
+               f'<path d="M {M:g} 0 L 0 {M:g} '
+               f'M {2 * M:g} 0 L {3 * M:g} {M:g} '
+               f'M {3 * M:g} {2 * M:g} L {2 * M:g} {3 * M:g} '
+               f'M {M:g} {3 * M:g} L 0 {2 * M:g}" {_INK}/>'),
+        width=3 * M, height=3 * M)
+
+    impact = OverlayPart(
+        name="impact", iso=IsoPart(29, "29.8", "C2035", "Impact type"),
+        # Crushing's 4 M X with a 2 M rotor drawn on the crossing: the
+        # four arms are cut back to the circle and run from its edge out
+        # to the box's corners, so the mark is 29.5 with the thing that
+        # does the striking put in the middle of it.
+        svg=_g("29_impact",
+               f'<circle cx="{2 * M:g}" cy="{2 * M:g}" r="{M:g}" {_INK}/>'
+               + "".join(
+                   f'<line x1="{(2 + _SQ2 * sx) * M:g}" y1="{(2 + _SQ2 * sy) * M:g}" '
+                   f'x2="{(2 + 2 * sx) * M:g}" y2="{(2 + 2 * sy) * M:g}" {_INK}/>'
+                   for sx, sy in ((-1, -1), (1, -1), (-1, 1), (1, 1)))),
+        width=4 * M, height=4 * M)
+
+    jaw = OverlayPart(
+        name="jaw", iso=IsoPart(29, "29.9", "C2036", "Jaw type"),
+        # The swing jaw and its eccentric: a 3 M line running into a 2 M
+        # circle at the far end of a 5 M x 2 M box.
+        svg=_g("29_jaw",
+               f'<line x1="0" y1="{M:g}" x2="{3 * M:g}" y2="{M:g}" {_INK}/>'
+               f'<circle cx="{4 * M:g}" cy="{M:g}" r="{M:g}" {_INK}/>'),
+        width=5 * M, height=2 * M)
+
+    liquid = OverlayPart(
+        name="liquid", iso=IsoPart(29, "29.10", "321", "Liquid type, wet type"),
+        # Two scallops meeting at the middle of a 4 M x 1 M box: each is
+        # an arc of a 2 M circle over a 1,85 M chord, which by
+        # r = (c^2 + 4h^2) / 8h dips 0,62 M. The 0,62 M is centred in the
+        # module band, so 0,19 M of air is left above and below -- the
+        # same way 29.1's arrow is centred across its own 2 M box.
+        svg=_g("29_liquid",
+               f'<path d="M {0.15 * M:g} {0.19 * M:g} '
+               f'A {M:g} {M:g} 0 0 0 {2 * M:g} {0.19 * M:g} '
+               f'A {M:g} {M:g} 0 0 0 {3.85 * M:g} {0.19 * M:g}" {_INK}/>'),
+        width=4 * M, height=M)
+
+    roller = OverlayPart(
+        name="roller", iso=IsoPart(29, "29.11", "C2037", "Roller type"),
+        # Two 2 M rolls with the nip between them: centres 2 M apart, so
+        # they touch and do not overlap. See 29.6 above -- the spacing
+        # is the entire difference, and it is why both are drawn in the
+        # same 4 M x 2 M box.
+        svg=_g("29_roller",
+               f'<circle cx="{M:g}" cy="{M:g}" r="{M:g}" {_INK}/>'
+               f'<circle cx="{3 * M:g}" cy="{M:g}" r="{M:g}" {_INK}/>'),
+        width=4 * M, height=2 * M)
+
+    cone = OverlayPart(
+        name="cone", iso=IsoPart(29, "29.12", "C2038", "Cone type"),
+        # The crushing head in section: an isosceles trapezoid 2 M
+        # across the top, 4 M across the bottom and 3 M deep.
+        svg=_g("29_cone",
+               f'<path d="M {M:g} 0 L {3 * M:g} 0 L {4 * M:g} {3 * M:g} '
+               f'L 0 {3 * M:g} Z" {_INK}/>'),
+        width=4 * M, height=3 * M)
+
+    jet = OverlayPart(
+        name="jet", iso=IsoPart(29, "29.13", "X8176", "Jet type"),
+        # The grinding chamber of a jet mill, and the biggest mark in
+        # the group by some way: a 6 M circle with its full horizontal
+        # diameter drawn, and two further chords mirrored about that
+        # diameter. The chord ends below are measured off the row and
+        # land on the circle -- 2,61^2 + 1,47^2 = 3^2 to within a
+        # thousandth of a module, which is a hundredth of the stroke.
+        svg=_g("29_jet",
+               f'<circle cx="{3 * M:g}" cy="{3 * M:g}" r="{3 * M:g}" {_INK}/>'
+               f'<line x1="0" y1="{3 * M:g}" x2="{6 * M:g}" y2="{3 * M:g}" {_INK}/>'
+               f'<path d="M {1.39 * M:g} {0.47 * M:g} L {5.61 * M:g} {1.53 * M:g} '
+               f'M {1.39 * M:g} {5.53 * M:g} L {5.61 * M:g} {4.47 * M:g}" {_INK}/>'),
+        width=6 * M, height=6 * M)
+
+    vibration = OverlayPart(
+        name="vibration", iso=IsoPart(29, "29.14", "3831", "Vibration type"),
+        # Two 3 M arrows on tracks a module apart, pointing opposite
+        # ways -- the standard's own idiom for oscillation. The heads
+        # are 29.1's: 1 M long and a little over half a module across,
+        # with the shaft stopping at the head's base.
+        svg=_g("29_vibration",
+               f'<line x1="{3 * M:g}" y1="{0.5 * M:g}" x2="{M:g}" y2="{0.5 * M:g}" {_INK}/>'
+               f'<polygon points="0,{0.5 * M:g} {M:g},{0.23 * M:g} '
+               f'{M:g},{0.77 * M:g}" {_SOLID_INK}/>'
+               f'<line x1="0" y1="{1.5 * M:g}" x2="{2 * M:g}" y2="{1.5 * M:g}" {_INK}/>'
+               f'<polygon points="{3 * M:g},{1.5 * M:g} {2 * M:g},{1.23 * M:g} '
+               f'{2 * M:g},{1.77 * M:g}" {_SOLID_INK}/>'),
+        width=3 * M, height=2 * M)
+
     return (
         leg, bracket, skirt, ring,
         tray, baffle_tray, bubble_cap_tray, valve_tray, sieve_tray, filter_insert,
@@ -523,6 +698,8 @@ def _build() -> tuple:
         agitator_general, flat_blade, gate_paddle, cross_beam, anchor, helical,
         impeller, propeller, disc, turbine,
         gravity, electrostatic, electromagnetic,
+        disc_type, crushing, gear, hammer, impact, jaw, liquid, roller, cone,
+        jet, vibration,
     )
 
 

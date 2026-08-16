@@ -2549,8 +2549,14 @@ class SymbolRegistry:
         X2618, the cyclone -- which ISO 14617-1 §4.5 names by number as a
         symbol in its own right), no baffle (8.2 X2616), no spray (8.5
         X2621, and so not 8.7 X8033 either) and no permanent magnet (8.9
-        X8127). Item 8.4's wet scrubber would need item 29.10's double
-        arc, which is not drawn yet.
+        X8127).
+
+        Item 8.4's wet scrubber is the one of the five whose mark group
+        29 now *does* have: 29.10 (registered 321) ships. It is still
+        vendored whole, because composing it would replace a drawing the
+        library already has rather than add one -- a different symbol,
+        different nozzle anchors, and a golden that moves -- and that is
+        a change to ``separator/scrubber`` rather than a part landing.
 
         The cost, stated because it is real: the three lose their draw.io
         stencils. Each of the three *is* a stencil in draw.io's P&ID set,
