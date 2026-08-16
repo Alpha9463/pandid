@@ -78,7 +78,10 @@ def test_fixed_port_units_have_expected_ports():
         "reboiler_duty",
         "condenser_duty",
     }
-    assert set(U.Reactor("R").ports) == {"feed", "outlet", "vent", "duty"}
+    # ``drive`` is the agitator's, and a plain Reactor is a stirred tank, so it
+    # has one. ``Reactor("R", agitator=None)`` is the bare shell's four.
+    assert set(U.Reactor("R").ports) == {"feed", "outlet", "vent", "duty", "drive"}
+    assert set(U.Reactor("R", agitator=None).ports) == {"feed", "outlet", "vent", "duty"}
 
 
 def test_column_return_nozzles_close_the_internal_loops():
@@ -305,21 +308,29 @@ def test_a_mechanical_separator_draws_an_overflow_and_an_underflow(variant):
 @pytest.mark.parametrize("variant", ["sifter", "impact", "permanent_magnet", "electromagnetic"])
 def test_a_mechanical_separators_nozzles_land_where_the_stencil_anchors_are(variant):
     """The names are only true if the overflow really is the high draw and the
-    underflow the low one. All four share the electrostatic precipitator's body
-    anchor for anchor, so the map is the same three points on every one."""
+    underflow the low one. All four are ISO 10628-2's separating vessel, anchor
+    for anchor, so the map is the same three points on every one.
+
+    Three of the four are still that vessel as draw.io vendored it. The
+    electromagnetic one is now the same outline **composed** from ISO item 8.8
+    X8126's parts, so it anchors what the composition's body anchors -- one
+    body, three marks, one set of nozzles -- and ``Separator._VARIANT_ANCHORS``
+    renames them, which is exactly what the unit half of the same change
+    already did for the two beside it.
+    """
     from pandid.render.symbols import default_registry
 
     symbol = default_registry.get("separator", variant)
+    anchors = {"electromagnetic": ("feed", "vapor", "liquid")}.get(
+        variant, ("feed", "overflow", "underflow")
+    )
     assert (symbol.width, symbol.height) == (80.0, 120.0)
-    assert symbol.ports == {
-        "feed": (0.0, 12.0),
-        "overflow": (80.0, 12.0),
-        "underflow": (40.0, 120.0),
-    }
+    assert symbol.ports == dict(zip(anchors, [(0.0, 12.0), (80.0, 12.0), (40.0, 120.0)]))
     # The overflow is on the side wall level with the feed; the underflow is the
     # hopper apex, the lowest point the artwork has.
-    assert symbol.ports["overflow"][1] == symbol.ports["feed"][1]
-    assert symbol.ports["underflow"][1] == symbol.height
+    high, low = anchors[1], anchors[2]
+    assert symbol.ports[high][1] == symbol.ports["feed"][1]
+    assert symbol.ports[low][1] == symbol.height
 
 
 def test_a_separator_variant_nobody_declared_still_gets_the_flash_drums_nozzles():

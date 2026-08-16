@@ -9,15 +9,20 @@ holds the mechanism to what the standard actually licenses.
 
 Two things this file is careful about.
 
-**No part ships yet.** The artwork for groups 26-29 is a separate change, so
-every part below is built here. That is deliberate rather than a gap: a suite
-that leaned on shipped parts would go quiet the day one was renamed, and the
-mechanism has to be right before there is anything to draw with it.
+**The mechanism is tested on parts built here, not on the shipped artwork.**
+That is deliberate rather than a gap: a suite that leaned on shipped parts
+would go quiet the day one was renamed, and this file's subject is the rule and
+the arithmetic. ``tests/test_iso_parts.py`` is where the twenty-five drawings
+are held to Table 2 row by row, and ``tests/test_drawio.py`` is where the two
+backends are held to each other.
 
-**Nothing the registry already draws may move.** A body with no parts is the
-zero case of a composition, so every symbol in the library is one, and
-:func:`test_no_shipped_symbol_carries_a_part` says so over the whole registry
-rather than over the examples. ``tests/test_golden.py`` is the other half.
+**What the registry itself composes is spelled out, not counted.** A
+composition the registry ships is a composition *ISO tabulates with a
+registration number of its own* -- three of them, all in group 8 -- while the
+ones an author configures with ``agitator=`` or ``trays=`` are built per unit
+and cannot be enumerated, because the combinations are the point.
+:func:`test_the_registry_composes_exactly_the_three_ISO_gives_a_number_to` lists
+the three by name so that a fourth has to be argued for here.
 """
 
 import re
@@ -564,21 +569,49 @@ def test_a_composed_symbol_renders_through_the_svg_backend():
         default_registry._composed.clear()
 
 
-# ---------------------------------------------------------------- no change
+# ------------------------------------------------- what the registry composes
 
 
-def test_no_shipped_symbol_carries_a_part():
-    """Every drawing in the library is a body with zero parts.
+def test_the_registry_composes_exactly_the_three_ISO_gives_a_number_to():
+    """A composition the *registry* ships is a composition **ISO tabulates**.
 
-    Which is the whole claim of this change: the mechanism arrives and nothing
-    the library draws is composed with it yet, so no sheet can have moved.
+    Two kinds of composition exist and only one of them belongs here. The one
+    an author configures -- which agitator, how many trays -- is built per unit
+    from a keyword and cannot be enumerated, because the combinations are the
+    point. The one the standard itself tabulates as a symbol example with a
+    registration number has a fixed answer, and a fixed answer belongs in the
+    registry beside every other fixed drawing.
+
+    Three, all in ISO 10628-2 group 8, all one separating vessel carrying one
+    group-29 characteristic. The list is spelled out rather than counted so
+    that a fourth arriving has to be argued for here.
     """
-    composed = [
-        f"{kind}/{variant}"
+    composed = {
+        f"{kind}/{variant}": sym.iso_reg
         for (kind, variant), sym in default_registry._symbols.items()
         if sym.overlays
-    ]
-    assert composed == []
+    }
+    assert composed == {
+        "separator/gravity": "X8031",
+        "separator/electrostatic": "X8125",
+        "separator/electromagnetic": "X8126",
+    }
+
+
+def test_the_cyclone_is_not_composed():
+    """ISO 14617-1 §4.5 names X2618 by registration number as a symbol in its
+    own right, and group 29 has no vortex to compose one from. So a
+    hydrocyclone is a whole drawing, keeps its stencil, and ``variant=`` stays
+    the way to ask for one -- which is why it is not deprecated.
+
+    The four beside it are here for the same reason, one absence each: no
+    baffle (8.2), no spray (8.5), no permanent magnet (8.9) and no double arc
+    (8.4) anywhere in group 29.
+    """
+    for variant in ("cyclone", "sifter", "impact", "permanent_magnet", "scrubber"):
+        sym = default_registry.get("separator", variant)
+        assert not sym.overlays, f"separator/{variant} is composed"
+        assert sym.drawio_shape, f"separator/{variant} lost its stencil"
 
 
 def test_the_parts_that_ship_are_available_and_unused():
@@ -603,11 +636,27 @@ def test_the_parts_that_ship_are_available_and_unused():
     assert agitator.svg != machine.svg and not machine.overlays
 
 
-def test_no_shipped_symbol_claims_a_registration_number_yet():
+def test_only_a_composition_claims_a_registration_number():
     """Filling one in is a conformance claim about that symbol's geometry, and
-    one made by assumption is worse than none. The backfill is its own change,
-    against Table 2, one drawing at a time."""
-    assert not [s for s in default_registry._symbols.values() if s.iso_reg]
+    one made by assumption is worse than none -- so the 154 whole drawings
+    still claim nothing, and the backfill is its own change, against Table 2,
+    one drawing at a time.
+
+    A composition is the exception, and is why the field exists. It is only
+    ever built because the standard composes at that point, so the row it
+    reproduces is known at the moment it is built: a separating vessel carrying
+    item 29.2 *is* X8125, and saying so is what makes the composition checkable
+    rather than plausible.
+    """
+    numbered = {
+        f"{kind}/{variant}": sym
+        for (kind, variant), sym in default_registry._symbols.items()
+        if sym.iso_reg
+    }
+    assert all(sym.overlays for sym in numbered.values()), (
+        "a whole drawing claimed a registration number; that is the backfill, "
+        "and it wants its own change"
+    )
 
 
 def test_a_built_to_size_drawing_does_not_capture_its_kinds_other_variants():
@@ -637,17 +686,34 @@ def test_a_built_to_size_drawing_does_not_capture_its_kinds_other_variants():
         del symbols._BUILT_TO_SIZE[("composition_test", "sized")]
 
 
-def test_a_reactor_declares_its_nozzles_per_variant():
-    """The prerequisite for the reactors that are not vertical vessels.
+def test_a_tubular_reactor_drops_the_vent_it_has_no_use_for():
+    """What ``_VARIANT_PORTS`` was added for.
 
     A tubular reactor is a pipe with a bed in it: no vapour space, so no
-    ``vent`` to connect. ``_VARIANT_PORTS`` is where that will be said, and it
-    is empty today so every reactor has exactly the nozzles it always had.
+    off-gas to take, and a nozzle nothing is ever routed to is a nozzle an
+    author has to be told to ignore. Every vertical reactor keeps all three.
     """
-    assert units.Reactor._VARIANT_PORTS == {}
     assert [name for name, _, _ in units.Reactor._variant_ports("default")] == [
         "outlet",
         "vent",
         "duty",
     ]
-    assert list(units.Reactor("R-101").ports) == ["outlet", "vent", "duty", "feed"]
+    assert [name for name, _, _ in units.Reactor._variant_ports("tubular")] == [
+        "outlet",
+        "duty",
+    ]
+    assert "vent" not in units.Reactor("R-301", variant="tubular", agitator=None).ports
+
+
+def test_only_the_agitator_brings_the_drive():
+    """The nozzle a *part* anchors exists exactly when the part does.
+
+    ISO item 1.27 X8006 runs the stirrer's shaft up through the top head to a
+    motor above the vessel, so the drive is a real connection at a real place
+    -- and a reactor with no stirrer has no shaft for it to be at.
+    """
+    assert "drive" in units.Reactor("R-101").ports
+    assert "drive" in units.Reactor("R-102", agitator="turbine").ports
+    assert "drive" not in units.Reactor("R-201", agitator=None).ports
+    # The body's own nozzles are unchanged either way, and in order.
+    assert list(units.Reactor("R-101").ports) == ["outlet", "vent", "duty", "drive", "feed"]

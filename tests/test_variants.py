@@ -127,13 +127,19 @@ def test_every_shipped_variant_still_constructs(cls, variant):
 def test_a_shipped_variant_resolves_the_nozzles_it_always_did(cls, variant):
     """The ports, against the expression that built them before this change.
 
-    Two rules covered the whole library and still do. The two variant-port
-    classes appended ``_VARIANT_PORTS.get(variant, <their default>)`` after
+    Three rules cover the whole library. The three variant-port classes append
+    ``_VARIANT_PORTS.get(variant, <their default>)`` after
     ``super().__init__()``, which is spelled out here from their own tables
-    rather than taken from the new ``_variant_ports``, so the assertion is
-    independent of the thing it is checking. Every other class builds the same
-    nozzles whatever the variant, since a variant is a second drawing of one
-    functional type, so its answer is the class's own default-variant instance.
+    rather than taken from ``_variant_ports``, so the assertion is independent
+    of the thing it is checking. Every other class builds the same nozzles
+    whatever the variant, since a variant is a second drawing of one functional
+    type, so its answer is the class's own default-variant instance.
+
+    ``Reactor`` needs one word more, and it is the one thing composition
+    changed about nozzles: **the drive is the agitator's**, so it is on a
+    reactor exactly when there is an agitator to be driven, and that is per
+    unit rather than per variant. ``_STIRRED`` is the list of bodies that get
+    one when the author names none.
     """
     built = set(_shipped(cls, variant).ports)
     if cls is units.HeatExchanger:
@@ -142,6 +148,12 @@ def test_a_shipped_variant_resolves_the_nozzles_it_always_did(cls, variant):
     elif cls is units.Separator:
         table = cls._VARIANT_PORTS.get(variant, cls._PHASES)
         assert built == {spec[0] for spec in table}
+    elif cls is units.Reactor:
+        table = cls._VARIANT_PORTS.get(variant, cls._VESSEL)
+        want = {spec[0] for spec in table} | {"feed"}
+        if variant in cls._STIRRED:
+            want |= {"drive"}
+        assert built == want
     else:
         assert built == set(cls("X-1").ports)
 

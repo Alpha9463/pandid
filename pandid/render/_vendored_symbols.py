@@ -315,16 +315,38 @@ def register_vendored(registry):
         port_series=(PortSeries('feed_', 'W', pitch=35.0, extent=0.35, at=105.0, singular='feed'),),
     ), 'packed')
 
-    # draw.io vessels:Mixing Reactor (aspect=variable) -> reactor/default
+    # draw.io vessels:Pressurized Vessel (aspect=variable) -> reactor/default
     registry.register('reactor', Symbol(
-        svg='<g id="sym_reactor"><path d="M 31.0 2.4 L 31.0 27.4 A 6.0 2.4 0.0 0 1 25.0 29.8 A 6.0 2.4 0.0 0 1 19.0 27.4 L 19.0 2.4 A 6.0 2.4 0.0 0 1 25.0 0.0 A 6.0 2.4 0.0 0 1 31.0 2.4 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 26.0 32.4 L 50.0 32.4 L 50.0 77.4 L 25.0 96.4 L 0.0 77.4 L 0.0 32.4 L 24.0 32.4 M 19.0 2.4 L 31.0 2.4 M 19.0 27.4 L 31.0 27.4 M 24.0 29.4 L 24.0 56.9 M 26.0 29.4 L 26.0 56.9 M 0.0 77.4 L 50.0 77.4" fill="white" stroke="#111" stroke-width="2.0"/><ellipse cx="30.0" cy="57.4" rx="5.0" ry="1.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="20.0" cy="57.4" rx="5.0" ry="1.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_reactor"><g transform="scale(0.62, 0.5)"><path d="M 0.0 15.0 A 50.0 15.0 0.0 0 1 50.0 0.0 A 50.0 15.0 0.0 0 1 100.0 15.0 L 100.0 185.0 A 50.0 15.0 0.0 0 1 50.0 200.0 A 50.0 15.0 0.0 0 1 0.0 185.0 Z" fill="white" stroke="#111" stroke-width="3.592"/></g></g>',
+        width=62.0, height=100.0,
+        ports={'outlet': (31.0, 100.0), 'duty': (62.0, 50.0), 'vent': (46.5, 1.0)},
+        drawio_shape='mxgraph.pid.vessels.pressurized_vessel',
+        # must not be turned: top-entering agitator over a dished bottom
+        gravity_fixed=True,
+        port_series=(PortSeries('feed_', 'W', pitch=14.0, extent=0.32, at=50.0, singular='feed'),),
+    ), 'default')
+
+    # draw.io vessels:Mixing Reactor (aspect=variable) -> reactor/mixing
+    registry.register('reactor', Symbol(
+        svg='<g id="sym_reactor_mixing"><path d="M 31.0 2.4 L 31.0 27.4 A 6.0 2.4 0.0 0 1 25.0 29.8 A 6.0 2.4 0.0 0 1 19.0 27.4 L 19.0 2.4 A 6.0 2.4 0.0 0 1 25.0 0.0 A 6.0 2.4 0.0 0 1 31.0 2.4 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 26.0 32.4 L 50.0 32.4 L 50.0 77.4 L 25.0 96.4 L 0.0 77.4 L 0.0 32.4 L 24.0 32.4 M 19.0 2.4 L 31.0 2.4 M 19.0 27.4 L 31.0 27.4 M 24.0 29.4 L 24.0 56.9 M 26.0 29.4 L 26.0 56.9 M 0.0 77.4 L 50.0 77.4" fill="white" stroke="#111" stroke-width="2.0"/><ellipse cx="30.0" cy="57.4" rx="5.0" ry="1.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="20.0" cy="57.4" rx="5.0" ry="1.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=50.0, height=96.4,
         ports={'outlet': (25.0, 96.4), 'duty': (50.0, 48.2), 'vent': (40.0, 32.4)},
         drawio_shape='mxgraph.pid.vessels.mixing_reactor',
-        # must not be turned: top-entering agitator over a dished bottom
+        # must not be turned: top-entering agitator over a conical bottom
         gravity_fixed=True,
         port_series=(PortSeries('feed_', 'W', pitch=14.0, extent=0.32, at=48.2, singular='feed'),),
-    ), 'default')
+    ), 'mixing')
+
+    # draw.io vessels:Vessel (Dished Ends, Heating-Cooling Jacket) (aspect=variable) -> reactor/jacketed
+    registry.register('reactor', Symbol(
+        svg='<g id="sym_reactor_jacketed"><path d="M 46.0 7.69 L 46.0 87.69 A 20.0 7.6923 0.0 0 1 26.0 95.3823 A 20.0 7.6923 0.0 0 1 6.0 87.69 L 6.0 7.69 A 20.0 7.6923 0.0 0 1 26.0 -0.0023 A 20.0 7.6923 0.0 0 1 46.0 7.69 Z M 6.0 7.69 L 46.0 7.69 M 6.0 87.69 L 46.0 87.69" fill="white" stroke="#111" stroke-width="2.0"/><rect x="0.0" y="12.69" width="6.0" height="70.0" fill="white" stroke="#111" stroke-width="2.0"/><rect x="46.0" y="12.69" width="6.0" height="70.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
+        width=52.0, height=95.4,
+        ports={'outlet': (26.0, 95.4), 'duty': (52.0, 47.7), 'vent': (14.0, 1.5)},
+        drawio_shape='mxgraph.pid.vessels.vessel_(dished_ends,_heating-cooling_jacket)',
+        # must not be turned: top-entering agitator over a dished bottom, inside its jacket
+        gravity_fixed=True,
+        port_series=(PortSeries('feed_', 'W', pitch=14.0, extent=0.32, at=47.7, singular='feed'),),
+    ), 'jacketed')
 
     # draw.io vessels:Pressurized Vessel (aspect=variable) -> separator/default
     registry.register('separator', Symbol(
@@ -1005,16 +1027,6 @@ def register_vendored(registry):
         gravity_fixed=True,
     ), 'cyclone')
 
-    # draw.io separators:Gravity Separator, Settling Chamber (aspect=variable) -> separator/gravity
-    registry.register('separator', Symbol(
-        svg='<g id="sym_separator_gravity"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z M 40.0 10.0 L 40.0 65.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 38.0 65.0 L 42.0 65.0 L 40.0 70.0 Z" fill="#111" stroke="#111" stroke-width="2.0"/></g>',
-        width=80.0, height=120.0,
-        ports={'feed': (0.0, 12.0), 'vapor': (80.0, 12.0), 'liquid': (40.0, 120.0)},
-        drawio_shape='mxgraph.pid.separators.gravity_separator,_settling_chamber',
-        # must not be turned: settling chamber; the arrow in it points down
-        gravity_fixed=True,
-    ), 'gravity')
-
     # draw.io separators:Separator (Wet Scrubber) (aspect=variable) -> separator/scrubber
     registry.register('separator', Symbol(
         svg='<g id="sym_separator_scrubber"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 40.0 10.0 L 40.0 65.0 M 50.0 10.0 A 5.0 5.0 0.0 0 0 55.0 15.0 A 5.0 5.0 0.0 0 0 60.0 10.0 M 60.0 10.0 A 5.0 5.0 0.0 0 0 65.0 15.0 A 5.0 5.0 0.0 0 0 70.0 10.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 38.0 65.0 L 42.0 65.0 L 40.0 70.0 Z" fill="#111" stroke="#111" stroke-width="2.0"/></g>',
@@ -1024,16 +1036,6 @@ def register_vendored(registry):
         # must not be turned: hopper bottom under a wash-liquid header
         gravity_fixed=True,
     ), 'scrubber')
-
-    # draw.io separators:Separator (Electrostatic Precipitator) (aspect=variable) -> separator/electrostatic
-    registry.register('separator', Symbol(
-        svg='<g id="sym_separator_electrostatic"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 15.0 70.0 L 35.0 70.0 M 35.0 60.0 L 35.0 80.0 M 45.0 60.0 L 45.0 80.0 M 45.0 70.0 L 60.0 70.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
-        width=80.0, height=120.0,
-        ports={'feed': (0.0, 12.0), 'vapor': (80.0, 12.0), 'liquid': (40.0, 120.0)},
-        drawio_shape='mxgraph.pid.separators.separator_(electrostatic_precipitator)',
-        # must not be turned: hopper bottom, collected phase out of the apex
-        gravity_fixed=True,
-    ), 'electrostatic')
 
     # draw.io separators:Separator, Sifter (aspect=variable) -> separator/sifter
     registry.register('separator', Symbol(
@@ -1064,16 +1066,6 @@ def register_vendored(registry):
         # must not be turned: hopper bottom, separated fraction out of the apex
         gravity_fixed=True,
     ), 'permanent_magnet')
-
-    # draw.io separators:Separator (Electromagnetic) (aspect=variable) -> separator/electromagnetic
-    registry.register('separator', Symbol(
-        svg='<g id="sym_separator_electromagnetic"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 10.0 65.0 L 19.0 65.0 A 7.0 7.0 0.0 0 1 26.0 58.0 A 7.0 7.0 0.0 0 1 33.0 65.0 A 7.0 7.0 0.0 0 1 40.0 58.0 A 7.0 7.0 0.0 0 1 47.0 65.0 A 7.0 7.0 0.0 0 1 54.0 58.0 A 7.0 7.0 0.0 0 1 61.0 65.0 L 70.0 65.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
-        width=80.0, height=120.0,
-        ports={'feed': (0.0, 12.0), 'overflow': (80.0, 12.0), 'underflow': (40.0, 120.0)},
-        drawio_shape='mxgraph.pid.separators.separator_(electromagnetic)',
-        # must not be turned: hopper bottom, separated fraction out of the apex
-        gravity_fixed=True,
-    ), 'electromagnetic')
 
     # draw.io filters:Gas Filter (Bag, Candle, Cartridge) (aspect=variable) -> filter/gas
     registry.register('filter', Symbol(

@@ -17,15 +17,15 @@ groups 26-29 supplementary symbols (``pandid/render/iso_parts.py``), which the
 default sheet cannot show because a part is not a symbol and is not in the
 registry a symbol lookup reads. Each cell names the Table 2 item and
 registration number it claims to be, so a reader with the standard can check
-the drawing against the row. Below the parts, a strip of worked compositions
-shows a handful of them on real bodies -- built by this script, not registered,
-since nothing in the library composes yet.
+the drawing against the row. Below the parts, a grid of the compositions the library
+ships: each is built through the unit keyword printed under it and read back
+through ``SymbolRegistry.for_unit``, so it is the drawing a sheet gets.
 """
 import sys
 import pathlib
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
-from pandid.render.symbols import Overlay, compose, default_registry as R  # noqa: E402
+from pandid.render.symbols import default_registry as R  # noqa: E402
 
 CELL_W, CELL_H = 200, 200
 FIT = 110.0          # target max symbol dimension inside a cell
@@ -100,38 +100,65 @@ def main():
 # --- the parts sheet ---------------------------------------------------------
 
 #: Compositions drawn under the parts, to show what a part looks like on the
-#: body it was drawn for rather than alone in a box. Nothing here is
-#: registered: these are built by this script and thrown away, because no unit
-#: in the library composes yet.
-DEMOS = [
-    ("vessel/dished + turbine", "vessel", "dished",
-     [Overlay(28, "turbine", 0.30, 0.05, 0.40, 0.75)]),
-    ("vessel/dished + anchor", "vessel", "dished",
-     [Overlay(28, "anchor", 0.28, 0.05, 0.44, 0.80)]),
-    ("column + 6 bubble caps", "column", "default",
-     [Overlay(27, "bubble_cap_tray", 0.12, 0.18 + 0.11 * i, 0.76, 0.09)
-      for i in range(6)]),
-    ("column + 8 sieve trays", "column", "default",
-     [Overlay(27, "sieve_tray", 0.12, 0.16 + 0.085 * i, 0.76, 0.07)
-      for i in range(8)]),
-    ("column + packing", "column", "default",
-     [Overlay(27, "packing", 0.12, 0.20, 0.76, 0.55)]),
-    ("separator + gravity", "separator", "gravity",
-     [Overlay(29, "gravity", 0.40, 0.15, 0.20, 0.45)]),
-    ("vessel + 2 legs", "vessel", "default",
-     [Overlay(26, "leg", 0.18, 0.95, 0.06, 0.22),
-      Overlay(26, "leg", 0.76, 0.95, 0.06, 0.22)]),
-    ("vessel + skirt", "vessel", "default",
-     [Overlay(26, "skirt", 0.20, 0.92, 0.60, 0.22)]),
-]
+#: body it was drawn for rather than alone in a box.
+#:
+#: **Every one of these is a real drawing the library ships**, built the way an
+#: author builds it -- ``Reactor(agitator=...)``, ``Column(internals=...,
+#: trays=...)``, ``Vessel(supports=...)``, ``Separator(characteristic=...)`` --
+#: and read back through ``SymbolRegistry.for_unit``. So the strip is a picture
+#: of the catalogue and not of what the catalogue could be made to do.
+def demos():
+    """The composed drawings, as (label, symbol) pairs."""
+    from pandid import units as U
+
+    built = [
+        ("Reactor()", U.Reactor("R-101")),
+        ('agitator="turbine"', U.Reactor("R-102", agitator="turbine")),
+        ('agitator="anchor"', U.Reactor("R-103", agitator="anchor")),
+        ('variant="jacketed"', U.Reactor("R-104", variant="jacketed")),
+        ('internals="packing"', U.Reactor("R-201", internals="packing", agitator=None)),
+        ('internals="fluidised_bed"',
+         U.Reactor("R-202", internals="fluidised_bed", agitator=None)),
+        ('variant="tubular"', U.Reactor("R-301", variant="tubular", agitator=None)),
+        ("Column()", U.Column("T-101")),
+        ('internals="bubble_cap_tray"',
+         U.Column("T-102", internals="bubble_cap_tray", trays=6)),
+        ('internals="valve_tray", trays=16',
+         U.Column("T-103", internals="valve_tray", trays=16)),
+        ('internals="packing", trays=2', U.Column("T-104", internals="packing", trays=2)),
+        ("internals=None", U.Column("T-105", internals=None)),
+        ('supports="leg"', U.Vessel("D-301", supports="leg")),
+        ('supports="skirt"', U.Vessel("D-302", supports="skirt")),
+        ('supports="bracket"', U.Vessel("D-303", supports="bracket")),
+        ('supports="ring"', U.Vessel("D-304", supports="ring")),
+        ('characteristic="gravity"', U.Separator("V-201", characteristic="gravity")),
+        ('characteristic="electrostatic"',
+         U.Separator("V-202", characteristic="electrostatic")),
+        ('characteristic="electromagnetic"',
+         U.Separator("V-203", characteristic="electromagnetic")),
+        ('variant="cyclone" (not composed)', U.Separator("V-204", variant="cyclone")),
+    ]
+    return [(label, R.for_unit(unit)) for label, unit in built]
+
+
+DEMO_COLS = 7
+DEMO_CELL_W, DEMO_CELL_H = 200, 300
+DEMO_FIT = 190.0
+
+
+def escape(text: str) -> str:
+    """The three characters a label may carry into SVG text."""
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def part_sheet(out: pathlib.Path):
     parts = R.parts()
+    shown = demos()
     rows = (len(parts) + PART_COLS - 1) // PART_COLS
+    demo_rows = (len(shown) + DEMO_COLS - 1) // DEMO_COLS
     demo_top = rows * PART_CELL_H + 130
-    W = max(PART_COLS * PART_CELL_W, len(DEMOS) * 190)
-    H = demo_top + 300
+    W = max(PART_COLS * PART_CELL_W, DEMO_COLS * DEMO_CELL_W + 20)
+    H = demo_top + demo_rows * DEMO_CELL_H + 20
 
     L = ['<?xml version="1.0" encoding="UTF-8"?>',
          f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
@@ -179,24 +206,31 @@ def part_sheet(out: pathlib.Path):
                  f'font-size="9" fill="#888" text-anchor="middle">{flags}</text>')
 
     L.append(f'<text x="20" y="{demo_top - 12}" font-family="sans-serif" font-size="15" '
-             f'font-weight="bold">composed onto a body (built here, not registered)</text>')
-    for idx, (label, kind, variant, overlays) in enumerate(DEMOS):
-        ox = idx * 190 + 10
-        sym = compose(R.get(kind, variant),
-                      [(o, R.part(o.group, o.name)) for o in overlays])
-        s = 200.0 / max(sym.width, sym.height)
-        gx = ox + (180 - sym.width * s) / 2
-        L.append(f'<g transform="translate({gx:.1f},{demo_top:.1f}) scale({s:.3f})">'
+             f'font-weight="bold">composed onto a body &#8212; every one a drawing the '
+             f'library ships, built through the unit keyword named under it</text>')
+    for idx, (label, sym) in enumerate(shown):
+        r, c = divmod(idx, DEMO_COLS)
+        ox = c * DEMO_CELL_W + 10
+        oy = demo_top + r * DEMO_CELL_H
+        s = DEMO_FIT / max(sym.width, sym.height)
+        gx = ox + (DEMO_CELL_W - 20 - sym.width * s) / 2
+        gy = oy + (DEMO_CELL_H - 40 - sym.height * s) / 2
+        L.append(f'<g transform="translate({gx:.1f},{gy:.1f}) scale({s:.3f})">'
                  f'{inner(sym.svg)}</g>')
-        for name, (px, py) in sym.ports.items():
-            L.append(f'<circle cx="{gx + px * s:.1f}" cy="{demo_top + py * s:.1f}" '
+        for px, py in sym.ports.values():
+            L.append(f'<circle cx="{gx + px * s:.1f}" cy="{gy + py * s:.1f}" '
                      f'r="3" fill="#d1495b"/>')
-        L.append(f'<text x="{ox + 90}" y="{demo_top + 275}" font-family="sans-serif" '
-                 f'font-size="11" text-anchor="middle">{label}</text>')
+        L.append(f'<text x="{ox + (DEMO_CELL_W - 20) / 2}" y="{oy + DEMO_CELL_H - 22}" '
+                 f'font-family="monospace" font-size="11" text-anchor="middle">'
+                 f'{escape(label)}</text>')
+        L.append(f'<text x="{ox + (DEMO_CELL_W - 20) / 2}" y="{oy + DEMO_CELL_H - 8}" '
+                 f'font-family="sans-serif" font-size="9" fill="#888" text-anchor="middle">'
+                 f'{len(sym.overlays)} part(s) &#183; {sym.width:g}&#215;{sym.height:g}'
+                 f'{" &#183; " + sym.iso_reg if sym.iso_reg else ""}</text>')
 
     L.append("</svg>")
     out.write_text("\n".join(L), encoding="utf-8")
-    print(f"wrote {out} ({len(parts)} parts, {len(DEMOS)} compositions)")
+    print(f"wrote {out} ({len(parts)} parts, {len(shown)} compositions)")
 
 
 if __name__ == "__main__":

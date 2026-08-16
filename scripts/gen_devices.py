@@ -595,6 +595,15 @@ STAYS_ON_BASE = {
     ("vessel", "default"): "Vessel's own drawing",
     ("column", "default"): "Column's own drawing",
     ("reactor", "plain"): "body style: the same charge vessel without the agitator",
+    # The other three reactor bodies. What makes a reactor a CSTR rather than a
+    # PBR is the ISO group-27/28 part inside it, which ``Reactor`` states with
+    # ``agitator=`` and ``internals=``, so none of these three is a functional
+    # type of its own: a jacket is cladding exactly as it is on a vessel;
+    # ``mixing`` is the rectangle-with-a-V-bottom ``default`` used to draw, kept
+    # under a name that says so; and a tubular shell is a shell.
+    ("reactor", "jacketed"): "cladding: a heating/cooling jacket",
+    ("reactor", "mixing"): "body style: a conical-bottomed mixing vessel",
+    ("reactor", "tubular"): "body style: a horizontal shell with a tube pass",
     # Refused by name; see REFUSED_KINDS.
     ("feed", "default"): "a boundary flag, not equipment",
     ("product", "default"): "a boundary flag, not equipment",

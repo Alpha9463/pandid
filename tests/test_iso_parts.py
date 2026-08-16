@@ -106,11 +106,22 @@ def test_a_part_is_asked_for_by_group_and_name(part):
     assert default_registry.part(part.iso.group, part.name) is part
 
 
-def test_no_symbol_composes_yet():
-    """Registering the artwork makes it available to be overlaid; putting it on
-    a unit is the next change. Until then every drawing the library ships is
-    the one it has always been, and ``tests/golden`` cannot have moved."""
-    assert [s for s in default_registry._symbols.values() if s.overlays] == []
+def test_every_part_that_draw_io_has_a_shape_for_names_it():
+    """Ten of the twenty-five, and they are draw.io's whole agitator set.
+
+    ``mxgraph.pid.agitators`` has exactly ten shapes and they are ISO group
+    28's ten, item for item -- so a composed reactor exports with a real
+    agitator on it rather than a stand-in. Nothing else in groups 26, 27 or 29
+    has a shape of its own in the P&ID set, and inventing a key for one would
+    fail silently: draw.io answers an unresolvable ``shape=`` with a plain
+    rectangle. ``tests/test_drawio.py`` holds these ten keys against the
+    stencil XML they are meant to name.
+    """
+    stencilled = {p.name for p in iso_parts.parts() if p.drawio_shape}
+    assert stencilled == {p.name for p in iso_parts.parts() if p.iso.group == 28}
+    for part in iso_parts.parts():
+        if part.drawio_shape:
+            assert part.drawio_shape.startswith("mxgraph.pid.agitators.")
 
 
 # --- how they are drawn -------------------------------------------------------
@@ -185,19 +196,46 @@ def test_only_an_agitator_brings_a_connection(part):
 
 
 @pytest.mark.parametrize("part", PARTS, ids=IDS)
-def test_a_mark_whose_form_is_its_meaning_is_not_stretched(part):
-    """Groups 28 and 29 are ten agitators and fourteen characteristics that
-    differ in nothing but the shape of the mark, so squashing one destroys the
-    only thing it says. Groups 26 and 27 are lines that follow the body."""
-    assert part.stretchable == (part.iso.group in (26, 27))
+def test_every_part_fills_the_rectangle_it_is_given(part):
+    """``stretchable=False`` is not "draw this part carefully".
+
+    It letterboxes the part on its rectangle **and** makes the whole composed
+    symbol unstretchable, and both of those are decisions about the body. The
+    first lifted a stirred tank's ``drive`` eight units off the head it comes
+    through, because a rectangle stated in fractions of the body's box has the
+    body's aspect and the width was the binding scale; the second would have
+    centred a reactor in the box its author asked for while every stencilled
+    neighbour filled one.
+
+    draw.io settles it from outside: its own ten agitator stencils, drawing
+    these same ten items, are every one of them ``aspect="variable"``, and this
+    module names those stencils -- so a part that refused to stretch would have
+    the two backends sizing one drawing by two rules.
+    """
+    assert part.stretchable
+
+
+@pytest.mark.parametrize("part", PARTS, ids=IDS)
+def test_no_part_holds_its_own_artwork_still_under_a_flip(part):
+    """``directional`` is a rendering instruction, not a claim about the mark.
+
+    It says *hold the artwork still and move only the nozzles*, which is sound
+    only where the artwork under the moved nozzle is the same as the artwork
+    under the original -- a circle with everything laid through its centre. A
+    part cannot promise that on a body's behalf: a settling arrow's body is a
+    hopper, and held still under a vertical flip its feed nozzle lands twenty
+    units below the cone in mid-air, which is what
+    ``tests/test_symbol_invariants`` measured.
+    """
+    assert not part.directional
 
 
 def test_the_settling_arrow_fixes_the_body_it_is_drawn_in():
     """Item 29.1 is the statement that gravity does the work, which is the case
-    ISO 14617-1 §4.5's prohibition on turning exists for; flipped, the same
-    arrow says the heavy phase rises."""
+    ISO 14617-1 §4.5's prohibition on turning exists for -- and a prohibition
+    is the right shape of thing for it, where ``directional`` is not."""
     arrow = default_registry.part(29, "gravity")
-    assert arrow.gravity_fixed and arrow.directional
+    assert arrow.gravity_fixed and not arrow.directional
 
 
 # --- composed onto a body -----------------------------------------------------
@@ -264,13 +302,20 @@ def test_an_agitators_drive_lands_on_the_body_and_the_bodys_nozzles_survive():
     assert out.ports["drive"] == (pytest.approx(40.0), pytest.approx(10.0))
 
 
-def test_a_composed_body_is_unstretchable_once_it_carries_an_agitator():
+def test_a_composed_body_stretches_exactly_as_the_bare_one_does():
+    """The other half of :func:`test_every_part_fills_the_rectangle_it_is_given`.
+
+    A stirred tank given a width and a height fills that box, as its neighbours
+    drawn from whole stencils do. It used not to: one unstretchable part made
+    the whole composition unstretchable, since there is no way to hold one
+    group still inside a group that is being stretched.
+    """
     host = body()
     out = compose(
         host,
         [(Overlay(28, "propeller", 0.3, 0.05, 0.4, 0.8), default_registry.part(28, "propeller"))],
     )
-    assert host.stretchable and not out.stretchable
+    assert host.stretchable and out.stretchable
 
 
 def test_a_column_of_trays_is_n_overlays_and_not_a_count():
