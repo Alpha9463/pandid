@@ -220,7 +220,9 @@ to_svg(*, show_stream_table: bool = False,
 ```
 Returns the SVG string, running `layout()` and `route()` first if they have not
 run, or if the sheet changed since they did. With `check=True`, validation
-errors raise `ValueError` and warnings land on `fs.warnings`.
+errors raise `ValueError` and warnings land on `fs.warnings`. The checks that
+read the model alone run *before* the layout and the routing; see
+[When the checks run](#when-the-checks-run).
 
 ```text
 to_drawio(*, diagram: str | None = None,
@@ -258,7 +260,7 @@ _repr_svg_() -> str              # Jupyter renders a flowsheet inline
 | `diagram` | `"pfd"` (the default), `"p&id"` | which drawing this is. A P&ID draws its process lines without arrowheads |
 | `connections` | `"none"` (the default), `"flanged"`, `"flanged-at-nozzles"` | `"flanged"` marks the double tick at every equipment nozzle *and* both sides of every valve and in-line fitting; `"flanged-at-nozzles"` marks the nozzles alone. A P&ID only; a PFD draws none whatever this says. See [Flanged connections](#flanged-connections) |
 | `show_stream_table` | `bool` | draws the stream property table (one column per unique material stream) |
-| `check` | `bool` | run `validate()` first; errors raise, warnings collect |
+| `check` | `bool` | validate; errors raise, warnings collect. The model-only checks run before the sheet is laid out, the geometric ones after — see [When the checks run](#when-the-checks-run) |
 | `page_size` | `None`, `"A4"`, `"A3"`, `"A2"`, `"A1"`, `"A0"` | `None` (the default) sizes the sheet to the drawing; a name draws a sheet of exactly that size |
 | `jump_direction` | `"vertical"`, `"horizontal"` | which of two crossing lines gets the semicircle hop |
 | `debug` | `False` (the default), `True`, a number | draws the [coordinate overlay](#the-coordinate-overlay). `True` uses a 50-unit grid; a number sets the spacing |
@@ -2615,6 +2617,33 @@ never raise, and collect on `fs.warnings` after each render. Geometric checks
 need resolved frames, so they are made over the units that have one: before
 layout that is none of them, and after it a balloon layout could not place is
 the one unit skipped rather than the whole sheet.
+
+### When the checks run
+
+The findings split in two, and a render makes them at two different moments:
+
+1. **Model checks**, before anything is laid out or routed:
+   `pin-not-finite`, `pin-out-of-bounds`, `gravity-turned`,
+   `letter-sequence`, `nozzle-unconnected`, `stream-name-reused` and
+   `deprecated`. Every one of these is a property of what you wrote down.
+2. `layout()` and `route()`.
+3. **Geometric checks**, over the frames and routes those produced:
+   `unit-overlap`, `coincident-ports`, `nozzles-crowded`,
+   `route-crosses-unit`, `route-detour`, `run-off-elevation`,
+   `instrument-unplaced` and `route-not-settled`.
+
+An error from either half raises, so a model error raises before any geometry
+exists. That is the point of the order: `pin(x=float("nan"))` is a
+contradiction the model check names exactly, and it is also a coordinate the
+router starts from and does not come back from. Checking it afterwards made a
+perfect finding about a drawing you could never obtain.
+
+Warnings from both halves land on `fs.warnings` together, model findings first.
+
+`fs.validate()` is unaffected and still answers with everything, errors first.
+Call it after `layout()` and `route()` — or after a render, which runs them —
+to hear the geometric half; on a sheet nothing has placed yet that half is
+simply silent.
 
 ### Deprecated API
 

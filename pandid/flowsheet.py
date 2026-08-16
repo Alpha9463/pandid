@@ -1119,8 +1119,8 @@ class Flowsheet:
     def _resolve_geometry(self) -> None:
         """Bring the frames and routes up to date with the model.
 
-        What every render entry point calls before it draws, and the one
-        place the rule is stated. Each stage runs when it has never run
+        Step 3 of :meth:`_prepare_to_draw`, and the one place the
+        staleness rule is stated. Each stage runs when it has never run
         at all, or when a mutation since has overtaken it; a sheet
         rendered twice with nothing changed in between pays for neither,
         which is the whole reason the geometry is kept rather than
@@ -1134,6 +1134,73 @@ class Flowsheet:
             self.layout()
         if self._route_stale or any(s.route is None for s in self.streams):
             self.route()
+
+    @staticmethod
+    def _raise_on_errors(issues: list) -> None:
+        """Raise on the errors in *issues*, naming every one of them.
+
+        One exception for the lot, rather than one per finding: an
+        author who fixes the first of four and renders again should not
+        have to meet the other three one at a time.
+        """
+        errors = [i for i in issues if i.severity == "error"]
+        if errors:
+            raise ValueError(
+                "Flowsheet validation failed:\n"
+                + "\n".join(f"  {e}" for e in errors)
+            )
+
+    def _prepare_to_draw(self, *, diagram: str | None, check: bool) -> None:
+        """Bring the sheet to the state a renderer can draw it from.
+
+        The order is the contract :meth:`to_svg`, :meth:`to_drawio` and
+        :meth:`render` all state, and this is the one place it is
+        carried out:
+
+        1. number the streams, so any finding quotes the name that will
+           actually be drawn;
+        2. **check the model** -- :func:`pandid.validate.model_issues`,
+           the findings that need no geometry: a pin that is not a
+           number, a symbol gravity fixes given a quarter turn, a tag
+           out of sequence, a counted nozzle with nothing piped to it, a
+           counted name already taken;
+        3. resolve the geometry, laying out and routing;
+        4. **check the geometry** --
+           :func:`pandid.validate.geometry_issues`: overlaps, coincident
+           nozzles, crossings, detours, elevations.
+
+        Step 2 precedes step 3 because a model the validator rejects is
+        a model the engine cannot lay out or route either, and the
+        engine has no way to say so. ``pin(x=nan)`` is the case that
+        named this method: ``pin-not-finite`` describes it exactly, and
+        every render reached the router first, which was handed that
+        coordinate and did not come back. The finding was made for a
+        drawing nobody could obtain.
+
+        Errors raise from whichever half found them, so a model error
+        raises before any geometry exists. Warnings from both halves
+        land on ``warnings`` together, model findings first, so that
+        list is one sheet's findings rather than one phase's.
+
+        ``check=False`` skips both halves and resolves the geometry
+        alone, which is what it has always meant.
+        """
+        from pandid.render.svg import draws_arrowheads
+        from pandid.validate import geometry_issues, model_issues
+
+        # Before the model check, not after: `stream-name-reused` reads
+        # the names, and `new_line_number` set after the last connect()
+        # regroups the runs and so changes them.
+        self.renumber_streams()
+        found: list = []
+        if check:
+            found = model_issues(self)
+            self._raise_on_errors(found)
+        self._resolve_geometry()
+        if check:
+            found += geometry_issues(self, arrows=draws_arrowheads(diagram))
+            self.warnings = [i for i in found if i.severity == "warning"]
+            self._raise_on_errors(found)
 
     def _stream_groups(self) -> "list[list[Stream]]":
         """The material streams, gathered into the runs that share a name.
@@ -1435,6 +1502,14 @@ class Flowsheet:
         on a PFD are not a defect there. ``render()`` passes the drawing
         it is making, so the warnings left on ``fs.warnings`` are about
         the sheet that came out.
+
+        Both halves of the check, over the sheet as it stands: the
+        geometric findings need frames and routes, so call this after
+        :meth:`layout` and :meth:`route` -- or after a render, which
+        runs them -- to hear them. On a sheet nothing has placed yet the
+        geometric half is simply silent, and the model findings are the
+        answer. A render asks the two separately, and in the order
+        :meth:`_prepare_to_draw` sets out.
         """
         from pandid.render.svg import draws_arrowheads
         from pandid.validate import validate as _validate
@@ -1495,21 +1570,14 @@ class Flowsheet:
         placement rather than part of the drawing, and is off by
         default.
 
-        When ``check`` is true, validation runs first: any *error*
-        raises :class:`ValueError`, and *warnings* are collected on
-        ``self.warnings``.
+        When ``check`` is true, validation runs around the geometry
+        rather than after it: the checks that read the model alone run
+        **before** ``layout()`` and ``route()``, and the ones that need
+        frames and routes run once those exist. Either half raises
+        :class:`ValueError` on an *error*; *warnings* from both are
+        collected on ``self.warnings``. See :meth:`_prepare_to_draw`.
         """
-        self._resolve_geometry()
-        self.renumber_streams()
-        if check:
-            issues = self.validate(diagram=diagram)
-            self.warnings = [i for i in issues if i.severity == "warning"]
-            errors = [i for i in issues if i.severity == "error"]
-            if errors:
-                raise ValueError(
-                    "Flowsheet validation failed:\n"
-                    + "\n".join(f"  {e}" for e in errors)
-                )
+        self._prepare_to_draw(diagram=diagram, check=check)
         from pandid.render.svg import SvgRenderer
         return SvgRenderer().render(
             self, show_stream_table=show_stream_table,
@@ -1543,10 +1611,11 @@ class Flowsheet:
 
         ``diagram`` says which drawing this is, exactly as
         :meth:`to_svg` takes it: a P&ID exports its process lines
-        without arrowheads. ``check`` validates first, on the same
-        terms. ``connections`` marks the joints, also exactly as
-        :meth:`to_svg` takes it, and in the same places -- the two
-        backends ask one function where a flange goes.
+        without arrowheads. ``check`` validates on the same terms and in
+        the same order -- the model before the geometry is built, the
+        geometry once it is. ``connections`` marks the joints, also
+        exactly as :meth:`to_svg` takes it, and in the same places --
+        the two backends ask one function where a flange goes.
 
         Sheet furniture (the title block and any annotation boxes) is
         docked by the same arithmetic the sheet docks it with, and
@@ -1588,17 +1657,7 @@ class Flowsheet:
         The debug overlay has no counterpart here and :meth:`render`
         refuses it for a ``.drawio`` path rather than ignoring it.
         """
-        self._resolve_geometry()
-        self.renumber_streams()
-        if check:
-            issues = self.validate(diagram=diagram)
-            self.warnings = [i for i in issues if i.severity == "warning"]
-            errors = [i for i in issues if i.severity == "error"]
-            if errors:
-                raise ValueError(
-                    "Flowsheet validation failed:\n"
-                    + "\n".join(f"  {e}" for e in errors)
-                )
+        self._prepare_to_draw(diagram=diagram, check=check)
         from pandid.render.drawio import DrawioRenderer
         return DrawioRenderer().render(self, diagram=diagram,
                                        page_size=page_size, border=border,
@@ -1645,8 +1704,10 @@ class Flowsheet:
                 grid, every ``pin()`` anchor and every port. ``True``
                 for the default spacing, a number to set it. Off by
                 default.
-            check: Validate first; errors raise, warnings collect on
-                ``warnings``.
+            check: Validate. The model-only checks run before the
+                sheet is laid out and routed, the geometric ones
+                after; errors raise from either, warnings collect on
+                ``warnings``. See :meth:`_prepare_to_draw`.
         """
         ext = Path(path).suffix.lower()
         if ext == ".drawio":

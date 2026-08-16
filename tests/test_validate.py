@@ -1093,3 +1093,165 @@ def test_a_plainly_numbered_sheet_reports_nothing():
     fs.connect(f.outlet, v.inlet)
     fs.connect(v.outlet, p.inlet)
     assert _reused(fs) == []
+
+
+# --- the model is checked before any geometry is built ------------------------
+# A render used to lay out and route first and validate the result, so a
+# sheet the validator would refuse outright was handed to the engine
+# anyway. ``pin(x=nan)`` is the case that shows it: `pin-not-finite` names
+# the contradiction exactly, and the same coordinate is one the router
+# starts from and does not come back from, so the finding was made about a
+# drawing nobody could obtain.
+#
+# Every test below therefore runs with `no_geometry` in place. Without it a
+# regression would not fail this file, it would hang it.
+
+
+class _GeometryRan(AssertionError):
+    """Raised in place of layout or routing, so a test can prove neither ran."""
+
+
+@pytest.fixture
+def no_geometry(monkeypatch):
+    """Make ``layout()`` and ``route()`` fail loudly instead of running.
+
+    The guard these tests need, and the assertion they make. A model-only
+    error has to be raised before either is called, so replacing both with
+    a raise turns "the check came too late" from an open-ended wait into an
+    immediate, named failure -- and turns "the check came first" into an
+    ordinary ``pytest.raises(ValueError)`` that never touches the router.
+    """
+
+    def refuse(self, *args, **kwargs):
+        raise _GeometryRan("layout/route ran before the model was checked")
+
+    monkeypatch.setattr(Flowsheet, "layout", refuse)
+    monkeypatch.setattr(Flowsheet, "route", refuse)
+
+
+def _off_sheet(value=float("nan"), axis="x"):
+    """A three-unit run whose middle unit is pinned at *value* on *axis*."""
+    fs = Flowsheet("not-finite")
+    f = fs.add(U.Feed("F")).pin(x=60, y=100)
+    hx = fs.add(U.HeatExchanger("E-101")).pin(**{axis: value, "y" if axis == "x" else "x": 100})
+    p = fs.add(U.Product("P")).pin(x=600, y=100)
+    fs.connect(f.outlet, hx.tube_in)
+    fs.connect(hx.tube_out, p.inlet)
+    return fs
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+@pytest.mark.parametrize("axis", ["x", "y"])
+def test_a_pin_that_is_not_a_number_is_an_error(value, axis):
+    """`pin-not-finite` itself, on both axes and all three non-numbers.
+
+    ``-inf`` is deliberately here beside ``nan``: it is also negative, and
+    the finding must be that it is not finite rather than that it is off
+    the left edge, since ``pin-out-of-bounds`` would tell the author to
+    move it somewhere it cannot be moved to.
+    """
+    issues = [i for i in _off_sheet(value, axis).validate() if i.code == "pin-not-finite"]
+    assert [i.severity for i in issues] == ["error"]
+    assert f"E-101 pinned {axis}={value!r} is not a finite number" == issues[0].message
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf")])
+def test_to_svg_refuses_a_pin_that_is_not_a_number(no_geometry, value):
+    with pytest.raises(ValueError, match="pin-not-finite"):
+        _off_sheet(value).to_svg()
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf")])
+def test_to_drawio_refuses_a_pin_that_is_not_a_number(no_geometry, value):
+    with pytest.raises(ValueError, match="pin-not-finite"):
+        _off_sheet(value).to_drawio()
+
+
+@pytest.mark.parametrize("suffix", [".svg", ".drawio"])
+def test_render_to_a_file_refuses_a_pin_that_is_not_a_number(no_geometry, tmp_path, suffix):
+    """Both branches of ``render()``: the sheet backends and the model one."""
+    out = tmp_path / f"sheet{suffix}"
+    with pytest.raises(ValueError, match="pin-not-finite"):
+        _off_sheet().render(out)
+    assert not out.exists()  # nothing half-written
+
+
+def test_the_model_error_is_the_one_reported(no_geometry):
+    """A sheet wrong in both halves is refused for the model half.
+
+    T-1 and P-1 sit on top of each other, which is ``unit-overlap`` -- a
+    finding that needs frames. The message must name the pin and not the
+    overlap, because the overlap has not been looked for: this is the
+    assertion that the model check happens *first* rather than merely
+    happening.
+    """
+    fs = Flowsheet("both")
+    a = fs.add(U.Tank("T-1")).pin(x=float("nan"), y=100)
+    b = fs.add(U.Pump("P-1")).pin(x=100, y=100)
+    fs.add(U.Tank("T-2")).pin(x=100, y=100)
+    fs.connect(a.outlet, b.suction)
+    with pytest.raises(ValueError) as caught:
+        fs.to_svg()
+    assert "pin-not-finite" in str(caught.value)
+    assert "unit-overlap" not in str(caught.value)
+
+
+def test_check_false_skips_the_model_check_too(no_geometry):
+    """``check=False`` still means *no* validation, not "the late half only".
+
+    With the geometry guard in place the proof is which exception comes
+    out: reaching layout at all says the model check was skipped, where a
+    ``ValueError`` would say it had quietly become unconditional.
+    """
+    with pytest.raises(_GeometryRan):
+        _off_sheet().to_svg(check=False)
+
+
+def test_a_sound_model_still_reaches_the_geometry(no_geometry):
+    """The other half: the pre-flight refuses a sheet, it does not stop one.
+
+    A clean model must pass through the model check and go on to lay out,
+    so this asserts the guard fires rather than a ``ValueError``.
+    """
+    fs = Flowsheet("clean")
+    f = fs.add(U.Feed("F"))
+    p = fs.add(U.Product("P"))
+    fs.connect(f.outlet, p.inlet)
+    with pytest.raises(_GeometryRan):
+        fs.to_svg()
+
+
+def test_the_two_halves_are_the_whole_of_validate():
+    """``validate()`` is still every finding, and still errors first.
+
+    The split is an order, not a subset: nothing may fall between the two
+    functions, and a caller who asks the sheet what is wrong with it gets
+    the same list as before.
+    """
+    from pandid.validate import geometry_issues, model_issues, validate
+
+    fs = _cyclic_balloons(pump_x=110, pump_y=110)  # overlap, and two loose balloons
+    fs.layout()
+    whole = validate(fs)
+    halves = model_issues(fs) + geometry_issues(fs)
+    assert sorted(str(i) for i in whole) == sorted(str(i) for i in halves)
+    assert [i.severity for i in whole] == sorted(
+        (i.severity for i in whole), key=lambda s: s != "error"
+    )
+
+
+def test_warnings_from_both_halves_land_on_the_sheet_together():
+    """``fs.warnings`` is one sheet's findings, not one phase's.
+
+    ``letter-sequence`` is made by the model half and ``route-detour`` by
+    the geometric one, so a render that collected only the second list
+    would drop half the findings on the floor.
+    """
+    fs = Flowsheet("warnings")
+    f = fs.add(U.Feed("F")).pin(x=60, y=100)
+    p = fs.add(U.Product("P")).pin(x=400, y=100)
+    fs.connect(f.outlet, p.inlet)
+    fs.add_instrument("FCI", 1, near=f)  # I, then C: out of ISO 15519-2 order
+    fs.to_svg()
+    assert "letter-sequence" in [w.code for w in fs.warnings]
+    assert all(w.severity == "warning" for w in fs.warnings)
