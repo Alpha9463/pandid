@@ -141,13 +141,16 @@ def main():
     # Left as a variant: no class in ``pandid.devices`` covers the
     # liquid belt filter, and ``DustCollector``'s ``belt`` aliases to
     # ``gas_belt``, a different symbol on a gas casing.
+    # A belt filter makes **two products** and has a nozzle for each: the
+    # filtrate leaves ``outlet`` on the east wall and the cake leaves
+    # ``cake`` through the floor. Both are reached by ``port()`` rather
+    # than as attributes, because only the four cake-forming variants
+    # carry them -- ``f.cake`` type-checking clean on a bag filter would
+    # be a nozzle the machine does not have. ``wash_in`` is offered too
+    # and this sheet does not use it.
     belt_filter = fs.add(Filter("FL-401", variant="belt", width=60,
                                 height=110,
                                 description="Concentrate Belt Filter"))
-    # This tee splits; the four ``branch="inlet"`` tees elsewhere
-    # combine, and are drawn identically, since a tee does not know
-    # which way its branch runs.
-    cake_tee = fs.add(Tee())
     filtrate = fs.add(Product("Filtrate", reference="PCD-402"))
     # Cake is dropped onto a belt, not piped into it, so the tail nozzle
     # comes off the top face rather than off the end.
@@ -243,17 +246,17 @@ def main():
     suction_red.pin(port="outlet", x=478, y=suction_y)
     disch_red.pin(port="inlet", x=624, y=suction_y)
     belt_filter.pin(port="inlet", x=670, y=suction_y)
+    cake_x = belt_filter.pin_.x + port_offset(belt_filter, "cake")[0]
 
-    cake_tee.pin(port="inlet", x=740, y=suction_y)
-    # Set west of FH-401's tag rather than under the dryer: the burner's
-    # plate is wider than its box, so a flag further east has that plate
-    # through its own outline.
-    filtrate.pin(port="inlet", x=770, y=560)
+    # Straight out of the east wall on the filter's own elevation, which
+    # is what the filtrate leg is: nothing is drawn between the machine
+    # and the boundary.
+    filtrate.pin(port="inlet", x=800, y=suction_y)
 
-    # The belt runs under the cake leg, so the cake drops onto its tail
-    # and throws off into the breeching.
+    # The belt runs under the filter, so the cake drops out of the floor
+    # onto its tail and throws off into the breeching.
     belt_y, dryer_y = 480.0, 490.0
-    conveyor.pin(port="feed", x=cake_tee.pin_.x + tee_w + 38, y=belt_y)
+    conveyor.pin(port="feed", x=cake_x, y=belt_y)
     breeching.pin(port="inlet", x=950, y=dryer_y)
     dryer.pin(port="feed", x=1000, y=dryer_y)
 
@@ -305,11 +308,14 @@ def main():
 
     fs.connect(underflow_pump.discharge, disch_red.inlet, name="S-409")
     fs.connect(disch_red.outlet, belt_filter.inlet, name="S-409")
-    fs.connect(belt_filter.outlet, cake_tee.inlet, name="S-409")
 
-    fs.connect(cake_tee.branch, filtrate.inlet, name="S-410")
+    # Two products out of one machine, on the two nozzles the machine
+    # has. Teeing off the discharge and calling one leg the cake said
+    # the solids leave in the liquid line, which is the opposite of what
+    # a belt filter does.
+    fs.connect(belt_filter.port("outlet"), filtrate.inlet, name="S-410")
 
-    fs.connect(cake_tee.outlet, conveyor.feed, name="S-411")
+    fs.connect(belt_filter.port("cake"), conveyor.feed, name="S-411")
     fs.connect(conveyor.discharge, breeching.inlet, name="S-411")
 
     fs.connect(air.outlet, heater.inlet, name="S-412")
@@ -360,9 +366,9 @@ def main():
     )
 
     # --- Sheet furniture ----------------------------------------------
-    # include= is named row by row in process order. The five tees, the
+    # include= is named row by row in process order. The four tees, the
     # funnel, the two reducers and the exhaust head are left out: all
-    # nine are bulk items bought by the line.
+    # eight are bulk items bought by the line.
     fs.add_annotation(equipment_list(fs, align="top", include=[
         "TK-401", "P-402", "TH-401", "P-401", "FL-401", "CV-401", "FH-401",
         "DR-401", "CY-401", "MS-401", "SC-401", "BL-401",

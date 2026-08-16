@@ -2978,12 +2978,12 @@ sheet uses it or not, and leaving one open is a drawing decision. Declaring one
 per variant rather than per class changes nothing here: a press run without a
 displacement wash is a real machine, and a sheet that lets the cake fall to a
 bin off the drawing is a real sheet. Across the twenty examples in
-`examples/` 433 ports carry no stream and every one of them is one of those:
+`examples/` 431 ports carry no stream and every one of them is one of those:
 302 signal connections, 31 exchanger utility sides, 24 duties, 18 reliefs,
-18 drains, 14 vents, 8 station drain outlets, and 18 further nozzles a class
+18 drains, 14 vents, 8 station drain outlets, and 16 further nozzles a class
 offers and a service did not need -- four agitator drives, an ion exchanger's
-regenerant pair, a filter press's wash and cake, and a handful of spare
-vessel and column nozzles. None is reported.
+regenerant pair, two filter presses' displacement wash, and a handful of
+spare vessel and column nozzles. None is reported.
 What is reported is a *count that went unmet*, which is why the singular
 spelling is silent too — a one-feed column's nozzle is called `feed`, not
 `feed_1`, and no number was ever written down for it.

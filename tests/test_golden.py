@@ -745,10 +745,6 @@ def _ethanol_pfd() -> Flowsheet:
             description="Membrane Pressure Filter Press",
         )
     )
-    # The press's discharge parts the same way, but the size and the service
-    # both change across it, so this one breaks the run's line number.
-    disch = fs.add(units.Tee())
-    disch.new_line_number = True
     belt = fs.add(units.Conveyor("BC-301", length=120, description="Filter Cake Conveyor Belt"))
     belt.nozzle("feed", "N")  # cake is dropped onto the belt, not piped
 
@@ -790,14 +786,17 @@ def _ethanol_pfd() -> Flowsheet:
     water.pin(x=140, y=mix1_y + 0.573 * mix1_h - 25)
 
     mix2.pin(x=1120, y=hx_axis_y - 15)  # in_1 level with the cooler
-    press_h = 60.0
     press.pin(x=1250, y=hx_axis_y - 20)
-    press_out_y = hx_axis_y - 20 + press_h / 2  # discharge, mid-shell
-    disch.pin(x=1400, y=press_out_y - tee_w / 2)
-    effluent.pin(x=1540, y=press_out_y - 25)  # flag tip on the filtrate leg
-    belt_y, belt_tail = 715.0, 10.0  # tail nozzle, in from the end
-    belt.pin(x=disch.pin_.x + tee_w / 2 - belt_tail, y=belt_y)
-    cake.pin(x=1546, y=belt_y + belt_tail - 25)
+    filtrate_y = press.pin_.y + port_offset(press, "outlet")[1]
+    cake_x = press.pin_.x + port_offset(press, "cake")[0]
+    effluent.pin(port="inlet", x=1440, y=filtrate_y)
+    belt_y = 715.0
+    belt.pin(port="feed", x=cake_x, y=belt_y)
+    cake.pin(
+        port="inlet",
+        x=belt.pin_.x + port_offset(belt, "discharge")[0] + 40,
+        y=belt.pin_.y + port_offset(belt, "discharge")[1],
+    )
 
     # Declared in stream-number order, which is the order the table reads. The
     # overhead and the reboiler circuit are each one service, so every segment
@@ -821,9 +820,9 @@ def _ethanol_pfd() -> Flowsheet:
     fs.connect(mix1.outlet, mix2.in_2, name="S-308")
 
     fs.connect(mix2.outlet, press.inlet, name="S-309")
-    fs.connect(press.outlet, disch.inlet, name="S-309")
-    fs.connect(disch.outlet, effluent.inlet, name="S-310")
-    fs.connect(disch.branch, belt.feed, name="S-501")
+    # Two products out of one machine, on the two nozzles the machine has.
+    fs.connect(press.port("outlet"), effluent.inlet, name="S-310")
+    fs.connect(press.port("cake"), belt.feed, name="S-501")
     fs.connect(belt.discharge, cake.inlet, name="S-501")
 
     for s in fs.streams:
@@ -1509,7 +1508,6 @@ def _mineral_dewatering() -> Flowsheet:
             "FL-401", variant="belt", width=60, height=110, description="Concentrate Belt Filter"
         )
     )
-    cake_tee = fs.add(units.Tee())
     filtrate = fs.add(units.Product("Filtrate", reference="PCD-402"))
     conveyor = fs.add(units.Conveyor("CV-401", length=150, description="Filter Cake Conveyor"))
     conveyor.nozzle("feed", "N")
@@ -1567,12 +1565,12 @@ def _mineral_dewatering() -> Flowsheet:
     suction_red.pin(port="outlet", x=478, y=suction_y)
     disch_red.pin(port="inlet", x=624, y=suction_y)
     belt_filter.pin(port="inlet", x=670, y=suction_y)
+    cake_x = belt_filter.pin_.x + port_offset(belt_filter, "cake")[0]
 
-    cake_tee.pin(port="inlet", x=740, y=suction_y)
-    filtrate.pin(port="inlet", x=770, y=560)
+    filtrate.pin(port="inlet", x=800, y=suction_y)
 
     belt_y, dryer_y = 480.0, 490.0
-    conveyor.pin(port="feed", x=cake_tee.pin_.x + tee_w + 38, y=belt_y)
+    conveyor.pin(port="feed", x=cake_x, y=belt_y)
     breeching.pin(port="inlet", x=950, y=dryer_y)
     dryer.pin(port="feed", x=1000, y=dryer_y)
 
@@ -1610,11 +1608,11 @@ def _mineral_dewatering() -> Flowsheet:
 
     fs.connect(underflow_pump.discharge, disch_red.inlet, name="S-409")
     fs.connect(disch_red.outlet, belt_filter.inlet, name="S-409")
-    fs.connect(belt_filter.outlet, cake_tee.inlet, name="S-409")
 
-    fs.connect(cake_tee.branch, filtrate.inlet, name="S-410")
+    # Two products out of one machine, on the two nozzles the machine has.
+    fs.connect(belt_filter.port("outlet"), filtrate.inlet, name="S-410")
 
-    fs.connect(cake_tee.outlet, conveyor.feed, name="S-411")
+    fs.connect(belt_filter.port("cake"), conveyor.feed, name="S-411")
     fs.connect(conveyor.discharge, breeching.inlet, name="S-411")
 
     fs.connect(air.outlet, heater.inlet, name="S-412")

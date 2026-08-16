@@ -96,11 +96,15 @@ def main():
                           description="Flocculant Activation Mixer Tank"))
     mix2 = fs.add(Mixer("M-302", n_inlets=2,
                         description="Beer Flocculant Mixer Tank"))
+    # A press makes **two products** and has a nozzle for each: the
+    # filtrate leaves ``outlet`` on the east wall and the cake leaves
+    # ``cake`` through the floor. Reached by ``port()`` rather than as an
+    # attribute, because only the cake-forming variants have them --
+    # ``press.cake`` type-checking clean on a bag filter would be a
+    # nozzle the machine does not have. ``wash_in`` is offered too and
+    # this sheet does not use it.
     press = fs.add(Filter("F-301", variant="press", width=120, height=60,
                           description="Membrane Pressure Filter Press"))
-    # Size and service both change here, so the number breaks.
-    disch = fs.add(Tee())
-    disch.new_line_number = True
     belt = fs.add(Conveyor("BC-301", length=120,
                            description="Filter Cake Conveyor Belt"))
     belt.nozzle("feed", "N")            # cake is dropped onto the belt, not piped
@@ -152,14 +156,17 @@ def main():
     water.pin(x=140, y=mix1_y + 0.573 * mix1_h - 25)
 
     mix2.pin(x=1120, y=hx_axis_y - 15)              # in_1 level with the cooler
-    press_h = 60.0
     press.pin(x=1250, y=hx_axis_y - 20)
-    press_out_y = hx_axis_y - 20 + press_h / 2      # discharge, mid-shell
-    disch.pin(x=1400, y=press_out_y - tee_w / 2)
-    effluent.pin(x=1540, y=press_out_y - 25)        # flag tip on the filtrate leg
-    belt_y, belt_tail = 715.0, 10.0                 # tail nozzle, in from the end
-    belt.pin(x=disch.pin_.x + tee_w / 2 - belt_tail, y=belt_y)
-    cake.pin(x=1546, y=belt_y + belt_tail - 25)
+    filtrate_y = press.pin_.y + port_offset(press, "outlet")[1]
+    cake_x = press.pin_.x + port_offset(press, "cake")[0]
+    effluent.pin(port="inlet", x=1440, y=filtrate_y)
+    # The belt runs under the press, so the cake drops out of the floor
+    # onto its tail and is thrown off the far end.
+    belt_y = 715.0
+    belt.pin(port="feed", x=cake_x, y=belt_y)
+    cake.pin(port="inlet",
+             x=belt.pin_.x + port_offset(belt, "discharge")[0] + 40,
+             y=belt.pin_.y + port_offset(belt, "discharge")[1])
 
     # --- Connections --------------------------------------------------
     # Declared in stream-number order, which is the order the table
@@ -183,9 +190,12 @@ def main():
     fs.connect(mix1.outlet, mix2.in_2, name="S-308")
 
     fs.connect(mix2.outlet, press.inlet, name="S-309")
-    fs.connect(press.outlet, disch.inlet, name="S-309")
-    fs.connect(disch.outlet, effluent.inlet, name="S-310")
-    fs.connect(disch.branch, belt.feed, name="S-501")
+    # Two products out of one machine, on the two nozzles the machine
+    # has. Teeing off the filtrate and calling one leg the cake said the
+    # solids leave in the liquid line, which is the opposite of what a
+    # press does.
+    fs.connect(press.port("outlet"), effluent.inlet, name="S-310")
+    fs.connect(press.port("cake"), belt.feed, name="S-501")
     fs.connect(belt.discharge, cake.inlet, name="S-501")
 
     for s in fs.streams:
