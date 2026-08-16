@@ -555,6 +555,14 @@ reader would otherwise take them for working code.
   nothing was found rather than nothing was looked for. Copy it if you want two
   renders' findings.
 
+- **`Instrument("FT101")` is now `FT-101`**, the same instrument
+  `Instrument("FT", 101)` and `Instrument("FT-101")` build. The un-hyphenated
+  spelling used to keep `FT101` as its name and tag.
+
+- **`Tee.branch_direction` is read off the branch nozzle** and can no longer be
+  assigned. It was documented read-only and was a plain attribute, so writing
+  it moved the word and left the nozzle where it was.
+
 - **A composition that grows the box left its port series behind.**
   `PortSeries` places its members in absolute coordinates along a face, and
   `compose` carried it across untouched — so a part drawn *above* a body left a

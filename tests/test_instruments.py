@@ -91,8 +91,42 @@ def test_tag_splits_type_from_number():
 def test_combined_tag_still_accepted():
     for tag, expect in (("FT-101", ("FT", "101")), ("PT101A", ("PT", "101A")), ("X", ("X", ""))):
         inst = U.Instrument(tag)
-        assert inst.name == tag  # the caller's string is the tag verbatim
         assert (inst.type, inst.number) == expect
+
+
+def test_the_three_spellings_of_one_tag_are_one_instrument():
+    """``split_tag`` promises they are the same request, so the name is too.
+
+    Until #292 the name was worked out beside the split rather than from
+    it, so ``Instrument("FT101")`` came out named and tagged ``FT101``
+    while its balloon drew ``FT`` over ``101``. The equipment list, every
+    cross-reference and the spec round trip then carried a tag no other
+    spelling of the same request produced.
+    """
+    built = [U.Instrument("FT", 101), U.Instrument("FT-101"), U.Instrument("FT101")]
+    assert {(i.name, i.tag, i.type, i.number) for i in built} == {("FT-101", "FT-101", "FT", "101")}
+
+
+def test_a_tag_that_is_all_letters_or_all_digits_keeps_itself():
+    """Nothing to join, so nothing is joined -- no leading hyphen."""
+    assert U.Instrument("X").name == "X"
+    assert U.Instrument("101").name == "101"
+
+
+@pytest.mark.parametrize("spelling", [("FT", 101), ("FT-101",), ("FT101",)])
+def test_an_instrument_comes_back_from_the_spec_under_the_tag_it_went_out_with(spelling):
+    """Asserted on the rebuilt instrument, not on its dict.
+
+    The spec writes the *split* -- ``type`` and ``number`` -- so both sides of
+    a dict comparison agree however the name was worked out. The disagreement
+    is in the object: ``Instrument("FT101")`` was named ``FT101`` and came back
+    named ``FT-101``, renamed by a round trip through a file nobody had edited,
+    and every cross-reference to it by name went with it.
+    """
+    fs = Flowsheet("s")
+    inst = fs.add(U.Instrument(*spelling))
+    (rebuilt,) = Flowsheet.from_dict(fs.to_dict()).units
+    assert (rebuilt.name, rebuilt.tag) == (inst.name, inst.tag) == ("FT-101", "FT-101")
 
 
 def test_balloon_draws_bare_number_not_the_whole_tag():

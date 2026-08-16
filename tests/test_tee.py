@@ -421,6 +421,61 @@ def test_the_spec_writes_the_branch_direction_only_when_it_is_a_return(cv303):
     assert [t.get("branch") for t in tees] == [None, None, None, "inlet"]
 
 
+# ---------------------------------------------------------------------------
+# branch_direction is the port's own (#292)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("branch", ["outlet", "inlet"])
+def test_the_branch_direction_is_read_off_the_nozzle(branch):
+    tee = units.Tee("T-1", branch=branch)
+    assert tee.branch_direction == tee.ports["branch"].direction == branch
+
+
+def test_the_branch_direction_cannot_be_assigned():
+    """It was a plain attribute until #292, and assigning it moved the word.
+
+    The nozzle stayed where it was, so the tee reported a return while its
+    branch went on taking flow off the run -- and :mod:`pandid.spec` wrote the
+    word rather than the nozzle, so the file said the same wrong thing.
+    """
+    tee = units.Tee("T-1")
+    with pytest.raises(AttributeError, match="read-only"):
+        tee.branch_direction = "inlet"
+    assert tee.branch_direction == tee.ports["branch"].direction == "outlet"
+
+
+def test_the_branch_direction_is_derived_and_so_cannot_shadow_the_nozzle():
+    """One fact, read in both places.
+
+    Reaching into ``ports`` is not an API this class offers -- it is how the
+    test says there is nothing kept beside the nozzle to fall out of step with
+    it. The serialiser is asked in the same breath, because #292 was as much
+    about what went into the file as about what the object reported.
+    """
+    fs = Flowsheet("s")
+    tee = fs.add(units.Tee("T-1"))
+    tee.ports["branch"].direction = "inlet"
+    assert tee.branch_direction == "inlet"
+    (entry,) = fs.to_dict()["units"]
+    assert entry["branch"] == "inlet"
+
+
+@pytest.mark.parametrize("branch", ["outlet", "inlet"])
+def test_a_tee_comes_back_from_the_spec_branching_the_way_it_went_in(branch):
+    """Asserted on the rebuilt tee, not on its dict.
+
+    A dict comparison is satisfied by a value the writer drops and the reader
+    never sees, which is exactly the shape of #276 and #316. The question here
+    is what the *object* on the far side does, so that is what is asked.
+    """
+    fs = Flowsheet("s")
+    fs.add(units.Tee("T-1", branch=branch))
+    (rebuilt,) = Flowsheet.from_dict(fs.to_dict()).units
+    assert rebuilt.branch_direction == branch
+    assert rebuilt.ports["branch"].direction == branch
+
+
 def test_only_a_tee_takes_a_branch_direction():
     from pandid.spec import SpecError
 
