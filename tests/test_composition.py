@@ -720,11 +720,19 @@ def test_the_parts_that_ship_are_available_and_unused():
 #: backfill over the vendored set is still its own change, against Table 2, one
 #: drawing at a time.
 #:
-#: These two are not backfill. Neither existed before the Table 2 row was
-#: measured -- ``crusher/default`` *is* item 11.2 and ``mill/default`` *is*
-#: item 11.8, drawn from the rows and from nothing else -- so the claim is the
-#: same kind of claim a composition makes, and is checkable the same way.
-_NUMBERED_WHOLE_DRAWINGS = {"crusher/default": "X8085", "mill/default": "X8086"}
+#: These are not backfill. None existed before the Table 2 row was measured --
+#: ``crusher/default`` *is* item 11.2 and ``mill/default`` *is* item 11.8,
+#: drawn from the rows and from nothing else -- so the claim is the same kind
+#: of claim a composition makes, and is checkable the same way. The three
+#: group-18 drawings joined them the same way: a screw conveyor and the two
+#: bucket elevators, none of which draw.io has a stencil for either.
+_NUMBERED_WHOLE_DRAWINGS = {
+    "crusher/default": "X8085",
+    "mill/default": "X8086",
+    "conveyor/screw": "X8063",
+    "elevator/default": "X8065",
+    "elevator/z_form": "X8066",
+}
 
 
 def test_a_registration_number_is_claimed_by_a_composition_or_by_a_measured_body():

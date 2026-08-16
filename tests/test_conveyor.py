@@ -1,16 +1,25 @@
-"""The belt conveyor: the one symbol drawn to a length the drawing gives it.
+"""ISO 10628-2 group 18's solids handling: the conveyors and the elevators.
 
-The defect these guard against is the reason it is built rather than scaled. An
-ordinary symbol is drawn once and placed with ``<use width= height=>`` against a
-fixed ``viewBox``, so a box of a different aspect ratio scales it unevenly --
-which would draw a conveyor's rollers as ellipses, wider the longer the belt. So
-the assertions here are about the rollers being the *same circle* at every
-length and about the scale factor being exactly 1, not about the box getting
-wider, which would pass either way.
+The two conveyors are the symbols drawn to a length the *drawing* gives them,
+and the defect that guards against is the reason they are built rather than
+scaled. An ordinary symbol is drawn once and placed with ``<use width= height=>``
+against a fixed ``viewBox``, so a box of a different aspect ratio scales it
+unevenly -- which would draw a belt's rollers as ellipses, wider the longer the
+belt. So the assertions here are about the rollers being the *same circle* at
+every length and about the scale factor being exactly 1, not about the box
+getting wider, which would pass either way.
+
+The screw conveyor is built for a related but different reason and the tests
+below say which: it has no circle in it, and what a stretch ruins is the
+*pitch* of its flight. The bucket elevators are not built to a size at all --
+an elevator's lift is not a number a flowsheet states -- so what is checked
+about them is their geometry against Table 2 and the end of the machine each
+nozzle is on.
 """
 
 from __future__ import annotations
 
+import re
 import xml.etree.ElementTree as ET
 
 import pytest
@@ -22,8 +31,16 @@ from pandid.render.symbols import (
     CONVEYOR_LENGTH,
     CONVEYOR_MIN_LENGTH,
     CONVEYOR_ROLLER,
+    SCREW_HEIGHT,
+    SCREW_MARGIN,
+    SCREW_MIN_LENGTH,
+    SCREW_MODULE,
+    SCREW_PITCH,
+    SCREW_REACH,
+    SCREW_TURN,
     conveyor_symbol,
     default_registry,
+    screw_conveyor_symbol,
 )
 
 SVG = "{http://www.w3.org/2000/svg}"
@@ -284,3 +301,187 @@ def test_the_default_length_is_the_stencils_own_proportion():
     whose rollers are r=10 centred 60 apart -- so 80 overall."""
     assert (CONVEYOR_ROLLER, CONVEYOR_LENGTH) == (10.0, 80.0)
     assert U.Conveyor("BC-301").length == CONVEYOR_LENGTH
+
+
+# ---------------------------------------------------------------------------
+# The screw conveyor, ISO 10628-2 item 18.5 X8063
+# ---------------------------------------------------------------------------
+
+
+def _screw_turns(length):
+    """Each turn of the flight, as the list of points it is drawn through.
+
+    The axis is the path's first run and is skipped: what these tests are
+    about is the turns on it.
+    """
+    svg = screw_conveyor_symbol(length).svg
+    body = re.search(r'<path d="(M 0 .*?)"', svg).group(1)
+    runs = [r.strip() for r in body.split("M ") if r.strip()]
+    return [
+        [tuple(float(v) for v in p.split()) for p in run.split("L ") if p.strip()]
+        for run in runs[1:]
+    ]
+
+
+def test_the_screw_is_the_construction_row_18_5_draws():
+    """Measured off row 18.5 in grid modules: a casing 15 M x 6 M, the screw's
+    axis along it, and turns 4 M wide reaching 2 M either side of that axis,
+    starting 2 M inside the tail and repeating every 7 M.
+
+    Written here in the module the drawing is built at, so a reader with the
+    standard can count dots. The casing's *length* is not among them: it is
+    whatever the author asks for, and 15 M is only what the row happens to draw.
+    """
+    assert SCREW_HEIGHT == 6 * SCREW_MODULE
+    assert (SCREW_TURN, SCREW_REACH) == (4 * SCREW_MODULE, 2 * SCREW_MODULE)
+    assert (SCREW_PITCH, SCREW_MARGIN) == (7 * SCREW_MODULE, 2 * SCREW_MODULE)
+    # Row 18.5's own casing carries exactly the two turns it draws.
+    assert len(_screw_turns(15 * SCREW_MODULE)) == 2
+
+
+@pytest.mark.parametrize("length", [SCREW_MIN_LENGTH, 80, 120, 200, 400])
+def test_a_turn_of_the_flight_is_the_same_turn_at_every_length(length):
+    """The screw's answer to the belt's rollers.
+
+    A screw has no circle in it, so nothing here would come out an ellipse --
+    what a stretched drawing would get wrong is the *pitch*, and a 400-unit
+    screw showing the same two turns as an 80-unit one reads as a flight every
+    four metres. So the turns keep their size and the casing gets more of them.
+    """
+    turns = _screw_turns(length)
+    assert turns, "a screw at a legal length drew no flight at all"
+    axis = SCREW_HEIGHT / 2
+    for pts in turns:
+        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+        assert max(xs) - min(xs) == pytest.approx(SCREW_TURN)
+        assert (min(ys), max(ys)) == pytest.approx((axis - SCREW_REACH, axis + SCREW_REACH))
+    starts = [min(p[0] for p in pts) for pts in turns]
+    assert starts[0] == pytest.approx(SCREW_MARGIN)
+    for a, b in zip(starts, starts[1:]):
+        assert b - a == pytest.approx(SCREW_PITCH)
+    # The last one leaves the head's clear casing rather than running out
+    # through the end wall.
+    assert max(p[0] for p in turns[-1]) <= length - SCREW_MARGIN + GEOM_TOL
+
+
+def test_a_longer_screw_gets_more_turns_rather_than_longer_ones():
+    counts = [len(_screw_turns(n)) for n in (40, 80, 200, 400)]
+    assert counts == sorted(counts) and counts[0] < counts[-1]
+
+
+def test_the_screw_is_drawn_from_its_own_drawing_and_not_the_belts():
+    """``_BUILT_TO_SIZE`` was keyed ``("conveyor", None)`` while a conveyor was
+    a belt and nothing else, and a kind-wide key would have handed the screw the
+    belt's builder -- a belt drawn at the screw's length, under the screw's tag.
+
+    Checked through ``for_unit``, which is what a sheet actually calls.
+    """
+    screw = default_registry.for_unit(U.Conveyor("SC-301", variant="screw", length=140))
+    belt = default_registry.for_unit(U.Conveyor("BC-301", length=140))
+    assert screw.width == belt.width == 140
+    assert screw.height == SCREW_HEIGHT and belt.height == 2 * CONVEYOR_ROLLER
+    assert "sym_conveyor_screw" in screw.svg
+    assert screw.svg != belt.svg
+
+
+def test_the_two_conveyors_put_their_nozzles_where_their_rows_do():
+    """A belt is open and is loaded and unloaded at its two ends; a screw runs
+    enclosed and is loaded and discharged through spouts. Table 2 ticks them
+    that way round, and so does this.
+    """
+    belt = default_registry.get("conveyor")
+    screw = default_registry.get("conveyor", "screw")
+    assert belt.ports["feed"][0] == 0.0
+    assert set(belt.port_faces["feed"]) == {"W", "N"}
+    assert set(belt.port_faces["discharge"]) == {"E", "S"}
+    # The screw's home faces are the other pair: in on top, out underneath.
+    assert screw.ports["feed"][1] == 0.0
+    assert screw.ports["discharge"][1] == SCREW_HEIGHT
+    assert set(screw.port_faces["feed"]) == {"N", "W"}
+    assert set(screw.port_faces["discharge"]) == {"S", "E"}
+
+
+def test_a_screw_too_short_for_one_turn_is_refused_in_its_own_words():
+    """And not in the belt's. The two minima are equal by arithmetic, so only
+    the sentence tells an author which machine ran out of room.
+    """
+    with pytest.raises(ValueError, match=r"screw conveyor can be drawn"):
+        U.Conveyor("SC-301", variant="screw", length=SCREW_MIN_LENGTH - 1)
+    with pytest.raises(ValueError, match=r"rollers.*would overlap"):
+        U.Conveyor("BC-301", length=CONVEYOR_MIN_LENGTH - 1)
+    assert U.Conveyor("SC-302", variant="screw", length=SCREW_MIN_LENGTH)
+
+
+def test_a_screw_conveyor_renders_and_meets_its_streams():
+    fs = Flowsheet("screw")
+    feed, out = fs.add(U.Feed("IN")), fs.add(U.Product("OUT"))
+    sc = fs.add(U.Conveyor("SC-301", variant="screw", length=140))
+    fs.connect(feed.outlet, sc.feed)
+    fs.connect(sc.discharge, out.inlet)
+    assert fs.validate() == []
+    assert "<svg" in fs.to_svg()
+
+
+# ---------------------------------------------------------------------------
+# The bucket elevators, ISO 10628-2 items 18.7 X8065 and 18.8 X8066
+# ---------------------------------------------------------------------------
+
+
+def test_the_elevators_are_the_boxes_their_rows_draw():
+    """Row 18.7's casing is 8 M x 12 M and row 18.8's Z is 20 M x 12 M, both on
+    the 10-unit module ``iso_parts`` states. Same height, because they are the
+    same machine.
+    """
+    straight = default_registry.get("elevator")
+    z = default_registry.get("elevator", "z_form")
+    assert (straight.width, straight.height) == (80.0, 120.0)
+    assert (z.width, z.height) == (200.0, 120.0)
+    assert (straight.iso_reg, z.iso_reg) == ("X8065", "X8066")
+    # Four pulleys on the Z-form against the straight lift's two: one at each
+    # end of the belt loop, and one at each corner it turns through.
+    assert straight.svg.count("<circle") == 2
+    assert z.svg.count("<circle") == 4
+
+
+def test_an_elevator_takes_material_in_low_and_delivers_it_high():
+    """The whole of what the machine is for, and the one thing a reader must be
+    able to see. Both variants: in at the boot, out at the head, so the feed
+    sits below the discharge on the drawn box.
+    """
+    for variant in ("default", "z_form"):
+        sym = default_registry.get("elevator", variant)
+        assert sym.ports["feed"][1] > sym.ports["discharge"][1], (
+            f"elevator/{variant} draws its feed above its discharge"
+        )
+        assert sym.gravity_fixed, f"elevator/{variant} may be turned upside down"
+
+
+def test_the_straight_lift_still_offers_the_vertical_chutes_row_18_7_ticks():
+    """The home nozzles depart from the row -- see ``symbols._BUCKET_ELEVATOR``
+    for why -- and the departure is only about which face is *default*. Table
+    2's own two directions are still reachable.
+    """
+    sym = default_registry.get("elevator")
+    assert set(sym.port_faces["feed"]) == {"W", "N"}
+    assert set(sym.port_faces["discharge"]) == {"E", "S"}
+    assert sym.port_faces["feed"]["N"][1] == 0.0
+    assert sym.port_faces["discharge"]["S"][1] == sym.height
+
+
+def test_an_elevator_is_not_sized_by_a_length():
+    """A conveyor's run is a number an author states; a lift is not, so there
+    is nothing to pass and both drawings are fixed.
+    """
+    with pytest.raises(TypeError):
+        U.Elevator("BE-301", length=140)  # type: ignore[call-arg]
+
+
+@pytest.mark.parametrize("variant", ["default", "z_form"])
+def test_an_elevator_renders_and_meets_its_streams(variant):
+    fs = Flowsheet("lift")
+    feed, out = fs.add(U.Feed("IN")), fs.add(U.Product("OUT"))
+    be = fs.add(U.Elevator("BE-301", variant=variant))
+    fs.connect(feed.outlet, be.feed)
+    fs.connect(be.discharge, out.inlet)
+    assert fs.validate() == []
+    assert "<svg" in fs.to_svg()

@@ -501,7 +501,7 @@ from pandid import units
 sifter = units.Separator("SC-101", variant="sifter")
 ```
 
-`units.Kind(variant=…)` is the escape hatch. 98 of the 171 registered drawings
+`units.Kind(variant=…)` is the escape hatch. 100 of the 174 registered drawings
 get no class of their own, and this is how you reach them; see
 [Variants](#variants) for the list. Where a class exists, name it.
 
@@ -565,7 +565,8 @@ Each entry is `port` *(direction / role)*.
 | `Dryer` | `dryer` | `feed` *(in/feed)*, `product` *(out)* |
 | `Crusher` | `crusher` | `feed` *(in/feed)*, `discharge` *(out)* |
 | `Mill` | `mill` | `feed` *(in/feed)*, `discharge` *(out)* |
-| `Conveyor` | `conveyor` | `feed` *(in/feed)*, `discharge` *(out)* |
+| `Conveyor` | `conveyor` | `feed` *(in/feed)*, `discharge` *(out)*; the belt anchors them at its two ends and the `screw` casing on its top and underside |
+| `Elevator` | `elevator` | `feed` *(in/feed)* at the boot, `discharge` *(out)* at the head |
 | `Reducer` | `reducer` | `inlet` *(in)*, `outlet` *(out)* |
 | `Tee` | `tee` | `inlet` *(in)*, `outlet` *(out)*, `branch` *(out, or in with `branch="inlet"`)* |
 | `Fitting` | `fitting` | `inlet` *(in)*, `outlet` *(out)* |
@@ -795,6 +796,7 @@ base has not, `-` one it drops. The bases are in the [Port table](#port-table).
 | `ImpactMill` | `mill` | `Mill` | |
 | `RollerMill` | `mill` | `Mill` | |
 | `VibratingMill` | `mill` | `Mill` | |
+| `ScrewConveyor` | `conveyor` | `Conveyor` | |
 | `ControlValve` | `valve` | `Valve` | |
 | `SolenoidValve` | `valve` | `Valve` | |
 | `ReliefValve` | `valve` | `Valve` | |
@@ -1331,6 +1333,8 @@ first listed is what the class draws when it is built by name alone.
 | `RollerMill` | `mill` | `roller` (as `default`) |
 | `VibratingMill` | `mill` | `vibration` (as `default`) |
 | `Mill` | `mill` | `default` — ISO 10628-2 item 11.8 X8086, and what a ball or rod mill is drawn as: the standard tabulates neither, and this is the body its four characteristics go in |
+| `ScrewConveyor` | `conveyor` | `screw` (as `default`) — ISO 10628-2 item 18.5 X8063. Built to `length=` rather than scaled to it, as the belt on `Conveyor` is |
+| `Elevator` | `elevator` | `default` — the bucket elevator, ISO 10628-2 item 18.7 X8065 — and `z_form`, item 18.8 X8066, the same lift with a horizontal run at each end |
 | `ControlValve` | `valve` | `control` (as `default`), `butterfly_pneumatic` |
 | `SolenoidValve` | `valve` | `solenoid` (as `default`) |
 | `ReliefValve` | `valve` | `relief` (as `default`), `psv` |
@@ -3029,7 +3033,7 @@ What a flip may not do is reverse an arrow the artwork carries — see
 below, which is handled by drawing rather than by refusing, for exactly the
 reason this paragraph gives.
 
-The 54 marked symbols, and what in each one's artwork only means one thing one
+The 56 marked symbols, and what in each one's artwork only means one thing one
 way up:
 
 | Symbols | Why |
@@ -3043,6 +3047,7 @@ way up:
 | `column` `default` `packed`, `reactor` `default` `plain` | liquid running down over trays or packing while vapour rises, and an agitator hanging in from above |
 | `vent` `default` `breather` `exhaust_head`, `funnel` | open ends: what leaves rises, and an open end drawn pointing down is a drain |
 | `crusher` `default` `cone` `hammer` `impact` `jaw` `roller`, `mill` `default` `hammer` `impact` `roller` `vibration` | ISO group 11's trapezoid is wide at the mouth and narrow at the throat, with its feed tick above it and its discharge tick below: turned, the machine is fed through the opening its product falls out of |
+| `elevator` `default` `z_form` | a machine whose purpose is to raise material: in at the boot, out at the head. Turned, it lowers it. The conveyors beside it are not marked, since a belt or a screw runs whichever way the plant needs |
 | `dryer` `spray` `fluidized_bed`, `filter` `gas` `gas_fixed_bed` `gas_belt` | solids that fall: an atomiser in the roof, a bed on its distributor plate, and the dust hopper each gas filter casing draws under its medium |
 
 Not marked, and deliberately: a pump, a compressor, a valve, an in-line fitting
@@ -3787,7 +3792,7 @@ against one. What it follows, feature by feature:
 - **Symbols where gravity is a functionality** are not turned. **ISO 15519-1
   §11.4.2** excepts them from the general permission to turn and mirror: *"for
   example symbol 2061: Open tank or symbol X 2618: Cyclone separator … Such
-  symbols must not be turned."* 54 registered symbols carry
+  symbols must not be turned."* 56 registered symbols carry
   `Symbol.gravity_fixed`, and
   [Symbols that must not be turned](#symbols-that-must-not-be-turned) lists them.
 

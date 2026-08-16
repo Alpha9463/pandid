@@ -207,6 +207,11 @@ GRAVITY_FIXED = {
     ("mill", "impact"),
     ("mill", "roller"),
     ("mill", "vibration"),
+    # A machine whose purpose is to raise material: in at the boot, out at the
+    # head. Turned, it lowers it. The conveyors beside it are *not* marked --
+    # a belt or a screw runs whichever way the plant needs it to.
+    ("elevator", "default"),
+    ("elevator", "z_form"),
     # the three gas filters, each drawn with a dust hopper under its medium
     ("filter", "gas"),
     ("filter", "gas_fixed_bed"),

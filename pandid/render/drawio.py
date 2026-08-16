@@ -661,6 +661,17 @@ _APPROXIMATIONS = {
         None, "the trapezoid outline and its chamfered top corners"),
     ("mill", "vibration"): _Approximation(
         None, "the trapezoid outline, its chamfered top corners and the drum"),
+    # ISO group 18's solids handling. The vendored set has a "Screw Pump",
+    # which is a different machine, and nothing at all for either elevator.
+    # The screw conveyor's casing really is a rectangle, so only the flight
+    # is lost; the two elevators lose everything inside the box, and the
+    # Z-form loses the box's own shape as well.
+    ("conveyor", "screw"): _Approximation(
+        None, "the screw's axis and the turns of its flight"),
+    ("elevator", "default"): _Approximation(
+        None, "the belt, its two pulleys and the loading and discharge chutes"),
+    ("elevator", "z_form"): _Approximation(
+        None, "the Z-shaped casing, the belt's three runs and its four pulleys"),
 }
 
 #: What draw.io is asked for to draw one ISO 10628-2 supplementary part,

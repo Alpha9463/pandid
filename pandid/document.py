@@ -291,8 +291,8 @@ class TableBox:
 # ``include=`` names its rows explicitly and this rule stands aside.
 _MAJOR_EQUIPMENT = frozenset({
     "blower", "column", "compressor", "conveyor", "cooler", "crusher", "dryer",
-    "ejector", "filter", "furnace", "heater", "hex", "mill", "pump", "reactor",
-    "separator", "tank", "turbine", "vessel",
+    "ejector", "elevator", "filter", "furnace", "heater", "hex", "mill",
+    "pump", "reactor", "separator", "tank", "turbine", "vessel",
 })
 # ``block`` is absent: a block flow diagram's box stands for a whole
 # section of plant, whose equipment list is a document of its own, so
@@ -314,6 +314,7 @@ _KIND_LABELS = {
     "crusher": "Crusher",
     "dryer": "Dryer",
     "ejector": "Ejector",
+    "elevator": "Bucket Elevator",
     "feed": "Feed",
     "filter": "Filter",
     "fitting": "In-Line Fitting",

@@ -893,6 +893,178 @@ def conveyor_symbol(length: float = CONVEYOR_LENGTH) -> Symbol:
 
 
 # ----------------------------------------------------------------
+# The screw conveyor, ISO 10628-2 Table 2 item 18.5 X8063.
+#
+# **Original artwork, built to the standard's stated construction**, on
+# the rule ``pandid.render.iso_parts`` states in full: the figures in
+# Table 2 are the document and are protected, the construction they
+# specify is not. Measured off row 18.5 in grid modules -- a closed
+# casing 15 M x 6 M, the screw's centre line along its axis, and two
+# identical zigzag turns on that line, each 4 M wide and reaching 2 M
+# either side of it -- and re-drawn here on pandid's own grid.
+#
+# Built to its length rather than scaled to it, which is the belt
+# conveyor's rule above and is here for a different reason. A belt is
+# made to measure because its rollers are circles and uneven scaling
+# turns them into ellipses. A screw has no circle in it; what a stretch
+# would ruin is the *pitch*, since a 30-unit screw and a 300-unit screw
+# scaled from one drawing would show the same two turns, and the second
+# would read as a screw with a flight every four metres. So the turns
+# keep their size and a longer casing gets more of them, which is what
+# the standard's own repeating construction means.
+# ----------------------------------------------------------------
+
+#: ISO row 18.5's grid module in drawing units. Half
+#: :data:`pandid.render.iso_parts.M`, so the 6 M casing comes out 30
+#: units deep -- half again as deep as the belt conveyor's 20 and the
+#: same order as it, which is what puts the two side by side on a sheet
+#: without one of them looking like a different kind of drawing.
+SCREW_MODULE = 5.0
+
+#: The casing's depth: 6 M, off row 18.5.
+SCREW_HEIGHT = 6 * SCREW_MODULE
+
+#: One turn of the screw: 4 M along the axis, reaching 2 M either side of
+#: it, drawn as three straight runs. Table 2 draws two of these and no
+#: curve, which is how it flattens a helix into two dimensions -- the
+#: same treatment ISO item 28.6 gives a helical agitator ribbon.
+SCREW_TURN, SCREW_REACH = 4 * SCREW_MODULE, 2 * SCREW_MODULE
+
+#: How far apart consecutive turns start, and how much clear casing is
+#: left at each end. Row 18.5's casing runs x 5..20 with turns at x 7..11
+#: and x 14..18: 2 M of clear casing at each end and 7 M from one turn's
+#: start to the next's.
+SCREW_PITCH, SCREW_MARGIN = 7 * SCREW_MODULE, 2 * SCREW_MODULE
+
+#: The shortest screw that can be drawn: clear casing, one whole turn,
+#: clear casing. Equal to :data:`CONVEYOR_MIN_LENGTH` by arithmetic
+#: rather than by design, so the two conveyors happen to refuse the same
+#: number.
+SCREW_MIN_LENGTH = 2 * SCREW_MARGIN + SCREW_TURN
+
+
+def screw_too_short(length: float, owner: str = "") -> ValueError:
+    """The error for a casing with no room for a turn of the screw.
+
+    :func:`conveyor_too_short`'s twin, and separate from it because the
+    two conveyors are refused for different reasons and a reader who has
+    just been told about rollers would go looking for rollers.
+    """
+    return ValueError(
+        f"{owner + ': ' if owner else ''}length={length:g} is shorter than a "
+        f"screw conveyor can be drawn: one turn of the flight is "
+        f"{SCREW_TURN:g} with {SCREW_MARGIN:g} of casing at each end. Use "
+        f"length={SCREW_MIN_LENGTH:g} or more."
+    )
+
+
+@lru_cache(maxsize=None)
+def screw_conveyor_symbol(length: float = CONVEYOR_LENGTH) -> Symbol:
+    """A closed screw conveyor ``length`` long: ISO item 18.5 X8063.
+
+    The casing, the screw's axis along it, and as many turns of the
+    flight as fit at :data:`SCREW_PITCH`.
+
+    Nozzles on the **top and the bottom**, which is the other way round
+    from the belt above and is what row 18.5 draws: its two connection
+    ticks are vertical, one over the casing a module in from the tail and
+    one under it a module in from the head. That is the machine -- a
+    screw runs enclosed in its trough and is loaded and discharged
+    through spouts, where a belt is open and material is dropped onto it
+    anywhere along the run. The two ends are still offered as faces, for
+    the screw taking the whole discharge of the one before it.
+
+    Cached, for :func:`conveyor_symbol`'s reason.
+    """
+    if length < SCREW_MIN_LENGTH:
+        raise screw_too_short(length)
+    axis = SCREW_HEIGHT / 2
+    # As many turns as leave SCREW_MARGIN of clear casing at the head.
+    starts, x = [], SCREW_MARGIN
+    while x + SCREW_TURN <= length - SCREW_MARGIN:
+        starts.append(x)
+        x += SCREW_PITCH
+    turns = "".join(
+        f'M {x0:g} {axis:g} L {x0 + SCREW_MODULE:g} {axis - SCREW_REACH:g} '
+        f'L {x0 + 3 * SCREW_MODULE:g} {axis + SCREW_REACH:g} '
+        f'L {x0 + SCREW_TURN:g} {axis:g} '
+        for x0 in starts)
+    suffix = f"_L{length:g}"
+    svg = (
+        f'<g id="sym_conveyor_screw{suffix}">'
+        f'<rect x="0" y="0" width="{length:g}" height="{SCREW_HEIGHT:g}" '
+        f'fill="white" stroke="#111" stroke-width="2"/>'
+        f'<path d="M 0 {axis:g} L {length:g} {axis:g} {turns}" '
+        f'fill="none" stroke="#111" stroke-width="2"/>'
+        f'</g>'
+    )
+    return Symbol(
+        svg=svg, width=float(length), height=SCREW_HEIGHT,
+        ports={"feed": (SCREW_MODULE, 0.0),
+               "discharge": (length - SCREW_MODULE, SCREW_HEIGHT)},
+        port_faces={"feed": {"W": (0.0, axis)},
+                    "discharge": {"E": (float(length), axis)}},
+        id_suffix=suffix,
+        # The turns keep their size at every length, so the artwork is
+        # made to measure and must not be stretched afterwards.
+        stretchable=False,
+        iso_reg="X8063",
+    )
+
+
+# ----------------------------------------------------------------
+# The bucket elevator, ISO 10628-2 Table 2 items 18.7 X8065 and 18.8
+# X8066.
+#
+# Original artwork on the same rule as the screw above, measured off
+# rows 18.7 and 18.8 in grid modules and re-drawn at
+# :data:`pandid.render.iso_parts.M` = 10 units to the module, so a
+# coordinate below is its module count times ten.
+#
+# Both rows draw the same machine: a belt carrying buckets, closed by a
+# pulley at each end, inside a casing, with a chute where it is loaded
+# and another where it throws off. The Z-form adds two more runs and two
+# more pulleys and bends the casing round them.
+#
+# Fixed drawings rather than built to size. A bucket elevator's one
+# dimension is its lift, and unlike a conveyor's run that is not a number
+# an author states -- there is no ``length`` on the class, and the
+# pulleys are circles, so scaling would flatten them. A taller lift is
+# the same symbol.
+# ----------------------------------------------------------------
+
+#: The grid module both elevator rows are drawn on, in drawing units, and
+#: the one :mod:`pandid.render.iso_parts` states.
+_LIFT_M = 10.0
+
+#: The belt's half-width and the pulley radius, both 1 M off the rows:
+#: the two belt runs are 2 M apart and each pulley closes that gap as a
+#: half-circle, so one number is both.
+_LIFT_R = _LIFT_M
+
+
+def _lift_pulley(cx: float, cy: float) -> str:
+    """One pulley: a 1 M circle closing the belt run at its end."""
+    return (f'<circle cx="{cx:g}" cy="{cy:g}" r="{_LIFT_R:g}" '
+            f'fill="none" stroke="#111" stroke-width="2"/>')
+
+
+def _lift_chute(x: float, y: float, dx: float, dy: float) -> str:
+    """A loading or discharge chute: a 2 M straight run out from the belt
+    at ``(x, y)`` towards ``(x + dx, y)``, closed by a quarter arc back
+    to ``(x, y + dy)``.
+
+    Rows 18.7 and 18.8 draw both chutes this way and draw only the two
+    outer edges -- the third side of the quadrant is the belt run itself,
+    already drawn, so repeating it would double the stroke.
+    """
+    r = abs(dx)
+    return (f'<path d="M {x:g} {y:g} L {x + dx:g} {y:g} '
+            f'A {r:g} {r:g} 0 0 0 {x:g} {y + dy:g}" '
+            f'fill="none" stroke="#111" stroke-width="2"/>')
+
+
+# ----------------------------------------------------------------
 # The block flow diagram's box.
 #
 # An original primitive, not a stencil: a BFD block is a plain rectangle
@@ -1056,15 +1228,20 @@ def block_symbol(faces: tuple[tuple[str, str], ...], label: str = "") -> Symbol:
 # has the unit, so its drawing is made to *fit*.
 #
 # Keyed by ``(kind, variant)``, with ``None`` for the variant meaning
-# "every variant of this kind". Both entries today are kind-wide, and
-# both kinds have exactly one variant, so the two spellings say the same
-# thing about the symbols on hand -- but only one of them stays true when
-# a second variant arrives. A tray column drawn to its tray count is a
-# ``("column", "tray")`` entry, and under a kind-wide key it would have
+# "every variant of this kind". A tray column drawn to its tray count is
+# a ``("column", "tray")`` entry, and under a kind-wide key it would have
 # captured ``column/default`` and ``column/packed`` as well and drawn
 # every tower as a tray tower.
+#
+# The conveyor is that case arriving. ``("conveyor", None)`` was right
+# while a conveyor was a belt and nothing else; a screw conveyor is built
+# to its length too, but from a different drawing, and under the
+# kind-wide key it would have been handed the belt's. So the belt names
+# its own variant now, which is what the paragraph above was written
+# against.
 _BUILT_TO_SIZE: "dict[tuple[str, str | None], object]" = {
-    ("conveyor", None): lambda unit: conveyor_symbol(unit.length),
+    ("conveyor", "default"): lambda unit: conveyor_symbol(unit.length),
+    ("conveyor", "screw"): lambda unit: screw_conveyor_symbol(unit.length),
     ("block", None): lambda unit: unit.symbol(),
 }
 
@@ -2086,6 +2263,103 @@ _VIBRATION_DRUM = (
 )
 
 
+#: ISO 10628-2 item 18.7 X8065, the bucket elevator, in drawing units.
+#:
+#: **Measured off row 18.7 in grid modules:** casing x 8..16 and y 1..13,
+#: so an 8 M x 12 M box; the belt's two runs on x 11 and x 13 from y 3 to
+#: y 11, closed by a 1 M pulley at (12,3) and another at (12,11); the
+#: loading chute out of the belt's west side at y 9 and the discharge
+#: chute out of its east side at y 5. Written below with the casing's
+#: top-left corner as the origin.
+#:
+#: **Where the nozzles go, and the one place this departs from the row.**
+#: Table 2's two ticks are *vertical*, one above the loading chute's
+#: mouth and one below the discharge chute -- material is dropped in and
+#: falls out, both through spouts, which is the machine. But a tick marks
+#: a direction and a nozzle marks a place, and projecting those two
+#: directions onto the casing would put the feed on the crown and the
+#: discharge on the floor: a sheet saying that a bucket elevator delivers
+#: its product lower than it took it in, which is the one thing the
+#: machine exists not to do. So the home nozzles sit on the walls at the
+#: heights of the two chutes the row draws -- **in low on the west, out
+#: high on the east** -- and the row's own vertical directions are
+#: offered as faces beside them. An author who wants ISO's spouts asks
+#: for the north and south faces and gets them.
+_BUCKET_ELEVATOR = Symbol(
+    svg='<g id="sym_elevator">'
+        '<rect x="0" y="0" width="80" height="120" '
+        'fill="white" stroke="#111" stroke-width="2"/>'
+        '<path d="M 30 20 L 30 100 M 50 20 L 50 100" '
+        'fill="none" stroke="#111" stroke-width="2"/>'
+        + _lift_pulley(40, 20) + _lift_pulley(40, 100)
+        # The head, throwing off eastward; and the boot, loaded from the
+        # west. Each is a quadrant standing on the belt run it opens out
+        # of, so the run is the chute's third side and is not redrawn.
+        + _lift_chute(50, 40, 2 * _LIFT_M, -2 * _LIFT_M)
+        + _lift_chute(30, 80, -2 * _LIFT_M, 2 * _LIFT_M)
+        + '</g>',
+    width=80.0, height=120.0,
+    ports={"feed": (0.0, 80.0), "discharge": (80.0, 40.0)},
+    # Row 18.7's own two ticks, offered rather than imposed. See above.
+    port_faces={"feed": {"N": (10.0, 0.0)},
+                "discharge": {"S": (70.0, 120.0)}},
+    # The pulleys are circles, so the drawing is placed at its own aspect
+    # rather than stretched into a box of another -- the belt conveyor's
+    # reason.
+    stretchable=False,
+    # A machine whose whole purpose is to raise material. Upside down it
+    # lowers it. ISO 15519-1 §11.4.2.
+    gravity_fixed=True,
+    iso_reg="X8065",
+)
+
+#: ISO 10628-2 item 18.8 X8066, the Z-form bucket elevator.
+#:
+#: **Measured off row 18.8:** the casing is an eight-sided Z running
+#: (2,13) (2,9) (10,9) (10,1) (22,1) (22,5) (14,5) (14,13), a 20 M x 12 M
+#: box; the belt is one loop through it in three runs -- along the low
+#: arm on y 11 between pulleys at (4,11) and (12,11), up the middle on
+#: x 12 between (12,11) and (12,3), and along the high arm on y 3 between
+#: (12,3) and (20,3) -- each run drawn as its two edges 2 M apart.
+#:
+#: **The nozzles depart from the row here too, and for a reason worth
+#: recording.** The Z's notches leave the casing's own faces clear, so
+#: row 18.8 puts its ticks where every other row does: a module above the
+#: low arm's crown at x 5, and a module below the high arm's floor at
+#: x 19. Loaded from above at the low end, discharging downward at the
+#: high end. Both of those points are on drawn ink and either would be a
+#: good nozzle -- but neither can be *reached*, because a nozzle's face
+#: is the nearest edge of the box (:func:`pandid.ports.outward_dir`) and
+#: no point on the low arm's crown is nearer the box's north edge than
+#: its west one. Anchored there, the feed would be approached from the
+#: west and the line would arrive running along the crown it was meant to
+#: land on.
+#:
+#: So both go on the arms' **end walls**, on the belt centreline of each:
+#: in at the west end of the low arm, out at the east end of the high
+#: one. Still in low and out high, still the two ends of the belt, and
+#: routable from a direction that is clear.
+_Z_ELEVATOR = Symbol(
+    svg='<g id="sym_elevator_z_form">'
+        '<path d="M 0 120 L 0 80 L 80 80 L 80 0 L 200 0 L 200 40 '
+        'L 120 40 L 120 120 Z" fill="white" stroke="#111" stroke-width="2"/>'
+        '<path d="M 20 90 L 100 90 M 20 110 L 100 110 '
+        'M 90 20 L 90 100 M 110 20 L 110 100 '
+        'M 100 10 L 180 10 M 100 30 L 180 30" '
+        'fill="none" stroke="#111" stroke-width="2"/>'
+        # Four pulleys: one at each end of the loop, and one at each
+        # corner where the belt turns from a run into the next.
+        + _lift_pulley(20, 100) + _lift_pulley(100, 100)
+        + _lift_pulley(100, 20) + _lift_pulley(180, 20)
+        + '</g>',
+    width=200.0, height=120.0,
+    ports={"feed": (0.0, 100.0), "discharge": (200.0, 20.0)},
+    stretchable=False,
+    gravity_fixed=True,
+    iso_reg="X8066",
+)
+
+
 class SymbolRegistry:
     def __init__(self):
         self._symbols: dict[tuple[str, str], Symbol] = {}
@@ -2479,6 +2753,14 @@ class SymbolRegistry:
         # any other length gets its own symbol from for_unit(); see
         # conveyor_symbol.
         self.register("conveyor", conveyor_symbol())
+        # Screw conveyor, ISO item 18.5 X8063, the same way.
+        self.register("conveyor", screw_conveyor_symbol(), "screw")
+
+        # Bucket elevators, ISO items 18.7 X8065 and 18.8 X8066. Fixed
+        # drawings: an elevator's size is its lift, which is not a number
+        # a flowsheet states.
+        self.register("elevator", _BUCKET_ELEVATOR)
+        self.register("elevator", _Z_ELEVATOR, "z_form")
 
         # Pipe tee: the junction where a line branches.
         #
