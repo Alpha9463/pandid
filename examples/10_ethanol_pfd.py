@@ -71,7 +71,12 @@ def main():
     floc = fs.add(Feed("Flocculant", reference="PCD-301"))
     water = fs.add(Feed("RO Water", reference="PCD-301"))
 
-    col = fs.add(Column("T-301", width=110, height=250, label_pos="center",
+    # Sieve trays: the beer arrives carrying yeast and grain solids, so
+    # the deck has to be one with no pocket to settle in and no moving
+    # part to seize -- a large-hole perforated deck. The stripper runs
+    # base-loaded, so nothing is given up in turndown for it.
+    col = fs.add(Column("T-301", internals="sieve_tray", trays=18,
+                        width=110, height=250, label_pos="center",
                         description="Beer Column"))
     cond = fs.add(HeatExchanger("E-301", variant="condenser", width=64,
                                 height=64,

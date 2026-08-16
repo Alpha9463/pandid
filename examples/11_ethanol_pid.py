@@ -55,7 +55,11 @@ def main():
     # --- Equipment ----------------------------------------------------
     # label_pos="center": the overhead leaves the top centre, so a tag
     # written above the tower would be written across that riser.
-    col = fs.add(Column("T-301", label_pos="center", description="Beer Column"))
+    # Sieve trays, the same eighteen decks 10's PFD draws in the same
+    # tower: yeast and grain solids come in with the beer, so the deck
+    # is perforated and has nothing that can settle or seize.
+    col = fs.add(Column("T-301", internals="sieve_tray", trays=18,
+                        label_pos="center", description="Beer Column"))
     cond = fs.add(HeatExchanger("C-301", variant="straight_tubes", width=130,
                                 height=40, description="Overhead Condenser"))
     drum = fs.add(Vessel("D-301", variant="horizontal", width=130, height=42,

@@ -138,6 +138,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `13_mineral_dewatering` (a gravity separator). Nothing else on any of them
   changes.
 
+- **The example columns are the towers they are tagged as.** Six `Column()`
+  calls across five examples all drew the same generic deck, which is what a
+  reader copying one would carry into their own sheet. Each now names the
+  internal its service really has, with a line beside it saying why: `T-100`
+  "Light Ends Column" is `valve_tray` (clean, but it swings with the upstream
+  rate and a valve holds efficiency where a sieve deck weeps), `T-200` "Product
+  Column" is `sieve_tray` (base-loaded on a clean feed, so the turndown a valve
+  buys is never used), `T-701` "Main Fractionator" is `baffle_tray` (a shed
+  deck has no perforation to plug in a coking service), and the ethanol `T-301`
+  "Beer Column" is `sieve_tray` on both the PFD and the P&ID (yeast and grain
+  solids, so nothing that can settle or seize). `D-801` "Degasser Tower" stays
+  `variant="packed"`: a CO2 stripper wants area and pressure drop rather than a
+  deck, and that body draws its own beds.
+
+  The drawn counts are 10 to 18 rather than the real tray count of any of them,
+  for the reason `DEFAULT_TRAYS` gives: a forty-tray column is not drawn with
+  forty lines on any sheet, and past about twenty a deck stops reading as a
+  deck. Four golden sheets and four gallery sheets move, along with the two
+  `.drawio` samples that carry one of these columns.
+
 - **A supplementary part stretches with the body it is drawn in**, where the
   agitators and the characteristics had been declared unstretchable. That flag
   does not mean "draw this part carefully": it letterboxes the part on its
