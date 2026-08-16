@@ -230,11 +230,6 @@ class Flowsheet:
         # control valve's. Set here for a whole sheet, overridable per
         # station.
         self.valve_station_tag_scheme = valve_station_tag_scheme
-        # Let the layout engine pick which face a movable port is piped
-        # from, given where its peer landed (see
-        # :mod:`pandid.layout.faces`). Turn it off to pin every port to
-        # its symbol's own nozzle plus whatever
-        # :meth:`~pandid.units.Unit.nozzle` named.
         self.auto_faces = auto_faces
         self.units: list = []
         self.streams: list[Stream] = []
@@ -256,6 +251,34 @@ class Flowsheet:
         # as `instrument-unplaced`. Empty until layout has run, so a
         # balloon that is merely waiting for layout is not a finding.
         self.unplaced_instruments: list = []
+        # Does the resolved geometry still answer for this model? A
+        # Frame and a Route are CACHED -- laying a sheet out and routing
+        # it costs far more than drawing it, and a script that renders
+        # the same sheet to .svg and .drawio should pay once -- so the
+        # render entry points reuse what is already there. That is only
+        # sound while nothing the engine reads has changed since, which
+        # is the invariant these two hold: EVERY mutation that can move
+        # a drawn box or a routed run says so through
+        # `_invalidate_layout()`, and a stage that is stale re-runs
+        # before the next drawing comes out. Miss one and the author's
+        # edit is silently absent from the file they get: the guard used
+        # to be `frame is None`, which is true only before the very
+        # first layout, so a second render redrew the first render's
+        # placement however much had changed in between.
+        #
+        # Two flags because the two stages do not go stale together. A
+        # route is computed against the frames, so re-laying out
+        # invalidates every route; re-routing moves no box and leaves
+        # the frames alone. `layout()` therefore clears the first and
+        # sets the second.
+        #
+        # `frame is None` / `route is None` is a different question --
+        # *never run* rather than *run and overtaken* -- and the render
+        # entry points still ask it separately. These start false for
+        # that reason: a sheet with nothing on it has no stale geometry,
+        # and the first `add()` is what makes it stale.
+        self._layout_stale = False
+        self._route_stale = False
         # The sheet's own metadata; a block set here is a title strip
         # drawn.
         self.title_block: "TitleBlock | None" = None
@@ -265,6 +288,42 @@ class Flowsheet:
         # Section headers to inject into the stream table: (before_key,
         # label).
         self.stream_table_sections: list[tuple[str, str]] = []
+
+    def _invalidate_layout(self) -> None:
+        """Say that the resolved geometry no longer answers for this
+        sheet.
+
+        The hook every mutation that can move a drawn box or a routed
+        run calls -- here, or through
+        :meth:`pandid.units.Unit._invalidate_layout` for a mutation made
+        on a unit. It is the one place the staleness flags described in
+        ``__init__`` are set, so a new mutator has an obvious thing to
+        call and one comment to read.
+
+        Cheap and idempotent, which settles the doubtful cases: a
+        mutator that cannot say for certain whether it moves anything
+        should call it anyway. Re-laying out costs time and comes out
+        the same drawing, because the solver is reseeded from ``pin_``
+        on every run; not re-laying out draws the previous sheet.
+        """
+        self._layout_stale = True
+        self._route_stale = True
+
+    @property
+    def auto_faces(self) -> bool:
+        """Let the layout engine pick which face a movable port is piped
+        from, given where its peer landed.
+
+        See :mod:`pandid.layout.faces`. Turn it off to pin every port to
+        its symbol's own nozzle plus whatever
+        :meth:`~pandid.units.Unit.nozzle` named.
+        """
+        return self._auto_faces
+
+    @auto_faces.setter
+    def auto_faces(self, value: bool) -> None:
+        self._auto_faces = value
+        self._invalidate_layout()
 
     def add_annotation(self, annotation):
         """Register a furniture box (Annotation/TableBox). Chainable."""
@@ -321,6 +380,7 @@ class Flowsheet:
             unit.name = self._repeat_name(unit.tag or unit.name)
         unit.flowsheet = self
         self.units.append(unit)
+        self._invalidate_layout()
         return unit
 
     def _repeat_name(self, tag: str) -> str:
@@ -947,6 +1007,7 @@ class Flowsheet:
         src.stream = stream
         dst.stream = stream
         self.streams.append(stream)
+        self._invalidate_layout()
         # The number a caller reads off the returned stream has to be
         # the number that gets drawn, so numbering is settled here
         # rather than at render time.
@@ -989,17 +1050,28 @@ class Flowsheet:
         return _to_dict(self)
 
     def layout(self, engine=None) -> None:
-        """Run the layout engine to generate unit coordinates."""
+        """Run the layout engine to generate unit coordinates.
+
+        Always runs: an explicit call is a request, not a cache lookup.
+        The frames it resolves are fresh geometry, so every route
+        computed against the old ones is now stale and the next
+        :meth:`route` -- or the next render, which calls it -- runs
+        again. Without that a ``pin()`` and a hand-called ``layout()``
+        moved the equipment and left the pipe where it was, drawn from
+        the new nozzle to the old run and so no longer orthogonal.
+        """
         if engine is None:
             from pandid.layout import default_layout_engine
             engine = default_layout_engine
         engine.layout(self)
+        self._layout_stale = False
+        self._route_stale = True
 
     def route(self, router=None) -> None:
         """Run the router to generate orthogonal stream paths.
 
-        Runs :meth:`layout` first if any unit still lacks a resolved
-        frame, since routing needs geometry to work against.
+        Runs :meth:`layout` first if the frames are stale or if any unit
+        still lacks one, since routing needs geometry to work against.
 
         Attached instruments are placed and the sheet re-routed until
         the two agree, up to
@@ -1007,7 +1079,7 @@ class Flowsheet:
         never settles leaves ``route_converged`` false, which
         :meth:`validate` reports as a warning.
         """
-        if any(u.frame is None for u in self.units):
+        if self._layout_stale or any(u.frame is None for u in self.units):
             self.layout()
         if router is None:
             from pandid.routing import DefaultRouter
@@ -1027,6 +1099,29 @@ class Flowsheet:
                 self.route_converged = True
                 break
             router.route(self)
+        # Last, so a router that raises leaves the sheet saying its
+        # routes are stale -- which they are: half of them are this
+        # run's and half the previous one's.
+        self._route_stale = False
+
+    def _resolve_geometry(self) -> None:
+        """Bring the frames and routes up to date with the model.
+
+        What every render entry point calls before it draws, and the one
+        place the rule is stated. Each stage runs when it has never run
+        at all, or when a mutation since has overtaken it; a sheet
+        rendered twice with nothing changed in between pays for neither,
+        which is the whole reason the geometry is kept rather than
+        recomputed.
+
+        :meth:`layout` sets ``_route_stale``, so a re-layout here always
+        drags the routes with it and the two cannot be left describing
+        different sheets.
+        """
+        if self._layout_stale or any(u.frame is None for u in self.units):
+            self.layout()
+        if self._route_stale or any(s.route is None for s in self.streams):
+            self.route()
 
     def renumber_streams(self) -> None:
         """Assign stream numbers, carrying one through inline fittings.
@@ -1162,7 +1257,8 @@ class Flowsheet:
                jump_direction: str = "vertical", debug: bool | float = False,
                check: bool = True) -> str:
         """Render to an SVG string, running ``layout()`` and ``route()``
-        first if they have not been run yet.
+        first if they have not been run yet, or if anything changed
+        since they were.
 
         ``border`` rules the sheet: ``"zone"`` for the ASME-style
         zone-ruled drawing frame, ``"none"`` (the default) for a plain
@@ -1213,10 +1309,7 @@ class Flowsheet:
         raises :class:`ValueError`, and *warnings* are collected on
         ``self.warnings``.
         """
-        if any(u.frame is None for u in self.units):
-            self.layout()
-        if any(s.route is None for s in self.streams):
-            self.route()
+        self._resolve_geometry()
         self.renumber_streams()
         if check:
             issues = self.validate(diagram=diagram)
@@ -1241,7 +1334,7 @@ class Flowsheet:
                   show_stream_table: bool = False, check: bool = True) -> str:
         """Render to a draw.io (``.drawio``) document string, running
         ``layout()`` and ``route()`` first if they have not been run
-        yet.
+        yet, or if anything changed since they were.
 
         The drawing comes out as a *model* rather than a picture: every
         unit is a draw.io shape and every stream an edge between two of
@@ -1305,10 +1398,7 @@ class Flowsheet:
         The debug overlay has no counterpart here and :meth:`render`
         refuses it for a ``.drawio`` path rather than ignoring it.
         """
-        if any(u.frame is None for u in self.units):
-            self.layout()
-        if any(s.route is None for s in self.streams):
-            self.route()
+        self._resolve_geometry()
         self.renumber_streams()
         if check:
             issues = self.validate(diagram=diagram)

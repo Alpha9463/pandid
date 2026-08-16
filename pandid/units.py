@@ -58,6 +58,40 @@ _UNCHANGED: Any = object()
 # mid-chain in ``fs.add(units.HeatExchanger("E-1")).pin(x=210)``.
 _UnitT = TypeVar("_UnitT", bound="Unit")
 
+# The facts about a unit that the layout engine and the router read:
+# write one and the box moves, changes size, or puts its nozzles
+# somewhere else. ``Unit.__setattr__`` marks the sheet's geometry stale
+# when one is assigned, which is the only way to catch a PLAIN
+# assignment -- a method can call the hook itself, ``pump.width = 90``
+# cannot -- and the sheet's cached frames and routes are only sound
+# while none of these has moved under them. See
+# ``Flowsheet.__init__``'s note on the two staleness flags.
+#
+# The private names are the backing fields of the properties that guard
+# these facts (``Block.width``, ``Conveyor.length``,
+# ``Reducer.large_end``, ``_NormallyPositioned.normal_position``),
+# listed here rather than hooked one setter at a time so there is a
+# single list to read and to add to. Each reaches the geometry through
+# ``SymbolRegistry.for_unit``, which hands back a DIFFERENT symbol --
+# its own box, its own nozzle coordinates -- for a conveyor of another
+# length, an expansion rather than a reduction, or a blind drawn shut.
+#
+# ``name`` is here because it is the tag that gets drawn, and the router
+# treats a label as an obstacle sized from it (see
+# ``pandid.routing.visibility``); renaming a unit moves the lines around
+# it.
+#
+# Deliberately absent: ``description``, ``reference`` and an
+# instrument's ``quadrants``, which are lettering the renderer lays out
+# afresh on every drawing and so can never be stale; and ``frame`` and
+# ``_slot``, which are the engine's own output -- listing those would
+# have every layout run end by declaring itself out of date.
+_LAYOUT_INPUTS = frozenset({
+    "name", "variant", "label_pos", "pin_",
+    "width", "height", "_width", "_height",
+    "_length", "_large_end", "_normal_position",
+})
+
 
 class Unit:
     #: The equipment type this unit is drawn as: the key the symbol
@@ -214,6 +248,38 @@ class Unit:
         for spec in self._declared_ports():
             self._add_port(*spec)
 
+    def _invalidate_layout(self) -> None:
+        """Tell the sheet this unit is on that its geometry is stale.
+
+        The unit-side half of
+        :meth:`pandid.flowsheet.Flowsheet._invalidate_layout`, where the
+        invariant is written down: a resolved frame or route is kept and
+        reused, so every change that could move one has to say so.
+
+        A unit on no flowsheet has nobody to tell, and needs nobody:
+        :meth:`~pandid.flowsheet.Flowsheet.add` marks the sheet stale as
+        it takes the unit, which accounts for everything set on the way
+        to that call.
+
+        ``getattr`` with a default rather than ``self.flowsheet``:
+        :meth:`__setattr__` fires on the first line of ``__init__``,
+        well before there is a ``flowsheet`` attribute to read.
+        """
+        fs = getattr(self, "flowsheet", None)
+        if fs is not None:
+            fs._invalidate_layout()
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Assign, and mark the sheet stale for a fact layout reads.
+
+        Which facts those are, and why an assignment rather than a
+        method has to be watched for at all, is :data:`_LAYOUT_INPUTS`.
+        Everything else is set at full speed.
+        """
+        super().__setattr__(name, value)
+        if name in _LAYOUT_INPUTS:
+            self._invalidate_layout()
+
     @property
     def tag(self) -> str:
         """The tag drawn against this unit.
@@ -258,6 +324,11 @@ class Unit:
     def new_line_number(self, value: bool) -> None:
         self._new_line_number = value
         if self.flowsheet is not None:
+            # Renumbering rewrites the names of every run that passed
+            # through this fitting, and a name is drawn -- so the sheet
+            # that comes out next has to be laid out and routed for the
+            # labels it now carries, not the ones it had.
+            self.flowsheet._invalidate_layout()
             self.flowsheet.renumber_streams()
 
     def pin(
@@ -381,7 +452,11 @@ class Unit:
             )
         face = _FACE_OF_SIDE.get(face.strip().lower(), face.strip().upper())
         self._check_face(port_name, face, port_faces(self, port_name))
+        # Marked by hand: this writes *into* ``_port_faces`` rather than
+        # rebinding it, and the assignment ``__setattr__`` watches for
+        # is the rebinding kind.
         self._port_faces[port_name] = face
+        self._invalidate_layout()
         return self
 
     def _check_face(self, port_name: str, face: str, options: list[str]) -> None:
@@ -1898,6 +1973,10 @@ class Instrument(Unit):
         self.offset = float(offset)
         self.angle = float(angle)
         self.relation = relation
+        # Where this balloon lands is these five together, and it is
+        # resolved inside route(); re-anchoring an already-placed one
+        # therefore has to send the sheet round again.
+        self._invalidate_layout()
         return self
 
 
@@ -2627,6 +2706,11 @@ class Block(Unit):
         try:
             self._check_box()
         except ValueError:
+            # The sheet is left marked stale by the two writes above,
+            # though this one placed nothing. That costs a layout run
+            # that resolves the same frames; the alternative is a flag
+            # that lies, and layout is reseeded from ``pin_`` every run
+            # precisely so a needless one is free of consequence.
             self.pin_ = was
             raise
         return self
@@ -2706,6 +2790,10 @@ class Block(Unit):
         except ValueError:
             self._faces[port_name] = was
             raise
+        # A move that stuck: the box is built from this declaration, so
+        # its artwork and its nozzles are both somewhere else now.
+        # Marked by hand for the reason :meth:`Unit.nozzle` gives.
+        self._invalidate_layout()
         return self
 
     def ports_on(self, face: str) -> tuple[Port, ...]:
@@ -2831,6 +2919,9 @@ class Block(Unit):
             (next(replacement) if on == wanted else name): on
             for name, on in self._faces.items()
         }
+        # Same face, different connections along it, so every nozzle on
+        # it has moved and the runs into them have to be routed again.
+        self._invalidate_layout()
         return self
 
     def symbol(self) -> "Symbol":
