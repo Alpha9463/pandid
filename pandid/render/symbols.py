@@ -33,8 +33,19 @@ Authoring conventions (hand-drawn symbols)
 - A symbol whose shape carries meaning sets ``stretchable=False`` and is
   centred in a box of another shape rather than distorted to fill it. A
   balloon is a circle because ISA-5.1 says a circle.
+
+Composed symbols
+----------------
+Every symbol above is drawn whole. ISO 10628-2 also builds symbols out
+of a body and the *parts* of its subject groups 26-29, and clause 5
+makes doing so a ``shall`` for anything it does not tabulate:
+:class:`IsoPart`, :class:`Overlay`, :class:`OverlayPart` and
+:func:`compose` are that mechanism. Read the comment block above
+:class:`IsoPart` before composing anything -- it says when a drawing may
+be composed at all, which is a narrower question than it looks.
 """
 
+import hashlib
 import math
 import re
 import warnings
@@ -220,6 +231,198 @@ class PortSeries:
         return fixed, centre - half, centre + half
 
 
+# ----------------------------------------------------------------
+# Supplementary symbols: the parts a body is composed with.
+#
+# ISO 10628-2:2012 Table 1 numbers 29 subject groups. Groups 1-25 name
+# whole apparatus; groups **26-29 name the parts you overlay onto one**:
+#
+#   26 apparatus elements   support leg, bracket, skirt, ring, manhole,
+#                           connection nozzle
+#   27 internals            tray, baffle tray, bubble-cap tray, valve
+#                           tray, sieve element, filter insert,
+#                           fluidised bed, packing
+#   28 agitators, stirrers  the general stirrer and nine impeller forms
+#   29 internal             the characteristic that says what separates,
+#      characteristics      crushes or settles inside the body
+#
+# ISO 10628-2 clause 5 makes composing from them a **shall** when the
+# symbol wanted is not tabulated, and ISO 14617-1:2025 §4.7 with Annex B
+# restates it with a worked six-part example. The standard demonstrates
+# it on itself: item 8.6 (electrostatic precipitator, X8125) is the
+# group-8 body carrying item 29.2 (C2030), item 8.8 (electromagnetic
+# separator, X8126) is the same body carrying item 29.3 (C2031), and
+# item 8.7 (wet electrostatic precipitator, X8033) is that body carrying
+# **two** parts at once.
+#
+# THE RULE THIS MODULE ENFORCES, AND THE ONE TO READ BEFORE ADDING A
+# COMPOSITION
+# --------------------------------------------------------------------
+# **Compose only where ISO itself composes. Where ISO registers a
+# distinct symbol, it stays a distinct symbol.**
+#
+# The test is not "does it look like a body with something inside it".
+# It is: *is every mark that distinguishes this drawing from the shared
+# body a tabulated group-26/27/28/29 item, and can it be named by its
+# registration number?* Item 8.3 (gravity separator, X8031) passes -- its
+# only mark is the down arrow that Table 2 registers on its own as item
+# 29.1, C2028. Item 8.10 (cyclone separator, X2618) fails: its mark is a
+# helical vortex, and no item in group 29 draws one, so there is nothing
+# to compose it from and X2618 is its own registered symbol. A
+# hydrocyclone is not "separator body + cyclone characteristic"; it is
+# X2618.
+#
+# :class:`IsoPart` is where that test is made checkable rather than
+# remembered. A part cannot be registered without naming the group, the
+# item number and the registration number it claims to be, so a reader
+# -- or ``tests/test_composition.py`` -- can put the drawing next to
+# Table 2 and check it. Registration numbers are the identity of a
+# symbol (ISO 14617-1 §3.6) and are what tells two same-shape symbols
+# apart (§4.2), which is exactly the distinction this rule turns on.
+# ----------------------------------------------------------------
+
+#: The subject groups of ISO 10628-2 Table 1 that are parts rather than
+#: apparatus, with the group name each is listed under. Nothing outside
+#: these four is a supplementary symbol, so nothing outside them may be
+#: overlaid: a whole apparatus drawn inside another apparatus is two
+#: pieces of equipment on one tag, not a composition.
+PART_GROUPS = {
+    26: "apparatus elements",
+    27: "internals",
+    28: "agitators, stirrers",
+    29: "internal characteristics and built-in components",
+}
+
+#: The four registration-number namespaces ISO 10628-2 clause 5 column 2
+#: declares, as one pattern:
+#:
+#: ``nnn`` / ``nnnn``   an ISO 14617 graphical symbol
+#: ``Cnnnn``            a preliminary number for a symbol that will be
+#:                      implemented in ISO 14617 at the next review
+#: ``X2nnn``            an ISO 14617 symbol *example*
+#: ``X8nnn``            an ISO 10628-2 symbol *example*
+#:
+#: The distinction between a bare number and an X number is not
+#: cosmetic: ISO 14617-1 §3.5 Note 2 calls a symbol example a guideline,
+#: while a bare-numbered entry is a normative basic symbol. It governs
+#: how strictly a given shape has to be matched, so it is worth being
+#: able to read off the declaration.
+_REG_NO = re.compile(r"\A(?:\d{3,4}|C\d{3,4}|X[28]\d{3})\Z")
+
+
+@dataclass(frozen=True)
+class IsoPart:
+    """The identity of one ISO 10628-2 group 26-29 supplementary symbol.
+
+    Four facts, all of them checkable against Table 2 by anyone holding
+    the standard: which of the four part groups it belongs to, its item
+    number within that group, its registration number, and what the
+    standard calls it.
+
+    Required on every :class:`OverlayPart`, which is the whole point.
+    pandid records no registration number for any of its 157 whole-symbol
+    drawings today, so nothing ties a shape to the entry it claims to be
+    and no conformance statement about one can be checked. A part is
+    where that stops: an overlay is only ever justified by the standard
+    composing there, and a part that cannot name the item it is has no
+    justification to offer.
+
+    Args:
+        group: The Table 1 subject group, one of :data:`PART_GROUPS`.
+        item: The item number within the group, as Table 2 writes it and
+            including the group -- ``"27.3"``, not ``"3"``.
+        reg: The registration number, in one of the four namespaces
+            clause 5 declares. See :data:`_REG_NO`.
+        name: The standard's own descriptor for the item, so a reader
+            can find the row without counting down the column.
+    """
+
+    group: int
+    item: str
+    reg: str
+    name: str
+
+    def __post_init__(self) -> None:
+        if self.group not in PART_GROUPS:
+            raise ValueError(
+                f"{self.reg}: ISO 10628-2 group {self.group} is not one of the part "
+                f"groups {sorted(PART_GROUPS)}. Groups 1-25 are whole apparatus, and "
+                f"an apparatus overlaid on another apparatus is two units on one tag"
+            )
+        if not self.item.startswith(f"{self.group}."):
+            raise ValueError(
+                f"{self.reg}: item {self.item!r} is not in group {self.group}; Table 2 "
+                f"numbers an item within its group, so a group-{self.group} item reads "
+                f"{self.group}.n"
+            )
+        if not _REG_NO.match(self.reg):
+            raise ValueError(
+                f"{self.item}: {self.reg!r} is not a registration number in any "
+                f"namespace ISO 10628-2 clause 5 declares (nnn, nnnn, Cnnnn, X2nnn, "
+                f"X8nnn). A mark with no registered number is not a supplementary "
+                f"symbol, and composing from one would invent a symbol where ISO 14617 "
+                f"already has an answer"
+            )
+        if not self.name.strip():
+            raise ValueError(
+                f"{self.reg}: a part needs the standard's own descriptor, so a reader "
+                f"can find the Table 2 row it claims to be"
+            )
+
+
+@dataclass(frozen=True)
+class Overlay:
+    """One supplementary part, and where it sits on a body's box.
+
+    Named rather than held: an overlay carries the part's registry key,
+    so the artwork and the registration number are looked up in the one
+    place they are declared, and an overlay is a small hashable value the
+    composition cache can be keyed by.
+
+    The placement is stated in **fractions of the body's box**, not in
+    drawing units, which is what makes a composition survive being
+    resized. A tray at ``y=0.3`` is three-tenths down the shell whether
+    the shell is drawn at its own size or stretched to a box the author
+    gave the unit, so the trays stay evenly spaced instead of drifting
+    off the bottom head.
+
+    Fractions outside ``0..1`` put the part outside the body, and that is
+    a supported case rather than an accident: ISO item 1.27 (X8006) hangs
+    the drive motor **above** the top head, on the agitator's shaft.
+    :func:`compose` grows the composed box to hold it.
+
+    A part that repeats -- a tray column is one deck drawn N times -- is
+    N overlays with N values of ``y``, not one overlay with a count. The
+    pitch is then the caller's arithmetic and the mechanism stays a
+    placement rule, which is what lets a baffle-tray column alternate
+    which wall each deck touches by varying ``x`` as well.
+
+    Args:
+        group: The part's ISO subject group, 26 to 29.
+        name: The part's registry name, in pandid's spelling
+            (``"turbine"``), not the standard's descriptor.
+        x: Left edge, as a fraction of the body's width.
+        y: Top edge, as a fraction of the body's height.
+        w: Width, as a fraction of the body's width.
+        h: Height, as a fraction of the body's height.
+    """
+
+    group: int
+    name: str
+    x: float
+    y: float
+    w: float
+    h: float
+
+    def __post_init__(self) -> None:
+        if self.w <= 0 or self.h <= 0:
+            raise ValueError(
+                f"overlay {self.group}/{self.name} is placed {self.w:g} x {self.h:g} of "
+                f"the body's box; a part with no extent draws nothing, and a negative "
+                f"one draws the part inside out"
+            )
+
+
 @dataclass
 class Symbol:
     """An SVG template for a unit, with named port anchors."""
@@ -360,6 +563,33 @@ class Symbol:
     # they are rather than as draw.io style text.
     drawio_flip_h: bool = False
     drawio_fill: str = ""
+    # The supplementary parts this drawing carries, in the order they are
+    # painted over the body. Empty for a symbol drawn whole, which is
+    # every symbol the registry ships today: a body with no parts is the
+    # zero case of a composition and nothing about it changes.
+    #
+    # Written by :func:`compose` and by nothing else, so it is a record of
+    # what the artwork *is* rather than a request. Read by the draw.io
+    # backend, which has to export a composition as its parts rather than
+    # as a stencil reference; see :attr:`drawio_shape`.
+    overlays: tuple[Overlay, ...] = ()
+    # The ISO registration number this drawing claims to be -- "2062",
+    # "X2618", "C2044" -- or empty where nobody has checked it against
+    # the standard yet, which is where all 157 shipped symbols stand.
+    #
+    # Per ISO 14617-1 §3.6 the registration number is a symbol's identity
+    # and is stable for its lifetime, and §4.2 makes it the thing that
+    # tells two same-shape symbols apart. Recording it is the difference
+    # between "this looks like a cyclone" and "this is X2618", and it is
+    # what makes the composition rule in the block above :class:`IsoPart`
+    # checkable rather than remembered.
+    #
+    # Deliberately optional and deliberately empty: filling it in for a
+    # symbol is a conformance claim about that symbol's geometry, and one
+    # made by assumption is worse than none. :class:`IsoPart` is where it
+    # is *required*, because a part that cannot name its Table 2 row has
+    # no business being composed with.
+    iso_reg: str = ""
 
     def __post_init__(self) -> None:
         declared = {name: dict(faces) for name, faces in self.port_faces.items()}
@@ -741,15 +971,29 @@ def block_symbol(faces: tuple[tuple[str, str], ...], label: str = "") -> Symbol:
     )
 
 
-# Kinds whose artwork is built to a size the *unit* carries, rather than
-# drawn once and scaled into whatever box it lands in. Uneven scaling
-# turns a conveyor's rollers into ellipses, so its drawing is made to
-# measure; a block's nozzles are a per-face count the symbol cannot know
-# until it has the unit, so its drawing is made to *fit*.
-_BUILT_TO_SIZE = {
-    "conveyor": lambda unit: conveyor_symbol(unit.length),
-    "block": lambda unit: unit.symbol(),
+# Drawings built to a size the *unit* carries, rather than drawn once and
+# scaled into whatever box they land in. Uneven scaling turns a
+# conveyor's rollers into ellipses, so its drawing is made to measure; a
+# block's nozzles are a per-face count the symbol cannot know until it
+# has the unit, so its drawing is made to *fit*.
+#
+# Keyed by ``(kind, variant)``, with ``None`` for the variant meaning
+# "every variant of this kind". Both entries today are kind-wide, and
+# both kinds have exactly one variant, so the two spellings say the same
+# thing about the symbols on hand -- but only one of them stays true when
+# a second variant arrives. A tray column drawn to its tray count is a
+# ``("column", "tray")`` entry, and under a kind-wide key it would have
+# captured ``column/default`` and ``column/packed`` as well and drawn
+# every tower as a tray tower.
+_BUILT_TO_SIZE: "dict[tuple[str, str | None], object]" = {
+    ("conveyor", None): lambda unit: conveyor_symbol(unit.length),
+    ("block", None): lambda unit: unit.symbol(),
 }
+
+
+def _built_to_size(kind: str, variant: str):
+    """The builder for ``(kind, variant)``, most specific first."""
+    return _BUILT_TO_SIZE.get((kind, variant)) or _BUILT_TO_SIZE.get((kind, None))
 
 
 # ----------------------------------------------------------------
@@ -1143,6 +1387,13 @@ def darkened(sym: Symbol) -> Symbol:
 #: left-to-right. North and south are unmoved by it.
 _FLIPPED_FACE = {"W": "E", "E": "W", "N": "N", "S": "S"}
 
+#: A symbol's artwork, split into its opening ``<g>``, its contents and
+#: its closing tag. Every symbol here is one group and nothing else, so
+#: the two derivations that rewrite artwork -- :func:`expander`, which
+#: mirrors it, and :func:`compose`, which paints parts over it -- can
+#: reach the contents without parsing the SVG.
+_GROUP = re.compile(r"\A(<g\b[^>]*>)(.*)(</g>)\Z", re.DOTALL)
+
 
 def expander(sym: Symbol) -> Symbol:
     """``sym`` turned end for end: the same fitting, piped the other way
@@ -1173,7 +1424,7 @@ def expander(sym: Symbol) -> Symbol:
             f"Only a fitting whose whole connection list is 'inlet' and 'outlet' "
             f"has two ends to trade."
         )
-    match = re.match(r"(<g\b[^>]*>)(.*)(</g>)\Z", sym.svg, re.DOTALL)
+    match = _GROUP.match(sym.svg)
     if match is None:
         raise ValueError(
             f"{sym.symbol_id()}: cannot be turned end for end -- its artwork is "
@@ -1208,6 +1459,342 @@ def expander(sym: Symbol) -> Symbol:
     )
 
 
+# ----------------------------------------------------------------
+# The body carrying its parts.
+#
+# Read the block above :class:`IsoPart` first: it says when a drawing may
+# be composed at all. This is only the machinery for one that may.
+# ----------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class OverlayPart:
+    """One supplementary symbol's artwork, and the ISO item it is.
+
+    A part is *only* combinable, never standalone: that is what makes it
+    a supplementary symbol under ISO 14617-1 §3.3 rather than a basic one
+    under §3.2. It is drawn in its own ``width`` x ``height`` box, with
+    (0, 0) at the top-left exactly as a :class:`Symbol` is, and
+    :func:`compose` maps that box onto whatever rectangle of the body's
+    an :class:`Overlay` names.
+
+    Args:
+        name: pandid's spelling, and half the registry key --
+            ``"turbine"``, where the standard says "Agitator, turbine
+            type". Short, because it is what an author types.
+        iso: The Table 2 row this drawing claims to be. Required; see
+            :class:`IsoPart`.
+        svg: A single ``<g>`` group, like a :class:`Symbol`'s. The
+            wrapper is dropped when the part is painted onto a body, so
+            its id is never emitted and only its contents are.
+        width: The box the artwork is drawn in.
+        height: The box the artwork is drawn in.
+        ports: Connections the *part* brings with it, in the part's own
+            coordinates. Almost always empty; see below.
+        stretchable: May the artwork be scaled unevenly to fill the
+            rectangle it is placed on? The same question
+            :attr:`Symbol.stretchable` asks, with the same answer: a tray
+            deck is a line and may be any length, an impeller and a
+            manhole are shapes and may not be squashed. A part that says
+            no is scaled evenly and centred on its rectangle, and it
+            makes the whole composition unstretchable -- see
+            :func:`compose`.
+        gravity_fixed: Does this part state that gravity does the work?
+            ISO 14617-1 §4.5 forbids turning a symbol where gravity is a
+            functionality, and item 29.1 (C2028, the settling arrow) is
+            that statement made as a part: a body carrying it must not be
+            turned even when the bare body may be.
+        directional: Does the artwork state a direction an axis flip
+            would reverse? Same question :attr:`Symbol.directional` asks.
+            The settling arrow is the case again -- flipped, it says the
+            heavy phase rises.
+        drawio_shape: The draw.io stencil that draws this part on its
+            own, where one exists (the stencil set ships ``Prop
+            Agitator`` and ``Turbine Agitator`` as exactly this kind of
+            drop-on overlay). Empty where the part has to be exported as
+            geometry.
+
+    Ports: what a part does and does not contribute
+    ----------------------------------------------
+    **An agitator brings a connection; an internal and a characteristic
+    do not.** That is not a convenience, it is what the standard draws.
+    ISO item 1.27 (X8006, "jacketed vessel with dished ends and agitator
+    driven by electric motor") draws the stirrer's shaft running up
+    through the top head to a circle marked ``M`` sitting *above* the
+    vessel -- itself item 20.6, C0082, "electric motor (general)". The
+    drive is a real connection at a real place on the drawing, so the
+    part that draws it anchors a nozzle there. A tray (group 27) and a
+    characteristic (group 29) are marks inside a body that no line ever
+    reaches, and they anchor nothing.
+
+    A part's ports are **added** to the body's, never substituted for
+    them: :func:`compose` refuses a part whose nozzle name the body
+    already anchors, because two nozzles under one name is a stream drawn
+    to whichever the dict happened to keep.
+
+    That leaves the port coherent with the unit layer without any special
+    case. A symbol anchoring a nozzle its unit does not declare is
+    already ordinary here -- the anchor is simply never asked for -- so a
+    body composed with an agitator draws the drive and a
+    :class:`~pandid.units.Unit` that has no ``drive`` in its ``PORTS``
+    connects nothing to it. The unit half is the other side of the same
+    change and is declared where every other nozzle is: in ``PORTS``, or
+    in a ``_VARIANT_PORTS`` table for a nozzle only some variants have.
+    """
+
+    name: str
+    iso: IsoPart
+    svg: str
+    width: float
+    height: float
+    ports: dict = field(default_factory=dict)
+    stretchable: bool = True
+    gravity_fixed: bool = False
+    directional: bool = False
+    drawio_shape: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.name.strip():
+            raise ValueError(
+                f"{self.iso.reg}: a part needs a name to be registered and asked for "
+                f"under; it is half the registry key"
+            )
+        if self.width <= 0 or self.height <= 0:
+            raise ValueError(
+                f"{self.iso.reg}: a part is drawn in a {self.width:g} x "
+                f"{self.height:g} box, which has nothing to map onto a body"
+            )
+        if _GROUP.match(self.svg) is None:
+            raise ValueError(
+                f"{self.iso.reg}: a part's artwork has to be a single <g> group, so "
+                f"compose() can paint its contents onto a body without parsing the SVG"
+            )
+        for port, xy in self.ports.items():
+            if not (0 <= xy[0] <= self.width and 0 <= xy[1] <= self.height):
+                raise ValueError(
+                    f"{self.iso.reg}: the {port!r} nozzle is at {xy}, outside the "
+                    f"{self.width:g} x {self.height:g} box the part is drawn in; a "
+                    f"placement outside the artwork lands wherever the part is scaled "
+                    f"to, which is nowhere in particular"
+                )
+
+    def key(self) -> "tuple[int, str]":
+        """The registry key: ISO subject group, then pandid's name."""
+        return (self.iso.group, self.name)
+
+
+# The twin of ``pandid.render.svg._at_pen_scale``, which cannot be
+# imported here because that module imports this one. Kept private and
+# small rather than shared through a third module: the two are four lines
+# of the same regex substitution and the coupling would cost more than
+# the duplication.
+_STROKE = re.compile(r'stroke-width="([\d.]+)"')
+
+
+def _at_part_scale(svg: str, scale: float) -> str:
+    """*svg* with every line weight in it divided by *scale*.
+
+    ISO 14617-1 §4.3, a ``shall``: "When the size of a symbol is changed,
+    the line width shall be unchanged." A part painted onto a body is
+    scaled to the rectangle it was given, and the transform would carry
+    its strokes with it -- a tray deck placed at a fifth of the body's
+    height drawn at a fifth of the weight its author chose. Dividing
+    first is what leaves the drawn weight the one the part declares.
+
+    Every weight, not only the outline: a part's own fine detail is drawn
+    at a deliberate fraction of the sheet weight and the scale swells all
+    of them alike.
+    """
+    if math.isclose(scale, 1.0, rel_tol=1e-9):
+        return svg
+    return _STROKE.sub(
+        lambda m: f'stroke-width="{float(m.group(1)) / scale:.6g}"', svg)
+
+
+def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
+            iso_reg: str = "") -> Symbol:
+    """``body`` with its supplementary parts painted over it.
+
+    One :class:`Symbol` out, so nothing downstream learns a second kind
+    of drawing: a composition is placed, resized, mirrored, exported and
+    cached exactly as a whole symbol is, and the renderer never asks
+    whether it was composed. That is the same choice :func:`darkened` and
+    :func:`expander` make, for the same reason -- the ``<defs>`` entry a
+    ``<use>`` points at is keyed by the artwork, so a body with parts and
+    the bare body are two drawings and need two definitions.
+
+    Each part is mapped from its own box onto the rectangle of the body's
+    box its :class:`Overlay` names. Because the rectangle is stated as
+    *fractions*, the mapping is re-done nowhere: the placement is already
+    proportional, so stretching the finished symbol into a unit's box
+    carries the parts with the body and a tray three-tenths down the
+    shell stays three-tenths down it.
+
+    What the parts decide about the whole
+    -------------------------------------
+    - **Stretchable** only if the body and every part is. A part that may
+      not be reshaped is scaled evenly and centred on its own rectangle
+      here, which handles the composition at its own size -- but the
+      renderer stretches the *finished* symbol as one drawing, and there
+      is no way to hold one group still inside a group that is being
+      stretched. Refusing the stretch for the whole symbol is the only
+      answer that keeps an impeller round, and it costs the body nothing
+      it was entitled to: ISO 14617-1 §4.4 bounds reshaping by "shall not
+      make it impossible to recognize the symbol", and an impeller drawn
+      as a smear is exactly that.
+    - **Gravity-fixed** and **directional** if the body or any part is.
+      Both are statements the artwork makes, and a part makes them as
+      readily as a body: item 29.1's settling arrow says the heavy phase
+      goes *down*, so a body carrying it may not be turned (ISO 14617-1
+      §4.5) and may not be flipped without drawing the opposite claim.
+
+    The box, and parts drawn outside the body
+    -----------------------------------------
+    The composed box is the union of the body's and every part's. A part
+    inside the body leaves it exactly the body's box, which is the common
+    case and costs nothing. A part hanging off it grows the box and
+    shifts everything into it, which is what ISO item 1.27 (X8006) needs:
+    the drive motor is drawn above the top head, so the vessel is no
+    longer the whole drawing and the nozzles have to move down with it.
+
+    draw.io
+    -------
+    The composed symbol carries no ``drawio_shape``. A stencil reference
+    names *one* shape and draw.io draws whatever that name resolves to,
+    so a composed reactor exported under its body's reference would come
+    out as a bare vessel -- the right outline, silently missing the thing
+    that made it a reactor. Naming nothing is what makes the two backends
+    disagree loudly instead of quietly, and :attr:`Symbol.overlays` is
+    what the exporter reads to draw the parts instead. See the report on
+    this change for the sequencing.
+    """
+    match = _GROUP.match(body.svg)
+    if match is None:
+        raise ValueError(
+            f"{body.symbol_id()}: cannot carry a part -- its artwork is not a "
+            f"single <g> group to compose into"
+        )
+    head, inner, tail = match.groups()
+
+    # Where each part lands, in the body's own coordinates, before the
+    # box is squared up below.
+    placed = []
+    for overlay, part in parts:
+        rx, ry = overlay.x * body.width, overlay.y * body.height
+        rw, rh = overlay.w * body.width, overlay.h * body.height
+        sx, sy = rw / part.width, rh / part.height
+        if not part.stretchable:
+            # The letterbox pandid.portgeom.ink_box applies to a whole
+            # symbol, applied to a part on its rectangle: keep the
+            # aspect, take the smaller scale, centre what is left over.
+            scale = min(sx, sy)
+            rx, ry = rx + (rw - scale * part.width) / 2, ry + (rh - scale * part.height) / 2
+            sx = sy = scale
+        placed.append((part, rx, ry, sx, sy))
+
+    xs = [0.0, body.width]
+    ys = [0.0, body.height]
+    for part, rx, ry, sx, sy in placed:
+        xs += [rx, rx + sx * part.width]
+        ys += [ry, ry + sy * part.height]
+    # The shift that puts the union's top-left corner back on the origin.
+    # Zero whenever every part is inside the body, which is when the
+    # composed drawing is the body's own box and no wrapper is emitted.
+    # The ``+ 0.0`` is not decoration: negating a zero gives ``-0.0``,
+    # which formats as ``-0`` and would put a minus sign in the emitted
+    # SVG of every composition that needed no shift at all.
+    ox, oy = -min(xs) + 0.0, -min(ys) + 0.0
+    width, height = max(xs) + ox, max(ys) + oy
+
+    art = [inner if (ox, oy) == (0.0, 0.0)
+           else f'<g transform="translate({ox:g},{oy:g})">{inner}</g>']
+    for part, rx, ry, sx, sy in placed:
+        contents = _GROUP.match(part.svg).group(2)  # type: ignore[union-attr]
+        # One number for a stroke that has two scales: the geometric mean
+        # is what pandid.render.svg._pen_scale settles an uneven
+        # placement with, and a part scaled unevenly is the same
+        # question. A part that may not be reshaped never reaches it --
+        # its two scales were made equal above.
+        art.append(
+            f'<g transform="translate({rx + ox:g},{ry + oy:g}) scale({sx:g},{sy:g})">'
+            f'{_at_part_scale(contents, math.sqrt(abs(sx * sy)))}</g>'
+        )
+
+    def shift(xy: "tuple[float, float]") -> "tuple[float, float]":
+        return (round(xy[0] + ox, 4), round(xy[1] + oy, 4))
+
+    ports = {name: shift(xy) for name, xy in body.ports.items()}
+    # A nozzle comes out of whichever face of its box it is nearest
+    # (:func:`pandid.portgeom.outward_dir`), so growing the box can move
+    # one onto a face it was never drawn for: a relief on the crown of a
+    # vessel, a quarter of the way across it, is nearer the top of the
+    # vessel's own box and nearer the *side* of a box grown to hold a
+    # drive motor above it. The stream would then leave sideways through
+    # the shell wall. Refused here rather than by the constructor, whose
+    # message is about the coordinate and cannot mention the part that
+    # moved it.
+    for name, menu in body.port_faces.items():
+        for face, xy in menu.items():
+            moved = shift(xy)
+            lands = outward_dir(moved[0], moved[1], width, height)
+            if lands != face:
+                raise ValueError(
+                    f"{body.symbol_id()}: a part drawn outside the body grows the box "
+                    f"to {width:g}x{height:g}, and the {name!r} nozzle at {moved} is "
+                    f"then nearest the {lands} edge rather than the {face} face it is "
+                    f"drawn on -- a stream routed to it would leave through the side "
+                    f"of the body. Place the part inside the body's box, or give the "
+                    f"body a drawing whose box already holds it"
+                )
+    for part, rx, ry, sx, sy in placed:
+        for name, (px, py) in part.ports.items():
+            if name in ports:
+                raise ValueError(
+                    f"{body.symbol_id()}: the {part.iso.reg} part anchors a nozzle "
+                    f"called {name!r}, and the body already has one. A part adds "
+                    f"connections and never replaces them, since two nozzles under "
+                    f"one name draw a stream to whichever survived the merge"
+                )
+            ports[name] = (round(rx + ox + sx * px, 4), round(ry + oy + sy * py, 4))
+
+    return Symbol(
+        svg=head + "".join(art) + tail,
+        width=round(width, 4), height=round(height, 4),
+        ports=ports,
+        # The body's authored menu, moved with the ink it was authored
+        # against, so a nozzle the layout engine chose to move to another
+        # face still lands on drawn stroke. Every entry in it has already
+        # been checked against the composed box above.
+        port_faces={name: {face: shift(xy) for face, xy in menu.items()}
+                    for name, menu in body.port_faces.items()},
+        faceless_ports=body.faceless_ports, port_series=body.port_series,
+        label_pos=body.label_pos,
+        # A definition per composition, on darkened()'s and expander()'s
+        # rule. Digested rather than spelled out because a tray column is
+        # thirty overlays and an id is read by a person: four bytes of
+        # blake2s is short, and stable across processes in a way hash()
+        # is not, which matters because this lands in the emitted SVG and
+        # the golden fixtures compare it byte for byte.
+        id_suffix=body.id_suffix + "_c" + hashlib.blake2s(
+            repr([o for o, _ in parts]).encode(), digest_size=4).hexdigest(),
+        stretchable=body.stretchable and all(p.stretchable for p, *_ in placed),
+        bare_run=body.bare_run,
+        gravity_fixed=body.gravity_fixed or any(p.gravity_fixed for p, *_ in placed),
+        directional=body.directional or any(p.directional for p, *_ in placed),
+        # Deliberately not the body's; see the docstring.
+        drawio_shape="", drawio_flip_h=body.drawio_flip_h, drawio_fill=body.drawio_fill,
+        overlays=tuple(overlay for overlay, _ in parts),
+        # *Not* the body's. A composition is a different symbol from the
+        # thing it was composed onto, so carrying the body's number
+        # forward would claim a stirred tank is a plain vessel -- the
+        # exact false identity :class:`IsoPart`'s rule exists to stop.
+        # Where the composition reproduces a tabulated symbol example it
+        # has a number of its own -- a body carrying item 29.2 is
+        # X8125 -- and the caller that knows which one states it.
+        iso_reg=iso_reg,
+    )
+
+
 class SymbolRegistry:
     def __init__(self):
         self._symbols: dict[tuple[str, str], Symbol] = {}
@@ -1223,6 +1810,17 @@ class SymbolRegistry:
         # Fittings turned end for end, built once each on demand and
         # shared for the same reason the darkened bodies are.
         self._expanders: dict[tuple[str, str], Symbol] = {}
+        # The supplementary symbols of ISO 10628-2 groups 26-29, keyed by
+        # (group, name). Empty until the artwork is drawn: the mechanism
+        # ships before the glyphs do, so that the first part added is a
+        # drawing and nothing else.
+        self._parts: dict[tuple[int, str], OverlayPart] = {}
+        # Bodies with their parts on, built once per (kind, variant,
+        # overlays) and shared. Port resolution asks for a unit's symbol
+        # on every call and a tray column is thirty parts to paint, so a
+        # composition that is rebuilt per lookup is rebuilt thousands of
+        # times per sheet.
+        self._composed: dict[tuple, Symbol] = {}
         self._register_defaults()
 
     def register(self, kind: str, template: Symbol, variant: str = "default") -> None:
@@ -1230,6 +1828,67 @@ class SymbolRegistry:
         self._darkened.pop((kind, variant), None)
         self._closed.pop((kind, variant), None)
         self._expanders.pop((kind, variant), None)
+        for key in [k for k in self._composed if k[:2] == (kind, variant)]:
+            del self._composed[key]
+
+    def register_part(self, part: OverlayPart) -> None:
+        """Register one ISO group 26-29 supplementary symbol.
+
+        Keyed by ``(group, name)``, so the ISO subject group is part of
+        the identity rather than a note about it: a tray is a group-27
+        internal and an agitator a group-28 stirrer, and a name is only
+        unique inside its group.
+
+        Read the block above :class:`IsoPart` before adding one. A part
+        is justified by the standard composing at that point, and the
+        registration number it carries is what lets that be checked.
+        """
+        self._parts[part.key()] = part
+        # Every composition, since any of them may have used this part.
+        # Registering a part is a startup act, so there is nothing to
+        # save by being clever about which.
+        self._composed.clear()
+
+    def part(self, group: int, name: str) -> OverlayPart:
+        """The supplementary symbol registered as ``(group, name)``."""
+        if (group, name) in self._parts:
+            return self._parts[(group, name)]
+        known = self.part_names(group)
+        close = get_close_matches(name, known, n=1, cutoff=0.6)
+        suggestion = f" (did you mean {close[0]!r}?)" if close else ""
+        raise ValueError(
+            f"ISO 10628-2 group {group} has no part {name!r}{suggestion}; registered "
+            f"group {group} parts: {', '.join(known) or '(none)'}"
+        )
+
+    def part_names(self, group: int) -> list[str]:
+        """Every part registered in one ISO subject group, A-Z."""
+        return sorted(name for (g, name) in self._parts if g == group)
+
+    def parts(self) -> list[OverlayPart]:
+        """Every registered supplementary symbol, by group then name."""
+        return [self._parts[key] for key in sorted(self._parts)]
+
+    def composed(self, kind: str, variant: str = "default",
+                 overlays: "tuple[Overlay, ...]" = ()) -> Symbol:
+        """``(kind, variant)`` carrying ``overlays``, built once.
+
+        The whole resolution: a body from :meth:`get`, a part per overlay
+        from :meth:`part`, and :func:`compose` to paint them. No overlays
+        gives the body back unchanged, which is the zero case every
+        symbol the registry ships is in, and it does not go near the
+        cache -- there is nothing to build.
+        """
+        if not overlays:
+            return self.get(kind, variant)
+        key = (kind, variant, tuple(overlays))
+        if key not in self._composed:
+            self._composed[key] = compose(
+                self.get(kind, variant),
+                [(overlay, self.part(overlay.group, overlay.name))
+                 for overlay in overlays],
+            )
+        return self._composed[key]
 
     def register_closed(self, kind: str, template: Symbol, variant: str = "default") -> None:
         """The drawing for ``(kind, variant)`` declared normally closed.
@@ -1270,12 +1929,26 @@ class SymbolRegistry:
         large face is, which turns the fitting end for end. The lookup
         still runs in every case, so a variant name nobody registered is
         still rejected.
+
+        A unit may also name **supplementary parts** to be drawn on its
+        body -- an agitator in a reactor, trays in a column. Nothing sets
+        them today, so every unit takes the empty tuple and the drawing
+        it has always had.
+
+        The three derivations below are disjoint from composition rather
+        than ordered against it. A normally closed valve and a fitting
+        piped backwards are two of them, and neither kind composes: a
+        valve is a registered symbol of ISO group 21, and a body carrying
+        an internal has no normal position to show.
         """
         variant = getattr(unit, "variant", "default")
         sym = self.get(unit.kind, variant)
-        build = _BUILT_TO_SIZE.get(unit.kind)
+        build = _built_to_size(unit.kind, variant)
         if build is not None:
             return build(unit)
+        overlays = tuple(getattr(unit, "overlays", ()) or ())
+        if overlays:
+            return self.composed(unit.kind, variant, overlays)
         mark = closed_marking(unit, self)
         if mark == "stencil":
             return self._closed[(unit.kind, variant)]

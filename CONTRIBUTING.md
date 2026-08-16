@@ -180,6 +180,31 @@ from, and `pandid.render.symbols.block_symbol` builds it.
 Do not reach for this to avoid vendoring. A symbol with a fixed size goes
 through `KIND_MAP` like everything else.
 
+### Symbols composed from parts
+
+ISO 10628-2 Table 1 groups 1–25 name whole apparatus. Groups **26–29 name the
+parts you overlay onto one**: supports and manholes, trays and packing, the ten
+agitators, and the characteristic that says what settles or precipitates inside
+a body. Clause 5 makes composing from them a `shall` for a symbol the standard
+does not tabulate. `pandid.render.symbols.compose` is the mechanism, and
+`OverlayPart` is what you register a part as.
+
+**Compose only where ISO itself composes. Where ISO registers a distinct
+symbol, it stays a distinct symbol.** The test is not whether the drawing looks
+like a body with something inside it. It is whether *every* mark that
+distinguishes it from the shared body is a tabulated group-26/27/28/29 item you
+can name by its registration number. Item 8.3, the gravity separator, passes:
+its only mark is the down arrow Table 2 registers on its own as item 29.1,
+C2028. Item 8.10, the cyclone, does not: its mark is a helical vortex, no
+group-29 item draws one, and X2618 is its own registered symbol. A hydrocyclone
+is not "separator body plus cyclone characteristic".
+
+That is why `IsoPart` is required on every part and takes the group, the item
+number and the registration number: so the claim can be checked against Table 2
+by a reader, and so a mark with no number cannot become a part at all. If you
+are unsure whether something composes, leave it a distinct symbol and say so in
+the PR. A false composition is worse than a missed one.
+
 ## 2. Every port must land on drawn ink
 
 A nozzle floating in whitespace draws a stream that fails to touch its
