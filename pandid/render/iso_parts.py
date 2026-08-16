@@ -1,4 +1,4 @@
-"""ISO 10628-2:2012 Table 2 groups 26-29: the supplementary symbols.
+"""ISO 10628-2:2012 Table 2's supplementary symbols, and one drive.
 
 Groups 1-25 of Table 1 name whole apparatus. Groups **26 apparatus
 elements, 27 internals, 28 agitators and 29 internal characteristics**
@@ -7,6 +7,13 @@ composing from them a ``shall`` for any symbol the standard does not
 tabulate. :mod:`pandid.render.symbols` has the mechanism -- ``IsoPart``,
 ``Overlay``, ``OverlayPart`` and ``compose`` -- and this module is the
 artwork it was waiting for.
+
+**And item 20.6, the electric motor**, which is not a part at all: group
+20 is DRIVES, whole machines. It is here because ISO composes it itself.
+Item 1.27 X8006 is a jacketed vessel with a group-28 stirrer *and* a
+motor drawn above the top head on the stirrer's own shaft, and the
+standard registers that composition as a symbol. See
+``symbols.COMPOSED_APPARATUS`` for the admission and how narrow it is.
 
 The bottom of this file is the other half: **where each part goes on a
 body**, as fractions of that body's box. ``Reactor(agitator=)``,
@@ -115,12 +122,20 @@ it, and a prohibition rather than a rendering instruction.
 
 Ports
 -----
-Only an agitator anchors one. ISO item 1.27 (X8006) runs the stirrer's
-shaft up through the top head to a motor drawn above the vessel, so the
-drive is a real connection at a real place; a tray and a settling arrow
-are marks inside a body that no line ever reaches. Every group-28 part
-therefore anchors ``drive`` at the top of its shaft and nothing else
-anchors anything.
+Only the motor anchors one, and it is the only part that is a machine.
+``drive`` is where the power comes into the drawing, and on ISO item
+1.27 (X8006) that is the motor: the shaft below it is welded to it, not
+connected to it. A tray, a settling arrow and a stirrer are marks inside
+or under a body that no line ever reaches.
+
+The group-28 agitators anchored ``drive`` at the top of their shafts
+until the motor was drawn, which was right while the shaft's top *was*
+the top of the drawing. It is not any more -- the crown is mid-shaft
+now -- and a nozzle there would be nearest a *side* of the grown box and
+would take its stream out through the shell wall. The two parts always
+arrive together (:func:`agitator_overlays` returns both), so moving the
+nozzle to the motor loses nothing and puts it where an author would draw
+the supply.
 
 Why the drawings are built inside a function
 --------------------------------------------
@@ -234,10 +249,9 @@ def _build() -> tuple:
                    f'<line x1="{_AG_X:g}" y1="0" x2="{_AG_X:g}" y2="{shaft_to:g}" {_INK}/>',
                    *blade),
             width=AGITATOR_W, height=AGITATOR_H, drawio_shape=stencil,
-            # ISO item 1.27 (X8006) runs the shaft up through the top
-            # head to a motor drawn above the vessel, so the drive is a
-            # real connection at a real place on the drawing.
-            ports={"drive": (_AG_X, 0.0)},
+            # No nozzle. The shaft's top is welded to the motor above it
+            # -- item 20.6 below, which anchors ``drive`` -- and is not
+            # where a line arrives. See the module docstring on ports.
             # Turned, the drive comes in from the side and the blade
             # hangs sideways in a vessel that is still upright. That is
             # not the equipment this draws, so ISO 14617-1 §4.5 applies
@@ -465,6 +479,46 @@ def _build() -> tuple:
         f'<rect x="0" y="{6 * M:g}" width="{4 * M:g}" height="{2 * M:g}" {_INK}/>'
         f'<path d="M {M:g} {6 * M:g} L {M:g} {8 * M:g} '
         f'M {3 * M:g} {6 * M:g} L {3 * M:g} {8 * M:g}" {_INK}/>')
+
+    # ------------------------------------------------------------
+    # Group 20 -- drives
+    #
+    # One item of the eight, and it is here on ISO's own authority rather
+    # than on the rule the other thirty-six are here on: see the module
+    # docstring and ``symbols.COMPOSED_APPARATUS``. A motor is a machine,
+    # and pandid draws seven other group-20 machines as whole symbols
+    # with tags of their own; this is the one the standard draws *inside*
+    # another symbol.
+    # ------------------------------------------------------------
+
+    motor = OverlayPart(
+        name="motor", iso=IsoPart(20, "20.6", "C0082", "Electric motor (general)"),
+        # Measured off row 20.6: a 4 M circle with the letter M in it.
+        # The M is 1,5 M x 2 M on the circle's centre -- verticals at
+        # x 1,25 and 2,75 running from y 1 to y 3, and a vee between
+        # their tops that comes down to the centre and back up. Drawn as
+        # one stroke, which is how the row draws it.
+        #
+        # 1.27 draws this same mark at half size, 2 M across, which is
+        # the standard's usual treatment of a symbol set inside another.
+        # That is a *placement*, so it is stated in
+        # :func:`agitator_overlays` and not here.
+        svg=_g("20_motor",
+               f'<circle cx="{2 * M:g}" cy="{2 * M:g}" r="{2 * M:g}" {_INK}/>'
+               f'<path d="M {1.25 * M:g} {3 * M:g} L {1.25 * M:g} {M:g} '
+               f'L {2 * M:g} {2 * M:g} L {2.75 * M:g} {M:g} '
+               f'L {2.75 * M:g} {3 * M:g}" {_INK}/>'),
+        width=4 * M, height=4 * M,
+        # The whole drawing's one connection: power in, at the top of the
+        # motor. See the module docstring -- the agitators gave this up
+        # when the motor was drawn, because the top of the shaft stopped
+        # being the top of the drawing.
+        ports={"drive": (2 * M, 0.0)},
+        # A motor over a vessel is over it; upside down it is a motor
+        # hanging under the floor with the vessel's stirrer running up
+        # into it. ISO 14617-1 §4.5 again, and the same claim about the
+        # body the agitator it drives already makes.
+        gravity_fixed=True)
 
     # ------------------------------------------------------------
     # Group 29 -- internal characteristics and built-in components
@@ -697,6 +751,7 @@ def _build() -> tuple:
         fluidised_bed, packing,
         agitator_general, flat_blade, gate_paddle, cross_beam, anchor, helical,
         impeller, propeller, disc, turbine,
+        motor,
         gravity, electrostatic, electromagnetic,
         disc_type, crushing, gear, hammer, impact, jaw, liquid, roller, cone,
         jet, vibration,
@@ -707,7 +762,10 @@ _PARTS: "tuple | None" = None
 
 
 def parts() -> tuple:
-    """Every group 26-29 supplementary symbol, in Table 2 order.
+    """Every part this module draws, in Table 2 order.
+
+    The groups 26-29 supplementary symbols, and item 20.6 the motor
+    between the agitators it belongs with and group 29.
 
     Built once and shared, so a part asked for through the registry and a
     part read off this module are the same object.
@@ -719,7 +777,7 @@ def parts() -> tuple:
 
 
 def register_parts(registry) -> None:
-    """Register every group 26-29 supplementary symbol on ``registry``.
+    """Register every part this module draws on ``registry``.
 
     Called from :meth:`pandid.render.symbols.SymbolRegistry.__init__`
     after the whole symbols, since a part is only ever overlaid on one.
@@ -770,25 +828,80 @@ def _part(group: int, name: str, registry=None):
     return registry.part(group, name)
 
 
-def agitator_overlays(name: str, registry=None) -> tuple:
-    """``name``'s agitator, hung from the top head of a vertical body.
+#: The motor's diameter as a fraction of the **shell's width**, and the
+#: clear air between it and the crown as a fraction of the **body's
+#: height**. Both read off ISO item 1.27 X8006: the shell runs x 11..17
+#: and the body y 4..13, so a 6 M x 9 M box; the motor circle is x 13..15
+#: and y 1..3. Two modules across a six-module shell, sitting one module
+#: over a nine-module body.
+_MOTOR_WIDTH, _MOTOR_GAP = 1 / 3, 1 / 9
 
-    One overlay, placed as **ISO item 1.27 X8006** places it. Measured
-    off that row: the shaft runs from a module above the top head's
-    crown down to the blade; the blade is **48 % of the shell's width**,
-    centred on it, and sits between **62 % and 86 % of the way down the
-    straight side**.
+#: Where the stirrer's blade sits, as a fraction of the body's box: 48 %
+#: of the shell's width centred on it, with the foot of the part 76 % of
+#: the way down. Also 1.27's, and unchanged by the motor -- the shaft
+#: grew upward and the blade stayed in the liquid.
+_AGITATOR_X, _AGITATOR_W, _AGITATOR_FOOT = 0.26, 0.48, 0.76
 
-    Here the shaft starts at the very top of the body's box, which is the
-    crown of its top head, because that is where the ``drive`` nozzle has
-    to land: ISO draws the shaft running *through* the head to a motor
-    above the vessel, so the connection is on the crown and not inside
-    the shell. The blade then lands about three-quarters down, low in the
-    liquid, which is where the standard draws it.
+
+def agitator_overlays(name: str, kind: str, variant: str, registry=None) -> tuple:
+    """``name``'s agitator and its motor, on a vertical body.
+
+    **Two overlays, because ISO item 1.27 X8006 draws two marks.** The
+    row is a vessel with a group-28 stirrer *and* item 20.6's electric
+    motor above the top head, and the shaft is one continuous stroke from
+    the motor's underside, through the head, down to the blade. There is
+    no tabulated stirred vessel without a driver -- group 1 has 29 rows,
+    exactly one carries an agitator, and it carries the motor too -- so
+    the motor is not a keyword and there is nothing to ask for.
+
+    Measured off that row, against its 6 M x 9 M body box:
+
+    - the blade is 48 % of the shell's width, centred, with the foot of
+      the stirrer 76 % of the way down -- low in the liquid;
+    - the shaft's top is **one module above the crown**, at the motor;
+    - the motor is a **2 M circle on a 6 M shell**, so a third of the
+      shell's width, centred on the shaft.
+
+    ``compose`` grows the composed box upward to hold it and moves the
+    body's own nozzles down into it, which is the case
+    :class:`~pandid.render.symbols.Overlay` was written to support.
+
+    Why this one helper needs the body
+    ----------------------------------
+    A rectangle here is stated in fractions of the body's box, so its
+    *shape* is the body's shape times those fractions -- and the motor is
+    a **circle**. A third of the width against a fixed fraction of the
+    height comes out 7 % oval on the 62 x 100 stirred tank and 22 % oval
+    on the 52 x 95,4 jacketed one. The height is therefore derived from
+    the width and the body it is going on, which is the only way to say
+    "round" in a coordinate that has no units. Every other rectangle in
+    this file is a line, a bar or a deck, and says nothing about a shape
+    a stretch could destroy.
+
+    Letterboxing is not the alternative. A part that declares
+    ``stretchable=False`` makes the whole composition unstretchable (see
+    the module docstring), so a stirred tank given a box would be
+    centred in it while every stencilled neighbour filled one.
     """
     from pandid.render.symbols import Overlay
+    if registry is None:
+        from pandid.render.symbols import default_registry as registry
     _part(28, name, registry)
-    return (Overlay(28, name, 0.26, 0.0, 0.48, 0.76),)
+    _part(20, "motor", registry)
+    body = registry.get(kind, variant)
+    # Round: the circle's diameter is a third of the shell's width, and
+    # its height is whatever fraction of *this* body's height that is.
+    height = _MOTOR_WIDTH * body.width / body.height
+    return (
+        # The stirrer, its rectangle reaching up past the crown to the
+        # motor's underside so the shaft is the one stroke 1.27 draws.
+        # The foot does not move: only the top edge goes negative.
+        Overlay(28, name, _AGITATOR_X, -_MOTOR_GAP, _AGITATOR_W,
+                _AGITATOR_FOOT + _MOTOR_GAP),
+        # The motor, centred on the shaft, clear of the head.
+        Overlay(20, "motor", (1 - _MOTOR_WIDTH) / 2, -(_MOTOR_GAP + height),
+                _MOTOR_WIDTH, height),
+    )
 
 
 #: Where a column's internals live, as fractions of a vertical body's

@@ -49,7 +49,7 @@ import hashlib
 import math
 import re
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from difflib import get_close_matches
 from functools import lru_cache
 
@@ -272,6 +272,16 @@ class PortSeries:
 # hydrocyclone is not "separator body + cyclone characteristic"; it is
 # X2618.
 #
+# The rule reads "compose only where ISO itself composes", and the two
+# halves are not the same test. Nearly always the part is a group-26/29
+# item and the two coincide. Once, they do not: item 1.27 (X8006) draws
+# the general electric **motor** -- item 20.6, and group 20 is DRIVES,
+# whole machines -- above a stirred vessel, on the stirrer's own shaft,
+# and registers the result. So a mark can be a tabulated apparatus and
+# still be composed, because ISO composed it. That admission is
+# :data:`COMPOSED_APPARATUS`, and it lists *items* precisely so it cannot
+# become a licence for the group they come from.
+#
 # :class:`IsoPart` is where that test is made checkable rather than
 # remembered. A part cannot be registered without naming the group, the
 # item number and the registration number it claims to be, so a reader
@@ -291,6 +301,34 @@ PART_GROUPS = {
     27: "internals",
     28: "agitators, stirrers",
     29: "internal characteristics and built-in components",
+}
+
+#: The apparatus items ISO **itself** draws inside another apparatus,
+#: each with the tabulated row that licenses it. Read an entry as: this
+#: item may be a part, and the row beside it is the composition it is a
+#: part of.
+#:
+#: One entry. Item 20.6 C0082 is the general electric motor, and item
+#: 1.27 X8006 -- "jacketed vessel with dished ends and agitator driven by
+#: electric motor" -- draws it above the vessel on the stirrer's own
+#: shaft. That is a hole in the rule above, and it is worth being exact
+#: about what the hole is. The rule refuses an **ad hoc** apparatus-on-
+#: another-apparatus overlay, and it can refuse one because the standard
+#: licenses none: an author who wants a motor beside a reactor draws two
+#: units and tags both. It does not refuse a composition **ISO tabulates
+#: and registers**, which is the same licence items 8.3, 8.6 and 8.8 give
+#: the three group-29 separators :meth:`SymbolRegistry._register_composed`
+#: already builds, and the same one clause 5 gives composition at all.
+#:
+#: **By item, not by group**, because the group is no licence whatever:
+#: ISO 10628-2 Table 1 group 20 is DRIVES, and 20.1 turbine, 20.2 gear
+#: and 20.7 generator are machines that carry a tag of their own and are
+#: drawn *beside* what they drive. Admitting the group would admit those;
+#: admitting the row admits the one drawing ISO composes. A second entry
+#: here has to arrive with its own tabulated row, named in this dict, the
+#: way this one does.
+COMPOSED_APPARATUS = {
+    "20.6": "1.27 X8006, the motor above a stirred vessel",
 }
 
 #: The four registration-number namespaces ISO 10628-2 clause 5 column 2
@@ -328,7 +366,10 @@ class IsoPart:
     justification to offer.
 
     Args:
-        group: The Table 1 subject group, one of :data:`PART_GROUPS`.
+        group: The Table 1 subject group, one of :data:`PART_GROUPS` --
+            or a group whose *item* is named in
+            :data:`COMPOSED_APPARATUS`, which is the one apparatus ISO
+            composes onto another itself.
         item: The item number within the group, as Table 2 writes it and
             including the group -- ``"27.3"``, not ``"3"``.
         reg: The registration number, in one of the four namespaces
@@ -343,11 +384,13 @@ class IsoPart:
     name: str
 
     def __post_init__(self) -> None:
-        if self.group not in PART_GROUPS:
+        if self.group not in PART_GROUPS and self.item not in COMPOSED_APPARATUS:
             raise ValueError(
                 f"{self.reg}: ISO 10628-2 group {self.group} is not one of the part "
-                f"groups {sorted(PART_GROUPS)}. Groups 1-25 are whole apparatus, and "
-                f"an apparatus overlaid on another apparatus is two units on one tag"
+                f"groups {sorted(PART_GROUPS)}, and item {self.item} is not one of the "
+                f"apparatus ISO composes anyway ({', '.join(sorted(COMPOSED_APPARATUS))}). "
+                f"Groups 1-25 are whole apparatus, and an apparatus overlaid on another "
+                f"apparatus is two units on one tag"
             )
         if not self.item.startswith(f"{self.group}."):
             raise ValueError(
@@ -398,7 +441,8 @@ class Overlay:
     which wall each deck touches by varying ``x`` as well.
 
     Args:
-        group: The part's ISO subject group, 26 to 29.
+        group: The part's ISO subject group: 26 to 29, or 20 for the one
+            drive :data:`COMPOSED_APPARATUS` admits.
         name: The part's registry name, in pandid's spelling
             (``"turbine"``), not the standard's descriptor.
         x: Left edge, as a fraction of the body's width.
@@ -1645,6 +1689,37 @@ def _at_part_scale(svg: str, scale: float) -> str:
         lambda m: f'stroke-width="{float(m.group(1)) / scale:.6g}"', svg)
 
 
+def _shifted_series(series: PortSeries, body: Symbol, ox: float, oy: float,
+                    width: float, height: float) -> PortSeries:
+    """``series``, moved and re-scaled onto the composed box.
+
+    A :class:`PortSeries` places its members in **absolute** coordinates
+    along a face: ``at`` is a point on it and ``pitch`` a distance along
+    it, with only ``extent`` stated as a fraction. So a series carried
+    across unchanged onto a box a part has grown says the same numbers
+    about a longer face, and the family walks up the shell -- a stirred
+    tank's charge nozzle, authored at the middle of a 100-unit wall,
+    landing a fifth of the way down a 132-unit one, which is above the
+    liquid it charges.
+
+    Both corrections are the same correction: hold the members where
+    they were drawn. ``at`` moves with the ink, and ``extent`` -- the
+    share of the face the widest run may spread over -- is re-expressed
+    so the run it allows is the same length of wall as before.
+
+    Nothing hit this until a part was drawn *above* a body: the supports
+    are the only other parts that leave the box, they leave it downwards,
+    and a box grown downwards has no offset to apply.
+    """
+    along, grown = ((body.height, height) if series.face in ("W", "E")
+                    else (body.width, width))
+    offset = oy if series.face in ("W", "E") else ox
+    if (offset, along) == (0.0, grown):
+        return series
+    at = (along / 2 if series.at is None else series.at) + offset
+    return replace(series, at=at, extent=series.extent * along / grown)
+
+
 def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
             iso_reg: str = "") -> Symbol:
     """``body`` with its supplementary parts painted over it.
@@ -1689,7 +1764,19 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
     case and costs nothing. A part hanging off it grows the box and
     shifts everything into it, which is what ISO item 1.27 (X8006) needs:
     the drive motor is drawn above the top head, so the vessel is no
-    longer the whole drawing and the nozzles have to move down with it.
+    longer the whole drawing and the nozzles have to move down with it --
+    the fixed ones by ``shift`` below, a :class:`PortSeries` by
+    :func:`_shifted_series`, since a series states its placement in
+    absolute coordinates along a face that has just got longer.
+
+    A nozzle **on** the body cannot always survive that. A face here is
+    the box edge the nozzle is nearest, re-derived from the coordinate
+    wherever it is read, so a vent on a vessel's crown is nearest the top
+    of the vessel's own box and nearest a *side* of a box grown to hold a
+    motor above it: the stream would leave through the shell wall. That
+    is refused below rather than drawn, and the answer is to clear the
+    crown -- which is what 1.27 draws, a top head carrying nothing but
+    the shaft.
 
     draw.io
     -------
@@ -1819,7 +1906,9 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
         # been checked against the composed box above.
         port_faces={name: {face: shift(xy) for face, xy in menu.items()}
                     for name, menu in body.port_faces.items()},
-        faceless_ports=body.faceless_ports, port_series=body.port_series,
+        faceless_ports=body.faceless_ports,
+        port_series=tuple(_shifted_series(s, body, ox, oy, width, height)
+                          for s in body.port_series),
         label_pos=body.label_pos,
         # A definition per composition, on darkened()'s and expander()'s
         # rule. Digested rather than spelled out because a tray column is

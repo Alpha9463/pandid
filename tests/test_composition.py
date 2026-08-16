@@ -34,6 +34,7 @@ import pytest
 from pandid import Flowsheet, units
 from pandid.render.svg import SvgRenderer
 from pandid.render.symbols import (
+    COMPOSED_APPARATUS,
     PART_GROUPS,
     IsoPart,
     Overlay,
@@ -112,6 +113,31 @@ def test_a_part_must_name_a_group_that_composes():
 
 def test_the_part_groups_are_the_four_iso_names_them():
     assert sorted(PART_GROUPS) == [26, 27, 28, 29]
+
+
+def test_the_one_apparatus_iso_composes_itself_is_admitted_by_item():
+    """ "Compose only where ISO itself composes" and "compose only groups 26-29"
+    are not the same test, and they part company exactly once.
+
+    Item 1.27 X8006 draws the general electric motor -- item 20.6, and group 20
+    is DRIVES, whole machines -- above a stirred vessel on the stirrer's own
+    shaft, and registers the composition. So the motor is composed on the
+    standard's own authority, the way the three group-29 separators are.
+
+    The admission is a list of **items**, which is what keeps it from becoming a
+    licence for the group it comes from: 20.1's turbine and 20.7's generator are
+    machines that carry a tag of their own, and they are refused here beside the
+    cyclone.
+    """
+    assert IsoPart(20, "20.6", "C0082", "Electric motor (general)").group == 20
+    assert set(COMPOSED_APPARATUS) == {"20.6"}
+    for group, item, reg, name in (
+        (20, "20.1", "C0080", "Turbine (general)"),
+        (20, "20.7", "C0083", "Generator (general)"),
+        (8, "8.10", "X2618", "Separator, cyclone type"),
+    ):
+        with pytest.raises(ValueError, match="not one of the part groups"):
+            IsoPart(group, item, reg, name)
 
 
 @pytest.mark.parametrize("reg", ["2062", "301", "C2044", "X2618", "X8141"])
@@ -708,9 +734,10 @@ def test_a_tubular_reactor_drops_the_vent_it_has_no_use_for():
 def test_only_the_agitator_brings_the_drive():
     """The nozzle a *part* anchors exists exactly when the part does.
 
-    ISO item 1.27 X8006 runs the stirrer's shaft up through the top head to a
-    motor above the vessel, so the drive is a real connection at a real place
-    -- and a reactor with no stirrer has no shaft for it to be at.
+    ISO item 1.27 X8006 runs the stirrer's shaft up through the top head to the
+    motor above the vessel, and the motor is where the power arrives -- so the
+    drive is a real connection at a real place, and a reactor with no stirrer
+    has neither the motor nor anything for it to turn.
     """
     assert "drive" in units.Reactor("R-101").ports
     assert "drive" in units.Reactor("R-102", agitator="turbine").ports
@@ -767,7 +794,7 @@ def test_an_agitator_the_author_named_survives_its_internals():
     of what it turns in.
     """
     unit = units.Reactor("R-203", agitator="turbine", internals="packing")
-    assert drawn(unit) == [(27, "packing"), (28, "turbine")]
+    assert drawn(unit) == [(27, "packing"), (28, "turbine"), (20, "motor")]
     assert (unit.agitator, unit.internals) == ("turbine", "packing")
     assert "drive" in unit.ports
 
@@ -779,12 +806,13 @@ def test_the_reactor_forms_that_did_not_change():
     that has escaped its subject, so the neighbours are asserted rather than
     assumed.
     """
-    # Nothing said at all: still the stirred tank a reactor is by default.
-    assert drawn(units.Reactor("R-101")) == [(28, "agitator")]
+    # Nothing said at all: still the stirred tank a reactor is by default,
+    # and a stirrer comes with the motor that turns it (ISO item 1.27 X8006).
+    assert drawn(units.Reactor("R-101")) == [(28, "agitator"), (20, "motor")]
     # Said, and said empty: still the bare shell somebody asked for.
     assert drawn(units.Reactor("R-102", agitator=None)) == []
     # Said, and said something: still that stirrer.
-    assert drawn(units.Reactor("R-103", agitator="anchor")) == [(28, "anchor")]
+    assert drawn(units.Reactor("R-103", agitator="anchor")) == [(28, "anchor"), (20, "motor")]
 
 
 def test_the_agitator_default_is_the_same_answer_wherever_it_is_asked_for():

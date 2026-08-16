@@ -362,14 +362,22 @@ KIND_MAP = {
     #
     # The nozzles are the drum's, in the drum's places: the product out of the
     # bottom head, the duty on the straight east wall (which spans y 7.5..92.5)
-    # and the charge nozzles down the west one. The vent takes the crown at
-    # (46.5, 1), which is where ``vessel/default`` puts its relief and is the
-    # mirror of it -- on the head, and a clear 15.5 from the agitator's shaft,
-    # which comes down the centre line at x 31.
+    # and the charge nozzles down the west one.
+    #
+    # **The vent is on the shell, not on the crown**, and that is 1.27 again
+    # rather than a preference. The crown of a stirred vessel carries the shaft
+    # and nothing else, because the motor is drawn on the shaft above it -- and
+    # pandid's own geometry says the same thing from the other side: a nozzle's
+    # face is the box edge it is nearest, the composed box is a third of the
+    # body's height taller than the body, and every point on a 62-wide crown is
+    # then nearer a side wall than the top. A vent left up there would take its
+    # stream out through the shell. So it sits at (62, 10), on the straight east
+    # wall just under the tangent line at y 7.5, which is where the off-gas
+    # leaves a vessel whose head is occupied.
     ("reactor", "default"): ("vessels", "Pressurized Vessel",
                              {"feed": ("SERIES", "W", 100.0, 28.0, 0.32),
                               "outlet": ("S", 50.0), "duty": ("E", 100.0),
-                              "vent": ("AT", 75.0, 2.0)}),
+                              "vent": ("AT", 100.0, 20.0)}),
     # The drawing ``default`` used to be, kept under a name that says what it is
     # rather than deleted: a box with a stirrer perched on top of it is still
     # what some plants draw, and a reader with an old sheet has to be able to
@@ -388,10 +396,15 @@ KIND_MAP = {
     # reactor and a jacketed vessel are one piece of equipment differing in what
     # is in it. The duty connection is the jacket's, so it takes the jacket band
     # rather than the shell wall.
+    #
+    # The vent is off the crown for the reason ``default``'s is, and lands at
+    # (46, 10): the shell's own east wall, which the outline draws from y 7.69
+    # to 87.69, at the one height above the jacket band (y 12.69..82.69) -- so
+    # the line leaves over the jacket rather than through it.
     ("reactor", "jacketed"): ("vessels", "Vessel (Dished Ends, Heating-Cooling Jacket)",
                               {"feed": ("SERIES", "W", 47.7, 14, 0.32),
                                "outlet": ("S", 26.0), "duty": ("E", 47.7),
-                               "vent": ("AT", 14.0, 1.5)}),
+                               "vent": ("AT", 46.0, 10.0)}),
     # The flash drum: the same plain dished-head cylinder the vessel and the
     # column are drawn from, with the phases named. ``vessel``/``horizontal``
     # and ``separator``/``horizontal`` are already one stencil ("Drum or

@@ -884,7 +884,13 @@ def test_ports_land_on_drawn_ink_at_any_box_shape(entry, odd_box_sheets):
         pytest.skip("feed/product are drawn dynamically, not from Symbol.svg")
     if kind in _UNBOXABLE_KINDS:
         pytest.skip("a conveyor is sized by length=, so its box is its artwork's")
-    segments = _collect_segments(sym.svg)
+    # The ink the *unit* is drawn with, which is not always the registered
+    # symbol's: a reactor composes a stirrer and its motor onto the body, and
+    # the motor grows the box upward and moves every one of the body's nozzles
+    # down into it. Measuring the moved nozzles against the unmoved body would
+    # report the composition's own offset as a gap.
+    first = next(iter(odd_box_sheets.values()))[(kind, variant)][0]
+    segments = _collect_segments(default_registry.for_unit(first).svg)
     for key, sheet in odd_box_sheets.items():
         unit, matrix = sheet[(kind, variant)]
         for name in unit.ports:
@@ -1468,7 +1474,12 @@ def test_a_lone_member_lands_where_the_fixed_nozzle_did():
     from pandid.portgeom import _drawn_placements, resolve_size
 
     for unit, want in (
-        (U.Reactor("R"), (0.0, 50.0)),
+        # The stirred tank's drawing is taller than its body: ISO item 1.27
+        # X8006's motor hangs above the crown, so the composed box grows by
+        # the motor's own diameter (a third of the 62-wide shell) plus the
+        # ninth of the body's height of clear air under it, and the shell
+        # moves down into it. 50 is still the middle of the straight wall.
+        (U.Reactor("R"), (0.0, 50.0 + 62.0 / 3 + 100.0 / 9)),
         (U.Reactor("R", variant="mixing"), (0.0, 48.2)),
         (U.Reactor("R", variant="plain"), (0.0, 30.0)),
     ):

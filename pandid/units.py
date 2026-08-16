@@ -2386,8 +2386,12 @@ class Reactor(Unit):
       body), ``"turbine"``, ``"propeller"``, ``"anchor"``, ``"helical"``,
       ``"flat_blade"``, ``"gate_paddle"``, ``"cross_beam"``,
       ``"impeller"``, ``"disc"``. It hangs from the top head on a shaft
-      through it and brings a ``drive`` connection at the top of that
-      shaft, which is where ISO item 1.27 X8006 draws the motor.
+      through it, and the shaft runs up to the **drive motor** -- ISO
+      item 20.6 C0082, drawn above the vessel, which is what carries the
+      ``drive`` connection. Stirrer and motor come together because ISO
+      item 1.27 X8006 draws them together: there is no tabulated stirred
+      vessel with nothing turning it, so there is no keyword to ask for
+      one.
     - ``internals=`` names one of the eight ISO group-27 internals. Two
       of them make a reactor a different reactor: ``"packing"`` is a
       packed bed and ``"fluidised_bed"`` is a fluidised bed.
@@ -2535,13 +2539,14 @@ class Reactor(Unit):
         _compose_onto(
             self,
             () if internals is None else internals_overlays(internals),
-            () if agitator is None else agitator_overlays(agitator),
+            () if agitator is None
+            else agitator_overlays(agitator, self.kind, self.variant),
         )
-        # The drive is the *agitator's*, so it exists exactly when the
-        # agitator does. Declared here rather than in ``_VARIANT_PORTS``
-        # because the part brings it and the part is chosen per unit,
-        # where a variant's nozzles are the same for every unit that
-        # names it.
+        # The drive is the *motor's*, and the motor comes with the
+        # agitator, so it exists exactly when the agitator does.
+        # Declared here rather than in ``_VARIANT_PORTS`` because the
+        # part brings it and the part is chosen per unit, where a
+        # variant's nozzles are the same for every unit that names it.
         if agitator is not None:
             self.drive = self._add_port("drive", "inlet", "energy")
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
