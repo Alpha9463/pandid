@@ -52,7 +52,8 @@ def free_units(fs: "Flowsheet") -> list:
 
 def free_streams(fs: "Flowsheet") -> list:
     """Streams between two ranked units. A signal to an attached
-    a flow-order constraint and must not push its peer down a column."""
+    balloon is not a flow-order constraint and must not push its peer
+    down a column."""
     return [s for s in fs.streams
             if not is_attached(s.source.owner) and not is_attached(s.dest.owner)]
 

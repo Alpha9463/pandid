@@ -82,12 +82,18 @@ def assign_coordinates(fs: "Flowsheet") -> None:
             unpinned_y.add(u)
 
     # Post-pass: straighten the process spine. Walk units left-to-right
-    # and, where a unit has a single horizontal process connection to a
-    # neighbour in another column, shift it vertically so the two ports
-    # share an absolute height, turning staircase jogs into straight
-    # runs (and clean L's for single-stream Feed/Product terminals).
-    # Anything that would overlap a neighbour in the same column is left
-    # on the row axis. The slot carries the same box the Frame will
+    # and, where a unit has a single horizontal process connection to
+    # pull it, shift it vertically so the two ports share an absolute
+    # height, turning staircase jogs into straight runs (and clean L's
+    # for single-stream Feed/Product terminals). Only a peer strictly to
+    # the left counts as upstream; everything else buckets downstream,
+    # a peer in this unit's own column included, so a same-column peer
+    # can be the lone anchor. Nothing rules that out ahead of time: the
+    # overlap check below is what settles it, and two boxes asked to
+    # share a height in one column will fail it unless the target is an
+    # N/S escape lane clear of both. Anything that would overlap a
+    # neighbour in the same column is left on the row axis. The slot
+    # carries the same box the Frame will
     # (size and transform), so the port resolver answers here exactly as
     # it will once the frames are emitted. That is the point: a target
     # read off the symbol instead ignores the resize, the mirror and any
