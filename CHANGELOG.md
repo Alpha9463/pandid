@@ -304,6 +304,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Product`.
 
 ### Changed
+- Comments and docs cite the standards rather than reproducing their text,
+  so no third-party clause ships in the package.
+
 
 - **The standards are cited, not quoted.** Every reproduced clause in the
   package, its tests, docs and examples is now a paraphrase with the citation

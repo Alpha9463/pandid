@@ -52,16 +52,16 @@ lines* -- the in-line detail band -- at 0,25 mm. A tray deck and an
 impeller are detail inside an outline, not the outline, so they belong in
 the finer band, and a professionally drawn sheet puts them there. The
 weight survives the scale to the body: ``compose`` divides every declared
-width by the scale first, per ISO 14617-1 §4.3's "when the size of a
-symbol is changed, the line width shall be unchanged".
+width by the scale first, because ISO 14617-1 §4.3 holds a symbol's
+line width fixed when the symbol is resized.
 
 Connection ticks are not drawn
 ------------------------------
 Table 2 draws a short thin stroke beside many symbols, offset by one
-module from the artwork. Clause 5 column 3 says what it is: *"Preferred
-locations of connections at graphical symbols are indicated by '—'. This
-is not a part of the graphical symbol."* It is a placement note, and
-pandid states placement in ``ports`` instead. That matters here because
+module from the artwork. Clause 5 column 3 says what it is: the mark
+that shows where a connection is preferably made, and expressly no part
+of the graphical symbol itself. It is a placement note, and pandid
+states placement in ``ports`` instead. That matters here because
 an agitator's tick sits directly above its shaft with a one-module gap,
 so a reader skimming the page sees a broken vertical line and concludes
 the shaft is dashed. **It is not.** Every group-28 shaft in Table 2 is a
@@ -73,8 +73,8 @@ Every part stretches, and two flags say why not
 **No part sets ``stretchable=False``**, and that is a correction to this
 module as it first shipped rather than an oversight. The case for holding
 the ten agitators rigid is real -- they differ in nothing but the shape at
-the foot of the shaft, and ISO 14617-1 §4.4 bounds reshaping by "shall
-not make it impossible to recognize the symbol". But the flag does not
+the foot of the shaft, and ISO 14617-1 §4.4 bounds reshaping at the
+point where the symbol stops being recognisable. But the flag does not
 mean *draw this part carefully*. It means two other things, and both are
 about the body rather than the part:
 
