@@ -42,8 +42,10 @@ measured variables. The counter runs at *declaration*, so the number is
 fixed by the line that declares the loop and nothing re-derives it
 afterwards. :meth:`~pandid.flowsheet.Flowsheet.to_dict` writes
 ``loops: [{variable, number}]`` with the number spelled out either way,
-so reading that spec back gives a sheet whose numbers are nailed down
-and whose counter is untouched.
+so reading that spec back gives a sheet whose numbers are nailed down.
+The counter is nailed down with them: the reader sets it past the
+highest number the file declares, so a draft that was frozen and read
+back carries on its series instead of starting it again.
 """
 
 from __future__ import annotations

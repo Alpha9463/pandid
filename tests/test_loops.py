@@ -532,3 +532,90 @@ def test_a_duplicate_loop_in_a_spec_names_the_entry():
                 "loops": [{"variable": "F", "number": 303}, {"variable": "F", "number": "303"}],
             }
         )
+
+
+# --- reading a frozen sheet back and carrying on ------------------------------
+
+
+def test_a_sheet_read_back_carries_its_series_on():
+    """The draft -> freeze -> continue path auto-numbering was built for.
+
+    The numbers are literals in the file and nothing records how many the
+    counter spent, so the counter is set past the highest number the file
+    declares. Without it the rebuilt sheet starts at 301 again and mints a
+    second series over the top of the first -- quietly, because ``F-301``
+    beside ``P-301`` is two legal loops.
+    """
+    fs = Flowsheet("A300", loop_number_start=301)
+    for variable in ("P", "T", "F", "L"):
+        fs.add_loop(variable)
+
+    rebuilt = Flowsheet.from_dict(fs.to_dict())
+    assert [loop.name for loop in rebuilt.loops] == ["P-301", "T-302", "F-303", "L-304"]
+    assert rebuilt.add_loop("F").name == "F-305" == fs.add_loop("F").name
+
+
+def test_the_restored_counter_clears_a_typed_number_too():
+    """It is the highest number declared, not a count of the loops.
+
+    The counter it restores is therefore not always the one the sheet had:
+    ``F-316`` typed by hand pushes the rebuilt series to 317 where the
+    original would have gone on at 303. That is the cost of deriving the
+    counter from the drawing rather than serialising it -- the series
+    resumes past a gap instead of filling it, and never lands on a number
+    the file already spells out.
+    """
+    fs = Flowsheet("mixed", loop_number_start=301)
+    fs.add_loop("P")  # P-301
+    fs.add_loop("T")  # T-302
+    fs.add_loop("F", 316)  # typed, well clear of the series
+    assert fs.add_loop("L").name == "L-303"
+
+    rebuilt = Flowsheet.from_dict(fs.to_dict())
+    assert rebuilt.add_loop("L").name == "L-317"
+
+
+def test_the_restored_counter_only_ever_moves_forwards():
+    """A loop numbered below the start does not un-spend anything.
+
+    ``loop_number_start`` is where the series begins; a hand-written spec
+    that also declares ``F-12`` has said nothing about where to resume.
+    """
+    rebuilt = Flowsheet.from_dict(
+        {"name": "T", "loop_number_start": 301, "loops": [{"variable": "F", "number": 12}]}
+    )
+    assert rebuilt.add_loop("T").name == "T-301"
+
+
+def test_a_loop_number_that_is_not_a_number_leaves_the_counter_alone():
+    """``L-301A`` has no place in the series to be past, so it moves nothing
+    and does not break the read.
+    """
+    rebuilt = Flowsheet.from_dict(
+        {
+            "name": "T",
+            "loop_number_start": 301,
+            "loops": [{"variable": "L", "number": "301A"}, {"variable": "P", "number": 303}],
+        }
+    )
+    assert [loop.name for loop in rebuilt.loops] == ["L-301A", "P-303"]
+    assert rebuilt.add_loop("T").name == "T-304"
+
+
+def test_a_spec_loop_with_no_number_still_takes_the_sheets_next_one():
+    """The counter is restored *after* the section, not before it.
+
+    A hand-written spec is the same declaration as the same calls typed out,
+    so ``{variable: T}`` following ``{variable: F, number: 316}`` takes 302
+    here exactly as ``add_loop("T")`` would. What the restore fixes is the
+    state the read leaves behind, not the read.
+    """
+    rebuilt = Flowsheet.from_dict(
+        {
+            "name": "A300",
+            "loop_number_start": 301,
+            "loops": [{"variable": "P"}, {"variable": "F", "number": 316}, {"variable": "T"}],
+        }
+    )
+    assert [loop.name for loop in rebuilt.loops] == ["P-301", "F-316", "T-302"]
+    assert rebuilt.add_loop("L").name == "L-317"

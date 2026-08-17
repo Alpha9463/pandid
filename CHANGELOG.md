@@ -585,6 +585,11 @@ reader would otherwise take them for working code.
   against the obstacles: both corner orders are tried and the one crossing less
   equipment is drawn.
 
+- **A spec read back carries its loop series on.** `from_dict` now sets the
+  loop counter past the highest number the file declares, so a frozen draft
+  continues its numbering instead of starting it again over numbers it has
+  already used.
+
 - Corpus counts in `docs/api.md` and `pandid/validate.py` are gone; the
   prose states the rule and the tests measure the corpus.
 
