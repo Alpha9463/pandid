@@ -518,7 +518,7 @@ from pandid import units
 sifter = units.Separator("SC-101", variant="sifter")
 ```
 
-`units.Kind(variant=…)` is the escape hatch. 100 of the 174 registered drawings
+`units.Kind(variant=…)` is the escape hatch. 103 of the 179 registered drawings
 get no class of their own, and this is how you reach them; see
 [Variants](#variants) for the list. Where a class exists, name it.
 
@@ -577,6 +577,7 @@ Each entry is `port` *(direction / role)*.
 | `HeatExchanger` | `hex` | `shell_in`, `shell_out`, `tube_in`, `tube_out`; `kettle` adds `bottoms` *(out/liquid)*. Four variants name their sides differently; see [Variants](#variants) |
 | `Heater` | `heater` | `inlet` *(in)*, `outlet` *(out)*, `utility_in` *(in/energy)* |
 | `Cooler` | `cooler` | `inlet` *(in)*, `outlet` *(out)*, `utility_out` *(out/energy)* |
+| `CoolingTower` | `cooling_tower` | `water_in` *(in)*, `water_out` *(out)*, `air_in` *(in)*, `air_out` *(out)*, `makeup` *(in/utility)*, `blowdown` *(out/liquid)*. Named for the side of the equipment, as an exchanger's are; `makeup` and `blowdown` are on the basin |
 | `Furnace` | `furnace` | `inlet` *(in)*, `outlet` *(out)*, `fuel` *(in/feed)* |
 | `Filter` | `filter` | `inlet` *(in)*, `outlet` *(out)* on the five that clarify — the medium keeps the solids and is cleaned offline (`default`, `fixed_bed`, `gas`, `gas_fixed_bed`, `gas_belt`). The four that form a cake add `wash_in` *(in/utility)* and `cake` *(out)*: `press`, `belt`, `rotary`, `rotary_scraper`. `ion_exchange` takes a regenerant rather than a wash, and names it: `regenerant_in` *(in/utility)*, `spent_regenerant` *(out)*; see [Variants](#variants) |
 | `Dryer` | `dryer` | `feed` *(in/feed)*, `product` *(out)* |
@@ -796,6 +797,7 @@ base has not, `-` one it drops. The bases are in the [Port table](#port-table).
 | `ImpactSeparator` | `separator` | `Separator` | `+overflow` `+underflow` `-vapor` `-liquid` |
 | `MagneticSeparator` | `separator` | `Separator` | `+overflow` `+underflow` `-vapor` `-liquid` |
 | `Scrubber` | `separator` | `Separator` | |
+| `VenturiScrubber` | `separator` | `Separator` | |
 | `KnockoutDrum` | `separator` | `Separator` | |
 | `DustCollector` | `filter` | `Filter` | |
 | `RotaryDrumFilter` | `filter` | `Filter` | `+wash_in` `+cake` |
@@ -823,6 +825,7 @@ base has not, `-` one it drops. The bases are in the [Port table](#port-table).
 | `SpectacleBlind` | `fitting` | `Fitting` | |
 | `FlowElement` | `fitting` | `Fitting` | |
 | `StirredTankReactor` | `reactor` | `Reactor` | |
+| `GasHolder` | `tank` | `Tank` | |
 
 Three of them do something the name does not say:
 
@@ -1342,6 +1345,7 @@ first listed is what the class draws when it is built by name alone.
 | `ImpactSeparator` | `separator` | `impact` (as `default`) |
 | `MagneticSeparator` | `separator` | `permanent_magnet` (as `default`), `electromagnetic` |
 | `Scrubber` | `separator` | `scrubber` (as `default`) |
+| `VenturiScrubber` | `separator` | `venturi_scrubber` (as `default`) |
 | `KnockoutDrum` | `separator` | `knockout` (as `default`) |
 | `Separator` | `separator` | `default` (the plain vertical drum, the shell `Vessel` and `Column` share), `horizontal` (the same drum lying down) |
 | `DustCollector` | `filter` | `gas` (as `default`), `gas_fixed_bed` (as `fixed_bed`), `gas_belt` (as `belt`) |
@@ -1379,6 +1383,8 @@ first listed is what the class draws when it is built by name alone.
 | `Reactor` | `reactor` | bodies: `plain` (a charge vessel with a packed bed hatched into it), `mixing` (a conical-bottomed mixing vessel with the stirrer drawn on top of it), `jacketed` (the dished-end shell inside a heating/cooling jacket), `tubular` (a horizontal shell with a tube pass: a PFR)<br>what is *inside* a reactor is [`agitator=` and `internals=`](#what-a-body-carries) rather than a variant, so a packed bed and a fluidised bed are the plain stirred body with a group-27 internal in it. `plain` and `mixing` are both [deprecated](#deprecated-api) for saying what is inside with the word that chooses the body |
 | `Vessel` | `vessel` | `default`, `dished`, `jacketed`, `skirted`, `legs`, `insulated`, `electrical_heating`, `swaged`, `dome`, `horizontal`<br>`dished`, `skirted` and `legs` are one shell on brackets, a skirt or a pair of legs; `jacketed` and `insulated` are that shell clad, and offer the same nozzles in the same places, so swapping one for another moves no run. `swaged` is the vessel drawn in two diameters, the wider one below |
 | `Tank` | `tank` | named for the roof: `default` (dished), `conical`, `floating_roof`, plus `sphere`<br>and for the bottom where it is a cone rather than a floor: `conical_bottom` (under a flat roof), `conical_ends` (a cone at each end), `dished_roof_conical_bottom`. On those three the `outlet` is on the cone's apex, which is where the tank actually drains |
+| `GasHolder` | `tank` | `gas_holder` (as `default`) |
+| `CoolingTower` | `cooling_tower` | `default` (induced draft: the fan on the stack), `induced_draft`, `forced_draft` (the fan in a housing at the foot of each side) |
 | `Column` | `column` | `default` (plain shell), `packed` |
 | `Reducer` | `reducer` | `default` (the concentric trapezoid), `concentric`, `eccentric`, plus `large_end`, which points the cone |
 | `Vent` | `vent` | `default` (stack with a weather cap), `exhaust_head`, `breather` |
@@ -3096,15 +3102,18 @@ What a flip may not do is reverse an arrow the artwork carries — see
 below, which is handled by drawing rather than by refusing, for exactly the
 reason this paragraph gives.
 
-The 56 marked symbols, and what in each one's artwork only means one thing one
+The 61 marked symbols, and what in each one's artwork only means one thing one
 way up:
 
 | Symbols | Why |
 |---|---|
 | `separator` `default` `cyclone` `electrostatic` `gravity` `horizontal` `knockout` `scrubber` | separation by density: `cyclone` **is** ISO's X 2618, `gravity` says so in its name, and the hopper-bottomed three collect out of an apex |
+| `separator` `venturi_scrubber` | fixed twice over: the family's hopper, and its own throat, which the artwork draws running down into it. Turned, the gas is accelerated into a wall |
 | `separator` `sifter` `impact` `permanent_magnet` `electromagnetic` | listed for the hopper, not for what does the separating: a magnet sorts by magnetism and a sifter by size, and what fixes the attitude of all four is the fall into the hopper the artwork draws. Turned, the hopper is a roof |
 | `tank` `default` `conical` `floating_roof` `sphere` | ISO's 2061: a free liquid surface, filled at the roof and drained at the floor, with `floating_roof` drawn floating on it |
 | `tank` `conical_bottom` `conical_ends` `dished_roof_conical_bottom` | the same, drained at a cone's apex instead of at a floor, which is the fall the hopper-bottomed separators above are listed for. Turned, the cone is a roof and the tank drains nowhere |
+| `tank` `gas_holder` | 2061 again, and the most literal case of it: the bell is drawn resting on the water in the seal, which is the whole mechanism. Turned, the seal runs out |
+| `cooling_tower` `default` `induced_draft` `forced_draft` | the warm water is distributed over the fill and falls through the draught into the basin the artwork draws under the machine. Turned, the water leaves sideways and the draught runs across the basin |
 | `vessel` `default` `dished` `dome` `horizontal` `jacketed` `skirted` `legs` `insulated` `electrical_heating` | holdup with a vapour space: the vent is on the top head and the shell drains from the bottom, and four of them draw the brackets, skirt, legs or saddles they stand on |
 | `vessel` `swaged` | the same, and one thing more: the vessel is drawn in two diameters with the larger below, so it is the bottom that holds the inventory. Turned, the two diameters are side by side and say nothing about either |
 | `column` `default` `packed`, `reactor` `default` `plain` | liquid running down over trays or packing while vapour rises, and an agitator hanging in from above |
@@ -3906,7 +3915,7 @@ What it follows, feature by feature:
 - **Symbols where gravity is a functionality** are not turned. **ISO 15519-1
   §11.4.2** excepts them from the general permission to turn and mirror, naming
   the open tank (2061) and the cyclone separator (X 2618) as its two examples.
-  56 registered symbols carry
+  61 registered symbols carry
   `Symbol.gravity_fixed`, and
   [Symbols that must not be turned](#symbols-that-must-not-be-turned) lists them.
 

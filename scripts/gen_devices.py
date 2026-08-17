@@ -296,6 +296,19 @@ DEVICES = {
     above this one keeps ``vapor`` and ``liquid``. A scrubber cleans a
     gas rather than classifying a solid.
 """),
+    ("separator", "venturi_scrubber"): ("VenturiScrubber", """Venturi scrubber: the wash is injected into an accelerating throat.
+
+    Its own class rather than a body style of :class:`Scrubber`, because
+    the separating families in this table each get one per **mechanism**
+    and this is a different mechanism: a spray tower washes a gas at the
+    velocity it arrives at, and a venturi accelerates it through a throat
+    first, which is what buys the collection efficiency and what costs
+    the pressure drop. Two different machines with two different fans in
+    front of them.
+
+    So the feed is on the **top**: the throat runs downward, and the
+    stencil draws it that way.
+"""),
     ("separator", "knockout"): ("KnockoutDrum", """Knock-out drum: an upright drum with a demister pad.
 
     A mesh pad and a level gauge are both *drawn internals*, which the
@@ -601,6 +614,26 @@ DEVICES = {
     ``n_feeds`` gives the vessel more than one charge nozzle, exactly as
     it does on :class:`pandid.units.Reactor`.
 """),
+
+    # --- Storage -----------------------------------------------------------
+    ("tank", "gas_holder"): ("GasHolder", """Gas holder: a bell floating in a water seal.
+
+    The only tank drawing that gets a class, and the reason is the rule
+    rather than an exception to it. Every other one is a **roof**, a
+    **floor** or a **shell style** on a container that holds a liquid at
+    atmospheric pressure -- a conical roof, a floating roof, a discharge
+    cone, a pressure sphere -- so all of them are one purchase drawn
+    several ways. A gas holder is not that container. It holds a *gas*,
+    it has a moving part, and its volume is what varies while its
+    pressure does not; the water in it is a seal and not the inventory.
+    Different machine, different row, different supplier.
+
+    ``inlet`` and ``outlet`` are the gas main, on the seal tank rather
+    than on the bell: the bell travels the height of the holder every
+    time it fills, so nothing is piped to it. ``vent`` and ``relief``
+    *are* on the bell, because a holder's crown valves discharge to
+    atmosphere and are piped nowhere. ``drain`` is the seal water.
+"""),
 }
 
 
@@ -694,6 +727,14 @@ STAYS_ON_BASE = {
     ("blower", "default"): "Blower's own drawing",
     ("conveyor", "default"): "Conveyor's own drawing",
     ("cooler", "default"): "Cooler's own drawing",
+    ("cooling_tower", "default"): "CoolingTower's own drawing (the fan on the stack)",
+    # One machine drawn twice. Where the fan sits changes the casing and
+    # nothing else: same water side, same air side, same basin, same six
+    # nozzles in the same roles, and one row on an equipment list either way.
+    ("cooling_tower", "induced_draft"):
+        "fan arrangement, and the same drawing as the default",
+    ("cooling_tower", "forced_draft"):
+        "fan arrangement: the fan in a housing at the foot of each side",
     ("crusher", "default"): "Crusher's own drawing (ISO item 11.2, no characteristic)",
     ("mill", "default"): "Mill's own drawing (ISO item 11.8, no characteristic)",
     ("elevator", "default"): "Elevator's own drawing (ISO item 18.7, the straight lift)",

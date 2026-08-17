@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`CoolingTower`**, a new kind, drawn induced draft (`default`) or forced
+  draft. It carries a water side and an air side, plus the `makeup` and
+  `blowdown` its basin is tapped for.
+
+- **`VenturiScrubber`** and **`GasHolder`**: the ninth separating vessel, and a
+  bell floating in a water seal. Both are piped like the drawings beside them.
+
 - **`Stream.tabulate`**, which segment of a run the stream table quotes. A run
   drawn through a control valve carries two pressures under one number, and one
   column can show one of them; mark the segment whose conditions the column
