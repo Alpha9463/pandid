@@ -388,6 +388,115 @@ def test_stream_table_section_header():
     assert "Stream Number" in svg
 
 
+# --- a column has to have something in it -------------------------------------
+#
+# ISO 10628-1:2014 4.3.3 a) lists the flows *between the process steps* among
+# the things a process flow diagram "can also contain", so an internal column
+# with nothing in it is a heading over a rule of dashes and is dropped. 4.3.2 d)
+# makes the ingoing and outgoing ones something the diagram **shall** contain,
+# so a boundary column is kept however empty it is -- dropping it would hide the
+# omission instead of showing it -- and pandid.validate reports it in words; see
+# ``boundary-flow-missing`` in tests/test_validate.py.
+#
+# A value present and blank is not nothing: it is the author reporting that
+# there is nothing to report, and it keeps the column.
+
+
+def _columns(fs) -> list:
+    """The stream numbers the table heads its columns with, in order."""
+    from pandid.render.furniture import stream_table_layout
+
+    table = stream_table_layout(fs)
+    return [] if table is None else [c.text for c in table.rows[0][1:]]
+
+
+def _table(fs, **kwargs) -> str:
+    """The drawn table alone, since a stream number is also drawn on its line."""
+    svg = fs.to_svg(show_stream_table=True, **kwargs)
+    body = re.search(r'<g id="stream_table">(.*?)</g>', svg, re.S)
+    return body.group(1) if body else ""
+
+
+def _two_and_two() -> Flowsheet:
+    """Four streams, two of them at the sheet edge, two of them tabulated.
+
+    The shape the drop rule is about: S1 comes in off a flag and carries
+    data, S2 is internal and carries data, S3 is internal and carries
+    none, S4 goes out to a flag and carries none.
+    """
+    fs = Flowsheet("t")
+    feed = fs.add(U.Feed("Raw Feed"))
+    pump = fs.add(U.Pump("P-101"))
+    e1 = fs.add(U.HeatExchanger("E-101"))
+    e2 = fs.add(U.HeatExchanger("E-102"))
+    prod = fs.add(U.Product("To Storage"))
+    s1 = fs.connect(feed.outlet, pump.suction)
+    s2 = fs.connect(pump.discharge, e1.tube_in)
+    fs.connect(e1.tube_out, e2.tube_in)
+    fs.connect(e2.tube_out, prod.inlet)
+    s1.properties = {"Temperature": "25 C"}
+    s2.properties = {"Temperature": "80 C"}
+    return fs
+
+
+def test_an_internal_column_with_nothing_in_it_is_dropped():
+    fs = _two_and_two()
+    assert _columns(fs) == ["S1", "S2", "S4"]
+    assert ">S3<" not in _table(fs)
+
+
+def test_a_boundary_column_with_nothing_in_it_is_kept():
+    """The 4.3.2 d) shall. The column is empty because the sheet does not
+    say what leaves it, and that is the thing to show rather than hide."""
+    fs = _two_and_two()
+    assert "S4" in _columns(fs)
+    assert ">S4<" in _table(fs)
+
+
+def test_a_value_present_and_blank_keeps_the_column():
+    """The escape hatch, and the reason an absent key and an empty string
+    are two different statements: one is silence, the other is an author
+    saying this line has none to report. Both draw a dash."""
+    fs = _two_and_two()
+    internal = fs.streams[2]
+    internal.properties = {"Temperature": ""}
+    assert _columns(fs) == ["S1", "S2", "S3", "S4"]
+    table = _table(fs)
+    assert ">S3<" in table
+    assert table.count(">-<") == 2  # the blank one and the boundary one
+
+
+def test_a_sheet_that_states_no_property_draws_no_table():
+    """Every column empty is the same finding writ large: a grid of
+    headings over nothing is not a stream table."""
+    fs = _sheet()
+    assert _columns(fs) == []
+    assert _table(fs) == ""
+
+
+def test_a_run_is_judged_over_every_segment_it_is_drawn_in():
+    """A line through an inline valve is several streams under one name and
+    one column, so what earns the column can sit on a segment other than
+    the one the column is headed from: here the product flag is on the far
+    segment of the outgoing run, and the property on the far segment of the
+    incoming one. Only the first segment's *values* are tabulated, which is
+    why every shipped example writes a run's properties on each of its
+    segments."""
+    fs = Flowsheet("segments")
+    feed = fs.add(U.Feed("F"))
+    pump = fs.add(U.Pump("P-1"))
+    hv = fs.add(U.Valve("HV-1"))
+    fv = fs.add(U.Valve("FV-1"))
+    prod = fs.add(U.Product("P"))
+    fs.connect(feed.outlet, hv.inlet)
+    tail = fs.connect(hv.outlet, pump.suction)
+    fs.connect(pump.discharge, fv.inlet)
+    fs.connect(fv.outlet, prod.inlet)
+    tail.properties = {"Temperature": "25 C"}  # the far segment of the run in
+    assert [s.name for s in fs.streams] == ["S1", "S1", "S2", "S2"]
+    assert _columns(fs) == ["S1", "S2"]
+
+
 # --- text that does not fit the cell drawn for it -----------------------------
 #
 # Two shapes of answer, and the sheet is entitled to exactly one of them. The

@@ -1124,6 +1124,95 @@ def test_a_plainly_numbered_sheet_reports_nothing():
     assert _reused(fs) == []
 
 
+# --- boundary-flow-missing ------------------------------------------------
+# ISO 10628-1:2014 4.3.2 d) makes the flow rates or quantities of ingoing
+# and outgoing materials something a process flow diagram *shall* contain,
+# where 4.3.3 a) leaves the flows between the process steps optional. So the
+# stream table drops an internal column with nothing in it and keeps a
+# boundary one (tests/test_titleblock.py), and this is the other half of
+# that: an empty column kept on the sheet is a shall unmet, and a column of
+# dashes is easy to read past.
+#
+# Only on a sheet that tabulates its other streams. One that tabulates none
+# of them has not left a feed out, it has taken none of it up -- and pandid
+# ships show_stream_table=False, so that is a decision above this finding's
+# head rather than an author's slip.
+
+
+def _missing(fs) -> list:
+    return [i for i in fs.validate() if i.code == "boundary-flow-missing"]
+
+
+def _partly_tabulated() -> Flowsheet:
+    """A sheet that states properties on its inlet and on nothing else."""
+    fs = Flowsheet("partly")
+    feed = fs.add(U.Feed("Raw Feed"))
+    pump = fs.add(U.Pump("P-101"))
+    prod = fs.add(U.Product("To Storage"))
+    fs.connect(feed.outlet, pump.suction).properties = {"Flow (kg/h)": "4200"}
+    fs.connect(pump.discharge, prod.inlet)
+    return fs
+
+
+def test_an_outgoing_line_with_nothing_on_it_is_reported():
+    found = _missing(_partly_tabulated())
+    assert len(found) == 1
+    assert found[0].message.startswith("S2 crosses the sheet edge at To Storage")
+    assert "4.3.2 d)" in found[0].message
+
+
+def test_the_reported_line_is_the_column_the_table_keeps_empty():
+    """The finding's whole content. Neither half is any use alone: the
+    column is what the reader sees and the finding is what says why it is
+    blank, so the two have to be about the same lines."""
+    from pandid.render.furniture import _table_streams
+
+    fs = _partly_tabulated()
+    kept = [s.name for s in _table_streams(fs) if not s.properties]
+    assert kept == [i.message.split()[0] for i in _missing(fs)] == ["S2"]
+
+
+def test_an_internal_line_with_nothing_on_it_is_not_reported():
+    """4.3.3 a) leaves it optional, so its column is dropped instead --
+    there is no clause to hold the sheet to and nothing to tell the author."""
+    fs = Flowsheet("internal")
+    feed = fs.add(U.Feed("Raw Feed"))
+    pump = fs.add(U.Pump("P-101"))
+    hx = fs.add(U.HeatExchanger("E-101"))
+    prod = fs.add(U.Product("To Storage"))
+    fs.connect(feed.outlet, pump.suction).properties = {"Flow (kg/h)": "4200"}
+    fs.connect(pump.discharge, hx.tube_in)  # internal, and nothing on it
+    fs.connect(hx.tube_out, prod.inlet).properties = {"Flow (kg/h)": "4200"}
+    assert _missing(fs) == []
+
+
+def test_a_sheet_that_tabulates_nothing_is_not_reported():
+    """The narrowness that keeps this off fourteen of the twenty shipped
+    examples. A sheet with no property on any stream has not omitted one
+    line's flow, it has recorded none of them, and pandid's own
+    show_stream_table=False is half of that decision."""
+    fs = _partly_tabulated()
+    fs.streams[0].properties = {}
+    assert _missing(fs) == []
+
+
+def test_a_value_present_and_blank_is_a_report():
+    """The escape hatch the table honours, honoured here too: an empty
+    string is the author saying this line has nothing to report, which is a
+    report. An absent key is silence, which is what this finding is about."""
+    fs = _partly_tabulated()
+    fs.streams[1].properties = {"Flow (kg/h)": ""}
+    assert _missing(fs) == []
+
+
+def test_the_finding_is_soft_so_the_sheet_still_draws():
+    """The column is drawn and the line is named on it; what is missing is
+    a number only the author has."""
+    fs = _partly_tabulated()
+    assert [i.severity for i in _missing(fs)] == ["warning"]
+    fs.to_svg(show_stream_table=True)  # does not raise
+
+
 # --- the model is checked before any geometry is built ------------------------
 # A render used to lay out and route first and validate the result, so a
 # sheet the validator would refuse outright was handed to the engine

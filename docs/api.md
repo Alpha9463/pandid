@@ -259,7 +259,7 @@ _repr_svg_() -> str              # Jupyter renders a flowsheet inline
 | `border` | `"none"`, `"zone"` | `"zone"` rules the sheet with the zone-lettered drawing frame (A.. top down, 1.. left to right, so A1 is the top-left corner). Anything else raises `ValueError` |
 | `diagram` | `"pfd"` (the default), `"p&id"` | which drawing this is. A P&ID draws its process lines without arrowheads |
 | `connections` | `"none"` (the default), `"flanged"`, `"flanged-at-nozzles"` | `"flanged"` marks the double tick at every equipment nozzle *and* both sides of every valve and in-line fitting; `"flanged-at-nozzles"` marks the nozzles alone. A P&ID only; a PFD draws none whatever this says. See [Flanged connections](#flanged-connections) |
-| `show_stream_table` | `bool` | draws the stream property table (one column per unique material stream) |
+| `show_stream_table` | `bool` | draws the stream property table (one column per stream that has properties, plus every feed and product); see [Stream properties and the table](#stream-properties-and-the-table) |
 | `check` | `bool` | validate; errors raise, warnings collect. The model-only checks run before the sheet is laid out, the geometric ones after — see [When the checks run](#when-the-checks-run) |
 | `page_size` | `None`, `"A4"`, `"A3"`, `"A2"`, `"A1"`, `"A0"` | `None` (the default) sizes the sheet to the drawing; a name draws a sheet of exactly that size |
 | `jump_direction` | `"vertical"`, `"horizontal"` | which of two crossing lines gets the semicircle hop |
@@ -1786,6 +1786,7 @@ single placement and raises. The choice is re-checked against any later `pin()`.
 | `kind` | `str` | see `connect()` |
 | `size` / `schedule` / `service` / `sequence` / `spec` / `insulation` | `str \| float \| None` | line-number components; `sequence` is filled by auto-numbering |
 | `has_line_number` | `bool` | **read-only**, true once a component other than `sequence` is set |
+| `at_boundary` | `bool` | **read-only**, true when one end of this segment is a `Feed` or a `Product` — an ingoing or outgoing material |
 | `is_recycle` | `bool` | **read-only**, computed by cycle detection during layout |
 | `properties` | `dict[str, str \| float]` | free-form; rendered by the stream table verbatim |
 | `color` | `str \| None` | SVG stroke colour override: a name, `#0a7`, or `rgb(0, 170, 119)`. Anything else raises |
@@ -1964,6 +1965,28 @@ units. Rows appear in first-seen key order, and missing values render as `-`.
 s.properties = {"Temperature": "120 C", "Pressure": "3.5 bara", "Flow": "1000 kg/h"}
 fs.stream_table_sections = [("Benzene", "Mass Fraction")]   # header row before "Benzene"
 fs.render("sheet.svg", border="zone", show_stream_table=True)
+```
+
+#### Which streams get a column
+
+A stream that states no property at all is left out. An empty column is a
+heading over a rule of dashes, and ISO 10628-1:2014 §4.3.3 a) leaves the flows
+between the process steps optional anyway. If nothing on the sheet states a
+property there is no table to draw.
+
+**A feed or a product keeps its column** even with nothing in it, because
+§4.3.2 d) makes the flow rates or quantities of ingoing and outgoing materials
+something a process flow diagram *shall* contain: dropping the column would hide
+the omission rather than show it. `validate()` reports it as
+[`boundary-flow-missing`](#validation), on a sheet that tabulates its other
+streams.
+
+A value present and blank keeps the column. `{"H2S": ""}` is you saying this
+stream has none to report, and it draws the same `-` a missing key does — the
+difference is that the column stays:
+
+```python
+s.properties = {"Flow (kg/h)": ""}   # nothing to report, and the column says so
 ```
 
 Every column is ruled wide enough for everything drawn in it: the row labels,
@@ -2755,6 +2778,7 @@ making, so the warnings left on `fs.warnings` are about the sheet that came out.
 | `nozzles-crowded` | warning | two nozzles on one face both wear an arrowhead and are pitched closer than ISO 128-20 lets two parallel lines come, so the strip of paper between the heads is too thin to survive reproduction. One finding per face, and the message names the box that would fix it. Not made for a P&ID, which draws no heads. See [Nozzles and the arrowheads they carry](#nozzles-and-the-arrowheads-they-carry) |
 | `nozzle-unconnected` | warning | a nozzle whose existence a count asked for (`n_inlets=`, `n_outlets=`, `n_feeds=`, `inputs=`, `outputs=`) carries no stream, so the sheet asserts a connection that is not drawn. One finding per family; only counted nozzles, and only process ones. See [Nozzles nothing is piped to](#nozzles-nothing-is-piped-to) |
 | `stream-name-reused` | warning | auto-numbering picked a name another stream already answers to, so the two share one stream-table column and one of them is not tabulated at all. Only a *counted* name is reported: a run drawn in several `connect()` calls shares its name on purpose. See [Stream numbering](#stream-numbering) |
+| `boundary-flow-missing` | warning | a stream with a `Feed` or a `Product` at one end states no property, on a sheet whose other streams state theirs. ISO 10628-1:2014 §4.3.2 d) makes the flow rates or quantities of ingoing and outgoing materials something a PFD shall contain, so the stream table keeps the empty column rather than dropping it the way it drops an empty internal one. A blank value is a report and is not flagged; see [Which streams get a column](#which-streams-get-a-column) |
 | `route-not-settled` | warning | routing and instrument placement never agreed and `route()` ran out of passes; see [Routing and instrument placement](#routing-and-instrument-placement) |
 | `deprecated` | warning | the sheet was built with a spelling that is being retired. The message names the replacement and the release the old one stops working in; see [Deprecated API](#deprecated-api) |
 | `symbol-kind-unknown` | warning | a unit whose `kind` no symbol is registered for. It is drawn as a blank 60×60 box with no ports, which is what a `Unit` subclass from outside the package legitimately gets — and also what a misspelt `kind` gets. One finding per kind, with the nearest registered name |
@@ -2778,8 +2802,8 @@ The findings split in two, and a render makes them at two different moments:
 1. **Model checks**, before anything is laid out or routed:
    `pin-not-finite`, `pin-out-of-bounds`, `symbol-kind-unknown`,
    `gravity-turned`, `symbol-out-of-aspect`, `letter-sequence`,
-   `nozzle-unconnected`, `stream-name-reused` and `deprecated`. Every one of
-   these is a property of what you wrote down.
+   `nozzle-unconnected`, `stream-name-reused`, `boundary-flow-missing` and
+   `deprecated`. Every one of these is a property of what you wrote down.
 2. `layout()` and `route()`.
 3. **Geometric checks**, over the frames and routes those produced:
    `unit-overlap`, `coincident-ports`, `nozzles-crowded`,
