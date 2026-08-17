@@ -2003,13 +2003,13 @@ def _tank_farm() -> Flowsheet:
     fs.connect(fa601.outlet, vt601.inlet)
 
     lt601 = fs.add_instrument("LT", ms_level, sensing=tk601, at="W", offset=62)
-    fs.add_instrument("LI", ms_level, near=lt601, at="S", offset=50, variant="shared").annotate(
-        high="LAH", low="LAL"
-    )
+    li601 = fs.add_instrument("LI", ms_level, near=lt601, at="S", offset=50, variant="shared")
+    li601.annotate(high="LAH", low="LAL")
+    fs.connect(lt601.sig_out, li601.sig_in, kind="electric")
     lt602 = fs.add_instrument("LT", eth_level, sensing=tk602, at="W", offset=32)
-    fs.add_instrument("LI", eth_level, near=lt602, at="S", offset=50, variant="shared").annotate(
-        high="LAH", low="LAL"
-    )
+    li602 = fs.add_instrument("LI", eth_level, near=lt602, at="S", offset=50, variant="shared")
+    li602.annotate(high="LAH", low="LAL")
+    fs.connect(lt602.sig_out, li602.sig_in, kind="electric")
 
     lsh611 = fs.add_instrument("LSHH", 611, sensing=tk601, at="E", offset=32)
     lsh612 = fs.add_instrument("LSHH", 612, sensing=tk602, at="E", offset=40)
@@ -2019,9 +2019,9 @@ def _tank_farm() -> Flowsheet:
     fs.add_instrument("Z", 1, acting_on=xv602, at="S", offset=46, variant="sis")
 
     pt603 = fs.add_instrument("PT", lpg_press, sensing=v603, at="E", offset=30)
-    fs.add_instrument("PI", lpg_press, near=pt603, at="N", offset=40, variant="shared").annotate(
-        high="PAH"
-    )
+    pi603 = fs.add_instrument("PI", lpg_press, near=pt603, at="N", offset=50, variant="shared")
+    pi603.annotate(high="PAH")
+    fs.connect(pt603.sig_out, pi603.sig_in, kind="electric")
 
     cv604_axis = 1400 + resolve_size(cv604)[0] / 2
     cv605_axis = 1140 + resolve_size(cv605)[0] / 2

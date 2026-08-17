@@ -546,6 +546,11 @@ reader would otherwise take them for working code.
 
 ### Fixed
 
+- `examples/14_tank_farm.py` draws the signal from each of its three
+  transmitters to the indicator beside it. `near=` had placed LI-601, LI-602 and
+  PI-603 against LT-601, LT-602 and PT-603 and nothing was wired, so each pair
+  stood on the sheet with no line between them.
+
 - `examples/10_ethanol_pfd.py` and `examples/13_mineral_dewatering.py` now take
   the cake off the filter's own `cake` nozzle instead of teeing it off the
   filtrate downstream. Both sheets lose a tee.
