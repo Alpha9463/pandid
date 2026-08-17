@@ -323,6 +323,7 @@ def model_issues(fs: "Flowsheet") -> list["Issue"]:
     from pandid import units
     from pandid.deprecation import findings as deprecation_findings
     from pandid.portgeom import resolve_size
+    from pandid.render.svg import LABEL_POSITIONS
     from pandid.render.symbols import default_registry
     from pandid.units import Instrument
 
@@ -350,6 +351,42 @@ def model_issues(fs: "Flowsheet") -> list["Issue"]:
             elif v < 0:
                 errors.append(Issue("error", "pin-out-of-bounds",
                                     f"{u.name} pinned {axis}={v} is negative (off-sheet)"))
+
+    # --- a label side no renderer places ---
+    # Hard, and hard for the reason an unregistered *variant* is: a value
+    # outside :data:`~pandid.render.svg.LABEL_POSITIONS` used to fall
+    # through both backends' side tables to ``top``, draw the tag on the
+    # wrong side of the symbol, and say nothing.
+    #
+    # The wrong side is the smaller half of it. A stated ``label_pos`` is
+    # read as a deliberate choice, so
+    # :meth:`~pandid.render.svg.SvgRenderer._tag_item` skips the search
+    # that steps a tag clear of the ink under it -- and a typo therefore
+    # both misplaces the tag and nails it there, on a pipe if that is
+    # where ``top`` lands. Neither half is visible from the drawing
+    # unless the author already knows which side they asked for.
+    #
+    # Here rather than in ``Unit.__init__`` because a spec file sets the
+    # attribute directly and a unit built before the renderer is asked
+    # anything is not yet wrong. This is the earliest point every path
+    # into a drawing passes through: a model error raises before any
+    # geometry exists (:meth:`pandid.flowsheet.Flowsheet._prepare_to_draw`),
+    # so the render refuses rather than emitting the wrong sheet.
+    for u in fs.units:
+        side = getattr(u, "label_pos", None)
+        # Falsy is *unset*, not a sixth side: layout and the renderer
+        # both spell the question ``label_pos or "top"``, so an empty
+        # string already means "you choose" everywhere it is read.
+        if not side or side in LABEL_POSITIONS:
+            continue
+        close = get_close_matches(str(side).strip().lower(), LABEL_POSITIONS, n=1, cutoff=0.6)
+        errors.append(Issue(
+            "error", "label-pos-unknown",
+            f"{u.name} asks for label_pos={side!r}, which no side answers to"
+            + (f" (did you mean {close[0]!r}?)" if close else "")
+            + f". Use one of {', '.join(LABEL_POSITIONS)}, or leave label_pos "
+              f"unset and let the engine put the tag on the first face no "
+              f"nozzle leaves from"))
 
     # --- a kind the symbol library has no artwork for ---
     # ``SymbolRegistry.get`` answers an unregistered *kind* with a blank

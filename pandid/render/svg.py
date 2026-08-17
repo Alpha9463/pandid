@@ -50,6 +50,29 @@ _DIAMOND_BALLOONS = {"sis", "logic", "interlock"}
 # in: a dashed line claims the less of the two.
 _FIELD_BALLOONS = {"default"}
 
+#: Every side a unit's tag may be asked for, spelled the way
+#: ``label_pos`` is written.
+#:
+#: Four faces and the middle of the box. The faces are
+#: :data:`pandid.layout.coordinates.LABEL_SIDES` in the order layout
+#: tries them; ``"center"`` is not a face and is not one layout ever
+#: picks -- a symbol asks for it (an instrument balloon letters its tag
+#: inside itself) or an author does, for a body wide enough to write
+#: across.
+#:
+#: Public because it is the vocabulary and not the implementation, and
+#: three things have to agree on it: :meth:`SvgRenderer._label_place`
+#: places these five, ``pandid.render.drawio._LABEL_SIDE`` keys on the
+#: same five, and :func:`pandid.validate.model_issues` refuses a sixth.
+#: ``tests/test_render_api`` holds the two backends against this tuple so
+#: none of the three can drift.
+#:
+#: ``"top_right"`` is deliberately not here. It is where §11.4.5 puts the
+#: ``NC`` marking (:meth:`SvgRenderer._nc_label_item`) rather than
+#: somewhere a tag may be asked for, and the draw.io backend has no key
+#: for it.
+LABEL_POSITIONS = ("top", "bottom", "right", "left", "center")
+
 # --- line weights -----------------------------------------------------
 # The two weights ISO 15519 draws a process diagram in. ISO 15519-1 §6.2
 # Table 1 gives field symbols 0,1 M and connections 0,2 M with M = 2,5
@@ -3135,7 +3158,13 @@ class SvgRenderer:
         return out
 
     def _label_place(self, lpos, x, y, u_width, u_height):
-        """Where a label on side ``lpos`` goes, and how it sets."""
+        """Where a label on side ``lpos`` goes, and how it sets.
+
+        ``lpos`` is one of :data:`LABEL_POSITIONS`, or the ``top_right``
+        corner the ``NC`` marking is lettered in. A unit carrying
+        anything else is ``label-pos-unknown`` and never reaches a
+        render; the trailing ``top`` is that side and not a fallback.
+        """
         if lpos == "bottom":
             return x + u_width / 2, y + u_height + 15, "middle", "middle"
         if lpos == "left":

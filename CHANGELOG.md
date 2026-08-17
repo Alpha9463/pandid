@@ -595,6 +595,10 @@ reader would otherwise take them for working code.
   continues its numbering instead of starting it again over numbers it has
   already used.
 
+- A `label_pos` no side answers to is refused instead of silently drawn on
+  top. The sides that place are `top`, `bottom`, `left`, `right` and
+  `center`; anything else is a `label-pos-unknown` error.
+
 - Corpus counts in `docs/api.md` and `pandid/validate.py` are gone; the
   prose states the rule and the tests measure the corpus.
 
