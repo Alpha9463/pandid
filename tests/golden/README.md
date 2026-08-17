@@ -64,6 +64,16 @@ and `20` the only one with a repeated *logic* square — eight of them, one at e
 valve one sequence strokes. All four state their own title-block dates, so none
 of them is pinned.
 
+`21_alumina_refinery` is the Bayer circuit and the largest fixture here:
+twenty-eight tagged items, fifty-five streams and a sheet sized to its own
+drawing rather than to a page. It is the only scenario drawing a crusher, a
+mill, a gravity separating vessel, a hydrocyclone or a fluidised-bed drier; the
+only one with two cake-forming filters piping `wash_in` and `cake` as well as
+the filtrate; and the only one whose process returns to its own first unit, so
+it is what holds a closed circuit — and a stream table wider than any standard
+page — to a drawing rather than to an arithmetic claim. It states its own
+title-block date, so nothing here is pinned.
+
 The flowsheets are rebuilt inline in `test_golden.py` rather than by running
 `examples/*.py` directly: those scripts write into `examples/` (a side
 effect a test suite shouldn't have) and `03`'s and `08`'s `TitleBlock`s leave
@@ -94,7 +104,7 @@ the process's string-hash seed, not on anything about the diagram — confirmed 
 rendering the same flowsheet under several `PYTHONHASHSEED` values and diffing.
 
 **The provenance block.** Every rendered sheet says what drew it, version
-included. Left alone, bumping `pandid.__version__` would rewrite all twenty
+included. Left alone, bumping `pandid.__version__` would rewrite all twenty-one
 fixtures for a reason that is about none of the drawings, and cutting a release
 would be a diff of every artefact in the repository. The renderer therefore
 fences the block between `<!-- pandid:provenance -->` and
