@@ -563,6 +563,14 @@ reader would otherwise take them for working code.
   the cake off the filter's own `cake` nozzle instead of teeing it off the
   filtrate downstream. Both sheets lose a tee.
 
+- **Four placements that read badly on the new sheets.** `LIC-305` on
+  `examples/18_fixed_bed_recycle.py` now hangs over the valve it strokes instead
+  of under the transmitter it reads, so neither of its signals crosses the crude
+  draw and its alarm lettering is off the line number. The four columns on
+  `examples/19_absorber_stripper.py` and `examples/20_molecular_sieve_dryer.py`
+  drop `label_pos="center"`, which was writing each tag across the vessel's own
+  trays or bed.
+
 - **Three stirred vessels sized to the wrong shape.** `M-301` on
   `examples/10_ethanol_pfd.py` was drawn 80×100 on a symbol whose box is
   62×131.8, which stretched its drive motor into a flat oval; `R-101` on

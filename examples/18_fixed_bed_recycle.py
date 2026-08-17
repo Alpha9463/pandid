@@ -216,8 +216,15 @@ def main():
     fs.connect(pic304.sig_out, cv304.actuator, kind="pneumatic")
 
     # --- Loop 305: separator level on the crude draw ------------------
+    # The faceplate hangs over the valve it strokes rather than under the
+    # transmitter it reads. Under the transmitter it stood on the far side
+    # of the crude draw, so both of the loop's signals crossed that run --
+    # the measurement coming down to it and the output going back up to
+    # the actuator -- and its alarm lettering was written across the line
+    # number. Over the valve, the output drops straight onto the actuator
+    # and nothing in the loop crosses a process line at all.
     lt305 = fs.add_instrument("LT", level305, sensing=sep, at="E", offset=60)
-    lic305 = fs.add_instrument("LIC", level305, near=lt305, at="S", offset=70,
+    lic305 = fs.add_instrument("LIC", level305, near=cv305, at="N", offset=52,
                                variant="shared")
     lic305.annotate(high="LAH", low="LAL")
     fs.connect(lt305.sig_out, lic305.sig_in, kind="electric")

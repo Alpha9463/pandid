@@ -53,11 +53,17 @@ def main():
     # The same call twice, and that is the point of the sheet: one shell,
     # one group-27 internal, two tags. Nothing about the drawing knows
     # which of them is adsorbing.
+    #
+    # No label_pos: a tag written in the middle of a bed is written across
+    # the crossed lines that say it is one. Left unset the engine takes
+    # the first face no nozzle's stream runs through, which puts A's tag
+    # on the wall away from its valves and B's on the wall away from its
+    # -- the pipework's own mirror, carried onto the lettering.
     bed_a = fs.add(Column("V-501A", internals="packing", trays=1, width=90,
-                          height=200, label_pos="center",
+                          height=200,
                           description="Molecular Sieve Drier A"))
     bed_b = fs.add(Column("V-501B", internals="packing", trays=1, width=90,
-                          height=200, label_pos="center",
+                          height=200,
                           description="Molecular Sieve Drier B"))
 
     heater = fs.add(Furnace("H-501", description="Regeneration Gas Heater"))

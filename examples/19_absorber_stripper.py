@@ -103,11 +103,17 @@ def main():
     # absorber those two are the *process* inlets: the solvent enters
     # over the top deck and the gas under the bottom one, and the tower
     # is counter-current between them.
+    #
+    # No label_pos: a tag written in the middle of a tower is written
+    # across the decks, and a tag is not haloed the way a line number is.
+    # Left unset the engine takes the first face no nozzle's stream runs
+    # through -- top, bottom, right, left in that order -- which is the
+    # wall beside each of these two.
     contactor = fs.add(Column("T-401", internals="valve_tray", trays=20,
-                              width=110, height=340, label_pos="center",
+                              width=110, height=340,
                               description="Amine Contactor")).pin(mirrored=True)
     regen = fs.add(Column("T-402", internals="packing", trays=2, width=110,
-                          height=300, label_pos="center",
+                          height=300,
                           description="Amine Regenerator"))
 
     # The rich amine goes tube side and the returning lean amine shell

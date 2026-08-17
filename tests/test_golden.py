@@ -2786,7 +2786,7 @@ def _fixed_bed_recycle() -> Flowsheet:
     fs.connect(pic304.sig_out, cv304.actuator, kind="pneumatic")
 
     lt305 = fs.add_instrument("LT", level305, sensing=sep, at="E", offset=60)
-    lic305 = fs.add_instrument("LIC", level305, near=lt305, at="S", offset=70, variant="shared")
+    lic305 = fs.add_instrument("LIC", level305, near=cv305, at="N", offset=52, variant="shared")
     lic305.annotate(high="LAH", low="LAL")
     fs.connect(lt305.sig_out, lic305.sig_in, kind="electric")
     fs.connect(lic305.sig_out, cv305.actuator, kind="pneumatic")
@@ -2879,7 +2879,6 @@ def _absorber_stripper() -> Flowsheet:
             trays=20,
             width=110,
             height=340,
-            label_pos="center",
             description="Amine Contactor",
         )
     ).pin(mirrored=True)
@@ -2890,7 +2889,6 @@ def _absorber_stripper() -> Flowsheet:
             trays=2,
             width=110,
             height=300,
-            label_pos="center",
             description="Amine Regenerator",
         )
     )
@@ -3129,7 +3127,6 @@ def _molecular_sieve_dryer() -> Flowsheet:
             trays=1,
             width=90,
             height=200,
-            label_pos="center",
             description="Molecular Sieve Drier A",
         )
     )
@@ -3140,7 +3137,6 @@ def _molecular_sieve_dryer() -> Flowsheet:
             trays=1,
             width=90,
             height=200,
-            label_pos="center",
             description="Molecular Sieve Drier B",
         )
     )
