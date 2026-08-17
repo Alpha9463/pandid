@@ -182,25 +182,32 @@ def _stack_rows(every: list["Unit"], satellites: dict["Unit", "Stack"]) -> None:
     """
     if not satellites:
         return
-    pending = list(satellites)
+    rows = _column_rows(every)
+    # A dict for the pending set: the sweep asks whether an anchor is
+    # still waiting once per satellite per pass, and reads its own
+    # membership in insertion order, which a list answers in a scan and
+    # a plain set does not answer in order at all. The order is the
+    # flowsheet's, and it is what settles which of two blocks a shared
+    # peer sits over (see :func:`_satellites`).
+    pending = dict.fromkeys(satellites)
     while pending:
         progressed = False
         for u in list(pending):
             st = satellites[u]
             if st.anchor in pending:
                 continue
-            taken = _taken(every, u)
+            taken = _taken(rows, u)
             row = (_slot(st.anchor).row or 0) + st.delta
             while row in taken:
                 row += st.delta
-            _slot(u).row = row
-            pending.remove(u)
+            _place(rows, u, row)
+            del pending[u]
             progressed = True
         if not progressed:
             for u in pending:
-                _free_row(every, u)
+                _free_row(rows, every, u)
             break
-    _rebase(every, satellites)
+    _rebase(every)
 
 
 def _slot(u: "Unit") -> "_Slot":
@@ -209,44 +216,73 @@ def _slot(u: "Unit") -> "_Slot":
     return u._slot
 
 
-def _taken(every: list["Unit"], u: "Unit") -> set[int]:
-    """Rows already held in ``u``'s column."""
-    col = _slot(u).col
-    return {r for v in every
-            if v is not u and _slot(v).col == col
-            and (r := _slot(v).row) is not None}
+def _column_rows(every: list["Unit"]) -> dict[int | None, set[int]]:
+    """The rows each column already holds.
+
+    Indexed once and kept in step by :func:`_place`, because the
+    alternative is a pass over every unit on the sheet per satellite per
+    sweep -- 1.3 M slot reads on a chain of 800 blocks with a feed over
+    each of them, to answer 800 questions about one column at a time.
+    """
+    out: dict[int | None, set[int]] = defaultdict(set)
+    for v in every:
+        s = _slot(v)
+        if s.row is not None:
+            out[s.col].add(s.row)
+    return out
 
 
-def _free_row(every: list["Unit"], u: "Unit") -> None:
+def _taken(rows: dict[int | None, set[int]], u: "Unit") -> set[int]:
+    """Rows already held in ``u``'s column, ``u``'s own excepted.
+
+    The index's own set where it can be, so the common question -- one
+    membership test against a column -- costs nothing to ask.
+    """
+    s = _slot(u)
+    held = rows[s.col]
+    return held - {s.row} if s.row in held else held
+
+
+def _place(rows: dict[int | None, set[int]], u: "Unit", row: int) -> None:
+    """Put ``u`` in ``row``, keeping the column index in step."""
+    s = _slot(u)
+    if s.row is not None:
+        rows[s.col].discard(s.row)
+    s.row = row
+    rows[s.col].add(row)
+
+
+def _free_row(rows: dict[int | None, set[int]], every: list["Unit"],
+              u: "Unit") -> None:
     """Drop ``u`` in the first unused row of its column."""
-    taken = _taken(every, u)
-    _slot(u).row = next(r for r in range(len(every) + 1) if r not in taken)
+    taken = _taken(rows, u)
+    _place(rows, u, next(r for r in range(len(every) + 1) if r not in taken))
 
 
-def _rebase(every: list["Unit"], satellites: dict["Unit", "Stack"]) -> None:
+def _rebase(every: list["Unit"]) -> None:
     """Slide the rows back down to zero, which the bands count from.
 
-    A north satellite over a unit on the top row lands above it, and the
-    coordinate pass has no band there. Moving every row together is what
-    keeps that from being a change to the drawing: the sheet is the same
-    one, one band lower.
+    A north satellite over a unit on the top row lands above it. Moving
+    every row together is what keeps that from being a change to the
+    drawing: the sheet is the same one, one band lower.
 
-    A sheet carrying a pinned row is left alone. A pin names a band, so
-    renumbering the bands under it would move a unit the author placed.
-    Where that leaves a row below zero the satellite takes the first
-    free row instead, which is the constraint dropped rather than the
-    pin broken.
+    A sheet carrying a pinned row is left where it is. A pin names a
+    band, so renumbering the bands under it would move a unit the author
+    placed -- and the satellite over it can stay where its face put it,
+    because a row below zero is a row the coordinate pass builds a band
+    for. It did not always: bands were counted up from zero, so the one
+    case that could not be renumbered was also the one case with nowhere
+    to put a negative row, and the stacking constraint was dropped
+    instead. The satellite took the first free row, which is *below* the
+    unit feeding it -- the drawing saying the opposite of what the
+    flowsheet does.
     """
-    rows = [r for u in every if (r := _slot(u).row) is not None]
-    if not rows or min(rows) >= 0:
+    placed = [r for u in every if (r := _slot(u).row) is not None]
+    if not placed or min(placed) >= 0:
         return
     if any(u.pin_ is not None and u.pin_.row is not None for u in every):
-        for u in satellites:
-            row = _slot(u).row
-            if row is not None and row < 0:
-                _free_row(every, u)
         return
-    lift = min(rows)
+    lift = min(placed)
     for u in every:
         row = _slot(u).row
         if row is not None:
