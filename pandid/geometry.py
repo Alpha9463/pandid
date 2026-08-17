@@ -80,16 +80,6 @@ class Pin:
     mirrored: bool = False
     mirror_y: bool = False
 
-    @property
-    def is_fixed_xy(self) -> bool:
-        """True when both x and y are pinned to absolute coordinates."""
-        return self.x is not None and self.y is not None
-
-    @property
-    def has_grid(self) -> bool:
-        """True when a grid column or row was requested."""
-        return self.col is not None or self.row is not None
-
 
 @dataclass
 class Frame:
@@ -157,5 +147,4 @@ class _Slot:
 class Route:
     """A Stream's resolved path, in absolute pixel waypoints."""
     waypoints: list[tuple[float, float]] = field(default_factory=list)
-    lane: int | None = None
     manual: bool = False
