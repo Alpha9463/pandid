@@ -53,9 +53,9 @@ def main():
     col_x, col_y = 300, 260
     col.pin(x=col_x, y=col_y)
     # The feed nozzle's elevation is asked of the symbol rather than
-    # measured; the flag's tip is 25 below where the flag itself is
-    # pinned.
-    feed.pin(x=90, y=col_y + port_offset(col, "feed")[1] - 25)
+    # measured, and the flag is pinned by its own tip, so the two meet
+    # without any arithmetic in between.
+    feed.pin(x=140, y=col_y + port_offset(col, "feed")[1])
 
     # Mirrored so vapour enters the top shell nozzle at x + 0.25w and
     # the condensate leaves the bottom one at x + 0.75w, over the drum.
@@ -69,20 +69,20 @@ def main():
     drum.pin(x=cond_drain_x - (20 / 91.5) * drum_w, y=drum_y)
     drum_x = cond_drain_x - (20 / 91.5) * drum_w
     drum_draw_x = drum_x + (68 / 91.5) * drum_w        # bottom liquid draw
-    vent.pin(x=880, y=100)                             # flag tip clears the condenser
+    vent.pin(x=880, y=125)                             # flag tip clears the condenser
 
     # Turned a quarter turn: inlet up, both outlets down. Placed so its
     # inlet is under the drum's draw, and high enough that reflux drops
     # to the tower's reflux nozzle rather than climbing back up.
     split_y = 240
     split.pin(x=drum_draw_x - 25, y=split_y, orientation=90)
-    dist.pin(x=900, y=315)
+    dist.pin(x=900, y=340)
 
     # Kettle off the tower bottom. Its shell inlet faces down, so the
     # sump line drops out of the tower, runs across and rises into the
     # nozzle.
     reb.pin(x=660, y=512)
-    bot.pin(x=900, y=620)                              # below the kettle's draw
+    bot.pin(x=900, y=645)                              # below the kettle's draw
 
     # --- Connections --------------------------------------------------
     fs.connect(feed.outlet, col.feed)

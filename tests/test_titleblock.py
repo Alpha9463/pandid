@@ -10,8 +10,8 @@ from pandid.document import TitleBlock, Revision
 
 def _sheet(name="Demo", span=0.0):
     fs = Flowsheet(name)
-    a = fs.add(U.Feed("F")).pin(x=60, y=105)
-    b = fs.add(U.Product("P")).pin(x=260 + span, y=105)
+    a = fs.add(U.Feed("F")).pin(x=110, y=130)
+    b = fs.add(U.Product("P")).pin(x=260 + span, y=130)
     fs.connect(a.outlet, b.inlet)
     return fs
 

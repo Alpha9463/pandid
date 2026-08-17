@@ -496,13 +496,13 @@
   </defs>
   <g id="drawing" transform="translate(199.76, 220.79) scale(0.716453)">
   <g id="units">
-    <polygon points="16.0,298.25 175,298.25 190,311.25 175,324.25 16.0,324.25" fill="transparent" stroke="black" stroke-width="2" />
+    <polygon points="16.0,298.25 175.0,298.25 190.0,311.25 175.0,324.25 16.0,324.25" fill="transparent" stroke="black" stroke-width="2" />
     <text x="95.5" y="307.25" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Fermentation Broth</text>
     <text x="95.5" y="319.25" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PFD-201</text>
-    <polygon points="80.0,633.8203900808785 175,633.8203900808785 190,646.8203900808785 175,659.8203900808785 80.0,659.8203900808785" fill="transparent" stroke="black" stroke-width="2" />
+    <polygon points="80.0,633.8203900808785 175.0,633.8203900808785 190.0,646.8203900808785 175.0,659.8203900808785 80.0,659.8203900808785" fill="transparent" stroke="black" stroke-width="2" />
     <text x="127.5" y="642.8203900808785" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Flocculant</text>
     <text x="127.5" y="654.8203900808785" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PCD-301</text>
-    <polygon points="96.0,710.0750247765557 175,710.0750247765557 190,723.0750247765557 175,736.0750247765557 96.0,736.0750247765557" fill="transparent" stroke="black" stroke-width="2" />
+    <polygon points="96.0,710.0750247765557 175.0,710.0750247765557 190.0,723.0750247765557 175.0,736.0750247765557 96.0,736.0750247765557" fill="transparent" stroke="black" stroke-width="2" />
     <text x="135.5" y="719.0750247765557" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">RO Water</text>
     <text x="135.5" y="731.0750247765557" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PCD-301</text>
     <use href="#sym_column_c94688fb2_s110x250" x="430" y="180" width="110" height="250" />
@@ -515,9 +515,9 @@
     <use href="#sym_mixer" x="1120" y="517.5" width="50.0" height="50.0" />
     <use href="#sym_filter_press_s120x60" x="1250" y="512.5" width="120" height="60" />
     <use href="#sym_conveyor_L120" x="1300" y="715" width="120.0" height="20.0" />
-    <polygon points="1330,262 1489.0,262 1504.0,275 1489.0,288 1330,288" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="1409.5" y="271" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Azeotropic Ethanol</text>
-    <text x="1409.5" y="283" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PFD-302</text>
+    <polygon points="1330.0,262.0 1489.0,262.0 1504.0,275.0 1489.0,288.0 1330.0,288.0" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="1409.5" y="271.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Azeotropic Ethanol</text>
+    <text x="1409.5" y="283.0" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PFD-302</text>
     <polygon points="1440.0,529.5 1535.0,529.5 1550.0,542.5 1535.0,555.5 1440.0,555.5" fill="transparent" stroke="black" stroke-width="2" />
     <text x="1487.5" y="538.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Wastewater</text>
     <text x="1487.5" y="550.5" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">PCD-302</text>
@@ -529,7 +529,7 @@
     <path d="M 190.0,311.25 L 430.0,311.25" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 190.0,646.8203900808785 L 535.0,646.8203900808785 L 535.0,706.8203900808785 L 560.0,706.8203900808785" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 190.0,723.0750247765557 L 560.0,723.0750247765557" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 781.7486338797814,229.75 L 781.7486338797814,275.0 L 1330,275.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 781.7486338797814,229.75 L 781.7486338797814,275.0 L 1330.0,275.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 485.0,180.0 L 485.0,112.08" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 485.0,63.92 L 485.0,31.0 L 675.0,31.0 L 675.0,118.0 L 700.0,118.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 781.7486338797814,136.0 L 781.7486338797814,217.75" fill="none" stroke="black" stroke-width="2" />

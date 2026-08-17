@@ -20,7 +20,9 @@ is the least important of them:
    arithmetic they were trying to escape.
 2. **Each unit's anchor**, in red: the exact point ``pin(x, y)`` sets,
    with the pair of numbers that sets it. Read it off the sheet and type
-   it back in.
+   it back in. On a boundary flag that point is its nozzle rather than
+   its corner, because that is what ``pin`` takes there; the two markers
+   coincide and the anchor is the one carrying the tag.
 3. **Each port**, in blue: the point a stream attaches to, with the name
    ``pin(port=...)`` and ``connect()`` take and the coordinate it is at.
 4. **Each unit's drawn box**, as a faint outline: how much room the
@@ -540,6 +542,23 @@ _PORT_LABEL = {
 }
 
 
+def _pin_point(unit, frame) -> "tuple[float, float]":
+    """The point ``pin(x, y)`` sets on this unit.
+
+    The frame's own corner for a piece of equipment. A boundary flag is
+    pinned by its one nozzle instead (see :meth:`pandid.units.Unit.pin`),
+    so that is the pair of numbers an author reads off the overlay and
+    types back in -- and a crosshair on the corner would be a coordinate
+    that moves the flag somewhere else when it is typed.
+    """
+    from pandid.portgeom import resolve_port
+    from pandid.units import _Boundary
+
+    if isinstance(unit, _Boundary):
+        return resolve_port(unit, frame, next(iter(unit.ports))).point
+    return frame.x, frame.y
+
+
 def _marks(fs: "Flowsheet", scale: float,
            bounds: "tuple[float, float, float, float]",
            plates: "list[tuple[float, float, float, float]]",
@@ -554,7 +573,8 @@ def _marks(fs: "Flowsheet", scale: float,
     true of a unit nobody pinned as of one somebody did, and the sheet
     tells an author what to write down to keep the placement the engine
     chose. A quarter turn or a mirror does not move it: both are applied
-    about the box's centre (see ``SvgRenderer._draw_units``).
+    about the box's centre (see ``SvgRenderer._draw_units``). A boundary
+    flag is the exception, and :func:`_pin_point` is it.
 
     **The ports**, in blue: a dot on every declared one, including the
     signal ports an instrument or a valve actuator carries. All of them
@@ -589,21 +609,22 @@ def _marks(fs: "Flowsheet", scale: float,
     anchor_spots = _spots(*_ANCHOR_LABEL)
     for u, f in frames:
         bx0, by0, bx1, by1 = unit_box(u, f)
+        ax, ay = _pin_point(u, f)
         geometry.append(
             f'    <rect x="{_n(bx0)}" y="{_n(by0)}" width="{_n(bx1 - bx0)}" '
             f'height="{_n(by1 - by0)}" fill="none" stroke="{_BOX}" '
             f'stroke-width="{0.75 / scale:.3f}" />')
         geometry.append(
-            f'    <line x1="{_n(f.x - arm)}" y1="{_n(f.y)}" x2="{_n(f.x + arm)}" '
-            f'y2="{_n(f.y)}" stroke="{_ANCHOR}" stroke-width="{width:.3f}" />')
+            f'    <line x1="{_n(ax - arm)}" y1="{_n(ay)}" x2="{_n(ax + arm)}" '
+            f'y2="{_n(ay)}" stroke="{_ANCHOR}" stroke-width="{width:.3f}" />')
         geometry.append(
-            f'    <line x1="{_n(f.x)}" y1="{_n(f.y - arm)}" x2="{_n(f.x)}" '
-            f'y2="{_n(f.y + arm)}" stroke="{_ANCHOR}" stroke-width="{width:.3f}" />')
+            f'    <line x1="{_n(ax)}" y1="{_n(ay - arm)}" x2="{_n(ax)}" '
+            f'y2="{_n(ay + arm)}" stroke="{_ANCHOR}" stroke-width="{width:.3f}" />')
         # The tag is written beside the coordinates because this
         # marker's whole use is matching a line of source to a point on
         # paper, and the tag is what the author searches for.
-        label = f"{u.tag} {_n(f.x)},{_n(f.y)}" if u.tag else f"{_n(f.x)},{_n(f.y)}"
-        job(label, f.x, f.y, _ANCHOR, anchor_spots)
+        label = f"{u.tag} {_n(ax)},{_n(ay)}" if u.tag else f"{_n(ax)},{_n(ay)}"
+        job(label, ax, ay, _ANCHOR, anchor_spots)
 
     for u, f in frames:
         for name in u.ports:

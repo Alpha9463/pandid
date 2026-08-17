@@ -3,20 +3,20 @@ from pandid import Flowsheet, units as U
 
 def test_unit_pin_sets_pin():
     fs = Flowsheet("Test")
-    feed = fs.add(U.Feed("F1"))
+    pump = fs.add(U.Pump("P-1"))
 
-    assert feed.pin_ is None
+    assert pump.pin_ is None
     # Fluent API check
-    returned = feed.pin(x=100.5, y=200.0, orientation=90)
-    assert returned is feed
+    returned = pump.pin(x=100.5, y=200.0, orientation=90)
+    assert returned is pump
 
     # pin() records intent only; the frame stays unset until layout runs.
-    assert feed.frame is None
-    assert feed.pin_ is not None
-    assert feed.pin_.x == 100.5
-    assert feed.pin_.y == 200.0
-    assert feed.pin_.orientation == 90
-    assert feed.pin_.col is None
+    assert pump.frame is None
+    assert pump.pin_ is not None
+    assert pump.pin_.x == 100.5
+    assert pump.pin_.y == 200.0
+    assert pump.pin_.orientation == 90
+    assert pump.pin_.col is None
 
 
 def test_stream_via_sets_route_waypoints():

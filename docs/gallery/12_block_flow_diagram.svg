@@ -28,30 +28,30 @@
     <use href="#sym_block_182x80" x="520" y="340" width="182.0" height="80.0" />
     <use href="#sym_block_142x80" x="830" y="340" width="142.0" height="80.0" />
     <use href="#sym_block_134x80" x="1080" y="340" width="134.0" height="80.0" />
-    <polygon points="-8.0,370 95,370 110,380 95,390 -8.0,390" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="43.5" y="380" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Natural Gas</text>
-    <polygon points="150.0,195 215,195 230,205 215,215 150.0,215" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="182.5" y="205" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Air</text>
-    <polygon points="300.0,195 365,195 380,205 365,215 300.0,215" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="332.5" y="205" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Steam</text>
-    <polygon points="560,185 663.0,185 678.0,195 663.0,205 560,205" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="611.5" y="195" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CO2 to Urea</text>
-    <polygon points="1300,370 1395.0,370 1410.0,380 1395.0,390 1300,390" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="1347.5" y="380" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Liquid NH3</text>
-    <polygon points="975,505 1062.0,505 1077.0,515 1062.0,525 975,525" fill="transparent" stroke="black" stroke-width="2" />
-    <text x="1018.5" y="515" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Purge Gas</text>
+    <polygon points="-8.0,370.0 95.0,370.0 110.0,380.0 95.0,390.0 -8.0,390.0" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="43.5" y="380.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Natural Gas</text>
+    <polygon points="150.0,195.0 215.0,195.0 230.0,205.0 215.0,215.0 150.0,215.0" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="182.5" y="205.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Air</text>
+    <polygon points="300.0,195.0 365.0,195.0 380.0,205.0 365.0,215.0 300.0,215.0" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="332.5" y="205.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Steam</text>
+    <polygon points="560.0,185.0 663.0,185.0 678.0,195.0 663.0,205.0 560.0,205.0" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="611.5" y="195.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">CO2 to Urea</text>
+    <polygon points="1300.0,370.0 1395.0,370.0 1410.0,380.0 1395.0,390.0 1300.0,390.0" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="1347.5" y="380.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Liquid NH3</text>
+    <polygon points="975.0,505.0 1062.0,505.0 1077.0,515.0 1062.0,525.0 975.0,525.0" fill="transparent" stroke="black" stroke-width="2" />
+    <text x="1018.5" y="515.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Purge Gas</text>
   </g>
   <g id="streams">
     <path d="M 110.0,380.0 L 260.0,380.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 230.0,205.0 L 275.0,205.0 L 275.0,315.0 L 305.0,315.0 L 305.0,340.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 380.0,205.0 L 405.0,205.0 L 405.0,315.0 L 335.0,315.0 L 335.0,340.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 380.0,380.0 L 520.0,380.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 611.0,340.0 L 611.0,235.0 L 535.0,235.0 L 535.0,195.0 L 560,195.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 611.0,340.0 L 611.0,235.0 L 535.0,235.0 L 535.0,195.0 L 560.0,195.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 702.0,380.0 L 830.0,380.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 972.0,380.0 L 1080.0,380.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 1214.0,380.0 L 1300,380.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 1214.0,380.0 L 1300.0,380.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <path d="M 1147.0,420.0 L 1147.0,445.0 L 916.0,445.0 L 916.0,420.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
-    <path d="M 886.0,420.0 L 886.0,515.0 L 975,515.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
+    <path d="M 886.0,420.0 L 886.0,515.0 L 975.0,515.0" fill="none" stroke="black" stroke-width="2" marker-end="url(#arrow_black)" />
     <rect x="175.8" y="373.5" width="18.4" height="13.0" fill="white" />
     <text x="185.0" y="380.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S1</text>
     <rect x="268.5" y="250.8" width="13.0" height="18.4" fill="white" />

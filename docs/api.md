@@ -278,8 +278,8 @@ It draws four things, all in red and blue and all *under* the diagram, so
 nothing on the sheet is obscured:
 
 - a faded dashed grid, with the coordinate written along the top and left edges;
-- a red cross on every unit's **top-left corner**, the point `pin(x=, y=)` sets,
-  labelled with the tag and that pair of numbers;
+- a red cross on the point `pin(x=, y=)` sets — the unit's **top-left corner**,
+  or a flag's **nozzle** — labelled with the tag and that pair of numbers;
 - a blue dot on every **port**, labelled with the name `pin(port=…)` and
   `connect()` take and the coordinate it is at;
 - a faint outline of each unit's drawn box.
@@ -1599,7 +1599,7 @@ follows it — a turbine or a generator is a unit with a tag of its own.
 
 ```text
 unit.pin(*, col=None, row=None, x=None, y=None,
-         orientation=unchanged, mirrored=unchanged, port=None) -> Unit
+         orientation=unchanged, mirrored=unchanged, port=unstated) -> Unit
 ```
 
 Records placement **intent** and returns the unit, so it chains off `add()`.
@@ -1610,14 +1610,19 @@ whichever axis it sets. `x`/`y` are the unit's frame origin, its **top-left
 corner** in SVG coordinates, not its centre and not a nozzle.
 
 A port sits at a fixed *fraction* of its symbol's box, so lining two items up
-means matching those fractions, not their corners. `Feed` is the one exception
-to "origin = top-left": its width is sized to its label text and, unmirrored,
-the flag is drawn extending **left** from `x + 50`, which is where its outlet
-nozzle sits.
+means matching those fractions, not their corners.
+
+`Feed` and `Product` are the exception, and `pin` means something else on them:
+`x`/`y` place the flag's **nozzle**. A flag is sized to its label text and,
+unmirrored, a `Feed` is drawn extending *left* from its outlet, so its corner is
+a coordinate with nothing drawn at it that moves as the label grows. It has one
+nozzle, which is the point worth naming. Pass `port=None` to place the corner
+anyway.
 
 ```python
 hx = fs.add(units.HeatExchanger("E-1")).pin(x=100, y=50)
 fv = fs.add(units.Valve("FV-1")).pin(col=2, row=1, mirrored=True)
+f1 = fs.add(units.Feed("F-1")).pin(x=110, y=130)   # the flag's tip lands there
 ```
 
 Calling `pin()` more than once merges: only the arguments you pass are updated,
@@ -1629,9 +1634,10 @@ back.
 ### `pin(port=…)`
 
 `port` names a nozzle, and the coordinates given then locate **that nozzle**
-rather than the top-left corner. A run is a line at one elevation and the
-devices on it are whatever size their artwork is, so this is how a device is put
-*on* a run without writing down half its height:
+rather than the top-left corner — what a `Feed` or a `Product` does by default.
+A run is a line at one elevation and the devices on it are whatever size their
+artwork is, so this is how a device is put *on* a run without writing down half
+its height:
 
 ```python
 valve.pin(port="inlet", x=200, y=run_y)     # the inlet lands exactly there
@@ -1646,9 +1652,10 @@ corner, so pinning the same nozzle to the same point twice is the same
 placement twice.
 
 The transform in the *same* call is applied first, since a mirror moves the
-nozzle within the box. A grid cell has no nozzle in it, so `port` with
-`col`/`row` raises `ValueError`, and a port the unit does not have raises
-`KeyError` naming the ones it does.
+nozzle within the box. A grid cell has no nozzle in it, so a `port` you *name*
+with `col`/`row` raises `ValueError`, and a port the unit does not have raises
+`KeyError` naming the ones it does. A flag pinned to a cell is not refused: it
+named no port, so there is nothing to refuse.
 
 ```text
 portgeom.port_offset(unit, port_name, placed=None) -> (dx, dy)
@@ -3329,10 +3336,14 @@ key out — a `Column` that says nothing is drawn with the trays a column draws.
 ### The `pin` and `port_faces` keys
 
 `pin` mirrors [`pin()`](#pin) with `x`/`y` (absolute), `col`/`row` (grid),
-`orientation` (`0`/`90`/`180`/`270`) and `mirrored` (`x`/`y`/`xy`). `port_faces`
-maps a port to the face it leaves from **as drawn**, so a mirrored or turned unit
-takes the face the reader sees. It is an override: without it the engine picks
-the face itself, and the top-level `auto_faces: false` is how you stop it.
+`orientation` (`0`/`90`/`180`/`270`) and `mirrored` (`x`/`y`/`xy`). `x`/`y` are
+always the corner here, a flag's included: what is written is the placement the
+engine resolved, and reading it back has to put the flag where it was.
+
+`port_faces` maps a port to the face it leaves from **as drawn**, so a mirrored
+or turned unit takes the face the reader sees. It is an override: without it the
+engine picks the face itself, and the top-level `auto_faces: false` is how you
+stop it.
 
 A `Block` also takes `port_order`, mapping a face to every connection on it in
 the order they are drawn along it — [`order_on()`](#block-the-block-flow-diagram)

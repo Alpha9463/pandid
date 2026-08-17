@@ -76,7 +76,7 @@ def main():
     # corner, while the axis its riser lands on is read off the nozzle.
     psv = fs.add(Valve("PSV-101", variant="relief")).pin(y=55).pin(
         port="inlet", x=420 + port_offset(drum, "vent")[0])
-    flare = fs.add(Product("To Flare", reference="P&ID-902")).pin(x=630, y=5)
+    flare = fs.add(Product("To Flare", reference="P&ID-902")).pin(x=630, y=30)
 
     fs.connect(feed.outlet, fe.inlet)
     fs.connect(fe.outlet, fv.inlet)

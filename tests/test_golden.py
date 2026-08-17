@@ -76,13 +76,13 @@ def _ammonia_loop() -> Flowsheet:
 
 def _manual_layout() -> Flowsheet:
     fs = Flowsheet("Manual Override Example")
-    f1 = fs.add(units.Feed("F-1")).pin(x=60, y=105)
+    f1 = fs.add(units.Feed("F-1")).pin(x=110, y=130)
     e1 = fs.add(units.HeatExchanger("E-1")).pin(x=210, y=100)
-    p1 = fs.add(units.Product("P-1")).pin(x=430, y=105)
+    p1 = fs.add(units.Product("P-1")).pin(x=430, y=130)
     run_y = 330
-    f2 = fs.add(units.Feed("F-2")).pin(x=60).pin(port="outlet", y=run_y)
+    f2 = fs.add(units.Feed("F-2")).pin(x=110, y=run_y)
     e2 = fs.add(units.HeatExchanger("E-2")).pin(x=210).pin(port="tube_in", y=run_y)
-    p2 = fs.add(units.Product("P-2")).pin(x=430).pin(port="inlet", y=run_y)
+    p2 = fs.add(units.Product("P-2")).pin(x=430, y=run_y)
     fs.connect(f1.outlet, e1.tube_in)
     fs.connect(e1.tube_out, p1.inlet)
     fs.connect(f2.outlet, e2.tube_in)
@@ -296,7 +296,7 @@ def _control_loop() -> Flowsheet:
         .pin(y=55)
         .pin(port="inlet", x=420 + port_offset(drum, "vent")[0])
     )
-    flare = fs.add(units.Product("To Flare", reference="P&ID-902")).pin(x=630, y=5)
+    flare = fs.add(units.Product("To Flare", reference="P&ID-902")).pin(x=630, y=30)
 
     fs.connect(feed.outlet, fe.inlet)
     fs.connect(fe.outlet, fv.inlet)
@@ -390,7 +390,7 @@ def _column_reflux() -> Flowsheet:
 
     col_x, col_y = 300, 260
     col.pin(x=col_x, y=col_y)
-    feed.pin(x=90, y=col_y + port_offset(col, "feed")[1] - 25)
+    feed.pin(x=140, y=col_y + port_offset(col, "feed")[1])
     cond_x, cond_y, cond_w = 560, 70, 120
     cond.pin(x=cond_x, y=cond_y, mirrored="x")
     cond_drain_x = cond_x + 0.75 * cond_w
@@ -398,11 +398,11 @@ def _column_reflux() -> Flowsheet:
     drum.pin(x=cond_drain_x - (20 / 91.5) * drum_w, y=drum_y)
     drum_x = cond_drain_x - (20 / 91.5) * drum_w
     drum_draw_x = drum_x + (68 / 91.5) * drum_w
-    vent.pin(x=880, y=100)
+    vent.pin(x=880, y=125)
     split.pin(x=drum_draw_x - 25, y=240, orientation=90)
-    dist.pin(x=900, y=315)
+    dist.pin(x=900, y=340)
     reb.pin(x=660, y=512)
-    bot.pin(x=900, y=620)
+    bot.pin(x=900, y=645)
 
     fs.connect(feed.outlet, col.feed)
     fs.connect(col.distillate, cond.shell_in)
@@ -763,7 +763,7 @@ def _ethanol_pfd() -> Flowsheet:
     col_feed_y = col_y + port_offset(col, "feed")[1]
     col_reflux_y = col_y + port_offset(col, "reflux_in")[1]
 
-    broth.pin(x=140, y=col_feed_y - 25)  # flag tip meets the feed nozzle
+    broth.pin(x=190, y=col_feed_y)  # flag tip meets the feed nozzle
 
     cond_w = 64.0
     cond.pin(x=col_axis - cond_w / 2, y=56, mirrored="y")
@@ -772,7 +772,7 @@ def _ethanol_pfd() -> Flowsheet:
     drum.pin(x=drum_x, y=drum_y)
     drum_draw_x = drum_x + (68 / 91.5) * drum_w  # liquid draw down the shell
     refl.pin(x=drum_draw_x - tee_w / 2, y=col_reflux_y - tee_w / 2, orientation=90)
-    ethanol.pin(x=1330, y=250)
+    ethanol.pin(x=1330, y=275)
 
     reb.pin(x=640, y=420)
 
@@ -780,11 +780,11 @@ def _ethanol_pfd() -> Flowsheet:
     hx.pin(x=900, y=hx_y)
     hx_axis_y = hx_y + hx_h / 2  # the dewatering train runs on it
 
-    mix1_y, flag_h = 620.0, 50.0
+    mix1_y = 620.0
     mix1.pin(x=560, y=mix1_y)
-    # x=140 puts every flag tip on one line
-    floc.pin(x=140, y=mix1_y + port_offset(mix1, "feed_1")[1] - flag_h / 2 - 60)
-    water.pin(x=140, y=mix1_y + port_offset(mix1, "feed_2")[1] - flag_h / 2)
+    # x=190 puts every flag tip on one line
+    floc.pin(x=190, y=mix1_y + port_offset(mix1, "feed_1")[1] - 60)
+    water.pin(x=190, y=mix1_y + port_offset(mix1, "feed_2")[1])
 
     mix2.pin(x=1120, y=hx_axis_y - 15)  # in_1 level with the cooler
     press.pin(x=1250, y=hx_axis_y - 20)
@@ -1391,12 +1391,12 @@ def _block_flow_diagram() -> Flowsheet:
     refrigeration = fs.add(units.Block("Refrigeration", inputs=1, outputs=["E", "S"])).pin(
         x=1080, y=340
     )
-    natural_gas = fs.add(units.Feed("Natural Gas")).pin(x=60, y=355)
-    air = fs.add(units.Feed("Air")).pin(x=180, y=180)
-    steam = fs.add(units.Feed("Steam")).pin(x=330, y=180)
-    co2 = fs.add(units.Product("CO2 to Urea")).pin(x=560, y=170)
-    ammonia = fs.add(units.Product("Liquid NH3")).pin(x=1300, y=355)
-    purge = fs.add(units.Product("Purge Gas")).pin(x=975, y=490)
+    natural_gas = fs.add(units.Feed("Natural Gas")).pin(x=110, y=380)
+    air = fs.add(units.Feed("Air")).pin(x=230, y=205)
+    steam = fs.add(units.Feed("Steam")).pin(x=380, y=205)
+    co2 = fs.add(units.Product("CO2 to Urea")).pin(x=560, y=195)
+    ammonia = fs.add(units.Product("Liquid NH3")).pin(x=1300, y=380)
+    purge = fs.add(units.Product("Purge Gas")).pin(x=975, y=515)
     fs.connect(natural_gas.outlet, reforming.in_1)
     fs.connect(air.outlet, reforming.in_2)
     fs.connect(steam.outlet, reforming.in_3)

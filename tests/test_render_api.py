@@ -48,8 +48,8 @@ def _fs():
 def _spanning(width: float) -> Flowsheet:
     """A feed and a product pinned *width* apart: a drawing of a chosen size."""
     fs = Flowsheet("span")
-    feed = fs.add(U.Feed("F")).pin(x=0, y=0)
-    prod = fs.add(U.Product("P")).pin(x=width, y=0)
+    feed = fs.add(U.Feed("F")).pin(x=50, y=25)
+    prod = fs.add(U.Product("P")).pin(x=width, y=25)
     fs.connect(feed.outlet, prod.inlet)
     return fs
 

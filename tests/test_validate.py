@@ -169,7 +169,7 @@ def _corner_pinned_run(fv_y=180.0):
     draws a step into the valve and a step back out.
     """
     fs = Flowsheet("corner-pinned")
-    feed = fs.add(U.Feed("Feed")).pin(x=60, y=170)
+    feed = fs.add(U.Feed("Feed")).pin(x=110, y=195)
     fv = fs.add(U.Valve("FV-101", variant="control")).pin(x=270, y=fv_y)
     drum = fs.add(U.Vessel("V-101")).pin(x=420, y=145)
     fs.connect(feed.outlet, fv.inlet)

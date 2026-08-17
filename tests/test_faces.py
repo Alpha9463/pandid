@@ -15,7 +15,7 @@ def _drum_fed_from(x, y, *, fs=None, **drum_pin):
     fs = fs if fs is not None else Flowsheet("faces")
     drum = fs.add(units.Separator("V-1", variant="horizontal"))
     drum.pin(x=200, y=200, **drum_pin)
-    flag = fs.add(units.Feed("F")).pin(x=x - 50, y=y - 25)
+    flag = fs.add(units.Feed("F")).pin(x=x, y=y)
     fs.connect(flag.outlet, drum.feed)
     return fs, drum
 

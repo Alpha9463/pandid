@@ -311,6 +311,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Product`.
 
 ### Changed
+- **`pin(x=…, y=…)` on a `Feed` or a `Product` places the flag's nozzle**, not
+  its frame corner. Add the offset the flag was drawn at to move one back —
+  `+50` in `x` for an unmirrored `Feed`, and half the flag's height in `y` for
+  either — or pass `port=None` to keep pinning the corner.
+
 - Comments and docs cite the standards rather than reproducing their text,
   so no third-party clause ships in the package.
 

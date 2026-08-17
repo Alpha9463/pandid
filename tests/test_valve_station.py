@@ -431,3 +431,25 @@ def test_pin_by_a_port_the_unit_does_not_have_says_which_it_has():
 def test_pin_by_port_refuses_a_grid_cell():
     with pytest.raises(ValueError, match="has no nozzle in it"):
         units.Valve("HV-1").pin(port="inlet", col=2)
+
+
+@pytest.mark.parametrize("kind, port", [(units.Feed, "outlet"), (units.Product, "inlet")])
+def test_a_flag_is_pinned_by_its_nozzle_without_being_asked(kind, port):
+    """A flag has one nozzle and no drawn corner, so naming the port is ceremony."""
+    fs = Flowsheet("flag")
+    flag = fs.add(kind("F")).pin(x=200, y=RUN_Y)
+    fs.layout()
+    assert port_point(flag, flag.frame, port) == pytest.approx((200, RUN_Y))
+
+
+def test_a_flag_can_still_be_pinned_by_its_corner():
+    """``port=None`` is the caller asking for the corner, which is not the same as
+    saying nothing -- and it is what reading a written pin back in needs."""
+    assert units.Feed("F").pin(port=None, x=200, y=100).pin_.x == 200
+
+
+def test_a_flag_still_takes_a_grid_cell():
+    """The nozzle default must not turn a cell into the col/row refusal, which is
+    for a caller who named a port and a cell in one breath."""
+    flag = units.Feed("F").pin(col=2, row=1)
+    assert (flag.pin_.col, flag.pin_.row) == (2, 1)

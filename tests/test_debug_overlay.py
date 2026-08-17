@@ -287,16 +287,17 @@ def test_a_turned_or_mirrored_unit_still_marks_the_point_pin_set():
 
 
 def test_a_feed_flag_is_drawn_left_of_the_point_that_pins_it():
-    """The one unit whose ink does not start at its own pin. The box outline is
-    what says so on the sheet, and it is why the outline is drawn at all."""
+    """The one unit whose ink does not start at its own pin: it *ends* there,
+    the pennant growing back from the tip by however long the label is. The box
+    outline is what says so on the sheet, and it is why it is drawn at all."""
     fs = Flowsheet("feed")
     feed = fs.add(U.Feed("F-1")).pin(x=60, y=105)
     prod = fs.add(U.Product("P-1")).pin(x=430, y=105)
     fs.connect(feed.outlet, prod.inlet)
     g = _group(fs.to_svg(debug=True))
     boxes = [(float(r.get("x")), float(r.get("width"))) for r in g.iter(f"{SVG}rect")]
-    assert any(x < 60 and x + w > 60 for x, w in boxes), (
-        "the feed's outline should straddle the point that pinned it"
+    assert any(x < 60 and x + w == pytest.approx(60) for x, w in boxes), (
+        "the feed's outline should end at the point that pinned it"
     )
 
 

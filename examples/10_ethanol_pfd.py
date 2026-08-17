@@ -134,7 +134,7 @@ def main():
     col_feed_y = col_y + port_offset(col, "feed")[1]
     col_reflux_y = col_y + port_offset(col, "reflux_in")[1]
 
-    broth.pin(x=140, y=col_feed_y - 25)             # flag tip meets the feed nozzle
+    broth.pin(x=190, y=col_feed_y)                  # flag tip meets the feed nozzle
 
     # mirrored="y" puts the shell inlet underneath, so the overhead
     # rises into it straight.
@@ -148,7 +148,7 @@ def main():
     drum.pin(x=drum_x, y=drum_y)
     drum_draw_x = drum_x + (68 / 91.5) * drum_w      # liquid draw down the shell
     refl.pin(x=drum_draw_x - tee_w / 2, y=col_reflux_y - tee_w / 2, orientation=90)
-    ethanol.pin(x=1330, y=250)
+    ethanol.pin(x=1330, y=275)
 
     # Low enough that the boilup rises into the return nozzle.
     reb.pin(x=640, y=420)
@@ -166,11 +166,11 @@ def main():
     # a fraction of the box. A fraction is a fraction of the box *before*
     # the drive motor grew it, and the one that used to be here put the
     # water flag 10 units off the nozzle it feeds.
-    mix1_y, flag_h = 620.0, 50.0
+    mix1_y = 620.0
     mix1.pin(x=560, y=mix1_y)
-    # x=140 puts every flag tip on one line.
-    floc.pin(x=140, y=mix1_y + port_offset(mix1, "feed_1")[1] - flag_h / 2 - 60)
-    water.pin(x=140, y=mix1_y + port_offset(mix1, "feed_2")[1] - flag_h / 2)
+    # x=190 puts every flag tip on one line.
+    floc.pin(x=190, y=mix1_y + port_offset(mix1, "feed_1")[1] - 60)
+    water.pin(x=190, y=mix1_y + port_offset(mix1, "feed_2")[1])
 
     mix2.pin(x=1120, y=hx_axis_y - 15)              # in_1 level with the cooler
     press.pin(x=1250, y=hx_axis_y - 20)
