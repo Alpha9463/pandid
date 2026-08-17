@@ -60,6 +60,7 @@ from pandid.units import (
     Pump,
     Reactor,
     Separator,
+    Tank,
     Valve,
 )
 
@@ -89,6 +90,7 @@ __all__ = [
     "ImpactSeparator",
     "MagneticSeparator",
     "Scrubber",
+    "VenturiScrubber",
     "KnockoutDrum",
     "DustCollector",
     "RotaryDrumFilter",
@@ -116,6 +118,7 @@ __all__ = [
     "SpectacleBlind",
     "FlowElement",
     "StirredTankReactor",
+    "GasHolder",
 ]
 
 
@@ -664,6 +667,35 @@ class Scrubber(Separator):
     kind = "separator"
     VARIANTS = ("default", "scrubber")
     VARIANT_ALIASES = {"default": "scrubber"}
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("vapor", "outlet", "vapor"),
+        ("liquid", "outlet", "liquid"),
+    ]
+
+    feed: Port
+    vapor: Port
+    liquid: Port
+
+
+class VenturiScrubber(Separator):
+    """Venturi scrubber: the wash is injected into an accelerating throat.
+
+    Its own class rather than a body style of :class:`Scrubber`, because
+    the separating families in this table each get one per **mechanism**
+    and this is a different mechanism: a spray tower washes a gas at the
+    velocity it arrives at, and a venturi accelerates it through a throat
+    first, which is what buys the collection efficiency and what costs
+    the pressure drop. Two different machines with two different fans in
+    front of them.
+
+    So the feed is on the **top**: the throat runs downward, and the
+    stencil draws it that way.
+    """
+
+    kind = "separator"
+    VARIANTS = ("default", "venturi_scrubber")
+    VARIANT_ALIASES = {"default": "venturi_scrubber"}
     PORTS = [
         ("feed", "inlet", "feed"),
         ("vapor", "outlet", "vapor"),
@@ -1301,3 +1333,41 @@ class StirredTankReactor(Reactor):
     outlet: Port
     vent: Port
     duty: Port
+
+
+class GasHolder(Tank):
+    """Gas holder: a bell floating in a water seal.
+
+    The only tank drawing that gets a class, and the reason is the rule
+    rather than an exception to it. Every other one is a **roof**, a
+    **floor** or a **shell style** on a container that holds a liquid at
+    atmospheric pressure -- a conical roof, a floating roof, a discharge
+    cone, a pressure sphere -- so all of them are one purchase drawn
+    several ways. A gas holder is not that container. It holds a *gas*,
+    it has a moving part, and its volume is what varies while its
+    pressure does not; the water in it is a seal and not the inventory.
+    Different machine, different row, different supplier.
+
+    ``inlet`` and ``outlet`` are the gas main, on the seal tank rather
+    than on the bell: the bell travels the height of the holder every
+    time it fills, so nothing is piped to it. ``vent`` and ``relief``
+    *are* on the bell, because a holder's crown valves discharge to
+    atmosphere and are piped nowhere. ``drain`` is the seal water.
+    """
+
+    kind = "tank"
+    VARIANTS = ("default", "gas_holder")
+    VARIANT_ALIASES = {"default": "gas_holder"}
+    PORTS = [
+        ("inlet", "inlet", "process"),
+        ("outlet", "outlet", "process"),
+        ("vent", "outlet", "vapor"),
+        ("relief", "outlet", "process"),
+        ("drain", "outlet", "liquid"),
+    ]
+
+    inlet: Port
+    outlet: Port
+    vent: Port
+    relief: Port
+    drain: Port

@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 __all__ = [
     "Unit",
     "Feed", "Product", "Pump", "Compressor", "Blower", "Valve", "Vessel", "Tank",
-    "HeatExchanger", "Heater", "Cooler", "Reactor", "Separator", "Column",
+    "HeatExchanger", "Heater", "Cooler", "CoolingTower", "Reactor", "Separator", "Column",
     "Mixer", "Splitter", "Tee", "Reducer", "Fitting", "Ejector", "Vent", "Funnel",
     "Furnace", "Turbine", "Filter", "Dryer", "Crusher", "Mill", "Conveyor",
     "Elevator", "Instrument", "Block",
@@ -2680,6 +2680,54 @@ class Cooler(Unit):
         ("inlet", "inlet", "process"),
         ("outlet", "outlet", "process"),
         ("utility_out", "outlet", "energy"),
+    ]
+
+
+class CoolingTower(Unit):
+    """Evaporative cooling tower: a water side, and air through it.
+
+    Variants: ``"default"`` and ``"induced_draft"`` are one drawing,
+    with the fan on a stack over the fill; ``"forced_draft"`` puts it in
+    a housing at the foot of each side instead. That is the whole
+    difference between the two machines, and both carry the same six
+    nozzles in the same roles, so swapping one for the other moves no
+    run.
+
+    Nozzles are named for the **side of the equipment**, as
+    :class:`HeatExchanger`'s are: ``water`` for the circulating loop,
+    ``air`` for what is drawn or blown through it. Which of the two is
+    the hot one is the operating case rather than a fact about the
+    tower, so neither is a nozzle name -- the return from the plant is
+    ``water_in`` whatever it comes back at.
+
+    Two more are what makes this a tower and not an exchanger. It cools
+    by evaporating part of its own inventory, so ``makeup`` replaces
+    what leaves as vapour and drift, and ``blowdown`` bleeds off the
+    dissolved solids that evaporation leaves behind. Both are drawn on
+    the cold-water basin, which is where a plant taps them.
+
+    A declared nozzle is *offered* rather than asserted, which is the
+    argument in :class:`Tank`. The air pair is drawn where the machine
+    takes its draught and discharges it, and a sheet that pipes neither
+    is the ordinary case: the air is ambient at both ends.
+    """
+
+    water_in: Port
+    water_out: Port
+    air_in: Port
+    air_out: Port
+    # ``utility`` and ``liquid``: the makeup is a service brought to the
+    # tower from somewhere else on the plant, and the blowdown is water
+    # leaving it. Neither is the circulating loop, which is the pair
+    # above.
+    makeup: Port
+    blowdown: Port
+
+    kind = "cooling_tower"
+    PORTS = [
+        *_side_ports("water", "air"),
+        ("makeup", "inlet", "utility"),
+        ("blowdown", "outlet", "liquid"),
     ]
 
 

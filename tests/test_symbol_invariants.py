@@ -1692,6 +1692,7 @@ def test_variants_lists_a_kinds_catalogue_default_first():
         "conical_ends",
         "dished_roof_conical_bottom",
         "floating_roof",
+        "gas_holder",
         "sphere",
     ]
 

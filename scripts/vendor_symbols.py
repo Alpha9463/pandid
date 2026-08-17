@@ -405,6 +405,31 @@ KIND_MAP = {
                               {"feed": ("SERIES", "W", 47.7, 14, 0.32),
                                "outlet": ("S", 26.0), "duty": ("E", 47.7),
                                "vent": ("AT", 46.0, 10.0)}),
+    # "Jacketed Mixing Vessel" and "Half Pipe Mixing Vessel" are the two shapes
+    # a reader looking for the entry above will find in vessels.xml, and neither
+    # is vendored.
+    #
+    # The first draws what ``jacketed`` already draws. Same dished capsule, same
+    # jacket wrapped round its lower half -- and then a motor box, a shaft and a
+    # pair of impeller ellipses drawn INTO the artwork. pandid draws those from
+    # ISO group 28 and item 20.6, composed by ``Reactor(agitator=...)``, so
+    # vendoring this puts a second drawing of one piece of equipment in the
+    # library with nothing to say which is the live one, and it is the worse of
+    # the two: its impeller is ink and cannot be changed to the one the plant
+    # has. That is the fault issue #307 is about. (``mixing`` is kept beside it
+    # for the opposite reason: its BODY is a different vessel, a rectangle with
+    # a V bottom, so it says something the composition cannot.)
+    #
+    # The second is that same drawing again with the jacket replaced by six
+    # limpet-coil turns in section, three down each shell wall. Those turns are
+    # the whole of what tells the two apart, and a coil is piped supply and
+    # return -- two nozzles, where ``Reactor`` declares one ``duty`` and
+    # ``Vessel`` declares none at all. So the marks that would make it worth
+    # having are the marks that cannot be connected to. It is the same gap
+    # ``examples/17_stirred_reactor_train.py`` already records against the
+    # jacket, and closing it is a change to the classes rather than a line here.
+    # A half-pipe jacket and a conventional one are in any case a datasheet
+    # fact: on a P&ID they are one vessel with a heating medium on it.
     # The flash drum: the same plain dished-head cylinder the vessel and the
     # column are drawn from, with the phases named. ``vessel``/``horizontal``
     # and ``separator``/``horizontal`` are already one stencil ("Drum or
@@ -660,6 +685,33 @@ KIND_MAP = {
     # maintenance, drawn as a pipe between two flanges.
     ("fitting", "spool"):          ("piping", "Removable Spool",
                                     {"inlet": "W", "outlet": "E"}),
+    # THE STEAM TRAP IS NOT HERE, and the reason is worth writing down, because
+    # every steam system has one and this table has thirty-eight fittings
+    # without it.
+    #
+    # piping.xml's "Steam Trap" draws nothing. It is a bare 50 x 50 rect with a
+    # W and an E constraint and an empty foreground -- and it is byte-for-byte
+    # its own file's "Desuper Heater", the way "Globe Valve" is valves.xml's
+    # "Ball Valve" (strip the two names and the XML is identical; the only other
+    # such group in the file is Detonation Arrestor / Flame Arrestor / In-Line
+    # Silencer). At this file's 0.5 it comes out a 25 x 25 empty square, which
+    # is what ``SymbolRegistry._generic_symbol`` already draws for a kind with
+    # no artwork at all. So vendoring it registers a blank box under two device
+    # names, which is the Globe Valve fault and issue #307's, committed on
+    # purpose.
+    #
+    # STENCIL_PATCHES cannot answer this one. That mechanism corrects a shape
+    # the stencil draws WRONGLY, and the globe valve's patch works because it
+    # quotes the stencil's own arcs back at it -- the seat was already drawn and
+    # only the fill was missing. Here there is nothing to quote: a trap's mark
+    # would be new artwork, which is a hand-drawn primitive under CONTRIBUTING
+    # section 1 and not a vendoring, and which STENCIL_PATCHES says outright it
+    # is not for.
+    #
+    # The gap is real and is being worked round today:
+    # ``examples/15_condensing_turbine.py`` draws its trap as a
+    # ``Product("Steam Trap Drain")``, which is a sheet boundary rather than a
+    # device in the run.
     # Spectacle blind (figure-8 blind): two discs on a common tie, one bored
     # through and one solid, bolted between a pair of flanges. Which of them is
     # in the line is the whole of what it says, so it is the one in-line device
@@ -1126,6 +1178,64 @@ KIND_MAP = {
         {"inlet": [("AT", 50.0, 6.4), ("W", 85), ("E", 85)], "outlet": ("S", 50),
          "vent": ("AT", 35.0, 7.9), "relief": ("AT", 65.0, 7.9),
          "drain": ("AT", 35.0, 116.5)}),
+    # The gas holder: a bell floating in a water seal, which is how a plant
+    # holds a gas at constant pressure and varying volume. The one container in
+    # the family whose inventory is a vapour, and the only one with no roof of
+    # its own -- the bell IS the roof, and it rides.
+    #
+    # 70 x 95. The seal tank is drawn open at the top: three sides, from (0, 30)
+    # down to the floor at y = 95 and up again to (70, 30). The bell sits in it,
+    # skirts at x = 5 and x = 65 running from y = 55 up to y = 15 and closed by
+    # a dome the stencil asks for as an arc rx 30 ry 15 across a 60-wide chord,
+    # so the ellipse is centred (35, 15) and its crown is at (35, 0).
+    #
+    # THE GAS CONNECTIONS ARE ON THE SEAL TANK, not on the bell, and that is
+    # ``tank/floating_roof``'s reason rather than a preference: a nozzle welded
+    # to the bell is a pipe joined to something that travels the height of the
+    # holder every time it fills. The main enters the tank wall and turns up
+    # inside, so ``inlet`` and ``outlet`` take the two walls -- which the outline
+    # strokes from y 30 to 95, so both are on ink at any box the unit is drawn
+    # at -- at y = 45, level with each other as a buffer's two connections are.
+    # Neither offers the other's wall as an alternate: there are two walls and
+    # two gas nozzles, so a menu would be an offer to draw both on one point.
+    #
+    # ``vent`` and ``relief`` ARE on the bell, and the movement is no objection
+    # there: a holder's crown valves discharge to atmosphere and are not piped
+    # anywhere. Both go on the dome's own ink rather than on the box's top edge,
+    # which the drawing touches at the crown alone -- x = 35 -+ 18 is 0.6 of a
+    # radius off it, at y = 15 - 15*0.8 = 3 -- and they flank the crown as the
+    # roofs above flank theirs, leaving it free.
+    #
+    # ``drain`` is the seal water, on the floor. It is the one nozzle here that
+    # is not a gas connection, and the floor is clear of everything else, so it
+    # takes the south face outright.
+    ("tank", "gas_holder"): ("vessels", "Gas Holder",
+                             {"inlet": ("W", 45.0), "outlet": ("E", 45.0),
+                              "vent": ("AT", 17.0, 3.0),
+                              "relief": ("AT", 53.0, 3.0),
+                              "drain": ("S", 20.0)}),
+    # THE OPEN-TOPPED CONTAINERS ARE ALL OUT, and one rule turns all four away:
+    # ``Tank`` carries a vent, a relief and a fill, every variant has to anchor
+    # all five of its nozzles on drawn ink (``tests/test_symbol_invariants.py``
+    # holds both halves), and ``vent`` and ``relief`` are positioned by their
+    # roles on the top of the container. An open container has no top to put
+    # them on.
+    #
+    # "Bunker (Conical Bottom)" is the clearest case, because it is a shape the
+    # library already draws with a lid: it is "Tank (Conical Bottom)" -- the
+    # same 100 x 100 outline, the same cone from y = 70 to an apex at (50, 100)
+    # -- with the roof line and the cone's springing line left off. So its box's
+    # top edge carries ink at exactly two points, the tops of the two shell
+    # walls, and the three roof connections ``tank/conical_bottom`` places at
+    # (35, 0), (50, 0) and (65, 0) have nothing under them. "Container, Tank,
+    # Cistern", ISO's own open tank 2061, is the same three-sided outline
+    # without the cone; "Tank (Covered)" and "Open Bulk Storage" are the lidded
+    # trough and the hatched stockpile beside it.
+    #
+    # The change that lets them in is a nozzle set for a container that is open
+    # -- a rim rather than a crown -- and that is a change to ``units.Tank``,
+    # not a line added to a port map.
+    #
     # Two more shapes in vessels.xml were weighed with those and left out, and
     # both for the same reason: a nozzle a class has no name for is a nozzle
     # that cannot be drawn.
@@ -1190,6 +1300,36 @@ KIND_MAP = {
     # than through the top face.
     ("separator", "scrubber"): ("separators", "Separator (Wet Scrubber)",
                                 {"feed": "W", "vapor": "E", "liquid": "S"}),
+    # The venturi scrubber, ISO 10628-2 item 8.11 X8034: ``scrubber``'s body
+    # exactly -- the same 80 x 120 outline down to the same hopper apex -- with
+    # a different internal in it. The throat that gives the machine its name is
+    # drawn as two chevrons, a cone converging from y = 40 to a flat at y = 55
+    # and a second one opening from y = 65 out to y = 80, so the gas is
+    # accelerated between them. Above it is the wash: a spray nozzle at (40,
+    # 0.5) fanning down to (30, 10) and (50, 10) about its own centre line,
+    # which is the identical mark that is the whole of "Spray Scrubber".
+    #
+    # It is therefore PIPED EXACTLY AS ``scrubber`` IS, and that is the rule
+    # this file already follows for a pair of casings that differ in what is
+    # inside them (see the four ``filter`` media): choosing between them is a
+    # statement about the internal, so a sheet swaps one for the other without
+    # moving a run. Feed on the west wall at y = 12, clean gas off the east one
+    # at the same height, scrubbing liquor and its catch out of the apex --
+    # ``scrubber``'s three points to the decimal. Both walls are stroked from
+    # y 0 to 80, so the pair is on ink at any box the unit is drawn at, and
+    # y = 12 is above the converging cone, which is the end a venturi is fed
+    # from.
+    #
+    # draw.io's own W and E anchors are at (0, 60) and (80, 60) and go unused.
+    # They are level with the throat, so the gas would be drawn arriving in the
+    # middle of the venturi rather than at the top of it, and they are 48 units
+    # off the sibling's, so every run on a sheet that swapped the two would
+    # move. The stencil's "N" is not taken either: it is at (40, 0), on the
+    # spray nozzle, and the wash header is drawn rather than piped here exactly
+    # as it is on ``scrubber``.
+    ("separator", "venturi_scrubber"): ("separators", "Separator (Venturi Scrubber)",
+                                        {"feed": ("W", 12.0), "vapor": ("E", 12.0),
+                                         "liquid": "S"}),
     # ``gravity``, ``electrostatic`` and ``electromagnetic`` are deliberately NOT
     # vendored. All three are this same hopper-bottomed body carrying one ISO
     # 10628-2 group-29 characteristic -- items 8.3 X8031, 8.6 X8125 and 8.8
@@ -1348,6 +1488,65 @@ KIND_MAP = {
     ("furnace", "default"): ("vessels", "Furnace",
                              {"inlet": ("W", 54.5), "outlet": ("E", 79.5), "fuel": "S"}),
     ("turbine", "default"): ("pumps", "Turbine", {"inlet": "W", "outlet": "E"}),
+    # The cooling tower. Two drawings, and one of the very few pieces of plant
+    # that is on nearly every industrial sheet and had no symbol here at all.
+    #
+    # THE NOZZLES ARE NAMED FOR THE SIDE, which is ``hex``'s rule and is here
+    # for ``hex``'s reason: there is a water side and an air side, and which of
+    # the two is hot is the operating case rather than a fact about the
+    # equipment. The warm return is ``water_in`` in January as well as in
+    # August. ``makeup`` and ``blowdown`` are the two nozzles that make this a
+    # tower and not an exchanger -- it cools by boiling off part of its own
+    # inventory, so something has to replace what leaves and something has to
+    # bleed off what the evaporation leaves behind -- and both belong to the
+    # cold-water basin, which is where a plant taps them.
+    #
+    # Both drawings offer the same six in the same roles, so swapping one for
+    # the other is a change of artwork and moves no run.
+    #
+    # Induced draft, and the default: 98 x 70, the fan on a stack over the
+    # fill. The casing is an inverted trapezoid, (0, 10)-(98, 10) across the top
+    # narrowing to (24, 60)-(74, 60), with the stack at x 34..64 above it and
+    # the basin closing the bottom from (24, 70) to (74, 70).
+    #
+    #   air_out  the stack's own top edge at (49, 0), which is the one place on
+    #            this drawing air is meant to leave.
+    #   air_in   the louvred east wall. draw.io's "E" is at (86.24, 35), which
+    #            is within a quarter of a unit of the slope's own x at that
+    #            height (98 - 24*25/50 = 86), so it is taken as named.
+    #   water_in the riser up the west casing. The hot water is distributed over
+    #            the fill, so it is high: (4.8, 20) is the west slope solved at
+    #            y = 20, and it reads west because 4.8 is nearer that wall than
+    #            20 is the roof.
+    #   water_out the cold basin, at the middle of its floor.
+    #   makeup / blowdown flank it on that same floor, 21 either side, which
+    #            leaves 4 units of floor beyond each and so keeps both on the
+    #            basin's own x 24..74 at any box the unit is drawn at.
+    ("cooling_tower", "default"): ("vessels", "Induced-Draft Cooling Tower",
+                                   {"water_in": ("AT", 4.8, 20.0), "water_out": "S",
+                                    "air_in": "E", "air_out": "N",
+                                    "makeup": ("S", 28.0), "blowdown": ("S", 70.0)}),
+    ("cooling_tower", "induced_draft"): ("vessels", "Induced-Draft Cooling Tower",
+                                         {"water_in": ("AT", 4.8, 20.0), "water_out": "S",
+                                          "air_in": "E", "air_out": "N",
+                                          "makeup": ("S", 28.0), "blowdown": ("S", 70.0)}),
+    # Forced draft: 99 x 99, the fan moved off the stack and into a housing at
+    # the foot of each side, which is the whole difference between the two
+    # machines. The casing stands at x 19.5..79.5 over a basin the full 99 wide
+    # from y 89.5 down, and each housing is the box the stencil closes with a
+    # wall at x = 9.5 and x = 89.5 between y 64.5 and 89.5.
+    #
+    # So air_in moves from a louvre to that housing's outer wall at (89.5, 77),
+    # which is where the fan takes it in, and air_out stays the top of the
+    # casing. Everything else is the induced-draft tower's, restated in this
+    # drawing's own dimensions: the water in high on the west casing wall (which
+    # runs the full y 0..89.5, so 25 is on ink), the water out of the middle of
+    # the basin floor, and the makeup and the blowdown either side of it at the
+    # same proportion of a floor that here is the whole width of the box.
+    ("cooling_tower", "forced_draft"): ("vessels", "Forced-Draft Cooling Tower",
+                                        {"water_in": ("AT", 19.5, 25.0), "water_out": "S",
+                                         "air_in": ("AT", 89.5, 77.0), "air_out": "N",
+                                         "makeup": ("S", 25.0), "blowdown": ("S", 75.0)}),
     ("filter", "default"):  ("filters", "Liquid Filter (Bag, Candle, Cartridge)", {"inlet": "W", "outlet": "E"}),
     ("dryer", "default"):   ("driers", "Rotary Drum Drier, Tumbling Drier", {"feed": "W", "product": "E"}),
     # Steam/gas ejector: motive fluid into the steam chest, entrained fluid up
@@ -1559,6 +1758,12 @@ GRAVITY_FIXED = {
     ("separator", "horizontal"):    "vapour disengages off the top, liquid draws off the bottom",
     ("separator", "knockout"):      "demister on top, vapour up and liquid down",
     ("separator", "scrubber"):      "hopper bottom under a wash-liquid header",
+    # The venturi is drawn running downward -- converging lip, throat, then the
+    # diverging cone opening onto the hopper -- so this one is fixed by its own
+    # internal as well as by the hopper the family shares. Turned, the gas is
+    # accelerated sideways into a wall and nothing collects.
+    ("separator", "venturi_scrubber"):
+        "wash spray on the crown, throat running down into the hopper",
     # The four mechanical separators, listed for the reason ``electrostatic``
     # already is rather than for what does the separating. A precipitator sorts
     # by charge and a magnet by magnetism, and neither is gravity; what fixes
@@ -1581,6 +1786,10 @@ GRAVITY_FIXED = {
     ("tank", "conical_ends"):   "conical roof over a free surface, drains to the cone apex",
     ("tank", "dished_roof_conical_bottom"):
         "dished roof over a free surface, drains to the cone apex",
+    # 2061 again, and the most literal case of it in the family: the bell is
+    # drawn *resting on* the water in the seal, which is the whole mechanism.
+    # Turned, the seal runs out and the holder holds nothing.
+    ("tank", "gas_holder"):     "the bell floats on the water seal",
     # Holdup with a vapour space: every variant carries its vent on the top head
     # and drains from the shell, and four of them draw the skirt, brackets, legs
     # or saddles they stand on. ``Vessel``'s own docstring already says this in
@@ -1621,6 +1830,16 @@ GRAVITY_FIXED = {
     ("vent", "breather"):     "the tank conservation vent sits on the roof",
     ("vent", "exhaust_head"): "the V-bottom catches and drains condensate",
     ("funnel", "default"):    "open cone above a stem that drains down",
+    # Water that falls. A cooling tower works because the warm water is
+    # distributed over the fill and rains down through the air rising against
+    # it, collecting in the basin the artwork draws under the whole machine.
+    # Both drawings put a free surface at the bottom and the air's way out at
+    # the top; turned, the water leaves sideways and the draught runs across the
+    # basin. The fan arrangement makes no difference to that, so all three keys
+    # are listed.
+    ("cooling_tower", "default"):        "the water falls through the fill into the basin",
+    ("cooling_tower", "induced_draft"):  "the water falls through the fill into the basin",
+    ("cooling_tower", "forced_draft"):   "the water falls through the fill into the basin",
     # Solids that fall. The spray drier atomises into its roof and drops powder
     # out of the floor; the fluidised bed is a layer held down by gravity and
     # lifted by the gas through its distributor, and the artwork draws it as a

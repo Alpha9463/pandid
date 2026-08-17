@@ -63,7 +63,7 @@ and a flowsheet renders inline in Jupyter.
   peer is actually on.
 - **Orthogonal A\* routing.** Right-angle streams with crossing jump-gaps and
   parallel-segment separation. Never emits a disconnected stream.
-- **174 registered symbols** with style variants, so a heat exchanger can be
+- **179 registered symbols** with style variants, so a heat exchanger can be
   shell-and-tube, plate, kettle or U-tube. They derive from the Apache-2.0
   draw.io P&ID stencils (see [`NOTICE`](https://github.com/Alpha9463/pandid/blob/main/NOTICE)).
 - **Pixel-perfect overrides.** `pin()` equipment to exact coordinates and
@@ -159,13 +159,13 @@ fs.add(StirredTankReactor("R-1"))
 ```
 
 The base classes are `Feed`, `Product`, `Pump`, `Compressor`, `Blower`, `Valve`,
-`Vessel`, `Tank`, `HeatExchanger`, `Heater`, `Cooler`, `Reactor`, `Separator`,
+`Vessel`, `Tank`, `HeatExchanger`, `Heater`, `Cooler`, `CoolingTower`, `Reactor`, `Separator`,
 `Column`, `Mixer`, `Splitter`, `Tee`, `Reducer`, `Fitting`, `Ejector`, `Vent`,
 `Funnel`, `Furnace`, `Turbine`, `Filter`, `Dryer`, `Crusher`, `Mill`, `Conveyor`,
 `Elevator` and `Instrument`,
-with 52 equipment classes over them — a `GearPump` *is* a `Pump`.
+with 54 equipment classes over them — a `GearPump` *is* a `Pump`.
 
-A variant is a drawing within a class, picked with `variant=`. 100 of the 174
+A variant is a drawing within a class, picked with `variant=`. 103 of the 179
 registered drawings get no class of their own, and this is how you reach them:
 
 ```python

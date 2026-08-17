@@ -984,6 +984,16 @@ def register_vendored(registry):
         port_faces={'inlet': {'N': (50.0, 6.4), 'W': (0.0, 85.0), 'E': (100.0, 85.0)}},
     ), 'dished_roof_conical_bottom')
 
+    # draw.io vessels:Gas Holder (aspect=variable) -> tank/gas_holder
+    registry.register('tank', Symbol(
+        svg='<g id="sym_tank_gas_holder"><path d="M 0.0 30.0 L 0.0 95.0 L 70.0 95.0 L 70.0 30.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 5.0 55.0 L 5.0 15.0 A 30.0 15.0 0.0 0 1 35.0 0.0 A 30.0 15.0 0.0 0 1 65.0 15.0 L 65.0 55.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
+        width=70.0, height=95.0,
+        ports={'inlet': (0.0, 45.0), 'outlet': (70.0, 45.0), 'vent': (17.0, 3.0), 'relief': (53.0, 3.0), 'drain': (20.0, 95.0)},
+        drawio_shape='mxgraph.pid.vessels.gas_holder',
+        # must not be turned: the bell floats on the water seal
+        gravity_fixed=True,
+    ), 'gas_holder')
+
     # draw.io vessels:Reactor (aspect=variable) -> reactor/plain
     registry.register('reactor', Symbol(
         svg='<g id="sym_reactor_plain"><path d="M 40.0 7.69 L 40.0 87.69 A 20.0 7.6923 0.0 0 1 20.0 95.3823 A 20.0 7.6923 0.0 0 1 0.0 87.69 L 0.0 7.69 A 20.0 7.6923 0.0 0 1 20.0 -0.0023 A 20.0 7.6923 0.0 0 1 40.0 7.69 Z M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69 M 0.0 67.69 L 40.0 67.69 M 0.0 27.69 L 40.0 27.69 M 8.0 27.69 L 0.0 35.69 M 24.0 27.69 L 0.0 51.69 M 32.0 27.69 L 0.0 59.69 M 40.0 27.69 L 0.0 67.69 M 40.0 35.69 L 8.0 67.69 M 40.0 51.69 L 24.0 67.69 M 40.0 59.69 L 32.0 67.69 M 16.0 27.69 L 0.0 43.69 M 40.0 43.69 L 16.0 67.69" fill="white" stroke="#111" stroke-width="2.0"/></g>',
@@ -1036,6 +1046,16 @@ def register_vendored(registry):
         # must not be turned: hopper bottom under a wash-liquid header
         gravity_fixed=True,
     ), 'scrubber')
+
+    # draw.io separators:Separator (Venturi Scrubber) (aspect=variable) -> separator/venturi_scrubber
+    registry.register('separator', Symbol(
+        svg='<g id="sym_separator_venturi_scrubber"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 30.0 10.0 L 40.0 0.5 L 50.0 10.0 M 40.0 0.5 L 40.0 10.0 M 15.0 80.0 L 25.0 65.0 L 40.0 65.0 L 60.0 80.0 M 15.0 40.0 L 25.0 55.0 L 40.0 55.0 L 60.0 40.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=80.0, height=120.0,
+        ports={'feed': (0.0, 12.0), 'vapor': (80.0, 12.0), 'liquid': (40.0, 120.0)},
+        drawio_shape='mxgraph.pid.separators.separator_(venturi_scrubber)',
+        # must not be turned: wash spray on the crown, throat running down into the hopper
+        gravity_fixed=True,
+    ), 'venturi_scrubber')
 
     # draw.io separators:Separator, Sifter (aspect=variable) -> separator/sifter
     registry.register('separator', Symbol(
@@ -1180,6 +1200,36 @@ def register_vendored(registry):
         ports={'inlet': (0.0, 30.0), 'outlet': (98.0, 30.0)},
         drawio_shape='mxgraph.pid.pumps.turbine',
     ), 'default')
+
+    # draw.io vessels:Induced-Draft Cooling Tower (aspect=variable) -> cooling_tower/default
+    registry.register('cooling_tower', Symbol(
+        svg='<g id="sym_cooling_tower"><path d="M 24.0 70.0 L 19.0 60.0 L 24.0 60.0 L 0.0 10.0 L 34.0 10.0 L 34.0 0.0 L 64.0 0.0 L 64.0 10.0 L 98.0 10.0 L 74.0 60.0 L 79.0 60.0 L 74.0 70.0 Z M 34.0 10.0 L 64.0 10.0 M 24.0 60.0 L 74.0 60.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
+        width=98.0, height=70.0,
+        ports={'water_in': (4.8, 20.0), 'water_out': (49.0, 70.0), 'air_in': (86.2, 35.0), 'air_out': (49.0, 0.0), 'makeup': (28.0, 70.0), 'blowdown': (70.0, 70.0)},
+        drawio_shape='mxgraph.pid.vessels.induced-draft_cooling_tower',
+        # must not be turned: the water falls through the fill into the basin
+        gravity_fixed=True,
+    ), 'default')
+
+    # draw.io vessels:Induced-Draft Cooling Tower (aspect=variable) -> cooling_tower/induced_draft
+    registry.register('cooling_tower', Symbol(
+        svg='<g id="sym_cooling_tower_induced_draft"><path d="M 24.0 70.0 L 19.0 60.0 L 24.0 60.0 L 0.0 10.0 L 34.0 10.0 L 34.0 0.0 L 64.0 0.0 L 64.0 10.0 L 98.0 10.0 L 74.0 60.0 L 79.0 60.0 L 74.0 70.0 Z M 34.0 10.0 L 64.0 10.0 M 24.0 60.0 L 74.0 60.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
+        width=98.0, height=70.0,
+        ports={'water_in': (4.8, 20.0), 'water_out': (49.0, 70.0), 'air_in': (86.2, 35.0), 'air_out': (49.0, 0.0), 'makeup': (28.0, 70.0), 'blowdown': (70.0, 70.0)},
+        drawio_shape='mxgraph.pid.vessels.induced-draft_cooling_tower',
+        # must not be turned: the water falls through the fill into the basin
+        gravity_fixed=True,
+    ), 'induced_draft')
+
+    # draw.io vessels:Forced-Draft Cooling Tower (aspect=variable) -> cooling_tower/forced_draft
+    registry.register('cooling_tower', Symbol(
+        svg='<g id="sym_cooling_tower_forced_draft"><path d="M 0.0 99.0 L 0.0 89.5 L 19.5 89.5 L 19.5 0.0 L 79.5 0.0 L 79.5 89.5 L 99.0 89.5 L 99.0 99.0 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 9.5 89.5 L 9.5 64.5 L 19.5 64.5 M 89.5 89.5 L 89.5 64.5 L 79.5 64.5 M 19.5 89.5 L 79.5 89.5" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        width=99.0, height=99.0,
+        ports={'water_in': (19.5, 25.0), 'water_out': (49.5, 99.0), 'air_in': (89.5, 77.0), 'air_out': (49.5, 0.0), 'makeup': (25.0, 99.0), 'blowdown': (75.0, 99.0)},
+        drawio_shape='mxgraph.pid.vessels.forced-draft_cooling_tower',
+        # must not be turned: the water falls through the fill into the basin
+        gravity_fixed=True,
+    ), 'forced_draft')
 
     # draw.io filters:Liquid Filter (Bag, Candle, Cartridge) (aspect=variable) -> filter/default
     registry.register('filter', Symbol(

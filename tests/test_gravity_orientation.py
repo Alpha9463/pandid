@@ -147,6 +147,9 @@ GRAVITY_FIXED = {
     ("separator", "horizontal"),
     ("separator", "knockout"),
     ("separator", "scrubber"),
+    # the venturi scrubber is fixed twice over: the family's hopper, and its own
+    # throat, which the artwork draws running downward into it
+    ("separator", "venturi_scrubber"),
     # the four mechanical separators, listed for the hopper rather than for what
     # does the separating: a magnet sorts by magnetism and a precipitator by
     # charge, and what fixes the attitude of all of them is the fall into the
@@ -166,6 +169,14 @@ GRAVITY_FIXED = {
     ("tank", "conical_bottom"),
     ("tank", "conical_ends"),
     ("tank", "dished_roof_conical_bottom"),
+    # ...and the one whose free surface is a seal rather than the inventory: the
+    # bell is drawn resting on the water, and turned it rests on nothing
+    ("tank", "gas_holder"),
+    # water distributed over the fill, falling through the draught into the
+    # basin the artwork draws under the whole machine
+    ("cooling_tower", "default"),
+    ("cooling_tower", "induced_draft"),
+    ("cooling_tower", "forced_draft"),
     # holdup with a vapour space over it
     ("vessel", "default"),
     ("vessel", "dished"),

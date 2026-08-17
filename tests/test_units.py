@@ -692,6 +692,29 @@ def test_ejector_has_three_connections():
     assert e.discharge.direction == "outlet"
 
 
+def test_a_cooling_tower_names_its_two_sides_and_taps_its_basin():
+    # The nozzles are named for the side of the equipment, as an exchanger's
+    # are: which of the two is the hot one is the operating case. The other two
+    # are what makes it a tower rather than an exchanger -- it evaporates part
+    # of its own inventory, so something replaces it and something bleeds off
+    # what is left behind.
+    ct = U.CoolingTower("CT-101")
+    assert list(ct.ports) == ["water_in", "water_out", "air_in", "air_out", "makeup", "blowdown"]
+    assert ct.water_in.direction == "inlet"
+    assert ct.water_out.direction == "outlet"
+    assert ct.makeup.role == "utility"
+    assert ct.blowdown.role == "liquid"
+
+
+def test_both_cooling_tower_drafts_are_piped_alike():
+    # Where the fan sits changes the casing and nothing else, so a sheet can
+    # swap one drawing for the other without moving a run.
+    drafts = [
+        U.CoolingTower("CT-1", variant=v) for v in ("default", "induced_draft", "forced_draft")
+    ]
+    assert {tuple(ct.ports) for ct in drafts} == {tuple(drafts[0].ports)}
+
+
 def test_open_ends_have_a_single_port_each_way():
     assert set(U.Vent("V-1").ports) == {"inlet"}
     assert U.Vent("V-1").inlet.direction == "inlet"
