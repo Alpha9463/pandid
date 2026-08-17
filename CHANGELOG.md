@@ -581,6 +581,10 @@ reader would otherwise take them for working code.
 
 ### Fixed
 
+- The L the router falls back to when the search finds nothing is now checked
+  against the obstacles: both corner orders are tried and the one crossing less
+  equipment is drawn.
+
 - Corpus counts in `docs/api.md` and `pandid/validate.py` are gone; the
   prose states the rule and the tests measure the corpus.
 
