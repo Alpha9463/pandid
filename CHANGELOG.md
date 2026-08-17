@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`Stream.tabulate`**, which segment of a run the stream table quotes. A run
+  drawn through a control valve carries two pressures under one number, and one
+  column can show one of them; mark the segment whose conditions the column
+  should report. Unmarked, the run reads in the order it is drawn, as before.
+
 - **`Conveyor(diameter=)`**, the second dimension: the roller a belt runs on,
   or the casing bore a screw turns in. It is set independently of `length=`,
   and the drawing is built to both, so the rollers are true circles at any
@@ -584,6 +589,10 @@ reader would otherwise take them for working code.
 - The L the router falls back to when the search finds nothing is now checked
   against the obstacles: both corner orders are tried and the one crossing less
   equipment is drawn.
+
+- **A stream-table column takes its values from the whole run**, not from its
+  first segment alone. A property written only on a later segment kept the
+  column, added its row and then drew a dash in it.
 
 - Corpus counts in `docs/api.md` and `pandid/validate.py` are gone; the
   prose states the rule and the tests measure the corpus.

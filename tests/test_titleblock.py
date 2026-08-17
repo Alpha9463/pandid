@@ -479,9 +479,9 @@ def test_a_run_is_judged_over_every_segment_it_is_drawn_in():
     one column, so what earns the column can sit on a segment other than
     the one the column is headed from: here the product flag is on the far
     segment of the outgoing run, and the property on the far segment of the
-    incoming one. Only the first segment's *values* are tabulated, which is
-    why every shipped example writes a run's properties on each of its
-    segments."""
+    incoming one. The value on that far segment reaches the column too --
+    it earned the column, so drawing a dash in it would be the table
+    contradicting itself."""
     fs = Flowsheet("segments")
     feed = fs.add(U.Feed("F"))
     pump = fs.add(U.Pump("P-1"))
@@ -495,6 +495,118 @@ def test_a_run_is_judged_over_every_segment_it_is_drawn_in():
     tail.properties = {"Temperature": "25 C"}  # the far segment of the run in
     assert [s.name for s in fs.streams] == ["S1", "S1", "S2", "S2"]
     assert _columns(fs) == ["S1", "S2"]
+    assert _row(fs, "Temperature") == ["25 C", "-"]
+
+
+# --- which segment of a run the column reports --------------------------------
+#
+# A run drawn through a valve is one column over several streams, and their
+# properties can genuinely differ: a control valve is there to drop the
+# pressure. One column cannot show both, and no rule can pick -- which point
+# it reports is a decision about the drawing. `tabulate=True` is where the
+# author makes it; unmarked, the run reads in the order it is drawn.
+
+
+def _row(fs, key) -> list:
+    """The values the table draws down one property row, in column order."""
+    from pandid.render.furniture import stream_table_layout
+
+    table = stream_table_layout(fs)
+    for row in [] if table is None else table.rows:
+        if len(row) > 1 and row[0].text == key:
+            return [c.text for c in row[1:]]
+    return []
+
+
+def _across_a_valve():
+    """One run in two segments with the drop across the valve written on it.
+
+    The shape of ``examples/08``'s S6: 11.6 barg above the spillback valve and
+    3.4 barg below it, both under one stream number.
+    """
+    fs = Flowsheet("drop")
+    feed = fs.add(U.Feed("F"))
+    fv = fs.add(U.Valve("FV-1", variant="control"))
+    prod = fs.add(U.Product("P"))
+    up = fs.connect(feed.outlet, fv.inlet)
+    down = fs.connect(fv.outlet, prod.inlet)
+    up.properties = {"Pressure": "11.6 barg"}
+    down.properties = {"Pressure": "3.4 barg"}
+    assert [s.name for s in fs.streams] == ["S1", "S1"]
+    return fs, up, down
+
+
+def test_an_unmarked_run_reports_the_conditions_it_is_drawn_from():
+    fs, _up, _down = _across_a_valve()
+    assert _row(fs, "Pressure") == ["11.6 barg"]
+
+
+def test_the_marked_segment_is_the_one_the_column_reports():
+    fs, _up, down = _across_a_valve()
+    down.tabulate = True
+    assert _row(fs, "Pressure") == ["3.4 barg"]
+
+
+def test_the_mark_moves_the_values_and_not_the_heading():
+    """The number and the line-number components belong to the run rather
+    than to any one segment, so the column is headed from the first segment
+    whichever one it reports."""
+    fs = Flowsheet("heading")
+    feed = fs.add(U.Feed("F"))
+    fv = fs.add(U.Valve("FV-1", variant="control"))
+    prod = fs.add(U.Product("P"))
+    up = fs.connect(feed.outlet, fv.inlet, size='6"', service="P", spec="A1A")
+    down = fs.connect(fv.outlet, prod.inlet)
+    up.properties = {"Pressure": "11.6 barg"}
+    down.properties = {"Pressure": "3.4 barg"}
+    down.tabulate = True
+    assert _columns(fs) == ['6"-P-1001-A1A']
+    assert _row(fs, "Pressure") == ["3.4 barg"]
+
+
+def test_the_mark_fills_only_the_rows_it_states():
+    """It says which segment to read *first*, not which to read only. A key
+    the marked segment is silent on still comes off the run, so nominating
+    the downstream point does not blank out the analysis written upstream.
+    """
+    fs, up, down = _across_a_valve()
+    up.properties["Benzene"] = "0.90"
+    down.tabulate = True
+    assert _row(fs, "Pressure") == ["3.4 barg"]
+    assert _row(fs, "Benzene") == ["0.90"]
+
+
+def test_two_marks_on_one_run_name_the_run_and_the_way_out():
+    """The mark exists to settle which point the column reports, so two of
+    them on one column is the question asked again rather than answered."""
+    fs, up, down = _across_a_valve()
+    up.tabulate = down.tabulate = True
+    with pytest.raises(ValueError) as excinfo:
+        _row(fs, "Pressure")
+    message = str(excinfo.value)
+    assert "S1 is drawn in 2 segments and 2 of them are marked" in message
+    assert "new_line_number" in message  # names the other way out
+
+
+def test_a_mark_on_a_run_of_one_segment_changes_nothing():
+    fs = Flowsheet("one")
+    feed = fs.add(U.Feed("F"))
+    prod = fs.add(U.Product("P"))
+    only = fs.connect(feed.outlet, prod.inlet)
+    only.properties = {"Pressure": "4.0 barg"}
+    only.tabulate = True
+    assert _row(fs, "Pressure") == ["4.0 barg"]
+
+
+def test_the_mark_survives_the_spec_round_trip():
+    """Asserted on the rebuilt sheet's table, not on the two dicts: a flag
+    dropped on the way out is dropped from both sides of a dict comparison
+    and the column quietly goes back to reporting the upstream point."""
+    fs, _up, down = _across_a_valve()
+    down.tabulate = True
+    rebuilt = Flowsheet.from_dict(fs.to_dict())
+    assert [s.tabulate for s in rebuilt.streams] == [False, True]
+    assert _row(rebuilt, "Pressure") == ["3.4 barg"]
 
 
 # --- text that does not fit the cell drawn for it -----------------------------
