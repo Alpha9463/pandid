@@ -77,17 +77,17 @@ LABEL_POSITIONS = ("top", "bottom", "right", "left", "center")
 # The two weights ISO 15519 draws a process diagram in. ISO 15519-1 §6.2
 # Table 1 gives field symbols 0,1 M and connections 0,2 M with M = 2,5
 # mm (§11.1.2), and makes the spacing a requirement rather than a habit:
-# "If two or more widths of line are used, the ratio between any two
-# widths shall be at least 2:1." ISO 15519-2 Annex A.1 spends the pair
-# per line type -- A.1.01 pipeline 0,50, A.1.02 instrument and control
+# where a drawing uses two or more line widths, any two of them have to
+# stand at least 2:1 apart. ISO 15519-2 Annex A.1 spends the pair per
+# line type -- A.1.01 pipeline 0,50, A.1.02 instrument and control
 # connection 0,25, A.1.03 pilot and signal line 0,25.
 #
 # A drawing unit here is a CSS pixel, 25,4/96 mm, so 2 and 1 land on
 # 0,53 mm and 0,26 mm: the standard's own pair at exactly its 2:1. They
 # are relative weights and still scale with the sheet; holding them to a
-# physical width is the *other* half of §6.2 -- "the width of lines of a
-# final diagram on paper or equivalent media shall be at least 0,18 mm"
-# -- and nothing here checks it. (Not §11.1.3, which is the unrelated
+# physical width is the *other* half of §6.2, which floors every line of
+# a finished diagram on paper or equivalent media at 0,18 mm -- and
+# nothing here checks it. (Not §11.1.3, which is the unrelated
 # rule that a symbol's stroke survives the symbol being resized; see
 # :data:`_SYMBOL_STROKE`.)
 _PROCESS_STROKE = 2
@@ -143,10 +143,10 @@ _LABEL_STEP = 6.0
 _LABEL_BANDS = 7
 
 #: The weight a graphical symbol's outline is drawn at, in whatever box
-#: it is placed in. ISO 15519-1 §11.1.3 is a *shall* -- "When the size
-#: of a symbol is changed, the line width shall be unchanged" -- and
-#: :func:`_nominal` holds every artwork in the registry to it, so this
-#: is one number for all of them rather than a property of any drawing.
+#: it is placed in. ISO 15519-1 §11.1.3 is a *shall*: resizing a symbol
+#: leaves its line width alone. :func:`_nominal` holds every artwork in
+#: the registry to it, so this is one number for all of them rather than
+#: a property of any drawing.
 _SYMBOL_STROKE = 2.0
 
 #: The paper a label's opaque plate leaves outside a symbol's ink.
@@ -184,14 +184,13 @@ def _obstacle(box) -> "tuple[float, float, float, float]":
 def _along(box, vertical: bool, lo: float, hi: float) -> bool:
     """Is a label at *box* written **along** the run ``lo``..``hi``?
 
-    ISO 15519-1 §7.2.5, on the reference designation of a connection:
-    "They shall be oriented along or adjacent to the relevant connecting
-    lines. If it is not possible to place the reference designation
-    adjacent to the connecting line, it shall be shown elsewhere in the
-    content area with a leader line to the actual connecting line."
+    ISO 15519-1 §7.2.5, on the reference designation of a connection,
+    orients it along or beside the connecting line it belongs to, and
+    where there is no room beside that line it goes elsewhere in the
+    content area with a leader drawn back to it.
 
     Two *shall*s, the second naming the only escape from the first, so
-    this is where "along" stops and :func:`_leader` takes over. It asks
+    this is where *along* stops and :func:`_leader` takes over. It asks
     the one question the clause turns on -- is the line *there*, beside
     the words? -- and not how wide the paper between them is.
 
@@ -323,18 +322,19 @@ def impulse_tap(inst) -> bool:
 
 
 # --- letter codes written outside the symbol --------------------------
-# ISO 15519-2 §5.1.3, p. 19: "Information placed outside the PCI symbol
-# shall be placed in the four quadrants around the symbol as illustrated
-# in Figure 8. This allows for horizontal and vertical connections to
-# the symbol."
+# ISO 15519-2 §5.1.3, p. 19, puts anything written outside a PCI symbol
+# in the four quadrants around it, drawn at Figure 8, and gives the
+# reason: doing so leaves the symbol free to be connected horizontally
+# and vertically.
 #
-# The quadrants are the *corners*, and the second sentence is why: N, S,
-# E and W stay clear for the four connections a balloon takes, so
-# annotating one spends no face (#253).
+# The quadrants are the *corners*, and that reason is why: N, S, E and W
+# stay clear for the four connections a balloon takes, so annotating one
+# spends no face (#253).
 #
-# §5.2.5 fixes the *vertical* half -- "increasing value away from the
-# centre line", so a high function is above it and a low one below --
-# and does not fix which side of the symbol the pair goes on.
+# §5.2.5 fixes the *vertical* half -- the value a code stands for rises
+# with its distance from the centre line, so a high function is above it
+# and a low one below -- and does not fix which side of the symbol the
+# pair goes on.
 # ``professional_examples/P&ID_301.pdf`` bears that out: all three of
 # its annotated controllers put their alarms on whichever side has room.
 # So a pair keeps its half of the symbol and takes whichever side reads.
@@ -682,18 +682,18 @@ def _label_anchors(cx: float, cy: float, span: float, hw: float, hh: float, vert
 
 
 # --- the leader that stands in for adjacency --------------------------
-# ISO 15519-1 §6.4, on how a leader ends: "Leader lines shall terminate:
-# with a dot if it terminates within an object; with an arrowhead if it
-# ends on the outline of an object or a connection; with an oblique
-# stroke if it ends at several parallel connections." A line number's
-# leader ends on a connection, so it wears an arrowhead, and Figure 4 c)
-# draws the leader itself *oblique*, running down onto a plain
-# horizontal connecting line with the text at its upper end.
+# ISO 15519-1 §6.4 gives a leader three terminators and picks between
+# them by where the leader lands: a dot inside an object, an arrowhead on
+# the outline of an object or on a connection, an oblique stroke across
+# several parallel connections. A line number's leader ends on a
+# connection, so it wears an arrowhead, and Figure 4 c) draws the leader
+# itself *oblique*, running down onto a plain horizontal connecting line
+# with the text at its upper end.
 #
-# The slope is load-bearing. §12.1 holds "the connecting lines
-# representing pipelines, mechanical links, conductors, functional
-# connections, etc." to horizontal or vertical, and it is being oblique
-# that keeps a leader from being read as one of those -- which is why
+# The slope is load-bearing. §12.1 holds the connecting lines -- pipes,
+# mechanical links, conductors, functional connections and the rest --
+# to horizontal or vertical, and it is being oblique that keeps a leader
+# from being read as one of those, which is why
 # tests/test_route_invariants.py sweeps streams and impulse lines and
 # not this.
 #
@@ -1327,10 +1327,10 @@ def flanged_joint(port, want: str) -> bool:
     part of the reference the rest of this module cites -- zero
     occurrences in ISO 15519-1:2010 and zero in ISO 15519-2:2015.
     ISO 15519-1 §12.4 is headed *Joints* and is not about pipe joints at
-    all: it governs the joining of *connecting lines* on the paper --
-    "Joining shall be indicated with symbol 501: Joint of connections, a
-    dot" -- and its last sentence, "In T-joint the dot may be omitted",
-    is the permission this package takes. Nothing here draws a joining
+    all: it governs the joining of *connecting lines* on the paper, and
+    marks a join with symbol 501, *Joint of connections*, a dot. Its last
+    sentence lets that dot be left off a T-joint, and that is the
+    permission this package takes. Nothing here draws a joining
     dot: a tee is two straight strokes and no ``<circle>`` is emitted
     anywhere (see the tee's own artwork in
     :mod:`pandid.render.symbols`). That is conforming, but it is
@@ -1735,17 +1735,14 @@ def _at_pen_scale(svg: str, scale: float) -> str:
 
 # --- baking an uneven scale into the drawing --------------------------
 #
-# ISO 15519-1:2010 §11.1.3, "Line width in graphical symbols", is a
-# *shall*:
-#
-#     The normal line width of graphical symbols is 0,1 M, according to
-#     ISO 81714-1. When the size of a symbol is changed, the line width
-#     shall be unchanged.
+# ISO 15519-1:2010 §11.1.3, *Line width in graphical symbols*, is a
+# *shall*: a symbol's line is normally 0,1 M after ISO 81714-1, and
+# resizing the symbol leaves that width alone.
 #
 # §11.1.2 permits the proportions themselves to be modified, so
 # stretching a stencil to fill the box a unit was given is allowed;
-# carrying the stroke along with it is not. §6.2 closes the other door
-# -- "the ratio between any two widths shall be at least 2:1" -- so an
+# carrying the stroke along with it is not. §6.2 closes the other door by
+# holding any two line widths on a drawing at least 2:1 apart, so an
 # outline drawn 1,53 heavier one way than the other cannot be defended
 # as a deliberate second weight either.
 #
@@ -2291,13 +2288,12 @@ def sheet_connections(diagram: "str | None",
     is a drawing on which the question does not arise, and nothing a
     stream states can reopen it.
 
-    That distinction is ISO 15519-2:2015's. Table 5 (p. 19) lists, as
-    *basic* information for a P&ID, "specific graphical symbols for
-    process equipment incl. prime movers ..., valves incl. actuators,
-    **connections**, etc."; Table 4 (p. 17) gives the PFD only "general
-    graphical symbols for connections". A flange face is as specific
-    as a connection gets, so ``connections="flanged"`` on a PFD draws
-    nothing.
+    That distinction is ISO 15519-2:2015's. Table 5 (p. 19) counts, among
+    the *basic* information for a P&ID, the **specific** symbols for
+    process equipment, prime movers, valves, actuators and connections;
+    Table 4 (p. 17) allows the PFD only **general** symbols for its
+    connections. A flange face is as specific as a connection gets, so
+    ``connections="flanged"`` on a PFD draws nothing.
 
     Public and asked rather than open-coded for the reason
     :func:`draws_arrowheads` is: the draw.io exporter needs the same
@@ -3280,10 +3276,10 @@ class SvgRenderer:
     def _nc_label_item(self, u, f, x, y, u_width, u_height, tag_box=None):
         """The ``NC`` abbreviation, for a body that cannot be darkened.
 
-        **ISO 15519-1 §11.4.5** governs the letters: the state "may be
-        indicated by adding the letter symbol NC *Normal closed* or NO
-        *Normal open* **above the symbol and to the right**, as
-        indicated in Figure 28". The figure draws it on an unfilled
+        **ISO 15519-1 §11.4.5** governs the letters: it allows the state
+        to be marked with ``NC`` for *normal closed* or ``NO`` for
+        *normal open*, set **above the symbol and to the right**, and
+        illustrates that at Figure 28. The figure draws it on an unfilled
         bowtie with the letters starting at about the valve's right-hand
         edge, clear above the run.
 
@@ -3329,10 +3325,8 @@ class SvgRenderer:
         :func:`pandid.render.symbols.fail_marking`.
 
         **PIP PIC001 clause 4.2.4.6(1)** places them, and is followed
-        exactly: *"Control valve failure action abbreviation shall be
-        shown at 0.06 inch directly below the control valve in
-        horizontal lines and 0.06 inch to the right of the control valve
-        in vertical lines."*
+        exactly: 0.06 inch directly below the control valve on a
+        horizontal line, and 0.06 inch to its right on a vertical one.
 
         So the quarter turn moves these letters where it does not move
         the ``NC`` abbreviation (:meth:`_nc_label_item`), and the two
@@ -3358,7 +3352,7 @@ class SvgRenderer:
         symbols are asked too, by :func:`_step_aside`, which slides the
         mark **along** the face -- the one direction that gets it off a
         line leaving that same face -- and holds it to half the face so
-        PIP's "directly below" survives the move. ``ink`` and
+        PIP's *directly below* survives the move. ``ink`` and
         ``symbols`` are the sheet's, in the two forms :meth:`_tag_item`
         takes them; a mark placed with neither still steps past its tag.
 
@@ -3579,11 +3573,11 @@ class SvgRenderer:
         #
         # A label runs parallel to the pipe it names, turned on a
         # vertical run so it reads bottom to top and never upside down.
-        # ISO 15519-1 §5.1.5 allows text read "from the bottom edge or
-        # ... from the right-hand edge of the document", and this is the
-        # second of those. Its next sentence, that reference
-        # designations stay horizontal "independent of symbol
-        # orientation", is about a *symbol's* designation and does not
+        # ISO 15519-1 §5.1.5 gives text two reading directions, from the
+        # bottom edge of the document and from its right-hand edge, and
+        # this is the second of those. Its next sentence keeps a
+        # reference designation horizontal whatever way its symbol is
+        # turned, which is about a *symbol's* designation and does not
         # reach a connection:
         # §7.2.5 is the clause for those, and asks for orientation
         # *along* the connecting line. Figure 40 turns the annotation on

@@ -30,13 +30,12 @@ from dataclasses import dataclass, field
 # Location references (ISO 15519-1:2010 Clause 9)
 # --------------------------------------------------------------
 
-#: How a zone may be spelled, from ISO 15519-1 §5.1.2: *"The grid
-#: reference system consists of columns and rows. A zone is the
-#: cross-section of a column and a row. Columns are designated with
-#: numbers. Rows are designated with letters."* So a zone is its row
-#: letter followed by its column number (Table 2's ``B3``), and a row or
-#: a column on its own is the letter or the number alone. ``3B`` is
-#: neither, and is the mistake this rejects.
+#: How a zone may be spelled. ISO 15519-1 §5.1.2 builds the grid from
+#: columns designated with numbers and rows designated with letters, and
+#: calls the cross-section of one column and one row a zone. So a zone is
+#: its row letter followed by its column number (Table 2's ``B3``), and a
+#: row or a column on its own is the letter or the number alone. ``3B``
+#: is neither, and is the mistake this rejects.
 _ZONE = re.compile(r"\A(?:[A-Za-z]+[0-9]+|[A-Za-z]+|[0-9]+)\Z")
 
 # The two signs Clause 9 reserves. A field containing one would be read
@@ -61,22 +60,12 @@ def _clean(value, field_name: str) -> str:
 def location_reference(document="", sheet="", zone="") -> str:
     """Compose an ISO 15519-1 Clause 9 location reference.
 
-    Clause 9, *Location references*, in full:
-
-        For reference to a document, to a sheet of a document, or to
-        a column, a row or a zone on a sheet, the grid reference
-        system described in 5.1.2 shall be used.
-
-        The following signs shall be used for creating location
-        references:
-
-        * solidus (/) for identification of a sheet;
-
-        * full stop (.) for identification of a column, a row or a
-          zone in a sheet.
-
-        The location reference shall be presented in following sequence:
-        document — sheet — column, row or zone.
+    Clause 9, *Location references*, covers a reference to a document, to
+    a sheet of a document, and to a column, a row or a zone on a sheet,
+    each of them spelled against the §5.1.2 grid. It reserves the solidus
+    for the sheet and the full stop for the column, row or zone, and
+    fixes the order they are presented in: document, then sheet, then
+    column, row or zone.
 
     So the three parts always appear in that order, each introduced by
     its own sign, and a part left out narrows the *scope* of the

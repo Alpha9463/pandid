@@ -613,9 +613,9 @@ def test_both_backends_place_every_label_side_the_vocabulary_names():
 
 
 def test_a_pfd_marks_no_joints_however_it_is_asked():
-    """ISO 15519-2:2015 Table 5 (p. 19) lists "connections" among the *specific*
-    graphical symbols a P&ID carries as basic information; Table 4 (p. 17) gives
-    the PFD only "general graphical symbols for connections". A flange face is
+    """ISO 15519-2:2015 Table 5 (p. 19) counts connections among the *specific*
+    graphical symbols a P&ID carries as basic information; Table 4 (p. 17)
+    allows the PFD only *general* symbols for its connections. A flange face is
     as specific as a connection gets, so a PFD does not draw one."""
     for value in ("flanged", "flanged-at-nozzles"):
         assert _marks(_joints().to_svg(connections=value)) == 0

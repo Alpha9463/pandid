@@ -18,8 +18,9 @@ says what the two have to do with each other:
 - ``near=`` neither: the balloon only sits there and nothing is drawn.
   What reaches the valve is a signal, stated with ``connect()``.
 
-``display="central"`` is ISO 15519-2 Table 1's single bar, "Information
-available in central control system"; a field balloon carries none.
+``display="central"`` is ISO 15519-2 Table 1's single bar, the one that
+puts the reading in the central control system; a field balloon carries
+none.
 
 ``fs.add_loop(variable, number)`` declares a loop and its members are
 tagged from it: a balloon by passing the loop where the number would go,

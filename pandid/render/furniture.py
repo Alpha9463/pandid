@@ -383,10 +383,10 @@ def _table_runs(fs) -> list:
     A stream that states no property at all is dropped. An empty column
     is a heading over a rule of dashes, and there is no clause behind
     it: ISO 10628-1:2014 4.3.3 a) puts the flows *between the process
-    steps* among the things a PFD "can also contain".
+    steps* among the things a PFD may carry rather than must.
 
-    Unless it crosses the sheet edge. 4.3.2 d) makes the "denomination
-    and flow rates or quantities of ingoing and outgoing materials"
+    Unless it crosses the sheet edge. 4.3.2 d) makes the name of each
+    ingoing and outgoing material, with its flow rate or quantity,
     something the diagram **shall** contain, so a feed or a product with
     nothing on it keeps its column -- dropping it would hide exactly
     what the standard asks the sheet to report, and hide it precisely
@@ -684,8 +684,8 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
     state a scale of its own.
 
     The strip is fixed geometry -- ISO 15519-1 §5.2.2 splits the title
-    block in two and fixes both halves, the *position* to ISO 5457 and
-    the *dimension and information contained within it* to ISO 7200 --
+    block in two and fixes both halves, where it sits to ISO 5457 and
+    how big it is and what goes in it to ISO 7200 --
     so a value too long for its cell cannot be given more room and is
     abbreviated instead. ``report`` is how each such
     cell says which field it abbreviated and what it was given; see

@@ -3,11 +3,10 @@
 **A line number is written along the line it names, or carries a leader to it.**
 
 That is BS ISO 15519-1:2010 §7.2.5, on the reference designation of a
-connection, and both halves of it are *shall*: "They shall be oriented along or
-adjacent to the relevant connecting lines. If it is not possible to place the
-reference designation adjacent to the connecting line, it shall be shown
-elsewhere in the content area with a leader line to the actual connecting line.
-See also 6.4."
+connection, and both halves of it are *shall*: the designation is oriented along
+or beside the connecting line it belongs to, and where there is no room beside
+that line it goes elsewhere in the content area with a leader drawn back to it
+(the clause points on to 6.4).
 
 Nothing asserted it. The placement search walked outward from the pipe until it
 found paper nothing else had claimed and wrote the number there, however far out
@@ -43,8 +42,8 @@ end.
 
 §6.4 governs the leader itself, and its three checks are here too: the leader
 lands *on* the line it names, it is oblique, and it cuts nothing. Oblique
-matters because §12.1 holds every connecting line -- "pipelines, mechanical
-links, conductors, functional connections" -- to horizontal or vertical, so the
+matters because §12.1 holds every connecting line -- pipes, mechanical links,
+conductors, functional connections -- to horizontal or vertical, so the
 slope is what stops a leader being read as a connection; ISO 15519-1's own
 Figure 4 c), the case of a leader landing on a plain connection, draws it that
 way. And cutting nothing matters because the label was moved out here to avoid
@@ -309,9 +308,9 @@ def test_a_line_number_is_written_along_its_line_or_carries_a_leader(sheets, nam
 
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
 def test_a_leader_lands_on_the_line_it_names(sheets, name):
-    """§6.4: the leader "shall terminate ... with an arrowhead if it ends on the
-    outline of an object or a connection". A leader that stops short of its
-    connection points at whatever it stopped over instead."""
+    """§6.4: a leader ending on the outline of an object, or on a connection,
+    terminates in an arrowhead. A leader that stops short of its connection
+    points at whatever it stopped over instead."""
     fs, labels = sheets[name]
     segs = _drawn_segments(fs)
     wrong = []

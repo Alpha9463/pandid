@@ -260,9 +260,9 @@ KIND_MAP = {
     # places them by the same two rules, which are the roles' own meanings and
     # not a layout convention:
     #
-    #   relief -- on the CROWN, beside the vent. CHEE4001 p.7: "The PSV should
-    #       be placed, whenever possible, directly on the system to be
-    #       protected, vertically, upward, and at the top of the container."
+    #   relief -- on the CROWN, beside the vent. CHEE4001 p.7 puts the PSV,
+    #       wherever it can be, on the protected system itself, upright,
+    #       discharging upward, at the top of the container.
     #       Measured onto the head's own arc or slope rather than onto the box's
     #       top edge, for the reason the roofs below are: a head rises inside
     #       its bounding box, so a nozzle on the edge floats above the ink.
@@ -980,9 +980,9 @@ KIND_MAP = {
     #
     # WHICH THREE DUTIES GET THE NOZZLES. Two of the five are fixed by
     # something other than preference and both are on top. CHEE4001 p.7 puts the
-    # protective device there -- "The PSV should be placed, whenever possible,
-    # directly on the system to be protected, vertically, upward, and at the top
-    # of the container" -- so ``relief`` takes a crown rectangle. ``vent`` is
+    # protective device there -- wherever it can be, the PSV goes on the
+    # protected system itself, upright, discharging upward, at the top of the
+    # container -- so ``relief`` takes a crown rectangle. ``vent`` is
     # the vapour connection and a vapour space is at the top of a vessel by
     # definition, so it takes the other. Which rectangle is which is arbitrary;
     # they are one drawing twice. That leaves the belly nozzle for one of the
@@ -1501,12 +1501,10 @@ ADAPTED_ELSEWHERE = {
 # Symbols that must not be turned, as ``Symbol.gravity_fixed``.
 #
 # ISO 15519-1 §11.4.2, *Orientation of graphical symbols*, permits turning and
-# mirroring "in order to fit into the actual layout of the diagram", and then:
-#
-#     Exceptions for turning are symbols representing components or devices
-#     where gravity is a functionality, for example symbol 2061: Open tank or
-#     symbol X 2618: Cyclone separator; see Figure 22 b). Such symbols must not
-#     be turned.
+# mirroring so that a symbol fits the layout the diagram actually has, and then
+# excepts one class of symbol: anything for a component or device whose function
+# depends on gravity. It names two of them, the open tank (2061) and the cyclone
+# separator (X 2618), drawn at Figure 22 b), and those must not be turned.
 #
 # Figure 22 b) draws those two: an open-topped U, and a body whose conical apex
 # points down with the vortex spiralling into it. Both are devices whose *job* is

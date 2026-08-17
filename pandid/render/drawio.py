@@ -2057,18 +2057,12 @@ class DrawioRenderer:
         stream and so is not in ``fs.streams``, and an exporter that
         walks only the streams hands back a sheet of balloons floating
         free of the plant. ISO 15519-2 §5.1.1 (document page 8, under
-        Figure 6) does not leave that open:
-
-            The PCI symbol **shall** be connected, see Figure 6, to the
-            following:
-
-            -- the process system with a solid functional
-            connection line without indications of for example
-            signal flow directions, signal types, etc.;
-
-            -- the control system with a solid or dashed functional
-            connection line depending on the type of diagram, see
-            Clause 6.
+        Figure 6) does not leave that open: a PCI symbol **shall** be
+        connected two ways, as Figure 6 draws it. To the process system
+        it takes a solid functional connection line carrying nothing
+        about signal direction or signal type; to the control system it
+        takes a functional connection line that is solid or dashed
+        according to which diagram this is (Clause 6).
 
         Which of the two a given line is, is
         :func:`~pandid.render.svg.impulse_tap`'s answer and not this
@@ -2322,10 +2316,10 @@ class DrawioRenderer:
 
         A caveat worth the author knowing, and it is why this was argued
         about rather than just added: a zone grid is an **address
-        space**. ISO 15519-1 Clause 9 uses it for "reference to a
-        document, to a sheet of a document, or to a column, a row or a
-        zone on a sheet", and :attr:`pandid.units._Boundary.reference`
-        is where this library writes such addresses. On paper they hold
+        space**. ISO 15519-1 Clause 9 addresses documents, sheets, and
+        columns, rows and zones on a sheet against it, and
+        :attr:`pandid.units._Boundary.reference` is where this library
+        writes such addresses. On paper they hold
         because the sheet holds. In an editable model they do not: drag
         a column two hundred units left and it is in a different zone
         from the one every reference on the sheet names, while the grid
@@ -2507,11 +2501,11 @@ class DrawioRenderer:
 #: ``horizontal=0`` is the exception, added per number in
 #: :meth:`DrawioRenderer._edges` for one on a vertical run. The sheet
 #: turns such a number a quarter to read bottom to top (ISO 15519-1
-#: §7.2.5, and §5.1.5 for reading "from the right-hand edge of the
-#: document"), so the paper the search reserved for it is 13 units
-#: across by however long the string is; written flat the label occupies
-#: the **transpose** of that. Two of the sixteen numbers on
-#: ``11_ethanol_pid`` and eight of the twenty-four on
+#: §7.2.5, and §5.1.5 for the reading direction taken from the
+#: right-hand edge of the document), so the paper the search reserved
+#: for it is 13 units across by however long the string is; written flat
+#: the label occupies the **transpose** of that. Two of the sixteen
+#: numbers on ``11_ethanol_pid`` and eight of the twenty-four on
 #: ``13_mineral_dewatering`` are vertical.
 #:
 #: Unlike the two above it does reach an edge label:
@@ -2599,11 +2593,11 @@ def _leader(edge_id: str, number, ink: str, fit: "_Fit") -> list[str]:
 
     Where :func:`~pandid.render.svg.stream_numbers` finds no clear paper
     alongside a run it writes the number off the line and draws a leader
-    back to it, and ISO 15519-1 §6.4 says how that leader ends: "Leader
-    lines **shall** terminate: with a dot if it terminates within an
-    object; with an arrowhead if it ends on the outline of an object or
-    a connection; with an oblique stroke if it ends at several parallel
-    connections." A line number's leader ends on a connection, so it
+    back to it, and ISO 15519-1 §6.4 says how that leader ends. It
+    **shall** carry one of three terminators, chosen by what it lands on:
+    a dot inside an object, an arrowhead on the outline of an object or
+    on a connection, an oblique stroke across several parallel
+    connections. A line number's leader ends on a connection, so it
     wears an arrowhead. Without one the number is a string of characters
     floating in blank paper, attached to nothing, which is what
     ``AE-304-150-80-SS`` on ``11_ethanol_pid`` was in every exported
@@ -2688,14 +2682,11 @@ def _hatches(edge_id: str, points, ink: str, fit: "_Fit") -> list[str]:
     edge.
 
     ISO 15519-2 §6.2 (document page 14) is what makes this worth the
-    trouble rather than decoration:
+    trouble rather than decoration: it keeps the symbols that mark a
+    signal medium -- pneumatic, hydraulic and the rest, drawn in Annex A
+    -- for telling a minority apart from an otherwise electric sheet.
 
-        Graphical symbols for indication of signal media, e.g.
-        pneumatic or hydraulic, should only be used to differentiate,
-        if the majority of signal lines in same diagram are electric.
-        For graphical symbols for signal media, see Annex A.
-
-    which is ``examples/11``'s case: most of its signal lines are
+    Which is ``examples/11``'s case: most of its signal lines are
     electric or software and the pneumatic ones run to actuators.
 
     **There is no native way to draw it.** ``Sidebar-PID.js`` registers

@@ -33,9 +33,9 @@ statement than the one above and is worth having for a different reason: a line
 broken by a halo is still that line, which is why a stream label is allowed to
 sit *in* the run it names, but an impulse line is two centimetres of tubing that
 exists only to say where a transmitter measures, and ISO 15519-2 §5.1.1 (p. 7)
-makes the connection between a PCI symbol and the process a *shall* -- "Exchange
-of information between the process system and the control system shall be
-represented within the process control information (PCI) symbol". Delete a
+makes the connection between a PCI symbol and the process a *shall* -- what
+passes between the process system and the control system is represented within
+the PCI symbol. Delete a
 length of one and the sheet has stopped saying it. :func:`~pandid.render.svg._erases`
 has ranked impulse lines above pipe since #194, and the defect was that a
 valve's fail-position mark never consulted it: ``examples/14``'s XV-601 hangs a
@@ -50,8 +50,8 @@ first check below measures the second and not the first.
 the box deletes exactly that half. ``examples/14``'s V-604 drew its left shell
 wall at 48,7 % of its weight for the forty pixels ``VAP-611-150-40-CS`` ran
 beside it -- a 2,06:1 step inside one outline, which ISO 15519-1 §6.2 leaves
-nothing to call: "If two or more widths of line are used, the ratio between any
-two widths shall be at least 2:1". This file passed on that sheet every time,
+nothing to call: where a drawing uses two or more line widths, any two of them
+have to stand at least 2:1 apart. This file passed on that sheet every time,
 because it was asking about the box.
 """
 

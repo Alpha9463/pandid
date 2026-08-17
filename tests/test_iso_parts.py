@@ -13,9 +13,9 @@ the caller having to know anything about it.
 The one test here that is a claim rather than a check is
 :func:`test_no_agitator_shaft_is_dashed`. Table 2 draws a short thin stroke a
 module above each agitator, which reads at a glance as the top of a dashed
-shaft and was reported as one. Clause 5 column 3 says what it actually is --
-"Preferred locations of connections at graphical symbols are indicated by
-'—'. This is not a part of the graphical symbol." -- and every group-28 shaft
+shaft and was reported as one. Clause 5 column 3 says what it actually is -- the
+mark showing where a connection is preferably made, and expressly no part of the
+graphical symbol -- and every group-28 shaft
 under it is a single solid stroke. The test is what stops that correction being
 undone by the next reader of the same page.
 """
@@ -386,9 +386,9 @@ def test_a_part_inside_the_body_leaves_the_body_its_own_box(part):
 
 @pytest.mark.parametrize("part", PARTS, ids=IDS)
 def test_a_part_is_drawn_at_its_declared_weight_however_it_is_scaled(part):
-    """ISO 14617-1 §4.3, a ``shall``: when the size of a symbol is changed the
-    line width shall be unchanged. A deck squeezed into a twentieth of a
-    column's height must not come out at a twentieth of the weight.
+    """ISO 14617-1 §4.3, a ``shall``: resizing a symbol leaves its line width
+    alone. A deck squeezed into a twentieth of a column's height must not come
+    out at a twentieth of the weight.
 
     Checked as *drawn* rather than as declared: ``compose`` divides the width
     it writes into the attribute by the scale it is about to apply, so the

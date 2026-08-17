@@ -236,7 +236,7 @@ Three conventions to keep if you add one.
   0,25 mm however the body is resized.
 - **Do not draw the connection ticks.** Table 2 puts a short thin stroke a
   module away from most symbols; clause 5 column 3 says it marks a preferred
-  connection and "is not a part of the graphical symbol". On the agitator rows
+  connection and is expressly no part of the graphical symbol. On the agitator rows
   it sits directly above the shaft, which makes the shaft *look* dashed on the
   page. It is not — every group-28 shaft is one solid stroke, and
   `test_no_agitator_shaft_is_dashed` is there because that misreading has

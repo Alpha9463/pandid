@@ -390,9 +390,10 @@ def test_stream_table_section_header():
 
 # --- a column has to have something in it -------------------------------------
 #
-# ISO 10628-1:2014 4.3.3 a) lists the flows *between the process steps* among
-# the things a process flow diagram "can also contain", so an internal column
-# with nothing in it is a heading over a rule of dashes and is dropped. 4.3.2 d)
+# ISO 10628-1:2014 4.3.3 a) puts the flows *between the process steps* among
+# the things a process flow diagram may carry rather than must, so an internal
+# column with nothing in it is a heading over a rule of dashes and is dropped.
+# 4.3.2 d)
 # makes the ingoing and outgoing ones something the diagram **shall** contain,
 # so a boundary column is kept however empty it is -- dropping it would hide the
 # omission instead of showing it -- and pandid.validate reports it in words; see

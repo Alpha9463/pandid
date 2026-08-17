@@ -468,15 +468,15 @@ class Flowsheet:
         # ONE series for the sheet, not one counter per measured
         # variable: ``professional_examples/P&ID_301.pdf`` runs P-301,
         # T-302, F-303, L-304 and on, a single series climbing through
-        # whichever variable came next, and its notes block says "Note
-        # that instrument number are unique to this drawing".
+        # whichever variable came next, and its notes block says the
+        # instrument numbers are unique to that drawing.
         #
         # And a NAIVE counter: no reservation list, no skipping past
         # numbers already typed, no collision search. That holds only
         # while nothing outside `loops` spends a number for it to dodge,
-        # which is CHEE4001 p.13: "A loop number is assigned to each
-        # group of components required to perform the desired function
-        # of the monitor or control scheme". The group consumes the
+        # which is CHEE4001 p.13: one number goes to the whole group of
+        # components that between them do the monitoring or control the
+        # scheme is for. The group consumes the
         # number, so p.11 letters a flow loop's element, transmitter,
         # controller and valve all 504, and a lone indicator is a group
         # of one.
@@ -636,10 +636,10 @@ class Flowsheet:
 
         A primary element is **one instrument shown as two marks**: the
         thing in the pipe, and the balloon that carries its tag.
-        CHEE4001 p.10 settles that it is one instrument -- "Primary
-        element (E): instrument that measures a process variable (e.g.
-        orifice plates, thermocouples)" -- and
-        ``professional_examples/P&ID_301.pdf`` settles the drawing: its
+        CHEE4001 p.10 settles that it is one instrument -- it defines the
+        primary element, letter ``E``, as the instrument that measures
+        the process variable, an orifice plate or a thermocouple say --
+        and ``professional_examples/P&ID_301.pdf`` settles the drawing: its
         venturi carries **no lettering at all**, an ``FE 303`` balloon
         hangs under it on a short impulse line, and ``FT 303`` sits
         immediately below that::

@@ -2545,10 +2545,10 @@ def test_a_displaced_line_number_is_tied_back_to_its_run(stem):
     It does not: an edge with both terminals stated as points and neither as a
     cell is how draw.io writes a free-standing line, and ``endArrow=block;
     endFill=1`` is the filled triangle the sheet's own `_arrowhead` draws.
-    ISO 15519-1 §6.4 makes the head a *shall* -- "Leader lines shall terminate
-    ... with an arrowhead if it ends on the outline of an object or a
-    connection" -- and without one `AE-304-150-80-SS` was a string of
-    characters floating in blank paper attached to nothing.
+    ISO 15519-1 §6.4 makes the head a *shall* -- a leader ending on the outline
+    of an object, or on a connection, terminates in an arrowhead -- and without
+    one `AE-304-150-80-SS` was a string of characters floating in blank paper
+    attached to nothing.
 
     Held against the **rendered sheet** rather than against `stream_numbers`:
     the leaders are read back out of the SVG's own ink, put through the fit,

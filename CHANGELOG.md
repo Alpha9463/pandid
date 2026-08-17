@@ -255,8 +255,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   One correction to note. The agitator shafts are **solid**. Table 2 draws a
   short thin stroke one module above each agitator, which reads as the top of a
-  dashed shaft; clause 5 says it marks a preferred connection and "is not a
-  part of the graphical symbol", and every shaft under it is a single stroke.
+  dashed shaft; clause 5 says it marks a preferred connection and is expressly
+  no part of the graphical symbol, and every shaft under it is a single stroke.
 
   `python scripts/symbol_sheet.py --parts out.svg` draws the set on its grid
   for review, with every composition the library ships under it.
@@ -304,6 +304,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Product`.
 
 ### Changed
+
+- **The standards are cited, not quoted.** Every reproduced clause in the
+  package, its tests, docs and examples is now a paraphrase with the citation
+  kept. Nothing a sheet draws changes.
 
 - **The stream table draws only the columns that carry something.** A stream
   with no properties on it loses its column, and a sheet with no properties

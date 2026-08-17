@@ -16,14 +16,13 @@ sloping segment is never intentional. It is what stale geometry looks like on
 the sheet: the line leaves one port, follows a path aimed at where the other end
 used to be, and closes the gap with a diagonal.
 
-The convention is not a house style. BS ISO 15519-1:2010 §12.1: "Connecting
-lines shall be oriented horizontally or vertically, except in those cases where
-oblique lines improve the clarity of the diagram", and §12.4: "Joining of
-connecting lines shall be shown meeting or intersecting at right angles", with
-no exception clause on the second. §12.1 names "conductors, functional
-connections" alongside pipelines, BS ISO 15519-2:2015 §6.1 pulls Part 1's rules
-into force on a P&ID, and its §5.1.1 calls an instrument's process tap a
-"functional connection line" -- so the rule reaches the tap and not only the
+The convention is not a house style. BS ISO 15519-1:2010 §12.1 runs connecting
+lines horizontally or vertically, excepting only a line that goes oblique to
+make the diagram clearer, and §12.4 has connecting lines meet or cross at right
+angles, with no exception clause on the second. §12.1 names conductors and
+functional connections alongside pipelines, BS ISO 15519-2:2015 §6.1 pulls Part
+1's rules into force on a P&ID, and its §5.1.1 calls an instrument's process tap
+a *functional connection line* -- so the rule reaches the tap and not only the
 pipe. The issued reference sheet ``professional_examples/P&ID_301.pdf`` draws 47
 dashed signal segments, every one exactly horizontal or vertical, and no
 diagonal connector of any kind.

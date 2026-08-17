@@ -76,8 +76,8 @@ def main():
     # Hung below the vessel rather than beside it: the east side is the
     # outlet run, and an instrument placed into equipment fails
     # validation. display="central" is ISO 15519-2 Table 1's single bar,
-    # "Information available in central control system"; the controller
-    # reads the drum's level, so the line between them is drawn.
+    # the one that puts the reading in the central control system; the
+    # controller reads the drum's level, so the line between them is drawn.
     lic = fs.add_instrument("LIC", 101, sensing=surge, at="S", offset=115,
                             display="central")
     fs.connect(lic.sig_out, fv.actuator, kind="electric")

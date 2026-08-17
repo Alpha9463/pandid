@@ -3,18 +3,16 @@
 A control valve is never a valve on its own. It sits in a standard
 arrangement that every P&ID in the industry draws the same way, and the
 **CHEE4001/7103 P&ID guidelines** (p.4, corroborated by the *EXAMPLE of
-a control valve system* figure on p.5) state it:
+a control valve system* figure on p.5) set it out: two isolation valves
+and two drain valves about the control valve, and a bypass pipe outside
+the isolations carrying a throttling valve. They add that a control
+valve is usually a size below the run it stands in, so that it throttles
+well across its range, and that a pair of reducers is therefore the
+norm.
 
-    "The basic arrangement of a control valve has two isolation
-    valves and two drain valves on each side of the control valve,
-    and a bypass pipe outside of the isolation valves with a
-    throttling valve on it. Most control valves are smaller in
-    nominal pipe size than the traveling-size pipe, in order to
-    provide appropriate throttling characteristics over a given
-    range, so reducers are commonly needed."
-
-The prose is ambiguous about "two ... on each side"; the figure is not.
-Read off the drawing, along the run:
+The prose is ambiguous about how the two pairs are counted -- two each
+side, or two in all; the figure is not. Read off the drawing, along the
+run:
 
     bypass takeoff, isolation valve, drain tee, reduction,
     control valve, expansion, drain tee, isolation valve,
@@ -53,12 +51,12 @@ drawing depends on.
 Tags
 ----
 
-The guidelines are explicit that this part is local practice, *"the
-symbols used to show the equipment, valves, instruments, and control
-loops typically depend on the practice of the particular design
-office"*, and the issued sheet in ``professional_examples/P&ID_301.pdf``
-tags **none** of a station's hand valves or reducers, writing only the
-control valve's own tag. So the derivation is a scheme with a common
+The guidelines are explicit that this part is local practice: which
+symbols a sheet shows its equipment, valves, instruments and control
+loops with usually follows the design office drawing it. And the issued
+sheet in ``professional_examples/P&ID_301.pdf`` tags **none** of a
+station's hand valves or reducers, writing only the control valve's own
+tag. So the derivation is a scheme with a common
 default, exactly as
 :data:`~pandid.flowsheet.DEFAULT_LINE_NUMBERING_SCHEME` is: set it once
 on the :class:`~pandid.flowsheet.Flowsheet` for a site, or per station.

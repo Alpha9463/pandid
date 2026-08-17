@@ -1,8 +1,8 @@
 """ISO 15519-1:2010 11.4.2 -- symbols where gravity is a functionality.
 
-    Exceptions for turning are symbols representing components or devices where
-    gravity is a functionality, for example symbol 2061: Open tank or symbol
-    X 2618: Cyclone separator; see Figure 22 b). Such symbols must not be turned.
+The clause excepts from turning any symbol for a component or device whose
+function depends on gravity, and names two of them: the open tank (2061) and
+the cyclone separator (X 2618), drawn at Figure 22 b). Those must not be turned.
 
 ``Symbol.gravity_fixed`` marks them and ``validate()`` reports a turned one as
 ``gravity-turned``. A warning rather than an error: the sheet still draws, the
@@ -111,8 +111,8 @@ def test_mirroring_is_left_alone():
 
 
 def test_the_message_names_the_variant_drawn_lying_down():
-    """11.4.2's own advice for a symbol that will not turn is that "a new symbol
-    should be created to the actual orientation". Two families ship one."""
+    """11.4.2's own advice for a symbol that will not turn is to draw a fresh
+    one in the orientation actually wanted. Two families ship one."""
     fs = _sheet(U.Vessel("D-301"), x=300, y=200, orientation=90)
     assert "variant='horizontal'" in _findings(fs)[0].message
 

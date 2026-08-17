@@ -134,8 +134,8 @@ def test_a_darkened_globe_is_not_confusable_with_an_ordinary_one():
 
 @pytest.mark.parametrize("variant", sorted(NC_FORBIDDEN))
 def test_a_control_or_relief_valve_refuses_the_mark(variant):
-    """PIP PIC001 4.2.2.10: "Control valves or relief valves shall not be shown
-    as NC." A darkened control valve on an issued sheet reads as a block valve
+    """PIP PIC001 4.2.2.10 bars a control valve and a relief valve from being
+    shown NC. A darkened control valve on an issued sheet reads as a block valve
     someone has closed, so this is a drafting error and is refused rather than
     warned about."""
     with pytest.raises(ValueError) as excinfo:
@@ -169,8 +169,8 @@ def test_a_body_that_cannot_be_darkened_says_so_in_letters(variant):
 
 
 def test_the_letters_go_above_the_valve_and_to_the_right():
-    """ISO 15519-1 §11.4.5 puts the abbreviation "above the symbol and to the
-    right", as Figure 28 draws it. The corner is fixed rather than chosen from
+    """ISO 15519-1 §11.4.5 puts the abbreviation above the symbol and to its
+    right, as Figure 28 draws it. The corner is fixed rather than chosen from
     the valve's quarter turn, so a valve in a vertical run is marked in the same
     corner as one in a horizontal run and a reader scans a sheet for one thing.
     """
