@@ -256,7 +256,7 @@ _repr_svg_() -> str              # Jupyter renders a flowsheet inline
 
 | Option | Values | Effect |
 |---|---|---|
-| `border` | `"none"`, `"zone"` | `"zone"` rules the sheet with the ASME-style zone-lettered drawing frame. Anything else raises `ValueError` |
+| `border` | `"none"`, `"zone"` | `"zone"` rules the sheet with the zone-lettered drawing frame (A.. top down, 1.. left to right, so A1 is the top-left corner). Anything else raises `ValueError` |
 | `diagram` | `"pfd"` (the default), `"p&id"` | which drawing this is. A P&ID draws its process lines without arrowheads |
 | `connections` | `"none"` (the default), `"flanged"`, `"flanged-at-nozzles"` | `"flanged"` marks the double tick at every equipment nozzle *and* both sides of every valve and in-line fitting; `"flanged-at-nozzles"` marks the nozzles alone. A P&ID only; a PFD draws none whatever this says. See [Flanged connections](#flanged-connections) |
 | `show_stream_table` | `bool` | draws the stream property table (one column per unique material stream) |
@@ -407,14 +407,16 @@ grows.
 Sizes are the ISO 216 landscape sheets, in mm: A4 297x210, A3 420x297,
 A2 594x420, A1 841x594, A0 1189x841.
 
-The grid itself runs `A` upward from the bottom and `1` leftward from the right,
-which is US/ASME practice, and it is a drawing-frame zone reference rather than
-an ISO 5457 grid. ISO 5457 §4.4 runs letters top down and numerals left to right
-at a fixed 50 mm pitch with the field counts of its Table 2, and §4.2, §4.3 and
-§4.5 add a 20 mm filing margin and centring and trimming marks. `pandid` matches
-none of those: the interval and the field count are chosen to suit the sheet.
-ISO 15519-1 §5.1.2, which is the clause that applies to a diagram, asks for the
-centring marks only on a document prepared for microfilming.
+The grid itself runs `A` downward from the top and `1` rightward from the left,
+which is ISO 5457 §4.4's direction, so zone `A1` is the top-left corner and a
+`location_reference` composed from it names the region a reader would look at.
+
+The *ruling* is not ISO 5457's. §4.4 fixes a 50 mm pitch and the field counts of
+its Table 2, and §4.2, §4.3 and §4.5 add a 20 mm filing margin and centring and
+trimming marks. `pandid` matches none of those: the interval and the field count
+are chosen to suit the sheet. ISO 15519-1 §5.1.2, which is the clause that
+applies to a diagram, asks for the centring marks only on a document prepared
+for microfilming.
 
 A named sheet declares that physical size on the `<svg>` element, so it prints
 and exports to PDF at exactly its ISO size rather than at whatever the reader
@@ -3802,12 +3804,14 @@ against one. What it follows, feature by feature:
   [Normally closed valves](#normally-closed-valves).
 - **Sheet sizes** are the **ISO 216** A series, declared in millimetres on the
   SVG root so a sheet prints at its physical size.
-- **The zone grid** is a drawing-frame zone reference in the ASME idiom: letters
-  run bottom to top, numerals right to left. It is **not** an ISO 5457 grid, and
-  [Sheet size](#sheet-size) gives the clauses it diverges from. ISO 15519-1
-  §5.1.2 asks for the centring marks only on a document prepared for
-  microfilming. The interval and the field count here are chosen to suit the
-  sheet.
+- **The zone grid** runs **ISO 5457 §4.4**'s way: letters A.. top down, numerals
+  1.. left to right, so zone A1 is the top-left corner and `location_reference`
+  addresses (ISO 15519-1 Clause 9) name the region a reader would look at. The
+  *ruling* is not ISO 5457's — §4.4's fixed 50 mm pitch and Table 2 field counts
+  are replaced by an interval chosen to suit the sheet, and the §4.3/§4.5
+  centring and trimming marks are not drawn. [Sheet size](#sheet-size) gives the
+  clauses. ISO 15519-1 §5.1.2 asks for the centring marks only on a document
+  prepared for microfilming.
 - **The title block** carries the data fields **ISO 7200** specifies, which
   ISO 10628-1 §5.1.2 requires on a process diagram: identification number, date
   of issue, sheet number, title, approval person, creator, and legal owner,

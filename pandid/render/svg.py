@@ -2473,8 +2473,9 @@ class SvgRenderer:
             Whether to render a stream property table on the sheet.
         border : str | None
             ``"none"`` for a plain sheet edge, ``"zone"`` for the
-            zone-ruled ASME-style drawing frame. The flowsheet's title
-            block and annotation boxes are drawn whichever is chosen.
+            zone-ruled drawing frame, lettered A.. top down and numbered
+            1.. left to right. The flowsheet's title block and
+            annotation boxes are drawn whichever is chosen.
         diagram : str | None
             Which drawing this is: ``"pfd"`` (the default) or
             ``"p&id"``, also spelled ``"pid"``. A P&ID draws its process

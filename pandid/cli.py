@@ -237,7 +237,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     draw.add_argument(
         "--border", choices=("none", "zone"),
-        help="'zone' rules the ASME-style zone-lettered drawing frame around the sheet",
+        help="'zone' rules the zone-lettered drawing frame around the sheet",
     )
     draw.add_argument(
         "--diagram", choices=("pfd", "p&id"), default="pfd",

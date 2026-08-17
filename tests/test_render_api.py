@@ -2,6 +2,7 @@
 whose format is inferred from the extension and returns None."""
 
 import re
+import string
 import sys
 import zlib
 
@@ -29,6 +30,11 @@ _FIT = re.compile(
 )
 # A zone letter/number ruled in the border band (furniture.zone_frame).
 _ZONE = re.compile(r'font-size="9.0" text-anchor="middle" font-weight="bold" fill="black">(\w+)<')
+# The same label with the point it is centred on, for reading the grid's direction.
+_ZONE_LABEL = re.compile(
+    r'<text x="([-\d.]+)" y="([-\d.]+)" font-family="[^"]*" font-size="9.0" '
+    r'text-anchor="middle" font-weight="bold" fill="black">(\w+)<'
+)
 
 
 def _fs():
@@ -350,6 +356,45 @@ def test_zone_grid_is_fixed_by_the_page_not_by_the_drawing():
         for w in (300.0, 900.0, 1500.0)
     ]
     assert len(set(map(tuple, fitted))) == 3
+
+
+def test_zone_grid_runs_letters_down_and_numerals_right():
+    """ISO 5457 4.4: the grid's origin is the top-left corner.
+
+    The direction is the whole of a zone reference's meaning. ISO 15519-1
+    Clause 9 composes an address out of it (``location_reference``), so a grid
+    that runs the other way sends a reader who is told "B3" to the far corner
+    of the sheet from the one the drawing meant.
+    """
+    from pandid.render import furniture as F
+
+    z = F.zone_layout(0.0, 0.0, 1200.0, 700.0)
+    labels = [part[1:] for part in z.parts if part[0] == "label"]
+    # Each numeral is lettered twice, on the top band and the bottom, at one x;
+    # each letter twice, left band and right, at one y. Dedupe to one per field.
+    numerals = sorted({(x, text) for x, _y, text in labels if text.isdigit()})
+    letters = sorted({(y, text) for _x, y, text in labels if text.isalpha()})
+
+    assert [text for _x, text in numerals] == [str(n) for n in range(1, len(numerals) + 1)]
+    assert [text for _y, text in letters] == list(string.ascii_uppercase[: len(letters)])
+
+
+def test_zone_b3_is_where_a_reader_told_b3_would_look():
+    """The rendered sheet, not the geometry: the issue's own reading of it."""
+    svg = _spanning(900.0).to_svg(page_size="A3", border="zone", diagram="p&id")
+    labels = _ZONE_LABEL.findall(svg)
+    assert labels, "no zone labels on a border='zone' sheet"
+
+    numerals = sorted({(float(x), text) for x, _y, text in labels if text.isdigit()})
+    letters = sorted({(float(y), text) for _x, y, text in labels if text.isalpha()})
+    assert [text for _x, text in numerals] == [str(n) for n in range(1, len(numerals) + 1)]
+    assert [text for _y, text in letters] == list(string.ascii_uppercase[: len(letters)])
+
+    # ...so B3 -- ISO 15519-1 5.1.2's spelling, row letter then column number --
+    # is the second band down and the third column across, in the upper left.
+    row_b = dict((text, y) for y, text in letters)["B"]
+    column_3 = dict((text, x) for x, text in numerals)["3"]
+    assert row_b < A3[1] / 2 and column_3 < A3[0] / 2
 
 
 def test_pid_furniture_rules_to_the_sheet_edges():
