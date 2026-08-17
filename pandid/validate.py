@@ -134,7 +134,13 @@ _ASPECT_TOL = 0.02
 #: (Table 2) and everything else is either a modifier (Table 3: ``D``,
 #: ``H``, ``L``, ``P``) or an ISA function letter ISO does not sequence
 #: (``T``, ``E``, ``Y``, ``V``), so those keep the position the author
-#: gave them.
+#: gave them. A letter that *is* here can still be a modifier where it
+#: qualifies a position switch rather than naming a function; see
+#: :func:`_is_control_function`.
+#:
+#: ``M`` is quoted as printed and is unreachable: §5.2.4 orders it, and
+#: the control functions the clause orders are defined without one, so no
+#: conforming tag has a letter to put in that slot.
 CONTROL_FUNCTION_SEQUENCE = "IRCSMZA"
 
 
@@ -155,13 +161,44 @@ def _overlap(a: tuple[float, float, float, float],
                 or a[3] - _TOL <= b[1] or b[3] - _TOL <= a[1])
 
 
-def _control_functions(letters: str) -> list[str]:
-    """The sequenced letters of a tag, in the order it spells them.
+def _is_control_function(letters: str, i: int) -> bool:
+    """Is ``letters[i]`` one of the letters §5.2.4 puts in order?
 
-    The first letter is the measured variable and is skipped: ``C``
-    opens a conductivity tag as legitimately as it closes ``FIC``.
+    Two letters that are in :data:`CONTROL_FUNCTION_SEQUENCE` are not
+    control functions where they stand.
+
+    **The first**, which is the measured variable: ``C`` opens a
+    conductivity tag as legitimately as it closes ``FIC``.
+
+    **The ``C`` that closes a position switch.** ANSI/ISA-5.1-2009 Table
+    5.2.1 reads ``Z`` as *Position, dimension* and ``S`` as *Switch*, and
+    a position switch is qualified by the position it switches at:
+    ``O`` for open and ``C`` for closed, which do for a valve what the
+    ``H`` and ``L`` of ``LAH`` do for a measurement. So the ``C`` in
+    ``ZSC`` is a modifier and keeps its place, exactly as that ``H``
+    does. Read as *Control (closed loop)* it made ``ZSC`` -- a standard
+    ISA valve-position switch -- a tag the library reported a conformance
+    warning against, and offered ``ZCS`` as the cure.
+
+    ``O`` needs no exception of its own: it is not one of the seven
+    letters, which is why ``ZSO`` was never reported. That was luck
+    rather than a correct reading, and this is the reading.
+
+    Narrow on purpose. Only a **position** tag qualifies its switch this
+    way, so ``FSC`` -- flow, switching and control, spelled out of order
+    -- is still reported, and so is ``ZAC``, whose ``C`` closes no
+    switch.
     """
-    return [c for c in letters[1:] if c.upper() in CONTROL_FUNCTION_SEQUENCE]
+    c = letters[i].upper()
+    if i == 0 or c not in CONTROL_FUNCTION_SEQUENCE:
+        return False
+    return not (c == "C" and letters[0].upper() == "Z"
+                and letters[i - 1].upper() == "S")
+
+
+def _control_functions(letters: str) -> list[str]:
+    """The sequenced letters of a tag, in the order it spells them."""
+    return [c for i, c in enumerate(letters) if _is_control_function(letters, i)]
 
 
 def _in_sequence(letters: str) -> str:
@@ -169,13 +206,15 @@ def _in_sequence(letters: str) -> str:
 
     Only those letters move. A modifier keeps the position it was given,
     since ``H`` in ``LAH`` says which limit alarmed and reordering it
-    would say something else.
+    would say something else. :func:`_is_control_function` decides which
+    is which, and is asked here rather than restated, so the letters
+    taken out cannot differ from the slots put back.
     """
     ordered = iter(sorted(_control_functions(letters),
                           key=lambda c: CONTROL_FUNCTION_SEQUENCE.index(c.upper())))
-    return letters[:1] + "".join(
-        next(ordered) if c.upper() in CONTROL_FUNCTION_SEQUENCE else c
-        for c in letters[1:]
+    return "".join(
+        next(ordered) if _is_control_function(letters, i) else c
+        for i, c in enumerate(letters)
     )
 
 
