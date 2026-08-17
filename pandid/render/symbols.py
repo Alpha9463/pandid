@@ -73,9 +73,9 @@ ARROWHEAD = 12.0
 #: The white a drawing has to leave between two arrowheads side by side
 #: on one face, in drawing units.
 #:
-#: **ISO 128-20:1996 §4.4**, *Spacing between lines*: the space between
-#: parallel lines shall be at least twice the width of the widest line,
-#: and never less than 0,7 mm. Two heads on one face are two parallel
+#: **ISO 128-20:1996 §4.4**, *Spacing between lines*, keeps two parallel
+#: lines at least twice the widest of them apart, and never under 0,7 mm.
+#: Two heads on one face are two parallel
 #: filled shapes, so the clearance is twice the weight the sheet draws
 #: its process lines at (``pandid.render.svg._PROCESS_STROKE``, 2 units,
 #: itself ISO 15519-1 §6.2's). ``tests/test_validate.py`` asserts the
@@ -542,13 +542,11 @@ class Symbol:
     # the PFD arrowhead; see :func:`wears_arrowhead`.
     bare_run: bool = False
     # Does the artwork only mean what it says one way up? ISO 15519-1
-    # §11.4.2 permits turning and mirroring "in order to fit into the
-    # actual layout of the diagram", then excepts one class of symbol:
-    #
-    #     Exceptions for turning are symbols representing components
-    #     or devices where gravity is a functionality, for example
-    #     symbol 2061: Open tank or symbol X 2618: Cyclone separator;
-    #     see Figure 22 b). Such symbols must not be turned.
+    # §11.4.2 permits turning and mirroring so that a symbol fits the
+    # layout the diagram actually has, then excepts one class of symbol:
+    # anything for a component or device whose function depends on
+    # gravity, of which it names the open tank (2061) and the cyclone
+    # separator (X 2618) at Figure 22 b). Those must not be turned.
     #
     # Set where the separation, containment or holdup the symbol depicts
     # is performed by gravity and the drawing shows it: a free liquid
@@ -561,8 +559,8 @@ class Symbol:
     #
     # A turned one is reported by :func:`pandid.validate.validate`
     # rather than refused: the sheet still draws, and the escape hatch
-    # ISO's own paragraph recommends -- "a new symbol should be created
-    # to the actual orientation" -- is here as a variant
+    # ISO's own paragraph recommends -- draw a fresh symbol in the
+    # orientation actually wanted -- is here as a variant
     # (``vessel/horizontal``).
     gravity_fixed: bool = False
     # Does the artwork state a *direction* that an axis flip would
@@ -1392,8 +1390,8 @@ NC_DARKENS = frozenset({
 })
 
 #: Valve variants that may not be shown normally closed at all. PIP
-#: PIC001 clause 4.2.2.10: "Control valves or relief valves shall not be
-#: shown as NC." A darkened control valve on an issued sheet reads as a
+#: PIC001 clause 4.2.2.10 bars a control valve and a relief valve from
+#: being shown NC. A darkened control valve on an issued sheet reads as a
 #: block valve someone has closed, which is a drafting error rather than
 #: a style.
 #:
@@ -1412,10 +1410,10 @@ NC_FORBIDDEN = frozenset({"control", "regulator", "relief", "psv"})
 # continuously adjustability, SHOWN WITH GENERAL ACTUATOR", carries
 # three at once -- 2101A, 210A, P050B -- because the control valve
 # symbol *is* the body symbol with an actuator symbol on it. §7.4.4.3
-# completes the rule: "Actuators shall be represented by actuator
-# symbols without indication of type or indication of power media. Only
-# if it of importance for understanding of the diagram actuator symbol
-# of specific type should be used."
+# completes the rule: an actuator is drawn with an actuator symbol that
+# says nothing about its type or its power medium, and a symbol for a
+# specific type is used only where the reader needs one to understand
+# the diagram.
 #
 # So the API takes the two questions separately -- ``variant`` is the
 # body, ``actuator`` is what strokes it. The artwork cannot follow it.
@@ -1543,9 +1541,9 @@ FAIL_POSITIONS: dict[str, str] = {
 }
 
 #: Valve variants that have motive power to lose, and so a fail position
-#: to declare. **ANSI/ISA-5.1-2009** note 5.3.4(10) says the failure
-#: symbols "are applicable to all types of control valves and
-#: actuators", and that is the test: an *actuator*, driven by air,
+#: to declare. **ANSI/ISA-5.1-2009** note 5.3.4(10) applies the failure
+#: symbols to every type of control valve and actuator, and that is the
+#: test: an *actuator*, driven by air,
 #: hydraulic fluid or electricity supplied from outside the valve.
 #:
 #: Three groups are refused by it, for three different reasons.
@@ -1566,10 +1564,10 @@ FAIL_POSITIONS: dict[str, str] = {
 #: because a handwheel is an operator and not an actuator.
 #:
 #: Every variant here is a two-port body. PIP PIC001 4.5.3.2(2) rules
-#: multi-port valves out of the letters -- "for multi-port automated
-#: valves, FL and FI shall be used where appropriate", with the comment
-#: that "FO and FC shall not be used; instead, arrows shall be used to
-#: show fail position flow paths" -- and this package draws no such
+#: multi-port valves out of the letters -- an automated multi-port
+#: valve takes ``FL`` or ``FI`` where those fit, and not ``FO`` or
+#: ``FC``, whose job is done instead by arrows drawing the fail-position
+#: flow paths -- and this package draws no such
 #: arrows. ``three_way`` is a bare body with no operator, so the
 #: question does not arise today; an actuated multi-port variant added
 #: later must not simply be added to this set.
@@ -1584,10 +1582,10 @@ def fail_marking(unit) -> str:
 
     One method, not two. **ANSI/ISA-5.1-2009 Table 5.4.4** offers Method
     A, arrows or bars on the actuator stem, and Method B, the letters;
-    **PIP PIC001 clause 4.5.3.2** picks between them -- *"Automated
-    valve fail actions shall be shown with text (FC/FO/FL/FI) in
-    accordance with ISA-5.1"*, with the comment that *"using stem arrows
-    as outlined in ISA-5.1 is not recommended"* -- and this follows PIP.
+    **PIP PIC001 clause 4.5.3.2** picks between them -- it calls for an
+    automated valve's fail action in text, ``FC``/``FO``/``FL``/``FI``
+    after ISA-5.1, and comments against ISA's stem arrows -- and this
+    follows PIP.
     See :attr:`pandid.units.Valve.fail`.
 
     The letters, unlike a darkened body, are the *whole* of the mark, so
@@ -1645,8 +1643,8 @@ def closed_marking(unit, registry=None) -> str:
     offers each. No ISO or ISA document fills a valve body; PIP PIC001
     4.2.2.7 is the source for that, and 4.2.2.10's prohibition on
     control and relief valves comes with it. The letters are the other
-    way round: ISO 15519-1 §11.4.5 prescribes ``NC``/``NO`` "above the
-    symbol and to the right" (Figure 28), so the letters and their
+    way round: ISO 15519-1 §11.4.5 sets ``NC``/``NO`` above the symbol
+    and to its right (Figure 28), so the letters and their
     placement are taken from there rather than from PIP PIC001 4.2.2.8,
     which puts them below.
 
@@ -1946,8 +1944,8 @@ _STROKE = re.compile(r'stroke-width="([\d.]+)"')
 def _at_part_scale(svg: str, scale: float) -> str:
     """*svg* with every line weight in it divided by *scale*.
 
-    ISO 14617-1 §4.3, a ``shall``: "When the size of a symbol is changed,
-    the line width shall be unchanged." A part painted onto a body is
+    ISO 14617-1 §4.3, a ``shall``: resizing a symbol leaves its line
+    width alone. A part painted onto a body is
     scaled to the rectangle it was given, and the transform would carry
     its strokes with it -- a tray deck placed at a fifth of the body's
     height drawn at a fifth of the weight its author chose. Dividing
@@ -2022,9 +2020,9 @@ def compose(body: Symbol, parts: "list[tuple[Overlay, OverlayPart]]",
       is no way to hold one group still inside a group that is being
       stretched. Refusing the stretch for the whole symbol is the only
       answer that keeps an impeller round, and it costs the body nothing
-      it was entitled to: ISO 14617-1 §4.4 bounds reshaping by "shall not
-      make it impossible to recognize the symbol", and an impeller drawn
-      as a smear is exactly that.
+      it was entitled to: ISO 14617-1 §4.4 bounds reshaping at the
+      point where the symbol stops being recognisable, and an impeller
+      drawn as a smear is exactly that.
     - **Gravity-fixed** and **directional** if the body or any part is.
       Both are statements the artwork makes, and a part makes them as
       readily as a body: item 29.1's settling arrow says the heavy phase
@@ -2952,11 +2950,10 @@ class SymbolRegistry:
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
             faceless_ports=_inst_faceless, label_pos="center", stretchable=False), "aux")
         # The bar is issue #181. ISO 15519-2 Table 1 (p. 7) tabulates
-        # the *additional graphic* a PCI symbol carries: "None:
-        # Information available on field mounted instrument/display",
-        # "Horizontal single full line: Information available in central
-        # control system", "Horizontal double full line: ... subsidiary
-        # control system". A shared display *is* the central control
+        # the *additional graphic* a PCI symbol carries: no bar for a
+        # reading available at a field-mounted instrument or display,
+        # one full horizontal bar for the central control system, two
+        # for a subsidiary one. A shared display *is* the central control
         # system, so a squared balloon with no bar states the one thing
         # about it that is certainly false.
         #

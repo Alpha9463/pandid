@@ -843,10 +843,10 @@ class Valve(_NormallyPositioned):
     vertical one. Those variants draw the letters.
     :data:`pandid.render.symbols.NC_DARKENS` lists the ones that darken.
 
-    Clause 4.2.2.10, *"control valves or relief valves shall not be
-    shown as NC"*, is enforced: a ``control``, ``regulator``, ``relief``
-    or ``psv`` valve raises rather than drawing a mark the standard
-    forbids.
+    Clause 4.2.2.10, which bars a control valve and a relief valve
+    from being shown NC at all, is enforced: a ``control``,
+    ``regulator``, ``relief`` or ``psv`` valve raises rather than
+    drawing a mark the standard forbids.
 
     ISA-5.1 has no valve-fill convention, and its clauses 2.8.1(b)(1),
     2.8.2 and 5.2.5 make it mandatory to declare any symbol extending
@@ -958,9 +958,9 @@ class Valve(_NormallyPositioned):
         clause 4.5.3.2's choice between the two ISA-5.1 Table 5.4.4
         methods. See the README's *Standards* section.
 
-        **One position, not two.** PIP PIC001 4.5.3.2(3): *"valves with
-        different fail actions for loss of signal and for loss of motive
-        power require an explanatory note."* Declare the motive-power
+        **One position, not two.** PIP PIC001 4.5.3.2(3) wants an
+        explanatory note on a valve that fails one way on loss of signal
+        and another on loss of motive power. Declare the motive-power
         position here and add the note; nothing writes it for you.
         """
         return self._fail
@@ -996,8 +996,8 @@ class Valve(_NormallyPositioned):
 
         if self.variant in NC_FORBIDDEN:
             raise ValueError(
-                f"{self.name}: PIP PIC001 clause 4.2.2.10 says control valves and "
-                f"relief valves shall not be shown as NC, and variant "
+                f"{self.name}: PIP PIC001 clause 4.2.2.10 bars a control valve and "
+                f"a relief valve from being shown NC, and variant "
                 f"{self.variant!r} draws one. A darkened control valve on an issued "
                 f"sheet reads as a block valve someone has closed. Say where the "
                 f"valve fails instead (fail='closed'), or put the normally closed "
@@ -1086,9 +1086,9 @@ class Vessel(Unit):
 
     **Named, and not counted.** Each of the five is positioned by what
     it is for, and a number carries no duty -- CHEE4001 p.7 puts the PSV
-    "directly on the system to be protected, vertically, upward, and at
-    the top of the container", and three interchangeable draws have
-    nothing in them that says which is the relief.
+    on the protected system itself, upright, discharging upward, at the
+    top of the container -- and three interchangeable draws have nothing
+    in them that says which is the relief.
 
     Every one of the ten vessel and seven tank stencils therefore
     anchors a coordinate for each of the five, and
@@ -1204,10 +1204,10 @@ class Tank(Unit):
       nozzle that is neither the fill nor the draw. Ordinary practice;
       no document on disk covers tank venting, arrestors or floating
       roofs.
-    - **``relief``, the fire-case relief on the sphere.** CHEE4001 p.8:
-      "Protection against exposure of a pressure vessel to fire or other
-      sources of heat provided that the vessel has no permanent supply
-      connection." A separate nozzle from the vent because one passes
+    - **``relief``, the fire-case relief on the sphere.** CHEE4001 p.8
+      has it protect a pressure vessel against fire or another outside
+      source of heat, on a vessel carrying no permanent supply
+      connection. A separate nozzle from the vent because one passes
       something on every fill and the other nothing until the design
       case.
 
@@ -2042,11 +2042,10 @@ def split_tag(type: str, number: str | int = "") -> tuple[str, str]:
 _POOL_MEMBER = re.compile(r"(sig_in|sig_out)_\d+")
 
 #: Where the information a balloon shows is available. ISO 15519-2:2015
-#: Table 1, p. 7, tabulates one additional graphic per row: none is
-#: "Information available on field mounted instrument/display", a
-#: horizontal single full line "Information available in central control
-#: system", a double "Information available in subsidiary control
-#: system".
+#: Table 1, p. 7, tabulates one additional graphic per row: no bar
+#: means the reading is at a field-mounted instrument or display, one
+#: full horizontal bar puts it in the central control system, and two
+#: put it in a subsidiary one.
 DISPLAYS = ("field", "central", "subsidiary")
 
 #: What a balloon relates to its host by. ``"sensing"`` and
@@ -2072,10 +2071,9 @@ _BALLOON_SYMBOLS = {
 _BALLOON_SHAPES = {drawn: shape for (shape, _display), drawn in _BALLOON_SYMBOLS.items()}
 
 #: The display a symbol type states on its own, so its bar is not a
-#: second decision to make. CHEE4001 p.13 on the square: "A circle
-#: within a square shows that the instrument has some controlling
-#: function. The circle represents a smooth control process, such as a
-#: distributed control system (DCS)."
+#: second decision to make. CHEE4001 p.13 reads a circle inside a
+#: square as an instrument with a controlling function, the circle
+#: standing for continuous control such as a DCS.
 _IMPLIED_DISPLAY = {"shared": "central"}
 
 #: The two spellings that were a location wearing a symbol type's
@@ -2402,10 +2400,10 @@ class Instrument(Unit):
                  variable: "str | Sequence[str] | None" = None) -> "Instrument":
         """Write letter codes in the quadrants around this symbol.
 
-        ISO 15519-2 §5.2.5, p. 22: "Letter code combinations with
-        modifiers H and L **shall** be represented outside the PCI
-        symbol. The sequence **shall** be A, S, and Z with increasing
-        value away from the centre line of the PCI symbol." So a high
+        ISO 15519-2 §5.2.5, p. 22, puts any letter code carrying the
+        modifiers H or L outside the PCI symbol, and **shall** order the
+        codes A, then S, then Z, with the value each stands for rising
+        as they go away from the symbol's centre line. So a high
         alarm on a controller is lettering beside that controller, not a
         balloon of its own, and no line is drawn: an annotation is not a
         signal.
@@ -2413,18 +2411,18 @@ class Instrument(Unit):
         §5.1.3, p. 19, names the four quadrants Figure 8 puts them in,
         and this method's four arguments are that list in its order:
 
-        - ``safety`` -- (a) "Reference to typical diagram, safety
-          information, e.g. SIL or SIF identifiers";
-        - ``variable`` -- (b) "Specification of type of measured
-          variable when using letter code U (multivariable), e.g. pH,
-          µS, MJ/s";
-        - ``high`` -- (c) "Information of high output/input functions,
-          e.g. alarm or switching";
-        - ``low`` -- (d) "Information of low output/input function".
+        - ``safety`` -- (a) a reference to a typical diagram, or safety
+          information such as a SIL or SIF identifier;
+        - ``variable`` -- (b) which variable is meant where the tag uses
+          letter code U for multivariable: pH, µS, MJ/s;
+        - ``high`` -- (c) a high output or input function, an alarm or a
+          switching action say;
+        - ``low`` -- (d) the same for a low one.
 
         The quadrants are the corners, which is the clause's own reason
-        for them: "This allows for horizontal and vertical connections
-        to the symbol." So annotating a balloon spends no face.
+        for them: keeping the four faces clear is what lets the symbol
+        be connected horizontally and vertically. So annotating a
+        balloon spends no face.
 
         Each takes one code or several. Several are ordered A, S then Z
         outward whatever order they are given in, since the standard
@@ -2531,8 +2529,8 @@ class Instrument(Unit):
 def _quadrant_codes(where: str, quadrant: str, codes: "str | Sequence[str]") -> tuple[str, ...]:
     """One quadrant's letter codes, in the sequence the standard fixes.
 
-    ISO 15519-2 §5.2.5: "The sequence shall be A, S, and Z with
-    increasing value away from the centre line of the PCI symbol." The
+    ISO 15519-2 §5.2.5 fixes the sequence: A, then S, then Z, with the
+    value each stands for rising away from the symbol's centre line. The
     author has no choice to express, so the order they wrote is not
     preserved; an alarm, a switch and a trip in one quadrant come out A
     then S then Z outward however they were listed. A code with none of
