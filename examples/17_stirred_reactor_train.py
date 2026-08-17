@@ -60,8 +60,14 @@ def main():
     # the motor and the ``drive`` nozzle on it -- ISO item 1.27 draws the
     # stirrer and its drive together, so there is no keyword for one
     # without the other.
+    #
+    # 152 x 360 and not 130 x 360: the motor is a circle, and its size is
+    # worked out from the jacketed body's own 52 x 123,3 box, so a box of
+    # another shape draws it as an oval. 152 is the width that shape asks
+    # for at the height this sheet wants, and every elevation below is a
+    # fraction of that height and does not move.
     rx = fs.add(Reactor("R-101", variant="jacketed", agitator="turbine",
-                        width=130, height=360,
+                        width=152, height=360,
                         description="Propylene Glycol Reactor"))
     cooler = fs.add(HeatExchanger("E-201", variant="straight_tubes", width=130,
                                   height=40, description="Product Cooler"))

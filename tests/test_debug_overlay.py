@@ -378,7 +378,10 @@ def test_a_port_label_is_not_written_under_the_unit_tags_halo():
 #: ``17_stirred_reactor_train`` puts a tee, a static mixer and a second tee on
 #: 70 units of charge line, which is closer than a port label is long.
 #: ``18_fixed_bed_recycle`` is laid out by the engine, and the recycle machine
-#: it places carries its tag over its own suction marker.
+#: it places carries its tag over its own suction marker. It grew by one when
+#: R-301 was given a box of the symbol's own shape: a wider converter moves
+#: everything the engine ranks after it, and the separator's signal markers come
+#: to rest a label's width apart.
 #: ``19_absorber_stripper`` drains its overhead condenser into a reflux drum at
 #: the same elevation, so the drain's marker and the drum's inlet share a row.
 #: ``20_molecular_sieve_dryer`` hangs a sequence square off each of eight
@@ -396,7 +399,7 @@ _CROWDED = {
     "12_block_flow_diagram": 4,
     "14_tank_farm": 14,
     "17_stirred_reactor_train": 6,
-    "18_fixed_bed_recycle": 5,
+    "18_fixed_bed_recycle": 7,
     "19_absorber_stripper": 4,
     "20_molecular_sieve_dryer": 5,
 }

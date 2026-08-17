@@ -732,7 +732,7 @@ def _ethanol_pfd() -> Flowsheet:
     )
     mix1 = fs.add(
         units.Reactor(
-            "M-301", n_feeds=2, width=80, height=100, description="Flocculant Activation Mixer Tank"
+            "M-301", n_feeds=2, width=72, height=153, description="Flocculant Activation Mixer Tank"
         )
     )
     mix2 = fs.add(units.Mixer("M-302", n_inlets=2, description="Beer Flocculant Mixer Tank"))
@@ -780,10 +780,11 @@ def _ethanol_pfd() -> Flowsheet:
     hx.pin(x=900, y=hx_y)
     hx_axis_y = hx_y + hx_h / 2  # the dewatering train runs on it
 
-    mix1_y, mix1_h = 620.0, 100.0
+    mix1_y, flag_h = 620.0, 50.0
     mix1.pin(x=560, y=mix1_y)
-    floc.pin(x=140, y=545)  # every flag tip on one line
-    water.pin(x=140, y=mix1_y + 0.573 * mix1_h - 25)
+    # x=140 puts every flag tip on one line
+    floc.pin(x=140, y=mix1_y + port_offset(mix1, "feed_1")[1] - flag_h / 2 - 60)
+    water.pin(x=140, y=mix1_y + port_offset(mix1, "feed_2")[1] - flag_h / 2)
 
     mix2.pin(x=1120, y=hx_axis_y - 15)  # in_1 level with the cooler
     press.pin(x=1250, y=hx_axis_y - 20)
@@ -2359,7 +2360,7 @@ def _stirred_reactor_train() -> Flowsheet:
             "R-101",
             variant="jacketed",
             agitator="turbine",
-            width=130,
+            width=152,
             height=360,
             description="Propylene Glycol Reactor",
         )
@@ -2641,7 +2642,7 @@ def _fixed_bed_recycle() -> Flowsheet:
 
     rx = fs.add(
         units.Reactor(
-            "R-301", internals="packing", width=90, height=200, description="Methanol Converter"
+            "R-301", internals="packing", width=124, height=200, description="Methanol Converter"
         )
     )
     fehe = fs.add(

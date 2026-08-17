@@ -1375,3 +1375,141 @@ def test_warnings_describe_the_last_render_and_nothing_earlier():
     fs.to_svg()
     fs.to_svg()
     assert [w.code for w in fs.warnings].count("letter-sequence") == 1
+
+
+# --- a round mark drawn as an oval ---------------------------------------------
+
+
+def _out_of_aspect(fs) -> list:
+    return [i for i in fs.validate() if i.code == "symbol-out-of-aspect"]
+
+
+def _sized(name="R-1", **kw) -> Flowsheet:
+    fs = Flowsheet("aspect")
+    fs.add(U.Reactor(name, **kw))
+    return fs
+
+
+def test_the_box_that_shipped_a_seventy_percent_stretch_is_reported():
+    """``examples/10_ethanol_pfd.py``'s M-301, as it stood.
+
+    80 x 100 was right when a stirred reactor's box was 62 x 100. Composing
+    ISO item 20.6's motor above the crown took the box to 62 x 131,8 and left
+    the number behind, and nothing said so: the sheet scaled the artwork x1,29
+    across and x0,76 down and drew the motor as a flat oval.
+    """
+    found = _out_of_aspect(_sized("M-301", n_feeds=2, width=80, height=100))
+    assert len(found) == 1
+    assert found[0].severity == "warning"
+    assert "M-301" in found[0].message
+    assert "80x100" in found[0].message and "62x131.778" in found[0].message
+    assert "70% out of shape" in found[0].message
+    # The part is named by the row of Table 2 it claims to be, and the cure is
+    # the width that goes with the height the author asked for.
+    assert "ISO item 20.6 C0082" in found[0].message
+    assert "M-301.width = 47.05" in found[0].message
+
+
+def test_the_width_the_message_offers_is_the_one_that_silences_it():
+    """The arithmetic in the message, checked rather than asserted in prose."""
+    fs = _sized("M-301", n_feeds=2, width=80, height=100)
+    sym = default_registry.for_unit(fs.units[0])
+    fixed = _sized("M-301", n_feeds=2, width=sym.width / sym.height * 100, height=100)
+    assert _out_of_aspect(fixed) == []
+
+
+@pytest.mark.parametrize("width,height", [(None, None), (72, 153), (124, 264), (36, 76.5)])
+def test_a_box_of_the_symbols_own_shape_is_quiet(width, height):
+    """At the artwork's own aspect, at any size, and unsized at all."""
+    kw = {k: v for k, v in (("width", width), ("height", height)) if v is not None}
+    assert _out_of_aspect(_sized("M-301", n_feeds=2, **kw)) == []
+
+
+def test_a_quarter_turn_is_not_a_stretch():
+    """``FA-601`` reads 334 % against the symbol's box and is a rotation.
+
+    ``resolve_size`` swaps the symbol's own box for a quarter turn, so a
+    12 x 25 arrestor drawn 25 x 12 is measured against 25 x 12. Checked here on
+    the reactor, which is the only family the finding can reach at all -- and
+    turned, which is what makes the two boxes disagree if the swap is missed.
+    """
+    fs = Flowsheet("turned")
+    rx = fs.add(U.Reactor("R-1", n_feeds=2))
+    sym = default_registry.for_unit(rx)
+    rx.pin(x=100, y=100, orientation=90)
+    rx.width, rx.height = sym.height, sym.width
+    assert _out_of_aspect(fs) == []
+    # ...and the same numbers *un*-turned are the stretch they describe.
+    rx.pin(x=100, y=100, orientation=0)
+    assert len(_out_of_aspect(fs)) == 1
+
+
+def test_a_boundary_flag_stretched_to_hold_its_label_is_not_reported():
+    """A pennant's own box is the wide one: it is sized to the text it carries.
+
+    106 of the 127 boxes on the twenty shipped sheets that differ from a
+    registered symbol's are these, and every one is the flag doing its job.
+    """
+    fs = Flowsheet("pennant")
+    f = fs.add(U.Feed("Cooling Water Supply Header", reference="P&ID-101"))
+    p = fs.add(U.Product("P"))
+    fs.connect(f.outlet, p.inlet)
+    fs.to_svg()
+    assert "symbol-out-of-aspect" not in [w.code for w in fs.warnings]
+
+
+def test_a_body_whose_marks_are_lines_may_be_any_shape():
+    """The narrowness is the measurement; see ``ROUND_PARTS``.
+
+    A packed bed and a trayed column are stretched hard on the shipped sheets
+    and are right: a deck is a line and a shell is drawn at the proportions the
+    plant has. A rule phrased as "the box is not the symbol's shape" would ask
+    for a 170 x 340 amine contactor.
+    """
+    packed = _sized("R-301", internals="packing", width=90, height=200)
+    assert _out_of_aspect(packed) == []
+
+    fs = Flowsheet("column")
+    fs.add(U.Column("T-401", internals="valve_tray", trays=20, width=110, height=340))
+    assert _out_of_aspect(fs) == []
+
+
+def test_the_motor_really_is_round_on_its_own_box_and_oval_off_it():
+    """``ROUND_PARTS`` is a rule with no geometry behind it, so measure it.
+
+    ``agitator_overlays`` sizes the motor's rectangle as a third of the shell's
+    width by *whatever fraction of this body's height that is*. This asserts the
+    consequence rather than the arithmetic: the rectangle is a square at the
+    natural box, and stops being one at a box of another shape -- by exactly the
+    amount the finding reports.
+    """
+    from pandid.render.iso_parts import agitator_overlays
+    from pandid.validate import ROUND_PARTS
+
+    for variant in ("default", "jacketed"):
+        body = default_registry.get("reactor", variant)
+        overlays = agitator_overlays("agitator", "reactor", variant)
+        motor = next(o for o in overlays if (o.group, o.name) in ROUND_PARTS)
+        # Round at the body's own box: the rectangle is a square.
+        rect_w, rect_h = motor.w * body.width, motor.h * body.height
+        assert rect_w == pytest.approx(rect_h, rel=1e-9)
+        # ...and the composed drawing stretched into a box 30 % wider than its
+        # shape draws that square 30 % wider, which is the oval.
+        sym = default_registry.for_unit(U.Reactor("R-1", variant=variant))
+        drawn_w, drawn_h = 1.3 * sym.width, sym.height
+        stretched = (rect_w * drawn_w / sym.width) / (rect_h * drawn_h / sym.height)
+        assert stretched == pytest.approx(1.3, rel=1e-9)
+
+
+def test_it_answers_before_anything_is_laid_out():
+    """A model finding: the box is the author's and needs no geometry.
+
+    ``resolve_size`` is what layout sizes the frame with, so the two agree, and
+    saying it early is the point -- the number is in the source and the artwork
+    it no longer matches is in the library.
+    """
+    from pandid.validate import model_issues
+
+    fs = _sized("M-301", n_feeds=2, width=80, height=100)
+    assert all(u.frame is None for u in fs.units)
+    assert [i.code for i in model_issues(fs)].count("symbol-out-of-aspect") == 1
