@@ -432,7 +432,7 @@ def register_vendored(registry):
 
     # draw.io fittings:Strainer (aspect=variable) -> fitting/strainer
     registry.register('fitting', Symbol(
-        svg='<g id="sym_fitting_strainer"><g transform="scale(0.25)"><rect x="0.0" y="0.0" width="40.0" height="80.0" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 0.0 0.0 L 40.0 80.0" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
+        svg='<g id="sym_fitting_strainer"><g transform="scale(0.25)"><rect x="0.0" y="0.0" width="40.0" height="80.0" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 0.0 0.0 L 40.0 80.0" fill="none" stroke="#111" stroke-width="8.0" stroke-dasharray="16 16"/></g></g>',
         width=10.0, height=20.0,
         ports={'inlet': (0.0, 10.0), 'outlet': (10.0, 10.0)},
         drawio_shape='mxgraph.pid.fittings.strainer',
@@ -440,7 +440,7 @@ def register_vendored(registry):
 
     # draw.io fittings:Strainer (Cone) (aspect=variable) -> fitting/strainer_cone
     registry.register('fitting', Symbol(
-        svg='<g id="sym_fitting_strainer_cone"><g transform="scale(0.25)"><rect x="0.0" y="0.0" width="40.0" height="80.0" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 0.0 0.0 L 40.0 40.0 L 0.0 80.0" fill="none" stroke="#111" stroke-width="8.0"/></g></g>',
+        svg='<g id="sym_fitting_strainer_cone"><g transform="scale(0.25)"><rect x="0.0" y="0.0" width="40.0" height="80.0" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 0.0 0.0 L 40.0 40.0 L 0.0 80.0" fill="none" stroke="#111" stroke-width="8.0" stroke-dasharray="48 24 0 24" stroke-linecap="round"/></g></g>',
         width=10.0, height=20.0,
         ports={'inlet': (0.0, 10.0), 'outlet': (10.0, 10.0)},
         drawio_shape='mxgraph.pid.fittings.strainer_(cone)',
@@ -795,7 +795,7 @@ def register_vendored(registry):
 
     # draw.io heat_exchangers:Hairpin Exchanger (aspect=variable) -> hex/hairpin
     registry.register('hex', Symbol(
-        svg='<g id="sym_hex_hairpin"><path d="M 5.0 6.0 L 15.0 6.0 L 15.0 0.0 L 20.0 0.0 L 20.0 6.0 L 70.0 6.0 L 70.0 0.0 L 75.0 0.0 L 75.0 6.0 L 85.0 6.0 A 6.75 9.0 0.0 0 1 91.75 15.0 A 6.75 9.0 0.0 0 1 85.0 24.0 L 75.0 24.0 L 75.0 30.0 L 70.0 30.0 L 70.0 24.0 L 20.0 24.0 L 20.0 30.0 L 15.0 30.0 L 15.0 24.0 L 5.0 24.0 L 0.0 23.0 L 0.0 20.0 L 5.0 19.0 L 83.0 19.0 A 3.5 4.0 0.0 0 0 86.5 15.0 A 3.5 4.0 0.0 0 0 83.0 11.0 L 5.0 11.0 L 0.0 10.0 L 0.0 7.0 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 5.0 3.0 L 5.0 14.0 M 5.0 16.0 L 5.0 27.0 M 15.0 6.0 L 20.0 6.0 M 70.0 6.0 L 75.0 6.0 M 75.0 24.0 L 70.0 24.0 M 20.0 24.0 L 15.0 24.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 2.0 8.0 L 2.0 9.5 M 3.0 7.0 L 3.0 9.0 M 2.0 21.0 L 2.0 22.5 M 3.0 20.0 L 3.0 22.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_hex_hairpin"><path d="M 5.0 6.0 L 15.0 6.0 L 15.0 0.0 L 20.0 0.0 L 20.0 6.0 L 70.0 6.0 L 70.0 0.0 L 75.0 0.0 L 75.0 6.0 L 85.0 6.0 A 6.75 9.0 0.0 0 1 91.75 15.0 A 6.75 9.0 0.0 0 1 85.0 24.0 L 75.0 24.0 L 75.0 30.0 L 70.0 30.0 L 70.0 24.0 L 20.0 24.0 L 20.0 30.0 L 15.0 30.0 L 15.0 24.0 L 5.0 24.0 L 0.0 23.0 L 0.0 20.0 L 5.0 19.0 L 83.0 19.0 A 3.5 4.0 0.0 0 0 86.5 15.0 A 3.5 4.0 0.0 0 0 83.0 11.0 L 5.0 11.0 L 0.0 10.0 L 0.0 7.0 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 5.0 3.0 L 5.0 14.0 M 5.0 16.0 L 5.0 27.0 M 15.0 6.0 L 20.0 6.0 M 70.0 6.0 L 75.0 6.0 M 75.0 24.0 L 70.0 24.0 M 20.0 24.0 L 15.0 24.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 2.0 8.0 L 2.0 9.5 M 3.0 7.0 L 3.0 9.0 M 2.0 21.0 L 2.0 22.5 M 3.0 20.0 L 3.0 22.0" fill="none" stroke="#111" stroke-width="0.5"/></g>',
         width=91.8, height=30.0,
         ports={'tube_in': (0.0, 8.5), 'tube_out': (0.0, 21.5), 'shell_in': (72.5, 0.0), 'shell_out': (17.5, 30.0)},
         drawio_shape='mxgraph.pid.heat_exchangers.hairpin_exchanger',
@@ -1069,7 +1069,7 @@ def register_vendored(registry):
 
     # draw.io filters:Gas Filter (Bag, Candle, Cartridge) (aspect=variable) -> filter/gas
     registry.register('filter', Symbol(
-        svg='<g id="sym_filter_gas"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.0 20.0 L 50.0 20.0 M 0.0 70.0 L 25.0 99.5 L 50.0 70.0 M 0.0 40.0 L 15.0 40.0 L 15.0 60.0 L 35.0 60.0 L 35.0 40.0 L 50.0 40.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_filter_gas"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.0 20.0 L 50.0 20.0 M 0.0 70.0 L 25.0 99.5 L 50.0 70.0 M 0.0 40.0 L 15.0 40.0 L 15.0 60.0 L 35.0 60.0 L 35.0 40.0 L 50.0 40.0" fill="none" stroke="#111" stroke-width="2.0" stroke-dasharray="4 4"/></g>',
         width=50.0, height=100.0,
         ports={'inlet': (0.0, 50.0), 'outlet': (50.0, 50.0)},
         drawio_shape='mxgraph.pid.filters.gas_filter_(bag,_candle,_cartridge)',
@@ -1079,7 +1079,7 @@ def register_vendored(registry):
 
     # draw.io filters:Press Filter (aspect=variable) -> filter/press
     registry.register('filter', Symbol(
-        svg='<g id="sym_filter_press"><rect x="0.0" y="0.0" width="100.0" height="50.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 10.0 10.0 L 10.0 40.0 M 30.0 10.0 L 30.0 40.0 M 50.0 10.0 L 50.0 40.0 M 70.0 10.0 L 70.0 40.0 M 90.0 10.0 L 90.0 40.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 20.0 0.0 L 20.0 50.0 M 40.0 0.0 L 40.0 50.0 M 60.0 0.0 L 60.0 50.0 M 80.0 0.0 L 80.0 50.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_filter_press"><rect x="0.0" y="0.0" width="100.0" height="50.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 10.0 10.0 L 10.0 40.0 M 30.0 10.0 L 30.0 40.0 M 50.0 10.0 L 50.0 40.0 M 70.0 10.0 L 70.0 40.0 M 90.0 10.0 L 90.0 40.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 20.0 0.0 L 20.0 50.0 M 40.0 0.0 L 40.0 50.0 M 60.0 0.0 L 60.0 50.0 M 80.0 0.0 L 80.0 50.0" fill="none" stroke="#111" stroke-width="2.0" stroke-dasharray="4 4"/></g>',
         width=100.0, height=50.0,
         ports={'inlet': (0.0, 25.0), 'wash_in': (25.0, 0.0), 'outlet': (100.0, 25.0), 'cake': (50.0, 50.0)},
         drawio_shape='mxgraph.pid.filters.press_filter',
@@ -1087,7 +1087,7 @@ def register_vendored(registry):
 
     # draw.io filters:Liquid Filter (Rotary, Drum or Disc) (aspect=variable) -> filter/rotary
     registry.register('filter', Symbol(
-        svg='<g id="sym_filter_rotary"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 13.0 31.5 A 22.0 22.0 0.0 0 1 37.0 31.5" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 80.0 L 50.0 80.0 M 0.0 20.0 L 50.0 20.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="25.0" cy="50.0" rx="15.0" ry="15.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_filter_rotary"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 13.0 31.5 A 22.0 22.0 0.0 0 1 37.0 31.5" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 80.0 L 50.0 80.0 M 0.0 20.0 L 50.0 20.0" fill="none" stroke="#111" stroke-width="2.0" stroke-dasharray="4 4"/><ellipse cx="25.0" cy="50.0" rx="15.0" ry="15.0" fill="none" stroke="#111" stroke-width="2.0" stroke-dasharray="4 4"/></g>',
         width=50.0, height=100.0,
         ports={'inlet': (0.0, 50.0), 'wash_in': (25.0, 0.0), 'outlet': (50.0, 50.0), 'cake': (25.0, 100.0)},
         drawio_shape='mxgraph.pid.filters.liquid_filter_(rotary,_drum_or_disc)',
@@ -1095,7 +1095,7 @@ def register_vendored(registry):
 
     # draw.io filters:Liquid Filter (Rotary, Drum or Disc, Scraper) (aspect=variable) -> filter/rotary_scraper
     registry.register('filter', Symbol(
-        svg='<g id="sym_filter_rotary_scraper"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 6.0 31.5 A 22.0 22.0 0.0 0 1 30.0 31.5 M 55.0 65.0 L 33.0 65.0 L 33.0 50.0 L 47.0 65.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 80.0 L 50.0 80.0 M 0.0 20.0 L 50.0 20.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="18.0" cy="50.0" rx="15.0" ry="15.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_filter_rotary_scraper"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 6.0 31.5 A 22.0 22.0 0.0 0 1 30.0 31.5 M 55.0 65.0 L 33.0 65.0 L 33.0 50.0 L 47.0 65.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 80.0 L 50.0 80.0 M 0.0 20.0 L 50.0 20.0" fill="none" stroke="#111" stroke-width="2.0" stroke-dasharray="4 4"/><ellipse cx="18.0" cy="50.0" rx="15.0" ry="15.0" fill="none" stroke="#111" stroke-width="2.0" stroke-dasharray="4 4"/></g>',
         width=55.0, height=100.0,
         ports={'inlet': (0.0, 50.0), 'wash_in': (25.0, 0.0), 'outlet': (50.0, 50.0), 'cake': (25.0, 100.0)},
         drawio_shape='mxgraph.pid.filters.liquid_filter_(rotary,_drum_or_disc,_scraper)',
@@ -1103,7 +1103,7 @@ def register_vendored(registry):
 
     # draw.io filters:Liquid Filter (Ion Exchanger) (aspect=variable) -> filter/ion_exchange
     registry.register('filter', Symbol(
-        svg='<g id="sym_filter_ion_exchange"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.0 20.0 L 50.0 20.0 M 0.0 80.0 L 50.0 80.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_filter_ion_exchange"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.0 20.0 L 50.0 20.0 M 0.0 80.0 L 50.0 80.0" fill="none" stroke="#111" stroke-width="2.0" stroke-dasharray="4 4"/></g>',
         width=50.0, height=100.0,
         ports={'inlet': (0.0, 50.0), 'regenerant_in': (25.0, 0.0), 'outlet': (50.0, 50.0), 'spent_regenerant': (25.0, 100.0)},
         drawio_shape='mxgraph.pid.filters.liquid_filter_(ion_exchanger)',
@@ -1111,7 +1111,7 @@ def register_vendored(registry):
 
     # draw.io filters:Liquid Filter (Fixed Bed) (aspect=variable) -> filter/fixed_bed
     registry.register('filter', Symbol(
-        svg='<g id="sym_filter_fixed_bed"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.0 20.0 L 50.0 80.0 M 50.0 20.0 L 0.0 80.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 20.0 L 50.0 20.0 M 0.0 80.0 L 50.0 80.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_filter_fixed_bed"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.0 20.0 L 50.0 80.0 M 50.0 20.0 L 0.0 80.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 20.0 L 50.0 20.0 M 0.0 80.0 L 50.0 80.0" fill="none" stroke="#111" stroke-width="2.0" stroke-dasharray="4 4"/></g>',
         width=50.0, height=100.0,
         ports={'inlet': (0.0, 50.0), 'outlet': (50.0, 50.0)},
         drawio_shape='mxgraph.pid.filters.liquid_filter_(fixed_bed)',
@@ -1119,7 +1119,7 @@ def register_vendored(registry):
 
     # draw.io filters:Gas Filter (Fixed Bed) (aspect=variable) -> filter/gas_fixed_bed
     registry.register('filter', Symbol(
-        svg='<g id="sym_filter_gas_fixed_bed"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.0 30.0 L 50.0 70.0 M 50.0 30.0 L 0.0 70.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 70.0 L 25.0 99.5 L 50.0 70.0 M 0.0 20.0 L 50.0 20.0 M 0.0 30.0 L 50.0 30.0 M 0.0 70.0 L 50.0 70.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_filter_gas_fixed_bed"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.0 30.0 L 50.0 70.0 M 50.0 30.0 L 0.0 70.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 70.0 L 25.0 99.5 L 50.0 70.0 M 0.0 20.0 L 50.0 20.0 M 0.0 30.0 L 50.0 30.0 M 0.0 70.0 L 50.0 70.0" fill="none" stroke="#111" stroke-width="2.0" stroke-dasharray="4 4"/></g>',
         width=50.0, height=100.0,
         ports={'inlet': (0.0, 50.0), 'outlet': (50.0, 50.0)},
         drawio_shape='mxgraph.pid.filters.gas_filter_(fixed_bed)',
@@ -1129,7 +1129,7 @@ def register_vendored(registry):
 
     # draw.io filters:Liquid Filter (Belt, Roll) (aspect=variable) -> filter/belt
     registry.register('filter', Symbol(
-        svg='<g id="sym_filter_belt"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><ellipse cx="6.0" cy="65.0" rx="6.0" ry="6.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="44.0" cy="65.0" rx="6.0" ry="6.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 80.0 L 50.0 80.0 M 0.0 20.0 L 50.0 20.0 M 6.0 59.0 L 44.0 59.0 M 6.0 71.0 L 44.0 71.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_filter_belt"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><ellipse cx="6.0" cy="65.0" rx="6.0" ry="6.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="44.0" cy="65.0" rx="6.0" ry="6.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 80.0 L 50.0 80.0 M 0.0 20.0 L 50.0 20.0 M 6.0 59.0 L 44.0 59.0 M 6.0 71.0 L 44.0 71.0" fill="none" stroke="#111" stroke-width="2.0" stroke-dasharray="4 4"/></g>',
         width=50.0, height=100.0,
         ports={'inlet': (0.0, 50.0), 'wash_in': (25.0, 0.0), 'outlet': (50.0, 50.0), 'cake': (25.0, 100.0)},
         drawio_shape='mxgraph.pid.filters.liquid_filter_(belt,_roll)',
@@ -1137,7 +1137,7 @@ def register_vendored(registry):
 
     # draw.io filters:Gas Filter (Belt, Roll) (aspect=variable) -> filter/gas_belt
     registry.register('filter', Symbol(
-        svg='<g id="sym_filter_gas_belt"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><ellipse cx="6.0" cy="65.0" rx="6.0" ry="6.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="44.0" cy="65.0" rx="6.0" ry="6.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 20.0 L 50.0 20.0 M 0.0 70.0 L 25.0 99.5 L 50.0 70.0 M 6.0 59.0 L 44.0 59.0 M 6.0 71.0 L 44.0 71.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_filter_gas_belt"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><ellipse cx="6.0" cy="65.0" rx="6.0" ry="6.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="44.0" cy="65.0" rx="6.0" ry="6.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 0.0 20.0 L 50.0 20.0 M 0.0 70.0 L 25.0 99.5 L 50.0 70.0 M 6.0 59.0 L 44.0 59.0 M 6.0 71.0 L 44.0 71.0" fill="none" stroke="#111" stroke-width="2.0" stroke-dasharray="4 4"/></g>',
         width=50.0, height=100.0,
         ports={'inlet': (0.0, 50.0), 'outlet': (50.0, 50.0)},
         drawio_shape='mxgraph.pid.filters.gas_filter_(belt,_roll)',
@@ -1183,7 +1183,7 @@ def register_vendored(registry):
 
     # draw.io filters:Liquid Filter (Bag, Candle, Cartridge) (aspect=variable) -> filter/default
     registry.register('filter', Symbol(
-        svg='<g id="sym_filter"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.0 20.0 L 50.0 20.0 M 0.0 80.0 L 50.0 80.0 M 0.0 40.0 L 15.0 40.0 L 15.0 60.0 L 35.0 60.0 L 35.0 40.0 L 50.0 40.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
+        svg='<g id="sym_filter"><rect x="0.0" y="0.0" width="50.0" height="100.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.0 20.0 L 50.0 20.0 M 0.0 80.0 L 50.0 80.0 M 0.0 40.0 L 15.0 40.0 L 15.0 60.0 L 35.0 60.0 L 35.0 40.0 L 50.0 40.0" fill="none" stroke="#111" stroke-width="2.0" stroke-dasharray="4 4"/></g>',
         width=50.0, height=100.0,
         ports={'inlet': (0.0, 50.0), 'outlet': (50.0, 50.0)},
         drawio_shape='mxgraph.pid.filters.liquid_filter_(bag,_candle,_cartridge)',
