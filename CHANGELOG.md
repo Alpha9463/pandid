@@ -584,6 +584,10 @@ reader would otherwise take them for working code.
   A real preference for the recycle lanes has to be a change to `cost`, as the
   off-lane charge beside it is.
 
+Five declared names nothing read are gone too: `Pin.is_fixed_xy`, `Pin.has_grid`
+and `Route.lane` from `pandid.geometry`, and the draw.io exporter's `_CHAR_W`
+and `_LINE_H`. No sheet moves.
+
 ### Fixed
 
 - The L the router falls back to when the search finds nothing is now checked

@@ -1,9 +1,10 @@
 """Port: a named nozzle on a unit, the attachment point for a stream.
 
 A port belongs to exactly one unit, has a direction ("inlet"/"outlet") and a
-role (e.g. "feed", "vapor", "energy"), and holds at most one stream. Named port
-anchors are what the (future) router targets; roles/sides are hints the (future)
-renderer and layout engine consume.
+role (e.g. "feed", "vapor", "energy"), and holds at most one stream. The router
+targets a port by name, and the renderer and the layout engine read its role.
+`side` is read by none of the three and passed by no call site of `_add_port`;
+it is a field waiting on a decision rather than a hint anything consumes.
 
 The role "signal" is the one that also decides what may be connected: a signal
 port carries a signal line and a process port carries fluid, and

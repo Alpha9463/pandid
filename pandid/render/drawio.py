@@ -812,14 +812,6 @@ _PART_APPROXIMATIONS = {
         None, "the two arrows and the opposite ways they point"),
 }
 
-#: A rough character width and line height for the furniture boxes,
-#: which are the only thing here that has to be given a size rather than
-#: told one. The drawing itself never needs this: every unit and every
-#: waypoint arrives with the geometry the layout engine settled. 6.2 is
-#: the width the SVG renderer measures a label's halo with, so the two
-#: at least agree with each other.
-_CHAR_W, _LINE_H = 6.2, 14.0
-
 #: The size the *drawing* is lettered at: an equipment tag, an
 #: instrument's letters, a boundary flag's service name. Twelve, because
 #: that is what ``SvgRenderer._draw_unit_labels``,
