@@ -680,6 +680,10 @@ and `_LINE_H`. No sheet moves.
   drop `label_pos="center"`, which was writing each tag across the vessel's own
   trays or bed.
 
+- `TI-306` on `examples/18_fixed_bed_recycle.py` now reads off `R-301`'s top
+  face instead of its west one. West put the balloon on the feed line's own
+  elevation, and the feed had to bend around it to get past.
+
 - `validate()` reports a run drawn on the slant, under `route-diagonal`, and
   names the corner that squares it up. One `via()` waypoint is enough to
   produce one.

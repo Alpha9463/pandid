@@ -235,7 +235,13 @@ def main():
     # permanent, so the trip reads the bed and shuts the firing. TT-307
     # is a well of its own: a trip taking TIC-302's reading stops working
     # the moment that loop is put on manual.
-    fs.add_instrument("TI", 306, sensing=rx, at="W", offset=60)
+    #
+    # at="N" and not "W": the feed nozzle sits at the vessel's vertical
+    # centre, which is also where "W" anchors a balloon with no nozzle of
+    # its own, so TI-306 landed on the feed line's own elevation and the
+    # feed had to bend around it. The top is clear on this vessel and TI-
+    # 306 has no physical side to be drawn on.
+    fs.add_instrument("TI", 306, sensing=rx, at="N", offset=60)
     tt307 = fs.add_instrument("TT", 307, sensing=rx, at="E", offset=60)
     fs.add_instrument("Z", 1, sensing=tt307, at="E", offset=44, variant="sis")
     # Over the valve rather than under it: a valve that states a fail
