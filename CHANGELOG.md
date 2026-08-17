@@ -623,6 +623,10 @@ reader would otherwise take them for working code.
   the cake off the filter's own `cake` nozzle instead of teeing it off the
   filtrate downstream. Both sheets lose a tee.
 
+- `validate()` no longer reports `letter-sequence` against `ZSC`, the ISA
+  valve-position switch closed. The `C` that closes a position switch is a
+  modifier like the `H` in `LAH`, not the ISO control function.
+
 - **Four placements that read badly on the new sheets.** `LIC-305` on
   `examples/18_fixed_bed_recycle.py` now hangs over the valve it strokes instead
   of under the transmitter it reads, so neither of its signals crosses the crude

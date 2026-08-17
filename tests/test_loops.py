@@ -430,6 +430,33 @@ def test_a_modifier_keeps_the_place_the_author_gave_it():
     assert _in_sequence("FAIC") == "FICA"
 
 
+@pytest.mark.parametrize("letters", ["ZSC", "ZSO", "ZSH", "ZSL"])
+def test_a_position_switch_is_qualified_open_or_closed_not_controlled(letters):
+    """ANSI/ISA-5.1-2009 Table 5.2.1 reads ``Z`` as *Position, dimension* and
+    ``S`` as *Switch*, and a position switch is qualified by the position it
+    switches at: ``O`` open, ``C`` closed, doing for a valve what the ``H`` and
+    ``L`` of ``LAH`` do for a measurement.
+
+    Reading that ``C`` as *Control (closed loop)* made ``ZSC`` -- a standard ISA
+    valve-position switch -- a tag the library warned against, offering ``ZCS``
+    as the cure. Its three siblings escaped only because their qualifier is not
+    one of the seven ordered letters."""
+    fs, line = _sheet()
+    fs.add_instrument(letters, 303, sensing=line, at=0.5, offset=60)
+    assert _letter_warnings(fs) == []
+
+
+def test_only_a_position_switch_takes_that_reading():
+    """The narrowness is the whole of the exception: a ``C`` that closes no
+    position switch is still a control function out of place."""
+    from pandid.validate import _in_sequence
+
+    assert _in_sequence("ZSCA") == "ZSCA"  # the alarm on one still sorts
+    assert _in_sequence("ZAC") == "ZCA"  # no switch for the C to close
+    assert _in_sequence("FSC") == "FCS"  # flow, switching and control
+    assert _in_sequence("ZC") == "ZC"  # position control: one letter, in order
+
+
 def test_one_warning_per_tag_however_often_the_square_is_drawn():
     fs, line = _sheet()
     first = fs.add_instrument("ZAC", 1, sensing=line, at=0.5, offset=60, variant="logic")
