@@ -502,6 +502,75 @@ def test_vertical_constraints_that_state_no_top_fall_back_to_a_free_row():
     assert {a.frame.row, b.frame.row} == {0, 1}
 
 
+# --- laying a sheet out twice draws it twice the same -------------------------
+
+
+def _interlock_on_a_signal():
+    """``examples/04_control_loop.py``'s shape: a balloon on a balloon's line.
+
+    ``LT`` reads the drum, ``LIC`` sits under it, and the interlock hangs
+    off the *signal between the two* -- a stream whose ends are both
+    attached instruments, so where it is drawn from depends on faces
+    chosen after the boxes are placed.
+    """
+    fs = Flowsheet("interlock")
+    feed = fs.add(U.Feed("Feed"))
+    drum = fs.add(U.Vessel("V-101"))
+    prod = fs.add(U.Product("Product"))
+    fs.connect(feed.outlet, drum.inlet)
+    fs.connect(drum.outlet, prod.inlet)
+
+    lt = fs.add_instrument("LT", 101, sensing=drum, at="S", offset=70)
+    lic = fs.add_instrument("LIC", 101, near=lt, at="S", offset=95, variant="shared")
+    measurement = fs.connect(lt.sig_out, lic.sig_in, kind="electric")
+    interlock = fs.add_instrument(
+        "I", 1, sensing=measurement, at=0.5, offset=44, angle=90, variant="logic"
+    )
+    return fs, interlock
+
+
+def test_laying_a_sheet_out_twice_puts_every_box_in_the_same_place():
+    """Issue #294: ``layout()`` has to be a function of the model.
+
+    An instrument hung on a signal between two other balloons was placed
+    from the faces a symbol defaults to on the first run and from the
+    faces the first run chose on the second, so ``layout()`` moved it
+    16px the second time it was called. The sheet drew correctly all the
+    same -- ``route()`` runs the placement to a fixed point of its own --
+    but anyone calling ``layout()`` and reading ``frame`` got the
+    unsettled answer, and so did ``validate()``.
+    """
+    fs, interlock = _interlock_on_a_signal()
+
+    def boxes():
+        return {u.name: (u.frame.x, u.frame.y) for u in fs.units if u.frame}
+
+    fs.layout()
+    first = boxes()
+    assert interlock.name in first  # the balloon under test is on the sheet
+    fs.layout()
+    assert boxes() == first
+    fs.layout()
+    assert boxes() == first
+
+
+def test_the_face_a_signal_leaves_on_is_settled_before_the_labels_are_placed():
+    """A label dodges the faces the nozzles leave from, so it is told last.
+
+    The placement fixed point sits between the two, which only works if
+    it ends on a selection nothing has moved a box since.
+    """
+    fs, interlock = _interlock_on_a_signal()
+    fs.layout()
+
+    lt = next(u for u in fs.units if u.name == "LT-101")
+    before = dict(lt.frame.port_faces)
+    from pandid.layout.attach import place_attached
+
+    assert not place_attached(fs), "a further pass still moves a balloon"
+    assert dict(lt.frame.port_faces) == before
+
+
 # --- the column-sharing pass against the scan it replaced ---------------------
 
 
