@@ -92,12 +92,26 @@ def _suggest(value: str, candidates: Sequence[str]) -> str:
 def _load(path: Path) -> Flowsheet:
     """Read a spec file, choosing the reader from its extension."""
     suffix = path.suffix.lower()
-    if suffix in (".yaml", ".yml"):
-        return spec.from_yaml(path)
+    if suffix not in (".yaml", ".yml", ".json"):
+        named = repr(suffix) if suffix else "a file with no extension"
+        raise _Failure(
+            f"{path}: cannot read a spec from {named}; write it as .yaml, .yml or .json")
+    # Open the file *before* the extension picks a reader.
+    # ``spec.from_yaml`` imports PyYAML before it opens anything, so on a
+    # machine without the optional extra a path that is simply not there
+    # was reported as a dependency problem and exited 3 -- the code this
+    # module's docstring reserves for an extra that is not installed --
+    # while the same missing path spelled .json exited 1. The file is the
+    # earlier question and is asked first; the extra is only a problem
+    # once there is something to read with it.
+    #
+    # Nothing on the dev box or in CI sees this, because both have
+    # PyYAML: ``tests/test_cli`` blocks the import to reach it.
+    with path.open("rb"):
+        pass
     if suffix == ".json":
         return spec.from_json(path)
-    named = repr(suffix) if suffix else "a file with no extension"
-    raise _Failure(f"{path}: cannot read a spec from {named}; write it as .yaml, .yml or .json")
+    return spec.from_yaml(path)
 
 
 def _draw(args: argparse.Namespace) -> int:
@@ -120,8 +134,12 @@ def _draw(args: argparse.Namespace) -> int:
     )
     if fs.warnings:
         # The drawing is made either way; say where to read what was
-        # flagged.
-        _note(f"{_plural(len(fs.warnings), 'warning')}; see: pandid validate {args.spec}")
+        # flagged -- and name the drawing that was made, since one
+        # finding depends on it and a bare `pandid validate` would answer
+        # about a PFD.
+        sheet = f" --diagram '{args.diagram}'" if args.diagram != "pfd" else ""
+        _note(f"{_plural(len(fs.warnings), 'warning')}; "
+              f"see: pandid validate{sheet} {args.spec}")
     return EXIT_OK
 
 
@@ -131,7 +149,7 @@ def _validate(args: argparse.Namespace) -> int:
     # measure until every unit has a frame, so validating a freshly read
     # spec without this reports only what the reader itself caught.
     fs.route()
-    issues = fs.validate()
+    issues = fs.validate(diagram=args.diagram)
     for issue in issues:
         print(f"{issue.severity}: {issue.code}: {issue.message}")
     errors = sum(1 for issue in issues if issue.severity == "error")
@@ -214,6 +232,22 @@ def _symbols(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------
 
 
+def _diagram_option(command: argparse.ArgumentParser, help: str) -> None:
+    """``--diagram``, on both commands that answer about a sheet.
+
+    ``draw`` makes the drawing and ``validate`` reports on it, so the two
+    have to be told the same thing about which drawing it is. A P&ID
+    draws its process lines without arrowheads, and ``nozzles-crowded``
+    is a finding about the paper left between two arrowheads: on a sheet
+    that draws none there are none to be crowded, so a ``validate`` that
+    could not be told judged every spec as a PFD and reported a defect in
+    ink the drawing does not contain.
+
+    Declared once so the spelling and the default cannot drift apart.
+    """
+    command.add_argument("--diagram", choices=("pfd", "p&id"), default="pfd", help=help)
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pandid",
@@ -239,10 +273,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "--border", choices=("none", "zone"),
         help="'zone' rules the zone-lettered drawing frame around the sheet",
     )
-    draw.add_argument(
-        "--diagram", choices=("pfd", "p&id"), default="pfd",
-        help="which drawing this is; a P&ID draws its process lines without "
-             "arrowheads (default: pfd)",
+    _diagram_option(
+        draw,
+        "which drawing this is; a P&ID draws its process lines without "
+        "arrowheads (default: pfd)",
     )
     draw.add_argument(
         "--connections", choices=("none", "flanged", "flanged-at-nozzles"),
@@ -278,6 +312,12 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     validate.add_argument(
         "spec", type=Path, metavar="SPEC", help="the spec file (.yaml, .yml, .json)"
+    )
+    _diagram_option(
+        validate,
+        "which drawing the findings are about; a P&ID draws no arrowheads, so "
+        "nozzles pitched inside the heads they would carry on a PFD are not a "
+        "defect on one (default: pfd)",
     )
     validate.set_defaults(run=_validate)
 

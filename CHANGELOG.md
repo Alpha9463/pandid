@@ -606,6 +606,13 @@ reader would otherwise take them for working code.
   first segment alone. A property written only on a later segment kept the
   column, added its row and then drew a dash in it.
 
+- `pandid validate` takes `--diagram`, the same flag `pandid draw` has. It
+  judged every spec as a PFD, so it reported crowded arrowheads on a P&ID,
+  which draws none.
+
+- `pandid draw missing.yaml` reports the missing file and exits 1. Without
+  PyYAML installed it blamed the missing package and exited 3.
+
 
 - `examples/14_tank_farm.py` draws the signal from each of its three
   transmitters to the indicator beside it. `near=` had placed LI-601, LI-602 and
