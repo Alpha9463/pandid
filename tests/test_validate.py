@@ -1380,6 +1380,50 @@ def test_warnings_from_both_halves_land_on_the_sheet_together():
 # --- what the sheet drew but nothing said -------------------------------------
 
 
+def test_a_label_side_nothing_places_is_refused_rather_than_topped():
+    """A misspelt ``label_pos`` used to mean "top" and mean it silently.
+
+    Two defects in one: the tag went to the wrong side, and a stated side is
+    read as deliberate, so ``_tag_item`` skipped the search that steps a tag
+    clear of the ink under it and nailed the typo where it landed.
+    """
+    fs = Flowsheet("botom")
+    f = fs.add(U.Feed("F"))
+    p = fs.add(U.Pump("P-1", label_pos="botom"))
+    q = fs.add(U.Product("Q"))
+    fs.connect(f.outlet, p.suction)
+    fs.connect(p.discharge, q.inlet)
+    with pytest.raises(ValueError, match="label-pos-unknown") as raised:
+        fs.to_svg()
+    assert "did you mean 'bottom'?" in str(raised.value)
+    assert "top, bottom, right, left, center" in str(raised.value)
+
+
+def test_the_label_sides_that_do_place_are_not_accused():
+    """Including ``center``, which no free face ever answers with: a symbol
+    asks for it or an author does, and it is drawn either way."""
+    from pandid.render.svg import LABEL_POSITIONS
+
+    for side in (*LABEL_POSITIONS, None, ""):
+        fs = Flowsheet("sides")
+        fs.add(U.Pump("P-1", label_pos=side))
+        assert [i.code for i in fs.validate()] == [], side
+
+
+def test_a_label_side_is_refused_before_anything_is_laid_out():
+    """A model finding, and hard: the side is the author's and needs no
+    geometry, and a render that reached the router would have drawn the wrong
+    sheet before anything could say so."""
+    from pandid.validate import model_issues
+
+    fs = Flowsheet("early")
+    fs.add(U.Pump("P-1", label_pos="centre"))
+    assert all(u.frame is None for u in fs.units)
+    found = model_issues(fs)
+    assert [(i.severity, i.code) for i in found] == [("error", "label-pos-unknown")]
+    assert "did you mean 'center'?" in found[0].message
+
+
 def test_a_kind_with_no_artwork_is_named_rather_than_drawn_blank():
     """Two spellings of one mistake were handled oppositely.
 

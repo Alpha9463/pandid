@@ -598,6 +598,20 @@ def test_the_bodies_flanged_are_a_subset_of_the_things_that_sit_in_a_run():
     assert _INLINE_BODIES < INLINE_KINDS
 
 
+def test_both_backends_place_every_label_side_the_vocabulary_names():
+    """``LABEL_POSITIONS`` is the vocabulary; ``_label_place`` and draw.io's
+    ``_LABEL_SIDE`` are two implementations of it and ``validate`` refuses
+    anything outside it, so all three have to agree. A side named in the tuple
+    that a backend does not place falls through to ``top`` -- which is the
+    silent default the tuple exists to stop."""
+    from pandid.render.drawio import _LABEL_SIDE
+    from pandid.render.svg import LABEL_POSITIONS, SvgRenderer
+
+    assert set(_LABEL_SIDE) == set(LABEL_POSITIONS)
+    placed = {side: SvgRenderer()._label_place(side, 0, 0, 100, 40) for side in LABEL_POSITIONS}
+    assert len(set(placed.values())) == len(LABEL_POSITIONS)
+
+
 def test_a_pfd_marks_no_joints_however_it_is_asked():
     """ISO 15519-2:2015 Table 5 (p. 19) lists "connections" among the *specific*
     graphical symbols a P&ID carries as basic information; Table 4 (p. 17) gives
