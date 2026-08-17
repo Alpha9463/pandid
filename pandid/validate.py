@@ -523,17 +523,22 @@ def model_issues(fs: "Flowsheet") -> list["Issue"]:
     # came from: a loop over ``(1, 2, 3)`` wiring ``in_2``, ``in_3`` and
     # ``in_4``.
     #
-    # **The narrowness is the measurement.** Across the twenty shipped
-    # examples 431 ports carry no stream and every one is legitimate --
-    # 302 signal connections, 31 dry exchanger sides, 24 duties, 18
-    # reliefs, 18 drains, 14 vents, 8 station drain legs that end off the
-    # sheet, and 16 more single nozzles a class offers and a service did
-    # not need. A nozzle a class *declares* is
-    # offered whether the sheet uses it or not, and leaving one open is a
-    # drawing decision. A **numbered** nozzle is not offered, it is asked
-    # for: ``n_inlets=4`` is a number the author wrote, so a bare member
-    # of that family is that number not being met. None of the 276 is
-    # one.
+    # **The narrowness is the measurement.** Every shipped example leaves
+    # ports carrying no stream, and every one is legitimate -- signal
+    # connections, dry exchanger sides, duties, reliefs, drains, vents,
+    # station drain legs that end off the sheet, and single nozzles a
+    # class offers and a service did not need. A nozzle a class
+    # *declares* is offered whether the sheet uses it or not, and leaving
+    # one open is a drawing decision. A **numbered** nozzle is not
+    # offered, it is asked for: ``n_inlets=4`` is a number the author
+    # wrote, so a bare member of that family is that number not being
+    # met. None of them is one.
+    #
+    # Counts are deliberately not written down here. Three figures in
+    # this comment and its twin in docs/api.md drifted as the corpus
+    # grew, and by 0.1.3 the same paragraph carried two that contradicted
+    # each other. ``tests/test_validate.py`` measures the corpus; prose
+    # states the rule.
     #
     # It shows on the paper too. A family is spread evenly for however
     # many members it has, connected or not, so a mixer with
