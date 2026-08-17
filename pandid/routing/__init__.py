@@ -50,6 +50,58 @@ def _clamp_projection(
     return cand if cand in nodes else proj
 
 
+def _fallback_path(
+    start: tuple[float, float],
+    start_proj: tuple[float, float],
+    goal_proj: tuple[float, float],
+    goal: tuple[float, float],
+    obstacles: list,
+) -> list[tuple[float, float]]:
+    """The L to draw when the search comes back with nothing.
+
+    A* returns nothing when the two escape nodes are not connected on the
+    lane grid -- most often because one of them has been sealed inside a
+    neighbouring unit, which leaves it out of the graph entirely and so
+    with no edges to search along. Something still has to be drawn, and an
+    L through the two projections is it.
+
+    Which L, though, is a choice, and it was not being made: the corner
+    always went across first and then down, wherever that landed. Both
+    orders are candidates here and the one crossing fewer obstacles wins,
+    with the across-first order keeping the tie so a sheet nothing is in
+    the way of draws exactly what it drew before.
+
+    Where every candidate is blocked there is no better line to draw --
+    the search has already established that the grid has none -- so the
+    least bad one goes down and ``validate()`` names it, under
+    ``route-crosses-unit``. Silently preferring a clear L when one exists
+    is the half that belongs here; saying so when none does is the half
+    that belongs there.
+
+    Any corner repeating the point before it is dropped. Two projections
+    already in one column put the corner on top of ``start_proj``, and the
+    caller's simplifier keeps both verbatim (it never drops a projection
+    point), leaving a zero-length segment that the separation pass then
+    reads as a horizontal run on a track the stream does not occupy.
+    """
+    def through(corner: tuple[float, float]) -> list[tuple[float, float]]:
+        pts = [start]
+        for point in (start_proj, corner, goal_proj, goal):
+            if point != pts[-1]:
+                pts.append(point)
+        return pts
+
+    def crossings(pts: list[tuple[float, float]]) -> int:
+        return sum(
+            any(o.intersects_segment(a[0], a[1], b[0], b[1]) for o in obstacles)
+            for a, b in zip(pts, pts[1:])
+        )
+
+    across = through((goal_proj[0], start_proj[1]))
+    down = through((start_proj[0], goal_proj[1]))
+    return down if crossings(down) < crossings(across) else across
+
+
 def _refuse_non_finite_geometry(fs: "Flowsheet") -> None:
     """Refuse a sheet carrying a NaN or an infinity in its geometry.
 
@@ -152,18 +204,9 @@ class DefaultRouter:
                     edge_penalties[(u_node, v_node)] = edge_penalties.get((u_node, v_node), 0.0) + 2000.0
                     edge_penalties[(v_node, u_node)] = edge_penalties.get((v_node, u_node), 0.0) + 2000.0
             else:
-                # Fallback to an orthogonal L-shape through the projection
-                # points, dropping any corner that repeats the point before it.
-                # Two projections already in one column put the corner on top of
-                # ``start_proj``, and the simplifier below keeps both verbatim
-                # (it never drops a projection point), leaving a zero-length
-                # segment that the separation pass then reads as a horizontal
-                # run on a track the stream does not occupy.
-                corner = (goal_proj[0], start_proj[1])
-                path = [start]
-                for point in (start_proj, corner, goal_proj, goal):
-                    if point != path[-1]:
-                        path.append(point)
+                path = _fallback_path(
+                    start, start_proj, goal_proj, goal, graph.obstacles
+                )
 
             # Simplify (remove collinear intermediate points), but never drop the
             # projection points that guarantee a clean port exit/entry.

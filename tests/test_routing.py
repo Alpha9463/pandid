@@ -2,7 +2,7 @@ import pytest
 
 from pandid.flowsheet import Flowsheet
 from pandid.units import Feed, HeatExchanger, Product, Pump, Valve, Vessel
-from pandid.routing import get_outward_dir
+from pandid.routing import get_outward_dir, _fallback_path
 from pandid.routing import astar
 from pandid.routing.astar import find_path
 from pandid.routing.visibility import Rect, VisibilityGraph, clear_gaps
@@ -113,10 +113,19 @@ def test_router_integration():
     fs = Flowsheet("test")
     f = fs.add(Feed("F"))
     p = fs.add(Product("P"))
+    # A column standing between the two, tall enough to reach both escape
+    # lanes. Without it the run the search finds and the L the router falls
+    # back to are the same five points, so nothing asserted about the drawn
+    # route could tell a working search from one that returned nothing: the
+    # sheet has to make the two differ before the assertions below mean
+    # anything. It spans both nozzle elevations, so *both* L's cross it and
+    # only a searched route gets past.
+    wall = fs.add(Vessel("V-101", width=50, height=250))
 
     # Force placement to bypass layout engine
     f.pin(x=0, y=0)
     p.pin(x=200, y=200)
+    wall.pin(x=100, y=0)
 
     s = fs.connect(f.outlet, p.inlet)
     fs.route()
@@ -125,8 +134,9 @@ def test_router_integration():
     wp = s.route.waypoints
     # Asserting only that the list exists passes on a router that found nothing
     # at all, so say what the run has to be: it starts on one nozzle, ends on
-    # the other, and every segment lies on an axis. Diagonally offset ports
-    # cannot be joined by one straight line, so it also has to turn.
+    # the other, every segment lies on an axis, and nothing but the two boxes
+    # it is tied to is in its way. Diagonally offset ports cannot be joined by
+    # one straight line, so it also has to turn.
     graph = VisibilityGraph(fs, margin=15.0)
     assert wp[0] == pytest.approx(graph.port_anchors[("F", "outlet")])
     assert wp[-1] == pytest.approx(graph.port_anchors[("P", "inlet")])
@@ -139,60 +149,109 @@ def test_router_integration():
     }
     assert len(turns) >= 2, f"expected an orthogonal step, got {wp}"
 
+    # No exemption for the end segments: a nozzle sits on its own box's edge
+    # and the stub off it leaves along the outward normal, which the segment
+    # test reads as touching rather than crossing. Every segment of this run,
+    # first and last included, is clear of every box on the sheet.
+    for a, b in zip(wp, wp[1:]):
+        hit = [o for o in graph.obstacles if o.intersects_segment(a[0], a[1], b[0], b[1])]
+        assert not hit, f"segment {a}->{b} of {wp} runs through {hit}"
+
 
 def test_no_obstacle_intersection():
+    """The searched run goes round what is in its way; the fallback L does not.
+
+    The sheet needs something in the way for that to be a distinction. With
+    only the two ends on it, the route is four points, every one of the
+    exemptions below applies to every segment, and the fallback L is the
+    route the search finds anyway -- so the assertion was never reached and
+    could not have failed if it had been. The drum between them is what makes
+    the two differ: it stands across both nozzle elevations, so *both* L's
+    cross it and only a route that has been searched for gets past.
+    """
     from pandid.units import Separator, Compressor
 
     fs = Flowsheet("intersect_test")
     v = fs.add(Separator("V1"))
     c = fs.add(Compressor("C1"))
+    drum = fs.add(Vessel("V-102", width=60, height=120))
 
     # Place them such that a straight line intersects
-    v.pin(x=0, y=0)
-    c.pin(x=200, y=0)
+    v.pin(x=0, y=100)
+    c.pin(x=200, y=100)
+    drum.pin(x=90, y=40)
 
     s = fs.connect(v.vapor, c.suction)
     fs.route()
 
     graph = VisibilityGraph(fs)
 
-    from pandid.render.symbols import default_registry
-
-    src_sym = default_registry.get(v.kind)
-    dst_sym = default_registry.get(c.kind)
-
-    spx, spy = src_sym.ports.get("vapor", (src_sym.width / 2, src_sym.height / 2))
-    dpx, dpy = dst_sym.ports.get("suction", (dst_sym.width / 2, dst_sym.height / 2))
-
-    sx, sy = v.frame.x + spx, v.frame.y + spy
-    dx, dy = c.frame.x + dpx, c.frame.y + dpy
-
     # A route with no waypoints used to fall through to a bare source-to-dest
     # straight line and be checked against the obstacles as though the router
     # had drawn it, so a router that found nothing passed this test.
     assert s.route is not None and s.route.waypoints, "V1 -> C1 was not routed"
-    pts = [(sx, sy)] + s.route.waypoints + [(dx, dy)]
+    pts = s.route.waypoints
+    assert pts[0] == pytest.approx(graph.port_anchors[("V1", "vapor")])
+    assert pts[-1] == pytest.approx(graph.port_anchors[("C1", "suction")])
 
-    for i in range(len(pts) - 1):
-        x1, y1 = pts[i]
-        x2, y2 = pts[i + 1]
+    # The stub off a nozzle is the one segment that may touch something: the
+    # label band sits between the nozzle and the sheet, so a run leaving a
+    # top nozzle on a top-labelled unit crosses its own label whatever it
+    # does next. That is the *first* segment and the *last*, not the first
+    # two and the last two -- which on a four-point route is all of them.
+    stubs = {0, len(pts) - 2}
+    for i, ((x1, y1), (x2, y2)) in enumerate(zip(pts, pts[1:])):
         for obs in graph.obstacles:
-            # The first segment is allowed to intersect the source unit's bounding box and its external label
-            if i in (0, 1):
-                if obs.x_min == v.frame.x and obs.y_min == v.frame.y:
+            if i in stubs:
+                own = v.frame if i == 0 else c.frame
+                if obs.x_min == own.x and obs.y_min == own.y:
                     continue
-                if obs.y_max == v.frame.y:
-                    continue
-            # The last segment is allowed to intersect the dest unit's bounding box and its external label
-            if i in (len(pts) - 2, len(pts) - 3):
-                if obs.x_min == c.frame.x and obs.y_min == c.frame.y:
-                    continue
-                if obs.y_max == c.frame.y:
+                if obs.y_max == own.y:
                     continue
 
             assert not obs.intersects_segment(x1, y1, x2, y2), (
                 f"Segment {pts[i]}->{pts[i + 1]} intersects obstacle {obs}"
             )
+
+
+def test_the_fallback_l_is_checked_against_the_obstacles():
+    """The L drawn when the search finds nothing is a choice, so make it one.
+
+    Both corner orders reach the same two projections. Only one of them may
+    be clear, and the router used to take the across-first order whatever was
+    standing on it -- through a vessel as readily as through open sheet.
+    """
+    start, start_proj = (0.0, 0.0), (25.0, 0.0)
+    goal_proj, goal = (100.0, 100.0), (100.0, 125.0)
+    across = [start, start_proj, (100.0, 0.0), goal_proj, goal]
+    down = [start, start_proj, (25.0, 100.0), goal_proj, goal]
+
+    # Nothing in the way: the across-first order, exactly as before.
+    assert _fallback_path(start, start_proj, goal_proj, goal, []) == across
+
+    # A box on the across-first leg, and the other order goes round it.
+    on_across = Rect(40.0, 60.0, -10.0, 10.0)
+    assert _fallback_path(start, start_proj, goal_proj, goal, [on_across]) == down
+
+    # A box on each: the search has already said the grid has no way through,
+    # so the least bad L is still drawn -- and ``validate()`` reports it under
+    # ``route-crosses-unit`` rather than the sheet coming out with a gap in it.
+    on_down = Rect(40.0, 60.0, 90.0, 110.0)
+    assert _fallback_path(start, start_proj, goal_proj, goal, [on_across, on_down]) == across
+
+
+def test_the_fallback_drops_a_corner_that_repeats_the_projection():
+    """Two projections in one column leave no corner to turn on.
+
+    Kept from #282: a repeated point survives the caller's simplifier, which
+    never drops a projection, and reaches the separation pass as a zero-length
+    run on a track the stream does not occupy.
+    """
+    start, start_proj = (0.0, 0.0), (25.0, 0.0)
+    goal_proj, goal = (25.0, 100.0), (25.0, 125.0)
+    path = _fallback_path(start, start_proj, goal_proj, goal, [])
+    assert path == [start, start_proj, goal_proj, goal]
+    assert len(set(path)) == len(path)
 
 
 def _straight_run(bad=None):
