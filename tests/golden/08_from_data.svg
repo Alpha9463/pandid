@@ -228,7 +228,7 @@
     <marker id="arrow_black" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="black" />
     </marker>
-    <symbol id="sym_fitting_strainer" viewBox="0 0 10.0 20.0" overflow="visible"><g transform="scale(0.25)"><rect x="0.0" y="0.0" width="40.0" height="80.0" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 0.0 0.0 L 40.0 80.0" fill="none" stroke="#111" stroke-width="8.0"/></g></symbol>
+    <symbol id="sym_fitting_strainer" viewBox="0 0 10.0 20.0" overflow="visible"><g transform="scale(0.25)"><rect x="0.0" y="0.0" width="40.0" height="80.0" fill="white" stroke="#111" stroke-width="8.0"/><path d="M 0.0 0.0 L 40.0 80.0" fill="none" stroke="#111" stroke-width="8.0" stroke-dasharray="16 16"/></g></symbol>
     <symbol id="sym_instrument" viewBox="0 0 44.0 44.0" overflow="visible"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/></symbol>
     <symbol id="sym_instrument_panel" viewBox="0 0 44.0 44.0" overflow="visible"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="22" x2="43" y2="22" stroke="black" stroke-width="1.5"/></symbol>
     <symbol id="sym_mixer" viewBox="0 0 50.0 50.0" overflow="visible"><polygon points="0,0 50,25 0,50" fill="none" stroke="black" stroke-width="2"/></symbol>
