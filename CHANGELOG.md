@@ -590,12 +590,12 @@ reader would otherwise take them for working code.
   against the obstacles: both corner orders are tried and the one crossing less
   equipment is drawn.
 
+- Corpus counts in `docs/api.md` and `pandid/validate.py` are gone; the
+  prose states the rule and the tests measure the corpus.
+
 - **A stream-table column takes its values from the whole run**, not from its
   first segment alone. A property written only on a later segment kept the
   column, added its row and then drew a dash in it.
-
-- Corpus counts in `docs/api.md` and `pandid/validate.py` are gone; the
-  prose states the rule and the tests measure the corpus.
 
 
 - `examples/14_tank_farm.py` draws the signal from each of its three
