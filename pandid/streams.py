@@ -179,6 +179,20 @@ class Stream:
     spec: str | float | None = None
     insulation: str | float | None = None
     properties: dict[str, str | float] = field(default_factory=dict)
+    # Read this segment first when the run's stream-table column is
+    # filled in. A run drawn through a valve is several streams sharing
+    # one name and one column, and its conditions can genuinely differ
+    # along it -- a control valve is there to drop the pressure -- so
+    # only the author can say which point the column reports. Set it on
+    # that segment. Nothing else changes: the column is still headed
+    # from the run's first segment, since the number and the line-number
+    # components are the run's rather than any one segment's.
+    #
+    # Not "put this line in the table"; that is decided by whether the
+    # run states anything and by whether it crosses the sheet edge (see
+    # `pandid.render.furniture._table_runs`). This picks between
+    # segments of a run that is in the table already.
+    tabulate: bool = False
     state: State | None = None  # <- balance engine writes here later
     _is_recycle: bool = field(default=False, init=False, repr=False)
     # The sequence auto-numbering last wrote, so a value the author put

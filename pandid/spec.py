@@ -57,7 +57,7 @@ The format::
       - {from: [LIC-101, sig_out], to: [FV-101, actuator],
          kind: electric}
       - {from: [FV-200, outlet], to: [M-100, in_2],
-         draw_as_recycle: true,
+         draw_as_recycle: true, tabulate: true,
          properties: {"Temperature (C)": 25 C}}
 
     stream_table_sections: [[Benzene, Mass Fraction]]
@@ -332,8 +332,8 @@ _BALLOON_KEYS = ({"balloon_of"} | _INSTRUMENT_KEYS) - {"type", "number", *_ANCHO
 _QUADRANT_KEYS = {"safety": "a", "variable": "b", "high": "c", "low": "d"}
 _LOOP_KEYS = {"variable", "number"}
 _STREAM_KEYS = {
-    "from", "to", "kind", "name", "draw_as_recycle", "properties", "via", "color", "dasharray",
-    "ends",
+    "from", "to", "kind", "name", "draw_as_recycle", "properties", "tabulate", "via",
+    "color", "dasharray", "ends",
     *LINE_NUMBER_FIELDS,
 }
 _COMPONENT_KEYS = {"name", "formula"}
@@ -855,6 +855,8 @@ def _read_stream(fs: Flowsheet, entry: Any, where: str) -> Stream:
             setattr(stream, key, _text(data[key], f"{where}.{key}"))
     if "properties" in data:
         stream.properties = _read_properties(data["properties"], f"{where}.properties")
+    if "tabulate" in data:
+        stream.tabulate = _flag(data["tabulate"], f"{where}.tabulate")
     if "via" in data:
         stream.via(_read_waypoints(data["via"], f"{where}.via"))
     return stream
@@ -1409,6 +1411,8 @@ def _write_stream(stream: Stream) -> dict[str, Any]:
         entry["via"] = [list(point) for point in stream.route.waypoints]
     if stream.properties:
         entry["properties"] = dict(stream.properties)
+    if stream.tabulate:
+        entry["tabulate"] = True
     return entry
 
 

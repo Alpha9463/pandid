@@ -320,14 +320,56 @@ class StreamTable(NamedTuple):
     h: float
 
 
-def _stream_cell_text(s, key) -> str:
-    """What one stream's cell draws for one property row.
+def _stream_cell_text(values, key) -> str:
+    """What one column's cell draws for one property row.
 
     The single place the placeholder for a missing value is decided, so
     the column that is *measured* is the column that is drawn.
     """
-    val = s.properties.get(key, "-")
+    val = values.get(key, "-")
     return "-" if val in (None, "") else str(val)
+
+
+def _run_values(run) -> dict:
+    """One column's values, gathered over the whole run.
+
+    A run drawn through inline devices is several streams sharing one
+    name and one column, and each of them can carry properties. Read in
+    segment order, the first statement of a key winning, with any
+    segment the author marked :attr:`~pandid.streams.Stream.tabulate`
+    read before the rest.
+
+    **Over the run**, because everything else about the column already
+    is: whether it exists at all (:func:`_table_runs`) and which rows it
+    fills (:func:`stream_table_layout`) are both asked of every segment,
+    and only the values used to come off the first one. A property
+    written on the far end of a line therefore kept the column, added
+    its row and then drew a dash in it.
+
+    **Marked**, because segments can disagree and no rule can settle it.
+    A control valve is there to drop the pressure, so ``S6`` at 11.6
+    barg above one and 3.4 barg below it is the author describing the
+    line correctly; one column cannot show both, and which point it
+    reports is a decision about the drawing rather than about the data.
+    Unmarked, the run reads in the order it is drawn, which is what it
+    always did.
+    """
+    marked = [s for s in run if s.tabulate]
+    if len(marked) > 1:
+        raise ValueError(
+            f"{run[0].name} is drawn in {len(run)} segments and {len(marked)} of them "
+            f"are marked tabulate=True. The run is one column in the stream table, so "
+            f"the mark says which segment's properties that column reports and only one "
+            f"segment can be the answer. Clear the mark on all but the point you mean, "
+            f"or break the run into two lines at the device between them with "
+            f"unit.new_line_number = True, which gives each its own number and its own "
+            f"column"
+        )
+    values: dict = {}
+    for s in marked + [s for s in run if not s.tabulate]:
+        for key, value in s.properties.items():
+            values.setdefault(key, value)
+    return values
 
 
 def _table_runs(fs) -> list:
@@ -373,11 +415,13 @@ def _table_runs(fs) -> list:
 def _table_streams(fs) -> list:
     """The stream each column is headed from, in sheet order.
 
-    The first segment of each run in :func:`_table_runs`, which is also
-    the one the column's *values* are read off -- so an author who
-    writes a run's properties on one of its later segments alone has
-    them in the model and not in the table. Every shipped example writes
-    them on each segment of the run.
+    The first segment of each run in :func:`_table_runs`. What the
+    heading is made of belongs to the run rather than to any one segment
+    -- the number is the same on all of them, and the line-number
+    components are written where the run starts -- so the head is fixed
+    and never moves with a ``tabulate`` mark. The column's *values* are
+    a separate question and are gathered over the whole run; see
+    :func:`_run_values`.
     """
     return [run[0] for run in _table_runs(fs)]
 
@@ -401,7 +445,8 @@ def stream_table_layout(fs) -> "StreamTable | None":
     runs = _table_runs(fs)
     if not runs:
         return None
-    streams = [run[0] for run in runs]
+    streams = [run[0] for run in runs]  # what each column is headed from
+    cells = [_run_values(run) for run in runs]  # and what goes down it
 
     # property rows in first-seen order (dict preserves insertion order),
     # over every segment of a run for the reason its column was kept
@@ -439,8 +484,8 @@ def stream_table_layout(fs) -> "StreamTable | None":
     labels = [heading] + [key for kind, key in disp if kind == "data"]
     label_w = max(122.0, max(text_width(t, size, bold=True)
                              for t in labels) + _STREAM_GUTTER)
-    values = [_stream_cell_text(s, key) for kind, key in disp if kind == "data"
-              for s in streams]
+    values = [_stream_cell_text(c, key) for kind, key in disp if kind == "data"
+              for c in cells]
     name_w = max(52.0,
                  max((text_width(s.name, size, bold=True) for s in streams),
                      default=0.0) + _STREAM_GUTTER,
@@ -465,9 +510,9 @@ def stream_table_layout(fs) -> "StreamTable | None":
             continue
         rows.append(
             [StreamCell(key, label_w, _STREAM_KEY_FILL, True, "start")]
-            + [StreamCell(_stream_cell_text(s, key), name_w,
+            + [StreamCell(_stream_cell_text(c, key), name_w,
                           _STREAM_VALUE_FILL, False, "middle")
-               for s in streams])
+               for c in cells])
     return StreamTable(rows, size, row_h, label_w + name_w * n,
                        row_h * len(rows))
 
