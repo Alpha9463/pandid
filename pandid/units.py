@@ -70,8 +70,9 @@ _UnitT = TypeVar("_UnitT", bound="Unit")
 # ``Flowsheet.__init__``'s note on the two staleness flags.
 #
 # The private names are the backing fields of the properties that guard
-# these facts (``Block.width``, ``Conveyor.length``,
-# ``Reducer.large_end``, ``_NormallyPositioned.normal_position``),
+# these facts (``Block.width``, ``Conveyor.length`` and
+# ``Conveyor.diameter``, ``Reducer.large_end``,
+# ``_NormallyPositioned.normal_position``),
 # listed here rather than hooked one setter at a time so there is a
 # single list to read and to add to. Each reaches the geometry through
 # ``SymbolRegistry.for_unit``, which hands back a DIFFERENT symbol --
@@ -91,7 +92,7 @@ _UnitT = TypeVar("_UnitT", bound="Unit")
 _LAYOUT_INPUTS = frozenset({
     "name", "variant", "label_pos", "pin_",
     "width", "height", "_width", "_height",
-    "_length", "_large_end", "_normal_position",
+    "_length", "_diameter", "_large_end", "_normal_position",
 })
 
 
@@ -1830,14 +1831,25 @@ class Conveyor(Unit):
 
         Conveyor("CV-101")                                # belt
         Conveyor("CV-102", variant="screw", length=140)   # screw
+        Conveyor("CV-103", length=300, diameter=40)       # big rollers
 
-    ``length`` is the run, and the unit's only size, for both. The
-    symbol is *built* to it rather than scaled to it, so a longer belt
-    grows the straight run and its rollers stay round, and a longer
-    screw gets more turns of the flight at the same pitch rather than
-    one stretched turn. ``width`` and ``height`` size the drawn box
-    instead and are refused. A quarter turn stands either on end, where
-    the length is its height.
+    **Two dimensions, and each is a dimension of the machine.**
+    ``length`` is the run, tail end to head end. ``diameter`` is the
+    machine across that run: the roller on a belt, the casing bore on a
+    screw -- both circles seen in elevation, and both the depth of the
+    drawing. Neither is worked out from the other, so a long belt on
+    small rollers and a short one on big rollers are both drawings.
+
+    The symbol is *built* to the pair rather than scaled to a box, so a
+    longer belt grows the straight run and its rollers stay round, a
+    bigger roller grows a circle, and a longer screw gets more turns of
+    the flight at the same pitch rather than one stretched turn.
+
+    ``width`` and ``height`` size the drawn *box* and are refused, for
+    the reason the second dimension is not spelled ``height=``: a
+    quarter turn stands the machine on end, where the length is the box
+    height and the diameter is its width. The rollers are the rollers
+    either way up, so they are stated as the rollers.
 
     **Where the nozzles are differs between the two, because the
     machines differ.** A belt is open: material is dropped onto it and
@@ -1857,25 +1869,47 @@ class Conveyor(Unit):
     PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
     _length: float
+    _diameter: float
 
     def __init__(self, name: str, length: float | None = None,
-                 variant: str = "default", width: float | None = None,
-                 height: float | None = None, label_pos: str | None = None,
-                 description: str = "", reference: str = ""):
+                 diameter: float | None = None, variant: str = "default",
+                 width: float | None = None, height: float | None = None,
+                 label_pos: str | None = None, description: str = "",
+                 reference: str = ""):
         from pandid.render.symbols import CONVEYOR_LENGTH
 
         if width is not None or height is not None:
+            # Name the keyword the given number belongs on. width= is
+            # always the run; height= is the machine across it, and the
+            # box axis it sizes is only the run's when the conveyor is
+            # left lying down.
             given = width if width is not None else height
+            instead = "length" if width is not None else "diameter"
             raise ValueError(
                 f"{name}: a Conveyor is sized by length=, the run between its "
-                f"two ends, and that one number is the only authority on how "
-                f"long it is. width= and height= size the drawn box instead, "
-                f"which would stretch a belt's rollers out of round and a "
-                f"screw's flight off its pitch. Pass length={given!r}."
+                f"two ends, and diameter=, the roller a belt runs on or the "
+                f"bore a screw turns in. Those are the machine; width= and "
+                f"height= size the drawn box instead, which a quarter turn "
+                f"swaps and which would stretch a belt's rollers out of round "
+                f"and a screw's flight off its pitch. Pass {instead}={given!r}."
             )
         super().__init__(name, variant=variant, label_pos=label_pos,
                          description=description, reference=reference)
+        # Diameter first: it is what the run is measured against, so a
+        # belt on 40 rollers is refused at 60 rather than accepted at
+        # the default roller's 40 and then quietly widened.
+        self.diameter = self.default_diameter() if diameter is None else diameter
         self.length = CONVEYOR_LENGTH if length is None else length
+
+    def default_diameter(self) -> float:
+        """The roller or bore this variant is drawn with unstated.
+
+        The stencil's own 20 for the belt and row 18.5's 6 M casing for
+        the screw: two drawings from two sources, so two numbers.
+        """
+        from pandid.render.symbols import CONVEYOR_DIAMETER, SCREW_HEIGHT
+
+        return SCREW_HEIGHT if self.variant == "screw" else CONVEYOR_DIAMETER
 
     @property
     def length(self) -> float:
@@ -1891,23 +1925,63 @@ class Conveyor(Unit):
     def length(self, value: float) -> None:
         """The shortest run each variant can be drawn in is its own.
 
-        A belt is bounded by its two rollers overlapping and a screw by
-        one whole turn of the flight not fitting; the two numbers are
-        equal by arithmetic, and the two *sentences* are not, so the
+        A belt is bounded by its two rollers overlapping -- so by the
+        roller, and a belt on bigger rollers needs a longer bed to stand
+        them on -- and a screw by one whole turn of the flight not
+        fitting, which is measured along the axis and so is the same
+        number at every bore. The two *sentences* differ too, so the
         error comes from whichever drawing is being asked for. A reader
         told about rollers goes looking for rollers.
         """
         from pandid.render.symbols import (
-            CONVEYOR_MIN_LENGTH, SCREW_MIN_LENGTH, conveyor_too_short,
+            SCREW_MIN_LENGTH, conveyor_min_length, conveyor_too_short,
             screw_too_short,
         )
 
         if self.variant == "screw":
             if value < SCREW_MIN_LENGTH:
                 raise screw_too_short(value, self.name)
-        elif value < CONVEYOR_MIN_LENGTH:
-            raise conveyor_too_short(value, self.name)
+        elif value < conveyor_min_length(self.diameter):
+            raise conveyor_too_short(value, self.name, self.diameter)
         self._length = float(value)
+
+    @property
+    def diameter(self) -> float:
+        """The machine across the run: the roller a belt runs on, or the
+        bore a screw turns in.
+
+        Its own dimension, set independently of :attr:`length` and never
+        derived from it. It *is* the drawn depth of the artwork, because
+        a belt runs tangent to both rollers and a screw fills its
+        casing -- so the box the symbol is placed in is the box it was
+        drawn in, and the circles in it are circles on the page.
+        """
+        return self._diameter
+
+    @diameter.setter
+    def diameter(self, value: float) -> None:
+        """A circle with no diameter is not a machine, and shrinking the
+        rollers under a belt already too short for them is not either.
+
+        The second check is the one that makes the pair a pair: the
+        minimum run is two roller diameters, so growing the roller on an
+        existing belt can invalidate a length that was legal, and it is
+        refused in the same sentence a short length is.
+        """
+        from pandid.render.symbols import (
+            conveyor_bad_diameter, conveyor_min_length, conveyor_too_short,
+            screw_bad_diameter,
+        )
+
+        if value <= 0:
+            raise (screw_bad_diameter if self.variant == "screw"
+                   else conveyor_bad_diameter)(value, self.name)
+        value = float(value)
+        length = getattr(self, "_length", None)
+        if (self.variant != "screw" and length is not None
+                and length < conveyor_min_length(value)):
+            raise conveyor_too_short(length, self.name, value)
+        self._diameter = value
 
 
 class Elevator(Unit):

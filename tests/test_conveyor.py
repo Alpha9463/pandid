@@ -47,12 +47,20 @@ SVG = "{http://www.w3.org/2000/svg}"
 R = CONVEYOR_ROLLER
 
 
-def _sheet(lengths, **pin):
-    """A flowsheet with one piped conveyor per length, rendered and parsed."""
+def _sheet(lengths, diameters=None, **pin):
+    """A flowsheet with one piped conveyor per size, rendered and parsed.
+
+    ``lengths`` may be plain runs or ``(length, diameter)`` pairs; ``diameters``
+    pairs one diameter with every length instead, for the sweeps below.
+    """
+    sizes = [s if isinstance(s, tuple) else (s, None) for s in lengths]
+    if diameters is not None:
+        sizes = [(length, d) for length, _ in sizes for d in diameters]
     fs = Flowsheet("conveyors")
-    for i, length in enumerate(lengths):
+    for i, (length, diameter) in enumerate(sizes):
         feed = fs.add(U.Feed(f"IN-{i}"))
-        conv = fs.add(U.Conveyor(f"BC-{i}", length=length))
+        kwargs = {} if diameter is None else {"diameter": diameter}
+        conv = fs.add(U.Conveyor(f"BC-{i}", length=length, **kwargs))
         product = fs.add(U.Product(f"OUT-{i}"))
         if pin:
             conv.pin(**pin)
@@ -148,7 +156,144 @@ def test_every_port_lands_on_drawn_ink_at_every_legal_length():
 
 
 # ---------------------------------------------------------------------------
-# One number, not two.
+# The second dimension: the roller, set independently of the run.
+#
+# The run and the roller are two dimensions of the machine and neither is
+# worked out from the other, so the assertions below sweep the *combinations*
+# rather than one axis at a time. What has to hold at every one of them is what
+# held at every length before: a true circle drawn at a scale of exactly 1.
+# ---------------------------------------------------------------------------
+
+DIAMETERS = [8.0, 2 * R, 45.0, 120.0]
+#: Long enough for the widest roller above, so the sweep is a rectangle rather
+#: than a triangle: every length pairs with every diameter.
+COMBOS = [(length, d) for length in (240.0, 400.0) for d in DIAMETERS]
+
+
+def _sym_id(length, diameter=None):
+    """The definition id a belt of this size is drawn under."""
+    tail = "" if diameter in (None, 2 * R) else f"_D{diameter:g}"
+    return f"sym_conveyor_L{length:g}{tail}"
+
+
+@pytest.mark.parametrize("length,diameter", COMBOS)
+def test_the_rollers_are_true_circles_at_every_run_and_roller(length, diameter):
+    """The hard requirement, now over both dimensions.
+
+    Two things together make a circle on the page, and both are checked here.
+    The drawn ellipse has to have rx == ry -- and it has to be *placed* at the
+    same scale on both axes, which is what ``<use width= height=>`` matching the
+    definition's viewBox says. Either alone would pass on a drawing the other
+    ruins.
+    """
+    _, root = _sheet([(length, diameter)])
+    definition = _defs(root)[_sym_id(length, diameter)]
+    r = diameter / 2
+    assert _ellipses(definition) == [(r, r, r, r), (length - r, r, r, r)]
+    _, _, vb_w, vb_h = (float(v) for v in definition.get("viewBox").split())
+    use = _uses(root)[f"#{_sym_id(length, diameter)}"]
+    assert (float(use.get("width")), float(use.get("height"))) == (vb_w, vb_h)
+    assert (vb_w, vb_h) == (length, diameter)
+
+
+@pytest.mark.parametrize("length,diameter", COMBOS)
+def test_every_port_lands_on_drawn_ink_at_every_combination(length, diameter):
+    sym = conveyor_symbol(length, diameter)
+    segments = _collect_segments(sym.svg)
+    for name, faces in sym.port_faces.items():
+        for face, point in faces.items():
+            assert _nearest_distance(point, segments) <= GEOM_TOL, (
+                f"{name}/{face} at {length:g}x{diameter:g}"
+            )
+
+
+def test_neither_dimension_moves_the_other():
+    """The whole of "built to size" in one assertion: change the run and the
+    rollers are the same circles; change the roller and the run is the same
+    run. A drawing scaled into a box could hold neither."""
+    _, root = _sheet([240.0, 400.0], diameters=DIAMETERS)
+    defs = _defs(root)
+    for length in (240.0, 400.0):
+        for diameter in DIAMETERS:
+            definition = defs[_sym_id(length, diameter)]
+            # The roller is the one asked for, at either run...
+            assert {e[2] for e in _ellipses(definition)} == {diameter / 2}
+            # ...and the straight run is the whole of what is left over, at
+            # either roller.
+            assert _belt_runs(definition) == [length - diameter] * 2
+
+
+def test_the_default_roller_is_the_stencils_own_and_draws_what_it_always_drew():
+    """The default has to reproduce the old drawing exactly, or every sheet
+    already issued moves. Byte for byte, including the definition's id."""
+    assert conveyor_symbol(300.0) == conveyor_symbol(300.0, 2 * R)
+    assert conveyor_symbol(300.0).id_suffix == "_L300"
+    assert U.Conveyor("BC-301").diameter == 2 * R
+
+
+def test_a_belt_on_bigger_rollers_needs_a_longer_bed():
+    """The minimum is two roller diameters and always was; what changed is that
+    the roller is now a number the author picks, so the bound moves with it."""
+    assert U.Conveyor("BC-301", length=90, diameter=45).length == 90
+    with pytest.raises(ValueError, match=r"Use length=90 or more"):
+        U.Conveyor("BC-302", length=89, diameter=45)
+
+
+def test_growing_the_roller_under_a_belt_too_short_for_it_is_refused():
+    """The pair is checked from both sides. Setting the roller is as able to
+    break the rule as setting the run, and it is refused in the same sentence
+    rather than drawing two overlapping circles."""
+    conveyor = U.Conveyor("BC-301", length=90)
+    conveyor.diameter = 45
+    with pytest.raises(ValueError, match=r"rollers.*would overlap"):
+        conveyor.diameter = 50
+    assert conveyor.diameter == 45
+
+
+@pytest.mark.parametrize(
+    "kwargs,message",
+    [
+        ({}, r"the rollers are circles"),
+        ({"variant": "screw"}, r"the casing is a tube"),
+    ],
+)
+def test_a_diameter_with_no_circle_in_it_is_refused_in_the_machines_words(kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        U.Conveyor("BC-301", length=140, diameter=0, **kwargs)
+
+
+def test_belts_of_one_size_share_a_definition_and_others_do_not():
+    """Two conveyors of the same run but different rollers are two drawings, so
+    a definition keyed on the run alone would hand one of them the other's."""
+    _, root = _sheet([(240.0, 45.0), (240.0, 45.0), (240.0, None), (400.0, 45.0)])
+    ids = sorted(i for i in _defs(root) if i.startswith("sym_conveyor"))
+    assert ids == ["sym_conveyor_L240", "sym_conveyor_L240_D45", "sym_conveyor_L400_D45"]
+
+
+def test_a_conveyor_round_trips_through_a_spec_with_its_roller():
+    fs = Flowsheet("cake handling")
+    fs.add(U.Conveyor("BC-301", length=300, diameter=45))
+    fs.add(U.Conveyor("BC-302", length=300))
+    spec = fs.to_dict()
+    assert spec["units"][0]["diameter"] == 45.0
+    # The default is left out: writing it down would rewrite every conveyor
+    # entry ever exported to say what its absence already says.
+    assert "diameter" not in spec["units"][1]
+    rebuilt = Flowsheet.from_dict(spec)
+    assert [u.diameter for u in rebuilt.units] == [45.0, 2 * R]
+    assert rebuilt.to_dict() == spec
+
+
+def test_a_diameter_on_something_that_is_not_a_conveyor_is_refused():
+    from pandid.spec import SpecError
+
+    spec = {"name": "s", "units": [{"kind": "Pump", "name": "P-101", "diameter": 40}]}
+    with pytest.raises(SpecError, match=r"only a Conveyor takes 'diameter'"):
+        Flowsheet.from_dict(spec)
+
+
+# ---------------------------------------------------------------------------
+# Two numbers, and the box is neither of them.
 # ---------------------------------------------------------------------------
 
 
@@ -164,12 +309,29 @@ def test_a_quarter_turn_makes_the_length_the_height():
     assert resolve_size(conveyor) == (2 * R, 300.0)
 
 
-def test_a_size_given_as_width_or_height_is_refused():
-    """Both would set the drawn box independently of the length and stretch the
-    rollers with it, so both are a second answer to a settled question."""
-    for kwargs in ({"width": 200}, {"height": 60}):
-        with pytest.raises(ValueError, match=r"sized by length="):
-            U.Conveyor("BC-301", **kwargs)
+@pytest.mark.parametrize(
+    "kwargs,names",
+    [
+        ({"width": 200}, "length=200"),
+        ({"height": 60}, "diameter=60"),
+    ],
+)
+def test_a_size_given_as_width_or_height_names_the_dimension_it_belongs_on(kwargs, names):
+    """Both set the drawn box, which a quarter turn swaps and the machine's own
+    two dimensions do not, so both are refused -- and the refusal says which
+    keyword the number the author typed actually belongs on."""
+    with pytest.raises(ValueError, match=r"sized by length=") as excinfo:
+        U.Conveyor("BC-301", **kwargs)
+    assert names in str(excinfo.value)
+
+
+def test_the_roller_is_not_the_box_height_when_the_belt_is_stood_on_end():
+    """Why the second dimension is ``diameter=`` and not ``height=``. A quarter
+    turn puts the *run* on the box's height and the rollers on its width; the
+    machine's own numbers are the same either way up."""
+    conveyor = U.Conveyor("BC-301", length=300, diameter=45).pin(orientation=90)
+    assert (conveyor.length, conveyor.diameter) == (300.0, 45.0)
+    assert resolve_size(conveyor) == (45.0, 300.0)
 
 
 def test_a_belt_shorter_than_two_roller_diameters_is_refused():
@@ -308,13 +470,13 @@ def test_the_default_length_is_the_stencils_own_proportion():
 # ---------------------------------------------------------------------------
 
 
-def _screw_turns(length):
+def _screw_turns(length, diameter=SCREW_HEIGHT):
     """Each turn of the flight, as the list of points it is drawn through.
 
     The axis is the path's first run and is skipped: what these tests are
     about is the turns on it.
     """
-    svg = screw_conveyor_symbol(length).svg
+    svg = screw_conveyor_symbol(length, diameter).svg
     body = re.search(r'<path d="(M 0 .*?)"', svg).group(1)
     runs = [r.strip() for r in body.split("M ") if r.strip()]
     return [
@@ -367,6 +529,60 @@ def test_a_turn_of_the_flight_is_the_same_turn_at_every_length(length):
 def test_a_longer_screw_gets_more_turns_rather_than_longer_ones():
     counts = [len(_screw_turns(n)) for n in (40, 80, 200, 400)]
     assert counts == sorted(counts) and counts[0] < counts[-1]
+
+
+BORES = [12.0, SCREW_HEIGHT, 45.0, 90.0]
+
+
+@pytest.mark.parametrize("diameter", BORES)
+def test_a_wider_screw_keeps_its_pitch_and_its_flight_fills_the_casing(diameter):
+    """The screw's answer to the belt's second dimension, and it cuts the
+    drawing in half. *Along the axis* nothing moves -- the turn is the same
+    4 M, the pitch the same 7 M, the count the same count -- because a wider
+    machine does not turn its flight more often. *Across it* the flight follows
+    the bore, because the flight is the screw and a screw fills its trough.
+    """
+    turns = _screw_turns(200.0, diameter)
+    assert len(turns) == len(_screw_turns(200.0))
+    axis, reach = diameter / 2, diameter * SCREW_REACH / SCREW_HEIGHT
+    starts = [min(p[0] for p in pts) for pts in turns]
+    assert starts == [min(p[0] for p in pts) for pts in _screw_turns(200.0)]
+    for pts in turns:
+        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+        assert max(xs) - min(xs) == pytest.approx(SCREW_TURN)
+        assert (min(ys), max(ys)) == pytest.approx((axis - reach, axis + reach))
+    assert screw_conveyor_symbol(200.0, diameter).height == diameter
+
+
+def test_the_shortest_screw_is_the_same_screw_at_every_bore():
+    """Unlike the belt, whose minimum is two roller diameters and moves with
+    the roller. Everything bounding a screw's length -- the turn and the clear
+    casing at each end -- is measured along the axis, which the bore does not
+    touch."""
+    for diameter in BORES:
+        assert screw_conveyor_symbol(SCREW_MIN_LENGTH, diameter)
+    with pytest.raises(ValueError, match=r"screw conveyor can be drawn"):
+        U.Conveyor("SC-301", variant="screw", length=SCREW_MIN_LENGTH - 1, diameter=90)
+
+
+def test_the_screws_bore_defaults_to_row_18_5s_own_casing():
+    assert U.Conveyor("SC-301", variant="screw").diameter == SCREW_HEIGHT
+    assert screw_conveyor_symbol(140.0) == screw_conveyor_symbol(140.0, SCREW_HEIGHT)
+    assert screw_conveyor_symbol(140.0).id_suffix == "_L140"
+
+
+def test_a_wider_screw_meets_its_streams():
+    fs = Flowsheet("screw")
+    feed, out = fs.add(U.Feed("IN")), fs.add(U.Product("OUT"))
+    sc = fs.add(U.Conveyor("SC-301", variant="screw", length=200, diameter=60))
+    fs.connect(feed.outlet, sc.feed)
+    fs.connect(sc.discharge, out.inlet)
+    assert fs.validate() == []
+    sym = default_registry.for_unit(sc)
+    segments = _collect_segments(sym.svg)
+    for name, faces in sym.port_faces.items():
+        for face, point in faces.items():
+            assert _nearest_distance(point, segments) <= GEOM_TOL, f"{name}/{face}"
 
 
 def test_the_screw_is_drawn_from_its_own_drawing_and_not_the_belts():

@@ -806,9 +806,10 @@ class Symbol:
 # scripts/vendor_data/drawio/driers.xml (w=100, h=140,
 # aspect="variable"). Two changes were made to it. The ``<background>``
 # drier housing is dropped, since the housing is the drier and not the
-# conveyor. And the distance between the two rollers becomes a parameter
-# while the rollers keep the stencil's own r=10, so a longer conveyor
-# grows its straight run and its rollers stay circles. See NOTICE, and
+# conveyor. And the machine's two dimensions -- the run between the ends
+# and the roller across them -- each become a parameter, defaulting to
+# the stencil's own 60-apart r=10 rollers, so a longer conveyor grows
+# its straight run and a bigger roller grows a circle. See NOTICE, and
 # ADAPTED_ELSEWHERE in scripts/vendor_symbols.py.
 #
 # It cannot come through that generator with the rest: the generator
@@ -817,18 +818,34 @@ class Symbol:
 # rollers as ellipses.
 # ----------------------------------------------------------------
 
-#: Roller radius, from the stencil's 20x20 roller ellipses. The same at
-#: every length: only the straight belt run between the rollers grows.
+#: Default roller radius, from the stencil's 20x20 roller ellipses.
 CONVEYOR_ROLLER = 10.0
+#: Default roller diameter, and so the default depth of the machine: the
+#: belt runs tangent to both rollers, so the drawn box is exactly one
+#: roller deep at any run.
+CONVEYOR_DIAMETER = 2 * CONVEYOR_ROLLER
 #: Default belt run, from the stencil's own proportions: it draws the
 #: rollers centred at x=20 and x=80, so the conveyor spans x=10..90.
 CONVEYOR_LENGTH = 80.0
-#: Two roller diameters. Any shorter and the rollers overlap, leaving no
-#: belt.
-CONVEYOR_MIN_LENGTH = 4 * CONVEYOR_ROLLER
 
 
-def conveyor_too_short(length: float, owner: str = "") -> ValueError:
+def conveyor_min_length(diameter: float = CONVEYOR_DIAMETER) -> float:
+    """Two roller diameters: any shorter and the rollers overlap.
+
+    A function of the roller rather than a constant, because the roller
+    is a number the author states. Bigger wheels need a longer bed to
+    stand on, and that is the whole of the rule.
+    """
+    return 2 * diameter
+
+
+#: The shortest belt at the default roller. Kept as a name because it is
+#: the number an author who has stated no roller will be refused with.
+CONVEYOR_MIN_LENGTH = conveyor_min_length()
+
+
+def conveyor_too_short(length: float, owner: str = "",
+                       diameter: float = CONVEYOR_DIAMETER) -> ValueError:
     """The error for a belt run the rollers do not leave room for.
 
     Built here so the message :class:`~pandid.units.Conveyor` raises up
@@ -837,21 +854,40 @@ def conveyor_too_short(length: float, owner: str = "") -> ValueError:
     """
     return ValueError(
         f"{owner + ': ' if owner else ''}length={length:g} is shorter than a "
-        f"conveyor can be drawn: the rollers are {CONVEYOR_ROLLER:g} in radius "
-        f"and would overlap. Use length={CONVEYOR_MIN_LENGTH:g} or more, two "
-        f"roller diameters."
+        f"conveyor can be drawn: the rollers are {diameter / 2:g} in radius "
+        f"and would overlap. Use length={conveyor_min_length(diameter):g} or "
+        f"more, two roller diameters."
+    )
+
+
+def conveyor_bad_diameter(diameter: float, owner: str = "") -> ValueError:
+    """The error for a roller with no circle in it."""
+    return ValueError(
+        f"{owner + ': ' if owner else ''}diameter={diameter:g} is not a "
+        f"conveyor: the rollers are circles and a circle has a positive "
+        f"diameter. Leave diameter= unset for {CONVEYOR_DIAMETER:g}, the "
+        f"stencil's own roller."
     )
 
 
 @lru_cache(maxsize=None)
-def conveyor_symbol(length: float = CONVEYOR_LENGTH) -> Symbol:
-    """A belt conveyor ``length`` long: two rollers and the belt run
-    between.
+def conveyor_symbol(length: float = CONVEYOR_LENGTH,
+                    diameter: float = CONVEYOR_DIAMETER) -> Symbol:
+    """A belt conveyor ``length`` long on rollers ``diameter`` across.
 
-    The symbol is *built* to the length rather than scaled to it, so its
-    width **is** the length and the box a conveyor is placed in is
+    **Two dimensions, neither worked out from the other.** ``length`` is
+    the run, tail end to head end, and ``diameter`` is the roller -- and
+    so the depth of the machine, since the belt runs tangent to both
+    rollers. Either may be changed on its own: a 500-unit belt on the
+    stencil's own 20 rollers and an 80-unit one on 60s are both
+    drawings, and the rollers are true circles in each, because they are
+    *drawn* at the size asked for rather than scaled to it.
+
+    The symbol is built to both, so its width **is** the length, its
+    height **is** the diameter, and the box a conveyor is placed in is
     exactly the box its artwork was drawn in. That is what holds the
-    rollers to :data:`CONVEYOR_ROLLER` at every length.
+    rollers round: a ``<use>`` whose width and height equal the
+    definition's viewBox scales by exactly 1 on both axes.
 
     ``feed`` is the tail roller. Its home nozzle is the end of the belt,
     and it is offered on the top face as well, because material is
@@ -859,17 +895,24 @@ def conveyor_symbol(length: float = CONVEYOR_LENGTH) -> Symbol:
     the head roller, where the belt throws off; it is offered on the
     underside too, for the chute that catches what comes over. Every
     placement sits on a roller circle or on the end of a belt line, at
-    any length.
+    any combination of the two.
 
     Cached, because port resolution asks for a unit's symbol on every
     call and the registry already hands out one shared instance per
     fixed symbol.
     """
-    if length < CONVEYOR_MIN_LENGTH:
-        raise conveyor_too_short(length)
-    r, height = CONVEYOR_ROLLER, 2 * CONVEYOR_ROLLER
+    if diameter <= 0:
+        raise conveyor_bad_diameter(diameter)
+    if length < conveyor_min_length(diameter):
+        raise conveyor_too_short(length, diameter=diameter)
+    r, height = diameter / 2, float(diameter)
     tail, head = r, length - r
-    suffix = f"_L{length:g}"
+    # The default roller is left out of the id. It names what makes this
+    # drawing different from another belt, and at the stencil's own
+    # roller the length is the whole of that difference -- so a sheet
+    # that states no roller keeps the id it has always had.
+    suffix = f"_L{length:g}" + (f"_D{diameter:g}"
+                                if diameter != CONVEYOR_DIAMETER else "")
     roller = ('<ellipse cx="{:g}" cy="{:g}" rx="{:g}" ry="{:g}" fill="none" '
               'stroke="#111" stroke-width="2"/>')
     svg = (
@@ -881,13 +924,13 @@ def conveyor_symbol(length: float = CONVEYOR_LENGTH) -> Symbol:
         + '</g>'
     )
     return Symbol(
-        svg=svg, width=float(length), height=float(height),
+        svg=svg, width=float(length), height=height,
         ports={"feed": (0.0, r), "discharge": (float(length), r)},
         port_faces={"feed": {"N": (tail, 0.0)},
-                    "discharge": {"S": (head, float(height))}},
+                    "discharge": {"S": (head, height)}},
         id_suffix=suffix,
         # The rollers are circles, which is why this symbol is built to
-        # its length instead of scaled to it.
+        # its two dimensions instead of scaled to a box.
         stretchable=False,
     )
 
@@ -921,7 +964,9 @@ def conveyor_symbol(length: float = CONVEYOR_LENGTH) -> Symbol:
 #: without one of them looking like a different kind of drawing.
 SCREW_MODULE = 5.0
 
-#: The casing's depth: 6 M, off row 18.5.
+#: The casing's default depth: 6 M, off row 18.5. A screw conveyor's
+#: casing is a tube and this is its bore seen in elevation, so it is the
+#: number an author states when the machine is a bigger screw.
 SCREW_HEIGHT = 6 * SCREW_MODULE
 
 #: One turn of the screw: 4 M along the axis, reaching 2 M either side of
@@ -929,6 +974,15 @@ SCREW_HEIGHT = 6 * SCREW_MODULE
 #: curve, which is how it flattens a helix into two dimensions -- the
 #: same treatment ISO item 28.6 gives a helical agitator ribbon.
 SCREW_TURN, SCREW_REACH = 4 * SCREW_MODULE, 2 * SCREW_MODULE
+
+#: How much of the bore the flight sweeps, from row 18.5's own 4 M reach
+#: across a 6 M casing. **The one thing on this drawing derived from
+#: another dimension, and derived because the machine is**: a screw
+#: fills its trough, so a flight that kept its reach in a deeper casing
+#: would draw a screw rattling about inside an oversized tube. What a
+#: bigger bore does *not* change is anything along the axis -- see
+#: :func:`screw_conveyor_symbol`.
+SCREW_SWEEP = 2 * SCREW_REACH / SCREW_HEIGHT
 
 #: How far apart consecutive turns start, and how much clear casing is
 #: left at each end. Row 18.5's casing runs x 5..20 with turns at x 7..11
@@ -949,6 +1003,12 @@ def screw_too_short(length: float, owner: str = "") -> ValueError:
     :func:`conveyor_too_short`'s twin, and separate from it because the
     two conveyors are refused for different reasons and a reader who has
     just been told about rollers would go looking for rollers.
+
+    It takes no ``diameter``, where the belt's twin does. A belt's
+    minimum is two roller diameters and moves with the roller; a screw's
+    is a whole turn of the flight plus the clear casing at each end, and
+    every one of those three is measured **along the axis**, which a
+    wider bore does not touch.
     """
     return ValueError(
         f"{owner + ': ' if owner else ''}length={length:g} is shorter than a "
@@ -958,12 +1018,41 @@ def screw_too_short(length: float, owner: str = "") -> ValueError:
     )
 
 
+def screw_bad_diameter(diameter: float, owner: str = "") -> ValueError:
+    """The error for a casing with no bore in it."""
+    return ValueError(
+        f"{owner + ': ' if owner else ''}diameter={diameter:g} is not a screw "
+        f"conveyor: the casing is a tube and a tube has a positive bore. "
+        f"Leave diameter= unset for {SCREW_HEIGHT:g}, row 18.5's own 6 M "
+        f"casing."
+    )
+
+
 @lru_cache(maxsize=None)
-def screw_conveyor_symbol(length: float = CONVEYOR_LENGTH) -> Symbol:
-    """A closed screw conveyor ``length`` long: ISO item 18.5 X8063.
+def screw_conveyor_symbol(length: float = CONVEYOR_LENGTH,
+                          diameter: float = SCREW_HEIGHT) -> Symbol:
+    """A closed screw conveyor ``length`` long on a ``diameter`` bore:
+    ISO item 18.5 X8063.
 
     The casing, the screw's axis along it, and as many turns of the
     flight as fit at :data:`SCREW_PITCH`.
+
+    **Two dimensions, and they cut the drawing in half between them.**
+    ``length`` is the run and ``diameter`` the casing bore, and every
+    other measurement belongs to one or the other and to nothing else:
+
+    - *Along the axis* -- the turn's 4 M width, the 7 M pitch, the 2 M
+      of clear casing at each end, and so the shortest screw that can be
+      drawn -- is fixed, and a longer casing gets **more** turns rather
+      than longer ones. That is the belt's rollers-stay-round rule in
+      the form a screw takes it: a 400-unit screw showing the same two
+      turns as an 80-unit one reads as a flight every four metres.
+    - *Across it* -- the axis and the flight's reach -- follows the
+      bore, because the flight is the screw and a screw fills its
+      trough; see :data:`SCREW_SWEEP`.
+
+    So a bigger screw is drawn bigger and still turns at its own pitch,
+    which is the pair of facts a stretched drawing cannot hold at once.
 
     Nozzles on the **top and the bottom**, which is the other way round
     from the belt above and is what row 18.5 draws: its two connection
@@ -976,32 +1065,37 @@ def screw_conveyor_symbol(length: float = CONVEYOR_LENGTH) -> Symbol:
 
     Cached, for :func:`conveyor_symbol`'s reason.
     """
+    if diameter <= 0:
+        raise screw_bad_diameter(diameter)
     if length < SCREW_MIN_LENGTH:
         raise screw_too_short(length)
-    axis = SCREW_HEIGHT / 2
+    height = float(diameter)
+    axis, reach = height / 2, height * SCREW_SWEEP / 2
     # As many turns as leave SCREW_MARGIN of clear casing at the head.
     starts, x = [], SCREW_MARGIN
     while x + SCREW_TURN <= length - SCREW_MARGIN:
         starts.append(x)
         x += SCREW_PITCH
     turns = "".join(
-        f'M {x0:g} {axis:g} L {x0 + SCREW_MODULE:g} {axis - SCREW_REACH:g} '
-        f'L {x0 + 3 * SCREW_MODULE:g} {axis + SCREW_REACH:g} '
+        f'M {x0:g} {axis:g} L {x0 + SCREW_MODULE:g} {axis - reach:g} '
+        f'L {x0 + 3 * SCREW_MODULE:g} {axis + reach:g} '
         f'L {x0 + SCREW_TURN:g} {axis:g} '
         for x0 in starts)
-    suffix = f"_L{length:g}"
+    # The default bore is left out of the id, for the belt's reason.
+    suffix = f"_L{length:g}" + (f"_D{diameter:g}"
+                                if diameter != SCREW_HEIGHT else "")
     svg = (
         f'<g id="sym_conveyor_screw{suffix}">'
-        f'<rect x="0" y="0" width="{length:g}" height="{SCREW_HEIGHT:g}" '
+        f'<rect x="0" y="0" width="{length:g}" height="{height:g}" '
         f'fill="white" stroke="#111" stroke-width="2"/>'
         f'<path d="M 0 {axis:g} L {length:g} {axis:g} {turns}" '
         f'fill="none" stroke="#111" stroke-width="2"/>'
         f'</g>'
     )
     return Symbol(
-        svg=svg, width=float(length), height=SCREW_HEIGHT,
+        svg=svg, width=float(length), height=height,
         ports={"feed": (SCREW_MODULE, 0.0),
-               "discharge": (length - SCREW_MODULE, SCREW_HEIGHT)},
+               "discharge": (length - SCREW_MODULE, height)},
         port_faces={"feed": {"W": (0.0, axis)},
                     "discharge": {"E": (float(length), axis)}},
         id_suffix=suffix,
@@ -1240,8 +1334,10 @@ def block_symbol(faces: tuple[tuple[str, str], ...], label: str = "") -> Symbol:
 # its own variant now, which is what the paragraph above was written
 # against.
 _BUILT_TO_SIZE: "dict[tuple[str, str | None], object]" = {
-    ("conveyor", "default"): lambda unit: conveyor_symbol(unit.length),
-    ("conveyor", "screw"): lambda unit: screw_conveyor_symbol(unit.length),
+    ("conveyor", "default"): lambda unit: conveyor_symbol(unit.length,
+                                                          unit.diameter),
+    ("conveyor", "screw"): lambda unit: screw_conveyor_symbol(unit.length,
+                                                              unit.diameter),
     ("block", None): lambda unit: unit.symbol(),
 }
 

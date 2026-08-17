@@ -346,10 +346,12 @@ _VARIABLE_PORTS = {
     "n_feeds": ("Column", "Reactor"),
 }
 # Sizes only some classes carry, policed the same way: a conveyor's belt
-# run is a dimension of its own rather than the generic width, so naming
-# it on anything else asks for a length nothing draws.
+# run and its roller are dimensions of its own rather than the generic
+# width and height, so naming either on anything else asks for a size
+# nothing draws.
 _KIND_SIZES = {
     "length": ("Conveyor",),
+    "diameter": ("Conveyor",),
 }
 # Text fields only some classes carry. ``normal_position`` is where a
 # valve or a blind sits with the plant running; a pump has no such
@@ -1288,10 +1290,14 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
         if unit.large_end != "inlet":
             entry["large_end"] = unit.large_end
     elif isinstance(unit, unit_types.Conveyor):
-        # Always written: it is how long the belt is, which is the whole
-        # of a conveyor's geometry, and nothing else on the entry
-        # records it.
+        # Always written: it is how long the belt is, and nothing else
+        # on the entry records it.
         entry["length"] = unit.length
+        # Only when it is not the drawing's own roller or bore. Writing
+        # the default down would rewrite every conveyor entry ever
+        # exported to say what leaving the key out already says.
+        if unit.diameter != unit.default_diameter():
+            entry["diameter"] = unit.diameter
     elif isinstance(unit, unit_types._NormallyPositioned):
         # Only when closed. "Open" is not a convention a P&ID draws, it
         # is the absence of one, so writing it down would be writing the

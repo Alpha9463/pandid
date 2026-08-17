@@ -950,22 +950,34 @@ A block is **not** scheduled: `equipment_list()` skips it, because a box
 standing for a whole section is not a purchasable item. `include=` still takes
 one by name, for a block index.
 
-`Conveyor` takes a `length` instead of a `width`:
+`Conveyor` takes a `length` and a `diameter` instead of a `width` and a
+`height`:
 
 ```text
-units.Conveyor(name, length=80, variant="default", label_pos=None,
-               description="")
+units.Conveyor(name, length=80, diameter=20, variant="default",
+               label_pos=None, description="")
 ```
 
-`length` is the belt run. The symbol is a bar between two rollers and is drawn
-to that length, so a longer conveyor grows the bar and its rollers stay the same
-circles. It is the unit's whole size: `width=` and `height=` size the drawn box
-instead, which would stretch the rollers, so a `Conveyor` refuses them and names
-`length` in their place. A quarter turn stands the belt on end, where the length
-is its height. The minimum is 40, two roller diameters, below which the rollers
-overlap. `feed` is the tail end and can also be taken from the top face, since
-material is dropped onto a belt rather than piped into it; `discharge` is the
-head end and can also be taken from underneath, for a chute.
+`length` is the run, tail end to head end. `diameter` is the machine across it:
+the roller a belt runs on, or the casing bore a screw turns in. Both are
+dimensions of the *machine*, and each is set on its own — a long belt on small
+rollers and a short one on big rollers are both drawings.
+
+The symbol is **built** to the pair rather than scaled into a box, so a longer
+belt grows the straight run, a bigger roller grows a circle, and a longer screw
+gets more turns of its flight at the same pitch. `width=` and `height=` size the
+drawn box instead, which a quarter turn swaps, so a `Conveyor` refuses them and
+names the keyword the number belongs on.
+
+`diameter` defaults to the drawing's own: 20 for the belt, 30 for the screw. A
+belt's minimum length is two roller diameters, below which the rollers overlap,
+so it moves with the roller; a screw's is a whole turn of the flight plus the
+clear casing at each end, all measured along the axis, so it is the same 40 at
+every bore.
+
+`feed` is the tail end and can also be taken from the top face, since material
+is dropped onto a belt rather than piped into it; `discharge` is the head end
+and can also be taken from underneath, for a chute.
 
 `Valve.actuator` is the signal connection on the valve, not a process nozzle. It
 is where a controller output or an interlock terminates, and it will not take
@@ -1352,7 +1364,7 @@ first listed is what the class draws when it is built by name alone.
 | `RollerMill` | `mill` | `roller` (as `default`) |
 | `VibratingMill` | `mill` | `vibration` (as `default`) |
 | `Mill` | `mill` | `default` — ISO 10628-2 item 11.8 X8086, and what a ball or rod mill is drawn as: the standard tabulates neither, and this is the body its four characteristics go in |
-| `ScrewConveyor` | `conveyor` | `screw` (as `default`) — ISO 10628-2 item 18.5 X8063. Built to `length=` rather than scaled to it, as the belt on `Conveyor` is |
+| `ScrewConveyor` | `conveyor` | `screw` (as `default`) — ISO 10628-2 item 18.5 X8063. Built to `length=` and `diameter=` rather than scaled to a box, as the belt on `Conveyor` is |
 | `Elevator` | `elevator` | `default` — the bucket elevator, ISO 10628-2 item 18.7 X8065 — and `z_form`, item 18.8 X8066, the same lift with a horizontal run at each end |
 | `ControlValve` | `valve` | `control` (as `default`), `butterfly_pneumatic` |
 | `SolenoidValve` | `valve` | `solenoid` (as `default`) |
@@ -3269,10 +3281,10 @@ which is what `to_dict()` writes for one. `name` (required) is the tag.
 Then `variant`, `description` (feeds the equipment list), `reference` (a boundary
 flag's off-page drawing), explicit `width`/`height`, `label_pos`, `new_line_number`
 (break the stream or line number at this inline item), `n_inlets` / `n_outlets`
-for `Mixer` / `Splitter`, `n_feeds` for `Column` / `Reactor`, `length` for
-`Conveyor`, `branch` (`outlet` / `inlet`) for `Tee`, `large_end` (`inlet` /
-`outlet`) for `Reducer`, `normal_position` (`open` / `closed`) for `Valve` and
-for `Fitting`'s `blind`, and `fail` (`open` / `closed` / `last` / `drift_open` /
+for `Mixer` / `Splitter`, `n_feeds` for `Column` / `Reactor`, `length` and
+`diameter` for `Conveyor`, `branch` (`outlet` / `inlet`) for `Tee`, `large_end`
+(`inlet` / `outlet`) for `Reducer`, `normal_position` (`open` / `closed`) for
+`Valve` and for `Fitting`'s `blind`, and `fail` (`open` / `closed` / `last` / `drift_open` /
 `drift_closed` / `indeterminate`) for an actuated `Valve`.
 
 [What a body carries](#what-a-body-carries) is stated by the same keywords the
