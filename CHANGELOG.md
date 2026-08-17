@@ -588,6 +588,9 @@ reader would otherwise take them for working code.
 
 ### Fixed
 
+- A north satellite on a sheet carrying a pinned row stays above the unit it
+  feeds. It was taking the first free row instead, which is below it.
+
 - The L the router falls back to when the search finds nothing is now checked
   against the obstacles: both corner orders are tried and the one crossing less
   equipment is drawn.
