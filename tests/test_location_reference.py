@@ -1,12 +1,8 @@
 """ISO 15519-1:2010 Clause 9 location references, and the flag that carries one.
 
-Clause 9 gives the grammar off-page connector text is composed in:
-
-    The following signs shall be used for creating location references:
-    - solidus (/) for identification of a sheet;
-    - full stop (.) for identification of a column, a row or a zone in a sheet.
-    The location reference shall be presented in following sequence:
-    document - sheet - column, row or zone.
+Clause 9 gives the grammar off-page connector text is composed in: the solidus
+marks the sheet and the full stop the column, row or zone, and the parts are
+presented in one order -- document, then sheet, then column, row or zone.
 
 Table 2 tabulates the seven cases, which is what the first test reproduces
 row for row.
@@ -81,9 +77,9 @@ def test_the_parts_stay_in_clause_9_order():
 
 @pytest.mark.parametrize("zone", ["3B", "B3C", "3B3", "B-3"])
 def test_a_zone_spelled_back_to_front_is_refused(zone):
-    """5.1.2: "Columns are designated with numbers. Rows are designated with
-    letters." Table 2 writes the zone as its row then its column, so B3 is a
-    zone and 3B is a reader sent to the wrong place."""
+    """5.1.2 designates columns with numbers and rows with letters. Table 2
+    writes the zone as its row then its column, so B3 is a zone and 3B is a
+    reader sent to the wrong place."""
     with pytest.raises(ValueError, match="not a zone, a row or a column"):
         location_reference(zone=zone)
 

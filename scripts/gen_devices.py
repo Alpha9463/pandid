@@ -482,15 +482,16 @@ DEVICES = {
     ("valve", "control"): ("ControlValve", """Control valve: the final element a loop's output lands on.
 
     The valve a controller modulates. **ISO 15519-2 Table A.3** builds
-    one on two axes: A.3.20 is the control valve, general, "shown with
-    general actuator", and §7.4.4.3 asks that an actuator be drawn
-    "without indication of type" unless the type matters. What is drawn
-    here is that general body with A.3.41's diaphragm on it, which
-    Table 5 makes the P&ID's answer -- a P&ID's basic information is
-    "specific graphical symbols for ... valves incl. actuators" -- and
-    which is a deviation on a PFD, where Table 4 asks for the general
-    one. It is deliberate: the stencil set fuses body and operator into
-    a single shape, so no general actuator exists to draw.
+    one on two axes: A.3.20 is the general control valve, drawn with a
+    general actuator standing on it, and §7.4.4.3 asks that an actuator
+    be drawn without saying what type it is unless the type matters.
+    What is drawn here is that general body with A.3.41's diaphragm on
+    it, which Table 5 makes the P&ID's answer -- a P&ID's basic
+    information runs to the **specific** symbols for valves and their
+    actuators -- and which is a deviation on a PFD, where Table 4 asks
+    for the general one. It is deliberate: the stencil set fuses body
+    and operator into a single shape, so no general actuator exists to
+    draw.
     ``default`` is the general body every sheet's CVs are drawn on;
     ``butterfly_pneumatic`` is the same actuator on a butterfly disc,
     and is reached as

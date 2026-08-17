@@ -390,8 +390,8 @@ def _tether(lab: "_Label", box: "tuple[float, float, float, float]") -> "str | N
 
     ISO 15519-1 §6.4 dresses the sheet's own leaders -- oblique, and
     terminated by dot, arrowhead or oblique stroke by what they land on
-    -- and its scope is wide: leader and reference lines "indicating
-    where notes or references apply", any note, not a connection's
+    -- and its scope is wide: it covers any leader or reference line
+    showing where a note or a reference applies, not a connection's
     designation alone. What puts this mark outside the clause is not
     that scope but its own: the overlay is scaffolding for whoever is
     writing the script, and is not part of an issued drawing. So this

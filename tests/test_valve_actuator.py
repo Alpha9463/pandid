@@ -8,16 +8,16 @@ be without, and the variant that drew it correctly was the one nobody would look
 for.
 
 **ISO 15519-2:2015 Table 5** (p. 19) settles that this is a defect and not a
-style: it lists *"specific graphical symbols for process equipment incl. prime
-movers ..., valves incl. actuators, connections, etc."* as **basic** information
-for a P&ID. ``professional_examples/P&ID_301.pdf`` draws the dome on all six of
-its control valves.
+style: it counts the **specific** symbols for process equipment, prime movers,
+valves, actuators and connections among the **basic** information for a P&ID.
+``professional_examples/P&ID_301.pdf`` draws the dome on all six of its control
+valves.
 
 **Table A.3** of the same standard is where the two axes come from. It registers
 the bowtie on its own (A.3.01, 2101A), registers the actuators on their own
 (A.3.40-A.3.45), and then registers the control valve as the two together
-(A.3.20, *"shown with general actuator"*, carrying 2101A, 210A and P050B at
-once).
+(A.3.20, the general valve drawn with a general actuator on it, carrying 2101A,
+210A and P050B at once).
 """
 
 import pytest

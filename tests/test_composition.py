@@ -240,9 +240,9 @@ def test_a_part_that_may_not_be_reshaped_holds_the_whole_symbol_to_its_aspect():
     """There is no way to hold one group still inside a group being stretched.
 
     So a composition is stretchable only if the body and every part is, and the
-    renderer letterboxes the lot. ISO 14617-1 §4.4 bounds reshaping by "shall
-    not make it impossible to recognize the symbol", which an impeller drawn as
-    a smear plainly is.
+    renderer letterboxes the lot. ISO 14617-1 §4.4 bounds reshaping at the point
+    where the symbol stops being recognisable, which an impeller drawn as a
+    smear plainly is.
     """
     assert body().stretchable
     loose = compose(body(), [(Overlay(27, "tray", 0.1, 0.5, 0.8, 0.05), part(TRAY))])

@@ -247,11 +247,12 @@ class Stream:
 
         Read-only, and the place the question is answered, because ISO
         10628-1:2014 draws its own line there and two callers have to
-        find it in the same place. 4.3.2 d) makes the "denomination and
-        flow rates or quantities of **ingoing and outgoing** materials"
-        something a PFD **shall** contain, where the flows *between* the
-        process steps are optional (4.3.3 a)). So the stream table drops
-        an internal column with nothing in it and keeps a boundary one
+        find it in the same place. 4.3.2 d) makes the name of every
+        **ingoing and outgoing** material, with its flow rate or
+        quantity, something a PFD **shall** carry, where the flows
+        *between* the process steps are optional (4.3.3 a)). So the
+        stream table drops an internal column with nothing in it and
+        keeps a boundary one
         (:func:`pandid.render.furniture._table_streams`), and
         :mod:`pandid.validate` reports the boundary column that is
         empty.

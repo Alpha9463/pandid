@@ -8,10 +8,10 @@ and fail closed, and both marks belong on the sheet.
 
 The letters are ANSI/ISA-5.1-2009 Table 5.4.4 Method B rather than the same
 table's Method A stem arrows, because PIP PIC001 4.5.3.2 chooses between them:
-"automated valve fail actions shall be shown with text (FC/FO/FL/FI) in
-accordance with ISA-5.1", with the comment that "using stem arrows as outlined
-in ISA-5.1 is not recommended". PIP PIC001 4.2.4.6(1) then places them, below a
-valve on a horizontal run and to the right of one on a vertical run.
+it calls for an automated valve's fail action in text, FC/FO/FL/FI after
+ISA-5.1, and comments against ISA's stem arrows. PIP PIC001 4.2.4.6(1) then
+places them, below a valve on a horizontal run and to the right of one on a
+vertical run.
 """
 
 from __future__ import annotations
@@ -115,8 +115,8 @@ def test_the_letters_are_the_whole_of_the_mark():
 
 @pytest.mark.parametrize("variant", UNACTUATED)
 def test_a_valve_with_no_actuator_is_refused(variant):
-    """ANSI/ISA-5.1 note 5.3.4(10) scopes the failure symbols to "all types of
-    control valves and actuators". A handwheel loses no air, and a regulator or
+    """ANSI/ISA-5.1 note 5.3.4(10) scopes the failure symbols to every type of
+    control valve and actuator. A handwheel loses no air, and a regulator or
     a relief valve is worked by the process it sits in, so there is no supply
     whose failure is the question. Declaring one would set an attribute about
     equipment the valve does not have."""
@@ -210,8 +210,8 @@ def test_the_nc_letters_and_the_fail_letters_do_not_collide():
 
 
 def test_the_letters_go_below_a_valve_on_a_horizontal_run():
-    """PIP PIC001 4.2.4.6(1): "directly below the control valve in horizontal
-    lines"."""
+    """PIP PIC001 4.2.4.6(1) puts them directly below the control valve on a
+    horizontal line."""
     from pandid.render.svg import SvgRenderer
 
     valve = units.Valve("FV-1", variant="control", fail="closed")
@@ -226,8 +226,8 @@ def test_the_letters_go_below_a_valve_on_a_horizontal_run():
 
 
 def test_the_letters_go_to_the_right_of_a_valve_on_a_riser():
-    """PIP PIC001 4.2.4.6(1): "to the right of the control valve in vertical
-    lines". Unlike the fixed ``NC`` corner, this one moves with the quarter
+    """PIP PIC001 4.2.4.6(1) puts them to the right of the control valve on a
+    vertical line. Unlike the fixed ``NC`` corner, this one moves with the quarter
     turn, because it has to: the face below a valve on a riser is its outlet
     nozzle, with the line running out of it."""
     from pandid.render.svg import SvgRenderer

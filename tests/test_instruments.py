@@ -597,10 +597,9 @@ def test_balloon_ports_have_no_face_of_their_own_but_equipment_nozzles_do():
 def test_a_barred_balloons_tag_clears_its_location_bar():
     """Every balloon carrying a location bar draws it across the middle of the
     circle, right where the tag letters would otherwise sit. ISO 15519-2
-    5.1.2 (p. 8) puts the letters above it and the number below: "Letter codes
-    for process variables and control functions ... shall be placed in the upper
-    part of the symbol and reference designation in the lower part of the
-    symbol"."""
+    5.1.2 (p. 8) puts the letters above it and the number below: the letter
+    codes for measured variable and control function go in the upper part of
+    the symbol and the reference designation in the lower part."""
     import re
 
     from pandid.render.symbols import default_registry
@@ -631,9 +630,9 @@ def test_a_barred_balloons_tag_clears_its_location_bar():
 
 def test_every_shared_display_balloon_carries_a_location_bar():
     """Issue #181. A shared display is the central control system, and ISO
-    15519-2 Table 1 (p. 7) has one graphic for saying so -- a horizontal single
-    full line, "Information available in central control system", against
-    "None: Information available on field mounted instrument/display". A square
+    15519-2 Table 1 (p. 7) has one graphic for saying so -- one full horizontal
+    bar for a reading available in the central control system, against no bar
+    for one at a field-mounted instrument or display. A square
     with no bar therefore stated the one thing about a DCS point that is
     certainly false. All forty balloons on ``professional_examples/P&ID_301.pdf``
     carry a bar, twelve of them circle-in-square.
@@ -860,8 +859,8 @@ def test_each_output_takes_a_face_of_its_own():
 
 def test_a_measurement_feeds_two_alarms_on_separate_lines():
     """ISO 15519-2 §6.2 (p.14): signal lines for functions inside the PCI symbol
-    and for functions outside it "shall be drawn separate between the PCI
-    symbols". A high alarm and a low alarm therefore each take a line from the
+    and for functions outside it are drawn separately between the PCI symbols,
+    not run together. A high alarm and a low alarm therefore each take a line from the
     measurement rather than being chained one behind the other, which needs two
     outputs on the transmitter."""
     fs = Flowsheet("alarms")
@@ -1179,9 +1178,10 @@ def test_a_display_picks_the_artwork_its_bar_is_drawn_in(display, drawn):
 
 def test_a_square_says_where_it_is_without_being_asked():
     """A circle in a square is the shared display, and CHEE4001 p.13 is why the
-    display is not a second decision to make: "A circle within a square shows
-    that the instrument has some controlling function ... such as a distributed
-    control system (DCS)." The bar it carries follows from the symbol."""
+    display is not a second decision to make: it reads a circle inside a square
+    as an instrument with a controlling function, the circle standing for
+    continuous control such as a DCS. The bar it carries follows from the
+    symbol."""
     assert U.Instrument("FIC", 301, variant="shared").display == "central"
     assert U.Instrument("FIC", 301, variant="shared", display="central").variant == "shared"
 
@@ -1209,10 +1209,10 @@ def test_a_display_that_is_not_one_of_the_three_is_refused():
 
 
 def test_annotate_writes_high_and_low_into_the_quadrants_iso_names_them():
-    """ISO 15519-2 5.1.3 (p. 19) letters them: (c) "Information of high
-    output/input functions, e.g. alarm or switching", (d) "Information of low
-    output/input function". High above the centre line and low below is 5.2.5's
-    "increasing value away from the centre line"."""
+    """ISO 15519-2 5.1.3 (p. 19) letters them: (c) takes a high output or input
+    function, an alarm or a switching action say, and (d) the same for a low
+    one. High above the centre line and low below is 5.2.5's rule that the
+    value a code stands for rises with its distance from that line."""
     inst = U.Instrument("LIC", 304).annotate(high="LAH", low="LAL")
     written = {name: codes for name, codes in inst.quadrants.items() if codes}
     assert written == {"c": ("LAH",), "d": ("LAL",)}
@@ -1224,8 +1224,8 @@ def test_annotate_returns_the_balloon_it_lettered():
 
 
 def test_several_codes_in_one_quadrant_take_the_sequence_the_standard_fixes():
-    """ISO 15519-2 5.2.5: "The sequence shall be A, S, and Z with increasing
-    value away from the centre line of the PCI symbol." A shall is not an
+    """ISO 15519-2 5.2.5 fixes the sequence: A, then S, then Z, with the value
+    each stands for rising away from the symbol's centre line. A shall is not an
     author's choice to express, so the order they wrote is not preserved: an
     alarm, a switch and a trip come out A, S, Z outward however they are given.
     """
@@ -1244,9 +1244,10 @@ def test_an_empty_letter_code_is_refused_rather_than_written():
 
 
 def test_an_annotated_balloon_spends_no_face():
-    """ISO 15519-2 5.1.3's own reason for the corners: "This allows for
-    horizontal and vertical connections to the symbol." The alarms used to be
-    balloons of their own hung off the controller, and a face went with each."""
+    """ISO 15519-2 5.1.3's own reason for the corners: keeping the four faces
+    clear is what lets the symbol be connected horizontally and vertically. The
+    alarms used to be balloons of their own hung off the controller, and a face
+    went with each."""
     fs = Flowsheet("annotated")
     lt = fs.add(U.Instrument("LT-304")).pin(x=200, y=400)
     lic = fs.add(U.Instrument("LIC-304", variant="shared")).pin(x=200, y=250)

@@ -105,9 +105,9 @@ class Loop:
         loop.
 
         Its **number** does, and that is the half this supplies.
-        CHEE4001 p.13: "A loop number is assigned to each group of
-        components required to perform the desired function of the
-        monitor or control scheme." The valve is in the group.
+        CHEE4001 p.13 gives one loop number to the whole group of
+        components that between them do the monitoring or control the
+        scheme is for. The valve is in the group.
 
         **A primary element goes through** :meth:`element` **instead**;
         see issue #203.

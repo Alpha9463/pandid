@@ -132,14 +132,8 @@ _ASPECT_TOL = 0.02
 
 #: The order the control-function letters of a tag have to appear in. BS
 #: ISO 15519-2:2015 §5.2.4, *Sequence of letter codes for control
-#: functions*:
-#:
-#:     Letter codes for control function shall be represented in
-#:     following sequence: I, R, C, S, M, Z, and A, for example:
-#:     * ICA   Indication, control (closed loop) and alarm;
-#:     * CS    Control (closed loop) and switching (open loop);
-#:     * ICZA  Indication, control (closed loop), switching (open
-#:             loop) safety relevant, and alarm.
+#: functions*, fixes that order as I, R, C, S, M, Z, A, and works it
+#: through on three tags: ``ICA``, ``CS`` and ``ICZA``.
 #:
 #: So ``FIC`` is right and ``FCI`` is wrong. Only these seven letters
 #: are ordered: the first letter of a tag is the measured variable
@@ -150,9 +144,9 @@ _ASPECT_TOL = 0.02
 #: qualifies a position switch rather than naming a function; see
 #: :func:`_is_control_function`.
 #:
-#: ``M`` is quoted as printed and is unreachable: §5.2.4 orders it, and
-#: the control functions the clause orders are defined without one, so no
-#: conforming tag has a letter to put in that slot.
+#: ``M`` is carried because §5.2.4 lists it and is unreachable: the
+#: clause orders it, and the control functions it orders are defined
+#: without one, so no conforming tag has a letter to put in that slot.
 CONTROL_FUNCTION_SEQUENCE = "IRCSMZA"
 
 
@@ -482,15 +476,13 @@ def model_issues(fs: "Flowsheet") -> list["Issue"]:
               f"default_registry.register({u.kind!r}, Symbol(...))"))
 
     # --- turned symbols whose function is gravity ---
-    # ISO 15519-1:2010 §11.4.2, *Orientation of graphical symbols*:
+    # ISO 15519-1:2010 §11.4.2, *Orientation of graphical symbols*,
+    # excepts from turning any symbol for a component or device whose
+    # function depends on gravity, and names two of them: the open tank
+    # (2061) and the cyclone separator (X 2618), drawn at Figure 22 b).
+    # Those must not be turned.
     #
-    #     Exceptions for turning are symbols representing
-    #     components or devices where gravity is a functionality,
-    #     for example symbol 2061: Open tank or symbol X 2618:
-    #     Cyclone separator; see Figure 22 b). Such symbols must
-    #     not be turned.
-    #
-    # Soft despite the clause's "must not": the sheet draws and every
+    # Soft despite the clause's *must not*: the sheet draws and every
     # nozzle lands on ink, so the only thing wrong is what the drawing
     # says about the plant. Refusing would also stop the library
     # checking its own artwork, since ``tests/test_symbol_invariants``
@@ -513,9 +505,9 @@ def model_issues(fs: "Flowsheet") -> list["Issue"]:
         if not default_registry.for_unit(u).gravity_fixed:
             continue
         # ISO's own way out, from the lettering paragraph of the same
-        # clause: "a new symbol should be created to the actual
-        # orientation". Two families ship one, the lying drum, so name
-        # it where it exists.
+        # clause: draw a fresh symbol in the orientation actually wanted
+        # rather than turning this one. Two families ship one, the lying
+        # drum, so name it where it exists.
         lying = ("horizontal" if variant != "horizontal"
                  and "horizontal" in default_registry.variants(u.kind) else "")
         warnings.append(Issue(
@@ -766,12 +758,10 @@ def model_issues(fs: "Flowsheet") -> list["Issue"]:
             f"Flowsheet(stream_number_start=...)"))
 
     # --- an ingoing or outgoing material with nothing to report ---
-    # ISO 10628-1:2014 4.3.2, *Process flow diagram*:
-    #
-    #     The process flow diagram shall contain at least the
-    #     following: [...] d) denomination and flow rates or
-    #     quantities of ingoing and outgoing materials; [...]
-    #     f) characteristic operating conditions.
+    # ISO 10628-1:2014 4.3.2, *Process flow diagram*, lists what a PFD
+    # must carry at a minimum. Item d) is the name of each ingoing and
+    # outgoing material together with its flow rate or quantity, and item
+    # f) is the operating conditions that characterise the process.
     #
     # The stream table is where a sheet answers that, and it drops a
     # column with nothing in it -- an internal one, which 4.3.3 a)
@@ -811,9 +801,9 @@ def model_issues(fs: "Flowsheet") -> list["Issue"]:
                 "warning", "boundary-flow-missing",
                 f"{name} crosses the sheet edge at {_and(flags)} and states no "
                 f"property, on a sheet whose other streams state theirs. ISO "
-                f"10628-1:2014 4.3.2 d) has a process flow diagram contain the "
-                f"denomination and flow rates or quantities of ingoing and "
-                f"outgoing materials, so the stream table keeps this column "
+                f"10628-1:2014 4.3.2 d) has a process flow diagram name every "
+                f"ingoing and outgoing material and state its flow rate or "
+                f"quantity, so the stream table keeps this column "
                 f"rather than dropping it the way it drops an empty internal "
                 f"one -- and every cell in it reads '-'. Write what the line "
                 f"carries, properties={{'Flow (kg/h)': ...}} on it, or state "
@@ -1083,11 +1073,11 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                         break
 
             # Soft: a segment drawn on the slant. BS ISO 15519-1:2010
-            # §12.1: "Connecting lines shall be oriented horizontally or
-            # vertically, except in those cases where oblique lines
-            # improve the clarity of the diagram" -- the exception is
-            # why this warns rather than refuses, and the exception is
-            # also why nothing can decide for the author.
+            # §12.1 wants connecting lines run horizontally or
+            # vertically, but lets a line go oblique where doing so
+            # makes the diagram clearer -- the exception is why this
+            # warns rather than refuses, and the exception is also why
+            # nothing can decide for the author.
             #
             # One ``via()`` waypoint is what produces it. ``via`` states
             # the middle of the path and nothing squares the two ends up

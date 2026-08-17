@@ -1066,9 +1066,9 @@ def test_every_holdup_variant_anchors_every_nozzle_its_class_declares(cls, kind,
 def test_a_relief_is_on_the_crown_and_a_drain_at_the_low_point(cls, kind, variant):
     """The position is the role, so it is the position that is checked.
 
-    CHEE4001 p.7 is the citable half: "The PSV should be placed, whenever
-    possible, directly on the system to be protected, vertically, upward, and at
-    the top of the container." A relief drawn on the floor is not a layout
+    CHEE4001 p.7 is the citable half: wherever it can be, the PSV goes on the
+    protected system itself, upright, discharging upward, at the top of the
+    container. A relief drawn on the floor is not a layout
     preference gone wrong -- it is a sheet asserting that the protective device
     vents the liquid. The vent is on the crown for the same reason a vapour
     space is at the top, and the drain at the low point because that is what a

@@ -613,8 +613,8 @@ fs.connect(drum.drain, sump.inlet)
 ```
 
 Each is drawn where its duty puts it, not where a count would: a relief is on
-the crown because CHEE4001 p.7 puts it there ("vertically, upward, and at the
-top of the container"), and a drain at the low point because that is what a
+the crown because CHEE4001 p.7 puts it there — upright, discharging upward, at
+the top of the container — and a drain at the low point because that is what a
 drain is. Every tank and vessel variant has all five, and piping none of them
 draws the sheet you drew before — a declared nozzle is offered, and leaving one
 open is a drawing decision that nothing reports. See
@@ -1005,8 +1005,8 @@ fs.add(units.Valve("HV-301", variant="gate", normal_position="closed"))  # drain
 fs.add(units.Valve("HV-302", variant="gate"))                            # isolation
 ```
 
-The source is **PIP PIC001 clause 4.2.2.7**, *"normally closed manual valves
-shall be shown using a darkened solid symbol"*. It is **not** an ISA-5.1,
+The source is **PIP PIC001 clause 4.2.2.7**, which draws a normally closed
+manual valve with its body darkened solid. It is **not** an ISA-5.1,
 ISO 10628 or ISO 15519 convention: ISA-5.1 says nothing about valve fill and
 hands manual block valve depiction to the piping group, ISO 10628 does not have
 the symbol either, and **ISO 15519-1 §11.4.5** does rule on the question and
@@ -1023,14 +1023,14 @@ drawn.
 **An unmarked valve says nothing, and two clauses of ISO 15519-1 disagree about
 what that silence means.** §11.4.5 makes the NC/NO marking optional, which reads
 as leaving an unmarked valve unstated. §11.3.1 a), under *Symbols with movable
-parts*, says a general purpose valve "which does not indicate the operational
-state of the valve (open or closed), **shall be regarded as closed**" -- the
+parts*, has a general purpose valve that says nothing about its operational
+state **regarded as closed** — the
 inverse of the North American default that an unmarked valve is normally open.
 The standard does not reconcile them, and neither does `pandid`. Read against
 §11.3.1's other sub-clauses, a) is fixing a *reference state for drawing
 dependent symbols* rather than saying how the plant runs: §11.3.1 e) draws a
-valve's position contacts "in the position they take on when a valve according
-to a) above is in its closed position", which is what a) exists to define.
+valve's position contacts in whatever position they take when the a) valve is
+closed, which is what a) exists to define.
 §11.4.5 is the clause about telling a reader the operating state. That reading
 is offered, not asserted. Either way both clauses agree on the operative point:
 an unmarked valve is not a reliable statement of normal position, so say it. The
@@ -1056,9 +1056,9 @@ darkened gate valve wearing another name, so the abbreviation **NC** is written
 beside the valve instead.
 
 The letters follow **ISO 15519-1 §11.4.5**, which is the clause that rules on
-them: the state "may be indicated by adding the letter symbol NC *Normal closed*
-or NO *Normal open* **above the symbol and to the right**, as indicated in
-Figure 28". Figure 28 draws an unfilled bowtie with the letters starting at
+them: it allows the state to be marked with `NC` for *normal closed* or `NO` for
+*normal open*, set **above the symbol and to the right**, and illustrates that
+at Figure 28. The figure draws an unfilled bowtie with the letters starting at
 about the valve's right-hand edge, clear above the run, and that is where
 `pandid` puts them. The corner is the same whatever quarter turn the valve is
 placed at, so a reader scans a sheet for one thing; where the equipment tag
@@ -1088,15 +1088,15 @@ normally closed `ball` are the same drawing: the seat that tells them apart is
 inside the body the fill covers. That is what the convention costs, and another
 reason the sheet needs its legend entry.
 
-**Control and relief valves are refused.** Clause 4.2.2.10, *"control valves or
-relief valves shall not be shown as NC"*, is enforced rather than warned about,
+**Control and relief valves are refused.** Clause 4.2.2.10, which bars a control
+valve and a relief valve from being shown NC, is enforced rather than warned about,
 because a darkened control valve on an issued sheet reads as a block valve
 someone has closed:
 
 ```python
 units.Valve("FV-1", variant="control", normal_position="closed")
-# ValueError: FV-1: PIP PIC001 clause 4.2.2.10 says control valves and relief
-# valves shall not be shown as NC, and variant 'control' draws one. ...
+# ValueError: FV-1: PIP PIC001 clause 4.2.2.10 bars a control valve and a
+# relief valve from being shown NC, and variant 'control' draws one. ...
 ```
 
 Say where the valve fails instead ([Fail position](#fail-position)), or put the
@@ -1154,19 +1154,18 @@ one fact three ways, so a drawing cannot be silent about which it means.
 
 - **ANSI/ISA-5.1-2009 Table 5.4.4** gives two of them itself, *Method A* as
   arrows or bars on the actuator stem and *Method B* as the letters above. Its
-  note 5.3.4(1) requires the user's standard to "document which symbols have been
-  selected".
+  note 5.3.4(1) requires the user's own standard to record which of the two it
+  has picked.
 - **ISO 15519-1 §11.3.1 c)** gives the third, geometrically: symbol 654's apex
-  "shall point towards the valve symbol if the valve is closed when in the
-  at-rest position ... and from the valve symbol if the valve is open when in the
-  at-rest position". **ISO 15519-2** Annex A.3 registers the cases as `654V1A`
+  points towards the valve where the valve is closed at rest, and away from it
+  where the valve is open at rest. **ISO 15519-2** Annex A.3 registers the cases as `654V1A`
   fail close, `654V2A` quick closing, `654V3A` fail open and `659A` fail freeze,
   and draws each as a small triangle on the stem between a diaphragm dome and the
   valve body.
 - **PIP PIC001 clause 4.5.3.2** is the only source that chooses between the ISA
-  pair, and it chooses the letters: *"automated valve fail actions shall be shown
-  with text (FC/FO/FL/FI) in accordance with ISA-5.1"*, with the comment that
-  *"using stem arrows as outlined in ISA-5.1 is not recommended"*.
+  pair, and it chooses the letters: an automated valve's fail action goes in
+  text, `FC`/`FO`/`FL`/`FI` after ISA-5.1, with a comment against ISA's stem
+  arrows.
 
 `pandid` follows PIP. Two further things point the same way. The reference sheets
 this package was built against draw every control valve as a plain diaphragm dome
@@ -1180,10 +1179,10 @@ stem for a triangle to sit on. The choice is recorded in the README's
 section, alongside the balloon set, because it is the same kind of declared
 exception.
 
-**Where the letters sit.** **PIP PIC001 clause 4.2.4.6(1)**: *"Control valve
-failure action abbreviation shall be shown at 0.06 inch directly below the
-control valve in horizontal lines and 0.06 inch to the right of the control valve
-in vertical lines."* That is followed whole, so a quarter turn moves these letters
+**Where the letters sit.** **PIP PIC001 clause 4.2.4.6(1)** puts the fail-action
+abbreviation 0.06 inch directly below the control valve on a horizontal line,
+and 0.06 inch to its right on a vertical one.
+That is followed whole, so a quarter turn moves these letters
 where it does not move the `NC` abbreviation. The two are the same principle
 rather than a contradiction: `NC` sits in a *corner*, and a corner is free
 whichever way a valve is laid, which is what lets it be fixed. These sit against a
@@ -1242,16 +1241,16 @@ clause 4.2.2.10 refuses on the strength of being one, and an automated valve is
 exactly what PIP PIC001 4.5.3.2 requires a fail action on.
 
 Multi-port valves are not reachable today and must not simply be added. PIP
-PIC001 4.5.3.2(2) rules them out of `FO` and `FC`: "for multi-port automated
-valves, FL and FI shall be used where appropriate", commenting that "FO and FC
-shall not be used; instead, arrows shall be used to show fail position flow
-paths", and `pandid` draws no such arrows. `three_way` is a bare body with no
+PIC001 4.5.3.2(2) rules them out of `FO` and `FC`: an automated multi-port valve
+takes `FL` or `FI` where those fit, and the job `FO` and `FC` would do is done
+instead by arrows drawing the fail-position flow
+paths, and `pandid` draws no such arrows. `three_way` is a bare body with no
 operator, so the question does not arise.
 
 **One position, not two.** A valve can behave one way on loss of signal and
-another on loss of air, and `fail` holds a single answer. PIP PIC001 4.5.3.2(3):
-*"valves with different fail actions for loss of signal and for loss of motive
-power require an explanatory note."* Declare the motive-power position here and
+another on loss of air, and `fail` holds a single answer. PIP PIC001 4.5.3.2(3)
+wants an explanatory note on any valve that fails one way on loss of signal and
+another on loss of motive power. Declare the motive-power position here and
 add the note; nothing writes it for you.
 
 Nothing about the symbol changes, so unlike a darkened body, declaring a fail
@@ -1923,9 +1922,9 @@ horizontal run and to the left of a vertical one. A line number is a dozen
 characters wide and most runs are not, so beside is the usual answer for one.
 
 Beside is also what **ISO 15519-1 §7.2.5** asks for: a connection's reference
-designation *"should be located above the connection with horizontal connecting
-lines and to the left of vertical connecting lines"*, and *"shall be oriented
-along or adjacent to the relevant connecting lines"*. On the line is a
+designation *should* go above a horizontal connecting line and to the left of a
+vertical one, and *shall* be oriented along or beside the line it belongs to.
+On the line is a
 divergence from that preference, but §7.2.5 words it as a `should`, and it buys
 back the sheet room that a dozen-character number costs.
 
@@ -1933,15 +1932,14 @@ That clause reaches a line number only if the line number is read as the
 connection's reference designation. A `pandid` line number is a line-list
 identifier, not the IEC 81346 designation §7.2 is written around, so this is a
 reading rather than a claim of conformance. It is a sound one: §7.3.4 turns off
-the boundary-frame principle for *"diagrams where the connections (pipelines)
-have reference designations"*, which is a P&ID with line numbers on it.
+the boundary-frame principle for any diagram whose connections carry reference
+designations, which is a P&ID with line numbers on it.
 
 On a vertical run the label is turned so it reads bottom to top and never upside
-down. §5.1.5 allows exactly that: *"Text shall be oriented horizontally or
-vertically corresponding to the reading directions viewed from the bottom edge
-or viewed from the right-hand edge of the document."* Its next sentence,
-*"Reference designations shall be oriented horizontally independent of symbol
-orientation"*, does not reach a line number. It is a rule about a symbol's own
+down. §5.1.5 allows exactly that: text runs horizontally or vertically, read
+either from the bottom edge of the document or from its right-hand edge. Its
+next sentence, which keeps a reference designation horizontal whatever way its
+symbol is turned, does not reach a line number. It is a rule about a symbol's own
 designation, which is why it is qualified by symbol orientation, and a pipe run
 has none; connections are §7.2.5's subject, and that clause asks for orientation
 *along* the line. ISO 15519-1 draws it both ways in one figure: Figure 40 boxes
@@ -2033,14 +2031,14 @@ across the symbol, and its three values are that table's three rows:
 
 | `display` | drawn | Table 1 |
 |---|---|---|
-| `"field"` (default) | no bar | "Information available on field mounted instrument/display" |
-| `"central"` | one bar | "Information available in central control system" |
-| `"subsidiary"` | two bars | "Information available in subsidiary control system" |
+| `"field"` (default) | no bar | reading at a field-mounted instrument or display |
+| `"central"` | one bar | reading in the central control system |
+| `"subsidiary"` | two bars | reading in a subsidiary control system |
 
 It is a separate question from `variant`, which is what the instrument *does*.
-**§5.1.1**, same page: *"The geographical availability or origin of information
-inside or outside the PCI symbol are illustrated by means of additional graphics
-within the PCI symbol, see Table 1."*
+**§5.1.1**, same page: where the information is available, or where it comes
+from, is shown by an additional graphic inside the PCI symbol, tabulated at
+Table 1.
 
 Not every pair has a drawing registered. `variant="shared"` is the only shape
 carrying a bar today and it carries `"central"` without being asked, a shared
@@ -2152,9 +2150,9 @@ flow  = fs.add_loop("F")        # F-303
   the series' next number, not 317. Should the counter reach a number already
   typed for the same variable, `add_loop()` raises at that line and names
   `loop_number_start` as the way clear.
-- **A loop of one member is a legitimate use.** CHEE4001 p.13 assigns a number
-  to "each group of components required to perform the desired function of the
-  monitor or control scheme", and a group of one is a group — which is what the
+- **A loop of one member is a legitimate use.** CHEE4001 p.13 assigns one number
+  to the whole group of components that between them do the monitoring or
+  control a scheme is for, and a group of one is a group — which is what the
   tail of `P&ID_301` is: `FE-313`, `PI-316`, `TI-319`, `LI-322`.
 - **`to_dict()` freezes the sheet.** Every loop's number is written out as a
   literal, allocated or typed, so reading the spec back gives the numbers nailed
@@ -2341,11 +2339,10 @@ fs.add_instrument("I", 1, sensing=trip, at=0.25, offset=44, angle=-90, variant="
 
 Hanging the square on an alarm instead would draw the alarm as driving it, and an
 alarm that acts is lettered `S` or `Z` rather than `A`. **ISO 15519-2 Table 2**
-note 9: *"Shall only be used for separate alarm control functions. If control
-functions S and Z at time of action also trigger an alarm/message, then the A
-shall not be used in addition to the in front letter codes S or Z."* **§7.2.4**
-is the same rule seen from the line: *"Signal lines for different types of
-control functions should not be joined."*
+note 9 keeps `A` for an alarm function that stands on its own: where an `S` or a
+`Z` raises an alarm as it acts, the `A` is not added in front of it. **§7.2.4**
+is the same rule seen from the line: signal lines carrying different kinds of
+control function are not joined.
 
 Attached
 balloons take no part in layout ranking and are drawn over the lines, so neither
@@ -2368,9 +2365,9 @@ instrument.annotate(*, safety=(), variable=(), high=(), low=()) -> Instrument
 
 An alarm is a **function of a controller**, not a second instrument, so it is
 written beside that controller's balloon and no line is drawn to it.
-**ISO 15519-2 §5.2.5** (p. 22): *"Letter code combinations with modifiers H and
-L shall be represented outside the PCI symbol. The sequence shall be A, S, and Z
-with increasing value away from the centre line of the PCI symbol."*
+**ISO 15519-2 §5.2.5** (p. 22) puts any letter code carrying the modifiers H or
+L outside the PCI symbol, and *shall* order the codes A, then S, then Z, with
+the value each stands for rising as they go away from the symbol's centre line.
 
 ```python
 lic304.annotate(high="LAH", low="LAL")
@@ -2382,13 +2379,14 @@ The four arguments are **§5.1.3**'s four quadrants (p. 19) in its own order:
 
 | argument | quadrant | §5.1.3 |
 |---|---|---|
-| `safety` | upper left | "Reference to typical diagram, safety information, e.g. SIL or SIF identifiers" |
-| `variable` | lower left | "Specification of type of measured variable when using letter code U (multivariable), e.g. pH, µS, MJ/s" |
-| `high` | upper right | "Information of high output/input functions, e.g. alarm or switching" |
-| `low` | lower right | "Information of low output/input function, e.g. alarm or switching" |
+| `safety` | upper left | a reference to a typical diagram, or safety information such as a SIL or SIF identifier |
+| `variable` | lower left | which variable is meant where the tag uses letter code U for multivariable: pH, µS, MJ/s |
+| `high` | upper right | a high output or input function, an alarm or a switching action say |
+| `low` | lower right | the same for a low one |
 
 The quadrants are the **corners**, which is the clause's own reason for them:
-*"This allows for horizontal and vertical connections to the symbol."* So
+keeping the four faces clear is what lets the symbol be connected horizontally
+and vertically. So
 annotating a balloon spends none of its four faces, and a connection arriving on
 the centre line runs between a `high` code and the `low` one beneath it, as the
 reference sheet draws it.
@@ -2414,8 +2412,9 @@ fs.add_balloon(element, *, at=None, offset=46.0, angle=90.0, **kwargs) -> Instru
 
 A primary element is **one instrument shown as two marks**: the thing in the
 pipe, and the balloon carrying its tag. CHEE4001 p.10 is what makes it one
-instrument — *"Primary element (E): instrument that measures a process variable
-(e.g. orifice plates, thermocouples)"* — and a P&ID draws it with the fitting
+instrument — it defines the primary element, letter `E`, as the instrument that
+measures the process variable, an orifice plate or a thermocouple say — and a
+P&ID draws it with the fitting
 **unlettered** and the tag in a balloon on a short impulse line.
 
 ```python
@@ -2453,8 +2452,8 @@ line down a pipe run.
 
 **They are also drawn at half the weight of a process line**, which is the cue a
 reader separates the process from the instrumentation by before reading a single
-dash pattern. **ISO 15519-1 §6.2**: *"If two or more widths of line are used,
-the ratio between any two widths shall be at least 2:1."* Its Table 1 puts
+dash pattern. **ISO 15519-1 §6.2**: where a drawing uses two or more line
+widths, any two of them have to stand at least 2:1 apart. Its Table 1 puts
 process-industry connections at 0,2 M and symbols at 0,1 M, and with M = 2,5 mm
 (§11.1.2) that is the 0,5 / 0,25 mm pair. **ISO 15519-2 Annex A.1** spends the
 pair per line type: A.1.01 pipeline **0,50**; A.1.02 instrument connection and
@@ -2668,15 +2667,9 @@ line that misses the arrow by eye can still be reported `route-crosses-unit`.
 #### Composing a location reference
 
 **ISO 15519-1:2010 Clause 9** gives the grammar a reference to another drawing is
-spelled in. Two signs, and a fixed order:
-
-> The following signs shall be used for creating location references:
->
-> * solidus (/) for identification of a sheet;
-> * full stop (.) for identification of a column, a row or a zone in a sheet.
->
-> The location reference shall be presented in following sequence:
-> document — sheet — column, row or zone.
+spelled in. Two signs, and a fixed order: the solidus marks the sheet and the
+full stop marks the column, row or zone, and the parts are presented in one
+sequence — document, then sheet, then column, row or zone.
 
 A part left out narrows the *scope* of the reference rather than changing its
 shape, which is what the standard's Table 2 tabulates.
@@ -2704,8 +2697,8 @@ fs.add(units.Product("Azeotropic Ethanol",
                      reference=location_reference("PFD-302", "12", "B3")))
 ```
 
-`zone` is checked against §5.1.2, *"Columns are designated with numbers. Rows are
-designated with letters"*, so a zone is its row's letter then its column's number
+`zone` is checked against §5.1.2, which designates columns with numbers and rows
+with letters, so a zone is its row's letter then its column's number
 (`"B3"`), a row is the letter alone and a column the number alone. `"3B"` raises
 rather than sending a reader to the wrong place. The two reserved signs are
 refused inside any part, since one there would be read as a separator.
@@ -2713,12 +2706,12 @@ refused inside any part, since one there would be read as a separator.
 **What is not done.** Three of Clause 9's neighbours are the drawing author's,
 not the engine's, and `pandid` says so rather than guessing:
 
-- **§12.6's placement rule**, *"The connecting line references shall be placed in
-  the outer grid zone of the content area"*, is left to `pin()`. The zone grid is
+- **§12.6's placement rule**, which puts a connecting line's references in the
+  outer grid zone of the content area, is left to `pin()`. The zone grid is
   measured at render time from the frame the furniture leaves, which is after
   `validate()` has run, and the reference sheets put their flags in the outer
   columns by authoring them there.
-- **Reciprocal references** (§12.6: *"the ends shall be mutually referenced"*)
+- **Reciprocal references** (§12.6 has the two ends reference one another)
   need the peer end, which is on another sheet. A `Flowsheet` is one sheet and
   there is no document object above it, so there is nothing to check against.
 - **Filling a reference from the peer's zone** needs the same missing peer.
@@ -2926,8 +2919,8 @@ A PFD ends every process line in a filled triangle,
 square viewBox maps onto a square viewport, exactly as much *across* the run. Two
 of them side by side on one face therefore leave `pitch − 12` of paper between
 two solid shapes, and **ISO 128-20:1996 §4.4** says how thin that strip may get:
-the space between parallel lines shall be at least twice the width of the widest
-line. The sheet draws its process lines 2 units wide, so the clearance is
+two parallel lines are kept at least twice the widest of them apart, and never
+under 0,7 mm. The sheet draws its process lines 2 units wide, so the clearance is
 `MIN_HEAD_CLEARANCE` = 4 and the floor is `MIN_NOZZLE_PITCH` = 16.
 
 A port family is spread across whatever face it has, so a short box closes that
@@ -3069,12 +3062,10 @@ unit with no frame, so there is no sheet to warn about.
 ### Symbols that must not be turned
 
 **ISO 15519-1:2010 §11.4.2**, *Orientation of graphical symbols*, allows a symbol
-to be turned or mirrored *"in order to fit into the actual layout of the
-diagram"*, and then makes one exception:
-
-> Exceptions for turning are symbols representing components or devices where
-> gravity is a functionality, for example symbol 2061: Open tank or symbol
-> X 2618: Cyclone separator; see Figure 22 b). Such symbols must not be turned.
+to be turned or mirrored so that it fits the layout the diagram actually has,
+and then makes one exception: a symbol for a component or device whose function
+depends on gravity must not be turned. It names two of them, the open tank
+(2061) and the cyclone separator (X 2618), drawn at Figure 22 b).
 
 Figure 22 b) draws those two: an open-topped U, and a body whose conical apex
 points down with the vortex spiralling into it. Both do their job by gravity, and
@@ -3094,9 +3085,9 @@ fs.to_svg()
 A **warning, not an error**. The sheet still draws, every nozzle still lands on
 ink, and the only thing wrong with it is what it says about the plant, which is
 the same kind of finding as `letter-sequence`. Where the equipment really is
-installed lying down, the answer the clause itself gives is *"a new symbol should
-be created to the actual orientation"*, and two families ship one: the message
-names `variant="horizontal"` where it exists.
+installed lying down, the answer the clause itself gives is to draw a fresh
+symbol in the orientation actually wanted, and two families ship one: the
+message names `variant="horizontal"` where it exists.
 
 Mirroring is left alone. §11.4.2 excepts *turning* only, and flipping a tank left
 to right to put its nozzles on the other side is a placement the clause permits.
@@ -3801,18 +3792,18 @@ What it follows, feature by feature:
   IEC 62424 and ISA 5.1 appear in its bibliography only. `pandid` takes neither
   ISO route, because ISA-5.1 is what North American practice draws and what the
   reference sheets this package was built against use. **ISO 15519-1 §7.1
-  licenses half of that**, and only half: *"Other reference designation
-  principles may be used as long as they are agreed upon between involved
-  parties."* It sits in clause 7, *Reference designations*, and reaches the tag
+  licenses half of that**, and only half: it lets another set of reference
+  designation principles be used where the parties involved have agreed on it.
+  That sits in clause 7, *Reference designations*, and reaches the tag
   letters. It says nothing about symbols or lines, which have no such escape:
-  §11.1.1 is a `shall` that graphical symbols *"conform to ISO 14617 and
-  IEC 60617"* and §6.1 a `shall` that line types *"comply with ISO 128-20"*.
+  §11.1.1 is a `shall` that graphical symbols conform to ISO 14617 and
+  IEC 60617, and §6.1 a `shall` that line types comply with ISO 128-20.
   The balloon outlines and the signal-line styles are therefore a **declared
   deviation** rather than a permitted alternative. ISA-5.1 §2.8.1(b) asks for
   agreement from its own side, that each exception be documented in the user's
   standard and on the drawing. `legend()` is where a sheet records it.
-- **The gap to ISO 15519-2 is structural**, not a letter table. Its §5.1.1 says
-  the symbol *"consists of a circle or extended circle"*, and its Table 1 draws
+- **The gap to ISO 15519-2 is structural**, not a letter table. Its §5.1.1 builds
+  the symbol from a circle or an extended circle, and its Table 1 draws
   only circles and stadiums, so the `shared` square, the `computer` hexagon and
   the `sis` and `interlock` diamonds have no ISO counterpart at all. Table 1
   codes location in three states, field / central / subsidiary, with no dashed
@@ -3832,17 +3823,17 @@ What it follows, feature by feature:
   `FL/DC` / `FI` beside the valve, and this is a declared choice because three
   standards draw the one fact three ways. **ANSI/ISA-5.1-2009 Table 5.4.4**
   offers two of them itself, Method A as arrows or bars on the actuator stem and
-  Method B as the letters, and its note 5.3.4(1) requires the user's standard to
-  "document which symbols have been selected", which is what this bullet is.
+  Method B as the letters, and its note 5.3.4(1) requires the user's own standard
+  to record which of the two it has picked, which is what this bullet is.
   **ISO 15519-1 §11.3.1 c)** offers the third and encodes it geometrically:
-  symbol 654's apex "shall point towards the valve symbol if the valve is closed
-  when in the at-rest position ... and from the valve symbol if the valve is open
-  when in the at-rest position", registered by **ISO 15519-2** Annex A.3 as
+  symbol 654's apex points towards the valve where the valve is closed at rest
+  and away from it where the valve is open at rest, registered by
+  **ISO 15519-2** Annex A.3 as
   `654V1A` fail close, `654V3A` fail open and `659A` fail freeze. `pandid` takes
   Method B on the authority of **PIP PIC001 clause 4.5.3.2**, the only one of the
-  sources that chooses between the ISA pair: *"automated valve fail actions shall
-  be shown with text (FC/FO/FL/FI) in accordance with ISA-5.1"*, with the comment
-  that *"using stem arrows as outlined in ISA-5.1 is not recommended"*. The
+  sources that chooses between the ISA pair: it calls for an automated valve's
+  fail action in text, `FC`/`FO`/`FL`/`FI` after ISA-5.1, and comments against
+  ISA's stem arrows. The
   placement is PIP's too, **clause 4.2.4.6(1)**, below the valve on a horizontal
   run and to the right of it on a vertical one. The reference sheets this package
   was built against draw their control valves as a bare diaphragm dome with
@@ -3856,11 +3847,11 @@ What it follows, feature by feature:
   answer: letters, not fill. See
   [Normally closed valves](#normally-closed-valves).
 - **No arrowhead on a P&ID's process lines** is a declared deviation.
-  **ISO 10628-1 §4.1** is unconditional: *"Flow routes and flow directions shall
-  be indicated by lines and arrows."* Two things in the same standard pull the
+  **ISO 10628-1 §4.1** is unconditional: flow routes and flow directions are
+  shown with lines and arrows. Two things in the same standard pull the
   other way — §4.4.2 leaves route and direction out of a P&ID's *basic*
   information and §4.4.3 b) makes it additional, and §5.3.3.3 softens the rule
-  itself to *"arrows are to be incorporated in the lines"* — and the reference
+  itself to arrows being incorporated in the lines — and the reference
   P&ID this package was built against draws none. A PFD keeps its heads. See
   [Which drawing this is](#which-drawing-this-is).
 - **Sheet sizes** are the **ISO 216** A series, declared in millimetres on the
@@ -3879,8 +3870,8 @@ What it follows, feature by feature:
   which is the issuing organisation and so is the `company` cell. `client` is
   not an ISO 7200 field; it is there because issued sheets carry one. ISO 7200's
   eighth mandatory field, **document type**, has no cell yet.
-- **Relative line weights** follow **ISO 15519-1 §6.2**, *"if two or more widths
-  of line are used, the ratio between any two widths shall be at least 2:1"*,
+- **Relative line weights** follow **ISO 15519-1 §6.2**, which holds any two of
+  a drawing's line widths at least 2:1 apart,
   spent as **ISO 15519-2 Annex A.1** spends it: a pipeline (A.1.01) at twice the
   weight of an instrument connection, control connection, pilot line or signal
   line (A.1.02, A.1.03). Process piping and equipment outlines are the heavy
@@ -3888,45 +3879,45 @@ What it follows, feature by feature:
   are the fine one. On A3 at 1:1 that is 0,53 mm against 0,26 mm, which is the
   standard's 0,5 / 0,25 pair. See [Signal lines](#signal-lines).
 - **Where a label sits on a pipe** follows **ISO 15519-1 §7.2.5**, which puts a
-  connection's designation *"above the connection with horizontal connecting
-  lines and to the left of vertical connecting lines"*. That is where `pandid`
+  connection's designation above a horizontal connecting line and to the left of
+  a vertical one. That is where `pandid`
   puts a line number beside its run, turned to read bottom to top on a riser,
   which is one of the two reading directions §5.1.5 allows. §5.1.5's second
-  sentence, holding a reference designation horizontal *"independent of symbol
-  orientation"*, is a rule about a symbol's own designation and does not reach a
+  sentence, holding a reference designation horizontal whatever way its symbol
+  is turned, is a rule about a symbol's own designation and does not reach a
   connection. `pandid` also draws the number **on** the line where the run is
   long enough to carry it, which §7.2.5 words as a `should`, so that one is a
   divergence rather than a breach. See
   [Where the number sits on the line](#where-the-number-sits-on-the-line).
 - **Off-page connector text** is composed by **ISO 15519-1 §9**, which reserves a
   solidus for the sheet and a full stop for the zone and fixes the sequence the
-  three parts appear in. The clause is quoted in full under
+  three parts appear in. It is set out under
   [Composing a location reference](#composing-a-location-reference).
   `location_reference()` spells it, reproducing
   all seven rows of the standard's Table 2 (`7569/12.B3`, `/12.B3`, `/.B3`). A
   `reference` is still a plain string, because a document number on its own is
   what an issued sheet's flags actually carry: the three reference drawings this
   package was built against name `PFD-201`, `PFD-302`, `PCD-302` and `PFD-501`,
-  and not one of them names a sheet or a zone. §12.6's placement rule, that the
-  references *"shall be placed in the outer grid zone of the content area"*, is
+  and not one of them names a sheet or a zone. §12.6's placement rule, putting
+  those references in the outer grid zone of the content area, is
   left to `pin()`, so the flag goes where the author puts it. Reciprocal
   references between the two ends of an interrupted line are outside the model,
   a `Flowsheet` being one sheet with no peer end to read a zone from.
 - **Symbols where gravity is a functionality** are not turned. **ISO 15519-1
-  §11.4.2** excepts them from the general permission to turn and mirror: *"for
-  example symbol 2061: Open tank or symbol X 2618: Cyclone separator … Such
-  symbols must not be turned."* 56 registered symbols carry
+  §11.4.2** excepts them from the general permission to turn and mirror, naming
+  the open tank (2061) and the cyclone separator (X 2618) as its two examples.
+  56 registered symbols carry
   `Symbol.gravity_fixed`, and
   [Symbols that must not be turned](#symbols-that-must-not-be-turned) lists them.
 
 The largest remaining gap against ISO 10628-1 is §5.3.1 and §5.4.2, and against
-ISO 15519-1 is §6.2, whose floor is a physical one: a final diagram's lines
-*"shall be at least 0,18 mm"* on paper or equivalent media. Line widths and
+ISO 15519-1 is §6.2, whose floor is a physical one: no line of a finished
+diagram on paper or equivalent media goes under 0,18 mm. Line widths and
 character heights here are in drawing units and scale with the drawing, so the
 weights above hold their *ratio* at any sheet size and nothing checks a width in
 millimetres. (§11.1.3, the neighbouring clause, is the other rule and *is* kept:
 a symbol's stroke does not change when the symbol is resized.) §7.2.3 is
 unimplemented for a related reason — it asks that a single object's designation
-be *"offset from the symbol centre lines"*, and `_label_place` puts every label
+be set off the symbol's centre lines, and `_label_place` puts every label
 on one, the label having been placed to clear ink rather than to clear a
 centre line.

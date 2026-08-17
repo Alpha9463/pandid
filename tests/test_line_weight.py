@@ -29,9 +29,9 @@ that as an ellipse bounded by the aspect change the placement asked for -- which
 let V-604's shell walls draw 1,53 heavier than its heads inside one outline, and
 let the four vendored families whose own wrapper group is uneven draw an ellipse
 at their natural size with no placement involved at all. ISO 15519-1:2010
-§11.1.3 is a *shall* -- "When the size of a symbol is changed, the line width
-shall be unchanged" -- and §6.2's "the ratio between any two widths shall be at
-least 2:1" leaves nothing between 1:1 and 2:1 to call it instead. The renderer
+§11.1.3 is a *shall* -- resizing a symbol leaves its line width alone -- and
+§6.2, holding any two widths on a drawing at least 2:1 apart, leaves nothing
+between 1:1 and 2:1 to call it instead. The renderer
 now redraws the artwork at the placed size rather than stretching its viewport
 (``pandid.render.svg._baked``), so every stroke below is checked for being
 *round*, at the weight its definition declares, with no bound and no exception.
