@@ -26,10 +26,19 @@ def break_cycles(fs: "Flowsheet") -> None:
     if not units:
         return
 
-    # 2. Build adjacency across ALL streams (material, energy, and
-    #    signal). Any of them can form a cycle the layering DAG must be
-    #    free of, e.g. a control loop's transmitter -> controller ->
-    #    valve -> ... signal feedback.
+    # 2. Build adjacency over free_streams(), which is every stream
+    #    between two ranked units. Kind is not filtered: material,
+    #    energy and signal can each close a cycle the layering DAG must
+    #    be free of, and a ranked-to-ranked signal run is as much a back
+    #    edge as a pipe is.
+    #
+    #    What the filter does cost is the textbook example. A control
+    #    loop's transmitter -> controller -> valve feedback runs through
+    #    balloons, and every stream touching one is dropped here, so on
+    #    a sheet with the whole loop drawn this function sees none of
+    #    it. That is not a hole in the DAG -- an attached unit is placed
+    #    from its host and never carries a rank for a cycle to break --
+    #    but a reader looking for the loop will not find it below.
     adj: dict["Unit", list["Stream"]] = {u: [] for u in units}
     in_degree: dict["Unit", int] = {u: 0 for u in units}
 

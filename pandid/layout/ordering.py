@@ -148,10 +148,15 @@ def _satellites(fs: "Flowsheet") -> dict["Unit", "Stack"]:
     """The unit each vertical connection places, and what places it.
 
     One constraint per unit: a peer taken from the north by two blocks
-    at once can only sit over one of them, and the streams are visited
-    in the order the flowsheet holds them so which one does not depend
-    on the order the author connected them. A row the author pinned wins
-    outright and leaves the unit ranked normally.
+    at once can only sit over one of them, so the first vertical edge to
+    claim it wins and the others are dropped. The streams are visited in
+    the order the flowsheet holds them, which is the order the author
+    called ``connect()`` in -- so swapping two connect() calls that
+    build the identical topology moves the peer, and the units feeding
+    it with it. An intrinsic tie-break, lowest anchor row and then name,
+    is what would make this phase as order-independent as the rest of
+    layout(); it is not there yet. A row the author pinned wins outright
+    and leaves the unit ranked normally.
     """
     from pandid.layout.stacking import stacked_edges
 

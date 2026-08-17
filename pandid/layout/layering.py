@@ -42,7 +42,7 @@ def assign_layers(fs: "Flowsheet") -> None:
         adj[a].append(b)
         in_degree[b] += 1
 
-    # 3. Topological Sort + Longest Path
+    # Topological sort + longest path
     ranks = dict.fromkeys(in_degree, 0)
     pinned = set()
     for u in units:

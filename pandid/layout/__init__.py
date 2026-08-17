@@ -1,9 +1,12 @@
 """Layout Engine orchestrator.
 
 The layout engine computes geometry (each unit's Frame) from topology.
-It follows the standard Sugiyama phases: Phase 0: Cycle breaking Phase
-1: Layering (Rank Assignment) Phase 2: Ordering (Crossing Reduction)
-Phase 3/4: Coordinate Assignment
+It follows the standard Sugiyama phases:
+
+- Phase 0: Cycle breaking
+- Phase 1: Layering (rank assignment)
+- Phase 2: Ordering (crossing reduction)
+- Phase 3/4: Coordinate assignment
 
 Two phases follow, both of which need every drawn box to be final and
 neither of which may move one: port-face selection, then label
