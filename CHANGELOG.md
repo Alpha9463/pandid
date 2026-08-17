@@ -277,7 +277,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the plant is. The message names the width that goes with the height you asked
   for.
 
+- `boundary-flow-missing`: `validate()` reports a line running to or from a
+  `Feed` or a `Product` with no properties on it, on a sheet whose other
+  streams have theirs. ISO 10628-1:2014 §4.3.2 d) asks a PFD for the flow rates
+  of its ingoing and outgoing materials.
+
+- `Stream.at_boundary`, read-only: true when one end of a line is a `Feed` or a
+  `Product`.
+
 ### Changed
+
+- **The stream table draws only the columns that carry something.** A stream
+  with no properties on it loses its column, and a sheet with no properties
+  anywhere draws no table. A line to or from a `Feed` or a `Product` keeps its
+  column either way, and so does a property whose value is present and blank.
+  No shipped sheet changes.
 
 - **No example is written in a deprecated spelling any more, and one sheet
   redraws for it.** The two that were: `examples/14_tank_farm.py`'s knock-out

@@ -1271,6 +1271,33 @@ class Flowsheet:
             groups.setdefault(find(i), []).append(s)
         return list(groups.values())
 
+    def _named_runs(self) -> "dict[str, list[Stream]]":
+        """The lines that get a stream-table column, by the name on them.
+
+        One entry per name, in the order the name was first drawn, each
+        holding every segment that answers to it. Signal lines are left
+        out: a signal is not a stream of anything and has no properties
+        to tabulate.
+
+        The sibling of :meth:`_stream_groups` and not the same grouping.
+        A *group* is a run through inline devices, which is what a single
+        number is handed to; a *named run* is every segment carrying one
+        name however it got there, which is what a single column is
+        handed to. ``examples/10_ethanol_pfd.py``'s ``S-305`` is one
+        named run and four groups. Split out for the reason that one is:
+        :func:`pandid.render.furniture._table_streams` decides which runs
+        get a column and :func:`pandid.validate.model_issues` reports the
+        boundary run that is empty, and the two must not disagree about
+        what one column is.
+        """
+        from pandid.streams import SIGNAL_KINDS
+
+        runs: dict[str, list[Stream]] = {}
+        for s in self.streams:
+            if s.kind not in SIGNAL_KINDS:
+                runs.setdefault(s.name, []).append(s)
+        return runs
+
     def renumber_streams(self) -> None:
         """Assign stream numbers, carrying one through inline fittings.
 

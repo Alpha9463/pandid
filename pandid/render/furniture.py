@@ -330,46 +330,92 @@ def _stream_cell_text(s, key) -> str:
     return "-" if val in (None, "") else str(val)
 
 
-def _table_streams(fs) -> list:
-    """The streams that get a column: the unique material ones, in sheet
-    order.
+def _table_runs(fs) -> list:
+    """The runs that get a column, each as its segments, in sheet order.
 
-    A signal is not a stream of anything and has no properties to
-    tabulate, and a stream drawn in two segments is one stream and gets
-    one column.
+    One column per name -- a run drawn in two segments is one stream --
+    and never a signal, which is not a stream of anything and has no
+    properties to tabulate. What remains is the question this answers:
+    **a column has to have something in it.**
+
+    A stream that states no property at all is dropped. An empty column
+    is a heading over a rule of dashes, and there is no clause behind
+    it: ISO 10628-1:2014 4.3.3 a) puts the flows *between the process
+    steps* among the things a PFD "can also contain".
+
+    Unless it crosses the sheet edge. 4.3.2 d) makes the "denomination
+    and flow rates or quantities of ingoing and outgoing materials"
+    something the diagram **shall** contain, so a feed or a product with
+    nothing on it keeps its column -- dropping it would hide exactly
+    what the standard asks the sheet to report, and hide it precisely
+    because it is missing. The empty column is the sheet saying so, and
+    :func:`pandid.validate.model_issues` says it in words as well.
+    :attr:`pandid.streams.Stream.at_boundary` is where that line is
+    drawn.
+
+    A property *present and blank* is not nothing: ``{"H2S": ""}`` is
+    the author saying this stream has none to report, and it keeps the
+    column. Only an absent key is silence. The two draw the same dash
+    (:func:`_stream_cell_text`) and are distinct in the model, which is
+    what makes a blank the way to keep a column the drop rule would
+    otherwise take.
+
+    Both questions are asked of the **whole run** rather than of the
+    segment the column is headed from, so nothing is dropped for being
+    written down at the far end of a line: a run out to a product flag
+    reaches it on its last segment, and a run's properties are written
+    wherever the author wrote them.
     """
-    from pandid.streams import SIGNAL_KINDS
+    return [run for run in fs._named_runs().values()
+            if any(s.properties for s in run) or any(s.at_boundary for s in run)]
 
-    streams, seen = [], set()
-    for s in fs.streams:
-        if s.kind in SIGNAL_KINDS or s.name in seen:
-            continue
-        seen.add(s.name)
-        streams.append(s)
-    return streams
+
+def _table_streams(fs) -> list:
+    """The stream each column is headed from, in sheet order.
+
+    The first segment of each run in :func:`_table_runs`, which is also
+    the one the column's *values* are read off -- so an author who
+    writes a run's properties on one of its later segments alone has
+    them in the model and not in the table. Every shipped example writes
+    them on each segment of the run.
+    """
+    return [run[0] for run in _table_runs(fs)]
 
 
 def stream_table_layout(fs) -> "StreamTable | None":
     """Where every cell of the stream table goes and what is in it, or
-    ``None`` for a flowsheet with no material stream to tabulate.
+    ``None`` for a flowsheet with nothing to tabulate.
 
     The table is measured from its own contents and placed at whatever
     it comes to -- the sheet is grown around it, or a page too small for
     it is refused -- so unlike a title-block cell there is no fixed room
     here to abbreviate into. A stream table that cannot show ``0.0441
     kg/kg total`` is not a stream table.
-    """
-    streams = _table_streams(fs)
-    if not streams:
-        return None
 
-    # property rows in first-seen order (dict preserves insertion order)
+    Nothing to tabulate is answered twice, and the second is the one
+    that matters: no stream gets a column (:func:`_table_streams`), or
+    no stream states a property, which leaves the columns that did get
+    one with no row to fill. Both are a grid of headings over nothing,
+    and a heading is not a stream table either.
+    """
+    runs = _table_runs(fs)
+    if not runs:
+        return None
+    streams = [run[0] for run in runs]
+
+    # property rows in first-seen order (dict preserves insertion order),
+    # over every segment of a run for the reason its column was kept
+    # over every segment: the row belongs to the sheet, and a run that
+    # names a property anywhere has named it.
     order, seen = [], set()
-    for s in streams:
-        for k in s.properties:
-            if k not in seen:
-                seen.add(k)
-                order.append(k)
+    for run in runs:
+        for s in run:
+            for k in s.properties:
+                if k not in seen:
+                    seen.add(k)
+                    order.append(k)
+    if not order:
+        return None
     sec_before: dict[str, str] = {}
     for key, label in (getattr(fs, "stream_table_sections", []) or []):
         sec_before.setdefault(key, label)

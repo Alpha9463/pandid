@@ -222,6 +222,46 @@ class Stream:
         """
         return any((self.size, self.schedule, self.service, self.spec, self.insulation))
 
+    @property
+    def at_boundary(self) -> bool:
+        """True when this line is an ingoing or outgoing material.
+
+        One of its ends is a :class:`~pandid.units.Feed` or a
+        :class:`~pandid.units.Product`: the off-page flag pandid draws
+        where a line crosses the edge of the sheet, and the only thing
+        in the model that says *the process ends here*.
+
+        Read-only, and the place the question is answered, because ISO
+        10628-1:2014 draws its own line there and two callers have to
+        find it in the same place. 4.3.2 d) makes the "denomination and
+        flow rates or quantities of **ingoing and outgoing** materials"
+        something a PFD **shall** contain, where the flows *between* the
+        process steps are optional (4.3.3 a)). So the stream table drops
+        an internal column with nothing in it and keeps a boundary one
+        (:func:`pandid.render.furniture._table_streams`), and
+        :mod:`pandid.validate` reports the boundary column that is
+        empty.
+
+        A :class:`~pandid.units.Vent` and a :class:`~pandid.units.Funnel`
+        are boundaries of the plant too and are deliberately not
+        boundaries here: both are drawn as real piping -- a stack with a
+        weather cap, a cone open to the room -- rather than as a
+        reference to a line that continues on another drawing, and it is
+        the reference that says the material is accounted for somewhere
+        else. An author who wants a vent tabulated says so the way any
+        other stream is kept, by giving it a property; a blank one is
+        enough.
+
+        Per *segment*, not per run: a line drawn through a valve is
+        several streams sharing one name and only the segment on the
+        flag answers True. Callers that mean the run ask it of every
+        segment.
+        """
+        from pandid.units import _Boundary
+
+        return (isinstance(self.source.owner, _Boundary)
+                or isinstance(self.dest.owner, _Boundary))
+
     def line_components(self) -> dict[str, str]:
         """The line-number components as text, empty where unset.
 

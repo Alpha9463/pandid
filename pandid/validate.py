@@ -663,6 +663,61 @@ def model_issues(fs: "Flowsheet") -> list["Issue"]:
             f"the series clear of the names already in use with "
             f"Flowsheet(stream_number_start=...)"))
 
+    # --- an ingoing or outgoing material with nothing to report ---
+    # ISO 10628-1:2014 4.3.2, *Process flow diagram*:
+    #
+    #     The process flow diagram shall contain at least the
+    #     following: [...] d) denomination and flow rates or
+    #     quantities of ingoing and outgoing materials; [...]
+    #     f) characteristic operating conditions.
+    #
+    # The stream table is where a sheet answers that, and it drops a
+    # column with nothing in it -- an internal one, which 4.3.3 a)
+    # leaves optional. At the sheet edge the clause above is a *shall*,
+    # so the column is kept however empty it is
+    # (:func:`pandid.render.furniture._table_streams`): dropping it
+    # would conceal the omission rather than show it, and conceal
+    # exactly what the standard asks to be reported. This says in words
+    # what a column of dashes means, since a sheet full of them is easy
+    # to read past.
+    #
+    # **Only on a sheet that tabulates something**, and that narrowness
+    # is the check. A sheet with no properties anywhere has not left a
+    # feed out, it has not taken the practice up at all -- and pandid
+    # ships ``show_stream_table=False``, so that is the library's
+    # decision as much as the author's and wants its own answer rather
+    # than a finding per boundary line on every drawing. Fourteen of the
+    # twenty shipped examples are in that state and none of them is what
+    # this is for. A sheet that tabulates its other streams and not this
+    # one has left it out, and the author is the only one who can say
+    # what belongs in it.
+    #
+    # Soft, not hard. The sheet draws, the column is there and the line
+    # is named on it; what is missing is a number nobody but the author
+    # has.
+    runs = fs._named_runs()
+    if any(s.properties for segments in runs.values() for s in segments):
+        for name, segments in runs.items():
+            if any(s.properties for s in segments):
+                continue
+            flags = list(dict.fromkeys(
+                p.owner.name for s in segments for p in (s.source, s.dest)
+                if isinstance(p.owner, units._Boundary)))
+            if not flags:
+                continue
+            warnings.append(Issue(
+                "warning", "boundary-flow-missing",
+                f"{name} crosses the sheet edge at {_and(flags)} and states no "
+                f"property, on a sheet whose other streams state theirs. ISO "
+                f"10628-1:2014 4.3.2 d) has a process flow diagram contain the "
+                f"denomination and flow rates or quantities of ingoing and "
+                f"outgoing materials, so the stream table keeps this column "
+                f"rather than dropping it the way it drops an empty internal "
+                f"one -- and every cell in it reads '-'. Write what the line "
+                f"carries, properties={{'Flow (kg/h)': ...}} on it, or state "
+                f"that there is nothing to report with a blank value, which "
+                f"keeps the column on purpose"))
+
     return errors + warnings
 
 
