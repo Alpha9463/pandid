@@ -85,7 +85,11 @@ LABEL_POSITIONS = ("top", "bottom", "right", "left", "center")
 # A drawing unit here is a CSS pixel, 25,4/96 mm, so 2 and 1 land on
 # 0,53 mm and 0,26 mm: the standard's own pair at exactly its 2:1. They
 # are relative weights and still scale with the sheet; holding them to a
-# physical width is ISO 15519-1 §11.1.3's separate problem.
+# physical width is the *other* half of §6.2 -- "the width of lines of a
+# final diagram on paper or equivalent media shall be at least 0,18 mm"
+# -- and nothing here checks it. (Not §11.1.3, which is the unrelated
+# rule that a symbol's stroke survives the symbol being resized; see
+# :data:`_SYMBOL_STROKE`.)
 _PROCESS_STROKE = 2
 _SIGNAL_STROKE = 1
 
@@ -529,10 +533,13 @@ def _erases(box, ink, symbols=()) -> "tuple[int, int, int]":
     and is a couple of centimetres long, so a break takes more of it.
 
     A **graphical symbol** is worse than either, and is first for that
-    reason: its outline is what identifies it -- ISO 15519-2 draws an
+    reason: its outline is what identifies it -- ANSI/ISA-5.1 draws an
     instrument as a circle and a shared display as a circle in a square,
     and the difference is the outline -- so a bite out of a balloon
-    replaces one symbol with a shape that is not in the standard. On
+    replaces one symbol with a shape that is in neither standard. (The
+    square is ISA's: ISO 15519-2 §5.1.1 has a circle and an extended
+    circle and nothing else, and neither of its two encodes function.)
+    On
     ``11_ethanol_pid`` D-301's tag ate the upper-left of LT-304's
     balloon and HV-301C's the left edge of PIC-301's square, both
     because nothing here had been told a symbol was there.
@@ -1322,7 +1329,12 @@ def flanged_joint(port, want: str) -> bool:
     ISO 15519-1 §12.4 is headed *Joints* and is not about pipe joints at
     all: it governs the joining of *connecting lines* on the paper --
     "Joining shall be indicated with symbol 501: Joint of connections, a
-    dot" -- which is the T-junction dot already drawn for a tee.
+    dot" -- and its last sentence, "In T-joint the dot may be omitted",
+    is the permission this package takes. Nothing here draws a joining
+    dot: a tee is two straight strokes and no ``<circle>`` is emitted
+    anywhere (see the tee's own artwork in
+    :mod:`pandid.render.symbols`). That is conforming, but it is
+    conforming by the exemption rather than by the rule.
     ISO 15519-2 §6.3.1 hands symbols to the ISO 14617 series, where the
     flanged-connection symbol lives, but 14617 is a registry of symbols
     rather than a rule about where to put them and is not in
@@ -3389,9 +3401,12 @@ class SvgRenderer:
             others.append(tag)
         # How far along the face the letters may go: until the near edge
         # of their plate reaches the far end of the face, which is where
-        # the mark stops lying against the body at all -- the same
-        # reading ISO 15519-1 §7.2.5 asks of a line number, which
-        # :func:`_along` measures. The search takes the *smallest*
+        # the mark stops lying against the body at all. ISO 15519-1
+        # §7.2.3 is the clause for lettering beside a *symbol*, and asks
+        # for it "adjacent to the symbol"; this bound is what adjacent
+        # comes to here. Not §7.2.5, cited elsewhere in this file: that
+        # one is a *connection's* designation and governs a line number.
+        # The search takes the *smallest*
         # clearing step, so the bound is only ever reached by a mark
         # with nowhere to go, and there the placement is one to make by
         # hand.

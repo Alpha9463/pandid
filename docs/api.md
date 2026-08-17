@@ -3778,7 +3778,16 @@ hand-registered (see `CONTRIBUTING.md`).
 
 `pandid` draws in the idiom of the process-industry drawing standards. It does
 not claim conformance to any of them, and nothing it produces has been certified
-against one. What it follows, feature by feature:
+against one.
+
+The set it works to is **ISO 10628-1** for the drawing rules, **ISO 15519-1** and
+**-2** for what 10628-1 leaves to them, and **ANSI/ISA-5.1** for instrumentation.
+No clause obliges a drawing to say which set it follows: ISO 14617-1:2025
+Annex C is informative, and its *shall* asks only that the parties **agree** a
+letter-code set. It is stated because the third choice is not an ISO one, and a
+reader should not have to work that out from the drawing.
+
+What it follows, feature by feature:
 
 - **Equipment symbols** follow the conventions of **ISO 10628-2**. They are
   derived from the draw.io / diagrams.net P&ID stencil set, which makes no
@@ -3791,12 +3800,17 @@ against one. What it follows, feature by feature:
   year later, and it sends symbols to ISO 14617 and identification to IEC 81346;
   IEC 62424 and ISA 5.1 appear in its bibliography only. `pandid` takes neither
   ISO route, because ISA-5.1 is what North American practice draws and what the
-  reference sheets this package was built against use. ISO 15519-1 §7.1 is the
-  permission it stands on: *"Other reference designation principles may be used
-  as long as they are agreed upon between involved parties."* ISA-5.1 §2.8.1(b)
-  asks for the same agreement from its own side, that each exception be
-  documented in the user's standard and on the drawing. `legend()` is where a
-  sheet records it.
+  reference sheets this package was built against use. **ISO 15519-1 §7.1
+  licenses half of that**, and only half: *"Other reference designation
+  principles may be used as long as they are agreed upon between involved
+  parties."* It sits in clause 7, *Reference designations*, and reaches the tag
+  letters. It says nothing about symbols or lines, which have no such escape:
+  §11.1.1 is a `shall` that graphical symbols *"conform to ISO 14617 and
+  IEC 60617"* and §6.1 a `shall` that line types *"comply with ISO 128-20"*.
+  The balloon outlines and the signal-line styles are therefore a **declared
+  deviation** rather than a permitted alternative. ISA-5.1 §2.8.1(b) asks for
+  agreement from its own side, that each exception be documented in the user's
+  standard and on the drawing. `legend()` is where a sheet records it.
 - **The gap to ISO 15519-2 is structural**, not a letter table. Its §5.1.1 says
   the symbol *"consists of a circle or extended circle"*, and its Table 1 draws
   only circles and stadiums, so the `shared` square, the `computer` hexagon and
@@ -3841,6 +3855,14 @@ against one. What it follows, feature by feature:
   ISO 15519 convention, and **ISO 15519-1 §11.4.5** prescribes a different
   answer: letters, not fill. See
   [Normally closed valves](#normally-closed-valves).
+- **No arrowhead on a P&ID's process lines** is a declared deviation.
+  **ISO 10628-1 §4.1** is unconditional: *"Flow routes and flow directions shall
+  be indicated by lines and arrows."* Two things in the same standard pull the
+  other way — §4.4.2 leaves route and direction out of a P&ID's *basic*
+  information and §4.4.3 b) makes it additional, and §5.3.3.3 softens the rule
+  itself to *"arrows are to be incorporated in the lines"* — and the reference
+  P&ID this package was built against draws none. A PFD keeps its heads. See
+  [Which drawing this is](#which-drawing-this-is).
 - **Sheet sizes** are the **ISO 216** A series, declared in millimetres on the
   SVG root so a sheet prints at its physical size.
 - **The zone grid** runs **ISO 5457 §4.4**'s way: letters A.. top down, numerals
@@ -3898,7 +3920,13 @@ against one. What it follows, feature by feature:
   [Symbols that must not be turned](#symbols-that-must-not-be-turned) lists them.
 
 The largest remaining gap against ISO 10628-1 is §5.3.1 and §5.4.2, and against
-ISO 15519-1 is §11.1.3 (*"when the size of a symbol is changed, the line width
-shall be unchanged"*): line widths and character heights are in drawing units
-and are scaled with the drawing, so the weights above hold their *ratio* at any
-sheet size but no physical width or height in millimetres is controlled.
+ISO 15519-1 is §6.2, whose floor is a physical one: a final diagram's lines
+*"shall be at least 0,18 mm"* on paper or equivalent media. Line widths and
+character heights here are in drawing units and scale with the drawing, so the
+weights above hold their *ratio* at any sheet size and nothing checks a width in
+millimetres. (§11.1.3, the neighbouring clause, is the other rule and *is* kept:
+a symbol's stroke does not change when the symbol is resized.) §7.2.3 is
+unimplemented for a related reason — it asks that a single object's designation
+be *"offset from the symbol centre lines"*, and `_label_place` puts every label
+on one, the label having been placed to clear ink rather than to clear a
+centre line.

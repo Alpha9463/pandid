@@ -683,9 +683,11 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
     at, which is what the scale cell reports for a sheet that does not
     state a scale of its own.
 
-    The strip is fixed geometry (an ISO 7200 block is a known rectangle
-    in a known corner), so a value too long for its cell cannot be given
-    more room and is abbreviated instead. ``report`` is how each such
+    The strip is fixed geometry -- ISO 15519-1 §5.2.2 splits the title
+    block in two and fixes both halves, the *position* to ISO 5457 and
+    the *dimension and information contained within it* to ISO 7200 --
+    so a value too long for its cell cannot be given more room and is
+    abbreviated instead. ``report`` is how each such
     cell says which field it abbreviated and what it was given; see
     :data:`Reporter`. The clipping happens **here** and not in either
     stroker, so the two backends abbreviate the same field to the same

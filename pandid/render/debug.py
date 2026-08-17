@@ -388,10 +388,14 @@ def _tether(lab: "_Label", box: "tuple[float, float, float, float]") -> "str | N
     the sheet to say so -- and this feature exists because a wrong
     coordinate typed into ``pin()`` is believed.
 
-    ISO 15519-1 §6.4 governs the sheet's own leaders and none of it
-    applies to scaffolding: it dresses the leader of a *connection's*
-    reference designation, oblique and arrowheaded at half the weight of
-    a process line. So this is the plainest thing that does the job -- a
+    ISO 15519-1 §6.4 dresses the sheet's own leaders -- oblique, and
+    terminated by dot, arrowhead or oblique stroke by what they land on
+    -- and its scope is wide: leader and reference lines "indicating
+    where notes or references apply", any note, not a connection's
+    designation alone. What puts this mark outside the clause is not
+    that scope but its own: the overlay is scaffolding for whoever is
+    writing the script, and is not part of an issued drawing. So this
+    is the plainest thing that does the job -- a
     straight hairline in the label's own colour, from the marker to the
     nearest corner of the words, under all the ink like everything else
     here.

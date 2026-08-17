@@ -1557,7 +1557,7 @@ GRAVITY_FIXED = {
     # already uses: the two are one stencil family in two attitudes and the
     # fact that fixes them is the same fact.
     ("separator", "default"):       "vapour disengages off the top, liquid draws off the bottom",
-    ("separator", "cyclone"):       "ISO 15519-1 symbol X 2618; apex points down",
+    ("separator", "cyclone"):       "ISO 14617 symbol X 2618; apex points down",
     ("separator", "horizontal"):    "vapour disengages off the top, liquid draws off the bottom",
     ("separator", "knockout"):      "demister on top, vapour up and liquid down",
     ("separator", "scrubber"):      "hopper bottom under a wash-liquid header",

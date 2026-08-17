@@ -603,6 +603,15 @@ and `_LINE_H`. No sheet moves.
   top. The sides that place are `top`, `bottom`, `left`, `right` and
   `center`; anything else is a `label-pos-unknown` error.
 
+- **The standards `pandid` works to are stated**, in `README.md` and in
+  `docs/api.md`: ISO 10628-1 for the drawing rules, ISO 15519-1 and -2 for what
+  it leaves to them, and ANSI/ISA-5.1 for instrumentation.
+
+- ISO 15519-1 §7.1 is no longer cited as licence for the ISA balloon outlines
+  and signal-line styles. It covers reference designations, so it reaches the
+  tag letters and no further, and the outlines are now recorded as a declared
+  deviation. Nine clause citations in the comments are corrected to match.
+
 - Corpus counts in `docs/api.md` and `pandid/validate.py` are gone; the
   prose states the rule and the tests measure the corpus.
 
