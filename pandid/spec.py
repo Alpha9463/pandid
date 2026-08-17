@@ -745,7 +745,12 @@ def _read_pin(unit: Unit, entry: Any, where: str) -> None:
     if "mirrored" in data:
         kwargs["mirrored"] = data["mirrored"]
     try:
-        unit.pin(**kwargs)
+        # ``port=None`` because a written pin is a resolved
+        # :class:`~pandid.geometry.Pin`, and a Pin stores a corner --
+        # including a flag's, which :meth:`~pandid.units.Unit.pin` would
+        # otherwise read back as its nozzle and move it by the offset
+        # the write took out.
+        unit.pin(port=None, **kwargs)
     except ValueError as e:
         raise _fail_from(e, where) from None
 

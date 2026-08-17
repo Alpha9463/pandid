@@ -49,9 +49,9 @@ def test_mirror_consistent_and_rendered():
     from pandid.portgeom import port_point, port_anchor
 
     fs = Flowsheet("mirror")
-    feed = fs.add(U.Feed("F")).pin(x=0, y=0)
+    feed = fs.add(U.Feed("F")).pin(x=50, y=25)
     valve = fs.add(U.Valve("V")).pin(x=200, y=0, mirrored=True)
-    prod = fs.add(U.Product("P")).pin(x=400, y=0)
+    prod = fs.add(U.Product("P")).pin(x=400, y=25)
     fs.connect(feed.outlet, valve.inlet)
     s2 = fs.connect(valve.outlet, prod.inlet)
     fs.layout()

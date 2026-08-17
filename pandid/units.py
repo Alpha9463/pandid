@@ -55,6 +55,14 @@ _FACE_OF_SIDE = {"top": "N", "bottom": "S", "left": "W", "right": "E"}
 # request: ``orientation=0`` and ``mirrored=False`` mean "put it back".
 _UNCHANGED: Any = object()
 
+#: Not stated is not the same as stated empty. A ``Reactor`` left alone
+#: is a stirred tank and gets its agitator; one told ``agitator=None`` is
+#: a bare shell somebody asked for on purpose. Every composition keyword
+#: with a non-empty default tells the two apart this way, and so does
+#: :meth:`Unit.pin`'s ``port``, where a flag names its own nozzle when
+#: the caller says nothing and ``None`` asks for the corner regardless.
+_UNSTATED: Any = object()
+
 # What the chainable placement methods hand back: the class they were
 # called on, so a plain ``-> Unit`` does not throw the subclass away
 # mid-chain in ``fs.add(units.HeatExchanger("E-1")).pin(x=210)``.
@@ -405,7 +413,7 @@ class Unit:
         y: float | None = None,
         orientation: float = _UNCHANGED,
         mirrored: bool | str = _UNCHANGED,
-        port: str | None = None,
+        port: str | None = _UNSTATED,
     ) -> _UnitT:
         """Pin the unit to a grid cell or an exact pixel coordinate.
 
@@ -426,7 +434,19 @@ class Unit:
         names are read that way, so
         ``pin(x=..., port="inlet", y=run_y)`` steps along a row by the
         corner and still lands the nozzle on the line. A grid cell has
-        no nozzle in it, so ``port`` refuses ``col``/ ``row``.
+        no nozzle in it, so a ``port`` you *name* refuses ``col``/
+        ``row``.
+
+        **On a** :class:`Feed` **or a** :class:`Product` **the nozzle is
+        the default**, so ``x``/``y`` place the tip of the flag and
+        ``pin(port=...)`` is only ever a way of writing that down. This
+        is the one place in the library where ``pin`` means two things:
+        every other unit is a box whose corner is somewhere on it, while
+        a flag's corner is a coordinate with nothing drawn at it that
+        moves as its label grows (see
+        :func:`pandid.portgeom.unit_box`). Pass ``port=None`` to place
+        that corner anyway -- which is what a placement read back off a
+        resolved :class:`~pandid.geometry.Pin` wants.
 
         Every argument is optional and an omitted one leaves that part
         of the placement as it stands, so a second ``pin(y=...)`` keeps
@@ -445,13 +465,23 @@ class Unit:
             candidate.orientation = normalize_orientation(orientation)
         if mirrored is not _UNCHANGED:
             candidate.mirrored, candidate.mirror_y = normalize_mirror(mirrored)
+        if port is _UNSTATED:
+            # A flag stands for the line, not for a piece of plant, and
+            # it has exactly one nozzle -- so the point worth naming is
+            # where the line leaves, and naming it costs a caller the
+            # ceremony of spelling out the only port there is. Nothing
+            # else defaults: a box's corner is on the box.
+            port = next(iter(self.ports)) if isinstance(self, _Boundary) else None
+        elif port is not None and (col is not None or row is not None):
+            # Only for a port this call *named*: the default above must
+            # leave a flag pinned to a grid cell alone rather than
+            # refusing a placement the caller wrote nothing wrong in.
+            raise ValueError(
+                f"{self.name}: pin(port=...) reads x/y as the position of a "
+                f"nozzle, and col/row name a grid cell, which has no nozzle in "
+                f"it. Give x/y, or drop port="
+            )
         if port is not None:
-            if col is not None or row is not None:
-                raise ValueError(
-                    f"{self.name}: pin(port=...) reads x/y as the position of a "
-                    f"nozzle, and col/row name a grid cell, which has no nozzle in "
-                    f"it. Give x/y, or drop port="
-                )
             # After the transform, never before: a mirror moves the
             # nozzle within the box, so an offset taken from the
             # placement this call replaces puts the device half a body
@@ -636,6 +666,10 @@ class _Boundary(Unit):
     Not a piece of plant. The flag stands for a line crossing the sheet
     edge, and its label identifies the service to the reader.
     ``reference`` is the drawing the line continues onto.
+
+    Being a line and not a box, it is placed by the line: ``pin(x=...,
+    y=...)`` puts the flag's *nozzle* there, where the same call puts
+    every other unit's top-left corner. See :meth:`Unit.pin`.
 
     ``header`` says the flag stands for a *utility header* rather than
     for one line: cooling water supply, steam, flare, plant air. A
@@ -2747,13 +2781,6 @@ def _feed_names(n_feeds: int, owner: str) -> list[str]:
     return ["feed"] if n_feeds == 1 else [f"feed_{i}" for i in range(1, n_feeds + 1)]
 
 
-#: Not stated is not the same as stated empty. A ``Reactor`` left alone
-#: is a stirred tank and gets its agitator; one told ``agitator=None`` is
-#: a bare shell somebody asked for on purpose. Every composition keyword
-#: with a non-empty default tells the two apart this way.
-_UNSTATED: Any = object()
-
-
 #: ``plain`` draws a bed ISO does not draw. Its band is filled with
 #: **one-way 45-degree hatching** between two solid rules; ISO 10628-2
 #: item 27.8 X8141 -- the only packed bed in group 27, and group 27 has
@@ -3684,7 +3711,7 @@ class Block(Unit):
         y: float | None = None,
         orientation: float = _UNCHANGED,
         mirrored: bool | str = _UNCHANGED,
-        port: str | None = None,
+        port: str | None = _UNSTATED,
     ) -> "Block":
         """Place the block, re-checking the placement can draw it.
 

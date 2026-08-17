@@ -50,8 +50,8 @@ def _station(variant="concentric"):
         w, h = resolve_size(unit)
         unit.pin(x=x, y=RUN_Y - h / 2)
         x += w + 14.0
-    feed.pin(x=40.0, y=RUN_Y - 25.0)
-    prod.pin(x=x + 40.0, y=RUN_Y - 25.0)
+    feed.pin(x=90.0, y=RUN_Y)
+    prod.pin(x=x + 40.0, y=RUN_Y)
     fs.connect(feed.outlet, rd.inlet)
     fs.connect(rd.outlet, cv.inlet)
     fs.connect(cv.outlet, ex.inlet)
@@ -173,10 +173,10 @@ def test_an_eccentric_reducer_is_drawn_flat_on_top():
 def _placed_eccentric(mirrored):
     """One eccentric reducer in a run, at the given flip, laid out."""
     fs = Flowsheet(f"eccentric, mirrored={mirrored!r}")
-    feed = fs.add(units.Feed("IN")).pin(x=40, y=RUN_Y - 25)
+    feed = fs.add(units.Feed("IN")).pin(x=90, y=RUN_Y)
     rd = fs.add(units.Reducer("RD-1", variant="eccentric"))
     rd.pin(x=200, y=RUN_Y - resolve_size(rd)[1] / 2, mirrored=mirrored)
-    prod = fs.add(units.Product("OUT")).pin(x=340, y=RUN_Y - 25)
+    prod = fs.add(units.Product("OUT")).pin(x=340, y=RUN_Y)
     fs.connect(feed.outlet, rd.inlet)
     fs.connect(rd.outlet, prod.inlet)
     fs.layout()

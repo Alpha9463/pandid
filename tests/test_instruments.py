@@ -20,10 +20,10 @@ def _line(**kw):
     actuator, so its nozzles are below the middle of the box, not on it.
     """
     fs = Flowsheet("tap")
-    feed = fs.add(U.Feed("Feed")).pin(x=60, y=170)
+    feed = fs.add(U.Feed("Feed")).pin(x=110, y=195)
     fv = fs.add(U.Valve("FV-101", variant="control"))
-    fv.pin(x=300, port="inlet", y=195)  # feed's outlet is at y=195
-    prod = fs.add(U.Product("Product")).pin(x=520, y=170)
+    fv.pin(x=300, port="inlet", y=195)  # the run is at y=195
+    prod = fs.add(U.Product("Product")).pin(x=520, y=195)
     s = fs.connect(feed.outlet, fv.inlet)
     fs.connect(fv.outlet, prod.inlet)
     inst = fs.add_instrument("FT", 101, sensing=s, **kw)
@@ -406,7 +406,7 @@ def test_relief_valve_is_tagged_as_plain_text_beside_the_symbol():
     fs = Flowsheet("psv")
     drum = fs.add(U.Vessel("V-101")).pin(x=200, y=100)
     psv = fs.add(U.Valve("PSV-308", variant="relief")).pin(x=221, y=20)
-    flare = fs.add(U.Product("Flare")).pin(x=400, y=0)
+    flare = fs.add(U.Product("Flare")).pin(x=400, y=25)
     fs.connect(drum.vent, psv.inlet)
     fs.connect(psv.outlet, flare.inlet)
     svg = fs.to_svg()

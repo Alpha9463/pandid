@@ -73,8 +73,16 @@ def test_every_example_round_trips(name):
 def test_round_trip_keeps_whole_number_coordinates_whole():
     """pin(x=60) must not come back as 60.0 -- it changes every path string."""
     fs = Flowsheet("T")
-    fs.add(units.Feed("F")).pin(x=60, y=105)
+    fs.add(units.Pump("P-1")).pin(x=60, y=105)
     assert fs.to_dict()["units"][0]["pin"] == {"x": 60, "y": 105}
+
+
+def test_a_flag_comes_back_where_it_was_pinned():
+    """A written pin is a corner, including a flag's, so reading it back must not
+    take it for the nozzle ``pin(x=...)`` places there and shift it again."""
+    fs = Flowsheet("T")
+    fs.add(units.Feed("F")).pin(x=60, y=105)
+    assert Flowsheet.from_dict(fs.to_dict()).units[0].pin_ == fs.units[0].pin_
 
 
 # --- equipment ----------------------------------------------------------------

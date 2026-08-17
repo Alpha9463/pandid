@@ -61,9 +61,9 @@ def _overlaps(box, run):
 
 def test_render_svg_with_manual_placements(tmp_path):
     fs = Flowsheet("Render Test")
-    feed = fs.add(U.Feed("F")).pin(x=10, y=10)
+    feed = fs.add(U.Feed("F")).pin(x=60, y=35)
     hx = fs.add(U.HeatExchanger("E-1")).pin(x=100, y=10)
-    prod = fs.add(U.Product("P")).pin(x=200, y=10)
+    prod = fs.add(U.Product("P")).pin(x=200, y=35)
 
     fs.connect(feed.outlet, hx.tube_in)
     fs.connect(hx.tube_out, prod.inlet).via([(150, 20), (150, 150)])
@@ -93,7 +93,7 @@ def test_render_svg_with_manual_placements(tmp_path):
 
 def test_render_svg_escapes_xml(tmp_path):
     fs = Flowsheet("Render Test")
-    fs.add(U.Feed("<Malicious>&")).pin(x=10, y=10)
+    fs.add(U.Feed("<Malicious>&")).pin(x=60, y=35)
 
     out_path = tmp_path / "test_escape.svg"
     fs.render(str(out_path))

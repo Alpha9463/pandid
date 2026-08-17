@@ -53,12 +53,12 @@ def main():
     # --- Where the sheet ends -----------------------------------------
     # The two above the row feed the reformer's north wall. The purge
     # flag hangs under the loop, clear of the recycle's channel.
-    natural_gas = fs.add(Feed("Natural Gas")).pin(x=60, y=355)
-    air = fs.add(Feed("Air")).pin(x=180, y=180)
-    steam = fs.add(Feed("Steam")).pin(x=330, y=180)
-    co2 = fs.add(Product("CO2 to Urea")).pin(x=560, y=170)
-    ammonia = fs.add(Product("Liquid NH3")).pin(x=1300, y=355)
-    purge = fs.add(Product("Purge Gas")).pin(x=975, y=490)
+    natural_gas = fs.add(Feed("Natural Gas")).pin(x=110, y=380)
+    air = fs.add(Feed("Air")).pin(x=230, y=205)
+    steam = fs.add(Feed("Steam")).pin(x=380, y=205)
+    co2 = fs.add(Product("CO2 to Urea")).pin(x=560, y=195)
+    ammonia = fs.add(Product("Liquid NH3")).pin(x=1300, y=380)
+    purge = fs.add(Product("Purge Gas")).pin(x=975, y=515)
 
     # --- The streams --------------------------------------------------
     fs.connect(natural_gas.outlet, reforming.in_1)
