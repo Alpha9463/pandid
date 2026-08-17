@@ -406,10 +406,10 @@ def model_issues(fs: "Flowsheet") -> list["Issue"]:
     # ``in_4``.
     #
     # **The narrowness is the measurement.** Across the twenty shipped
-    # examples 433 ports carry no stream and every one is legitimate --
+    # examples 431 ports carry no stream and every one is legitimate --
     # 302 signal connections, 31 dry exchanger sides, 24 duties, 18
     # reliefs, 18 drains, 14 vents, 8 station drain legs that end off the
-    # sheet, and 18 more single nozzles a class offers and a service did
+    # sheet, and 16 more single nozzles a class offers and a service did
     # not need. A nozzle a class *declares* is
     # offered whether the sheet uses it or not, and leaving one open is a
     # drawing decision. A **numbered** nozzle is not offered, it is asked

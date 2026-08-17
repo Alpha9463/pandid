@@ -546,6 +546,10 @@ reader would otherwise take them for working code.
 
 ### Fixed
 
+- `examples/10_ethanol_pfd.py` and `examples/13_mineral_dewatering.py` now take
+  the cake off the filter's own `cake` nozzle instead of teeing it off the
+  filtrate downstream. Both sheets lose a tee.
+
 - **Six things the render dropped without saying so.** A draw.io stand-in that
   does not draw all of a symbol now reports what it lost
   (`drawio-approximated`); a title-block cell the `.drawio` export had to
