@@ -1606,8 +1606,9 @@ corner** in SVG coordinates, not its centre and not a nozzle.
 
 A port sits at a fixed *fraction* of its symbol's box, so lining two items up
 means matching those fractions, not their corners. `Feed` is the one exception
-to "origin = top-left": its width is sized to its label text and the flag is
-drawn extending **left** from `x + 50`, which is where its outlet nozzle sits.
+to "origin = top-left": its width is sized to its label text and, unmirrored,
+the flag is drawn extending **left** from `x + 50`, which is where its outlet
+nozzle sits.
 
 ```python
 hx = fs.add(units.HeatExchanger("E-1")).pin(x=100, y=50)
@@ -2659,6 +2660,10 @@ fs.add(units.Feed("Fermentation Broth", reference="PFD-201"))
 
 The flag is the only thing with a second line to draw it on, so `reference=` on
 a pump or a column raises `ValueError` naming the boundary to put it on.
+
+A flag is drawn wide enough for its label and its `reference`, and that drawn
+box is the obstacle the router keeps clear: a long name makes a wide one, so a
+line that misses the arrow by eye can still be reported `route-crosses-unit`.
 
 #### Composing a location reference
 
