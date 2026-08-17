@@ -2745,6 +2745,7 @@ making, so the warnings left on `fs.warnings` are about the sheet that came out.
 | `deprecated` | warning | the sheet was built with a spelling that is being retired. The message names the replacement and the release the old one stops working in; see [Deprecated API](#deprecated-api) |
 | `symbol-kind-unknown` | warning | a unit whose `kind` no symbol is registered for. It is drawn as a blank 60×60 box with no ports, which is what a `Unit` subclass from outside the package legitimately gets — and also what a misspelt `kind` gets. One finding per kind, with the nearest registered name |
 | `label-overruns-symbol` | warning | a `Block` given a `width` of its own too narrow for the name it letters inside the box, so the name is drawn out through both sides. A block left to size itself always fits |
+| `symbol-out-of-aspect` | warning | a `width`/`height` of a different shape from the symbol's own box, on a drawing that carries a **round** mark — today that is ISO item 20.6's drive motor, on a stirred vessel. The composition works the motor's size out from the body's box, so at any other shape it is drawn as an oval. A shell with no round mark on it may be any shape you like; see [Sizing a stirred vessel](#sizing-a-stirred-vessel) |
 | `drawio-approximated` | warning | `to_drawio()` only: a symbol draw.io has no stencil for, exported as a built-in stand-in that does not draw all of it. The message names the unit and what the stand-in loses; see [Editing the sheet by hand](#editing-the-sheet-by-hand) |
 
 Errors raise from `to_svg()`/`render()` unless you pass `check=False`. Warnings
@@ -2762,9 +2763,9 @@ The findings split in two, and a render makes them at two different moments:
 
 1. **Model checks**, before anything is laid out or routed:
    `pin-not-finite`, `pin-out-of-bounds`, `symbol-kind-unknown`,
-   `gravity-turned`, `letter-sequence`, `nozzle-unconnected`,
-   `stream-name-reused` and `deprecated`. Every one of these is a property of
-   what you wrote down.
+   `gravity-turned`, `symbol-out-of-aspect`, `letter-sequence`,
+   `nozzle-unconnected`, `stream-name-reused` and `deprecated`. Every one of
+   these is a property of what you wrote down.
 2. `layout()` and `route()`.
 3. **Geometric checks**, over the frames and routes those produced:
    `unit-overlap`, `coincident-ports`, `nozzles-crowded`,
@@ -3091,6 +3092,31 @@ rests on its support the way every piece of plant rests on the ground, and that
 is not the test. The reasons are recorded beside `GRAVITY_FIXED` in
 `scripts/vendor_symbols.py`, which is where the flag is set for the vendored
 symbols.
+
+### Sizing a stirred vessel
+
+`width=`/`height=` is taken as the final box, so a box of a different shape from
+the symbol's own scales the artwork unevenly. For a shell that is the point — a
+vessel is drawn at the proportions the plant has, and a tray deck or a packed bed
+is a line that may be any length.
+
+One mark is not a line. A stirred vessel carries ISO item 20.6's drive motor
+above its crown, and the motor is a **circle**; the composition works its size
+out from the shell's own box, so at a box of another shape it is drawn as an
+oval. Sizing one out of shape earns `symbol-out-of-aspect`:
+
+```python
+rx = fs.add(units.Reactor("M-301", n_feeds=2, width=80, height=100))
+[w.message for w in fs.validate()]
+# ["M-301 is drawn 80x100 on a reactor/default whose own box is 62x131.778, ...
+#   70% out of shape. ... Give M-301 a box of the same shape,
+#   M-301.width = 47.05 for the height it has, ..."]
+```
+
+Two ways out, and the message names both: leave `width=` and `height=` unset and
+let the symbol size itself, or keep the height you want and take the width that
+goes with it. Nothing else is affected — the finding is only made for a drawing
+that carries a round mark.
 
 ### Symbols whose artwork points somewhere
 

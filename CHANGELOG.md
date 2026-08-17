@@ -269,6 +269,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   optional `iso_reg` for the same traceability, left empty everywhere until
   each drawing has been checked against the standard one at a time.
 
+- **`symbol-out-of-aspect`**, a `validate()` warning for a `width`/`height` of a
+  different shape from the symbol's own box, on a drawing that carries a round
+  mark. Today that is ISO item 20.6's drive motor on a stirred vessel: the
+  composition works its size out from the shell's box, so at any other shape it
+  is drawn as an oval. A shell with no round mark on it may still be any shape
+  the plant is. The message names the width that goes with the height you asked
+  for.
+
 ### Changed
 
 - **No example is written in a deprecated spelling any more, and one sheet
@@ -549,6 +557,15 @@ reader would otherwise take them for working code.
 - `examples/10_ethanol_pfd.py` and `examples/13_mineral_dewatering.py` now take
   the cake off the filter's own `cake` nozzle instead of teeing it off the
   filtrate downstream. Both sheets lose a tee.
+
+- **Three stirred vessels sized to the wrong shape.** `M-301` on
+  `examples/10_ethanol_pfd.py` was drawn 80×100 on a symbol whose box is
+  62×131.8, which stretched its drive motor into a flat oval; `R-101` on
+  `examples/17_stirred_reactor_train.py` and `R-301` on
+  `examples/18_fixed_bed_recycle.py` were out of shape the same way. All three
+  now carry a box of the artwork's own proportions. `M-301`'s two make-up flags
+  also take their elevations from the nozzles they feed rather than from a
+  fraction of the box.
 
 - **Six things the render dropped without saying so.** A draw.io stand-in that
   does not draw all of a symbol now reports what it lost

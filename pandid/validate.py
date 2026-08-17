@@ -71,6 +71,53 @@ OFFSET_BY_DESIGN = frozenset({
     ("reducer", "eccentric"),
 })
 
+#: ``(group, name)`` of every supplementary part whose *shape* is worked
+#: out from the body's own box, so that a body drawn in a box of another
+#: shape draws the part in the wrong one.
+#:
+#: One entry. :func:`pandid.render.iso_parts.agitator_overlays` places
+#: item 20.6's drive motor as ``a third of the shell's width`` by
+#: ``whatever fraction of this body's height that is`` -- which is the
+#: only way to say "round" in a coordinate system with no units, and is
+#: written down as such in that function. The rectangle it lands on is a
+#: square at the body's natural box and a rectangle at any other, and
+#: what is drawn inside it is a circle.
+#:
+#: **The narrowness is the measurement.** The other thirty-six
+#: registered parts are lines, bars and decks -- a tray deck is 100 x 20
+#: and is drawn 100 x 20 on any shell, a leg is a channel section, a
+#: settling arrow is a stroke -- and the whole point of stretching a
+#: shell is that a vessel is drawn at the proportions the plant has. A
+#: rule phrased as "the box is not the symbol's shape" reports
+#: ``19_absorber_stripper``'s amine contactor, drawn 110 x 340 on a
+#: 100 x 200 symbol because twenty trays need the room, and its cure
+#: would be a 170 x 340 column no draughtsman would draw.
+#:
+#: Membership is a rule with no geometry behind it, so
+#: ``tests/test_validate.py`` measures the circle rather than taking it
+#: on faith: round on the natural box, oval off it.
+ROUND_PARTS = frozenset({
+    (20, "motor"),
+})
+
+#: How far out of shape a symbol carrying a :data:`ROUND_PARTS` mark may
+#: be drawn before ``symbol-out-of-aspect`` says so, as a fraction.
+#:
+#: Two per cent, and both bounds are measured.
+#:
+#: *Below*, because an author works in whole drawing units and cannot
+#: write 62 : 131,7778 down exactly. Over every whole height from 100 to
+#: 400 units, the best whole width for the two stirred bodies the library
+#: draws lands within 1,02 % of their aspect -- and where the author
+#: picks both numbers it is far closer, 72 x 153 being 0,02 % out. A
+#: threshold under that would report arithmetic rather than a drawing.
+#:
+#: *Above*, because ``agitator_overlays`` names 7 % oval on the plain
+#: stirred tank and 22 % on the jacketed one as the defect it derives the
+#: motor's height to avoid. A threshold above those would leave the
+#: finding unable to say what the library already treats as wrong.
+_ASPECT_TOL = 0.02
+
 #: The order the control-function letters of a tag have to appear in. BS
 #: ISO 15519-2:2015 §5.2.4, *Sequence of letter codes for control
 #: functions*:
@@ -275,6 +322,7 @@ def model_issues(fs: "Flowsheet") -> list["Issue"]:
 
     from pandid import units
     from pandid.deprecation import findings as deprecation_findings
+    from pandid.portgeom import resolve_size
     from pandid.render.symbols import default_registry
     from pandid.units import Instrument
 
@@ -380,6 +428,76 @@ def model_issues(fs: "Flowsheet") -> list["Issue"]:
             f"{u.kind}/{variant} is one of them"
             + (f". Use variant={lying!r}, which is that equipment drawn lying "
                f"down rather than the upright one turned" if lying else "")))
+
+    # --- a round mark drawn as an oval ---
+    # An explicit ``width``/``height`` is taken as the *final* box
+    # (:func:`pandid.portgeom.resolve_size`), so a box of a different
+    # shape from the symbol's own scales the artwork unevenly. That is
+    # ordinary and wanted for a shell -- a vessel is drawn at the
+    # proportions the plant has -- and it is a defect for the one mark
+    # the library sizes from the body's own box: see :data:`ROUND_PARTS`.
+    #
+    # **Nothing was watching the two ends of that arrangement.** The box
+    # is written in an example and the aspect is a property of the
+    # artwork, so a change to the artwork moves the aspect out from under
+    # a number nobody edits. That is what happened: adding item 20.6's
+    # motor took the stirred reactor's box from 62 x 100 to 62 x 131,8,
+    # and ``examples/10_ethanol_pfd.py``'s hard-coded 80 x 100 -- right
+    # the day it was written -- became a 70 % stretch that drew the motor
+    # as a flat oval, on the gallery, with nothing said.
+    #
+    # Read off the model rather than the frame. ``resolve_size`` is what
+    # layout sizes the box with, so the two agree, and answering before
+    # anything is placed is the earlier and better moment to be told.
+    #
+    # Two things this deliberately does not fire on, because
+    # ``resolve_size`` already accounts for both. A **quarter turn** swaps
+    # the symbol's own box, so a 12 x 25 arrestor drawn 25 x 12 is
+    # measured against 25 x 12 and is not a stretch. A **boundary flag**
+    # is sized to the label it has to hold, so its own box is the wide
+    # one and the pennant is not stretched either. Neither could reach
+    # here in any case -- a flag and a fitting carry no parts -- but a
+    # measurement that needed them excluded by name would be measuring
+    # the wrong thing.
+    for u in fs.units:
+        variant = getattr(u, "variant", "default")
+        if variant not in default_registry.variants(u.kind):
+            continue
+        sym = default_registry.for_unit(u)
+        marks = [ov for ov in sym.overlays if (ov.group, ov.name) in ROUND_PARTS]
+        if not marks:
+            continue
+        # The box that gets drawn, and the box the artwork is round in.
+        # The quarter turn swaps the second exactly as ``resolve_size``
+        # swaps it for the first.
+        placed = u.frame if u.frame is not None else u.pin_
+        w, h = resolve_size(u, placed)
+        nat_w, nat_h = sym.width, sym.height
+        if int(getattr(placed, "orientation", 0) or 0) in (90, 270):
+            nat_w, nat_h = nat_h, nat_w
+        if min(w, h, nat_w, nat_h) <= 0:
+            continue
+        across, down = w / nat_w, h / nat_h
+        out_of_shape = max(across, down) / min(across, down) - 1.0
+        if out_of_shape <= _ASPECT_TOL:
+            continue
+        # The cure is a box of the right shape, so the message does the
+        # arithmetic: the height the author asked for, kept, and the
+        # width that goes with it. Named that way round because height is
+        # what an author sizes a vertical body by.
+        fits = nat_w / nat_h * h
+        iso = [default_registry.part(ov.group, ov.name).iso for ov in marks]
+        named = _and([f"ISO item {p.item} {p.reg}" for p in iso])
+        warnings.append(Issue(
+            "warning", "symbol-out-of-aspect",
+            f"{u.name} is drawn {w:g}x{h:g} on a {u.kind}/{variant} whose own box "
+            f"is {nat_w:g}x{nat_h:g}, so the artwork is scaled x{across:.3f} across "
+            f"and x{down:.3f} down -- {out_of_shape * 100:.0f}% out of shape. That "
+            f"drawing carries {named}, a circle whose size the composition works out "
+            f"from the box above, so at this one it is drawn as an oval. Give "
+            f"{u.name} a box of the same shape, {u.name}.width = {fits:.4g} for the "
+            f"height it has, or leave width= and height= unset and let the symbol "
+            f"size itself"))
 
     # --- tag spelling --- Soft, not hard: the
     # letters still read, and a sheet whose house style differs from

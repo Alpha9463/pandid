@@ -92,7 +92,15 @@ def main():
     hx = fs.add(HeatExchanger("HX-301", variant="straight_tubes", width=150,
                               height=45,
                               description="Beer Column Bottoms Cooling"))
-    mix1 = fs.add(Reactor("M-301", n_feeds=2, width=80, height=100,
+    # 72 x 153 and not 80 x 100: a stirred vessel is drawn with ISO item
+    # 20.6's motor above its crown, and the motor is a **circle** whose
+    # roundness is worked out against the shell's own 62 x 131,8 box. A
+    # box of another shape draws it as an oval, so this one keeps the
+    # artwork's proportions to a fifth of a percent. It is 1,16 times the
+    # symbol rather than the symbol itself because the two make-up
+    # nozzles carry arrowheads, and under 151 tall they run into each
+    # other.
+    mix1 = fs.add(Reactor("M-301", n_feeds=2, width=72, height=153,
                           description="Flocculant Activation Mixer Tank"))
     mix2 = fs.add(Mixer("M-302", n_inlets=2,
                         description="Beer Flocculant Mixer Tank"))
@@ -149,11 +157,20 @@ def main():
     hx.pin(x=900, y=hx_y)
     hx_axis_y = hx_y + hx_h / 2                     # dewatering train runs on it
 
-    # Both make-up feeds land on M-301's west wall a nozzle pitch apart.
-    mix1_y, mix1_h = 620.0, 100.0
+    # Both make-up feeds land on M-301's west wall a nozzle pitch apart
+    # -- 16 units, against a boundary flag 50 tall -- so only one of the
+    # two flags can stand on its own nozzle. The water does, and the
+    # flocculant stands 60 clear above it and steps down into the shell.
+    #
+    # Both elevations are asked of the symbol rather than written down as
+    # a fraction of the box. A fraction is a fraction of the box *before*
+    # the drive motor grew it, and the one that used to be here put the
+    # water flag 10 units off the nozzle it feeds.
+    mix1_y, flag_h = 620.0, 50.0
     mix1.pin(x=560, y=mix1_y)
-    floc.pin(x=140, y=545)                          # every flag tip on one line
-    water.pin(x=140, y=mix1_y + 0.573 * mix1_h - 25)
+    # x=140 puts every flag tip on one line.
+    floc.pin(x=140, y=mix1_y + port_offset(mix1, "feed_1")[1] - flag_h / 2 - 60)
+    water.pin(x=140, y=mix1_y + port_offset(mix1, "feed_2")[1] - flag_h / 2)
 
     mix2.pin(x=1120, y=hx_axis_y - 15)              # in_1 level with the cooler
     press.pin(x=1250, y=hx_axis_y - 20)

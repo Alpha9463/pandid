@@ -57,7 +57,7 @@ def main():
     # to a body the author put nothing in, and leaves it out of one they
     # did. A stirrer drawn through a fixed bed would be a machine the
     # plant does not have.
-    rx = fs.add(Reactor("R-301", internals="packing", width=90, height=200,
+    rx = fs.add(Reactor("R-301", internals="packing", width=124, height=200,
                         description="Methanol Converter"))
     fehe = fs.add(HeatExchanger("E-301", variant="straight_tubes", width=120,
                                 height=36,
