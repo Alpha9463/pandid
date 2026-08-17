@@ -102,9 +102,33 @@ def assign_coordinates(fs: "Flowsheet") -> None:
             return s.y + s.h + 15.0
         return py
 
+    # Both questions the loop below asks are asked of a *neighbourhood* --
+    # the runs on one unit, and the boxes in one column -- and both used
+    # to be answered by reading the whole sheet: a pass over every stream
+    # and a pass over every unit, per unit. Indexed once here instead.
+    by_col: dict[int | None, list] = {}
+    for u in units:
+        if u._slot is not None:
+            by_col.setdefault(u._slot.col, []).append(u)
+
+    # Keyed by the unit each end belongs to, holding the (my port, peer,
+    # peer's port) triple the loop wants, in stream order. A stream whose
+    # two ends are one unit is registered once, on the arriving end, which
+    # is the end the straightening used to read first.
+    touching: dict = {}
+    for st in streams:
+        if st.is_recycle or st.kind != "material":
+            continue
+        src, dst = st.source.owner, st.dest.owner
+        if src is None or dst is None:
+            continue
+        touching.setdefault(dst, []).append((st.dest, src, st.source))
+        if src is not dst:
+            touching.setdefault(src, []).append((st.source, dst, st.dest))
+
     def _overlaps(u, s, new_y):
-        for other in units:
-            if other is u or other._slot is None or other._slot.col != s.col:
+        for other in by_col.get(s.col, ()):
+            if other is u:
                 continue
             oy, oh = other._slot.y, other._slot.h
             if oy is not None and not (new_y + s.h <= oy or new_y >= oy + oh):
@@ -115,15 +139,7 @@ def assign_coordinates(fs: "Flowsheet") -> None:
         s = u._slot
         ups: list = []
         downs: list = []
-        for st in streams:
-            if st.is_recycle or st.kind != "material":
-                continue
-            if st.dest.owner is u and st.source.owner is not None:
-                pair = (st.dest, st.source.owner, st.source)
-            elif st.source.owner is u and st.dest.owner is not None:
-                pair = (st.source, st.dest.owner, st.dest)
-            else:
-                continue
+        for pair in touching.get(u, ()):
             bucket = ups if (pair[1]._slot.col or 0) < (s.col or 0) else downs
             bucket.append(pair)
         # A single upstream anchor chains the spine; fall back to a

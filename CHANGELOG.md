@@ -396,6 +396,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   standing on either wants a pair. A second registered part would have been a
   second registration number for a symbol ISO numbers once.
 
+- **`layout()` on a sheet that stacks is four times faster.** The column-sharing
+  pass carries the contracted flow graph across its unions instead of rebuilding
+  it per stacked edge, and the row and coordinate passes index the neighbourhood
+  they ask about rather than re-reading the sheet. 800 blocks with a feed over
+  each fall from 0.84s to 0.19s, byte for byte the same drawing.
+  `scripts/layout_bench.py` prints the numbers.
+
 - **Routing a dense sheet is an order of magnitude faster.** The visibility
   graph scanned every obstacle for every grid point and every candidate edge.
   `examples/11_ethanol_pid.py` lays a 394x283 lane grid over 146 obstacles, so

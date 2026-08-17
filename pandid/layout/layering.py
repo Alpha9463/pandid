@@ -124,6 +124,15 @@ def _share_columns(units: list, flow: list["Stream"],
     in one rank, or close a cycle in the contracted flow graph. Either
     makes the ranking unanswerable, and a sheet with one constraint
     dropped is worth more than a sheet with no ranks at all.
+
+    The contracted graph is carried across the unions rather than rebuilt
+    for each candidate. Rebuilding it meant contracting every unit and
+    every stream and topologically sorting the result once per stacked
+    edge, which is the whole sheet re-read K times: a chain of 800 blocks
+    with a feed over each of them spent 2.5 M contractions and 2.6 M
+    find()s on one ``layout()``. Kept here, a union costs the edges of
+    the group being folded in, and the question each candidate asks is
+    asked of the two ends rather than of the sheet.
     """
     lead = {u: u for u in units}
 
@@ -133,43 +142,95 @@ def _share_columns(units: list, flow: list["Stream"],
             u = lead[u]
         return u
 
+    succ: dict = defaultdict(set)
+    pred: dict = defaultdict(set)
+    for s in flow:
+        assert s.source.owner is not None and s.dest.owner is not None
+        x, y = s.source.owner, s.dest.owner
+        if x is not y:
+            succ[x].add(y)
+            pred[y].add(x)
+
     col = {u: u._slot.col for u in units if u._slot.col is not None}
     for st in stacks:
         a, b = find(st.satellite), find(st.anchor)
         if a is b or (a in col and b in col and col[a] != col[b]):
             continue
-        if _closes_cycle(units, flow, find, a, b):
+        if _closes_cycle(succ, pred, a, b):
             continue
+        _fold(succ, pred, a, b)
         lead[a] = b
         if a in col:
             col[b] = col.pop(a)
     return {u: find(u) for u in units}
 
 
-def _closes_cycle(units: list, flow: list["Stream"], find, a, b) -> bool:
-    """Would merging ranks ``a`` and ``b`` leave the flow graph cyclic?"""
-    def merged(u: "Unit"):
-        g = find(u)
-        return b if g is a else g
+def _fold(succ: dict, pred: dict, a, b) -> None:
+    """Move ``a``'s edges onto ``b``, which is now the two of them.
 
-    adj = defaultdict(set)
-    nodes = {merged(u) for u in units}
-    for s in flow:
-        assert s.source.owner is not None and s.dest.owner is not None
-        x, y = merged(s.source.owner), merged(s.dest.owner)
-        if x is not y:
-            adj[x].add(y)
-    in_degree = dict.fromkeys(nodes, 0)
-    for ys in adj.values():
-        for y in ys:
-            in_degree[y] += 1
-    queue = deque([n for n in nodes if in_degree[n] == 0])
-    seen = 0
-    while queue:
-        n = queue.popleft()
-        seen += 1
-        for y in adj[n]:
-            in_degree[y] -= 1
-            if in_degree[y] == 0:
-                queue.append(y)
-    return seen < len(nodes)
+    An edge between the pair becomes a loop on the merged node and is
+    dropped, exactly as contracting the graph wholesale dropped it: a
+    stream between two units in one rank is no longer a step from one
+    rank to another, and reading it as one would say the merged rank
+    comes after itself.
+    """
+    for y in succ.pop(a, ()):
+        pred[y].discard(a)
+        if y is not b:
+            succ[b].add(y)
+            pred[y].add(b)
+    for x in pred.pop(a, ()):
+        succ[x].discard(a)
+        if x is not b:
+            pred[b].add(x)
+            succ[x].add(b)
+    succ[b].discard(b)
+    pred[b].discard(b)
+
+
+def _closes_cycle(succ: dict, pred: dict, a, b) -> bool:
+    """Would merging ranks ``a`` and ``b`` leave the flow graph cyclic?
+
+    The graph this is asked about is acyclic already -- Phase 0 broke the
+    cycles in the flow, and every union that would have closed one has
+    been refused by this same test -- so a cycle in the merged graph has
+    to run through the merged node. That is a run out of one end and back
+    into the other, and it has to be **two steps or more**: a single
+    stream between the pair becomes a loop on the merged node, which is
+    dropped rather than read as a cycle (see :func:`_fold`).
+    """
+    return _joined(succ, pred, a, b) or _joined(succ, pred, b, a)
+
+
+def _joined(succ: dict, pred: dict, x, y) -> bool:
+    """Is there a run of two steps or more from ``x`` to ``y``?
+
+    Such a run has an interior node: one the flow reaches from ``x`` and
+    reaches ``y`` from. So the two sets are grown towards each other --
+    what ``x`` leads to, and what leads to ``y`` -- and the answer is
+    whether they ever touch. Growing the smaller of the two each time is
+    what keeps a satellite with nothing downstream of it from walking the
+    length of the sheet looking for an anchor that could not reach it: a
+    feed over a block's roof settles the question on its own empty edge
+    set, which is the case nearly every stacked sheet is made of.
+
+    Each new front is tested against the whole of the far side, so a
+    node the two reach at different times is still caught by whichever
+    of them arrives second.
+    """
+    ahead, behind = set(succ[x]), set(pred[y])
+    if not ahead.isdisjoint(behind):
+        return True
+    seen_ahead, seen_behind = set(ahead), set(behind)
+    while ahead and behind:
+        if len(ahead) <= len(behind):
+            ahead = {n for f in ahead for n in succ[f]} - seen_ahead
+            if not ahead.isdisjoint(seen_behind):
+                return True
+            seen_ahead |= ahead
+        else:
+            behind = {n for f in behind for n in pred[f]} - seen_behind
+            if not behind.isdisjoint(seen_ahead):
+                return True
+            seen_behind |= behind
+    return False
