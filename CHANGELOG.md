@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`20`). `18` and `20` draw the same ISO item 27.8 bed as a catalytic
   converter and as an adsorber.
 
+- **An alumina refinery** (`21`): the Bayer process on one PFD, from bauxite
+  grinding through digestion, flashing, red mud settling and washing,
+  precipitation, classification and fluidised-bed calcination, with the spent
+  liquor returning to the mill. Twenty-eight items and fifty-five streams make
+  it the largest sheet in the gallery.
+
 - Screw conveyor and bucket elevator (straight and Z-form):
   `Conveyor(variant="screw")`, `Elevator()`, `Elevator(variant="z_form")`.
   The screw is sized by `length=` and `diameter=`, as the belt is.

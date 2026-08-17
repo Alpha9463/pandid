@@ -392,3 +392,35 @@ the other, which is what puts the driest gas last against the end the next cycle
 has to hold on specification. `KY-501` is one logic function drawn at each of
 the eight valves it strokes, and the only repeated square in the gallery that is
 not a trip.
+
+## 21 · Alumina refinery
+
+[`examples/21_alumina_refinery.py`](../../examples/21_alumina_refinery.py) ·
+[SVG](21_alumina_refinery.svg)
+
+![Alumina refinery PFD](21_alumina_refinery.png)
+
+The Bayer process end to end, and the largest sheet here: twenty-eight tagged
+items and fifty-five streams, sized to its own drawing because a table that wide
+fits on no standard page. Bauxite is crushed in `CR-901` and ground in spent
+liquor in `ML-901`; the slurry is preheated against two stages of flash vapour,
+held in the desilication tank `TK-901`, pumped up and taken to 145 °C with live
+steam in `E-903`, and digested in `D-901`. The blow-off flashes through `V-901`
+and `V-902`, and each flash serves the interchanger its own temperature suits —
+the hotter one nearer the digester — so the two vapour lanes cross, which is
+what counter-current interchange looks like drawn.
+
+Red mud settles in `TH-901` and is washed in `TH-902`; the green liquor is
+polished in the press `F-901`, cooled, seeded and precipitated in `PR-901` and
+`PR-902`; `CY-901` and `CY-902` classify the product hydrate from the seed;
+`F-902` washes it and `CA-901` calcines it. **The circuit closes**: spent liquor
+leaves classification, is concentrated in `EV-901` and returns to the mill on
+`S-903`, which runs the border of the sheet rather than across it. The stream
+table is a real balance — 212 t/h of bauxite makes 100 t/h of alumina, and the
+caustic and dissolved alumina come back to the values they left with.
+
+Its symbols are the minerals and solids families the fluids sheets never reach
+for: a jaw crusher and a ball mill, two gravity separating vessels (ISO 8.3
+X8031 — a thickener is that symbol, and the rake is a mechanical internal the
+standard does not draw), three hydrocyclones, a fluidised-bed calciner, and two
+cake-forming filters that pipe `wash_in` and `cake` as well as the filtrate.
