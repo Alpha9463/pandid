@@ -202,7 +202,7 @@ def _stack_rows(every: list["Unit"], satellites: dict["Unit", "Stack"]) -> None:
             for u in pending:
                 _free_row(rows, every, u)
             break
-    _rebase(rows, every, satellites)
+    _rebase(every)
 
 
 def _slot(u: "Unit") -> "_Slot":
@@ -254,29 +254,28 @@ def _free_row(rows: dict[int | None, set[int]], every: list["Unit"],
     _place(rows, u, next(r for r in range(len(every) + 1) if r not in taken))
 
 
-def _rebase(rows: dict[int | None, set[int]], every: list["Unit"],
-            satellites: dict["Unit", "Stack"]) -> None:
+def _rebase(every: list["Unit"]) -> None:
     """Slide the rows back down to zero, which the bands count from.
 
-    A north satellite over a unit on the top row lands above it, and the
-    coordinate pass has no band there. Moving every row together is what
-    keeps that from being a change to the drawing: the sheet is the same
-    one, one band lower.
+    A north satellite over a unit on the top row lands above it. Moving
+    every row together is what keeps that from being a change to the
+    drawing: the sheet is the same one, one band lower.
 
-    A sheet carrying a pinned row is left alone. A pin names a band, so
-    renumbering the bands under it would move a unit the author placed.
-    Where that leaves a row below zero the satellite takes the first
-    free row instead, which is the constraint dropped rather than the
-    pin broken.
+    A sheet carrying a pinned row is left where it is. A pin names a
+    band, so renumbering the bands under it would move a unit the author
+    placed -- and the satellite over it can stay where its face put it,
+    because a row below zero is a row the coordinate pass builds a band
+    for. It did not always: bands were counted up from zero, so the one
+    case that could not be renumbered was also the one case with nowhere
+    to put a negative row, and the stacking constraint was dropped
+    instead. The satellite took the first free row, which is *below* the
+    unit feeding it -- the drawing saying the opposite of what the
+    flowsheet does.
     """
     placed = [r for u in every if (r := _slot(u).row) is not None]
     if not placed or min(placed) >= 0:
         return
     if any(u.pin_ is not None and u.pin_.row is not None for u in every):
-        for u in satellites:
-            row = _slot(u).row
-            if row is not None and row < 0:
-                _free_row(rows, every, u)
         return
     lift = min(placed)
     for u in every:

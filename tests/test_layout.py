@@ -418,12 +418,17 @@ def test_crossing_reduction_runs_left_of_column_zero():
 
 
 def test_a_pinned_row_survives_a_sheet_that_stacks_above_it():
-    """The rebase drops the stacking constraint, not the author's pin.
+    """Neither the pin nor the stacking constraint gives.
 
     ``Air`` on the north face lands a row above the block, which is a
     row below zero here, and the rebase cannot renumber the bands out
     from under a pin. It walked every unit rather than the satellites,
     so the pinned product was renumbered too.
+
+    It then put the satellite in the first free row instead, which is
+    *below* the unit feeding it. The coordinate pass builds a band for a
+    negative row now, so there is nothing left to drop: the pin keeps its
+    band and the feed keeps its roof.
     """
     fs = Flowsheet("pinned row over a stack")
     ng = fs.add(U.Feed("Natural Gas"))
@@ -437,8 +442,64 @@ def test_a_pinned_row_survives_a_sheet_that_stacks_above_it():
     fs.layout()
 
     assert prod.frame.row == -1
-    # Air is the constraint that gives: it takes a free row instead.
-    assert air.frame.row >= 0
+    assert air.frame.row == sec.frame.row - 1
+    assert air.frame.y < sec.frame.y
+
+
+def _pinned_north_feed(pin_row):
+    """A block with a west feed and a north one, optionally pinned."""
+    fs = Flowsheet("stack")
+    b = fs.add(U.Block("Reaction", inputs=["W", "N"], outputs=1))
+    feed = fs.add(U.Feed("Main"))
+    air = fs.add(U.Feed("Air"))
+    prod = fs.add(U.Product("Out"))
+    fs.connect(feed.outlet, b.in_1)
+    fs.connect(air.outlet, b.in_2)
+    fs.connect(b.out_1, prod.inlet)
+    if pin_row is not None:
+        b.pin(row=pin_row)
+    fs.layout()
+    return b, air
+
+
+def test_pinning_the_row_the_engine_picks_anyway_does_not_flip_a_north_feed():
+    """Issue #311: a pin that moves nothing turned the drawing upside down.
+
+    ``pin(row=0)`` is what an author types to say *this is the top of the
+    sheet*, and it put the north feed on the south side of the block it
+    feeds. Every one of these is the same sheet, and ``Air`` is over the
+    block on all of them.
+    """
+    for pin_row in (None, 0, 1, 2, -1):
+        block, air = _pinned_north_feed(pin_row)
+        assert air.frame.row == block.frame.row - 1, f"pin(row={pin_row})"
+        assert air.frame.y < block.frame.y, f"pin(row={pin_row})"
+    # The pin is still the pin: the band it named is the band it gets.
+    for pin_row in (0, 1, 2, -1):
+        assert _pinned_north_feed(pin_row)[0].frame.row == pin_row
+
+
+def test_vertical_constraints_that_state_no_top_fall_back_to_a_free_row():
+    """Two blocks each told to sit over the other.
+
+    Two streams between the same pair, one naming the arriving face and
+    one the leaving face, so each block is the other's satellite. The
+    chain never resolves, which states no top and no bottom, and both
+    take the first free row in their column instead of hanging.
+    """
+    fs = Flowsheet("vertical cycle")
+    a = fs.add(U.Block("A", inputs=["W"], outputs=["E", "N"]))
+    b = fs.add(U.Block("B", inputs=["N", "W"], outputs=["E"]))
+    fs.connect(fs.add(U.Feed("F")).outlet, a.in_1)
+    fs.connect(a.out_1, b.in_1)
+    fs.connect(a.out_2, b.in_2)
+    fs.connect(b.out_1, fs.add(U.Product("P")).inlet)
+    fs.layout()
+
+    # Ranked as one column all the same, and no two units on one band.
+    assert a.frame.col == b.frame.col
+    assert a.frame.row != b.frame.row
+    assert {a.frame.row, b.frame.row} == {0, 1}
 
 
 # --- the column-sharing pass against the scan it replaced ---------------------
