@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`Conveyor(diameter=)`**, the second dimension: the roller a belt runs on,
+  or the casing bore a screw turns in. It is set independently of `length=`,
+  and the drawing is built to both, so the rollers are true circles at any
+  combination and the screw's flight keeps its pitch at any bore. It defaults
+  to the drawing's own — 20 for the belt, 30 for the screw — so nothing already
+  drawn moves.
+
 - **Four new examples**, drawn as what their equipment calls for: a jacketed
   stirred reactor train (`17`), a fixed-bed reactor with recycle (`18`), an
   absorber and its regenerator (`19`) and a two-bed molecular sieve dryer
@@ -17,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Screw conveyor and bucket elevator (straight and Z-form):
   `Conveyor(variant="screw")`, `Elevator()`, `Elevator(variant="z_form")`.
-  The screw is sized by `length=`, as the belt is.
+  The screw is sized by `length=` and `diameter=`, as the belt is.
 
 - **Crushers and mills.** ISO 10628-2 group 11, all eleven drawings the
   standard tabulates, and the size-reduction end of a flowsheet that had no
