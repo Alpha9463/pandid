@@ -455,6 +455,13 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
 
     for i, entry in enumerate(_sequence(data.get("loops", []), "loops")):
         _read_loop(fs, entry, f"loops[{i}]")
+    # After the section, not during it: reading a hand-written spec is
+    # the same declaration as typing the same calls, so a number left
+    # out here takes the sheet's next one exactly as `add_loop()` would.
+    # What is restored is the state AFTER those declarations -- how many
+    # numbers the sheet has spent -- which the file records only as the
+    # numbers themselves.
+    fs._resume_loop_numbering()
 
     # Instruments are created before the streams so a controller output
     # can be connected, but attached afterwards because a balloon may

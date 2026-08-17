@@ -515,6 +515,37 @@ class Flowsheet:
         self.loops.append(loop)
         return loop
 
+    def _resume_loop_numbering(self) -> None:
+        """Move the counter past every loop number already declared.
+
+        The hook a *reader* calls once :attr:`loops` is populated, and
+        the reason a frozen sheet can be picked up and carried on.
+        :func:`~pandid.spec.to_dict` writes every number out as a
+        literal and records nothing about the counter, so a rebuilt
+        sheet would otherwise start the series over and hand out numbers
+        the drawing has already spent -- quietly, because ``F-301``
+        beside ``P-301`` is two legal loops and only a repeated *pair*
+        raises.
+
+        Derived on read rather than serialised: the counter is engine
+        state and the spec is a description of the drawing, and every
+        number needed to derive it is in the file already. The cost is a
+        series with a deliberate hole in it -- 301-304, 306, 307 --
+        which resumes at 308 rather than filling 305. Allocating past a
+        gap is the mild failure; allocating into one the author left for
+        a loop not yet drawn is not.
+
+        Only ever forwards, so it is safe to call twice and safe on a
+        sheet whose loops sit below :attr:`loop_number_start`. A number
+        that is not a number at all -- ``"301A"`` -- moves nothing,
+        having no place in the series to be past.
+        """
+        for loop in self.loops:
+            if not loop.number.isdigit():
+                continue
+            self._loops_allocated = max(
+                self._loops_allocated, int(loop.number) + 1 - self.loop_number_start)
+
     def add_instrument(self, type: str, number: "str | int | Loop" = "", *,
                        sensing: "Stream | Unit | None" = None,
                        acting_on: "Stream | Unit | None" = None,
