@@ -1023,7 +1023,7 @@ def register_vendored(registry):
         width=80.0, height=120.0,
         ports={'feed': (0.0, 12.0), 'vapor': (40.0, 0.0), 'liquid': (40.0, 120.0)},
         drawio_shape='mxgraph.pid.separators.separator_(cyclone)',
-        # must not be turned: ISO 15519-1 symbol X 2618; apex points down
+        # must not be turned: ISO 14617 symbol X 2618; apex points down
         gravity_fixed=True,
     ), 'cyclone')
 

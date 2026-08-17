@@ -2215,10 +2215,12 @@ class Instrument(Unit):
     def _resolved_variant(self, name: str, variant: str, display: str | None) -> str:
         """The one registered spelling for a symbol type and a display.
 
-        ISO 15519-2 asks two questions -- Table 1's additional graphic
-        is *where the information is*, and the outline is *what the
-        instrument does* -- and the registry answers both with one
-        variant name. This is where the two meet, so that the rest of
+        Two questions, answered by one variant name. *Where* the
+        information is available is ISO 15519-2 Table 1's additional
+        graphic. *What the instrument does* is the outline -- and that
+        half is ANSI/ISA-5.1's, not ISO's: §5.1.1 gives a circle and an
+        extended circle, and neither of the two encodes function. This
+        is where they meet, so that the rest of
         the package sees a variant and nothing else, exactly as
         :meth:`Valve._resolve` folds a body and an actuator into one.
         """

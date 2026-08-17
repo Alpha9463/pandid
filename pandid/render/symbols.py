@@ -83,7 +83,8 @@ ARROWHEAD = 12.0
 #:
 #: In drawing units against the drawing's own line weight, so it says
 #: the same thing at whatever scale the sheet is issued. Holding any of
-#: them at a *physical* width is ISO 15519-1 §11.1.3's separate problem.
+#: them at a *physical* width is the other half of ISO 15519-1 §6.2 --
+#: at least 0,18 mm on the final medium -- which nothing here checks.
 MIN_HEAD_CLEARANCE = 2 * 2.0
 
 #: The closest two nozzles that both wear an arrowhead may be pitched on
@@ -3126,8 +3127,9 @@ class SymbolRegistry:
         The five group-8 drawings pandid ships beside them stay vendored
         whole, because ISO gives each a distinct registered symbol and
         group 29 has nothing to build them out of: **no vortex** (8.10
-        X2618, the cyclone -- which ISO 14617-1 §4.5 names by number as a
-        symbol in its own right), no baffle (8.2 X2616), no spray (8.5
+        X2618, the cyclone -- which ISO 15519-1 §11.4.2 names by number
+        and ISO 14617-1 §4.5 by description alone), no baffle (8.2
+        X2616), no spray (8.5
         X2621, and so not 8.7 X8033 either) and no permanent magnet (8.9
         X8127).
 

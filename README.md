@@ -105,12 +105,22 @@ supply, and nothing is calculated from them. This is a drawing engine.
 
 `pandid` draws in the idiom of the process-industry drawing standards. It does
 not claim conformance to any of them, and nothing it produces has been certified
-against one. In summary:
+against one.
+
+The set it works to is **ISO 10628-1** for the drawing rules, **ISO 15519-1** and
+**-2** for what 10628-1 leaves to them, and **ANSI/ISA-5.1** for instrumentation.
+That third choice is not an ISO one, and it shows in four places: the balloon
+outlines, the pneumatic cross-hatch, the fail-position letters, and the absence
+of direction arrowheads on a P&ID.
+
+In summary:
 
 - Equipment symbols follow the conventions of **ISO 10628-2**.
-- Instrument balloons, signal lines and tag letters follow **ANSI/ISA-5.1**,
-  which is a documented exception under ISO 15519-1 §7.1 rather than the
-  ISO 15519-2 route.
+- Instrument balloons, signal lines and tag letters follow **ANSI/ISA-5.1**
+  rather than the ISO 15519-2 route. ISO 15519-1 §7.1 licenses the **tag
+  letters**, which are a reference designation. It reaches no further: the
+  balloon outlines and the signal-line styles are a declared deviation, since
+  ISO 15519-2 §5.1.1 gives a circle and an extended circle and nothing else.
 - Line weights follow **ISO 15519-1 §6.2** and **ISO 15519-2 Annex A.1**, label
   placement **ISO 15519-1 §7.2.5**, and off-page connector text
   **ISO 15519-1 §9**.
