@@ -581,6 +581,10 @@ reader would otherwise take them for working code.
 
 ### Fixed
 
+- Corpus counts in `docs/api.md` and `pandid/validate.py` are gone; the
+  prose states the rule and the tests measure the corpus.
+
+
 - `examples/14_tank_farm.py` draws the signal from each of its three
   transmitters to the indicator beside it. `near=` had placed LI-601, LI-602 and
   PI-603 against LT-601, LT-602 and PT-603 and nothing was wired, so each pair
