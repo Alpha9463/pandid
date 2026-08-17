@@ -1377,6 +1377,61 @@ def test_warnings_from_both_halves_land_on_the_sheet_together():
     assert all(w.severity == "warning" for w in fs.warnings)
 
 
+# --- a run drawn on the slant -------------------------------------------------
+
+
+def _hand_routed(*waypoints):
+    """A pump discharge routed through hand-written points."""
+    fs = Flowsheet("via")
+    f = fs.add(U.Feed("F"))
+    p = fs.add(U.Pump("P-1"))
+    q = fs.add(U.Product("Q"))
+    fs.connect(f.outlet, p.suction)
+    run = fs.connect(p.discharge, q.inlet).via(list(waypoints))
+    fs.layout()
+    fs.route()
+    return fs, run
+
+
+def test_a_single_via_waypoint_that_squares_nothing_up_is_reported():
+    """`via()` states the middle of the path and nothing squares the ends
+    against it, so one point off the axis of both nozzles leaves a diagonal.
+    `tests/test_route_invariants` holds the shipped corpus orthogonal; an author
+    drawing their own sheet had nothing watching at all."""
+    from pandid.layout.attach import stream_path
+
+    fs, run = _hand_routed((300.0, 200.0))
+    assert stream_path(run) == [(300.0, 60.0), (300.0, 200.0), (400.0, 60.0)]
+    (found,) = [i for i in fs.validate() if i.code == "route-diagonal"]
+    assert found.severity == "warning"
+    assert "(300, 200) to (400, 60)" in found.message
+    # The corner it turns at, and only the one that is not already on the path:
+    # turning at the source doubles the line back on itself.
+    assert "Add the corner it turns at, (400, 200)" in found.message
+
+
+def test_the_corner_it_names_is_the_cure():
+    fs, _ = _hand_routed((300.0, 200.0), (400.0, 200.0))
+    assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
+
+
+def test_neither_route_finding_beside_it_can_see_a_diagonal():
+    """`route-detour` measures Manhattan length, which a diagonal and the elbow
+    replacing it share exactly, and `_seg_crosses_box` answers `False` for a
+    sloping segment whatever it runs over. So the finding could not be left to
+    either of them."""
+    from pandid.validate import _seg_crosses_box
+
+    def detour(fs):
+        return next(i for i in fs.validate() if i.code == "route-detour").message
+
+    assert detour(_hand_routed((300.0, 200.0))[0]) == detour(
+        _hand_routed((300.0, 200.0), (400.0, 200.0))[0]
+    )
+    assert not _seg_crosses_box(0, 0, 100, 100, (10, 10, 90, 90))
+    assert _seg_crosses_box(50, 0, 50, 100, (10, 10, 90, 90))
+
+
 # --- what the sheet drew but nothing said -------------------------------------
 
 

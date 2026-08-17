@@ -53,6 +53,18 @@ if TYPE_CHECKING:
 
 _TOL = 1.0  # px tolerance so touching edges are not flagged as overlaps
 
+#: How far off square a drawn segment may be and still read as
+#: orthogonal, in px. Half a pixel: under it the line is on the axis and
+#: over it the sheet shows a slope.
+#:
+#: The two rules that use it are the same question asked twice.
+#: :func:`_seg_crosses_box` calls a segment vertical or horizontal to
+#: decide which side of a box to measure it against, and answers *no
+#: crossing* for anything else -- so a segment this rejects is invisible
+#: to ``route-crosses-unit`` as well as sloping, which is the second
+#: reason ``route-diagonal`` reports it.
+_SQUARE_TOL = 0.5
+
 #: ``(kind, variant)`` pairs a run is *meant* to change centreline
 #: through, so ``run-off-elevation`` has nothing to tell an author who
 #: put one in a line.
@@ -214,12 +226,21 @@ def _and(names: list[str]) -> str:
     return " and ".join(filter(None, [", ".join(names[:-1]), *names[-1:]]))
 
 
+def _square(x1, y1, x2, y2) -> bool:
+    """True if this segment is drawn along an axis rather than sloping."""
+    return abs(x1 - x2) < _SQUARE_TOL or abs(y1 - y2) < _SQUARE_TOL
+
+
 def _seg_crosses_box(x1, y1, x2, y2, box) -> bool:
-    """True if an orthogonal segment passes through a box's interior."""
+    """True if an orthogonal segment passes through a box's interior.
+
+    A sloping one answers ``False`` whatever it runs over, which is why
+    ``route-diagonal`` exists: see :data:`_SQUARE_TOL`.
+    """
     bx0, by0, bx1, by1 = box
-    if abs(x1 - x2) < 0.5:  # vertical
+    if abs(x1 - x2) < _SQUARE_TOL:  # vertical
         return bx0 + _TOL < x1 < bx1 - _TOL and min(y1, y2) < by1 - _TOL and max(y1, y2) > by0 + _TOL
-    if abs(y1 - y2) < 0.5:  # horizontal
+    if abs(y1 - y2) < _SQUARE_TOL:  # horizontal
         return by0 + _TOL < y1 < by1 - _TOL and min(x1, x2) < bx1 - _TOL and max(x1, x2) > bx0 + _TOL
     return False
 
@@ -984,6 +1005,69 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                         warnings.append(Issue("warning", "route-crosses-unit",
                                               f"stream {s.name} crosses {u.name}"))
                         break
+
+            # Soft: a segment drawn on the slant. BS ISO 15519-1:2010
+            # §12.1: "Connecting lines shall be oriented horizontally or
+            # vertically, except in those cases where oblique lines
+            # improve the clarity of the diagram" -- the exception is
+            # why this warns rather than refuses, and the exception is
+            # also why nothing can decide for the author.
+            #
+            # One ``via()`` waypoint is what produces it. ``via`` states
+            # the middle of the path and nothing squares the two ends up
+            # against it, so a single point off the axis of both nozzles
+            # leaves two sloping segments where the author expected an
+            # elbow. ``tests/test_route_invariants`` and
+            # ``tests/test_render`` hold the shipped corpus orthogonal,
+            # so the sheets in this repo are clean and an author drawing
+            # their own had nothing watching at all.
+            #
+            # Neither route finding beside it can see this.
+            # ``route-detour`` measures Manhattan length, and a
+            # diagonal's is exactly the elbow's that replaces it -- the
+            # same dx and the same dy -- so squaring one up does not move
+            # the ratio by a pixel. ``route-crosses-unit`` is blind to a
+            # sloping segment outright (:data:`_SQUARE_TOL`), so a
+            # diagonal run straight through a vessel is reported by
+            # nothing at all.
+            #
+            # One finding per stream: the whole path is one ``via()``
+            # call and one thing to fix.
+            slopes = [(a, b) for a, b in zip(pts, pts[1:]) if not _square(*a, *b)]
+            if slopes:
+                (x1, y1), (x2, y2) = slopes[0]
+                more = ("" if len(slopes) == 1 else
+                        f", the first of {len(slopes)} on it")
+                # Only the author knows which corner they meant, so the
+                # message offers the ones the segment allows rather than
+                # guessing -- less any that is already a point on the
+                # path, since turning at one of those doubles the line
+                # back on itself instead of squaring it. With a single
+                # ``via()`` waypoint that leaves exactly one.
+                #
+                # Off a manual route the cure is the ``via()`` call; off
+                # an automatic one there is nothing to edit, since the
+                # router draws right angles only and a slope there is a
+                # path resolved against geometry that has since moved.
+                corners = [c for c in ((x1, y2), (x2, y1))
+                           if all(math.dist(c, p) > _SQUARE_TOL for p in pts)]
+                named = " or ".join(f"({cx:g}, {cy:g})"
+                                    for cx, cy in corners or [(x1, y2), (x2, y1)])
+                cure = (f"via() states the exact points the line is drawn through and "
+                        f"squares nothing up, so each consecutive pair -- the two "
+                        f"nozzles included -- has to share an x or a y. Add the "
+                        f"corner it turns at, {named}"
+                        if s.route.manual else
+                        "the router draws right angles only, so this is a path "
+                        "resolved against geometry that has since moved: route() "
+                        "again after the last change to the sheet")
+                warnings.append(Issue(
+                    "warning", "route-diagonal",
+                    f"stream {s.name} is drawn on the slant, ({x1:g}, {y1:g}) to "
+                    f"({x2:g}, {y2:g}){more}. ISO 15519-1:2010 12.1 has connecting "
+                    f"lines oriented horizontally or vertically, and a diagonal is "
+                    f"also invisible to the check that reports a line crossing a "
+                    f"vessel. {cure}"))
 
             length = sum(abs(pts[k + 1][0] - pts[k][0]) + abs(pts[k + 1][1] - pts[k][1])
                          for k in range(len(pts) - 1))

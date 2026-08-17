@@ -47,13 +47,24 @@ streams:
 
 # A sheet with nothing wrong with it but a stream sent the long way round, so
 # the router reports a detour: a warning, and warnings never stop a drawing.
+#
+# The corners are stated as well as the sides. `via` squares nothing up, so a
+# waypoint off the axis of the nozzle before it draws a diagonal -- which is a
+# `route-diagonal` finding of its own and would make this fixture about two
+# things.
 DETOUR = {
     "name": "Long Way Round",
     "units": [
         {"kind": "Feed", "name": "F", "pin": {"x": 60, "y": 175}},
         {"kind": "Product", "name": "P", "pin": {"x": 360, "y": 175}},
     ],
-    "streams": [{"from": ["F", "outlet"], "to": ["P", "inlet"], "via": [[150, 600], [300, 600]]}],
+    "streams": [
+        {
+            "from": ["F", "outlet"],
+            "to": ["P", "inlet"],
+            "via": [[110, 600], [300, 600], [300, 200]],
+        }
+    ],
 }
 
 # Two units pinned on top of one another: an error, and no drawing.

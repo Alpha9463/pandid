@@ -606,6 +606,10 @@ reader would otherwise take them for working code.
   drop `label_pos="center"`, which was writing each tag across the vessel's own
   trays or bed.
 
+- `validate()` reports a run drawn on the slant, under `route-diagonal`, and
+  names the corner that squares it up. One `via()` waypoint is enough to
+  produce one.
+
 - **Three stirred vessels sized to the wrong shape.** `M-301` on
   `examples/10_ethanol_pfd.py` was drawn 80×100 on a symbol whose box is
   62×131.8, which stretched its drive motor into a flat oval; `R-101` on
