@@ -597,6 +597,9 @@ and `_LINE_H`. No sheet moves.
 
 ### Fixed
 
+- `layout()` draws the same sheet every time it is called. A balloon hung on a
+  signal between two other balloons moved on the second run.
+
 - A north satellite on a sheet carrying a pinned row stays above the unit it
   feeds. It was taking the first free row instead, which is below it.
 
