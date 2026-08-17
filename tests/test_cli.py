@@ -67,6 +67,25 @@ OVERLAP = {
 }
 
 
+# A mixer whose two inlets are pitched inside the arrowheads they carry. That is
+# a defect on a PFD and nothing at all on a P&ID, which draws no heads for them
+# to be inside of -- so it is the finding that tells the two sheets apart.
+CROWDED = {
+    "name": "Crowded Nozzles",
+    "units": [
+        {"kind": "Feed", "name": "A"},
+        {"kind": "Feed", "name": "B"},
+        {"kind": "Mixer", "name": "M-1", "n_inlets": 2, "height": 20},
+        {"kind": "Product", "name": "P"},
+    ],
+    "streams": [
+        {"from": ["A", "outlet"], "to": ["M-1", "in_1"]},
+        {"from": ["B", "outlet"], "to": ["M-1", "in_2"]},
+        {"from": ["M-1", "outlet"], "to": ["P", "inlet"]},
+    ],
+}
+
+
 def _spec_file(tmp_path, spec=SPEC, name="plant.json"):
     path = tmp_path / name
     path.write_text(json.dumps(spec), encoding="utf-8")
@@ -186,6 +205,32 @@ def test_validate_passes_on_warnings_alone(tmp_path, capsys):
     assert "0 errors, 1 warning" in out
 
 
+def test_validate_answers_about_the_drawing_it_is_told_about(tmp_path, capsys):
+    """`draw` has `--diagram` and `validate` had nothing but `-h`, so it judged
+    every spec as a PFD -- and reported crowded arrowheads on a sheet that draws
+    none. `draws_arrowheads` states the principle: a finding about ink the
+    drawing does not contain is false however well the geometry is measured."""
+    spec = _spec_file(tmp_path, CROWDED)
+    assert main(["validate", str(spec)]) == EXIT_OK
+    assert "warning: nozzles-crowded: M-1.in_1 and M-1.in_2" in capsys.readouterr().out
+
+    assert main(["validate", "--diagram", "p&id", str(spec)]) == EXIT_OK
+    assert capsys.readouterr().out == f"{spec}: no problems found (4 units, 3 streams)\n"
+
+
+def test_draw_sends_the_reader_to_validate_for_the_sheet_it_drew(tmp_path, capsys):
+    """The hint has to carry the drawing across, or it points at an answer about
+    a different sheet: `pandid validate` on its own judges every spec as a PFD."""
+    out = tmp_path / "d.svg"
+    argv = ["draw", str(_spec_file(tmp_path, DETOUR)), "-o", str(out)]
+    assert main(argv) == EXIT_OK
+    err = capsys.readouterr().err
+    assert "see: pandid validate " in err and "--diagram" not in err
+
+    assert main([*argv, "--diagram", "p&id"]) == EXIT_OK
+    assert "see: pandid validate --diagram 'p&id' " in capsys.readouterr().err
+
+
 # --- symbols ------------------------------------------------------------------
 
 
@@ -240,6 +285,34 @@ def test_a_missing_file_is_one_line_not_a_traceback(tmp_path, capsys):
     err = capsys.readouterr().err
     assert "missing.yaml" in err
     assert len(err.splitlines()) == 1
+
+
+@pytest.mark.parametrize("name", ["missing.yaml", "missing.yml", "missing.json"])
+def test_a_missing_file_is_the_missing_file_even_with_no_pyyaml(
+    tmp_path, capsys, monkeypatch, name
+):
+    """`spec.from_yaml` imports PyYAML before it opens anything, so a path that
+    was not there got the dependency message and exit 3 -- the code reserved for
+    an optional extra -- while the same missing path spelled .json got exit 1.
+
+    The test above cannot see it: the dev box and CI both have PyYAML, so the
+    arm that reported the wrong thing was never taken. Blocking the import is
+    what reaches it."""
+    monkeypatch.setitem(sys.modules, "yaml", None)  # makes `import yaml` fail
+    assert main(["draw", str(tmp_path / name)]) == EXIT_FAILED
+    err = capsys.readouterr().err
+    assert name in err and "PyYAML" not in err
+    assert len(err.splitlines()) == 1
+
+
+def test_a_yaml_spec_that_is_there_still_names_the_extra_it_needs(tmp_path, capsys, monkeypatch):
+    """The other half of the reorder: the file is the earlier question, and once
+    it is answered the missing extra is the real problem again."""
+    spec = tmp_path / "plant.yaml"
+    spec.write_text(YAML_SPEC, encoding="utf-8")
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    assert main(["draw", str(spec)]) == EXIT_MISSING_DEPENDENCY
+    assert "pip install 'pandid[yaml]'" in capsys.readouterr().err
 
 
 def test_a_file_that_is_not_a_spec_says_what_one_is(tmp_path, capsys):
