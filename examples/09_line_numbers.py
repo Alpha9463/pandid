@@ -20,7 +20,7 @@ a line that already exists on someone else's line list.
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pandid import Feed, Fitting, Flowsheet, Product, Pump, Valve, Vessel
+from pandid import ControlValve, Feed, Fitting, Flowsheet, Product, Pump, ReliefValve, Valve, Vessel
 from pandid.document import Revision, TitleBlock
 from pandid.portgeom import port_offset
 
@@ -34,12 +34,12 @@ def main():
     strainer = fs.add(Fitting("ST-101", variant="strainer",
                               description="Suction Strainer"))
     pump = fs.add(Pump("P-101", description="Transfer Pump"))
-    fv = fs.add(Valve("FV-101", variant="control",
-                      description="Discharge Control Valve"))
+    fv = fs.add(ControlValve("FV-101",
+                             description="Discharge Control Valve"))
     surge = fs.add(Vessel("V-101", width=90, height=140,
                           description="Surge Vessel"))
-    psv = fs.add(Valve("PSV-101", variant="psv",
-                       description="Vessel Relief Valve"))
+    psv = fs.add(ReliefValve("PSV-101", variant="psv",
+                             description="Vessel Relief Valve"))
     flare = fs.add(Product("To Flare", reference="PFD-900"))
     prod = fs.add(Product("To Unit 200", reference="PFD-200"))
 

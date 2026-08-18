@@ -10,7 +10,7 @@ the runs are straight.
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pandid import Feed, Fitting, Flowsheet, Product, Pump, Valve, Vessel
+from pandid import Feed, Fitting, Flowsheet, MotorOperatedValve, Product, Pump, ReliefValve, Vessel
 from pandid.portgeom import port_offset
 
 
@@ -24,12 +24,12 @@ def main():
     pump = fs.add(Pump("P-101", description="Feed Pump"))
     meter = fs.add(Fitting("FI-101", variant="rotameter",
                            description="Variable-Area Flow Meter"))
-    fv = fs.add(Valve("FV-101", variant="motor",
-                      description="Motor-Operated Throttle Valve"))
+    fv = fs.add(MotorOperatedValve("FV-101",
+                                   description="Motor-Operated Throttle Valve"))
     surge = fs.add(Vessel("V-101", width=90, height=140,
                           description="Surge Vessel"))
-    psv = fs.add(Valve("PSV-101", variant="psv",
-                       description="Vessel Relief Valve"))
+    psv = fs.add(ReliefValve("PSV-101", variant="psv",
+                             description="Vessel Relief Valve"))
     flare = fs.add(Product("To Flare", reference="PFD-900"))
     glass = fs.add(Fitting("SG-101", variant="sight_glass",
                            description="Sight Glass"))

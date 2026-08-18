@@ -25,13 +25,16 @@ quench on either of two measurements of its own.
 from _bootstrap import out  # runs from the repo root or from examples/
 
 from pandid import (
+    ControlValve,
     Feed,
     Fitting,
+    FlowElement,
     Flowsheet,
-    HeatExchanger,
     Product,
     Pump,
     Reactor,
+    ShellAndTubeExchanger,
+    SolenoidValve,
     Tee,
     Valve,
 )
@@ -69,8 +72,8 @@ def main():
     rx = fs.add(Reactor("R-101", variant="jacketed", agitator="turbine",
                         width=152, height=360,
                         description="Propylene Glycol Reactor"))
-    cooler = fs.add(HeatExchanger("E-201", variant="straight_tubes", width=130,
-                                  height=40, description="Product Cooler"))
+    cooler = fs.add(ShellAndTubeExchanger("E-201", variant="straight_tubes", width=130,
+                                          height=40, description="Product Cooler"))
     pump = fs.add(Pump("P-201A/B", description="Propylene Oxide Charge Pump"))
 
     # header=True is one service tapped wherever the sheet wants it, so
@@ -85,18 +88,18 @@ def main():
     glycol = fs.add(Product("Crude Propylene Glycol", reference="P&ID-301"))
 
     # --- In-line devices ----------------------------------------------
-    xv201 = fs.add(Valve("XV-201", variant="solenoid", fail="closed",
-                         description="Reactor Feed Trip Valve"))
+    xv201 = fs.add(SolenoidValve("XV-201", fail="closed",
+                                 description="Reactor Feed Trip Valve"))
     # No label_pos: an element's tag goes in a balloon rather than beside
     # the symbol, so nothing is written against the venturi itself. See
     # add_balloon() below.
-    fe201 = fs.add(Fitting(flow201.element("FE"), variant="venturi",
-                           description="Propylene Oxide Flow Element"))
+    fe201 = fs.add(FlowElement(flow201.element("FE"),
+                               description="Propylene Oxide Flow Element"))
     # loop.tag() composes without checking the first letter and cannot: a
     # final control element is not tagged from the measured variable. A
     # primary element goes through loop.element(), which does check.
-    cv201 = fs.add(Valve(flow201.tag("CV"), variant="control", fail="closed",
-                         description="Propylene Oxide Control Valve"))
+    cv201 = fs.add(ControlValve(flow201.tag("CV"), fail="closed",
+                                description="Propylene Oxide Control Valve"))
     hv202 = fs.add(Valve("HV-202", description="Process Water Block Valve"))
     # Both tees combine rather than split, and a tee is drawn identically
     # either way: it does not know which way its branch runs.
@@ -104,17 +107,17 @@ def main():
     mixer = fs.add(Fitting("M-201", variant="static_mixer",
                            description="Reactor Charge Static Mixer"))
     dump = fs.add(Tee(branch="inlet"))      # the quench joins the charge
-    xv206 = fs.add(Valve("XV-206", variant="solenoid", fail="open",
-                         description="Reactor Quench Valve"))
-    cv204 = fs.add(Valve(press204.tag("CV"), variant="control", fail="open",
-                         description="Reactor Vent Control Valve"))
-    cv203 = fs.add(Valve(level203.tag("CV"), variant="control", fail="closed",
-                         description="Product Draw Control Valve"))
+    xv206 = fs.add(SolenoidValve("XV-206", fail="open",
+                                 description="Reactor Quench Valve"))
+    cv204 = fs.add(ControlValve(press204.tag("CV"), fail="open",
+                                description="Reactor Vent Control Valve"))
+    cv203 = fs.add(ControlValve(level203.tag("CV"), fail="closed",
+                                description="Product Draw Control Valve"))
     hv205 = fs.add(Valve("HV-205", description="Jacket Cooling Water Block Valve"))
-    fe205 = fs.add(Fitting(flow205.element("FE"), variant="venturi",
-                           description="Jacket Cooling Water Flow Element"))
-    cv205 = fs.add(Valve(flow205.tag("CV"), variant="control", fail="open",
-                         description="Jacket Cooling Water Control Valve"))
+    fe205 = fs.add(FlowElement(flow205.element("FE"),
+                               description="Jacket Cooling Water Flow Element"))
+    cv205 = fs.add(ControlValve(flow205.tag("CV"), fail="open",
+                                description="Jacket Cooling Water Control Valve"))
     hv207 = fs.add(Valve("HV-207", description="E-201 Cooling Water Block Valve"))
 
     # --- Placement ----------------------------------------------------

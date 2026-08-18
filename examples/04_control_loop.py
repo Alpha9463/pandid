@@ -43,7 +43,7 @@ The equipment is pinned; the instrumentation is placed by its hosts.
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pandid import Feed, Fitting, Flowsheet, Product, Valve, Vessel
+from pandid import ControlValve, Feed, Fitting, Flowsheet, Product, ReliefValve, Vessel
 from pandid.portgeom import port_offset
 
 
@@ -61,7 +61,7 @@ def main():
     run_y = 195
 
     feed = fs.add(Feed("Feed")).pin(port="outlet", x=110, y=run_y)
-    fv = fs.add(Valve(flow.tag("FV"), variant="control")).pin(
+    fv = fs.add(ControlValve(flow.tag("FV"))).pin(
         x=270, port="inlet", y=run_y)
     drum = fs.add(Vessel("V-101", description="Surge Drum")).pin(
         x=420, port="inlet", y=run_y)
@@ -69,12 +69,12 @@ def main():
                         description="Feed Orifice Plate")).pin(
         x=180, port="inlet", y=run_y)
     # Flipped so the actuator faces the controller under the drum.
-    lv = fs.add(Valve(level.tag("LV"), variant="control")).pin(
+    lv = fs.add(ControlValve(level.tag("LV"))).pin(
         x=640, port="inlet", y=run_y, mirrored="y")
     prod = fs.add(Product("Product")).pin(port="inlet", x=790, y=run_y)
     # Two pins: how high the PSV stands is a free choice and stays a
     # corner, while the axis its riser lands on is read off the nozzle.
-    psv = fs.add(Valve("PSV-101", variant="relief")).pin(y=55).pin(
+    psv = fs.add(ReliefValve("PSV-101")).pin(y=55).pin(
         port="inlet", x=420 + port_offset(drum, "vent")[0])
     flare = fs.add(Product("To Flare", reference="P&ID-902")).pin(x=630, y=30)
 

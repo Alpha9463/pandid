@@ -17,6 +17,7 @@ from pandid import (
     Feed,
     Flowsheet,
     HeatExchanger,
+    KettleReboiler,
     Mixer,
     Product,
     Pump,
@@ -47,8 +48,8 @@ def main():
     c1_drum = fs.add(Vessel("V-101", variant="horizontal", width=130, height=42,
                             description="T-100 Reflux Drum"))
     c1_tee = fs.add(Tee())
-    c1_reb = fs.add(HeatExchanger("E-102", variant="kettle", width=120, height=44,
-                                  description="T-100 Kettle Reboiler"))
+    c1_reb = fs.add(KettleReboiler("E-102", width=120, height=44,
+                                   description="T-100 Kettle Reboiler"))
     c1_prod = fs.add(Product("Light Product", reference="PFD-1002"))
 
     pump1 = fs.add(Pump("P-100A/B", description="T-100 Bottoms Pump"))
@@ -64,8 +65,8 @@ def main():
     c2_drum = fs.add(Vessel("V-201", variant="horizontal", width=130, height=42,
                             description="T-200 Reflux Drum"))
     c2_tee = fs.add(Tee())
-    c2_reb = fs.add(HeatExchanger("E-202", variant="kettle", width=120, height=44,
-                                  description="T-200 Kettle Reboiler"))
+    c2_reb = fs.add(KettleReboiler("E-202", width=120, height=44,
+                                   description="T-200 Kettle Reboiler"))
     c2_prod = fs.add(Product("Med Product", reference="PFD-1002"))
 
     # Bottoms split and recycle
