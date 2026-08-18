@@ -52,6 +52,7 @@ import warnings
 from dataclasses import dataclass, field, replace
 from difflib import get_close_matches
 from functools import lru_cache
+from typing import Callable
 
 from pandid.portgeom import outward_dir
 from pandid.streams import SIGNAL_KINDS
@@ -1332,7 +1333,7 @@ def block_symbol(faces: tuple[tuple[str, str], ...], label: str = "") -> Symbol:
 # kind-wide key it would have been handed the belt's. So the belt names
 # its own variant now, which is what the paragraph above was written
 # against.
-_BUILT_TO_SIZE: "dict[tuple[str, str | None], object]" = {
+_BUILT_TO_SIZE: "dict[tuple[str, str | None], Callable[..., Symbol]]" = {
     ("conveyor", "default"): lambda unit: conveyor_symbol(unit.length,
                                                           unit.diameter),
     ("conveyor", "screw"): lambda unit: screw_conveyor_symbol(unit.length,
@@ -1341,7 +1342,7 @@ _BUILT_TO_SIZE: "dict[tuple[str, str | None], object]" = {
 }
 
 
-def _built_to_size(kind: str, variant: str):
+def _built_to_size(kind: str, variant: str) -> "Callable[..., Symbol] | None":
     """The builder for ``(kind, variant)``, most specific first."""
     return _BUILT_TO_SIZE.get((kind, variant)) or _BUILT_TO_SIZE.get((kind, None))
 
@@ -3768,15 +3769,17 @@ class SymbolRegistry:
             ("pusher", "X8038", sq + margin, sq, margin, _CENTRIFUGE_PUSHER, side),
             ("skimmer", "X8039", sq + margin, sq, margin, _CENTRIFUGE_SKIMMER, side),
         )
-        decanter = None
+        by_name: dict[str, Symbol] = {}
         for name, reg, width, height, ox, detail, ports in rows:
             sym = _centrifuge(name, reg, width, height, ox, detail, ports)
             self.register("centrifuge", sym, name)
-            if name == "decanter":
-                decanter = sym
+            by_name[name] = sym
         # Bare Centrifuge(...) draws the decanter: see the class
         # docstring on why, and the docstring above on the second key.
-        self.register("centrifuge", decanter)
+        # Looked up rather than tracked through the loop above, so
+        # "decanter" not being one of ``rows`` fails loudly here instead
+        # of registering a bare centrifuge that draws nothing.
+        self.register("centrifuge", by_name["decanter"])
 
     def _register_driers(self):
         """ISO 10628-2 Table 2 group 10, the four rows pandid did not

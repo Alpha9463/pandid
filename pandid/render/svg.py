@@ -3165,7 +3165,8 @@ class SvgRenderer:
                        f'dominant-baseline="middle">{escaped(bot)}</text>')
         return out
 
-    def _label_place(self, lpos, x, y, u_width, u_height):
+    def _label_place(self, lpos: str, x: float, y: float, u_width: float,
+                     u_height: float) -> "tuple[float, float, str, str]":
         """Where a label on side ``lpos`` goes, and how it sets.
 
         ``lpos`` is one of :data:`LABEL_POSITIONS`, or the ``top_right``
@@ -3405,6 +3406,11 @@ class SvgRenderer:
         # with nowhere to go, and there the placement is one to make by
         # hand.
         plate = _unit_label_box(item)
+        # `_unit_label_box` only answers None for a `center` item, and
+        # `item` above is built with `lpos` fixed to "right" or "bottom"
+        # (see `lpos` at the top of this method) -- never reassigned to
+        # "center" on any path that reaches here.
+        assert plate is not None
         face, along = ((u_height, plate[3] - plate[1]) if upright
                        else (u_width, plate[2] - plate[0]))
         return _step_aside(item, (face + along) / 2, ink, others)

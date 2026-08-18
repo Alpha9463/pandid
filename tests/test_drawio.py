@@ -2293,6 +2293,22 @@ def test_a_paged_drawing_is_fitted_onto_its_paper():
         assert -1 <= float(geo.get("y")) <= sheet.height
 
 
+def test_dock_names_the_missing_callback_rather_than_crashing_blind():
+    """``too_small`` is only reached from inside ``dock``'s own overflow
+    branch, so a caller whose page never overflows -- the two tests above,
+    both with tiny or empty ``items`` -- may leave it out. One whose page
+    *does* overflow and still left it out used to fail with a bare
+    "'NoneType' object is not callable"; it now names what is actually
+    missing."""
+    from pandid.render import furniture as F
+    from pandid.render.svg import _page
+
+    sheet = _page("A4")
+    huge = object()
+    with pytest.raises(TypeError, match="too_small"):
+        F.dock([(huge, "top-left", 10_000.0, 10_000.0)], (0.0, 0.0, 100.0, 100.0), sheet=sheet)
+
+
 def test_a_zone_border_rules_the_same_frame_the_sheet_rules():
     """Held against ``furniture.zone_layout`` -- the geometry the SVG strokes --
     so the exported band is divided into the same fields, lettered the same way
