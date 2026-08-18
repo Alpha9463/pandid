@@ -40,7 +40,7 @@ from pandid import (
     Tee,
 )
 from pandid.document import Revision, TitleBlock, equipment_list, legend, notes
-from pandid.portgeom import port_offset
+from pandid.portgeom import pinned_x, pinned_y, port_offset
 
 
 def main():
@@ -185,15 +185,15 @@ def main():
     # coming back from the east; the burner stays underneath, where the
     # stencil draws it.
     heater.pin(mirrored=True).pin(port="inlet", x=420, y=regen_run_y)
-    heater_out_y = heater.pin_.y + port_offset(heater, "outlet")[1]
-    fuel_x = heater.pin_.x + port_offset(heater, "fuel")[0]
+    heater_out_y = pinned_y(heater, "outlet")
+    fuel_x = pinned_x(heater, "fuel")
     fuel.pin(port="outlet", x=140, y=1030)
     cv503.pin(port="inlet", x=250, y=1030)
 
     regen_cooler.pin(port="tube_in", x=1250, y=regen_out_y)
     regen_sep.pin(port="feed", x=1440, y=regen_out_y)
-    sep_vapor_x = regen_sep.pin_.x + port_offset(regen_sep, "vapor")[0]
-    sep_liquid_x = regen_sep.pin_.x + port_offset(regen_sep, "liquid")[0]
+    sep_vapor_x = pinned_x(regen_sep, "vapor")
+    sep_liquid_x = pinned_x(regen_sep, "liquid")
     regen_k.pin(port="suction", x=1620, y=60)
     cv504.pin(port="inlet", x=1520, y=310)
     water.pin(port="inlet", x=1700, y=310)

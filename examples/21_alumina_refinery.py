@@ -71,7 +71,7 @@ from pandid import (
     Tee,
 )
 from pandid.document import Revision, TableBox, TitleBlock, equipment_list, notes
-from pandid.portgeom import port_offset
+from pandid.portgeom import pinned_x, pinned_y
 
 # --- Stream property table --------------------------------------------
 # Rows render in first-seen key order, so every stream below carries the
@@ -381,7 +381,7 @@ def main():
     # positioned by that nozzle, and its head is then a roller's radius
     # below the drop -- so the run out of it is on the *head's*
     # elevation, which is what everything downstream is pinned to.
-    ore_run_y = ore_belt.pin_.y + port_offset(ore_belt, "discharge")[1]
+    ore_run_y = pinned_y(ore_belt, "discharge")
     mill_tee.pin(port="inlet", x=460, y=ore_run_y)
     mill.pin(port="feed", x=570, y=340)
 
@@ -397,23 +397,16 @@ def main():
     # Read off the artwork rather than written down: every one of these
     # is a nozzle position the symbol owns, so nothing here has to be
     # re-derived when a box changes size or a train is spread out.
-    hx1_shell_in_x = interchanger_1.pin_.x + port_offset(
-        interchanger_1, "shell_in")[0]
-    hx2_shell_in_x = interchanger_2.pin_.x + port_offset(
-        interchanger_2, "shell_in")[0]
-    hx1_drain_x = interchanger_1.pin_.x + port_offset(
-        interchanger_1, "shell_out")[0]
-    hx2_drain_x = interchanger_2.pin_.x + port_offset(
-        interchanger_2, "shell_out")[0]
-    heater_steam_x = steam_heater.pin_.x + port_offset(
-        steam_heater, "shell_in")[0]
-    heater_drain_x = steam_heater.pin_.x + port_offset(
-        steam_heater, "shell_out")[0]
-    desil_draw_x = desilication.pin_.x + port_offset(
-        desilication, "outlet")[0]
-    digester_draw_x = digester.pin_.x + port_offset(digester, "outlet")[0]
-    flash_1_axis_x = flash_1.pin_.x + port_offset(flash_1, "vapor")[0]
-    flash_2_axis_x = flash_2.pin_.x + port_offset(flash_2, "vapor")[0]
+    hx1_shell_in_x = pinned_x(interchanger_1, "shell_in")
+    hx2_shell_in_x = pinned_x(interchanger_2, "shell_in")
+    hx1_drain_x = pinned_x(interchanger_1, "shell_out")
+    hx2_drain_x = pinned_x(interchanger_2, "shell_out")
+    heater_steam_x = pinned_x(steam_heater, "shell_in")
+    heater_drain_x = pinned_x(steam_heater, "shell_out")
+    desil_draw_x = pinned_x(desilication, "outlet")
+    digester_draw_x = pinned_x(digester, "outlet")
+    flash_1_axis_x = pinned_x(flash_1, "vapor")
+    flash_2_axis_x = pinned_x(flash_2, "vapor")
 
     mp_steam.pin(port="outlet", x=1560, y=400)
     steam_condensate.pin(port="inlet", x=1760, y=790)
@@ -446,16 +439,14 @@ def main():
     hydrate_filter.pin(port="inlet", x=2150, y=1700)
     hydrate_wash.pin(port="outlet", x=2200, y=1500)
     hydrate_belt.pin(port="feed", x=2220, y=calcine_y)
-    hydrate_run_y = hydrate_belt.pin_.y + port_offset(
-        hydrate_belt, "discharge")[1]
+    hydrate_run_y = pinned_y(hydrate_belt, "discharge")
     calciner_tee.pin(port="inlet", x=2470, y=hydrate_run_y)
     calciner.pin(port="feed", x=2560, y=hydrate_run_y)
     product_cyclone.pin(port="feed", x=2780, y=hydrate_run_y)
     combustion.pin(port="inlet", x=2260, y=2000)
     air.pin(port="outlet", x=2160, y=2000)
     fuel.pin(port="outlet", x=2180, y=2170)
-    combustion_gas_y = combustion.pin_.y + port_offset(
-        combustion, "outlet")[1]
+    combustion_gas_y = pinned_y(combustion, "outlet")
     offgas.pin(port="inlet", x=2960, y=1680)
     alumina.pin(port="inlet", x=2960, y=2060)
 
@@ -463,24 +454,21 @@ def main():
     caustic.pin(port="outlet", x=1230, y=1863)
     evaporator.pin(port="shell_in", x=1550, y=2000)
     lp_steam.pin(port="outlet", x=1300,
-                 y=evaporator.pin_.y + port_offset(evaporator, "tube_in")[1])
+                 y=pinned_y(evaporator, "tube_in"))
     evap_condensate.pin(
         port="inlet", x=1740,
-        y=evaporator.pin_.y + port_offset(evaporator, "tube_out")[1])
+        y=pinned_y(evaporator, "tube_out"))
     evap_vapour.pin(port="inlet", x=1660, y=1820)
     liquor_pump.pin(port="suction", x=1780, y=2100)
 
-    cake_x = security_filter.pin_.x + port_offset(security_filter, "cake")[0]
-    mud_draw_x = settler.pin_.x + port_offset(settler, "underflow")[0]
-    classifier_1_axis_x = classifier_1.pin_.x + port_offset(
-        classifier_1, "overflow")[0]
-    classifier_2_axis_x = classifier_2.pin_.x + port_offset(
-        classifier_2, "overflow")[0]
-    product_axis_x = product_cyclone.pin_.x + port_offset(
-        product_cyclone, "overflow")[0]
-    evap_bottoms_x = evaporator.pin_.x + port_offset(evaporator, "bottoms")[0]
-    evap_vapour_x = evaporator.pin_.x + port_offset(evaporator, "shell_out")[0]
-    spent_in_2_y = spent_mixer.pin_.y + port_offset(spent_mixer, "in_2")[1]
+    cake_x = pinned_x(security_filter, "cake")
+    mud_draw_x = pinned_x(settler, "underflow")
+    classifier_1_axis_x = pinned_x(classifier_1, "overflow")
+    classifier_2_axis_x = pinned_x(classifier_2, "overflow")
+    product_axis_x = pinned_x(product_cyclone, "overflow")
+    evap_bottoms_x = pinned_x(evaporator, "bottoms")
+    evap_vapour_x = pinned_x(evaporator, "shell_out")
+    spent_in_2_y = pinned_y(spent_mixer, "in_2")
 
     # Every lane a line takes when it runs back the way it came, written
     # down once. Three of them reach the dilution tank's inlets, three
@@ -516,7 +504,7 @@ def main():
                draw_as_recycle=True).via(
                    [(1850, lane_home_y), (lane_home_x, lane_home_y),
                     (lane_home_x, lane_return_y),
-                    (mill_tee.pin_.x + tee_w / 2, lane_return_y)])
+                    (pinned_x(mill_tee) + tee_w / 2, lane_return_y)])
     fs.connect(mill_tee.outlet, mill.feed, name="S-904").via([(570, ore_run_y)])
     fs.connect(mill.discharge, interchanger_1.tube_in, name="S-905").via(
         [(570, slurry_y)])
@@ -550,7 +538,7 @@ def main():
     # this line is drawn left to right and so is everything below it.
     fs.connect(flash_2.liquid, dilution.port("in_1"), name="S-915").via(
         [(flash_2_axis_x, lane_blowoff_y), (lane_blowoff, lane_blowoff_y),
-         (lane_blowoff, dilution.pin_.y + port_offset(dilution, "in_1")[1])])
+         (lane_blowoff, pinned_y(dilution, "in_1"))])
 
     fs.connect(mp_steam.outlet, steam_heater.port("shell_in"),
                name="S-916").via([(heater_steam_x, 400)])
@@ -570,43 +558,42 @@ def main():
                name="S-921").via(
                    [(cake_x, lane_residue_y), (lane_residue, lane_residue_y),
                     (lane_residue,
-                     dilution.pin_.y + port_offset(dilution, "in_3")[1])])
+                     pinned_y(dilution, "in_3"))])
     fs.connect(dilution.outlet, floc_tee.inlet, name="S-922")
     # East along the flag's own elevation and then up the riser: one
     # waypoint short of that and the two ends are joined by a slope,
     # which ISO 15519-1 12.1 does not allow a connecting line and
     # tests/test_route_invariants.py catches.
     fs.connect(flocculant.outlet, floc_tee.branch, name="S-923").via(
-        [(floc_tee.pin_.x + tee_w / 2, 1250)])
+        [(pinned_x(floc_tee) + tee_w / 2, 1250)])
     fs.connect(floc_tee.outlet, settler.feed, name="S-924")
 
     fs.connect(settler.port("overflow"), security_filter.inlet, name="S-925")
     fs.connect(filter_wash.outlet, security_filter.port("wash_in"),
                name="S-926").via(
-                   [(security_filter.pin_.x
-                     + port_offset(security_filter, "wash_in")[0], 880)])
+                   [(pinned_x(security_filter, "wash_in"), 880)])
     fs.connect(security_filter.outlet, liquor_cooler.inlet, name="S-927")
 
     # --- Mud washing --------------------------------------------------
     fs.connect(settler.port("underflow"), wash_tee.inlet, name="S-928").via(
         [(mud_draw_x, 1430)])
     fs.connect(wash_water.outlet, wash_tee.branch, name="S-929").via(
-        [(wash_tee.pin_.x + tee_w / 2, 1520)])
+        [(pinned_x(wash_tee) + tee_w / 2, 1520)])
     fs.connect(wash_tee.outlet, washer.feed, name="S-930")
     fs.connect(washer.port("underflow"), residue.inlet, name="S-931").via(
-        [(washer.pin_.x + port_offset(washer, "underflow")[0], 1660)])
+        [(pinned_x(washer, "underflow"), 1660)])
 
     # --- Precipitation and classification -----------------------------
     fs.connect(liquor_cooler.outlet, seed_tee.inlet, name="S-932")
     fs.connect(classifier_2.port("underflow"), seed_tee.branch,
                name="S-933").via([(classifier_2_axis_x, lane_seed_y),
-                                  (seed_tee.pin_.x + tee_w / 2, lane_seed_y)])
+                                  (pinned_x(seed_tee) + tee_w / 2, lane_seed_y)])
     fs.connect(seed_tee.outlet, precipitator_1.feed, name="S-934")
     fs.connect(precipitator_1.outlet, precipitator_2.feed, name="S-935").via(
-        [(precipitator_1.pin_.x + port_offset(precipitator_1, "outlet")[0],
+        [(pinned_x(precipitator_1, "outlet"),
           1270)])
     fs.connect(precipitator_2.outlet, classifier_1.feed, name="S-936").via(
-        [(precipitator_2.pin_.x + port_offset(precipitator_2, "outlet")[0],
+        [(pinned_x(precipitator_2, "outlet"),
           1400)])
     fs.connect(classifier_1.port("underflow"), hydrate_filter.inlet,
                name="S-937").via([(classifier_1_axis_x, 1700)])
@@ -623,8 +610,7 @@ def main():
     # --- Hydrate filtration and calcination ---------------------------
     fs.connect(hydrate_wash.outlet, hydrate_filter.port("wash_in"),
                name="S-940").via(
-                   [(hydrate_filter.pin_.x
-                     + port_offset(hydrate_filter, "wash_in")[0], 1500)])
+                   [(pinned_x(hydrate_filter, "wash_in"), 1500)])
     fs.connect(hydrate_filter.outlet, spent_mixer.port("in_2"),
                name="S-941").via(
                    [(2340, 1700), (2340, lane_filtrate_y),
@@ -651,9 +637,9 @@ def main():
     # --- Calcination --------------------------------------------------
     fs.connect(air.outlet, combustion.inlet, name="S-949")
     fs.connect(fuel.outlet, combustion.fuel, name="S-950").via(
-        [(combustion.pin_.x + port_offset(combustion, "fuel")[0], 2170)])
+        [(pinned_x(combustion, "fuel"), 2170)])
     fs.connect(combustion.outlet, calciner_tee.branch, name="S-951").via(
-        [(calciner_tee.pin_.x + tee_w / 2, combustion_gas_y)])
+        [(pinned_x(calciner_tee) + tee_w / 2, combustion_gas_y)])
     fs.connect(calciner_tee.outlet, calciner.feed, name="S-952")
     fs.connect(calciner.product, product_cyclone.feed, name="S-953")
     fs.connect(product_cyclone.port("overflow"), offgas.inlet,

@@ -442,9 +442,11 @@ def port_offset(unit: "Unit", port_name: str, placed=None) -> tuple[float, float
     land on a line at ``y`` is pinned at
     ``y - port_offset(valve, "inlet")[1]``, which is
     :meth:`pandid.units.Unit.pin`'s ``port=`` argument, and it is how an
-    author finds the elevation of a nozzle to run a spine at::
+    author finds the elevation of a nozzle to run a spine at -- though
+    :func:`pinned_y` is the spelling for that, this being the offset
+    alone and the two being easy to add up wrongly::
 
-        feed_y = column.pin_.y + port_offset(column, "feed")[1]
+        feed_y = pinned_y(column, "feed")
 
     ``placed`` is the placement to answer for and defaults to the unit's
     own, preferring the *pin* over the frame for the reason
@@ -461,3 +463,67 @@ def port_offset(unit: "Unit", port_name: str, placed=None) -> tuple[float, float
     probe = Frame(x=0.0, y=0.0, w=w, h=h, orientation=rot,
                   mirrored=mirror_x, mirror_y=mirror_y)
     return port_point(unit, probe, port_name)
+
+
+def _pinned(unit: "Unit", axis: str, port_name: str | None) -> float:
+    """One axis of a pinned unit's corner, or of one of its nozzles.
+
+    The shared half of :func:`pinned_x` and :func:`pinned_y`; see either
+    for what it is for.
+    """
+    pin = unit.pin_
+    if pin is None:
+        raise ValueError(
+            f"{unit.name} has not been pinned, so it has no {axis} to read. "
+            f"pin() it first, or ask its frame after the sheet is laid out "
+            f"(port_point(unit, unit.frame, ...))."
+        )
+    corner = getattr(pin, axis)
+    if corner is None:
+        placed = "col/row" if (pin.col is not None or pin.row is not None) else "nothing"
+        raise ValueError(
+            f"{unit.name} is pinned by {placed} and not by an absolute {axis}, so "
+            f"there is no coordinate to read: the solver decides it, and it is not "
+            f"decided until the sheet is laid out. Pin it with {axis}=, or read "
+            f"unit.frame.{axis} afterwards."
+        )
+    if port_name is None:
+        return corner
+    return corner + port_offset(unit, port_name)[0 if axis == "x" else 1]
+
+
+def pinned_x(unit: "Unit", port_name: str | None = None) -> float:
+    """The absolute ``x`` a pinned unit -- or one of its nozzles -- sits at.
+
+    The safe spelling of ``unit.pin_.x + port_offset(unit, port)[0]``,
+    and the one to reach for. That expression is wrong in two ways a
+    reader does not see: ``pin_`` is ``None`` until the unit is pinned
+    and ``pin_.x`` is ``None`` when it is pinned by ``col``/``row``, so
+    it raises ``TypeError`` from inside an arithmetic expression; and
+    the ``[0]`` has to be matched to the ``.x`` by hand, so an ``.x``
+    paired with a ``[1]`` reads fine and silently draws a run at the
+    wrong elevation.
+
+    This returns a ``float`` or raises saying which of the two is
+    wrong::
+
+        spine_y = pinned_y(column, "feed")     # the nozzle's elevation
+        centre_x = pinned_x(tee) + tee_w / 2   # the unit's own corner
+
+    Answers about the **pin** and so about the sheet that is coming,
+    which is what an author placing the next unit is asking. After a
+    layout, :func:`port_point` against the unit's frame is the same
+    question about the sheet that exists.
+
+    Raises :class:`ValueError` if the unit is unpinned, or pinned on the
+    other axis only.
+    """
+    return _pinned(unit, "x", port_name)
+
+
+def pinned_y(unit: "Unit", port_name: str | None = None) -> float:
+    """The absolute ``y`` a pinned unit -- or one of its nozzles -- sits at.
+
+    :func:`pinned_x` down the other axis; see it.
+    """
+    return _pinned(unit, "y", port_name)

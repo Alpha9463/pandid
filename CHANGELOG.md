@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - draw.io exports a composed symbol as a group of cells.
 - A type checker resolves `mixer.in_1`, `splitter.out_2`, `column.feed_2` and
   `block.in_3`, and refuses a number the unit was not built with.
+- `pinned_x()` and `pinned_y()` give the coordinate a pinned unit or one of
+  its nozzles sits at.
 - `Stream.at_boundary` is true when one end of a line is a `Feed` or a
   `Product`. `Stream.tabulate` marks which segment of a run the stream table
   reads.

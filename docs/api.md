@@ -1695,12 +1695,33 @@ portgeom.port_offset(unit, port_name, placed=None) -> (dx, dy)
 ```
 
 Where a port sits relative to the unit's own top-left corner, under `placed` (a
-`Pin` or a `Frame`) or under the unit's own placement. The read-only half of the
-same idea, for finding the elevation of a nozzle to run a spine at:
+`Pin` or a `Frame`) or under the unit's own placement. This is the offset alone;
+to find the elevation of a nozzle to run a spine at, use the pair below.
+
+```text
+portgeom.pinned_x(unit, port_name=None) -> float
+portgeom.pinned_y(unit, port_name=None) -> float
+```
+
+The absolute coordinate a **pinned** unit — or one of its nozzles — sits at.
 
 ```python
-feed_y = column.pin_.y + port_offset(column, "feed")[1]
+spine_y = pinned_y(column, "feed")     # the nozzle's elevation
+centre_x = pinned_x(tee) + tee_w / 2   # the unit's own corner
 ```
+
+These replace `unit.pin_.y + port_offset(unit, port)[1]`, which is wrong in two
+ways a reader does not see. `pin_` is `None` until the unit is pinned, and
+`pin_.y` is `None` when it is pinned by `col`/`row`, so it raises from inside an
+arithmetic expression naming neither the unit nor the reason — and the `[1]` has
+to be matched to the `.y` by hand, so a `.x` paired with a `[1]` reads fine and
+silently draws a run at the wrong elevation.
+
+They answer about the **pin**, and so about the sheet that is coming, which is
+what an author placing the next unit is asking. After a layout,
+`port_point(unit, unit.frame, port)` is the same question about the sheet that
+exists. Both raise `ValueError` if the unit is unpinned or pinned on the other
+axis only.
 
 ### `orientation`
 
