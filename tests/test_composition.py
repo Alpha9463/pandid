@@ -828,6 +828,158 @@ def test_the_group_9_bodies_are_the_outline_table_2_draws():
     assert default_registry.get("centrifuge") is default_registry.get("centrifuge", "decanter")
 
 
+def test_group_4_matches_the_rows_it_claims():
+    """ISO 10628-2 group 4: the boiler, the stack and the flare.
+
+    Measured off rows 4.1, 4.7 and 4.8 in grid modules and written here in
+    drawing units at ten to the module, the same scale the group-11 test
+    above checks the crusher and mill against.
+
+    * **4.1, 2532, Boiler with dome:** a 10 M square shell (0,25) (100,25)
+      (100,125) (0,125), with a 5 M semicircular dome -- radius 25 units --
+      struck from (25,25) to (75,25).
+    * **4.7, 2041, Stack:** a shaft tapering from a 2 M cap at (20,0)
+      (40,0) to walls landing a module short of a 6 M foundation flange at
+      (10,100) and (50,100), the flange itself one flat stroke under it
+      rather than a fourth side closing the outline -- Table 2's own
+      construction, and why this is open strokes rather than a filled
+      polygon.
+    * **4.8, 2591, Gas flare:** the same open shaft-and-flange
+      construction with straight rather than tapered walls, topped by a
+      2 M x 4 M vesica flame.
+    """
+    boiler = default_registry.get("boiler")
+    assert (boiler.width, boiler.height) == (100.0, 125.0)
+    assert "M 25 25 A 25 25 0 0 1 75 25" in boiler.svg
+    assert "L 100 25 L 100 125 L 0 125 L 0 25 Z" in boiler.svg
+    assert boiler.ports == {"feedwater": (0.0, 50.0), "steam": (50.0, 0.0)}
+    assert boiler.iso_reg == "2532"
+
+    stack = default_registry.get("stack")
+    assert (stack.width, stack.height) == (60.0, 100.0)
+    assert "M 20 0 L 40 0" in stack.svg
+    assert "M 20 0 L 10 100" in stack.svg
+    assert "M 40 0 L 50 100" in stack.svg
+    assert "M 0 100 L 60 100" in stack.svg
+    assert 'fill="none"' in stack.svg
+    assert stack.ports == {"inlet": (12.0, 80.0)}
+    assert stack.port_faces["inlet"] == {"W": (12.0, 80.0)}
+    assert stack.iso_reg == "2041"
+
+    flare = default_registry.get("flare")
+    assert (flare.width, flare.height) == (60.0, 120.0)
+    assert "M 30 40 A 25 25 0 0 1 30 0 A 25 25 0 0 1 30 40 Z" in flare.svg
+    assert "M 20 40 L 40 40 M 20 40 L 20 120 M 40 40 L 40 120" in flare.svg
+    assert "M 0 120 L 60 120" in flare.svg
+    assert flare.ports == {"inlet": (20.0, 90.0)}
+    assert flare.port_faces["inlet"] == {"W": (20.0, 90.0)}
+    assert flare.iso_reg == "2591"
+
+
+def test_the_group_10_outline_is_the_row_table_2_draws():
+    """The chamfered casing every group-10 row shares.
+
+    Measured off row 10.1: casing x 8..16 M at y 6..16 M, chamfered 1 M x
+    2 M at the top two corners only -- (8,6) to (9,4) and (16,6) to
+    (15,4) -- so an 8 M x 12 M box. The two connection ticks are on the
+    west and east walls, nine tenths of the way down a straight-sided run
+    from y 20 to y 120 units -- also its own mid-point.
+    """
+    general = default_registry.get("dryer", "general")
+    assert (general.width, general.height) == (80.0, 120.0)
+    assert "M 0 120 L 0 20 L 10 0 L 70 0 L 80 20 L 80 120 Z" in general.svg
+    assert general.ports == {"feed": (0.0, 70.0), "product": (80.0, 70.0)}
+    assert general.iso_reg == "C0046"
+    assert not general.overlays
+
+
+@pytest.mark.parametrize(
+    "variant, reg, needle",
+    [
+        ("shelf", "X8083", '<line x1="20" y1="30" x2="60" y2="30"'),
+        (
+            "turbo",
+            "X8040",
+            "M 20 30 L 60 30 M 20 50 L 60 50 M 0 40 L 30 40 M 50 40 L 80 40 M 40 50 L 40 0",
+        ),
+        ("belt", "X8043", '<circle cx="17.5" cy="40" r="7.5"'),
+    ],
+)
+def test_group_10_marks_match_their_rows(variant, reg, needle):
+    """Item 10.2's three shelf lines, 10.3's rotor shaft and 10.6's rollers.
+
+    Each is the shared outline from the test above plus one detail, drawn
+    straight into the body rather than composed from a part -- group 10
+    has no supplementary-symbol group behind it, so none of the three is
+    an :class:`~pandid.render.symbols.OverlayPart` and none carries
+    ``overlays``.
+    """
+    sym = default_registry.get("dryer", variant)
+    assert "M 0 120 L 0 20 L 10 0 L 70 0 L 80 20 L 80 120 Z" in sym.svg
+    assert needle in sym.svg
+    assert sym.iso_reg == reg
+    assert not sym.overlays
+    assert sym.ports == {"feed": (0.0, 70.0), "product": (80.0, 70.0)}
+
+
+def test_the_group_5_outline_is_the_row_table_2_draws():
+    """The trapezoid-on-a-basin every group-5 row shares.
+
+    Measured off row 5.1: a trapezoid 4 M across the top (20,0) (60,0)
+    widening to 8 M at a shoulder 8 M down (0,80) (80,80), sitting on a
+    2 M deep basin the same 8 M wide -- an 8 M x 10 M box overall, the
+    apex centred on it.
+    """
+    general = default_registry.get("cooling_tower", "general")
+    assert (general.width, general.height) == (80.0, 100.0)
+    assert "M 20 0 L 60 0 L 80 80 L 80 100 L 0 100 L 0 80 Z" in general.svg
+    assert general.iso_reg == "2521"
+    assert not general.overlays
+    assert general.ports == {
+        "air_out": (40.0, 0.0),
+        "water_in": (0.0, 90.0),
+        "air_in": (80.0, 90.0),
+        "water_out": (40.0, 100.0),
+        "makeup": (20.0, 100.0),
+        "blowdown": (60.0, 100.0),
+    }
+
+
+@pytest.mark.parametrize(
+    "variant, reg, has_dry, has_wet, has_fan",
+    [
+        ("dry_natural", "X8109", True, False, None),
+        ("dry_forced", "X8110", True, False, 65.0),
+        ("dry_induced", "X8111", True, False, 15.0),
+        ("wet_natural", "X8112", False, True, None),
+        ("wet_forced", "X8113", False, True, 65.0),
+        ("wet_induced", "X8114", False, True, 15.0),
+        ("wet_dry_natural", "X8115", True, True, None),
+    ],
+)
+def test_group_5_fill_and_draught_marks_match_their_rows(variant, reg, has_dry, has_wet, has_fan):
+    """Every combination Table 2 tabulates, and only those.
+
+    The dry mark (items 5.2/5.3/5.4/5.8) is a rule across the basin's own
+    mid-height hatched with seven 1 M ticks; the wet mark (5.5/5.6/5.7/5.8)
+    is a stub off the west wall breaking into an arrow up the trapezoid's
+    vertical middle; the fan (5.3/5.4/5.6/5.7) is a 2 M circle with a
+    bow-tie blade mark, low in the tower for a forced draught and high in
+    it for an induced one -- there is no fan on a naturally draughted row.
+    """
+    sym = default_registry.get("cooling_tower", variant)
+    assert "M 20 0 L 60 0 L 80 80 L 80 100 L 0 100 L 0 80 Z" in sym.svg
+    assert sym.iso_reg == reg
+    assert not sym.overlays
+    assert ('<line x1="0" y1="90" x2="80" y2="90"' in sym.svg) is has_dry
+    assert ("M 10 40 L 40 40 M 30 50 L 40 40 L 50 50" in sym.svg) is has_wet
+    if has_fan is None:
+        assert '<circle cx="40" cy="65"' not in sym.svg
+        assert '<circle cx="40" cy="15"' not in sym.svg
+    else:
+        assert f'<circle cx="40" cy="{has_fan:g}" r="10"' in sym.svg
+
+
 def test_the_cyclone_is_not_composed():
     """ISO 14617-1 §4.5 names X2618 by registration number as a symbol in its
     own right, and group 29 has no vortex to compose one from. So a
@@ -903,6 +1055,27 @@ _NUMBERED_WHOLE_DRAWINGS = {
     "centrifuge/default": "X8082",
     "centrifuge/pusher": "X8038",
     "centrifuge/skimmer": "X8039",
+    # ISO 10628-2 group 4, STEAM GENERATORS, FURNACES, RECOOLING DEVICE.
+    "boiler/default": "2532",
+    "stack/default": "2041",
+    "flare/default": "2591",
+    # Group 10, DRIER: the four rows with no group 26-29 mark to compose,
+    # drawn body-plus-detail the way the group-11 crushers are.
+    "dryer/general": "C0046",
+    "dryer/shelf": "X8083",
+    "dryer/turbo": "X8040",
+    "dryer/belt": "X8043",
+    # Group 5, COOLING TOWER: one outline, a fill mark and a draught mark,
+    # the same shape of composition as group 11's and just as unregistered
+    # by IsoPart, since neither mark is a tabulated group 26-29 item.
+    "cooling_tower/general": "2521",
+    "cooling_tower/dry_natural": "X8109",
+    "cooling_tower/dry_forced": "X8110",
+    "cooling_tower/dry_induced": "X8111",
+    "cooling_tower/wet_natural": "X8112",
+    "cooling_tower/wet_forced": "X8113",
+    "cooling_tower/wet_induced": "X8114",
+    "cooling_tower/wet_dry_natural": "X8115",
 }
 
 

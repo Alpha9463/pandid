@@ -99,6 +99,9 @@ __all__ = [
     "RotaryDryer",
     "FluidizedBedDryer",
     "SprayDryer",
+    "ShelfDryer",
+    "TurboDryer",
+    "BeltDryer",
     "JawCrusher",
     "ConeCrusher",
     "HammerCrusher",
@@ -899,6 +902,60 @@ class SprayDryer(Dryer):
     kind = "dryer"
     VARIANTS = ("default", "spray")
     VARIANT_ALIASES = {"default": "spray"}
+    PORTS = [("feed", "inlet", "feed"), ("product", "outlet", "process")]
+
+    feed: Port
+    product: Port
+
+
+class ShelfDryer(Dryer):
+    """Shelf (tray) dryer: trays of product in a heated oven or chamber.
+
+    ISO 10628-2 item 10.2, X8083: the general drier's own casing
+    carrying three shelf lines. Batch duty -- the trays are loaded and
+    struck by hand -- next to the continuous machines the rest of the
+    group draws.
+    """
+
+    kind = "dryer"
+    VARIANTS = ("default", "shelf")
+    VARIANT_ALIASES = {"default": "shelf"}
+    PORTS = [("feed", "inlet", "feed"), ("product", "outlet", "process")]
+
+    feed: Port
+    product: Port
+
+
+class TurboDryer(Dryer):
+    """Turbo (disc, moving-shelf) dryer: a stack of rotating discs on one shaft.
+
+    ISO 10628-2 item 10.3, X8040. The product moves down the stack from
+    disc to disc as each one turns under it, which is what tells this
+    from :class:`ShelfDryer`'s fixed trays -- the artwork's own shaft
+    reaching to the casing's crown is the drive that turns them.
+    """
+
+    kind = "dryer"
+    VARIANTS = ("default", "turbo")
+    VARIANT_ALIASES = {"default": "turbo"}
+    PORTS = [("feed", "inlet", "feed"), ("product", "outlet", "process")]
+
+    feed: Port
+    product: Port
+
+
+class BeltDryer(Dryer):
+    """Belt (roller-conveyor) dryer: product carried through on a moving bed.
+
+    ISO 10628-2 item 10.6, X8043. Continuous duty, drawn as the two
+    rollers a belt runs on -- the same construction
+    :class:`~pandid.units.Conveyor`'s belt variant draws, here inside a
+    heated casing rather than in the open.
+    """
+
+    kind = "dryer"
+    VARIANTS = ("default", "belt")
+    VARIANT_ALIASES = {"default": "belt"}
     PORTS = [("feed", "inlet", "feed"), ("product", "outlet", "process")]
 
     feed: Port

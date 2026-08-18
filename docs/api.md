@@ -518,7 +518,7 @@ from pandid import units
 sifter = units.Separator("SC-101", variant="sifter")
 ```
 
-`units.Kind(variant=…)` is the escape hatch. 113 of the 189 registered drawings
+`units.Kind(variant=…)` is the escape hatch. 125 of the 204 registered drawings
 get no class of their own, and this is how you reach them; see
 [Variants](#variants) for the list. Where a class exists, name it.
 
@@ -788,7 +788,7 @@ sep.underflow            # the dust draw, and a Port a type checker can resolve
 ```
 
 `Kind(variant=…)` stays the low-level form, and is the only way to reach the
-92 drawings that get no class of their own. A class stores the
+125 drawings that get no class of their own. A class stores the
 **registry's** spelling of its variant and not its own, so `to_dict()` writes
 `variant: cyclone` rather than the class-local `default`, and the file reads
 back. [Variants](#variants) lists the drawings each class owns.
@@ -832,6 +832,9 @@ base has not, `-` one it drops. The bases are in the [Port table](#port-table).
 | `RotaryDryer` | `dryer` | `Dryer` | |
 | `FluidizedBedDryer` | `dryer` | `Dryer` | |
 | `SprayDryer` | `dryer` | `Dryer` | |
+| `ShelfDryer` | `dryer` | `Dryer` | |
+| `TurboDryer` | `dryer` | `Dryer` | |
+| `BeltDryer` | `dryer` | `Dryer` | |
 | `JawCrusher` | `crusher` | `Crusher` | |
 | `ConeCrusher` | `crusher` | `Crusher` | |
 | `HammerCrusher` | `crusher` | `Crusher` | |
@@ -1383,6 +1386,10 @@ first listed is what the class draws when it is built by name alone.
 | `RotaryDryer` | `dryer` | `default` |
 | `FluidizedBedDryer` | `dryer` | `fluidized_bed` (as `default`) |
 | `SprayDryer` | `dryer` | `spray` (as `default`) |
+| `ShelfDryer` | `dryer` | `shelf` (as `default`) — ISO item 10.2 X8083 |
+| `TurboDryer` | `dryer` | `turbo` (as `default`) — ISO item 10.3 X8040 |
+| `BeltDryer` | `dryer` | `belt` (as `default`) — ISO item 10.6 X8043 |
+| `Dryer` | `dryer` | `general` — ISO item 10.1 C0046, the bare casing with no characteristic drawn |
 | `CrushingMachine` | `crushing_machine` | `default` — ISO 10628-2 item 11.1 X8084, a size-reduction machine with neither a crusher's nor a mill's mark, drawn before process design has picked between them. `Crusher` and `Mill` are both built on it |
 | `JawCrusher` | `crusher` | `jaw` (as `default`) |
 | `ConeCrusher` | `crusher` | `cone` (as `default`) |
@@ -1412,10 +1419,13 @@ first listed is what the class draws when it is built by name alone.
 | `Vessel` | `vessel` | `default`, `dished`, `jacketed`, `skirted`, `legs`, `insulated`, `electrical_heating`, `swaged`, `dome`, `horizontal`<br>`dished`, `skirted` and `legs` are one shell on brackets, a skirt or a pair of legs; `jacketed` and `insulated` are that shell clad, and offer the same nozzles in the same places, so swapping one for another moves no run. `swaged` is the vessel drawn in two diameters, the wider one below |
 | `Tank` | `tank` | named for the roof: `default` (dished), `conical`, `floating_roof`, plus `sphere`<br>and for the bottom where it is a cone rather than a floor: `conical_bottom` (under a flat roof), `conical_ends` (a cone at each end), `dished_roof_conical_bottom`. On those three the `outlet` is on the cone's apex, which is where the tank actually drains |
 | `GasHolder` | `tank` | `gas_holder` (as `default`) |
-| `CoolingTower` | `cooling_tower` | `default` (induced draft: the fan on the stack), `induced_draft`, `forced_draft` (the fan in a housing at the foot of each side) |
+| `CoolingTower` | `cooling_tower` | `default` (induced draft: the fan on the stack), `induced_draft`, `forced_draft` (the fan in a housing at the foot of each side)<br>and the eight ISO 10628-2 group-5 drawings: `general` (5.1, 2521, the bare outline), `dry_natural` (5.2 X8109), `dry_forced` (5.3 X8110), `dry_induced` (5.4 X8111), `wet_natural` (5.5 X8112), `wet_forced` (5.6 X8113), `wet_induced` (5.7 X8114), `wet_dry_natural` (5.8 X8115) |
 | `Column` | `column` | `default` (plain shell), `packed` |
 | `Reducer` | `reducer` | `default` (the concentric trapezoid), `concentric`, `eccentric`, plus `large_end`, which points the cone |
 | `Vent` | `vent` | `default` (stack with a weather cap), `exhaust_head`, `breather` |
+| `Boiler` | `boiler` | `default` — ISO 10628-2 item 4.1, 2532, boiler with dome |
+| `Stack` | `stack` | `default` — ISO 10628-2 item 4.7, 2041. Not `Vent`: a stack is Table 2's own equipment, bought and founded like the furnace or boiler it exhausts, where a vent is bulk piping |
+| `Flare` | `flare` | `default` — ISO 10628-2 item 4.8, 2591 |
 | `Instrument` | `instrument` | `default` (a circle), `shared` (a circle in a square), `computer` (a hexagon), `sis` (a diamond in a square, also spelled `logic`), `interlock` (a plain diamond). Where the information is available is the separate [`display`](#where-the-information-is) axis; `panel` and `aux` are that axis in this column and are reached as `display="central"` and `display="subsidiary"` |
 | `Heater`, `Cooler`, `Furnace`, `Turbine`, `Blower`, `Ejector`, `Funnel`, `Conveyor`, `Mixer`, `Splitter`, `Tee`, `Block`, `Feed`, `Product` | each its own | `default` only |
 
@@ -3163,7 +3173,7 @@ What a flip may not do is reverse an arrow the artwork carries — see
 below, which is handled by drawing rather than by refusing, for exactly the
 reason this paragraph gives.
 
-The 62 marked symbols, and what in each one's artwork only means one thing one
+The 74 marked symbols, and what in each one's artwork only means one thing one
 way up:
 
 | Symbols | Why |
@@ -3174,14 +3184,17 @@ way up:
 | `tank` `default` `conical` `floating_roof` `sphere` | ISO's 2061: a free liquid surface, filled at the roof and drained at the floor, with `floating_roof` drawn floating on it |
 | `tank` `conical_bottom` `conical_ends` `dished_roof_conical_bottom` | the same, drained at a cone's apex instead of at a floor, which is the fall the hopper-bottomed separators above are listed for. Turned, the cone is a roof and the tank drains nowhere |
 | `tank` `gas_holder` | 2061 again, and the most literal case of it: the bell is drawn resting on the water in the seal, which is the whole mechanism. Turned, the seal runs out |
-| `cooling_tower` `default` `induced_draft` `forced_draft` | the warm water is distributed over the fill and falls through the draught into the basin the artwork draws under the machine. Turned, the water leaves sideways and the draught runs across the basin |
+| `boiler` `default` | ISO item 4.1, 2532: steam collects in the dome because it is the shell's highest point. Turned, the dome is the lowest point and holds the liquid instead |
+| `cooling_tower` `default` `induced_draft` `forced_draft` `general` `dry_natural` `dry_forced` `dry_induced` `wet_natural` `wet_forced` `wet_induced` `wet_dry_natural` | the warm water is distributed over the fill and falls through the draught into the basin the artwork draws under the machine. Turned, the water leaves sideways and the draught runs across the basin |
 | `vessel` `default` `dished` `dome` `horizontal` `jacketed` `skirted` `legs` `insulated` `electrical_heating` | holdup with a vapour space: the vent is on the top head and the shell drains from the bottom, and four of them draw the brackets, skirt, legs or saddles they stand on |
 | `vessel` `swaged` | the same, and one thing more: the vessel is drawn in two diameters with the larger below, so it is the bottom that holds the inventory. Turned, the two diameters are side by side and say nothing about either |
 | `column` `default` `packed`, `reactor` `default` `plain` | liquid running down over trays or packing while vapour rises, and an agitator hanging in from above |
 | `vent` `default` `breather` `exhaust_head`, `funnel` | open ends: what leaves rises, and an open end drawn pointing down is a drain |
+| `stack` `default`, `flare` `default` | ISO items 4.7 (2041) and 4.8 (2591): a stack exhausts up and a flare burns off its tip up, the same "open end, and what leaves rises" claim as `vent` |
 | `crushing_machine` `default`, `crusher` `default` `cone` `hammer` `impact` `jaw` `roller`, `mill` `default` `hammer` `impact` `roller` `vibration` | ISO group 11's trapezoid is wide at the mouth and narrow at the throat, with its feed tick above it and its discharge tick below: turned, the machine is fed through the opening its product falls out of |
 | `elevator` `default` `z_form` | a machine whose purpose is to raise material: in at the boot, out at the head. Turned, it lowers it. The conveyors beside it are not marked, since a belt or a screw runs whichever way the plant needs |
 | `dryer` `spray` `fluidized_bed`, `filter` `gas` `gas_fixed_bed` `gas_belt` | solids that fall: an atomiser in the roof, a bed on its distributor plate, and the dust hopper each gas filter casing draws under its medium |
+| `dryer` `shelf` | ISO item 10.2, X8083: the mark is trays resting on shelves, which turned over is trays resting on nothing. `general`, `turbo` and `belt` are not marked, on the same reasoning `default` (the rotary drum) already was not |
 
 Not marked, and deliberately: a pump, a compressor, a valve, an in-line fitting
 or a heat exchanger is installed in whatever attitude the run wants, so turning
@@ -3983,7 +3996,7 @@ What it follows, feature by feature:
 - **Symbols where gravity is a functionality** are not turned. **ISO 15519-1
   §11.4.2** excepts them from the general permission to turn and mirror, naming
   the open tank (2061) and the cyclone separator (X 2618) as its two examples.
-  62 registered symbols carry
+  74 registered symbols carry
   `Symbol.gravity_fixed`, and
   [Symbols that must not be turned](#symbols-that-must-not-be-turned) lists them.
 

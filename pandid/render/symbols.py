@@ -2557,6 +2557,178 @@ _VIBRATION_DRUM = (
 )
 
 
+#: Where ISO item 4.7's one connection tick lands on the stack's own west
+#: wall, in drawing units. **Measured off row 4.7:** the tick sits at
+#: module 9 down a 10 M shaft, one module clear of the base -- the usual
+#: gap -- and the wall it points at is not vertical, it tapers from (2,0)
+#: M to (1,10) M, so a point read straight off that height sits closer to
+#: the box's own *bottom* edge than to its west wall and
+#: :func:`~pandid.portgeom.outward_dir` would face the nozzle south, out
+#: through air below the shape rather than out through the wall it is
+#: drawn on. Held one module higher instead -- module 8, still low on the
+#: shaft and still the base third of it -- where the same wall equation
+#: (x = 2 - (2-1) * (8/10) M) puts the nozzle unambiguously on the west
+#: face.
+_STACK_INLET_Y = 80.0
+_STACK_INLET_X = 20.0 - (20.0 - 10.0) * (_STACK_INLET_Y / 100.0)
+
+
+#: ISO 10628-2 Table 2 group 10's shared outline, in drawing units.
+#:
+#: **Measured off row 10.1, the general drier:** casing x 8..16 at y
+#: 6..16, chamfered 1 M x 2 M at the top two corners only -- (8,6) to
+#: (9,4) and (16,6) to (15,4) -- so an 8 M x 12 M box, drawn below at
+#: :data:`~pandid.render.iso_parts.M` = 10 units to the module with the
+#: chamfer's top-left corner at the origin. Every one of rows 10.1 to
+#: 10.7 draws this same outline; the seven rows differ only in what is
+#: drawn inside it, which is why this is one constant and the seven marks
+#: below are the only other geometry group 10 needs.
+_DRIER_W, _DRIER_H = 80.0, 120.0
+_DRIER_OUTLINE = (
+    '<path d="M 0 120 L 0 20 L 10 0 L 70 0 L 80 20 L 80 120 Z" '
+    'fill="white" stroke="#111" stroke-width="2"/>'
+)
+
+#: The two connection ticks every group-10 row draws, on the west and
+#: east walls at the same height: nine tenths of the way down the
+#: straight-sided run, which is also exactly the middle of it (the walls
+#: run from y 20 to y 120). No row in the group ticks a third connection,
+#: so a drier drawn from this outline has just the two nozzles a
+#: :class:`~pandid.units.Dryer` already declares.
+_DRIER_PORTS = {"feed": (0.0, 70.0), "product": (80.0, 70.0)}
+
+
+def _drier(name: str, reg: str, *detail: str, gravity_fixed: bool = False) -> Symbol:
+    """One group-10 body: the shared casing plus what tells it apart.
+
+    Group 10 has no supplementary-symbol group of its own -- unlike
+    group 11's crushers, whose marks are group 29's -- so nothing here
+    is an :class:`OverlayPart` and every detail is drawn straight into
+    the body, the same way :data:`_CRUSHER_JAWS` is.
+
+    ``gravity_fixed`` defaults false, on the outline's own authority:
+    the casing feeds and discharges on the same horizontal axis, which
+    is an attitude rather than a functionality, and it is exactly the
+    reasoning that already leaves ``dryer/default`` (the rotary drum)
+    off ``docs/api.md``'s marked-symbol table despite tumbling its
+    solids under gravity too, and that leaves the belt and screw
+    conveyors off it beside the drier group -- "a belt ... runs
+    whichever way the plant needs". A caller passes ``True`` only where
+    the *mark inside* the casing makes its own gravity claim, the way a
+    tray drier's shelves do.
+    """
+    return Symbol(
+        svg=f'<g id="sym_drier_{name}">{_DRIER_OUTLINE}' + "".join(detail) + "</g>",
+        width=_DRIER_W, height=_DRIER_H,
+        ports=dict(_DRIER_PORTS),
+        gravity_fixed=gravity_fixed,
+        iso_reg=reg,
+    )
+
+
+#: Item 10.2 X8083's own mark: three shelf lines, 4 M wide and centred,
+#: at y 3, 4 and 5 M -- read off the row as (10,7)/(14,7), (10,8)/(14,8),
+#: (10,9)/(14,9) and rebased to the outline's own origin.
+_DRIER_SHELVES = "".join(
+    f'<line x1="20" y1="{y:g}" x2="60" y2="{y:g}" fill="none" stroke="#111" '
+    f'stroke-width="2"/>' for y in (30, 40, 50))
+
+#: Item 10.3 X8040's own mark: a shaft running from the casing's straight
+#: run up to its chamfered top, crossed by two shelf lines and a third,
+#: wider one broken where the shaft crosses it -- the rotating stack of
+#: discs a turbo or moving-shelf drier turns. Measured off the row the
+#: same way as :data:`_DRIER_SHELVES`.
+_DRIER_TURBO = (
+    '<path d="M 20 30 L 60 30 M 20 50 L 60 50 M 0 40 L 30 40 M 50 40 L 80 40 '
+    'M 40 50 L 40 0" fill="none" stroke="#111" stroke-width="2"/>'
+)
+
+#: Item 10.6 X8043's own mark: two 1,5 M rollers on the casing's
+#: centreline, tangent to a belt drawn as the two lines that would run
+#: over their top and bottom. Measured off the row: roller centres at x
+#: 1,75 and 6,25 M, y 4 M, radius 0,75 M; belt lines at y 3,25 and 4,75 M.
+_DRIER_BELT = (
+    '<circle cx="17.5" cy="40" r="7.5" fill="none" stroke="#111" stroke-width="2"/>'
+    '<circle cx="62.5" cy="40" r="7.5" fill="none" stroke="#111" stroke-width="2"/>'
+    '<path d="M 17.5 32.5 L 62.5 32.5 M 17.5 47.5 L 62.5 47.5" '
+    'fill="none" stroke="#111" stroke-width="2"/>'
+)
+
+
+#: ISO 10628-2 Table 2 group 5's shared outline, in drawing units.
+#:
+#: **Measured off row 5.1, the general cooling tower:** a trapezoid 4 M
+#: across the top narrowing -- widening, read downward -- to 8 M at a
+#: shoulder 8 M below, sitting on a 2 M deep basin the same 8 M wide. So
+#: an 8 M x 10 M box overall, apex centred on it, drawn at 10 units to
+#: the module with the apex's own top-left corner at the origin. Every
+#: one of rows 5.1 to 5.8 draws this same outline -- the fill and draught
+#: marks below are the whole of what tells the eight rows apart, which is
+#: the composition the module docstring on group 11 promised group 5
+#: would turn out to be.
+_TOWER_W, _TOWER_TRAP_H, _TOWER_H = 80.0, 80.0, 100.0
+_TOWER_OUTLINE = (
+    '<path d="M 20 0 L 60 0 L 80 80 L 80 100 L 0 100 L 0 80 Z" '
+    'fill="white" stroke="#111" stroke-width="2"/>'
+    '<line x1="0" y1="80" x2="80" y2="80" fill="none" stroke="#111" stroke-width="2"/>'
+)
+
+#: The six nozzles every group-5 row is drawn from, in the roles and on
+#: the faces :class:`~pandid.units.CoolingTower`'s existing three
+#: vendored bodies already use: air off the apex, water on the west
+#: wall and air on the east at the basin's own mid-height (row 5.1's two
+#: side ticks), and the basin's own three bottom connections spread
+#: across its width. Table 2 ticks only the apex and the two side walls
+#: on any one row -- there is no third bottom tick on 5.1 to 5.8 -- so
+#: ``water_out``, ``makeup`` and ``blowdown`` are offered rather than
+#: read off a mark, on the same footing :class:`CoolingTower`'s own
+#: docstring already puts the vendored six on.
+_TOWER_PORTS = {
+    "air_out": (40.0, 0.0),
+    "water_in": (0.0, 90.0), "air_in": (80.0, 90.0),
+    "water_out": (40.0, 100.0), "makeup": (20.0, 100.0), "blowdown": (60.0, 100.0),
+}
+
+#: Item 5.2/5.3/5.4/5.8's dry-fill mark: a rule across the basin's own
+#: mid-height, hatched with seven 1 M ticks a module apart. Measured off
+#: row 5.2: the rule at y 13 M of a basin running y 12..14 M (its own
+#: mid-height, one module clear of the outline's own shoulder line at y
+#: 12), the hatch at x 9 to 15 M in whole-module steps, each tick a
+#: module tall astride the rule.
+_TOWER_DRY = (
+    '<line x1="0" y1="90" x2="80" y2="90" fill="none" stroke="#111" stroke-width="2"/>'
+    + "".join(f'<line x1="{x:g}" y1="85" x2="{x:g}" y2="95" fill="none" stroke="#111" '
+              f'stroke-width="2"/>' for x in range(10, 71, 10))
+)
+
+#: Item 5.5/5.6/5.7/5.8's wet-fill mark: a short water-distribution stub
+#: off the west wall breaking into an arrow pointing up the trapezoid --
+#: the mixed phase rising off the fill. Measured off row 5.5: the stub
+#: from x 1 to 4 M at y 4 M (the trapezoid's own vertical middle), the
+#: arrow's 2 M head astride it and a 1 M tail down to y 5 M.
+_TOWER_WET = (
+    '<path d="M 10 40 L 40 40 M 30 50 L 40 40 L 50 50 M 40 40 L 40 50" '
+    'fill="none" stroke="#111" stroke-width="2"/>'
+)
+
+#: Item 5.3/5.6's forced-draught fan and item 5.4/5.7's induced-draught
+#: one: the same 2 M circle and bow-tie blade mark, low in the trapezoid
+#: for a forced draught (a fan at the foot, blowing up through the fill)
+#: and high in it for an induced one (a fan at the crown, drawing up
+#: through it) -- measured off rows 5.3 and 5.4, whose circles differ in
+#: nothing but their centre height.
+def _tower_fan(cy: float) -> str:
+    return (
+        f'<circle cx="40" cy="{cy:g}" r="10" fill="none" stroke="#111" stroke-width="2"/>'
+        f'<path d="M 36 {cy - 9:g} L 31 {cy + 5:g} M 44 {cy - 9:g} L 49 {cy + 5:g}" '
+        f'fill="none" stroke="#111" stroke-width="2"/>'
+    )
+
+
+_TOWER_FAN_FORCED = _tower_fan(65.0)
+_TOWER_FAN_INDUCED = _tower_fan(15.0)
+
+
 #: ISO 10628-2 item 18.7 X8065, the bucket elevator, in drawing units.
 #:
 #: **Measured off row 18.7 in grid modules:** casing x 8..16 and y 1..13,
@@ -3280,6 +3452,97 @@ class SymbolRegistry:
                                     extent=0.5, at=20.0, singular="feed"),),
         ), "tubular")
 
+        # ISO 10628-2 Table 2 group 4 -- STEAM GENERATORS, FURNACES,
+        # RECOOLING DEVICE. Three whole drawings with nothing in group
+        # 26-29 to compose them from: no boiler dome, tapered stack or
+        # flare flame appears anywhere in the supplementary-symbol
+        # groups, so each is built here as its own outline, the way
+        # :data:`_SEPARATING_VESSEL` and the tubular reactor above are.
+        #
+        # Item 4.3, 2533, Furnace, is the fourth row of the group and is
+        # *not* registered here. ``furnace/default`` is already a
+        # fired-heater pictogram vendored from draw.io (a
+        # radiant box, a convection bank and a stack in one drawing),
+        # and it is not this row: Table 2's 2533 is a plain chamfered
+        # double-walled box with no stack, no tubes and no burner --
+        # measured off row 4.3 and confirmed against ``furnace/default``
+        # by eye, not just by silhouette. Overwriting the vendored
+        # drawing to match 2533 would change what every existing sheet
+        # already shows for a fired heater, so it stays un-registered
+        # rather than carry a number it is not drawn to.
+
+        # Item 4.1, 2532, Boiler with dome. Measured off row 4.1: a 10 M
+        # square shell with a 5 M semicircular dome centred on its
+        # crown -- radius 2,5 M, so the dome's own height is its own
+        # radius. The feedwater tick sits a quarter of the way down the
+        # shell from the crown, on the west wall; the steam tick is on
+        # the dome's own apex, one module above it with the usual gap
+        # (see the connection-tick note in ``iso_parts``).
+        self.register("boiler", Symbol(
+            svg='<g id="sym_boiler"><path d="M 25 25 A 25 25 0 0 1 75 25 '
+                'L 100 25 L 100 125 L 0 125 L 0 25 Z" '
+                'fill="white" stroke="#111" stroke-width="2"/></g>',
+            width=100.0, height=125.0,
+            ports={"feedwater": (0.0, 50.0), "steam": (50.0, 0.0)},
+            # Steam collects in the dome because it is the highest point
+            # of the shell; turned over, the dome is the lowest point
+            # and holds the liquid instead. ISO 15519-1 §11.4.2's
+            # exception, on the same footing as an open tank's.
+            gravity_fixed=True,
+            iso_reg="2532",
+        ), "default")
+
+        # Item 4.7, 2041, Stack, chimney. Measured off row 4.7: a shaft
+        # tapering from a 2 M cap to walls that land a module short of a
+        # 6 M foundation flange -- the flange is drawn as one flat
+        # stroke under the shaft rather than closing it into a solid
+        # outline, which is Table 2's own construction and is why this
+        # is four open strokes rather than a filled polygon. The one
+        # tick is on the west wall, roughly nine tenths of the way down
+        # -- see :data:`_STACK_INLET_Y`.
+        self.register("stack", Symbol(
+            svg='<g id="sym_stack"><path d="M 20 0 L 40 0 M 20 0 L 10 100 '
+                'M 40 0 L 50 100 M 0 100 L 60 100" '
+                'fill="none" stroke="#111" stroke-width="2"/></g>',
+            width=60.0, height=100.0,
+            ports={"inlet": (_STACK_INLET_X, _STACK_INLET_Y)},
+            # A stack exhausts *up*; turned over it draws flue gas down
+            # into the ground it is founded on. The same exception as
+            # the boiler's.
+            gravity_fixed=True,
+            iso_reg="2041",
+        ), "default")
+
+        # Item 4.8, 2591, Gas flare. The same open shaft-and-flange
+        # construction as the stack, but the shaft walls run straight
+        # rather than taper, and a vesica flame sits on top of it --
+        # measured off row 4.8 as a 2 M wide, 4 M tall lens, its two
+        # arcs each struck from a centre a module and a half either
+        # side of the shaft's own centreline. See the module docstring
+        # for why this is a new equipment class rather than a
+        # ``Vent`` variant: a flare stack is Table 2's own item, not a
+        # vent pipe with a different cap.
+        self.register("flare", Symbol(
+            svg='<g id="sym_flare">'
+                '<path d="M 30 40 A 25 25 0 0 1 30 0 A 25 25 0 0 1 30 40 Z" '
+                'fill="none" stroke="#111" stroke-width="2"/>'
+                '<path d="M 20 40 L 40 40 M 20 40 L 20 120 M 40 40 L 40 120 '
+                'M 0 120 L 60 120" fill="none" stroke="#111" stroke-width="2"/>'
+                '</g>',
+            width=60.0, height=120.0,
+            # Measured off row 4.8: the tick sits one module above the
+            # base, on the shaft's own (straight, unlike the stack's)
+            # west wall at x 2 M. Held two modules up rather than one --
+            # still low on an 8 M shaft -- for the reason
+            # :data:`_STACK_INLET_Y` gives: one module up reads closer to
+            # the box's south edge than to the wall it is drawn on.
+            ports={"inlet": (20.0, 90.0)},
+            # The flame burns off the tip, upward, the same claim the
+            # stack's own shape makes about its exhaust.
+            gravity_fixed=True,
+            iso_reg="2591",
+        ), "default")
+
         # Vendored draw.io symbols (Apache-2.0): registered last so they
         # override the hand-drawn defaults for shared kinds and add
         # variants.
@@ -3296,6 +3559,8 @@ class SymbolRegistry:
         self._register_composed()
         self._register_crushing_machines()
         self._register_centrifuges()
+        self._register_driers()
+        self._register_cooling_towers()
 
     def _register_composed(self):
         """The three drawings ISO composes and gives a number of its own.
@@ -3512,6 +3777,113 @@ class SymbolRegistry:
         # Bare Centrifuge(...) draws the decanter: see the class
         # docstring on why, and the docstring above on the second key.
         self.register("centrifuge", decanter)
+
+    def _register_driers(self):
+        """ISO 10628-2 Table 2 group 10, the four rows pandid did not
+        already ship.
+
+        Group 10 has no supplementary-symbol group backing it the way
+        group 11's crushers draw on group 29, so this is the same
+        pattern applied without :class:`IsoPart`: one shared outline
+        (:data:`_DRIER_OUTLINE`), four bodies.
+
+        ========  ======  ================================================
+        item      reg     descriptor
+        ========  ======  ================================================
+        10.1      C0046   Drier (general)
+        10.2      X8083   Drying oven, drying chamber, shelf drier
+        10.3      X8040   Turbo drier, disc drier, moving shelf drier
+        10.6      X8043   Belt drier, roller-conveyor type drier
+        ========  ======  ================================================
+
+        The other three group-10 rows -- 10.4 X8041 fluidised bed, 10.5
+        X8042 spray, 10.7 X8044 rotary drum -- are not here, because
+        pandid already ships ``dryer/fluidized_bed``, ``dryer/spray``
+        and ``dryer/default`` from the vendored draw.io set and none of
+        the three, measured against its row, is this outline: the
+        vendored casing chamfers at a different ratio and the fill or
+        atomiser marks sit at different fractions of a different-shaped
+        box. They are close enough that a reader would call them the
+        same drawing and different enough that overwriting them would
+        move every sheet that already has one, so they are left as they
+        ship, unregistered rather than mis-registered.
+        """
+        self.register("dryer", _drier("general", "C0046"), "general")
+        # Shelf, and shelf alone, is gravity-fixed: the trays the mark
+        # draws rest on their shelves, and turned over they fall off
+        # them, which is the ISO 15519-1 §11.4.2 claim the other three
+        # do not make. See ``_drier``'s own docstring.
+        self.register(
+            "dryer", _drier("shelf", "X8083", _DRIER_SHELVES, gravity_fixed=True),
+            "shelf")
+        self.register(
+            "dryer", _drier("turbo", "X8040", _DRIER_TURBO), "turbo")
+        self.register(
+            "dryer", _drier("belt", "X8043", _DRIER_BELT), "belt")
+
+    def _register_cooling_towers(self):
+        """ISO 10628-2 Table 2 group 5, all nine rows but the spray
+        cooler.
+
+        One outline (:data:`_TOWER_OUTLINE`), composed with a fill mark
+        (dry, wet or both) and a draught mark (a fan, low for forced or
+        high for induced, absent for natural) -- eight rows, and every
+        combination Table 2 actually tabulates:
+
+        =================  ======  =========================================
+        item               reg     fill + draught
+        =================  ======  =========================================
+        5.1                2521    none (general)
+        5.2                X8109   dry, natural
+        5.3                X8110   dry, forced
+        5.4                X8111   dry, induced
+        5.5                X8112   wet, natural
+        5.6                X8113   wet, forced
+        5.7                X8114   wet, induced
+        5.8                X8115   wet-dry, natural
+        =================  ======  =========================================
+
+        There is no wet-dry forced or induced row -- Table 2 tabulates
+        the hybrid only at natural draught -- so eight rows and not
+        twelve.
+
+        Item 5.9 X2504, the spray cooler, is not here: it is a different
+        body (a plain casing rather than this trapezoid-on-a-basin) with
+        three connections rather than this outline's six, and landing it
+        would be a new equipment class, not another variant of
+        :class:`~pandid.units.CoolingTower`. Measured and left for a
+        later change.
+
+        The three drawings pandid already ships -- ``cooling_tower/
+        default``, ``/induced_draft``, ``/forced_draft`` -- are also not
+        touched. They are vendored draw.io stencils built to six real
+        nozzles and their own proportions, and measured against rows 5.1
+        to 5.4 none is this outline either: a different basin, a
+        different apex, no dry-fill hatch on any of them. Left exactly
+        as they ship, for the reason the same finding leaves the driers
+        alone above.
+        """
+        self.register("cooling_tower", Symbol(
+            svg=f'<g id="sym_cooling_tower_general">{_TOWER_OUTLINE}</g>',
+            width=_TOWER_W, height=_TOWER_H, ports=dict(_TOWER_PORTS),
+            gravity_fixed=True, iso_reg="2521",
+        ), "general")
+
+        for name, fill, fan, reg in (
+            ("dry_natural", _TOWER_DRY, "", "X8109"),
+            ("dry_forced", _TOWER_DRY, _TOWER_FAN_FORCED, "X8110"),
+            ("dry_induced", _TOWER_DRY, _TOWER_FAN_INDUCED, "X8111"),
+            ("wet_natural", _TOWER_WET, "", "X8112"),
+            ("wet_forced", _TOWER_WET, _TOWER_FAN_FORCED, "X8113"),
+            ("wet_induced", _TOWER_WET, _TOWER_FAN_INDUCED, "X8114"),
+            ("wet_dry_natural", _TOWER_DRY + _TOWER_WET, "", "X8115"),
+        ):
+            self.register("cooling_tower", Symbol(
+                svg=f'<g id="sym_cooling_tower_{name}">{_TOWER_OUTLINE}'
+                    f'{fill}{fan}</g>',
+                width=_TOWER_W, height=_TOWER_H, ports=dict(_TOWER_PORTS),
+                gravity_fixed=True, iso_reg=reg,
+            ), name)
 
 
 default_registry = SymbolRegistry()

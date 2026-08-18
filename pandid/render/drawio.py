@@ -759,6 +759,51 @@ _APPROXIMATIONS = {
         None, "the belt, its two pulleys and the loading and discharge chutes"),
     ("elevator", "z_form"): _Approximation(
         None, "the Z-shaped casing, the belt's three runs and its four pulleys"),
+    # ISO 10628-2 group 4, hand-drawn because none of the three is a
+    # vendored stencil and none has a built-in that keeps its outline
+    # honest -- a dome on a shell and a shaft on a flange are no nearer
+    # a circle or a triangle than a crusher's trapezoid is.
+    ("boiler", "default"): _Approximation(
+        None, "the shell's own outline and the dome on its crown"),
+    ("stack", "default"): _Approximation(
+        None, "the tapered shaft and the foundation flange under it"),
+    ("flare", "default"): _Approximation(
+        None, "the shaft and the flame on its tip"),
+    # ISO 10628-2 group 10, the four rows built the way group 11's
+    # crushers are: one casing, composed here rather than vendored.
+    ("dryer", "general"): _Approximation(
+        None, "the casing's chamfered top corners"),
+    ("dryer", "shelf"): _Approximation(
+        None, "the casing's chamfered top corners and the three shelf lines"),
+    ("dryer", "turbo"): _Approximation(
+        None, "the casing's chamfered top corners and the rotor shaft and discs"),
+    ("dryer", "belt"): _Approximation(
+        None,
+        "the casing's chamfered top corners and the two rollers the belt runs on"),
+    # ISO 10628-2 group 5, the eight rows built the same way: one
+    # trapezoid-on-a-basin outline, composed with a fill mark and a
+    # draught mark.
+    ("cooling_tower", "general"): _Approximation(
+        None, "the trapezoid-on-a-basin outline"),
+    ("cooling_tower", "dry_natural"): _Approximation(
+        None, "the trapezoid-on-a-basin outline and the dry-fill hatch in the basin"),
+    ("cooling_tower", "dry_forced"): _Approximation(
+        None, "the trapezoid-on-a-basin outline, the dry-fill hatch and the fan "
+              "low in the tower"),
+    ("cooling_tower", "dry_induced"): _Approximation(
+        None, "the trapezoid-on-a-basin outline, the dry-fill hatch and the fan "
+              "high in the tower"),
+    ("cooling_tower", "wet_natural"): _Approximation(
+        None, "the trapezoid-on-a-basin outline and the wet-fill arrow rising "
+              "through the tower"),
+    ("cooling_tower", "wet_forced"): _Approximation(
+        None, "the trapezoid-on-a-basin outline, the wet-fill arrow and the fan "
+              "low in the tower"),
+    ("cooling_tower", "wet_induced"): _Approximation(
+        None, "the trapezoid-on-a-basin outline, the wet-fill arrow and the fan "
+              "high in the tower"),
+    ("cooling_tower", "wet_dry_natural"): _Approximation(
+        None, "the trapezoid-on-a-basin outline and both fill marks in it"),
 }
 
 #: What draw.io is asked for to draw one ISO 10628-2 supplementary part,

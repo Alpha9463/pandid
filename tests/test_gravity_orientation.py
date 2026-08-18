@@ -177,6 +177,18 @@ GRAVITY_FIXED = {
     ("cooling_tower", "default"),
     ("cooling_tower", "induced_draft"),
     ("cooling_tower", "forced_draft"),
+    # ...and the eight ISO 10628-2 group-5 drawings: the same fill-and-basin
+    # claim, whichever draught mark or fill mark is composed onto it
+    ("cooling_tower", "general"),
+    ("cooling_tower", "dry_natural"),
+    ("cooling_tower", "dry_forced"),
+    ("cooling_tower", "dry_induced"),
+    ("cooling_tower", "wet_natural"),
+    ("cooling_tower", "wet_forced"),
+    ("cooling_tower", "wet_induced"),
+    ("cooling_tower", "wet_dry_natural"),
+    # ISO item 4.1, 2532: steam collects in the shell's highest point, the dome
+    ("boiler", "default"),
     # holdup with a vapour space over it
     ("vessel", "default"),
     ("vessel", "dished"),
@@ -200,9 +212,16 @@ GRAVITY_FIXED = {
     ("vent", "breather"),
     ("vent", "exhaust_head"),
     ("funnel", "default"),
+    # ISO items 4.7 (2041) and 4.8 (2591): the same claim as the two above --
+    # a stack exhausts up, a flare burns off its tip up
+    ("stack", "default"),
+    ("flare", "default"),
     # solids that fall
     ("dryer", "spray"),
     ("dryer", "fluidized_bed"),
+    # ISO item 10.2, X8083: trays resting on their shelves. general, turbo and
+    # belt are not marked, on the reasoning default (the rotary drum) was not
+    ("dryer", "shelf"),
     # ISO group 11's thirteen rows are one trapezoid, wide at the top and
     # narrow at the bottom, with a connection tick above it and another
     # below: ore in at the mouth, product out of the throat. Turned, the
