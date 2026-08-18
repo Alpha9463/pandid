@@ -2957,19 +2957,28 @@ def _drawn(polylines, order, hops):
     crosses, and nothing else. Returns ``{(hopper, hopped)}``.
     """
     rank = {key: n for n, key in enumerate(order)}
-    seg = {key: (
-        [(min(a[0], b[0]), max(a[0], b[0]), a[1])
-         for a, b in zip(pts, pts[1:]) if a[1] == b[1] and a[0] != b[0]],
-        [(min(a[1], b[1]), max(a[1], b[1]), a[0])
-         for a, b in zip(pts, pts[1:]) if a[0] == b[0] and a[1] != b[1]],
-    ) for key, pts in polylines.items()}
+    seg = {
+        key: (
+            [
+                (min(a[0], b[0]), max(a[0], b[0]), a[1])
+                for a, b in zip(pts, pts[1:])
+                if a[1] == b[1] and a[0] != b[0]
+            ],
+            [
+                (min(a[1], b[1]), max(a[1], b[1]), a[0])
+                for a, b in zip(pts, pts[1:])
+                if a[0] == b[0] and a[1] != b[1]
+            ],
+        )
+        for key, pts in polylines.items()
+    }
     out = set()
     for hopper in hops:
         for other in polylines:
             if other == hopper or rank[other] >= rank[hopper]:
                 continue
-            for lo, hi, at in seg[hopper][1]:            # hopper's verticals
-                for c_lo, c_hi, c_at in seg[other][0]:   # other's horizontals
+            for lo, hi, at in seg[hopper][1]:  # hopper's verticals
+                for c_lo, c_hi, c_at in seg[other][0]:  # other's horizontals
                     if c_lo < at < c_hi and lo < c_at < hi:
                         out.add((hopper, other))
     return out
@@ -2996,8 +3005,10 @@ def test_two_runs_that_each_hop_the_other_draw_no_hop_at_all():
     carries the style. ``22_biodiesel_plant`` is the sheet that made this
     reachable.
     """
-    polylines = {"a": [(0.0, 10.0), (20.0, 10.0), (20.0, 30.0)],
-                 "b": [(10.0, 0.0), (10.0, 20.0), (30.0, 20.0)]}
+    polylines = {
+        "a": [(0.0, 10.0), (20.0, 10.0), (20.0, 30.0)],
+        "b": [(10.0, 0.0), (10.0, 20.0), (30.0, 20.0)],
+    }
     order, hops = _hops(polylines, "vertical")
     assert sorted(order) == ["a", "b"], "every edge is still written once"
     assert _drawn(polylines, order, hops) == set(), (
@@ -3013,10 +3024,12 @@ def test_a_cycle_costs_only_the_runs_inside_it():
     of its hops to save six. ``h`` and ``c`` cross each other and neither of the
     stranded pair.
     """
-    polylines = {"a": [(0.0, 10.0), (20.0, 10.0), (20.0, 30.0)],
-                 "b": [(10.0, 0.0), (10.0, 20.0), (30.0, 20.0)],
-                 "h": [(100.0, 10.0), (130.0, 10.0)],
-                 "c": [(115.0, 0.0), (115.0, 20.0)]}
+    polylines = {
+        "a": [(0.0, 10.0), (20.0, 10.0), (20.0, 30.0)],
+        "b": [(10.0, 0.0), (10.0, 20.0), (30.0, 20.0)],
+        "h": [(100.0, 10.0), (130.0, 10.0)],
+        "c": [(115.0, 0.0), (115.0, 20.0)],
+    }
     order, hops = _hops(polylines, "vertical")
     assert _drawn(polylines, order, hops) == {("c", "h")}
 
