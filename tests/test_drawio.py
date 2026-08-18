@@ -3041,11 +3041,18 @@ def test_two_runs_that_each_hop_the_other_draw_no_hop_at_all():
         "a": [(0.0, 10.0), (20.0, 10.0), (20.0, 30.0)],
         "b": [(10.0, 0.0), (10.0, 20.0), (30.0, 20.0)],
     }
-    order, hops, _lost = _hops(polylines, "vertical")
+    order, hops, lost = _hops(polylines, "vertical")
     assert sorted(order) == ["a", "b"], "every edge is still written once"
     assert _drawn(polylines, order, hops) == set(), (
         "a cycle drew a hop, and one of the two can only be the wrong way round"
     )
+    # Both crossings are reported, and there are *two* of them: the pair
+    # crosses twice, which is what makes it a cycle at all. Counting the
+    # pair rather than the crossings under-reports every cycle, and is
+    # what let 22_biodiesel_plant lose nine crossings while naming eight.
+    assert len(lost) == 2, f"a cycle lost 2 crossings and named {len(lost)}"
+    assert {(hop, crossed) for hop, crossed, _x, _y in lost} == {("a", "b"), ("b", "a")}
+    assert len({(x, y) for _h, _c, x, y in lost}) == 2, "at two different points"
 
 
 def test_a_cycle_costs_only_the_runs_inside_it():
