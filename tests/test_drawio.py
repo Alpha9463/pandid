@@ -43,7 +43,12 @@ import pytest
 from pandid import units
 from pandid.flowsheet import Flowsheet
 from pandid.portgeom import port_point, unit_box
-from pandid.render.drawio import _APPROXIMATIONS, _PART_APPROXIMATIONS, DrawioRenderer
+from pandid.render.drawio import (
+    _APPROXIMATIONS,
+    _hops,
+    _PART_APPROXIMATIONS,
+    DrawioRenderer,
+)
 from pandid.render.svg import (
     _page,
     _PROCESS_STROKE,
@@ -2922,6 +2927,98 @@ def test_only_a_stream_hops_or_is_hopped():
             f"{cid}: a {'stream' if stream else 'rule or tap'} says "
             f"noJump={_style(cell).get('noJump')}"
         )
+
+
+def test_a_run_is_written_before_the_run_that_hops_it():
+    """The ordinary case, on the two segments that make one crossing.
+
+    ``_hops`` is exercised through whole sheets everywhere else in this file,
+    which is the right level for "does the export agree with the drawing" and
+    the wrong one for "what does the rule do at the edges" -- a sheet cannot be
+    asked for a precedence graph of a particular shape. These two ask it
+    directly.
+    """
+    order, hops = _hops(
+        {"h": [(0.0, 10.0), (30.0, 10.0)], "v": [(15.0, 0.0), (15.0, 20.0)]},
+        "vertical",
+    )
+    assert hops == {"v"}, "the vertical run hops the horizontal one"
+    assert order.index("h") < order.index("v"), (
+        "draw.io intersects an edge only against the edges before it, so the "
+        "hopper has to be written second"
+    )
+
+
+def _drawn(polylines, order, hops):
+    """What draw.io actually paints, given what ``_hops`` decided.
+
+    ``updateLineJumps`` transcribed down to the one line that matters here: an
+    edge carrying ``jumpStyle`` hops each edge written *before* it that it
+    crosses, and nothing else. Returns ``{(hopper, hopped)}``.
+    """
+    rank = {key: n for n, key in enumerate(order)}
+    seg = {key: (
+        [(min(a[0], b[0]), max(a[0], b[0]), a[1])
+         for a, b in zip(pts, pts[1:]) if a[1] == b[1] and a[0] != b[0]],
+        [(min(a[1], b[1]), max(a[1], b[1]), a[0])
+         for a, b in zip(pts, pts[1:]) if a[0] == b[0] and a[1] != b[1]],
+    ) for key, pts in polylines.items()}
+    out = set()
+    for hopper in hops:
+        for other in polylines:
+            if other == hopper or rank[other] >= rank[hopper]:
+                continue
+            for lo, hi, at in seg[hopper][1]:            # hopper's verticals
+                for c_lo, c_hi, c_at in seg[other][0]:   # other's horizontals
+                    if c_lo < at < c_hi and lo < c_at < hi:
+                        out.add((hopper, other))
+    return out
+
+
+def test_two_runs_that_each_hop_the_other_draw_no_hop_at_all():
+    """A cycle, and the reason a hop is dropped rather than kept.
+
+    ``a`` runs east then south and ``b`` south then east, so they cross twice
+    and swap roles between the crossings: ``b``'s vertical hops ``a``'s
+    horizontal at (10, 10), and ``a``'s vertical hops ``b``'s horizontal at
+    (20, 20). Each therefore has to be written after the other and neither can
+    be.
+
+    ``jumpStyle`` is per edge and cannot be aimed at one crossing, so whichever
+    is written second would hop the other at *both* points -- drawing, at one of
+    them, the wrong line passing over. That reads as a fact about the piping and
+    is not one. So the second gives the key up and the first keeps a key it can
+    do nothing with, there being no edge before it to hop; both crossings come
+    out flat, which is ambiguous rather than wrong.
+
+    Asserted on what draw.io would paint rather than on ``hops``, because those
+    are not the same thing: an edge written first draws no hop whether or not it
+    carries the style. ``22_biodiesel_plant`` is the sheet that made this
+    reachable.
+    """
+    polylines = {"a": [(0.0, 10.0), (20.0, 10.0), (20.0, 30.0)],
+                 "b": [(10.0, 0.0), (10.0, 20.0), (30.0, 20.0)]}
+    order, hops = _hops(polylines, "vertical")
+    assert sorted(order) == ["a", "b"], "every edge is still written once"
+    assert _drawn(polylines, order, hops) == set(), (
+        "a cycle drew a hop, and one of the two can only be the wrong way round"
+    )
+
+
+def test_a_cycle_costs_only_the_runs_inside_it():
+    """A crossing that is not in the cycle keeps its hop.
+
+    The blunt fix -- drop every hop on a sheet that has a cycle anywhere on it
+    -- would pass the test above and cost ``22_biodiesel_plant`` all forty-one
+    of its hops to save six. ``h`` and ``c`` cross each other and neither of the
+    stranded pair.
+    """
+    polylines = {"a": [(0.0, 10.0), (20.0, 10.0), (20.0, 30.0)],
+                 "b": [(10.0, 0.0), (10.0, 20.0), (30.0, 20.0)],
+                 "h": [(100.0, 10.0), (130.0, 10.0)],
+                 "c": [(115.0, 0.0), (115.0, 20.0)]}
+    order, hops = _hops(polylines, "vertical")
+    assert _drawn(polylines, order, hops) == {("c", "h")}
 
 
 # ---------------------------------------------------------------------------
