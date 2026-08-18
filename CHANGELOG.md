@@ -29,7 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Five new examples: a stirred reactor train, a fixed-bed recycle loop, an
   absorber–stripper pair, a molecular sieve dryer and an alumina refinery.
 - draw.io exports a composed symbol as a group of cells.
-- A type checker resolves `mixer.in_1`, `splitter.out_2` and `block.in_3`.
+- A type checker resolves `mixer.in_1`, `splitter.out_2`, `column.feed_2` and
+  `block.in_3`, and refuses a number the unit was not built with.
 - `Stream.at_boundary` is true when one end of a line is a `Feed` or a
   `Product`. `Stream.tabulate` marks which segment of a run the stream table
   reads.

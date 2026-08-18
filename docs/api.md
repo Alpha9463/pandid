@@ -741,21 +741,36 @@ runtime value and Python has no integer generic, so no annotation names `in_1` �
 `Mixer("M", n_inlets=len(feeds))`, which is the call a sheet built from data
 actually writes. `mixer.inlets[0]` resolves to `Port` under mypy.
 
-`mixer.in_1` resolves to `Port` as well, but by a different route and at a
-price. `Unit.__getattr__` is hidden from type checkers on purpose, so a nozzle
-no class declares is an error before the sheet is drawn rather than an `Any`
-that resolves to anything — which is what makes `reactor.fed` and `sep.liqid`
-editor errors. `Mixer`, `Splitter` and `Block` override that with a
-`__getattr__` of their own, visible to a checker and returning `Port`, because
-their numbered nozzles outnumber their fixed ones and `mixer.in_1` is the
-spelling this library is written in.
+`mixer.in_1` resolves to `Port` too, and so does `mixer.in_3` on a three-inlet
+mixer — while `mixer.in_4` on that same mixer is an **error**. The count cannot
+be named in an annotation, but it can be read off the *call*: `Mixer`,
+`Splitter` and `Column` overload `__new__` on a literal count and hand back a
+subclass declaring exactly the nozzles that count builds.
 
-The price is those three classes' own typo detection: `mixer.outlt` is no
-longer caught at edit time. It still raises the moment Python reaches it, with
-every real nozzle listed. `Column` and `Reactor` spell a family too and do
-**not** take this trade — they carry six and seven fixed nozzles apiece, so
-`col.bottms` is worth catching and `col.feeds` or `col.port("feed_2")` is the
-route to the numbered ones there.
+```python
+m = fs.add(units.Mixer("M-101", n_inlets=3))
+m.in_3        # Port
+m.in_4        # error: Cannot access attribute "in_4" for class "Mixer3"
+m.outlt       # error: typo detection is not given up for this
+```
+
+The subclasses exist only under `TYPE_CHECKING`. Nothing is built at run time,
+the object really is a `Mixer`, and each one is assignable to the base for
+anything annotating `Mixer`.
+
+Where the count is **computed** — `Mixer("M", n_inlets=len(feeds))` — no
+overload matches, the type is the plain base class, and the numbered nozzles are
+unresolvable. That is honest rather than restrictive: a checker cannot know how
+many nozzles that call made. Use `m.inlets[i]` there.
+
+Two classes sit outside this. **`Block`** takes a blanket `__getattr__` instead,
+so `block.in_1` resolves and `block.outlt` is *not* caught: its two counts are
+independent, and the form its own examples use — `inputs=["W", "W", "N"]` — is a
+`list`, whose length is not in its type. **`Reactor`** takes neither, for a
+reason about subclasses rather than feeds: `StirredTankReactor` adds `duty`,
+`outlet` and `vent`, and an overload returning `Reactor2` would hand back a type
+that has lost all three. Reach a reactor's numbered feed through `feeds` or
+`port("feed_2")`.
 
 ### Equipment classes
 
