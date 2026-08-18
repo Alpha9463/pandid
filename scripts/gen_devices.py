@@ -398,6 +398,27 @@ DEVICES = {
     cyclone downstream of one is where the product is usually recovered;
     see :class:`Cyclone`.
 """),
+    ("dryer", "shelf"): ("ShelfDryer", """Shelf (tray) dryer: trays of product in a heated oven or chamber.
+
+    ISO 10628-2 item 10.2, X8083: the general drier's own casing
+    carrying three shelf lines. Batch duty -- the trays are loaded and
+    struck by hand -- next to the continuous machines the rest of the
+    group draws.
+"""),
+    ("dryer", "turbo"): ("TurboDryer", """Turbo (disc, moving-shelf) dryer: a stack of rotating discs on one shaft.
+
+    ISO 10628-2 item 10.3, X8040. The product moves down the stack from
+    disc to disc as each one turns under it, which is what tells this
+    from :class:`ShelfDryer`'s fixed trays -- the artwork's own shaft
+    reaching to the casing's crown is the drive that turns them.
+"""),
+    ("dryer", "belt"): ("BeltDryer", """Belt (roller-conveyor) dryer: product carried through on a moving bed.
+
+    ISO 10628-2 item 10.6, X8043. Continuous duty, drawn as the two
+    rollers a belt runs on -- the same construction
+    :class:`~pandid.units.Conveyor`'s belt variant draws, here inside a
+    heated casing rather than in the open.
+"""),
 
     # --- Crushers and mills -------------------------------------------------
     #
@@ -725,6 +746,7 @@ STAYS_ON_BASE = {
     # would be the layer's first duplicate.
     ("block", "default"): "Block's own drawing",
     ("blower", "default"): "Blower's own drawing",
+    ("boiler", "default"): "Boiler's own drawing",
     ("conveyor", "default"): "Conveyor's own drawing",
     ("cooler", "default"): "Cooler's own drawing",
     ("cooling_tower", "default"): "CoolingTower's own drawing (the fan on the stack)",
@@ -757,18 +779,41 @@ STAYS_ON_BASE = {
     ("centrifuge", "skimmer"): "mechanism: item 9.8 X8039, the skimmer tube",
     ("crushing_machine", "default"):
         "CrushingMachine's own drawing (ISO item 11.1, no characteristic)",
+    # The eight ISO 10628-2 group-5 drawings (symbols._register_cooling_towers):
+    # one outline, a draught arrangement and a fill characteristic, on the same
+    # reasoning as the three vendored bodies just above -- same basin, same six
+    # nozzles, one row on an equipment list whichever fan or fill is drawn.
+    ("cooling_tower", "general"): "ISO item 5.1: the bare outline, no fill or draught mark",
+    ("cooling_tower", "dry_natural"): "fill + draught: dry fill, no fan (natural draught)",
+    ("cooling_tower", "dry_forced"): "fill + draught: dry fill, fan low in the tower",
+    ("cooling_tower", "dry_induced"): "fill + draught: dry fill, fan high in the tower",
+    ("cooling_tower", "wet_natural"): "fill + draught: wet fill, no fan (natural draught)",
+    ("cooling_tower", "wet_forced"): "fill + draught: wet fill, fan low in the tower",
+    ("cooling_tower", "wet_induced"): "fill + draught: wet fill, fan high in the tower",
+    ("cooling_tower", "wet_dry_natural"):
+        "fill + draught: both fill marks, no fan (natural draught)",
     ("crusher", "default"): "Crusher's own drawing (ISO item 11.2, no characteristic)",
     ("mill", "default"): "Mill's own drawing (ISO item 11.8, no characteristic)",
+    # ISO item 10.1 C0046, "Drier (general)": the group's own bare casing,
+    # with none of the six marks that make a drawing one particular
+    # machine. Not a scheduled item of its own -- an equipment list does
+    # not row "a drier, unspecified" -- but a real drawing for the stage
+    # before process design has picked shelf over turbo over belt, on
+    # the same reasoning ("crushing_machine", "default") above gives
+    # X8084 for a crusher-or-mill not yet chosen.
+    ("dryer", "general"): "ISO item 10.1: the bare casing, no characteristic drawn",
     ("elevator", "default"): "Elevator's own drawing (ISO item 18.7, the straight lift)",
     ("elevator", "z_form"): "body style: the same lift with a run at each end",
     ("ejector", "default"): "Ejector's own drawing",
     ("filter", "default"): "Filter's own drawing (bag, candle or cartridge elements)",
+    ("flare", "default"): "Flare's own drawing",
     ("funnel", "default"): "Funnel's own drawing",
     ("furnace", "default"): "Furnace's own drawing",
     ("heater", "default"): "Heater's own drawing",
     ("mixer", "default"): "Mixer's own drawing",
     ("separator", "default"): "Separator's own drawing (the flash drum)",
     ("splitter", "default"): "Splitter's own drawing",
+    ("stack", "default"): "Stack's own drawing",
     ("tank", "default"): "Tank's own drawing",
     ("tee", "default"): "Tee's own drawing",
     ("turbine", "default"): "Turbine's own drawing",

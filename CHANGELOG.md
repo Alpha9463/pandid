@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   item 11.1 X8084.
 - `CoolingTower`, `VenturiScrubber`, `Elevator`, `Conveyor(variant="screw")`
   and `tank/gas_holder`.
+- `Boiler`, `Stack` and `Flare`.
+- `Dryer` gains `shelf`, `turbo` and `belt`; `cooling_tower` gains `general`
+  and the eight ISO 10628-2 group-5 draught and fill drawings.
 - `Conveyor(diameter=)` sets the roller a belt runs on, or the bore a screw
   turns in. `length=` is unchanged.
 - A cake-forming filter draws its cake and its wash: `wash_in` and `cake` on

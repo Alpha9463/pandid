@@ -39,8 +39,9 @@ __all__ = [
     "Feed", "Product", "Pump", "Compressor", "Blower", "Valve", "Vessel", "Tank",
     "HeatExchanger", "Heater", "Cooler", "CoolingTower", "Reactor", "Separator", "Column",
     "Mixer", "Splitter", "Tee", "Reducer", "Fitting", "Ejector", "Vent", "Funnel",
-    "Furnace", "Turbine", "Filter", "Dryer", "CrushingMachine", "Crusher", "Mill",
-    "Centrifuge", "Conveyor", "Elevator", "Instrument", "Block",
+    "Furnace", "Boiler", "Stack", "Flare", "Turbine", "Filter", "Dryer",
+    "CrushingMachine", "Crusher", "Mill", "Centrifuge", "Conveyor", "Elevator",
+    "Instrument", "Block",
 ]
 
 # Only a signal port may carry a signal line and only a process one may
@@ -1625,6 +1626,61 @@ class Furnace(Unit):
     kind = "furnace"
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process"),
              ("fuel", "inlet", "feed")]
+
+
+class Boiler(Unit):
+    """Steam boiler: feedwater in, steam out. ISO 10628-2 item 4.1, 2532.
+
+    Two nozzles, in the two connections Table 2 draws and no others:
+    ``feedwater`` on the shell's west wall, a quarter of the way down
+    from the crown, and ``steam`` off the dome's own apex. There is no
+    fuel or flue connection in the row -- unlike :class:`Furnace`, which
+    draws one -- so none is declared here; a boiler fired by its own
+    burner is a :class:`Furnace` upstream of this on the sheet, tagged
+    and drawn separately.
+    """
+
+    feedwater: Port
+    steam: Port
+
+    kind = "boiler"
+    PORTS = [("feedwater", "inlet", "process"), ("steam", "outlet", "process")]
+
+
+class Stack(Unit):
+    """Exhaust stack or chimney. ISO 10628-2 item 4.7, 2041.
+
+    Not :class:`Vent`. A vent is bulk piping -- a pipe stack with a
+    weather cap, bought by the line -- and this is Table 2's own
+    equipment: the structure a furnace or boiler's flue gas is ducted up
+    and out through, tagged and scheduled the way the plant it exhausts
+    is. Table 2 draws one connection, low on the shaft, and nothing
+    downstream of it -- a stack takes a line and gives the sheet nothing
+    back, the same boundary a :class:`Vent` or a :class:`Product` draws,
+    but piped as real equipment rather than an off-page flag.
+    """
+
+    inlet: Port
+
+    kind = "stack"
+    PORTS = [("inlet", "inlet", "vapor")]
+
+
+class Flare(Unit):
+    """Flare stack: waste gas burned off at the tip. ISO 10628-2 item 4.8, 2591.
+
+    The same terminal shape as :class:`Stack` -- one connection, low on
+    the shaft, nothing routed onward -- topped with the flame Table 2
+    draws in place of an open end. A sheet that instead wants to *name*
+    the flare header a stream leaves to, without drawing the stack
+    itself, still reaches for ``Product(header=True)``; see that
+    class's docstring. This is for drawing the equipment.
+    """
+
+    inlet: Port
+
+    kind = "flare"
+    PORTS = [("inlet", "inlet", "vapor")]
 
 
 class Turbine(Unit):

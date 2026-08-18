@@ -279,10 +279,17 @@ class TableBox:
 # A separate valve or instrument schedule is a real drawing, so
 # ``include=`` names its rows explicitly and this rule stands aside.
 _MAJOR_EQUIPMENT = frozenset({
-    "blower", "column", "compressor", "conveyor", "cooler", "cooling_tower",
-    "crusher", "dryer", "ejector", "elevator", "filter", "furnace", "heater",
-    "hex", "mill", "pump", "reactor", "separator", "tank", "turbine", "vessel",
+    "blower", "boiler", "column", "compressor", "conveyor", "cooler",
+    "cooling_tower", "crusher", "dryer", "ejector", "elevator", "filter",
+    "flare", "furnace", "heater", "hex", "mill", "pump", "reactor", "separator",
+    "stack", "tank", "turbine", "vessel",
 })
+# ``boiler``, ``stack`` and ``flare`` are here and ``vent``/``funnel`` are
+# not, for the reason ``Stack``'s own docstring gives: those two are
+# bulk piping, bought by the line, and these three are ISO 10628-2's
+# own group-4 equipment -- a stack or a flare stack has a foundation and
+# a datasheet the way a furnace does, not a piping-class entry the way a
+# vent cap does.
 # ``block`` is absent: a block flow diagram's box stands for a whole
 # section of plant, whose equipment list is a document of its own, so
 # scheduling one would say that "Reaction" is a thing somebody
@@ -296,6 +303,7 @@ _MAJOR_EQUIPMENT = frozenset({
 _KIND_LABELS = {
     "block": "Process Block",
     "blower": "Blower",
+    "boiler": "Boiler",
     "centrifuge": "Centrifuge",
     "column": "Column",
     "compressor": "Compressor",
@@ -310,6 +318,7 @@ _KIND_LABELS = {
     "feed": "Feed",
     "filter": "Filter",
     "fitting": "In-Line Fitting",
+    "flare": "Flare",
     "funnel": "Charging Funnel",
     "furnace": "Fired Heater",
     "heater": "Heater",
@@ -323,6 +332,7 @@ _KIND_LABELS = {
     "reducer": "Reducer",
     "separator": "Separator",
     "splitter": "Splitter",
+    "stack": "Stack",
     "tank": "Tank",
     "tee": "Pipe Tee",
     "turbine": "Turbine",
