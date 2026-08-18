@@ -39,7 +39,7 @@ from pandid import (
     Valve,
 )
 from pandid.document import Revision, TitleBlock, equipment_list, legend, notes
-from pandid.portgeom import port_offset
+from pandid.portgeom import pinned_x, pinned_y, port_offset
 
 
 def main():
@@ -141,7 +141,7 @@ def main():
     # of it stepping over that gap instead of lying on one elevation.
     pump.pin(x=150).pin(port="discharge", y=charge_y)
     po_feed.pin(port="outlet", x=80,
-                y=pump.pin_.y + port_offset(pump, "suction")[1])
+                y=pinned_y(pump, "suction"))
     # 120 units of clear run between the pump and the trip valve, and it
     # is the line number that asks for them: the discharge is a line of
     # its own, twelve characters of it, and a number with less than half
@@ -182,8 +182,8 @@ def main():
     product_y = 720.0
     cv203.pin(port="inlet", x=880, y=product_y)
     cooler.pin(x=1040).pin(port="tube_in", y=product_y)
-    shell_in_x = cooler.pin_.x + port_offset(cooler, "shell_in")[0]
-    shell_out_x = cooler.pin_.x + port_offset(cooler, "shell_out")[0]
+    shell_in_x = pinned_x(cooler, "shell_in")
+    shell_out_x = pinned_x(cooler, "shell_out")
     cws_cool.pin(port="outlet", x=shell_in_x, y=590)
     hv207.pin(orientation=90).pin(port="inlet", x=shell_in_x, y=640)
     cwr_cool.pin(port="inlet", x=shell_out_x, y=850)

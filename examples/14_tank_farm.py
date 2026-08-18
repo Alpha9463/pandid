@@ -50,7 +50,7 @@ from pandid import (
     Vessel,
 )
 from pandid.document import Annotation, Revision, TitleBlock, legend, notes
-from pandid.portgeom import port_offset, resolve_size
+from pandid.portgeom import pinned_x, pinned_y, port_offset, resolve_size
 
 
 def main():
@@ -225,8 +225,8 @@ def main():
     fe605.pin(port="inlet", x=1080, y=eth_run_y)
     cv605.pin(port="inlet", x=1140, y=eth_run_y)
     nrv602.pin(port="inlet", x=1180, y=eth_run_y)
-    psv_branch_x = t_psv.pin_.x + port_offset(t_psv, "branch")[0]
-    rec_branch_x = t_rec.pin_.x + port_offset(t_rec, "branch")[0]
+    psv_branch_x = pinned_x(t_psv, "branch")
+    rec_branch_x = pinned_x(t_rec, "branch")
     psv602.pin(port="inlet", x=rec_branch_x, y=psv_run_y)
 
     hv605.pin(port="inlet", x=1250, y=lpg_run_y)
@@ -236,7 +236,7 @@ def main():
 
     blend_y = ms_disch_y
     t_blend.pin(mirrored="y").pin(port="inlet", x=1220, y=blend_y)
-    blend_branch_x = t_blend.pin_.x + port_offset(t_blend, "branch")[0]
+    blend_branch_x = pinned_x(t_blend, "branch")
     fe604.pin(port="inlet", x=1340, y=blend_y)
     cv604.pin(port="inlet", x=1400, y=blend_y)
     hv604.pin(port="inlet", x=1460, y=blend_y)
@@ -255,8 +255,8 @@ def main():
     hv607.pin(port="inlet", x=hv607_x, y=vap_y)
     fa602.pin(port="inlet", x=fa602_x, y=vap_y)
     v604.pin(port="inlet", x=drum_x, y=vap_y)
-    vent_x = v604.pin_.x + port_offset(v604, "vent")[0]
-    vent_y = v604.pin_.y + port_offset(v604, "vent")[1]
+    vent_x = pinned_x(v604, "vent")
+    vent_y = pinned_y(v604, "vent")
     fa601.pin(orientation=270).pin(port="inlet", x=vent_x, y=vent_y - 22)
     vt601.pin(port="inlet", x=vent_x, y=vent_y - 68)
     vru_out.pin(port="inlet", x=1560, y=vap_y)

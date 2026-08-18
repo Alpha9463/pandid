@@ -33,7 +33,7 @@ from pandid import (
     Vessel,
 )
 from pandid.document import Revision, TableBox, TitleBlock, equipment_list
-from pandid.portgeom import port_offset
+from pandid.portgeom import pinned_x, pinned_y, port_offset
 
 # --- Stream property table --------------------------------------------
 # Rows render in first-seen key order, so every stream carries the same
@@ -173,24 +173,28 @@ def main():
 
     mix2.pin(x=1120, y=hx_axis_y - 15)              # in_1 level with the cooler
     press.pin(x=1250, y=hx_axis_y - 20)
-    filtrate_y = press.pin_.y + port_offset(press, "outlet")[1]
-    cake_x = press.pin_.x + port_offset(press, "cake")[0]
+    filtrate_y = pinned_y(press, "outlet")
+    cake_x = pinned_x(press, "cake")
     effluent.pin(port="inlet", x=1440, y=filtrate_y)
     # The belt runs under the press, so the cake drops out of the floor
     # onto its tail and is thrown off the far end.
     belt_y = 715.0
     belt.pin(port="feed", x=cake_x, y=belt_y)
     cake.pin(port="inlet",
-             x=belt.pin_.x + port_offset(belt, "discharge")[0] + 40,
-             y=belt.pin_.y + port_offset(belt, "discharge")[1])
+             x=pinned_x(belt, "discharge") + 40,
+             y=pinned_y(belt, "discharge"))
 
     # --- Connections --------------------------------------------------
     # Declared in stream-number order, which is the order the table
     # reads. A number is drawn once, on the first segment declared, so
     # each group starts with the run it belongs on.
     fs.connect(broth.outlet, col.feed, name="S-301")
-    fs.connect(floc.outlet, mix1.feed_1, name="S-303")
-    fs.connect(water.outlet, mix1.feed_2, name="S-304")
+    # ``feeds`` and not ``feed_1``/``feed_2``: a reactor is the one class
+    # whose numbered nozzles a checker cannot resolve, because
+    # ``StirredTankReactor`` subclasses it and the overloads that would
+    # name them would hand back a type that has lost its nozzles.
+    fs.connect(floc.outlet, mix1.feeds[0], name="S-303")
+    fs.connect(water.outlet, mix1.feeds[1], name="S-304")
 
     fs.connect(refl.outlet, ethanol.inlet, name="S-305")
     fs.connect(col.distillate, cond.shell_in, name="S-305")

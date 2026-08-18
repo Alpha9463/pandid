@@ -26,7 +26,7 @@ from pandid import (
     Valve,
     Vessel,
 )
-from pandid.portgeom import port_offset
+from pandid.portgeom import pinned_x, pinned_y, port_offset
 
 def main():
     fs = Flowsheet("Distillation Train")
@@ -86,7 +86,7 @@ def main():
     mixer.pin(x=290).pin(port="outlet", y=feed_run_y)
     # A boundary flag is pinned at the tip of its arrow, and this one's
     # line lands on in_1, above the outlet the run is pinned on.
-    feed.pin(port="outlet", x=210, y=mixer.pin_.y + port_offset(mixer, "in_1")[1])
+    feed.pin(port="outlet", x=210, y=pinned_y(mixer, "in_1"))
     feed_valve.pin(x=410, port="inlet", y=feed_run_y)
     preheater.pin(x=520, port="tube_in", y=feed_run_y)
 
@@ -101,8 +101,8 @@ def main():
     # Asked of the symbol rather than measured off the drawing. The two
     # return elevations are never written down: reflux_in and boilup_in
     # sit at fixed fractions of whatever height the column is drawn at.
-    c1_axis = col1.pin_.x + port_offset(col1, "distillate")[0]
-    c2_axis = col2.pin_.x + port_offset(col2, "distillate")[0]
+    c1_axis = pinned_x(col1, "distillate")
+    c2_axis = pinned_x(col2, "distillate")
 
     # Condenser over its own tower on the same axis, flipped top to
     # bottom so the vapour rises into its underside dead straight.
@@ -122,7 +122,7 @@ def main():
     for tee, drum, prod, prod_x in ((c1_tee, c1_drum, c1_prod, 1070),
                                     (c2_tee, c2_drum, c2_prod, 1640)):
         tee.pin(orientation=90, mirrored="y")
-        tee.pin(port="inlet", x=drum.pin_.x + port_offset(drum, "outlet")[0])
+        tee.pin(port="inlet", x=pinned_x(drum, "outlet"))
         tee.pin(port="branch", y=tee_y)
         prod.pin(x=prod_x, port="inlet", y=tee_y)
 
@@ -136,7 +136,7 @@ def main():
     # Bottoms split, above T-200's pump discharge run.
     splitter.pin(x=1710, y=bot_y - 40)
     c2_bot.pin(x=1830, port="inlet",
-               y=splitter.pin_.y + port_offset(splitter, "out_1")[1])
+               y=pinned_y(splitter, "out_1"))
 
     # Recycle valve below the pump row (receives flow from the right)
     recycle_valve.pin(x=590, y=pump_y + 110, mirrored=True)

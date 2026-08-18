@@ -43,7 +43,7 @@ from pandid import (
     Vent,
 )
 from pandid.document import Revision, TableBox, TitleBlock, equipment_list
-from pandid.portgeom import port_offset
+from pandid.portgeom import pinned_x
 
 # --- Stream property table --------------------------------------------
 # Rows render in first-seen key order, so every stream below carries the
@@ -223,7 +223,7 @@ def main():
     # The powder drops into the fill line, so the funnel stands over the
     # tee with its stem on the branch's centreline.
     charge.pin(mirrored="y").pin(port="inlet", x=130, y=water_y)
-    funnel.pin(port="outlet", x=charge.pin_.x + tee_w / 2, y=water_y - 20)
+    funnel.pin(port="outlet", x=pinned_x(charge) + tee_w / 2, y=water_y - 20)
 
     tank.pin(port="inlet", x=200, y=260)
     # Both the pump's connections are on its crown, so the discharge
@@ -246,7 +246,7 @@ def main():
     suction_red.pin(port="outlet", x=478, y=suction_y)
     disch_red.pin(port="inlet", x=624, y=suction_y)
     belt_filter.pin(port="inlet", x=670, y=suction_y)
-    cake_x = belt_filter.pin_.x + port_offset(belt_filter, "cake")[0]
+    cake_x = pinned_x(belt_filter, "cake")
 
     # Straight out of the east wall on the filter's own elevation, which
     # is what the filtrate leg is: nothing is drawn between the machine
@@ -265,7 +265,7 @@ def main():
     heater.pin(port="inlet", x=860, y=654.5)
     air.pin(port="outlet", x=790, y=654.5)   # clear of the burner wall
     gas.pin(port="outlet", x=750, y=740)
-    hot_gas_x = breeching.pin_.x + tee_w / 2
+    hot_gas_x = pinned_x(breeching) + tee_w / 2
 
     cyclone.pin(port="feed", x=1180, y=322)
     # Above the gas riser rather than beside it: the scrub-water line
@@ -276,7 +276,7 @@ def main():
     scrubber.pin(port="feed", x=1300, y=132)
     effluent.pin(port="inlet", x=1400, y=280)
     fan.pin(port="suction", x=1440, y=132)
-    stack.pin(port="inlet", x=fan.pin_.x + port_offset(fan, "discharge")[0],
+    stack.pin(port="inlet", x=pinned_x(fan, "discharge"),
               y=60)
 
     magnet.pin(port="feed", x=1300, y=532)

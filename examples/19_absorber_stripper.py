@@ -47,7 +47,7 @@ from pandid import (
     Vessel,
 )
 from pandid.document import Revision, TableBox, TitleBlock, equipment_list
-from pandid.portgeom import port_offset
+from pandid.portgeom import pinned_x, pinned_y, port_offset
 
 # --- Stream property table --------------------------------------------
 # Rows render in first-seen key order, so every stream carries the same
@@ -184,8 +184,8 @@ def main():
     rich_y = 822.0
     letdown.pin(port="inlet", x=460, y=rich_y)
     cross.pin(x=620).pin(port="tube_in", y=rich_y)
-    cross_shell_in_x = cross.pin_.x + port_offset(cross, "shell_in")[0]
-    cross_shell_out_x = cross.pin_.x + port_offset(cross, "shell_out")[0]
+    cross_shell_in_x = pinned_x(cross, "shell_in")
+    cross_shell_out_x = pinned_x(cross, "shell_out")
     rich_riser_x = 880.0
 
     regen.pin(x=980, y=290)
@@ -197,11 +197,11 @@ def main():
     # mirrored="y" puts the condenser's shell inlet underneath, so the
     # overhead rises into it straight.
     ovhd.pin(mirrored="y").pin(port="shell_in", x=regen_axis, y=201)
-    ovhd_drain_y = ovhd.pin_.y + port_offset(ovhd, "shell_out")[1]
-    cw_ovhd_y = ovhd.pin_.y + port_offset(ovhd, "tube_in")[1]
+    ovhd_drain_y = pinned_y(ovhd, "shell_out")
+    cw_ovhd_y = pinned_y(ovhd, "tube_in")
     drum.pin(port="inlet", x=1200, y=ovhd_drain_y)
-    drum_draw_x = drum.pin_.x + port_offset(drum, "outlet")[0]
-    drum_vent_x = drum.pin_.x + port_offset(drum, "vent")[0]
+    drum_draw_x = pinned_x(drum, "outlet")
+    drum_vent_x = pinned_x(drum, "vent")
     reflux_run_y = 240.0
     reflux_pump.pin(x=1350).pin(port="suction", y=reflux_run_y)
     reflux_riser_x = 1480.0
@@ -229,11 +229,11 @@ def main():
     # walls where a boundary flag can reach them without doubling back.
     return_y = 900.0
     lean_pump.pin(mirrored=True).pin(port="suction", x=600, y=return_y)
-    pump_out_y = lean_pump.pin_.y + port_offset(lean_pump, "discharge")[1]
+    pump_out_y = pinned_y(lean_pump, "discharge")
     trim.pin(x=370, y=960)
-    trim_shell_in_x = trim.pin_.x + port_offset(trim, "shell_in")[0]
-    trim_shell_out_x = trim.pin_.x + port_offset(trim, "shell_out")[0]
-    cw_trim_y = trim.pin_.y + port_offset(trim, "tube_in")[1]
+    trim_shell_in_x = pinned_x(trim, "shell_in")
+    trim_shell_out_x = pinned_x(trim, "shell_out")
+    cw_trim_y = pinned_y(trim, "tube_in")
     cws_trim.pin(port="outlet", x=250, y=cw_trim_y)
     cwr_trim.pin(port="inlet", x=760, y=cw_trim_y)
     lean_riser_x = 150.0
@@ -260,8 +260,7 @@ def main():
         [(drum_draw_x, reflux_run_y)])
     fs.connect(reflux_pump.discharge, regen.reflux_in, name="S-409",
                draw_as_recycle=True).via(
-                   [(reflux_riser_x, reflux_pump.pin_.y
-                     + port_offset(reflux_pump, "discharge")[1]),
+                   [(reflux_riser_x, pinned_y(reflux_pump, "discharge")),
                     (reflux_riser_x, reflux_in_y)])
 
     fs.connect(regen.bottoms, reboiler.shell_in, name="S-410").via(
