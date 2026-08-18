@@ -243,7 +243,7 @@
     <path d="M 446.5,390.0 L 576.5,390.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 589.0,390.0 L 746.5,390.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 771.0,390.0 L 871.0,390.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 895.5,390.0 L 1076.0,390.0 L 1076.0,390.0 A 5 5 0 0 1 1076.0,400.0 L 1076.0,464.5 L 1131.0,464.5 L 1131.0,430.1" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 895.5,390.0 L 1076.0,390.0 L 1076.0,464.5 L 1131.0,464.5 L 1131.0,430.1" fill="none" stroke="black" stroke-width="2" />
     <path d="M 921.0,974.4 L 1121.0,974.4 L 1121.0,967.4 L 1181.0,967.4 L 1181.0,989.4" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1121.0,1025.4 L 1121.0,1040.4 L 1311.0,1040.4" fill="none" stroke="black" stroke-width="2" />
     <path d="M 290.25,601.0 L 290.25,563.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />

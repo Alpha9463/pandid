@@ -51,6 +51,7 @@ from pandid.render.drawio import (
     DrawioRenderer,
 )
 from pandid.render.svg import (
+    HOP_R,
     _page,
     _PROCESS_STROKE,
     _SIGNAL_STROKE,
@@ -2815,9 +2816,16 @@ def _drawio_hops(edges):
 def _sheet_hops(fs, fit, direction="vertical"):
     """Every hop the *sheet* draws, by ``SvgRenderer._draw_streams``' own rule.
 
-    A vertical segment strictly inside a horizontal one hops it, or the reverse
-    under ``"horizontal"``. Put through the same fit as the export, so the two
-    sets are comparable point for point.
+    A vertical segment inside a horizontal one hops it, or the reverse under
+    ``"horizontal"``. Put through the same fit as the export, so the two sets
+    are comparable point for point.
+
+    **Inside by at least ``HOP_R``**, which is the renderer's own bound and not
+    a rounding allowance: the arc occupies a span of ``2 * HOP_R`` centred on
+    the crossing, so a crossing nearer than that to the end of its segment has
+    no room for one and is drawn flat. Plain strict containment was the rule
+    until a hop was found drawn on the corner beside a crossing; see
+    ``tests/test_render.py::test_a_hop_has_room_for_its_own_arc``.
     """
     hor, ver = [], []
     for n, s in enumerate(fs.streams):
@@ -2831,7 +2839,7 @@ def _sheet_hops(fs, fit, direction="vertical"):
     out = set()
     for hop, lo, hi, at in hopping:
         for cross, c_lo, c_hi, c_at in crossed:
-            if hop == cross or not (c_lo < at < c_hi and lo < c_at < hi):
+            if hop == cross or not (c_lo < at < c_hi and lo + HOP_R < c_at < hi - HOP_R):
                 continue
             point = (at, c_at) if direction == "vertical" else (c_at, at)
             x, y = fit.at(*point)

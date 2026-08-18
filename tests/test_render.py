@@ -5,6 +5,7 @@ import pytest
 
 from pandid import Flowsheet, units as U
 from pandid.layout.attach import stream_path
+from pandid.render.svg import HOP_R, stream_polyline
 from pandid.streams import SIGNAL_KINDS
 
 from test_route_invariants import CORPUS
@@ -356,3 +357,55 @@ def test_no_label_halo_deletes_a_line_that_is_not_its_own(drawn, name):
                 erased.append(f"tag {text!r} halo deletes {owner or 'an impulse line'} at {run}")
 
     assert not erased, f"{name}: " + "; ".join(sorted(set(erased)))
+
+
+@pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
+def test_a_hop_has_room_for_its_own_arc(drawn, name):
+    """A hop is drawn on a crossing, never on the corner beside one.
+
+    ``_draw_streams`` replaces a span of ``2 * HOP_R`` centred on the crossing
+    with a semicircle. A crossing nearer than ``HOP_R`` to the end of the
+    segment it sits on therefore has an arc that reaches past the end -- and
+    where the run turns there, the bump is drawn on the elbow, which reads as a
+    kink in the pipe rather than as one line passing over another.
+    ``18_fixed_bed_recycle`` shipped one: a zero-length ``L`` at the corner
+    followed immediately by the arc.
+
+    Checked by counting, because the two halves are computed independently.
+    Every arc in a stream's path is one hop, so the arcs in the drawing must
+    number exactly the crossings that have the room -- which is the rule
+    restated, and would fail if the renderer kept the old bound.
+    """
+    fs, svg = drawn[name]
+
+    horizontals, verticals = [], []
+    for s in fs.streams:
+        pts = stream_polyline(s)
+        for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
+            if y1 == y2 and x1 != x2:
+                horizontals.append((min(x1, x2), max(x1, x2), y1))
+            elif x1 == x2 and y1 != y2:
+                verticals.append((x1, min(y1, y2), max(y1, y2)))
+
+    expected = 0
+    for s in fs.streams:
+        pts = stream_polyline(s)
+        for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
+            if x1 != x2:
+                continue
+            expected += sum(
+                1
+                for mnx, mxx, hy in horizontals
+                if mnx < x1 < mxx and min(y1, y2) + HOP_R < hy < max(y1, y2) - HOP_R
+            )
+
+    drawn_arcs = sum(
+        d.count(f"A {HOP_R} {HOP_R} ")
+        for d in re.findall(r'<path d="(M [^"]*)"', svg)
+        if " A " in d
+    )
+    assert drawn_arcs == expected, (
+        f"{name}: {drawn_arcs} hop arcs drawn, {expected} crossings have room "
+        f"for one -- a hop nearer than {HOP_R} to the end of its segment "
+        f"overhangs, and on a corner is drawn as a kink"
+    )

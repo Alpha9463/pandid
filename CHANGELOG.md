@@ -116,6 +116,8 @@ Each of these draws a **different** symbol from the spelling it replaces.
 - Auto-numbering no longer walks over a stream name an author already used.
 - A balloon layout could not place no longer makes `validate()` silent about
   the rest of the sheet.
+- A hop is drawn only where there is room for its arc, so one no longer lands
+  on the corner beside a crossing.
 - A crossing the draw.io export cannot hop the right way round is drawn flat
   rather than the wrong way round, and is reported.
 - Six things the draw.io export dropped without saying so are now reported;
