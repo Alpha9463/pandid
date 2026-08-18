@@ -195,7 +195,7 @@ from pandid.render import generator
 from pandid.render import svg as _svg
 from pandid.render.escape import escaped, writable
 from pandid.render.svg import (_DIAMOND_BALLOONS, _FIT_CODES, _furniture_name,
-                               _LEADER_HEAD, _scale_text, _too_small,
+                               _LEADER_HEAD, _scale_text, _Sheet, _too_small,
                                _SIGNAL_DASH, _PROCESS_STROKE,
                                _SIGNAL_STROKE, _TAP_DASH, fit_issue, HOP_R,
                                NUMBER_TYPE, boundary_flag,
@@ -2350,7 +2350,7 @@ class DrawioRenderer:
         _ox, _oy, ow, oh = F.sheet_rect(*frame)
         return (ow + 2 * F.OUTER_MARGIN, oh + 2 * F.OUTER_MARGIN)
 
-    def _furniture(self, fs, sheet=None, show_stream_table: bool = False):
+    def _furniture(self, fs, sheet: "_Sheet | None" = None, show_stream_table: bool = False):
         """Title block, annotations, table boxes and the stream table,
         docked where the sheet docks them and ruled as the tables they
         are.
@@ -2414,10 +2414,19 @@ class DrawioRenderer:
             items.append((table, "bottom-left", table.w, table.h))
 
         inner = self._drawing_box(fs)
-        placed, frame, free = F.dock(
-            items, inner, sheet=sheet,
-            too_small=lambda need_w, need_h, culprit: _too_small(
-                sheet, need_w, need_h, _furniture_name(culprit) if culprit else ""))
+        if sheet is None:
+            placed, frame, free = F.dock(items, inner)
+        else:
+            # Rebound so the closure below closes over a `_Sheet`, not
+            # the parameter's `_Sheet | None`: `dock` only ever calls
+            # `too_small` from inside its own `sheet is not None`
+            # branch, so by the time this lambda runs the page it
+            # named is exactly this one.
+            page = sheet
+            placed, frame, free = F.dock(
+                items, inner, sheet=page,
+                too_small=lambda need_w, need_h, culprit: _too_small(
+                    page, need_w, need_h, _furniture_name(culprit) if culprit else ""))
         # A fixed page fits the drawing into whatever the bands leave,
         # at the ratio the title strip's scale cell reports. Without one
         # there is no fitting: the drawing keeps its own coordinates and

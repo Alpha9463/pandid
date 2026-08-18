@@ -162,41 +162,42 @@ class VisibilityGraph:
                 else:
                     self.obstacles.append(Rect(f.x, f.x + u_width, f.y, f.y + u_height))
 
+            # The label's own obstacle rect and the lanes that clear it were
+            # two separately-guarded blocks that happened to test the same
+            # ``lpos`` under the same condition, `label_w` computed in the
+            # first and only read in the second -- true today because the
+            # two conditions are copies of each other, and one unbound
+            # `label_w` away from not being. One guard, computing it once,
+            # is the same result without relying on that staying true.
             lpos = f.label_pos or "top"
             if u.kind not in ("feed", "product") and lpos != "center":
                 label_w = min(150.0, max(40.0, len(u.name) * 7.5))
                 if lpos == "top":
                     cx = f.x + u_width / 2
                     self.obstacles.append(Rect(cx - label_w/2, cx + label_w/2, f.y - 20, f.y))
+                    y_set.add(f.y - 20.0 - margin)
+                    y_set.add(f.y - 10.0)
                 elif lpos == "bottom":
                     cx = f.x + u_width / 2
                     self.obstacles.append(Rect(cx - label_w/2, cx + label_w/2, f.y + u_height, f.y + u_height + 25))
+                    y_set.add(f.y + u_height + 25.0 + margin)
+                    y_set.add(f.y + u_height + 10.0)
                 elif lpos == "left":
                     cy = f.y + u_height / 2
                     self.obstacles.append(Rect(f.x - label_w - 15, f.x, cy - 10, cy + 10))
+                    x_set.add(f.x - label_w - 15.0 - margin)
+                    x_set.add(f.x - 5.0)
                 elif lpos == "right":
                     cy = f.y + u_height / 2
                     self.obstacles.append(Rect(f.x + u_width, f.x + u_width + label_w + 15, cy - 10, cy + 10))
+                    x_set.add(f.x + u_width + label_w + 15.0 + margin)
+                    x_set.add(f.x + u_width + 5.0)
 
             # Routing lanes around the unit
             x_set.add(f.x - margin)
             x_set.add(f.x + u_width + margin)
             y_set.add(f.y - margin)
             y_set.add(f.y + u_height + margin)
-
-            if u.kind not in ("feed", "product") and lpos != "center":
-                if lpos == "top":
-                    y_set.add(f.y - 20.0 - margin)
-                    y_set.add(f.y - 10.0)
-                elif lpos == "bottom":
-                    y_set.add(f.y + u_height + 25.0 + margin)
-                    y_set.add(f.y + u_height + 10.0)
-                elif lpos == "left":
-                    x_set.add(f.x - label_w - 15.0 - margin)
-                    x_set.add(f.x - 5.0)
-                elif lpos == "right":
-                    x_set.add(f.x + u_width + label_w + 15.0 + margin)
-                    x_set.add(f.x + u_width + 5.0)
 
             # Port anchors (bbox-edge) and their projected escape nodes.
             for name in u.ports:

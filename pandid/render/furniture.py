@@ -1065,6 +1065,9 @@ def dock(items, inner, *, sheet=None, too_small=None):
     fixed page cannot hold its own furniture and must return the
     exception to raise; the caller supplies it because naming
     ``culprit`` in words is the caller's vocabulary, not this module's.
+    It is only reached from inside that same overflow, so a caller
+    whose page cannot overflow -- an empty ``items``, say -- may still
+    leave it ``None``.
 
     Returns ``(placed, frame, free)``: the list of :class:`Docked`
     rectangles in the order the sheet draws them, the frame rectangle
@@ -1124,6 +1127,14 @@ def dock(items, inner, *, sheet=None, too_small=None):
                      stack_h(cols["left"]), stack_h(cols["right"]))
         too_wide = need_w >= sheet.width - 2 * edge
         if too_wide or need_h >= sheet.height - 2 * edge:
+            # Only a fixed page can overflow, so this is the one place
+            # a missing `too_small` would otherwise surface as a bare
+            # "NoneType is not callable" -- naming the real invariant
+            # here instead means whoever forgot it reads why, and only
+            # a caller that actually overflows its page has to supply
+            # it at all.
+            if too_small is None:
+                raise TypeError("dock() needs a too_small callback when sheet is given")
             raise too_small(need_w + 2 * edge, need_h + 2 * edge,
                             biggest(1 if too_wide else 2))
         ix, iy = edge, edge
