@@ -45,6 +45,33 @@ python -m mypy pandid                  # type check (blocking, not advisory)
 `ruff format` is enforced on `tests/` only. The rest of the tree is linted but
 not auto-formatted, so don't reformat `pandid/` in a feature PR.
 
+### A test you add must type-check clean
+
+`mypy` is a gate; Pyright is not, but a great many users run it through Pylance
+and it is stricter. **Any test written from now on must produce nothing from
+it**, on the new code:
+
+```bash
+python -m pyright tests/test_your_thing.py
+```
+
+This is forward-looking only. `tests/` carries a large backlog of Pyright
+findings that is deliberately not being cleaned up — a user never opens
+`tests/`, so the old noise costs them nothing, while a new test written
+carelessly adds to a pile nobody will ever clear cheaply. Holding the line where
+the test is written is free; a sweep is not.
+
+`pandid/` and `examples/` **are** Pyright-clean, and should stay that way — the
+examples are what a user copies, so a warning there lands in their editor.
+
+When the checker complains, the fix is almost never a `cast` or a
+`# type: ignore`. Those hide the question rather than answering it. Ask whether
+the value can really be bad at run time: if it can, that is a bug worth a test;
+if it cannot, the *types* are lying and the honest fix is usually a better API.
+`portgeom.pinned_x()` exists because `unit.pin_.x + port_offset(unit, p)[0]`
+reached through two `Optional`s and made the reader match the `[0]` to the `.x`
+by hand — the checker was right, seventy-two times over.
+
 Keep a PR to one concern. If a change touches rendering, say so and show what
 moved (see *Goldens* below).
 
