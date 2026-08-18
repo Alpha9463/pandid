@@ -3042,8 +3042,8 @@ def test_two_runs_that_each_hop_the_other_draw_no_hop_at_all():
 
     Asserted on what draw.io would paint rather than on ``hops``, because those
     are not the same thing: an edge written first draws no hop whether or not it
-    carries the style. ``22_biodiesel_plant`` is the sheet that made this
-    reachable.
+    carries the style. No shipped sheet reaches this; a recycle running the
+    length of a sheet against a counter-current train is what does.
     """
     polylines = {
         "a": [(0.0, 10.0), (20.0, 10.0), (20.0, 30.0)],
@@ -3056,8 +3056,8 @@ def test_two_runs_that_each_hop_the_other_draw_no_hop_at_all():
     )
     # Both crossings are reported, and there are *two* of them: the pair
     # crosses twice, which is what makes it a cycle at all. Counting the
-    # pair rather than the crossings under-reports every cycle, and is
-    # what let 22_biodiesel_plant lose nine crossings while naming eight.
+    # pair rather than the crossings under-reports every cycle by one
+    # -- nine crossings lost and eight named, on the sheet that found it.
     assert len(lost) == 2, f"a cycle lost 2 crossings and named {len(lost)}"
     assert {(hop, crossed) for hop, crossed, _x, _y in lost} == {("a", "b"), ("b", "a")}
     assert len({(x, y) for _h, _c, x, y in lost}) == 2, "at two different points"
@@ -3067,9 +3067,9 @@ def test_a_cycle_costs_only_the_runs_inside_it():
     """A crossing that is not in the cycle keeps its hop.
 
     The blunt fix -- drop every hop on a sheet that has a cycle anywhere on it
-    -- would pass the test above and cost ``22_biodiesel_plant`` all forty-one
-    of its hops to save six. ``h`` and ``c`` cross each other and neither of the
-    stranded pair.
+    -- would pass the test above and cost a dense sheet every one of its hops
+    to save the handful inside the cycle. ``h`` and ``c`` cross each other and
+    neither of the stranded pair.
     """
     polylines = {
         "a": [(0.0, 10.0), (20.0, 10.0), (20.0, 30.0)],
