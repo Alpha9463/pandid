@@ -45,6 +45,7 @@ from pandid.flowsheet import Flowsheet
 from pandid.portgeom import port_point, unit_box
 from pandid.render.drawio import (
     _APPROXIMATIONS,
+    HOP_DROPPED,
     _hops,
     _PART_APPROXIMATIONS,
     DrawioRenderer,
@@ -2833,10 +2834,17 @@ def test_a_crossing_is_hopped_by_the_line_the_sheet_hops(stem):
     one at all unless the edge asks.
 
     So the two sets are built independently and compared: what
-    `_draw_streams` hops, and what draw.io would hop given this document. Equal
-    means every crossing carries exactly one hop, on the line the direction
-    selects, and that the hopping edge really is the later of the two in
-    ``<root>`` -- because an edge written first cannot hop at all.
+    `_draw_streams` hops, and what draw.io would hop given this document.
+
+    **Containment and not equality**, and the difference is the whole of what
+    draw.io cannot do. A hop it draws must be one the sheet draws, at the same
+    point and the same way round -- there is no excuse for a *wrong* hop, which
+    would state that the other pipe passes over. But it may draw fewer: two runs
+    that each cross the other want to be written after each other and cannot
+    both be, so one crossing is exported flat. That is a loss, and this file's
+    rule for a loss is the same as everywhere else in the backend -- it is
+    reported. So every crossing that goes missing must carry a ``HOP_DROPPED``
+    warning, and a sheet that loses none must raise none.
     """
     fs, kwargs = gallery.flowsheet(stem)
     fs.to_svg(**kwargs)
@@ -2844,7 +2852,15 @@ def test_a_crossing_is_hopped_by_the_line_the_sheet_hops(stem):
         fs.to_drawio(**{k: v for k, v in kwargs.items() if k in _DRAWIO_KWARGS})
     ).find("diagram/mxGraphModel/root")
     edges, fit = _edge_lines(fs, kwargs, root)
-    assert _drawio_hops(edges) == _sheet_hops(fs, fit)
+    drawn, sheet = _drawio_hops(edges), _sheet_hops(fs, fit)
+    assert drawn <= sheet, (
+        f"{stem}: draw.io hops {sorted(drawn - sheet)}, which the sheet does not "
+        f"-- a hop the wrong way round says the wrong pipe passes over"
+    )
+    assert len(sheet - drawn) == len([w for w in fs.warnings if w.code == HOP_DROPPED]), (
+        f"{stem}: {len(sheet - drawn)} crossing(s) exported flat, "
+        f"{len([w for w in fs.warnings if w.code == HOP_DROPPED])} reported"
+    )
 
 
 @pytest.mark.parametrize("direction", ["vertical", "horizontal"])
@@ -2938,7 +2954,7 @@ def test_a_run_is_written_before_the_run_that_hops_it():
     asked for a precedence graph of a particular shape. These two ask it
     directly.
     """
-    order, hops = _hops(
+    order, hops, _lost = _hops(
         {"h": [(0.0, 10.0), (30.0, 10.0)], "v": [(15.0, 0.0), (15.0, 20.0)]},
         "vertical",
     )
@@ -3009,7 +3025,7 @@ def test_two_runs_that_each_hop_the_other_draw_no_hop_at_all():
         "a": [(0.0, 10.0), (20.0, 10.0), (20.0, 30.0)],
         "b": [(10.0, 0.0), (10.0, 20.0), (30.0, 20.0)],
     }
-    order, hops = _hops(polylines, "vertical")
+    order, hops, _lost = _hops(polylines, "vertical")
     assert sorted(order) == ["a", "b"], "every edge is still written once"
     assert _drawn(polylines, order, hops) == set(), (
         "a cycle drew a hop, and one of the two can only be the wrong way round"
@@ -3030,7 +3046,7 @@ def test_a_cycle_costs_only_the_runs_inside_it():
         "h": [(100.0, 10.0), (130.0, 10.0)],
         "c": [(115.0, 0.0), (115.0, 20.0)],
     }
-    order, hops = _hops(polylines, "vertical")
+    order, hops, _lost = _hops(polylines, "vertical")
     assert _drawn(polylines, order, hops) == {("c", "h")}
 
 

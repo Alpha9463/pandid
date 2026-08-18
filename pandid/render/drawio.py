@@ -341,7 +341,7 @@ def _jump_size(radius: float, weight: float) -> int:
     return max(1, round(2.0 * (radius - weight) + 2.0))
 
 
-def _hops(polylines: dict, direction: str) -> "tuple[list, set]":
+def _hops(polylines: dict, direction: str) -> "tuple[list, set, set]":
     """Which edges carry the hop, and the order that lets draw.io draw
     it.
 
@@ -399,7 +399,7 @@ def _hops(polylines: dict, direction: str) -> "tuple[list, set]":
     """
     keys = list(polylines)
     if direction not in ("vertical", "horizontal"):
-        return keys, set()
+        return keys, set(), set()
     # The two families of segment, by the edge that owns each.
     # `_draw_streams` keeps the same two lists and tests the same strict
     # containment.
@@ -433,7 +433,7 @@ def _hops(polylines: dict, direction: str) -> "tuple[list, set]":
             after[hop_key].add(cross_key)
             hopped_by[cross_key].add(hop_key)
     if not hops:
-        return keys, hops
+        return keys, hops, set()
     # Kahn's, taking the lowest original index each round -- `keys` is
     # already in that order, so `ready[0]` is it -- which keeps the
     # emitted order as close to the stream order as the crossings allow.
@@ -461,9 +461,25 @@ def _hops(polylines: dict, direction: str) -> "tuple[list, set]":
     # filter passes everything and the emitted document is unchanged to
     # the byte.
     rank = {key: n for n, key in enumerate(order)}
-    hops = {key for key in hops
+    kept = {key for key in hops
             if all(rank[other] > rank[key] for other in hopped_by[key])}
-    return order, hops
+    # The third return is what the caller owes the reader: every crossing
+    # the sheet hops and this file will not, as ``(hopper, crossed)``.
+    #
+    # Counted per *crossing* and not per edge that surrendered its style,
+    # because those are different sets and the smaller one under-reports.
+    # An edge inside a cycle can keep ``jumpStyle`` -- nothing entitled to
+    # hop it precedes it -- and still lose a crossing of its own, to an
+    # edge the ordering had to put after it. Both are the same loss to a
+    # reader: a crossing the sheet draws hopped and this file draws flat,
+    # so the two exports of one drawing disagree about which pipe passes
+    # over. The release that added :data:`_EXPORT_CODES` decided such a
+    # thing is said out loud rather than discovered.
+    lost = {(hop_key, cross_key)
+            for hop_key in hops
+            for cross_key in after[hop_key]
+            if hop_key not in kept or rank[cross_key] > rank[hop_key]}
+    return order, kept, lost
 
 
 #: pandid turns a symbol clockwise; draw.io names the same four
@@ -565,10 +581,19 @@ class _Approximation(NamedTuple):
 #: sentence beside its entry in :data:`_APPROXIMATIONS`.
 APPROXIMATED = "drawio-approximated"
 
+#: A crossing the sheet hops and this file cannot. ``jumpStyle`` is per
+#: edge and draw.io only lets an edge hop the edges written before it, so
+#: two runs that each cross the other twice want to be written after each
+#: other and neither can be; see :func:`_hops`. The hop is dropped rather
+#: than drawn backwards -- a hop states which pipe passes over, and
+#: backwards it is a false statement where a flat crossing is only an
+#: ambiguous one -- and this is that drop said out loud.
+HOP_DROPPED = "drawio-hop-dropped"
+
 #: The codes this backend puts on ``fs.warnings`` itself, as against the
 #: validator's findings about the diagram. Replaced rather than added to
 #: on each export, the way ``SvgRenderer.render`` replaces its own.
-_EXPORT_CODES = (*_FIT_CODES, APPROXIMATED)
+_EXPORT_CODES = (*_FIT_CODES, APPROXIMATED, HOP_DROPPED)
 
 
 #: Every symbol this library draws itself, and what draw.io is asked for
@@ -2032,7 +2057,17 @@ class DrawioRenderer:
         numbers = {number.name: number
                    for number in stream_numbers(fs, list(tags.plates), joints)}
         polylines = {n: stream_polyline(s) for n, s in enumerate(fs.streams)}
-        order, hops = _hops(polylines, direction)
+        order, hops, lost = _hops(polylines, direction)
+
+        def _run(key):
+            return fs.streams[key].name or f"stream {key + 1}"
+
+        for hop_key, cross_key in sorted(lost):
+            self._findings.append(Issue(
+                "warning", HOP_DROPPED,
+                f"{_run(hop_key)} hops {_run(cross_key)} on the sheet, and the two "
+                f"cross each other more than once, which draw.io cannot draw either "
+                f"way round; the crossing is exported flat"))
         labelled: set = set()
         cells: dict = {}
         for n, s in enumerate(fs.streams):
