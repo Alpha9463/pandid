@@ -2246,6 +2246,205 @@ _SEPARATING_VESSEL = Symbol(
 )
 
 
+#: ISO 10628-2 Table 2 group 9's outline, in drawing units: an 8 M x 8 M
+#: square. Measured off every one of rows 9.1 to 9.8, all eight of which
+#: draw it and nothing else outside it, so it is CENTRIFUGES' shared
+#: shape -- :data:`_CRUSHER_OUTLINE`'s counterpart for group 11, at 10
+#: units to the module the way that outline is.
+_CENTRIFUGE_SQ = 80.0
+
+#: How far Table 2 draws real ink outside the square, in drawing units:
+#: one module. Four rows (9.1-9.4) draw a shaft one module below the
+#: floor; the other four (9.5, 9.6, 9.7, 9.8) draw a feed pipe one module
+#: through the west wall. Both are equipment weight and neither is a
+#: connection tick (see the module docstring on ``iso_parts`` for what a
+#: tick is and why it is not drawn), so both are real geometry and the
+#: box each row is drawn in has to hold them.
+_CENTRIFUGE_MARGIN = 10.0
+
+
+def _centrifuge_outline(ox: float) -> str:
+    """The bare square, its west wall ``ox`` drawing units from the box's
+    own left edge.
+
+    Zero for 9.1 to 9.4, whose box is exactly the square.
+    :data:`_CENTRIFUGE_MARGIN` for 9.5 to 9.8, whose box is one module
+    wider than the square to hold the feed pipe drawn crossing the west
+    wall -- see :data:`_CENTRIFUGE_SIDE_PORTS`.
+    """
+    return (f'<path d="M {ox:g} 0 L {ox + _CENTRIFUGE_SQ:g} 0 '
+            f'L {ox + _CENTRIFUGE_SQ:g} {_CENTRIFUGE_SQ:g} '
+            f'L {ox:g} {_CENTRIFUGE_SQ:g} Z" fill="white" stroke="#111" stroke-width="2"/>')
+
+
+#: The break in a perforated shell wall, as three runs' start and end
+#: offset from the square's own top or left edge, in drawing units.
+#: Measured off item 9.2's east and west walls: 1 M of ink, 1 M of gap,
+#: 2 M of ink, 1 M of gap, 1 M of ink, the first run starting a module
+#: inside the square's near edge and the last stopping a module short of
+#: the far one. Items 9.5, 9.7 and 9.8 break their basket's top and
+#: bottom edges the same way, turned ninety degrees, so one constant
+#: serves both readings rather than each row carrying its own copy.
+_CENTRIFUGE_DASH = ((10.0, 20.0), (30.0, 50.0), (60.0, 70.0))
+
+
+def _dashed_wall(fixed: float, offset: float, vertical: bool) -> str:
+    """One broken wall: :data:`_CENTRIFUGE_DASH`'s three runs, drawn
+    along ``fixed`` (an x for a vertical wall, a y for a horizontal one)
+    and starting ``offset`` drawing units along the other axis -- the
+    square's own left edge for a vertical wall, or its top for a
+    horizontal one.
+    """
+    out = []
+    for a, b in _CENTRIFUGE_DASH:
+        p0, p1 = offset + a, offset + b
+        if vertical:
+            out.append(f'<line x1="{fixed:g}" y1="{p0:g}" x2="{fixed:g}" y2="{p1:g}" '
+                       f'fill="none" stroke="#111" stroke-width="2"/>')
+        else:
+            out.append(f'<line x1="{p0:g}" y1="{fixed:g}" x2="{p1:g}" y2="{fixed:g}" '
+                       f'fill="none" stroke="#111" stroke-width="2"/>')
+    return "".join(out)
+
+
+#: The nozzles of 9.1 to 9.4, whose feed is the plain tick Table 2 draws
+#: on the centre of the top edge. Measured off the four rows' own ticks,
+#: with one simplification stated here because it is a placement note
+#: and not part of the graphical symbol (see ``iso_parts`` on connection
+#: ticks): Table 2 puts the higher of the group's two east-wall ticks at
+#: 0 M down the wall on 9.1 and 9.2 and at 2 M down it on 9.3, 9.4 and
+#: 9.6, and this uses the 2 M three of the eight rows agree on for every
+#: row alike, rather than the two positions the standard actually draws.
+#: ``underflow`` is where the drawn shaft ends, one module below the
+#: floor -- real ink, not a tick, so its position is measured rather than
+#: chosen.
+_CENTRIFUGE_TOP_PORTS = {
+    "feed": (40.0, 0.0),
+    "overflow": (80.0, 20.0),
+    "underflow": (40.0, 90.0),
+}
+
+#: The nozzles of 9.5 to 9.8, whose feed is the pipe Table 2 draws
+#: threaded through the west wall at mid-height rather than a top tick.
+#: ``feed`` is where that drawn pipe ends, one module outside the wall;
+#: ``overflow`` is the same east-wall tick :data:`_CENTRIFUGE_TOP_PORTS`
+#: uses, moved one module right for the box's own margin; ``underflow``
+#: is the offset tick Table 2 draws below the box's south-east corner,
+#: at the narrow end a screw discharges its solids from.
+_CENTRIFUGE_SIDE_PORTS = {
+    "feed": (0.0, 40.0),
+    "overflow": (90.0, 20.0),
+    "underflow": (80.0, 80.0),
+}
+
+#: Item 9.1 X2619's own mark: an open funnel -- two strokes rising from
+#: the basket's floor to within 2 M of each other at the top, so the
+#: standard draws it with a gap at the apex rather than a closed
+#: triangle -- and the shaft below it, real ink from the floor to a
+#: module below.
+_CENTRIFUGE_ROTOR = (
+    '<path d="M 10 70 L 30 20 M 50 20 L 70 70 L 10 70" '
+    'fill="none" stroke="#111" stroke-width="2"/>'
+    '<line x1="40" y1="70" x2="40" y2="90" fill="none" stroke="#111" stroke-width="2"/>'
+)
+
+#: Item 9.2 X2614's own mark: a basket 6 M x 6 M, inset a module from
+#: every wall of the square but the floor, open at the top and floored
+#: by one solid run -- with both side walls broken by
+#: :func:`_dashed_wall`, which is what tells a perforated shell from
+#: item 9.3's solid one.
+_CENTRIFUGE_BASKET_DASHED = (
+    _dashed_wall(10.0, 0.0, True) + _dashed_wall(70.0, 0.0, True) +
+    '<line x1="10" y1="70" x2="70" y2="70" fill="none" stroke="#111" stroke-width="2"/>'
+    '<line x1="40" y1="70" x2="40" y2="90" fill="none" stroke="#111" stroke-width="2"/>'
+)
+
+#: Item 9.3 X8035's own mark: the same basket as 9.2, its two side walls
+#: drawn as one solid run apiece rather than broken.
+_CENTRIFUGE_BASKET_SOLID = (
+    '<path d="M 10 70 L 10 10 M 70 70 L 70 10 M 10 70 L 70 70" '
+    'fill="none" stroke="#111" stroke-width="2"/>'
+    '<line x1="40" y1="70" x2="40" y2="90" fill="none" stroke="#111" stroke-width="2"/>'
+)
+
+#: Item 9.4 X8036's own mark: two chevrons stacked 2 M apart -- the disc
+#: stack seen edge on -- threaded on one shaft that runs from a module
+#: above the top chevron down to a module below the floor.
+_CENTRIFUGE_DISC_STACK = (
+    '<path d="M 10 24 L 40 10 L 70 24 M 10 44 L 40 30 L 70 44" '
+    'fill="none" stroke="#111" stroke-width="2"/>'
+    '<line x1="40" y1="10" x2="40" y2="90" fill="none" stroke="#111" stroke-width="2"/>'
+)
+
+#: Item 9.5 X8037's own mark: the basket's west wall solid and its floor
+#: and roof broken by :func:`_dashed_wall` -- the perforated shell turned
+#: ninety degrees from 9.2's, since this basket lies on its side -- with
+#: the feed pipe run through it at mid-height and the screw's single
+#: zigzag flight drawn inside.
+_CENTRIFUGE_SCREW_PERFORATED = (
+    '<line x1="20" y1="10" x2="20" y2="70" fill="none" stroke="#111" stroke-width="2"/>'
+    + _dashed_wall(10.0, 10.0, False) + _dashed_wall(70.0, 10.0, False) +
+    '<line x1="0" y1="40" x2="80" y2="40" fill="none" stroke="#111" stroke-width="2"/>'
+    '<path d="M 30 40 L 40 20 L 60 60 L 70 40" fill="none" stroke="#111" stroke-width="2"/>'
+)
+
+#: Item 9.6 X8082's own mark: 9.5's basket with its roof and floor drawn
+#: solid rather than broken -- the decanter, and the drawing bare
+#: ``Centrifuge(...)`` and ``variant="decanter"`` both give; see
+#: :class:`~pandid.units.Centrifuge`.
+_CENTRIFUGE_SCREW_SOLID = (
+    '<path d="M 20 70 L 20 10 L 80 10 M 20 70 L 80 70" '
+    'fill="none" stroke="#111" stroke-width="2"/>'
+    '<line x1="0" y1="40" x2="80" y2="40" fill="none" stroke="#111" stroke-width="2"/>'
+    '<path d="M 30 40 L 40 20 L 60 60 L 70 40" fill="none" stroke="#111" stroke-width="2"/>'
+)
+
+#: Item 9.7 X8038's own mark: 9.5's perforated basket with the screw's
+#: zigzag swapped for a single rod standing on the feed pipe, which stops
+#: at the rod rather than running the basket's width -- the pusher plate,
+#: worked back and forth along the axis the pipe is drawn on.
+_CENTRIFUGE_PUSHER = (
+    '<line x1="20" y1="10" x2="20" y2="70" fill="none" stroke="#111" stroke-width="2"/>'
+    + _dashed_wall(10.0, 10.0, False) + _dashed_wall(70.0, 10.0, False) +
+    '<line x1="0" y1="40" x2="30" y2="40" fill="none" stroke="#111" stroke-width="2"/>'
+    '<line x1="30" y1="20" x2="30" y2="60" fill="none" stroke="#111" stroke-width="2"/>'
+)
+
+#: Item 9.8 X8039's own mark: 9.5's perforated basket again, the feed
+#: pipe stopping at the west wall rather than crossing it, and a small
+#: pennant standing near the roof in place of the pusher's rod or the
+#: screw's flight -- the skimmer tube that scoops liquid off the
+#: rotating pool's surface.
+_CENTRIFUGE_SKIMMER = (
+    '<line x1="20" y1="10" x2="20" y2="70" fill="none" stroke="#111" stroke-width="2"/>'
+    + _dashed_wall(10.0, 10.0, False) + _dashed_wall(70.0, 10.0, False) +
+    '<line x1="0" y1="40" x2="20" y2="40" fill="none" stroke="#111" stroke-width="2"/>'
+    '<path d="M 70 20 L 50 20 L 50 10 L 60 20" fill="none" stroke="#111" stroke-width="2"/>'
+)
+
+
+def _centrifuge(name: str, reg: str, width: float, height: float, ox: float,
+               detail: str, ports: dict) -> Symbol:
+    """One group-9 body: the shared square (:func:`_centrifuge_outline`)
+    plus the one mark that tells its row from the other seven.
+
+    No ``drawio_shape``: the vendored stencil set has no centrifuge under
+    any name, which is why this is drawn here at all -- the same
+    position :func:`_crushing_machine` is in.
+
+    Not ``gravity_fixed``. A centrifuge's floor is drawn low and its feed
+    high, but what does the separating is rotation, not a settling body
+    or a free surface, and :class:`~pandid.render.symbols.Symbol` is
+    explicit that a device whose function is rotation is not the case
+    ISO 15519-1 §11.4.2's exception was written for.
+    """
+    return Symbol(
+        svg=f'<g id="sym_centrifuge_{name}">{_centrifuge_outline(ox)}{detail}</g>',
+        width=width, height=height, ports=dict(ports),
+        iso_reg=reg,
+    )
+
+
 #: ISO 10628-2 Table 2 group 11's outline, in drawing units.
 #:
 #: **Measured off rows 11.1 to 11.12, in grid modules:** top edge x 7..17
@@ -3096,6 +3295,7 @@ class SymbolRegistry:
         register_parts(self)
         self._register_composed()
         self._register_crushing_machines()
+        self._register_centrifuges()
 
     def _register_composed(self):
         """The three drawings ISO composes and gives a number of its own.
@@ -3173,21 +3373,25 @@ class SymbolRegistry:
            verticals, 11.8 X8086 the mill draws two chords across the top
            corners, and 11.1 X8084 the general machine draws neither.
            Neither mark appears anywhere in group 29, so neither is a
-           part, and the two bodies are whole registered drawings.
+           part, and the three bodies are whole registered drawings.
         2. **A group-29 characteristic** inside it, which says *how*. Nine
            of the twelve rows carry one, every one of them already drawn
            in :mod:`pandid.render.iso_parts`, and each is centred on the
            body's box at the size its own group-29 row draws it. So the
-           nine are compositions, and closing this group cost two bodies
-           rather than eleven drawings.
+           nine are compositions, and closing this group cost three bodies
+           rather than twelve drawings.
 
-        Item 11.1 X8084 is **deliberately not registered.** It is the
-        bare trapezoid carrying 29.5 crushing, and it means "a crusher or
-        a mill, unspecified" -- which is not a thing a sheet says, because
-        the author writing it knows which machine is on order.
-        :class:`~pandid.units.Crusher` and :class:`~pandid.units.Mill` ask
-        for one or the other, so registering X8084 would put a drawing in
-        the catalogue that no class can reach.
+        Item 11.1 X8084 means "a crusher or a mill, unspecified", which is
+        not a thing a *finished* sheet says -- but it is exactly what an
+        early PFD says, before process design has picked jaw over cone or
+        even settled coarse crushing against fine grinding, and a
+        placeholder box with no ISO number of its own is a worse answer
+        than the row the standard already gives that stage.
+        :class:`~pandid.units.CrushingMachine` is the class that asks for
+        it and the base :class:`~pandid.units.Crusher` and
+        :class:`~pandid.units.Mill` are built on, so a machine picked later
+        is a variant of the same unit rather than a fresh one dropped in
+        beside it.
 
         Item 11.12 X8054 is the one row that is not a body plus a part
         alone: it draws a 4 M drum around 29.14's arrows, and a drum has
@@ -3197,6 +3401,7 @@ class SymbolRegistry:
         ==============  ======  =====================================
         item            reg     body + part
         ==============  ======  =====================================
+        11.1            X8084   general machine, no mark
         11.2            X8085   crusher, no mark
         11.3            X8045   crusher + 29.7 C2034 hammer
         11.4            X8046   crusher + 29.8 C2035 impact
@@ -3212,12 +3417,14 @@ class SymbolRegistry:
         """
         from pandid.render.iso_parts import crushing_overlays
 
+        general = _crushing_machine("crushing_machine", "X8084")
         crusher = _crushing_machine("crusher", "X8085", _CRUSHER_JAWS)
         mill = _crushing_machine("mill", "X8086", _MILL_CHAMFERS)
         # The drum body. Registered nowhere and numbered nothing: it
         # exists to be composed onto once, and X8054 is the *composition*
         # rather than the body. That is _SEPARATING_VESSEL's job too.
         drum = _crushing_machine("mill_vibration", "", _MILL_CHAMFERS, _VIBRATION_DRUM)
+        self.register("crushing_machine", general)
         self.register("crusher", crusher)
         self.register("mill", mill)
 
@@ -3239,6 +3446,72 @@ class SymbolRegistry:
                     [(o, self.part(o.group, o.name)) for o in overlays],
                     iso_reg=reg,
                 ), name)
+
+    def _register_centrifuges(self):
+        """ISO 10628-2 Table 2 group 9, all eight rows of it: CENTRIFUGES.
+
+        One 8 M x 8 M square (:func:`_centrifuge_outline`) drawn eight
+        times, each carrying the one mark that tells its row from the
+        other seven -- a rotor, a basket wall, a disc stack, a screw. Not
+        a composition: none of the eight marks appears anywhere in group
+        29, so none is a part, the way neither the crusher's verticals
+        nor the mill's chords are (see ``_register_crushing_machines``).
+        Closing the group cost one shared outline and two small helpers,
+        not eight independent drawings.
+
+        ====  ======  ==================================================
+        item  reg     descriptor
+        ====  ======  ==================================================
+        9.1   X2619   High speed centrifuge
+        9.2   X2614   Centrifuge with perforated shell
+        9.3   X8035   Centrifuge with solid shell
+        9.4   X8036   Centrifuge, separator disc-type
+        9.5   X8037   Centrifuge, screw-type with perforated shell
+        9.6   X8082   Decanter, centrifuge, screw type with solid shell
+        9.7   X8038   Centrifuge, pusher type
+        9.8   X8039   Centrifuge, skimmer type
+        ====  ======  ==================================================
+
+        Every one of the eight anchors the same three nozzles --
+        :class:`~pandid.units.Centrifuge` declares ``feed``, ``overflow``
+        and ``underflow`` once rather than varying the *names* by
+        variant, since Table 2 draws the same shape of connection on all
+        eight rows. Only where each sits on the box differs, between
+        :data:`_CENTRIFUGE_TOP_PORTS` (9.1-9.4) and
+        :data:`_CENTRIFUGE_SIDE_PORTS` (9.5-9.8); 9.6 draws both a top
+        tick and the side pipe and is placed with the latter four because
+        the pipe, not the tick, is the one drawn in ink.
+
+        Bare ``Centrifuge(...)`` and ``variant="decanter"`` both draw 9.6,
+        registered under both names: see
+        :class:`~pandid.units.Centrifuge` for why.
+        """
+        top, side = _CENTRIFUGE_TOP_PORTS, _CENTRIFUGE_SIDE_PORTS
+        sq, margin = _CENTRIFUGE_SQ, _CENTRIFUGE_MARGIN
+
+        rows = (
+            ("high_speed", "X2619", sq, sq + margin, 0.0, _CENTRIFUGE_ROTOR, top),
+            ("perforated_shell", "X2614", sq, sq + margin, 0.0,
+             _CENTRIFUGE_BASKET_DASHED, top),
+            ("solid_shell", "X8035", sq, sq + margin, 0.0,
+             _CENTRIFUGE_BASKET_SOLID, top),
+            ("disc", "X8036", sq, sq + margin, 0.0, _CENTRIFUGE_DISC_STACK, top),
+            ("screw_perforated", "X8037", sq + margin, sq, margin,
+             _CENTRIFUGE_SCREW_PERFORATED, side),
+            ("decanter", "X8082", sq + margin, sq, margin,
+             _CENTRIFUGE_SCREW_SOLID, side),
+            ("pusher", "X8038", sq + margin, sq, margin, _CENTRIFUGE_PUSHER, side),
+            ("skimmer", "X8039", sq + margin, sq, margin, _CENTRIFUGE_SKIMMER, side),
+        )
+        decanter = None
+        for name, reg, width, height, ox, detail, ports in rows:
+            sym = _centrifuge(name, reg, width, height, ox, detail, ports)
+            self.register("centrifuge", sym, name)
+            if name == "decanter":
+                decanter = sym
+        # Bare Centrifuge(...) draws the decanter: see the class
+        # docstring on why, and the docstring above on the second key.
+        self.register("centrifuge", decanter)
 
 
 default_registry = SymbolRegistry()

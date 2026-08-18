@@ -518,7 +518,7 @@ from pandid import units
 sifter = units.Separator("SC-101", variant="sifter")
 ```
 
-`units.Kind(variant=…)` is the escape hatch. 103 of the 179 registered drawings
+`units.Kind(variant=…)` is the escape hatch. 113 of the 189 registered drawings
 get no class of their own, and this is how you reach them; see
 [Variants](#variants) for the list. Where a class exists, name it.
 
@@ -580,7 +580,9 @@ Each entry is `port` *(direction / role)*.
 | `CoolingTower` | `cooling_tower` | `water_in` *(in)*, `water_out` *(out)*, `air_in` *(in)*, `air_out` *(out)*, `makeup` *(in/utility)*, `blowdown` *(out/liquid)*. Named for the side of the equipment, as an exchanger's are; `makeup` and `blowdown` are on the basin |
 | `Furnace` | `furnace` | `inlet` *(in)*, `outlet` *(out)*, `fuel` *(in/feed)* |
 | `Filter` | `filter` | `inlet` *(in)*, `outlet` *(out)* on the five that clarify — the medium keeps the solids and is cleaned offline (`default`, `fixed_bed`, `gas`, `gas_fixed_bed`, `gas_belt`). The four that form a cake add `wash_in` *(in/utility)* and `cake` *(out)*: `press`, `belt`, `rotary`, `rotary_scraper`. `ion_exchange` takes a regenerant rather than a wash, and names it: `regenerant_in` *(in/utility)*, `spent_regenerant` *(out)*; see [Variants](#variants) |
+| `Centrifuge` | `centrifuge` | `feed` *(in/feed)*, `overflow` *(out)*, `underflow` *(out)*; named for where Table 2 draws them, not for which is the product — see [Variants](#variants) |
 | `Dryer` | `dryer` | `feed` *(in/feed)*, `product` *(out)* |
+| `CrushingMachine` | `crushing_machine` | `feed` *(in/feed)*, `discharge` *(out)* |
 | `Crusher` | `crusher` | `feed` *(in/feed)*, `discharge` *(out)* |
 | `Mill` | `mill` | `feed` *(in/feed)*, `discharge` *(out)* |
 | `Conveyor` | `conveyor` | `feed` *(in/feed)*, `discharge` *(out)*; the belt anchors them at its two ends and the `screw` casing on its top and underside |
@@ -1353,9 +1355,11 @@ first listed is what the class draws when it is built by name alone.
 | `FilterPress` | `filter` | `press` (as `default`) |
 | `IonExchanger` | `filter` | `ion_exchange` (as `default`) |
 | `Filter` | `filter` | `default` (bag/candle/cartridge), `fixed_bed`, `belt`. `DustCollector`'s three are the gas equivalents, each drawn with the dust hopper that makes it one of the [symbols that must not be turned](#symbols-that-must-not-be-turned) |
+| `Centrifuge` | `centrifuge` | `default`, `decanter` (ISO item 9.6 X8082, and what `default` draws too — group 9 tabulates no "centrifuge, general" the way item 11.1 does for a crushing machine), `high_speed` (9.1 X2619), `perforated_shell` (9.2 X2614), `solid_shell` (9.3 X8035), `disc` (9.4 X8036), `screw_perforated` (9.5 X8037), `pusher` (9.7 X8038), `skimmer` (9.8 X8039) |
 | `RotaryDryer` | `dryer` | `default` |
 | `FluidizedBedDryer` | `dryer` | `fluidized_bed` (as `default`) |
 | `SprayDryer` | `dryer` | `spray` (as `default`) |
+| `CrushingMachine` | `crushing_machine` | `default` — ISO 10628-2 item 11.1 X8084, a size-reduction machine with neither a crusher's nor a mill's mark, drawn before process design has picked between them. `Crusher` and `Mill` are both built on it |
 | `JawCrusher` | `crusher` | `jaw` (as `default`) |
 | `ConeCrusher` | `crusher` | `cone` (as `default`) |
 | `HammerCrusher` | `crusher` | `hammer` (as `default`) |
@@ -3114,7 +3118,7 @@ What a flip may not do is reverse an arrow the artwork carries — see
 below, which is handled by drawing rather than by refusing, for exactly the
 reason this paragraph gives.
 
-The 61 marked symbols, and what in each one's artwork only means one thing one
+The 62 marked symbols, and what in each one's artwork only means one thing one
 way up:
 
 | Symbols | Why |
@@ -3130,14 +3134,17 @@ way up:
 | `vessel` `swaged` | the same, and one thing more: the vessel is drawn in two diameters with the larger below, so it is the bottom that holds the inventory. Turned, the two diameters are side by side and say nothing about either |
 | `column` `default` `packed`, `reactor` `default` `plain` | liquid running down over trays or packing while vapour rises, and an agitator hanging in from above |
 | `vent` `default` `breather` `exhaust_head`, `funnel` | open ends: what leaves rises, and an open end drawn pointing down is a drain |
-| `crusher` `default` `cone` `hammer` `impact` `jaw` `roller`, `mill` `default` `hammer` `impact` `roller` `vibration` | ISO group 11's trapezoid is wide at the mouth and narrow at the throat, with its feed tick above it and its discharge tick below: turned, the machine is fed through the opening its product falls out of |
+| `crushing_machine` `default`, `crusher` `default` `cone` `hammer` `impact` `jaw` `roller`, `mill` `default` `hammer` `impact` `roller` `vibration` | ISO group 11's trapezoid is wide at the mouth and narrow at the throat, with its feed tick above it and its discharge tick below: turned, the machine is fed through the opening its product falls out of |
 | `elevator` `default` `z_form` | a machine whose purpose is to raise material: in at the boot, out at the head. Turned, it lowers it. The conveyors beside it are not marked, since a belt or a screw runs whichever way the plant needs |
 | `dryer` `spray` `fluidized_bed`, `filter` `gas` `gas_fixed_bed` `gas_belt` | solids that fall: an atomiser in the roof, a bed on its distributor plate, and the dust hopper each gas filter casing draws under its medium |
 
 Not marked, and deliberately: a pump, a compressor, a valve, an in-line fitting
 or a heat exchanger is installed in whatever attitude the run wants, so turning
 its symbol states nothing false, even where a nozzle happens to sit low
-(`hex/kettle`) or the stencil draws a downward tap (`valve/bleed`). Nor is any
+(`hex/kettle`) or the stencil draws a downward tap (`valve/bleed`). Nor is
+`centrifuge`, despite drawing low the same way a hopper does: what does the
+separating is rotation rather than a settling body or a free surface, which is
+the case the exclusion is written for rather than an oversight of it. Nor is any
 *liquid* filter, which is the sharpest case in the list: `fixed_bed` and
 `gas_fixed_bed` draw the same bed the same way, and it is only the hopper the gas
 casing adds underneath it that fixes an attitude. A bed driven by pressure drop
@@ -3931,7 +3938,7 @@ What it follows, feature by feature:
 - **Symbols where gravity is a functionality** are not turned. **ISO 15519-1
   §11.4.2** excepts them from the general permission to turn and mirror, naming
   the open tank (2061) and the cyclone separator (X 2618) as its two examples.
-  61 registered symbols carry
+  62 registered symbols carry
   `Symbol.gravity_fixed`, and
   [Symbols that must not be turned](#symbols-that-must-not-be-turned) lists them.
 

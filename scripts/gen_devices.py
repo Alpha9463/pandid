@@ -735,6 +735,28 @@ STAYS_ON_BASE = {
         "fan arrangement, and the same drawing as the default",
     ("cooling_tower", "forced_draft"):
         "fan arrangement: the fan in a housing at the foot of each side",
+    # Centrifuge's eight ISO 10628-2 group-9 rows. None differs from the
+    # others in its ports -- all eight anchor the same feed/overflow/
+    # underflow -- so none clears the bar a crusher's or a filter's press
+    # clears; each is "a drawn internal" the rule's own phrase already
+    # covers, the way Column's eight tray types are. Only where the mark
+    # sits on the shell changes between them.
+    ("centrifuge", "default"): (
+        "Centrifuge's own drawing (ISO item 9.6 X8082, the decanter) -- "
+        "same drawing as decanter, below"
+    ),
+    ("centrifuge", "high_speed"): "mechanism: item 9.1 X2619, the open rotor",
+    ("centrifuge", "perforated_shell"):
+        "mechanism: item 9.2 X2614, a basket with broken walls",
+    ("centrifuge", "solid_shell"): "mechanism: item 9.3 X8035, a basket with solid walls",
+    ("centrifuge", "disc"): "mechanism: item 9.4 X8036, the disc stack",
+    ("centrifuge", "screw_perforated"):
+        "mechanism: item 9.5 X8037, a screw in a perforated shell",
+    ("centrifuge", "decanter"): "mechanism: item 9.6 X8082, a screw in a solid shell",
+    ("centrifuge", "pusher"): "mechanism: item 9.7 X8038, the pusher plate",
+    ("centrifuge", "skimmer"): "mechanism: item 9.8 X8039, the skimmer tube",
+    ("crushing_machine", "default"):
+        "CrushingMachine's own drawing (ISO item 11.1, no characteristic)",
     ("crusher", "default"): "Crusher's own drawing (ISO item 11.2, no characteristic)",
     ("mill", "default"): "Mill's own drawing (ISO item 11.8, no characteristic)",
     ("elevator", "default"): "Elevator's own drawing (ISO item 18.7, the straight lift)",

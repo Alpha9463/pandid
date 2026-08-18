@@ -203,10 +203,11 @@ GRAVITY_FIXED = {
     # solids that fall
     ("dryer", "spray"),
     ("dryer", "fluidized_bed"),
-    # ISO group 11's twelve rows are one trapezoid, wide at the top and narrow
-    # at the bottom, with a connection tick above it and another below: ore in
-    # at the mouth, product out of the throat. Turned, the machine is fed from
-    # its discharge.
+    # ISO group 11's thirteen rows are one trapezoid, wide at the top and
+    # narrow at the bottom, with a connection tick above it and another
+    # below: ore in at the mouth, product out of the throat. Turned, the
+    # machine is fed from its discharge.
+    ("crushing_machine", "default"),
     ("crusher", "default"),
     ("crusher", "cone"),
     ("crusher", "hammer"),

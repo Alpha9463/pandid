@@ -719,6 +719,35 @@ _APPROXIMATIONS = {
         None, "the trapezoid outline and its chamfered top corners"),
     ("mill", "vibration"): _Approximation(
         None, "the trapezoid outline, its chamfered top corners and the drum"),
+    # ISO item 11.1, the general machine both bodies above are built on:
+    # the bare trapezoid, neither mark drawn.
+    ("crushing_machine", "default"): _Approximation(
+        None, "the trapezoid outline"),
+    # ISO group 9, CENTRIFUGES. Same absence as group 11's: no crusher or
+    # mill in the vendored set, and no centrifuge either, so the square
+    # outline goes along with whichever mark says how the row separates.
+    # ``default`` and ``decanter`` are the same Symbol under two registry
+    # keys (see ``symbols.SymbolRegistry._register_centrifuges``), so the
+    # two entries say the same thing, the way ``instrument/sis`` and
+    # ``instrument/logic`` already do above.
+    ("centrifuge", "default"): _Approximation(
+        None, "the square outline, the basket's solid walls and the screw"),
+    ("centrifuge", "high_speed"): _Approximation(
+        None, "the square outline and the open rotor drawn inside it"),
+    ("centrifuge", "perforated_shell"): _Approximation(
+        None, "the square outline and the basket's broken walls"),
+    ("centrifuge", "solid_shell"): _Approximation(
+        None, "the square outline and the basket's solid walls"),
+    ("centrifuge", "disc"): _Approximation(
+        None, "the square outline and the disc stack drawn inside it"),
+    ("centrifuge", "screw_perforated"): _Approximation(
+        None, "the square outline, the basket's broken walls and the screw"),
+    ("centrifuge", "decanter"): _Approximation(
+        None, "the square outline, the basket's solid walls and the screw"),
+    ("centrifuge", "pusher"): _Approximation(
+        None, "the square outline, the basket's broken walls and the pusher plate"),
+    ("centrifuge", "skimmer"): _Approximation(
+        None, "the square outline, the basket's broken walls and the skimmer tube"),
     # ISO group 18's solids handling. The vendored set has a "Screw Pump",
     # which is a different machine, and nothing at all for either elevator.
     # The screw conveyor's casing really is a rectangle, so only the flight

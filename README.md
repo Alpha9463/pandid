@@ -63,7 +63,7 @@ and a flowsheet renders inline in Jupyter.
   peer is actually on.
 - **Orthogonal A\* routing.** Right-angle streams with crossing jump-gaps and
   parallel-segment separation. Never emits a disconnected stream.
-- **179 registered symbols** with style variants, so a heat exchanger can be
+- **189 registered symbols** with style variants, so a heat exchanger can be
   shell-and-tube, plate, kettle or U-tube. They derive from the Apache-2.0
   draw.io P&ID stencils (see [`NOTICE`](https://github.com/Alpha9463/pandid/blob/main/NOTICE)).
 - **Pixel-perfect overrides.** `pin()` equipment to exact coordinates and
@@ -165,7 +165,7 @@ The base classes are `Feed`, `Product`, `Pump`, `Compressor`, `Blower`, `Valve`,
 `Elevator` and `Instrument`,
 with 54 equipment classes over them — a `GearPump` *is* a `Pump`.
 
-A variant is a drawing within a class, picked with `variant=`. 103 of the 179
+A variant is a drawing within a class, picked with `variant=`. 113 of the 189
 registered drawings get no class of their own, and this is how you reach them:
 
 ```python

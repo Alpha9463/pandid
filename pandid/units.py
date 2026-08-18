@@ -39,8 +39,8 @@ __all__ = [
     "Feed", "Product", "Pump", "Compressor", "Blower", "Valve", "Vessel", "Tank",
     "HeatExchanger", "Heater", "Cooler", "CoolingTower", "Reactor", "Separator", "Column",
     "Mixer", "Splitter", "Tee", "Reducer", "Fitting", "Ejector", "Vent", "Funnel",
-    "Furnace", "Turbine", "Filter", "Dryer", "Crusher", "Mill", "Conveyor",
-    "Elevator", "Instrument", "Block",
+    "Furnace", "Turbine", "Filter", "Dryer", "CrushingMachine", "Crusher", "Mill",
+    "Centrifuge", "Conveyor", "Elevator", "Instrument", "Block",
 ]
 
 # Only a signal port may carry a signal line and only a process one may
@@ -1760,6 +1760,63 @@ class Filter(Unit):
             self._add_port(*spec)
 
 
+class Centrifuge(Unit):
+    """Centrifuge: separates a feed by spinning it, ISO 10628-2 group 9.
+
+    A feed and two streams, named for **where** Table 2 draws them
+    rather than for which one is the product -- :class:`Separator`'s own
+    reasoning, and for the same reason. ``overflow`` is drawn high on
+    the shell and ``underflow`` low, at the end a basket or a screw
+    discharges its solids from; a decanter clarifying a brine wants its
+    ``overflow`` and one dewatering a mineral slurry wants its
+    ``underflow``, and neither name should presuppose which is the
+    product::
+
+        Centrifuge("CF-101")                             # 9.6  X8082  decanter
+        Centrifuge("CF-102", variant="disc")              # 9.4  X8036
+        Centrifuge("CF-103", variant="high_speed")        # 9.1  X2619
+        Centrifuge("CF-104", variant="perforated_shell")  # 9.2  X2614
+        Centrifuge("CF-105", variant="solid_shell")       # 9.3  X8035
+        Centrifuge("CF-106", variant="screw_perforated")  # 9.5  X8037
+        Centrifuge("CF-107", variant="pusher")            # 9.7  X8038
+        Centrifuge("CF-108", variant="skimmer")           # 9.8  X8039
+
+    **Bare ``Centrifuge(...)`` draws the decanter**, item 9.6 X8082, and
+    that is a choice rather than an arbitrary default. Group 9 tabulates
+    no "centrifuge, general": every one of its eight rows already commits
+    to a mechanism, unlike group 11's 11.1 X8084, which is why
+    :class:`CrushingMachine` has an unspecified drawing to reach and this
+    class does not. Of the eight, the continuous screw-type decanter is
+    the one a solid-liquid separation duty on a slurry, sludge or cake
+    reaches for most often, so it is the drawing an author gets free and
+    every other row is named explicitly.
+
+    **The same three nozzles on every row.** All eight draw the same
+    shape of connection -- a feed and a pair of draws -- so unlike
+    :class:`Filter`'s cake-forming variants, no variant here adds or
+    removes a nozzle; only where each lands on the drawing changes
+    between them. See
+    ``pandid.render.symbols.SymbolRegistry._register_centrifuges``.
+
+    **Not gravity-fixed.** A centrifuge's floor is drawn low and its feed
+    high, the way a hopper's or a settling vessel's is, but what does the
+    separating is rotation and not a free surface or a settling body, so
+    it may be turned or mirrored to fit a layout exactly as ISO 15519-1
+    §11.4.2 permits for equipment whose function is not gravity.
+    """
+
+    feed: Port
+    overflow: Port
+    underflow: Port
+
+    kind = "centrifuge"
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("overflow", "outlet", "process"),
+        ("underflow", "outlet", "process"),
+    ]
+
+
 class Dryer(Unit):
     """Dryer (removes moisture from a feed solid/slurry)."""
 
@@ -1770,14 +1827,29 @@ class Dryer(Unit):
     PORTS = [("feed", "inlet", "feed"), ("product", "outlet", "process")]
 
 
-class _CrushingMachine(Unit):
-    """ISO 10628-2 group 11: a machine that makes the feed smaller.
+class CrushingMachine(Unit):
+    """ISO 10628-2 item 11.1 X8084: a size-reduction machine, unspecified.
 
-    Two nozzles, and the same two for every variant of both subclasses,
-    because Table 2 draws the same two connection ticks on every one of
-    the group's twelve rows: one on the centre line above the top edge
-    and one below the bottom edge. Ore goes in the top and falls out of
-    the bottom.
+    The bare trapezoid, no mark inside it -- neither :class:`Crusher`'s
+    two verticals nor :class:`Mill`'s two chords, both of which are
+    built on this class rather than beside it. ISO's own item means "a
+    crusher or a mill, not yet said which", which is not something a
+    *finished* P&ID says. It is exactly what an early PFD says: process
+    design has sized a duty for coarse crushing or fine grinding before
+    it has picked jaw over cone or even settled which of the two
+    families the flowsheet needs, and this is the row Table 2 gives that
+    stage rather than a placeholder box with no ISO number behind it::
+
+        CrushingMachine("SZ-101")            # 11.1  X8084  general
+
+    Once the machine is chosen, :class:`Crusher` or :class:`Mill` draws
+    it and ``variant=`` says which characteristic -- both take every
+    keyword this class does, since both are it with a mark added.
+
+    Two nozzles, and the same two on every row of the group, because
+    Table 2 draws the same two connection ticks on all thirteen: one on
+    the centre line above the top edge and one below the bottom edge.
+    Ore goes in the top and falls out of the bottom.
 
     ``feed`` and ``discharge`` are :class:`Conveyor`'s names, which is
     deliberate -- a crusher is fed by a belt and discharges onto one, and
@@ -1793,15 +1865,21 @@ class _CrushingMachine(Unit):
     invented, on a body ISO has already said how to connect. An author
     who wants the drive on the sheet draws the motor as its own tagged
     unit, which is what the other seven group-20 machines are for.
+
+    Drawn one way up and reported as ``gravity-turned`` by
+    :meth:`~pandid.flowsheet.Flowsheet.validate` if turned: the feed
+    comes in the top and the product falls out of the bottom, which is
+    ISO 15519-1 §11.4.2's exception.
     """
 
     feed: Port
     discharge: Port
 
+    kind = "crushing_machine"
     PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
 
 
-class Crusher(_CrushingMachine):
+class Crusher(CrushingMachine):
     """Crusher: coarse size reduction, ISO 10628-2 item 11.2 X8085.
 
     The trapezoid every group-11 row is drawn on, with the crusher's own
@@ -1830,7 +1908,7 @@ class Crusher(_CrushingMachine):
     kind = "crusher"
 
 
-class Mill(_CrushingMachine):
+class Mill(CrushingMachine):
     """Mill or pulveriser: fine grinding, ISO 10628-2 item 11.8 X8086.
 
     The same trapezoid as :class:`Crusher`, with the mill's own two

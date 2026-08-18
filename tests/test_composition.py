@@ -638,33 +638,40 @@ def test_the_registry_composes_exactly_the_rows_ISO_gives_a_number_to():
     }
 
 
-def test_the_two_group_11_bodies_are_the_outline_table_2_draws():
-    """The trapezoid, and the one mark each that tells a crusher from a mill.
+def test_the_three_group_11_bodies_are_the_outline_table_2_draws():
+    """The trapezoid, and the one mark each that tells the three bodies apart.
 
-    Measured off rows 11.2 and 11.8 in grid modules and written here in drawing
-    units at ten to the module, which is the scale
+    Measured off rows 11.1, 11.2 and 11.8 in grid modules and written here in
+    drawing units at ten to the module, which is the scale
     ``symbols._CRUSHER_W`` x ``_CRUSHER_H`` is built at:
 
     * the shared trapezoid, 10 M across the top and 6 M across the bottom over a
       6 M depth -- (0,0) (100,0) (80,60) (20,60);
+    * the **general machine's** bare trapezoid and nothing else;
     * the **crusher's** two verticals at x 20 and x 80, which are ISO's x 9 and
       x 15, running the full depth;
     * the **mill's** two chords, each striking the top edge 2,5 M in from a
       corner and falling 4 down for 3 across to the wall at (10/13, 30/13) M.
 
-    Neither mark is in group 29, which is why both are body rather than part and
-    why this is a geometry check rather than a composition one. The numbers are
-    spelled out so that a redraw has to be argued against the page.
+    None of the three marks is in group 29, which is why all three are body
+    rather than part and why this is a geometry check rather than a
+    composition one. The numbers are spelled out so that a redraw has to be
+    argued against the page.
     """
     trapezoid = "M 0 0 L 100 0 L 80 60 L 20 60 Z"
+    general = default_registry.get("crushing_machine")
     crusher = default_registry.get("crusher")
     mill = default_registry.get("mill")
-    for sym in (crusher, mill):
+    for sym in (general, crusher, mill):
         assert (sym.width, sym.height) == (100.0, 60.0)
         assert trapezoid in sym.svg
         # Fed at the mouth, discharging at the throat, and nothing else. See
-        # ``units._CrushingMachine`` on why there is no drive.
+        # ``units.CrushingMachine`` on why there is no drive.
         assert sym.ports == {"feed": (50.0, 0.0), "discharge": (50.0, 60.0)}
+    assert general.iso_reg == "X8084"
+    # The general machine draws neither mark: it is the trapezoid alone.
+    assert "M 20 0 L 20 60" not in general.svg
+    assert "M 25 0 L 7.6923" not in general.svg
     assert "M 20 0 L 20 60 M 80 0 L 80 60" in crusher.svg
     assert "M 25 0 L 7.6923 23.0769 M 75 0 L 92.3077 23.0769" in mill.svg
     # The vibration mill is the same body with X8054's drum on it, which is the
@@ -672,6 +679,153 @@ def test_the_two_group_11_bodies_are_the_outline_table_2_draws():
     # ``symbols._VIBRATION_DRUM``.
     drum = default_registry.get("mill", "vibration")
     assert '<circle cx="50" cy="30" r="20"' in drum.svg
+
+
+def test_the_group_9_bodies_are_the_outline_table_2_draws():
+    """The 8 M x 8 M square, and the one mark each that tells the eight rows
+    apart.
+
+    Measured off rows 9.1 to 9.8 in grid modules and written here in drawing
+    units at ten to the module, the scale ``symbols._CENTRIFUGE_SQ`` is built
+    at. None of the eight marks is in group 29, which is why all eight are
+    body rather than part and why this is a geometry check rather than a
+    composition one: the exact strings are spelled out so a redraw has to be
+    argued against the page, the way the group-11 test above does it.
+
+    Full ``svg`` equality rather than substring checks, since a body here is
+    short enough to write out whole and a substring check would not catch an
+    extra stroke the row does not draw.
+    """
+    ink = 'fill="none" stroke="#111" stroke-width="2"'
+    square = '<path d="M 0 0 L 80 0 L 80 80 L 0 80 Z" fill="white" stroke="#111" stroke-width="2"/>'
+    square_side = (
+        '<path d="M 10 0 L 90 0 L 90 80 L 10 80 Z" fill="white" stroke="#111" stroke-width="2"/>'
+    )
+    top_ports = {"feed": (40.0, 0.0), "overflow": (80.0, 20.0), "underflow": (40.0, 90.0)}
+    side_ports = {"feed": (0.0, 40.0), "overflow": (90.0, 20.0), "underflow": (80.0, 80.0)}
+
+    # The three broken runs a perforated wall draws, in module offsets: 1 M
+    # ink, 1 M gap, 2 M ink, 1 M gap, 1 M ink. Built here as (x, y) pairs for
+    # each of the three orientations the eight rows draw it in, so a check
+    # below reads as "the dashes", not as six magic numbers apiece.
+    def dash_v(x: float, y0: float) -> str:
+        return (
+            f'<line x1="{x:g}" y1="{y0 + 10:g}" x2="{x:g}" y2="{y0 + 20:g}" {ink}/>'
+            f'<line x1="{x:g}" y1="{y0 + 30:g}" x2="{x:g}" y2="{y0 + 50:g}" {ink}/>'
+            f'<line x1="{x:g}" y1="{y0 + 60:g}" x2="{x:g}" y2="{y0 + 70:g}" {ink}/>'
+        )
+
+    def dash_h(y: float, x0: float) -> str:
+        return (
+            f'<line x1="{x0 + 10:g}" y1="{y:g}" x2="{x0 + 20:g}" y2="{y:g}" {ink}/>'
+            f'<line x1="{x0 + 30:g}" y1="{y:g}" x2="{x0 + 50:g}" y2="{y:g}" {ink}/>'
+            f'<line x1="{x0 + 60:g}" y1="{y:g}" x2="{x0 + 70:g}" y2="{y:g}" {ink}/>'
+        )
+
+    zigzag = f'<path d="M 30 40 L 40 20 L 60 60 L 70 40" {ink}/>'
+
+    rows = {
+        # item, reg, box, ports, svg-id, inner
+        "high_speed": (
+            "9.1",
+            "X2619",
+            (80.0, 90.0),
+            top_ports,
+            square
+            + f'<path d="M 10 70 L 30 20 M 50 20 L 70 70 L 10 70" {ink}/>'
+            + f'<line x1="40" y1="70" x2="40" y2="90" {ink}/>',
+        ),
+        "perforated_shell": (
+            "9.2",
+            "X2614",
+            (80.0, 90.0),
+            top_ports,
+            square
+            + dash_v(10.0, 0.0)
+            + dash_v(70.0, 0.0)
+            + f'<line x1="10" y1="70" x2="70" y2="70" {ink}/>'
+            + f'<line x1="40" y1="70" x2="40" y2="90" {ink}/>',
+        ),
+        "solid_shell": (
+            "9.3",
+            "X8035",
+            (80.0, 90.0),
+            top_ports,
+            square
+            + f'<path d="M 10 70 L 10 10 M 70 70 L 70 10 M 10 70 L 70 70" {ink}/>'
+            + f'<line x1="40" y1="70" x2="40" y2="90" {ink}/>',
+        ),
+        "disc": (
+            "9.4",
+            "X8036",
+            (80.0, 90.0),
+            top_ports,
+            square
+            + f'<path d="M 10 24 L 40 10 L 70 24 M 10 44 L 40 30 L 70 44" {ink}/>'
+            + f'<line x1="40" y1="10" x2="40" y2="90" {ink}/>',
+        ),
+        "screw_perforated": (
+            "9.5",
+            "X8037",
+            (90.0, 80.0),
+            side_ports,
+            square_side
+            + f'<line x1="20" y1="10" x2="20" y2="70" {ink}/>'
+            + dash_h(10.0, 10.0)
+            + dash_h(70.0, 10.0)
+            + f'<line x1="0" y1="40" x2="80" y2="40" {ink}/>'
+            + zigzag,
+        ),
+        "decanter": (
+            "9.6",
+            "X8082",
+            (90.0, 80.0),
+            side_ports,
+            square_side
+            + f'<path d="M 20 70 L 20 10 L 80 10 M 20 70 L 80 70" {ink}/>'
+            + f'<line x1="0" y1="40" x2="80" y2="40" {ink}/>'
+            + zigzag,
+        ),
+        "pusher": (
+            "9.7",
+            "X8038",
+            (90.0, 80.0),
+            side_ports,
+            square_side
+            + f'<line x1="20" y1="10" x2="20" y2="70" {ink}/>'
+            + dash_h(10.0, 10.0)
+            + dash_h(70.0, 10.0)
+            + f'<line x1="0" y1="40" x2="30" y2="40" {ink}/>'
+            + f'<line x1="30" y1="20" x2="30" y2="60" {ink}/>',
+        ),
+        "skimmer": (
+            "9.8",
+            "X8039",
+            (90.0, 80.0),
+            side_ports,
+            square_side
+            + f'<line x1="20" y1="10" x2="20" y2="70" {ink}/>'
+            + dash_h(10.0, 10.0)
+            + dash_h(70.0, 10.0)
+            + f'<line x1="0" y1="40" x2="20" y2="40" {ink}/>'
+            + f'<path d="M 70 20 L 50 20 L 50 10 L 60 20" {ink}/>',
+        ),
+    }
+    assert len(rows) == 8
+    for variant, (item, reg, (width, height), ports, inner) in rows.items():
+        sym = default_registry.get("centrifuge", variant)
+        assert sym.svg == f'<g id="sym_centrifuge_{variant}">{inner}</g>', (
+            f"centrifuge/{variant} ({item} {reg}) does not draw the row as measured"
+        )
+        assert (sym.width, sym.height) == (width, height)
+        assert sym.ports == ports
+        assert sym.iso_reg == reg
+        # Neither gravity is what does the separating; see the class
+        # docstring on ``Centrifuge`` and ``symbols._centrifuge``.
+        assert not sym.gravity_fixed
+
+    # Bare ``Centrifuge(...)`` draws 9.6, the decanter, under a second key.
+    assert default_registry.get("centrifuge") is default_registry.get("centrifuge", "decanter")
 
 
 def test_the_cyclone_is_not_composed():
@@ -726,12 +880,29 @@ def test_the_parts_that_ship_are_available_and_unused():
 #: of claim a composition makes, and is checkable the same way. The three
 #: group-18 drawings joined them the same way: a screw conveyor and the two
 #: bucket elevators, none of which draw.io has a stencil for either.
+#:
+#: Group 9's eight and ``crushing_machine/default`` (item 11.1 X8084) are the
+#: same claim again: eight bodies plus the general trapezoid, each drawn from
+#: its own row and nothing else. ``centrifuge/decanter`` and
+#: ``centrifuge/default`` are two registry keys for one Symbol object --
+#: item 9.6, which bare ``Centrifuge(...)`` also draws -- so both keys carry
+#: X8082.
 _NUMBERED_WHOLE_DRAWINGS = {
+    "crushing_machine/default": "X8084",
     "crusher/default": "X8085",
     "mill/default": "X8086",
     "conveyor/screw": "X8063",
     "elevator/default": "X8065",
     "elevator/z_form": "X8066",
+    "centrifuge/high_speed": "X2619",
+    "centrifuge/perforated_shell": "X2614",
+    "centrifuge/solid_shell": "X8035",
+    "centrifuge/disc": "X8036",
+    "centrifuge/screw_perforated": "X8037",
+    "centrifuge/decanter": "X8082",
+    "centrifuge/default": "X8082",
+    "centrifuge/pusher": "X8038",
+    "centrifuge/skimmer": "X8039",
 }
 
 
