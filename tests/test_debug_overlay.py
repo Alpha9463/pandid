@@ -388,6 +388,12 @@ def test_a_port_label_is_not_written_under_the_unit_tags_halo():
 #: ``20_molecular_sieve_dryer`` hangs a sequence square off each of eight
 #: switching valves; two of the sixteen markers that makes land under lettering.
 #:
+#: ``22_biodiesel_plant`` reads its reactor's own batch temperature from a
+#: transmitter east of R-401 and a controller north of that, with the
+#: discharge pump P-403 immediately south-east of the first and R-401's own
+#: tag immediately north of the second -- both drawn above the symbol they
+#: name, per ``label_pos``. Two markers land under a tag that is not theirs.
+#:
 #: 04 and 14 both grew when the letter codes ISO 15519-2 5.2.5 writes outside a
 #: symbol arrived: a code is haloed lettering like any tag, so it is one more
 #: thing an overlay marker can land under, and the sheets that letter the most
@@ -403,6 +409,7 @@ _CROWDED = {
     "18_fixed_bed_recycle": 7,
     "19_absorber_stripper": 4,
     "20_molecular_sieve_dryer": 5,
+    "22_biodiesel_plant": 3,
 }
 
 

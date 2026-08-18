@@ -89,6 +89,35 @@ def main():
     level407 = fs.add_loop("L", 407)    # reboiler level, onto the ester draw
     level408 = fs.add_loop("L", 408)    # wash separator interface level
 
+    # --- Boundary conditions ----------------------------------------------
+    # Declared ahead of the equipment, methanol ahead of everything else
+    # here: the layout engine's cycle-breaking walks the sheet from
+    # whichever unit with no upstream it meets first, and the methanol
+    # recycle (CV-406 back to this feed) is only found as the loop it
+    # actually is if that walk starts here. Left for the engine to
+    # discover from the oil or the KOH charge instead, it finds the loop
+    # from the far side and calls MT-401's own charge line the recycle,
+    # which is what drags TK-402 and P-402 to the far right of the case.
+    meoh_feed = fs.add(Feed("Methanol", reference="PFD-002"))
+    oil_feed = fs.add(Feed("Canola Oil", reference="PFD-001"))
+    acid_feed = fs.add(Feed("Phosphoric Acid", reference="PFD-004"))
+    ww_feed = fs.add(Feed("Wash Water", reference="PFD-005"))
+    hw_supply = fs.add(Feed("HWSH", header=True))
+    steam_reb = fs.add(Feed("LPSSH", header=True))
+    steam_ej = fs.add(Feed("LPSSH", header=True))
+    steam_condensate = fs.add(Product("LPSRH", header=True))
+    cws = fs.add(Feed("CWSH", header=True))
+    cwr = fs.add(Product("CWRH", header=True))
+    reactor_vent = fs.add(Product("Reactor Vent to Vapour Recovery",
+                                  reference="P&ID-701"))
+    wastewater = fs.add(Product("Wash Water to Wastewater Treatment",
+                                reference="P&ID-702"))
+    vacuum_vent = fs.add(Product("Vacuum System Discharge", reference="P&ID-703"))
+    biodiesel_prod = fs.add(Product("Biodiesel (FAME) to Loading",
+                                    reference="P&ID-801"))
+    glycerol_prod = fs.add(Product("Crude Glycerol to Loading",
+                                   reference="P&ID-802"))
+
     # --- Equipment ------------------------------------------------------
     # Oil receipt and storage.
     tk401 = fs.add(Tank("TK-401", description="Canola Oil Storage Tank"))
@@ -169,35 +198,21 @@ def main():
     cv408 = fs.add(Valve(level408.tag("CV"), variant="control",
                          description="Wash Water Draw Control Valve"))
 
-    # --- Boundary conditions ----------------------------------------------
-    oil_feed = fs.add(Feed("Canola Oil", reference="PFD-001"))
-    meoh_feed = fs.add(Feed("Methanol", reference="PFD-002"))
-    acid_feed = fs.add(Feed("Phosphoric Acid", reference="PFD-004"))
-    ww_feed = fs.add(Feed("Wash Water", reference="PFD-005"))
-    hw_supply = fs.add(Feed("HWSH", header=True))
-    steam_reb = fs.add(Feed("LPSSH", header=True))
-    steam_ej = fs.add(Feed("LPSSH", header=True))
-    steam_condensate = fs.add(Product("LPSRH", header=True))
-    cws = fs.add(Feed("CWSH", header=True))
-    cwr = fs.add(Product("CWRH", header=True))
-    reactor_vent = fs.add(Product("Reactor Vent to Vapour Recovery",
-                                  reference="P&ID-701"))
-    wastewater = fs.add(Product("Wash Water to Wastewater Treatment",
-                                reference="P&ID-702"))
-    vacuum_vent = fs.add(Product("Vacuum System Discharge", reference="P&ID-703"))
-    biodiesel_prod = fs.add(Product("Biodiesel (FAME) to Loading",
-                                    reference="P&ID-801"))
-    glycerol_prod = fs.add(Product("Crude Glycerol to Loading",
-                                   reference="P&ID-802"))
-
     # --- Process lines ------------------------------------------------
     # Oil receipt and charge.
     fs.connect(oil_feed.outlet, tk401.inlet, service="CO", sequence=401,
                size=150, schedule=40, spec="CS")
     fs.connect(tk401.outlet, p401.suction, service="CO", sequence=402,
                size=100, schedule=40, spec="CS")
-    fs.connect(p401.discharge, r401.feed_1, service="CO", sequence=403,
+    fs.connect(p401.discharge, r401.feeds[0], service="CO", sequence=403,
                size=80, schedule=40, spec="CS")
+    # Left to the engine, P-401's discharge and R-401's feed_1 nozzle
+    # sit 34.6px apart in elevation -- too close to read as a change of
+    # level, so the line steps sideways into R-401 and back out rather
+    # than rising cleanly. Pinned a clean step below the nozzle instead
+    # of level with it: level puts the line through TT-409, R-401's own
+    # west-side tap.
+    p401.pin(port="discharge", y=2150.0)
 
     # Methanol receipt, storage and the methoxide charge. The recovered
     # methanol recycle rejoins the fresh feed at t_meoh_in, ahead of the
@@ -208,11 +223,11 @@ def main():
     fs.connect(tk402.vent, bv401.inlet)
     fs.connect(tk402.outlet, p402.suction, service="MEOH", sequence=405,
                size=80, schedule=40, spec="SS")
-    fs.connect(p402.discharge, mt401.feed_1, service="MEOH", sequence=406,
+    fs.connect(p402.discharge, mt401.feeds[0], service="MEOH", sequence=406,
                size=50, schedule=40, spec="SS")
-    fs.connect(fn401.outlet, mt401.feed_2, service="KOH", sequence=407,
+    fs.connect(fn401.outlet, mt401.feeds[1], service="KOH", sequence=407,
                size=25, schedule=40, spec="SS")
-    fs.connect(mt401.outlet, r401.feed_2, service="MX", sequence=408,
+    fs.connect(mt401.outlet, r401.feeds[1], service="MX", sequence=408,
                size=50, schedule=40, spec="SS")
 
     # The batch reaction and the phase split.
@@ -225,16 +240,12 @@ def main():
 
     # The settler's two draws: the light phase to methanol stripping, the
     # heavy phase to neutralisation.
-    fs.connect(s401.overflow, c401.feed, service="CE", sequence=412,
+    fs.connect(s401.port("overflow"), c401.feed, service="CE", sequence=412,
                size=80, schedule=40, spec="SS")
-    fs.connect(s401.underflow, cv403.inlet, service="CG", sequence=413,
+    fs.connect(s401.port("underflow"), cv403.inlet, service="CG", sequence=413,
                size=50, schedule=40, spec="SS")
-    fs.connect(cv403.outlet, n401.feed_1)
-    # Pinned clear of C-401's floor: left to the engine, CV-403 lands
-    # close enough under the column that LIC-403's signal line clips its
-    # shell on the way to the actuator.
-    cv403.pin(port="inlet", x=1568.5, y=1821.5)
-    fs.connect(acid_feed.outlet, n401.feed_2, service="PA", sequence=414,
+    fs.connect(cv403.outlet, n401.feeds[0])
+    fs.connect(acid_feed.outlet, n401.feeds[1], service="PA", sequence=414,
                size=25, schedule=40, spec="SS")
 
     # Methanol stripping: the overhead condenses, splits to reflux and
@@ -258,10 +269,11 @@ def main():
     fs.connect(cv405.outlet, fe405.inlet)
     fs.connect(fe405.outlet, c401.reflux_in, draw_as_recycle=True)
     fs.connect(cv406.outlet, t_meoh_in.branch, draw_as_recycle=True)
-    # Pinned clear of CV-405: left to the engine, the two land close
-    # enough together that LIC-406's signal line clips CV-405's shell on
-    # the way to CV-406's actuator.
-    cv406.pin(port="inlet", x=2413.0, y=2372.0)
+    # Pinned clear of CV-405: both valves draw off T-reflux one hop
+    # apart, and left to the engine they stack directly on top of each
+    # other -- not just close, touching -- with nowhere for either
+    # valve's own signal line to run.
+    cv406.pin(port="inlet", x=2432.5, y=2318.0)
 
     fs.connect(c401.bottoms, e402.shell_in, service="CE", sequence=422,
                size=80, schedule=40, spec="SS")
@@ -281,9 +293,9 @@ def main():
                size=40, schedule=40, spec="CS")
     fs.connect(m401.outlet, s402.feed, service="WM", sequence=428,
                size=50, schedule=40, spec="SS")
-    fs.connect(s402.overflow, s403.feed, service="WE", sequence=429,
+    fs.connect(s402.port("overflow"), s403.feed, service="WE", sequence=429,
                size=50, schedule=40, spec="SS")
-    fs.connect(s402.underflow, cv408.inlet, service="SW", sequence=430,
+    fs.connect(s402.port("underflow"), cv408.inlet, service="SW", sequence=430,
                size=40, schedule=40, spec="CS")
     fs.connect(cv408.outlet, wastewater.inlet)
     fs.connect(s403.vapor, ej401.suction, service="WV", sequence=431,
@@ -306,11 +318,6 @@ def main():
                size=50, schedule=40, spec="SS")
     fs.connect(tk404.outlet, glycerol_prod.inlet, service="CGP", sequence=439,
                size=80, schedule=40, spec="SS")
-    # Pinned clear of the reflux/recovered-methanol valve pair: nothing
-    # else on the sheet is pinned, but left to the engine this flag lands
-    # in the same column as CV-405 and CV-406 and their signal lines
-    # cross it.
-    glycerol_prod.pin(y=1900)
 
     # The jacket's hot water, feeding the temperature/flow cascade.
     fs.connect(hw_supply.outlet, hv402.inlet, service="HWS", sequence=440,
@@ -326,7 +333,10 @@ def main():
     # hot-water header pressure is corrected before the batch temperature
     # has moved at all.
     tt401 = fs.add_instrument("TT", temp401, sensing=r401, at="E", offset=70)
-    tic401 = fs.add_instrument("TIC", temp401, near=tt401, at="S", offset=90,
+    # at="N", not "S": P-403 takes R-401's discharge immediately south
+    # of TT-401, and a controller dropped there has nowhere to stand
+    # beside the reactor mix line without crowding the pump.
+    tic401 = fs.add_instrument("TIC", temp401, near=tt401, at="N", offset=90,
                                variant="shared")
     tic401.nozzle("sig_out", "W")
     tic401.annotate(high="TAH", low="TAL")
@@ -343,18 +353,27 @@ def main():
 
     # --- Loop 403: settler interface level onto the glycerol draw -------
     lt403 = fs.add_instrument("LT", level403, sensing=s401, at="E", offset=60)
-    lic403 = fs.add_instrument("LIC", level403, near=cv403, at="W", offset=52,
+    # at="S", not "W": S-401 and CV-403 stand close enough together that
+    # a balloon on CV-403's west face lands back in LT-403's own pocket.
+    lic403 = fs.add_instrument("LIC", level403, near=cv403, at="S", offset=100,
                                variant="shared")
     lic403.annotate(high="LAH", low="LAL")
     fs.connect(lt403.sig_out, lic403.sig_in, kind="electric")
     fs.connect(lic403.sig_out, cv403.actuator, kind="pneumatic")
 
     # --- Loops 404/405: column top temperature onto the reflux ----------
-    tt404 = fs.add_instrument("TT", temp404, sensing=vapour, at=0.4, offset=60)
+    # at=0.2, not the midpoint: E-402 sits close enough to this line's
+    # far half that a tap taken there lands on the reboiler shell.
+    # Reading the vapour closer to the column it leaves is truer to what
+    # "column top temperature" means in any case.
+    tt404 = fs.add_instrument("TT", temp404, sensing=vapour, at=0.2, offset=60)
     tic404 = fs.add_instrument("TIC", temp404, near=tt404, at="N", offset=70,
                                variant="shared")
     tic404.annotate(high="TAH")
     fs.connect(tt404.sig_out, tic404.sig_in, kind="electric")
+    # West, clear of TAH: left on the default face, software leaves
+    # from the same corner the annotation is written in.
+    tic404.nozzle("sig_out", "W")
 
     fe405_b = fs.add_balloon(fe405, at="N", offset=38)
     ft405 = fs.add_instrument("FT", flow405, near=fe405_b, at="N", offset=23)
@@ -374,7 +393,10 @@ def main():
 
     # --- Loop 407: reboiler level onto the stripped ester draw -----------
     lt407 = fs.add_instrument("LT", level407, sensing=e402, at="S", offset=60)
-    lic407 = fs.add_instrument("LIC", level407, near=cv407, at="N", offset=52,
+    # at="W", offset widened from 52: TIC-404's cascade runs the width of
+    # the sheet at roughly this height on its way to FIC-405, and a
+    # balloon close north of CV-407 sits in its path.
+    lic407 = fs.add_instrument("LIC", level407, near=cv407, at="W", offset=90,
                                variant="shared")
     lic407.annotate(high="LAH", low="LAL")
     fs.connect(lt407.sig_out, lic407.sig_in, kind="electric")
@@ -382,7 +404,9 @@ def main():
 
     # --- Loop 408: wash separator interface level -------------------------
     lt408 = fs.add_instrument("LT", level408, sensing=s402, at="E", offset=60)
-    lic408 = fs.add_instrument("LIC", level408, near=cv408, at="S", offset=52,
+    # at="E", not "S": CV-408's own tag sits close under the valve, in
+    # the way of a balloon hung there.
+    lic408 = fs.add_instrument("LIC", level408, near=cv408, at="E", offset=70,
                                variant="shared")
     lic408.annotate(high="LAH", low="LAL")
     fs.connect(lt408.sig_out, lic408.sig_in, kind="electric")
@@ -395,8 +419,15 @@ def main():
     # reading the controller reads what it last asked the valve for, and
     # stops working the moment that loop is put on manual.
     tt409 = fs.add_instrument("TT", 409, sensing=r401, at="W", offset=70)
-    fs.add_instrument("Z", 1, sensing=tt409, at="S", offset=44, variant="sis")
-    fs.add_instrument("Z", 1, acting_on=cv402, at="S", offset=34, variant="sis")
+    # at="N", not "S": P-401's oil charge line passes south of TT-409 on
+    # its way into R-401, and a square dropped there sits on the pipe.
+    fs.add_instrument("Z", 1, sensing=tt409, at="N", offset=44, variant="sis")
+    # at="N" and stood off further than the loop above: south is where
+    # the tap carrying this square's own trip signal down from the
+    # actuator runs; west is the jacket hot-water header's own line in
+    # from HV-402; and close north still catches FIC-402's signal down
+    # to the actuator, which offset=60 clears.
+    fs.add_instrument("Z", 1, acting_on=cv402, at="N", offset=60, variant="sis")
 
     # A local reading only: the vacuum is watched, not held on a loop of
     # its own, which is ordinary for a batch dryer run to a fixed time
