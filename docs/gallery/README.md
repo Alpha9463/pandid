@@ -424,3 +424,38 @@ for: a jaw crusher and a ball mill, two gravity separating vessels (ISO 8.3
 X8031 — a thickener is that symbol, and the rake is a mechanical internal the
 standard does not draw), three hydrocyclones, a fluidised-bed calciner, and two
 cake-forming filters that pipe `wash_in` and `cake` as well as the filtrate.
+
+## 22 · Batch biodiesel plant
+
+[`examples/22_biodiesel_plant.py`](../../examples/22_biodiesel_plant.py) ·
+[SVG](22_biodiesel_plant.svg)
+
+![Batch biodiesel P&ID](22_biodiesel_plant.png)
+
+Canola oil and methanol, alkali-catalysed, one batch at a time — and the only
+batch process in the gallery. KOH is dissolved into fresh and recovered
+methanol in `MT-401` to make potassium methoxide, which is charged to `R-401`
+alongside the oil. `R-401` is jacketed and agitated, drawn from the same ISO
+item 1.27 X8006 body as example 17's continuous reactor: the standard has no
+reactor symbol of its own and draws no batch/continuous distinction either, so
+what makes this sheet a batch sheet is its tagging and its holds, not a
+different shape.
+
+The batch is dumped to `S-401` and splits by density alone once agitation
+stops — crude ester up, crude glycerol down. The ester still carries the
+methanol excess the reaction needed, so it is stripped in `C-401` before
+anything else touches it; unstripped, that methanol flashes into the wash water
+and is costed as effluent rather than recovered as feedstock. It is then washed
+in `M-401`/`S-402`, dried under vacuum in `S-403` behind the ejector `EJ-401`,
+and stored as fuel. The glycerol is neutralised with phosphoric acid in `N-401`
+and stored crude.
+
+**Both separations are ISO item 8.3 X8031** — `characteristic="gravity"`, the
+same composed separating vessel example 21's red mud thickener is drawn from.
+The standard gives a liquid-liquid decanter no shape of its own, so the mark is
+what says how the split is driven. Eight loops close on it: two cascades
+(reactor temperature onto jacket hot-water flow, column top temperature onto
+reflux) and four level loops on every inventory the process holds — settler
+interface, reflux drum, reboiler sump, wash separator — plus a high-temperature
+trip that shuts the jacket on a runaway the temperature controller cannot be
+trusted to catch, because by then it is the thing that has failed.
