@@ -29,8 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A cake-forming filter draws its cake and its wash: `wash_in` and `cake` on
   `press`, `belt`, `rotary` and `rotary_scraper`; `regenerant_in` and
   `spent_regenerant` on `ion_exchange`.
-- Five new examples: a stirred reactor train, a fixed-bed recycle loop, an
-  absorber–stripper pair, a molecular sieve dryer and an alumina refinery.
+- Six new examples: a stirred reactor train, a fixed-bed recycle loop, an
+  absorber–stripper pair, a molecular sieve dryer, an alumina refinery and a
+  batch biodiesel plant.
 - draw.io exports a composed symbol as a group of cells.
 - A type checker resolves `mixer.in_1`, `splitter.out_2`, `column.feed_2` and
   `block.in_3`, and refuses a number the unit was not built with.
