@@ -38,7 +38,9 @@ kinds, each argued at the class or the module it applies to:
   from spreading past the eleven classes it is true of.
 """
 
+import ast
 import inspect
+import pathlib
 import re
 
 import pytest
@@ -260,6 +262,94 @@ def test_every_annotation_is_a_port_that_is_built(cls):
         f"{cls.__name__} declares {sorted(phantom)}, which a default "
         f"{cls.__name__} does not have; a nozzle only some variants carry "
         f"belongs on a per-variant subclass, not here"
+    )
+
+
+#: The classes whose numbered nozzles a type checker is allowed to answer for
+#: with a blanket ``__getattr__``, and the price is that class's typo detection.
+#: Only where the numbered nozzles *outnumber* the fixed ones, which is why
+#: ``Column`` and ``Reactor`` are absent: they spell a family too, but they carry
+#: six and seven fixed nozzles apiece, so ``col.bottms`` is worth catching and
+#: ``col.feeds`` is the typed route to the numbered ones.
+_CHECKER_VISIBLE_GETATTR = {"Mixer", "Splitter", "Block"}
+
+
+def _classes_with_a_visible_getattr():
+    """Every class in ``units.py`` defining ``__getattr__`` under ``TYPE_CHECKING``.
+
+    Read off the source rather than the objects, and it has to be: the whole
+    point of ``if TYPE_CHECKING`` is that the method does not exist at run time,
+    so there is nothing on the class to find. The AST is what a checker sees.
+    """
+    tree = ast.parse(pathlib.Path(units.__file__).read_text(encoding="utf-8"))
+    out = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        for stmt in node.body:
+            # ``if TYPE_CHECKING:`` -- the guard that makes it visible to a
+            # checker and absent at run time. ``if not TYPE_CHECKING`` is the
+            # opposite and is how ``Unit`` hides the real one; the ``ast.Not``
+            # test below is what tells the two apart.
+            if (isinstance(stmt, ast.If)
+                    and isinstance(stmt.test, ast.Name)
+                    and stmt.test.id == "TYPE_CHECKING"
+                    and any(isinstance(b, ast.FunctionDef) and b.name == "__getattr__"
+                            for b in stmt.body)):
+                out.add(node.name)
+    return out
+
+
+def test_only_these_classes_answer_for_a_numbered_nozzle():
+    """A blanket ``__getattr__`` costs a class its typos; three may spend it.
+
+    ``mixer.in_1`` is the spelling this library is written in -- the examples
+    use it thirty-four times -- and no annotation can name it, so a checker
+    called it unknown. These three say ``-> Port`` to a checker instead.
+
+    It is a real cost and it is why this list is pinned rather than left to
+    spread: a class with a visible ``__getattr__`` answers for *every* attribute
+    asked of it, so ``mixer.outlt`` is no longer caught at edit time. That is
+    tolerable on a class whose attribute set is genuinely open and whose fixed
+    nozzles number two; it would not be on ``Column``. The run-time
+    ``Unit.__getattr__`` still raises on the first access with every real nozzle
+    listed, so a typo is loud rather than silent -- just later.
+    """
+    assert _classes_with_a_visible_getattr() == _CHECKER_VISIBLE_GETATTR
+
+
+def test_the_run_time_getattr_stays_hidden_from_checkers():
+    """The base class must keep hiding its own, or the three above are moot.
+
+    ``Unit.__getattr__`` visible would answer for every unit class in the
+    package and there would be no typo detection anywhere -- which is the state
+    this whole module exists to prevent.
+    """
+    # It must exist at run time -- that is the method that raises with every
+    # real nozzle listed, and it is the only reason a typo on one of the three
+    # classes above is loud rather than silent.
+    assert "__getattr__" in vars(units.Unit)
+
+    # And it must be the guarded one. ``if not TYPE_CHECKING`` parses as a
+    # unary ``not`` over the name, which is exactly what tells it apart from
+    # the ``if TYPE_CHECKING`` the three classes use.
+    tree = ast.parse(pathlib.Path(units.__file__).read_text(encoding="utf-8"))
+    guarded = [
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ClassDef)
+        for stmt in node.body
+        if isinstance(stmt, ast.If)
+        and isinstance(stmt.test, ast.UnaryOp)
+        and isinstance(stmt.test.op, ast.Not)
+        and isinstance(stmt.test.operand, ast.Name)
+        and stmt.test.operand.id == "TYPE_CHECKING"
+        and any(isinstance(b, ast.FunctionDef) and b.name == "__getattr__"
+                for b in stmt.body)
+    ]
+    assert guarded == ["Unit"], (
+        f"expected Unit alone to hide a run-time __getattr__ from checkers, "
+        f"got {guarded}"
     )
 
 

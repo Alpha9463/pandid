@@ -725,10 +725,10 @@ Two things worth knowing.
 **The tuple is indexed from zero while the nozzles are numbered from one**, so
 `inlets[0]` is `in_1`. Nothing re-bases it — a sequence that indexed from one
 would be the only one in the language, and would cost `[-1]`, slicing and every
-`zip`. Where the number is what you want, `m.port("in_3")` asks for it and is
-the only 1-based route a type checker can follow; `m.in_3` answers at run time
-and always has, but it is the one spelling mypy cannot see (below).
-`enumerate(m.inlets, start=1)` gives the number and the port together.
+`zip`. Where the number is what you want, `m.in_3` is the plain spelling and a
+type checker resolves it (below); `m.port("in_3")` is the same nozzle where the
+name is computed, and `enumerate(m.inlets, start=1)` gives the number and the
+port together.
 
 **A one-feed `Column` or `Reactor` names its lone nozzle `feed`, and `feeds` is
 the one-tuple holding it.** The sequence is the general form and the singular
@@ -741,12 +741,21 @@ runtime value and Python has no integer generic, so no annotation names `in_1` �
 `Mixer("M", n_inlets=len(feeds))`, which is the call a sheet built from data
 actually writes. `mixer.inlets[0]` resolves to `Port` under mypy.
 
-`mixer.in_1` does not, and never has: `Unit.__getattr__` is hidden from type
-checkers on purpose, so a nozzle no class declares is an error before the sheet
-is drawn rather than an `Any` that resolves to anything. It still works when
-Python runs, and every sheet written against it is unaffected — but in code you
-type-check, reach a numbered nozzle through the family or through
-`port("in_3")`.
+`mixer.in_1` resolves to `Port` as well, but by a different route and at a
+price. `Unit.__getattr__` is hidden from type checkers on purpose, so a nozzle
+no class declares is an error before the sheet is drawn rather than an `Any`
+that resolves to anything — which is what makes `reactor.fed` and `sep.liqid`
+editor errors. `Mixer`, `Splitter` and `Block` override that with a
+`__getattr__` of their own, visible to a checker and returning `Port`, because
+their numbered nozzles outnumber their fixed ones and `mixer.in_1` is the
+spelling this library is written in.
+
+The price is those three classes' own typo detection: `mixer.outlt` is no
+longer caught at edit time. It still raises the moment Python reaches it, with
+every real nozzle listed. `Column` and `Reactor` spell a family too and do
+**not** take this trade — they carry six and seven fixed nozzles apiece, so
+`col.bottms` is worth catching and `col.feeds` or `col.port("feed_2")` is the
+route to the numbered ones there.
 
 ### Equipment classes
 

@@ -637,9 +637,13 @@ class Unit:
     # run time, so the method is defined exactly as it always was.
     #
     # The cost is that a checker refuses the numbered members no
-    # annotation can name one at a time (``mixer.in_3`` -- iterate the
-    # family or call ``port("in_3")``) and the variant nozzles that are
-    # not on the base class (see :class:`Separator`).
+    # annotation can name one at a time and the variant nozzles that are
+    # not on the base class (see :class:`Separator`). The three classes
+    # that are *mostly* numbered members -- :class:`Mixer`,
+    # :class:`Splitter`, :class:`Block` -- buy that half back with a
+    # ``__getattr__`` of their own, visible to a checker and returning
+    # ``Port``, and pay for it in their own typo detection. Nobody else
+    # may: ``tests/test_port_annotations.py`` pins the three.
     if not TYPE_CHECKING:
 
         def __getattr__(self, name: str) -> Any:
@@ -3506,15 +3510,37 @@ class Mixer(Unit):
     # zero while the nozzles are numbered from one**: ``m.inlets[0]`` is
     # ``in_1``.
     #
-    # Where the number is wanted, ``m.port("in_3")`` is the only 1-based
-    # route a checker can follow: ``m.in_3`` answers at run time, but
-    # the ``__getattr__`` above is hidden from type checkers, so mypy
-    # reads it as an error and an ``Any``.
-    # ``enumerate(m.inlets, start=1)`` gives the number and the port
-    # together.
+    # Where the number is wanted, ``m.in_3`` is the plain spelling and
+    # resolves to ``Port`` in a checker -- see the ``__getattr__`` below,
+    # which exists for it. ``m.port("in_3")`` is the same nozzle where
+    # the name is computed, and ``enumerate(m.inlets, start=1)`` gives
+    # the number and the port together.
     inlets: tuple[Port, ...]
     # The one nozzle every mixer has, declared like any other fixed one.
     outlet: Port
+
+    # ``in_1`` ... ``in_n`` are real attributes at run time, and a checker
+    # cannot be told their names because ``n`` is the caller's -- so a
+    # reader writing the spelling this class exists for was told
+    # "Cannot access attribute" by Pyright and ``attr-defined`` by mypy.
+    # This answers with the family's own type instead.
+    #
+    # **The cost is paid on this class and nowhere else.**
+    # :meth:`Unit.__getattr__` stays hidden, so ``reactor.fed`` and
+    # ``sep.liqid`` are still refused; what gives typo detection up is a
+    # class whose attribute set is genuinely open, where the numbered
+    # nozzles outnumber the fixed ones. A typo still raises at run time
+    # on the first access, listing every real nozzle, and the declared
+    # annotations above still win over this -- ``outlet`` resolves to
+    # the nozzle, not to the fallback.
+    #
+    # Not done for :class:`Column` and :class:`Reactor`, whose
+    # ``feed_1`` ... ``feed_n`` are the same shape: they carry six and
+    # seven fixed nozzles apiece, so the trade runs the other way and
+    # ``col.feeds`` or ``col.port("feed_2")`` is the typed route there.
+    if TYPE_CHECKING:
+
+        def __getattr__(self, name: str) -> Port: ...
 
     kind = "mixer"
 
@@ -3545,6 +3571,29 @@ class Splitter(Unit):
     # the caller's count and the family is what is declared; see
     # :class:`Mixer`.
     outlets: tuple[Port, ...]
+
+    # ``in_1`` ... ``in_n`` are real attributes at run time, and a checker
+    # cannot be told their names because ``n`` is the caller's -- so a
+    # reader writing the spelling this class exists for was told
+    # "Cannot access attribute" by Pyright and ``attr-defined`` by mypy.
+    # This answers with the family's own type instead.
+    #
+    # **The cost is paid on this class and nowhere else.**
+    # :meth:`Unit.__getattr__` stays hidden, so ``reactor.fed`` and
+    # ``sep.liqid`` are still refused; what gives typo detection up is a
+    # class whose attribute set is genuinely open, where the numbered
+    # nozzles outnumber the fixed ones. A typo still raises at run time
+    # on the first access, listing every real nozzle, and the declared
+    # annotations above still win over this -- ``outlet`` resolves to
+    # the nozzle, not to the fallback.
+    #
+    # Not done for :class:`Column` and :class:`Reactor`, whose
+    # ``feed_1`` ... ``feed_n`` are the same shape: they carry six and
+    # seven fixed nozzles apiece, so the trade runs the other way and
+    # ``col.feeds`` or ``col.port("feed_2")`` is the typed route there.
+    if TYPE_CHECKING:
+
+        def __getattr__(self, name: str) -> Port: ...
 
     kind = "splitter"
 
@@ -3677,6 +3726,29 @@ class Block(Unit):
     # declare a family in ``_DECLARED_FAMILIES``.
     inlets: tuple[Port, ...]
     outlets: tuple[Port, ...]
+
+    # ``in_1`` ... ``in_n`` are real attributes at run time, and a checker
+    # cannot be told their names because ``n`` is the caller's -- so a
+    # reader writing the spelling this class exists for was told
+    # "Cannot access attribute" by Pyright and ``attr-defined`` by mypy.
+    # This answers with the family's own type instead.
+    #
+    # **The cost is paid on this class and nowhere else.**
+    # :meth:`Unit.__getattr__` stays hidden, so ``reactor.fed`` and
+    # ``sep.liqid`` are still refused; what gives typo detection up is a
+    # class whose attribute set is genuinely open, where the numbered
+    # nozzles outnumber the fixed ones. A typo still raises at run time
+    # on the first access, listing every real nozzle, and the declared
+    # annotations above still win over this -- ``outlet`` resolves to
+    # the nozzle, not to the fallback.
+    #
+    # Not done for :class:`Column` and :class:`Reactor`, whose
+    # ``feed_1`` ... ``feed_n`` are the same shape: they carry six and
+    # seven fixed nozzles apiece, so the trade runs the other way and
+    # ``col.feeds`` or ``col.port("feed_2")`` is the typed route there.
+    if TYPE_CHECKING:
+
+        def __getattr__(self, name: str) -> Port: ...
 
     kind = "block"
 
@@ -3961,7 +4033,7 @@ class Block(Unit):
                     f"{self.name}: order_on() takes the connections themselves and "
                     f"not their names, so a checker can see a typo -- "
                     f"order_on({wanted!r}, [b.out_2, b.in_2]), or b.outlets[1] / "
-                    f"b.port('out_2') where the attribute cannot be named. "
+                    f"b.port('out_2') where the name is computed. "
                     f"Got {port!r}."
                 )
             if self.ports.get(port.name) is not port:
