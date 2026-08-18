@@ -2976,7 +2976,7 @@ def _composed_units():
         units.Reactor("R-103", variant="jacketed", agitator="propeller"),
         units.Reactor("R-201", internals="packing", agitator=None),
         units.Reactor("R-202", internals="fluidised_bed", agitator="anchor"),
-        units.Column("T-101"),
+        units.Column("T-101", internals="tray"),
         units.Column("T-102", internals="bubble_cap_tray", trays=6),
         units.Column("T-103", internals="packing", trays=2),
         units.Vessel("D-301", supports="leg"),
