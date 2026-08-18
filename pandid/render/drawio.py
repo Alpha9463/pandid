@@ -419,6 +419,11 @@ def _hops(polylines: dict, direction: str) -> "tuple[list, set, set]":
     # tellable from a wrong one below: who is entitled to hop *me*.
     hopped_by: dict = {key: set() for key in keys}
     hops: set = set()
+    # Every crossing, keyed by where it is as well as who is in it. Two
+    # runs can cross each other **more than once** -- that is exactly the
+    # shape that makes a cycle -- so a pair is not a crossing, and
+    # counting pairs under-reports a sheet that loses both.
+    crossings: set = set()
     for hop_key, lo, hi, at in hopping:
         for cross_key, c_lo, c_hi, c_at in crossed:
             if not (c_lo < at < c_hi and lo < c_at < hi):
@@ -432,6 +437,8 @@ def _hops(polylines: dict, direction: str) -> "tuple[list, set, set]":
             hops.add(hop_key)
             after[hop_key].add(cross_key)
             hopped_by[cross_key].add(hop_key)
+            point = (at, c_at) if direction == "vertical" else (c_at, at)
+            crossings.add((hop_key, cross_key, *point))
     if not hops:
         return keys, hops, set()
     # Kahn's, taking the lowest original index each round -- `keys` is
@@ -475,9 +482,8 @@ def _hops(polylines: dict, direction: str) -> "tuple[list, set, set]":
     # so the two exports of one drawing disagree about which pipe passes
     # over. The release that added :data:`_EXPORT_CODES` decided such a
     # thing is said out loud rather than discovered.
-    lost = {(hop_key, cross_key)
-            for hop_key in hops
-            for cross_key in after[hop_key]
+    lost = {(hop_key, cross_key, x, y)
+            for hop_key, cross_key, x, y in crossings
             if hop_key not in kept or rank[cross_key] > rank[hop_key]}
     return order, kept, lost
 
@@ -2062,12 +2068,13 @@ class DrawioRenderer:
         def _run(key):
             return fs.streams[key].name or f"stream {key + 1}"
 
-        for hop_key, cross_key in sorted(lost):
+        for hop_key, cross_key, x, y in sorted(lost):
             self._findings.append(Issue(
                 "warning", HOP_DROPPED,
-                f"{_run(hop_key)} hops {_run(cross_key)} on the sheet, and the two "
-                f"cross each other more than once, which draw.io cannot draw either "
-                f"way round; the crossing is exported flat"))
+                f"{_run(hop_key)} hops {_run(cross_key)} at ({_num(x)}, {_num(y)}) "
+                f"on the sheet, and the two cross each other more than once, which "
+                f"draw.io cannot draw either way round; the crossing is exported "
+                f"flat"))
         labelled: set = set()
         cells: dict = {}
         for n, s in enumerate(fs.streams):
