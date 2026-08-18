@@ -27,16 +27,17 @@ from _bootstrap import out  # runs from the repo root or from examples/
 
 from pandid import (
     Compressor,
+    ControlValve,
     Feed,
     Fitting,
     Flowsheet,
     Furnace,
-    HeatExchanger,
     KnockoutDrum,
     Product,
     Reactor,
+    ShellAndTubeExchanger,
+    SolenoidValve,
     Tee,
-    Valve,
 )
 from pandid.document import Revision, TitleBlock, equipment_list, legend, notes
 
@@ -59,12 +60,12 @@ def main():
     # plant does not have.
     rx = fs.add(Reactor("R-301", internals="packing", width=124, height=200,
                         description="Methanol Converter"))
-    fehe = fs.add(HeatExchanger("E-301", variant="straight_tubes", width=120,
-                                height=36,
-                                description="Feed / Effluent Exchanger"))
+    fehe = fs.add(ShellAndTubeExchanger("E-301", variant="straight_tubes", width=120,
+                                        height=36,
+                                        description="Feed / Effluent Exchanger"))
     heater = fs.add(Furnace("H-301", description="Converter Fired Heater"))
-    cooler = fs.add(HeatExchanger("E-302", variant="straight_tubes", width=120,
-                                  height=36, description="Product Condenser"))
+    cooler = fs.add(ShellAndTubeExchanger("E-302", variant="straight_tubes", width=120,
+                                          height=36, description="Product Condenser"))
     sep = fs.add(KnockoutDrum("V-301", description="Crude Methanol Separator"))
     makeup_k = fs.add(Compressor("K-301", description="Make-up Gas Compressor"))
     recycle_k = fs.add(Compressor("K-302", description="Recycle Gas Compressor"))
@@ -90,18 +91,18 @@ def main():
 
     fe301 = fs.add(Fitting(flow301.element("FE"), variant="orifice",
                            description="Make-up Gas Flow Element"))
-    cv301 = fs.add(Valve(flow301.tag("CV"), variant="control", fail="closed",
-                         description="Make-up Gas Control Valve"))
+    cv301 = fs.add(ControlValve(flow301.tag("CV"), fail="closed",
+                                description="Make-up Gas Control Valve"))
     fe303 = fs.add(Fitting(flow303.element("FE"), variant="orifice",
                            description="Fuel Gas Flow Element"))
-    xv307 = fs.add(Valve("XV-307", variant="solenoid", fail="closed",
-                         description="Fired Heater Fuel Trip Valve"))
-    cv303 = fs.add(Valve(flow303.tag("CV"), variant="control", fail="closed",
-                         description="Fuel Gas Control Valve"))
-    cv304 = fs.add(Valve(press304.tag("CV"), variant="control", fail="open",
-                         description="Loop Purge Control Valve"))
-    cv305 = fs.add(Valve(level305.tag("CV"), variant="control", fail="closed",
-                         description="Crude Methanol Control Valve"))
+    xv307 = fs.add(SolenoidValve("XV-307", fail="closed",
+                                 description="Fired Heater Fuel Trip Valve"))
+    cv303 = fs.add(ControlValve(flow303.tag("CV"), fail="closed",
+                                description="Fuel Gas Control Valve"))
+    cv304 = fs.add(ControlValve(press304.tag("CV"), fail="open",
+                                description="Loop Purge Control Valve"))
+    cv305 = fs.add(ControlValve(level305.tag("CV"), fail="closed",
+                                description="Crude Methanol Control Valve"))
 
     # --- Process lines ------------------------------------------------
     # The pressure sequence is the loop's: make-up arrives at 30 barg and

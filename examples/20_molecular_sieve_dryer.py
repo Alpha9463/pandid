@@ -30,13 +30,14 @@ from pandid import (
     AirCooledExchanger,
     Column,
     Compressor,
+    ControlValve,
     Feed,
     Flowsheet,
     Furnace,
     KnockoutDrum,
     Product,
+    SolenoidValve,
     Tee,
-    Valve,
 )
 from pandid.document import Revision, TitleBlock, equipment_list, legend, notes
 from pandid.portgeom import port_offset
@@ -88,27 +89,27 @@ def main():
     # both. Every one is a solenoid-piloted on/off valve stroked by the
     # drier sequence, and every one fails to the position that leaves the
     # bed isolated rather than passing gas nobody is watching.
-    xv501a = fs.add(Valve("XV-501A", variant="solenoid", fail="closed",
-                          description="V-501A Wet Gas Inlet Valve"))
-    xv501b = fs.add(Valve("XV-501B", variant="solenoid", fail="closed",
-                          description="V-501B Wet Gas Inlet Valve"))
-    xv502a = fs.add(Valve("XV-502A", variant="solenoid", fail="closed",
-                          description="V-501A Dry Gas Outlet Valve"))
-    xv502b = fs.add(Valve("XV-502B", variant="solenoid", fail="closed",
-                          description="V-501B Dry Gas Outlet Valve"))
-    xv503a = fs.add(Valve("XV-503A", variant="solenoid", fail="closed",
-                          description="V-501A Regeneration Gas Inlet Valve"))
-    xv503b = fs.add(Valve("XV-503B", variant="solenoid", fail="closed",
-                          description="V-501B Regeneration Gas Inlet Valve"))
-    xv504a = fs.add(Valve("XV-504A", variant="solenoid", fail="closed",
-                          description="V-501A Regeneration Gas Outlet Valve"))
-    xv504b = fs.add(Valve("XV-504B", variant="solenoid", fail="closed",
-                          description="V-501B Regeneration Gas Outlet Valve"))
+    xv501a = fs.add(SolenoidValve("XV-501A", fail="closed",
+                                  description="V-501A Wet Gas Inlet Valve"))
+    xv501b = fs.add(SolenoidValve("XV-501B", fail="closed",
+                                  description="V-501B Wet Gas Inlet Valve"))
+    xv502a = fs.add(SolenoidValve("XV-502A", fail="closed",
+                                  description="V-501A Dry Gas Outlet Valve"))
+    xv502b = fs.add(SolenoidValve("XV-502B", fail="closed",
+                                  description="V-501B Dry Gas Outlet Valve"))
+    xv503a = fs.add(SolenoidValve("XV-503A", fail="closed",
+                                  description="V-501A Regeneration Gas Inlet Valve"))
+    xv503b = fs.add(SolenoidValve("XV-503B", fail="closed",
+                                  description="V-501B Regeneration Gas Inlet Valve"))
+    xv504a = fs.add(SolenoidValve("XV-504A", fail="closed",
+                                  description="V-501A Regeneration Gas Outlet Valve"))
+    xv504b = fs.add(SolenoidValve("XV-504B", fail="closed",
+                                  description="V-501B Regeneration Gas Outlet Valve"))
 
-    cv503 = fs.add(Valve(temp503.tag("CV"), variant="control", fail="closed",
-                         description="H-501 Fuel Gas Control Valve"))
-    cv504 = fs.add(Valve(level504.tag("CV"), variant="control", fail="closed",
-                         description="V-502 Water Draw Control Valve"))
+    cv503 = fs.add(ControlValve(temp503.tag("CV"), fail="closed",
+                                description="H-501 Fuel Gas Control Valve"))
+    cv504 = fs.add(ControlValve(level504.tag("CV"), fail="closed",
+                                description="V-502 Water Draw Control Valve"))
 
     # --- Header junctions ---------------------------------------------
     # All five are tees: a header teed for two beds is piping, not plant,

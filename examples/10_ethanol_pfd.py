@@ -19,14 +19,16 @@ from _bootstrap import out  # runs from the repo root or from examples/
 
 from pandid import (
     Column,
+    Condenser,
     Conveyor,
     Feed,
-    Filter,
+    FilterPress,
     Flowsheet,
-    HeatExchanger,
+    KettleReboiler,
     Mixer,
     Product,
     Reactor,
+    ShellAndTubeExchanger,
     Tee,
     Vessel,
 )
@@ -78,20 +80,20 @@ def main():
     col = fs.add(Column("T-301", internals="sieve_tray", trays=18,
                         width=110, height=250, label_pos="center",
                         description="Beer Column"))
-    cond = fs.add(HeatExchanger("E-301", variant="condenser", width=64,
-                                height=64,
-                                description="T-301 Overhead Condenser"))
+    cond = fs.add(Condenser("E-301", width=64,
+                            height=64,
+                            description="T-301 Overhead Condenser"))
     drum = fs.add(Vessel("V-301", variant="horizontal", width=110,
                          height=36, description="T-301 Reflux Drum"))
     # A Tee, not a Splitter: it draws no symbol and takes no tag, so it
     # puts no row in the equipment list.
     refl = fs.add(Tee())
-    reb = fs.add(HeatExchanger("E-302", variant="kettle", width=120,
-                               height=44,
-                               description="T-301 Kettle Reboiler"))
-    hx = fs.add(HeatExchanger("HX-301", variant="straight_tubes", width=150,
-                              height=45,
-                              description="Beer Column Bottoms Cooling"))
+    reb = fs.add(KettleReboiler("E-302", width=120,
+                                height=44,
+                                description="T-301 Kettle Reboiler"))
+    hx = fs.add(ShellAndTubeExchanger("HX-301", variant="straight_tubes", width=150,
+                                      height=45,
+                                      description="Beer Column Bottoms Cooling"))
     # 72 x 153 and not 80 x 100: a stirred vessel is drawn with ISO item
     # 20.6's motor above its crown, and the motor is a **circle** whose
     # roundness is worked out against the shell's own 62 x 131,8 box. A
@@ -106,13 +108,10 @@ def main():
                         description="Beer Flocculant Mixer Tank"))
     # A press makes **two products** and has a nozzle for each: the
     # filtrate leaves ``outlet`` on the east wall and the cake leaves
-    # ``cake`` through the floor. Reached by ``port()`` rather than as an
-    # attribute, because only the cake-forming variants have them --
-    # ``press.cake`` type-checking clean on a bag filter would be a
-    # nozzle the machine does not have. ``wash_in`` is offered too and
-    # this sheet does not use it.
-    press = fs.add(Filter("F-301", variant="press", width=120, height=60,
-                          description="Membrane Pressure Filter Press"))
+    # ``cake`` through the floor. ``wash_in`` is offered too and this
+    # sheet does not use it.
+    press = fs.add(FilterPress("F-301", width=120, height=60,
+                               description="Membrane Pressure Filter Press"))
     belt = fs.add(Conveyor("BC-301", length=120,
                            description="Filter Cake Conveyor Belt"))
     belt.nozzle("feed", "N")            # cake is dropped onto the belt, not piped
@@ -211,8 +210,8 @@ def main():
     # has. Teeing off the filtrate and calling one leg the cake said the
     # solids leave in the liquid line, which is the opposite of what a
     # press does.
-    fs.connect(press.port("outlet"), effluent.inlet, name="S-310")
-    fs.connect(press.port("cake"), belt.feed, name="S-501")
+    fs.connect(press.outlet, effluent.inlet, name="S-310")
+    fs.connect(press.cake, belt.feed, name="S-501")
     fs.connect(belt.discharge, cake.inlet, name="S-501")
 
     for s in fs.streams:

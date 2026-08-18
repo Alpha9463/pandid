@@ -24,7 +24,22 @@ being the one symbol allowed to carry its tag more than once.
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pandid import Column, Feed, Fitting, Flowsheet, HeatExchanger, Product, Tee, Valve, Vessel
+from pandid import (
+    CheckValve,
+    Column,
+    ControlValve,
+    Feed,
+    Fitting,
+    FlowElement,
+    Flowsheet,
+    KettleReboiler,
+    Product,
+    ShellAndTubeExchanger,
+    SolenoidValve,
+    Tee,
+    Valve,
+    Vessel,
+)
 from pandid.document import Annotation, Revision, TitleBlock, legend, notes
 from pandid.portgeom import port_offset, resolve_size
 
@@ -60,14 +75,14 @@ def main():
     # is perforated and has nothing that can settle or seize.
     col = fs.add(Column("T-301", internals="sieve_tray", trays=18,
                         label_pos="center", description="Beer Column"))
-    cond = fs.add(HeatExchanger("C-301", variant="straight_tubes", width=130,
-                                height=40, description="Overhead Condenser"))
+    cond = fs.add(ShellAndTubeExchanger("C-301", variant="straight_tubes", width=130,
+                                        height=40, description="Overhead Condenser"))
     drum = fs.add(Vessel("D-301", variant="horizontal", width=130, height=42,
                          description="Reflux Drum"))
-    reb = fs.add(HeatExchanger("RB-301", variant="kettle", width=140, height=50,
-                               description="U-tube Kettle Reboiler"))
-    cooler = fs.add(HeatExchanger("HX-301", variant="straight_tubes", width=130,
-                                  height=40, description="Beer Bottoms Cooler"))
+    reb = fs.add(KettleReboiler("RB-301", width=140, height=50,
+                                description="U-tube Kettle Reboiler"))
+    cooler = fs.add(ShellAndTubeExchanger("HX-301", variant="straight_tubes", width=130,
+                                          height=40, description="Beer Bottoms Cooler"))
 
     # header=True is one service tapped wherever the sheet wants it, so
     # both cooling-water tie-ins carry CWSH and both returns CWRH.
@@ -82,29 +97,29 @@ def main():
     bottoms_prod = fs.add(Product("Cooled Bottoms", reference="F-301"))
 
     # The in-line devices that stand on their own, outside a station.
-    xv = fs.add(Valve("XV-301", variant="solenoid",
-                      description="Feed Trip Valve"))
+    xv = fs.add(SolenoidValve("XV-301",
+                              description="Feed Trip Valve"))
     meter = fs.add(Fitting("FE-313", variant="rotameter",
                            description="Feed Flow Element"))
     # loop.tag() composes without checking the first letter and cannot:
     # a final element is not tagged from the measured variable. A
     # primary element goes through loop.element(), which does check --
     # see FE-303.
-    cv306 = fs.add(Valve(level306.tag("CV"), variant="control",
-                         description="Bottoms Control Valve"))
-    nrv306 = fs.add(Valve("NRV-306", variant="check",
-                          description="Bottoms Non-Return Valve"))
+    cv306 = fs.add(ControlValve(level306.tag("CV"),
+                                description="Bottoms Control Valve"))
+    nrv306 = fs.add(CheckValve("NRV-306",
+                               description="Bottoms Non-Return Valve"))
     hv311 = fs.add(Valve("HV-311", description="C-301 Cooling Water Block Valve"))
     hv315 = fs.add(Valve("HV-315", description="HX-301 Cooling Water Block Valve"))
     # No label_pos: an element's tag goes in a balloon rather than
     # beside the symbol, so nothing is written against the venturi at
     # all. See add_balloon() below.
-    fe303 = fs.add(Fitting(flow303.element("FE"), variant="venturi",
-                           description="Reflux Flow Element"))
-    fe305 = fs.add(Fitting(flow305.element("FE"), variant="venturi",
-                           description="Distillate Flow Element"))
-    fe308 = fs.add(Fitting(flow308.element("FE"), variant="venturi",
-                           description="Steam Flow Element"))
+    fe303 = fs.add(FlowElement(flow303.element("FE"),
+                               description="Reflux Flow Element"))
+    fe305 = fs.add(FlowElement(flow305.element("FE"),
+                               description="Distillate Flow Element"))
+    fe308 = fs.add(FlowElement(flow308.element("FE"),
+                               description="Steam Flow Element"))
     # The size steps down 100 -> 40, so the number breaks here.
     t_draw = fs.add(Tee())
     t_draw.new_line_number = True

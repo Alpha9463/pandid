@@ -52,19 +52,22 @@ from _bootstrap import out  # runs from the repo root or from examples/
 from pandid import (
     Conveyor,
     Cooler,
-    Crusher,
-    Dryer,
+    Cyclone,
     Feed,
-    Filter,
+    FilterPress,
     Flowsheet,
+    FluidizedBedDryer,
     Furnace,
-    HeatExchanger,
+    JawCrusher,
+    KettleReboiler,
     Mill,
     Mixer,
     Product,
     Pump,
     Reactor,
+    RotaryDrumFilter,
     Separator,
+    ShellAndTubeExchanger,
     Tee,
 )
 from pandid.document import Revision, TableBox, TitleBlock, equipment_list, notes
@@ -151,8 +154,8 @@ def main():
     # and one below the bottom edge on every one of its twelve rows, and
     # nothing here turns them.
     bauxite = fs.add(Feed("ROM Bauxite", reference="PFD-101"))
-    crusher = fs.add(Crusher("CR-901", variant="jaw",
-                             description="Bauxite Jaw Crusher"))
+    crusher = fs.add(JawCrusher("CR-901",
+                                description="Bauxite Jaw Crusher"))
     # Cake and ore are dropped onto a belt rather than piped into it, so
     # the tail nozzle comes off the top face rather than off the end.
     ore_belt = fs.add(Conveyor("CV-901", length=200,
@@ -176,10 +179,10 @@ def main():
     # steam heater behind the charge pump, which is where the pressure
     # break really is: desilication is an eight-hour atmospheric hold and
     # only what leaves it is pumped to digestion pressure.
-    interchanger_1 = fs.add(HeatExchanger(
+    interchanger_1 = fs.add(ShellAndTubeExchanger(
         "E-901", variant="straight_tubes", width=150, height=45,
         description="Digestion Heat Interchanger No. 1"))
-    interchanger_2 = fs.add(HeatExchanger(
+    interchanger_2 = fs.add(ShellAndTubeExchanger(
         "E-902", variant="straight_tubes", width=150, height=45,
         description="Digestion Heat Interchanger No. 2"))
     # ``Reactor`` rather than ``Tank``: a desilication tank is stirred,
@@ -190,7 +193,7 @@ def main():
         "TK-901", agitator="turbine", width=80, height=170,
         description="Desilication Tank"))
     charge_pump = fs.add(Pump("P-901", description="Digester Charge Pump"))
-    steam_heater = fs.add(HeatExchanger(
+    steam_heater = fs.add(ShellAndTubeExchanger(
         "E-903", variant="straight_tubes", width=150, height=45,
         description="Live Steam Digestion Heater"))
     # 145 C and 5 bara: the low-temperature route, which is what a
@@ -257,8 +260,8 @@ def main():
     # off the sheet. ``wash_in`` is the displacement wash that pushes
     # pregnant liquor out of the cake before the plates are opened --
     # 20 t/h of caustic liquor is worth recovering and worth drawing.
-    security_filter = fs.add(Filter(
-        "F-901", variant="press", width=140, height=70,
+    security_filter = fs.add(FilterPress(
+        "F-901", width=140, height=70,
         description="Security Filter"))
     filter_wash = fs.add(Feed("Hot Condensate", reference="PCD-902"))
     # A single-stream cooler: the cooling water is a connection on the
@@ -291,11 +294,11 @@ def main():
     # product-size hydrate out of the bottom and the secondary sends the
     # fines back as seed, which is what makes precipitation a crystalliser
     # rather than a once-through vessel.
-    classifier_1 = fs.add(Separator(
-        "CY-901", variant="cyclone", width=90, height=140,
+    classifier_1 = fs.add(Cyclone(
+        "CY-901", width=90, height=140,
         description="Primary Classifying Cyclone"))
-    classifier_2 = fs.add(Separator(
-        "CY-902", variant="cyclone", width=90, height=140,
+    classifier_2 = fs.add(Cyclone(
+        "CY-902", width=90, height=140,
         description="Secondary Classifying Cyclone"))
 
     # --- Hydrate filtration and calcination ---------------------------
@@ -303,8 +306,8 @@ def main():
     # the one the product specification depends on: soda left in the
     # cake is soda in the alumina, so the wash here is a duty rather
     # than a recovery.
-    hydrate_filter = fs.add(Filter(
-        "F-902", variant="rotary", width=140, height=80,
+    hydrate_filter = fs.add(RotaryDrumFilter(
+        "F-902", width=140, height=80,
         description="Hydrate Filter"))
     hydrate_wash = fs.add(Feed("Hydrate Wash Water", reference="PCD-902"))
     hydrate_belt = fs.add(Conveyor("CV-902", length=200,
@@ -326,14 +329,14 @@ def main():
                                 description="Calciner Combustion Chamber"))
     air = fs.add(Feed("Combustion Air"))
     fuel = fs.add(Feed("Fuel Gas", reference="PCD-905"))
-    calciner = fs.add(Dryer("CA-901", variant="fluidized_bed", width=130,
-                            height=180, description="Alumina Calciner"))
+    calciner = fs.add(FluidizedBedDryer("CA-901", width=130,
+                                        height=180, description="Alumina Calciner"))
     # Product and gas leave the calciner on one nozzle because the symbol
     # has one, so the cyclone below is where the sheet parts them. Neither
     # draw is named for which one is wanted: here the product is the
     # ``underflow`` and the spent gas the ``overflow``.
-    product_cyclone = fs.add(Separator(
-        "CY-903", variant="cyclone", width=90, height=140,
+    product_cyclone = fs.add(Cyclone(
+        "CY-903", width=90, height=140,
         description="Calciner Product Cyclone"))
     offgas = fs.add(Product("Calciner Off-Gas to Gas Cleaning",
                             reference="PFD-902"))
@@ -352,8 +355,8 @@ def main():
     # A kettle body: a shell with a heated bundle in it, a vapour space
     # over the bundle and a weir draw at the end, which is the nearest
     # drawing ISO has to an effect of a falling-film train.
-    evaporator = fs.add(HeatExchanger(
-        "EV-901", variant="kettle", width=170, height=64,
+    evaporator = fs.add(KettleReboiler(
+        "EV-901", width=170, height=64,
         description="Spent Liquor Evaporator"))
     lp_steam = fs.add(Feed("LP Steam", reference="PCD-903"))
     evap_condensate = fs.add(Product("Steam Condensate", header=True,

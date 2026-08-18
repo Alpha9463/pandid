@@ -14,7 +14,16 @@ stream numbering and labels are automatic.
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
-from pandid import Column, Feed, Flowsheet, HeatExchanger, Product, Splitter, Vessel
+from pandid import (
+    Column,
+    Feed,
+    Flowsheet,
+    KettleReboiler,
+    Product,
+    ShellAndTubeExchanger,
+    Splitter,
+    Vessel,
+)
 from pandid.portgeom import port_offset
 
 
@@ -33,8 +42,8 @@ def main():
     # width/height stay close to each symbol's native proportions:
     # scaling one far past its drawn aspect is what makes a sheet look
     # wrong.
-    cond = fs.add(HeatExchanger("E-701", variant="straight_tubes", width=120,
-                                height=36, description="Overhead Condenser"))
+    cond = fs.add(ShellAndTubeExchanger("E-701", variant="straight_tubes", width=120,
+                                        height=36, description="Overhead Condenser"))
     # The drum's inlet is authored on three faces and the engine picks
     # the top one unaided, so nothing here has to override it.
     drum = fs.add(Vessel("V-701", variant="horizontal", width=130, height=42,
@@ -43,8 +52,8 @@ def main():
     split = fs.add(Splitter("SP-701", n_outlets=2, description="Reflux Split"))
     dist = fs.add(Product("Distillate", reference="PFD-200"))
 
-    reb = fs.add(HeatExchanger("E-702", variant="kettle", width=120, height=44,
-                               description="Kettle Reboiler"))
+    reb = fs.add(KettleReboiler("E-702", width=120, height=44,
+                                description="Kettle Reboiler"))
     bot = fs.add(Product("Bottoms", reference="PFD-300"))
 
     # --- Placement ----------------------------------------------------

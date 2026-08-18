@@ -36,12 +36,14 @@ from _bootstrap import out  # runs from the repo root or from examples/
 
 from pandid import (
     Column,
+    Condenser,
+    ControlValve,
     Feed,
     Flowsheet,
-    HeatExchanger,
+    KettleReboiler,
     Product,
     Pump,
-    Valve,
+    ShellAndTubeExchanger,
     Vessel,
 )
 from pandid.document import Revision, TableBox, TitleBlock, equipment_list
@@ -124,19 +126,19 @@ def main():
     # the half that can be pulled and cleaned. The shell also runs east
     # to west against the tubes, which is the counter-current the
     # exchanger is sized on.
-    cross = fs.add(HeatExchanger("E-401", variant="straight_tubes", width=140,
-                                 height=44,
-                                 description="Lean / Rich Exchanger"))
-    ovhd = fs.add(HeatExchanger("E-402", variant="condenser", width=70,
-                                height=70,
-                                description="Regenerator Overhead Condenser"))
+    cross = fs.add(ShellAndTubeExchanger("E-401", variant="straight_tubes", width=140,
+                                         height=44,
+                                         description="Lean / Rich Exchanger"))
+    ovhd = fs.add(Condenser("E-402", width=70,
+                            height=70,
+                            description="Regenerator Overhead Condenser"))
     drum = fs.add(Vessel("V-401", variant="horizontal", width=120, height=40,
                          description="Reflux Drum"))
-    reboiler = fs.add(HeatExchanger("E-403", variant="kettle", width=130,
-                                    height=46,
-                                    description="Regenerator Reboiler"))
-    trim = fs.add(HeatExchanger("E-404", variant="straight_tubes", width=130,
-                                height=40, description="Lean Amine Cooler"))
+    reboiler = fs.add(KettleReboiler("E-403", width=130,
+                                     height=46,
+                                     description="Regenerator Reboiler"))
+    trim = fs.add(ShellAndTubeExchanger("E-404", variant="straight_tubes", width=130,
+                                        height=40, description="Lean Amine Cooler"))
     lean_pump = fs.add(Pump("P-401A/B", description="Lean Solvent Pump"))
     reflux_pump = fs.add(Pump("P-402A/B", description="Reflux Pump"))
 
@@ -145,8 +147,8 @@ def main():
     # contactor at 66 bara and a regenerator at 1.9: without it the
     # pressures in the table either side of E-401 have nothing to happen
     # across.
-    letdown = fs.add(Valve("LV-401", variant="control",
-                           description="Rich Amine Level Control Valve"))
+    letdown = fs.add(ControlValve("LV-401",
+                                  description="Rich Amine Level Control Valve"))
 
     sour = fs.add(Feed("Sour Gas", reference="PFD-301"))
     steam = fs.add(Feed("LP Steam", reference="PFD-901"))
