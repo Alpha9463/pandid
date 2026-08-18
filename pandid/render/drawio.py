@@ -380,11 +380,22 @@ def _hops(polylines: dict, direction: str) -> "tuple[list, set]":
     horizontal *and* H's vertical crosses V's horizontal, so each has to
     be written after the other. draw.io's model cannot express that pair
     and neither can this function; it satisfies every constraint it can
-    and leaves the remainder in stream order, so the sheet loses a hop
-    rather than gaining a wrong one. Nothing in the shipped corpus
-    reaches it -- ``11_ethanol_pid`` is the only example with crossings
-    at all, seven of them, and its precedence graph is a forest -- and a
-    test pins that the emitted order satisfies every crossing.
+    and leaves the remainder in stream order.
+
+    An edge stranded that way then **gives up its hop**, because
+    ``jumpStyle`` cannot be aimed -- an edge carrying it hops every
+    earlier edge it crosses, and after a cycle one of those is an edge
+    that was supposed to hop *it*. A lost hop leaves a reader with an
+    ambiguous four-way; a kept one would draw the wrong line passing
+    over, which reads as a fact about the piping and is not one. So the
+    sheet loses a hop rather than gaining a wrong one, and the filter at
+    the end of this function is where.
+
+    ``22_biodiesel_plant`` is the first sheet in the corpus to reach it,
+    with three cycles among ten edges -- a batch sheet recycles methanol
+    the length of the paper and washes counter-current to it, and two
+    runs that each cross the other twice are what that looks like drawn.
+    A test pins that the emitted order satisfies every crossing it kept.
     """
     keys = list(polylines)
     if direction not in ("vertical", "horizontal"):
@@ -404,6 +415,9 @@ def _hops(polylines: dict, direction: str) -> "tuple[list, set]":
                     (key, min(y1, y2), max(y1, y2), x1))
     # (crossed, hopper): the crossed edge must be written first.
     after: dict = {key: set() for key in keys}
+    # The mirror of it, and the only thing that makes a lost hop
+    # tellable from a wrong one below: who is entitled to hop *me*.
+    hopped_by: dict = {key: set() for key in keys}
     hops: set = set()
     for hop_key, lo, hi, at in hopping:
         for cross_key, c_lo, c_hi, c_at in crossed:
@@ -417,6 +431,7 @@ def _hops(polylines: dict, direction: str) -> "tuple[list, set]":
                 continue
             hops.add(hop_key)
             after[hop_key].add(cross_key)
+            hopped_by[cross_key].add(hop_key)
     if not hops:
         return keys, hops
     # Kahn's, taking the lowest original index each round -- `keys` is
@@ -431,7 +446,24 @@ def _hops(polylines: dict, direction: str) -> "tuple[list, set]":
         order.append(ready[0])
         done.add(ready[0])
     # Whatever the cycle left behind, in stream order.
-    return order + [key for key in keys if key not in done], hops
+    order += [key for key in keys if key not in done]
+    # A cycle leaves at least one edge written after an edge that was
+    # supposed to hop *it*, and ``jumpStyle`` cannot be aimed: an edge
+    # that carries it hops every earlier edge it crosses, the ones it
+    # has no business hopping included. So an edge whose own hopper now
+    # precedes it gives the key up, and the crossing comes out flat.
+    # Losing a hop leaves a reader with an ambiguous four-way; keeping
+    # one would draw the wrong line passing over, which reads as a fact
+    # about the piping and is not one.
+    #
+    # A run with no cycle in it never reaches this: the topological
+    # order puts every one of ``hopped_by[key]`` after ``key``, so the
+    # filter passes everything and the emitted document is unchanged to
+    # the byte.
+    rank = {key: n for n, key in enumerate(order)}
+    hops = {key for key in hops
+            if all(rank[other] > rank[key] for other in hopped_by[key])}
+    return order, hops
 
 
 #: pandid turns a symbol clockwise; draw.io names the same four

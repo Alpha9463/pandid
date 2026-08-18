@@ -107,6 +107,8 @@ Each of these draws a **different** symbol from the spelling it replaces.
 - Auto-numbering no longer walks over a stream name an author already used.
 - A balloon layout could not place no longer makes `validate()` silent about
   the rest of the sheet.
+- A crossing the draw.io export cannot hop the right way round is drawn flat
+  rather than the wrong way round.
 - Six things the draw.io export dropped without saying so are now reported;
   `fs.warnings` describes the last render and nothing earlier; and routing says
   why it left a stream undrawn.
