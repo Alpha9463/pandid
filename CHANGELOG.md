@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a packed bed, `internals="fluidised_bed"` a fluidised one.
 - `Crusher` and `Mill` for the jaw, cone, roller, hammer, impact and vibration
   types. Closes #218.
+- `Centrifuge` for ISO 10628-2 group 9's eight rows, and `CrushingMachine` for
+  item 11.1 X8084.
 - `CoolingTower`, `VenturiScrubber`, `Elevator`, `Conveyor(variant="screw")`
   and `tank/gas_holder`.
 - `Conveyor(diameter=)` sets the roller a belt runs on, or the bore a screw
