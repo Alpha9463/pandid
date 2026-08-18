@@ -38,7 +38,9 @@ kinds, each argued at the class or the module it applies to:
   from spreading past the eleven classes it is true of.
 """
 
+import ast
 import inspect
+import pathlib
 import re
 
 import pytest
@@ -260,6 +262,169 @@ def test_every_annotation_is_a_port_that_is_built(cls):
         f"{cls.__name__} declares {sorted(phantom)}, which a default "
         f"{cls.__name__} does not have; a nozzle only some variants carry "
         f"belongs on a per-variant subclass, not here"
+    )
+
+
+#: The classes whose numbered nozzles a type checker is allowed to answer for
+#: with a blanket ``__getattr__``, at the price of that class's own typo
+#: detection. ``Block`` alone, and only because its two counts are independent
+#: and its usual declaration form -- ``inputs=["W", "W", "N"]`` -- carries no
+#: length in its type, so the per-arity overloads the other families use would
+#: need a class per (inputs, outputs) pair and would still miss the list form.
+_CHECKER_VISIBLE_GETATTR = {"Block"}
+
+#: The families answered *exactly* instead: a literal count picks an overload
+#: returning a subclass that declares those nozzles and no others, so
+#: ``Mixer("M", n_inlets=3).in_4`` is an error and so is ``.outlt``. Maps the
+#: class to the arities it generates and the nozzle they are named for.
+#:
+#: ``Reactor`` is absent and it is not about feeds: ``StirredTankReactor`` adds
+#: ``duty``, ``outlet`` and ``vent``, and ``__new__`` overloads returning
+#: ``Reactor2`` would hand back a type that has lost all three. The other three
+#: have no subclass to lose.
+_EXACT_ARITY = {units.Mixer: "in", units.Splitter: "out", units.Column: "feed"}
+_MAX_ARITY = 8
+
+
+def _classes_with_a_visible_getattr():
+    """Every class in ``units.py`` defining ``__getattr__`` under ``TYPE_CHECKING``.
+
+    Read off the source rather than the objects, and it has to be: the whole
+    point of ``if TYPE_CHECKING`` is that the method does not exist at run time,
+    so there is nothing on the class to find. The AST is what a checker sees.
+    """
+    tree = ast.parse(pathlib.Path(units.__file__).read_text(encoding="utf-8"))
+    out = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        for stmt in node.body:
+            # ``if TYPE_CHECKING:`` -- the guard that makes it visible to a
+            # checker and absent at run time. ``if not TYPE_CHECKING`` is the
+            # opposite and is how ``Unit`` hides the real one; the ``ast.Not``
+            # test below is what tells the two apart.
+            if (
+                isinstance(stmt, ast.If)
+                and isinstance(stmt.test, ast.Name)
+                and stmt.test.id == "TYPE_CHECKING"
+                and any(
+                    isinstance(b, ast.FunctionDef) and b.name == "__getattr__" for b in stmt.body
+                )
+            ):
+                out.add(node.name)
+    return out
+
+
+def test_only_these_classes_answer_for_a_numbered_nozzle():
+    """A blanket ``__getattr__`` costs a class its typos; one may spend it.
+
+    A class with a visible ``__getattr__`` answers for *every* attribute asked
+    of it, so ``block.outlt`` is not caught at edit time. Only ``Block`` pays
+    that, and only because the per-arity overloads the other three families use
+    cannot be written for it: its two counts are independent, and the form its
+    own examples are written in -- ``inputs=["W", "W", "N"]`` -- is a ``list``,
+    whose length is not in its type.
+
+    The run-time ``Unit.__getattr__`` still raises on the first access with
+    every real nozzle listed, so a typo is loud rather than silent, just later.
+    """
+    assert _classes_with_a_visible_getattr() == _CHECKER_VISIBLE_GETATTR
+
+
+@pytest.mark.parametrize(
+    "cls", sorted(_EXACT_ARITY, key=lambda c: c.__name__), ids=lambda c: c.__name__
+)
+def test_a_literal_count_gets_a_class_declaring_exactly_those_nozzles(cls):
+    """The per-arity subclasses say what the constructor really builds.
+
+    ``Mixer3`` exists so a checker handed ``n_inlets=3`` can resolve ``in_3``
+    and refuse ``in_4``. That is only true while the declarations match what
+    ``__init__`` actually adds, and nothing else checks it -- the classes are
+    under ``if TYPE_CHECKING`` and never run, so a wrong one is invisible until
+    somebody writes the nozzle and is told it does not exist.
+
+    So: build the unit for real at each arity, and compare its ports against
+    what the subclass of that arity declares. A ``Column1`` is the case worth
+    having, since a one-feed tower is ``feed`` and not ``feed_1``.
+    """
+    module = ast.parse(pathlib.Path(units.__file__).read_text(encoding="utf-8"))
+    declared = {
+        node.name: {
+            stmt.target.id
+            for stmt in node.body
+            if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
+        }
+        for node in ast.walk(module)
+        if isinstance(node, ast.ClassDef)
+    }
+    keyword = {"Mixer": "n_inlets", "Splitter": "n_outlets", "Column": "n_feeds"}[cls.__name__]
+    member = _EXACT_ARITY[cls]
+    for n in range(1, _MAX_ARITY + 1):
+        name = f"{cls.__name__}{n}"
+        assert name in declared, f"{name} is not defined; the overload names it"
+        # The *numbered* nozzles this arity really builds. The singular ones
+        # are the base class's job and are declared there -- which is why a
+        # one-feed Column1 is empty and a one-inlet Mixer1 is not: a lone feed
+        # is ``feed``, a lone inlet is ``in_1``.
+        built = {
+            port
+            for port in cls("X-1", **{keyword: n}).ports
+            if re.fullmatch(rf"{member}_\d+", port)
+        }
+        assert declared[name] == built, (
+            f"{name} declares {sorted(declared[name])} but a {keyword}={n} "
+            f"{cls.__name__} builds {sorted(built)}"
+        )
+
+
+def test_no_arity_class_is_left_over(cls=None):
+    """The ceiling: a subclass nobody's overload names is a lie nobody catches.
+
+    ``Mixer9`` sitting in the file would declare nine inlets and never be
+    handed to anyone, and the test above -- which walks ``1 .. _MAX_ARITY`` --
+    would not look at it.
+    """
+    module = ast.parse(pathlib.Path(units.__file__).read_text(encoding="utf-8"))
+    expected = {f"{c.__name__}{n}" for c in _EXACT_ARITY for n in range(1, _MAX_ARITY + 1)}
+    found = {
+        node.name
+        for node in ast.walk(module)
+        if isinstance(node, ast.ClassDef)
+        and re.fullmatch(r"(Mixer|Splitter|Column|Reactor|Block)\d+", node.name)
+    }
+    assert found == expected
+
+
+def test_the_run_time_getattr_stays_hidden_from_checkers():
+    """The base class must keep hiding its own, or the three above are moot.
+
+    ``Unit.__getattr__`` visible would answer for every unit class in the
+    package and there would be no typo detection anywhere -- which is the state
+    this whole module exists to prevent.
+    """
+    # It must exist at run time -- that is the method that raises with every
+    # real nozzle listed, and it is the only reason a typo on one of the three
+    # classes above is loud rather than silent.
+    assert "__getattr__" in vars(units.Unit)
+
+    # And it must be the guarded one. ``if not TYPE_CHECKING`` parses as a
+    # unary ``not`` over the name, which is exactly what tells it apart from
+    # the ``if TYPE_CHECKING`` the three classes use.
+    tree = ast.parse(pathlib.Path(units.__file__).read_text(encoding="utf-8"))
+    guarded = [
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ClassDef)
+        for stmt in node.body
+        if isinstance(stmt, ast.If)
+        and isinstance(stmt.test, ast.UnaryOp)
+        and isinstance(stmt.test.op, ast.Not)
+        and isinstance(stmt.test.operand, ast.Name)
+        and stmt.test.operand.id == "TYPE_CHECKING"
+        and any(isinstance(b, ast.FunctionDef) and b.name == "__getattr__" for b in stmt.body)
+    ]
+    assert guarded == ["Unit"], (
+        f"expected Unit alone to hide a run-time __getattr__ from checkers, got {guarded}"
     )
 
 

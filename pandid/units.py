@@ -23,7 +23,7 @@ import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from difflib import get_close_matches
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, TypeVar, overload
 
 from pandid.deprecation import Deprecation
 from pandid.geometry import Frame, Pin, _Slot
@@ -636,10 +636,16 @@ class Unit:
     # the annotations above buy nothing. ``TYPE_CHECKING`` is False at
     # run time, so the method is defined exactly as it always was.
     #
-    # The cost is that a checker refuses the numbered members no
-    # annotation can name one at a time (``mixer.in_3`` -- iterate the
-    # family or call ``port("in_3")``) and the variant nozzles that are
-    # not on the base class (see :class:`Separator`).
+    # The cost is that a checker refuses the variant nozzles that are not
+    # on the base class (see :class:`Separator`), and would refuse the
+    # numbered members of a family too. The families buy that back
+    # without giving anything up: :class:`Mixer`, :class:`Splitter` and
+    # :class:`Column` overload ``__new__`` on a **literal** count and
+    # hand back a subclass declaring exactly the nozzles that count
+    # builds, so ``mixer.in_3`` resolves and ``mixer.in_4`` does not.
+    # :class:`Block` is the one class that cannot be written that way and
+    # does take the blanket ``__getattr__``; it says why, and
+    # ``tests/test_port_annotations.py`` pins that it is alone.
     if not TYPE_CHECKING:
 
         def __getattr__(self, name: str) -> Any:
@@ -3435,6 +3441,61 @@ class Column(Unit):
     # :class:`Mixer`.
     feed: Port
 
+
+    # ``feed_1`` ... ``feed_n`` are the same shape as :class:`Mixer`'s
+    # numbered inlets and are answered the same way: a literal
+    # ``n_feeds`` gets a subclass declaring exactly those nozzles, a
+    # computed one gets this class and ``col.feeds[i]``.
+    #
+    # A one-feed tower keeps the singular ``feed`` -- see
+    # :func:`_feed_names` -- so ``Column1`` declares nothing of its own
+    # and the annotation above answers for it.
+    #
+    # :class:`Reactor` spells the same family and does **not** do this,
+    # for a reason that is about its subclasses rather than about feeds:
+    # ``StirredTankReactor`` adds ``duty``, ``outlet`` and ``vent``, and
+    # an overload returning ``Reactor2`` would hand back a type that has
+    # lost them. A column has no subclass to lose.
+    if TYPE_CHECKING:
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
+                    *args: Any, **kwargs: Any) -> "Column1": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[2],
+                    *args: Any, **kwargs: Any) -> "Column2": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[3],
+                    *args: Any, **kwargs: Any) -> "Column3": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[4],
+                    *args: Any, **kwargs: Any) -> "Column4": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[5],
+                    *args: Any, **kwargs: Any) -> "Column5": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[6],
+                    *args: Any, **kwargs: Any) -> "Column6": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[7],
+                    *args: Any, **kwargs: Any) -> "Column7": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[8],
+                    *args: Any, **kwargs: Any) -> "Column8": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: int,
+                    *args: Any, **kwargs: Any) -> "Column": ...
+        def __new__(cls, name: str, n_feeds: int = 1,
+                    *args: Any, **kwargs: Any) -> "Column": ...
+
     kind = "column"
     PORTS = [
         ("distillate", "outlet", "vapor"),
@@ -3479,6 +3540,66 @@ class Column(Unit):
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
 
 
+
+if TYPE_CHECKING:
+    # A column of each feed count, for the overloads above. ``Column1``
+    # is the one-feed tower, whose nozzle is the singular ``feed`` the
+    # base already declares, so it adds nothing and exists only so the
+    # overload for ``Literal[1]`` has something to name.
+
+    class Column1(Column):
+        pass
+
+    class Column2(Column):
+        feed_1: Port
+        feed_2: Port
+
+    class Column3(Column):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+
+    class Column4(Column):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+
+    class Column5(Column):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+
+    class Column6(Column):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+
+    class Column7(Column):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+
+    class Column8(Column):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+        feed_8: Port
+
+
 # ----------------------------------------------------------------
 # Variable-port unit types
 # ----------------------------------------------------------------
@@ -3506,15 +3627,78 @@ class Mixer(Unit):
     # zero while the nozzles are numbered from one**: ``m.inlets[0]`` is
     # ``in_1``.
     #
-    # Where the number is wanted, ``m.port("in_3")`` is the only 1-based
-    # route a checker can follow: ``m.in_3`` answers at run time, but
-    # the ``__getattr__`` above is hidden from type checkers, so mypy
-    # reads it as an error and an ``Any``.
-    # ``enumerate(m.inlets, start=1)`` gives the number and the port
-    # together.
+    # Where the number is wanted, ``m.in_3`` is the plain spelling and
+    # resolves to ``Port`` in a checker -- see the ``__getattr__`` below,
+    # which exists for it. ``m.port("in_3")`` is the same nozzle where
+    # the name is computed, and ``enumerate(m.inlets, start=1)`` gives
+    # the number and the port together.
     inlets: tuple[Port, ...]
     # The one nozzle every mixer has, declared like any other fixed one.
     outlet: Port
+
+
+    # ``in_1`` ... ``in_n`` are real attributes at run time and no
+    # annotation can name them: ``n`` is the caller's. But a checker
+    # *can* be told what a **literal** count builds, and that is every
+    # call this library has ever been written with -- there is not one
+    # ``n_inlets=len(...)`` in the examples or the suite.
+    #
+    # So the overloads below hand a literal count back a subclass that
+    # declares exactly those nozzles, and a computed one back this
+    # class, which declares none of them. ``Mixer("M", n_inlets=3).in_3``
+    # is a ``Port``; ``.in_4`` and ``.outlt`` are both errors, which a
+    # blanket ``__getattr__`` could not have said. The subclasses exist
+    # only under ``TYPE_CHECKING``: nothing is built at run time, the
+    # object really is a ``Mixer``, and every one of them is assignable
+    # to ``Mixer`` for anything that annotates the base.
+    #
+    # Where the count *is* computed, ``m.inlets[i]`` is the typed route
+    # and the honest one -- a checker cannot know how many nozzles
+    # ``n_inlets=len(feeds)`` made, and saying it did would be a lie
+    # rather than a limitation.
+    #
+    # ``*args``/``**kwargs`` on the overloads rather than the real
+    # signature repeated nine times: ``__new__`` takes what
+    # ``__init__`` takes, and ``__init__`` right below is the one
+    # declaration of it.
+    if TYPE_CHECKING:
+        @overload
+        def __new__(cls, name: str, n_inlets: Literal[1],
+                    *args: Any, **kwargs: Any) -> "Mixer1": ...
+
+        @overload
+        def __new__(cls, name: str, n_inlets: Literal[2] = 2,
+                    *args: Any, **kwargs: Any) -> "Mixer2": ...
+
+        @overload
+        def __new__(cls, name: str, n_inlets: Literal[3],
+                    *args: Any, **kwargs: Any) -> "Mixer3": ...
+
+        @overload
+        def __new__(cls, name: str, n_inlets: Literal[4],
+                    *args: Any, **kwargs: Any) -> "Mixer4": ...
+
+        @overload
+        def __new__(cls, name: str, n_inlets: Literal[5],
+                    *args: Any, **kwargs: Any) -> "Mixer5": ...
+
+        @overload
+        def __new__(cls, name: str, n_inlets: Literal[6],
+                    *args: Any, **kwargs: Any) -> "Mixer6": ...
+
+        @overload
+        def __new__(cls, name: str, n_inlets: Literal[7],
+                    *args: Any, **kwargs: Any) -> "Mixer7": ...
+
+        @overload
+        def __new__(cls, name: str, n_inlets: Literal[8],
+                    *args: Any, **kwargs: Any) -> "Mixer8": ...
+
+        @overload
+        def __new__(cls, name: str, n_inlets: int,
+                    *args: Any, **kwargs: Any) -> "Mixer": ...
+        def __new__(cls, name: str, n_inlets: int = 2,
+                    *args: Any, **kwargs: Any) -> "Mixer": ...
 
     kind = "mixer"
 
@@ -3529,6 +3713,69 @@ class Mixer(Unit):
             self._add_port(f"in_{i}", "inlet", "process") for i in range(1, n_inlets + 1)
         )
         self._add_port("outlet", "outlet", "process")
+
+
+
+if TYPE_CHECKING:
+    # A mixer of each arity, for the overloads above to hand back.
+    #
+    # Declared here and not generated in a loop, because a checker reads
+    # the source and not the objects: a class built by ``type()`` at
+    # import time is invisible to Pyright and to mypy alike, which is
+    # the whole point of these. Nothing is built at run time either --
+    # ``TYPE_CHECKING`` is False there and this block does not execute.
+
+    class Mixer1(Mixer):
+        in_1: Port
+
+    class Mixer2(Mixer):
+        in_1: Port
+        in_2: Port
+
+    class Mixer3(Mixer):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+
+    class Mixer4(Mixer):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+        in_4: Port
+
+    class Mixer5(Mixer):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+        in_4: Port
+        in_5: Port
+
+    class Mixer6(Mixer):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+        in_4: Port
+        in_5: Port
+        in_6: Port
+
+    class Mixer7(Mixer):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+        in_4: Port
+        in_5: Port
+        in_6: Port
+        in_7: Port
+
+    class Mixer8(Mixer):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+        in_4: Port
+        in_5: Port
+        in_6: Port
+        in_7: Port
+        in_8: Port
 
 
 class Splitter(Unit):
@@ -3546,6 +3793,48 @@ class Splitter(Unit):
     # :class:`Mixer`.
     outlets: tuple[Port, ...]
 
+    # The mirror of :class:`Mixer`'s: a literal ``n_outlets`` gets a
+    # subclass declaring exactly ``out_1`` ... ``out_n``, a computed one
+    # gets this class and ``outlets[i]``. See :class:`Mixer` for why.
+    if TYPE_CHECKING:
+        @overload
+        def __new__(cls, name: str, n_outlets: Literal[1],
+                    *args: Any, **kwargs: Any) -> "Splitter1": ...
+
+        @overload
+        def __new__(cls, name: str, n_outlets: Literal[2] = 2,
+                    *args: Any, **kwargs: Any) -> "Splitter2": ...
+
+        @overload
+        def __new__(cls, name: str, n_outlets: Literal[3],
+                    *args: Any, **kwargs: Any) -> "Splitter3": ...
+
+        @overload
+        def __new__(cls, name: str, n_outlets: Literal[4],
+                    *args: Any, **kwargs: Any) -> "Splitter4": ...
+
+        @overload
+        def __new__(cls, name: str, n_outlets: Literal[5],
+                    *args: Any, **kwargs: Any) -> "Splitter5": ...
+
+        @overload
+        def __new__(cls, name: str, n_outlets: Literal[6],
+                    *args: Any, **kwargs: Any) -> "Splitter6": ...
+
+        @overload
+        def __new__(cls, name: str, n_outlets: Literal[7],
+                    *args: Any, **kwargs: Any) -> "Splitter7": ...
+
+        @overload
+        def __new__(cls, name: str, n_outlets: Literal[8],
+                    *args: Any, **kwargs: Any) -> "Splitter8": ...
+
+        @overload
+        def __new__(cls, name: str, n_outlets: int,
+                    *args: Any, **kwargs: Any) -> "Splitter": ...
+        def __new__(cls, name: str, n_outlets: int = 2,
+                    *args: Any, **kwargs: Any) -> "Splitter": ...
+
     kind = "splitter"
 
     def __init__(self, name: str, n_outlets: int = 2, variant: str = "default", width: float | None = None, height: float | None = None, description: str = "", reference: str = ""):
@@ -3556,6 +3845,69 @@ class Splitter(Unit):
         self.outlets = tuple(
             self._add_port(f"out_{i}", "outlet", "process") for i in range(1, n_outlets + 1)
         )
+
+
+
+if TYPE_CHECKING:
+    # A splitter of each arity; see the mixers above.
+    #
+    # Declared here and not generated in a loop, because a checker reads
+    # the source and not the objects: a class built by ``type()`` at
+    # import time is invisible to Pyright and to mypy alike, which is
+    # the whole point of these. Nothing is built at run time either --
+    # ``TYPE_CHECKING`` is False there and this block does not execute.
+
+    class Splitter1(Splitter):
+        out_1: Port
+
+    class Splitter2(Splitter):
+        out_1: Port
+        out_2: Port
+
+    class Splitter3(Splitter):
+        out_1: Port
+        out_2: Port
+        out_3: Port
+
+    class Splitter4(Splitter):
+        out_1: Port
+        out_2: Port
+        out_3: Port
+        out_4: Port
+
+    class Splitter5(Splitter):
+        out_1: Port
+        out_2: Port
+        out_3: Port
+        out_4: Port
+        out_5: Port
+
+    class Splitter6(Splitter):
+        out_1: Port
+        out_2: Port
+        out_3: Port
+        out_4: Port
+        out_5: Port
+        out_6: Port
+
+    class Splitter7(Splitter):
+        out_1: Port
+        out_2: Port
+        out_3: Port
+        out_4: Port
+        out_5: Port
+        out_6: Port
+        out_7: Port
+
+    class Splitter8(Splitter):
+        out_1: Port
+        out_2: Port
+        out_3: Port
+        out_4: Port
+        out_5: Port
+        out_6: Port
+        out_7: Port
+        out_8: Port
 
 
 def _block_faces(spec: "int | Sequence[str]", default: str, owner: str,
@@ -3677,6 +4029,29 @@ class Block(Unit):
     # declare a family in ``_DECLARED_FAMILIES``.
     inlets: tuple[Port, ...]
     outlets: tuple[Port, ...]
+
+    # ``in_1`` ... ``in_n`` are real attributes at run time, and a checker
+    # cannot be told their names because ``n`` is the caller's -- so a
+    # reader writing the spelling this class exists for was told
+    # "Cannot access attribute" by Pyright and ``attr-defined`` by mypy.
+    # This answers with the family's own type instead.
+    #
+    # **The cost is paid on this class and nowhere else.**
+    # :meth:`Unit.__getattr__` stays hidden, so ``reactor.fed`` and
+    # ``sep.liqid`` are still refused; what gives typo detection up is a
+    # class whose attribute set is genuinely open, where the numbered
+    # nozzles outnumber the fixed ones. A typo still raises at run time
+    # on the first access, listing every real nozzle, and the declared
+    # annotations above still win over this -- ``outlet`` resolves to
+    # the nozzle, not to the fallback.
+    #
+    # Not done for :class:`Column` and :class:`Reactor`, whose
+    # ``feed_1`` ... ``feed_n`` are the same shape: they carry six and
+    # seven fixed nozzles apiece, so the trade runs the other way and
+    # ``col.feeds`` or ``col.port("feed_2")`` is the typed route there.
+    if TYPE_CHECKING:
+
+        def __getattr__(self, name: str) -> Port: ...
 
     kind = "block"
 
@@ -3961,7 +4336,7 @@ class Block(Unit):
                     f"{self.name}: order_on() takes the connections themselves and "
                     f"not their names, so a checker can see a typo -- "
                     f"order_on({wanted!r}, [b.out_2, b.in_2]), or b.outlets[1] / "
-                    f"b.port('out_2') where the attribute cannot be named. "
+                    f"b.port('out_2') where the name is computed. "
                     f"Got {port!r}."
                 )
             if self.ports.get(port.name) is not port:
