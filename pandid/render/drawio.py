@@ -426,7 +426,15 @@ def _hops(polylines: dict, direction: str) -> "tuple[list, set, set]":
     crossings: set = set()
     for hop_key, lo, hi, at in hopping:
         for cross_key, c_lo, c_hi, c_at in crossed:
-            if not (c_lo < at < c_hi and lo < c_at < hi):
+            # ``HOP_R`` and not a bare containment, because this asks the
+            # same question ``_draw_streams`` asks and has to get the same
+            # answer: the arc spans ``2 * HOP_R`` about the crossing, so
+            # one nearer than that to the end of its segment is drawn
+            # flat on the sheet. Asking draw.io to hop it would put a
+            # jump in the file where the drawing has none, which is the
+            # same disagreement between the two backends as a hop drawn
+            # the wrong way round, only quieter.
+            if not (c_lo < at < c_hi and lo + HOP_R < c_at < hi - HOP_R):
                 continue
             # A run crossing itself is one line, not two, and draw.io
             # does not hop it either: an edge is pushed onto

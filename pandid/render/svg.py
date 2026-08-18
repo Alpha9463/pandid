@@ -3510,7 +3510,9 @@ class SvgRenderer:
                 x1, y1 = points[i]
                 x2, y2 = points[i + 1]
                 if jump_direction == "vertical" and x1 == x2:
-                    crossings = [hy for mnx, mxx, hy in horizontals if mnx < x1 < mxx and min(y1, y2) < hy < max(y1, y2)]
+                    crossings = [hy for mnx, mxx, hy in horizontals
+                                 if mnx < x1 < mxx
+                                 and min(y1, y2) + HOP_R < hy < max(y1, y2) - HOP_R]
                     crossings.sort(reverse=(y1 > y2))
                     for hy in crossings:
                         if y1 < y2:
@@ -3519,7 +3521,9 @@ class SvgRenderer:
                             d_parts.extend([f"L {x1},{hy + HOP_R}", f"A {HOP_R} {HOP_R} 0 0 1 {x1},{hy - HOP_R}"])
                     d_parts.append(f"L {x2},{y2}")
                 elif jump_direction == "horizontal" and y1 == y2:
-                    crossings = [vx for vx, my, My in verticals if my < y1 < My and min(x1, x2) < vx < max(x1, x2)]
+                    crossings = [vx for vx, my, My in verticals
+                                 if my < y1 < My
+                                 and min(x1, x2) + HOP_R < vx < max(x1, x2) - HOP_R]
                     crossings.sort(reverse=(x1 > x2))
                     for vx in crossings:
                         if x1 < x2:
