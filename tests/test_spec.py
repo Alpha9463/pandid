@@ -436,6 +436,10 @@ def test_a_body_carrying_two_parts_keeps_both_and_their_order():
         lambda: units.Vessel("D-101"),  # one that can, and was not asked to
         lambda: units.Separator("V-101"),
         lambda: units.Tank("TK-101"),
+        # ISO item 2.1 X8100: the general column carries no internal, so an
+        # unfurnished tower is a body that composes nothing rather than one
+        # whose default part goes unwritten.
+        lambda: units.Column("T-101"),
     ],
 )
 def test_a_unit_that_composes_nothing_gains_nothing(make):
@@ -455,11 +459,10 @@ def test_a_unit_that_composes_nothing_gains_nothing(make):
     ("make", "drawn"),
     [
         (lambda: units.Reactor("R-101"), {(28, "agitator"), (20, "motor")}),
-        (lambda: units.Column("T-101"), {(27, "tray")}),
     ],
 )
 def test_the_part_a_class_draws_by_itself_is_not_written_down(make, drawn):
-    """A reactor is a stirred tank and a column has trays without being told.
+    """A reactor is a stirred tank without being told.
 
     Only what differs from a default is written, here as everywhere else in the
     format, so the entry for an ordinary reactor is the entry it always was.
@@ -478,15 +481,18 @@ def test_the_part_a_class_draws_by_itself_is_not_written_down(make, drawn):
 @pytest.mark.parametrize(
     ("make", "key"),
     [
-        (lambda: units.Column("T-105", internals=None), "internals"),
         (lambda: units.Reactor("R-105", agitator=None), "agitator"),
     ],
 )
 def test_a_body_asked_for_bare_comes_back_bare(make, key):
     """Stated empty is not the same as not stated, and ``null`` is how it is said.
 
-    Leave the keyword off and the class puts its own part back: a bare shell
-    reads as the eight decks a column draws when nobody says otherwise.
+    Leave the keyword off and the class puts its own part back: an unstated
+    agitator reads as the stirrer a reactor turns when nobody says otherwise.
+
+    A reactor is the only class this still bites. A column's unfurnished
+    default *is* bare -- ISO item 2.1 X8100 -- so for that one the two spellings
+    genuinely mean the same thing and neither is written down.
     """
     unit = make()
     entry, rebuilt = _round_trip(unit)

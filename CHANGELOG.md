@@ -39,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   corner.** Pass `port=None` for the old behaviour.
 - `reactor/default` is a stirred tank with its agitator inside the shell and its
   motor above. The old drawing is `variant="mixing"`.
-- `column/default` is drawn with trays.
+- A `Column` says what is inside it, and is drawn bare until it does.
 - The stream table draws only the columns that carry something. A line to or
   from the sheet edge keeps its column and is reported if it is empty.
 - The example columns carry the internals their service really has.

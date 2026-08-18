@@ -3314,26 +3314,28 @@ class Column(Unit):
 
     What is inside it
     -----------------
-    **A column is drawn with trays.** ISO 10628-2's group 2 is not a
-    separate vocabulary of towers; it is one dished-end shell carrying
-    one group-27 internal, drawn eight times. So ``internals=`` is what
-    makes this tower one tower rather than another, and ``trays=`` is how
-    many of them are drawn::
+    **A column is drawn bare; ``internals=`` furnishes it.** ISO
+    10628-2's group 2 is not a separate vocabulary of towers; it is one
+    dished-end shell carrying one group-27 internal, drawn N times. The
+    standard's own general column is item 2.1 X8100 and it carries
+    nothing; the tray tower is the *separate* item 2.2 X8101. So a
+    column nobody has furnished draws the first of those, not the
+    second::
 
-        Column("T-101")                                    # a tray tower
-        Column("T-102", internals="bubble_cap_tray", trays=12)
-        Column("T-103", internals="valve_tray", trays=30)
-        Column("T-104", internals="packing", trays=2)      # two beds
-        Column("T-105", internals=None)                    # a bare shell
+        Column("T-101")                                    # a bare shell
+        Column("T-102", internals="tray")                  # a tray tower
+        Column("T-103", internals="bubble_cap_tray", trays=12)
+        Column("T-104", internals="valve_tray", trays=30)
+        Column("T-105", internals="packing", trays=2)      # two beds
 
-    The eight names are ISO's: ``"tray"`` (27.1, and the default),
-    ``"baffle_tray"``, ``"bubble_cap_tray"``, ``"valve_tray"``,
-    ``"sieve_tray"``, ``"filter_insert"``, ``"fluidised_bed"`` and
-    ``"packing"``.
+    The eight names are ISO's: ``"tray"`` (27.1), ``"baffle_tray"``,
+    ``"bubble_cap_tray"``, ``"valve_tray"``, ``"sieve_tray"``,
+    ``"filter_insert"``, ``"fluidised_bed"`` and ``"packing"``.
 
     ``trays=`` counts whatever ``internals=`` names: decks for a deck,
-    beds for a bed. The default is :data:`DEFAULT_TRAYS`, which is the
-    eight ISO item 2.6 X8011 draws.
+    beds for a bed, and nothing at all where ``internals`` is ``None``.
+    The default is :data:`DEFAULT_TRAYS`, the eight of ISO item 2.6
+    X8011.
 
     An absorber, a stripper, a scrubbing tower, an adsorber and a
     molecular sieve are **not distinct drawings** and ISO gives them no
@@ -3365,32 +3367,20 @@ class Column(Unit):
         ("condenser_duty", "outlet", "energy"),
     ]
 
-    #: The bodies an internal is drawn into when the author names none.
-    #: Only the general shell: ``packed`` draws two beds on their support
-    #: grids in its own artwork and would come out with a third.
-    _BARE = ("default",)
-
-    #: The internals depend on the body and the count does not: eight is
-    #: eight of whatever is drawn, and of nothing where nothing is.
-    COMPOSITION = {"internals": _UNSTATED, "trays": DEFAULT_TRAYS}
-
-    @classmethod
-    def composition_defaults(cls, variant: str,
-                             stated: Mapping[str, Any] | None = None
-                             ) -> dict[str, Any]:
-        """A bare shell gets item 27.1; a drawn-in one gets nothing.
-
-        The only place :attr:`_BARE` is read; see
-        :meth:`Reactor.composition_defaults` for why it is a method.
-
-        *stated* is not read here and a column has nothing for it to
-        say: ``trays`` is a count rather than a part, so there is no
-        second part for the internals to be ruled out by. The same goes
-        for :class:`Vessel` and :class:`Separator`, which compose from
-        one keyword each. A reactor is the only class with two.
-        """
-        return {**super().composition_defaults(variant, stated),
-                "internals": "tray" if variant in cls._BARE else None}
+    #: Nothing is drawn inside a column nobody has furnished. ISO's own
+    #: general column, item 2.1 X8100, carries no internal, and the tray
+    #: tower is the separate item 2.2 X8101 -- so defaulting to a deck
+    #: would assert a tray count the author never gave, and would say it
+    #: of every absorber, stripper and adsorber drawn through this class
+    #: too. The count does not depend on the body: eight is eight of
+    #: whatever is drawn, and of nothing where nothing is.
+    #:
+    #: No :meth:`composition_defaults` override, deliberately. The
+    #: answer no longer turns on which body is drawn, and the override
+    #: existed only to keep the general shell's default deck out of
+    #: ``packed``, which draws two beds on their support grids in its
+    #: own artwork and would have come out with a third.
+    COMPOSITION = {"internals": None, "trays": DEFAULT_TRAYS}
 
     def __init__(self, name: str, n_feeds: int = 1, variant: str = "default",
                  internals: str | None = _UNSTATED, trays: int = DEFAULT_TRAYS,

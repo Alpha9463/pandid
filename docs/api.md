@@ -633,7 +633,7 @@ units.Mixer(name, n_inlets=2, variant="default", width=None, height=None,
             description="")
 units.Splitter(name, n_outlets=2, variant="default", width=None, height=None,
                description="")
-units.Column(name, n_feeds=1, variant="default", internals="tray", trays=8,
+units.Column(name, n_feeds=1, variant="default", internals=None, trays=8,
              width=None, height=None, label_pos=None, description="")
 units.Reactor(name, n_feeds=1, variant="default", agitator="agitator",
               internals=None, width=None, height=None, label_pos=None,
@@ -1540,15 +1540,20 @@ because `variant=` had already been spent.
 | keyword | names |
 |---|---|
 | `agitator=` | `agitator` (28.1, the general one and the default), `flat_blade`, `gate_paddle`, `cross_beam`, `anchor`, `helical`, `impeller`, `propeller`, `disc`, `turbine` |
-| `internals=` | `tray` (27.1, and a `Column`'s default), `baffle_tray`, `bubble_cap_tray`, `valve_tray`, `sieve_tray`, `filter_insert`, `fluidised_bed`, `packing` |
+| `internals=` | `tray` (27.1), `baffle_tray`, `bubble_cap_tray`, `valve_tray`, `sieve_tray`, `filter_insert`, `fluidised_bed`, `packing` |
 | `supports=` | `leg` (26.1), `bracket` (26.2), `skirt` (26.3), `ring` (26.4) |
 | `characteristic=` | `gravity` (29.1), `electrostatic` (29.2), `electromagnetic` (29.3) |
 
 **Not stated is not the same as stated empty.** A `Reactor` left alone is a
 stirred tank and gets item 28.1; one told `agitator=None` is a bare shell
-somebody asked for. The same goes for a `Column`, which is drawn with eight
-trays unless it is told otherwise — the count and the pitch ISO item 2.6 X8011
-draws.
+somebody asked for.
+
+A `Column` is the one class where the two spellings mean the same thing, and
+that is ISO's doing: item 2.1 X8100 is the general column and it carries no
+internal, while the tray tower is the separate item 2.2 X8101. So an
+unfurnished tower is drawn bare, and `internals=` is what furnishes it. It has
+to be — an absorber, a stripper and an adsorber all reach the sheet through
+this class, and none of them has decks.
 
 **Naming `internals=` leaves the agitator out.** A packed bed is not stirred, a
 fluidised bed is mixed by its own fluidisation and a trayed vessel is not a tank
