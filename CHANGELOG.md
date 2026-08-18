@@ -9,1045 +9,120 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`CoolingTower`**, a new kind, drawn induced draft (`default`) or forced
-  draft. It carries a water side and an air side, plus the `makeup` and
-  `blowdown` its basin is tapped for.
-
-- **`VenturiScrubber`** and **`GasHolder`**: the ninth separating vessel, and a
-  bell floating in a water seal. Both are piped like the drawings beside them.
-
-- **`Stream.tabulate`**, which segment of a run the stream table quotes. A run
-  drawn through a control valve carries two pressures under one number, and one
-  column can show one of them; mark the segment whose conditions the column
-  should report. Unmarked, the run reads in the order it is drawn, as before.
-
-- **`Conveyor(diameter=)`**, the second dimension: the roller a belt runs on,
-  or the casing bore a screw turns in. It is set independently of `length=`,
-  and the drawing is built to both, so the rollers are true circles at any
-  combination and the screw's flight keeps its pitch at any bore. It defaults
-  to the drawing's own — 20 for the belt, 30 for the screw — so nothing already
-  drawn moves.
-
-- **Four new examples**, drawn as what their equipment calls for: a jacketed
-  stirred reactor train (`17`), a fixed-bed reactor with recycle (`18`), an
-  absorber and its regenerator (`19`) and a two-bed molecular sieve dryer
-  (`20`). `18` and `20` draw the same ISO item 27.8 bed as a catalytic
-  converter and as an adsorber.
-
-- **An alumina refinery** (`21`): the Bayer process on one PFD, from bauxite
-  grinding through digestion, flashing, red mud settling and washing,
-  precipitation, classification and fluidised-bed calcination, with the spent
-  liquor returning to the mill. Twenty-eight items and fifty-five streams make
-  it the largest sheet in the gallery.
-
-- Screw conveyor and bucket elevator (straight and Z-form):
-  `Conveyor(variant="screw")`, `Elevator()`, `Elevator(variant="z_form")`.
-  The screw is sized by `length=` and `diameter=`, as the belt is.
-
-- **Crushers and mills.** ISO 10628-2 group 11, all eleven drawings the
-  standard tabulates, and the size-reduction end of a flowsheet that had no
-  symbol at all until now:
-
-  ```python
-  from pandid import Crusher, Mill, JawCrusher, HammerMill
-
-  Crusher("CR-101", variant="jaw")     # or JawCrusher("CR-101")
-  Mill("ML-201", variant="hammer")     # or HammerMill("ML-201")
-  ```
-
-  Two nozzles, `feed` and `discharge`, and the same two on every variant of
-  both: Table 2 draws one connection tick above the outline and one below it
-  on all twelve of the group's rows, so ore goes in the top and product falls
-  out of the bottom. They are `Conveyor`'s two names, because a crusher is fed
-  by a belt and discharges onto one. There is deliberately **no `drive`** — ISO
-  draws a motor in exactly one row of Table 2 (item 1.27, the stirred vessel),
-  and a drive nozzle here would be one pandid invented.
-
-  `Crusher` draws item 11.2 X8085 and `Mill` item 11.8 X8086: one trapezoid,
-  wide at the mouth and narrow at the throat, with the crusher's two full-depth
-  jaws or the mill's two chamfered top corners inside it. Both are marked
-  [must not be turned](docs/api.md#symbols-that-must-not-be-turned) for the
-  reason a hopper is.
-
-  The nine specific machines are that body **composed** with the ISO group-29
-  characteristic that says how it breaks the feed — artwork that already
-  shipped — so closing the group cost two drawings rather than eleven:
-  `JawCrusher` (11.5), `ConeCrusher` (11.7), `HammerCrusher` (11.3),
-  `ImpactCrusher` (11.4) and `RollerCrusher` (11.6); `HammerMill` (11.9),
-  `ImpactMill` (11.10), `RollerMill` (11.11) and `VibratingMill` (11.12).
-  A **ball or rod mill** is drawn as the plain `Mill`: the standard tabulates
-  neither.
-
-  Item 11.1 X8084, the general crushing/grinding machine, is deliberately not
-  drawn. It means "a crusher or a mill, unspecified", and an author who is
-  writing the tag knows which machine is on order.
-
-  `crusher/default` and `mill/default` are the first whole drawings in the
-  library to carry a `Symbol.iso_reg`, because they are the first drawn *from*
-  a Table 2 row rather than vendored and matched to one afterwards.
-
-  These are the eleven symbols draw.io has no stencil for; each exports as a
-  documented rectangle, with the composed mark still drawn as a child cell.
-
-- **A filter that makes a cake can now draw it.** A press separates a slurry
-  into two products, and until now only one of them had a nozzle — so the cake
-  had to be drawn as the filtrate, which is the sheet saying the solids leave
-  in the liquid line:
-
-  ```python
-  press = Filter("F-301", variant="press")
-  fs.connect(slurry.outlet,       press.port("inlet"))
-  fs.connect(wash_water.outlet,   press.port("wash_in"))    # new
-  fs.connect(press.port("outlet"), filtrate.inlet)
-  fs.connect(press.port("cake"),   cake_bin.inlet)          # new
-  ```
-
-  `wash_in` is the **displacement wash** that pushes mother liquor out of the
-  cake before it is discharged, which is standard practice on the four casings
-  that carry the pair: `press`, `belt`, `rotary` and `rotary_scraper`, reached
-  by name as `FilterPress` and `RotaryDrumFilter`.
-
-  The other five variants are unchanged and stay two nozzles. `default`,
-  `fixed_bed`, `gas`, `gas_fixed_bed` and `gas_belt` **clarify**: the solids
-  are held in the medium and come out when it is changed, backwashed or blown
-  down, which is not a line on the sheet.
-
-  **`ion_exchange` gets its own pair, not the wash.** A resin bed is restored by
-  running acid, caustic or brine through it, so `IonExchanger` takes
-  `regenerant_in` and returns `spent_regenerant` — the reagent carrying the
-  ions it has stripped. Naming that line a wash would put water on the line
-  list where the pipe has to be rubber-lined.
-
-  **No drawing moves.** The artwork is untouched; the four new anchors are
-  points on it that nothing was piped to before, and an unconnected nozzle is
-  not drawn. The wash comes down onto the cake from above and the cake leaves
-  through the floor on all four — a press discharges downward when the plates
-  part, a drum filter's sprays land on top of the drum, a belt filter washes
-  onto the cloth — and the ion exchanger's regenerant enters over its bed and
-  its spent regenerant leaves through the underdrain.
-
-  Both extra nozzles are **offered, not required**: `validate()` says nothing
-  about a press with no wash line, on the same rule that keeps it quiet about
-  an unpiped vent or relief.
-
-- **A reactor, a column, a vessel and a separator now say what is *inside*
-  them.** Four keywords, one per ISO 10628-2 part group, each naming a
-  supplementary symbol the standard tabulates:
-
-  ```python
-  Reactor("R-101", agitator="turbine")                    # ten group-28 stirrers
-  Reactor("R-201", internals="packing")                   # a packed bed
-  Column("T-101", internals="valve_tray", trays=30)       # eight group-27 internals
-  Vessel("D-301", supports="skirt")                       # four group-26 supports
-  Separator("V-201", characteristic="gravity")            # three group-29 marks
-  ```
-
-  `variant=` goes on choosing the **body**; these choose what is drawn in it,
-  and the two were previously the same word. That is why a `Reactor` could not
-  be jacketed *and* packed, and why a jacketed `Vessel` could not stand on
-  legs: `variant=` had already been spent. It is also what ISO does — its
-  group 2 is not a vocabulary of towers, it is one shell drawn eight times with
-  a different group-27 internal in it, so an absorber, a stripper, an adsorber
-  and a molecular sieve are one drawing told apart by its tag.
-
-  An agitator brings its motor and a `drive` nozzle on it; a reactor without
-  one has neither. Trays, supports and characteristics are marks no line
-  reaches and bring nothing.
-
-- **A stirred vessel is drawn with the motor that turns it.** ISO item 1.27
-  X8006 is one row and three marks — a dished-end vessel, a group-28 stirrer,
-  and item 20.6 C0082's electric motor above the top head on the stirrer's own
-  shaft — and pandid drew the first two. Now it draws all three:
-  `Reactor("R-101")` is a circle marked **M** over the crown, on a shaft
-  continuous from the motor's underside down to the blade.
-
-  **Always, and there is no keyword.** Group 1 has 29 rows, exactly one carries
-  an agitator, and it carries the motor too — so a stirred tank with nothing
-  turning it is not a symbol the standard has. pandid was already behaving as
-  though the motor existed: `drive` was justified in two docstrings by "ISO
-  draws the shaft running up to a motor above the vessel", and the motor was
-  not drawn.
-
-  The motor is item **20.6**, and ISO group 20 is DRIVES — whole machines, the
-  one thing `IsoPart` refuses to overlay. It is admitted by *item* rather than
-  by group, in `symbols.COMPOSED_APPARATUS`, and the licence is item 1.27
-  itself: the standard composes the motor onto the vessel and registers the
-  result, exactly as items 8.3, 8.6 and 8.8 license the three composed
-  separators. Group 20's other seven rows — a turbine, a gear, a generator —
-  are still refused, and so is the cyclone.
-
-  **Sheets with a stirred `Reactor` move.** The motor is drawn above the
-  vessel, so the drawing is about a third taller than the shell and every one
-  of the body's nozzles sits lower in the box. `drive` moves from the top of
-  the shaft to the top of the motor, which is now the top of the drawing;
-  examples 01, 05 and 10 are redrawn.
-
-- **A stirred reactor's `vent` is on the shell, not on the crown.** ISO item
-  1.27 draws a top head carrying nothing but the shaft, and pandid's geometry
-  agrees from the other side: a nozzle leaves by the box edge it is nearest, a
-  motor makes the box a third taller than the shell, and every point on the
-  crown of a vessel taller than it is wide is then nearer a side wall than the
-  top — so a vent left up there would take its stream out through the shell.
-  `reactor/default` moves it to the straight east wall just below the tangent
-  line and `reactor/jacketed` to the shell wall just above the jacket band.
-  Both are on drawn stroke, and both are stable under any later growth of the
-  box.
-
-- **`Reactor(variant="tubular")`, a plug-flow reactor**, and
-  `Reactor(variant="jacketed")`, the stirred tank inside a heating jacket that
-  is ISO item 1.27 X8006 itself. The tubular shell is original artwork — ISO
-  has no tubular-reactor symbol and neither has draw.io's P&ID set, so it is
-  built to item 3.7 reg 2514's construction, a shell with a serpentine tube in
-  it. **It has no `vent`**: a pipe with a bed in it has no vapour space, and a
-  nozzle nothing is ever routed to is a nozzle an author has to be told to
-  ignore.
-
-- **Three symbols that carry an ISO registration number.** Items 8.3 X8031,
-  8.6 X8125 and 8.8 X8126 are now built by composition rather than vendored —
-  one separating vessel carrying one group-29 characteristic each, which is
-  what the standard draws — and each records the number of the row it
-  reproduces in `Symbol.iso_reg`. They are the first three of the library's
-  160 drawings to claim one; the rest is a backfill of its own.
-
-- **draw.io exports a composition as a group of cells.** A composed symbol
-  names no stencil — a `shape=` names *one* drawing, so a stirred tank exported
-  under the vessel's own reference would come out a bare vessel with the thing
-  that made it a reactor silently gone. It is drawn as the body's cell with one
-  child cell per part, each at the same fraction of the body's box the sheet
-  uses, and the ten agitators name draw.io's own `mxgraph.pid.agitators`
-  shapes. `tests/test_drawio.py` holds both backends to drawing the same parts
-  in the same places.
-
-- **ISO 10628-2 group 29 is complete: all fourteen internal characteristics.**
-  The eleven the artwork below was missing — 29.4 disc, 29.5 crushing, 29.6
-  gear, 29.7 hammer, 29.8 impact, 29.9 jaw, 29.10 liquid/wet, 29.11 roller,
-  29.12 cone, 29.13 jet and 29.14 vibration — measured off Table 2 and drawn
-  the same way as the rest, on the 2,5 mm module grid and at the detail weight.
-
-  Eleven marks that say how a machine *crushes*, where the first three say how
-  a vessel *separates*, which is why Table 2 files all fourteen under one
-  heading. `python scripts/symbol_sheet.py --parts out.svg` draws the group.
-
-  **This adds artwork, not keywords, and moves no drawing.**
-  `Separator(characteristic=)` still names the three rows ISO itself composes
-  and gives a registration number to; the other eleven are available to compose
-  with and nothing composes them yet, because the bodies they belong in are
-  Table 1 group 11's crushing and grinding machines and pandid draws those from
-  whole stencils. Registering a part adds nothing to the symbol catalogue, so
-  no sheet, no golden and no gallery page changes.
-
-  One number is quoted as printed rather than repaired: 29.6's registration
-  number is **C024**, three digits where every sibling in the group has four.
-  That is what the standard prints.
-
-- **The ISO 10628-2 groups 26–29 artwork.** Thirty-six supplementary symbols,
-  in `pandid/render/iso_parts.py`: four supports (leg, bracket, skirt, ring),
-  all eight internals (tray, tray with baffle, bubble-cap, valve, sieve, filter
-  insert, fluidised bed, packing), all ten agitators, and all fourteen
-  characteristics, of which gravity, electrostatic and electromagnetic are the
-  three the standard is shown composing onto a separating vessel. Until now the
-  package had no agitator at all, which is why it could not draw a stirred
-  tank, and no tray, which is why it could not draw a distillation column.
-
-  Original drawings, built to the construction ISO states rather than traced
-  from its figures: measured off Table 2 in grid modules and re-drawn on
-  `iso_parts.M`, the same 2,5 mm module ISO 14617-1 §4.3 lays its own artwork
-  out on. Each part names the Table 2 row it claims to be, so the claim is
-  checkable; `tests/test_iso_parts.py` holds all thirty-six to it.
-
-  They are drawn at half the weight of an equipment outline, which is ISO
-  10628-1 §5.3.1's split between b) equipment symbols and c) the in-line detail
-  band, and is what makes a tray read as detail inside a shell rather than as a
-  second shell.
-
-  One correction to note. The agitator shafts are **solid**. Table 2 draws a
-  short thin stroke one module above each agitator, which reads as the top of a
-  dashed shaft; clause 5 says it marks a preferred connection and is expressly
-  no part of the graphical symbol, and every shaft under it is a single stroke.
-
-  `python scripts/symbol_sheet.py --parts out.svg` draws the set on its grid
-  for review, with every composition the library ships under it.
-
-- **A symbol can be composed from a body and ISO 10628-2's supplementary
-  parts.** Groups 1–25 of that standard's Table 1 name whole apparatus; groups
-  26–29 name the parts you overlay onto one — supports and manholes, trays and
-  packing, the ten agitators, and the characteristic that says what settles or
-  precipitates inside a body. Clause 5 makes composing from them a `shall` for
-  any symbol the standard does not tabulate, and every pandid symbol was an
-  atomic SVG string with no way to. `Symbol` now carries `overlays`, a part
-  registry sits beside the symbol registry, and `compose()` resolves the two
-  into one cached `Symbol` the renderer places exactly as it places any other.
-  A part is placed in *fractions* of the body's box, so it survives the body
-  being resized; a part whose shape carries meaning keeps its aspect and holds
-  the whole composition to its own; and a part drawn outside the body — ISO
-  item 1.27 hangs a drive motor above the top head — grows the box and moves
-  the body into it.
-
-  The artwork is the entry above and the keywords that ask for it are the
-  entry above that; between them they are what makes a reactor a stirred tank
-  and a column a tray column.
-
-  Two things go with it. A part must name the Table 2 row it claims to be —
-  subject group, item number and registration number — because composing is
-  only ever justified by the standard composing at that point, and a mark with
-  no registered number is not a supplementary symbol. `Symbol` gains an
-  optional `iso_reg` for the same traceability, left empty everywhere until
-  each drawing has been checked against the standard one at a time.
-
-- **`symbol-out-of-aspect`**, a `validate()` warning for a `width`/`height` of a
-  different shape from the symbol's own box, on a drawing that carries a round
-  mark. Today that is ISO item 20.6's drive motor on a stirred vessel: the
-  composition works its size out from the shell's box, so at any other shape it
-  is drawn as an oval. A shell with no round mark on it may still be any shape
-  the plant is. The message names the width that goes with the height you asked
-  for.
-
-- `boundary-flow-missing`: `validate()` reports a line running to or from a
-  `Feed` or a `Product` with no properties on it, on a sheet whose other
-  streams have theirs. ISO 10628-1:2014 §4.3.2 d) asks a PFD for the flow rates
-  of its ingoing and outgoing materials.
-
-- `Stream.at_boundary`, read-only: true when one end of a line is a `Feed` or a
-  `Product`.
+- Symbols can be composed from a body and ISO 10628-2's supplementary parts.
+  All 37 parts of groups 26–29 ship, plus item 20.6's drive motor.
+- `Reactor`, `Column`, `Vessel` and `Separator` say what is inside them:
+  `agitator=`, `internals=`, `trays=`, `supports=`, `characteristic=`.
+- `Reactor(variant="tubular")` draws a plug-flow reactor; `internals="packing"`
+  a packed bed, `internals="fluidised_bed"` a fluidised one.
+- `Crusher` and `Mill` for the jaw, cone, roller, hammer, impact and vibration
+  types. Closes #218.
+- `CoolingTower`, `VenturiScrubber`, `Elevator`, `Conveyor(variant="screw")`
+  and `tank/gas_holder`.
+- `Conveyor(diameter=)` sets the roller a belt runs on, or the bore a screw
+  turns in. `length=` is unchanged.
+- A cake-forming filter draws its cake and its wash: `wash_in` and `cake` on
+  `press`, `belt`, `rotary` and `rotary_scraper`; `regenerant_in` and
+  `spent_regenerant` on `ion_exchange`.
+- Five new examples: a stirred reactor train, a fixed-bed recycle loop, an
+  absorber–stripper pair, a molecular sieve dryer and an alumina refinery.
+- draw.io exports a composed symbol as a group of cells.
+- `Stream.at_boundary` is true when one end of a line is a `Feed` or a
+  `Product`. `Stream.tabulate` marks which segment of a run the stream table
+  reads.
+- Three new `validate()` findings: `symbol-out-of-aspect`,
+  `boundary-flow-missing` and `route-diagonal`.
 
 ### Changed
-- **`pin(x=…, y=…)` on a `Feed` or a `Product` places the flag's nozzle**, not
-  its frame corner. Add the offset the flag was drawn at to move one back —
-  `+50` in `x` for an unmirrored `Feed`, and half the flag's height in `y` for
-  either — or pass `port=None` to keep pinning the corner.
 
-- Comments and docs cite the standards rather than reproducing their text,
-  so no third-party clause ships in the package.
-
-
-- **The standards are cited, not quoted.** Every reproduced clause in the
-  package, its tests, docs and examples is now a paraphrase with the citation
-  kept. Nothing a sheet draws changes.
-
-- **The stream table draws only the columns that carry something.** A stream
-  with no properties on it loses its column, and a sheet with no properties
-  anywhere draws no table. A line to or from a `Feed` or a `Product` keeps its
-  column either way, and so does a property whose value is present and blank.
-  No shipped sheet changes.
-
-- **No example is written in a deprecated spelling any more, and one sheet
-  redraws for it.** The two that were: `examples/14_tank_farm.py`'s knock-out
-  drum V-604, and the thickener in `13_mineral_dewatering.py`'s golden fixture.
-
-  The thickener is a rename and nothing else — `Separator(characteristic=…)`
-  draws that body to the character, so `tests/golden/13_mineral_dewatering.svg`
-  does not move.
-
-  V-604 is a **redraw**, and deliberately: `Vessel(supports="leg")` composes
-  ISO item 1.16 X8002 — a dished-end vessel with two item 26.1 C2005 channel
-  legs under it — where `variant="legs"` reached draw.io's
-  `vessel_(dished_ends,_legs)` stencil. The drum keeps its five nozzles in the
-  same places and every line into it, and it gains a shell drawn to the
-  standard's construction with the legs open at the top where the vessel closes
-  them, at the detail weight rather than the outline's. Thirty lines of
-  `tests/golden/14_tank_farm.svg` move: V-604's symbol, its two nozzle stubs,
-  its two labels and the sheet's own fit scale, which shifts 0,15 % because the
-  drawing's bounds changed. Nothing else on the sheet does.
-
-  A deprecated spelling in an example is a recommendation, and this one had
-  until 0.2.0 to become a refusal. Moving it now is the sheet moving while
-  somebody is looking at it.
-
-- **`reactor/default` is a stirred tank drawn as a stirred tank.** It was
-  draw.io's "Mixing Reactor": a rectangle with a V bottom and the stirrer's
-  motor perched in a box outside the shell. It is now the same dished-end
-  cylinder the vessel, the flash drum and the column are cut from, with the
-  agitator on a shaft through the top head — ISO item 1.27 X8006's
-  construction, measured off Table 2. The old drawing is kept, under
-  `Reactor(variant="mixing")`, because it is still what some plants draw.
-
-- **`column/default` is drawn with trays.** The package held a hand-drawn tray
-  column that `_vendored_symbols.py` silently registered over with a plain
-  "Pressurized Vessel" capsule, so every distillation column pandid has ever
-  drawn came out as a bare drum with no internals at all — the dead code was
-  the more conformant of the two. A `Column` now composes eight ISO item 27.1
-  trays onto the shell, which is the count and the pitch ISO item 2.6 X8011
-  draws, at half the shell's line weight. `Column(internals=None)` is the bare
-  shell for anyone who wants it, and `column/packed` is unchanged: it draws its
-  beds in its own artwork.
-
-- **Seven golden sheets move**, and only where one of the above is on them:
-  `01_ammonia_loop` and `05_reactor_recycle` (a reactor), `03_distillation_train`,
-  `06_column_reflux` and `11_ethanol_pid` (a column), `10_ethanol_pfd` (both) and
-  `13_mineral_dewatering` (a gravity separator). Nothing else on any of them
-  changes.
-
-- **The example columns are the towers they are tagged as.** Six `Column()`
-  calls across five examples all drew the same generic deck, which is what a
-  reader copying one would carry into their own sheet. Each now names the
-  internal its service really has, with a line beside it saying why: `T-100`
-  "Light Ends Column" is `valve_tray` (clean, but it swings with the upstream
-  rate and a valve holds efficiency where a sieve deck weeps), `T-200` "Product
-  Column" is `sieve_tray` (base-loaded on a clean feed, so the turndown a valve
-  buys is never used), `T-701` "Main Fractionator" is `baffle_tray` (a shed
-  deck has no perforation to plug in a coking service), and the ethanol `T-301`
-  "Beer Column" is `sieve_tray` on both the PFD and the P&ID (yeast and grain
-  solids, so nothing that can settle or seize). `D-801` "Degasser Tower" stays
-  `variant="packed"`: a CO2 stripper wants area and pressure drop rather than a
-  deck, and that body draws its own beds.
-
-  The drawn counts are 10 to 18 rather than the real tray count of any of them,
-  for the reason `DEFAULT_TRAYS` gives: a forty-tray column is not drawn with
-  forty lines on any sheet, and past about twenty a deck stops reading as a
-  deck. Four golden sheets and four gallery sheets move, along with the two
-  `.drawio` samples that carry one of these columns.
-
-- **A supplementary part stretches with the body it is drawn in**, where the
-  agitators and the characteristics had been declared unstretchable. That flag
-  does not mean "draw this part carefully": it letterboxes the part on its
-  rectangle *and* makes the whole composed symbol unstretchable. The first
-  lifted a stirred tank's `drive` eight units clear of the head it comes
-  through; the second would have centred a reactor in the box its author asked
-  for while every stencilled neighbour beside it filled one. draw.io's own ten
-  agitator stencils — the same ten ISO items — are every one of them
-  `aspect="variable"`.
-
-  For the same reason no part declares `directional`. That flag holds the
-  artwork still under a flip and moves only the nozzles, which is sound only
-  where the artwork under the moved nozzle is the artwork that was under the
-  original: a settling arrow's body is a hopper, and held still under a
-  vertical flip its feed nozzle lands twenty units below the cone. What says a
-  settling chamber may not be turned is `gravity_fixed`, which is ISO 14617-1
-  §4.5's own word for it, and it is unchanged.
-
-- **`Overlay` can mirror a part.** Table 2 draws item 26.2's support bracket
-  and item 26.4's support ring against a wall on one side, and a vessel
-  standing on either wants a pair. A second registered part would have been a
-  second registration number for a symbol ISO numbers once.
-
-- **`layout()` on a sheet that stacks is four times faster.** The column-sharing
-  pass carries the contracted flow graph across its unions instead of rebuilding
-  it per stacked edge, and the row and coordinate passes index the neighbourhood
-  they ask about rather than re-reading the sheet. 800 blocks with a feed over
-  each fall from 0.84s to 0.19s, byte for byte the same drawing.
-  `scripts/layout_bench.py` prints the numbers.
-
-- **Routing a dense sheet is an order of magnitude faster.** The visibility
-  graph scanned every obstacle for every grid point and every candidate edge.
-  `examples/11_ethanol_pid.py` lays a 394x283 lane grid over 146 obstacles, so
-  that is 16 million rectangle tests before the search has started, and under a
-  profiler 99% of `route()` was spent building the graph rather than searching
-  it. The obstacles are now indexed against the lanes once — an interval per
-  row and per column — and every test is asked of only the few that can reach
-  the point or the segment in hand. `route()` on that sheet falls from 2.4s to
-  0.2s, and across all sixteen examples from 3.4s to 0.3s. It is the same graph
-  and the same search: every golden fixture and every gallery sheet is byte for
-  byte what it was. `scripts/route_bench.py` prints the numbers.
-
-- **Building a large sheet is no longer quadratic in its own size.** Stream
-  numbering runs on every `connect()`, because the name on the stream you are
-  handed back has to be the name that gets drawn — but it re-derived every name
-  on the sheet to do it, walking every unit to find the inline runs and every
-  stream to name them. That is linear work per connection and quadratic over a
-  build: 200 streams cost 0.02s of it and 1600 cost 1.17s, with 4.6s of a 4.7s
-  build inside numbering. `connect()` now names the line it just added.
-  Appending one leaves almost every name alone, and there are only three shapes
-  it can take: a run of its own, which becomes the last group; the next segment
-  of a run already drawn, which renames at most that run; or a join between two
-  runs, which really does renumber the sheet and says so. Every name still
-  comes out of the same call the full pass makes, so the two cannot drift, and
-  `renumber_streams()` re-derives everything as before. The connect loop over
-  1600 streams falls from 1.17s to 0.005s, and the cost of adding one line is
-  flat from 200 streams to 3200 instead of growing with the sheet. Byte for
-  byte the same drawing: every golden fixture and every gallery sheet is
-  unmoved. `scripts/renumber_bench.py` prints the numbers.
-
-- **Three comments in the routing and geometry layers describe the code under
-  them.** `find_path`'s docstring said a path "must arrive heading the
-  opposite direction" at the goal port, while the loop bans only arriving from
-  *behind* and the comment beside it sets out why entering from the side is
-  allowed: 53 of the 232 arrivals across the examples are the case the
-  docstring called impossible. `portgeom`'s module docstring claimed that every
-  function there takes a resolved box rather than reading `unit.frame` —
-  `port_faces`, `resolve_size` and `port_offset` all fall back to it — and that
-  everything there wraps `resolve_port`, where three do and the rest are its
-  peers. And `ink_box` returned early on a non-positive symbol box, a guard
-  that prevented nothing: its only caller divides by those two values the
-  moment it has the answer, so a zero raised `ZeroDivisionError` either way.
+- **`pin(x=…, y=…)` on a `Feed` or a `Product` places the nozzle, not the frame
+  corner.** Pass `port=None` for the old behaviour.
+- `reactor/default` is a stirred tank with its agitator inside the shell and its
+  motor above. The old drawing is `variant="mixing"`.
+- `column/default` is drawn with trays.
+- The stream table draws only the columns that carry something. A line to or
+  from the sheet edge keeps its column and is reported if it is empty.
+- The example columns carry the internals their service really has.
+- Comments and docs cite the standards rather than reproducing their text, so
+  no third-party clause ships in the package.
+- Routing a dense sheet is an order of magnitude faster; `layout()` on a sheet
+  that stacks is four times faster; building a large sheet is no longer
+  quadratic in its own size.
+- A supplementary part stretches with the body it is drawn in, and `Overlay`
+  can mirror one.
 
 ### Deprecated
 
-Seven `variant=` spellings that named a **part** rather than a body, each moved
-to the keyword that names the part. All work throughout 0.1.3 and are removed
-in 0.2.0.
+Each of these draws a **different** symbol from the spelling it replaces.
 
-- **`Reactor(variant="mixing")` → `Reactor(agitator="disc")`.** The seventh, and
-  the loosest fit of them, because `mixing` names a body as well as its
-  contents: draw.io's "Mixing Reactor" is a cone-bottomed rectangle with a
-  capsule perched on top for the motor and two flat plates for the impeller,
-  all of it drawn into the body artwork.
-
-  **Not equivalent, and redundant anyway.** ISO draws an agitated vessel
-  exactly once — item 1.27 X8006 — and it is the dished-end one. Group 1 has 29
-  rows; 1.8 to 1.11 are cone-bottomed and carry no agitator, 1.27 carries the
-  agitator and is dished, and nothing in the group is both. So this variant
-  reproduces no tabulated item. It also spends `variant=` on the contents on
-  the one row where that word is already contested: `Reactor._STIRRED` has to
-  exclude `mixing` precisely because its stirrer is in the artwork and a
-  composed one would make two, so a `mixing` reactor cannot take a stirrer of
-  its own, cannot be jacketed, and cannot hold a bed or trays.
-
-  The sharpest of it: **its drawn motor connects to nothing.** The agitator
-  resolves to `None`, so no `drive` nozzle is ever added, and the sheet shows a
-  driver an author cannot route power to. `Reactor(agitator="disc")` draws the
-  motor *and* the nozzle. `disc` rather than the bare default because `mixing`'s
-  two flat plates are nearest item 28.9 C2026.
-
-**Four of the seven redraw, and that is the point of them.** The keyword builds
-ISO's own composition — a vessel outline with a group-26 element under it, which
-is what items 1.16–1.19 are — where the `variant=` spelling reached a vendored
-draw.io stencil approximating the same equipment. So `Vessel(supports="leg")`,
-`Vessel(supports="skirt")` and `Reactor(internals="packing")` are the standard's
-drawing rather than the stencil's: a slightly wider shell, and the support or the
-bed drawn to ISO's construction at ISO 10628-1 §5.3.1 c)'s detail weight rather
-than at the outline's. Same equipment, same nozzles, a sheet that moves.
-`Reactor(agitator="disc")` is the fourth and goes further, since it replaces the
-body as well. The three `Separator(characteristic=…)` spellings are the other
-kind — the same drawing to the character, since that body was already composed.
-
-So a sheet on one of the four does move, and it moves when the author edits it
-rather than at 0.2.0. `examples/14_tank_farm.py` is the worked case: see the
-entry under **Changed**.
-
-**And the warning says so.** A deprecation is a promise that the sentence it
-prints is enough to act on, and "use X instead" pointing at a symbol that is
-not the old one is that promise broken silently: the release notes said the
-sheet moves, and the author reading the finding was told it was a rename.
-`Deprecation` takes a `note` for it, printed before the replacement so the
-sentence still ends on the line to type. An empty note is now a claim in its
-own right — it says the two spellings draw the same thing — and
-`tests/test_deprecation.py` puts every pair of drawings side by side and holds
-each declaration to whichever it is.
-
-- **`Vessel(variant="legs")` → `Vessel(supports="leg")`** and
-  **`Vessel(variant="skirted")` → `Vessel(supports="skirt")`.** ISO group 1
-  items 1.16–1.19 are a vessel outline plus a group-26 element, composed;
-  pandid vendored whichever two of the four the stencil set happened to ship,
-  which is why a bracket and a ring were unreachable. As a keyword it works on
-  every vessel variant, so a jacketed vessel can now stand on legs.
-
-  *The drawing changes.* The support is the same construction either way, but
-  the shell under it is not: the variants are 40 × 122.7 with the support in
-  the body artwork, and the keyword puts the ISO element under the 62 × 125
-  shell every other vessel keyword draws.
-
-- **`Reactor(variant="plain")` → `Reactor(internals="packing")`.**
-
-  *The drawing changes, and this is the one that was drawn wrong.* The variant
-  fills its bed with **one-way 45° hatching between two solid rules**. ISO
-  10628-2 item 27.8 X8141 — the only packed bed in group 27, and group 27 has
-  exactly eight items — is a **crossed X between two long-dashed rules**, which
-  is what `internals="packing"` draws. No item in the group is a hatch, so the
-  variant was a bed drawn with a mark that has no registration number, standing
-  next to the keyword that draws the one that has. The shell changes too, from
-  40 × 95.4 to the 62 × 100 `variant="default"` draws.
-
-- **`Separator(variant="gravity")`, `"electrostatic"` and `"electromagnetic"` →
-  `Separator(characteristic=…)`.** The three group-8 rows whose every mark is a
-  numbered group-29 part. These three **are** drop-ins: variant and keyword
-  resolve to byte-identical artwork under the same ISO registration number, so
-  they carry no note and no sheet moves.
-
-**`Separator(variant="cyclone")` is not deprecated and is not going.** ISO
-14617-1 §4.5 names X2618 by registration number as a symbol in its own right,
-and group 29 has no vortex to compose one from, so a hydrocyclone is a distinct
-drawing and `variant=` is the right way to ask for it. The same holds for the
-sifter, the impact separator, the permanent magnet and the wet scrubber.
+- `Reactor(variant="mixing")` → `Reactor(agitator="disc")`
+- `Reactor(variant="plain")` → `Reactor(internals="packing")`
+- `Vessel(variant="legs")` → `Vessel(supports="leg")`, `"skirted"` →
+  `supports="skirt"`
+- `Separator(variant="gravity")`, `"electrostatic"`, `"electromagnetic"` →
+  `characteristic=`. These three draw the same symbol as before.
 
 ### Removed
 
-**Breaking.** The six spellings 0.1.2 deprecated are gone in 0.1.3, which is
-the release each of their warnings named. Every replacement draws what the old
-spelling drew, so no sheet moves; what changes is that the old spelling now
-raises where it used to warn.
+**Breaking.** The six spellings 0.1.2 deprecated are gone.
 
-- **`add_instrument(on=…)`, and `on:` in a spec (#137).** Use `sensing=`,
-  `acting_on=` or `near=`; `on=` meant `sensing=`. The call raises
-  `TypeError`, and `on:` in a spec is an unknown key.
-
-- **`Instrument(variant="panel")` and `Instrument(variant="aux")` (#181).**
-  Use `display="central"` and `display="subsidiary"`. Both raise `ValueError`
-  naming the `display=` to write. Refused by name rather than left to the
-  registry, which still draws those two symbols under those two names.
-
-- **`Valve(variant="pneumatic")` (#136).** Use `Valve(variant="control")`, or
-  spell the pairing out as `Valve(variant="gate", actuator="diaphragm")`. No
-  `pneumatic` artwork is registered, so it is refused at render like any other
-  variant the registry has not got. `butterfly_pneumatic` is kept.
-
-- **`vapor` and `liquid` on a dust-collecting separator.** On
-  `Separator(variant="cyclone")`, `("gravity")` and `("electrostatic")`, use
-  `overflow` and `underflow`. Attribute access raises `AttributeError`;
-  `port()`, `nozzle()` and `pin(port=…)` raise `KeyError`; a spec file's
-  endpoint raises `SpecError`. Each names the nozzles the unit has. Nothing
-  changes for a drum or a scrubber, which keep `vapor` and `liquid`.
-
-`pandid.deprecation` and the `deprecated` finding stay: they are what the next
-retirement is declared with. Nothing is deprecated in this release.
-
-Two branches inside the router that could not change a drawing are gone as
-well. Neither is API and no sheet moves; both are recorded because the next
-reader would otherwise take them for working code.
-
-- **The A\* boundary penalty.** It charged 2000 for an edge running along an
-  obstacle's edge, and no such edge ever reached it: `Rect.intersects_segment`
-  bounds an obstacle inclusively, so a run exactly on `x_min` or `y_max`
-  counts as intersecting it and the visibility graph never builds the edge.
-  Counted over the whole corpus it fired 0 times in 815,416 axis-aligned
-  edges. Preferring a lane off the boundary means letting those edges exist
-  first, which is a change to `visibility.py`.
-
-- **The halved heuristic on recycle streams.** `h = h / 2.0` was there to
-  "explore the longer recycle lanes", but scaling an admissible heuristic
-  cannot change which path A\* returns — only how greedily it looks for it.
-  The recycle paths across the sixteen examples are identical without it, and
-  the search does 42% less work getting them (16,312 pushes against 23,137).
-  A real preference for the recycle lanes has to be a change to `cost`, as the
-  off-lane charge beside it is.
-
-Five declared names nothing read are gone too: `Pin.is_fixed_xy`, `Pin.has_grid`
-and `Route.lane` from `pandid.geometry`, and the draw.io exporter's `_CHAR_W`
-and `_LINE_H`. No sheet moves.
+- `add_instrument(on=…)` and `on:` in a spec → `sensing=`, `acting_on=` or
+  `near=` (#137)
+- `Instrument(variant="panel")` → `display="central"`; `"aux"` →
+  `display="subsidiary"` (#181)
+- `Valve(variant="pneumatic")` → `variant="control"` (#136)
+- `vapor` and `liquid` on a cyclone, gravity or electrostatic separator →
+  `overflow` and `underflow`
 
 ### Fixed
 
-- `layout()` draws the same sheet every time it is called. A balloon hung on a
-  signal between two other balloons moved on the second run.
-
-- A north satellite on a sheet carrying a pinned row stays above the unit it
-  feeds. It was taking the first free row instead, which is below it.
-
-- The L the router falls back to when the search finds nothing is now checked
-  against the obstacles: both corner orders are tried and the one crossing less
-  equipment is drawn.
-
-- **A spec read back carries its loop series on.** `from_dict` now sets the
-  loop counter past the highest number the file declares, so a frozen draft
-  continues its numbering instead of starting it again over numbers it has
-  already used.
-
-- A `label_pos` no side answers to is refused instead of silently drawn on
-  top. The sides that place are `top`, `bottom`, `left`, `right` and
-  `center`; anything else is a `label-pos-unknown` error.
-
-- **The standards `pandid` works to are stated**, in `README.md` and in
-  `docs/api.md`: ISO 10628-1 for the drawing rules, ISO 15519-1 and -2 for what
-  it leaves to them, and ANSI/ISA-5.1 for instrumentation.
-
-- ISO 15519-1 §7.1 is no longer cited as licence for the ISA balloon outlines
-  and signal-line styles. It covers reference designations, so it reaches the
-  tag letters and no further, and the outlines are now recorded as a declared
-  deviation. Nine clause citations in the comments are corrected to match.
-
-- Corpus counts in `docs/api.md` and `pandid/validate.py` are gone; the
-  prose states the rule and the tests measure the corpus.
-
-- **A stream-table column takes its values from the whole run**, not from its
-  first segment alone. A property written only on a later segment kept the
-  column, added its row and then drew a dash in it.
-
-- `pandid validate` takes `--diagram`, the same flag `pandid draw` has. It
-  judged every spec as a PFD, so it reported crowded arrowheads on a P&ID,
-  which draws none.
-
-- `pandid draw missing.yaml` reports the missing file and exits 1. Without
-  PyYAML installed it blamed the missing package and exited 3.
-
-
-- `examples/14_tank_farm.py` draws the signal from each of its three
-  transmitters to the indicator beside it. `near=` had placed LI-601, LI-602 and
-  PI-603 against LT-601, LT-602 and PT-603 and nothing was wired, so each pair
-  stood on the sheet with no line between them.
-
-- `examples/10_ethanol_pfd.py` and `examples/13_mineral_dewatering.py` now take
-  the cake off the filter's own `cake` nozzle instead of teeing it off the
-  filtrate downstream. Both sheets lose a tee.
-
-- `validate()` no longer reports `letter-sequence` against `ZSC`, the ISA
-  valve-position switch closed. The `C` that closes a position switch is a
-  modifier like the `H` in `LAH`, not the ISO control function.
-
-- **Four placements that read badly on the new sheets.** `LIC-305` on
-  `examples/18_fixed_bed_recycle.py` now hangs over the valve it strokes instead
-  of under the transmitter it reads, so neither of its signals crosses the crude
-  draw and its alarm lettering is off the line number. The four columns on
-  `examples/19_absorber_stripper.py` and `examples/20_molecular_sieve_dryer.py`
-  drop `label_pos="center"`, which was writing each tag across the vessel's own
-  trays or bed.
-
-- `TI-306` on `examples/18_fixed_bed_recycle.py` now reads off `R-301`'s top
-  face instead of its west one. West put the balloon on the feed line's own
-  elevation, and the feed had to bend around it to get past.
-
-- `validate()` reports a run drawn on the slant, under `route-diagonal`, and
-  names the corner that squares it up. One `via()` waypoint is enough to
-  produce one.
-
-- **Three stirred vessels sized to the wrong shape.** `M-301` on
-  `examples/10_ethanol_pfd.py` was drawn 80×100 on a symbol whose box is
-  62×131.8, which stretched its drive motor into a flat oval; `R-101` on
-  `examples/17_stirred_reactor_train.py` and `R-301` on
-  `examples/18_fixed_bed_recycle.py` were out of shape the same way. All three
-  now carry a box of the artwork's own proportions. `M-301`'s two make-up flags
-  also take their elevations from the nozzles they feed rather than from a
-  fraction of the box.
-
-- **Six things the render dropped without saying so.** A draw.io stand-in that
-  does not draw all of a symbol now reports what it lost
-  (`drawio-approximated`); a title-block cell the `.drawio` export had to
-  abbreviate says which field, as the SVG already did; a `kind` no symbol is
-  registered for is named rather than drawn as a blank box
-  (`symbol-kind-unknown`); a `Block` whose name is wider than the `width` it was
-  given says so (`label-overruns-symbol`); and
-  `equipment_list(include=["P-1O2"])` raises `ValueError` naming the tag instead
-  of dropping the row.
-
-- **`fs.warnings` describes the last render and nothing earlier.** It is emptied
-  at the start of every render, `check=False` included, so an empty list means
-  nothing was found rather than nothing was looked for. Copy it if you want two
-  renders' findings.
-
-- **`Instrument("FT101")` is now `FT-101`**, the same instrument
-  `Instrument("FT", 101)` and `Instrument("FT-101")` build. The un-hyphenated
-  spelling used to keep `FT101` as its name and tag.
-
-- **`Tee.branch_direction` is read off the branch nozzle** and can no longer be
-  assigned. It was documented read-only and was a plain attribute, so writing
-  it moved the word and left the nozzle where it was.
-
-- **The zone grid ran backwards.** `border="zone"` now letters A.. from the top
-  down and numbers 1.. from the left, ISO 5457 §4.4's direction, so zone A1 is
-  the top-left corner. It ran the other way on both axes, which put every
-  `location_reference(zone=...)` in the mirrored region of the sheet. Sheets
-  drawn with the border move: the labels change, no geometry does.
-
-- **Twelve filter and strainer symbols draw their dashed screen again.** The
-  stencil converter had been dropping the directive that says so; a directive
-  it does not handle now stops the conversion instead of vanishing.
-
-- **A composition that grows the box left its port series behind.**
-  `PortSeries` places its members in absolute coordinates along a face, and
-  `compose` carried it across untouched — so a part drawn *above* a body left a
-  stirred tank's charge nozzle at the middle of the box rather than the middle
-  of the shell, a fifth of the way down instead of half way. The series now
-  moves with the ink and its `extent` is re-expressed against the longer face.
-  Nothing had hit this: the supports are the only other parts that leave the
-  body's box, and they leave it downwards.
-
-- **A packed-bed reactor came out with a stirrer in the bed.**
-  `Reactor(internals="packing")` drew the crossed-X packed bed *and* the
-  default agitator, because the agitator's default was worked out from the
-  body alone and a dished-end shell is a stirred tank. So was
-  `internals="fluidised_bed"`, which is mixed by its own fluidisation, and
-  `internals="sieve_tray"`, which is a trayed vessel. None of the three is a
-  stirred tank, and all three were drawn with a shaft running down through
-  what it would have had to turn in.
-
-  Naming `internals=` now leaves out the agitator **default**, and only the
-  default: `Reactor(agitator="turbine", internals="packing")` is a stirred
-  slurry reactor and still draws both. The distinction is between an author
-  who said nothing and one who said something, which is what the constructor's
-  sentinel already recorded, so it is read rather than restated — and it is
-  read in `Unit.composition_defaults()`, where the serializer asks the same
-  question the constructor does. A spec written from a packed-bed reactor
-  therefore carries `internals` alone rather than `internals` plus a redundant
-  `agitator: null`, and reads back as the same drawing.
-
-  A `Column`, a `Vessel` and a `Separator` compose from one keyword each, so
-  none of them has a second part to be ruled out by and none of them changes.
-
-- **`GravitySeparator` and `ElectrostaticPrecipitator` scolded their authors
-  for a word they never wrote.** Both classes exist to spell one variant for
-  you — `VARIANT_ALIASES` maps `default` onto `gravity` and `electrostatic` —
-  and the guard that decides whether to warn read the variant *after* that
-  mapping. So `GravitySeparator("V-1")` reported
-  `Separator(variant='gravity') is deprecated … use
-  Separator(characteristic='gravity')`, about a variant the author had not
-  named, recommending they abandon the class they had picked for one that
-  draws the same symbol under different nozzle names.
-
-  A deprecation table is keyed by the spelling being *retired*, so the only
-  question it can answer is what the author typed. It now reads that.
-  `Separator(variant="gravity")` still warns, and so does the retired word
-  typed on the convenience class; what has stopped is the package inventing it.
-  The same correction goes on `Vessel`'s and `Reactor`'s guards, which read the
-  resolved spelling for the same wrong reason and are a no-op today only
-  because nothing aliases into a retired support yet.
-
-  `examples/13_mineral_dewatering.py` was one of the two examples emitting a
-  deprecation warning, and it emits none now without a line of it changing.
-
-- **The spec format could not express a composed unit, and quietly downgraded
-  one.** The keywords above landed on four equipment classes without
-  `pandid/spec.py` learning them, so `to_dict()` wrote a skirted vessel as
-  `{kind, name}` and `from_dict()` read it back as a vessel standing on
-  nothing. Every one of them was lost: `Reactor(agitator="anchor")` came back
-  stirred by the general item 28.1, `Column(internals="sieve_tray", trays=18)`
-  came back as the eight generic decks a column draws when nobody says
-  otherwise, and `Column(internals=None)` — a bare shell asked for on purpose —
-  came back with those same eight in it.
-
-  The state was dropped on the way **out**, which is why nothing caught it: the
-  file and the flowsheet read back from it agreed exactly, and only the drawing
-  had changed. It is the failure the balloon round trip had, so it is closed the
-  same way — the keywords are now declared once, on the class that takes them,
-  as `Unit.COMPOSITION`, and both directions of the spec read that declaration
-  rather than a list of their own. `Unit.composition_defaults()` says what each
-  keyword means on a given body, and the constructors ask it too, so "a reactor
-  is a stirred tank unless it says otherwise" is one sentence rather than one in
-  the constructor and another in the serializer.
-
-  A stated `null` now survives as a statement: a body told `internals: null` is
-  drawn bare, where one that says nothing keeps the part its class draws. Only
-  what differs from that default is written, as everywhere else in the format,
-  so an ordinary reactor's entry is the entry it always was.
-
-  `Separator(characteristic=)` is written as itself and no longer as the
-  `variant=` it folds into. The fold is how the drawing is found, but the
-  variant spelling of it is deprecated and goes at 0.2.0 — so a sheet written
-  out and read back warned today and would have been refused then, without
-  anybody having edited it.
-
-  No golden fixture or gallery sheet moves: this is what a flowsheet is written
-  down as, and nothing about how one is drawn.
-
-- **A render validated the sheet after building it, so a sheet the validator
-  would refuse reached the engine anyway.** `to_svg()`, `to_drawio()` and
-  `render()` all documented validation as running first and all ran
-  `layout()`, then `route()`, then `validate()`. `pin(x=float("nan"))` is the
-  case that shows what that cost: `pin-not-finite` names the contradiction
-  exactly, and the same coordinate is one the router starts from and does not
-  come back from — so on the default `check=True` the render never returned
-  and the finding was made about a drawing nobody could obtain.
-
-  The checks now run in two halves. `validate.model_issues()` reads what the
-  author wrote down — `pin-not-finite`, `pin-out-of-bounds`, `gravity-turned`,
-  `letter-sequence`, `nozzle-unconnected`, `stream-name-reused`, `deprecated`
-  — and runs *before* any geometry; `validate.geometry_issues()` reads the
-  frames and routes and runs once they exist. An error from either half
-  raises, so a model error raises before a coordinate has been resolved.
-  Warnings from both land on `fs.warnings` together.
-
-  The split is an order and not a subset: `fs.validate()` still answers with
-  every finding, errors first, and `check=False` still skips all of them. Most
-  rules are geometric and could not move — an overlap needs two boxes — so
-  each was classified rather than the call relocated wholesale. `gravity-turned`
-  went with the model half because a quarter turn is intent: `Pin` is the only
-  thing that sets one and layout copies it onto the `Frame` unchanged. No
-  golden fixture or gallery sheet moves; this reorders checks and draws nothing
-  differently.
-
-- **Auto-numbering walked over the stream names an author had already
-  used.** A group named by hand consumed nothing from the number series, so on
-  a `stream_number_start=100` sheet `connect(..., name="S100")` followed by a
-  plain `connect()` numbered the second stream `S100` as well. The stream table
-  is one column per distinct name, so the two runs shared a column and one of
-  them was not tabulated at all, while both drew the same label — and nothing
-  said so. A named group now takes a place in the sequence rather than skipping
-  one, which also lines the series up with the sheet: the fourth run drawn is
-  the fourth number whether or not the three before it were named by hand. No
-  golden fixture or gallery sheet moves, none of the sixteen examples mixing
-  the two ways of naming.
-
-  Counting cannot close it completely, because a name is free text and
-  `name="S102"` on that same sheet still meets the third number the counter
-  reaches. `validate()` reports what is left as `stream-name-reused`, naming
-  the run that took the counted name and what to do about it. Only a name
-  *auto-numbering* chose is reported: a run drawn in several `connect()` calls
-  is one stream and is meant to carry one label — `examples/10_ethanol_pfd.py`
-  draws `S-305` over five of them and `examples/11_ethanol_pid.py` gives four
-  pairs of segments one line number each — and a duplicate an author typed
-  cannot be told from one they meant. A counted name can: nobody chose it, and
-  the counter's one promise is that it is free.
-
-- **A balloon nothing could place made `validate()` silent about the whole
-  sheet.** Instrument placement gives up when a pass places nothing — two
-  balloons attached to each other have a host chain with no end — and it gave
-  up without a word, leaving the balloons frameless. Geometric checks were
-  gated on *every* unit having a frame, so one such balloon skipped
-  unit-overlap, coincident-ports and nozzles-crowded for every other unit on
-  the sheet, and a drawing with overlapping equipment on it came back clean.
-  Placement now records what it could not place, `validate()` reports each as
-  an `instrument-unplaced` error naming the host it waits on, and the
-  geometric checks are made over the units that have a frame rather than all
-  or none.
-
-- **A primary element's balloon round-trips through a spec.** `to_dict()` wrote
-  a balloon's description, size, label position and quadrant lettering, and
-  `from_dict()` then refused every one of them as an unknown key: a sheet built
-  with `fs.add_balloon(fe, description="Venturi meter")` could be written to a
-  file that would not load. The reader now takes the same fields for a balloon
-  as it does for any other instrument, less the tag and the anchor, which
-  `balloon_of` already names.
-
-- **A balloon that was pinned stays where it was put.** The writer left the
-  balloon out of the pass that records placement, so `pin()` and `nozzle()` on
-  a balloon never reached the file. Because neither direction carried them, a
-  sheet read back from its own spec compared *equal* to it while the drawing
-  had moved. `new_line_number` on any instrument had the matching hole on the
-  read side, and is accepted now too.
-
-- **An edit made after a render reaches the next one.** `to_svg()`,
-  `to_drawio()` and `render()` decided whether to lay the sheet out by asking
-  whether any unit still lacked a frame, and that is true only before the very
-  first layout. So from the second render on, every change was drawn from the
-  first render's geometry and the file came out byte-identical — a `pin()`, an
-  `add()`, a `connect()`, a `nozzle()`, a new `width`, `variant` or
-  `label_pos`. A notebook, which draws through `_repr_svg_`, baked the
-  placement it happened to display first.
-
-  The flowsheet now records that its geometry is stale and re-runs whichever
-  stage is. A sheet nobody changed is still laid out and routed once and no
-  more, which is what the old guard was buying.
-
-- **`layout()` called by hand takes the routes with it.** A route is measured
-  against the frames, so replacing the frames left every run describing the
-  sheet it was routed for: `render → pin() → layout() → render` drew each line
-  from its current nozzle to the old path, as a diagonal. No shipped sheet
-  moves.
-
-- **A row pinned above the sheet crashed the coordinate pass.** `pin(row=-1)`
-  names the band over row 0, and the bands were built counting up from 0, so
-  the pin indexed a band that was never made and `layout()` raised
-  `KeyError: -1`. The bands now run from the first row the sheet names. Row 0
-  still anchors the top margin where nothing goes above it, so `pin(row=2)`
-  keeps the two empty bands it asks for.
-
-- **A pinned column dragged the rank feeding it off the page.** Slack removal
-  slid each rank to one short of its nearest successor, which is a move to the
-  *left* when that successor is pinned: `A → B → C` with `A.pin(col=3)` and
-  `C.pin(col=0)` put `B` in column −1, four columns behind the unit feeding it.
-  A rank now only moves right, which is the invariant the pass was written for.
-  Two pins with a longer chain between them than the gap they leave cannot both
-  be honoured, and the derived rank is the one that holds its ground.
-
-- **A column left of 0 switched crossing reduction off without saying so.** The
-  barycentre sweeps counted from column 0, so a sheet pinned to the left of it
-  had an empty range in both directions: all four passes ran over nothing and
-  the sheet came out in insertion order. The sweeps now run between the columns
-  that exist.
-
-- **Rebasing a stacked sheet overwrote the row the author pinned.** Where a
-  north or south connection lands a unit below row 0 and a pin fixes the bands,
-  the stacking constraint is dropped so the pin can stand. The loop that did it
-  walked every unit rather than the stacked ones, so a `pin(row=-1)` was itself
-  renumbered.
-
-- **A stream that jogs between its nozzles was dragged off one of them.** The
-  pass that separates parallel runs resolved a cluster one track per *stream*,
-  taking the first port-attached run's height as the whole stream's. A stream
-  whose two nozzles sit a few pixels apart contributes two port-attached runs
-  at two heights, so the second was pulled onto the first one's track: the jog
-  collapsed to a zero-length segment and the run that held the nozzle left it.
-  Each port-attached run now claims its own track. A run that is free to move
-  and whose own stream is pinned in the same cluster still joins that nozzle,
-  which is what un-doubles the line, so no shipped sheet moves. The pass also
-  works in runs now — a maximal chain of collinear segments — rather than in
-  single segments, so a line the simplifier kept in two pieces cannot be
-  offset into a diagonal.
-
-- **The separation pass could resolve two runs closer than its own minimum.**
-  It measured each run's track to the nearest pixel and then applied
-  `target - track` to the unrounded waypoint, so a run settled up to half a
-  pixel off the slot it was given: three runs placed on a 6px grid finished
-  5.2px apart, closer than the spacing the pass exists to enforce. Tracks are
-  the raw coordinate now, and candidate slots are compared at the spacing
-  exactly instead of with half a pixel of slack.
-
-- **Routing says why it left a stream undrawn.** Three paths out of the router
-  dropped a stream with no line and no word, and each leaves `stream.route`
-  None, which draws nothing and sends every later render back through routing.
-  A port with no owning unit was caught by an `assert` — stripped under
-  `python -O`, where it became an `AttributeError` naming none of this — and
-  now raises a `ValueError` naming the port. A unit with no frame and a port
-  with no anchor were skipped silently and now warn, naming the stream and
-  what is missing.
-
-- **The fallback route no longer leaves a zero-length segment behind.** When
-  the search finds no path at all, the router falls back to an L through the
-  two escape projections. Where those share a column the corner lands on top
-  of the first of them, and the simplifier keeps both — it never drops a
-  projection point — leaving a zero-length segment that the separation pass
-  then reads as a horizontal run on a track the stream does not occupy. The
-  fallback drops a point that repeats the one before it.
-
-- **A non-finite coordinate no longer hangs the render.** `pin(x=float("nan"))`
-  — or an infinity, or a non-finite width — made `to_svg()`, `to_drawio()` and
-  `render()` never return, on a sheet `validate()` was already reporting as
-  `pin-not-finite`. A\* terminates because `visited[state] <= g` settles each
-  state at most once, and that comparison is false for every NaN: nothing was
-  settled, every state re-expanded, and the queue's growing paths ate memory
-  until the process died. The router now refuses such a sheet before it builds
-  the visibility graph, with a `ValueError` naming the unit and the coordinate,
-  which is the last point either can be named.
-
-  Termination no longer rests on the numbers behaving, either. `find_path`
-  refuses a non-finite endpoint outright and will not expand more than
-  `MAX_EXPANSIONS_PER_NODE` states per graph node — eight, where the hardest of
-  323 real searches across the sixteen examples expands 0.85 — raising rather
-  than looping. A search that will not converge is a bug worth a traceback,
-  not a drawing that never arrives.
+- A non-finite coordinate no longer hangs the render.
+- A render checks the model before it builds any geometry, so a sheet the
+  validator would reject no longer reaches the router.
+- The spec can express a composed unit, and a spec read back carries its loop
+  series on.
+- A balloon round-trips through a spec with its placement and every field it
+  carries.
+- An edit made after a render reaches the next one, `layout()` called by hand
+  takes the routes with it, and `layout()` draws the same sheet every time.
+- Pins outside the first row or column are honoured: a row above the sheet no
+  longer crashes, a pinned column no longer drags its upstream off the page,
+  rebasing a stacked sheet no longer overwrites a pinned row, and a north
+  satellite stays above the unit it feeds.
+- A stream that jogs between its nozzles stays on both of them; the separation
+  pass no longer resolves two runs closer than its own minimum; and the
+  fallback route is checked against the obstacles before it is drawn.
+- The zone grid runs ISO 5457's way: letters down, numerals right.
+- Twelve filter and strainer symbols draw their dashed screen again, so the two
+  backends draw the same equipment.
+- A packed-bed reactor no longer comes out with a stirrer in the bed, and three
+  stirred vessels were drawn out of shape.
+- A stream-table column takes its values from the whole run.
+- `Instrument("FT101")` is named `FT-101`, so a spec that references it loads.
+- `Tee.branch_direction` is read off the branch nozzle rather than stored.
+- `GravitySeparator` and `ElectrostaticPrecipitator` no longer warn about a
+  variant their author never wrote, and `validate()` no longer reports
+  `letter-sequence` against `ZSC`.
+- A `label_pos` no side answers to is refused rather than silently drawn on top.
+- Auto-numbering no longer walks over a stream name an author already used.
+- A balloon layout could not place no longer makes `validate()` silent about
+  the rest of the sheet.
+- Six things the draw.io export dropped without saying so are now reported;
+  `fs.warnings` describes the last render and nothing earlier; and routing says
+  why it left a stream undrawn.
+- `pandid validate` takes `--diagram`, and `pandid draw missing.yaml` reports
+  the missing file rather than a missing package.
+- `examples/14_tank_farm.py` draws the signal from each transmitter to its
+  indicator. `examples/10` and `examples/13` take cake from the filter's `cake`
+  nozzle instead of teeing off the filtrate.
 
 ### Security
 
-- **The sdist now names what it must not ship.** `standards/`,
-  `professional_examples/`, `renders/`, `.venv/`, `test_diagram.svg`,
-  `skills-lock.json`, `uv.lock` and the agent scratch directories are excluded
-  by name in `pyproject.toml` rather than inherited from `.gitignore`.
-  `tests/test_packaging.py` builds an sdist from a tree with no `.gitignore` and
-  fails if a PDF comes out; the release workflow checks the real artifacts too.
-
-- **A spec file could put script into the sheet drawn from it.** `Stream.color`
-  and `Stream.dasharray` reached their SVG attributes unescaped, so
-  `color: 'black" onload="alert(1)'` in a `.yaml` closed the attribute and
-  opened an event handler on the `<path>` — and an SVG is opened in a browser.
-  Every string a user fills in now goes through one escaper
-  (`pandid.render.escape`) on its way into either document, attribute values
-  and text nodes alike: unit names, tags, descriptions, off-page references,
-  instrument letters, loop numbers, stream names and line-number components,
-  stream properties, every title-block and revision cell, and the title, rows,
-  headers and cells of every annotation, note, legend and table.
-
-  It also drops the characters XML has no spelling for. A `NUL` or a `BEL` in a
-  tag cannot be escaped into legality — XML 1.0 §2.2 admits tab, newline and
-  carriage return and nothing else below `U+0020`, numeric references included
-  — and one of them anywhere made the whole file unopenable, in both backends.
-  A control character has no glyph, so nothing a drawing could have shown is
-  lost by leaving it out.
-
-  `tests/test_escape.py` is the property, not a list of cases: twelve shapes of
-  hostile string through every field, on both backends, asserting each render
-  parses, carries no attribute the value invented, and leaves every `url(#…)`
-  and `href="#…"` pointing at an id that exists.
-
-- **An id built from a colour was not always an id.** The arrowhead marker was
-  named by pasting the colour into a string, so `color="rgb(1,2,3)"` minted
-  `arrow_rgb(1,2,3)` — a legal attribute value and not a legal XML name. A
-  browser drops the definition and draws the line with no arrowhead, while a
-  PDF export, which resolves the reference itself, still draws one: two files
-  disagreeing about the drawing, with nothing said. Marker ids and `<symbol>`
-  ids are now minted by one function that answers with a name whatever it is
-  given, and the `url(#…)` and `href="#…"` reaching them are written from the
-  same call, so a definition and its reference cannot disagree. Where
-  sanitising would be lossy a digest of the original is appended, so two
-  colours never land on one definition. `arrow_black` and `arrow_0a7` are
-  unchanged, and no golden or gallery sheet moves.
-
-- **A colour that is not a colour is now refused, not escaped.** Escaping
-  `black" onload="alert(1)` leaves a well-formed document whose `stroke` is a
-  string no renderer recognises — and an unrecognised paint is *ignored*, so
-  the line is drawn with no stroke at all and disappears off a drawing whose
-  whole job is to say what is connected to what. `Stream.color` and
-  `Stream.dasharray` are checked as they are set, against the shapes SVG writes
-  one in, and the `ValueError` names the field, the line and what to write
-  instead. The shape is what makes the value safe to put in an SVG attribute
-  and in a draw.io `style=` key; a misspelled keyword is a typo rather than an
-  injection and is left to `validate()`. See `pandid.streams.check_color`.
+- A spec file could put script into the sheet drawn from it. Every string a
+  user supplies is now escaped, and ids built from one are valid ids.
+- A colour that is not a colour is refused rather than escaped.
+- The sdist names the paths it must not ship rather than inheriting them from
+  `.gitignore`.
 
 ## [0.1.2] - 2026-08-05
 
