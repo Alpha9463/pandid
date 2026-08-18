@@ -2791,7 +2791,7 @@ def _fixed_bed_recycle() -> Flowsheet:
     fs.connect(lt305.sig_out, lic305.sig_in, kind="electric")
     fs.connect(lic305.sig_out, cv305.actuator, kind="pneumatic")
 
-    fs.add_instrument("TI", 306, sensing=rx, at="W", offset=60)
+    fs.add_instrument("TI", 306, sensing=rx, at="N", offset=60)
     tt307 = fs.add_instrument("TT", 307, sensing=rx, at="E", offset=60)
     fs.add_instrument("Z", 1, sensing=tt307, at="E", offset=44, variant="sis")
     fs.add_instrument("Z", 1, acting_on=xv307, at="N", offset=34, variant="sis")
