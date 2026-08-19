@@ -914,6 +914,18 @@ class Valve(_NormallyPositioned):
     :func:`pandid.document.legend` builds the box; nothing adds the
     entry for you.
 
+    ``variant="three_way"`` carries a third process nozzle, ``branch``,
+    where the symbol's own third leg lands. A three-way body both
+    diverts (one inlet, two outlets) and mixes (two inlets, one
+    outlet), so no direction is right for both jobs; ``branch`` is
+    declared ``"outlet"``, the switching/diverting service the drawing
+    is already described as -- the one a run is *switched between*, not
+    blended into. Reached by name through
+    :class:`~pandid.devices.ThreeWayValve`, or as
+    ``Valve(variant="three_way").port("branch")`` on the low-level
+    form, since it is not annotated here; see :class:`HeatExchanger`
+    for why.
+
     ``fail`` is a **different question**; see :attr:`fail`.
     """
 
@@ -922,8 +934,30 @@ class Valve(_NormallyPositioned):
     actuator: Port
 
     kind = "valve"
-    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process"),
+    # Empty because which nozzles a valve has depends on its variant, and
+    # Unit.__init__ reads PORTS before a variant is in hand. _VARIANT_PORTS
+    # below is the declaration; __init__ lays it down.
+    PORTS: list[tuple[str, str, str]] = []
+    #: Every variant but ``three_way``: the inlet, the outlet and the
+    #: actuator's signal terminal.
+    _BASE = [("inlet", "inlet", "process"), ("outlet", "outlet", "process"),
              ("actuator", "inlet", "signal")]
+    #: The nozzles each variant has, keyed by variant, defaulting to
+    #: :data:`_BASE`. Only ``three_way`` carries a fourth, ``branch``,
+    #: and it is not annotated as a bare ``branch: Port`` on the class
+    #: body the way ``inlet``/``outlet``/``actuator`` are: that would say
+    #: every valve has one and make a real mistake type-check clean,
+    #: which is why :class:`HeatExchanger` keeps ``bottoms`` off its own
+    #: base the same way.
+    _VARIANT_PORTS = {"three_way": [*_BASE, ("branch", "outlet", "process")]}
+
+    @classmethod
+    def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
+        """The nozzles a *variant* adds; none if the class declares any.
+
+        The same one line :meth:`HeatExchanger._variant_ports` is.
+        """
+        return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._BASE)
 
     def __init__(self, name: str, variant: str = "default", *,
                  actuator: str = "",
@@ -935,6 +969,9 @@ class Valve(_NormallyPositioned):
         super().__init__(name, variant=variant, width=width, height=height,
                          label_pos=label_pos, description=description,
                          reference=reference, normal_position=normal_position)
+        # ``self.variant`` rather than the argument; see HeatExchanger.
+        for spec in self._variant_ports(self.variant):
+            self._add_port(*spec)
         self._fail = ""
         self.fail = fail
 

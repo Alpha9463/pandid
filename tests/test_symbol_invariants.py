@@ -316,10 +316,23 @@ _KNOWN_GEOMETRY_GAPS = {
 # instrument tap, so the line stops at the symbol's outline instead of reaching
 # in to meet ink, and most stencils draw no operator there to meet. They answer
 # to the outline rule below instead; every port a pipe attaches to keeps this one.
+#
+# ``cls.PORTS`` alone misses a class like ``Valve``, whose base declares no
+# ports at all and lays each variant's down through ``_variant_ports`` instead
+# (the ``HeatExchanger`` pattern) -- so every variant the registry has is
+# asked too, the same union :func:`~scripts.gen_devices.ports_for` reads a
+# generated class's own nozzles from.
 _SIGNAL_PORTS = {
     (cls.kind, name)
     for cls in (getattr(units, n) for n in units.__all__)
-    for name, _, role in cls.PORTS
+    for name, _, role in [
+        *cls.PORTS,
+        *(
+            port
+            for variant in default_registry.variants(cls.kind)
+            for port in (cls._variant_ports(variant) if hasattr(cls, "_variant_ports") else [])
+        ),
+    ]
     if role == "signal"
 }
 
@@ -758,6 +771,52 @@ def _sized_unit(kind: str, variant: str, index: int, w: float, h: float):
             return cls("XX", index, display=display, width=w, height=h)
         return cls("XX", index, variant=variant, width=w, height=h)
     return cls(f"{kind}-{variant}-{index}", variant=variant, width=w, height=h)
+
+
+def _default_unit(kind: str, variant: str):
+    """One unit of ``(kind, variant)``, at its own natural size.
+
+    :func:`_sized_unit` minus the box: which ports a class declares does not
+    depend on the shape it is drawn at (``Conveyor`` even refuses one), so
+    nothing below needs a box, only the instrument's ``display=`` handling.
+    """
+    cls = _UNIT_BY_KIND[kind]
+    if kind == "instrument":
+        display = _RETIRED_DISPLAYS.get(variant)
+        if display is not None:
+            return cls("XX", 1, display=display)
+        return cls("XX", 1, variant=variant)
+    return cls(f"{kind}-{variant}-x", variant=variant)
+
+
+@pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
+def test_every_anchor_the_artwork_offers_a_modelled_port_can_reach(entry):
+    """The general shape of #388: an anchor the artwork draws and no port
+    reaches.
+
+    ``valve/three_way`` drew the ISO three-port mark's third leg and
+    anchored it, while ``Valve`` had no port for it: an author could put the
+    valve on a sheet and had nowhere to connect the third leg. That is a
+    claim every shipped drawing can be held to, not just this one -- a
+    symbol vendored later with an anchor its class does not model is the
+    same defect, caught here instead of on someone's sheet.
+
+    A port's own name is not always what the artwork anchors it under --
+    :class:`~pandid.units.Separator`'s four collectors still draw ``vapor``/
+    ``liquid`` under their renamed ``overflow``/``underflow`` -- so the
+    comparison goes through :meth:`~pandid.units.Unit._symbol_anchor`, the
+    same lookup the renderer and the router use to place a stream, rather
+    than comparing the port names directly.
+    """
+    (kind, variant), sym = entry
+    unit = _default_unit(kind, variant)
+    reachable = {unit._symbol_anchor(name) for name in unit.ports}
+    unreached = set(sym.ports) - reachable
+    it = "it" if len(unreached) == 1 else "them"
+    assert not unreached, (
+        f"{kind}/{variant} anchors {sorted(unreached)} in its artwork, and no "
+        f"port on {type(unit).__name__} reaches {it}"
+    )
 
 
 def _invert(m: Matrix) -> Matrix:

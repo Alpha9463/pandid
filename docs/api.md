@@ -518,7 +518,7 @@ from pandid import units
 sifter = units.Separator("SC-101", variant="sifter")
 ```
 
-`units.Kind(variant=…)` is the escape hatch. 131 of the 219 registered drawings
+`units.Kind(variant=…)` is the escape hatch. 130 of the 219 registered drawings
 get no class of their own, and this is how you reach them; see
 [Variants](#variants) for the list. Where a class exists, name it.
 
@@ -568,7 +568,7 @@ Each entry is `port` *(direction / role)*.
 | `Compressor` | `compressor` | `suction` *(in)*, `discharge` *(out)* |
 | `Blower` | `blower` | `suction` *(in)*, `discharge` *(out)* |
 | `Turbine` | `turbine` | `inlet` *(in)*, `outlet` *(out)* |
-| `Valve` | `valve` | `inlet` *(in)*, `outlet` *(out)*, `actuator` *(in/signal)* |
+| `Valve` | `valve` | `inlet` *(in)*, `outlet` *(out)*, `actuator` *(in/signal)*; `three_way` adds `branch` *(out)* |
 | `Vessel` | `vessel` | `inlet` *(in)*, `outlet` *(out)*, `vent` *(out/vapor)*, `relief` *(out)*, `drain` *(out/liquid)* |
 | `Tank` | `tank` | the same five as `Vessel` |
 | `Separator` | `separator` | `feed` *(in)*, `vapor` *(out/vapor)*, `liquid` *(out/liquid)* on the four variants whose draws really are phases — the drum (`default`, `horizontal`, `knockout`) and the wet `scrubber`. The other seven sort or collect rather than separating into phases, and name the two draws their artwork has: `feed` *(in/feed)*, `overflow` *(out)*, `underflow` *(out)*; see [Variants](#variants) |
@@ -819,7 +819,7 @@ sep.underflow            # the dust draw, and a Port a type checker can resolve
 ```
 
 `Kind(variant=…)` stays the low-level form, and is the only way to reach the
-131 drawings that get no class of their own. A class stores the
+130 drawings that get no class of their own. A class stores the
 **registry's** spelling of its variant and not its own, so `to_dict()` writes
 `variant: cyclone` rather than the class-local `default`, and the file reads
 back. [Variants](#variants) lists the drawings each class owns.
@@ -885,6 +885,7 @@ base has not, `-` one it drops. The bases are in the [Port table](#port-table).
 | `VibratingScreen` | `screening_device` | `ScreeningDevice` | |
 | `RotaryDrumScreen` | `screening_device` | `ScreeningDevice` | |
 | `ReelScreen` | `screening_device` | `ScreeningDevice` | |
+| `ThreeWayValve` | `valve` | `Valve` | `+branch` |
 | `ControlValve` | `valve` | `Valve` | |
 | `SolenoidValve` | `valve` | `Valve` | |
 | `ReliefValve` | `valve` | `Valve` | |
@@ -896,10 +897,10 @@ base has not, `-` one it drops. The bases are in the [Port table](#port-table).
 | `StirredTankReactor` | `reactor` | `Reactor` | |
 | `GasHolder` | `tank` | `Tank` | |
 
-Three of them do something the name does not say:
+Four of them do something the name does not say:
 
-- `KettleReboiler` adds `bottoms`, the draw at the weir end of the shell. It is
-  the only class in the library that adds a nozzle.
+- `KettleReboiler` adds `bottoms`, the draw at the weir end of the shell.
+- `ThreeWayValve` adds `branch`, the leg the run is switched between.
 - `CheckValve` drops `actuator`. The flow works it, so there is no operator for
   a signal to land on.
 - `Cyclone`, `GravitySeparator` and `ElectrostaticPrecipitator` collect *dust*,
@@ -1455,13 +1456,14 @@ first listed is what the class draws when it is built by name alone.
 | `RotaryDrumScreen` | `screening_device` | `rotating_drum` (as `default`) — ISO item 7.6 X8029 |
 | `ReelScreen` | `screening_device` | `basket_reel` (as `default`) — ISO item 7.7 X8030, drawn in a taller outline to hold the reel's own rollers |
 | `ScreeningDevice` | `screening_device` | `general` — ISO item 7.1 X8123, the bare outline with no mechanism drawn. Not `separator/sifter` (the `Screen` class above): measured against Table 2, that drawing is not one of ISO group 7's seven rows |
+| `ThreeWayValve` | `valve` | `three_way` (as `default`) — the ISO three-port mark, its third leg anchored as `branch` |
 | `ControlValve` | `valve` | `control` (as `default`), `butterfly_pneumatic` |
 | `SolenoidValve` | `valve` | `solenoid` (as `default`) |
 | `ReliefValve` | `valve` | `relief` (as `default`), `psv` |
 | `PressureRegulator` | `valve` | `regulator` (as `default`) |
 | `MotorOperatedValve` | `valve` | `motor` (as `default`) |
 | `CheckValve` | `valve` | `check` (as `default`) |
-| `Valve` | `valve` | bodies: `default` (gate), `gate`, `globe`, `ball`, `butterfly`, `needle`, `saunders`, `three_way`, `plug`, `pinch`, `angle`, `bleed`<br>with a drawn operator: `hydraulic`, `manual`, `knife`<br>which of them take a [`normal_position`](#normally-closed-valves) and which a [`fail`](#fail-position) are two different lists |
+| `Valve` | `valve` | bodies: `default` (gate), `gate`, `globe`, `ball`, `butterfly`, `needle`, `saunders`, `plug`, `pinch`, `angle`, `bleed`<br>with a drawn operator: `hydraulic`, `manual`, `knife`<br>which of them take a [`normal_position`](#normally-closed-valves) and which a [`fail`](#fail-position) are two different lists |
 | `SpectacleBlind` | `fitting` | `blind` (as `default`) |
 | `FlowElement` | `fitting` | `venturi` (as `default`), `flow_nozzle`, `coriolis`, `vortex`, `ultrasonic`, `turbine_meter`, `positive_displacement`, `v_cone`, `wedge`, `target`, `pitot`, `averaging_pitot` |
 | `Fitting` | `fitting` | `default` (flanged connection), `flange`, `strainer`, `strainer_cone`, `strainer_y`, `strainer_basket`, `strainer_duplex`, `orifice`, `rotameter`, `rupture_disc`, `sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `bellows`, `damper`, `spool`, `static_mixer` (ISO item 12.2 X2673), `rotary_mixer` (item 12.1 X2672), `mixing_path` (item 12.3 X8184), `hose`, `coupling`, `clamped_coupling`, `flame_arrestor`, `flame_arrestor_explosion_proof`, `flame_arrestor_detonation_proof`, `flame_arrestor_fire_resistant` |

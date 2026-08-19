@@ -578,13 +578,23 @@ DEVICES = {
 
     # --- Valves ------------------------------------------------------------
     #
-    # Six classes over twenty-three drawings, split on BEHAVIOUR rather than on
-    # body. A gate, a ball and a globe valve are three ways of building the same
-    # thing (a hand-operated block valve in a line) and the flowsheet cannot
-    # tell them apart; a control valve, a relief valve and a check valve are
-    # three different jobs, and the difference shows in what the unit may be
-    # declared to do. Body style stays a variant, which is what
+    # Seven classes over twenty-three drawings, split on BEHAVIOUR rather than
+    # on body. A gate, a ball and a globe valve are three ways of building the
+    # same thing (a hand-operated block valve in a line) and the flowsheet
+    # cannot tell them apart; a control valve, a relief valve and a check valve
+    # are three different jobs, and the difference shows in what the unit may
+    # be declared to do. Body style stays a variant, which is what
     # ``Valve(variant="ball")`` has always been.
+    #
+    # ``three_way`` earns its own class on the rule's explicit tie-breaker
+    # (the centrifuge entry above): a third connection is a different port
+    # set, not a body style, whichever words the drawing is described in.
+    ("valve", "three_way"): ("ThreeWayValve", """Three-way valve: a third leg the run is switched between.
+
+    The ISO three-port mark, with the third connection anchored as
+    ``branch`` -- see :class:`~pandid.units.Valve` for what it is
+    declared as and why.
+    """),
     ("valve", "control"): ("ControlValve", """Control valve: the final element a loop's output lands on.
 
     The valve a controller modulates. **ISO 15519-2 Table A.3** builds
@@ -973,7 +983,6 @@ STAYS_ON_BASE = {
     ("valve", "plug"): "body style",
     ("valve", "pinch"): "body style",
     ("valve", "knife"): "body style",
-    ("valve", "three_way"): "body style: a third connection the run is switched between",
     ("valve", "angle"): "body style: the seat turns the flow a quarter",
     ("valve", "bleed"): "body style: the small drain valve tapped off a header",
     ("valve", "manual"): "operator style: a handwheel drawn on the body",
