@@ -75,8 +75,11 @@ KIND_MAP = {
                              "actuator": ("N", 49.0)}),
     ("valve", "needle"):    ("valves", "Needle",            {"inlet": "W", "outlet": "E",
                              "actuator": ("N", 49.0)}),
+    # The third leg: the stencil's own "S" constraint, (0.5, 1) of the box --
+    # bottom centre, where the two bowties' crossing point hangs its branch
+    # (see _OFF_THE_RUN_BY_DESIGN["three_way"] in test_symbol_invariants.py).
     ("valve", "three_way"): ("valves", "Three-Way Valve",   {"inlet": "W", "outlet": "E",
-                             "actuator": ("N", 49.0)}),
+                             "actuator": ("N", 49.0), "branch": "S"}),
     # A PSV's centreline is taken by its own inlet and outlet; the pilot/solenoid
     # connection goes on the side of the spring bonnet instead.
     ("valve", "relief"):    ("valves", "Relief PRV",        {"inlet": "S", "outlet": "N",

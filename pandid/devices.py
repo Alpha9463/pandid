@@ -125,6 +125,7 @@ __all__ = [
     "VibratingScreen",
     "RotaryDrumScreen",
     "ReelScreen",
+    "ThreeWayValve",
     "ControlValve",
     "SolenoidValve",
     "ReliefValve",
@@ -1324,6 +1325,30 @@ class ReelScreen(ScreeningDevice):
     feed: Port
     oversize: Port
     undersize: Port
+
+
+class ThreeWayValve(Valve):
+    """Three-way valve: a third leg the run is switched between.
+
+    The ISO three-port mark, with the third connection anchored as
+    ``branch`` -- see :class:`~pandid.units.Valve` for what it is
+    declared as and why.
+    """
+
+    kind = "valve"
+    VARIANTS = ("default", "three_way")
+    VARIANT_ALIASES = {"default": "three_way"}
+    PORTS = [
+        ("inlet", "inlet", "process"),
+        ("outlet", "outlet", "process"),
+        ("actuator", "inlet", "signal"),
+        ("branch", "outlet", "process"),
+    ]
+
+    inlet: Port
+    outlet: Port
+    actuator: Port
+    branch: Port
 
 
 class ControlValve(Valve):

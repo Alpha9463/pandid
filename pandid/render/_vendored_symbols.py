@@ -75,7 +75,7 @@ def register_vendored(registry):
     registry.register('valve', Symbol(
         svg='<g id="sym_valve_three_way"><g transform="scale(0.25)"><path d="M 19.0 79.0 L 49.0 30.0 L 98.0 0.0 L 98.0 60.0 L 0.0 0.0 L 0.0 60.0 L 49.0 30.0 L 79.0 79.0 Z" fill="white" stroke="#111" stroke-width="8.0"/></g></g>',
         width=24.5, height=19.8,
-        ports={'inlet': (0.0, 7.6), 'outlet': (24.5, 7.6), 'actuator': (12.2, 0.0)},
+        ports={'inlet': (0.0, 7.6), 'outlet': (24.5, 7.6), 'actuator': (12.2, 0.0), 'branch': (12.2, 19.8)},
         drawio_shape='mxgraph.pid.valves.three-way_valve',
     ), 'three_way')
 
