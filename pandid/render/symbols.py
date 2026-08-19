@@ -208,11 +208,21 @@ class PortSeries:
             port_name.startswith(self.prefix)
             and port_name[len(self.prefix):].isdigit())
 
-    def placement(self, index: int, count: int,
-                  width: float, height: float) -> tuple[float, float]:
-        """Symbol-space coordinate of member ``index`` of ``count``."""
+    def placement(self, index: int, count: int, width: float, height: float,
+                  pin: float | None = None) -> tuple[float, float]:
+        """Symbol-space coordinate of member ``index`` of ``count``.
+
+        ``pin`` overrides the even spread for this one member: a fraction
+        of the face's own length, in place of whatever :func:`spread`
+        would have put there. It is how a unit that knows a specific
+        reason one member belongs somewhere else on the face says so --
+        :meth:`pandid.units.Unit._series_pin`, which :class:`Column`
+        overrides for ``feed_stages=`` -- without a second placement
+        mechanism standing next to this one.
+        """
         along = height if self.face in ("W", "E") else width
-        t = spread(index, count, along, self.pitch, self.extent, self.at)
+        t = (pin * along if pin is not None
+             else spread(index, count, along, self.pitch, self.extent, self.at))
         return _on_face(self.face, t, width, height)
 
     def reach(self, width: float, height: float) -> tuple[float, float, float]:

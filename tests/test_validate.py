@@ -124,6 +124,26 @@ def test_an_extractive_towers_feeds_get_nozzles_of_their_own():
     fs.to_svg()  # must not raise
 
 
+def test_two_feeds_pinned_to_the_same_stage_are_coincident():
+    """``feed_stages=`` is a placement rule like any other a
+    :class:`~pandid.render.symbols.PortSeries` resolves, so two feeds
+    asked for the same stage land on the same point and the existing
+    check catches it -- no code of its own is needed."""
+    fs = Flowsheet("same-stage")
+    col = fs.add(
+        U.Column("T-302", internals="valve_tray", trays=30, n_feeds=2, feed_stages=[12, 12])
+    )
+    for port in ("feed_1", "feed_2"):
+        feed = fs.add(U.Feed(port))
+        fs.connect(feed.outlet, col.ports[port])
+    fs.layout()
+    errors = [i for i in fs.validate() if i.severity == "error"]
+    assert [i.code for i in errors] == ["coincident-ports"]
+    assert "T-302.feed_1 and T-302.feed_2" in errors[0].message
+    with pytest.raises(ValueError, match="coincident-ports"):
+        fs.to_svg()
+
+
 def test_a_kettle_takes_its_bottoms_off_its_own_draw():
     """The draw is a nozzle of the reboiler's, so a tower can hand it the sump
     and take product back without an imaginary splitter in between."""

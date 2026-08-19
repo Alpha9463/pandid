@@ -279,6 +279,88 @@ def test_a_column_or_reactor_feed_count_round_trips():
     assert "n_feeds" not in written["R-1"]
 
 
+def test_a_columns_feed_stages_round_trip():
+    """The keyword the writer must not drop: unlike ``n_feeds``, nothing else
+    on the entry says where a feed landed, so a dropped ``feed_stages`` reads
+    back as the even spread and both sides of a dict comparison would agree
+    on a drawing that had moved."""
+    fs = Flowsheet.from_dict(
+        {
+            "name": "T",
+            "units": [
+                {
+                    "kind": "Column",
+                    "name": "T-101",
+                    "internals": "valve_tray",
+                    "trays": 30,
+                    "n_feeds": 2,
+                    "feed_stages": [12, 22],
+                },
+            ],
+        }
+    )
+    col = fs.units[0]
+    assert col.feed_stages == [12, 22]
+    written = fs.to_dict()["units"][0]
+    assert written["feed_stages"] == [12, 22]
+    assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
+    assert Flowsheet.from_dict(fs.to_dict()).to_svg() == fs.to_svg()
+
+
+def test_a_null_feed_stage_round_trips_as_null_not_as_absent():
+    """``feed_stages: [12, null]`` and no ``feed_stages`` at all are two
+    different requests -- one feed pinned and the other free, against
+    neither feed pinned -- and the writer has to be able to tell them apart
+    on the way back out."""
+    fs = Flowsheet.from_dict(
+        {
+            "name": "T",
+            "units": [
+                {
+                    "kind": "Column",
+                    "name": "T-101",
+                    "internals": "tray",
+                    "trays": 8,
+                    "n_feeds": 2,
+                    "feed_stages": [3, None],
+                },
+            ],
+        }
+    )
+    written = fs.to_dict()["units"][0]
+    assert written["feed_stages"] == [3, None]
+    assert Flowsheet.from_dict(fs.to_dict()).units[0].feed_stages == [3, None]
+
+
+def test_an_unstated_feed_stages_is_not_written_down():
+    col = units.Column("T-101", n_feeds=2)
+    fs = Flowsheet("T")
+    fs.add(col)
+    entry = fs.to_dict()["units"][0]
+    assert "feed_stages" not in entry
+
+
+def test_a_feed_stages_length_mismatch_is_refused_from_a_spec():
+    with pytest.raises(SpecError) as excinfo:
+        Flowsheet.from_dict(
+            {
+                "name": "T",
+                "units": [
+                    {"kind": "Column", "name": "T-1", "n_feeds": 2, "feed_stages": [5]},
+                ],
+            }
+        )
+    assert "feed_stages names 1" in str(excinfo.value)
+
+
+def test_feed_stages_on_a_kind_with_no_feed_family_is_rejected():
+    with pytest.raises(SpecError) as excinfo:
+        Flowsheet.from_dict(
+            {"name": "T", "units": [{"kind": "Pump", "name": "P-1", "feed_stages": [1]}]}
+        )
+    assert "only a Column takes 'feed_stages', not a Pump" in str(excinfo.value)
+
+
 @pytest.mark.parametrize("kind", ["Vessel", "Tank"])
 def test_a_vessels_relief_and_drain_need_no_key_of_their_own(kind):
     """The spec carries #222's nozzles by carrying nothing.

@@ -636,7 +636,8 @@ units.Mixer(name, n_inlets=2, variant="default", width=None, height=None,
 units.Splitter(name, n_outlets=2, variant="default", width=None, height=None,
                description="")
 units.Column(name, n_feeds=1, variant="default", internals=None, trays=8,
-             width=None, height=None, label_pos=None, description="")
+             feed_stages=None, width=None, height=None, label_pos=None,
+             description="")
 units.Reactor(name, n_feeds=1, variant="default", agitator="agitator",
               internals=None, width=None, height=None, label_pos=None,
               description="")
@@ -696,6 +697,23 @@ tower = units.Column("T-302", n_feeds=2, description="Extractive Column")
 fs.connect(solvent.outlet, tower.feed_1)   # solvent enters above...
 fs.connect(feed.outlet, tower.feed_2)      # ...the feed tray
 ```
+
+Where that spread lands is still arbitrary — it says nothing about *which*
+stage a feed actually enters on. `Column(feed_stages=)` says so, one entry per
+feed and in the same count `trays=` gives:
+
+```python
+units.Column("T-101", internals="valve_tray", trays=30,
+             n_feeds=2, feed_stages=[12, 22])
+```
+
+`feed_stages=[12, None]` pins only the first feed and leaves the second on the
+even spread. Naming a stage the column does not have (`feed_stages=[40]` on a
+30-tray column) is refused, naming the count; naming one at all on a column
+with no `internals=` is refused too, since there is no tray for a reader to
+count against. `internals="packing"` counts beds rather than decks, and a
+stage there lands *above* the bed it names, not through it — a packed tower's
+feed enters above the packing.
 
 ### The family as a sequence
 
@@ -3394,11 +3412,13 @@ which is what `to_dict()` writes for one. `name` (required) is the tag.
 Then `variant`, `description` (feeds the equipment list), `reference` (a boundary
 flag's off-page drawing), explicit `width`/`height`, `label_pos`, `new_line_number`
 (break the stream or line number at this inline item), `n_inlets` / `n_outlets`
-for `Mixer` / `Splitter`, `n_feeds` for `Column` / `Reactor`, `length` and
-`diameter` for `Conveyor`, `branch` (`outlet` / `inlet`) for `Tee`, `large_end`
-(`inlet` / `outlet`) for `Reducer`, `normal_position` (`open` / `closed`) for
-`Valve` and for `Fitting`'s `blind`, and `fail` (`open` / `closed` / `last` / `drift_open` /
-`drift_closed` / `indeterminate`) for an actuated `Valve`.
+for `Mixer` / `Splitter`, `n_feeds` for `Column` / `Reactor`, `feed_stages` (one
+stage per feed, `null` for a feed that keeps the even spread) for `Column`,
+`length` and `diameter` for `Conveyor`, `branch` (`outlet` / `inlet`) for `Tee`,
+`large_end` (`inlet` / `outlet`) for `Reducer`, `normal_position` (`open` /
+`closed`) for `Valve` and for `Fitting`'s `blind`, and `fail` (`open` / `closed` /
+`last` / `drift_open` / `drift_closed` / `indeterminate`) for an actuated
+`Valve`.
 
 [What a body carries](#what-a-body-carries) is stated by the same keywords the
 constructors take: `supports` for a `Vessel`, `agitator` and `internals` for a

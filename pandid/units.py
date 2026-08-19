@@ -620,6 +620,23 @@ class Unit:
         """
         return type(self).PORT_ANCHORS.get(port_name, port_name)
 
+    def _series_pin(self, port_name: str) -> float | None:
+        """Where this unit pins ``port_name`` along its
+        :class:`~pandid.render.symbols.PortSeries`' face, as a fraction of
+        that face -- or ``None`` to let the series spread it evenly with
+        its siblings, which is what every unit does by default.
+
+        :mod:`pandid.portgeom` asks through here before falling back to
+        :meth:`~pandid.render.symbols.PortSeries.placement`'s even spread,
+        so a unit that knows a *specific* reason one member of its family
+        belongs somewhere else on the face can say so without a second
+        placement mechanism standing next to the series. Nothing overrides
+        this but :class:`Column`, whose ``feed_stages=`` puts a feed on
+        the stage it actually enters rather than spreading it with the
+        rest.
+        """
+        return None
+
     def port(self, name: str) -> Port:
         if name in self.ports:
             return self.ports[name]
@@ -2922,6 +2939,53 @@ def _feed_names(n_feeds: int, owner: str) -> list[str]:
     return ["feed"] if n_feeds == 1 else [f"feed_{i}" for i in range(1, n_feeds + 1)]
 
 
+def _feed_stage_fractions(name: str, internals: str | None, trays: int,
+                          feed_stages: list[int | None] | None,
+                          feed_names: list[str]) -> dict[str, float]:
+    """Validate ``feed_stages`` against ``feed_names`` and turn it into a
+    fraction of the shell, per feed that named one.
+
+    ``None`` -- the default -- asks nothing of the shell: every feed keeps
+    :class:`~pandid.render.symbols.PortSeries`'s even spread, and a column
+    that names no stage is unchanged from the one 0.1.3 drew.
+
+    Given a list, its length has to match the feeds: one entry per feed,
+    in declaration order, so ``feed_stages[i]`` is never read against the
+    wrong nozzle. An entry may be ``None``: that one feed keeps the even
+    spread while its siblings pin to the stage they name, which is what
+    lets an author place the solvent and leave the main feed where it
+    always was.
+    """
+    if feed_stages is None:
+        return {}
+    if len(feed_stages) != len(feed_names):
+        raise ValueError(
+            f"{name} has {len(feed_names)} feed{'s' if len(feed_names) != 1 else ''} "
+            f"({', '.join(feed_names)}) but feed_stages names {len(feed_stages)}; "
+            f"give one entry per feed, in the same order, and null for a feed that "
+            f"keeps the even spread"
+        )
+    if internals is None:
+        if any(stage is not None for stage in feed_stages):
+            raise ValueError(
+                f"{name}: feed_stages names a stage, and this column draws no "
+                f"stages to put one on -- internals is None, so there is nothing on "
+                f"the shell for a reader to count against. Give internals= a deck or "
+                f"a bed, or drop feed_stages and let n_feeds spread the feeds evenly"
+            )
+        return {}
+    from pandid.render.iso_parts import stage_fraction
+    fractions = {}
+    for feed_name, stage in zip(feed_names, feed_stages):
+        if stage is None:
+            continue
+        try:
+            fractions[feed_name] = stage_fraction(internals, stage, trays)
+        except ValueError as e:
+            raise ValueError(f"{name}.{feed_name}: {e}") from None
+    return fractions
+
+
 #: ``plain`` draws a bed ISO does not draw. Its band is filled with
 #: **one-way 45-degree hatching** between two solid rules; ISO 10628-2
 #: item 27.8 X8141 -- the only packed bed in group 27, and group 27 has
@@ -3600,6 +3664,25 @@ class Column(Unit):
     molecular sieve are **not distinct drawings** and ISO gives them no
     symbols. Each is this shell carrying whichever internal it really
     contains, told apart by its tag.
+
+    Where a feed enters
+    -------------------
+    Left alone, ``n_feeds`` nozzles spread evenly down the shell -- a
+    placement with no process meaning. ``feed_stages=`` says which stage
+    each feed actually enters on, in the same count ``trays=`` gives::
+
+        Column("T-101", internals="valve_tray", trays=30,
+               n_feeds=2, feed_stages=[12, 22])
+
+    One entry per feed, in declaration order, top of the shell to bottom.
+    ``None`` in place of a stage leaves that one feed on the even spread,
+    so ``feed_stages=[12, None]`` pins the solvent and leaves the main
+    feed exactly where it always was. A stage is 1 at the top of the
+    shell to ``trays`` at the bottom -- the same numbering the tray count
+    itself is given in -- and a stage the column does not have is
+    refused, naming the count it does. Naming a stage on a column with
+    no ``internals=`` is refused too: there is nothing on the shell for a
+    reader to count against.
     """
 
     distillate: Port
@@ -3697,6 +3780,7 @@ class Column(Unit):
 
     def __init__(self, name: str, n_feeds: int = 1, variant: str = "default",
                  internals: str | None = _UNSTATED, trays: int = DEFAULT_TRAYS,
+                 feed_stages: list[int | None] | None = None,
                  width: float | None = None, height: float | None = None,
                  label_pos: str | None = None, description: str = "",
                  reference: str = ""):
@@ -3712,6 +3796,12 @@ class Column(Unit):
         _compose_onto(self, () if internals is None
                       else internals_overlays(internals, trays))
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
+        self.feed_stages = feed_stages
+        self._feed_stage_fractions = _feed_stage_fractions(
+            name, internals, trays, feed_stages, names)
+
+    def _series_pin(self, port_name: str) -> float | None:
+        return self._feed_stage_fractions.get(port_name)
 
 
 

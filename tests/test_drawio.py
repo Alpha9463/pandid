@@ -881,6 +881,33 @@ def test_a_connection_point_resolves_back_onto_its_nozzle(orientation, mirrored)
             )
 
 
+def test_a_feed_pinned_to_a_stage_resolves_to_the_same_point_in_both_backends():
+    """``feed_stages=`` moves a *series* member off its even spread by
+    overriding :meth:`~pandid.render.symbols.PortSeries.placement`, and the
+    export has to follow it there exactly as it follows every other fixed
+    placement -- see :func:`test_a_connection_point_resolves_back_onto_its_nozzle`,
+    which this is the same check made for a pinned series member rather than
+    a fixed nozzle."""
+    fs = Flowsheet("stage")
+    col = fs.add(
+        units.Column("T-101", internals="valve_tray", trays=30, n_feeds=2, feed_stages=[12, 22])
+    )
+    col.pin(x=400, y=200)
+    solvent = fs.add(units.Feed("Solvent")).pin(x=60, y=180)
+    feed = fs.add(units.Feed("Feed")).pin(x=60, y=240)
+    fs.connect(solvent.outlet, col.feed_1)
+    fs.connect(feed.outlet, col.feed_2)
+    fs.route()
+
+    cells = _cells(fs, check=False)
+    style = _style(cells["u0"])
+    for n, port_name in enumerate(("feed_1", "feed_2")):
+        entry = _style(cells[f"s{n}"])
+        landed = _drawio_connection_point(col, style, entry, "entry")
+        drawn = port_point(col, col.frame, port_name)
+        assert landed == pytest.approx(drawn, abs=0.01)
+
+
 # ---------------------------------------------------------------------------
 # What the style says about a placement.
 # ---------------------------------------------------------------------------

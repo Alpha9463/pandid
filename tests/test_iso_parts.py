@@ -491,3 +491,36 @@ def test_a_column_of_trays_is_n_overlays_and_not_a_count():
     out = compose(body(), [(o, deck) for o in overlays])
     assert len(out.overlays) == 12
     assert out.svg.count('id="part_27_baffle_tray"') == 0  # the wrapper is dropped
+
+
+# --- stage_fraction: where a feed asked for a stage actually lands ----------
+
+
+@pytest.mark.parametrize("count", [1, 8, 30])
+def test_a_decks_stage_lands_where_internals_overlays_centres_the_deck(count):
+    """``stage_fraction`` has to answer off the same two constants
+    ``internals_overlays`` lays the band out with, or a feed pinned to
+    stage 12 and the twelfth tray line itself can drift apart on the next
+    edit to either one."""
+    overlays = iso_parts.internals_overlays("tray", count)
+    for k in range(1, count + 1):
+        deck = overlays[k - 1]
+        assert iso_parts.stage_fraction("tray", k, count) == pytest.approx(deck.y + deck.h / 2)
+
+
+@pytest.mark.parametrize("count", [1, 2, 5])
+def test_a_beds_stage_lands_on_the_bed_internals_overlays_draws_above_it(count):
+    """A packed tower's feed enters above the packing, not through it, so
+    a bed's stage is the top edge of the very rectangle
+    ``internals_overlays`` draws the bed in -- not its centre."""
+    overlays = iso_parts.internals_overlays("packing", count)
+    for k in range(1, count + 1):
+        bed = overlays[k - 1]
+        assert iso_parts.stage_fraction("packing", k, count) == pytest.approx(bed.y)
+
+
+def test_a_stage_out_of_range_is_refused_naming_the_count():
+    with pytest.raises(ValueError, match=r"stage 0 is not on a column of 30"):
+        iso_parts.stage_fraction("tray", 0, 30)
+    with pytest.raises(ValueError, match=r"stage 31 is not on a column of 30"):
+        iso_parts.stage_fraction("tray", 31, 30)

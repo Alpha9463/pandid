@@ -967,6 +967,35 @@ def internals_overlays(name: str, count: int = 1, registry=None) -> tuple:
         for i in range(count))
 
 
+def stage_fraction(name: str, stage: int, count: int, registry=None) -> float:
+    """Where stage ``stage`` of ``count`` sits, as a fraction of the body's box.
+
+    The same reading :func:`internals_overlays` lays the internals band out
+    with, so a feed asked for stage ``k`` lands on the deck it names (or
+    above the bed it names) rather than somewhere close to it -- the two
+    read off the one pair of constants and cannot drift apart.
+
+    A **deck** stage is numbered top to bottom, 1 at the top, and lands on
+    the centre of its own pitch: the same point the tray line itself is
+    centred on.
+
+    A **bed** stage lands on the *top* of the bed it names, not through it
+    -- a packed tower's feed enters above the packing, where the liquid
+    distributor sits, and never through the middle of the bed itself.
+    """
+    if stage < 1 or stage > count:
+        raise ValueError(
+            f"stage {stage} is not on a column of {count}; a stage counts from 1 "
+            f"at the top to {count} at the bottom, the same count trays= gives"
+        )
+    part = _part(27, name, registry)
+    top, span = _INTERNALS_TOP, _INTERNALS_BOTTOM - _INTERNALS_TOP
+    step = span / count
+    if part.height <= DECK_H:
+        return top + (stage - 0.5) * step
+    return top + (stage - 1 + 0.1) * step
+
+
 #: How far below the body's box a support reaches, and how wide a leg is,
 #: as fractions of the body's box. A support is drawn *under* the vessel,
 #: so the rectangle starts just inside the bottom of the box and runs out
