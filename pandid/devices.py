@@ -47,6 +47,8 @@ import devices``, or take the names off the package, which re-exports
 them all.
 """
 
+from typing import TYPE_CHECKING, Any, Literal, overload
+
 from pandid.ports import Port
 from pandid.units import (
     Compressor,
@@ -1390,6 +1392,101 @@ class StirredTankReactor(Reactor):
     outlet: Port
     vent: Port
     duty: Port
+
+    if TYPE_CHECKING:
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
+                    *args: Any, **kwargs: Any) -> "StirredTankReactor1": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[2],
+                    *args: Any, **kwargs: Any) -> "StirredTankReactor2": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[3],
+                    *args: Any, **kwargs: Any) -> "StirredTankReactor3": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[4],
+                    *args: Any, **kwargs: Any) -> "StirredTankReactor4": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[5],
+                    *args: Any, **kwargs: Any) -> "StirredTankReactor5": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[6],
+                    *args: Any, **kwargs: Any) -> "StirredTankReactor6": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[7],
+                    *args: Any, **kwargs: Any) -> "StirredTankReactor7": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[8],
+                    *args: Any, **kwargs: Any) -> "StirredTankReactor8": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: int,
+                    *args: Any, **kwargs: Any) -> "StirredTankReactor": ...
+        def __new__(cls, name: str, n_feeds: int = 1,
+                    *args: Any, **kwargs: Any) -> "StirredTankReactor": ...
+
+
+if TYPE_CHECKING:
+
+    class StirredTankReactor1(StirredTankReactor):
+        pass
+
+    class StirredTankReactor2(StirredTankReactor):
+        feed_1: Port
+        feed_2: Port
+
+    class StirredTankReactor3(StirredTankReactor):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+
+    class StirredTankReactor4(StirredTankReactor):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+
+    class StirredTankReactor5(StirredTankReactor):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+
+    class StirredTankReactor6(StirredTankReactor):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+
+    class StirredTankReactor7(StirredTankReactor):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+
+    class StirredTankReactor8(StirredTankReactor):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+        feed_8: Port
 
 
 class GasHolder(Tank):
