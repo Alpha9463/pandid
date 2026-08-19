@@ -564,6 +564,7 @@ def register_vendored(registry):
         width=25.0, height=25.0,
         ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
         drawio_shape='mxgraph.pid.mixers.in-line_static_mixer',
+        iso_reg='X2673',
     ), 'static_mixer')
 
     # draw.io flow_sensors:Venturi (aspect=variable) -> fitting/venturi

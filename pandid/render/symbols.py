@@ -2837,6 +2837,466 @@ _Z_ELEVATOR = Symbol(
 )
 
 
+# ----------------------------------------------------------------
+# ISO 10628-2 Table 2 group 19 -- PROPORTIONERS, FEEDERS AND
+# DISTRIBUTION FACILITIES, and item 19.5 the spray nozzle.
+#
+# 19.1 and 19.2 share one 4 M circle, told apart by the mark inside it
+# -- the same shape of family group 9's centrifuges are. 19.3 and 19.4
+# are their own drawings; group 19 has no supplementary-symbol group
+# behind it (unlike group 11's crushers on group 29), so every mark
+# below is drawn straight into the body.
+# ----------------------------------------------------------------
+
+#: The circle 19.1 C2056 and 19.2 X8067 share, in drawing units: a 4 M
+#: circle, fed on the centre line above it and discharging below, each
+#: tick a module clear of the rim. Measured off both rows, which draw
+#: the same circle to the same radius.
+_FEEDER_CIRCLE = 40.0
+_FEEDER_CIRCLE_PORTS = {"feed": (20.0, 0.0), "discharge": (20.0, 40.0)}
+
+
+def _feeder_circle(name: str, reg: str, mark: str) -> Symbol:
+    """One group-19 circle body: the shared rim plus what tells it apart.
+
+    A hopper valve takes its feed from above and metres it out below,
+    and upside down it does neither -- ISO 15519-1 §11.4.2's exception,
+    the same claim :data:`_CRUSHER_OUTLINE` makes for group 11.
+    """
+    return Symbol(
+        svg=f'<g id="sym_feeder_{name}">'
+            f'<circle cx="20" cy="20" r="20" fill="white" stroke="#111" '
+            f'stroke-width="2"/>{mark}</g>',
+        width=_FEEDER_CIRCLE, height=_FEEDER_CIRCLE,
+        ports=dict(_FEEDER_CIRCLE_PORTS),
+        gravity_fixed=True,
+        iso_reg=reg,
+    )
+
+
+#: Item 19.1 C2056's own mark: a Z drawn as one stroke. Measured off the
+#: row: two 3,46 M bars at y 1 M and y 3 M, each inset 0,27 M from the
+#: circle's own wall, closed by the diagonal between their inner ends.
+_FEEDER_Z = (
+    '<path d="M 37.3 30 L 2.7 30 L 37.3 10 L 2.7 10" '
+    'fill="none" stroke="#111" stroke-width="2"/>'
+)
+
+#: Item 19.2 X8067's own mark: a six-spoke rotor -- the rotary valve's
+#: rotor, seen end-on. Measured off the row: a 0,3 M hub and six spokes
+#: 60 degrees apart, each running from the hub to the circle's own rim,
+#: so the rotor shares its radius with the body it is drawn in rather
+#: than stopping short of it.
+_FEEDER_HUB_R = 3.0
+_FEEDER_ROTOR_ANGLES = (0, 60, 120, 180, 240, 300)
+
+
+def _feeder_rotor(cx: float, cy: float, hub_r: float, rim_r: float) -> str:
+    ink = 'fill="none" stroke="#111" stroke-width="2"'
+    spokes = "".join(
+        f'<line x1="{cx + hub_r * math.cos(math.radians(a)):g}" '
+        f'y1="{cy + hub_r * math.sin(math.radians(a)):g}" '
+        f'x2="{cx + rim_r * math.cos(math.radians(a)):g}" '
+        f'y2="{cy + rim_r * math.sin(math.radians(a)):g}" {ink}/>'
+        for a in _FEEDER_ROTOR_ANGLES
+    )
+    return f'<circle cx="{cx:g}" cy="{cy:g}" r="{hub_r:g}" {ink}/>' + spokes
+
+
+_FEEDER_ROTOR_MARK = _feeder_rotor(20.0, 20.0, _FEEDER_HUB_R, 20.0)
+
+
+#: ISO item 19.3 C0074, the rotary table feeder, in drawing units.
+#:
+#: **Measured off the row:** a 5 M table (the flat bar every rotary
+#: table swings under) on the centre line, a shaft running the table
+#: down to the discharge 6 M below it, and the table's own rotation
+#: drawn as a flattened ellipse -- 5 M across and half that deep --
+#: astride the shaft two thirds of the way down. Table 2 breaks the
+#: ellipse where the rotation arrow sits and draws the arrow tangent to
+#: it; the break is not reproduced (see the module's provenance note),
+#: only the arrow is, at the ellipse's own east point where the tangent
+#: is vertical and needs no construction of its own.
+_FEEDER_TABLE_W = 50.0
+_FEEDER_TABLE_H = 60.0
+_FEEDER_TABLE = (
+    '<line x1="0" y1="0" x2="50" y2="0" fill="none" stroke="#111" stroke-width="2"/>'
+    '<line x1="25" y1="0" x2="25" y2="60" fill="none" stroke="#111" stroke-width="2"/>'
+    '<ellipse cx="25" cy="37.5" rx="25" ry="12.5" fill="none" stroke="#111" '
+    'stroke-width="2"/>'
+    # The rotation arrow: a 0,7 M tail up the ellipse's own tangent at
+    # its east point, closed by 29.1's own arrowhead proportions -- 1 M
+    # long and a little over half a module across.
+    '<line x1="50" y1="37.5" x2="50" y2="30.5" fill="none" stroke="#111" '
+    'stroke-width="2"/>'
+    '<polygon points="50,27.5 47.3,30.5 52.7,30.5" fill="#111" stroke="none"/>'
+)
+
+#: ISO item 19.4 C0035, the metering-type proportional feeder, in
+#: drawing units.
+#:
+#: **Measured off the row:** a beam 14,8 M long with a 2,2 M-radius pan
+#: hanging from each end and a triangle -- the balance's fulcrum --
+#: centred under it, apex on the beam and base 3 M below, 1,7 M either
+#: side of the centre line. The beam sits 0,3 M inside the box's own
+#: top edge rather than on it, which is not a measurement: a port drawn
+#: exactly on a corner of the box has no unique wall to leave through
+#: (:func:`pandid.portgeom.outward_dir` ties north against west there),
+#: so the whole drawing is held a third of a module clear of the top so
+#: ``inlet`` and ``outlet`` land unambiguously on the west and east
+#: walls.
+_METER_W = 148.0
+_METER_H = 33.0
+_METER_BEAM_Y = 3.0
+_METER_PAN_R = 22.0
+_METER = (
+    f'<line x1="0" y1="{_METER_BEAM_Y:g}" x2="{_METER_W:g}" y2="{_METER_BEAM_Y:g}" '
+    f'fill="none" stroke="#111" stroke-width="2"/>'
+    f'<path d="M 0 {_METER_BEAM_Y:g} A {_METER_PAN_R:g} {_METER_PAN_R:g} 0 0 1 '
+    f'{2 * _METER_PAN_R:g} {_METER_BEAM_Y:g}" fill="none" stroke="#111" stroke-width="2"/>'
+    f'<path d="M {_METER_W - 2 * _METER_PAN_R:g} {_METER_BEAM_Y:g} '
+    f'A {_METER_PAN_R:g} {_METER_PAN_R:g} 0 0 1 {_METER_W:g} {_METER_BEAM_Y:g}" '
+    f'fill="none" stroke="#111" stroke-width="2"/>'
+    f'<path d="M {_METER_W / 2:g} {_METER_BEAM_Y:g} L {_METER_W / 2 - 17:g} '
+    f'{_METER_BEAM_Y + 30:g} L {_METER_W / 2 + 17:g} {_METER_BEAM_Y + 30:g} Z" '
+    f'fill="none" stroke="#111" stroke-width="2"/>'
+)
+
+#: ISO item 19.5 2037, the spray nozzle: a three-pronged fan, 4 M across
+#: and 2 M deep, meeting at a point on the centre line of a header above
+#: it. Measured off the row: apex at (2 M, 0), legs to (0, 2 M), (2 M,
+#: 2 M) and (4 M, 2 M). Table 2 ticks the connection level with the apex
+#: on *both* sides -- the nozzle taps a header running through it rather
+#: than terminating a single pipe run -- so the header itself is drawn
+#: the width of the box, and ``inlet`` is offered on the west face and
+#: the east alike; see :class:`~pandid.units.SprayNozzle`.
+#:
+#: The port sits 0,1 M below the header rather than on it: at (0, 0) it
+#: is a corner of the box, where :func:`pandid.portgeom.outward_dir`
+#: cannot tell the west face from the north one (both are nearest by an
+#: equal margin) and resolves it to the wrong one. Held a tenth of a
+#: module clear, the same correction :data:`_METER_BEAM_Y` makes for
+#: item 19.4's beam.
+_SPRAY_W = 40.0
+_SPRAY_H = 20.0
+_SPRAY_PORT_Y = 1.0
+_SPRAY_NOZZLE = Symbol(
+    svg='<g id="sym_spray_nozzle">'
+        f'<line x1="0" y1="0" x2="{_SPRAY_W:g}" y2="0" fill="none" stroke="#111" '
+        f'stroke-width="2"/>'
+        '<path d="M 20 0 L 0 20 M 20 0 L 20 20 M 20 0 L 40 20" '
+        'fill="none" stroke="#111" stroke-width="2"/></g>',
+    width=_SPRAY_W, height=_SPRAY_H,
+    ports={"inlet": (0.0, _SPRAY_PORT_Y)},
+    port_faces={"inlet": {"E": (_SPRAY_W, _SPRAY_PORT_Y)}},
+    iso_reg="2037",
+)
+
+
+# ----------------------------------------------------------------
+# ISO 10628-2 Table 2 group 12 -- MIXERS/KNEADERS.
+#
+# 12.1, 12.2 and 12.3 are one box carrying one, two or three "N" mixing
+# elements -- the family the task brief calls out, and the reason
+# closing it cost one helper rather than three drawings. 12.2 already
+# ships as ``fitting/static_mixer``, vendored from draw.io; measured
+# against the row it is item 12.2 X2673 to within the rounding a hand
+# trace and an independent measurement always differ by, so it is
+# registered rather than redrawn -- see
+# ``pandid.render._vendored_symbols``. 12.4 the kneader draws a
+# different mark (a single wave, not a row of N's) and is its own
+# :class:`~pandid.units.Kneader`.
+# ----------------------------------------------------------------
+
+#: One "N" mixing element, 4 M wide, drawn in the 6 M-tall band every
+#: group-12 in-line mixer shares: a top stub from y 0,5 M to y 2,5 M, a
+#: diagonal down to the opposite corner, and a bottom stub from y 3,5 M
+#: to y 5,5 M. Measured off item 12.2 X2673 -- the vendored
+#: ``fitting/static_mixer`` draws one of these in a 6 M square -- and
+#: found unchanged, module for module, on 12.1 and 12.3.
+def _mix_element(x0: float) -> str:
+    ink = 'fill="none" stroke="#111" stroke-width="2"'
+    return (
+        f'<path d="M {x0:g} 5 L {x0:g} 25 M {x0:g} 5 L {x0 + 40:g} 55 '
+        f'M {x0 + 40:g} 35 L {x0 + 40:g} 55" {ink}/>'
+    )
+
+
+#: ISO item 12.1 X2672, the in-line rotary mixer, in drawing units.
+#:
+#: **Measured off the row:** a 12 M x 6 M box holding two mixing
+#: elements, inset 1 M from the west wall and 2 M from the east one,
+#: with the flow axis drawn as a stroke through the box's own
+#: mid-height rather than as a separate tick -- it is real ink on this
+#: row, one module wide of the west wall on that side and flush with
+#: the east one, which :data:`_MIXER_W` includes so the ``inlet``
+#: nozzle lands on the ink that actually reaches it.
+_MIXER_W = 130.0
+_MIXER_H = 60.0
+_MIXER_PORTS = {"inlet": (0.0, 30.0), "outlet": (_MIXER_W, 30.0)}
+_ROTARY_MIXER = Symbol(
+    svg='<g id="sym_fitting_rotary_mixer">'
+        '<path d="M 10 0 L 130 0 L 130 60 L 10 60 Z" '
+        'fill="white" stroke="#111" stroke-width="2"/>'
+        '<line x1="0" y1="30" x2="130" y2="30" fill="none" stroke="#111" '
+        'stroke-width="2"/>'
+        + _mix_element(20.0) + _mix_element(70.0)
+        + '</g>',
+    width=_MIXER_W, height=_MIXER_H,
+    ports=dict(_MIXER_PORTS),
+    iso_reg="X2672",
+)
+
+#: ISO item 12.3 X8184, the mixing path, in drawing units.
+#:
+#: **Measured off the row:** a 16 M x 6 M box holding three mixing
+#: elements evenly spaced -- 1 M margins and 1 M gaps around three 4 M
+#: elements, 1+4+1+4+1+4+1 = 16 -- with the usual west/east ticks at
+#: mid-height and no flow-axis stroke drawn through it, unlike 12.1.
+_PATH_W = 160.0
+_PATH_H = 60.0
+_MIXING_PATH = Symbol(
+    svg='<g id="sym_fitting_mixing_path">'
+        '<path d="M 0 0 L 160 0 L 160 60 L 0 60 Z" '
+        'fill="white" stroke="#111" stroke-width="2"/>'
+        + _mix_element(10.0) + _mix_element(60.0) + _mix_element(110.0)
+        + '</g>',
+    width=_PATH_W, height=_PATH_H,
+    ports={"inlet": (0.0, 30.0), "outlet": (_PATH_W, 30.0)},
+    iso_reg="X8184",
+)
+
+#: ISO item 12.4 X8134, the kneader, in drawing units.
+#:
+#: **Measured off the row:** a 10 M x 6 M casing with a single wave --
+#: the folding action of a kneader's blades -- crossing it on the
+#: centre line: up 1 M to a crest, down 2 M to a trough, back up 1 M to
+#: the centre line and out to the east wall. The west end pokes 1 M
+#: clear of the wall the way 12.1's flow axis does, which
+#: :data:`_KNEADER_W` includes for the same reason.
+_KNEADER_W = 110.0
+_KNEADER_H = 60.0
+_KNEADER_PORTS = {"inlet": (0.0, 30.0), "outlet": (_KNEADER_W, 30.0)}
+_KNEADER = Symbol(
+    svg='<g id="sym_kneader">'
+        '<path d="M 10 0 L 110 0 L 110 60 L 10 60 Z" '
+        'fill="white" stroke="#111" stroke-width="2"/>'
+        '<path d="M 0 30 L 20 30 L 40 20 L 70 40 L 100 30 L 110 30" '
+        'fill="none" stroke="#111" stroke-width="2"/></g>',
+    width=_KNEADER_W, height=_KNEADER_H,
+    ports=dict(_KNEADER_PORTS),
+    # A twin-shaft trough mixer: the shafts are driven from above and
+    # the trough holds its charge below them, the same asymmetry
+    # :data:`_CRUSHER_OUTLINE` is fixed for.
+    gravity_fixed=True,
+    iso_reg="X8134",
+)
+
+
+# ----------------------------------------------------------------
+# ISO 10628-2 Table 2 group 7 -- SCREENING DEVICES, SIEVES AND RAKES.
+#
+# One outline (:data:`_SCREEN_OUTLINE`), drawn six times with the mark
+# that tells each row apart -- the shape the task brief predicted: "one
+# screen box with different internal marks", the same pattern group 11's
+# crushers and group 9's centrifuges are in. Item 7.7's basket reel is
+# the exception: Table 2 draws it in a taller box to hold the reel's two
+# rollers, so it keeps its own outline (:data:`_REEL_OUTLINE`) rather
+# than sharing this one.
+#
+# Not ``separator/sifter``. That vendored drawing shares group 8's own
+# outline proportions (measured off item 8.3, a flat top over straight
+# sides over a point, 2:2:1) at group 8's own 8 M box rather than this
+# group's 6 M one, and its mark -- a mesh line near the *top* of the
+# vessel with two solid arrowheads -- is not the corner-to-corner
+# diagonal any of these seven rows draws. Close enough to read as a
+# screen at a glance, not close enough to be one of these rows; left
+# vendored and unregistered rather than mis-registered.
+# ----------------------------------------------------------------
+
+#: The outline every group-7 row but 7.7 shares, in drawing units: a
+#: 6 M x 6 M wall over a 3 M point, 6 M x 9 M overall. Measured off row
+#: 7.1: walls at x 0 and x 60, top edge at y 0, walls down to y 60, then
+#: (0,60) -> (30,90) -> (60,60) -- the same 2:2:1 proportion
+#: :data:`_SEPARATING_VESSEL` is built at, at this group's own smaller
+#: box rather than scaled from that one.
+_SCREEN_W, _SCREEN_H = 60.0, 90.0
+_SCREEN_OUTLINE = (
+    '<path d="M 0 0 L 60 0 L 60 60 L 30 90 L 0 60 Z" '
+    'fill="white" stroke="#111" stroke-width="2"/>'
+)
+
+#: The three nozzles every one of the six shared-outline rows anchors,
+#: measured off row 7.1: fed on the centre line above the top edge,
+#: retaining the oversize out of the east wall five sixths of the way
+#: down the wall run, and passing the undersize out of the apex below.
+#: :class:`~pandid.units.Screen` is the class that names them this way.
+_SCREEN_PORTS = {"feed": (30.0, 0.0), "oversize": (60.0, 50.0), "undersize": (30.0, 90.0)}
+
+#: ISO's own 2 M dash / 1 M gap, the pitch :data:`~pandid.render.iso_parts._DASH_LONG`
+#: draws group 27's decks at. Group 7 has no supplementary-symbol group
+#: of its own to hold this in, so it is repeated here rather than
+#: imported across a module boundary that runs the other way.
+_SCREEN_DASH = 'stroke-dasharray="20,10"'
+
+#: The corner-to-corner mesh diagonal every one of the six shared-outline
+#: rows draws across the wall square, item 7.1 X8123's own mark and
+#: 7.2 through 7.5's shared base. Measured off row 7.1: (0,0) to (60,60),
+#: dashed at the group-27 pitch above.
+_SCREEN_MESH = (
+    f'<line x1="0" y1="0" x2="60" y2="60" fill="none" stroke="#111" '
+    f'stroke-width="2" {_SCREEN_DASH}/>'
+)
+
+
+def _screen(name: str, reg: str, mark: str) -> Symbol:
+    """One group-7 body: the shared wall-and-point outline plus the mark
+    that tells its row from the other six sharing it.
+
+    A screen retains its oversize on a deck and drops the undersize
+    through it; upside down it does neither, the ISO 15519-1 §11.4.2
+    exception :data:`_SEPARATING_VESSEL` and :data:`_CRUSHER_OUTLINE`
+    are also fixed for.
+    """
+    return Symbol(
+        svg=f'<g id="sym_screen_{name}">{_SCREEN_OUTLINE}{mark}</g>',
+        width=_SCREEN_W, height=_SCREEN_H,
+        ports=dict(_SCREEN_PORTS),
+        gravity_fixed=True,
+        iso_reg=reg,
+    )
+
+
+#: cos 45 degrees, which is also sin 45: how far along each axis a
+#: perpendicular tick travels off the 45 degree mesh diagonal. Group 7
+#: has no supplementary-symbol group to hold this beside, so it is
+#: local here rather than imported across a module boundary that runs
+#: the other way; see :data:`~pandid.render.iso_parts._SQ2`.
+_SCREEN_SQ2 = math.sqrt(2) / 2
+
+
+def _rake_teeth(points: "tuple[float, ...]", half_len: float) -> str:
+    """Short ticks crossing :data:`_SCREEN_MESH` at right angles, at each
+    fraction of its length in *points*.
+
+    Item 7.2 X8026 draws three coarse teeth and 7.3 X8027 draws five
+    finer ones, both straddling the same 45 degree diagonal; the
+    perpendicular direction to a line rising at 45 degrees is another
+    line at 45 degrees, so each tooth is just the diagonal's own unit
+    step turned a quarter turn.
+    """
+    ink = 'fill="none" stroke="#111" stroke-width="2"'
+    out = []
+    for t in points:
+        x, y = 60 * t, 60 * t
+        dx = dy = half_len * _SCREEN_SQ2
+        out.append(f'<line x1="{x + dx:g}" y1="{y - dy:g}" x2="{x - dx:g}" '
+                    f'y2="{y + dy:g}" {ink}/>')
+    return "".join(out)
+
+
+#: Item 7.5 X2605's own addition to the mesh diagonal: a short double
+#: arrow beside it, the standard's idiom for oscillation
+#: (:data:`~pandid.render.iso_parts._DASH_LONG`'s sibling part, 29.14,
+#: draws the same pair of opposed arrowheads). Placed alongside the
+#: diagonal's own middle third rather than on it, so the mesh line
+#: underneath stays legible.
+def _screen_vibration() -> str:
+    """Two short arrows on tracks either side of the mesh diagonal,
+    pointing opposite ways along it -- item 29.14's own construction
+    (:data:`~pandid.render.iso_parts._DASH_LONG`'s neighbour part, the
+    vibration mark every group-11 mill may carry), turned to the
+    diagonal's own 45 degree line instead of drawn across a horizontal
+    one.
+
+    Built from the diagonal's own direction vector rather than from
+    coordinates picked to look right, so a track is parallel to the
+    mesh line by construction: ``along`` is the unit step down the
+    diagonal and ``across`` is that step turned a quarter turn.
+    """
+    along = (_SCREEN_SQ2, _SCREEN_SQ2)
+    across = (_SCREEN_SQ2, -_SCREEN_SQ2)
+    ink = 'fill="none" stroke="#111" stroke-width="2"'
+
+    def track(tail: "tuple[float, float]", tip: "tuple[float, float]") -> str:
+        # The shaft stops 6 units short of the tip and the arrowhead
+        # fills the rest, the same 4-to-1 split :data:`_FEEDER_TABLE`'s
+        # own arrow uses.
+        base = (tip[0] - 6 * along[0], tip[1] - 6 * along[1])
+        wing = 2.5
+        left = (base[0] + wing * across[0], base[1] + wing * across[1])
+        right = (base[0] - wing * across[0], base[1] - wing * across[1])
+        return (
+            f'<line x1="{tail[0]:g}" y1="{tail[1]:g}" x2="{base[0]:g}" '
+            f'y2="{base[1]:g}" {ink}/>'
+            f'<polygon points="{tip[0]:g},{tip[1]:g} {left[0]:g},{left[1]:g} '
+            f'{right[0]:g},{right[1]:g}" fill="#111" stroke="none"/>'
+        )
+
+    # Two tracks either side of the diagonal's own middle point (30, 30),
+    # offset 4 units of ``across`` and each 10 units of ``along`` long,
+    # pointing away from each other -- the standard's own idiom for
+    # oscillation.
+    o1 = (30 + 4 * across[0], 30 + 4 * across[1])
+    o2 = (30 - 4 * across[0], 30 - 4 * across[1])
+    return (
+        track((o1[0] - 5 * along[0], o1[1] - 5 * along[1]),
+              (o1[0] + 5 * along[0], o1[1] + 5 * along[1]))
+        + track((o2[0] + 5 * along[0], o2[1] + 5 * along[1]),
+                 (o2[0] - 5 * along[0], o2[1] - 5 * along[1]))
+    )
+
+
+_SCREEN_VIBRATION = _screen_vibration()
+
+#: Item 7.6 X8029's own mark: the rotating drum, drawn dashed because a
+#: rotating part is drawn hidden. Measured off the row: a 1,5 M-radius
+#: circle centred on the wall square, at (30, 45).
+_SCREEN_DRUM = (
+    '<circle cx="30" cy="45" r="15" fill="none" stroke="#111" stroke-width="2" '
+    + _SCREEN_DASH + "/>"
+)
+
+#: ISO item 7.7 X8030's own outline, in drawing units: an 8 M x 12 M
+#: wall over a 4 M point, 8 M x 16 M overall -- the same 2:2:1
+#: proportion the other six rows share, drawn at Table 2's own larger
+#: box for this row so the reel's two rollers fit inside the walls.
+_REEL_W, _REEL_H = 80.0, 160.0
+_REEL_OUTLINE = (
+    '<path d="M 0 0 L 80 0 L 80 120 L 40 160 L 0 120 Z" '
+    'fill="white" stroke="#111" stroke-width="2"/>'
+)
+
+#: 7.7's own ports: Table 2 ticks this row on the west and east walls,
+#: level with the top roller, rather than on the centre line above it --
+#: the reel is fed and discharges its oversize past the same roller the
+#: other six rows feed over the top edge. Measured off the row: both
+#: ticks at y 20, one module off the roller's own vertical span.
+_REEL_PORTS = {"feed": (0.0, 20.0), "oversize": (_REEL_W, 20.0), "undersize": (40.0, 160.0)}
+
+#: Item 7.7 X8030's own mark: two 1 M rollers 8 M apart on the centre
+#: line, joined by a pair of dashed rails one module off the centre
+#: line either side -- the wire basket strung between them. Measured
+#: off the row; the mesh's own bulge where it sags between the rollers
+#: is not reproduced.
+_REEL_MARK = (
+    '<circle cx="40" cy="20" r="10" fill="none" stroke="#111" stroke-width="2"/>'
+    '<circle cx="40" cy="100" r="10" fill="none" stroke="#111" stroke-width="2"/>'
+    '<line x1="30" y1="30" x2="30" y2="90" fill="none" stroke="#111" stroke-width="2" '
+    + _SCREEN_DASH + "/>"
+    '<line x1="50" y1="30" x2="50" y2="90" fill="none" stroke="#111" stroke-width="2" '
+    + _SCREEN_DASH + "/>"
+)
+
+_REEL_BODY = Symbol(
+    svg=f'<g id="sym_screen_basket_reel">{_REEL_OUTLINE}{_REEL_MARK}</g>',
+    width=_REEL_W, height=_REEL_H,
+    ports=dict(_REEL_PORTS),
+    gravity_fixed=True,
+    iso_reg="X8030",
+)
+
+
 class SymbolRegistry:
     def __init__(self):
         self._symbols: dict[tuple[str, str], Symbol] = {}
@@ -3572,6 +4032,9 @@ class SymbolRegistry:
         self._register_centrifuges()
         self._register_driers()
         self._register_cooling_towers()
+        self._register_feeders()
+        self._register_mixers()
+        self._register_screens()
 
     def _register_composed(self):
         """The three drawings ISO composes and gives a number of its own.
@@ -3897,6 +4360,124 @@ class SymbolRegistry:
                 width=_TOWER_W, height=_TOWER_H, ports=dict(_TOWER_PORTS),
                 gravity_fixed=True, iso_reg=reg,
             ), name)
+
+    def _register_feeders(self):
+        """ISO 10628-2 Table 2 group 19, all five rows of it: PROPORTIONERS,
+        FEEDERS AND DISTRIBUTION FACILITIES.
+
+        19.1 and 19.2 are one 4 M circle carrying one mark each -- the
+        pattern group 9's centrifuges are in, at group 19's own smaller
+        scale. 19.3 and 19.4 are their own drawings; group 19 has no
+        supplementary-symbol group behind it, so nothing here is an
+        :class:`~pandid.render.iso_parts.OverlayPart`. 19.5 is a
+        distribution fitting rather than a feeder and is registered
+        under its own kind.
+
+        ====  ======  ==============================================
+        item  reg     descriptor
+        ====  ======  ==============================================
+        19.1  C2056   Proportional feeder (general)
+        19.2  X8067   Proportional feeder, rotary valve type
+        19.3  C0074   Feeder, rotary table type
+        19.4  C0035   Proportional feeder, metering type
+        19.5  2037    Spray nozzle
+        ====  ======  ==============================================
+
+        :class:`~pandid.units.Feeder` is the class that draws the first
+        four; :class:`~pandid.units.SprayNozzle` draws the fifth.
+        """
+        self.register("feeder", _feeder_circle("general", "C2056", _FEEDER_Z), "general")
+        self.register(
+            "feeder", _feeder_circle("rotary_valve", "X8067", _FEEDER_ROTOR_MARK),
+            "rotary_valve")
+        self.register("feeder", Symbol(
+            svg=f'<g id="sym_feeder_rotary_table">{_FEEDER_TABLE}</g>',
+            width=_FEEDER_TABLE_W, height=_FEEDER_TABLE_H,
+            ports={"feed": (25.0, 0.0), "discharge": (25.0, 60.0)},
+            gravity_fixed=True, iso_reg="C0074",
+        ), "rotary_table")
+        self.register("feeder", Symbol(
+            svg=f'<g id="sym_feeder_metering">{_METER}</g>',
+            width=_METER_W, height=_METER_H,
+            ports={"feed": (0.0, _METER_BEAM_Y), "discharge": (_METER_W, _METER_BEAM_Y)},
+            gravity_fixed=True, iso_reg="C0035",
+        ), "metering")
+        self.register("spray_nozzle", _SPRAY_NOZZLE)
+
+    def _register_mixers(self):
+        """ISO 10628-2 Table 2 group 12, all four rows of it: MIXERS/
+        KNEADERS.
+
+        ====  ======  ==============================================
+        item  reg     descriptor
+        ====  ======  ==============================================
+        12.1  X2672   In-line rotary mixer
+        12.2  X2673   In-line static mixer
+        12.3  X8184   Mixing path
+        12.4  X8134   Kneader
+        ====  ======  ==============================================
+
+        12.2 is not registered here: it ships already, as
+        ``fitting/static_mixer`` in
+        :mod:`pandid.render._vendored_symbols`, and measured against the
+        row is item 12.2 to within the difference between a hand trace
+        and an independent measurement -- so it is given the number
+        there rather than redrawn here. 12.1 and 12.3 are
+        :class:`~pandid.units.Fitting` variants beside it, since all
+        three are in-line devices with nothing to distinguish them from
+        a strainer or a static mixer but what is drawn between the
+        ports. 12.4 the kneader is substantial process equipment with a
+        tag of its own, drawn under its own kind by
+        :class:`~pandid.units.Kneader`.
+        """
+        self.register("fitting", _ROTARY_MIXER, "rotary_mixer")
+        self.register("fitting", _MIXING_PATH, "mixing_path")
+        self.register("kneader", _KNEADER)
+
+    def _register_screens(self):
+        """ISO 10628-2 Table 2 group 7, all seven rows of it: SCREENING
+        DEVICES, SIEVES AND RAKES.
+
+        One outline (:data:`_SCREEN_OUTLINE`) drawn six times with the
+        mark that tells each row apart, plus 7.7's own larger outline
+        for the reel it holds -- exactly the shape the task brief
+        predicted, and the same pattern group 11's crushers and group
+        9's centrifuges are in. Group 7 has no supplementary-symbol
+        group behind it, so every mark below is drawn straight into the
+        body.
+
+        ====  ======  ==============================================
+        item  reg     descriptor
+        ====  ======  ==============================================
+        7.1   X8123   Screening device, sieve, strainer, general
+        7.2   X8026   coarse rake type
+        7.3   X8027   fine rake type
+        7.4   X8028   with coarse and fine screens
+        7.5   X2605   sieve, strainer, vibrating type
+        7.6   X8029   rotating drum type
+        7.7   X8030   basket reel type
+        ====  ======  ==============================================
+
+        Not ``separator/sifter``: see the module docstring above
+        :data:`_SCREEN_OUTLINE` for the measurement that rules it out.
+        """
+        self.register("screening_device", _screen("general", "X8123", _SCREEN_MESH), "general")
+        self.register("screening_device", _screen(
+            "coarse_rake", "X8026",
+            _SCREEN_MESH + _rake_teeth((0.4, 0.55, 0.7), 12.0)), "coarse_rake")
+        self.register("screening_device", _screen(
+            "fine_rake", "X8027",
+            _SCREEN_MESH + _rake_teeth((0.35, 0.45, 0.55, 0.65, 0.75), 7.0)), "fine_rake")
+        self.register("screening_device", _screen(
+            "coarse_and_fine", "X8028",
+            _SCREEN_MESH
+            + f'<line x1="20" y1="0" x2="60" y2="40" fill="none" stroke="#111" '
+              f'stroke-width="2" {_SCREEN_DASH}/>'), "coarse_and_fine")
+        self.register("screening_device", _screen(
+            "vibrating", "X2605", _SCREEN_MESH + _SCREEN_VIBRATION), "vibrating")
+        self.register("screening_device", _screen(
+            "rotating_drum", "X8029", _SCREEN_DRUM), "rotating_drum")
+        self.register("screening_device", _REEL_BODY, "basket_reel")
 
 
 default_registry = SymbolRegistry()

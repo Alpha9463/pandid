@@ -980,6 +980,285 @@ def test_group_5_fill_and_draught_marks_match_their_rows(variant, reg, has_dry, 
         assert f'<circle cx="40" cy="{has_fan:g}" r="10"' in sym.svg
 
 
+def test_the_group_19_circle_carries_its_own_mark():
+    """Items 19.1 C2056 and 19.2 X8067: one 4 M circle, told apart by the
+    Z or the six-spoke rotor drawn inside it.
+
+    Full ``svg`` equality, the way the group-9 test above holds the
+    centrifuges to their rows: a body this short is worth writing out
+    whole rather than substring-matched.
+    """
+    general = default_registry.get("feeder", "general")
+    assert general.svg == (
+        '<g id="sym_feeder_general">'
+        '<circle cx="20" cy="20" r="20" fill="white" stroke="#111" stroke-width="2"/>'
+        '<path d="M 37.3 30 L 2.7 30 L 37.3 10 L 2.7 10" fill="none" stroke="#111" '
+        'stroke-width="2"/></g>'
+    )
+    assert (general.width, general.height) == (40.0, 40.0)
+    assert general.ports == {"feed": (20.0, 0.0), "discharge": (20.0, 40.0)}
+    assert general.iso_reg == "C2056"
+    assert general.gravity_fixed
+
+    rotary_valve = default_registry.get("feeder", "rotary_valve")
+    assert '<circle cx="20" cy="20" r="20" fill="white"' in rotary_valve.svg
+    assert '<circle cx="20" cy="20" r="3" fill="none"' in rotary_valve.svg
+    # Six spokes, one every 60 degrees, hub to rim -- and the rim is the
+    # body's own wall (r 20), not a shorter reach of its own.
+    assert rotary_valve.svg.count("<line ") == 6
+    assert 'x1="23" y1="20" x2="40" y2="20"' in rotary_valve.svg
+    assert 'x1="17" y1="20" x2="0" y2="20"' in rotary_valve.svg
+    assert (rotary_valve.width, rotary_valve.height) == (40.0, 40.0)
+    assert rotary_valve.ports == general.ports
+    assert rotary_valve.iso_reg == "X8067"
+    assert rotary_valve.gravity_fixed
+
+
+def test_group_19s_other_two_feeders_match_their_rows():
+    """Items 19.3 C0074 (rotary table) and 19.4 C0035 (metering) are
+    their own drawings -- group 19 has no supplementary-symbol group
+    behind it, so nothing here is composed.
+    """
+    table = default_registry.get("feeder", "rotary_table")
+    assert table.svg == (
+        '<g id="sym_feeder_rotary_table">'
+        '<line x1="0" y1="0" x2="50" y2="0" fill="none" stroke="#111" stroke-width="2"/>'
+        '<line x1="25" y1="0" x2="25" y2="60" fill="none" stroke="#111" stroke-width="2"/>'
+        '<ellipse cx="25" cy="37.5" rx="25" ry="12.5" fill="none" stroke="#111" '
+        'stroke-width="2"/>'
+        '<line x1="50" y1="37.5" x2="50" y2="30.5" fill="none" stroke="#111" '
+        'stroke-width="2"/>'
+        '<polygon points="50,27.5 47.3,30.5 52.7,30.5" fill="#111" stroke="none"/></g>'
+    )
+    assert (table.width, table.height) == (50.0, 60.0)
+    assert table.ports == {"feed": (25.0, 0.0), "discharge": (25.0, 60.0)}
+    assert table.iso_reg == "C0074"
+    assert table.gravity_fixed
+
+    metering = default_registry.get("feeder", "metering")
+    assert metering.svg == (
+        '<g id="sym_feeder_metering">'
+        '<line x1="0" y1="3" x2="148" y2="3" fill="none" stroke="#111" stroke-width="2"/>'
+        '<path d="M 0 3 A 22 22 0 0 1 44 3" fill="none" stroke="#111" stroke-width="2"/>'
+        '<path d="M 104 3 A 22 22 0 0 1 148 3" fill="none" stroke="#111" '
+        'stroke-width="2"/>'
+        '<path d="M 74 3 L 57 33 L 91 33 Z" fill="none" stroke="#111" '
+        'stroke-width="2"/></g>'
+    )
+    assert (metering.width, metering.height) == (148.0, 33.0)
+    # Held a third of a module off the box's own top edge so the ports
+    # resolve to the west and east walls; see symbols._METER_BEAM_Y.
+    assert metering.ports == {"feed": (0.0, 3.0), "discharge": (148.0, 3.0)}
+    assert metering.iso_reg == "C0035"
+    assert metering.gravity_fixed
+
+
+def test_the_spray_nozzle_ticks_both_sides_of_its_apex():
+    """Item 19.5 2037: a three-pronged fan, ticked on the west and the
+    east alike -- the header runs through it rather than dead-ending on
+    it, which is why :class:`~pandid.units.SprayNozzle` gets one nozzle
+    offered on both faces.
+    """
+    sym = default_registry.get("spray_nozzle")
+    assert sym.svg == (
+        '<g id="sym_spray_nozzle">'
+        '<line x1="0" y1="0" x2="40" y2="0" fill="none" stroke="#111" '
+        'stroke-width="2"/>'
+        '<path d="M 20 0 L 0 20 M 20 0 L 20 20 M 20 0 L 40 20" fill="none" '
+        'stroke="#111" stroke-width="2"/></g>'
+    )
+    assert (sym.width, sym.height) == (40.0, 20.0)
+    # A tenth of a module clear of the header, not on it, so the port
+    # resolves to a wall rather than to the box's own corner; see
+    # symbols._SPRAY_PORT_Y.
+    assert sym.ports == {"inlet": (0.0, 1.0)}
+    assert sym.port_faces["inlet"] == {"W": (0.0, 1.0), "E": (40.0, 1.0)}
+    assert sym.iso_reg == "2037"
+    assert not sym.gravity_fixed
+
+
+def test_group_12s_in_line_mixers_are_one_element_repeated():
+    """Items 12.1 X2672 and 12.3 X8184 carry two and three of the "N"
+    mixing elements ``fitting/static_mixer`` (item 12.2 X2673) already
+    draws one of, at the same 4 M width and the same margins.
+    """
+    rotary = default_registry.get("fitting", "rotary_mixer")
+    assert rotary.svg == (
+        '<g id="sym_fitting_rotary_mixer">'
+        '<path d="M 10 0 L 130 0 L 130 60 L 10 60 Z" fill="white" stroke="#111" '
+        'stroke-width="2"/>'
+        '<line x1="0" y1="30" x2="130" y2="30" fill="none" stroke="#111" '
+        'stroke-width="2"/>'
+        '<path d="M 20 5 L 20 25 M 20 5 L 60 55 M 60 35 L 60 55" fill="none" '
+        'stroke="#111" stroke-width="2"/>'
+        '<path d="M 70 5 L 70 25 M 70 5 L 110 55 M 110 35 L 110 55" fill="none" '
+        'stroke="#111" stroke-width="2"/></g>'
+    )
+    assert (rotary.width, rotary.height) == (130.0, 60.0)
+    # The flow axis is real ink on this row, one module clear of the
+    # west wall; the box includes the poke so the port lands on it.
+    assert rotary.ports == {"inlet": (0.0, 30.0), "outlet": (130.0, 30.0)}
+    assert rotary.iso_reg == "X2672"
+
+    path = default_registry.get("fitting", "mixing_path")
+    assert path.svg == (
+        '<g id="sym_fitting_mixing_path">'
+        '<path d="M 0 0 L 160 0 L 160 60 L 0 60 Z" fill="white" stroke="#111" '
+        'stroke-width="2"/>'
+        '<path d="M 10 5 L 10 25 M 10 5 L 50 55 M 50 35 L 50 55" fill="none" '
+        'stroke="#111" stroke-width="2"/>'
+        '<path d="M 60 5 L 60 25 M 60 5 L 100 55 M 100 35 L 100 55" fill="none" '
+        'stroke="#111" stroke-width="2"/>'
+        '<path d="M 110 5 L 110 25 M 110 5 L 150 55 M 150 35 L 150 55" fill="none" '
+        'stroke="#111" stroke-width="2"/></g>'
+    )
+    assert (path.width, path.height) == (160.0, 60.0)
+    assert path.ports == {"inlet": (0.0, 30.0), "outlet": (160.0, 30.0)}
+    assert path.iso_reg == "X8184"
+
+    # 12.2 itself: shipped since 0.1.0 as a draw.io stencil, and given
+    # the number here rather than redrawn -- see
+    # ``pandid.render._vendored_symbols``.
+    static = default_registry.get("fitting", "static_mixer")
+    assert static.iso_reg == "X2673"
+    assert static.drawio_shape == "mxgraph.pid.mixers.in-line_static_mixer"
+
+
+def test_the_kneader_carries_its_own_row():
+    """Item 12.4 X8134: a single wave crossing the casing, not a row of
+    "N" elements -- the mark that tells it apart from the three drawings
+    above.
+    """
+    sym = default_registry.get("kneader")
+    assert sym.svg == (
+        '<g id="sym_kneader">'
+        '<path d="M 10 0 L 110 0 L 110 60 L 10 60 Z" fill="white" stroke="#111" '
+        'stroke-width="2"/>'
+        '<path d="M 0 30 L 20 30 L 40 20 L 70 40 L 100 30 L 110 30" fill="none" '
+        'stroke="#111" stroke-width="2"/></g>'
+    )
+    assert (sym.width, sym.height) == (110.0, 60.0)
+    assert sym.ports == {"inlet": (0.0, 30.0), "outlet": (110.0, 30.0)}
+    assert sym.iso_reg == "X8134"
+    assert sym.gravity_fixed
+
+
+def test_the_group_7_outline_is_the_row_table_2_draws():
+    """The wall-and-point outline six of the seven group-7 rows share:
+    a 6 M x 6 M wall over a 3 M point, 6 M x 9 M overall -- measured off
+    row 7.1, and the same 2:2:1 proportion :data:`_SEPARATING_VESSEL`
+    is built at, at this group's own smaller box.
+    """
+    general = default_registry.get("screening_device", "general")
+    assert general.svg == (
+        '<g id="sym_screen_general">'
+        '<path d="M 0 0 L 60 0 L 60 60 L 30 90 L 0 60 Z" fill="white" stroke="#111" '
+        'stroke-width="2"/>'
+        '<line x1="0" y1="0" x2="60" y2="60" fill="none" stroke="#111" '
+        'stroke-width="2" stroke-dasharray="20,10"/></g>'
+    )
+    assert (general.width, general.height) == (60.0, 90.0)
+    assert general.ports == {
+        "feed": (30.0, 0.0),
+        "oversize": (60.0, 50.0),
+        "undersize": (30.0, 90.0),
+    }
+    assert general.iso_reg == "X8123"
+    assert general.gravity_fixed
+
+
+@pytest.mark.parametrize(
+    "variant, reg, needle",
+    [
+        ("coarse_rake", "X8026", 'x1="32.4853" y1="15.5147" x2="15.5147" y2="32.4853"'),
+        ("fine_rake", "X8027", 'x1="25.9497" y1="16.0503" x2="16.0503" y2="25.9497"'),
+        (
+            "coarse_and_fine",
+            "X8028",
+            '<line x1="20" y1="0" x2="60" y2="40" fill="none" stroke="#111" '
+            'stroke-width="2" stroke-dasharray="20,10"/>',
+        ),
+        ("vibrating", "X2605", 'polygon points="36.364,30.7071'),
+        (
+            "rotating_drum",
+            "X8029",
+            '<circle cx="30" cy="45" r="15" fill="none" stroke="#111" stroke-width="2" '
+            'stroke-dasharray="20,10"/>',
+        ),
+    ],
+)
+def test_group_7_marks_match_their_rows(variant, reg, needle):
+    """Items 7.2 through 7.6, each the outline above plus the one mark
+    that tells it from the other five: three coarse rake teeth, five
+    finer ones, a second parallel mesh line, a double arrow beside the
+    diagonal, or the drum drawn dashed.
+
+    7.6's drum replaces the corner-to-corner diagonal rather than
+    joining it -- Table 2 draws no mesh line on that row, only the
+    drum itself -- so it is the one variant here not also checked
+    against :data:`_SCREEN_MESH`.
+    """
+    sym = default_registry.get("screening_device", variant)
+    assert '<path d="M 0 0 L 60 0 L 60 60 L 30 90 L 0 60 Z"' in sym.svg
+    if variant != "rotating_drum":
+        assert 'x1="0" y1="0" x2="60" y2="60"' in sym.svg
+    assert needle in sym.svg
+    assert sym.iso_reg == reg
+    assert sym.ports == {"feed": (30.0, 0.0), "oversize": (60.0, 50.0), "undersize": (30.0, 90.0)}
+    assert sym.gravity_fixed
+
+
+def test_the_basket_reel_keeps_its_own_larger_outline():
+    """Item 7.7 X8030: an 8 M x 12 M wall over a 4 M point, drawn taller
+    than the other six rows to hold the reel's two rollers -- so its
+    ports move with the bigger box rather than sitting where the other
+    six put theirs.
+    """
+    sym = default_registry.get("screening_device", "basket_reel")
+    assert sym.svg == (
+        '<g id="sym_screen_basket_reel">'
+        '<path d="M 0 0 L 80 0 L 80 120 L 40 160 L 0 120 Z" fill="white" '
+        'stroke="#111" stroke-width="2"/>'
+        '<circle cx="40" cy="20" r="10" fill="none" stroke="#111" stroke-width="2"/>'
+        '<circle cx="40" cy="100" r="10" fill="none" stroke="#111" stroke-width="2"/>'
+        '<line x1="30" y1="30" x2="30" y2="90" fill="none" stroke="#111" '
+        'stroke-width="2" stroke-dasharray="20,10"/>'
+        '<line x1="50" y1="30" x2="50" y2="90" fill="none" stroke="#111" '
+        'stroke-width="2" stroke-dasharray="20,10"/></g>'
+    )
+    assert (sym.width, sym.height) == (80.0, 160.0)
+    assert sym.ports == {"feed": (0.0, 20.0), "oversize": (80.0, 20.0), "undersize": (40.0, 160.0)}
+    assert sym.iso_reg == "X8030"
+    assert sym.gravity_fixed
+
+
+def test_separator_sifter_is_not_a_group_7_row():
+    """The reason ``ScreeningDevice`` is not named ``Screen``.
+
+    Measured against every one of group 7's seven rows: none shares
+    ``separator/sifter``'s outline (the group-8 vessel shape, at group
+    8's own 8 M box rather than group 7's 6 M one) or its mark (a mesh
+    line near the shoulder, not the corner-to-corner diagonal every row
+    here draws). Left vendored and unregistered, exactly as it ships.
+    """
+    sifter = default_registry.get("separator", "sifter")
+    assert not sifter.iso_reg
+    assert (sifter.width, sifter.height) == (80.0, 120.0)
+    for variant in (
+        "general",
+        "coarse_rake",
+        "fine_rake",
+        "coarse_and_fine",
+        "vibrating",
+        "rotating_drum",
+        "basket_reel",
+    ):
+        screen = default_registry.get("screening_device", variant)
+        assert (screen.width, screen.height) != (sifter.width, sifter.height) or (
+            screen.svg.split(">", 1)[1] != sifter.svg.split(">", 1)[1]
+        )
+
+
 def test_the_cyclone_is_not_composed():
     """ISO 14617-1 §4.5 names X2618 by registration number as a symbol in its
     own right, and group 29 has no vortex to compose one from. So a
@@ -1076,6 +1355,31 @@ _NUMBERED_WHOLE_DRAWINGS = {
     "cooling_tower/wet_forced": "X8113",
     "cooling_tower/wet_induced": "X8114",
     "cooling_tower/wet_dry_natural": "X8115",
+    # Group 19, PROPORTIONERS, FEEDERS AND DISTRIBUTION FACILITIES: no
+    # supplementary-symbol group behind it, so every mark is drawn
+    # straight into the body, the same as group 10's driers.
+    "feeder/general": "C2056",
+    "feeder/rotary_valve": "X8067",
+    "feeder/rotary_table": "C0074",
+    "feeder/metering": "C0035",
+    "spray_nozzle/default": "2037",
+    # Group 12, MIXERS/KNEADERS. 12.2 is not drawn fresh -- it is the
+    # vendored ``fitting/static_mixer``, measured against the row and
+    # given the number there; see
+    # ``pandid.render._vendored_symbols.register_vendored``.
+    "fitting/rotary_mixer": "X2672",
+    "fitting/static_mixer": "X2673",
+    "fitting/mixing_path": "X8184",
+    "kneader/default": "X8134",
+    # Group 7, SCREENING DEVICES, SIEVES AND RAKES: one outline, six
+    # marks, plus 7.7's own larger outline for the basket reel.
+    "screening_device/general": "X8123",
+    "screening_device/coarse_rake": "X8026",
+    "screening_device/fine_rake": "X8027",
+    "screening_device/coarse_and_fine": "X8028",
+    "screening_device/vibrating": "X2605",
+    "screening_device/rotating_drum": "X8029",
+    "screening_device/basket_reel": "X8030",
 }
 
 

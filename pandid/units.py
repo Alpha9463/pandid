@@ -41,6 +41,7 @@ __all__ = [
     "Mixer", "Splitter", "Tee", "Reducer", "Fitting", "Ejector", "Vent", "Funnel",
     "Furnace", "Boiler", "Stack", "Flare", "Turbine", "Filter", "Dryer",
     "CrushingMachine", "Crusher", "Mill", "Centrifuge", "Conveyor", "Elevator",
+    "Feeder", "SprayNozzle", "ScreeningDevice", "Kneader",
     "Instrument", "Block",
 ]
 
@@ -1537,10 +1538,12 @@ class Fitting(_NormallyPositioned):
     ``strainer_basket``, ``strainer_duplex``, ``orifice``,
     ``rotameter``, ``rupture_disc``, ``sight_glass``,
     ``sight_glass_lit``, ``silencer``, ``expansion_joint``, ``bellows``,
-    ``blind``, ``damper``, ``spool``, ``static_mixer``, ``hose``,
-    ``coupling``, ``clamped_coupling``, ``flange`` (the default), and
-    the flame arrestors (``flame_arrestor`` plus ``_explosion_proof`` /
-    ``_detonation_proof`` / ``_fire_resistant``).
+    ``blind``, ``damper``, ``spool``, ``static_mixer`` (ISO 10628-2 item
+    12.2 X2673), ``rotary_mixer`` (item 12.1 X2672), ``mixing_path``
+    (item 12.3 X8184), ``hose``, ``coupling``, ``clamped_coupling``,
+    ``flange`` (the default), and the flame arrestors
+    (``flame_arrestor`` plus ``_explosion_proof`` / ``_detonation_proof``
+    / ``_fire_resistant``).
 
     A primary flow element is in the run like anything else here, so it
     is a variant too: ``venturi``, ``flow_nozzle``, ``coriolis``,
@@ -1905,6 +1908,153 @@ class Dryer(Unit):
 
     kind = "dryer"
     PORTS = [("feed", "inlet", "feed"), ("product", "outlet", "process")]
+
+
+class Feeder(Unit):
+    """Proportional or metering feeder, ISO 10628-2 group 19.
+
+    A feeder takes solids in and metres them out, so every variant
+    keeps the two names :class:`CrushingMachine` does::
+
+        Feeder("FD-101")                          # 19.1  C2056  general
+        Feeder("FD-102", variant="rotary_valve")  # 19.2  X8067
+        Feeder("FD-103", variant="rotary_table")  # 19.3  C0074
+        Feeder("FD-104", variant="metering")      # 19.4  C0035
+
+    **``"general"`` is the default**, item 19.1's plain circle with no
+    mechanism marked -- the same reasoning :class:`CrushingMachine`
+    gives item 11.1: a process design that has sized a feed duty
+    without yet picking a rotary valve over a table feeder wants this
+    row rather than a placeholder with no ISO number.
+
+    ``"rotary_valve"`` (19.2) is the standard way solids enter a
+    pressurised system: a rotor turning in a close-fitting housing
+    passes material through a module at a time while keeping the two
+    sides from communicating.
+
+    ``"rotary_table"`` (19.3) meters off a turntable's edge and
+    ``"metering"`` (19.4) is drawn as a balance, weighing what it lets
+    through -- both still fed from above and discharging below, the
+    hopper valve's own claim about which way is down.
+
+    Every variant is drawn one way up and reported as ``gravity-turned``
+    by :meth:`~pandid.flowsheet.Flowsheet.validate` if turned: solids
+    drop in at the top and are metered out at the bottom, ISO
+    15519-1 §11.4.2's exception for a hopper valve.
+    """
+
+    feed: Port
+    discharge: Port
+
+    kind = "feeder"
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+
+
+class SprayNozzle(Unit):
+    """Spray nozzle, ISO 10628-2 item 19.5 2037.
+
+    A terminal fitting on a line, drawn as a fan opening downward off
+    the point a header tees into it -- not a piece of equipment with a
+    duty of its own, so it carries the one connection a nozzle has:
+    ``inlet``, the header feeding it. What it sprays into is whatever
+    line or vessel it is drawn against, and is not a nozzle of this
+    symbol's.
+
+    Table 2 ticks the connection level with the fan's own apex on
+    *both* sides -- the nozzle taps a header running through it rather
+    than dead-ending a single supply -- so ``inlet`` is offered on the
+    west face and the east alike; an author routes from whichever side
+    the header approaches from.
+    """
+
+    inlet: Port
+
+    kind = "spray_nozzle"
+    PORTS = [("inlet", "inlet", "process")]
+
+
+class ScreeningDevice(Unit):
+    """Screening device: sieve, strainer or rake, ISO 10628-2 group 7.
+
+    **Not named ``Screen``.** ``Separator(variant="sifter")`` has drawn
+    a screening deck since before this class existed and
+    :mod:`pandid.devices` already generates that variant's own class
+    under the word an engineer searches for -- see
+    :class:`~pandid.devices.Screen`. Measured against Table 2's group 7
+    it is not one of these seven rows (a different outline, at group 8's
+    own 8 M box rather than this group's 6 M one, and a mesh mark near
+    the vessel's shoulder rather than the corner-to-corner diagonal
+    every row here draws), so it is left exactly as it ships and this
+    class takes the ISO name instead of the plainer one.
+
+    A screen makes an oversize and an undersize, named for what Table 2
+    draws rather than for which one is wanted -- :class:`Separator`'s
+    own reasoning, and for the same reason: a scalping screen ahead of
+    a crusher wants its ``oversize`` and a dewatering screen under a
+    centrifuge wants its ``undersize``, and neither name should presume
+    which is the product::
+
+        ScreeningDevice("SC-101")                             # 7.1  X8123  general
+        ScreeningDevice("SC-102", variant="coarse_rake")      # 7.2  X8026
+        ScreeningDevice("SC-103", variant="fine_rake")        # 7.3  X8027
+        ScreeningDevice("SC-104", variant="coarse_and_fine")  # 7.4  X8028
+        ScreeningDevice("SC-105", variant="vibrating")        # 7.5  X2605
+        ScreeningDevice("SC-106", variant="rotating_drum")    # 7.6  X8029
+        ScreeningDevice("SC-107", variant="basket_reel")      # 7.7  X8030
+
+    **The same three nozzles on every row.** All seven draw the same
+    shape of connection -- fed from above, oversize retained out of a
+    side wall, undersize passed through the deck and out of the apex
+    below -- so no variant adds or removes a nozzle; only 7.7's own
+    larger outline moves where each one lands on it. See
+    ``pandid.render.symbols.SymbolRegistry._register_screens``.
+
+    Every variant is drawn one way up and reported as ``gravity-turned``
+    by :meth:`~pandid.flowsheet.Flowsheet.validate` if turned: a screen
+    retains its oversize on a deck and drops its undersize through it,
+    ISO 15519-1 §11.4.2's exception again.
+    """
+
+    feed: Port
+    oversize: Port
+    undersize: Port
+
+    # Not ``"screen"``: that string is also ``Screen``'s own class name
+    # lower-cased (:class:`~pandid.devices.Screen`, the group-8
+    # ``separator/sifter`` device), and :mod:`pandid.spec` builds one
+    # alias table from both a class's name and every class's ``kind``.
+    # The two would collide there -- whichever loop ran last would win,
+    # and a spec naming ``kind: Screen`` would silently resolve to the
+    # wrong class on the way back in. See ``pandid.spec._ALIASES``.
+    kind = "screening_device"
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("oversize", "outlet", "process"),
+        ("undersize", "outlet", "process"),
+    ]
+
+
+class Kneader(Unit):
+    """Kneader: a trough mixer working a stiff paste, dough or rubber
+    compound, ISO 10628-2 item 12.4 X8134.
+
+    A folding wave crossing the casing on its own centre line is
+    Table 2's mark for the blades' action; unlike ``fitting/
+    rotary_mixer`` and ``fitting/mixing_path`` beside it in group 12,
+    a kneader is substantial process equipment and carries a tag of
+    its own rather than sitting in the run as pipe furniture.
+
+    Drawn one way up and reported as ``gravity-turned`` by
+    :meth:`~pandid.flowsheet.Flowsheet.validate` if turned: twin shafts
+    driven from above work a trough that holds its charge below them,
+    ISO 15519-1 §11.4.2's exception.
+    """
+
+    inlet: Port
+    outlet: Port
+
+    kind = "kneader"
+    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
 
 class CrushingMachine(Unit):

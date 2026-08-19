@@ -280,9 +280,10 @@ class TableBox:
 # ``include=`` names its rows explicitly and this rule stands aside.
 _MAJOR_EQUIPMENT = frozenset({
     "blower", "boiler", "column", "compressor", "conveyor", "cooler",
-    "cooling_tower", "crusher", "dryer", "ejector", "elevator", "filter",
-    "flare", "furnace", "heater", "hex", "mill", "pump", "reactor", "separator",
-    "stack", "tank", "turbine", "vessel",
+    "cooling_tower", "crusher", "dryer", "ejector", "elevator", "feeder",
+    "filter", "flare", "furnace", "heater", "hex", "kneader", "mill", "pump",
+    "reactor", "screening_device", "separator", "stack", "tank", "turbine",
+    "vessel",
 })
 # ``boiler``, ``stack`` and ``flare`` are here and ``vent``/``funnel`` are
 # not, for the reason ``Stack``'s own docstring gives: those two are
@@ -316,6 +317,7 @@ _KIND_LABELS = {
     "ejector": "Ejector",
     "elevator": "Bucket Elevator",
     "feed": "Feed",
+    "feeder": "Feeder",
     "filter": "Filter",
     "fitting": "In-Line Fitting",
     "flare": "Flare",
@@ -324,14 +326,17 @@ _KIND_LABELS = {
     "heater": "Heater",
     "hex": "Heat Exchanger",
     "instrument": "Instrument",
+    "kneader": "Kneader",
     "mill": "Mill",
     "mixer": "Mixer",
     "product": "Product",
     "pump": "Pump",
     "reactor": "Reactor",
     "reducer": "Reducer",
+    "screening_device": "Screen",
     "separator": "Separator",
     "splitter": "Splitter",
+    "spray_nozzle": "Spray Nozzle",
     "stack": "Stack",
     "tank": "Tank",
     "tee": "Pipe Tee",

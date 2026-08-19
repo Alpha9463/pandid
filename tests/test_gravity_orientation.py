@@ -247,6 +247,25 @@ GRAVITY_FIXED = {
     ("filter", "gas"),
     ("filter", "gas_fixed_bed"),
     ("filter", "gas_belt"),
+    # ISO group 19's hopper valves: solids drop in at the top and are
+    # metered out at the bottom, the same claim group 11's crushers make.
+    ("feeder", "general"),
+    ("feeder", "rotary_valve"),
+    ("feeder", "rotary_table"),
+    ("feeder", "metering"),
+    # ISO item 12.4 X8134: twin shafts driven from above, working a
+    # trough that holds its charge below them.
+    ("kneader", "default"),
+    # ISO group 7's screens: oversize retained on a deck, undersize
+    # dropped through it -- group 11's hopper claim again, at this
+    # group's own outline.
+    ("screening_device", "general"),
+    ("screening_device", "coarse_rake"),
+    ("screening_device", "fine_rake"),
+    ("screening_device", "coarse_and_fine"),
+    ("screening_device", "vibrating"),
+    ("screening_device", "rotating_drum"),
+    ("screening_device", "basket_reel"),
 }
 
 

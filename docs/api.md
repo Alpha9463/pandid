@@ -518,7 +518,7 @@ from pandid import units
 sifter = units.Separator("SC-101", variant="sifter")
 ```
 
-`units.Kind(variant=…)` is the escape hatch. 125 of the 204 registered drawings
+`units.Kind(variant=…)` is the escape hatch. 131 of the 219 registered drawings
 get no class of their own, and this is how you reach them; see
 [Variants](#variants) for the list. Where a class exists, name it.
 
@@ -587,6 +587,10 @@ Each entry is `port` *(direction / role)*.
 | `Mill` | `mill` | `feed` *(in/feed)*, `discharge` *(out)* |
 | `Conveyor` | `conveyor` | `feed` *(in/feed)*, `discharge` *(out)*; the belt anchors them at its two ends and the `screw` casing on its top and underside |
 | `Elevator` | `elevator` | `feed` *(in/feed)* at the boot, `discharge` *(out)* at the head |
+| `Feeder` | `feeder` | `feed` *(in/feed)*, `discharge` *(out)* |
+| `SprayNozzle` | `spray_nozzle` | `inlet` *(in)*, offered on the west face and the east alike — the header runs through it rather than dead-ending on it |
+| `ScreeningDevice` | `screening_device` | `feed` *(in/feed)*, `oversize` *(out)*, `undersize` *(out)*; named for where Table 2 draws them, not for which is the product — see [Variants](#variants) |
+| `Kneader` | `kneader` | `inlet` *(in)*, `outlet` *(out)* |
 | `Reducer` | `reducer` | `inlet` *(in)*, `outlet` *(out)* |
 | `Tee` | `tee` | `inlet` *(in)*, `outlet` *(out)*, `branch` *(out, or in with `branch="inlet"`)* |
 | `Fitting` | `fitting` | `inlet` *(in)*, `outlet` *(out)* |
@@ -815,7 +819,7 @@ sep.underflow            # the dust draw, and a Port a type checker can resolve
 ```
 
 `Kind(variant=…)` stays the low-level form, and is the only way to reach the
-125 drawings that get no class of their own. A class stores the
+131 drawings that get no class of their own. A class stores the
 **registry's** spelling of its variant and not its own, so `to_dict()` writes
 `variant: cyclone` rather than the class-local `default`, and the file reads
 back. [Variants](#variants) lists the drawings each class owns.
@@ -872,6 +876,15 @@ base has not, `-` one it drops. The bases are in the [Port table](#port-table).
 | `RollerMill` | `mill` | `Mill` | |
 | `VibratingMill` | `mill` | `Mill` | |
 | `ScrewConveyor` | `conveyor` | `Conveyor` | |
+| `RotaryValveFeeder` | `feeder` | `Feeder` | |
+| `RotaryTableFeeder` | `feeder` | `Feeder` | |
+| `MeteringFeeder` | `feeder` | `Feeder` | |
+| `CoarseRakeScreen` | `screening_device` | `ScreeningDevice` | |
+| `FineRakeScreen` | `screening_device` | `ScreeningDevice` | |
+| `CoarseAndFineScreen` | `screening_device` | `ScreeningDevice` | |
+| `VibratingScreen` | `screening_device` | `ScreeningDevice` | |
+| `RotaryDrumScreen` | `screening_device` | `ScreeningDevice` | |
+| `ReelScreen` | `screening_device` | `ScreeningDevice` | |
 | `ControlValve` | `valve` | `Valve` | |
 | `SolenoidValve` | `valve` | `Valve` | |
 | `ReliefValve` | `valve` | `Valve` | |
@@ -1431,6 +1444,17 @@ first listed is what the class draws when it is built by name alone.
 | `Mill` | `mill` | `default` — ISO 10628-2 item 11.8 X8086, and what a ball or rod mill is drawn as: the standard tabulates neither, and this is the body its four characteristics go in |
 | `ScrewConveyor` | `conveyor` | `screw` (as `default`) — ISO 10628-2 item 18.5 X8063. Built to `length=` and `diameter=` rather than scaled to a box, as the belt on `Conveyor` is |
 | `Elevator` | `elevator` | `default` — the bucket elevator, ISO 10628-2 item 18.7 X8065 — and `z_form`, item 18.8 X8066, the same lift with a horizontal run at each end |
+| `RotaryValveFeeder` | `feeder` | `rotary_valve` (as `default`) — ISO item 19.2 X8067 |
+| `RotaryTableFeeder` | `feeder` | `rotary_table` (as `default`) — ISO item 19.3 C0074 |
+| `MeteringFeeder` | `feeder` | `metering` (as `default`) — ISO item 19.4 C0035 |
+| `Feeder` | `feeder` | `general` — ISO item 19.1 C2056, the bare circle with no mechanism drawn. The three above are that circle (19.1/19.2) or a body of their own (19.3/19.4) carrying a mechanism, and each is a machine of its own rather than a style of this one |
+| `CoarseRakeScreen` | `screening_device` | `coarse_rake` (as `default`) — ISO item 7.2 X8026 |
+| `FineRakeScreen` | `screening_device` | `fine_rake` (as `default`) — ISO item 7.3 X8027 |
+| `CoarseAndFineScreen` | `screening_device` | `coarse_and_fine` (as `default`) — ISO item 7.4 X8028 |
+| `VibratingScreen` | `screening_device` | `vibrating` (as `default`) — ISO item 7.5 X2605 |
+| `RotaryDrumScreen` | `screening_device` | `rotating_drum` (as `default`) — ISO item 7.6 X8029 |
+| `ReelScreen` | `screening_device` | `basket_reel` (as `default`) — ISO item 7.7 X8030, drawn in a taller outline to hold the reel's own rollers |
+| `ScreeningDevice` | `screening_device` | `general` — ISO item 7.1 X8123, the bare outline with no mechanism drawn. Not `separator/sifter` (the `Screen` class above): measured against Table 2, that drawing is not one of ISO group 7's seven rows |
 | `ControlValve` | `valve` | `control` (as `default`), `butterfly_pneumatic` |
 | `SolenoidValve` | `valve` | `solenoid` (as `default`) |
 | `ReliefValve` | `valve` | `relief` (as `default`), `psv` |
@@ -1440,7 +1464,7 @@ first listed is what the class draws when it is built by name alone.
 | `Valve` | `valve` | bodies: `default` (gate), `gate`, `globe`, `ball`, `butterfly`, `needle`, `saunders`, `three_way`, `plug`, `pinch`, `angle`, `bleed`<br>with a drawn operator: `hydraulic`, `manual`, `knife`<br>which of them take a [`normal_position`](#normally-closed-valves) and which a [`fail`](#fail-position) are two different lists |
 | `SpectacleBlind` | `fitting` | `blind` (as `default`) |
 | `FlowElement` | `fitting` | `venturi` (as `default`), `flow_nozzle`, `coriolis`, `vortex`, `ultrasonic`, `turbine_meter`, `positive_displacement`, `v_cone`, `wedge`, `target`, `pitot`, `averaging_pitot` |
-| `Fitting` | `fitting` | `default` (flanged connection), `flange`, `strainer`, `strainer_cone`, `strainer_y`, `strainer_basket`, `strainer_duplex`, `orifice`, `rotameter`, `rupture_disc`, `sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `bellows`, `damper`, `spool`, `static_mixer`, `hose`, `coupling`, `clamped_coupling`, `flame_arrestor`, `flame_arrestor_explosion_proof`, `flame_arrestor_detonation_proof`, `flame_arrestor_fire_resistant` |
+| `Fitting` | `fitting` | `default` (flanged connection), `flange`, `strainer`, `strainer_cone`, `strainer_y`, `strainer_basket`, `strainer_duplex`, `orifice`, `rotameter`, `rupture_disc`, `sight_glass`, `sight_glass_lit`, `silencer`, `expansion_joint`, `bellows`, `damper`, `spool`, `static_mixer` (ISO item 12.2 X2673), `rotary_mixer` (item 12.1 X2672), `mixing_path` (item 12.3 X8184), `hose`, `coupling`, `clamped_coupling`, `flame_arrestor`, `flame_arrestor_explosion_proof`, `flame_arrestor_detonation_proof`, `flame_arrestor_fire_resistant` |
 | `StirredTankReactor` | `reactor` | `default` |
 | `Reactor` | `reactor` | bodies: `plain` (a charge vessel with a packed bed hatched into it), `mixing` (a conical-bottomed mixing vessel with the stirrer drawn on top of it), `jacketed` (the dished-end shell inside a heating/cooling jacket), `tubular` (a horizontal shell with a tube pass: a PFR)<br>what is *inside* a reactor is [`agitator=` and `internals=`](#what-a-body-carries) rather than a variant, so a packed bed and a fluidised bed are the plain stirred body with a group-27 internal in it. `plain` and `mixing` are both [deprecated](#deprecated-api) for saying what is inside with the word that chooses the body |
 | `Vessel` | `vessel` | `default`, `dished`, `jacketed`, `skirted`, `legs`, `insulated`, `electrical_heating`, `swaged`, `dome`, `horizontal`<br>`dished`, `skirted` and `legs` are one shell on brackets, a skirt or a pair of legs; `jacketed` and `insulated` are that shell clad, and offer the same nozzles in the same places, so swapping one for another moves no run. `swaged` is the vessel drawn in two diameters, the wider one below |
@@ -1454,6 +1478,8 @@ first listed is what the class draws when it is built by name alone.
 | `Stack` | `stack` | `default` — ISO 10628-2 item 4.7, 2041. Not `Vent`: a stack is Table 2's own equipment, bought and founded like the furnace or boiler it exhausts, where a vent is bulk piping |
 | `Flare` | `flare` | `default` — ISO 10628-2 item 4.8, 2591 |
 | `Instrument` | `instrument` | `default` (a circle), `shared` (a circle in a square), `computer` (a hexagon), `sis` (a diamond in a square, also spelled `logic`), `interlock` (a plain diamond). Where the information is available is the separate [`display`](#where-the-information-is) axis; `panel` and `aux` are that axis in this column and are reached as `display="central"` and `display="subsidiary"` |
+| `SprayNozzle` | `spray_nozzle` | `default` — ISO item 19.5 2037. A terminal fitting rather than a variant of `Fitting`: the one nozzle it has is ticked on both faces, not a pair of them |
+| `Kneader` | `kneader` | `default` — ISO item 12.4 X8134 |
 | `Heater`, `Cooler`, `Furnace`, `Turbine`, `Blower`, `Ejector`, `Funnel`, `Conveyor`, `Mixer`, `Splitter`, `Tee`, `Block`, `Feed`, `Product` | each its own | `default` only |
 
 `HeatExchanger(variant="kettle")` carries a fifth nozzle, `bottoms`. It is the
@@ -3200,7 +3226,7 @@ What a flip may not do is reverse an arrow the artwork carries — see
 below, which is handled by drawing rather than by refusing, for exactly the
 reason this paragraph gives.
 
-The 74 marked symbols, and what in each one's artwork only means one thing one
+The 86 marked symbols, and what in each one's artwork only means one thing one
 way up:
 
 | Symbols | Why |
@@ -3222,6 +3248,9 @@ way up:
 | `elevator` `default` `z_form` | a machine whose purpose is to raise material: in at the boot, out at the head. Turned, it lowers it. The conveyors beside it are not marked, since a belt or a screw runs whichever way the plant needs |
 | `dryer` `spray` `fluidized_bed`, `filter` `gas` `gas_fixed_bed` `gas_belt` | solids that fall: an atomiser in the roof, a bed on its distributor plate, and the dust hopper each gas filter casing draws under its medium |
 | `dryer` `shelf` | ISO item 10.2, X8083: the mark is trays resting on shelves, which turned over is trays resting on nothing. `general`, `turbo` and `belt` are not marked, on the same reasoning `default` (the rotary drum) already was not |
+| `feeder` `general` `rotary_valve` `rotary_table` `metering` | ISO group 19's hopper valves: solids drop in at the top and are metered out at the bottom, the same feed-tick-above/discharge-tick-below claim group 11's crushers make |
+| `kneader` `default` | ISO item 12.4 X8134: twin shafts driven from above work a trough that holds its charge below them |
+| `screening_device` `general` `coarse_rake` `fine_rake` `coarse_and_fine` `vibrating` `rotating_drum` `basket_reel` | ISO group 7's screens: oversize retained on a deck, undersize dropped through it -- group 11's hopper claim again, at this group's own wall-and-point outline |
 
 Not marked, and deliberately: a pump, a compressor, a valve, an in-line fitting
 or a heat exchanger is installed in whatever attitude the run wants, so turning
@@ -4025,7 +4054,7 @@ What it follows, feature by feature:
 - **Symbols where gravity is a functionality** are not turned. **ISO 15519-1
   §11.4.2** excepts them from the general permission to turn and mirror, naming
   the open tank (2061) and the cyclone separator (X 2618) as its two examples.
-  74 registered symbols carry
+  86 registered symbols carry
   `Symbol.gravity_fixed`, and
   [Symbols that must not be turned](#symbols-that-must-not-be-turned) lists them.
 

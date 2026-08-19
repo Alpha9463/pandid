@@ -1884,6 +1884,22 @@ DIRECTIONAL = {
 }
 
 
+# ISO 10628-2 registration numbers, for the vendored drawings someone has
+# since measured against Table 2 and found to be the row -- not filled in
+# by default, because a conformance claim made by assumption is worse than
+# none (see ``Symbol.iso_reg``). A key names the row the stencil was
+# checked against; the check itself lives beside the drawing this
+# generates, in ``pandid.render.symbols``.
+ISO_REG = {
+    # Item 12.2 X2673, in-line static mixer: measured against a 6 M square
+    # with one mixing element inset 1 M from each wall -- the same
+    # construction (within a hand trace's rounding) symbols._mix_element
+    # draws fresh for items 12.1 and 12.3 beside it. See
+    # ``pandid.render.symbols._register_mixers``.
+    ("fitting", "static_mixer"): "X2673",
+}
+
+
 # draw.io draws inline devices oversized; scale them to read as small devices
 # (the converter is handed a matching heavier stroke, so the line still lands at
 # 2px once the transform has been applied).
@@ -2341,6 +2357,13 @@ def render() -> str:
                 f"        drawio_shape="
                 f"{drawio_shape_key(namespaces[stencil], shape_name)!r},",
             ]
+            # A registration number is a conformance claim about the
+            # geometry above, so it is only ever added for the (kind,
+            # variant) someone has actually measured against Table 2; see
+            # ISO_REG. Suffixed shapes (a normally-closed second drawing)
+            # never carry one -- ISO_REG names the open drawing's own row.
+            if not suffix and (kind, variant) in ISO_REG:
+                lines.append(f"        iso_reg={ISO_REG[(kind, variant)]!r},")
             if suffix:
                 # A second drawing of one (kind, variant) needs a <defs> entry of
                 # its own, which is what the suffix on the id buys.

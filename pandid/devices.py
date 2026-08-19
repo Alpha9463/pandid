@@ -55,12 +55,14 @@ from pandid.units import (
     Conveyor,
     Crusher,
     Dryer,
+    Feeder,
     Filter,
     Fitting,
     HeatExchanger,
     Mill,
     Pump,
     Reactor,
+    ScreeningDevice,
     Separator,
     Tank,
     Valve,
@@ -114,6 +116,15 @@ __all__ = [
     "RollerMill",
     "VibratingMill",
     "ScrewConveyor",
+    "RotaryValveFeeder",
+    "RotaryTableFeeder",
+    "MeteringFeeder",
+    "CoarseRakeScreen",
+    "FineRakeScreen",
+    "CoarseAndFineScreen",
+    "VibratingScreen",
+    "RotaryDrumScreen",
+    "ReelScreen",
     "ControlValve",
     "SolenoidValve",
     "ReliefValve",
@@ -1137,6 +1148,182 @@ class ScrewConveyor(Conveyor):
 
     feed: Port
     discharge: Port
+
+
+class RotaryValveFeeder(Feeder):
+    """Rotary valve feeder: a close-fitting rotor metering solids through a housing.
+
+    The standard way solids enter a pressurised system, one pocket of
+    the rotor at a time -- a purge lock as much as a feeder. ISO
+    10628-2 item 19.2 X8067.
+    """
+
+    kind = "feeder"
+    VARIANTS = ("default", "rotary_valve")
+    VARIANT_ALIASES = {"default": "rotary_valve"}
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+
+    feed: Port
+    discharge: Port
+
+
+class RotaryTableFeeder(Feeder):
+    """Rotary table feeder: solids dropped onto a turning table and ploughed off its edge.
+
+    A steady, low-headroom feed off a hopper -- ISO 10628-2 item 19.3
+    C0074 -- drawn as the table, its shaft and the rotation it turns
+    on.
+    """
+
+    kind = "feeder"
+    VARIANTS = ("default", "rotary_table")
+    VARIANT_ALIASES = {"default": "rotary_table"}
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+
+    feed: Port
+    discharge: Port
+
+
+class MeteringFeeder(Feeder):
+    """Metering (weigh) feeder: solids let through in proportion to a measured weight.
+
+    Drawn as a balance -- ISO 10628-2 item 19.4 C0035 -- because that
+    is the principle: what leaves is metered against what the pans
+    weigh, not against a timer or a gate position.
+    """
+
+    kind = "feeder"
+    VARIANTS = ("default", "metering")
+    VARIANT_ALIASES = {"default": "metering"}
+    PORTS = [("feed", "inlet", "feed"), ("discharge", "outlet", "process")]
+
+    feed: Port
+    discharge: Port
+
+
+class CoarseRakeScreen(ScreeningDevice):
+    """Rake screen, coarse type: a mesh cleared by a coarse-toothed rake.
+
+    ISO 10628-2 item 7.2 X8026.
+    """
+
+    kind = "screening_device"
+    VARIANTS = ("default", "coarse_rake")
+    VARIANT_ALIASES = {"default": "coarse_rake"}
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("oversize", "outlet", "process"),
+        ("undersize", "outlet", "process"),
+    ]
+
+    feed: Port
+    oversize: Port
+    undersize: Port
+
+
+class FineRakeScreen(ScreeningDevice):
+    """Rake screen, fine type: the same rake at a finer tooth pitch.
+
+    ISO 10628-2 item 7.3 X8027.
+    """
+
+    kind = "screening_device"
+    VARIANTS = ("default", "fine_rake")
+    VARIANT_ALIASES = {"default": "fine_rake"}
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("oversize", "outlet", "process"),
+        ("undersize", "outlet", "process"),
+    ]
+
+    feed: Port
+    oversize: Port
+    undersize: Port
+
+
+class CoarseAndFineScreen(ScreeningDevice):
+    """Double-deck screen: a coarse deck over a fine one in one casing.
+
+    ISO 10628-2 item 7.4 X8028: the two mesh lines Table 2 draws are
+    the two decks, one screening pass each.
+    """
+
+    kind = "screening_device"
+    VARIANTS = ("default", "coarse_and_fine")
+    VARIANT_ALIASES = {"default": "coarse_and_fine"}
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("oversize", "outlet", "process"),
+        ("undersize", "outlet", "process"),
+    ]
+
+    feed: Port
+    oversize: Port
+    undersize: Port
+
+
+class VibratingScreen(ScreeningDevice):
+    """Vibrating screen: the deck itself is shaken to work material across it.
+
+    The screener a sizing or dewatering duty reaches for first. ISO
+    10628-2 item 7.5 X2605, the same double-arrow oscillation mark
+    :class:`VibratingMill` carries on its own drum.
+    """
+
+    kind = "screening_device"
+    VARIANTS = ("default", "vibrating")
+    VARIANT_ALIASES = {"default": "vibrating"}
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("oversize", "outlet", "process"),
+        ("undersize", "outlet", "process"),
+    ]
+
+    feed: Port
+    oversize: Port
+    undersize: Port
+
+
+class RotaryDrumScreen(ScreeningDevice):
+    """Rotary drum screen, trommel: a slowly turning perforated cylinder.
+
+    Coarse scalping ahead of a crusher, or dewatering off a wash
+    circuit. ISO 10628-2 item 7.6 X8029.
+    """
+
+    kind = "screening_device"
+    VARIANTS = ("default", "rotating_drum")
+    VARIANT_ALIASES = {"default": "rotating_drum"}
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("oversize", "outlet", "process"),
+        ("undersize", "outlet", "process"),
+    ]
+
+    feed: Port
+    oversize: Port
+    undersize: Port
+
+
+class ReelScreen(ScreeningDevice):
+    """Reel screen: a wire basket strung between two rollers and turned.
+
+    ISO 10628-2 item 7.7 X8030, drawn in a taller outline than the
+    other six rows to hold the reel's own rollers.
+    """
+
+    kind = "screening_device"
+    VARIANTS = ("default", "basket_reel")
+    VARIANT_ALIASES = {"default": "basket_reel"}
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("oversize", "outlet", "process"),
+        ("undersize", "outlet", "process"),
+    ]
+
+    feed: Port
+    oversize: Port
+    undersize: Port
 
 
 class ControlValve(Valve):
