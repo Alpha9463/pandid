@@ -26,6 +26,18 @@ internal it really contains, so what tells them apart here is
   thermally above about 130 C. Packing buys the low drop, and the two
   beds are the wash section over the stripping section.
 
+They differ in **class**, not only in furnishing. T-401 is an
+``Absorber``: nothing in a contactor boils, so it has no reboiler, no
+condenser and no reflux loop, and drawing it as a plain ``Column`` would
+carry all four of those nozzles unconnected. Its two feeds are the
+counter-current streams a contactor actually takes -- lean amine over
+the top deck, sour gas under the bottom one -- placed with
+``feed_stages=`` the same way any other Column places one. T-402 keeps
+its overhead condenser (E-402) and reflux drum (V-401): a regenerator
+that refluxes to hold its water balance is not the shell a ``Stripper``
+draws, so it stays a plain ``Column`` rather than being pressed into a
+class that says it has no condenser when it does.
+
 Drawn as a PFD -- an arrowhead on every process line, an equipment
 list, a utilities summary and a stream table sectioned into a mass
 fraction block, with one control valve on the sheet and no instrument
@@ -35,6 +47,7 @@ balloon anywhere.
 from _bootstrap import out  # runs from the repo root or from examples/
 
 from pandid import (
+    Absorber,
     Column,
     Condenser,
     ControlValve,
@@ -99,21 +112,23 @@ def main():
     fs = Flowsheet("Amine Sweetening A400")
 
     # --- Equipment ----------------------------------------------------
-    # mirrored=True turns the contactor end for end so that the two
-    # nozzles a column takes its returns on -- reflux_in at the top and
-    # boilup_in at the bottom -- face the sheet's west edge. On an
-    # absorber those two are the *process* inlets: the solvent enters
-    # over the top deck and the gas under the bottom one, and the tower
-    # is counter-current between them.
+    # An Absorber's two feeds are the counter-current process inlets a
+    # contactor actually has: lean amine over the top deck (feed_1, stage
+    # 1) and sour gas under the bottom one (feed_2, stage 20 of the 20
+    # this tower carries). Both are the feed family's own west face, so
+    # nothing needs mirroring to bring them round to the sheet's west
+    # edge the way the two return nozzles a plain Column would have used
+    # once did.
     #
     # No label_pos: a tag written in the middle of a tower is written
     # across the decks, and a tag is not haloed the way a line number is.
     # Left unset the engine takes the first face no nozzle's stream runs
     # through -- top, bottom, right, left in that order -- which is the
     # wall beside each of these two.
-    contactor = fs.add(Column("T-401", internals="valve_tray", trays=20,
-                              width=110, height=340,
-                              description="Amine Contactor")).pin(mirrored=True)
+    contactor = fs.add(Absorber("T-401", internals="valve_tray", trays=20,
+                                n_feeds=2, feed_stages=[1, 20],
+                                width=110, height=340,
+                                description="Amine Contactor"))
     regen = fs.add(Column("T-402", internals="packing", trays=2, width=110,
                           height=300,
                           description="Amine Regenerator"))
@@ -171,8 +186,8 @@ def main():
     # a flag off its run. A boundary flag is pinned at the tip of its
     # arrow.
     contactor.pin(x=300, y=250)
-    lean_in_y = 250 + port_offset(contactor, "reflux_in")[1]
-    gas_in_y = 250 + port_offset(contactor, "boilup_in")[1]
+    lean_in_y = 250 + port_offset(contactor, "feed_1")[1]
+    gas_in_y = 250 + port_offset(contactor, "feed_2")[1]
     contactor_axis = 300 + port_offset(contactor, "distillate")[0]
     sour.pin(port="outlet", x=120, y=gas_in_y)
     sweet.pin(port="inlet", x=contactor_axis, y=140)
@@ -243,7 +258,7 @@ def main():
     # Declared in stream-number order, which is the order the table
     # reads. A number is drawn once, on the first segment declared, so
     # each group starts with the run it belongs on.
-    fs.connect(sour.outlet, contactor.boilup_in, name="S-401")
+    fs.connect(sour.outlet, contactor.feed_2, name="S-401")
     fs.connect(contactor.distillate, sweet.inlet, name="S-402")
 
     fs.connect(contactor.bottoms, letdown.inlet, name="S-404").via(
@@ -282,7 +297,7 @@ def main():
     # suction on the sheet.
     fs.connect(lean_pump.discharge, trim.shell_in, name="S-414").via(
         [(trim_shell_in_x, pump_out_y)])
-    fs.connect(trim.shell_out, contactor.reflux_in, name="S-403",
+    fs.connect(trim.shell_out, contactor.feed_1, name="S-403",
                draw_as_recycle=True).via(
                    [(trim_shell_out_x, lean_return_y),
                     (lean_riser_x, lean_return_y),

@@ -140,6 +140,60 @@ def test_a_unit_with_no_feed_at_all_is_rejected():
         U.Reactor("R", n_feeds=0)
 
 
+# --- Absorber and Stripper: a Column missing the nozzles it does not have ----
+
+
+def test_absorber_has_neither_loop():
+    """No reboiler, no condenser, no reflux, no boilup: nothing in an
+    absorber boils, so none of Column's four return nozzles belongs on it."""
+    absorber = U.Absorber("V-501")
+    assert set(absorber.ports) == {"feed", "distillate", "bottoms"}
+    assert isinstance(absorber, U.Column)
+
+
+def test_absorber_defaults_to_packing():
+    """Absorbers come packed, trayed or as a bare spray tower more often than
+    a distillation column comes bare, so the default differs from Column's."""
+    assert U.Absorber("V-501").internals == "packing"
+    assert U.Column("T-101").internals is None
+    # The knob is still Column's own: nothing about Absorber narrows it away.
+    bare = U.Absorber("V-502", internals=None)
+    assert bare.internals is None
+    trayed = U.Absorber("V-503", internals="valve_tray", trays=6)
+    assert trayed.internals == "valve_tray" and trayed.trays == 6
+
+
+def test_stripper_keeps_the_reboiler_loop_but_not_the_condenser():
+    """A stripper still reboils, so boilup_in and reboiler_duty stay; it
+    never refluxes, so reflux_in and condenser_duty do not."""
+    stripper = U.Stripper("T-601")
+    assert set(stripper.ports) == {
+        "feed",
+        "distillate",
+        "bottoms",
+        "boilup_in",
+        "reboiler_duty",
+    }
+    assert stripper.boilup_in.role == "vapor"
+    assert stripper.reboiler_duty.role == "energy"
+    assert isinstance(stripper, U.Column)
+    # Unlike Absorber, Stripper states no default of its own.
+    assert stripper.internals is None
+
+
+def test_absorber_and_stripper_take_more_than_one_feed():
+    """The two counter-current inlets a real absorber has -- gas at the
+    bottom, lean solvent at the top -- are the same n_feeds/feed_stages a
+    Column places any other feed with; nothing about the reduced port set
+    touches that machinery."""
+    absorber = U.Absorber("V-501", internals="packing", trays=8, n_feeds=2, feed_stages=[1, 8])
+    assert {"feed_1", "feed_2"} <= set(absorber.ports)
+    assert absorber.feeds[0].name == "feed_1"
+
+    stripper = U.Stripper("T-601", n_feeds=2)
+    assert {"feed_1", "feed_2"} <= set(stripper.ports)
+
+
 # --- feed_stages: a feed lands on the stage it enters ------------------------
 
 

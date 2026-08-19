@@ -2865,23 +2865,26 @@ def _fixed_bed_recycle() -> Flowsheet:
 def _absorber_stripper() -> Flowsheet:
     """Example 19 -- two columns on one PFD, with different internals.
 
-    An absorber on valve trays and its regenerator on packing, which is what
-    pins two group-27 internals against each other on one sheet. It is also the
-    only scenario with a plain kettle reboiler feeding a lean/rich exchanger,
-    and it states its own title-block date.
+    An ``Absorber`` on valve trays and a plain ``Column`` regenerator on
+    packing, which is what pins two group-27 internals against each other
+    on one sheet, and the reduced port set of #389 against the full one.
+    It is also the only scenario with a plain kettle reboiler feeding a
+    lean/rich exchanger, and it states its own title-block date.
     """
     fs = Flowsheet("Amine Sweetening A400")
 
     contactor = fs.add(
-        units.Column(
+        units.Absorber(
             "T-401",
             internals="valve_tray",
             trays=20,
+            n_feeds=2,
+            feed_stages=[1, 20],
             width=110,
             height=340,
             description="Amine Contactor",
         )
-    ).pin(mirrored=True)
+    )
     regen = fs.add(
         units.Column(
             "T-402",
@@ -2942,8 +2945,8 @@ def _absorber_stripper() -> Flowsheet:
     cwr_trim = fs.add(units.Product("CWR", header=True))
 
     contactor.pin(x=300, y=250)
-    lean_in_y = 250 + port_offset(contactor, "reflux_in")[1]
-    gas_in_y = 250 + port_offset(contactor, "boilup_in")[1]
+    lean_in_y = 250 + port_offset(contactor, "feed_1")[1]
+    gas_in_y = 250 + port_offset(contactor, "feed_2")[1]
     contactor_axis = 300 + port_offset(contactor, "distillate")[0]
     sour.pin(port="outlet", x=120, y=gas_in_y)
     sweet.pin(port="inlet", x=contactor_axis, y=140)
@@ -2998,7 +3001,7 @@ def _absorber_stripper() -> Flowsheet:
     lean_riser_x = 150.0
     lean_return_y = 1040.0
 
-    fs.connect(sour.outlet, contactor.boilup_in, name="S-401")
+    fs.connect(sour.outlet, contactor.feed_2, name="S-401")
     fs.connect(contactor.distillate, sweet.inlet, name="S-402")
 
     fs.connect(contactor.bottoms, letdown.inlet, name="S-404").via([(contactor_axis, rich_y)])
@@ -3034,7 +3037,7 @@ def _absorber_stripper() -> Flowsheet:
     fs.connect(lean_pump.discharge, trim.shell_in, name="S-414").via(
         [(trim_shell_in_x, pump_out_y)]
     )
-    fs.connect(trim.shell_out, contactor.reflux_in, name="S-403", draw_as_recycle=True).via(
+    fs.connect(trim.shell_out, contactor.feed_1, name="S-403", draw_as_recycle=True).via(
         [
             (trim_shell_out_x, lean_return_y),
             (lean_riser_x, lean_return_y),

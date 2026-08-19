@@ -37,7 +37,8 @@ if TYPE_CHECKING:
 __all__ = [
     "Unit",
     "Feed", "Product", "Pump", "Compressor", "Blower", "Valve", "Vessel", "Tank",
-    "HeatExchanger", "Heater", "Cooler", "CoolingTower", "Reactor", "Separator", "Column",
+    "HeatExchanger", "Heater", "Cooler", "CoolingTower", "Reactor", "Separator",
+    "Absorber", "Stripper", "Column",
     "Mixer", "Splitter", "Tee", "Reducer", "Fitting", "Ejector", "Vent", "Funnel",
     "Furnace", "Boiler", "Stack", "Flare", "Turbine", "Filter", "Dryer",
     "CrushingMachine", "Crusher", "Mill", "Centrifuge", "Conveyor", "Elevator",
@@ -4004,6 +4005,289 @@ if TYPE_CHECKING:
         feed_7: Port
 
     class Column8(Column):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+        feed_8: Port
+
+
+class Absorber(Column):
+    """Absorption or scrubbing tower: a solute moves from a gas into a liquid.
+
+    :class:`Column` again -- ISO gives an absorber, a scrubber and a
+    molecular sieve no symbol of its own, so the drawing is the same
+    dished-end shell carrying whichever group-27 internal it really
+    holds, exactly as the module docstring already says. What earns this
+    class is not the picture but the **ports**: an absorber has no
+    reboiler, no condenser and no internal reflux loop, because nothing
+    in the tower boils. Gas enters at the bottom and lean liquid at the
+    top; treated gas leaves over ``distillate`` and rich liquid over
+    ``bottoms``, and the two counter-current inlets are ``n_feeds=2``,
+    placed on the trays they actually enter::
+
+        Absorber("V-501", internals="packing",
+                 n_feeds=2, feed_stages=[1, 8])
+
+    ``reflux_in``, ``boilup_in``, ``reboiler_duty`` and ``condenser_duty``
+    are **not on this class**. A plain :class:`Column` pressed into
+    service as an absorber carries all four, unconnected, and nothing
+    then stops an author wiring one of them to a stream the vessel does
+    not have -- the false statement this class exists to rule out. See
+    :class:`Stripper` for the shell with a reboiler and no condenser, and
+    ``scripts/gen_devices.py``'s module docstring for the rule both
+    classes are the first to be justified under: a **reduced port set**,
+    with no distinct drawing behind it at all.
+
+    Defaults to ``internals="packing"``, because absorbers are packed,
+    trayed or -- for a coarse duty -- run as a bare spray tower more
+    often than a distillation column is drawn bare. ``trays=`` and every
+    other knob :class:`Column` offers are still here: a trayed absorber
+    is a normal absorber, not a different class of tower.
+    """
+
+    kind = "column"
+    PORTS = [
+        ("distillate", "outlet", "vapor"),
+        ("bottoms", "outlet", "liquid"),
+    ]
+
+    distillate: Port
+    bottoms: Port
+
+    #: The one default this class narrows: an unfurnished absorber is
+    #: rarer than an unfurnished column, so ``internals=`` defaults to a
+    #: bed rather than to bare shell. ``trays=`` keeps :class:`Column`'s
+    #: own default -- the count means the same thing on both classes and
+    #: neither has a reason to disagree with the other about it.
+    COMPOSITION = {"internals": "packing", "trays": DEFAULT_TRAYS}
+
+    # Copied from :class:`Column`'s own overloads rather than inherited:
+    # a literal ``n_feeds`` has to resolve to ``Absorber2``, not
+    # ``Column2``, or ``t: Absorber = Absorber("V-1")`` is an error the
+    # moment a checker sees it -- see ``StirredTankReactor``'s comment in
+    # ``scripts/gen_devices.py`` for the general argument.
+    if TYPE_CHECKING:
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
+                    *args: Any, **kwargs: Any) -> "Absorber1": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[2],
+                    *args: Any, **kwargs: Any) -> "Absorber2": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[3],
+                    *args: Any, **kwargs: Any) -> "Absorber3": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[4],
+                    *args: Any, **kwargs: Any) -> "Absorber4": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[5],
+                    *args: Any, **kwargs: Any) -> "Absorber5": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[6],
+                    *args: Any, **kwargs: Any) -> "Absorber6": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[7],
+                    *args: Any, **kwargs: Any) -> "Absorber7": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[8],
+                    *args: Any, **kwargs: Any) -> "Absorber8": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: int,
+                    *args: Any, **kwargs: Any) -> "Absorber": ...
+        def __new__(cls, name: str, n_feeds: int = 1,
+                    *args: Any, **kwargs: Any) -> "Absorber": ...
+
+
+if TYPE_CHECKING:
+
+    class Absorber1(Absorber):
+        pass
+
+    class Absorber2(Absorber):
+        feed_1: Port
+        feed_2: Port
+
+    class Absorber3(Absorber):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+
+    class Absorber4(Absorber):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+
+    class Absorber5(Absorber):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+
+    class Absorber6(Absorber):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+
+    class Absorber7(Absorber):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+
+    class Absorber8(Absorber):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+        feed_8: Port
+
+
+class Stripper(Column):
+    """Stripping column: a light component is driven out of a liquid by heat.
+
+    :class:`Column` again, for :class:`Absorber`'s reason -- the drawing
+    is one dished-end shell, and what a stripper draws is picked by
+    ``internals=`` the same way an absorber's or a plain distillation
+    column's is. What earns this class is again the **ports**: a
+    stripper carries a reboiler and the vapour it returns, but nothing
+    condenses and nothing refluxes, because what leaves the top is the
+    stripped-out product itself, not something the tower recovers and
+    sends back down. ``distillate``, ``bottoms``, ``reboiler_duty`` and
+    ``boilup_in`` are here; ``reflux_in`` and ``condenser_duty`` are not
+    -- two of :class:`Column`'s four return nozzles rather than
+    :class:`Absorber`'s none, because a stripper still reboils even
+    though it never refluxes.
+
+    ``internals=`` and ``trays=`` are unchanged from :class:`Column`: a
+    stripper is at least as often trayed as packed, so unlike
+    :class:`Absorber` this class states no default of its own.
+    """
+
+    kind = "column"
+    PORTS = [
+        ("distillate", "outlet", "vapor"),
+        ("bottoms", "outlet", "liquid"),
+        ("boilup_in", "inlet", "vapor"),
+        ("reboiler_duty", "inlet", "energy"),
+    ]
+
+    distillate: Port
+    bottoms: Port
+    boilup_in: Port
+    reboiler_duty: Port
+
+    # See :class:`Absorber`'s comment on the same block: a literal
+    # ``n_feeds`` has to resolve to ``Stripper2``, not ``Column2``.
+    if TYPE_CHECKING:
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
+                    *args: Any, **kwargs: Any) -> "Stripper1": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[2],
+                    *args: Any, **kwargs: Any) -> "Stripper2": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[3],
+                    *args: Any, **kwargs: Any) -> "Stripper3": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[4],
+                    *args: Any, **kwargs: Any) -> "Stripper4": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[5],
+                    *args: Any, **kwargs: Any) -> "Stripper5": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[6],
+                    *args: Any, **kwargs: Any) -> "Stripper6": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[7],
+                    *args: Any, **kwargs: Any) -> "Stripper7": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[8],
+                    *args: Any, **kwargs: Any) -> "Stripper8": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: int,
+                    *args: Any, **kwargs: Any) -> "Stripper": ...
+        def __new__(cls, name: str, n_feeds: int = 1,
+                    *args: Any, **kwargs: Any) -> "Stripper": ...
+
+
+if TYPE_CHECKING:
+
+    class Stripper1(Stripper):
+        pass
+
+    class Stripper2(Stripper):
+        feed_1: Port
+        feed_2: Port
+
+    class Stripper3(Stripper):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+
+    class Stripper4(Stripper):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+
+    class Stripper5(Stripper):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+
+    class Stripper6(Stripper):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+
+    class Stripper7(Stripper):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+
+    class Stripper8(Stripper):
         feed_1: Port
         feed_2: Port
         feed_3: Port

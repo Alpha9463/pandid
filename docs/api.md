@@ -573,6 +573,8 @@ Each entry is `port` *(direction / role)*.
 | `Tank` | `tank` | the same five as `Vessel` |
 | `Separator` | `separator` | `feed` *(in)*, `vapor` *(out/vapor)*, `liquid` *(out/liquid)* on the four variants whose draws really are phases — the drum (`default`, `horizontal`, `knockout`) and the wet `scrubber`. The other seven sort or collect rather than separating into phases, and name the two draws their artwork has: `feed` *(in/feed)*, `overflow` *(out)*, `underflow` *(out)*; see [Variants](#variants) |
 | `Column` | `column` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*, `reflux_in` *(in/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*, `condenser_duty` *(out/energy)*; the feeds are [`feeds`](#the-family-as-a-sequence) |
+| `Absorber` | `column` | A `Column` with none of the four return nozzles: `feed` *(in/feed)*, or `feed_1` … `feed_n`, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*. Nothing in an absorber boils, so it has no `reflux_in`, `boilup_in`, `reboiler_duty` or `condenser_duty`; `internals=` defaults to `"packing"` |
+| `Stripper` | `column` | A `Column` with a reboiler and no condenser: `feed` *(in/feed)*, or `feed_1` … `feed_n`, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*. No `reflux_in` or `condenser_duty` |
 | `Reactor` | `reactor` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `outlet` *(out)*, `vent` *(out/vapor)*, `duty` *(in/energy)*, and `drive` *(in/energy)* where it has an [`agitator=`](#what-a-body-carries) to be driven; `variant="tubular"` is a PFR and has no vapour space, so it has no `vent`. The feeds are [`feeds`](#the-family-as-a-sequence) |
 | `HeatExchanger` | `hex` | `shell_in`, `shell_out`, `tube_in`, `tube_out`; `kettle` adds `bottoms` *(out/liquid)*. Four variants name their sides differently; see [Variants](#variants) |
 | `Heater` | `heater` | `inlet` *(in)*, `outlet` *(out)*, `utility_in` *(in/energy)* |
@@ -798,6 +800,11 @@ s.feed_3        # Port
 reveal_type(s)  # StirredTankReactor3, not Reactor3
 ```
 
+`Absorber` and `Stripper` take the same treatment, for the same reason: each
+has its own `feed_1` … `feed_n` overloads, so `Absorber("V-1", n_feeds=2)`
+narrows to `Absorber2` rather than to `Column2`, and `t: Absorber =
+Absorber("V-1")` still type-checks with no `n_feeds` given at all.
+
 **`Block`** sits outside this. It takes a blanket `__getattr__` instead, so
 `block.in_1` resolves and `block.outlt` is *not* caught: its two counts are
 independent, and the form its own examples use — `inputs=["W", "W", "N"]` — is a
@@ -907,6 +914,26 @@ Three of them do something the name does not say:
   `Separator(variant="cyclone")`, as of 0.1.2: it called them `vapor` and
   `liquid` up to 0.1.1, and those two names were removed in 0.1.3. One drawing,
   one vocabulary, whichever class you built.
+
+Two more classes carry the same shape of table row -- a base and the ports
+that differ from it -- without being generated: `Absorber` and `Stripper`
+live in `pandid.units`, next to `Column` itself, because neither draws
+anything the registry does not already draw under `Column`. What earns each
+its own class is not a drawing but a **reduced port set**:
+
+| Class | `kind` | Base | Ports that differ |
+|---|---|---|---|
+| `Absorber` | `column` | `Column` | `-reflux_in` `-boilup_in` `-reboiler_duty` `-condenser_duty` |
+| `Stripper` | `column` | `Column` | `-reflux_in` `-condenser_duty` |
+
+An absorber neither boils nor refluxes, so it keeps none of `Column`'s four
+return nozzles; a stripper still reboils but never refluxes, so it keeps
+`boilup_in` and `reboiler_duty` and drops the other two. Both keep
+`internals=`, `trays=`, `n_feeds=` and `feed_stages=` unchanged from
+`Column` -- an absorber can be trayed, packed or a bare spray tower exactly
+as any other column can, so `Absorber` only narrows the ports and the
+default for `internals=` (`"packing"`), never the composition keywords
+themselves.
 
 ### `Block`: the block flow diagram
 
