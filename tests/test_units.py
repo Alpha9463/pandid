@@ -140,6 +140,118 @@ def test_a_unit_with_no_feed_at_all_is_rejected():
         U.Reactor("R", n_feeds=0)
 
 
+# --- feed_stages: a feed lands on the stage it enters ------------------------
+
+
+def test_a_feed_stage_moves_the_nozzle_off_the_even_spread():
+    """The whole point: two feeds asked for different stages land at
+    different, specific elevations rather than the two points the even
+    spread would have put them at."""
+    from pandid.portgeom import port_point
+
+    fs = _flowsheet_with(
+        U.Column("T-101", internals="valve_tray", trays=30, n_feeds=2, feed_stages=[12, 22]).pin(
+            x=300, y=0
+        )
+    )
+    col = fs.units[0]
+    fs.layout()
+    _, y1 = port_point(col, col.frame, "feed_1")
+    _, y2 = port_point(col, col.frame, "feed_2")
+    top = col.frame.y
+    height = col.frame.h
+    assert (y1 - top) / height == pytest.approx(0.11 + 11.5 * 0.78 / 30)
+    assert (y2 - top) / height == pytest.approx(0.11 + 21.5 * 0.78 / 30)
+
+
+def test_a_single_feed_column_can_pin_its_lone_nozzle_too():
+    """``feed_stages=`` is not only for a multi-feed tower: a one-feed
+    column's ``feed`` is a family of one, and pinning it is the same
+    keyword rather than a second one for the singular case."""
+    from pandid.portgeom import port_point
+
+    fs = _flowsheet_with(
+        U.Column("T-1", internals="tray", trays=8, feed_stages=[4]).pin(x=300, y=0)
+    )
+    col = fs.units[0]
+    fs.layout()
+    _, y = port_point(col, col.frame, "feed")
+    assert (y - col.frame.y) / col.frame.h == pytest.approx(0.11 + 3.5 * 0.78 / 8)
+
+
+def test_a_stage_left_null_keeps_the_even_spread():
+    """One feed pinned and the other not: the pinned one moves, and the
+    other keeps exactly the point the even spread always gave it."""
+    from pandid.portgeom import port_point
+
+    plain_fs = _flowsheet_with(
+        U.Column("T-1", internals="tray", trays=8, n_feeds=2).pin(x=300, y=0)
+    )
+    pinned_fs = _flowsheet_with(
+        U.Column("T-2", internals="tray", trays=8, n_feeds=2, feed_stages=[3, None]).pin(x=300, y=0)
+    )
+    plain, pinned = plain_fs.units[0], pinned_fs.units[0]
+    plain_fs.layout()
+    pinned_fs.layout()
+    assert port_point(plain, plain.frame, "feed_2") == port_point(pinned, pinned.frame, "feed_2")
+    assert port_point(plain, plain.frame, "feed_1") != port_point(pinned, pinned.frame, "feed_1")
+
+
+def test_a_packed_beds_stage_lands_above_the_bed_not_through_it():
+    from pandid.portgeom import port_point
+    from pandid.render import iso_parts
+
+    fs = _flowsheet_with(
+        U.Column("T-1", internals="packing", trays=2, feed_stages=[2]).pin(x=300, y=0)
+    )
+    col = fs.units[0]
+    fs.layout()
+    _, y = port_point(col, col.frame, "feed")
+    expected = iso_parts.stage_fraction("packing", 2, 2)
+    assert (y - col.frame.y) / col.frame.h == pytest.approx(expected)
+
+
+def test_feed_stages_length_must_match_the_feeds():
+    with pytest.raises(
+        ValueError,
+        match=r"T-1 has 2 feeds \(feed_1, feed_2\) but "
+        r"feed_stages names 1",
+    ):
+        U.Column("T-1", n_feeds=2, feed_stages=[5])
+
+
+def test_a_stage_out_of_range_names_the_tray_count():
+    with pytest.raises(ValueError, match=r"stage 40 is not on a column of 30"):
+        U.Column("T-1", internals="tray", trays=30, feed_stages=[40])
+
+
+def test_feed_stages_on_a_bare_shell_is_refused():
+    """A bare shell has no stages, so a stage number would name a tray
+    line no reader can find on the drawing."""
+    with pytest.raises(ValueError, match="internals is None"):
+        U.Column("T-1", internals=None, feed_stages=[1])
+
+
+def test_feed_stages_all_null_is_fine_even_on_a_bare_shell():
+    """Every entry left ``None`` asks nothing of the shell, so it is not
+    the same request as naming a real stage."""
+    col = U.Column("T-1", internals=None, n_feeds=2, feed_stages=[None, None])
+    assert col.feed_stages == [None, None]
+
+
+def test_feed_stages_is_none_by_default_and_unwritten():
+    col = U.Column("T-1", n_feeds=2)
+    assert col.feed_stages is None
+
+
+def _flowsheet_with(unit):
+    from pandid import Flowsheet
+
+    fs = Flowsheet("T")
+    fs.add(unit)
+    return fs
+
+
 def test_a_kettle_reboiler_has_a_bottoms_draw():
     """What does not boil overflows the weir and leaves the plant from there,
     which is why the draw belongs on the exchanger and not on an invented

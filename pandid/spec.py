@@ -217,6 +217,19 @@ def _composed(value: Any, default: Any, where: str) -> Any:
     return value
 
 
+def _stages(value: Any, where: str) -> list[int | None]:
+    """``feed_stages:``'s value: one stage number per feed, or ``null`` for
+    a feed that keeps the even spread.
+
+    ``null`` is the same statement it is in :func:`_composed`: a feed
+    naming no stage is not a feed the list said nothing about, and reading
+    the two alike would pin every feed to whichever stage the first one
+    named.
+    """
+    return [None if item is None else _integer(item, f"{where}[{i}]")
+            for i, item in enumerate(_sequence(value, where))]
+
+
 def _component(value: Any, where: str) -> str | float:
     """A line-number component.
 
@@ -388,6 +401,13 @@ _KIND_ORDER = {
 _KIND_FLAGS = {
     "header": ("Feed", "Product"),
 }
+# One stage number per feed, keyed the same way. Not a composition
+# keyword: it names no part and has no per-variant default, it only says
+# where an already-drawn feed lands, so it is checked and read like the
+# tables above rather than folded into ``_KIND_COMPOSITION`` below.
+_KIND_STAGES = {
+    "feed_stages": ("Column",),
+}
 #: The composition keywords, keyed the same way and **derived rather
 #: than listed**: every one of them is an entry in the
 #: :attr:`~pandid.units.Unit.COMPOSITION` of the class that declares it,
@@ -414,7 +434,7 @@ for _name, _cls in _CLASSES.items():
 #: classes take, in one mapping: what a unit entry may carry beyond
 #: :data:`_UNIT_KEYS`, and which classes may carry it.
 _KIND_KEYS = {**_VARIABLE_PORTS, **_KIND_SIZES, **_KIND_TEXT, **_KIND_FLAGS,
-              **_KIND_FACES, **_KIND_ORDER, **_KIND_COMPOSITION}
+              **_KIND_FACES, **_KIND_ORDER, **_KIND_COMPOSITION, **_KIND_STAGES}
 
 
 def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
@@ -565,6 +585,9 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
     for key in _KIND_FACES:
         if key in data:
             kwargs[key] = _faces(data[key], f"{where}.{key}")
+    for key in _KIND_STAGES:
+        if key in data:
+            kwargs[key] = _stages(data[key], f"{where}.{key}")
     # The parts drawn *in* the body, where ``variant`` above chose the
     # body. The class's own default says which of the two shapes a value
     # takes, so nothing here has to know that ``trays`` counts and the
@@ -1292,6 +1315,11 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
         # down.
         if len(unit.feeds) > 1:
             entry["n_feeds"] = len(unit.feeds)
+        # Only a Column has a stage to name, and only where the author
+        # gave one: an unstated ``feed_stages`` is the even spread, which
+        # is what leaving the key off already means.
+        if isinstance(unit, unit_types.Column) and unit.feed_stages is not None:
+            entry["feed_stages"] = list(unit.feed_stages)
     elif isinstance(unit, unit_types.Tee):
         # Only a returning tee. A takeoff is the ordinary case and is
         # what a tee without the word already is.

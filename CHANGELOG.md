@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Column(feed_stages=)` puts a feed on the stage it enters, in place of the
+  even spread `n_feeds` draws by default.
+
 ### Fixed
 
 - `Reactor(agitator="propeller")` and `agitator="impeller"` draw instead of
