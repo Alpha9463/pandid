@@ -362,13 +362,18 @@ foot of the sheet.
 
 ![Absorber and stripper](19_absorber_stripper.png)
 
-Two columns on one PFD, and they are not the same tower. `T-401` contacts sour
-gas with lean MDEA at 66 bara on `internals="valve_tray"`, where turndown and
-fouling decide the deck; `T-402` strips the acid gas back off just above
-atmospheric on `internals="packing"`, where pressure drop is the design, because
-every millibar across the tower raises the reboiler's bubble point. ISO gives an
-absorber and a regenerator no symbols of their own, so what tells them apart
-here is what is drawn inside them.
+Two columns on one PFD, and they are not the same tower, nor the same class.
+`T-401` is an `Absorber`: sour gas contacts lean MDEA at 66 bara on
+`internals="valve_tray"`, and nothing in it boils, so it has no reboiler,
+condenser or reflux loop, and its two counter-current feeds are placed with
+`feed_stages=` like any other column's. `T-402` strips the acid gas back off
+just above atmospheric on `internals="packing"`, where pressure drop is the
+design because every millibar across the tower raises the reboiler's bubble
+point -- but it keeps its own overhead condenser and reflux drum, so it stays
+a plain `Column` rather than a `Stripper`. ISO gives an absorber and a
+regenerator no symbols of their own, so what tells the two drawings apart is
+what is drawn inside them; what tells the two *classes* apart is the nozzles
+each one has.
 
 Twenty streams in a sectioned table, a lean/rich cross exchanger, a kettle
 reboiler, and the one control valve a PFD earns: the 64-bar break between the

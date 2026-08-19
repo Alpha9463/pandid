@@ -279,6 +279,78 @@ def test_a_column_or_reactor_feed_count_round_trips():
     assert "n_feeds" not in written["R-1"]
 
 
+def test_absorber_and_stripper_kind_round_trips():
+    """``kind: Absorber``/``Stripper`` is a fact about which nozzles the
+    drawing has, and it is the class name -- not ``Column`` plus a variant
+    -- that carries it, so it has to survive the trip unchanged."""
+    fs = Flowsheet.from_dict(
+        {
+            "name": "T",
+            "units": [
+                {"kind": "Absorber", "name": "V-501"},
+                {"kind": "Stripper", "name": "T-601"},
+            ],
+        }
+    )
+    assert set(fs.units[0].ports) == {"feed", "distillate", "bottoms"}
+    assert type(fs.units[0]).__name__ == "Absorber"
+    assert type(fs.units[1]).__name__ == "Stripper"
+    written = {u["name"]: u for u in fs.to_dict()["units"]}
+    assert written["V-501"]["kind"] == "Absorber"
+    assert written["T-601"]["kind"] == "Stripper"
+    assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
+
+
+def test_an_absorbers_packing_default_round_trips_silently():
+    """``internals="packing"`` is :class:`~pandid.units.Absorber`'s own
+    default, not :class:`~pandid.units.Column`'s, so a bare
+    ``{kind: Absorber}`` has to read back packed rather than bare -- the
+    silent-failure shape this project has already been bitten by three
+    times: a default that depends on the *class* the spec names has to be
+    asked of that class, not of its base's.
+    """
+    fs = Flowsheet.from_dict({"name": "T", "units": [{"kind": "Absorber", "name": "V-501"}]})
+    assert fs.units[0].internals == "packing"
+    written = fs.to_dict()["units"][0]
+    # Nothing is written: packing is what an unstated Absorber already means.
+    assert "internals" not in written
+    # A bare absorber -- one that really carries no internal -- still says so.
+    bare = Flowsheet.from_dict(
+        {"name": "T", "units": [{"kind": "Absorber", "name": "V-502", "internals": None}]}
+    )
+    assert bare.units[0].internals is None
+    assert Flowsheet.from_dict(bare.to_dict()).units[0].internals is None
+
+
+def test_absorber_and_stripper_still_take_n_feeds_and_feed_stages():
+    """The reduced port set is only the four return nozzles; the feed
+    family Column already has is untouched, and a spec has to be able to
+    say where an absorber's two counter-current feeds land exactly as it
+    would on a plain Column."""
+    fs = Flowsheet.from_dict(
+        {
+            "name": "T",
+            "units": [
+                {
+                    "kind": "Absorber",
+                    "name": "V-501",
+                    "internals": "packing",
+                    "trays": 8,
+                    "n_feeds": 2,
+                    "feed_stages": [1, 8],
+                },
+            ],
+        }
+    )
+    absorber = fs.units[0]
+    assert {"feed_1", "feed_2"} <= set(absorber.ports)
+    assert absorber.feed_stages == [1, 8]
+    written = fs.to_dict()["units"][0]
+    assert written["n_feeds"] == 2
+    assert written["feed_stages"] == [1, 8]
+    assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
+
+
 def test_a_columns_feed_stages_round_trip():
     """The keyword the writer must not drop: unlike ``n_feeds``, nothing else
     on the entry says where a feed landed, so a dropped ``feed_stages`` reads

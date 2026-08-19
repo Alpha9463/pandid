@@ -172,12 +172,23 @@ def _catalogue() -> list[tuple[str, str, list[str]]]:
     so what is listed is what a flowsheet can actually put on a sheet: a
     ``kind`` a spec is free to name, with the variants the renderer has
     artwork for.
+
+    One row per ``kind``, not one row per class that carries it. Every
+    ``units`` class used to have a kind of its own, but ``Absorber`` and
+    ``Stripper`` do not: both are ``"column"``, the same as ``Column``,
+    because neither draws anything the registry does not already draw
+    under it. Filtered through ``spec._ALIASES``, the table that already
+    says which class a bare ``kind: column`` resolves to, so a class
+    whose ports are a reduced subset of its kind's does not print the
+    kind's whole variant list a second time under its own name.
     """
     from pandid.render.symbols import default_registry
 
     rows = []
     for name in units.__all__:
         kind = getattr(units, name).kind
+        if spec._ALIASES.get(kind) != name:
+            continue
         variants = default_registry.variants(kind)
         if variants:
             rows.append((name, kind, variants))

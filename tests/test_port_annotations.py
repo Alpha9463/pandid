@@ -27,15 +27,18 @@ kinds, each argued at the class or the module it applies to:
 - the **variant nozzles** (``HeatExchanger``'s ``bottoms``, ``Separator``'s
   ``overflow``), which belong to some variants and not others, so declaring them
   on the base class would tell a checker something false about every other one;
-- the **superseded nozzles** of :mod:`pandid.devices`, where a generated class
-  replaces its base's whole nozzle list. ``PlateExchanger`` has lettered sides
-  and no shell, and ``CheckValve`` has no actuator, but both inherit the
-  annotation their base wrote. Python has no way to un-declare one:
-  ``__annotations__`` is merged down the MRO and there is no "delete", and
-  re-annotating the name with something narrower is an incompatible override.
-  So the phantom check answers for the annotations a class *writes*, and
+- the **superseded nozzles** of a class that replaces its base's whole nozzle
+  list. Most of these are :mod:`pandid.devices`'s generated classes --
+  ``PlateExchanger`` has lettered sides and no shell, ``CheckValve`` has no
+  actuator -- and two, ``units.Absorber`` and ``units.Stripper``, are
+  hand-written next to :class:`~pandid.units.Column` for the same reason a
+  generated class needs it: all of them inherit the annotation their base
+  wrote, and Python has no way to un-declare one. ``__annotations__`` is
+  merged down the MRO and there is no "delete", and re-annotating the name
+  with something narrower is an incompatible override. So the phantom check
+  answers for the annotations a class *writes*, and
   :func:`test_only_these_classes_supersede_a_declaration` is what keeps that
-  from spreading past the eleven classes it is true of.
+  from spreading past the thirteen classes it is true of.
 """
 
 import ast
@@ -294,6 +297,8 @@ _EXACT_ARITY = {
     units.Splitter: "out",
     units.Column: "feed",
     units.Reactor: "feed",
+    units.Absorber: "feed",
+    units.Stripper: "feed",
 }
 _MAX_ARITY = 8
 
@@ -374,6 +379,8 @@ def test_a_literal_count_gets_a_class_declaring_exactly_those_nozzles(cls):
         "Splitter": "n_outlets",
         "Column": "n_feeds",
         "Reactor": "n_feeds",
+        "Absorber": "n_feeds",
+        "Stripper": "n_feeds",
     }[cls.__name__]
     member = _EXACT_ARITY[cls]
     for n in range(1, _MAX_ARITY + 1):
@@ -407,7 +414,7 @@ def test_no_arity_class_is_left_over(cls=None):
         node.name
         for node in ast.walk(module)
         if isinstance(node, ast.ClassDef)
-        and re.fullmatch(r"(Mixer|Splitter|Column|Reactor|Block)\d+", node.name)
+        and re.fullmatch(r"(Mixer|Splitter|Column|Reactor|Block|Absorber|Stripper)\d+", node.name)
     }
     assert found == expected
 
@@ -525,6 +532,8 @@ def test_only_these_classes_supersede_a_declaration():
         "SpiralExchanger": ["shell_in", "shell_out", "tube_in", "tube_out"],
         "ThinFilmEvaporator": ["shell_in", "shell_out", "tube_in", "tube_out"],
         "CheckValve": ["actuator"],
+        "Absorber": ["boilup_in", "condenser_duty", "reboiler_duty", "reflux_in"],
+        "Stripper": ["condenser_duty", "reflux_in"],
     }
 
 

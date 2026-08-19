@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Absorber` and `Stripper`, a `Column` missing the return nozzles it does
+  not have: an absorber carries no `reflux_in`, `boilup_in`,
+  `reboiler_duty` or `condenser_duty`, and a stripper keeps the reboiler
+  loop but not the condenser's. Both keep `internals=`, `trays=`,
+  `n_feeds=` and `feed_stages=` unchanged; `Absorber` defaults
+  `internals=` to `"packing"`.
 - `Column(feed_stages=)` puts a feed on the stage it enters, in place of the
   even spread `n_feeds` draws by default.
 - `Feeder` for ISO 10628-2 group 19: `general`, `rotary_valve`,
