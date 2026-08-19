@@ -391,11 +391,12 @@ def _hops(polylines: dict, direction: str) -> "tuple[list, set, set]":
     sheet loses a hop rather than gaining a wrong one, and the filter at
     the end of this function is where.
 
-    ``22_biodiesel_plant`` is the first sheet in the corpus to reach it,
-    with three cycles among ten edges -- a batch sheet recycles methanol
-    the length of the paper and washes counter-current to it, and two
-    runs that each cross the other twice are what that looks like drawn.
-    A test pins that the emitted order satisfies every crossing it kept.
+No sheet in the shipped corpus reaches it. What does is a sheet whose
+    recycle runs the length of the paper against a train that washes
+    counter-current to it: two runs then cross each other twice, which is
+    the shape, and a batch process is where it turns up. A test builds
+    that pair directly rather than waiting for a drawing to grow one, and
+    pins that the emitted order satisfies every crossing it kept.
     """
     keys = list(polylines)
     if direction not in ("vertical", "horizontal"):
