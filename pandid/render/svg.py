@@ -1801,11 +1801,25 @@ _Y_LENGTHS = {"ry", "height"}
 
 _TAG = re.compile(r'<(/?)([A-Za-z][\w.-]*)((?:\s+[\w:.-]+="[^"]*")*)\s*(/?)>')
 _ATTR = re.compile(r'([\w:.-]+)="([^"]*)"')
-# Absolute moves, lines and elliptical arcs, and how many numbers each
-# takes. The symbol library emits these and nothing else; a relative or
-# curve command would mean the library had changed under this file, and
-# is refused rather than guessed at, as export._reject_unsupported does.
-_PATH_ARITY = {"M": 2, "L": 2, "A": 7, "Z": 0, "z": 0}
+# Absolute moves, lines, cubics and elliptical arcs, and how many
+# numbers each takes.
+#
+# Everything but the arc is a list of *points*, so an axis-aligned scale
+# is applied to each in turn and a cubic needs nothing the line does not
+# -- the image of a Bezier under an affine map is the Bezier through the
+# mapped control points, exactly. The arc is the one that has to be
+# recomputed rather than scaled, which is what :func:`_scaled_ellipse`
+# is for.
+#
+# A **relative** command is still refused, and deliberately: its numbers
+# are displacements, so the scale applies and the translation must not,
+# and quietly adding it to this table would apply both. Nothing in the
+# library emits one. ``H``/``V`` are refused for a related reason -- a
+# lone number that is an x on one and a y on the other does not fit the
+# alternating map below. Both are a few lines to support on the day a
+# drawing needs them, and an error until then, as
+# ``export._reject_unsupported`` does it.
+_PATH_ARITY = {"M": 2, "L": 2, "C": 6, "A": 7, "Z": 0, "z": 0}
 _PATH_TOKEN = re.compile(r"[A-Za-z]|-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?")
 
 

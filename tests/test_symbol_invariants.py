@@ -31,6 +31,10 @@ from pandid import units
 from pandid.portgeom import outward_dir, port_point
 from pandid.render.symbols import Symbol, default_registry
 
+#: Every group-28 stirrer, read off the registry so a new one is covered
+#: without anyone remembering to come here.
+_AGITATORS = {name for group, name in default_registry._parts if group == 28}
+
 BOX_EPS = 1.0  # bounding-box slack, in symbol-space units
 GEOM_TOL = 2.0  # max distance from a port to the nearest drawn segment
 
@@ -2695,3 +2699,53 @@ def test_the_pneumatic_butterfly_is_back_on_the_run_because_it_is_rescaled():
     assert "butterfly_pneumatic" not in _OFF_THE_RUN
     assert sym.height - sym.ports["inlet"][1] == _VALVE_RUN_HEIGHT
     assert _ink_below_the_run(sym) == pytest.approx(_ink_below_the_run(plain))
+
+
+def _every_drawing():
+    """Every registered symbol and every supplementary part, with a name."""
+    for key, sym in sorted(default_registry._symbols.items(), key=lambda kv: str(kv[0])):
+        yield f"{key[0]}/{key[1]}", sym.svg
+    for key, part in sorted(default_registry._parts.items(), key=lambda kv: str(kv[0])):
+        yield f"part {key[0]}.{key[1]}", part.svg
+
+
+@pytest.mark.parametrize(
+    ("name", "svg"), list(_every_drawing()), ids=[n for n, _ in _every_drawing()]
+)
+def test_every_drawing_survives_being_scaled(name, svg):
+    """A drawing the renderer cannot resize is a crash, not a bad picture.
+
+    ``_baked`` rewrites a symbol's geometry at the placed size, and refuses a
+    path command it has no rule for rather than guessing. That refusal is right,
+    but it is only ever reached from a *render*, so a drawing carrying one is
+    fine in the registry, fine in the invariant suite, and raises the moment
+    somebody puts it on a sheet at a size of its own.
+
+    Two did: items 28.6 and 28.10, the propeller and the impeller, are the only
+    vendored artwork drawn with a cubic, and ``Reactor(agitator="propeller")``
+    -- a spelling ``docs/api.md`` lists -- raised ``RuntimeError`` for every
+    author who tried it. The path table said in a comment that the library
+    emitted no curve; the library had changed under it.
+
+    So this asks the question of every drawing rather than of the ones a sheet
+    in the corpus happens to place, and it asks it where the answer is cheap.
+    """
+    from pandid.render.svg import _baked
+
+    # Both axes, and neither of them 1.0: `_baked` short-circuits on an
+    # identity map, which would make this vacuous.
+    _baked(svg, 1.37, 0.61)
+
+
+@pytest.mark.parametrize("agitator", sorted(_AGITATORS))
+def test_every_agitator_a_reactor_offers_can_be_drawn(agitator):
+    """The bug above, from the side an author meets it.
+
+    ``docs/api.md`` lists ten names for ``agitator=``; two of them raised. A
+    name the documentation offers has to reach a sheet.
+    """
+    from pandid import Flowsheet
+
+    fs = Flowsheet("agitator")
+    fs.add(units.Reactor("R-1", agitator=agitator))
+    assert fs.to_svg()
