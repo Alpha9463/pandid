@@ -4092,9 +4092,13 @@ def _biodiesel_plant() -> Flowsheet:
     the other twice, which no edge order can hop both ways round, so nine
     crossings export flat and say so. See ``_hops`` and ``HOP_DROPPED``.
 
-    Two pins: P-401's discharge, clear of a rounding tie between how a pipe
-    and its arrowhead are drawn, and CV-406, clear of CV-405, which the
-    engine otherwise stacks it directly on.
+    P-401's discharge is pinned clear of a rounding tie between how a pipe
+    and its arrowhead are drawn, and CV-406 clear of CV-405, which the
+    engine otherwise stacks it directly on. C-401's condenser and reboiler
+    are pinned the way every other column in the corpus is (see
+    examples/06_column_reflux.py and examples/11_ethanol_pid.py): the engine
+    has nothing that says a condenser belongs over the vapour draw and a
+    reboiler under the liquid one, so left alone it drew them swapped.
     """
     fs = Flowsheet("Biodiesel Production A400", line_number_start=401)
 
@@ -4295,9 +4299,16 @@ def _biodiesel_plant() -> Flowsheet:
     )
     fs.connect(t_meoh_in.outlet, tk402.inlet)
     fs.connect(tk402.vent, bv401.inlet)
+    # Left to the engine, this line's own jog right (on its way down to
+    # P-402) lands 6px under the canola oil charge line into TK-401,
+    # the two then running side by side for 135px before this one turns
+    # down -- close enough to read as one doubled line rather than two
+    # streams. Routed clear of it instead: down well past that height
+    # before turning, so the two lines simply cross once, the way BS
+    # ISO 15519-1 draws a hop.
     fs.connect(
         tk402.outlet, p402.suction, service="MEOH", sequence=405, size=80, schedule=40, spec="SS"
-    )
+    ).via([(474.0, 2200.0), (609.0, 2200.0), (609.0, 2283.0)])
     fs.connect(
         p402.discharge,
         mt401.feeds[0],
@@ -4352,18 +4363,56 @@ def _biodiesel_plant() -> Flowsheet:
 
     # Methanol stripping: the overhead condenses, splits to reflux and
     # recovered methanol, and the sump reboils and draws stripped ester.
+    #
+    # C-401's two heat exchangers rank in the same column of the sheet
+    # and neither is a Block, so neither carries the north/south face a
+    # stacked constraint reads (see pandid.layout.stacking) -- the
+    # engine has nothing that says a condenser belongs over the vapour
+    # draw and a reboiler under the liquid one, which is why the two
+    # came out swapped. Laid out by hand instead, the way
+    # examples/06_column_reflux.py and examples/11_ethanol_pid.py draw
+    # every column/condenser/reboiler group in this corpus: each
+    # exchanger pinned by its own nozzle, so no rescaling of the
+    # artwork can leave a run off its port, and the vapour and sump
+    # lines routed through an explicit waypoint rather than left to
+    # find their own way past the column and each other.
+    #
+    # C-401 is left for the engine to place -- pinning it would pull its
+    # own 200px height out of row 13's band, collapsing every row below
+    # it by that much (see the E-401/E-402/D-401 pins just below for the
+    # same effect at smaller scale). col_x/col_y instead just name where
+    # the engine already stands it, so the numbers derived from them
+    # hold without constraining the column itself.
+    col_x, col_y = 1722.49, 1730.0
+    col_axis = col_x + port_offset(c401, "distillate")[0]
+
+    overhead_y = 1560.0  # the vapour header's height, clear above the column
+    cond_x, cond_y = 1972.49, 1640.0
+    e401.pin(x=cond_x, y=cond_y)  # condenser, over C-401's vapour draw
+    cond_shell_in_x = cond_x + port_offset(e401, "shell_in")[0]
+    cw_cond_y = cond_y + port_offset(e401, "tube_in")[1]
+
     vapour = fs.connect(
         c401.distillate, e401.shell_in, service="MV", sequence=415, size=80, schedule=40, spec="SS"
-    )
-    fs.connect(
-        e401.shell_out, d401.inlet, service="RCM", sequence=416, size=80, schedule=40, spec="SS"
-    )
+    ).via([(col_axis, overhead_y), (cond_shell_in_x, overhead_y)])
+    hv403.pin(port="inlet", x=1722.49, y=cw_cond_y)  # condenser cooling water, with E-401
     fs.connect(
         cws.outlet, hv403.inlet, service="CWS", sequence=417, size=80, schedule=40, spec="CS"
     )
     fs.connect(hv403.outlet, e401.tube_in)
+    cwr.pin(port="inlet", x=2372.49, y=cw_cond_y)
     fs.connect(
         e401.tube_out, cwr.inlet, service="CWR", sequence=418, size=80, schedule=40, spec="CS"
+    )
+
+    # D-401's inlet is authored on three faces; naming the top one and
+    # pinning off E-401's own drain makes the run a straight drop, no
+    # waypoint needed.
+    d401.nozzle("inlet", "N")
+    drum_x = cond_x + port_offset(e401, "shell_out")[0] - port_offset(d401, "inlet")[0]
+    d401.pin(x=drum_x, y=1790.0)  # reflux drum, straight under the condenser
+    fs.connect(
+        e401.shell_out, d401.inlet, service="RCM", sequence=416, size=80, schedule=40, spec="SS"
     )
 
     fs.connect(
@@ -4372,11 +4421,32 @@ def _biodiesel_plant() -> Flowsheet:
     fs.connect(
         t_reflux.branch, cv406.inlet, service="RCM", sequence=420, size=40, schedule=40, spec="SS"
     )
+    # Pinned rather than left to the engine's barycentre: unpinned, this
+    # tee's only rank-ordering neighbour is D-401, now up beside the
+    # condenser, and the coordinate pass's spine-straightening would
+    # carry the tee up to match it -- and cv405, fe405 and the reflux
+    # flow loop off it in turn -- into the wash and vacuum train's own
+    # corner of the sheet. Held at the height this split kept before
+    # D-401 moved.
+    t_reflux.pin(y=2094.5)
     fs.connect(
         t_reflux.outlet, cv405.inlet, service="RCM", sequence=421, size=40, schedule=40, spec="SS"
     )
     fs.connect(cv405.outlet, fe405.inlet)
-    fs.connect(fe405.outlet, c401.reflux_in, draw_as_recycle=True)
+    # Left to the engine, this recycle rises to C-401's own reflux tap
+    # height as soon as it leaves FE-405, and travels the width of the
+    # sheet at it -- straight through the gap E-401 and D-401 stand in,
+    # which is where RCM-416's own line number then has nowhere to sit
+    # without a leader that cuts this line. Routed clear instead: a
+    # short step off FE-405's own column (the FIC-405 loop stacks
+    # straight up off it), a rise through the gap that loop's own
+    # instruments leave between FT-405 and FIC-405, and a run in above
+    # the condenser and the drum, only dropping onto the tap in the
+    # clear run beside the column.
+    reflux_y = col_y + port_offset(c401, "reflux_in")[1]
+    fs.connect(fe405.outlet, c401.reflux_in, draw_as_recycle=True).via(
+        [(2870.0, 2100.5), (2870.0, 1920.0), (1850.0, 1920.0), (1850.0, reflux_y)]
+    )
     fs.connect(cv406.outlet, t_meoh_in.branch, draw_as_recycle=True)
     # Pinned clear of CV-405: both valves draw off T-reflux one hop
     # apart, and left to the engine they stack directly on top of each
@@ -4384,9 +4454,24 @@ def _biodiesel_plant() -> Flowsheet:
     # valve's own signal line to run.
     cv406.pin(port="inlet", x=2432.5, y=2318.0)
 
+    reb_x, reb_y = 1972.49, 2060.0
+    e402.pin(x=reb_x, y=reb_y)  # reboiler, under C-401's liquid draw
+    sump_x = reb_x + port_offset(e402, "shell_in")[0]
+    boilup_x = reb_x + port_offset(e402, "shell_out")[0]
+    boilup_y = col_y + port_offset(c401, "boilup_in")[1]
+    steam_y = reb_y + port_offset(e402, "tube_in")[1]
+
+    # shell_in is E-402's own underside, so the sump line is routed
+    # under the reboiler's own floor and back up into it, the same
+    # shape 06 and 11 draw their kettle's sump line in.
     fs.connect(
         c401.bottoms, e402.shell_in, service="CE", sequence=422, size=80, schedule=40, spec="SS"
-    )
+    ).via([(col_axis, reb_y + 63.0), (sump_x, reb_y + 63.0)])
+    # shell_out is the reboiler's own crown, so the boilup line rises
+    # off it, crosses at a height clear of both nozzles, and drops back
+    # onto C-401's own side tap -- three waypoints, not one, so this
+    # line and the sump line above don't run on top of each other
+    # between the two shells.
     fs.connect(
         e402.shell_out,
         c401.boilup_in,
@@ -4396,11 +4481,14 @@ def _biodiesel_plant() -> Flowsheet:
         schedule=40,
         spec="SS",
         draw_as_recycle=True,
-    )
+    ).via([(boilup_x, reb_y - 40.0), (1870.0, reb_y - 40.0), (1870.0, boilup_y)])
+    hv404.pin(port="inlet", x=1722.49, y=steam_y)  # reboiler steam, with E-402
     fs.connect(
         steam_reb.outlet, hv404.inlet, service="LPS", sequence=424, size=50, schedule=40, spec="CS"
     )
     fs.connect(hv404.outlet, e402.tube_in)
+    condensate_y = reb_y + port_offset(e402, "tube_out")[1]
+    steam_condensate.pin(port="inlet", x=2472.49, y=condensate_y)
     fs.connect(
         e402.tube_out,
         steam_condensate.inlet,
@@ -4410,6 +4498,11 @@ def _biodiesel_plant() -> Flowsheet:
         schedule=40,
         spec="CS",
     )
+    # E-402's bottoms draw is its own underside, like shell_in above, so
+    # CV-407 is pinned close under it -- left automatic it ranks against
+    # a much later column and drifts far from the nozzle it drains,
+    # reading as a valve on a line of its own rather than E-402's draw.
+    cv407.pin(port="inlet", x=reb_x + port_offset(e402, "bottoms")[0], y=2180.0)
     fs.connect(
         e402.bottoms, cv407.inlet, service="SE", sequence=426, size=50, schedule=40, spec="SS"
     )
@@ -4501,10 +4594,10 @@ def _biodiesel_plant() -> Flowsheet:
     # the slave holds the water flow the master asks for, so a swing in
     # hot-water header pressure is corrected before the batch temperature
     # has moved at all.
-    tt401 = fs.add_instrument("TT", temp401, sensing=r401, at="E", offset=70)
-    # at="N", not "S": P-403 takes R-401's discharge immediately south
-    # of TT-401, and a controller dropped there has nowhere to stand
-    # beside the reactor mix line without crowding the pump.
+    # at="W", not "E": the batch temperature this sheet exists to hold
+    # reads better standing over the feed side of the reactor than
+    # sharing the discharge side with the trip that backs it up.
+    tt401 = fs.add_instrument("TT", temp401, sensing=r401, at="W", offset=70)
     tic401 = fs.add_instrument("TIC", temp401, near=tt401, at="N", offset=90, variant="shared")
     tic401.nozzle("sig_out", "W")
     tic401.annotate(high="TAH", low="TAL")
@@ -4512,7 +4605,9 @@ def _biodiesel_plant() -> Flowsheet:
 
     fe402_b = fs.add_balloon(fe402, at="N", offset=38)
     ft402 = fs.add_instrument("FT", flow402, near=fe402_b, at="N", offset=23)
-    fic402 = fs.add_instrument("FIC", flow402, near=ft402, at="W", offset=70, variant="shared")
+    # at="E", not "W": the signal flows transmitter to controller, and a
+    # sheet reads that the same direction the loop does.
+    fic402 = fs.add_instrument("FIC", flow402, near=ft402, at="E", offset=70, variant="shared")
     fic402.nozzle("sig_out", "S")
     fs.connect(ft402.sig_out, fic402.pv, kind="electric")
     fs.connect(tic401.sig_out, fic402.sig_in, kind="software")
@@ -4520,9 +4615,13 @@ def _biodiesel_plant() -> Flowsheet:
 
     # --- Loop 403: settler interface level onto the glycerol draw -------
     lt403 = fs.add_instrument("LT", level403, sensing=s401, at="E", offset=60)
-    # at="S", not "W": S-401 and CV-403 stand close enough together that
-    # a balloon on CV-403's west face lands back in LT-403's own pocket.
-    lic403 = fs.add_instrument("LIC", level403, near=cv403, at="S", offset=100, variant="shared")
+    # at="N", not "S" or "W": north of CV-403 stands the faceplate over
+    # the valve it strokes and east of LT-403, which reads better than
+    # either of the sides it was tried on. "W" lands back in LT-403's
+    # own pocket, S-401 and CV-403 standing close enough together for
+    # that; "S" reads as if the valve fed the loop rather than the loop
+    # the valve.
+    lic403 = fs.add_instrument("LIC", level403, near=cv403, at="N", offset=100, variant="shared")
     lic403.annotate(high="LAH", low="LAL")
     fs.connect(lt403.sig_out, lic403.sig_in, kind="electric")
     fs.connect(lic403.sig_out, cv403.actuator, kind="pneumatic")
@@ -4549,17 +4648,19 @@ def _biodiesel_plant() -> Flowsheet:
 
     # --- Loop 406: reflux drum level onto the recovered methanol draw ---
     lt406 = fs.add_instrument("LT", level406, sensing=d401, at="E", offset=60)
-    lic406 = fs.add_instrument("LIC", level406, near=cv406, at="W", offset=52, variant="shared")
+    # at="N", not "W": west of CV-406 is the tee's own drop from T-reflux,
+    # and a balloon parked in it is what bent that line wide around it.
+    lic406 = fs.add_instrument("LIC", level406, near=cv406, at="N", offset=52, variant="shared")
     lic406.annotate(high="LAH", low="LAL")
     fs.connect(lt406.sig_out, lic406.sig_in, kind="electric")
     fs.connect(lic406.sig_out, cv406.actuator, kind="pneumatic")
 
     # --- Loop 407: reboiler level onto the stripped ester draw -----------
-    lt407 = fs.add_instrument("LT", level407, sensing=e402, at="S", offset=60)
-    # at="W", offset widened from 52: TIC-404's cascade runs the width of
-    # the sheet at roughly this height on its way to FIC-405, and a
-    # balloon close north of CV-407 sits in its path.
-    lic407 = fs.add_instrument("LIC", level407, near=cv407, at="W", offset=90, variant="shared")
+    lt407 = fs.add_instrument("LT", level407, sensing=e402, at="S", offset=110)
+    # at="W", offset widened from 52: E-402 sits close enough west of
+    # CV-407 that a balloon left at the smaller offset lands on the
+    # reboiler shell.
+    lic407 = fs.add_instrument("LIC", level407, near=cv407, at="W", offset=115, variant="shared")
     lic407.annotate(high="LAH", low="LAL")
     fs.connect(lt407.sig_out, lic407.sig_in, kind="electric")
     fs.connect(lic407.sig_out, cv407.actuator, kind="pneumatic")
@@ -4579,9 +4680,11 @@ def _biodiesel_plant() -> Flowsheet:
     # drawing does not have. The transmitter and not TIC-401: a trip
     # reading the controller reads what it last asked the valve for, and
     # stops working the moment that loop is put on manual.
-    tt409 = fs.add_instrument("TT", 409, sensing=r401, at="W", offset=70)
-    # at="N", not "S": P-401's oil charge line passes south of TT-409 on
-    # its way into R-401, and a square dropped there sits on the pipe.
+    # at="E", not "W": the trip stands over the discharge side now, out
+    # from under the batch temperature loop it backs up.
+    tt409 = fs.add_instrument("TT", 409, sensing=r401, at="E", offset=70)
+    # at="N", not "S": P-403 takes R-401's discharge immediately south
+    # of TT-409, and a square dropped there sits on the pump's own line.
     fs.add_instrument("Z", 1, sensing=tt409, at="N", offset=44, variant="sis")
     # at="N" and stood off further than the loop above: south is where
     # the tap carrying this square's own trip signal down from the
