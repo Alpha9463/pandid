@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `Column(feed_stages=)` puts a feed on the stage it enters, in place of the
   even spread `n_feeds` draws by default.
+- `Feeder` for ISO 10628-2 group 19: `general`, `rotary_valve`,
+  `rotary_table` and `metering`, plus `RotaryValveFeeder`,
+  `RotaryTableFeeder` and `MeteringFeeder`.
+- `SprayNozzle` for item 19.5, ticked on both faces.
+- `Fitting` gains `rotary_mixer` (item 12.1 X2672) and `mixing_path`
+  (item 12.3 X8184); `static_mixer` is registered as item 12.2 X2673.
+- `Kneader` for item 12.4 X8134.
+- `ScreeningDevice` for ISO 10628-2 group 7's seven rows -- `general`,
+  `coarse_rake`, `fine_rake`, `coarse_and_fine`, `vibrating`,
+  `rotating_drum` and `basket_reel` -- plus `CoarseRakeScreen`,
+  `FineRakeScreen`, `CoarseAndFineScreen`, `VibratingScreen`,
+  `RotaryDrumScreen` and `ReelScreen`. Not `separator/sifter`, which
+  ships a different outline and stays `devices.Screen`.
 
 ### Fixed
 

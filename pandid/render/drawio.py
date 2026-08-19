@@ -844,6 +844,50 @@ _APPROXIMATIONS = {
               "high in the tower"),
     ("cooling_tower", "wet_dry_natural"): _Approximation(
         None, "the trapezoid-on-a-basin outline and both fill marks in it"),
+    # ISO 10628-2 group 19, PROPORTIONERS, FEEDERS AND DISTRIBUTION
+    # FACILITIES: no vendored stencil under any name, so the circle or
+    # the balance every drawing is built on goes with the mark inside it.
+    ("feeder", "general"): _Approximation(
+        None, "the circle outline and the Z mark drawn inside it"),
+    ("feeder", "rotary_valve"): _Approximation(
+        None, "the circle outline and the six-spoke rotor drawn inside it"),
+    ("feeder", "rotary_table"): _Approximation(
+        None, "the table, its shaft and the rotation arrow drawn on it"),
+    ("feeder", "metering"): _Approximation(
+        None, "the beam, its two pans and the fulcrum triangle under it"),
+    # Item 19.5, the spray nozzle: the header line and the fan below it.
+    ("spray_nozzle", "default"): _Approximation(
+        None, "the header line and the three-pronged spray fan under it"),
+    # ISO 10628-2 group 12's other two in-line mixers, beside the
+    # vendored ``fitting/static_mixer`` (which keeps its own stencil):
+    # the box and the "N" element or elements drawn inside it.
+    ("fitting", "rotary_mixer"): _Approximation(
+        None, "the box, its flow axis and the two mixing elements in it"),
+    ("fitting", "mixing_path"): _Approximation(
+        None, "the box and the three mixing elements in it"),
+    # Item 12.4, the kneader: the casing and the wave its blades draw.
+    ("kneader", "default"): _Approximation(
+        None, "the casing and the wave the blades draw across it"),
+    # ISO 10628-2 group 7, SCREENING DEVICES, SIEVES AND RAKES: no
+    # vendored stencil under any name (``separator/sifter`` keeps its
+    # own, and is not one of these seven rows -- see
+    # ``symbols._SCREEN_OUTLINE``), so the wall-and-point outline goes
+    # with whichever mark tells the row apart. 7.7's own larger outline
+    # is the same absence at its own size.
+    ("screening_device", "general"): _Approximation(
+        None, "the wall-and-point outline and the corner-to-corner mesh diagonal"),
+    ("screening_device", "coarse_rake"): _Approximation(
+        None, "the outline, the mesh diagonal and its three coarse rake teeth"),
+    ("screening_device", "fine_rake"): _Approximation(
+        None, "the outline, the mesh diagonal and its five fine rake teeth"),
+    ("screening_device", "coarse_and_fine"): _Approximation(
+        None, "the outline and its two parallel mesh diagonals"),
+    ("screening_device", "vibrating"): _Approximation(
+        None, "the outline, the mesh diagonal and the double arrow beside it"),
+    ("screening_device", "rotating_drum"): _Approximation(
+        None, "the outline and the dashed drum drawn inside it"),
+    ("screening_device", "basket_reel"): _Approximation(
+        None, "the outline, the reel's two rollers and the dashed rails between them"),
 }
 
 #: What draw.io is asked for to draw one ISO 10628-2 supplementary part,

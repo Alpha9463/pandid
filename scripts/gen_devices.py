@@ -508,6 +508,74 @@ DEVICES = {
     more turns of the flight rather than a longer one.
 """),
 
+    # --- Feeders -------------------------------------------------------------
+    #
+    # ISO 10628-2 group 19, three classes over three drawings, on the same
+    # reasoning as the crushers above: a rotary valve feeder, a rotary table
+    # feeder and a weigh (metering) feeder are three purchases and three rows
+    # on an equipment list, not one machine shown three ways.
+    #
+    # ``feeder/general`` stays on the base class, which is where a feeder
+    # whose mechanism is not being stated belongs -- the same reasoning
+    # ``crushing_machine/default`` gives item 11.1.
+    ("feeder", "rotary_valve"): ("RotaryValveFeeder", """Rotary valve feeder: a close-fitting rotor metering solids through a housing.
+
+    The standard way solids enter a pressurised system, one pocket of
+    the rotor at a time -- a purge lock as much as a feeder. ISO
+    10628-2 item 19.2 X8067.
+"""),
+    ("feeder", "rotary_table"): ("RotaryTableFeeder", """Rotary table feeder: solids dropped onto a turning table and ploughed off its edge.
+
+    A steady, low-headroom feed off a hopper -- ISO 10628-2 item 19.3
+    C0074 -- drawn as the table, its shaft and the rotation it turns
+    on.
+"""),
+    ("feeder", "metering"): ("MeteringFeeder", """Metering (weigh) feeder: solids let through in proportion to a measured weight.
+
+    Drawn as a balance -- ISO 10628-2 item 19.4 C0035 -- because that
+    is the principle: what leaves is metered against what the pans
+    weigh, not against a timer or a gate position.
+"""),
+
+    # --- Screens -------------------------------------------------------------
+    #
+    # ISO 10628-2 group 7, six classes over six drawings, one outline apiece --
+    # the same shape of family the crushers above are, and for the same
+    # reason: a vibrating screen, a trommel and a rake screen are different
+    # purchases even where their nozzles agree.
+    #
+    # ``screen/general`` stays on the base class, ISO item 7.1's plain
+    # outline with no mechanism marked.
+    ("screening_device", "coarse_rake"): ("CoarseRakeScreen", """Rake screen, coarse type: a mesh cleared by a coarse-toothed rake.
+
+    ISO 10628-2 item 7.2 X8026.
+"""),
+    ("screening_device", "fine_rake"): ("FineRakeScreen", """Rake screen, fine type: the same rake at a finer tooth pitch.
+
+    ISO 10628-2 item 7.3 X8027.
+"""),
+    ("screening_device", "coarse_and_fine"): ("CoarseAndFineScreen", """Double-deck screen: a coarse deck over a fine one in one casing.
+
+    ISO 10628-2 item 7.4 X8028: the two mesh lines Table 2 draws are
+    the two decks, one screening pass each.
+"""),
+    ("screening_device", "vibrating"): ("VibratingScreen", """Vibrating screen: the deck itself is shaken to work material across it.
+
+    The screener a sizing or dewatering duty reaches for first. ISO
+    10628-2 item 7.5 X2605, the same double-arrow oscillation mark
+    :class:`VibratingMill` carries on its own drum.
+"""),
+    ("screening_device", "rotating_drum"): ("RotaryDrumScreen", """Rotary drum screen, trommel: a slowly turning perforated cylinder.
+
+    Coarse scalping ahead of a crusher, or dewatering off a wash
+    circuit. ISO 10628-2 item 7.6 X8029.
+"""),
+    ("screening_device", "basket_reel"): ("ReelScreen", """Reel screen: a wire basket strung between two rollers and turned.
+
+    ISO 10628-2 item 7.7 X8030, drawn in a taller outline than the
+    other six rows to hold the reel's own rollers.
+"""),
+
     # --- Valves ------------------------------------------------------------
     #
     # Six classes over twenty-three drawings, split on BEHAVIOUR rather than on
@@ -806,6 +874,14 @@ STAYS_ON_BASE = {
     # the same reasoning ("crushing_machine", "default") above gives
     # X8084 for a crusher-or-mill not yet chosen.
     ("dryer", "general"): "ISO item 10.1: the bare casing, no characteristic drawn",
+    ("feeder", "general"): "ISO item 19.1: the bare circle, no mechanism drawn",
+    ("screening_device", "general"): "ISO item 7.1: the bare outline, no mechanism drawn",
+    ("kneader", "default"): "Kneader's own drawing (ISO item 12.4 X8134)",
+    ("spray_nozzle", "default"): "SprayNozzle's own drawing (ISO item 19.5 2037)",
+    # Group 12's other two in-line mixers, beside ``fitting/static_mixer``
+    # just above: mixing elements in the run, the same body style.
+    ("fitting", "rotary_mixer"): "body style: a rotating mixing element in the run",
+    ("fitting", "mixing_path"): "body style: three mixing elements in series in the run",
     ("elevator", "default"): "Elevator's own drawing (ISO item 18.7, the straight lift)",
     ("elevator", "z_form"): "body style: the same lift with a run at each end",
     ("ejector", "default"): "Ejector's own drawing",
