@@ -744,8 +744,8 @@ actually writes. `mixer.inlets[0]` resolves to `Port` under mypy.
 `mixer.in_1` resolves to `Port` too, and so does `mixer.in_3` on a three-inlet
 mixer — while `mixer.in_4` on that same mixer is an **error**. The count cannot
 be named in an annotation, but it can be read off the *call*: `Mixer`,
-`Splitter` and `Column` overload `__new__` on a literal count and hand back a
-subclass declaring exactly the nozzles that count builds.
+`Splitter`, `Column` and `Reactor` overload `__new__` on a literal count and
+hand back a subclass declaring exactly the nozzles that count builds.
 
 ```python
 m = fs.add(units.Mixer("M-101", n_inlets=3))
@@ -763,14 +763,23 @@ overload matches, the type is the plain base class, and the numbered nozzles are
 unresolvable. That is honest rather than restrictive: a checker cannot know how
 many nozzles that call made. Use `m.inlets[i]` there.
 
-Two classes sit outside this. **`Block`** takes a blanket `__getattr__` instead,
-so `block.in_1` resolves and `block.outlt` is *not* caught: its two counts are
+`Reactor` takes the same treatment: `Reactor("R-1", n_feeds=2).feed_2` resolves
+to `Port`, and `.feed_3` is an error. Its one device subclass gets its own
+overloads rather than reusing `Reactor`'s, so it stays itself instead of
+narrowing to a `Reactor` subclass:
+
+```python
+from pandid.devices import StirredTankReactor
+
+s = fs.add(StirredTankReactor("R-2", n_feeds=3))
+s.feed_3        # Port
+reveal_type(s)  # StirredTankReactor3, not Reactor3
+```
+
+**`Block`** sits outside this. It takes a blanket `__getattr__` instead, so
+`block.in_1` resolves and `block.outlt` is *not* caught: its two counts are
 independent, and the form its own examples use — `inputs=["W", "W", "N"]` — is a
-`list`, whose length is not in its type. **`Reactor`** takes neither, for a
-reason about subclasses rather than feeds: `StirredTankReactor` adds `duty`,
-`outlet` and `vent`, and an overload returning `Reactor2` would hand back a type
-that has lost all three. Reach a reactor's numbered feed through `feeds` or
-`port("feed_2")`.
+`list`, whose length is not in its type.
 
 ### Equipment classes
 

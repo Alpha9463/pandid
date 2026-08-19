@@ -46,7 +46,11 @@ claimed on its own, because each is a name a caller may write.
 
 Run:  python scripts/gen_devices.py
 """
+import ast
+import functools
+import inspect
 import pathlib
+import re
 import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -990,6 +994,104 @@ def ports_for(base: type, variant: str) -> list[tuple[str, str, str]]:
     return [*declared, *variant_ports]
 
 
+# (keyword, member, default, max_n) for one variable-port family base --
+# ``Mixer``, ``Splitter``, ``Column`` and ``Reactor`` today. ``keyword`` is
+# the constructor argument a literal count is passed under (``n_feeds``),
+# ``member`` the numbered nozzles' common prefix (``feed``), ``default`` the
+# count an author gets by leaving the argument out, and ``max_n`` the
+# highest arity the base hands back an exact class for.
+_Family = tuple[str, str, int, int]
+
+_ARITY_CLASS_RE = re.compile(r"^([A-Za-z]+)(\d+)$")
+
+
+@functools.lru_cache(maxsize=None)
+def _arity_families() -> dict[str, dict[int, list[str]]]:
+    """Every base's per-arity ``TYPE_CHECKING`` subclasses, read off units.py.
+
+    ``{"Reactor": {1: [], 2: ["feed_1", "feed_2"], ...}, ...}``. Read off the
+    *source* rather than the objects, and it has to be: a family's ``BaseN``
+    classes are declared only under ``if TYPE_CHECKING:`` and so do not exist
+    at import time -- ``tests/test_port_annotations.py`` reads them the same
+    way, for the same reason.
+    """
+    tree = ast.parse((HERE.parent / "pandid" / "units.py").read_text(encoding="utf-8"))
+    families: dict[str, dict[int, list[str]]] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        m = _ARITY_CLASS_RE.match(node.name)
+        if not m:
+            continue
+        base_name, n = m.group(1), int(m.group(2))
+        members = [
+            stmt.target.id
+            for stmt in node.body
+            if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
+        ]
+        families.setdefault(base_name, {})[n] = members
+    return families
+
+
+def arity_family(base: type) -> "_Family | None":
+    """What *base* would hand a generated subclass's ``__new__`` overloads,
+    if it is a variable-port family base -- ``None`` if it is not one.
+
+    Derived from the base rather than a hard-coded list of names, so a
+    future family base earns this for its device subclasses without this
+    file being told about it by name: whether ``base`` is one at all comes
+    from :func:`_arity_families`, the member prefix from the nozzles its own
+    arity-2 class declares, and the keyword and its default off the base's
+    live ``__init__`` signature -- the argument right after ``name``, which
+    is what every family base takes it as (``Mixer(name, n_inlets=2, ...)``,
+    ``Reactor(name, n_feeds=1, ...)``).
+
+    Why a subclass needs its own rather than inheriting the base's: a
+    literal count on ``StirredTankReactor`` has to resolve to
+    ``StirredTankReactor2``, not ``Reactor2`` -- the base's own overloads
+    would hand back a type pyright no longer considers a
+    ``StirredTankReactor`` at all (``t: StirredTankReactor =
+    StirredTankReactor("R")`` would then be an error), whether or not the
+    subclass's ports happen to match the base's.
+    """
+    arities = _arity_families().get(base.__name__)
+    if not arities:
+        return None
+    max_n = max(arities)
+    sample = next((members for n, members in arities.items() if n >= 2 and members), None)
+    if sample is None:
+        raise SystemExit(
+            f"{base.__name__} declares arity classes 1..{max_n} but none past "
+            f"1 has a numbered nozzle; cannot tell what a device subclass's "
+            f"own arity classes should be named"
+        )
+    prefixes = {name.rsplit("_", 1)[0] for name in sample}
+    if len(prefixes) != 1:
+        raise SystemExit(
+            f"{base.__name__}'s numbered nozzles ({sorted(sample)}) do not "
+            f"share one prefix; cannot derive the member name"
+        )
+    member = next(iter(prefixes))
+    # ``inspect.signature(base)``, not ``base.__init__``: a class's own
+    # signature already leaves ``self`` off, and asking it of the class
+    # rather than the bound method is also what keeps this sound under
+    # mypy, which otherwise cannot rule out a subclass overriding
+    # ``__init__`` with an incompatible one.
+    params = list(inspect.signature(base).parameters.values())
+    if not params or params[0].name != "name":
+        raise SystemExit(f"{base.__name__}.__init__ does not take name first")
+    if len(params) < 2:
+        raise SystemExit(f"{base.__name__}.__init__ takes no count argument after name")
+    keyword = params[1].name
+    default = params[1].default
+    if not isinstance(default, int) or isinstance(default, bool):
+        raise SystemExit(
+            f"{base.__name__}.__init__'s {keyword}= has no integer default; "
+            f"cannot derive a fallback overload for it"
+        )
+    return keyword, member, default, max_n
+
+
 def claims() -> dict[tuple[str, str], str]:
     """Every registered ``(kind, variant)``, mapped to what claims it.
 
@@ -1071,6 +1173,7 @@ def spec_of(class_name: str, kind: str, home: str, doc: str) -> dict:
         "name": class_name, "base": base.__name__, "kind": kind, "doc": doc,
         "variants": variants, "aliases": aliases,
         "anchors": PORT_ANCHORS.get(class_name, {}), "ports": ports,
+        "family": arity_family(base),
     }
 
 
@@ -1122,7 +1225,7 @@ bases from there, so that would be a genuine cycle. Use ``from pandid
 import devices``, or take the names off the package, which re-exports
 them all.
 """
-
+{typing_import}
 from pandid.ports import Port
 from pandid.units import (
 {imports})
@@ -1130,6 +1233,13 @@ from pandid.units import (
 __all__ = [
 {exports}]
 '''
+
+#: Prepended to :data:`HEADER` only where a spec needs it: a generated class
+#: with a family base's own overloads and per-arity classes to write (see
+#: :func:`arity_family`). Every other release of this file has none, and
+#: importing ``TYPE_CHECKING``, ``Any``, ``Literal`` and ``overload`` for
+#: nothing would be an unused-import lint finding on every one of them.
+_TYPING_IMPORT = "\nfrom typing import TYPE_CHECKING, Any, Literal, overload\n"
 
 
 def render() -> str:
@@ -1154,6 +1264,7 @@ def render() -> str:
         )
 
     lines = [HEADER.format(
+        typing_import=_TYPING_IMPORT if any(s["family"] for s in specs) else "",
         imports="".join(f"    {base},\n" for base in sorted({s["base"] for s in specs})),
         exports="".join(f'    "{spec["name"]}",\n' for spec in specs),
     )]
@@ -1191,7 +1302,62 @@ def emit(spec: dict) -> str:
     body.append("")
     body += [f"    {name}: Port" for name, _direction, _role in spec["ports"]]
     body.append("")
-    return "\n".join(body)
+    if spec["family"]:
+        body += _family_overload_lines(spec["name"], spec["family"])
+    out = "\n".join(body)
+    if spec["family"]:
+        # Two blank lines, matching the gap PEP 8 -- and every class above --
+        # already keeps before a top-level statement: ``out`` ends on a real
+        # line (the arity overloads' own last line, not a blank one).
+        out += "\n\n\n" + _family_class_block(spec["name"], spec["family"])
+    return out
+
+
+def _family_overload_lines(name: str, family: "_Family") -> list[str]:
+    """The ``if TYPE_CHECKING: ... def __new__`` lines a family subclass needs.
+
+    The same shape :class:`~pandid.units.Column` writes by hand: a literal
+    count has to pick an overload naming *this* class's own arity, or the
+    whole reason a device subclass needs one (see :func:`arity_family`) is
+    undone.
+    """
+    keyword, _member, default, max_n = family
+    lines = ["    if TYPE_CHECKING:", ""]
+    for n in range(1, max_n + 1):
+        default_clause = f" = {default}" if n == default else ""
+        lines.append("        @overload")
+        lines.append(
+            f"        def __new__(cls, name: str, {keyword}: Literal[{n}]{default_clause},"
+        )
+        lines.append(f'                    *args: Any, **kwargs: Any) -> "{name}{n}": ...')
+        lines.append("")
+    lines.append("        @overload")
+    lines.append(f"        def __new__(cls, name: str, {keyword}: int,")
+    lines.append(f'                    *args: Any, **kwargs: Any) -> "{name}": ...')
+    lines.append(f"        def __new__(cls, name: str, {keyword}: int = {default},")
+    lines.append(f'                    *args: Any, **kwargs: Any) -> "{name}": ...')
+    return lines
+
+
+def _family_class_block(name: str, family: "_Family") -> str:
+    """``ClassName1`` ... ``ClassName{max_n}``, the module-level block the
+    overloads above hand back.
+
+    Mirrors ``pandid.units``'s own per-arity classes: nothing but the
+    numbered nozzles at every arity, and nothing at all at arity 1, since a
+    lone member keeps its singular name (``feed``, not ``feed_1``) and the
+    base class already declares that one.
+    """
+    _keyword, member, _default, max_n = family
+    lines = ["if TYPE_CHECKING:", ""]
+    for n in range(1, max_n + 1):
+        lines.append(f"    class {name}{n}({name}):")
+        if n == 1:
+            lines.append("        pass")
+        else:
+            lines += [f"        {member}_{i}: Port" for i in range(1, n + 1)]
+        lines.append("")
+    return "\n".join(lines)
 
 
 def _q(text: str) -> str:

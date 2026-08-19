@@ -20,6 +20,7 @@ build and draw exactly what they always did -- is ``tests/test_variants.py``,
 which sweeps the base classes and only the base classes.
 """
 
+import ast
 import functools
 import importlib.util
 import pathlib
@@ -195,6 +196,62 @@ def test_every_declared_nozzle_is_visible_to_a_type_checker(cls):
     hints = typing.get_type_hints(cls)
     assert declared <= hints.keys()
     assert all(hints[name] is Port for name in declared)
+
+
+def _family_device_classes():
+    """Device classes whose base is a variable-port family -- ``StirredTankReactor``
+    (:class:`~pandid.units.Reactor`) alone today, and whichever earns it next.
+
+    Asked of the generator rather than named, for the reason
+    ``tests/test_port_annotations.py``'s ``_EXACT_ARITY`` gives for ``Reactor``: a
+    device that subclasses a family base tomorrow gets this test for free.
+    """
+    generator = _generator()
+    return [cls for cls in DEVICE_CLASSES if generator.arity_family(cls.__mro__[1])]
+
+
+_FAMILY_DEVICE_CLASSES = _family_device_classes()
+_FAMILY_IDS = [cls.__name__ for cls in _FAMILY_DEVICE_CLASSES]
+
+
+@pytest.mark.parametrize("cls", _FAMILY_DEVICE_CLASSES, ids=_FAMILY_IDS)
+def test_a_generated_family_subclass_gets_its_own_exact_arity_classes(cls):
+    """The mirror, for generated classes, of
+    ``test_port_annotations.test_a_literal_count_gets_a_class_declaring_exactly_those_nozzles``.
+
+    ``StirredTankReactor`` is the case there is today: a literal ``n_feeds`` has
+    to resolve to *its own* arity class, ``StirredTankReactor2``, and not
+    ``Reactor2`` -- a checker handed the base's class there would no longer
+    consider the result a ``StirredTankReactor`` at all. This is what would miss
+    a generator bug that ``test_the_committed_module_matches_the_generator``
+    cannot: that test only compares the committed file against another run of
+    the same generator, so a wrong ``emit()`` agrees with itself. This instead
+    builds the real unit and checks its ports.
+    """
+    generator = _generator()
+    keyword, member, _default, max_n = generator.arity_family(cls.__mro__[1])
+    module = ast.parse(pathlib.Path(devices.__file__).read_text(encoding="utf-8"))
+    declared = {
+        node.name: {
+            stmt.target.id
+            for stmt in node.body
+            if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
+        }
+        for node in ast.walk(module)
+        if isinstance(node, ast.ClassDef)
+    }
+    for n in range(1, max_n + 1):
+        name = f"{cls.__name__}{n}"
+        assert name in declared, f"{name} is not defined; the overload names it"
+        built = {
+            port
+            for port in cls("X-1", **{keyword: n}).ports
+            if re.fullmatch(rf"{member}_\d+", port)
+        }
+        assert declared[name] == built, (
+            f"{name} declares {sorted(declared[name])} but a {keyword}={n} "
+            f"{cls.__name__} builds {sorted(built)}"
+        )
 
 
 @pytest.mark.parametrize("cls", DEVICE_CLASSES, ids=IDS)

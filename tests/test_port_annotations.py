@@ -278,11 +278,23 @@ _CHECKER_VISIBLE_GETATTR = {"Block"}
 #: ``Mixer("M", n_inlets=3).in_4`` is an error and so is ``.outlt``. Maps the
 #: class to the arities it generates and the nozzle they are named for.
 #:
-#: ``Reactor`` is absent and it is not about feeds: ``StirredTankReactor`` adds
-#: ``duty``, ``outlet`` and ``vent``, and ``__new__`` overloads returning
-#: ``Reactor2`` would hand back a type that has lost all three. The other three
-#: have no subclass to lose.
-_EXACT_ARITY = {units.Mixer: "in", units.Splitter: "out", units.Column: "feed"}
+#: ``Reactor`` is here despite ``StirredTankReactor`` adding ``duty``,
+#: ``outlet`` and ``vent``: all three are already declared on ``Reactor`` too
+#: (``set(devices.StirredTankReactor.__annotations__) -
+#: set(units.Reactor.__annotations__)`` is empty), so narrowing ``Reactor``'s
+#: own ``__new__`` to ``Reactor2`` loses nothing a stirred tank has. What a
+#: narrower *base* return type would still break is the subclass's own
+#: assignability -- ``t: StirredTankReactor = StirredTankReactor("R")`` wants
+#: ``StirredTankReactor``, not ``Reactor2`` -- so ``scripts/gen_devices.py``
+#: gives every generated subclass of a family base its own overloads and its
+#: own ``ClassNameN`` classes rather than reusing the base's; see that
+#: script's ``arity_family``.
+_EXACT_ARITY = {
+    units.Mixer: "in",
+    units.Splitter: "out",
+    units.Column: "feed",
+    units.Reactor: "feed",
+}
 _MAX_ARITY = 8
 
 
@@ -357,7 +369,12 @@ def test_a_literal_count_gets_a_class_declaring_exactly_those_nozzles(cls):
         for node in ast.walk(module)
         if isinstance(node, ast.ClassDef)
     }
-    keyword = {"Mixer": "n_inlets", "Splitter": "n_outlets", "Column": "n_feeds"}[cls.__name__]
+    keyword = {
+        "Mixer": "n_inlets",
+        "Splitter": "n_outlets",
+        "Column": "n_feeds",
+        "Reactor": "n_feeds",
+    }[cls.__name__]
     member = _EXACT_ARITY[cls]
     for n in range(1, _MAX_ARITY + 1):
         name = f"{cls.__name__}{n}"

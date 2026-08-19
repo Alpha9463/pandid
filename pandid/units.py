@@ -640,10 +640,11 @@ class Unit:
     # The cost is that a checker refuses the variant nozzles that are not
     # on the base class (see :class:`Separator`), and would refuse the
     # numbered members of a family too. The families buy that back
-    # without giving anything up: :class:`Mixer`, :class:`Splitter` and
-    # :class:`Column` overload ``__new__`` on a **literal** count and
-    # hand back a subclass declaring exactly the nozzles that count
-    # builds, so ``mixer.in_3`` resolves and ``mixer.in_4`` does not.
+    # without giving anything up: :class:`Mixer`, :class:`Splitter`,
+    # :class:`Column` and :class:`Reactor` overload ``__new__`` on a
+    # **literal** count and hand back a subclass declaring exactly the
+    # nozzles that count builds, so ``mixer.in_3`` resolves and
+    # ``mixer.in_4`` does not.
     # :class:`Block` is the one class that cannot be written that way and
     # does take the blanket ``__getattr__``; it says why, and
     # ``tests/test_port_annotations.py`` pins that it is alone.
@@ -3056,6 +3057,65 @@ class Reactor(Unit):
     # :class:`Mixer`.
     feed: Port
 
+    # ``feed_1`` ... ``feed_n`` are the same shape as :class:`Column`'s
+    # feeds and :class:`Mixer`'s numbered inlets, and are answered the
+    # same way: a literal ``n_feeds`` gets a subclass declaring exactly
+    # those nozzles, a computed one gets this class and
+    # ``reactor.feeds[i]``.
+    #
+    # A one-feed vessel keeps the singular ``feed`` -- see
+    # :func:`_feed_names` -- so ``Reactor1`` declares nothing of its own
+    # and the annotation above answers for it.
+    #
+    # ``StirredTankReactor`` adds ``duty``, ``outlet`` and ``vent``, but
+    # all three are already declared here too -- narrowing this
+    # ``__new__`` to ``Reactor2`` loses nothing a stirred tank has. What
+    # it *would* break is ``StirredTankReactor``'s own assignability
+    # (``t: StirredTankReactor = StirredTankReactor("R")`` wants
+    # ``StirredTankReactor``, not ``Reactor2``), so
+    # ``scripts/gen_devices.py`` gives every generated subclass of a
+    # family base its own overloads and its own ``ClassNameN`` classes
+    # rather than reusing the base's. See that file's ``_arity_family``.
+    if TYPE_CHECKING:
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
+                    *args: Any, **kwargs: Any) -> "Reactor1": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[2],
+                    *args: Any, **kwargs: Any) -> "Reactor2": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[3],
+                    *args: Any, **kwargs: Any) -> "Reactor3": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[4],
+                    *args: Any, **kwargs: Any) -> "Reactor4": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[5],
+                    *args: Any, **kwargs: Any) -> "Reactor5": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[6],
+                    *args: Any, **kwargs: Any) -> "Reactor6": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[7],
+                    *args: Any, **kwargs: Any) -> "Reactor7": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[8],
+                    *args: Any, **kwargs: Any) -> "Reactor8": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: int,
+                    *args: Any, **kwargs: Any) -> "Reactor": ...
+        def __new__(cls, name: str, n_feeds: int = 1,
+                    *args: Any, **kwargs: Any) -> "Reactor": ...
+
     kind = "reactor"
     # Empty because which nozzles a reactor has depends on its variant,
     # and Unit.__init__ reads PORTS before a variant is in hand.
@@ -3180,6 +3240,65 @@ class Reactor(Unit):
         if agitator is not None:
             self.drive = self._add_port("drive", "inlet", "energy")
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
+
+
+if TYPE_CHECKING:
+    # A reactor of each feed count, for the overloads above. ``Reactor1``
+    # is the one-feed vessel, whose nozzle is the singular ``feed`` the
+    # base already declares, so it adds nothing of its own -- exactly as
+    # ``Column1`` does.
+
+    class Reactor1(Reactor):
+        pass
+
+    class Reactor2(Reactor):
+        feed_1: Port
+        feed_2: Port
+
+    class Reactor3(Reactor):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+
+    class Reactor4(Reactor):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+
+    class Reactor5(Reactor):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+
+    class Reactor6(Reactor):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+
+    class Reactor7(Reactor):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+
+    class Reactor8(Reactor):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+        feed_8: Port
 
 
 #: One per composable characteristic, so the sentence an author reads
@@ -3507,11 +3626,10 @@ class Column(Unit):
     # :func:`_feed_names` -- so ``Column1`` declares nothing of its own
     # and the annotation above answers for it.
     #
-    # :class:`Reactor` spells the same family and does **not** do this,
-    # for a reason that is about its subclasses rather than about feeds:
-    # ``StirredTankReactor`` adds ``duty``, ``outlet`` and ``vent``, and
-    # an overload returning ``Reactor2`` would hand back a type that has
-    # lost them. A column has no subclass to lose.
+    # :class:`Reactor` spells the same family and takes the same
+    # treatment; see its own comment for the subclass wrinkle that has
+    # nothing to do with feeds and does not touch a column, which has no
+    # subclass to protect.
     if TYPE_CHECKING:
 
         @overload
