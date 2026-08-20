@@ -74,15 +74,21 @@ def crystalliser():
 
 
 def _plant(unit):
-    """A feed, the unit under test, and a product on each of its outlets."""
+    """A feed, the unit under test, and a product on each of its outlets.
+
+    Every boundary line tabulated, so stream-table-missing does not join
+    whatever finding a caller is actually asking about.
+    """
     fs = Flowsheet("Salt Plant")
     brine = fs.add(units.Feed("Brine"))
     fs.add(unit)
-    fs.connect(brine.outlet, unit.ports["feed" if "feed" in unit.ports else "inlet"])
+    fs.connect(brine.outlet, unit.ports["feed" if "feed" in unit.ports else "inlet"]).properties = {
+        "Flow (kg/h)": "4200"
+    }
     for name, port in unit.ports.items():
         if port.direction == "outlet":
             product = fs.add(units.Product(f"P-{name}"))
-            fs.connect(port, product.inlet)
+            fs.connect(port, product.inlet).properties = {"Flow (kg/h)": "4200"}
     return fs
 
 

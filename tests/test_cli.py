@@ -26,9 +26,20 @@ SPEC = {
         {"kind": "Product", "name": "To Unit 200"},
     ],
     "streams": [
-        {"from": ["Raw Feed", "outlet"], "to": ["P-101", "suction"]},
+        # Tabulated, so stream-table-missing does not join
+        # route-detour/etc. on the "sound flowsheet" fixtures below and
+        # change how many warnings they carry.
+        {
+            "from": ["Raw Feed", "outlet"],
+            "to": ["P-101", "suction"],
+            "properties": {"Flow (kg/h)": "4200"},
+        },
         {"from": ["P-101", "discharge"], "to": ["FV-101", "inlet"]},
-        {"from": ["FV-101", "outlet"], "to": ["To Unit 200", "inlet"]},
+        {
+            "from": ["FV-101", "outlet"],
+            "to": ["To Unit 200", "inlet"],
+            "properties": {"Flow (kg/h)": "4200"},
+        },
     ],
 }
 
@@ -63,6 +74,9 @@ DETOUR = {
             "from": ["F", "outlet"],
             "to": ["P", "inlet"],
             "via": [[110, 600], [300, 600], [300, 200]],
+            # Tabulated, so stream-table-missing does not join
+            # route-detour and change the warning count below.
+            "properties": {"Flow (kg/h)": "4200"},
         }
     ],
 }

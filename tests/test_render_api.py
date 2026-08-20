@@ -765,7 +765,10 @@ def _mutable() -> Flowsheet:
 
     Every numbered nozzle is piped and ``P-3`` is the one spare: an
     unconnected nozzle is a warning of its own, and a fixture that always
-    warns hides the warning a change breaks.
+    warns hides the warning a change breaks. Every boundary line states a
+    property for the same reason -- stream-table-missing and
+    boundary-flow-missing both read that, and a fixture that always
+    carries one of them would hide the same thing.
     """
     fs = Flowsheet("mutable")
     feed = fs.add(U.Feed("F"))
@@ -776,12 +779,12 @@ def _mutable() -> Flowsheet:
     prod = fs.add(U.Product("P-1"))
     drain = fs.add(U.Product("P-2"))
     fs.add(U.Product("P-3"))
-    fs.connect(feed.outlet, valve.inlet)
+    fs.connect(feed.outlet, valve.inlet).properties = {"Flow (kg/h)": "1000"}
     fs.connect(valve.outlet, tank.inlet)
     fs.connect(tank.outlet, block.in_1)
-    fs.connect(steam.outlet, block.in_2)
-    fs.connect(block.out_1, prod.inlet)
-    fs.connect(block.out_2, drain.inlet)
+    fs.connect(steam.outlet, block.in_2).properties = {"Flow (kg/h)": "50"}
+    fs.connect(block.out_1, prod.inlet).properties = {"Flow (kg/h)": "900"}
+    fs.connect(block.out_2, drain.inlet).properties = {"Flow (kg/h)": "150"}
     fs.add_instrument("PI", 101, sensing=fs.streams[0])
     return fs
 

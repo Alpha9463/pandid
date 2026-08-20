@@ -87,9 +87,13 @@ def _crowded_taps() -> Flowsheet:
     drum = fs.add(units.Vessel("V-1"))
     sep = fs.add(units.Separator("V-2"))
     prod = fs.add(units.Product("P"))
-    fs.connect(feed.outlet, drum.inlet)
+    # Tabulated, so stream-table-missing does not join whatever routing
+    # finding a caller of this fixture is actually asking about; properties
+    # carry no geometry, so the settling behaviour below is untouched.
+    fs.connect(feed.outlet, drum.inlet).properties = {"Flow (kg/h)": "4200"}
     transfer = fs.connect(drum.outlet, sep.feed)
     overhead = fs.connect(sep.vapor, prod.inlet)
+    overhead.properties = {"Flow (kg/h)": "4200"}
     pt = fs.add_instrument("PT", 104, sensing=transfer, at=0.5, offset=60, angle=90)
     pic = fs.add_instrument("PIC", 101, sensing=overhead, at=0.3, offset=30, angle=90)
     fs.connect(pt.sig_out, pic.sig_in, kind="electric")

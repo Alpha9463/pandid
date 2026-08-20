@@ -87,9 +87,11 @@ def station():
         valve.pin(orientation=90)
         valve.pin(port="inlet", x=junction_x, y=DRAIN_Y)
 
+    # Tabulated, so stream-table-missing does not join whatever finding a
+    # caller of this fixture is actually asking about.
     fs.connect(
         feed.outlet, t_by_a.inlet, service="AE", sequence=303, size=80, schedule=80, spec="SS"
-    )
+    ).properties = {"Flow (kg/h)": "4200"}
     fs.connect(t_by_a.outlet, hv_a.inlet)
     fs.connect(hv_a.outlet, t_dr_a.inlet)
     fs.connect(t_dr_a.outlet, rd.inlet)

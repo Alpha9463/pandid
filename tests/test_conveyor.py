@@ -575,8 +575,8 @@ def test_a_wider_screw_meets_its_streams():
     fs = Flowsheet("screw")
     feed, out = fs.add(U.Feed("IN")), fs.add(U.Product("OUT"))
     sc = fs.add(U.Conveyor("SC-301", variant="screw", length=200, diameter=60))
-    fs.connect(feed.outlet, sc.feed)
-    fs.connect(sc.discharge, out.inlet)
+    fs.connect(feed.outlet, sc.feed).properties = {"Flow (kg/h)": "4200"}
+    fs.connect(sc.discharge, out.inlet).properties = {"Flow (kg/h)": "4200"}
     assert fs.validate() == []
     sym = default_registry.for_unit(sc)
     segments = _collect_segments(sym.svg)
@@ -632,8 +632,8 @@ def test_a_screw_conveyor_renders_and_meets_its_streams():
     fs = Flowsheet("screw")
     feed, out = fs.add(U.Feed("IN")), fs.add(U.Product("OUT"))
     sc = fs.add(U.Conveyor("SC-301", variant="screw", length=140))
-    fs.connect(feed.outlet, sc.feed)
-    fs.connect(sc.discharge, out.inlet)
+    fs.connect(feed.outlet, sc.feed).properties = {"Flow (kg/h)": "4200"}
+    fs.connect(sc.discharge, out.inlet).properties = {"Flow (kg/h)": "4200"}
     assert fs.validate() == []
     assert "<svg" in fs.to_svg()
 
@@ -697,7 +697,7 @@ def test_an_elevator_renders_and_meets_its_streams(variant):
     fs = Flowsheet("lift")
     feed, out = fs.add(U.Feed("IN")), fs.add(U.Product("OUT"))
     be = fs.add(U.Elevator("BE-301", variant=variant))
-    fs.connect(feed.outlet, be.feed)
-    fs.connect(be.discharge, out.inlet)
+    fs.connect(feed.outlet, be.feed).properties = {"Flow (kg/h)": "4200"}
+    fs.connect(be.discharge, out.inlet).properties = {"Flow (kg/h)": "4200"}
     assert fs.validate() == []
     assert "<svg" in fs.to_svg()

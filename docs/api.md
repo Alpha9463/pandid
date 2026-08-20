@@ -2220,7 +2220,10 @@ fs.render("sheet.svg", border="zone", show_stream_table=True)
 A stream that states no property at all is left out. An empty column is a
 heading over a rule of dashes, and ISO 10628-1:2014 §4.3.3 a) leaves the flows
 between the process steps optional anyway. If nothing on the sheet states a
-property there is no table to draw.
+property there is no table to draw — and on a PFD with a `Feed` or a
+`Product`, that silence is what `validate()` reports as
+[`stream-table-missing`](#validation): §4.3.2 d) does not stop applying
+because the practice was never taken up.
 
 **A feed or a product keeps its column** even with nothing in it, because
 §4.3.2 d) makes the flow rates or quantities of ingoing and outgoing materials
@@ -3006,8 +3009,10 @@ and `message`.
 `validate(diagram=…)` takes the drawing the findings are about, spelled as
 [`to_svg()`](#rendering) takes it. Almost nothing depends on it — a flowsheet is
 a flowsheet either way — but `nozzles-crowded` is about arrowheads, and a P&ID
-draws none. It defaults to `"pfd"`; `render()` passes whichever drawing it is
-making, so the warnings left on `fs.warnings` are about the sheet that came out.
+draws none, and `stream-table-missing` answers a clause that governs a process
+flow diagram and not a P&ID. It defaults to `"pfd"`; `render()` passes
+whichever drawing it is making, so the warnings left on `fs.warnings` are about
+the sheet that came out.
 
 | Code | Severity | Meaning |
 |---|---|---|
@@ -3026,6 +3031,7 @@ making, so the warnings left on `fs.warnings` are about the sheet that came out.
 | `nozzle-unconnected` | warning | a nozzle whose existence a count asked for (`n_inlets=`, `n_outlets=`, `n_feeds=`, `n_draws=`, `inputs=`, `outputs=`) carries no stream, so the sheet asserts a connection that is not drawn. One finding per family; only counted nozzles, and only process ones. See [Nozzles nothing is piped to](#nozzles-nothing-is-piped-to) |
 | `stream-name-reused` | warning | auto-numbering picked a name another stream already answers to, so the two share one stream-table column and one of them is not tabulated at all. Only a *counted* name is reported: a run drawn in several `connect()` calls shares its name on purpose. See [Stream numbering](#stream-numbering) |
 | `boundary-flow-missing` | warning | a stream with a `Feed` or a `Product` at one end states no property, on a sheet whose other streams state theirs. ISO 10628-1:2014 §4.3.2 d) makes the flow rates or quantities of ingoing and outgoing materials something a PFD shall contain, so the stream table keeps the empty column rather than dropping it the way it drops an empty internal one. A blank value is a report and is not flagged; see [Which streams get a column](#which-streams-get-a-column) |
+| `stream-table-missing` | warning | a PFD with a `Feed` or a `Product` and no stream anywhere on the sheet stating a property, so §4.3.2 d) is unmet and nothing says so the way `boundary-flow-missing` does for a sheet that has at least started. Not made for a P&ID, which answers to §4.4.2 instead; see [Which streams get a column](#which-streams-get-a-column) |
 | `route-not-settled` | warning | routing and instrument placement never agreed and `route()` ran out of passes; see [Routing and instrument placement](#routing-and-instrument-placement) |
 | `deprecated` | warning | the sheet was built with a spelling that is being retired. The message names the replacement and the release the old one stops working in; see [Deprecated API](#deprecated-api) |
 | `symbol-kind-unknown` | warning | a unit whose `kind` no symbol is registered for. It is drawn as a blank 60×60 box with no ports, which is what a `Unit` subclass from outside the package legitimately gets — and also what a misspelt `kind` gets. One finding per kind, with the nearest registered name |
@@ -3049,8 +3055,9 @@ The findings split in two, and a render makes them at two different moments:
 1. **Model checks**, before anything is laid out or routed:
    `pin-not-finite`, `pin-out-of-bounds`, `symbol-kind-unknown`,
    `gravity-turned`, `symbol-out-of-aspect`, `letter-sequence`,
-   `nozzle-unconnected`, `stream-name-reused`, `boundary-flow-missing` and
-   `deprecated`. Every one of these is a property of what you wrote down.
+   `nozzle-unconnected`, `stream-name-reused`, `boundary-flow-missing`,
+   `stream-table-missing` and `deprecated`. Every one of these is a
+   property of what you wrote down.
 2. `layout()` and `route()`.
 3. **Geometric checks**, over the frames and routes those produced:
    `unit-overlap`, `coincident-ports`, `nozzles-crowded`,
