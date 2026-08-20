@@ -37,6 +37,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `RotaryDrumScreen` and `ReelScreen`. Not `separator/sifter`, which
   ships a different outline and stays `devices.Screen`.
 
+### Changed
+
+- **A valve, fitting, piping accessory or instrument balloon draws at half
+  the weight of the equipment beside it (#305).** ISO 10628-1 §5.3.1 rules
+  three line weights and one constant covered every symbol on a sheet, so a
+  hand valve was drawn as heavily as the vessel it is bolted to. `Valve`,
+  `Fitting` (and its `Reducer`, `Vent`, `Funnel`, `Ejector` siblings) and
+  `Instrument` now draw at half the weight `Vessel`, `Pump`, `Column` and
+  every other equipment and machinery symbol does; a `Symbol`'s `trim`
+  says which class it is in, and both backends read it off the resolved
+  symbol rather than off the unit's `kind`. **This moves every sheet that
+  draws one of those kinds** -- 14 of the 21 shipped examples, and the
+  goldens and gallery sheets with them. Nothing about a unit's box, ports
+  or tag placement changes, only the ink its outline is stroked with.
+  Where ISO 15519-1 §11.1.3 gives every symbol one flat weight and 10628-1
+  §5.3.1 splits equipment from this finer class, pandid now follows
+  10628-1: its own scope clause names it the application standard for
+  this industry's diagrams, over 15519-1's general one. §5.3.1 a)'s third
+  weight, a highlighted main flow line distinguished from a subsidiary
+  one, is not part of this change -- pandid does not yet classify a
+  stream as either, and is left for its own issue.
+
 ### Fixed
 
 - `Reactor(agitator="propeller")` and `agitator="impeller"` draw instead of

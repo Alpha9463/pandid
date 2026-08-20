@@ -1620,6 +1620,22 @@ CLOSED_SHAPES = {
     ("fitting", "blind"): "Closed Figure 8 Blind",
 }
 
+# Kinds ISO 10628-1 §5.3.1 c) rules at half the weight b) rules equipment
+# and machinery at: valves, fittings, piping accessories, and PCE
+# symbols (the last drawn by hand -- see Symbol.trim in symbols.py, which
+# is where ``instrument`` gets the same flag).
+#
+# By pandid's own kind, not by the stencil a shape happened to be filed
+# under in KIND_MAP above: draw.io keeps an orifice plate and a
+# rotameter in valves.xml, a static mixer in mixers.xml and eleven flow
+# elements in flow_sensors.xml, none of which is the class ISO 10628-2
+# files them in -- Table 1 puts every one of the fourteen in group 24,
+# FITTINGS, alongside the strainers and reducers that do keep the
+# ``piping``/``fittings`` stencil category. ``furnace`` is the opposite
+# trap the other way: filed under ``vessels.xml`` for its shape, and
+# equipment regardless.
+TRIM_KINDS = frozenset({"valve", "fitting", "reducer", "vent", "funnel", "ejector"})
+
 
 # Corrections to the vendored stencils themselves.
 #
@@ -2377,6 +2393,9 @@ def render() -> str:
             # never carry one -- ISO_REG names the open drawing's own row.
             if not suffix and (kind, variant) in ISO_REG:
                 lines.append(f"        iso_reg={ISO_REG[(kind, variant)]!r},")
+            # ISO 10628-1 §5.3.1 c), by kind; see TRIM_KINDS.
+            if kind in TRIM_KINDS:
+                lines.append("        trim=True,")
             if suffix:
                 # A second drawing of one (kind, variant) needs a <defs> entry of
                 # its own, which is what the suffix on the id buys.

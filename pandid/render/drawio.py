@@ -260,11 +260,32 @@ _NO_STROKE = "none"
 #: generator outside the installed package -- so
 #: ``tests/test_drawio.py`` measures it back off the rendered sheet.
 #:
-#: ISO 15519-1:2010 §6.2 Table 1 gives the process industry 0,1 M for
-#: symbols and 0,2 M for connections, so a symbol is *meant* to be the
-#: lighter of the two, by a stated ratio rather than by whatever the
-#: reader's editor defaults to. This library rules both at 2.
-_SYMBOL_STROKE = 2.0
+#: For a :class:`~.symbols.Symbol` whose :attr:`~.symbols.Symbol.trim`
+#: is unset: equipment and machinery, and the frames and connections
+#: beside them, per ISO 10628-1 §5.3.1 b).
+#:
+#: Two standards disagree about this pen, and this library picks one.
+#: ISO 15519-1:2010 §6.2 Table 1 gives the *general* process-industry
+#: diagram 0,1 M for every symbol and 0,2 M for connections, a bare
+#: symbol/connection split with the symbol the lighter of the two. ISO
+#: 10628-1 §1 names itself a collective application standard *of* 15519
+#: -- the specific rule for this industry's flow diagrams and P&IDs,
+#: exactly what this library draws -- and its own §5.3.1 splits
+#: symbols themselves in two: equipment at 0,2 M, valves, fittings,
+#: piping accessories and PCE symbols at half that, 0,1 M
+#: (:data:`_TRIM_STROKE`). Where the specific standard states its own
+#: rule for the document this library draws, that is the rule followed;
+#: 15519-1's flat single symbol weight is not.
+_EQUIPMENT_STROKE = 2.0
+
+#: The pen §5.3.1 c) rules instead: valves, fittings, piping
+#: accessories and PCE (instrument) symbols, at half
+#: :data:`_EQUIPMENT_STROKE` -- which happens to equal
+#: :data:`~pandid.render.svg._SIGNAL_STROKE`, the weight this library
+#: already draws a control or data line at, since 15519-1 puts both at
+#: its own 0,1 M. Not imported from there for it, since the two answer
+#: to different clauses that could in principle part company.
+_TRIM_STROKE = 1.0
 
 #: The ink a *line* is drawn in, which is not quite the ink a symbol is
 #: drawn in: the SVG renderer strokes a stream ``black`` and a converted
@@ -566,9 +587,17 @@ class _Approximation(NamedTuple):
     sheet's stencil ink: a pipe tee is *pipe*, drawn black at the
     pipeline's weight, and drawing it at a stencil's ``#111`` hairline
     put a visibly lighter, thinner rule across every junction on the
-    sheet. ``lost`` says what the sheet has that the stand-in does not,
-    in words, and is the point of the table: an approximation nobody
-    wrote down is indistinguishable from a mistake.
+    sheet. ``weight`` defaults to :data:`_EQUIPMENT_STROKE` and is
+    stated as :data:`_TRIM_STROKE` on every entry whose
+    :class:`~.symbols.Symbol` carries :attr:`~.symbols.Symbol.trim` --
+    a balloon and the two in-line mixers this table stands in for --
+    rather than read off ``sym`` here: the two must already agree, since
+    a stand-in draws the outline a real stencil would have, and stating
+    it lets a reader see the class at the entry rather than chase it
+    into the registry. ``lost`` says what the sheet has that the
+    stand-in does not, in words, and is the point of the table: an
+    approximation nobody wrote down is indistinguishable from a
+    mistake.
 
     ``inscribed`` is a *second* built-in, drawn inside the first and
     filling the same box, for a symbol that is two outlines rather than
@@ -581,7 +610,7 @@ class _Approximation(NamedTuple):
     flip_h: bool = False
     fill: str = _NO_FILL
     stroke: str = _INK
-    weight: float = _SYMBOL_STROKE
+    weight: float = _EQUIPMENT_STROKE
     keys: tuple = ()
     inscribed: "str | None" = None
 
@@ -636,34 +665,36 @@ _BALLOON_FILL = "#ffffff"
 
 _APPROXIMATIONS = {
     # ISA balloons -----------------------------------------------
+    # Every balloon carries weight=_TRIM_STROKE: a PCE symbol is ISO
+    # 10628-1 §5.3.1 c), never b), whichever built-in stands in for it.
     ("instrument", "default"): _Approximation(
         # A circle is a circle: nothing lost.
-        "ellipse", "", fill=_BALLOON_FILL),
+        "ellipse", "", fill=_BALLOON_FILL, weight=_TRIM_STROKE),
     ("instrument", "panel"): _Approximation(
         "ellipse", "the bar across the balloon that puts the instrument in a panel",
-        fill=_BALLOON_FILL),
+        fill=_BALLOON_FILL, weight=_TRIM_STROKE),
     ("instrument", "aux"): _Approximation(
         "ellipse", "the double bar that puts the instrument in an auxiliary panel",
-        fill=_BALLOON_FILL),
+        fill=_BALLOON_FILL, weight=_TRIM_STROKE),
     ("instrument", "shared"): _Approximation(
         "ellipse", "the square around the balloon that puts the function in a "
                    "shared display, and the bar that puts it in the control room",
-        fill=_BALLOON_FILL),
+        fill=_BALLOON_FILL, weight=_TRIM_STROKE),
     ("instrument", "computer"): _Approximation(
         # The computer hexagon, drawn as one.
-        "hexagon", "", fill=_BALLOON_FILL),
+        "hexagon", "", fill=_BALLOON_FILL, weight=_TRIM_STROKE),
     # A square with a diamond inscribed in it, which is two outlines and
     # so two cells. Nothing lost, so nothing listed. `logic` is the same
     # Symbol under its second name (pandid.render.symbols registers one
     # object twice), so the two entries have to say the same thing or
     # the two spellings would draw differently.
     ("instrument", "sis"): _Approximation(
-        None, "", fill=_BALLOON_FILL, inscribed="rhombus"),
+        None, "", fill=_BALLOON_FILL, inscribed="rhombus", weight=_TRIM_STROKE),
     ("instrument", "logic"): _Approximation(
-        None, "", fill=_BALLOON_FILL, inscribed="rhombus"),
+        None, "", fill=_BALLOON_FILL, inscribed="rhombus", weight=_TRIM_STROKE),
     ("instrument", "interlock"): _Approximation(
         # A bare diamond, drawn as one.
-        "rhombus", "", fill=_BALLOON_FILL),
+        "rhombus", "", fill=_BALLOON_FILL, weight=_TRIM_STROKE),
     # junctions and boundaries -----------------------------------
     # A mixer is a triangle pointing the way the streams combine,
     # which is draw.io's own triangle; a splitter is that triangle
@@ -862,9 +893,10 @@ _APPROXIMATIONS = {
     # vendored ``fitting/static_mixer`` (which keeps its own stencil):
     # the box and the "N" element or elements drawn inside it.
     ("fitting", "rotary_mixer"): _Approximation(
-        None, "the box, its flow axis and the two mixing elements in it"),
+        None, "the box, its flow axis and the two mixing elements in it",
+        weight=_TRIM_STROKE),
     ("fitting", "mixing_path"): _Approximation(
-        None, "the box and the three mixing elements in it"),
+        None, "the box and the three mixing elements in it", weight=_TRIM_STROKE),
     # Item 12.4, the kneader: the casing and the wave its blades draw.
     ("kneader", "default"): _Approximation(
         None, "the casing and the wave the blades draw across it"),
@@ -1651,7 +1683,8 @@ class DrawioRenderer:
         stated scaled would put the two back out of proportion at the
         other end.
         """
-        weight = f"strokeWidth={fit.length(_SYMBOL_STROKE):g}"
+        weight = (f"strokeWidth="
+                  f"{fit.length(_TRIM_STROKE if sym.trim else _EQUIPMENT_STROKE):g}")
         if u.kind in ("feed", "product"):
             return self._flag_shape(u, fit)
         # A composition names no stencil of its own -- that is what stops
@@ -1673,7 +1706,7 @@ class DrawioRenderer:
             # is a stencil saying "take the pen from the cell" -- and
             # the cell said nothing, so draw.io's default 1 drew every
             # symbol lighter than the pipes around it. See
-            # :data:`_SYMBOL_STROKE`.
+            # :data:`_EQUIPMENT_STROKE`.
             keys = [f"shape={stencil}", "outlineConnect=0",
                     f"strokeColor={_INK}", f"fillColor={sym.drawio_fill or _PAPER}",
                     weight]
@@ -1737,8 +1770,12 @@ class DrawioRenderer:
                 # The pennant is a symbol outline and is ruled like one,
                 # and like one it scales with the drawing. It was stated
                 # flat here, which on a paged sheet drew the flag
-                # heavier than the pipe running into it.
-                f"strokeWidth={fit.length(_SYMBOL_STROKE):g}"]
+                # heavier than the pipe running into it. Equipment
+                # weight and not trim: a Feed or a Product is a boundary
+                # marker on the flow line itself (ISO 10628-1 §5.3.3.2's
+                # in/outgoing-flow arrow), not one of §5.3.1 c)'s
+                # classes, so it stays at the pipe's own weight.
+                f"strokeWidth={fit.length(_EQUIPMENT_STROKE):g}"]
 
     def _label(self, u, fit: "_Fit", tags: "_Tags") -> "tuple[str, list[str], tuple]":
         """A unit's label text, the style keys that place it, and how
