@@ -12,10 +12,12 @@ remembering to come here. The exemptions are named, and there are only three
 kinds, each argued at the class or the module it applies to:
 
 - the **numbered members** of a variable-sized family (``Mixer``'s ``in_1`` ...
-  ``in_n``, ``Splitter``'s ``out_1`` ... ``out_n``, both of ``Block``'s, and the
+  ``in_n``, ``Splitter``'s ``out_1`` ... ``out_n``, both of ``Block``'s, the
   ``feed_1`` ... ``feed_n`` a second feed spells a ``Column`` or ``Reactor``
-  with), whose count is the caller's, so there is no finite set of names a class
-  annotation could stand for one at a time.
+  with, and the ``draw_1`` ... ``draw_n`` a second draw spells a ``Column``
+  with -- the one class with *two* independent counted families), whose count
+  is the caller's, so there is no finite set of names a class annotation
+  could stand for one at a time.
 
   It is *only* the members. The family itself is perfectly declarable as a
   sequence -- ``inlets: tuple[Port, ...]`` -- and every one of the five is
@@ -92,11 +94,16 @@ def _is_family(hint):
 #
 # ``Block`` declares two and nothing else, since a block flow diagram's box has
 # no nozzle every block has: *all* of its connections are one of the families.
+#
+# ``Column`` declares two of its own -- ``feeds`` and ``draws`` -- the one
+# class in this dict that does, since it is the one class with two
+# independent counted families (``n_feeds=`` and ``n_draws=``). See
+# ``_EXACT_ARITY`` below for the typed side of that.
 _DECLARED_FAMILIES = {
     units.Mixer: {"inlets"},
     units.Splitter: {"outlets"},
     units.Block: {"inlets", "outlets"},
-    units.Column: {"feeds"},
+    units.Column: {"feeds", "draws"},
     units.Reactor: {"feeds"},
 }
 
@@ -278,8 +285,25 @@ _CHECKER_VISIBLE_GETATTR = {"Block"}
 
 #: The families answered *exactly* instead: a literal count picks an overload
 #: returning a subclass that declares those nozzles and no others, so
-#: ``Mixer("M", n_inlets=3).in_4`` is an error and so is ``.outlt``. Maps the
-#: class to the arities it generates and the nozzle they are named for.
+#: ``Mixer("M", n_inlets=3).in_4`` is an error and so is ``.outlt``. Maps each
+#: class to a tuple of the families *it* generates, one ``(keyword, member,
+#: suffix)`` per family:
+#:
+#: - ``keyword`` is the constructor argument that sets the count
+#:   (``n_inlets``, ``n_draws``, ...);
+#: - ``member`` is the nozzle stem the count numbers (``in`` builds ``in_1``
+#:   ... ``in_n``);
+#: - ``suffix`` is what sits between the class name and the arity in the
+#:   generated class's own name -- ``""`` for ``Mixer3``, and ``"Draw"`` for
+#:   ``ColumnDraw3``, which is what tells the two families on one class apart
+#:   without a second dict alongside this one.
+#:
+#: Every class here carries one family but ``Column``, which carries two:
+#: ``n_feeds`` (suffix ``""``, the ordinary case a plain ``Column`` always
+#: had) and ``n_draws`` (suffix ``"Draw"``, added beside it). The two are
+#: independent rather than crossed -- see ``Column.__new__``'s own comment --
+#: so ``feed``'s per-arity classes and ``draw``'s are two separate walks over
+#: 1..8, not one walk over 64 combinations.
 #:
 #: ``Reactor`` is here despite ``StirredTankReactor`` adding ``duty``,
 #: ``outlet`` and ``vent``: all three are already declared on ``Reactor`` too
@@ -292,15 +316,43 @@ _CHECKER_VISIBLE_GETATTR = {"Block"}
 #: gives every generated subclass of a family base its own overloads and its
 #: own ``ClassNameN`` classes rather than reusing the base's; see that
 #: script's ``arity_family``.
+#:
+#: ``Absorber`` and ``Stripper`` are here for ``n_feeds`` only. Both still
+#: *take* ``n_draws=``/``draw_stages=`` at run time -- they are ``Column``'s
+#: own keywords and neither subclass overrides ``__init__`` -- but neither
+#: gets a second overload family of its own for it: copying ``Column``'s
+#: two-family trade onto every reduced-port-set subclass too would spend the
+#: class-explosion problem a second and a third time for a combination
+#: (``Absorber``/``Stripper`` *and* a side draw) narrower still than the one
+#: ``Column`` already declines to cross-type. So ``absorber.draw_2`` does not
+#: resolve even where ``n_draws=2`` really built it; ``absorber.draws[i]`` or
+#: ``absorber.port("draw_2")`` is the typed route there, exactly as
+#: ``m.inlets[i]`` is for a *computed* ``n_inlets`` everywhere else in this
+#: table.
 _EXACT_ARITY = {
-    units.Mixer: "in",
-    units.Splitter: "out",
-    units.Column: "feed",
-    units.Reactor: "feed",
-    units.Absorber: "feed",
-    units.Stripper: "feed",
+    units.Mixer: (("n_inlets", "in", ""),),
+    units.Splitter: (("n_outlets", "out", ""),),
+    units.Column: (("n_feeds", "feed", ""), ("n_draws", "draw", "Draw")),
+    units.Reactor: (("n_feeds", "feed", ""),),
+    units.Absorber: (("n_feeds", "feed", ""),),
+    units.Stripper: (("n_feeds", "feed", ""),),
 }
 _MAX_ARITY = 8
+
+
+def _arity_families():
+    """``_EXACT_ARITY`` flattened to one row per (class, family).
+
+    Most classes contribute one row; ``Column`` contributes two. Parametrizing
+    over this, rather than over ``_EXACT_ARITY`` itself, is what lets the tests
+    below walk ``n_feeds`` and ``n_draws`` as the two independent families they
+    are instead of assuming there is exactly one keyword per class.
+    """
+    return [
+        (cls, keyword, member, suffix)
+        for cls, families in _EXACT_ARITY.items()
+        for keyword, member, suffix in families
+    ]
 
 
 def _classes_with_a_visible_getattr():
@@ -349,9 +401,11 @@ def test_only_these_classes_answer_for_a_numbered_nozzle():
 
 
 @pytest.mark.parametrize(
-    "cls", sorted(_EXACT_ARITY, key=lambda c: c.__name__), ids=lambda c: c.__name__
+    "cls,keyword,member,suffix",
+    _arity_families(),
+    ids=[f"{cls.__name__}-{keyword}" for cls, keyword, member, suffix in _arity_families()],
 )
-def test_a_literal_count_gets_a_class_declaring_exactly_those_nozzles(cls):
+def test_a_literal_count_gets_a_class_declaring_exactly_those_nozzles(cls, keyword, member, suffix):
     """The per-arity subclasses say what the constructor really builds.
 
     ``Mixer3`` exists so a checker handed ``n_inlets=3`` can resolve ``in_3``
@@ -362,7 +416,10 @@ def test_a_literal_count_gets_a_class_declaring_exactly_those_nozzles(cls):
 
     So: build the unit for real at each arity, and compare its ports against
     what the subclass of that arity declares. A ``Column1`` is the case worth
-    having, since a one-feed tower is ``feed`` and not ``feed_1``.
+    having, since a one-feed tower is ``feed`` and not ``feed_1`` -- and
+    ``ColumnDraw1`` is the case that reads the opposite way: a one-draw
+    tower's ``draw`` is *not* the base class's job, because ``n_draws``
+    defaults to zero and nothing can say a plain ``Column`` has one.
     """
     module = ast.parse(pathlib.Path(units.__file__).read_text(encoding="utf-8"))
     declared = {
@@ -374,30 +431,26 @@ def test_a_literal_count_gets_a_class_declaring_exactly_those_nozzles(cls):
         for node in ast.walk(module)
         if isinstance(node, ast.ClassDef)
     }
-    keyword = {
-        "Mixer": "n_inlets",
-        "Splitter": "n_outlets",
-        "Column": "n_feeds",
-        "Reactor": "n_feeds",
-        "Absorber": "n_feeds",
-        "Stripper": "n_feeds",
-    }[cls.__name__]
-    member = _EXACT_ARITY[cls]
     for n in range(1, _MAX_ARITY + 1):
-        name = f"{cls.__name__}{n}"
+        name = f"{cls.__name__}{suffix}{n}"
         assert name in declared, f"{name} is not defined; the overload names it"
-        # The *numbered* nozzles this arity really builds. The singular ones
-        # are the base class's job and are declared there -- which is why a
-        # one-feed Column1 is empty and a one-inlet Mixer1 is not: a lone feed
-        # is ``feed``, a lone inlet is ``in_1``.
+        # Every nozzle this family builds at this arity -- singular
+        # included, unlike the old single-family version of this check.
+        # What the arity class has to declare on its own is only the part
+        # the base class does not already promise: subtracting
+        # ``_annotated(cls)`` is what makes ``Column1`` empty (``feed`` is
+        # on ``Column`` itself) and ``ColumnDraw1`` not (``draw`` is on
+        # neither ``Column`` nor any base of it), from the one formula.
         built = {
             port
             for port in cls("X-1", **{keyword: n}).ports
-            if re.fullmatch(rf"{member}_\d+", port)
+            if re.fullmatch(rf"{member}(_\d+)?", port)
         }
-        assert declared[name] == built, (
+        expected = built - _annotated(cls)
+        assert declared[name] == expected, (
             f"{name} declares {sorted(declared[name])} but a {keyword}={n} "
-            f"{cls.__name__} builds {sorted(built)}"
+            f"{cls.__name__} builds {sorted(expected)} beyond what {cls.__name__} "
+            f"itself already declares"
         )
 
 
@@ -406,15 +459,22 @@ def test_no_arity_class_is_left_over(cls=None):
 
     ``Mixer9`` sitting in the file would declare nine inlets and never be
     handed to anyone, and the test above -- which walks ``1 .. _MAX_ARITY`` --
-    would not look at it.
+    would not look at it. ``ColumnDraw9`` is the same shape of leftover for
+    ``Column``'s second family.
     """
     module = ast.parse(pathlib.Path(units.__file__).read_text(encoding="utf-8"))
-    expected = {f"{c.__name__}{n}" for c in _EXACT_ARITY for n in range(1, _MAX_ARITY + 1)}
+    expected = {
+        f"{cls.__name__}{suffix}{n}"
+        for cls, keyword, member, suffix in _arity_families()
+        for n in range(1, _MAX_ARITY + 1)
+    }
     found = {
         node.name
         for node in ast.walk(module)
         if isinstance(node, ast.ClassDef)
-        and re.fullmatch(r"(Mixer|Splitter|Column|Reactor|Block|Absorber|Stripper)\d+", node.name)
+        and re.fullmatch(
+            r"(Mixer|Splitter|ColumnDraw|Column|Reactor|Block|Absorber|Stripper)\d+", node.name
+        )
     }
     assert found == expected
 

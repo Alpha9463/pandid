@@ -298,6 +298,140 @@ def test_feed_stages_is_none_by_default_and_unwritten():
     assert col.feed_stages is None
 
 
+# --- n_draws: a side draw, the feed family reversed ---------------------
+
+
+def test_a_column_has_no_draw_by_default():
+    """Most columns have none, unlike ``n_feeds``: a plain two-product
+    tower gets no third nozzle it never asked for."""
+    col = U.Column("T-101")
+    assert col.draws == ()
+    assert "draw" not in col.ports
+
+
+def test_a_column_takes_a_side_draw():
+    col = U.Column("T-301", n_draws=1)
+    assert set(col.ports) == {
+        "feed",
+        "draw",
+        "distillate",
+        "bottoms",
+        "reflux_in",
+        "boilup_in",
+        "reboiler_duty",
+        "condenser_duty",
+    }
+    assert col.draw.direction == "outlet"
+    assert col.draw.role == "draw"
+
+
+def test_a_column_takes_more_than_one_side_draw():
+    col = U.Column("T-301", n_draws=2)
+    assert {"draw_1", "draw_2"} <= set(col.ports)
+    assert "draw" not in col.ports
+    assert col.draw_1.direction == "outlet"
+    assert col.draw_2.role == "draw"
+
+
+def test_a_negative_draw_count_is_rejected():
+    with pytest.raises(ValueError, match="cannot take a negative number of draws"):
+        U.Column("T", n_draws=-1)
+
+
+def test_a_draw_lands_on_the_east_face_a_feed_never_reaches():
+    """A draw is a feed's flow reversed: it leaves opposite the wall a
+    feed enters on."""
+    from pandid.portgeom import _drawn_placements, resolve_size
+
+    col = U.Column("T-301", n_draws=1)
+    w, h = resolve_size(col)
+    assert list(_drawn_placements(col, "draw", w, h, 0, False, False)) == ["E"]
+    assert list(_drawn_placements(col, "feed", w, h, 0, False, False)) == ["W"]
+
+
+# --- draw_stages: a draw lands on the stage it actually leaves from ------
+
+
+def test_a_draw_stage_moves_the_nozzle_off_the_even_spread():
+    from pandid.portgeom import port_point
+
+    fs = _flowsheet_with(
+        U.Column("T-301", internals="valve_tray", trays=30, n_draws=2, draw_stages=[8, 20]).pin(
+            x=300, y=0
+        )
+    )
+    col = fs.units[0]
+    fs.layout()
+    _, y1 = port_point(col, col.frame, "draw_1")
+    _, y2 = port_point(col, col.frame, "draw_2")
+    top = col.frame.y
+    height = col.frame.h
+    assert (y1 - top) / height == pytest.approx(0.11 + 7.5 * 0.78 / 30)
+    assert (y2 - top) / height == pytest.approx(0.11 + 19.5 * 0.78 / 30)
+
+
+def test_a_single_draw_column_can_pin_its_lone_nozzle_too():
+    """``draw_stages=`` on a one-draw tower pins the singular ``draw``,
+    the same shape ``feed_stages=`` takes on a one-feed tower."""
+    from pandid.portgeom import port_point
+
+    fs = _flowsheet_with(
+        U.Column("T-1", internals="tray", trays=8, n_draws=1, draw_stages=[4]).pin(x=300, y=0)
+    )
+    col = fs.units[0]
+    fs.layout()
+    _, y = port_point(col, col.frame, "draw")
+    assert (y - col.frame.y) / col.frame.h == pytest.approx(0.11 + 3.5 * 0.78 / 8)
+
+
+def test_draw_stages_length_must_match_the_draws():
+    with pytest.raises(
+        ValueError,
+        match=r"T-1 has 2 draws \(draw_1, draw_2\) but draw_stages names 1",
+    ):
+        U.Column("T-1", n_draws=2, draw_stages=[5])
+
+
+def test_a_draw_stage_out_of_range_names_the_tray_count():
+    with pytest.raises(ValueError, match=r"stage 40 is not on a column of 30"):
+        U.Column("T-1", internals="tray", trays=30, n_draws=1, draw_stages=[40])
+
+
+def test_draw_stages_on_a_bare_shell_is_refused():
+    with pytest.raises(ValueError, match="draw_stages names a stage"):
+        U.Column("T-1", internals=None, n_draws=1, draw_stages=[1])
+
+
+def test_draw_stages_is_none_by_default_and_unwritten():
+    col = U.Column("T-1", n_draws=2)
+    assert col.draw_stages is None
+
+
+def test_a_feed_stage_and_a_draw_stage_pin_independently():
+    """The two stage lists are read into one merged fraction table; this
+    is the check that neither keyword shadows the other's nozzle."""
+    from pandid.portgeom import port_point
+
+    fs = _flowsheet_with(
+        U.Column(
+            "T-101",
+            internals="valve_tray",
+            trays=30,
+            n_feeds=1,
+            feed_stages=[12],
+            n_draws=1,
+            draw_stages=[22],
+        ).pin(x=300, y=0)
+    )
+    col = fs.units[0]
+    fs.layout()
+    _, feed_y = port_point(col, col.frame, "feed")
+    _, draw_y = port_point(col, col.frame, "draw")
+    top, height = col.frame.y, col.frame.h
+    assert (feed_y - top) / height == pytest.approx(0.11 + 11.5 * 0.78 / 30)
+    assert (draw_y - top) / height == pytest.approx(0.11 + 21.5 * 0.78 / 30)
+
+
 def _flowsheet_with(unit):
     from pandid import Flowsheet
 
@@ -728,6 +862,8 @@ def test_one_feed_is_the_one_tuple_holding_the_singular_nozzle():
         (lambda: U.Mixer("M", n_inlets=5), ["inlets"]),
         (lambda: U.Splitter("S", n_outlets=5), ["outlets"]),
         (lambda: U.Column("T", n_feeds=5), ["feeds"]),
+        (lambda: U.Column("T", n_draws=5), ["draws"]),
+        (lambda: U.Column("T", n_feeds=5, n_draws=5), ["feeds", "draws"]),
         (lambda: U.Reactor("R", n_feeds=5), ["feeds"]),
         (lambda: U.Block("B", inputs=5, outputs=4), ["inlets", "outlets"]),
     ],
@@ -758,6 +894,22 @@ def test_a_multi_feed_towers_family_is_its_numbered_nozzles_top_to_bottom():
     assert col.reflux_in not in col.feeds
     assert col.boilup_in not in col.feeds
     assert [p.name for p in U.Reactor("R-201", n_feeds=2).feeds] == ["feed_1", "feed_2"]
+
+
+def test_a_multi_draw_towers_family_is_its_numbered_nozzles_top_to_bottom():
+    col = U.Column("T-302", n_draws=3)
+    assert [p.name for p in col.draws] == ["draw_1", "draw_2", "draw_3"]
+    assert col.draws[0] is col.draw_1
+    # The draws are outlets on the east wall, not the returns beside them.
+    assert col.reflux_in not in col.draws
+    assert col.boilup_in not in col.draws
+    assert col.feed not in col.draws
+
+
+def test_one_draw_is_the_one_tuple_holding_the_singular_nozzle():
+    col = U.Column("T-101", n_draws=1)
+    assert [p.name for p in col.draws] == ["draw"]
+    assert col.draws[0] is col.draw
 
 
 def test_tank_is_its_own_kind():

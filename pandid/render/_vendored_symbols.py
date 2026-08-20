@@ -301,7 +301,7 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.vessels.pressurized_vessel',
         # must not be turned: distillate off the top, bottoms off the floor
         gravity_fixed=True,
-        port_series=(PortSeries('feed_', 'W', pitch=35.0, extent=0.35, at=105.0, singular='feed'),),
+        port_series=(PortSeries('feed_', 'W', pitch=35.0, extent=0.35, at=105.0, singular='feed'), PortSeries('draw_', 'E', pitch=35.0, extent=0.35, at=105.0, singular='draw'),),
     ), 'default')
 
     # draw.io vessels:Tower With Packing (aspect=variable) -> column/packed
@@ -312,7 +312,7 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.vessels.tower_with_packing',
         # must not be turned: packed beds rest on their support grids
         gravity_fixed=True,
-        port_series=(PortSeries('feed_', 'W', pitch=35.0, extent=0.35, at=105.0, singular='feed'),),
+        port_series=(PortSeries('feed_', 'W', pitch=35.0, extent=0.35, at=105.0, singular='feed'), PortSeries('draw_', 'E', pitch=35.0, extent=0.35, at=105.0, singular='draw'),),
     ), 'packed')
 
     # draw.io vessels:Pressurized Vessel (aspect=variable) -> reactor/default

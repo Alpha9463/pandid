@@ -675,6 +675,7 @@ def test_what_the_naming_rule_reads(name, stem):
         (lambda: U.Mixer("M", n_inlets=4), "in", 4),
         (lambda: U.Splitter("S", n_outlets=3), "out", 3),
         (lambda: U.Column("T", n_feeds=2), "feed", 2),
+        (lambda: U.Column("T", n_draws=3), "draw", 3),
         (lambda: U.Reactor("R", n_feeds=5), "feed", 5),
         (lambda: U.Block("B", inputs=["W", "N", "N"], outputs=1), "in", 3),
         (lambda: U.Block("B", inputs=1, outputs=2), "out", 2),

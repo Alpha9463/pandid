@@ -572,9 +572,9 @@ Each entry is `port` *(direction / role)*.
 | `Vessel` | `vessel` | `inlet` *(in)*, `outlet` *(out)*, `vent` *(out/vapor)*, `relief` *(out)*, `drain` *(out/liquid)* |
 | `Tank` | `tank` | the same five as `Vessel` |
 | `Separator` | `separator` | `feed` *(in)*, `vapor` *(out/vapor)*, `liquid` *(out/liquid)* on the four variants whose draws really are phases — the drum (`default`, `horizontal`, `knockout`) and the wet `scrubber`. The other seven sort or collect rather than separating into phases, and name the two draws their artwork has: `feed` *(in/feed)*, `overflow` *(out)*, `underflow` *(out)*; see [Variants](#variants) |
-| `Column` | `column` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*, `reflux_in` *(in/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*, `condenser_duty` *(out/energy)*; the feeds are [`feeds`](#the-family-as-a-sequence) |
-| `Absorber` | `column` | A `Column` with none of the four return nozzles: `feed` *(in/feed)*, or `feed_1` … `feed_n`, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*. Nothing in an absorber boils, so it has no `reflux_in`, `boilup_in`, `reboiler_duty` or `condenser_duty`; `internals=` defaults to `"packing"` |
-| `Stripper` | `column` | A `Column` with a reboiler and no condenser: `feed` *(in/feed)*, or `feed_1` … `feed_n`, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*. No `reflux_in` or `condenser_duty` |
+| `Column` | `column` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, no draw, or `draw` *(out/draw)*, or `draw_1` … `draw_n`, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*, `reflux_in` *(in/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*, `condenser_duty` *(out/energy)*; the feeds are [`feeds`](#the-family-as-a-sequence) and the draws [`draws`](#the-family-as-a-sequence) |
+| `Absorber` | `column` | A `Column` with none of the four return nozzles: `feed` *(in/feed)*, or `feed_1` … `feed_n`, no draw, or `draw` *(out/draw)*, or `draw_1` … `draw_n`, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*. Nothing in an absorber boils, so it has no `reflux_in`, `boilup_in`, `reboiler_duty` or `condenser_duty`; `internals=` defaults to `"packing"` |
+| `Stripper` | `column` | A `Column` with a reboiler and no condenser: `feed` *(in/feed)*, or `feed_1` … `feed_n`, no draw, or `draw` *(out/draw)*, or `draw_1` … `draw_n`, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*. No `reflux_in` or `condenser_duty` |
 | `Reactor` | `reactor` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `outlet` *(out)*, `vent` *(out/vapor)*, `duty` *(in/energy)*, and `drive` *(in/energy)* where it has an [`agitator=`](#what-a-body-carries) to be driven; `variant="tubular"` is a PFR and has no vapour space, so it has no `vent`. The feeds are [`feeds`](#the-family-as-a-sequence) |
 | `HeatExchanger` | `hex` | `shell_in`, `shell_out`, `tube_in`, `tube_out`; `kettle` adds `bottoms` *(out/liquid)*. Four variants name their sides differently; see [Variants](#variants) |
 | `Heater` | `heater` | `inlet` *(in)*, `outlet` *(out)*, `utility_in` *(in/energy)* |
@@ -642,8 +642,8 @@ units.Mixer(name, n_inlets=2, variant="default", width=None, height=None,
 units.Splitter(name, n_outlets=2, variant="default", width=None, height=None,
                description="")
 units.Column(name, n_feeds=1, variant="default", internals=None, trays=8,
-             feed_stages=None, width=None, height=None, label_pos=None,
-             description="")
+             feed_stages=None, n_draws=0, draw_stages=None, width=None,
+             height=None, label_pos=None, description="")
 units.Reactor(name, n_feeds=1, variant="default", agitator="agitator",
               internals=None, width=None, height=None, label_pos=None,
               description="")
@@ -721,6 +721,54 @@ count against. `internals="packing"` counts beds rather than decks, and a
 stage there lands *above* the bed it names, not through it — a packed tower's
 feed enters above the packing.
 
+### `n_draws`: a side draw
+
+`n_draws` gives a column a third product off the shell, between the feed and
+the two ends: a crude atmospheric tower, a solvent recovery train, any
+sidestream fractionation. Unlike `n_feeds`, no draw at all is the ordinary
+case — most columns have none — so it defaults to zero and the nozzles are
+`col.draw` / `col.draw_1` … `col.draw_n` on the shell's **east** face, opposite
+the feeds:
+
+```python
+tower = units.Column("T-301", n_draws=1, description="Sidestream Column")
+fs.connect(tower.draw, kerosene.inlet)
+```
+
+**It places a nozzle only.** A real side draw is vapour or liquid, and the two
+leave different nozzles on a real sheet — but a feed does not distinguish that
+either, and drawing the distinction for a draw alone would say something a
+feed does not. The phase belongs on the port's `role` (`"draw"`, exactly as
+generic as `"feed"`), not on its placement, and no above/below-the-tray
+geometry is drawn for it.
+
+`draw_stages=` puts a draw on the stage it actually leaves from, the identical
+mechanism `feed_stages=` puts a feed on, read the other way:
+
+```python
+units.Column("T-301", internals="valve_tray", trays=30,
+             n_draws=1, draw_stages=[15])
+```
+
+Every rule `feed_stages=` follows above applies unchanged here: one entry per
+draw, `None` keeps the even spread, and a stage out of range or named on a
+bare shell is refused for the same reason.
+
+**A pumparound** is a draw at one stage and an ordinary feed carrying the
+return at another — two nozzles, wired with a plain `connect()`. There is no
+paired abstraction for it, the same way reflux itself is not one:
+
+```python
+tower = units.Column("T-301", internals="valve_tray", trays=30,
+                      n_feeds=2, feed_stages=[3, None],
+                      n_draws=1, draw_stages=[10])
+pump = fs.add(units.Pump("P-301"))
+cooler = fs.add(units.Cooler("E-301"))
+fs.connect(tower.draw, pump.suction)          # pulled off stage 10...
+fs.connect(pump.discharge, cooler.inlet)
+fs.connect(cooler.outlet, tower.feed_1)       # ...and returned cooled to stage 3, above it
+```
+
 ### The family as a sequence
 
 Each of those counts also has an accessor for the **whole family**, a
@@ -732,6 +780,7 @@ Each of those counts also has an accessor for the **whole family**, a
 | `Splitter` | `outlets` | `out_1` … `out_n` |
 | `Block` | `inlets`, `outlets` | `in_1` … `in_n`, `out_1` … `out_m` |
 | `Column` | `feeds` | `feed`, or `feed_1` … `feed_n` |
+| `Column` | `draws` | none, `draw`, or `draw_1` … `draw_n` |
 | `Reactor` | `feeds` | `feed`, or `feed_1` … `feed_n` |
 
 ```python
@@ -804,6 +853,44 @@ reveal_type(s)  # StirredTankReactor3, not Reactor3
 has its own `feed_1` … `feed_n` overloads, so `Absorber("V-1", n_feeds=2)`
 narrows to `Absorber2` rather than to `Column2`, and `t: Absorber =
 Absorber("V-1")` still type-checks with no `n_feeds` given at all.
+
+**`Column` narrows on a second, independent count too: `n_draws`.** Crossing
+both — a subclass per `(n_feeds, n_draws)` pair — is 64 `TYPE_CHECKING`
+classes for a combination almost nothing draws, so it is two separate
+families instead: any `n_feeds` with no draw (`Column1` … `Column8`, the
+ordinary case above, unchanged) and `n_feeds=1` with any `n_draws`
+(`ColumnDraw1` … `ColumnDraw8`):
+
+```python
+c = units.Column("T-1", n_feeds=2)
+c.feed_2         # Port
+d = units.Column("T-2", n_draws=3)
+d.draw_3         # Port
+```
+
+**Naming both counts above one is the genuine intersection**, and it falls
+back to the plain `Column` — every nozzle it really has is still reachable
+through `col.feeds`/`col.draws` or `col.port(...)`, just not by the numbered
+attribute spelling:
+
+```python
+both = units.Column("T-3", n_feeds=2, n_draws=2)
+reveal_type(both)  # Column, not Column2 or ColumnDraw2
+both.feed_2        # error -- use both.feeds[1] or both.port("feed_2")
+```
+
+This still catches every typo `n_feeds` alone did: `Column` does not take
+`Block`'s blanket `__getattr__`, because a column carries six fixed nozzles
+worth catching a misspelling on and a block carries almost none.
+
+`Absorber` and `Stripper` do **not** get a second overload family for
+`n_draws`. Both still take `n_draws=`/`draw_stages=` at run time — they are
+`Column`'s own keywords, and neither subclass overrides `__init__` — but
+typing every reduced-port-set subclass for a draw too would spend the
+64-class problem a second time over a combination narrower still. So
+`Absorber("V-1", n_draws=2).draw_2` does not resolve even though the nozzle
+is really there; `.draws[i]` or `.port("draw_2")` is the typed route, exactly
+as `m.inlets[i]` is for a computed count everywhere else on this page.
 
 **`Block`** sits outside this. It takes a blanket `__getattr__` instead, so
 `block.in_1` resolves and `block.outlt` is *not* caught: its two counts are
@@ -930,11 +1017,14 @@ its own class is not a drawing but a **reduced port set**:
 An absorber neither boils nor refluxes, so it keeps none of `Column`'s four
 return nozzles; a stripper still reboils but never refluxes, so it keeps
 `boilup_in` and `reboiler_duty` and drops the other two. Both keep
-`internals=`, `trays=`, `n_feeds=` and `feed_stages=` unchanged from
-`Column` -- an absorber can be trayed, packed or a bare spray tower exactly
-as any other column can, so `Absorber` only narrows the ports and the
-default for `internals=` (`"packing"`), never the composition keywords
-themselves.
+`internals=`, `trays=`, `n_feeds=`, `feed_stages=`, `n_draws=` and
+`draw_stages=` unchanged from `Column` -- an absorber can be trayed, packed
+or a bare spray tower exactly as any other column can, and can carry a side
+draw exactly as any other column can, so `Absorber` only narrows the ports
+and the default for `internals=` (`"packing"`), never the composition
+keywords themselves. What `Absorber`/`Stripper` do *not* inherit is a typed
+`n_draws` overload family of their own -- see the note on it in
+[The family as a sequence](#the-family-as-a-sequence) above.
 
 ### `Block`: the block flow diagram
 
@@ -2933,7 +3023,7 @@ making, so the warnings left on `fs.warnings` are about the sheet that came out.
 | `gravity-turned` | warning | a unit whose symbol's function depends on gravity has been given a quarter turn, which ISO 15519-1:2010 §11.4.2 excepts from the general permission to turn. One finding per unit; see [Symbols that must not be turned](#symbols-that-must-not-be-turned) |
 | `run-off-elevation` | warning | two connected nozzles on one horizontal run are *almost* level, missing by less than the shorter symbol is tall, so the line steps into a device and back out; see [Runs at one elevation](#runs-at-one-elevation) |
 | `nozzles-crowded` | warning | two nozzles on one face both wear an arrowhead and are pitched closer than ISO 128-20 lets two parallel lines come, so the strip of paper between the heads is too thin to survive reproduction. One finding per face, and the message names the box that would fix it. Not made for a P&ID, which draws no heads. See [Nozzles and the arrowheads they carry](#nozzles-and-the-arrowheads-they-carry) |
-| `nozzle-unconnected` | warning | a nozzle whose existence a count asked for (`n_inlets=`, `n_outlets=`, `n_feeds=`, `inputs=`, `outputs=`) carries no stream, so the sheet asserts a connection that is not drawn. One finding per family; only counted nozzles, and only process ones. See [Nozzles nothing is piped to](#nozzles-nothing-is-piped-to) |
+| `nozzle-unconnected` | warning | a nozzle whose existence a count asked for (`n_inlets=`, `n_outlets=`, `n_feeds=`, `n_draws=`, `inputs=`, `outputs=`) carries no stream, so the sheet asserts a connection that is not drawn. One finding per family; only counted nozzles, and only process ones. See [Nozzles nothing is piped to](#nozzles-nothing-is-piped-to) |
 | `stream-name-reused` | warning | auto-numbering picked a name another stream already answers to, so the two share one stream-table column and one of them is not tabulated at all. Only a *counted* name is reported: a run drawn in several `connect()` calls shares its name on purpose. See [Stream numbering](#stream-numbering) |
 | `boundary-flow-missing` | warning | a stream with a `Feed` or a `Product` at one end states no property, on a sheet whose other streams state theirs. ISO 10628-1:2014 §4.3.2 d) makes the flow rates or quantities of ingoing and outgoing materials something a PFD shall contain, so the stream table keeps the empty column rather than dropping it the way it drops an empty internal one. A blank value is a report and is not flagged; see [Which streams get a column](#which-streams-get-a-column) |
 | `route-not-settled` | warning | routing and instrument placement never agreed and `route()` ran out of passes; see [Routing and instrument placement](#routing-and-instrument-placement) |
@@ -3472,6 +3562,7 @@ flag's off-page drawing), explicit `width`/`height`, `label_pos`, `new_line_numb
 (break the stream or line number at this inline item), `n_inlets` / `n_outlets`
 for `Mixer` / `Splitter`, `n_feeds` for `Column` / `Reactor`, `feed_stages` (one
 stage per feed, `null` for a feed that keeps the even spread) for `Column`,
+`n_draws` and `draw_stages` (the same shape, for a side draw) for `Column`,
 `length` and `diameter` for `Conveyor`, `branch` (`outlet` / `inlet`) for `Tee`,
 `large_end` (`inlet` / `outlet`) for `Reducer`, `normal_position` (`open` /
 `closed`) for `Valve` and for `Fitting`'s `blind`, and `fail` (`open` / `closed` /

@@ -93,6 +93,23 @@ def test_a_feed_family_is_fixed_the_way_a_single_nozzle_is():
     assert port_anchor(col, col.frame, "feed_1") != port_anchor(col, col.frame, "feed_2")
 
 
+def test_a_draw_family_is_fixed_on_the_east_wall_a_feed_never_reaches():
+    """The feed's mirror: a draw's family spreads down the east wall the
+    same way, and offers no other face to select between either."""
+    fs = Flowsheet("sidestream")
+    col = fs.add(units.Column("T-401", n_draws=2)).pin(x=300, y=200)
+    heavy = fs.add(units.Product("Heavy Naphtha")).pin(x=500, y=250)
+    light = fs.add(units.Product("Light Naphtha")).pin(x=500, y=330)
+    fs.connect(col.draw_1, heavy.inlet)
+    fs.connect(col.draw_2, light.inlet)
+    fs.layout()
+    assert port_anchor(col, col.frame, "draw_1")[2] == "E"
+    assert port_anchor(col, col.frame, "draw_2")[2] == "E"
+    assert col.frame is not None
+    assert col.frame.port_faces == {}
+    assert port_anchor(col, col.frame, "draw_1") != port_anchor(col, col.frame, "draw_2")
+
+
 def test_a_kettles_bottoms_draw_is_a_fixed_target_its_peer_aims_at():
     """The draw is on the shell bottom and offers nothing else, so it is what a
     movable port at the other end of the line gets scored against."""

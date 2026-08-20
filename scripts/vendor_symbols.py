@@ -325,8 +325,17 @@ KIND_MAP = {
     # For a reader: one, two or three feeds sit at the declared 35 pitch, and
     # the fourth is where PortSeries begins squeezing the run into ``extent``
     # rather than running it off the ends.
+    # ``draw`` is the feed family read the other way: the same band, the
+    # same arithmetic, the opposite wall. A draw leaves over the east
+    # face a feed enters the west one on, so it shares the feed family's
+    # ``at``/``pitch``/``extent`` outright rather than deriving its own --
+    # centred on 105 with a 70-unit band, it lands strictly inside the
+    # 65..145 the duty arrows already bound on *this* wall, the same
+    # clearance the feeds get on theirs. ``n_draws`` defaults to zero, so
+    # nothing here is drawn on a sheet that does not ask for one.
     ("column", "default"): ("vessels", "Pressurized Vessel",
                             {"feed": ("SERIES", "W", 105, 35, 0.35),
+                             "draw": ("SERIES", "E", 105, 35, 0.35),
                              "distillate": ("N", 50), "bottoms": ("S", 50),
                              "reflux_in": ("E", 35), "boilup_in": ("E", 175),
                              "condenser_duty": ("E", 65), "reboiler_duty": ("E", 145)}),
@@ -349,6 +358,7 @@ KIND_MAP = {
     # tower's feed band on exactly the default column's.
     ("column", "packed"): ("vessels", "Tower With Packing",
                            {"feed": ("SERIES", "W", 50.925, 16.975, 0.35),
+                            "draw": ("SERIES", "E", 50.925, 16.975, 0.35),
                             "distillate": ("N", 7), "bottoms": ("S", 7),
                             "reflux_in": ("E", 16.975), "boilup_in": ("E", 84.875),
                             "condenser_duty": ("E", 31.525),

@@ -433,6 +433,130 @@ def test_feed_stages_on_a_kind_with_no_feed_family_is_rejected():
     assert "only a Column takes 'feed_stages', not a Pump" in str(excinfo.value)
 
 
+def test_a_columns_draw_count_round_trips():
+    """``n_draws`` the other way round: unlike ``n_feeds``, zero -- not one
+    -- is the shape that writes nothing down, since most columns have no
+    side draw at all."""
+    fs = Flowsheet.from_dict(
+        {"name": "T", "units": [{"kind": "Column", "name": "T-301", "n_draws": 2}]}
+    )
+    assert {"draw_1", "draw_2"} <= set(fs.units[0].ports)
+    written = fs.to_dict()["units"][0]
+    assert written["n_draws"] == 2
+    bare = Flowsheet.from_dict({"name": "T", "units": [{"kind": "Column", "name": "T-101"}]})
+    assert "n_draws" not in bare.to_dict()["units"][0]
+
+
+def test_a_columns_draw_stages_round_trip():
+    """The keyword the writer must not drop, for the reason
+    ``test_a_columns_feed_stages_round_trip`` gives ``feed_stages``: nothing
+    else on the entry says where a draw landed."""
+    fs = Flowsheet.from_dict(
+        {
+            "name": "T",
+            "units": [
+                {
+                    "kind": "Column",
+                    "name": "T-301",
+                    "internals": "valve_tray",
+                    "trays": 30,
+                    "n_draws": 2,
+                    "draw_stages": [8, 20],
+                },
+            ],
+        }
+    )
+    col = fs.units[0]
+    assert col.draw_stages == [8, 20]
+    written = fs.to_dict()["units"][0]
+    assert written["draw_stages"] == [8, 20]
+    assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
+    assert Flowsheet.from_dict(fs.to_dict()).to_svg() == fs.to_svg()
+
+
+def test_a_null_draw_stage_round_trips_as_null_not_as_absent():
+    fs = Flowsheet.from_dict(
+        {
+            "name": "T",
+            "units": [
+                {
+                    "kind": "Column",
+                    "name": "T-101",
+                    "internals": "tray",
+                    "trays": 8,
+                    "n_draws": 2,
+                    "draw_stages": [3, None],
+                },
+            ],
+        }
+    )
+    written = fs.to_dict()["units"][0]
+    assert written["draw_stages"] == [3, None]
+    assert Flowsheet.from_dict(fs.to_dict()).units[0].draw_stages == [3, None]
+
+
+def test_an_unstated_draw_stages_is_not_written_down():
+    col = units.Column("T-101", n_draws=2)
+    fs = Flowsheet("T")
+    fs.add(col)
+    entry = fs.to_dict()["units"][0]
+    assert "draw_stages" not in entry
+
+
+def test_a_draw_stages_length_mismatch_is_refused_from_a_spec():
+    with pytest.raises(SpecError) as excinfo:
+        Flowsheet.from_dict(
+            {
+                "name": "T",
+                "units": [
+                    {"kind": "Column", "name": "T-1", "n_draws": 2, "draw_stages": [5]},
+                ],
+            }
+        )
+    assert "draw_stages names 1" in str(excinfo.value)
+
+
+def test_draw_stages_on_a_kind_with_no_draw_family_is_rejected():
+    with pytest.raises(SpecError) as excinfo:
+        Flowsheet.from_dict(
+            {"name": "T", "units": [{"kind": "Pump", "name": "P-1", "draw_stages": [1]}]}
+        )
+    assert "only a Column takes 'draw_stages', not a Pump" in str(excinfo.value)
+
+
+def test_a_draw_count_on_a_kind_with_no_draw_family_is_rejected():
+    with pytest.raises(SpecError) as excinfo:
+        Flowsheet.from_dict({"name": "T", "units": [{"kind": "Pump", "name": "P-1", "n_draws": 2}]})
+    assert "only a Column takes 'n_draws', not a Pump" in str(excinfo.value)
+
+
+def test_a_column_with_both_feed_and_draw_families_round_trips():
+    """The intersection ``Column.__new__``'s comment names: both counts
+    above one, resolving to the untyped base class at the type level but
+    drawing and round-tripping exactly like any other column."""
+    fs = Flowsheet.from_dict(
+        {
+            "name": "T",
+            "units": [
+                {
+                    "kind": "Column",
+                    "name": "T-301",
+                    "internals": "valve_tray",
+                    "trays": 30,
+                    "n_feeds": 2,
+                    "feed_stages": [10, None],
+                    "n_draws": 2,
+                    "draw_stages": [None, 22],
+                },
+            ],
+        }
+    )
+    col = fs.units[0]
+    assert {"feed_1", "feed_2", "draw_1", "draw_2"} <= set(col.ports)
+    assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
+    assert Flowsheet.from_dict(fs.to_dict()).to_svg() == fs.to_svg()
+
+
 @pytest.mark.parametrize("kind", ["Vessel", "Tank"])
 def test_a_vessels_relief_and_drain_need_no_key_of_their_own(kind):
     """The spec carries #222's nozzles by carrying nothing.

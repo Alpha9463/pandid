@@ -218,13 +218,13 @@ def _composed(value: Any, default: Any, where: str) -> Any:
 
 
 def _stages(value: Any, where: str) -> list[int | None]:
-    """``feed_stages:``'s value: one stage number per feed, or ``null`` for
-    a feed that keeps the even spread.
+    """``feed_stages:``/``draw_stages:``'s value: one stage number per
+    feed or draw, or ``null`` for one that keeps the even spread.
 
-    ``null`` is the same statement it is in :func:`_composed`: a feed
-    naming no stage is not a feed the list said nothing about, and reading
-    the two alike would pin every feed to whichever stage the first one
-    named.
+    ``null`` is the same statement it is in :func:`_composed`: a feed or
+    a draw naming no stage is not one the list said nothing about, and
+    reading the two alike would pin every one of them to whichever
+    stage the first one named.
     """
     return [None if item is None else _integer(item, f"{where}[{i}]")
             for i, item in enumerate(_sequence(value, where))]
@@ -357,6 +357,7 @@ _VARIABLE_PORTS = {
     "n_inlets": ("Mixer",),
     "n_outlets": ("Splitter",),
     "n_feeds": ("Column", "Reactor"),
+    "n_draws": ("Column",),
 }
 # Sizes only some classes carry, policed the same way: a conveyor's belt
 # run and its roller are dimensions of its own rather than the generic
@@ -401,12 +402,14 @@ _KIND_ORDER = {
 _KIND_FLAGS = {
     "header": ("Feed", "Product"),
 }
-# One stage number per feed, keyed the same way. Not a composition
-# keyword: it names no part and has no per-variant default, it only says
-# where an already-drawn feed lands, so it is checked and read like the
-# tables above rather than folded into ``_KIND_COMPOSITION`` below.
+# One stage number per feed, or per draw, keyed the same way. Not a
+# composition keyword: it names no part and has no per-variant default,
+# it only says where an already-drawn feed or draw lands, so it is
+# checked and read like the tables above rather than folded into
+# ``_KIND_COMPOSITION`` below.
 _KIND_STAGES = {
     "feed_stages": ("Column",),
+    "draw_stages": ("Column",),
 }
 #: The composition keywords, keyed the same way and **derived rather
 #: than listed**: every one of them is an entry in the
@@ -1320,6 +1323,15 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
         # is what leaving the key off already means.
         if isinstance(unit, unit_types.Column) and unit.feed_stages is not None:
             entry["feed_stages"] = list(unit.feed_stages)
+        if isinstance(unit, unit_types.Column):
+            # Only a Column draws, and only Reactor is silent on the
+            # count above -- a draw has no singular spelling to fall
+            # back to, so unlike a feed's, zero is the count that means
+            # "leave this key off" rather than one.
+            if len(unit.draws) > 0:
+                entry["n_draws"] = len(unit.draws)
+            if unit.draw_stages is not None:
+                entry["draw_stages"] = list(unit.draw_stages)
     elif isinstance(unit, unit_types.Tee):
         # Only a returning tee. A takeoff is the ordinary case and is
         # what a tee without the word already is.
