@@ -8,7 +8,7 @@
         <mxCell id="u0" value="Reforming" style="html=1;rounded=0;whiteSpace=wrap;strokeColor=#111;fillColor=none;strokeWidth=2;verticalLabelPosition=middle;verticalAlign=middle;align=center;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="260" y="340" width="120" height="80" as="geometry" />
         </mxCell>
-        <mxCell id="u1" value="Shift &amp; CO2 Removal" style="html=1;rounded=0;whiteSpace=wrap;strokeColor=#111;fillColor=none;strokeWidth=2;verticalLabelPosition=middle;verticalAlign=middle;align=center;fontSize=12;" vertex="1" parent="1">
+        <mxCell id="u1" value="Shift &amp;amp; CO2 Removal" style="html=1;rounded=0;whiteSpace=wrap;strokeColor=#111;fillColor=none;strokeWidth=2;verticalLabelPosition=middle;verticalAlign=middle;align=center;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="520" y="340" width="182" height="80" as="geometry" />
         </mxCell>
         <mxCell id="u2" value="Synthesis Loop" style="html=1;rounded=0;whiteSpace=wrap;strokeColor=#111;fillColor=none;strokeWidth=2;verticalLabelPosition=middle;verticalAlign=middle;align=center;fontSize=12;" vertex="1" parent="1">

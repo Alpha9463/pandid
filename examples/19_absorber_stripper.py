@@ -341,23 +341,14 @@ def main():
         "T-401", "E-401", "T-402", "E-402", "V-401", "P-402A/B", "E-403",
         "P-401A/B", "E-404",
     ]))
-    # The unit is written in the two temperature headers rather than on
-    # every value under them, which is a column narrower and a reading
-    # clearer. It also keeps those two columns off a width the renderer
-    # cannot round the same way twice: a column is as wide as its widest
-    # cell plus a fixed pad, at five characters that comes to a width
-    # whose half is an exact rounding tie, and which way a tie falls
-    # depends on the last bit of a float sum -- which CPython 3.12
-    # changed. Five-character cells there draw this sheet 0,1 unit apart
-    # on 3.11 and on 3.12. The fix belongs in the renderer.
     fs.add_annotation(TableBox(
         title="UTILITIES SUMMARY",
-        headers=["Utility", "Unit No.", "Duty (kW)", "Flow (kg/s)", "T_in (C)",
-                 "T_out (C)"],
+        headers=["Utility", "Unit No.", "Duty (kW)", "Flow (kg/s)", "T_in",
+                 "T_out"],
         rows=[
-            ["LP Steam", "E-403", "24700", "11.30", "152", "151"],
-            ["Cooling Water", "E-402", "-4540", "72.4", "25", "40"],
-            ["Cooling Water", "E-404", "-12310", "196.3", "25", "40"],
+            ["LP Steam", "E-403", "24700", "11.30", "152 C", "151 C"],
+            ["Cooling Water", "E-402", "-4540", "72.4", "25 C", "40 C"],
+            ["Cooling Water", "E-404", "-12310", "196.3", "25 C", "40 C"],
         ],
         col_align=["l", "l", "r", "r", "c", "c"],
         align="bottom-right",

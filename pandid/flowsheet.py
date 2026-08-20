@@ -66,8 +66,9 @@ def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream)
 
     A component left unset drops out, and so does the text introducing
     it, so a line with no spec reads ``6"-P-1001`` rather than
-    ``6"-P-1001-``. A format spec still applies, which is how a site
-    pads its sequence: ``"{size}-{service}-{sequence:0>4}"``.
+    ``6"-P-1001-``, and a line with no size reads ``P-1001-SS`` rather
+    than ``-P-1001-SS``. A format spec still applies, which is how a
+    site pads its sequence: ``"{size}-{service}-{sequence:0>4}"``.
     """
     if callable(scheme):
         return scheme(stream)
@@ -87,7 +88,12 @@ def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream)
         if not value:
             pending = ""
             continue
-        out.append(pending + (format(value, format_spec) if format_spec else value))
+        # `pending` is the literal between this component and the last
+        # surviving one -- unless nothing has survived yet, in which case
+        # it only ever separated this component from one dropped ahead of
+        # it (or from nothing at all), and there is nothing for it to join.
+        piece = format(value, format_spec) if format_spec else value
+        out.append((pending if out else "") + piece)
         pending = ""
     line_number = "".join(out) + pending
     if not line_number:
@@ -815,6 +821,20 @@ class Flowsheet:
                 f"{tag}: bypass_over names the member the bypass valve stands over, "
                 f"one of {', '.join(BYPASS_ANCHORS)}, got {bypass_over!r}"
             )
+        # Which roles this station will carry is decided by isolation= and
+        # reducers= alone -- control is always built -- so this is checked
+        # from the two flags, before any member joins the sheet, rather than
+        # from the constructed units afterwards. A call refused here must
+        # leave nothing behind to be drawn.
+        _bypass_anchor_kept = {
+            "upstream_isolation": isolation, "downstream_isolation": isolation,
+            "reduction": reducers, "expansion": reducers, "control": True,
+        }
+        if bypass_over is not None and not _bypass_anchor_kept[bypass_over]:
+            raise ValueError(
+                f"{tag}: bypass_over={bypass_over!r} names a member this station was "
+                f"told to leave out"
+            )
 
         scheme = tag_scheme if tag_scheme is not None else self.valve_station_tag_scheme
         num = str(number) if number is not None else station_number(tag)
@@ -863,12 +883,6 @@ class Flowsheet:
                if u is not None]
         anchors = {"upstream_isolation": iso_a, "downstream_isolation": iso_b,
                    "reduction": red, "expansion": exp, "control": control}
-
-        if bypass_over is not None and anchors[bypass_over] is None:
-            raise ValueError(
-                f"{tag}: bypass_over={bypass_over!r} names a member this station was "
-                f"told to leave out"
-            )
 
         if x is not None and y is not None:
             left: dict[int, float] = {}   # the corner each member was pinned at

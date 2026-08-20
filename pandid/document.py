@@ -207,6 +207,29 @@ def _resolve_align(align, default):
     return value
 
 
+#: A :class:`TableBox` column's alignment: left, centre or right, spelled
+#: short. The spelled-out word is the obvious guess, and both renderers
+#: used to answer it by silently centring rather than raising.
+_COL_ALIGN = {"l", "c", "r"}
+
+
+def _resolve_col_align(col_align):
+    """``col_align``, checked entry by entry against the three spellings
+    the renderers key off. ``None`` passes through unchanged; a table
+    with no ``col_align`` is centred by default and that is not this
+    function's business to say.
+    """
+    if col_align is None:
+        return None
+    for i, a in enumerate(col_align):
+        if a not in _COL_ALIGN:
+            raise ValueError(
+                f"col_align[{i}] must be one of {sorted(_COL_ALIGN)} ('l'/'c'/'r' for "
+                f"left/centre/right), got {a!r}"
+            )
+    return col_align
+
+
 @dataclass
 class Annotation:
     """A generic titled box placed on the sheet.
@@ -260,6 +283,7 @@ class TableBox:
 
     def __post_init__(self):
         self.align = _resolve_align(self.align, "bottom-right")
+        self.col_align = _resolve_col_align(self.col_align)
 
 
 # --------------------------------------------------------------

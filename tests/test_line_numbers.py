@@ -50,6 +50,22 @@ def test_an_unset_component_drops_out_with_its_separator():
     assert s1.name == '6"-P-1001'
 
 
+def test_an_unset_first_component_drops_its_separator_too():
+    """A line with no declared bore -- entirely ordinary at PFD stage -- reads
+    P-1001-SS, not -P-1001-SS. Size is the first field in the default scheme,
+    so this is a leading separator rather than the trailing one above."""
+    _, _, (s1, _, _) = _skid(service="AE", spec="SS")
+    assert s1.name == "AE-1001-SS"
+
+
+def test_several_unset_leading_components_drop_one_separator():
+    fs = Flowsheet("t", line_numbering_scheme="{size}-{schedule}-{service}-{sequence}")
+    feed = fs.add(U.Feed("F"))
+    prod = fs.add(U.Product("P"))
+    s = fs.connect(feed.outlet, prod.inlet, service="P")
+    assert s.name == "P-1001"
+
+
 def test_a_scheme_can_name_the_insulation():
     fs = Flowsheet("t", line_numbering_scheme="{size}-{service}-{sequence}-{spec}-{insulation}")
     feed = fs.add(U.Feed("F"))

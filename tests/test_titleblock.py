@@ -388,6 +388,27 @@ def test_stream_table_section_header():
     assert "Stream Number" in svg
 
 
+def test_a_stream_table_section_keyed_to_nothing_warns_instead_of_vanishing():
+    """A section heading keyed to a property no stream sets never appears --
+    the same silence :func:`test_include_refuses_a_tag_the_flowsheet_does_not_have`
+    above refuses outright. This one cannot raise at assignment (the streams
+    may not exist yet when ``stream_table_sections`` is set), so it warns at
+    render time instead, naming the key and the heading that never showed."""
+    fs = Flowsheet("Tabled")
+    feed = fs.add(U.Feed("F"))
+    prod = fs.add(U.Product("P"))
+    s = fs.connect(feed.outlet, prod.inlet)
+    s.properties = {"Ethanol": "0.9"}
+    fs.stream_table_sections = [("Bogus", "Mass Fraction"), ("Ethanol", "Real Section")]
+    svg = fs.to_svg(border="zone", diagram="p&id", show_stream_table=True)
+    assert "Mass Fraction" not in svg
+    assert "Real Section" in svg
+    codes = [w.code for w in fs.warnings]
+    assert "stream-table-section-unused" in codes
+    message = next(str(w) for w in fs.warnings if w.code == "stream-table-section-unused")
+    assert "'Bogus'" in message and "'Mass Fraction'" in message
+
+
 # --- a column has to have something in it -------------------------------------
 #
 # ISO 10628-1:2014 4.3.3 a) puts the flows *between the process steps* among

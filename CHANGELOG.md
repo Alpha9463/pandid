@@ -44,6 +44,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A type checker resolves `reactor.feed_2`, as it already did `mixer.in_2`.
 - `Valve(variant="three_way")` anchors its third leg, `branch`; `ThreeWayValve`
   reaches it by name.
+- A line number with its first scheme component unset no longer opens with a
+  stray separator, e.g. `AE-1001-SS` rather than `-AE-1001-SS`.
+- `add_valve_station(bypass_over=...)` naming a member the station was told
+  to leave out is now refused before any member joins the sheet, instead of
+  after ten units are already on it.
+- `TableBox(col_align=...)` raises on an entry outside `"l"`/`"c"`/`"r"`
+  instead of silently centring it.
+- `stream_table_sections` naming a property no stream in the table sets now
+  warns instead of the heading silently never appearing.
+- `TableBox`/`Annotation` furniture placement no longer calls the builtin
+  `sum()`, whose float algorithm changed in CPython 3.12 (gh-100425) and
+  could round 0,1 unit differently from a plain running total on the same
+  values -- a column 5 or 15 characters wide could land its own centring on
+  that tie and draw 0,1 unit apart on 3.11 and on 3.12+. `19_absorber_stripper`
+  no longer needs to keep its utilities table off the tie by choice of header.
+
+### Security
+
+- draw.io reads a cell's `value` as HTML, so a tag an author's text carried
+  (a unit name, a description, a stream property, a title-block field, …)
+  rendered as markup there while the SVG export drew it literally. Author
+  text is now escaped for that HTML layer before composing a label, so both
+  backends draw the same tag as the same tag.
 
 ## [0.1.3] - 2026-08-19
 
