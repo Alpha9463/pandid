@@ -44,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A type checker resolves `reactor.feed_2`, as it already did `mixer.in_2`.
 - `Valve(variant="three_way")` anchors its third leg, `branch`; `ThreeWayValve`
   reaches it by name.
+- A line number with its first scheme component unset no longer opens with a
+  stray separator, e.g. `AE-1001-SS` rather than `-AE-1001-SS`.
 
 ## [0.1.3] - 2026-08-19
 

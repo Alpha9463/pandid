@@ -66,8 +66,9 @@ def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream)
 
     A component left unset drops out, and so does the text introducing
     it, so a line with no spec reads ``6"-P-1001`` rather than
-    ``6"-P-1001-``. A format spec still applies, which is how a site
-    pads its sequence: ``"{size}-{service}-{sequence:0>4}"``.
+    ``6"-P-1001-``, and a line with no size reads ``P-1001-SS`` rather
+    than ``-P-1001-SS``. A format spec still applies, which is how a
+    site pads its sequence: ``"{size}-{service}-{sequence:0>4}"``.
     """
     if callable(scheme):
         return scheme(stream)
@@ -87,7 +88,12 @@ def _format_line_number(scheme: "str | Callable[[Stream], str]", stream: Stream)
         if not value:
             pending = ""
             continue
-        out.append(pending + (format(value, format_spec) if format_spec else value))
+        # `pending` is the literal between this component and the last
+        # surviving one -- unless nothing has survived yet, in which case
+        # it only ever separated this component from one dropped ahead of
+        # it (or from nothing at all), and there is nothing for it to join.
+        piece = format(value, format_spec) if format_spec else value
+        out.append((pending if out else "") + piece)
         pending = ""
     line_number = "".join(out) + pending
     if not line_number:
