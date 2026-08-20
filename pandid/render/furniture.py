@@ -282,6 +282,33 @@ _STREAM_SECTION_FILL = "#f4f4f4"
 _STREAM_KEY_FILL = "#f9f9f9"
 _STREAM_VALUE_FILL = "white"
 
+#: A :attr:`~pandid.flowsheet.Flowsheet.stream_table_sections` key that
+#: matched no property row. Unlike ``label_pos`` or ``col_align``, this
+#: cannot be checked when the author sets it -- the streams it is
+#: checked against may not exist yet -- so it is a render-time warning
+#: rather than a constructor-time raise.
+_UNUSED_SECTION_CODE = "stream-table-section-unused"
+
+
+def _report_unused_sections(fs, sec_before: dict[str, str], seen: set) -> None:
+    """Warn on ``fs.warnings`` for a section keyed to a property no
+    stream in the table sets, so it silently never heads anything.
+
+    Filtered and replaced rather than appended to, exactly as
+    :data:`~pandid.render.svg._FIT_CODES` is: a section named on an
+    earlier render that a later one has fixed must stop being warned
+    about.
+    """
+    from pandid.validate import Issue
+
+    unused = [Issue(
+        "warning", _UNUSED_SECTION_CODE,
+        f"stream_table_sections names {key!r}, which no stream in the table "
+        f"sets, so its heading {label!r} never appears"
+    ) for key, label in sec_before.items() if key not in seen]
+    fs.warnings = [w for w in fs.warnings
+                   if getattr(w, "code", "") != _UNUSED_SECTION_CODE] + unused
+
 
 class StreamCell(NamedTuple):
     """One ruled cell of the stream table.
@@ -459,11 +486,12 @@ def stream_table_layout(fs) -> "StreamTable | None":
                 if k not in seen:
                     seen.add(k)
                     order.append(k)
-    if not order:
-        return None
     sec_before: dict[str, str] = {}
     for key, label in (getattr(fs, "stream_table_sections", []) or []):
         sec_before.setdefault(key, label)
+    _report_unused_sections(fs, sec_before, seen)
+    if not order:
+        return None
 
     n = len(streams)
     size = 10.5 if n <= 18 else max(8.0, 190.0 / n)

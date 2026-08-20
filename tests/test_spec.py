@@ -1597,6 +1597,27 @@ def test_bad_alignment_is_reported_with_the_valid_ones():
     assert "align must be one of" in str(excinfo.value)
 
 
+def test_bad_col_align_is_reported_with_the_valid_ones():
+    """The spelled-out word is the obvious guess, and used to be taken as
+    an unrecognised alignment and silently centred rather than refused."""
+    with pytest.raises(ValueError, match=r"col_align\[0\] must be one of"):
+        TableBox(headers=["A", "B"], rows=[["1", "2"]], col_align=["left", "r"])
+    with pytest.raises(SpecError) as excinfo:
+        Flowsheet.from_dict(
+            _spec(
+                annotations=[
+                    {
+                        "type": "table",
+                        "headers": ["A"],
+                        "rows": [["1"]],
+                        "col_align": ["left"],
+                    }
+                ]
+            )
+        )
+    assert "col_align[0] must be one of" in str(excinfo.value)
+
+
 def test_invalid_json_points_at_the_line(tmp_path):
     path = tmp_path / "fs.json"
     path.write_text('{"name": "T",}', encoding="utf-8")

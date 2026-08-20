@@ -49,6 +49,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `add_valve_station(bypass_over=...)` naming a member the station was told
   to leave out is now refused before any member joins the sheet, instead of
   after ten units are already on it.
+- `TableBox(col_align=...)` raises on an entry outside `"l"`/`"c"`/`"r"`
+  instead of silently centring it.
+- `stream_table_sections` naming a property no stream in the table sets now
+  warns instead of the heading silently never appearing.
 
 ## [0.1.3] - 2026-08-19
 
