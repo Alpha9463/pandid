@@ -53,6 +53,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of silently centring it.
 - `stream_table_sections` naming a property no stream in the table sets now
   warns instead of the heading silently never appearing.
+- `TableBox`/`Annotation` furniture placement no longer calls the builtin
+  `sum()`, whose float algorithm changed in CPython 3.12 (gh-100425) and
+  could round 0,1 unit differently from a plain running total on the same
+  values -- a column 5 or 15 characters wide could land its own centring on
+  that tie and draw 0,1 unit apart on 3.11 and on 3.12+. `19_absorber_stripper`
+  no longer needs to keep its utilities table off the tie by choice of header.
 
 ### Security
 

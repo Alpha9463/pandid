@@ -47,6 +47,31 @@ def text_width(s, size: float, bold: bool = False) -> float:
     return len(str(s)) * size * (_ADV_BOLD if bold else _ADV)
 
 
+def _total(values) -> float:
+    """The sum of *values*, added left to right by hand rather than
+    through the builtin ``sum()``.
+
+    A box measured this way (its total width or height) is later
+    subtracted from a frame edge to place the box, and each of its own
+    pieces -- a column centred at half its width, an entry stacked at
+    half a run's height -- is positioned by walking the same values
+    forward with plain ``+=``. ``sum()``'s float algorithm changed in
+    CPython 3.12 (Neumaier-compensated, gh-100425): more accurate, and
+    a different last bit from a plain running total on the same
+    values. The measurement and the walk have to agree on that bit or
+    a centring formatted to one decimal place lands on a rounding tie
+    that falls one way on 3.11 and the other on 3.12+ -- the same
+    values, drawn 0,1 unit apart depending only on which Python drew
+    them. Adding by hand, the one way every version of Python always
+    has, is what keeps a box's measured extent and its own drawing
+    from ever disagreeing about it.
+    """
+    total = 0.0
+    for v in values:
+        total += v
+    return total
+
+
 def clip(s, room: float, size: float, bold: bool = False, *,
          field: str = "", report: "Reporter | None" = None) -> str:
     """Trim a value to the room its cell has, and report what was cut.
@@ -126,7 +151,7 @@ def _ann_layout(ann):
 def measure_annotation(ann) -> tuple[float, float]:
     size, row_h, title_h, col_w = _ann_layout(ann)
     pad, gap = 9.0, 12.0
-    body_w = sum(col_w) + gap * (len(col_w) - 1)
+    body_w = _total(col_w) + gap * (len(col_w) - 1)
     inner = max(body_w, text_width(ann.title, size + 1, bold=True))
     w = ann.width if ann.width is not None else inner + 2 * pad
     h = title_h + len(ann.rows) * row_h + 8
@@ -160,7 +185,7 @@ def draw_annotation(ann, x: float, y: float, *,
     pad, gap = 9.0, 12.0
     w, h = measure_annotation(ann)
     if report is not None and ann.width is not None:
-        body_w = sum(col_w) + gap * (len(col_w) - 1)
+        body_w = _total(col_w) + gap * (len(col_w) - 1)
         inner = max(body_w, text_width(ann.title, size + 1, bold=True))
         if ann.width < inner + 2 * pad:
             over = _overflowing_text(ann, size, body_w)
@@ -206,13 +231,13 @@ def measure_table(tb) -> tuple[float, float]:
     size, ncol, col_w, row_h = _table_layout(tb)
     title_h = size + 10 if tb.title else 0
     nrows = len(tb.rows) + (1 if tb.headers else 0)
-    return sum(col_w), title_h + nrows * row_h
+    return _total(col_w), title_h + nrows * row_h
 
 
 def draw_table(tb, x: float, y: float) -> list[str]:
     size, ncol, col_w, row_h = _table_layout(tb)
     title_h = size + 10 if tb.title else 0
-    w = sum(col_w)
+    w = _total(col_w)
     align = tb.col_align or ["c"] * ncol
     L = []
     if tb.title:
@@ -1116,7 +1141,7 @@ def dock(items, inner, *, sheet=None, too_small=None):
             cols[align].append((obj, w, h))
 
     def stack_h(entries):
-        return sum(h for _, _, h in entries) + GAP * max(0, len(entries) - 1)
+        return _total(h for _, _, h in entries) + GAP * max(0, len(entries) - 1)
 
     def stack_w(entries):
         return max((w for _, w, _ in entries), default=0.0)
