@@ -198,7 +198,7 @@ def test_furniture_boxes_rendered():
     col = fs.add(U.Column("T-101", description="Main Column"))
     prod = fs.add(U.Product("Top", reference="PFD-002"))
     fs.connect(feed.outlet, col.feed)
-    fs.connect(col.distillate, prod.inlet)
+    fs.connect(col.overhead, prod.inlet)
     fs.add_annotation(equipment_list(fs))
     fs.add_annotation(notes(["First note", "Second note"]))
     fs.add_annotation(legend({"SS": "Stainless Steel"}))

@@ -15,7 +15,7 @@ stream numbering and labels are automatic.
 from _bootstrap import out  # runs from the repo root or from examples/
 
 from pandid import (
-    Column,
+    DistillationColumn,
     Feed,
     Flowsheet,
     KettleReboiler,
@@ -36,8 +36,8 @@ def main():
     # coke-forming feed, and a shed deck is what goes in there because
     # it has no perforation to plug and no valve to stick. They are
     # inefficient, so the tower is few decks and tall sections.
-    col = fs.add(Column("T-701", internals="baffle_tray", trays=10,
-                        description="Main Fractionator"))
+    col = fs.add(DistillationColumn("T-701", internals="baffle_tray", trays=10,
+                                    description="Main Fractionator"))
 
     # width/height stay close to each symbol's native proportions:
     # scaling one far past its drawn aspect is what makes a sheet look
@@ -96,7 +96,7 @@ def main():
     # --- Connections --------------------------------------------------
     fs.connect(feed.outlet, col.feed)
 
-    fs.connect(col.distillate, cond.shell_in)
+    fs.connect(col.overhead, cond.shell_in)
     fs.connect(cond.shell_out, drum.inlet)
     fs.connect(drum.vent, vent.inlet)
     fs.connect(drum.outlet, split.inlet)

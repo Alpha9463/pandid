@@ -18,9 +18,9 @@ utilities summary.
 from _bootstrap import out  # runs from the repo root or from examples/
 
 from pandid import (
-    Column,
     Condenser,
     Conveyor,
+    DistillationColumn,
     Feed,
     FilterPress,
     Flowsheet,
@@ -77,9 +77,9 @@ def main():
     # the deck has to be one with no pocket to settle in and no moving
     # part to seize -- a large-hole perforated deck. The stripper runs
     # base-loaded, so nothing is given up in turndown for it.
-    col = fs.add(Column("T-301", internals="sieve_tray", trays=18,
-                        width=110, height=250, label_pos="center",
-                        description="Beer Column"))
+    col = fs.add(DistillationColumn("T-301", internals="sieve_tray", trays=18,
+                                    width=110, height=250, label_pos="center",
+                                    description="Beer Column"))
     cond = fs.add(Condenser("E-301", width=64,
                             height=64,
                             description="T-301 Overhead Condenser"))
@@ -127,7 +127,7 @@ def main():
     tee_w = 12.0
     col_x, col_y, col_w = 430.0, 180.0, 110.0
     col.pin(x=col_x, y=col_y)
-    col_axis = col_x + col_w / 2                    # distillate / bottoms line
+    col_axis = col_x + col_w / 2                    # overhead / bottoms line
     # Asked of the symbol, not measured off it: Column places its feed
     # by a rule (n_feeds=) and has no fixed fraction to write down.
     col_feed_y = col_y + port_offset(col, "feed")[1]
@@ -197,7 +197,7 @@ def main():
     fs.connect(water.outlet, mix1.feeds[1], name="S-304")
 
     fs.connect(refl.outlet, ethanol.inlet, name="S-305")
-    fs.connect(col.distillate, cond.shell_in, name="S-305")
+    fs.connect(col.overhead, cond.shell_in, name="S-305")
     fs.connect(cond.shell_out, drum.inlet, name="S-305")
     fs.connect(drum.outlet, refl.inlet, name="S-305")
     fs.connect(refl.branch, col.reflux_in, name="S-305", draw_as_recycle=True)

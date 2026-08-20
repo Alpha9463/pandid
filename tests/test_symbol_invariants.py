@@ -789,6 +789,19 @@ def _default_unit(kind: str, variant: str):
     return cls(f"{kind}-{variant}-x", variant=variant)
 
 
+#: For this test only: the class whose default instance has to reach every
+#: anchor a kind's artwork offers, where that is not :func:`_default_unit`'s
+#: own choice. ``kind == "column"`` is now four classes -- :class:`Column`
+#: is the general tower on purpose (#400) and does not build a distillation
+#: column's four return nozzles by default -- so the widest of the four,
+#: :class:`~pandid.units.DistillationColumn`, is what stands in here. Every
+#: other test in this module keeps asking :func:`_default_unit`/
+#: :func:`_sized_unit`, which still answer ``Column`` for that kind: this
+#: dict is about *this* claim only, not about which class ``kind: column``
+#: resolves to.
+_WIDEST_CLASS_FOR_KIND = {"column": units.DistillationColumn}
+
+
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_every_anchor_the_artwork_offers_a_modelled_port_can_reach(entry):
     """The general shape of #388: an anchor the artwork draws and no port
@@ -809,7 +822,8 @@ def test_every_anchor_the_artwork_offers_a_modelled_port_can_reach(entry):
     than comparing the port names directly.
     """
     (kind, variant), sym = entry
-    unit = _default_unit(kind, variant)
+    cls = _WIDEST_CLASS_FOR_KIND.get(kind)
+    unit = cls(f"{kind}-{variant}-x", variant=variant) if cls else _default_unit(kind, variant)
     reachable = {unit._symbol_anchor(name) for name in unit.ports}
     unreached = set(sym.ports) - reachable
     it = "it" if len(unreached) == 1 else "them"

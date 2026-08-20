@@ -572,9 +572,10 @@ Each entry is `port` *(direction / role)*.
 | `Vessel` | `vessel` | `inlet` *(in)*, `outlet` *(out)*, `vent` *(out/vapor)*, `relief` *(out)*, `drain` *(out/liquid)* |
 | `Tank` | `tank` | the same five as `Vessel` |
 | `Separator` | `separator` | `feed` *(in)*, `vapor` *(out/vapor)*, `liquid` *(out/liquid)* on the four variants whose draws really are phases — the drum (`default`, `horizontal`, `knockout`) and the wet `scrubber`. The other seven sort or collect rather than separating into phases, and name the two draws their artwork has: `feed` *(in/feed)*, `overflow` *(out)*, `underflow` *(out)*; see [Variants](#variants) |
-| `Column` | `column` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, no draw, or `draw` *(out/draw)*, or `draw_1` … `draw_n`, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*, `reflux_in` *(in/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*, `condenser_duty` *(out/energy)*; the feeds are [`feeds`](#the-family-as-a-sequence) and the draws [`draws`](#the-family-as-a-sequence) |
-| `Absorber` | `column` | A `Column` with none of the four return nozzles: `feed` *(in/feed)*, or `feed_1` … `feed_n`, no draw, or `draw` *(out/draw)*, or `draw_1` … `draw_n`, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*. Nothing in an absorber boils, so it has no `reflux_in`, `boilup_in`, `reboiler_duty` or `condenser_duty`; `internals=` defaults to `"packing"` |
-| `Stripper` | `column` | A `Column` with a reboiler and no condenser: `feed` *(in/feed)*, or `feed_1` … `feed_n`, no draw, or `draw` *(out/draw)*, or `draw_1` … `draw_n`, `distillate` *(out/vapor)*, `bottoms` *(out/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*. No `reflux_in` or `condenser_duty` |
+| `Column` | `column` | The general tower: `feed` *(in/feed)*, or `feed_1` … `feed_n`, no draw, or `draw` *(out/draw)*, or `draw_1` … `draw_n`, `overhead` *(out/vapor)*, `bottoms` *(out/liquid)*; the feeds are [`feeds`](#the-family-as-a-sequence) and the draws [`draws`](#the-family-as-a-sequence). Nothing here assumes the tower boils — see `DistillationColumn`, `Stripper` and `Absorber` for the three that add a reflux loop, a reboiler alone, or neither |
+| `DistillationColumn` | `column` | A `Column` plus the two return nozzles that close a distillation column's internal loops: `reflux_in` *(in/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*, `condenser_duty` *(out/energy)* |
+| `Absorber` | `column` | A `Column` with nothing added: `feed` *(in/feed)*, or `feed_1` … `feed_n`, no draw, or `draw` *(out/draw)*, or `draw_1` … `draw_n`, `overhead` *(out/vapor)*, `bottoms` *(out/liquid)*. Nothing in an absorber boils, so it has none of `DistillationColumn`'s four return nozzles; `internals=` defaults to `"packing"` |
+| `Stripper` | `column` | A `Column` with a reboiler and no condenser, sitting beside `DistillationColumn` rather than under it: `feed` *(in/feed)*, or `feed_1` … `feed_n`, no draw, or `draw` *(out/draw)*, or `draw_1` … `draw_n`, `overhead` *(out/vapor)*, `bottoms` *(out/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*. No `reflux_in` or `condenser_duty` |
 | `Reactor` | `reactor` | `feed` *(in/feed)*, or `feed_1` … `feed_n`, `outlet` *(out)*, `vent` *(out/vapor)*, `duty` *(in/energy)*, and `drive` *(in/energy)* where it has an [`agitator=`](#what-a-body-carries) to be driven; `variant="tubular"` is a PFR and has no vapour space, so it has no `vent`. The feeds are [`feeds`](#the-family-as-a-sequence) |
 | `HeatExchanger` | `hex` | `shell_in`, `shell_out`, `tube_in`, `tube_out`; `kettle` adds `bottoms` *(out/liquid)*. Four variants name their sides differently; see [Variants](#variants) |
 | `Heater` | `heater` | `inlet` *(in)*, `outlet` *(out)*, `utility_in` *(in/energy)* |
@@ -695,8 +696,9 @@ tower it always did.
 
 A second feed is what changes the spelling: `col.feed` on a one-feed tower,
 `col.feed_1` … `col.feed_n` once there is more than one, drawn top to bottom in
-that order. The feeds stay on the shell wall opposite the `reflux_in` and
-`boilup_in` returns, so no count can put a feed on a return nozzle.
+that order. On a `DistillationColumn` the feeds stay on the shell wall
+opposite the `reflux_in` and `boilup_in` returns, so no count can put a feed
+on a return nozzle.
 
 ```python
 tower = units.Column("T-302", n_feeds=2, description="Extractive Column")
@@ -849,10 +851,11 @@ s.feed_3        # Port
 reveal_type(s)  # StirredTankReactor3, not Reactor3
 ```
 
-`Absorber` and `Stripper` take the same treatment, for the same reason: each
-has its own `feed_1` … `feed_n` overloads, so `Absorber("V-1", n_feeds=2)`
-narrows to `Absorber2` rather than to `Column2`, and `t: Absorber =
-Absorber("V-1")` still type-checks with no `n_feeds` given at all.
+`Absorber`, `Stripper` and `DistillationColumn` take the same treatment, for
+the same reason: each has its own `feed_1` … `feed_n` overloads, so
+`Absorber("V-1", n_feeds=2)` narrows to `Absorber2` rather than to `Column2`,
+and `t: Absorber = Absorber("V-1")` still type-checks with no `n_feeds` given
+at all.
 
 **`Column` narrows on a second, independent count too: `n_draws`.** Crossing
 both — a subclass per `(n_feeds, n_draws)` pair — is 64 `TYPE_CHECKING`
@@ -880,17 +883,18 @@ both.feed_2        # error -- use both.feeds[1] or both.port("feed_2")
 ```
 
 This still catches every typo `n_feeds` alone did: `Column` does not take
-`Block`'s blanket `__getattr__`, because a column carries six fixed nozzles
+`Block`'s blanket `__getattr__`, because a column carries fixed nozzles
 worth catching a misspelling on and a block carries almost none.
 
-`Absorber` and `Stripper` do **not** get a second overload family for
-`n_draws`. Both still take `n_draws=`/`draw_stages=` at run time — they are
-`Column`'s own keywords, and neither subclass overrides `__init__` — but
-typing every reduced-port-set subclass for a draw too would spend the
-64-class problem a second time over a combination narrower still. So
-`Absorber("V-1", n_draws=2).draw_2` does not resolve even though the nozzle
-is really there; `.draws[i]` or `.port("draw_2")` is the typed route, exactly
-as `m.inlets[i]` is for a computed count everywhere else on this page.
+`Absorber`, `Stripper` and `DistillationColumn` do **not** get a second
+overload family for `n_draws`. All three still take `n_draws=`/
+`draw_stages=` at run time — they are `Column`'s own keywords, and none of
+the three subclasses overrides `__init__` — but typing every one of them for
+a draw too would spend the 64-class problem a second, third and fourth time
+over a combination narrower still. So `Absorber("V-1", n_draws=2).draw_2`
+does not resolve even though the nozzle is really there; `.draws[i]` or
+`.port("draw_2")` is the typed route, exactly as `m.inlets[i]` is for a
+computed count everywhere else on this page.
 
 **`Block`** sits outside this. It takes a blanket `__getattr__` instead, so
 `block.in_1` resolves and `block.outlt` is *not* caught: its two counts are
@@ -1003,27 +1007,31 @@ Four of them do something the name does not say:
   `liquid` up to 0.1.1, and those two names were removed in 0.1.3. One drawing,
   one vocabulary, whichever class you built.
 
-Two more classes carry the same shape of table row -- a base and the ports
-that differ from it -- without being generated: `Absorber` and `Stripper`
-live in `pandid.units`, next to `Column` itself, because neither draws
-anything the registry does not already draw under `Column`. What earns each
-its own class is not a drawing but a **reduced port set**:
+Three more classes carry the same shape of table row -- a base and the ports
+that differ from it -- without being generated: `DistillationColumn`,
+`Absorber` and `Stripper` live in `pandid.units`, next to `Column` itself,
+because none draws anything the registry does not already draw under
+`Column`. What earns each its own class is not a drawing but a **narrower or
+wider port set** than the general tower:
 
 | Class | `kind` | Base | Ports that differ |
 |---|---|---|---|
-| `Absorber` | `column` | `Column` | `-reflux_in` `-boilup_in` `-reboiler_duty` `-condenser_duty` |
-| `Stripper` | `column` | `Column` | `-reflux_in` `-condenser_duty` |
+| `DistillationColumn` | `column` | `Column` | `+reflux_in` `+boilup_in` `+reboiler_duty` `+condenser_duty` |
+| `Absorber` | `column` | `Column` | none |
+| `Stripper` | `column` | `Column` | `+boilup_in` `+reboiler_duty` |
 
-An absorber neither boils nor refluxes, so it keeps none of `Column`'s four
-return nozzles; a stripper still reboils but never refluxes, so it keeps
-`boilup_in` and `reboiler_duty` and drops the other two. Both keep
+`Column` is the general tower: a feed, an `overhead` product and a `bottoms`
+one, and nothing that assumes a reflux loop. A distillation column adds all
+four return nozzles; a stripper reboils but never refluxes, so it adds only
+`boilup_in` and `reboiler_duty`; an absorber adds nothing at all, because it
+neither boils nor refluxes and *is* a general tower. All three keep
 `internals=`, `trays=`, `n_feeds=`, `feed_stages=`, `n_draws=` and
 `draw_stages=` unchanged from `Column` -- an absorber can be trayed, packed
 or a bare spray tower exactly as any other column can, and can carry a side
-draw exactly as any other column can, so `Absorber` only narrows the ports
-and the default for `internals=` (`"packing"`), never the composition
-keywords themselves. What `Absorber`/`Stripper` do *not* inherit is a typed
-`n_draws` overload family of their own -- see the note on it in
+draw exactly as any other column can, so `Absorber` only narrows the default
+for `internals=` (`"packing"`), never the composition keywords themselves.
+What none of the three inherits is a typed `n_draws` overload family of its
+own -- see the note on it in
 [The family as a sequence](#the-family-as-a-sequence) above.
 
 ### `Block`: the block flow diagram
@@ -1786,10 +1794,10 @@ bare one's. Its `vent` is on the shell just under the top head rather than on
 the crown, because the crown carries the shaft.
 
 **`trays=` counts whatever `internals=` names** — decks for a deck, beds for a
-bed. `Column("T-104", internals="packing", trays=2)` is a two-bed absorber. An
-absorber, a stripper, a scrubbing tower, an adsorber and a molecular sieve are
-not distinct drawings and ISO gives them no symbols: each is this shell carrying
-whichever internal it really contains, told apart by its tag.
+bed. `Absorber("T-104", internals="packing", trays=2)` is a two-bed absorber.
+An absorber, a stripper, a scrubbing tower, an adsorber and a molecular sieve
+are not distinct drawings and ISO gives them no symbols: each is this shell
+carrying whichever internal it really contains, told apart by its tag.
 
 **Where composition stops.** A composition is only justified where every mark
 that distinguishes the drawing is a numbered Table 2 part. Three of the eleven

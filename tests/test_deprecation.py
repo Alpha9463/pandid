@@ -345,6 +345,36 @@ _RETIRED_PAIRS = [
         lambda: U.Separator("V-1", variant="electromagnetic"),
         lambda: U.Separator("V-1", characteristic="electromagnetic"),
     ),
+    # The four #400 moved off Column onto DistillationColumn, and the one
+    # rename alongside them (distillate -> overhead). All five draw the
+    # same kind="column" symbol either way -- a class or a nozzle name
+    # changed, never a stencil -- so "before" and "after" are the same
+    # drawing for every one of them, and the note stays empty.
+    (
+        U.COLUMN_REFLUX_IN,
+        lambda: U.Column("T-1"),
+        lambda: U.DistillationColumn("T-1"),
+    ),
+    (
+        U.COLUMN_BOILUP_IN,
+        lambda: U.Column("T-1"),
+        lambda: U.DistillationColumn("T-1"),
+    ),
+    (
+        U.COLUMN_REBOILER_DUTY,
+        lambda: U.Column("T-1"),
+        lambda: U.DistillationColumn("T-1"),
+    ),
+    (
+        U.COLUMN_CONDENSER_DUTY,
+        lambda: U.Column("T-1"),
+        lambda: U.DistillationColumn("T-1"),
+    ),
+    (
+        U.COLUMN_DISTILLATE,
+        lambda: U.Column("T-1"),
+        lambda: U.Column("T-1"),
+    ),
 ]
 
 
@@ -424,21 +454,28 @@ def test_declarations_finds_a_module_constant():
     assert found == {"RETIRED": RETIRED}
 
 
-def test_the_package_declares_exactly_the_variant_keywords_it_is_retiring():
-    """Seven spellings, all one retirement: a ``variant=`` that named a *part*
-    rather than a body, moved to the keyword that names the part.
+def test_the_package_declares_exactly_what_it_is_retiring():
+    """Twelve spellings, two shapes of retirement.
 
-    ``mixing`` is the seventh and is the loosest fit of them, because it names a
-    body as well as its contents. It is retired for the same reason all the same:
-    the contents are what it is *for* -- ``Reactor._STIRRED`` has to exclude it
-    so the composed stirrer does not make two -- and no ISO row draws a
-    cone-bottomed agitated vessel, so the body it also names is a body the
-    standard does not have.
+    Seven are a ``variant=`` that named a *part* rather than a body, moved to
+    the keyword that names the part. ``mixing`` is the loosest fit of the
+    seven, because it names a body as well as its contents. It is retired for
+    the same reason all the same: the contents are what it is *for* --
+    ``Reactor._STIRRED`` has to exclude it so the composed stirrer does not
+    make two -- and no ISO row draws a cone-bottomed agitated vessel, so the
+    body it also names is a body the standard does not have.
+
+    Five are #400's: a nozzle a checker could not honestly place on
+    ``Column``, moved to ``DistillationColumn`` or, for ``distillate``,
+    renamed on every class that had it. Not a ``variant=`` at all -- an
+    attribute a sheet reaches for after construction -- and declared beside
+    ``Column`` the same way the other seven sit beside the class each
+    retires from.
 
     Spelled out rather than counted. A deprecation is a promise to delete
     something one release later, and the list of what has been promised is the
-    thing a release has to be read against -- so an eighth arriving has to be
-    added here, and one quietly disappearing fails.
+    thing a release has to be read against -- so a thirteenth arriving has to
+    be added here, and one quietly disappearing fails.
     """
     assert {name.rsplit(".", 1)[-1] for name in declarations()} == {
         "VESSEL_VARIANT_LEGS",
@@ -448,6 +485,11 @@ def test_the_package_declares_exactly_the_variant_keywords_it_is_retiring():
         "SEPARATOR_VARIANT_GRAVITY",
         "SEPARATOR_VARIANT_ELECTROSTATIC",
         "SEPARATOR_VARIANT_ELECTROMAGNETIC",
+        "COLUMN_REFLUX_IN",
+        "COLUMN_BOILUP_IN",
+        "COLUMN_REBOILER_DUTY",
+        "COLUMN_CONDENSER_DUTY",
+        "COLUMN_DISTILLATE",
     }
 
 

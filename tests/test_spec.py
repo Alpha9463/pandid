@@ -292,12 +292,54 @@ def test_absorber_and_stripper_kind_round_trips():
             ],
         }
     )
-    assert set(fs.units[0].ports) == {"feed", "distillate", "bottoms"}
+    assert set(fs.units[0].ports) == {"feed", "overhead", "bottoms"}
     assert type(fs.units[0]).__name__ == "Absorber"
     assert type(fs.units[1]).__name__ == "Stripper"
     written = {u["name"]: u for u in fs.to_dict()["units"]}
     assert written["V-501"]["kind"] == "Absorber"
     assert written["T-601"]["kind"] == "Stripper"
+    assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
+
+
+def test_a_bare_column_kind_still_loads_as_the_general_tower():
+    """#400: four classes now share ``kind == "column"`` and a bare
+    ``kind: column`` still has to mean the one that draws every variant
+    of it -- the general tower, not whichever of the four happened to
+    iterate last building ``_ALIASES``."""
+    fs = Flowsheet.from_dict({"name": "T", "units": [{"kind": "column", "name": "T-101"}]})
+    assert type(fs.units[0]).__name__ == "Column"
+    assert set(fs.units[0].ports) == {"feed", "overhead", "bottoms"}
+
+
+def test_a_distillation_column_kind_round_trips():
+    """``kind: distillation_column`` is the fourth spelling the same
+    collision resolves, and it has to survive the trip unchanged, exactly
+    as ``Absorber``/``Stripper`` do above."""
+    fs = Flowsheet.from_dict(
+        {
+            "name": "T",
+            "units": [
+                {
+                    "kind": "distillation_column",
+                    "name": "T-101",
+                    "internals": "valve_tray",
+                    "trays": 20,
+                },
+            ],
+        }
+    )
+    assert type(fs.units[0]).__name__ == "DistillationColumn"
+    assert set(fs.units[0].ports) == {
+        "feed",
+        "overhead",
+        "bottoms",
+        "reflux_in",
+        "boilup_in",
+        "reboiler_duty",
+        "condenser_duty",
+    }
+    written = fs.to_dict()["units"][0]
+    assert written["kind"] == "DistillationColumn"
     assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
 
 

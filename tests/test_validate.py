@@ -117,7 +117,7 @@ def test_an_extractive_towers_feeds_get_nozzles_of_their_own():
     for port in ("feed_1", "feed_2"):
         feed = fs.add(U.Feed(port))
         fs.connect(feed.outlet, col.ports[port])
-    fs.connect(col.distillate, fs.add(U.Product("D")).inlet)
+    fs.connect(col.overhead, fs.add(U.Product("D")).inlet)
     fs.connect(col.bottoms, fs.add(U.Product("B")).inlet)
     fs.layout()
     assert [i for i in fs.validate() if i.code == "coincident-ports"] == []
@@ -148,7 +148,7 @@ def test_a_kettle_takes_its_bottoms_off_its_own_draw():
     """The draw is a nozzle of the reboiler's, so a tower can hand it the sump
     and take product back without an imaginary splitter in between."""
     fs = Flowsheet("reboiler")
-    col = fs.add(U.Column("T-701"))
+    col = fs.add(U.DistillationColumn("T-701"))
     reb = fs.add(U.HeatExchanger("E-702", variant="kettle"))
     fs.connect(col.bottoms, reb.shell_in)
     fs.connect(reb.shell_out, col.boilup_in, draw_as_recycle=True)
@@ -475,7 +475,7 @@ def test_a_column_counts_its_feeds():
     fs = Flowsheet("col")
     col = fs.add(U.Column("T-1", n_feeds=3))
     fs.connect(fs.add(U.Feed("F")).outlet, col.feeds[0])
-    fs.connect(col.distillate, fs.add(U.Product("D")).inlet)
+    fs.connect(col.overhead, fs.add(U.Product("D")).inlet)
     fs.connect(col.bottoms, fs.add(U.Product("B")).inlet)
     issues = _unpiped(fs)
     assert len(issues) == 1
@@ -486,12 +486,12 @@ def test_a_column_counts_its_feeds():
 def test_the_singular_spelling_of_a_family_is_not_counted():
     """A one-feed column's nozzle is called ``feed`` and not ``feed_1``, and
     that spelling is the whole difference: it is declared as a class annotation
-    beside ``distillate`` and ``bottoms``, like any other fixed nozzle, and no
+    beside ``overhead`` and ``bottoms``, like any other fixed nozzle, and no
     count was ever written down for it. ``n_feeds`` is what spells the family,
     and only then is there a number to have failed to meet."""
     fs = Flowsheet("col1")
     col = fs.add(U.Column("T-2"))
-    fs.connect(col.distillate, fs.add(U.Product("D")).inlet)
+    fs.connect(col.overhead, fs.add(U.Product("D")).inlet)
     fs.connect(col.bottoms, fs.add(U.Product("B")).inlet)
     assert "feed" in col.ports and "feed_1" not in col.ports
     assert _unpiped(fs) == []
@@ -569,7 +569,7 @@ def test_a_spec_built_sheet_is_checked_too():
         (lambda fs: fs.add(U.Reactor("R-1")), "duty"),  # a duty
         (lambda fs: fs.add(U.Reactor("R-1")), "vent"),  # an off-gas
         (lambda fs: fs.add(U.Vessel("V-1")), "vent"),
-        (lambda fs: fs.add(U.Column("T-1")), "reboiler_duty"),
+        (lambda fs: fs.add(U.DistillationColumn("T-1")), "reboiler_duty"),
         (lambda fs: fs.add(U.Valve("HV-1")), "outlet"),  # a drain leg
         (lambda fs: fs.add(U.Separator("S-1")), "vapor"),
         (lambda fs: fs.add(U.Ejector("EJ-1")), "motive"),

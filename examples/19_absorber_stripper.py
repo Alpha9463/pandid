@@ -28,15 +28,17 @@ internal it really contains, so what tells them apart here is
 
 They differ in **class**, not only in furnishing. T-401 is an
 ``Absorber``: nothing in a contactor boils, so it has no reboiler, no
-condenser and no reflux loop, and drawing it as a plain ``Column`` would
-carry all four of those nozzles unconnected. Its two feeds are the
-counter-current streams a contactor actually takes -- lean amine over
-the top deck, sour gas under the bottom one -- placed with
-``feed_stages=`` the same way any other Column places one. T-402 keeps
-its overhead condenser (E-402) and reflux drum (V-401): a regenerator
-that refluxes to hold its water balance is not the shell a ``Stripper``
-draws, so it stays a plain ``Column`` rather than being pressed into a
-class that says it has no condenser when it does.
+condenser and no reflux loop, and drawing it as a general ``Column``
+would carry none of those nozzles at all but say nothing about why. Its
+two feeds are the counter-current streams a contactor actually takes --
+lean amine over the top deck, sour gas under the bottom one -- placed
+with ``feed_stages=`` the same way any other Column places one. T-402
+keeps its overhead condenser (E-402) and reflux drum (V-401): a
+regenerator that refluxes to hold its water balance is a
+``DistillationColumn``, not the shell a ``Stripper`` draws with no
+condenser at all, and not the general ``Column`` either -- that class
+carries a feed, an overhead and a bottoms and nothing that assumes a
+reflux loop, which T-402 very much has.
 
 Drawn as a PFD -- an arrowhead on every process line, an equipment
 list, a utilities summary and a stream table sectioned into a mass
@@ -48,9 +50,9 @@ from _bootstrap import out  # runs from the repo root or from examples/
 
 from pandid import (
     Absorber,
-    Column,
     Condenser,
     ControlValve,
+    DistillationColumn,
     Feed,
     Flowsheet,
     KettleReboiler,
@@ -117,8 +119,7 @@ def main():
     # 1) and sour gas under the bottom one (feed_2, stage 20 of the 20
     # this tower carries). Both are the feed family's own west face, so
     # nothing needs mirroring to bring them round to the sheet's west
-    # edge the way the two return nozzles a plain Column would have used
-    # once did.
+    # edge the way a distillation column's two return nozzles would.
     #
     # No label_pos: a tag written in the middle of a tower is written
     # across the decks, and a tag is not haloed the way a line number is.
@@ -129,9 +130,9 @@ def main():
                                 n_feeds=2, feed_stages=[1, 20],
                                 width=110, height=340,
                                 description="Amine Contactor"))
-    regen = fs.add(Column("T-402", internals="packing", trays=2, width=110,
-                          height=300,
-                          description="Amine Regenerator"))
+    regen = fs.add(DistillationColumn("T-402", internals="packing", trays=2,
+                                      width=110, height=300,
+                                      description="Amine Regenerator"))
 
     # The rich amine goes tube side and the returning lean amine shell
     # side. Nozzles are named for the side of the equipment, never for
@@ -188,7 +189,7 @@ def main():
     contactor.pin(x=300, y=250)
     lean_in_y = 250 + port_offset(contactor, "feed_1")[1]
     gas_in_y = 250 + port_offset(contactor, "feed_2")[1]
-    contactor_axis = 300 + port_offset(contactor, "distillate")[0]
+    contactor_axis = 300 + port_offset(contactor, "overhead")[0]
     sour.pin(port="outlet", x=120, y=gas_in_y)
     sweet.pin(port="inlet", x=contactor_axis, y=140)
 
@@ -204,7 +205,7 @@ def main():
     rich_riser_x = 880.0
 
     regen.pin(x=980, y=290)
-    regen_axis = 980 + port_offset(regen, "distillate")[0]
+    regen_axis = 980 + port_offset(regen, "overhead")[0]
     regen_feed_y = 290 + port_offset(regen, "feed")[1]
     reflux_in_y = 290 + port_offset(regen, "reflux_in")[1]
     boilup_in_y = 290 + port_offset(regen, "boilup_in")[1]
@@ -259,7 +260,7 @@ def main():
     # reads. A number is drawn once, on the first segment declared, so
     # each group starts with the run it belongs on.
     fs.connect(sour.outlet, contactor.feed_2, name="S-401")
-    fs.connect(contactor.distillate, sweet.inlet, name="S-402")
+    fs.connect(contactor.overhead, sweet.inlet, name="S-402")
 
     fs.connect(contactor.bottoms, letdown.inlet, name="S-404").via(
         [(contactor_axis, rich_y)])
@@ -267,7 +268,7 @@ def main():
     fs.connect(cross.tube_out, regen.feed, name="S-405").via(
         [(rich_riser_x, rich_y), (rich_riser_x, regen_feed_y)])
 
-    fs.connect(regen.distillate, ovhd.shell_in, name="S-406")
+    fs.connect(regen.overhead, ovhd.shell_in, name="S-406")
     fs.connect(ovhd.shell_out, drum.inlet, name="S-407").via(
         [(regen_axis, ovhd_drain_y)])
     fs.connect(drum.vent, acid.inlet, name="S-408").via([(drum_vent_x, 60)])

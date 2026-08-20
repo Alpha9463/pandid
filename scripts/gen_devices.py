@@ -19,22 +19,24 @@ definition of "bought as an item", a variant becomes a class only where the
 **ports** or a **declarable property** differ. That line is what keeps this at
 forty-odd classes instead of a hundred and twenty.
 
-**A reduced port set earns a class with no drawing behind it at all.**
-Every class this file generates is named for a *drawing*: a registered
-``(kind, variant)`` this module claims and hands a ``PORTS`` list read off
-the registry. ``pandid.units.Absorber`` and ``pandid.units.Stripper`` are
-not that. Both draw exactly what ``Column`` already draws -- ISO gives
-neither a symbol, so there is no new stencil, no new registry key, and
+**A narrower or wider port set earns a class with no drawing behind it at
+all.** Every class this file generates is named for a *drawing*: a
+registered ``(kind, variant)`` this module claims and hands a ``PORTS``
+list read off the registry. ``pandid.units.DistillationColumn``,
+``pandid.units.Absorber`` and ``pandid.units.Stripper`` are not that. All
+three draw exactly what ``Column`` already draws -- ISO gives none of
+them a symbol, so there is no new stencil, no new registry key, and
 nothing for :func:`claims` to see -- and what tells them apart is only
-that each is missing nozzles the general column carries: an absorber has
-no reboiler, no condenser and no reflux at all, a stripper a reboiler and
-no condenser. So they are not in ``DEVICES``, ``OWNS`` or
-``STAYS_ON_BASE``, and this script does not generate them; they are
+which of the general tower's return nozzles each one has: a distillation
+column has all four (a reboiler, a condenser and the reflux that closes
+the loop between them), a stripper a reboiler and no condenser, an
+absorber neither. So none is in ``DEVICES``, ``OWNS`` or
+``STAYS_ON_BASE``, and this script does not generate any of them; they are
 written by hand in ``pandid/units.py`` next to ``Column`` itself, the one
 other class in this codebase whose ports this file does not own. A future
 class earns the same treatment on the same test: no drawing of its own,
-and ports enough narrower than its base's that stating the base's full
-set on it would be false.
+and a port set narrower or wider than its base's that stating the base's
+own set on it would be false.
 
 Three tables say the rest of it, and :func:`claims` holds them to the registry:
 

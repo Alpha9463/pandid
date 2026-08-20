@@ -26,8 +26,8 @@ from _bootstrap import out  # runs from the repo root or from examples/
 
 from pandid import (
     CheckValve,
-    Column,
     ControlValve,
+    DistillationColumn,
     Feed,
     Fitting,
     FlowElement,
@@ -73,8 +73,8 @@ def main():
     # Sieve trays, the same eighteen decks 10's PFD draws in the same
     # tower: yeast and grain solids come in with the beer, so the deck
     # is perforated and has nothing that can settle or seize.
-    col = fs.add(Column("T-301", internals="sieve_tray", trays=18,
-                        label_pos="center", description="Beer Column"))
+    col = fs.add(DistillationColumn("T-301", internals="sieve_tray", trays=18,
+                                    label_pos="center", description="Beer Column"))
     cond = fs.add(ShellAndTubeExchanger("C-301", variant="straight_tubes", width=130,
                                         height=40, description="Overhead Condenser"))
     drum = fs.add(Vessel("D-301", variant="horizontal", width=130, height=42,
@@ -228,7 +228,7 @@ def main():
     # attached instrument hangs off the *routed* path, so a line the
     # router is free to re-bend takes its instrumentation elsewhere with
     # it.
-    vapour = fs.connect(col.distillate, st301.inlet, service="AE", sequence=302,
+    vapour = fs.connect(col.overhead, st301.inlet, service="AE", sequence=302,
                         size=300, schedule=80, spec="SS").via([(col_axis, overhead_y)])
     fs.connect(st301.outlet, cond.shell_in).via([(cond_shell_in_x, overhead_y)])
 

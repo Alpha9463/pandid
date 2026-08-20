@@ -10,27 +10,32 @@ whole unit, and it is why there are two of everything on this sheet.
 symbol of its own. What it gives is a dished-end shell and item 27.8
 X8141, the crossed bed, and a molecular sieve is that shell with that
 bed in it -- exactly what a packed catalytic converter is. So
-``Column(internals="packing", trays=1)`` here draws the same mark that
-``Reactor(internals="packing")`` draws in example 18's methanol
-converter, and the only things telling a drier from a converter, or bed
-A from bed B, are the tag and the service. The two calls below are
-written out one under the other, identical but for those two, so that
-the sheet says it rather than the docstring.
+``DistillationColumn(internals="packing", trays=1)`` here draws the same
+mark that ``Reactor(internals="packing")`` draws in example 18's
+methanol converter, and the only things telling a drier from a
+converter, or bed A from bed B, are the tag and the service. The two
+calls below are written out one under the other, identical but for
+those two, so that the sheet says it rather than the docstring.
 
 Each bed takes four lines and they are the four the switching valves
 route: wet gas **down** through the on-line bed, hot regeneration gas
 **up** through the other. Counter-current regeneration is what puts the
 driest gas last against the bed's outlet end, which is the end the next
-adsorption cycle has to hold on specification.
+adsorption cycle has to hold on specification. The two return nozzles
+that close a distillation column's reflux and boilup loops close
+nothing here -- a bed has no condenser and no reboiler -- but they are
+still the two nozzles a cycle running the opposite way to the ordinary
+feed/product pair actually needs, so ``DistillationColumn`` is what
+draws them; a plain ``Column`` has neither.
 """
 
 from _bootstrap import out  # runs from the repo root or from examples/
 
 from pandid import (
     AirCooledExchanger,
-    Column,
     Compressor,
     ControlValve,
+    DistillationColumn,
     Feed,
     Flowsheet,
     Furnace,
@@ -60,12 +65,12 @@ def main():
     # the first face no nozzle's stream runs through, which puts A's tag
     # on the wall away from its valves and B's on the wall away from its
     # -- the pipework's own mirror, carried onto the lettering.
-    bed_a = fs.add(Column("V-501A", internals="packing", trays=1, width=90,
-                          height=200,
-                          description="Molecular Sieve Drier A"))
-    bed_b = fs.add(Column("V-501B", internals="packing", trays=1, width=90,
-                          height=200,
-                          description="Molecular Sieve Drier B"))
+    bed_a = fs.add(DistillationColumn("V-501A", internals="packing", trays=1, width=90,
+                                      height=200,
+                                      description="Molecular Sieve Drier A"))
+    bed_b = fs.add(DistillationColumn("V-501B", internals="packing", trays=1, width=90,
+                                      height=200,
+                                      description="Molecular Sieve Drier B"))
 
     heater = fs.add(Furnace("H-501", description="Regeneration Gas Heater"))
     # Air-cooled: a regeneration gas cooler in a gas plant is a fin-fan,
@@ -136,8 +141,8 @@ def main():
 
     bed_a.pin(mirrored=True).pin(x=460, y=bed_y)
     bed_b.pin(x=940, y=bed_y)
-    a_axis = 460 + port_offset(bed_a, "distillate")[0]
-    b_axis = 940 + port_offset(bed_b, "distillate")[0]
+    a_axis = 460 + port_offset(bed_a, "overhead")[0]
+    b_axis = 940 + port_offset(bed_b, "overhead")[0]
     top_in_y = bed_y + port_offset(bed_a, "reflux_in")[1]
     bot_in_y = bed_y + port_offset(bed_a, "boilup_in")[1]
     a_leg_x, b_leg_x = 380.0, 1110.0
@@ -257,10 +262,10 @@ def main():
     # in. The wet end of the bed is the end the gas enters on adsorption,
     # so regenerating the other way round drives the water back out the
     # way it came in and leaves the outlet end the driest.
-    fs.connect(bed_a.distillate, xv504a.inlet, size=200, service="RG",
+    fs.connect(bed_a.overhead, xv504a.inlet, size=200, service="RG",
                sequence=509, spec="LT")
     fs.connect(xv504a.outlet, t_regen_out.inlet).via([(a_axis, regen_out_y)])
-    fs.connect(bed_b.distillate, xv504b.inlet, size=200, service="RG",
+    fs.connect(bed_b.overhead, xv504b.inlet, size=200, service="RG",
                sequence=510, spec="LT")
     fs.connect(xv504b.outlet, t_regen_out.branch)
     fs.connect(t_regen_out.outlet, regen_cooler.tube_in, size=200,
