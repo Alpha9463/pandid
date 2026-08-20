@@ -89,7 +89,7 @@ LABEL_POSITIONS = ("top", "bottom", "right", "left", "center")
 # a finished diagram on paper or equivalent media at 0,18 mm -- and
 # nothing here checks it. (Not §11.1.3, which is the unrelated
 # rule that a symbol's stroke survives the symbol being resized; see
-# :data:`_SYMBOL_STROKE`.)
+# :data:`_EQUIPMENT_STROKE`.)
 _PROCESS_STROKE = 2
 _SIGNAL_STROKE = 1
 
@@ -143,11 +143,39 @@ _LABEL_STEP = 6.0
 _LABEL_BANDS = 7
 
 #: The weight a graphical symbol's outline is drawn at, in whatever box
-#: it is placed in. ISO 15519-1 §11.1.3 is a *shall*: resizing a symbol
-#: leaves its line width alone. :func:`_nominal` holds every artwork in
-#: the registry to it, so this is one number for all of them rather than
-#: a property of any drawing.
-_SYMBOL_STROKE = 2.0
+#: it is placed in, for the class ISO 10628-1 §5.3.1 b) rules: equipment
+#: and machinery, the frames a block or a splitter draws, and (see
+#: :data:`_PROCESS_STROKE`) subsidiary flow and energy-carrier lines.
+#: ISO 15519-1 §11.1.3 is a *shall* that applies to both this and
+#: :data:`_TRIM_STROKE` alike: resizing a symbol leaves its line width
+#: alone. :func:`_nominal` holds every artwork in the registry to
+#: whichever of the two it is drawn at, so each is one number for its
+#: whole class rather than a property of any one drawing.
+#:
+#: 15519-1 §6.2 Table 1 disagrees with 5.3.1 b) about this number by a
+#: flat factor of two, and :data:`pandid.render.drawio._EQUIPMENT_STROKE`
+#: is where the choice between the two governing standards is written
+#: down.
+_EQUIPMENT_STROKE = 2.0
+
+#: The weight §5.3.1 c) rules instead, for a :class:`~.symbols.Symbol`
+#: whose :attr:`~.symbols.Symbol.trim` is set: valves, fittings, piping
+#: accessories and PCE (instrument) symbols. Half of
+#: :data:`_EQUIPMENT_STROKE`, which is the clause's own ratio between
+#: the two -- 0,5 mm to 0,25 mm -- and happens to equal
+#: :data:`_SIGNAL_STROKE`, a coincidence of the two governing standards
+#: agreeing on this one pair of numbers and not a reason to write one in
+#: terms of the other: a control line and a valve bowtie answer to
+#: different clauses that could in principle diverge.
+_TRIM_STROKE = 1.0
+
+
+def _class_stroke(sym) -> float:
+    """The outline weight *sym* draws at: :data:`_TRIM_STROKE` for a
+    trimmed symbol, :data:`_EQUIPMENT_STROKE` for every other one.
+    """
+    return _TRIM_STROKE if sym.trim else _EQUIPMENT_STROKE
+
 
 #: The paper a label's opaque plate leaves outside a symbol's ink.
 #:
@@ -176,8 +204,20 @@ def _obstacle(box) -> "tuple[float, float, float, float]":
     The growth is applied where the boxes are *used* rather than where
     they are built, because the draw.io exporter builds a list of its
     own and hands it to ``_tag_item``.
+
+    Held to :data:`_EQUIPMENT_STROKE`, the heavier of the two symbol
+    weights, whatever *box* was actually drawn at. This is a clearance
+    around a box that already grew to the ink (see :data:`_PLATE_CLEARANCE`),
+    not the ink's own measurement, so an obstacle for a valve or a
+    balloon a half-pen too generous never puts a label nearer real ink
+    than it draws -- only ever ekes it a little further off a trimmed
+    symbol than :data:`_TRIM_STROKE` strictly requires. Threading which
+    class each box was drawn in through every caller here, several of
+    which build their list from mixed geometry (a flange mark has no
+    :class:`~.symbols.Symbol` at all), would buy nothing a reader could
+    see.
     """
-    pad = _SYMBOL_STROKE / 2 + _PLATE_CLEARANCE
+    pad = _EQUIPMENT_STROKE / 2 + _PLATE_CLEARANCE
     return (box[0] - pad, box[1] - pad, box[2] + pad, box[3] + pad)
 
 
@@ -2945,6 +2985,16 @@ class SvgRenderer:
             # in the coordinates the definition will be written in.
             art = _baked(sym.svg, *fold)
             width, height = sym.width * fold[0], sym.height * fold[1]
+            # Every weight the artwork was drawn at is baked to
+            # :data:`_EQUIPMENT_STROKE`, whichever class the symbol is
+            # actually in (see :func:`_nominal`), so a trimmed symbol's
+            # weight is divided out here rather than carried by `pen`,
+            # which stays the *resize* factor alone and nothing else:
+            # :func:`_size_tag` and the cache `key` above both read it
+            # for that, and every symbol of one (kind, variant) is one
+            # class, so folding the two together would buy the cache
+            # nothing and cost `_size_tag` its meaning.
+            stroke = pen * _EQUIPMENT_STROKE / _class_stroke(sym)
             # Either, never both. A directional symbol's *whole*
             # drawing is held still, lettering included, so a glyph
             # inside one would need the residual of the two rather than
@@ -2953,10 +3003,10 @@ class SvgRenderer:
             # says so over the registry rather than leaving this branch
             # to be trusted.
             if sym.directional:
-                svg_str = _upright_artwork(_at_pen_scale(art, pen),
+                svg_str = _upright_artwork(_at_pen_scale(art, stroke),
                                            width, height, mirror_x, mirror_y)
             else:
-                svg_str = _upright_text(_at_pen_scale(art, pen), rot, mirror_x, mirror_y)
+                svg_str = _upright_text(_at_pen_scale(art, stroke), rot, mirror_x, mirror_y)
             if svg_str.startswith('<g'):
                 inner = svg_str[svg_str.find('>') + 1:svg_str.rfind('</g>')]
                 # preserveAspectRatio: stated only where a placement

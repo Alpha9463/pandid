@@ -45,8 +45,10 @@ import pytest
 
 from pandid import Flowsheet, units
 from pandid.render.svg import (
+    _EQUIPMENT_STROKE,
     _PROCESS_STROKE,
     _SIGNAL_STROKE,
+    _TRIM_STROKE,
     SvgRenderer,
     _placement_scale,
 )
@@ -215,6 +217,14 @@ def check_symbol_weights(fs, svg):
     on the lines a sheet draws directly
     (:func:`test_every_line_on_the_corpus_lands_on_one_of_the_two_sheet_weights`),
     so "the weight it should be" cannot be satisfied by moving the target.
+
+    Every artwork is authored to one nominal weight, :data:`~pandid.render.svg
+    ._EQUIPMENT_STROKE`, whatever class it draws in on the page (#305): a
+    valve's ``8.0`` under ``scale(0.25)`` is centred on 2.0 the same as a
+    vessel's bare ``2``. A trimmed symbol -- ISO 10628-1 §5.3.1 c), see
+    :attr:`~pandid.render.symbols.Symbol.trim` -- is halved again once more at
+    render time on top of that, so what ``authored_pens`` declares is scaled
+    down here before it is held to what the sheet actually drew.
     """
     renderer = SvgRenderer()
     by_id = {}
@@ -228,7 +238,8 @@ def check_symbol_weights(fs, svg):
         sym = default_registry.for_unit(u)
         sym_id = renderer._sym_id(u)
         assert sym_id in by_id, f"{u.name}: nothing on the sheet uses {sym_id!r}"
-        expected = authored_pens(sym)
+        class_factor = (_TRIM_STROKE / _EQUIPMENT_STROKE) if sym.trim else 1.0
+        expected = [w * class_factor for w in authored_pens(sym)]
         drawn = by_id[sym_id][: len(expected)]
         assert len(drawn) == len(expected), (
             f"{u.name}: {sym_id} draws {len(drawn)} strokes, its definition "
@@ -419,10 +430,21 @@ def test_a_uniformly_resized_valve_draws_at_the_sheet_weight_exactly(request):
     """The bug of #152 and #153, written out in the numbers it went wrong in.
 
     A gate valve's artwork is drawn under ``scale(0.25)`` and carries an 8.0 so
-    it lands on the sheet's 2.0. Placed in a box 2.878 times its own -- which is
-    what ``examples/07`` asked of the relief valve -- it used to come out at 5.8
-    and merge into a blob. It is one symbol and one number, and no bound or mean
-    is involved: a uniform resize must move the weight not at all.
+    it is authored centred on the sheet's equipment weight, 2.0 -- what every
+    outline in the registry declares, valve included
+    (:func:`test_every_symbol_declares_a_pen_centred_on_the_sheet_weight`).
+    Placed in a box 2.878 times its own -- which is what ``examples/07`` asked
+    of the relief valve, back when a valve drew at that same 2.0 -- it used to
+    come out at 5.8 and merge into a blob. It is one symbol and one number, and
+    no bound or mean is involved: a uniform resize must move the weight not at
+    all.
+
+    A valve is a trimmed symbol since #305 and draws at half that on the page,
+    :data:`~pandid.render.svg._TRIM_STROKE`, 1.0 -- a second, orthogonal
+    halving this test holds just as exactly: the bug above was a resize
+    working loose of *any* weight the symbol should have held, and checking
+    against 1.0 now is what stops a regression of it from hiding behind the
+    class split.
     """
     for factor in (1.0, 2.878, 0.5, 4.0):
         sym = default_registry.get("valve", "gate")
@@ -435,5 +457,5 @@ def test_a_uniformly_resized_valve_draws_at_the_sheet_weight_exactly(request):
         for where, lo, hi in drawn_pens(fs.to_svg()):
             if not where.startswith("sym_valve"):
                 continue
-            assert lo == pytest.approx(float(_PROCESS_STROKE), rel=1e-5)
-            assert hi == pytest.approx(float(_PROCESS_STROKE), rel=1e-5)
+            assert lo == pytest.approx(float(_TRIM_STROKE), rel=1e-5)
+            assert hi == pytest.approx(float(_TRIM_STROKE), rel=1e-5)

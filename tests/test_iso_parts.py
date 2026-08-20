@@ -26,7 +26,7 @@ import re
 import pytest
 
 from pandid.render import iso_parts
-from pandid.render.svg import _SYMBOL_STROKE
+from pandid.render.svg import _EQUIPMENT_STROKE
 from pandid.render.symbols import Overlay, Symbol, compose, default_registry
 from test_symbol_invariants import _collect_segments
 
@@ -265,7 +265,7 @@ def test_a_part_is_drawn_at_the_detail_weight(part):
     """
     widths = {float(w) for w in re.findall(r'stroke-width="([\d.]+)"', part.svg)}
     assert widths in ({iso_parts.PART_STROKE}, set())
-    assert iso_parts.PART_STROKE * 2 == _SYMBOL_STROKE
+    assert iso_parts.PART_STROKE * 2 == _EQUIPMENT_STROKE
 
 
 @pytest.mark.parametrize("part", PARTS, ids=IDS)
@@ -413,7 +413,7 @@ def test_a_part_is_drawn_at_its_declared_weight_however_it_is_scaled(part):
     }
     assert all(w == pytest.approx(iso_parts.PART_STROKE, rel=1e-4) for w in drawn)
     # ...and the body's own outline is untouched by any of it.
-    assert f'stroke-width="{_SYMBOL_STROKE:g}"' in out.svg
+    assert f'stroke-width="{_EQUIPMENT_STROKE:g}"' in out.svg
 
 
 def test_a_motors_drive_lands_on_the_body_and_the_bodys_nozzles_survive():

@@ -679,6 +679,26 @@ class Symbol:
     # no business being composed with.
     iso_reg: str = ""
 
+    # Does this outline belong to ISO 10628-1 §5.3.1 c) rather than b)?
+    # The clause rules graphical symbols in two weights: b) equipment and
+    # machinery (and the frames and lines beside them), c) valves,
+    # fittings, piping accessories and PCE (instrument) symbols, at half
+    # b)'s weight. A drawing is one or the other by what it *is*, not by
+    # where its stencil happened to be filed -- draw.io keeps an orifice
+    # plate in ``valves.xml`` and a static mixer in ``mixers.xml``, and
+    # neither is what its folder says -- so this is set once per drawing,
+    # here, rather than inferred downstream from ``kind``.
+    #
+    # False for every equipment, machinery and frame symbol the registry
+    # ships, which is why it defaults false: a body drawn without an
+    # opinion is the b) weight, the one every hand-drawn fallback in this
+    # module was already written to. Both renderers read it off the
+    # resolved :class:`Symbol` and rule their own weight from it --
+    # :data:`pandid.render.svg._TRIM_STROKE` and
+    # :data:`pandid.render.drawio._TRIM_STROKE` -- rather than keeping a
+    # second table of kinds that could drift from this one.
+    trim: bool = False
+
     def __post_init__(self) -> None:
         declared = {name: dict(faces) for name, faces in self.port_faces.items()}
         # Everything below rejects rather than repairs. The menu is
@@ -3045,6 +3065,10 @@ _ROTARY_MIXER = Symbol(
     width=_MIXER_W, height=_MIXER_H,
     ports=dict(_MIXER_PORTS),
     iso_reg="X2672",
+    # An in-line device, ISO 10628-2 group 24's own comment for it: "no
+    # different from a strainer or a static mixer" -- both piping
+    # accessories. See :attr:`Symbol.trim`.
+    trim=True,
 )
 
 #: ISO item 12.3 X8184, the mixing path, in drawing units.
@@ -3064,6 +3088,8 @@ _MIXING_PATH = Symbol(
     width=_PATH_W, height=_PATH_H,
     ports={"inlet": (0.0, 30.0), "outlet": (_PATH_W, 30.0)},
     iso_reg="X8184",
+    # See :data:`_ROTARY_MIXER`: the same in-line, piping-accessory case.
+    trim=True,
 )
 
 #: ISO item 12.4 X8134, the kneader, in drawing units.
@@ -3619,7 +3645,11 @@ class SymbolRegistry:
                 '</g>'
             ),
             width=40.0, height=30.0,
-            ports={'inlet': (0.0, 15.0), 'outlet': (40.0, 15.0)}
+            ports={'inlet': (0.0, 15.0), 'outlet': (40.0, 15.0)},
+            # Overridden by the vendored registry below on every real
+            # sheet; kept true anyway so a lookup of the fallback answers
+            # the same class as the drawing it stands in for.
+            trim=True,
         ))
 
         # Vessel: vertical drum with dished heads
@@ -3782,15 +3812,19 @@ class SymbolRegistry:
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
-            faceless_ports=_inst_faceless, label_pos="center", stretchable=False))
+            faceless_ports=_inst_faceless, label_pos="center", stretchable=False,
+            # A PCE symbol, ISO 10628-1 §5.3.1 c). See :attr:`Symbol.trim`.
+            trim=True))
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_panel"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="22" x2="43" y2="22" stroke="black" stroke-width="1.5"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
-            faceless_ports=_inst_faceless, label_pos="center", stretchable=False), "panel")
+            faceless_ports=_inst_faceless, label_pos="center", stretchable=False,
+            trim=True), "panel")
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_aux"><circle cx="22" cy="22" r="21" fill="white" stroke="black" stroke-width="2"/><line x1="1" y1="19" x2="43" y2="19" stroke="black" stroke-width="1.5"/><line x1="1" y1="25" x2="43" y2="25" stroke="black" stroke-width="1.5"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
-            faceless_ports=_inst_faceless, label_pos="center", stretchable=False), "aux")
+            faceless_ports=_inst_faceless, label_pos="center", stretchable=False,
+            trim=True), "aux")
         # The bar is issue #181. ISO 15519-2 Table 1 (p. 7) tabulates
         # the *additional graphic* a PCI symbol carries: no bar for a
         # reading available at a field-mounted instrument or display,
@@ -3816,7 +3850,8 @@ class SymbolRegistry:
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_shared"><rect x="1" y="1" width="42" height="42" fill="white" stroke="black" stroke-width="2"/><circle cx="22" cy="22" r="20" fill="none" stroke="black" stroke-width="2"/><line x1="2" y1="22" x2="42" y2="22" stroke="black" stroke-width="1.5"/></g>',
             width=44.0, height=44.0, ports=_inst_ports, port_faces=_inst_menu,
-            faceless_ports=_inst_faceless, label_pos="center", stretchable=False), "shared")
+            faceless_ports=_inst_faceless, label_pos="center", stretchable=False,
+            trim=True), "shared")
         self.register("instrument", Symbol(
             svg='<g id="sym_instrument_computer"><polygon points="11,3 33,3 43,22 33,41 11,41 1,22" fill="white" stroke="black" stroke-width="2"/></g>',
             # The hexagon's flat bottom is at y=41, not y=43 like the
@@ -3830,7 +3865,8 @@ class SymbolRegistry:
             # y=41, so N and S need their own stubs; the side vertices
             # sit where the circles do.
             port_faces={n: {**_inst_faces, "N": (22.0, 2.0), "S": (22.0, 42.0)}
-                        for n in _inst_ports}), "computer")
+                        for n in _inst_ports},
+            trim=True), "computer")
         # The two trip / logic squares, hung under the instrument they
         # act on. ANSI/ISA-5.1-2009 draws these as two *different*
         # symbols and the package carries both:
@@ -3877,7 +3913,7 @@ class SymbolRegistry:
             # a box of another proportion its vertices leave the sides'
             # midpoints, which is where all three ports sit.
             width=40.0, height=40.0, label_pos="center", stretchable=False,
-            ports=_logic_ports)
+            ports=_logic_ports, trim=True)
         self.register("instrument", _sis, "sis")
         self.register("instrument", _sis, "logic")
         # The plain diamond fills its own outline: nothing is drawn
@@ -3888,7 +3924,7 @@ class SymbolRegistry:
                 '<polygon points="20,1 39,20 20,39 1,20" fill="white" stroke="black" stroke-width="2"/>'
                 '</g>',
             width=40.0, height=40.0, label_pos="center", stretchable=False,
-            ports=_logic_ports),
+            ports=_logic_ports, trim=True),
             "interlock")
 
         # The tubular reactor: a PFR, and the one reactor that is not a

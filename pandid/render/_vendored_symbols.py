@@ -13,6 +13,7 @@ def register_vendored(registry):
         width=24.5, height=15.0,
         ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.2, 0.0)},
         drawio_shape='mxgraph.pid.valves.gate_valve',
+        trim=True,
     ), 'default')
 
     # draw.io valves:Gate Valve (aspect=variable) -> valve/gate
@@ -21,6 +22,7 @@ def register_vendored(registry):
         width=24.5, height=15.0,
         ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.2, 0.0)},
         drawio_shape='mxgraph.pid.valves.gate_valve',
+        trim=True,
     ), 'gate')
 
     # draw.io valves:Globe Valve (aspect=variable) -> valve/globe
@@ -29,6 +31,7 @@ def register_vendored(registry):
         width=24.5, height=15.0,
         ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.2, 0.0)},
         drawio_shape='mxgraph.pid.valves.globe_valve',
+        trim=True,
     ), 'globe')
 
     # draw.io valves:Ball Valve (aspect=variable) -> valve/ball
@@ -37,6 +40,7 @@ def register_vendored(registry):
         width=24.5, height=15.0,
         ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.2, 0.0)},
         drawio_shape='mxgraph.pid.valves.ball_valve',
+        trim=True,
     ), 'ball')
 
     # draw.io valves:Butterfly Valve 1 (aspect=variable) -> valve/butterfly
@@ -45,6 +49,7 @@ def register_vendored(registry):
         width=24.5, height=15.0,
         ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.2, 0.0)},
         drawio_shape='mxgraph.pid.valves.butterfly_valve_1',
+        trim=True,
     ), 'butterfly')
 
     # draw.io valves:Check Valve 1 (aspect=variable) -> valve/check
@@ -53,6 +58,7 @@ def register_vendored(registry):
         width=24.6, height=15.5,
         ports={'inlet': (0.7, 7.8), 'outlet': (24.6, 7.8), 'actuator': (12.3, 0.0)},
         drawio_shape='mxgraph.pid.valves.check_valve_1',
+        trim=True,
     ), 'check')
 
     # draw.io valves:Diaphragm (aspect=variable) -> valve/saunders
@@ -61,6 +67,7 @@ def register_vendored(registry):
         width=24.5, height=15.0,
         ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.2, 0.0)},
         drawio_shape='mxgraph.pid.valves.diaphragm',
+        trim=True,
     ), 'saunders')
 
     # draw.io valves:Needle (aspect=variable) -> valve/needle
@@ -69,6 +76,7 @@ def register_vendored(registry):
         width=24.5, height=15.0,
         ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.2, 0.0)},
         drawio_shape='mxgraph.pid.valves.needle',
+        trim=True,
     ), 'needle')
 
     # draw.io valves:Three-Way Valve (aspect=variable) -> valve/three_way
@@ -77,6 +85,7 @@ def register_vendored(registry):
         width=24.5, height=19.8,
         ports={'inlet': (0.0, 7.6), 'outlet': (24.5, 7.6), 'actuator': (12.2, 0.0), 'branch': (12.2, 19.8)},
         drawio_shape='mxgraph.pid.valves.three-way_valve',
+        trim=True,
     ), 'three_way')
 
     # draw.io valves:Relief PRV (aspect=variable) -> valve/relief
@@ -85,6 +94,7 @@ def register_vendored(registry):
         width=15.0, height=22.1,
         ports={'inlet': (7.5, 22.1), 'outlet': (7.5, 0.0), 'actuator': (15.0, 9.0)},
         drawio_shape='mxgraph.pid.valves.relief_prv',
+        trim=True,
     ), 'relief')
 
     # draw.io valves:Angle (aspect=variable) -> valve/angle
@@ -93,6 +103,7 @@ def register_vendored(registry):
         width=19.8, height=19.8,
         ports={'inlet': (7.5, 19.8), 'outlet': (19.8, 7.5), 'actuator': (7.5, 0.0)},
         drawio_shape='mxgraph.pid.valves.angle',
+        trim=True,
     ), 'angle')
 
     # draw.io valves:Safety PSV 1 (aspect=variable) -> valve/psv
@@ -101,6 +112,7 @@ def register_vendored(registry):
         width=19.8, height=33.8,
         ports={'inlet': (7.5, 33.8), 'outlet': (19.8, 21.6), 'actuator': (7.5, 0.0)},
         drawio_shape='mxgraph.pid.valves.safety_psv_1',
+        trim=True,
     ), 'psv')
 
     # draw.io valves:Bleeder Valve 1 (aspect=variable) -> valve/bleed
@@ -109,6 +121,7 @@ def register_vendored(registry):
         width=6.2, height=18.8,
         ports={'inlet': (3.1, 0.0), 'outlet': (3.1, 18.8), 'actuator': (6.0, 0.0)},
         drawio_shape='mxgraph.pid.valves.bleeder_valve_1',
+        trim=True,
     ), 'bleed')
 
     # draw.io valves:Plug (aspect=variable) -> valve/plug
@@ -117,6 +130,7 @@ def register_vendored(registry):
         width=24.5, height=15.0,
         ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.2, 0.0)},
         drawio_shape='mxgraph.pid.valves.plug',
+        trim=True,
     ), 'plug')
 
     # draw.io valves:Pinch Valve (aspect=variable) -> valve/pinch
@@ -125,6 +139,7 @@ def register_vendored(registry):
         width=24.5, height=15.0,
         ports={'inlet': (0.0, 7.5), 'outlet': (24.5, 7.5), 'actuator': (12.2, 0.0)},
         drawio_shape='mxgraph.pid.valves.pinch_valve',
+        trim=True,
     ), 'pinch')
 
     # draw.io valves:Motor Operated Valve (aspect=variable) -> valve/motor
@@ -133,6 +148,7 @@ def register_vendored(registry):
         width=24.5, height=22.2,
         ports={'inlet': (0.0, 14.9), 'outlet': (24.5, 14.9), 'actuator': (12.2, 0.0)},
         drawio_shape='mxgraph.pid.valves.motor_operated_valve',
+        trim=True,
     ), 'motor')
 
     # draw.io valves:Solenoid Valve Closed (aspect=variable) -> valve/solenoid
@@ -141,6 +157,7 @@ def register_vendored(registry):
         width=24.5, height=22.2,
         ports={'inlet': (0.0, 14.9), 'outlet': (24.5, 14.9), 'actuator': (12.2, 0.0)},
         drawio_shape='mxgraph.pid.valves.solenoid_valve_closed',
+        trim=True,
     ), 'solenoid')
 
     # draw.io valves:Hydraulic Valve (aspect=variable) -> valve/hydraulic
@@ -149,6 +166,7 @@ def register_vendored(registry):
         width=24.5, height=22.2,
         ports={'inlet': (0.0, 14.9), 'outlet': (24.5, 14.9), 'actuator': (12.2, 0.0)},
         drawio_shape='mxgraph.pid.valves.hydraulic_valve',
+        trim=True,
     ), 'hydraulic')
 
     # draw.io valves:Pneumatic Operated (aspect=variable) -> valve/control
@@ -157,6 +175,7 @@ def register_vendored(registry):
         width=24.5, height=19.8,
         ports={'inlet': (0.0, 12.4), 'outlet': (24.5, 12.4), 'actuator': (12.2, 0.0)},
         drawio_shape='mxgraph.pid.valves.pneumatic_operated',
+        trim=True,
     ), 'control')
 
     # draw.io valves:Manual Operated Valve (aspect=variable) -> valve/manual
@@ -165,6 +184,7 @@ def register_vendored(registry):
         width=24.5, height=16.2,
         ports={'inlet': (0.0, 8.8), 'outlet': (24.5, 8.8), 'actuator': (12.2, 0.0)},
         drawio_shape='mxgraph.pid.valves.manual_operated_valve',
+        trim=True,
     ), 'manual')
 
     # draw.io valves:Knife Valve (aspect=variable) -> valve/knife
@@ -173,6 +193,7 @@ def register_vendored(registry):
         width=25.0, height=21.2,
         ports={'inlet': (0.0, 11.3), 'outlet': (25.0, 11.3), 'actuator': (12.5, 0.0)},
         drawio_shape='mxgraph.pid.valves.knife_valve',
+        trim=True,
     ), 'knife')
 
     # draw.io valves:Pneumatic Operated Butterfly Valve (aspect=variable) -> valve/butterfly_pneumatic
@@ -181,6 +202,7 @@ def register_vendored(registry):
         width=24.5, height=30.0,
         ports={'inlet': (0.0, 22.5), 'outlet': (24.5, 22.5), 'actuator': (12.2, 0.0)},
         drawio_shape='mxgraph.pid.valves.pneumatic_operated_butterfly_valve',
+        trim=True,
     ), 'butterfly_pneumatic')
 
     # draw.io valves:Back Pressure Regulator 1 (aspect=variable) -> valve/regulator
@@ -189,6 +211,7 @@ def register_vendored(registry):
         width=24.5, height=23.5,
         ports={'inlet': (0.0, 16.1), 'outlet': (24.5, 16.1), 'actuator': (12.2, 0.0)},
         drawio_shape='mxgraph.pid.valves.back_pressure_regulator_1',
+        trim=True,
     ), 'regulator')
 
     # draw.io pumps:Centrifugal Pump 1 (aspect=variable) -> pump/default
@@ -396,6 +419,7 @@ def register_vendored(registry):
         width=12.5, height=12.5,
         ports={'inlet': (0.0, 6.2), 'outlet': (12.5, 6.2)},
         drawio_shape='mxgraph.pid.piping.concentric_reducer',
+        trim=True,
     ), 'default')
 
     # draw.io piping:Concentric Reducer (aspect=variable) -> reducer/concentric
@@ -404,6 +428,7 @@ def register_vendored(registry):
         width=12.5, height=12.5,
         ports={'inlet': (0.0, 6.2), 'outlet': (12.5, 6.2)},
         drawio_shape='mxgraph.pid.piping.concentric_reducer',
+        trim=True,
     ), 'concentric')
 
     # draw.io piping:Eccentric Reducer (aspect=variable) -> reducer/eccentric
@@ -412,6 +437,7 @@ def register_vendored(registry):
         width=16.7, height=12.5,
         ports={'inlet': (0.0, 6.2), 'outlet': (16.7, 3.8)},
         drawio_shape='mxgraph.pid.piping.eccentric_reducer',
+        trim=True,
     ), 'eccentric')
 
     # draw.io fittings:Flanged Connection (aspect=variable) -> fitting/default
@@ -420,6 +446,7 @@ def register_vendored(registry):
         width=5.0, height=12.5,
         ports={'inlet': (0.0, 6.2), 'outlet': (5.0, 6.2)},
         drawio_shape='mxgraph.pid.fittings.flanged_connection',
+        trim=True,
     ), 'default')
 
     # draw.io fittings:Flanged Connection (aspect=variable) -> fitting/flange
@@ -428,6 +455,7 @@ def register_vendored(registry):
         width=5.0, height=12.5,
         ports={'inlet': (0.0, 6.2), 'outlet': (5.0, 6.2)},
         drawio_shape='mxgraph.pid.fittings.flanged_connection',
+        trim=True,
     ), 'flange')
 
     # draw.io fittings:Strainer (aspect=variable) -> fitting/strainer
@@ -436,6 +464,7 @@ def register_vendored(registry):
         width=10.0, height=20.0,
         ports={'inlet': (0.0, 10.0), 'outlet': (10.0, 10.0)},
         drawio_shape='mxgraph.pid.fittings.strainer',
+        trim=True,
     ), 'strainer')
 
     # draw.io fittings:Strainer (Cone) (aspect=variable) -> fitting/strainer_cone
@@ -444,6 +473,7 @@ def register_vendored(registry):
         width=10.0, height=20.0,
         ports={'inlet': (0.0, 10.0), 'outlet': (10.0, 10.0)},
         drawio_shape='mxgraph.pid.fittings.strainer_(cone)',
+        trim=True,
     ), 'strainer_cone')
 
     # draw.io fittings:Rupture Disc (aspect=variable) -> fitting/rupture_disc
@@ -452,6 +482,7 @@ def register_vendored(registry):
         width=12.5, height=25.0,
         ports={'inlet': (0.0, 12.5), 'outlet': (12.5, 12.5)},
         drawio_shape='mxgraph.pid.fittings.rupture_disc',
+        trim=True,
     ), 'rupture_disc')
 
     # draw.io fittings:Viewing Glass (aspect=variable) -> fitting/sight_glass
@@ -460,6 +491,7 @@ def register_vendored(registry):
         width=25.0, height=12.5,
         ports={'inlet': (0.0, 6.2), 'outlet': (25.0, 6.2)},
         drawio_shape='mxgraph.pid.fittings.viewing_glass',
+        trim=True,
     ), 'sight_glass')
 
     # draw.io fittings:Viewing Glass (Lighting) (aspect=variable) -> fitting/sight_glass_lit
@@ -468,6 +500,7 @@ def register_vendored(registry):
         width=25.0, height=25.0,
         ports={'inlet': (0.0, 6.2), 'outlet': (25.0, 6.2)},
         drawio_shape='mxgraph.pid.fittings.viewing_glass_(lighting)',
+        trim=True,
     ), 'sight_glass_lit')
 
     # draw.io fittings:Silencer (aspect=variable) -> fitting/silencer
@@ -476,6 +509,7 @@ def register_vendored(registry):
         width=35.0, height=25.0,
         ports={'inlet': (0.0, 12.5), 'outlet': (35.0, 12.5)},
         drawio_shape='mxgraph.pid.fittings.silencer',
+        trim=True,
     ), 'silencer')
 
     # draw.io fittings:Compensator (aspect=variable) -> fitting/expansion_joint
@@ -484,6 +518,7 @@ def register_vendored(registry):
         width=10.0, height=20.0,
         ports={'inlet': (0.0, 10.0), 'outlet': (10.0, 10.0)},
         drawio_shape='mxgraph.pid.fittings.compensator',
+        trim=True,
     ), 'expansion_joint')
 
     # draw.io fittings:Flame Arrestor (aspect=variable) -> fitting/flame_arrestor
@@ -492,6 +527,7 @@ def register_vendored(registry):
         width=12.5, height=25.0,
         ports={'inlet': (0.0, 12.5), 'outlet': (12.5, 12.5)},
         drawio_shape='mxgraph.pid.fittings.flame_arrestor',
+        trim=True,
     ), 'flame_arrestor')
 
     # draw.io fittings:Flame Arrestor (Explosion-Proof) (aspect=variable) -> fitting/flame_arrestor_explosion_proof
@@ -500,6 +536,7 @@ def register_vendored(registry):
         width=25.0, height=25.0,
         ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
         drawio_shape='mxgraph.pid.fittings.flame_arrestor_(explosion-proof)',
+        trim=True,
     ), 'flame_arrestor_explosion_proof')
 
     # draw.io fittings:Flame Arrestor (Detonation-Proof) (aspect=variable) -> fitting/flame_arrestor_detonation_proof
@@ -508,6 +545,7 @@ def register_vendored(registry):
         width=25.0, height=25.0,
         ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
         drawio_shape='mxgraph.pid.fittings.flame_arrestor_(detonation-proof)',
+        trim=True,
     ), 'flame_arrestor_detonation_proof')
 
     # draw.io fittings:Flame Arrestor (Fire-Resistant) (aspect=variable) -> fitting/flame_arrestor_fire_resistant
@@ -516,6 +554,7 @@ def register_vendored(registry):
         width=25.0, height=25.0,
         ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
         drawio_shape='mxgraph.pid.fittings.flame_arrestor_(fire-resistant)',
+        trim=True,
     ), 'flame_arrestor_fire_resistant')
 
     # draw.io fittings:Coupling (aspect=variable) -> fitting/coupling
@@ -524,6 +563,7 @@ def register_vendored(registry):
         width=12.5, height=25.0,
         ports={'inlet': (0.0, 12.5), 'outlet': (12.5, 12.5)},
         drawio_shape='mxgraph.pid.fittings.coupling',
+        trim=True,
     ), 'coupling')
 
     # draw.io fittings:Clamped Flange Coupling (aspect=variable) -> fitting/clamped_coupling
@@ -532,6 +572,7 @@ def register_vendored(registry):
         width=12.5, height=25.0,
         ports={'inlet': (2.5, 12.5), 'outlet': (10.0, 12.5)},
         drawio_shape='mxgraph.pid.fittings.clamped_flange_coupling',
+        trim=True,
     ), 'clamped_coupling')
 
     # draw.io fittings:Hose (aspect=variable) -> fitting/hose
@@ -540,6 +581,7 @@ def register_vendored(registry):
         width=45.0, height=7.5,
         ports={'inlet': (0.0, 3.8), 'outlet': (45.0, 3.8)},
         drawio_shape='mxgraph.pid.fittings.hose',
+        trim=True,
     ), 'hose')
 
     # draw.io valves:Orifice (aspect=variable) -> fitting/orifice
@@ -548,6 +590,7 @@ def register_vendored(registry):
         width=12.5, height=15.0,
         ports={'inlet': (0.0, 7.5), 'outlet': (12.5, 7.5)},
         drawio_shape='mxgraph.pid.valves.orifice',
+        trim=True,
     ), 'orifice')
 
     # draw.io valves:Rotameter (aspect=variable) -> fitting/rotameter
@@ -556,6 +599,7 @@ def register_vendored(registry):
         width=18.8, height=15.0,
         ports={'inlet': (0.0, 7.5), 'outlet': (18.8, 7.5)},
         drawio_shape='mxgraph.pid.valves.rotameter',
+        trim=True,
     ), 'rotameter')
 
     # draw.io mixers:In-Line Static Mixer (aspect=variable) -> fitting/static_mixer
@@ -565,6 +609,7 @@ def register_vendored(registry):
         ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
         drawio_shape='mxgraph.pid.mixers.in-line_static_mixer',
         iso_reg='X2673',
+        trim=True,
     ), 'static_mixer')
 
     # draw.io flow_sensors:Venturi (aspect=variable) -> fitting/venturi
@@ -573,6 +618,7 @@ def register_vendored(registry):
         width=25.0, height=20.0,
         ports={'inlet': (0.0, 10.0), 'outlet': (25.0, 10.0)},
         drawio_shape='mxgraph.pid.flow_sensors.venturi',
+        trim=True,
     ), 'venturi')
 
     # draw.io flow_sensors:Flow Nozzle (aspect=variable) -> fitting/flow_nozzle
@@ -581,6 +627,7 @@ def register_vendored(registry):
         width=25.0, height=12.5,
         ports={'inlet': (0.0, 6.2), 'outlet': (25.0, 6.2)},
         drawio_shape='mxgraph.pid.flow_sensors.flow_nozzle',
+        trim=True,
     ), 'flow_nozzle')
 
     # draw.io flow_sensors:Coriolis (aspect=variable) -> fitting/coriolis
@@ -589,6 +636,7 @@ def register_vendored(registry):
         width=25.0, height=25.0,
         ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
         drawio_shape='mxgraph.pid.flow_sensors.coriolis',
+        trim=True,
     ), 'coriolis')
 
     # draw.io flow_sensors:Vortex (aspect=variable) -> fitting/vortex
@@ -597,6 +645,7 @@ def register_vendored(registry):
         width=25.0, height=25.0,
         ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
         drawio_shape='mxgraph.pid.flow_sensors.vortex',
+        trim=True,
     ), 'vortex')
 
     # draw.io flow_sensors:Ultrasonic (aspect=variable) -> fitting/ultrasonic
@@ -605,6 +654,7 @@ def register_vendored(registry):
         width=25.0, height=25.0,
         ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
         drawio_shape='mxgraph.pid.flow_sensors.ultrasonic',
+        trim=True,
     ), 'ultrasonic')
 
     # draw.io flow_sensors:Turbine (aspect=variable) -> fitting/turbine_meter
@@ -613,6 +663,7 @@ def register_vendored(registry):
         width=25.0, height=25.0,
         ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
         drawio_shape='mxgraph.pid.flow_sensors.turbine',
+        trim=True,
     ), 'turbine_meter')
 
     # draw.io flow_sensors:Positive Displacement (aspect=variable) -> fitting/positive_displacement
@@ -621,6 +672,7 @@ def register_vendored(registry):
         width=25.0, height=15.0,
         ports={'inlet': (0.0, 7.5), 'outlet': (25.0, 7.5)},
         drawio_shape='mxgraph.pid.flow_sensors.positive_displacement',
+        trim=True,
     ), 'positive_displacement')
 
     # draw.io flow_sensors:V-cone (aspect=variable) -> fitting/v_cone
@@ -629,6 +681,7 @@ def register_vendored(registry):
         width=25.0, height=25.0,
         ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
         drawio_shape='mxgraph.pid.flow_sensors.v-cone',
+        trim=True,
     ), 'v_cone')
 
     # draw.io flow_sensors:Wedge (aspect=variable) -> fitting/wedge
@@ -637,6 +690,7 @@ def register_vendored(registry):
         width=25.0, height=25.0,
         ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
         drawio_shape='mxgraph.pid.flow_sensors.wedge',
+        trim=True,
     ), 'wedge')
 
     # draw.io flow_sensors:Target (aspect=variable) -> fitting/target
@@ -645,6 +699,7 @@ def register_vendored(registry):
         width=25.0, height=25.0,
         ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
         drawio_shape='mxgraph.pid.flow_sensors.target',
+        trim=True,
     ), 'target')
 
     # draw.io flow_sensors:Pitot Tube (aspect=variable) -> fitting/pitot
@@ -653,6 +708,7 @@ def register_vendored(registry):
         width=25.0, height=25.0,
         ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
         drawio_shape='mxgraph.pid.flow_sensors.pitot_tube',
+        trim=True,
     ), 'pitot')
 
     # draw.io flow_sensors:Averging Pitot Tube (aspect=variable) -> fitting/averaging_pitot
@@ -661,6 +717,7 @@ def register_vendored(registry):
         width=25.0, height=25.0,
         ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
         drawio_shape='mxgraph.pid.flow_sensors.averging_pitot_tube',
+        trim=True,
     ), 'averaging_pitot')
 
     # draw.io piping:Y-Type Strainer (aspect=variable) -> fitting/strainer_y
@@ -669,6 +726,7 @@ def register_vendored(registry):
         width=25.0, height=17.0,
         ports={'inlet': (0.0, 4.9), 'outlet': (25.0, 4.9)},
         drawio_shape='mxgraph.pid.piping.y-type_strainer',
+        trim=True,
     ), 'strainer_y')
 
     # draw.io piping:Basket Strainer (aspect=variable) -> fitting/strainer_basket
@@ -677,6 +735,7 @@ def register_vendored(registry):
         width=25.0, height=22.5,
         ports={'inlet': (0.0, 12.5), 'outlet': (25.0, 12.5)},
         drawio_shape='mxgraph.pid.piping.basket_strainer',
+        trim=True,
     ), 'strainer_basket')
 
     # draw.io piping:Duplex Strainer (aspect=variable) -> fitting/strainer_duplex
@@ -685,6 +744,7 @@ def register_vendored(registry):
         width=25.0, height=20.0,
         ports={'inlet': (0.0, 10.0), 'outlet': (25.0, 10.0)},
         drawio_shape='mxgraph.pid.piping.duplex_strainer',
+        trim=True,
     ), 'strainer_duplex')
 
     # draw.io piping:Expansion Joint (aspect=variable) -> fitting/bellows
@@ -693,6 +753,7 @@ def register_vendored(registry):
         width=25.0, height=10.0,
         ports={'inlet': (0.0, 5.0), 'outlet': (25.0, 5.0)},
         drawio_shape='mxgraph.pid.piping.expansion_joint',
+        trim=True,
     ), 'bellows')
 
     # draw.io piping:Damper (aspect=variable) -> fitting/damper
@@ -701,6 +762,7 @@ def register_vendored(registry):
         width=25.0, height=10.0,
         ports={'inlet': (0.0, 5.0), 'outlet': (25.0, 5.0)},
         drawio_shape='mxgraph.pid.piping.damper',
+        trim=True,
     ), 'damper')
 
     # draw.io piping:Removable Spool (aspect=variable) -> fitting/spool
@@ -709,6 +771,7 @@ def register_vendored(registry):
         width=25.0, height=15.0,
         ports={'inlet': (0.0, 5.0), 'outlet': (25.0, 5.0)},
         drawio_shape='mxgraph.pid.piping.removable_spool',
+        trim=True,
     ), 'spool')
 
     # draw.io piping:Open Figure 8 Blind (aspect=variable) -> fitting/blind
@@ -717,6 +780,7 @@ def register_vendored(registry):
         width=10.0, height=40.0,
         ports={'inlet': (0.0, 15.0), 'outlet': (10.0, 15.0)},
         drawio_shape='mxgraph.pid.piping.open_figure_8_blind',
+        trim=True,
     ), 'blind')
 
     # draw.io piping:Closed Figure 8 Blind (aspect=variable) -> fitting/blind [normally closed]
@@ -725,6 +789,7 @@ def register_vendored(registry):
         width=10.0, height=40.0,
         ports={'inlet': (0.0, 15.0), 'outlet': (10.0, 15.0)},
         drawio_shape='mxgraph.pid.piping.closed_figure_8_blind',
+        trim=True,
         id_suffix='_closed',
     ), 'blind')
 
@@ -1254,6 +1319,7 @@ def register_vendored(registry):
         width=80.0, height=40.0,
         ports={'motive': (0.0, 20.0), 'suction': (20.0, 40.0), 'discharge': (80.0, 20.0)},
         drawio_shape='mxgraph.pid.fittings.injector',
+        trim=True,
     ), 'default')
 
     # draw.io fittings:Vent (aspect=variable) -> vent/default
@@ -1262,6 +1328,7 @@ def register_vendored(registry):
         width=20.0, height=35.0,
         ports={'inlet': (10.0, 35.0)},
         drawio_shape='mxgraph.pid.fittings.vent',
+        trim=True,
         # must not be turned: weather cap on top of the stack
         gravity_fixed=True,
     ), 'default')
@@ -1272,6 +1339,7 @@ def register_vendored(registry):
         width=20.0, height=35.0,
         ports={'outlet': (10.0, 35.0)},
         drawio_shape='mxgraph.pid.fittings.funnel',
+        trim=True,
         # must not be turned: open cone above a stem that drains down
         gravity_fixed=True,
     ), 'default')
@@ -1282,6 +1350,7 @@ def register_vendored(registry):
         width=25.0, height=20.0,
         ports={'inlet': (12.5, 20.0)},
         drawio_shape='mxgraph.pid.piping.exhaust_head',
+        trim=True,
         # must not be turned: the V-bottom catches and drains condensate
         gravity_fixed=True,
     ), 'exhaust_head')
@@ -1292,6 +1361,7 @@ def register_vendored(registry):
         width=25.0, height=15.0,
         ports={'inlet': (12.5, 15.0)},
         drawio_shape='mxgraph.pid.piping.breather',
+        trim=True,
         # must not be turned: the tank conservation vent sits on the roof
         gravity_fixed=True,
     ), 'breather')

@@ -481,7 +481,7 @@
     <symbol id="sym_pump" viewBox="0 0 70.0 67.0" overflow="visible"><path d="M 12.0 54.0 L 0.0 67.0 L 60.0 67.0 L 48.0 54.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.6 25.0 A 30.0 30.0 0.0 0 1 30.0 0.0 L 70.0 0.0 L 70.0 20.0 L 58.45 20.0 A 30.0 30.0 0.0 0 1 51.8587 50.8297 A 30.0 30.0 0.0 0 1 21.3414 58.7425 A 30.0 30.0 0.0 0 1 0.6 35.0" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 21.4 25.0 A 10.0 10.0 0.0 1 1 21.4 35.0" fill="none" stroke="#111" stroke-width="2.0"/></symbol>
     <symbol id="sym_splitter" viewBox="0 0 50.0 50.0" overflow="visible"><polygon points="0,25 50,0 50,50" fill="none" stroke="black" stroke-width="2"/></symbol>
     <symbol id="sym_tee" viewBox="0 0 12.0 12.0" overflow="visible"><path d="M 0 6 L 12 6 M 6 6 L 6 12" fill="none" stroke="black" stroke-width="2"/></symbol>
-    <symbol id="sym_valve" viewBox="0 0 24.5 15.0" overflow="visible"><g transform="scale(0.25)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="white" stroke="#111" stroke-width="8.0"/></g></symbol>
+    <symbol id="sym_valve" viewBox="0 0 24.5 15.0" overflow="visible"><g transform="scale(0.25)"><path d="M 0.0 60.0 L 0.0 0.0 L 98.0 60.0 L 98.0 0.0 Z" fill="white" stroke="#111" stroke-width="4"/></g></symbol>
     <symbol id="sym_vessel_horizontal_s130x42" viewBox="0 0 130 42" overflow="visible"><path d="M 8.197814 42 L 121.859016 42 A 21 8.196678 90 0 0 130.055694 21 A 21 8.196678 90 0 0 121.859016 0 L 8.197814 0 A 21 8.196678 90 0 0 0.001137 21 A 21 8.196678 90 0 0 8.197814 42 Z M 8.197814 0 L 8.197814 42 M 121.859016 0 L 121.859016 42" fill="white" stroke="#111" stroke-width="2"/></symbol>
   </defs>
   <g id="units">

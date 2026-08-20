@@ -2647,7 +2647,7 @@ def test_a_displaced_line_number_is_tied_back_to_its_run(stem):
 
 
 def test_the_pen_the_export_states_is_the_pen_the_library_draws_with():
-    """``_SYMBOL_STROKE`` is a copy, and this is what stops it drifting.
+    """``_EQUIPMENT_STROKE`` is a copy, and this is what stops it drifting.
 
     It has to be a copy: the number is a literal inside a hundred SVG fragments
     in `pandid.render.symbols` and a division inside `scripts/vendor_symbols.py`,
@@ -2655,8 +2655,14 @@ def test_the_pen_the_export_states_is_the_pen_the_library_draws_with():
     library's own artwork instead -- `authored_pens` reads the weight each
     symbol declares through its internal scale group, which is the weight it
     draws at on the paper.
+
+    Every artwork is authored to this one nominal weight regardless of class
+    (#305): a trimmed symbol's own halving to ``_TRIM_STROKE`` is a render-time
+    division on top of it (:func:`pandid.render.drawio._shape`), not a second
+    number the artwork itself declares, so what is checked here does not
+    change with :attr:`~pandid.render.symbols.Symbol.trim`.
     """
-    from pandid.render.drawio import _SYMBOL_STROKE
+    from pandid.render.drawio import _EQUIPMENT_STROKE
     from test_line_weight import authored_pens
 
     checked = 0
@@ -2664,8 +2670,8 @@ def test_the_pen_the_export_states_is_the_pen_the_library_draws_with():
         # The outline is the heaviest pen; a symbol's fine detail is
         # deliberately lighter and draw.io has one weight for the whole stencil.
         pen = max(authored_pens(sym))
-        assert pen == pytest.approx(_SYMBOL_STROKE, rel=2e-3), (
-            f"{kind}/{variant} is drawn at {pen:.4g} and exported at {_SYMBOL_STROKE}"
+        assert pen == pytest.approx(_EQUIPMENT_STROKE, rel=2e-3), (
+            f"{kind}/{variant} is drawn at {pen:.4g} and exported at {_EQUIPMENT_STROKE}"
         )
         checked += 1
     assert checked > 100, f"only {checked} symbols were walked; the registry is bigger"
@@ -2684,16 +2690,21 @@ def test_every_drawn_symbol_states_the_weight_the_sheet_rules_it_at(stem):
     Scaled, because a symbol's outline is a *drawing* dimension and a paged
     export fits the drawing into what the furniture leaves. Stating it flat
     beside a stream stated scaled is the same defect the other way round.
+
+    Two weights and not one since #305: a trimmed symbol -- ISO 10628-1
+    §5.3.1 c), see :attr:`~pandid.render.symbols.Symbol.trim` -- states
+    ``_TRIM_STROKE``, and everything else states ``_EQUIPMENT_STROKE``.
     """
-    from pandid.render.drawio import _SYMBOL_STROKE
+    from pandid.render.drawio import _EQUIPMENT_STROKE, _TRIM_STROKE
 
     fs, kwargs = gallery.flowsheet(stem)
     fs.to_svg(**kwargs)
     _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
     cells = _drawio_cells(fs, kwargs)
-    want = fit.length(_SYMBOL_STROKE)
     seen = 0
     for i, u in enumerate(fs.units):
+        sym = default_registry.for_unit(u)
+        want = fit.length(_TRIM_STROKE if sym.trim else _EQUIPMENT_STROKE)
         for cid in (f"u{i}", f"u{i}-in"):
             cell = cells.get(cid)
             if cell is None:

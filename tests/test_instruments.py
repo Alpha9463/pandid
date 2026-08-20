@@ -421,7 +421,16 @@ def test_hanger_is_not_drawn_where_a_signal_already_joins_the_pair():
     # that would otherwise be joined to its host by a line.
     fic = fs.add_instrument("FIC", 101, sensing=ft, at="N", offset=110, angle=35, display="central")
     fs.connect(ft.sig_out, fic.sig_in, kind="electric")
-    taps = [ln for ln in fs.to_svg().split("\n") if "<line" in ln and 'stroke-width="1"' in ln]
+    # A drawn ``<line>`` starts its own text line; a nested one does not --
+    # ``display="central"`` is a trimmed balloon since #305 and its own
+    # ``<symbol>`` definition carries a bar drawn with a ``<line>`` too, on
+    # one text line with the balloon's now-1-wide outline, which a bare
+    # substring search over both would double-count.
+    taps = [
+        ln
+        for ln in fs.to_svg().split("\n")
+        if ln.strip().startswith("<line") and 'stroke-width="1"' in ln
+    ]
     assert len(taps) == 1  # the transmitter's impulse line, not a second FT-FIC line
 
 
