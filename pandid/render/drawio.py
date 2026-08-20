@@ -1140,17 +1140,23 @@ def _quadrant_cell(cid: str, item, fit: "_Fit") -> list[str]:
     and ``labelBackgroundColor`` is the halo the sheet letters a code
     on; see :data:`_NUMBER_KEYS`.
 
-    The text arrives escaped, the sheet having written it into SVG, and
-    :func:`_attr` escapes what it is handed: unescaped here so that it
-    is escaped exactly once.
+    The text arrives already escaped once, for the HTML layer -- the
+    sheet built it with :func:`~pandid.render.escape.escaped`
+    (:func:`~pandid.render.svg._quadrant_block`), the same call
+    :func:`_html_text` makes at every other label site. :func:`_attr`
+    escapes it again, for the XML layer, so it is passed straight
+    through rather than unescaped and escaped once -- that used to
+    undo the HTML-layer escaping and let a quadrant code carrying its
+    own markup (``annotate(safety="<b>SIL 2</b>")``) reach draw.io as a
+    tag. Only the width measurement wants the raw code, since a box is
+    sized to what is drawn rather than to its escaped spelling.
     """
     import html as _html
 
     lx, ly, anchor, _baseline, _lpos, text = item
-    value = _html.unescape(text)
     size = fit.length(_TAG_TYPE)
     x, y = fit.at(lx, ly)
-    box_w = F.text_width(value, size) + 2 * _TEXT_INSET
+    box_w = F.text_width(_html.unescape(text), size) + 2 * _TEXT_INSET
     box_h = _line_box(size) + 2 * _TEXT_INSET
     left, align = ((x + _TEXT_INSET - box_w, "right") if anchor == "end"
                    else (x - _TEXT_INSET, "left"))
@@ -1158,7 +1164,7 @@ def _quadrant_cell(cid: str, item, fit: "_Fit") -> list[str]:
              f"labelBackgroundColor=#ffffff;align={align};"
              f"verticalAlign=middle;fontSize={size:g};fontColor={_LINE_INK};")
     return [
-        f'        <mxCell id="{cid}" value={_attr(value)} style={_attr(style)} '
+        f'        <mxCell id="{cid}" value={_attr(text)} style={_attr(style)} '
         f'vertex="1" parent="1">',
         f'          <mxGeometry x="{_num(left)}" y="{_num(y - box_h / 2)}" '
         f'width="{_num(box_w)}" height="{_num(box_h)}" as="geometry" />',
@@ -1221,6 +1227,38 @@ def _attr(value) -> str:
                          ('"', "&quot;"), ("'", "&apos;")):
         text = text.replace(char, entity)
     return f'"{text}"'
+
+
+def _html_text(value) -> str:
+    """Author text bound for an HTML-flavoured draw.io ``value``.
+
+    Escaped here for the *HTML* layer, so that a tag the author typed --
+    ``<b>P-1</b>`` as a unit's own name, say -- reaches mxGraph's HTML
+    parser as the four characters ``<b>`` and not as a bold tag.
+    :func:`_attr` then escapes the result again, for the *XML* layer the
+    file itself is: this turns ``<`` into ``&lt;``, and ``_attr`` turns
+    that leading ``&`` into ``&amp;``, so the file reads back ``&lt;``
+    and the HTML parser shows it literally.
+
+    Three characters only, ``&``/``<``/``>``, and not the five
+    :func:`_attr` escapes: a cell's ``value`` becomes HTML *content*
+    (``innerHTML``), not an HTML attribute, and a quote or an apostrophe
+    means nothing there -- ``8"`` in a line number needs no help from
+    this layer, only from the XML one underneath it, which already gives
+    it one.
+
+    Only the library's own ``<br>`` may skip this and reach :func:`_attr`
+    raw: it is the one piece of real HTML any label composes, and it has
+    to arrive at the HTML parser unescaped to read as a line break rather
+    than as the word ``br``. A label built from both is composed by
+    escaping each piece of author text with this and then joining with a
+    literal ``<br>``, never by joining first and escaping the whole
+    string once -- that cannot tell the two apart.
+    """
+    text = writable(value)
+    for char, entity in (("&", "&amp;"), ("<", "&lt;"), (">", "&gt;")):
+        text = text.replace(char, entity)
+    return text
 
 
 def _num(v: float) -> str:
@@ -1737,7 +1775,12 @@ class DrawioRenderer:
             else:
                 parts = [letters.upper(), number]
             parts = [part for part in parts if part]
-            text = "<br>".join(parts)
+            # Each piece escaped before it is joined, not after: `parts`
+            # is author text (a tag's letters and number), the `<br>` is
+            # the library's own, and only composing this way keeps the
+            # two apart once :func:`_attr` escapes the result again; see
+            # :func:`_html_text`.
+            text = "<br>".join(_html_text(part) for part in parts)
             # A balloon's tag is written inside the balloon, so its type
             # is capped to what the balloon holds. The sheet sets the
             # letters at 12 and the number at 11 and a draw.io label has
@@ -1772,7 +1815,7 @@ class DrawioRenderer:
             # does not have to make that trade -- it sets the reference
             # at 10,5 on a baseline of its own -- and a draw.io label
             # has one size and one line height for the whole of it.
-            return "<br>".join(lines), _LABEL_SIDE["center"] + [
+            return "<br>".join(_html_text(line) for line in lines), _LABEL_SIDE["center"] + [
                 _drawn_type(_TAG_TYPE, fit, lines=len(lines),
                             box=self._cell_box(u))], (0.0, 0.0)
         if closed_marking(u, self.registry) == "NC":
@@ -1787,8 +1830,9 @@ class DrawioRenderer:
         # overflow. `_LABEL_SIDE` gives the label its own box outside
         # the cell and mxGraph draws it at whatever size it is told
         # (`mxGraphView.updateVertexLabelOffset`).
-        return "<br>".join(lines), _LABEL_SIDE.get(side, _LABEL_SIDE["top"]) + [
-            _drawn_type(_TAG_TYPE, fit)], (fit.length(dx), fit.length(dy))
+        return "<br>".join(_html_text(line) for line in lines), _LABEL_SIDE.get(
+            side, _LABEL_SIDE["top"]
+        ) + [_drawn_type(_TAG_TYPE, fit)], (fit.length(dx), fit.length(dy))
 
     @staticmethod
     def _cell_box(u) -> "tuple[float, float, float, float]":
@@ -2230,7 +2274,8 @@ class DrawioRenderer:
             else:
                 geometry = [head + " />"]
             cells[n] = [
-                f'        <mxCell id="s{n}" value={_attr(label)} style={_attr(style)} '
+                f'        <mxCell id="s{n}" value={_attr(_html_text(label))} '
+                f'style={_attr(style)} '
                 f'edge="1" parent="1" source="{self._id(index[id(src_u)])}" '
                 f'target="{self._id(index[id(dst_u)])}">',
                 *geometry,
@@ -3378,7 +3423,7 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
     shape = _TABLE_SHAPE + f"startSize={_num(start)};fontSize={font:g};" + keys
     cell = _TABLE_CELL + f"fontSize={font:g};"
     out = [
-        f'        <mxCell id="{cid}" value={_attr(title)} '
+        f'        <mxCell id="{cid}" value={_attr(_html_text(title))} '
         f'style={_attr(shape)} vertex="1" parent="1">',
         f'          <mxGeometry x="{_num(x)}" y="{_num(y)}" width="{_num(w)}" '
         f'height="{_num(h)}" as="geometry" />',
@@ -3403,7 +3448,7 @@ def _table(cid: str, title: str, headers, rows, x, y, w, h, widths,
             extra = (cell_keys[r][c] if cell_keys is not None
                      else col_keys[c] if c < len(col_keys) else "")
             out += [
-                f'        <mxCell id="{cid}-r{r}-c{c}" value={_attr(value)} '
+                f'        <mxCell id="{cid}-r{r}-c{c}" value={_attr(_html_text(value))} '
                 f'style={_attr(cell + head + extra)} vertex="1" '
                 f'parent="{cid}-r{r}">',
                 f'          <mxGeometry x="{_num(cx)}" width="{_num(cw[c])}" '
@@ -3536,7 +3581,8 @@ def _text_box(cid: str, title: str, rows, x, y, w, h, font: float = 11.0,
             f"align=left;verticalAlign=top;spacingLeft=7;fontSize={font:g};"
             f"fontColor={_LINE_INK};")
     return out + [
-        f'        <mxCell id="{cid}-b" value={_attr("<br>".join(str(r) for r in rows))} '
+        f'        <mxCell id="{cid}-b" '
+        f'value={_attr("<br>".join(_html_text(r) for r in rows))} '
         f'style={_attr(body)} vertex="1" parent="1">',
         f'          <mxGeometry x="{_num(x)}" y="{_num(y + title_h)}" '
         f'width="{_num(w)}" height="{_num(h - title_h)}" as="geometry" />',
@@ -3634,8 +3680,8 @@ def _label(cid: str, cx, cy, text: str, size: float) -> list[str]:
              f"align=center;verticalAlign=middle;fontStyle=1;fontSize={size:g};"
              f"fontColor={_LINE_INK};")
     return [
-        f'        <mxCell id="{cid}" value={_attr(text)} style={_attr(style)} '
-        f'vertex="1" parent="1">',
+        f'        <mxCell id="{cid}" value={_attr(_html_text(text))} '
+        f'style={_attr(style)} vertex="1" parent="1">',
         f'          <mxGeometry x="{_num(cx - _LABEL_HALF)}" '
         f'y="{_num(cy - _LABEL_HALF)}" width="{_num(2 * _LABEL_HALF)}" '
         f'height="{_num(2 * _LABEL_HALF)}" as="geometry" />',
@@ -3687,8 +3733,8 @@ def _strip_label(cid: str, part) -> list[str]:
              f"fontColor={_LINE_INK if ink == 'black' else ink};"
              + ("fontStyle=1;" if bold else ""))
     return [
-        f'        <mxCell id="{cid}" value={_attr(text)} style={_attr(style)} '
-        f'vertex="1" parent="1">',
+        f'        <mxCell id="{cid}" value={_attr(_html_text(text))} '
+        f'style={_attr(style)} vertex="1" parent="1">',
         f'          <mxGeometry x="{_num(left)}" y="{_num(top)}" '
         f'width="{_num(box_w)}" height="{_num(box_h)}" as="geometry" />',
         '        </mxCell>',

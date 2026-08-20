@@ -266,6 +266,51 @@ def test_a_hostile_value_cannot_break_the_drawio_export(field, payload):
     _carries_no_injected_markup(_parsed(export))
 
 
+def _carries_no_html_beyond_br(root: ET.Element) -> None:
+    """No cell ``value`` decodes, from XML, to a literal tag other than
+    the library's own ``<br>``.
+
+    draw.io reads a cell's ``value`` as *HTML*, a second parse the XML
+    layer above knows nothing about. :func:`_carries_no_injected_markup`
+    holds the XML layer to account -- no attribute or element name a
+    payload invented -- and says nothing about this one: a payload
+    surviving XML-decoding as ``<script>...</script>`` is perfectly
+    well-formed XML and *is* the bug (issue #299), so it needs a check
+    of its own.
+    """
+    for element in root.iter():
+        value = element.get("value")
+        if not value:
+            continue
+        bare = value.replace("<br>", "")
+        assert "<" not in bare and ">" not in bare, (
+            f"{element.tag} value={value!r} decodes to HTML markup draw.io "
+            f"reads as a tag, not as the text it was given"
+        )
+
+
+@pytest.mark.parametrize("field", FIELDS)
+@pytest.mark.parametrize("payload", PAYLOADS.values(), ids=list(PAYLOADS))
+def test_a_hostile_value_cannot_become_html_in_the_drawio_export(field, payload):
+    """draw.io interprets a cell's ``value`` as HTML, so a tag an author's
+    field carries -- ``<script>alert(1)</script>`` as a unit's own
+    description, say -- must survive as the literal characters, not
+    render as markup. Well-formed XML is not enough to say that; see
+    :func:`_carries_no_html_beyond_br`."""
+    # Spelled out rather than `**RENDERED`: the dict's mixed str/bool
+    # values type as a plain `dict[str, str | bool]`, which a checker
+    # cannot match back against `to_drawio`'s per-parameter types once
+    # unpacked, on this call site or the ones above it (pre-existing).
+    export = _plant(payload, field).to_drawio(
+        border="zone",
+        diagram="p&id",
+        connections="flanged",
+        show_stream_table=True,
+        check=False,
+    )
+    _carries_no_html_beyond_br(_parsed(export))
+
+
 @pytest.mark.parametrize("field", FIELDS)
 def test_every_field_reaches_the_sheet(field):
     """Each name in :data:`FIELDS` really does put a value on a drawing.

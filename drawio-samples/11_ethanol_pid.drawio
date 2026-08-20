@@ -685,7 +685,7 @@
         <mxCell id="f3-p3" value="Ethanol Purification" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=12.5;fontColor=#000000;fontStyle=1;" vertex="1" parent="1">
           <mxGeometry x="1315.4" y="1020.27" width="159" height="19" as="geometry" />
         </mxCell>
-        <mxCell id="f3-p4" value="A300 Process &amp; Instrumentation Diagram 1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=10.5;fontColor=#000000;" vertex="1" parent="1">
+        <mxCell id="f3-p4" value="A300 Process &amp;amp; Instrumentation Diagram 1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=10.5;fontColor=#000000;" vertex="1" parent="1">
           <mxGeometry x="1315.4" y="1033.07" width="239.2" height="16.6" as="geometry" />
         </mxCell>
         <mxCell id="f3-p5" value="SHEET 1 of 1" style="text;html=1;strokeColor=none;fillColor=none;align=right;verticalAlign=middle;fontSize=7.5;fontColor=#666;" vertex="1" parent="1">
@@ -700,7 +700,7 @@
         <mxCell id="f3-p8" value="DRAWING No" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=6.5;fontColor=#666;" vertex="1" parent="1">
           <mxGeometry x="1314.4" y="1073.07" width="40.4" height="11.8" as="geometry" />
         </mxCell>
-        <mxCell id="f3-p9" value="P&amp;ID-301" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=11;fontColor=#000000;fontStyle=1;" vertex="1" parent="1">
+        <mxCell id="f3-p9" value="P&amp;amp;ID-301" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=11;fontColor=#000000;fontStyle=1;" vertex="1" parent="1">
           <mxGeometry x="1314.4" y="1081.62" width="58.56" height="17.2" as="geometry" />
         </mxCell>
         <mxCell id="f3-p10" value="" style="edgeStyle=none;rounded=0;html=1;endArrow=none;startArrow=none;strokeColor=#000000;strokeWidth=0.5;movable=1;noJump=1;" edge="1" parent="1">
@@ -812,7 +812,7 @@
             <mxPoint x="-5.15" y="0" as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="u5" value="Fermentation Broth&lt;br&gt;P&amp;ID-201" style="html=1;shape=offPageConnector;size=0.086207;direction=north;anchorPointDirection=0;legacyAnchorPoints=1;rounded=0;whiteSpace=wrap;strokeColor=#000000;fillColor=none;strokeWidth=1.71746;verticalLabelPosition=middle;verticalAlign=middle;align=center;fontSize=9.30292;" vertex="1" parent="1">
+        <mxCell id="u5" value="Fermentation Broth&lt;br&gt;P&amp;amp;ID-201" style="html=1;shape=offPageConnector;size=0.086207;direction=north;anchorPointDirection=0;legacyAnchorPoints=1;rounded=0;whiteSpace=wrap;strokeColor=#000000;fillColor=none;strokeWidth=1.71746;verticalLabelPosition=middle;verticalAlign=middle;align=center;fontSize=9.30292;" vertex="1" parent="1">
           <mxGeometry x="68.93" y="611.4" width="149.42" height="22.33" as="geometry" />
         </mxCell>
         <mxCell id="u6" value="CWSH" style="html=1;shape=offPageConnector;size=0.1875;direction=north;anchorPointDirection=0;legacyAnchorPoints=1;rounded=0;whiteSpace=wrap;strokeColor=#000000;fillColor=none;strokeWidth=1.71746;verticalLabelPosition=middle;verticalAlign=middle;align=center;fontSize=10.3048;" vertex="1" parent="1">

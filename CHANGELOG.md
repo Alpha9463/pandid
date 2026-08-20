@@ -54,6 +54,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `stream_table_sections` naming a property no stream in the table sets now
   warns instead of the heading silently never appearing.
 
+### Security
+
+- draw.io reads a cell's `value` as HTML, so a tag an author's text carried
+  (a unit name, a description, a stream property, a title-block field, …)
+  rendered as markup there while the SVG export drew it literally. Author
+  text is now escaped for that HTML layer before composing a label, so both
+  backends draw the same tag as the same tag.
+
 ## [0.1.3] - 2026-08-19
 
 ### Added
