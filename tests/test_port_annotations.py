@@ -30,17 +30,23 @@ kinds, each argued at the class or the module it applies to:
   ``overflow``), which belong to some variants and not others, so declaring them
   on the base class would tell a checker something false about every other one;
 - the **superseded nozzles** of a class that replaces its base's whole nozzle
-  list. Most of these are :mod:`pandid.devices`'s generated classes --
+  list. All of these are :mod:`pandid.devices`'s generated classes --
   ``PlateExchanger`` has lettered sides and no shell, ``CheckValve`` has no
-  actuator -- and two, ``units.Absorber`` and ``units.Stripper``, are
-  hand-written next to :class:`~pandid.units.Column` for the same reason a
-  generated class needs it: all of them inherit the annotation their base
-  wrote, and Python has no way to un-declare one. ``__annotations__`` is
-  merged down the MRO and there is no "delete", and re-annotating the name
-  with something narrower is an incompatible override. So the phantom check
-  answers for the annotations a class *writes*, and
-  :func:`test_only_these_classes_supersede_a_declaration` is what keeps that
-  from spreading past the thirteen classes it is true of.
+  actuator -- inheriting an annotation their base wrote for a nozzle they do
+  not build, because Python has no way to un-declare one.
+  ``__annotations__`` is merged down the MRO and there is no "delete", and
+  re-annotating the name with something narrower is an incompatible
+  override. So the phantom check answers for the annotations a class
+  *writes*, and :func:`test_only_these_classes_supersede_a_declaration` is
+  what keeps that from spreading past the eleven classes it is true of.
+
+  ``units.Absorber`` and ``units.Stripper`` used to be here too, for the
+  same reason: hand-written next to :class:`~pandid.units.Column`,
+  inheriting four nozzles they do not build. #400 is why they are not
+  anymore -- ``Column`` no longer declares those four at all, so there is
+  nothing left for either class to inherit falsely. That is the fix this
+  whole exemption exists to make unnecessary: a class the hierarchy tells
+  the truth about needs no annotation-level patch.
 """
 
 import ast
@@ -317,18 +323,18 @@ _CHECKER_VISIBLE_GETATTR = {"Block"}
 #: own ``ClassNameN`` classes rather than reusing the base's; see that
 #: script's ``arity_family``.
 #:
-#: ``Absorber`` and ``Stripper`` are here for ``n_feeds`` only. Both still
-#: *take* ``n_draws=``/``draw_stages=`` at run time -- they are ``Column``'s
-#: own keywords and neither subclass overrides ``__init__`` -- but neither
-#: gets a second overload family of its own for it: copying ``Column``'s
-#: two-family trade onto every reduced-port-set subclass too would spend the
-#: class-explosion problem a second and a third time for a combination
-#: (``Absorber``/``Stripper`` *and* a side draw) narrower still than the one
-#: ``Column`` already declines to cross-type. So ``absorber.draw_2`` does not
-#: resolve even where ``n_draws=2`` really built it; ``absorber.draws[i]`` or
-#: ``absorber.port("draw_2")`` is the typed route there, exactly as
-#: ``m.inlets[i]`` is for a *computed* ``n_inlets`` everywhere else in this
-#: table.
+#: ``Absorber``, ``Stripper`` and ``DistillationColumn`` are here for
+#: ``n_feeds`` only. All three still *take* ``n_draws=``/``draw_stages=``
+#: at run time -- they are ``Column``'s own keywords and none of the three
+#: subclasses overrides ``__init__`` -- but none gets a second overload
+#: family of its own for it: copying ``Column``'s two-family trade onto
+#: every narrower-or-wider subclass too would spend the class-explosion
+#: problem a second, a third and a fourth time for a combination narrower
+#: still than the one ``Column`` already declines to cross-type. So
+#: ``absorber.draw_2`` does not resolve even where ``n_draws=2`` really
+#: built it; ``absorber.draws[i]`` or ``absorber.port("draw_2")`` is the
+#: typed route there, exactly as ``m.inlets[i]`` is for a *computed*
+#: ``n_inlets`` everywhere else in this table.
 _EXACT_ARITY = {
     units.Mixer: (("n_inlets", "in", ""),),
     units.Splitter: (("n_outlets", "out", ""),),
@@ -336,6 +342,7 @@ _EXACT_ARITY = {
     units.Reactor: (("n_feeds", "feed", ""),),
     units.Absorber: (("n_feeds", "feed", ""),),
     units.Stripper: (("n_feeds", "feed", ""),),
+    units.DistillationColumn: (("n_feeds", "feed", ""),),
 }
 _MAX_ARITY = 8
 
@@ -473,7 +480,9 @@ def test_no_arity_class_is_left_over(cls=None):
         for node in ast.walk(module)
         if isinstance(node, ast.ClassDef)
         and re.fullmatch(
-            r"(Mixer|Splitter|ColumnDraw|Column|Reactor|Block|Absorber|Stripper)\d+", node.name
+            r"(Mixer|Splitter|ColumnDraw|Column|Reactor|Block|Absorber|Stripper"
+            r"|DistillationColumn)\d+",
+            node.name,
         )
     }
     assert found == expected
@@ -592,8 +601,6 @@ def test_only_these_classes_supersede_a_declaration():
         "SpiralExchanger": ["shell_in", "shell_out", "tube_in", "tube_out"],
         "ThinFilmEvaporator": ["shell_in", "shell_out", "tube_in", "tube_out"],
         "CheckValve": ["actuator"],
-        "Absorber": ["boilup_in", "condenser_duty", "reboiler_duty", "reflux_in"],
-        "Stripper": ["condenser_duty", "reflux_in"],
     }
 
 

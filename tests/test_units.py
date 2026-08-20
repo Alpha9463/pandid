@@ -1,4 +1,5 @@
 import re
+import warnings
 
 import pytest
 from pandid.units import Unit
@@ -69,9 +70,10 @@ def test_fixed_port_units_have_expected_ports():
         "tube_out",
     }
     assert set(U.Separator("V").ports) == {"feed", "vapor", "liquid"}
-    assert set(U.Column("T").ports) == {
+    assert set(U.Column("T").ports) == {"feed", "overhead", "bottoms"}
+    assert set(U.DistillationColumn("T").ports) == {
         "feed",
-        "distillate",
+        "overhead",
         "bottoms",
         "reflux_in",
         "boilup_in",
@@ -84,10 +86,10 @@ def test_fixed_port_units_have_expected_ports():
     assert set(U.Reactor("R", agitator=None).ports) == {"feed", "outlet", "vent", "duty"}
 
 
-def test_column_return_nozzles_close_the_internal_loops():
+def test_distillation_column_return_nozzles_close_the_internal_loops():
     # reflux and boilup return to the tower itself; without them a reflux loop
     # has to be faked as a recycle to an upstream unit.
-    col = U.Column("T-101")
+    col = U.DistillationColumn("T-101")
     assert col.reflux_in.direction == "inlet"
     assert col.boilup_in.direction == "inlet"
     assert col.reflux_in.role == "liquid"
@@ -105,16 +107,7 @@ def test_a_column_takes_more_than_one_feed():
     """Extractive distillation puts the solvent in above the feed tray, so a
     tower with a single nozzle cannot be drawn at all."""
     col = U.Column("T-302", n_feeds=2)
-    assert set(col.ports) == {
-        "feed_1",
-        "feed_2",
-        "distillate",
-        "bottoms",
-        "reflux_in",
-        "boilup_in",
-        "reboiler_duty",
-        "condenser_duty",
-    }
+    assert set(col.ports) == {"feed_1", "feed_2", "overhead", "bottoms"}
     assert col.feed_1.direction == "inlet"
     assert col.feed_2.role == "feed"
 
@@ -145,9 +138,10 @@ def test_a_unit_with_no_feed_at_all_is_rejected():
 
 def test_absorber_has_neither_loop():
     """No reboiler, no condenser, no reflux, no boilup: nothing in an
-    absorber boils, so none of Column's four return nozzles belongs on it."""
+    absorber boils, so none of DistillationColumn's four return nozzles
+    belongs on it."""
     absorber = U.Absorber("V-501")
-    assert set(absorber.ports) == {"feed", "distillate", "bottoms"}
+    assert set(absorber.ports) == {"feed", "overhead", "bottoms"}
     assert isinstance(absorber, U.Column)
 
 
@@ -169,7 +163,7 @@ def test_stripper_keeps_the_reboiler_loop_but_not_the_condenser():
     stripper = U.Stripper("T-601")
     assert set(stripper.ports) == {
         "feed",
-        "distillate",
+        "overhead",
         "bottoms",
         "boilup_in",
         "reboiler_duty",
@@ -192,6 +186,95 @@ def test_absorber_and_stripper_take_more_than_one_feed():
 
     stripper = U.Stripper("T-601", n_feeds=2)
     assert {"feed_1", "feed_2"} <= set(stripper.ports)
+
+
+# --- DistillationColumn: the four nozzles a general tower does not have ------
+
+
+def test_distillation_column_has_all_four_return_nozzles():
+    col = U.DistillationColumn("T-101")
+    assert set(col.ports) == {
+        "feed",
+        "overhead",
+        "bottoms",
+        "reflux_in",
+        "boilup_in",
+        "reboiler_duty",
+        "condenser_duty",
+    }
+    assert isinstance(col, U.Column)
+
+
+def test_a_plain_column_still_answers_to_the_four_retired_nozzles():
+    """#400: the type moved, and the runtime spelling still works for one
+    release, warning towards the class that now really has it.
+
+    Read through ``getattr``, not the literal attribute: a plain ``Column``
+    is typed without these four now, on purpose, so the literal spelling is
+    the pyright error #400 exists to make real -- see the acceptance check
+    in the issue itself. This test is about the run-time promise, which
+    ``getattr`` exercises exactly the same way.
+    """
+    col = U.Column("T-101")
+    with pytest.warns(DeprecationWarning, match="DistillationColumn"):
+        reflux = getattr(col, "reflux_in")
+    assert reflux.direction == "inlet" and reflux.role == "liquid"
+    with pytest.warns(DeprecationWarning, match="DistillationColumn"):
+        boilup = getattr(col, "boilup_in")
+    assert boilup.direction == "inlet" and boilup.role == "vapor"
+    with pytest.warns(DeprecationWarning, match="DistillationColumn"):
+        assert getattr(col, "reboiler_duty").role == "energy"
+    with pytest.warns(DeprecationWarning, match="DistillationColumn"):
+        assert getattr(col, "condenser_duty").role == "energy"
+    # Minted once: a second read is the same object and warns no further.
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert getattr(col, "reflux_in") is reflux
+    assert {"reflux_in", "boilup_in", "reboiler_duty", "condenser_duty"} <= set(col.ports)
+
+
+def test_a_retired_nozzle_can_still_be_connected():
+    """Not just an attribute that resolves -- a real, connectable port, so
+    an existing sheet's reflux loop still draws."""
+    from pandid import Flowsheet
+
+    fs = Flowsheet("legacy")
+    col = fs.add(U.Column("T-101"))
+    drum = fs.add(U.Vessel("D-101"))
+    with pytest.warns(DeprecationWarning):
+        fs.connect(drum.outlet, getattr(col, "reflux_in"), draw_as_recycle=True)
+    assert col.port("reflux_in").stream is not None
+
+
+def test_distillate_still_works_everywhere_it_used_to():
+    """The rename applies uniformly: Column, Absorber, Stripper and
+    DistillationColumn all still answer to the retired name."""
+    for unit in (
+        U.Column("T-1"),
+        U.Absorber("V-1"),
+        U.Stripper("T-2"),
+        U.DistillationColumn("T-3"),
+    ):
+        with pytest.warns(DeprecationWarning, match="overhead"):
+            assert getattr(unit, "distillate") is unit.overhead
+
+
+def test_absorber_and_stripper_never_answer_to_the_nozzles_they_refused():
+    """Unlike Column, Absorber/Stripper never carried these honestly (#398),
+    so they get no deprecation grace period for them either -- accessing
+    one is still a hard, immediate error."""
+    absorber = U.Absorber("V-501")
+    for name in ("reflux_in", "boilup_in", "reboiler_duty", "condenser_duty"):
+        with pytest.raises(AttributeError, match=name):
+            getattr(absorber, name)
+
+    stripper = U.Stripper("T-601")
+    for name in ("reflux_in", "condenser_duty"):
+        with pytest.raises(AttributeError, match=name):
+            getattr(stripper, name)
+    # The two it really has are not touched by any of this.
+    assert stripper.boilup_in.role == "vapor"
+    assert stripper.reboiler_duty.role == "energy"
 
 
 # --- feed_stages: a feed lands on the stage it enters ------------------------
@@ -311,16 +394,7 @@ def test_a_column_has_no_draw_by_default():
 
 def test_a_column_takes_a_side_draw():
     col = U.Column("T-301", n_draws=1)
-    assert set(col.ports) == {
-        "feed",
-        "draw",
-        "distillate",
-        "bottoms",
-        "reflux_in",
-        "boilup_in",
-        "reboiler_duty",
-        "condenser_duty",
-    }
+    assert set(col.ports) == {"feed", "draw", "overhead", "bottoms"}
     assert col.draw.direction == "outlet"
     assert col.draw.role == "draw"
 
@@ -887,7 +961,7 @@ def test_a_family_is_every_numbered_nozzle_at_a_count_nothing_defaults_to(build,
 
 
 def test_a_multi_feed_towers_family_is_its_numbered_nozzles_top_to_bottom():
-    col = U.Column("T-302", n_feeds=3)
+    col = U.DistillationColumn("T-302", n_feeds=3)
     assert [p.name for p in col.feeds] == ["feed_1", "feed_2", "feed_3"]
     assert col.feeds[0] is col.feed_1
     # The other inlets are not charge nozzles, whatever their direction says.
@@ -897,9 +971,14 @@ def test_a_multi_feed_towers_family_is_its_numbered_nozzles_top_to_bottom():
 
 
 def test_a_multi_draw_towers_family_is_its_numbered_nozzles_top_to_bottom():
-    col = U.Column("T-302", n_draws=3)
+    # DistillationColumn, not Column: n_draws=3 with the reflux/boilup
+    # nozzles for real, without the deprecated-nozzle path a plain Column
+    # would take below. DistillationColumn gets no typed n_draws overload
+    # family of its own (see Absorber/Stripper's own note on the same
+    # trade), so draw_1 is read through port(), the untyped route.
+    col = U.DistillationColumn("T-302", n_draws=3)
     assert [p.name for p in col.draws] == ["draw_1", "draw_2", "draw_3"]
-    assert col.draws[0] is col.draw_1
+    assert col.draws[0] is col.port("draw_1")
     # The draws are outlets on the east wall, not the returns beside them.
     assert col.reflux_in not in col.draws
     assert col.boilup_in not in col.draws

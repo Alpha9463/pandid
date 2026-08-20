@@ -317,7 +317,7 @@ def test_a_branch_ranks_beside_the_spine_it_joins():
     water = fs.add(U.Feed("Water"))
     a = fs.add(U.Filter("F-1"))
     b = fs.add(U.Filter("F-2"))
-    tower = fs.add(U.Column("D-1"))
+    tower = fs.add(U.Stripper("D-1"))
     air = fs.add(U.Feed("Air"))
     blower = fs.add(U.Blower("B-1"))
     fs.connect(water.outlet, a.inlet)

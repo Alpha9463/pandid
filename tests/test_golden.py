@@ -104,7 +104,9 @@ def _distillation_train() -> Flowsheet:
     feed_valve = fs.add(units.Valve("FV-100"))
     preheater = fs.add(units.HeatExchanger("E-100", description="Feed Preheater"))
     col1 = fs.add(
-        units.Column("T-100", internals="valve_tray", trays=14, description="Light Ends Column")
+        units.DistillationColumn(
+            "T-100", internals="valve_tray", trays=14, description="Light Ends Column"
+        )
     )
     c1_ovhd = fs.add(units.HeatExchanger("E-101", description="T-100 Overhead Condenser"))
     c1_drum = fs.add(
@@ -121,7 +123,9 @@ def _distillation_train() -> Flowsheet:
     c1_prod = fs.add(units.Product("Light Product", reference="PFD-1002"))
     pump1 = fs.add(units.Pump("P-100A/B", description="T-100 Bottoms Pump"))
     col2 = fs.add(
-        units.Column("T-200", internals="sieve_tray", trays=18, description="Product Column")
+        units.DistillationColumn(
+            "T-200", internals="sieve_tray", trays=18, description="Product Column"
+        )
     )
     c2_ovhd = fs.add(units.HeatExchanger("E-201", description="T-200 Overhead Condenser"))
     c2_drum = fs.add(
@@ -157,8 +161,8 @@ def _distillation_train() -> Flowsheet:
     bot_y = col_y + 225
     pump_y = bot_y + 85
 
-    c1_axis = col1.pin_.x + port_offset(col1, "distillate")[0]
-    c2_axis = col2.pin_.x + port_offset(col2, "distillate")[0]
+    c1_axis = col1.pin_.x + port_offset(col1, "overhead")[0]
+    c2_axis = col2.pin_.x + port_offset(col2, "overhead")[0]
 
     c1_ovhd.pin(mirrored="y").pin(x=c1_axis, port="shell_in", y=ovhd_run_y)
     c2_ovhd.pin(mirrored="y").pin(x=c2_axis, port="shell_in", y=ovhd_run_y)
@@ -189,7 +193,7 @@ def _distillation_train() -> Flowsheet:
     fs.connect(feed_valve.outlet, preheater.tube_in)
     fs.connect(preheater.tube_out, col1.feed)
 
-    fs.connect(col1.distillate, c1_ovhd.shell_in)
+    fs.connect(col1.overhead, c1_ovhd.shell_in)
     fs.connect(c1_ovhd.shell_out, c1_drum.inlet)
     fs.connect(c1_drum.outlet, c1_tee.inlet)
     fs.connect(c1_tee.outlet, col1.reflux_in, draw_as_recycle=True)
@@ -200,7 +204,7 @@ def _distillation_train() -> Flowsheet:
     fs.connect(c1_reb.bottoms, pump1.suction)
     fs.connect(pump1.discharge, col2.feed)
 
-    fs.connect(col2.distillate, c2_ovhd.shell_in)
+    fs.connect(col2.overhead, c2_ovhd.shell_in)
     fs.connect(c2_ovhd.shell_out, c2_drum.inlet)
     fs.connect(c2_drum.outlet, c2_tee.inlet)
     fs.connect(c2_tee.outlet, col2.reflux_in, draw_as_recycle=True)
@@ -364,7 +368,9 @@ def _column_reflux() -> Flowsheet:
     fs = Flowsheet("Column Overhead System")
     feed = fs.add(units.Feed("Feed", reference="PFD-100"))
     col = fs.add(
-        units.Column("T-701", internals="baffle_tray", trays=10, description="Main Fractionator")
+        units.DistillationColumn(
+            "T-701", internals="baffle_tray", trays=10, description="Main Fractionator"
+        )
     )
     cond = fs.add(
         units.HeatExchanger(
@@ -405,7 +411,7 @@ def _column_reflux() -> Flowsheet:
     bot.pin(x=900, y=645)
 
     fs.connect(feed.outlet, col.feed)
-    fs.connect(col.distillate, cond.shell_in)
+    fs.connect(col.overhead, cond.shell_in)
     fs.connect(cond.shell_out, drum.inlet)
     fs.connect(drum.vent, vent.inlet)
     fs.connect(drum.outlet, split.inlet)
@@ -687,7 +693,7 @@ def _ethanol_pfd() -> Flowsheet:
     water = fs.add(units.Feed("RO Water", reference="PCD-301"))
 
     col = fs.add(
-        units.Column(
+        units.DistillationColumn(
             "T-301",
             internals="sieve_tray",
             trays=18,
@@ -808,7 +814,7 @@ def _ethanol_pfd() -> Flowsheet:
     fs.connect(water.outlet, mix1.feed_2, name="S-304")
 
     fs.connect(refl.outlet, ethanol.inlet, name="S-305")
-    fs.connect(col.distillate, cond.shell_in, name="S-305")
+    fs.connect(col.overhead, cond.shell_in, name="S-305")
     fs.connect(cond.shell_out, drum.inlet, name="S-305")
     fs.connect(drum.outlet, refl.inlet, name="S-305")
     fs.connect(refl.branch, col.reflux_in, name="S-305", draw_as_recycle=True)
@@ -912,7 +918,7 @@ def _ethanol_pid() -> Flowsheet:
     flow308 = fs.add_loop("F", 308)
 
     col = fs.add(
-        units.Column(
+        units.DistillationColumn(
             "T-301",
             internals="sieve_tray",
             trays=18,
@@ -1116,7 +1122,7 @@ def _ethanol_pid() -> Flowsheet:
     # instrument hangs off the *routed* path, so a line the router is free to
     # re-bend carries its instrumentation somewhere else with it.
     vapour = fs.connect(
-        col.distillate, st301.inlet, service="AE", sequence=302, size=300, schedule=80, spec="SS"
+        col.overhead, st301.inlet, service="AE", sequence=302, size=300, schedule=80, spec="SS"
     ).via([(col_axis, overhead_y)])
     fs.connect(st301.outlet, cond.shell_in).via([(cond_shell_in_x, overhead_y)])
 
@@ -2233,7 +2239,7 @@ def _demineralised_water() -> Flowsheet:
     f802 = fs.add(units.Filter("F-802", variant="fixed_bed", description="Activated Carbon Filter"))
     ix801 = fs.add(units.Filter("IX-801", variant="ion_exchange", description="Cation Exchanger"))
 
-    d801 = fs.add(units.Column("D-801", variant="packed", description="Degasser Tower"))
+    d801 = fs.add(units.Stripper("D-801", variant="packed", description="Degasser Tower"))
     air = fs.add(units.Feed("Stripping Air"))
     b801 = fs.add(units.Blower("B-801", description="Degasser Air Blower"))
     vt801 = fs.add(units.Vent("VT-801", description="Degasser Vent"))
@@ -2255,7 +2261,7 @@ def _demineralised_water() -> Flowsheet:
     fs.connect(ix801.outlet, d801.feed)
     fs.connect(air.outlet, b801.suction)
     fs.connect(b801.discharge, d801.boilup_in)
-    fs.connect(d801.distillate, vt801.inlet)
+    fs.connect(d801.overhead, vt801.inlet)
     fs.connect(d801.bottoms, p802.suction)
 
     fs.connect(p802.discharge, ix802.inlet)
@@ -2886,7 +2892,7 @@ def _absorber_stripper() -> Flowsheet:
         )
     )
     regen = fs.add(
-        units.Column(
+        units.DistillationColumn(
             "T-402",
             internals="packing",
             trays=2,
@@ -2947,7 +2953,7 @@ def _absorber_stripper() -> Flowsheet:
     contactor.pin(x=300, y=250)
     lean_in_y = 250 + port_offset(contactor, "feed_1")[1]
     gas_in_y = 250 + port_offset(contactor, "feed_2")[1]
-    contactor_axis = 300 + port_offset(contactor, "distillate")[0]
+    contactor_axis = 300 + port_offset(contactor, "overhead")[0]
     sour.pin(port="outlet", x=120, y=gas_in_y)
     sweet.pin(port="inlet", x=contactor_axis, y=140)
 
@@ -2959,7 +2965,7 @@ def _absorber_stripper() -> Flowsheet:
     rich_riser_x = 880.0
 
     regen.pin(x=980, y=290)
-    regen_axis = 980 + port_offset(regen, "distillate")[0]
+    regen_axis = 980 + port_offset(regen, "overhead")[0]
     regen_feed_y = 290 + port_offset(regen, "feed")[1]
     reflux_in_y = 290 + port_offset(regen, "reflux_in")[1]
     boilup_in_y = 290 + port_offset(regen, "boilup_in")[1]
@@ -3002,7 +3008,7 @@ def _absorber_stripper() -> Flowsheet:
     lean_return_y = 1040.0
 
     fs.connect(sour.outlet, contactor.feed_2, name="S-401")
-    fs.connect(contactor.distillate, sweet.inlet, name="S-402")
+    fs.connect(contactor.overhead, sweet.inlet, name="S-402")
 
     fs.connect(contactor.bottoms, letdown.inlet, name="S-404").via([(contactor_axis, rich_y)])
     fs.connect(letdown.outlet, cross.tube_in, name="S-404")
@@ -3010,7 +3016,7 @@ def _absorber_stripper() -> Flowsheet:
         [(rich_riser_x, rich_y), (rich_riser_x, regen_feed_y)]
     )
 
-    fs.connect(regen.distillate, ovhd.shell_in, name="S-406")
+    fs.connect(regen.overhead, ovhd.shell_in, name="S-406")
     fs.connect(ovhd.shell_out, drum.inlet, name="S-407").via([(regen_axis, ovhd_drain_y)])
     fs.connect(drum.vent, acid.inlet, name="S-408").via([(drum_vent_x, 60)])
     fs.connect(drum.outlet, reflux_pump.suction, name="S-409").via([(drum_draw_x, reflux_run_y)])
@@ -3124,7 +3130,7 @@ def _molecular_sieve_dryer() -> Flowsheet:
     level504 = fs.add_loop("L", 504)
 
     bed_a = fs.add(
-        units.Column(
+        units.DistillationColumn(
             "V-501A",
             internals="packing",
             trays=1,
@@ -3134,7 +3140,7 @@ def _molecular_sieve_dryer() -> Flowsheet:
         )
     )
     bed_b = fs.add(
-        units.Column(
+        units.DistillationColumn(
             "V-501B",
             internals="packing",
             trays=1,
@@ -3244,8 +3250,8 @@ def _molecular_sieve_dryer() -> Flowsheet:
 
     bed_a.pin(mirrored=True).pin(x=460, y=bed_y)
     bed_b.pin(x=940, y=bed_y)
-    a_axis = 460 + port_offset(bed_a, "distillate")[0]
-    b_axis = 940 + port_offset(bed_b, "distillate")[0]
+    a_axis = 460 + port_offset(bed_a, "overhead")[0]
+    b_axis = 940 + port_offset(bed_b, "overhead")[0]
     top_in_y = bed_y + port_offset(bed_a, "reflux_in")[1]
     bot_in_y = bed_y + port_offset(bed_a, "boilup_in")[1]
     a_leg_x, b_leg_x = 380.0, 1110.0
@@ -3321,9 +3327,9 @@ def _molecular_sieve_dryer() -> Flowsheet:
     ).via([(b_leg_x, regen_in_y), (b_leg_x, bot_in_y)])
     fs.connect(xv503b.outlet, bed_b.boilup_in)
 
-    fs.connect(bed_a.distillate, xv504a.inlet, size=200, service="RG", sequence=509, spec="LT")
+    fs.connect(bed_a.overhead, xv504a.inlet, size=200, service="RG", sequence=509, spec="LT")
     fs.connect(xv504a.outlet, t_regen_out.inlet).via([(a_axis, regen_out_y)])
-    fs.connect(bed_b.distillate, xv504b.inlet, size=200, service="RG", sequence=510, spec="LT")
+    fs.connect(bed_b.overhead, xv504b.inlet, size=200, service="RG", sequence=510, spec="LT")
     fs.connect(xv504b.outlet, t_regen_out.branch)
     fs.connect(
         t_regen_out.outlet, regen_cooler.tube_in, size=200, service="RG", sequence=511, spec="LT"

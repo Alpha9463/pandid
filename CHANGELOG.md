@@ -9,11 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `Absorber` and `Stripper`, a `Column` missing the return nozzles it does
-  not have: an absorber carries no `reflux_in`, `boilup_in`,
-  `reboiler_duty` or `condenser_duty`, and a stripper keeps the reboiler
-  loop but not the condenser's. Both keep `internals=`, `trays=`,
-  `n_feeds=` and `feed_stages=` unchanged; `Absorber` defaults
+- `DistillationColumn`, `Absorber` and `Stripper` over a `Column` that is now
+  the general tower -- a feed, an `overhead` product and a `bottoms` one,
+  nothing that assumes anything inside it boils (#400). `DistillationColumn`
+  adds the reflux loop and the reboiler: `reflux_in`, `boilup_in`,
+  `reboiler_duty`, `condenser_duty`. `Stripper` adds the reboiler alone,
+  `boilup_in` and `reboiler_duty`, sitting beside `DistillationColumn` rather
+  than under it. `Absorber` adds nothing -- it neither boils nor refluxes,
+  and *is* a general tower. All three keep `internals=`, `trays=`, `n_feeds=`
+  and `feed_stages=` unchanged from `Column`; `Absorber` defaults
   `internals=` to `"packing"`.
 - `Column(feed_stages=)` puts a feed on the stage it enters, in place of the
   even spread `n_feeds` draws by default.
@@ -72,6 +76,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   weight, a highlighted main flow line distinguished from a subsidiary
   one, is not part of this change -- pandid does not yet classify a
   stream as either, and is left for its own issue.
+
+- **`Column` is the general tower; `DistillationColumn` is the specific
+  one (#400).** `Column` used to carry every nozzle a distillation column
+  has, so `Absorber`/`Stripper` inherited four of them dishonestly:
+  Python cannot un-declare an inherited annotation, so a type checker saw
+  a reflux nozzle on a tower that raised the moment one was connected.
+  `t: units.Column` still accepts an `Absorber`, a `Stripper` or a
+  `DistillationColumn`, exactly as before -- only which class carries
+  which nozzle has changed, matching `Separator`, the one other class
+  with a family of narrower subclasses. No drawing moves: all four still
+  draw the same `kind="column"` symbol.
+
+### Deprecated
+
+Nothing about the drawing changes below; only where a nozzle lives in the
+class hierarchy, or what it is called.
+
+- `Column(...).reflux_in`, `.boilup_in`, `.reboiler_duty` and
+  `.condenser_duty` → build the tower as `DistillationColumn` instead,
+  which is what actually has them now. `Absorber` and `Stripper` never
+  carried these honestly and do not carry this grace period either --
+  reaching for one on either is a hard error, as it was before.
+- `Column(...).distillate`, and the same on `Absorber`/`Stripper`/
+  `DistillationColumn` → `.overhead`, the position name every tower's top
+  product leaves through -- `distillate` is a distillation word, and an
+  absorber's overhead product is stripped gas, not distillate.
 
 ### Fixed
 

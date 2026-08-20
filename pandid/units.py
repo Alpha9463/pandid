@@ -38,7 +38,7 @@ __all__ = [
     "Unit",
     "Feed", "Product", "Pump", "Compressor", "Blower", "Valve", "Vessel", "Tank",
     "HeatExchanger", "Heater", "Cooler", "CoolingTower", "Reactor", "Separator",
-    "Absorber", "Stripper", "Column",
+    "Absorber", "Stripper", "DistillationColumn", "Column",
     "Mixer", "Splitter", "Tee", "Reducer", "Fitting", "Ejector", "Vent", "Funnel",
     "Furnace", "Boiler", "Stack", "Flare", "Turbine", "Filter", "Dryer",
     "CrushingMachine", "Crusher", "Mill", "Centrifuge", "Conveyor", "Elevator",
@@ -159,6 +159,28 @@ class Unit:
     #: :meth:`_symbol_anchor` is the reader, and :class:`Instrument`
     #: overrides it because it mints nozzles per signal connection.
     PORT_ANCHORS: dict[str, str] = {}
+
+    #: Nozzle name -> ``(direction, role, the Deprecation naming its
+    #: replacement)``, for a nozzle this class stopped building but must
+    #: still answer for one release: an author who called this class for
+    #: what has moved to a narrower one still has a sheet connecting the
+    #: old name. :meth:`__getattr__` is the only reader, and it mints the
+    #: port -- once, on first access -- rather than building it at
+    #: construction, so a unit that never uses the retired name never
+    #: warns. A class that never carried the nozzle honestly overrides
+    #: this back to ``{}`` rather than inheriting a promise it never
+    #: made; see :class:`Absorber` and :class:`Stripper`.
+    _RETIRED_PORTS: dict[str, tuple[str, str, Deprecation]] = {}
+
+    #: Nozzle name -> ``(the name that replaces it, the Deprecation that
+    #: says so)``, for a nozzle that was only ever renamed -- the same
+    #: connection point under an old word. Unlike :attr:`_RETIRED_PORTS`,
+    #: this mints nothing: the retired name resolves to *the same*
+    #: :class:`~pandid.ports.Port` object the new one does, since two
+    #: ports answering for one nozzle is exactly the fault
+    #: :meth:`~pandid.render.symbols.Symbol.coincident_ports` exists to
+    #: catch.
+    _RETIRED_PORT_ALIASES: dict[str, tuple[str, Deprecation]] = {}
 
     #: The composition keywords this class takes, each mapped to what it
     #: means when the author states none. ``variant=`` chooses the
@@ -680,8 +702,19 @@ class Unit:
             # typos a message listing the real ports.
             ports = self.__dict__.get("ports")
             if ports is not None and not name.startswith("_"):
+                where = self.__dict__.get("name", "?")
+                alias = type(self)._RETIRED_PORT_ALIASES.get(name)
+                if alias is not None:
+                    target, dep = alias
+                    dep.warn(self, where=where)
+                    return getattr(self, target)
+                retired = type(self)._RETIRED_PORTS.get(name)
+                if retired is not None:
+                    direction, role, dep = retired
+                    dep.warn(self, where=where)
+                    return self._add_port(name, direction, role)
                 raise AttributeError(
-                    f"{type(self).__name__} {self.__dict__.get('name', '?')!r} has no "
+                    f"{type(self).__name__} {where!r} has no "
                     f"attribute or port {name!r}; available ports: {sorted(ports)}"
                 )
             raise AttributeError(name)
@@ -3834,14 +3867,65 @@ class Separator(Unit):
 #: draws: eight decks at a 2 M pitch down a 16 M straight side.
 DEFAULT_TRAYS = 8
 
+# ``Column`` used to carry every nozzle a distillation column has, and
+# ``Absorber``/``Stripper`` inherited four of them dishonestly (#400):
+# Python cannot un-declare an inherited annotation, so a checker saw a
+# reflux nozzle on a tower that raised the moment one was connected.  The
+# fix is structural -- ``Column`` becomes the general tower and
+# :class:`DistillationColumn` the specific one, matching
+# :class:`Separator`, the one other class with a family of narrower
+# subclasses -- and these five declarations are what keeps every sheet
+# already writing the old spellings on its feet for one release.
+#
+# All five draw the same ``kind="column"`` symbol as before: nothing here
+# moves a nozzle's position on the shell, only which class answers for
+# it, so every ``note`` below is empty.
+COLUMN_REFLUX_IN = Deprecation(
+    what="Column(...).reflux_in", instead="DistillationColumn(...).reflux_in",
+    removed_in="0.2.0")
+COLUMN_BOILUP_IN = Deprecation(
+    what="Column(...).boilup_in", instead="DistillationColumn(...).boilup_in",
+    removed_in="0.2.0")
+COLUMN_REBOILER_DUTY = Deprecation(
+    what="Column(...).reboiler_duty", instead="DistillationColumn(...).reboiler_duty",
+    removed_in="0.2.0")
+COLUMN_CONDENSER_DUTY = Deprecation(
+    what="Column(...).condenser_duty", instead="DistillationColumn(...).condenser_duty",
+    removed_in="0.2.0")
+#: Not a class move: ``distillate`` is retired on every tower it ever
+#: named, ``Column`` included, in favour of ``overhead`` -- the position
+#: name :class:`Separator` already chose ``overflow``/``underflow`` for,
+#: and for the same reason. ``distillate`` is a distillation word and an
+#: absorber's overhead product is stripped gas, not distillate; #398
+#: fixed that category error four times over and left this the fifth.
+COLUMN_DISTILLATE = Deprecation(
+    what="Column(...).distillate", instead="Column(...).overhead",
+    removed_in="0.2.0")
+
 
 class Column(Unit):
-    """Distillation or absorption column.
+    """A general tower: one dished-end shell, fed at one end and drawn from
+    both.
 
-    Besides the feed and the two products, a column has two *return*
-    nozzles that close its internal loops: ``reflux_in`` (liquid back to
-    the top from the reflux drum) and ``boilup_in`` (vapour back to the
-    bottom from the reboiler).
+    Every column has a feed, an ``overhead`` product off the top and
+    ``bottoms`` off the bottom -- and nothing else, because nothing about
+    those three assumes the tower boils. :class:`DistillationColumn` adds
+    the reflux loop and the reboiler a *distillation* column has;
+    :class:`Stripper` adds the reboiler alone; :class:`Absorber` adds
+    neither, because an absorber is a general tower with an honest name.
+    This class is their common base for exactly that reason -- the
+    :class:`Separator` shape, one base carrying what every subclass has
+    and nothing narrower -- so ``t: Column`` accepts any of the four and
+    a checker never sees a nozzle a plain ``Column`` does not build.
+
+    A plain ``Column(...)`` is still what an author writes for equipment
+    that never had a reflux loop -- a scrubber, an adsorber, a molecular
+    sieve -- and ``col.reflux_in``/``.boilup_in``/``.reboiler_duty``/
+    ``.condenser_duty`` still work for one release where an existing sheet
+    reaches for them on a tower that should have been built as a
+    :class:`DistillationColumn`, with a warning naming the class to move
+    to. ``col.distillate`` still works the same way, everywhere it used
+    to, warning towards ``.overhead``.
 
     ``n_feeds`` gives the tower more than one feed nozzle: an extractive
     distillation takes its solvent above the feed tray, an azeotropic
@@ -3929,12 +4013,8 @@ class Column(Unit):
     feed's is.
     """
 
-    distillate: Port
+    overhead: Port
     bottoms: Port
-    reflux_in: Port
-    boilup_in: Port
-    reboiler_duty: Port
-    condenser_duty: Port
     # Every feed nozzle, in declaration order and so highest first,
     # whatever the count spelled them. See :class:`Reactor`.
     feeds: tuple[Port, ...]
@@ -3981,11 +4061,16 @@ class Column(Unit):
     #
     # This still catches every typo the single-family version did:
     # neither family reaches for a blanket ``__getattr__`` the way
-    # :class:`Block` does, because a column carries six fixed nozzles
-    # worth catching a misspelling on and a block carries almost none --
-    # see :class:`Block`'s own comment on that trade, and
+    # :class:`Block` does, because a column carries fixed nozzles worth
+    # catching a misspelling on and a block carries almost none -- see
+    # :class:`Block`'s own comment on that trade, and
     # ``tests/test_port_annotations.py``'s ``_CHECKER_VISIBLE_GETATTR``,
     # which pins that ``Block`` is still the only class paying it.
+    # :attr:`_RETIRED_PORTS`/:attr:`_RETIRED_PORT_ALIASES` are a
+    # different mechanism from both: they answer through
+    # :meth:`Unit.__getattr__`, which stays hidden from a checker, so
+    # ``col.reflux_in`` still raises at edit time on a plain ``Column``
+    # even though it still works at run time.
     if TYPE_CHECKING:
 
         # Family A: any n_feeds, n_draws pinned at its own default (0).
@@ -4074,13 +4159,35 @@ class Column(Unit):
 
     kind = "column"
     PORTS = [
-        ("distillate", "outlet", "vapor"),
+        ("overhead", "outlet", "vapor"),
         ("bottoms", "outlet", "liquid"),
-        ("reflux_in", "inlet", "liquid"),
-        ("boilup_in", "inlet", "vapor"),
-        ("reboiler_duty", "inlet", "energy"),
-        ("condenser_duty", "outlet", "energy"),
     ]
+
+    #: The vendored artwork still anchors this nozzle under its pre-0.1.4
+    #: name -- a rename of the *nozzle*, not a redrawing of the symbol,
+    #: so the artwork itself did not move. Without this, ``overhead``
+    #: finds no anchor the symbol answers to and falls back to the
+    #: box centre; inherited by every subclass, since none renames its
+    #: own artwork either.
+    PORT_ANCHORS = {"overhead": "distillate"}
+
+    # The four nozzles a distillation column has and a general tower does
+    # not (see :class:`DistillationColumn`), reachable here -- once, with
+    # a warning -- for one release. Same ``(direction, role)`` a
+    # :class:`DistillationColumn` builds them with, so a stream connected
+    # through the old spelling draws exactly where the new one would.
+    _RETIRED_PORTS: dict[str, tuple[str, str, Deprecation]] = {
+        "reflux_in": ("inlet", "liquid", COLUMN_REFLUX_IN),
+        "boilup_in": ("inlet", "vapor", COLUMN_BOILUP_IN),
+        "reboiler_duty": ("inlet", "energy", COLUMN_REBOILER_DUTY),
+        "condenser_duty": ("outlet", "energy", COLUMN_CONDENSER_DUTY),
+    }
+    #: ``distillate`` was this nozzle's name through 0.1.3; every
+    #: subclass inherits this unchanged, since the rename is not about
+    #: which class the nozzle lives on.
+    _RETIRED_PORT_ALIASES: dict[str, tuple[str, Deprecation]] = {
+        "distillate": ("overhead", COLUMN_DISTILLATE),
+    }
 
     #: Nothing is drawn inside a column nobody has furnished. ISO's own
     #: general column, item 2.1 X8100, carries no internal, and the tray
@@ -4251,28 +4358,174 @@ if TYPE_CHECKING:
         draw_8: Port
 
 
+class DistillationColumn(Column):
+    """Distillation column: reflux at the top, a reboiler at the bottom.
+
+    Besides the feed and the two products :class:`Column` already gives
+    every tower, a distillation column carries two *return* nozzles that
+    close its internal loops: ``reflux_in`` (liquid back to the top from
+    the reflux drum) and ``boilup_in`` (vapour back to the bottom from
+    the reboiler), plus the ``reboiler_duty`` and ``condenser_duty``
+    energy streams the two exchangers carry. See :class:`Stripper` for
+    the reboiler alone, and :class:`Absorber` for neither.
+
+    Everything else is :class:`Column`'s own and works exactly the same
+    way here: ``internals=``, ``trays=``, ``n_feeds=``, ``feed_stages=``,
+    ``n_draws=`` and ``draw_stages=`` are that class's keywords, not
+    this one's::
+
+        DistillationColumn("T-101", internals="valve_tray", trays=30)
+
+    This class carries the four nozzles :class:`Column` carried outright
+    through 0.1.3. They moved here in 0.1.4 (#400) because a checker
+    could not otherwise see that :class:`Absorber` and :class:`Stripper`
+    do not have them: Python has no way to un-declare an inherited
+    annotation, so putting them on the base told a checker every tower
+    reboils. ``Column(...).reflux_in`` and the other three still work,
+    with a warning naming this class, for one release.
+    """
+
+    kind = "column"
+    PORTS = [
+        ("overhead", "outlet", "vapor"),
+        ("bottoms", "outlet", "liquid"),
+        ("reflux_in", "inlet", "liquid"),
+        ("boilup_in", "inlet", "vapor"),
+        ("reboiler_duty", "inlet", "energy"),
+        ("condenser_duty", "outlet", "energy"),
+    ]
+
+    overhead: Port
+    bottoms: Port
+    reflux_in: Port
+    boilup_in: Port
+    reboiler_duty: Port
+    condenser_duty: Port
+
+    # Copied from :class:`Column`'s own overloads rather than inherited,
+    # for :class:`Absorber`'s reason: a literal ``n_feeds`` has to
+    # resolve to ``DistillationColumn2``, not ``Column2``. ``n_draws=``
+    # is untyped here for the same reason it is on :class:`Absorber` and
+    # :class:`Stripper` -- a second overload family for every
+    # narrower-or-wider subclass would spend the class-explosion problem
+    # a third time.
+    if TYPE_CHECKING:
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
+                    *args: Any, **kwargs: Any) -> "DistillationColumn1": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[2],
+                    *args: Any, **kwargs: Any) -> "DistillationColumn2": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[3],
+                    *args: Any, **kwargs: Any) -> "DistillationColumn3": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[4],
+                    *args: Any, **kwargs: Any) -> "DistillationColumn4": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[5],
+                    *args: Any, **kwargs: Any) -> "DistillationColumn5": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[6],
+                    *args: Any, **kwargs: Any) -> "DistillationColumn6": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[7],
+                    *args: Any, **kwargs: Any) -> "DistillationColumn7": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[8],
+                    *args: Any, **kwargs: Any) -> "DistillationColumn8": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: int,
+                    *args: Any, **kwargs: Any) -> "DistillationColumn": ...
+        def __new__(cls, name: str, n_feeds: int = 1,
+                    *args: Any, **kwargs: Any) -> "DistillationColumn": ...
+
+
+if TYPE_CHECKING:
+
+    class DistillationColumn1(DistillationColumn):
+        pass
+
+    class DistillationColumn2(DistillationColumn):
+        feed_1: Port
+        feed_2: Port
+
+    class DistillationColumn3(DistillationColumn):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+
+    class DistillationColumn4(DistillationColumn):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+
+    class DistillationColumn5(DistillationColumn):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+
+    class DistillationColumn6(DistillationColumn):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+
+    class DistillationColumn7(DistillationColumn):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+
+    class DistillationColumn8(DistillationColumn):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+        feed_8: Port
+
+
 class Absorber(Column):
     """Absorption or scrubbing tower: a solute moves from a gas into a liquid.
 
-    :class:`Column` again -- ISO gives an absorber, a scrubber and a
-    molecular sieve no symbol of its own, so the drawing is the same
-    dished-end shell carrying whichever group-27 internal it really
-    holds, exactly as the module docstring already says. What earns this
-    class is not the picture but the **ports**: an absorber has no
-    reboiler, no condenser and no internal reflux loop, because nothing
-    in the tower boils. Gas enters at the bottom and lean liquid at the
-    top; treated gas leaves over ``distillate`` and rich liquid over
-    ``bottoms``, and the two counter-current inlets are ``n_feeds=2``,
-    placed on the trays they actually enter::
+    :class:`Column` itself, and honestly -- an absorber *is* a general
+    tower, so this class adds nothing to its base. ISO gives an absorber,
+    a scrubber and a molecular sieve no symbol of its own, so the drawing
+    is the same dished-end shell carrying whichever group-27 internal it
+    really holds, exactly as the module docstring already says. Gas
+    enters at the bottom and lean liquid at the top; treated gas leaves
+    over ``overhead`` and rich liquid over ``bottoms``, and the two
+    counter-current inlets are ``n_feeds=2``, placed on the trays they
+    actually enter::
 
         Absorber("V-501", internals="packing",
                  n_feeds=2, feed_stages=[1, 8])
 
     ``reflux_in``, ``boilup_in``, ``reboiler_duty`` and ``condenser_duty``
-    are **not on this class**. A plain :class:`Column` pressed into
-    service as an absorber carries all four, unconnected, and nothing
-    then stops an author wiring one of them to a stream the vessel does
-    not have -- the false statement this class exists to rule out. See
+    stay refused here, even during :class:`Column`'s own deprecation
+    window for them: nothing in an absorber boils, and this class exists
+    so that wiring one of those four to a stream the vessel does not have
+    is refused rather than silently drawn on an unconnected nozzle. See
     :class:`Stripper` for the shell with a reboiler and no condenser, and
     ``scripts/gen_devices.py``'s module docstring for the rule both
     classes are the first to be justified under: a **reduced port set**,
@@ -4287,12 +4540,20 @@ class Absorber(Column):
 
     kind = "column"
     PORTS = [
-        ("distillate", "outlet", "vapor"),
+        ("overhead", "outlet", "vapor"),
         ("bottoms", "outlet", "liquid"),
     ]
 
-    distillate: Port
+    overhead: Port
     bottoms: Port
+
+    #: None of :class:`Column`'s four distillation-only nozzles: an
+    #: absorber never carried them honestly, so it does not inherit the
+    #: one-release grace period either -- ``absorber.reflux_in`` still
+    #: raises outright. ``_RETIRED_PORT_ALIASES`` is *not* overridden:
+    #: ``.distillate`` still warns towards ``.overhead`` here too, since
+    #: that rename is not about which class the nozzle lives on.
+    _RETIRED_PORTS: dict[str, tuple[str, str, Deprecation]] = {}
 
     #: The one default this class narrows: an unfurnished absorber is
     #: rarer than an unfurnished column, so ``internals=`` defaults to a
@@ -4421,16 +4682,17 @@ class Stripper(Column):
 
     :class:`Column` again, for :class:`Absorber`'s reason -- the drawing
     is one dished-end shell, and what a stripper draws is picked by
-    ``internals=`` the same way an absorber's or a plain distillation
-    column's is. What earns this class is again the **ports**: a
-    stripper carries a reboiler and the vapour it returns, but nothing
-    condenses and nothing refluxes, because what leaves the top is the
-    stripped-out product itself, not something the tower recovers and
-    sends back down. ``distillate``, ``bottoms``, ``reboiler_duty`` and
-    ``boilup_in`` are here; ``reflux_in`` and ``condenser_duty`` are not
-    -- two of :class:`Column`'s four return nozzles rather than
-    :class:`Absorber`'s none, because a stripper still reboils even
-    though it never refluxes.
+    ``internals=`` the same way an absorber's or a distillation column's
+    is. Sitting *beside* :class:`DistillationColumn` rather than under
+    it: a stripper carries a reboiler and the vapour it returns, but
+    nothing condenses and nothing refluxes, because what leaves the top
+    is the stripped-out product itself, not something the tower recovers
+    and sends back down. ``overhead``, ``bottoms``, ``reboiler_duty`` and
+    ``boilup_in`` are here; ``reflux_in`` and ``condenser_duty`` are not,
+    and stay refused even during :class:`Column`'s own deprecation window
+    for them -- nothing here condenses, and this class exists so that
+    wiring either to a stream the vessel does not have is refused rather
+    than silently drawn on an unconnected nozzle.
 
     ``internals=`` and ``trays=`` are unchanged from :class:`Column`: a
     stripper is at least as often trayed as packed, so unlike
@@ -4439,16 +4701,26 @@ class Stripper(Column):
 
     kind = "column"
     PORTS = [
-        ("distillate", "outlet", "vapor"),
+        ("overhead", "outlet", "vapor"),
         ("bottoms", "outlet", "liquid"),
         ("boilup_in", "inlet", "vapor"),
         ("reboiler_duty", "inlet", "energy"),
     ]
 
-    distillate: Port
+    overhead: Port
     bottoms: Port
     boilup_in: Port
     reboiler_duty: Port
+
+    #: Neither of the two nozzles left -- ``reflux_in``/``condenser_duty``
+    #: -- for :class:`Absorber`'s reason: a stripper never carried them
+    #: honestly either, so it does not inherit :class:`Column`'s grace
+    #: period for them. ``boilup_in``/``reboiler_duty`` need no entry
+    #: here at all: this class already builds them for real, so they
+    #: resolve through the ordinary instance dict and never reach
+    #: :meth:`Unit.__getattr__`. ``_RETIRED_PORT_ALIASES`` is not
+    #: overridden, for :class:`Absorber`'s reason.
+    _RETIRED_PORTS: dict[str, tuple[str, str, Deprecation]] = {}
 
     # See :class:`Absorber`'s comment on the same block: a literal
     # ``n_feeds`` has to resolve to ``Stripper2``, not ``Column2``, and

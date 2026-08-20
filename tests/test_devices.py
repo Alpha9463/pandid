@@ -374,17 +374,18 @@ def test_a_kind_tag_still_names_the_class_that_owns_the_whole_kind():
     built from ``units`` alone, so a kind tag names the class that draws every
     variant of that kind, exactly as it did before this layer existed.
 
-    ``Absorber`` and ``Stripper`` are the one place two ``units`` classes
-    themselves share a ``kind`` -- both are ``"column"``, the same as
-    ``Column`` -- because neither is a distinct drawing, only a reduced port
-    set. ``kind: column`` still has to mean the class that draws every
-    variant of it, which is ``Column`` and not the one of the three that
-    happened to iterate last, so they are the named exception rather than
-    the rule this test checks.
+    ``Absorber``, ``Stripper`` and ``DistillationColumn`` are the one place
+    several ``units`` classes themselves share a ``kind`` -- all four are
+    ``"column"``, the same as ``Column`` -- because none is a distinct
+    drawing, only a narrower or wider port set on the one shell. ``kind:
+    column`` still has to mean the class that draws every variant of it,
+    which is ``Column`` and not the one of the four that happened to
+    iterate last, so they are the named exception rather than the rule
+    this test checks.
     """
     # Shares its kind with Column, and is not what a bare `kind: column`
     # should resolve to; see the docstring.
-    shares_a_kind = {"Absorber", "Stripper"}
+    shares_a_kind = {"Absorber", "Stripper", "DistillationColumn"}
     for name in units.__all__:
         if name == "Unit" or name in shares_a_kind:
             continue

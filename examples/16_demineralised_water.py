@@ -17,7 +17,6 @@ from pandid.document import Revision, TitleBlock, equipment_list
 
 from pandid import (
     Blower,
-    Column,
     Feed,
     Filter,
     Fitting,
@@ -25,6 +24,7 @@ from pandid import (
     IonExchanger,
     Product,
     Pump,
+    Stripper,
     Tank,
     Valve,
     Vent,
@@ -50,8 +50,11 @@ def main():
     # no separation to hold on spec. ``variant="packed"`` is the body
     # that draws its own two beds on their support grids, so it takes no
     # ``internals=`` -- composing one onto it would draw a third bed.
-    d801 = fs.add(Column("D-801", variant="packed",
-                         description="Degasser Tower"))
+    # ``Stripper``, not a plain ``Column``: it reboils on nothing but air,
+    # so ``boilup_in`` is real and ``reflux_in``/``condenser_duty`` would
+    # be two unconnected nozzles this tower never has.
+    d801 = fs.add(Stripper("D-801", variant="packed",
+                           description="Degasser Tower"))
     air = fs.add(Feed("Stripping Air"))
     b801 = fs.add(Blower("B-801", description="Degasser Air Blower"))
     vt801 = fs.add(Vent("VT-801", description="Degasser Vent"))
@@ -75,7 +78,7 @@ def main():
     fs.connect(ix801.outlet, d801.feed)
     fs.connect(air.outlet, b801.suction)
     fs.connect(b801.discharge, d801.boilup_in)
-    fs.connect(d801.distillate, vt801.inlet)
+    fs.connect(d801.overhead, vt801.inlet)
     fs.connect(d801.bottoms, p802.suction)
 
     fs.connect(p802.discharge, ix802.inlet)
