@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `internals=` to `"packing"`.
 - `Column(feed_stages=)` puts a feed on the stage it enters, in place of the
   even spread `n_feeds` draws by default.
+- `Column(n_draws=)`, a side draw: `draw` / `draw_1` … `draw_n` on the east
+  face, opposite the feeds, defaulting to zero since most columns have none.
+  `draw_stages=` places one on a stage the same way `feed_stages=` does. A
+  type checker resolves `col.draw_2` for a literal `n_draws=2` the same way
+  it resolves `col.feed_2`; naming both `n_feeds` and `n_draws` above one at
+  once falls back to the plain `Column`.
 - `Feeder` for ISO 10628-2 group 19: `general`, `rotary_valve`,
   `rotary_table` and `metering`, plus `RotaryValveFeeder`,
   `RotaryTableFeeder` and `MeteringFeeder`.

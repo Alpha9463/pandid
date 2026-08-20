@@ -233,10 +233,11 @@ def _family_stem(port_name: str) -> str | None:
 
     A numbered nozzle exists **because a count was written down**, and
     five classes build one -- ``Mixer(n_inlets=)``,
-    ``Splitter(n_outlets=)``, ``Column``/``Reactor(n_feeds=)`` and
-    ``Block(inputs=)``, which ``tests/test_port_annotations`` pins in
-    ``_DECLARED_FAMILIES``. Each spells its family as a stem, an
-    underscore and a 1-based index; nothing else numbers a port.
+    ``Splitter(n_outlets=)``, ``Column``/``Reactor(n_feeds=)``,
+    ``Column(n_draws=)`` and ``Block(inputs=)``, which
+    ``tests/test_port_annotations`` pins in ``_DECLARED_FAMILIES``. Each
+    spells its family as a stem, an underscore and a 1-based index;
+    nothing else numbers a port.
 
     Read off the **unit's own port list** and not the symbol's
     :class:`~pandid.render.symbols.PortSeries`, which writes the same

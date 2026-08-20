@@ -48,8 +48,13 @@ __all__ = [
 
 # Only a signal port may carry a signal line and only a process one may
 # carry fluid; Flowsheet.connect enforces the pairing.
+#
+# "draw" is "feed" reversed: a side draw's phase is as unstated as a
+# feed's is, for the same reason -- neither placement nor role commits a
+# column to vapour or liquid, so drawing that distinction is a choice a
+# future role value can make without this one lying about it meanwhile.
 _VALID_ROLES = {"process", "feed", "product", "energy", "utility", "vapor",
-                "liquid", "signal"}
+                "liquid", "signal", "draw"}
 
 # The side vocabulary label_pos uses, mapped onto compass faces.
 _FACE_OF_SIDE = {"top": "N", "bottom": "S", "left": "W", "right": "E"}
@@ -633,9 +638,9 @@ class Unit:
         so a unit that knows a *specific* reason one member of its family
         belongs somewhere else on the face can say so without a second
         placement mechanism standing next to the series. Nothing overrides
-        this but :class:`Column`, whose ``feed_stages=`` puts a feed on
-        the stage it actually enters rather than spreading it with the
-        rest.
+        this but :class:`Column`, whose ``feed_stages=``/``draw_stages=``
+        put a feed or a draw on the stage it actually enters or leaves
+        on, rather than spreading it with the rest.
         """
         return None
 
@@ -3127,50 +3132,71 @@ def _feed_names(n_feeds: int, owner: str) -> list[str]:
     return ["feed"] if n_feeds == 1 else [f"feed_{i}" for i in range(1, n_feeds + 1)]
 
 
-def _feed_stage_fractions(name: str, internals: str | None, trays: int,
-                          feed_stages: list[int | None] | None,
-                          feed_names: list[str]) -> dict[str, float]:
-    """Validate ``feed_stages`` against ``feed_names`` and turn it into a
-    fraction of the shell, per feed that named one.
+def _draw_names(n_draws: int, owner: str) -> list[str]:
+    """Names for a :class:`Column`'s side draws: none, ``draw``, or
+    ``draw_1`` .. ``draw_n``.
 
-    ``None`` -- the default -- asks nothing of the shell: every feed keeps
-    :class:`~pandid.render.symbols.PortSeries`'s even spread, and a column
-    that names no stage is unchanged from the one 0.1.3 drew.
-
-    Given a list, its length has to match the feeds: one entry per feed,
-    in declaration order, so ``feed_stages[i]`` is never read against the
-    wrong nozzle. An entry may be ``None``: that one feed keeps the even
-    spread while its siblings pin to the stage they name, which is what
-    lets an author place the solvent and leave the main feed where it
-    always was.
+    :func:`_feed_names` the other way round. A draw is the feed's flow
+    reversed and most columns have none, so unlike a feed the count may
+    be zero -- the empty list, and no nozzle at all -- rather than
+    refusing anything short of one.
     """
-    if feed_stages is None:
+    if n_draws < 0:
+        raise ValueError(f"{owner} cannot take a negative number of draws, got {n_draws}")
+    if n_draws == 0:
+        return []
+    return ["draw"] if n_draws == 1 else [f"draw_{i}" for i in range(1, n_draws + 1)]
+
+
+def _stage_fractions(name: str, internals: str | None, trays: int,
+                     stages: list[int | None] | None, names: list[str],
+                     keyword: str, noun: str) -> dict[str, float]:
+    """Validate ``keyword=`` (``feed_stages`` or ``draw_stages``) against
+    ``names`` and turn it into a fraction of the shell, per nozzle that
+    named one.
+
+    ``None`` -- the default -- asks nothing of the shell: every nozzle
+    keeps :class:`~pandid.render.symbols.PortSeries`'s even spread, and a
+    column that names no stage is unchanged from the one 0.1.3 drew.
+
+    Given a list, its length has to match ``names``: one entry per
+    nozzle, in declaration order, so ``stages[i]`` is never read against
+    the wrong one. An entry may be ``None``: that one nozzle keeps the
+    even spread while its siblings pin to the stage they name, which is
+    what lets an author place the solvent feed, or the semi-lean draw,
+    and leave the rest where they always were.
+
+    Shared by :class:`Column`'s feeds and its draws -- one function, so
+    the two keywords cannot drift into checking the count, the bare
+    shell or a stage out of range differently.
+    """
+    if stages is None:
         return {}
-    if len(feed_stages) != len(feed_names):
+    if len(stages) != len(names):
         raise ValueError(
-            f"{name} has {len(feed_names)} feed{'s' if len(feed_names) != 1 else ''} "
-            f"({', '.join(feed_names)}) but feed_stages names {len(feed_stages)}; "
-            f"give one entry per feed, in the same order, and null for a feed that "
-            f"keeps the even spread"
+            f"{name} has {len(names)} {noun}{'s' if len(names) != 1 else ''} "
+            f"({', '.join(names)}) but {keyword} names {len(stages)}; "
+            f"give one entry per {noun}, in the same order, and null for a {noun} "
+            f"that keeps the even spread"
         )
     if internals is None:
-        if any(stage is not None for stage in feed_stages):
+        if any(stage is not None for stage in stages):
             raise ValueError(
-                f"{name}: feed_stages names a stage, and this column draws no "
+                f"{name}: {keyword} names a stage, and this column draws no "
                 f"stages to put one on -- internals is None, so there is nothing on "
                 f"the shell for a reader to count against. Give internals= a deck or "
-                f"a bed, or drop feed_stages and let n_feeds spread the feeds evenly"
+                f"a bed, or drop {keyword} and let n_{noun}s spread the {noun}s evenly"
             )
         return {}
     from pandid.render.iso_parts import stage_fraction
     fractions = {}
-    for feed_name, stage in zip(feed_names, feed_stages):
+    for one_name, stage in zip(names, stages):
         if stage is None:
             continue
         try:
-            fractions[feed_name] = stage_fraction(internals, stage, trays)
+            fractions[one_name] = stage_fraction(internals, stage, trays)
         except ValueError as e:
-            raise ValueError(f"{name}.{feed_name}: {e}") from None
+            raise ValueError(f"{name}.{one_name}: {e}") from None
     return fractions
 
 
@@ -3823,6 +3849,22 @@ class Column(Unit):
     the shell in declaration order, so ``feed_1`` is the highest; the
     single-feed column keeps the plain ``feed``.
 
+    ``n_draws`` gives it a side draw: a sidestream tower -- a crude
+    atmospheric column, a solvent recovery train, any three-product
+    fractionation -- pulls a third product off the shell between the two
+    ends. Unlike a feed, none is the ordinary case, so it defaults to
+    zero and the family is ``draw`` / ``draw_1`` ... ``draw_n`` on the
+    shell's **east** face, opposite the feeds -- a draw is a feed's flow
+    reversed. It places a nozzle only: a real draw is vapour or liquid
+    and the two leave different nozzles on a real sheet, but a feed does
+    not distinguish that either, so doing it for a draw alone would be
+    inconsistent. The phase belongs on the port's ``role``, not on its
+    placement, and nothing here draws above-or-below-the-tray geometry
+    for it. A pumparound is a draw at one stage and an ordinary feed
+    carrying the return at another -- two nozzles, wired with a plain
+    ``connect()`` and no paired abstraction for it, the same way reflux
+    is not one either.
+
     What is inside it
     -----------------
     **A column is drawn bare; ``internals=`` furnishes it.** ISO
@@ -3871,6 +3913,20 @@ class Column(Unit):
     refused, naming the count it does. Naming a stage on a column with
     no ``internals=`` is refused too: there is nothing on the shell for a
     reader to count against.
+
+    Where a draw leaves
+    --------------------
+    ``draw_stages=`` puts a draw on the stage it actually leaves from --
+    the identical mechanism, read in the other direction::
+
+        Column("T-301", internals="valve_tray", trays=30,
+               n_draws=1, draw_stages=[15])
+
+    One entry per draw, in the same declaration order, and every rule
+    ``feed_stages=`` follows above applies unchanged: ``None`` keeps the
+    even spread, a stage out of range names the count the column really
+    has, and a stage named on a bare shell is refused for the reason a
+    feed's is.
     """
 
     distillate: Port
@@ -3886,60 +3942,135 @@ class Column(Unit):
     # family that cannot be declared a member at a time. See
     # :class:`Mixer`.
     feed: Port
+    # Every side draw, in declaration order and so highest first,
+    # whatever the count spelled them -- ``feeds`` above, read the other
+    # way. Unlike ``feed``, there is no bare ``draw: Port`` beside this
+    # one: ``n_draws`` defaults to zero, so a lone draw is not a nozzle
+    # every column has the way a lone feed is, and declaring one here
+    # would be a phantom on every column that draws nothing. See
+    # :func:`_draw_names` and ``ColumnDraw1`` below, which is where a
+    # one-draw tower's singular ``draw`` really gets declared.
+    draws: tuple[Port, ...]
 
-
-    # ``feed_1`` ... ``feed_n`` are the same shape as :class:`Mixer`'s
-    # numbered inlets and are answered the same way: a literal
-    # ``n_feeds`` gets a subclass declaring exactly those nozzles, a
-    # computed one gets this class and ``col.feeds[i]``.
+    # Two independent arity families on one class -- ``n_feeds`` and
+    # ``n_draws`` -- and fully cross-typing them would be 8 x 8 = 64
+    # ``TYPE_CHECKING`` classes for a combination almost nothing draws:
+    # a column with more than one of *both* a feed and a draw is rare,
+    # and a checker that cannot resolve ``feed_2`` on it has lost nothing
+    # ``t: Column`` did not already accept.
     #
-    # A one-feed tower keeps the singular ``feed`` -- see
-    # :func:`_feed_names` -- so ``Column1`` declares nothing of its own
-    # and the annotation above answers for it.
+    # So this is two independent overload families instead, each
+    # covering the case that is actually common:
     #
-    # :class:`Reactor` spells the same family and takes the same
-    # treatment; see its own comment for the subclass wrinkle that has
-    # nothing to do with feeds and does not touch a column, which has no
-    # subclass to protect.
+    # - **any n_feeds, n_draws=0** (the ordinary column, drawing no
+    #   side stream at all) -- ``Column1`` .. ``Column8``, exactly as
+    #   before this class had a second count;
+    # - **n_feeds=1, any n_draws** (a plain tower with one side draw)
+    #   -- ``ColumnDraw1`` .. ``ColumnDraw8``.
+    #
+    # A call naming *both* counts above one matches neither family and
+    # falls through to the last, untyped overload, which hands back the
+    # plain ``Column``: every nozzle it really has is still reachable
+    # through ``col.feeds``/``col.draws`` or ``col.port(...)``, just not
+    # by the numbered attribute spelling. That is the same trade
+    # :class:`Reactor` and :class:`Mixer` already take for a *computed*
+    # count -- honest rather than restrictive, since nothing about
+    # ``n_feeds=2, n_draws=2`` is a literal a checker could not in
+    # principle have resolved, only one this class declines to spend 64
+    # classes resolving.
+    #
+    # This still catches every typo the single-family version did:
+    # neither family reaches for a blanket ``__getattr__`` the way
+    # :class:`Block` does, because a column carries six fixed nozzles
+    # worth catching a misspelling on and a block carries almost none --
+    # see :class:`Block`'s own comment on that trade, and
+    # ``tests/test_port_annotations.py``'s ``_CHECKER_VISIBLE_GETATTR``,
+    # which pins that ``Block`` is still the only class paying it.
     if TYPE_CHECKING:
 
+        # Family A: any n_feeds, n_draws pinned at its own default (0).
+        # ``n_draws`` sits after ``*args`` -- keyword-only, exactly like
+        # every other keyword this constructor takes beyond ``n_feeds``
+        # -- so naming it changes nothing about how any positional call
+        # this library has ever been written with resolves.
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
-                    *args: Any, **kwargs: Any) -> "Column1": ...
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
+                    n_draws: Literal[0] = 0, **kwargs: Any) -> "Column1": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[2],
-                    *args: Any, **kwargs: Any) -> "Column2": ...
+        def __new__(cls, name: str, n_feeds: Literal[2], *args: Any,
+                    n_draws: Literal[0] = 0, **kwargs: Any) -> "Column2": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[3],
-                    *args: Any, **kwargs: Any) -> "Column3": ...
+        def __new__(cls, name: str, n_feeds: Literal[3], *args: Any,
+                    n_draws: Literal[0] = 0, **kwargs: Any) -> "Column3": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[4],
-                    *args: Any, **kwargs: Any) -> "Column4": ...
+        def __new__(cls, name: str, n_feeds: Literal[4], *args: Any,
+                    n_draws: Literal[0] = 0, **kwargs: Any) -> "Column4": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[5],
-                    *args: Any, **kwargs: Any) -> "Column5": ...
+        def __new__(cls, name: str, n_feeds: Literal[5], *args: Any,
+                    n_draws: Literal[0] = 0, **kwargs: Any) -> "Column5": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[6],
-                    *args: Any, **kwargs: Any) -> "Column6": ...
+        def __new__(cls, name: str, n_feeds: Literal[6], *args: Any,
+                    n_draws: Literal[0] = 0, **kwargs: Any) -> "Column6": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[7],
-                    *args: Any, **kwargs: Any) -> "Column7": ...
+        def __new__(cls, name: str, n_feeds: Literal[7], *args: Any,
+                    n_draws: Literal[0] = 0, **kwargs: Any) -> "Column7": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[8],
-                    *args: Any, **kwargs: Any) -> "Column8": ...
+        def __new__(cls, name: str, n_feeds: Literal[8], *args: Any,
+                    n_draws: Literal[0] = 0, **kwargs: Any) -> "Column8": ...
+
+        # Family B: n_feeds pinned at its own default (1), any n_draws.
+        # ``n_draws`` takes no default here -- unlike Family A's, this
+        # literal is what a call has to *name* for one of these eight to
+        # match at all, so a bare ``Column("T-1")`` keeps resolving to
+        # ``Column1`` above rather than to ``ColumnDraw1``.
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
+                    n_draws: Literal[1], **kwargs: Any) -> "ColumnDraw1": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: int,
-                    *args: Any, **kwargs: Any) -> "Column": ...
-        def __new__(cls, name: str, n_feeds: int = 1,
-                    *args: Any, **kwargs: Any) -> "Column": ...
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
+                    n_draws: Literal[2], **kwargs: Any) -> "ColumnDraw2": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
+                    n_draws: Literal[3], **kwargs: Any) -> "ColumnDraw3": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
+                    n_draws: Literal[4], **kwargs: Any) -> "ColumnDraw4": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
+                    n_draws: Literal[5], **kwargs: Any) -> "ColumnDraw5": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
+                    n_draws: Literal[6], **kwargs: Any) -> "ColumnDraw6": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
+                    n_draws: Literal[7], **kwargs: Any) -> "ColumnDraw7": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
+                    n_draws: Literal[8], **kwargs: Any) -> "ColumnDraw8": ...
+
+        # The intersection -- both counts above one -- and every
+        # computed count: neither family above matches, so this is what
+        # both an ``n_feeds=2, n_draws=2`` and an
+        # ``n_feeds=len(...)`` call resolve to.
+        @overload
+        def __new__(cls, name: str, n_feeds: int = 1, *args: Any,
+                    n_draws: int = 0, **kwargs: Any) -> "Column": ...
+        def __new__(cls, name: str, n_feeds: int = 1, *args: Any,
+                    n_draws: int = 0, **kwargs: Any) -> "Column": ...
 
     kind = "column"
     PORTS = [
@@ -3969,10 +4100,12 @@ class Column(Unit):
     def __init__(self, name: str, n_feeds: int = 1, variant: str = "default",
                  internals: str | None = _UNSTATED, trays: int = DEFAULT_TRAYS,
                  feed_stages: list[int | None] | None = None,
+                 n_draws: int = 0, draw_stages: list[int | None] | None = None,
                  width: float | None = None, height: float | None = None,
                  label_pos: str | None = None, description: str = "",
                  reference: str = ""):
         names = _feed_names(n_feeds, "Column")
+        draw_names = _draw_names(n_draws, "Column")
         super().__init__(name, variant=variant, width=width, height=height,
                          label_pos=label_pos, description=description,
                          reference=reference)
@@ -3984,12 +4117,18 @@ class Column(Unit):
         _compose_onto(self, () if internals is None
                       else internals_overlays(internals, trays))
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
+        self.draws = tuple(self._add_port(draw, "outlet", "draw") for draw in draw_names)
         self.feed_stages = feed_stages
-        self._feed_stage_fractions = _feed_stage_fractions(
-            name, internals, trays, feed_stages, names)
+        self.draw_stages = draw_stages
+        self._stage_fractions = {
+            **_stage_fractions(name, internals, trays, feed_stages, names,
+                               "feed_stages", "feed"),
+            **_stage_fractions(name, internals, trays, draw_stages, draw_names,
+                               "draw_stages", "draw"),
+        }
 
     def _series_pin(self, port_name: str) -> float | None:
-        return self._feed_stage_fractions.get(port_name)
+        return self._stage_fractions.get(port_name)
 
 
 
@@ -4051,6 +4190,66 @@ if TYPE_CHECKING:
         feed_7: Port
         feed_8: Port
 
+    # A column of each draw count, for Family B above -- the same
+    # pattern read the other way, and the reason ``ColumnDraw1`` is not
+    # empty the way ``Column1`` is. ``feed`` is on the base class
+    # because ``n_feeds`` defaults to 1, so a one-feed tower always has
+    # it; ``draw`` is on no base class at all, because ``n_draws``
+    # defaults to 0, so nothing here can say a plain ``Column`` has one.
+    # ``ColumnDraw1`` is where the singular nozzle really gets declared.
+
+    class ColumnDraw1(Column):
+        draw: Port
+
+    class ColumnDraw2(Column):
+        draw_1: Port
+        draw_2: Port
+
+    class ColumnDraw3(Column):
+        draw_1: Port
+        draw_2: Port
+        draw_3: Port
+
+    class ColumnDraw4(Column):
+        draw_1: Port
+        draw_2: Port
+        draw_3: Port
+        draw_4: Port
+
+    class ColumnDraw5(Column):
+        draw_1: Port
+        draw_2: Port
+        draw_3: Port
+        draw_4: Port
+        draw_5: Port
+
+    class ColumnDraw6(Column):
+        draw_1: Port
+        draw_2: Port
+        draw_3: Port
+        draw_4: Port
+        draw_5: Port
+        draw_6: Port
+
+    class ColumnDraw7(Column):
+        draw_1: Port
+        draw_2: Port
+        draw_3: Port
+        draw_4: Port
+        draw_5: Port
+        draw_6: Port
+        draw_7: Port
+
+    class ColumnDraw8(Column):
+        draw_1: Port
+        draw_2: Port
+        draw_3: Port
+        draw_4: Port
+        draw_5: Port
+        draw_6: Port
+        draw_7: Port
+        draw_8: Port
+
 
 class Absorber(Column):
     """Absorption or scrubbing tower: a solute moves from a gas into a liquid.
@@ -4107,6 +4306,20 @@ class Absorber(Column):
     # ``Column2``, or ``t: Absorber = Absorber("V-1")`` is an error the
     # moment a checker sees it -- see ``StirredTankReactor``'s comment in
     # ``scripts/gen_devices.py`` for the general argument.
+    #
+    # ``n_draws=``/``draw_stages=`` are still :class:`Column`'s own
+    # keywords and work exactly the same way at run time here -- an
+    # absorber can carry a semi-lean draw the same way any column
+    # carries a side draw. What is *not* copied is Column's second
+    # overload family: giving every reduced-port-set subclass its own
+    # copy of the draw family too would spend the 64-class problem
+    # Column's own comment argues against a second time. So ``n_draws=``
+    # lands in ``**kwargs`` below, untyped, and ``absorber.draw_2`` does
+    # not resolve even though the nozzle is really there once
+    # ``n_draws=2`` is given -- the same honest gap ``m.inlets[i]``
+    # covers for a *computed* count elsewhere in this module.
+    # ``absorber.draws[i]`` or ``absorber.port("draw_2")`` is the typed
+    # route.
     if TYPE_CHECKING:
 
         @overload
@@ -4238,7 +4451,8 @@ class Stripper(Column):
     reboiler_duty: Port
 
     # See :class:`Absorber`'s comment on the same block: a literal
-    # ``n_feeds`` has to resolve to ``Stripper2``, not ``Column2``.
+    # ``n_feeds`` has to resolve to ``Stripper2``, not ``Column2``, and
+    # ``n_draws=`` is untyped here for the same reason it is there.
     if TYPE_CHECKING:
 
         @overload

@@ -1467,6 +1467,7 @@ def test_a_home_placement_restated_in_the_menu_is_accepted():
         ("mixer", "in_", "n_inlets", "W", "default"),
         ("splitter", "out_", "n_outlets", "E", "default"),
         ("column", "feed_", "n_feeds", "W", "default"),
+        ("column", "draw_", "n_draws", "E", "default"),
         ("reactor", "feed_", "n_feeds", "W", "default"),
         ("reactor", "feed_", "n_feeds", "W", "plain"),
     ],
@@ -1573,6 +1574,22 @@ def test_a_lone_column_feed_sits_at_the_centre_of_the_duty_band():
         assert placed["W"] == pytest.approx((0.0, 105.0)), f"column/{variant}"
 
 
+def test_a_lone_column_draw_sits_at_the_centre_of_the_duty_band_too():
+    """The east-wall mirror of the test above: a one-draw tower's ``draw``
+    shares the feed family's own ``at``, so it lands on the same 105
+    elevation the lone feed does -- on the opposite wall's own width, not
+    the west wall's 0.0."""
+    from pandid import units as U
+    from pandid.portgeom import _drawn_placements, resolve_size
+
+    for variant in default_registry.variants("column"):
+        unit = U.Column("T", variant=variant, n_draws=1)
+        w, h = resolve_size(unit)
+        placed = _drawn_placements(unit, "draw", w, h, 0, False, False)
+        assert list(placed) == ["E"], f"column/{variant}"
+        assert placed["E"] == pytest.approx((w, 105.0)), f"column/{variant}"
+
+
 def test_a_feed_family_reaching_the_return_nozzles_is_caught():
     """The feeds are on the tower's west wall and the returns on its east one,
     which is what keeps them apart however many feeds there are. Put the family
@@ -1604,6 +1621,41 @@ def test_the_shipped_feed_families_reach_nothing_else():
         assert sym.coincident_ports() == [], f"{kind}/{variant}"
 
 
+def _assert_family_between_duty_arrows(variant, prefix, label, build):
+    """Shared body of the two tests below: one family, walked at every count.
+
+    Column carries two series on one face pair now -- ``feed_`` on the west
+    wall and ``draw_`` on the east -- so ``sym.port_series`` is no longer a
+    single entry to destructure; this picks the one ``prefix`` names and
+    checks it the way the single-series version used to check the only one
+    there was.
+
+    ``build`` takes ``(variant, count)`` rather than a ``**{ctor_arg:
+    count}`` dict -- a dynamic keyword name against ``Column.__new__``'s own
+    overloads is a call Pyright cannot resolve a return type for, and this
+    is a call site rather than a place to spend that.
+    """
+    from pandid.portgeom import port_offset
+
+    sym = default_registry.get("column", variant)
+    lo, hi = sym.ports["condenser_duty"][1], sym.ports["reboiler_duty"][1]
+    assert lo < hi, f"column/{variant}: the duty arrows bound no band at all"
+    (family,) = (series for series in sym.port_series if series.prefix == prefix)
+    # Past three the run is squeezed into ``extent`` rather than pitched (see
+    # the KIND_MAP comment), so both regimes have to be walked: the defect was a
+    # band wider than the one the duty arrows bound, *and* centred below it.
+    for count in range(1, 13):
+        column = build(variant, count)
+        members = [name for name in column.ports if family.matches(name)]
+        assert len(members) == count, f"column/{variant} {label}={count}: {members}"
+        for name in members:
+            y = port_offset(column, name)[1]
+            assert lo < y < hi, (
+                f"column/{variant} {name} of {count} sits at y={y}, outside the "
+                f"({lo}, {hi}) band the duty arrows bound"
+            )
+
+
 @pytest.mark.parametrize("variant", default_registry.variants("column"))
 def test_every_column_feed_stays_between_the_duty_arrows(variant):
     """A tower's feeds land between the two duty arrows at every count.
@@ -1626,25 +1678,30 @@ def test_every_column_feed_stays_between_the_duty_arrows(variant):
     would only prove this test agrees with itself.
     """
     from pandid import units as U
-    from pandid.portgeom import port_offset
 
-    sym = default_registry.get("column", variant)
-    lo, hi = sym.ports["condenser_duty"][1], sym.ports["reboiler_duty"][1]
-    assert lo < hi, f"column/{variant}: the duty arrows bound no band at all"
-    (family,) = sym.port_series
-    # Past three the run is squeezed into ``extent`` rather than pitched (see
-    # the KIND_MAP comment), so both regimes have to be walked: the defect was a
-    # band wider than the one the duty arrows bound, *and* centred below it.
-    for count in range(1, 13):
-        column = U.Column("T", variant=variant, n_feeds=count)
-        feeds = [name for name in column.ports if family.matches(name)]
-        assert len(feeds) == count, f"column/{variant} n_feeds={count}: {feeds}"
-        for name in feeds:
-            y = port_offset(column, name)[1]
-            assert lo < y < hi, (
-                f"column/{variant} {name} of {count} sits at y={y}, outside the "
-                f"({lo}, {hi}) band the duty arrows bound"
-            )
+    _assert_family_between_duty_arrows(
+        variant, "feed_", "n_feeds", lambda v, count: U.Column("T", variant=v, n_feeds=count)
+    )
+
+
+@pytest.mark.parametrize("variant", default_registry.variants("column"))
+def test_every_column_draw_stays_between_the_duty_arrows(variant):
+    """The same claim, for the east wall a draw shares with the two duty
+    arrows and the two returns, rather than the west wall a feed has to
+    itself.
+
+    A draw shares the feed family's own ``at``/``pitch``/``extent`` (see
+    ``scripts/vendor_symbols.py``'s ``KIND_MAP`` comment), so the band it
+    stays inside is the identical 65..145 the feeds on the opposite wall
+    stay inside -- reused rather than re-derived, and this is the check
+    that it is not merely equal by construction: it is still clear of the
+    four fixed nozzles that share its own wall.
+    """
+    from pandid import units as U
+
+    _assert_family_between_duty_arrows(
+        variant, "draw_", "n_draws", lambda v, count: U.Column("T", variant=v, n_draws=count)
+    )
 
 
 def test_two_series_ports_land_where_the_symbol_used_to_draw_them():
