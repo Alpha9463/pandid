@@ -821,6 +821,20 @@ class Flowsheet:
                 f"{tag}: bypass_over names the member the bypass valve stands over, "
                 f"one of {', '.join(BYPASS_ANCHORS)}, got {bypass_over!r}"
             )
+        # Which roles this station will carry is decided by isolation= and
+        # reducers= alone -- control is always built -- so this is checked
+        # from the two flags, before any member joins the sheet, rather than
+        # from the constructed units afterwards. A call refused here must
+        # leave nothing behind to be drawn.
+        _bypass_anchor_kept = {
+            "upstream_isolation": isolation, "downstream_isolation": isolation,
+            "reduction": reducers, "expansion": reducers, "control": True,
+        }
+        if bypass_over is not None and not _bypass_anchor_kept[bypass_over]:
+            raise ValueError(
+                f"{tag}: bypass_over={bypass_over!r} names a member this station was "
+                f"told to leave out"
+            )
 
         scheme = tag_scheme if tag_scheme is not None else self.valve_station_tag_scheme
         num = str(number) if number is not None else station_number(tag)
@@ -869,12 +883,6 @@ class Flowsheet:
                if u is not None]
         anchors = {"upstream_isolation": iso_a, "downstream_isolation": iso_b,
                    "reduction": red, "expansion": exp, "control": control}
-
-        if bypass_over is not None and anchors[bypass_over] is None:
-            raise ValueError(
-                f"{tag}: bypass_over={bypass_over!r} names a member this station was "
-                f"told to leave out"
-            )
 
         if x is not None and y is not None:
             left: dict[int, float] = {}   # the corner each member was pinned at

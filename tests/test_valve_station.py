@@ -363,6 +363,46 @@ def test_a_bypass_over_something_that_is_not_a_member_is_refused():
         fs.add_valve_station("CV-1", x=300, y=RUN_Y, bypass_over="drain")
 
 
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        dict(isolation=False, bypass=True),
+        dict(drains=3),
+        dict(x=300),
+        dict(x=300, y=RUN_Y, reducers=False, bypass_over="reduction"),
+    ],
+    ids=[
+        "bypass_without_isolation",
+        "bad_drain_count",
+        "x_without_y",
+        "bypass_over_a_role_left_out",
+    ],
+)
+def test_a_refused_call_leaves_the_sheet_exactly_as_it_was(kwargs):
+    """Every refusal is checked before a member joins the sheet, so a call
+    that raises has built nothing -- not just fewer things than it would
+    have, but nothing at all. A retry with the mistake fixed can then reuse
+    the tag."""
+    fs = Flowsheet("bad")
+    before_units, before_streams = list(fs.units), list(fs.streams)
+    with pytest.raises(ValueError):
+        fs.add_valve_station("CV-1", **kwargs)
+    assert fs.units == before_units
+    assert fs.streams == before_streams
+
+
+def test_a_bypass_over_a_role_left_out_can_be_retried_with_the_same_tag():
+    """The failed call above never claimed 'CV-1', so fixing the mistake and
+    calling again does not collide with a half-built station."""
+    fs = Flowsheet("bad")
+    with pytest.raises(ValueError, match="told to leave out"):
+        fs.add_valve_station("CV-1", x=300, y=RUN_Y, reducers=False, bypass_over="reduction")
+    station = fs.add_valve_station(
+        "CV-1", x=300, y=RUN_Y, reducers=False, bypass_over="upstream_isolation"
+    )
+    assert station.control.name == "CV-1"
+
+
 # --- the station is a constructor, so nothing of it has to be serialized ------
 
 

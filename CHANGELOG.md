@@ -46,6 +46,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reaches it by name.
 - A line number with its first scheme component unset no longer opens with a
   stray separator, e.g. `AE-1001-SS` rather than `-AE-1001-SS`.
+- `add_valve_station(bypass_over=...)` naming a member the station was told
+  to leave out is now refused before any member joins the sheet, instead of
+  after ten units are already on it.
 
 ## [0.1.3] - 2026-08-19
 
