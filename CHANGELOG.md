@@ -36,6 +36,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `FineRakeScreen`, `CoarseAndFineScreen`, `VibratingScreen`,
   `RotaryDrumScreen` and `ReelScreen`. Not `separator/sifter`, which
   ships a different outline and stays `devices.Screen`.
+- A new `validate()` finding, `stream-table-missing` (#365). `show_stream_table`
+  ships `False`, so a process flow diagram with a `Feed` or a `Product` and
+  no property stated on any stream was silently short of ISO 10628-1:2014
+  4.3.2 d) -- name and quantify every ingoing and outgoing material -- and
+  nothing said so. `boundary-flow-missing` already reports the same clause
+  from the other end, for a sheet that has started tabulating and left one
+  column out; this is the sheet that has not started at all. PFD-only, since
+  4.3.2 governs a process flow diagram and a P&ID answers to a different
+  clause, 4.4.2, that this does not attempt. The default stays `False`: a
+  table drawn without data would only replace a missing table with a
+  columns-of-dashes one, which states the denomination half of d) and not
+  the flow-rate half, so flipping it does not on its own reach conformance
+  -- the missing piece is data only the author has, which is what the new
+  finding says.
 
 ### Fixed
 

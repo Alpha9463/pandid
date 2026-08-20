@@ -216,6 +216,8 @@ def test_the_handle_does_not_let_a_member_be_rebound():
 
 def test_a_member_is_an_ordinary_unit_that_can_still_be_moved_and_instrumented():
     fs, st = _sheet()
+    # Tabulated, so stream-table-missing does not join the assertion below.
+    fs.streams[0].properties = {"Flow (kg/h)": "4200"}
     st.bypass.pin(x=555)
     assert st.bypass.pin_.x == 555
     fic = fs.add_instrument("FIC", 303, near=st.control, at="N", variant="shared")
@@ -304,6 +306,8 @@ def test_an_unplaced_station_is_declared_and_connected_but_not_pinned():
 
 def test_a_placed_station_draws_without_a_finding():
     fs, _st = _sheet()
+    # Tabulated, so stream-table-missing does not join the assertion below.
+    fs.streams[0].properties = {"Flow (kg/h)": "4200"}
     assert fs.validate() == []
     assert "<svg" in fs.to_svg(diagram="p&id")
 

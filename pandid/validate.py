@@ -356,7 +356,7 @@ def _crowded(heads: list[tuple[float, str]], floor: float
     return next((p for p in pairs if _TOL < p[0] < floor), None)
 
 
-def model_issues(fs: "Flowsheet") -> list["Issue"]:
+def model_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     """The findings that read the model alone (errors first).
 
     Nothing here touches a :class:`~pandid.geometry.Frame` or a
@@ -372,6 +372,12 @@ def model_issues(fs: "Flowsheet") -> list["Issue"]:
     (:mod:`pandid.layout`), so the pin and the frame cannot disagree
     about it. The check still prefers the frame where there is one,
     since that is the placement that got drawn.
+
+    ``arrows`` is :func:`~pandid.render.svg.draws_arrowheads` on the
+    diagram this is about, and is true by default because so is the
+    diagram it defaults to. One finding reads it: ``stream-table-missing``
+    answers ISO 10628-1 4.3.2, a *process flow diagram*'s clause, and is
+    silent on a sheet drawn as a P&ID, which answers to 4.4.2 instead.
     """
     from difflib import get_close_matches
 
@@ -810,6 +816,47 @@ def model_issues(fs: "Flowsheet") -> list["Issue"]:
                 f"carries, properties={{'Flow (kg/h)': ...}} on it, or state "
                 f"that there is nothing to report with a blank value, which "
                 f"keeps the column on purpose"))
+    else:
+        # --- a PFD with material crossing its edge and no table at all ---
+        # The check above answers a sheet that has taken up tabulating and
+        # left one column short. This is the sheet that has not taken up
+        # the practice at all -- pandid ships ``show_stream_table=False``,
+        # so a render before this line is ever reached has already chosen
+        # not to draw one. ISO 10628-1:2014 4.3.2 c) and d) make the route
+        # and the denomination and flow rate of every ingoing and outgoing
+        # material a process flow diagram's minimum content regardless, so
+        # a PFD with a Feed or a Product and nothing tabulated anywhere is
+        # short of it whether or not the author ever opened the stream
+        # table's door.
+        #
+        # A P&ID answers a different clause, 4.4.2, which does not ask for
+        # this, so the check reads ``arrows``: true exactly when the sheet
+        # this render is for is a PFD (see
+        # :func:`~pandid.render.svg.draws_arrowheads`).
+        #
+        # One finding for the sheet and not one per line: unlike the check
+        # above, there is no other column here to contrast an empty one
+        # against, so there is one thing to say rather than one per line
+        # that says it.
+        #
+        # Soft, not hard, for the same reason the check above is: the
+        # sheet draws either way, and what is missing is data nobody but
+        # the author has.
+        if arrows:
+            crossed = list(dict.fromkeys(
+                name for name, segments in runs.items()
+                if any(isinstance(p.owner, units._Boundary)
+                       for s in segments for p in (s.source, s.dest))))
+            if crossed:
+                warnings.append(Issue(
+                    "warning", "stream-table-missing",
+                    f"{_and(crossed)} cross{'es' if len(crossed) == 1 else ''} "
+                    f"the sheet edge and nothing on the sheet is tabulated. "
+                    f"ISO 10628-1:2014 4.3.2 d) has a process flow diagram "
+                    f"name every ingoing and outgoing material and state its "
+                    f"flow rate or quantity. Set properties="
+                    f"{{'Flow (kg/h)': ...}} on the lines that carry one and "
+                    f"render(show_stream_table=True) to report it."))
 
     return errors + warnings
 
@@ -1203,9 +1250,11 @@ def validate(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     different moments; see
     :meth:`pandid.flowsheet.Flowsheet._prepare_to_draw`.
 
-    ``arrows`` is :func:`geometry_issues`' argument and is passed
-    straight through.
+    ``arrows`` is :func:`geometry_issues`' argument, passed straight
+    through, and :func:`model_issues`' -- the one finding that reads it
+    there answers a clause that governs a PFD and not a P&ID, the same
+    fact ``arrows`` already carries.
     """
-    found = model_issues(fs) + geometry_issues(fs, arrows=arrows)
+    found = model_issues(fs, arrows=arrows) + geometry_issues(fs, arrows=arrows)
     return ([i for i in found if i.severity == "error"]
             + [i for i in found if i.severity == "warning"])

@@ -775,6 +775,9 @@ def test_the_revision_date_column_holds_a_full_date():
     """Every sheet in the corpus stamps an ISO 8601 date, and the column it goes
     in was 3px narrower than one measures."""
     fs = _sheet()
+    # Tabulated, so stream-table-missing does not join the assertion below
+    # -- this test is about the revision date column and nothing else.
+    fs.streams[0].properties = {"Flow (kg/h)": "4200"}
     fs.title_block = TitleBlock(
         title="Demo", revisions=[Revision("A", "2026-01-01", "Issued", "AA")]
     )

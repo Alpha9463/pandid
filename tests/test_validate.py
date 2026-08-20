@@ -550,7 +550,12 @@ def test_a_spec_built_sheet_is_checked_too():
     )
     assert "M-1.in_2 and M-1.in_3 carry no stream" in _unpiped(fs)[0].message
     # ...and it survives the round trip, since to_dict() writes the count back.
-    assert [i.code for i in from_dict(fs.to_dict()).validate()] == ["nozzle-unconnected"]
+    # stream-table-missing rides along too: F1 and P1 make this a PFD with
+    # material crossing its edge, and the fixture states no property.
+    assert [i.code for i in from_dict(fs.to_dict()).validate()] == [
+        "nozzle-unconnected",
+        "stream-table-missing",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -601,13 +606,22 @@ def test_a_press_that_takes_no_wash_is_a_clean_sheet():
     """
     fs = Flowsheet("press")
     press = fs.add(U.Filter("F-301", variant="press"))
-    fs.connect(fs.add(U.Feed("Slurry")).outlet, press.port("inlet"))
-    fs.connect(press.port("outlet"), fs.add(U.Product("Filtrate")).inlet)
+    # Tabulated, so stream-table-missing does not ride along and blur what
+    # this test is actually about: a sheet that tabulates nothing at all is
+    # its own finding (test_validate.py's stream-table-missing section).
+    fs.connect(fs.add(U.Feed("Slurry")).outlet, press.port("inlet")).properties = {
+        "Flow (kg/h)": "4200"
+    }
+    fs.connect(press.port("outlet"), fs.add(U.Product("Filtrate")).inlet).properties = {
+        "Flow (kg/h)": "4100"
+    }
     assert [n for n in press.ports if press.ports[n].stream is None] == ["wash_in", "cake"]
     assert fs.validate() == []
     # ...and piping the cake and still no wash is equally quiet, which is the
     # commoner sheet of the two.
-    fs.connect(press.port("cake"), fs.add(U.Product("Cake")).inlet)
+    fs.connect(press.port("cake"), fs.add(U.Product("Cake")).inlet).properties = {
+        "Flow (kg/h)": "100"
+    }
     assert fs.validate() == []
 
 
@@ -1235,6 +1249,82 @@ def test_the_finding_is_soft_so_the_sheet_still_draws():
     fs = _partly_tabulated()
     assert [i.severity for i in _missing(fs)] == ["warning"]
     fs.to_svg(show_stream_table=True)  # does not raise
+
+
+# --- stream-table-missing --------------------------------------------------
+# The other end of the same clause. boundary-flow-missing answers a sheet
+# that has taken up tabulating and left one column short; this answers one
+# that has not taken the practice up at all -- which pandid's own
+# show_stream_table=False default makes the common case, and which #365
+# named a silent breach: ISO 10628-1:2014 4.3.2 c) and d) do not stop
+# applying to a process flow diagram because show_stream_table was never
+# set to True or no stream was ever given a property.
+
+
+def _no_table(fs) -> list:
+    return [i for i in fs.validate() if i.code == "stream-table-missing"]
+
+
+def _untabulated() -> Flowsheet:
+    """A PFD with material crossing its edge and no property anywhere."""
+    fs = Flowsheet("untabulated")
+    feed = fs.add(U.Feed("Raw Feed"))
+    pump = fs.add(U.Pump("P-101"))
+    prod = fs.add(U.Product("To Storage"))
+    fs.connect(feed.outlet, pump.suction)
+    fs.connect(pump.discharge, prod.inlet)
+    return fs
+
+
+def test_a_pfd_with_a_boundary_and_nothing_tabulated_is_reported():
+    found = _no_table(_untabulated())
+    assert len(found) == 1
+    assert "4.3.2 d)" in found[0].message
+    assert "S1" in found[0].message and "S2" in found[0].message
+
+
+def test_the_finding_names_every_boundary_run_once_and_not_per_line():
+    """One finding for the sheet, not one per crossing: unlike
+    boundary-flow-missing there is no other column to contrast an empty one
+    against, so there is one thing to say about the sheet rather than one
+    per line that says it."""
+    found = _no_table(_untabulated())
+    assert len(found) == 1
+    assert found[0].message.startswith("S1 and S2 cross")
+
+
+def test_an_internal_only_sheet_has_no_boundary_to_report():
+    """No Feed, no Product, nothing crosses the edge -- the clause is about
+    ingoing and outgoing material, and this sheet has none."""
+    fs = Flowsheet("internal-loop")
+    a = fs.add(U.Pump("P-101"))
+    b = fs.add(U.HeatExchanger("E-101"))
+    fs.connect(a.discharge, b.tube_in)
+    assert _no_table(fs) == []
+
+
+def test_a_sheet_that_has_started_tabulating_is_boundary_flow_missings_to_report():
+    """The moment one stream states a property, the sheet has taken up the
+    practice and the narrower, per-line finding is the one that answers --
+    the two are mutually exclusive by construction, not by an extra check."""
+    fs = _untabulated()
+    fs.streams[0].properties = {"Flow (kg/h)": "4200"}
+    assert _no_table(fs) == []
+    assert len(_missing(fs)) == 1  # S2 is the column left empty
+
+
+def test_a_pid_is_not_reported():
+    """4.3.2 governs a process flow diagram; a P&ID answers to 4.4.2
+    instead, which this finding does not attempt."""
+    fs = _untabulated()
+    assert fs.validate(diagram="p&id") == []
+    fs.to_svg(diagram="p&id")  # does not raise or warn
+
+
+def test_the_finding_is_soft_and_the_default_render_still_draws():
+    fs = _untabulated()
+    assert [i.severity for i in _no_table(fs)] == ["warning"]
+    fs.to_svg()  # show_stream_table stays False; does not raise
 
 
 # --- the model is checked before any geometry is built ------------------------

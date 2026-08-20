@@ -1256,7 +1256,7 @@ class Flowsheet:
         self.renumber_streams()
         found: list = []
         if check:
-            found = model_issues(self)
+            found = model_issues(self, arrows=draws_arrowheads(diagram))
             self._raise_on_errors(found)
         self._resolve_geometry()
         if check:
@@ -1586,11 +1586,14 @@ class Flowsheet:
 
         ``diagram`` names the drawing the findings are about, in the
         spelling :meth:`to_svg` takes it: ``"pfd"`` (the default) or
-        ``"p&id"``. One finding depends on it: a P&ID draws no
+        ``"p&id"``. Two findings depend on it. A P&ID draws no
         arrowheads, so nozzles pitched inside the head they would carry
-        on a PFD are not a defect there. ``render()`` passes the drawing
-        it is making, so the warnings left on ``fs.warnings`` are about
-        the sheet that came out.
+        on a PFD are not a defect there. And ``stream-table-missing``
+        answers ISO 10628-1 4.3.2, a *process flow diagram*'s clause, so
+        it is silent on a sheet declared a P&ID, which answers to 4.4.2
+        instead. ``render()`` passes the drawing it is making, so the
+        warnings left on ``fs.warnings`` are about the sheet that came
+        out.
 
         Both halves of the check, over the sheet as it stands: the
         geometric findings need frames and routes, so call this after
