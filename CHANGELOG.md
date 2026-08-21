@@ -135,6 +135,13 @@ class hierarchy, or what it is called.
   fixed direction -- being run from a nozzle back to itself; undrawn but
   undetected, since the resulting zero-length spike is exactly what the
   renderer's own collinear-run collapse then erases.
+- `from_dict()` resolves a plain `Column`'s retired nozzles (`reflux_in`,
+  `boilup_in`, `reboiler_duty`, `condenser_duty`) the same way accessing
+  them at run time does, instead of only checking `unit.ports` directly. A
+  stream connected to one of them wrote out under its name from `to_dict()`
+  same as any other, but `from_dict()` raised on reading it back -- the
+  one-release grace period #400 gave those four broke round-tripping the
+  very sheet it was there to keep working.
 
 ### Security
 

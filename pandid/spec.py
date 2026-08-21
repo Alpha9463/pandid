@@ -812,6 +812,23 @@ def _find_port(unit: Unit, name: Any, where: str) -> Port:
             return unit.signal_port(name)
         except KeyError:
             pass
+    # A retired nozzle -- one a class still answers for one release after it
+    # stopped building it outright, e.g. a plain Column's ``reflux_in`` (see
+    # Unit._RETIRED_PORTS/_RETIRED_PORT_ALIASES) -- is not in ``unit.ports``
+    # until something reads it by name, which is exactly what an author's own
+    # script did to connect a stream there in the first place. ``to_dict()``
+    # writes that stream out under the retired name because that really is
+    # the port it is on, so without this ``from_dict()`` could not read the
+    # very sheet it just wrote -- the grace period breaking its own round
+    # trip. ``getattr`` is what mints it, warning the same way the author's
+    # script did.
+    if isinstance(name, str) and name not in unit.ports:
+        try:
+            retired = getattr(unit, name)
+        except AttributeError:
+            retired = None
+        if isinstance(retired, Port):
+            return retired
     if not isinstance(name, str) or name not in unit.ports:
         raise SpecError(
             f"{where}: {type(unit).__name__} {unit.name!r} has no port {name!r}"

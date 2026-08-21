@@ -343,6 +343,33 @@ def test_a_distillation_column_kind_round_trips():
     assert Flowsheet.from_dict(fs.to_dict()).to_dict() == fs.to_dict()
 
 
+def test_a_plain_columns_retired_nozzle_round_trips():
+    """A plain ``Column`` still answers ``reflux_in``/``condenser_duty`` for
+    one release (#400), minted lazily through ``getattr`` rather than
+    declared in ``unit.ports`` -- so a stream connected to one of them is
+    real, and ``to_dict()`` writes it out under that name. ``from_dict()``
+    used to look the name up in ``unit.ports`` directly, never asking
+    ``getattr`` for it, so the very sheet the grace period was for could not
+    be read back: the deprecation broke its own round trip.
+    """
+    fs = Flowsheet("legacy")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        col = fs.add(units.Column("T-901"))
+        drum = fs.add(units.Vessel("D-101"))
+        prod = fs.add(units.Product("PR-1"))
+        fs.connect(drum.outlet, getattr(col, "reflux_in"), draw_as_recycle=True)
+        fs.connect(getattr(col, "condenser_duty"), prod.inlet)
+
+    written = fs.to_dict()
+    with pytest.warns(DeprecationWarning, match="DistillationColumn"):
+        back = Flowsheet.from_dict(written)
+    reread = back.units[0]
+    assert type(reread).__name__ == "Column"
+    assert reread.port("reflux_in").stream is not None
+    assert back.to_dict() == written
+
+
 def test_an_absorbers_packing_default_round_trips_silently():
     """``internals="packing"`` is :class:`~pandid.units.Absorber`'s own
     default, not :class:`~pandid.units.Column`'s, so a bare
