@@ -840,6 +840,56 @@ def test_every_new_filter_nozzle_lands_somewhere_the_artwork_anchors(variant):
     assert symbol.ports[out][0] > inlet_x
 
 
+#: Every registered Dryer variant, general included: the default port set
+#: applies uniformly today (see units.Dryer's own docstring), so there is
+#: no split the way the filter's cake/clarifying one is.
+_DRYER_VARIANTS = ["default", "general", "belt", "fluidized_bed", "shelf", "spray", "turbo"]
+
+
+@pytest.mark.parametrize("variant", _DRYER_VARIANTS)
+def test_a_drier_takes_a_heating_medium_in_and_sends_moisture_out(variant):
+    """#345: two nozzles where the plant has four. A gas-suspension calciner
+    tees its combustion chamber's hot gas into the solids feed line, and lets
+    dried solid and off-gas leave together on one nozzle, because ``feed``
+    and ``product`` were the whole of it; ``heating_in``/``vent`` are the
+    two the plant actually has.
+
+    Written out rather than read off ``_VARIANT_PORTS``, so this is the
+    released API and not a restatement of the table that builds it -- the
+    same discipline :func:`test_a_filter_that_forms_a_cake_draws_the_cake_and_takes_a_wash`
+    holds Filter to.
+    """
+    assert _nozzles(U.Dryer("DR-1", variant=variant)) == [
+        ("feed", "inlet", "feed"),
+        ("product", "outlet", "process"),
+        ("heating_in", "inlet", "utility"),
+        ("vent", "outlet", "vapor"),
+    ]
+
+
+@pytest.mark.parametrize("variant", _DRYER_VARIANTS)
+def test_every_driers_gas_nozzles_land_somewhere_the_artwork_anchors(variant):
+    """No fallback to the centre of the box, on any registered variant --
+    the same invariant :func:`test_every_new_filter_nozzle_lands_somewhere_the_artwork_anchors`
+    holds Filter to, since ``heating_in``/``vent`` are just as new here."""
+    from pandid.portgeom import is_anchored
+
+    dryer = U.Dryer("DR-1", variant=variant)
+    for name in dryer.ports:
+        assert is_anchored(dryer, name), f"dryer/{variant} does not anchor {name!r}"
+
+
+def test_a_drier_variant_nobody_declared_still_gets_all_four_nozzles():
+    """The port table falls back rather than guessing, as the exchanger's,
+    the separator's and the filter's do."""
+    assert _nozzles(U.Dryer("DR-9", variant="not_a_variant")) == [
+        ("feed", "inlet", "feed"),
+        ("product", "outlet", "process"),
+        ("heating_in", "inlet", "utility"),
+        ("vent", "outlet", "vapor"),
+    ]
+
+
 def test_the_two_rotary_drums_are_piped_alike():
     """One machine drawn with and without the knife that lifts its cake.
 

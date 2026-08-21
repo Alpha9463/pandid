@@ -2623,10 +2623,16 @@ _DRIER_OUTLINE = (
 #: The two connection ticks every group-10 row draws, on the west and
 #: east walls at the same height: nine tenths of the way down the
 #: straight-sided run, which is also exactly the middle of it (the walls
-#: run from y 20 to y 120). No row in the group ticks a third connection,
-#: so a drier drawn from this outline has just the two nozzles a
-#: :class:`~pandid.units.Dryer` already declares.
-_DRIER_PORTS = {"feed": (0.0, 70.0), "product": (80.0, 70.0)}
+#: run from y 20 to y 120). No row in the group ticks a third connection
+#: or a fourth, so ``heating_in``/``vent`` are not read off any row --
+#: they sit centred on the outline's own floor and roof, the bottom
+#: edge and the chamfer's flat top, which is the nearest drawn ink to
+#: "in at the floor, out at the roof" and out of the solid pair's way
+#: on the side walls. See :class:`~pandid.units.Dryer`.
+_DRIER_PORTS = {
+    "feed": (0.0, 70.0), "product": (80.0, 70.0),
+    "heating_in": (40.0, 120.0), "vent": (40.0, 0.0),
+}
 
 
 def _drier(name: str, reg: str, *detail: str, gravity_fixed: bool = False) -> Symbol:

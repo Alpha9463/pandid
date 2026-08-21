@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Dryer` gains `heating_in` and `vent`: the heating medium in and the
+  moisture it leaves with, on every variant, alongside `feed`/`product`.
+  A gas-suspension calciner no longer has to tee its combustion gas into
+  the solids feed line or let product and off-gas leave on one nozzle to
+  be parted downstream -- the port set the drawing needs is there.
 - `DistillationColumn`, `Absorber` and `Stripper` over a `Column` that is now
   the general tower -- a feed, an `overhead` product and a `bottoms` one,
   nothing that assumes anything inside it boils (#400). `DistillationColumn`

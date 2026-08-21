@@ -2006,13 +2006,65 @@ class Centrifuge(Unit):
 
 
 class Dryer(Unit):
-    """Dryer (removes moisture from a feed solid/slurry)."""
+    """Dryer (removes moisture from a feed solid/slurry).
+
+    A drier takes a heating medium in and sends the moisture it picked
+    up back out, so every variant carries four nozzles and not two:
+    ``feed``/``product`` for the solid, and ``heating_in``/``vent`` for
+    the gas that dries it and leaves laden with what it dried.
+
+    Real plant forces the point. A gas-suspension calciner tees its
+    combustion chamber's hot gas into the solids feed line rather than
+    a windbox nozzle of its own, and lets the dried solid and the
+    off-gas leave together on one nozzle to be parted in a downstream
+    cyclone, when what it draws is one machine with four connections.
+    ISO 10628-2's own group 10 row ticks only the solid pair -- no row
+    in the group draws a third connection -- so ``heating_in``/``vent``
+    are this library's own addition to it, on the casing wall (the
+    solid's own) rather than the roof or the floor: a drier's air
+    enters where the ISO row draws nothing and leaves where it draws
+    nothing either, and there is no tabulated point to defer to.
+    """
 
     feed: Port
     product: Port
+    heating_in: Port
+    vent: Port
 
     kind = "dryer"
-    PORTS = [("feed", "inlet", "feed"), ("product", "outlet", "process")]
+    # Empty because which nozzles a drier has depends on its variant --
+    # today every one of them the same four, but the mechanism is
+    # :attr:`_VARIANT_PORTS`, the one :class:`HeatExchanger`, ``Filter``
+    # and :class:`Reactor` already use, so a future variant needing a
+    # different set (a jacketed, indirect drier with a utility loop
+    # rather than a direct gas sweep) is a dict entry rather than a
+    # second mechanism.
+    PORTS: list[tuple[str, str, str]] = []
+    _GAS_SWEPT = [
+        ("feed", "inlet", "feed"),
+        ("product", "outlet", "process"),
+        ("heating_in", "inlet", "utility"),
+        ("vent", "outlet", "vapor"),
+    ]
+    _VARIANT_PORTS: dict[str, list[tuple[str, str, str]]] = {}
+
+    @classmethod
+    def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
+        """The nozzles a *variant* adds; none if the class declares any.
+
+        The same one line :meth:`HeatExchanger._variant_ports` is.
+        """
+        return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._GAS_SWEPT)
+
+    def __init__(self, name: str, variant: str = "default",
+                 width: float | None = None, height: float | None = None,
+                 label_pos: str | None = None, description: str = "",
+                 reference: str = ""):
+        super().__init__(name, variant=variant, width=width, height=height,
+                         label_pos=label_pos, description=description,
+                         reference=reference)
+        for spec in self._variant_ports(self.variant):
+            self._add_port(*spec)
 
 
 class Feeder(Unit):
