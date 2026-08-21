@@ -1235,7 +1235,7 @@ def register_vendored(registry):
     registry.register('dryer', Symbol(
         svg='<g id="sym_dryer_fluidized_bed"><path d="M 10.0 0.0 L 90.0 0.0 L 100.0 25.0 L 100.0 140.0 L 0.0 140.0 L 0.0 25.0 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.0 40.0 L 100.0 40.0 M 0.0 70.0 L 100.0 70.0" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="12.5" cy="60.0" rx="0.5" ry="0.5" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="25.0" cy="50.0" rx="0.5" ry="0.5" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="37.5" cy="60.0" rx="0.5" ry="0.5" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="50.0" cy="50.0" rx="0.5" ry="0.5" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="62.5" cy="60.0" rx="0.5" ry="0.5" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="75.0" cy="50.0" rx="0.5" ry="0.5" fill="none" stroke="#111" stroke-width="2.0"/><ellipse cx="87.5" cy="60.0" rx="0.5" ry="0.5" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=140.0,
-        ports={'feed': (0.0, 35.0), 'product': (100.0, 35.0)},
+        ports={'feed': (0.0, 35.0), 'product': (100.0, 35.0), 'heating_in': (50.0, 140.0), 'vent': (50.0, 0.0)},
         drawio_shape='mxgraph.pid.driers.drier_(fluidized_bed)',
         # must not be turned: the bed is a layer on its distributor plate
         gravity_fixed=True,
@@ -1245,7 +1245,7 @@ def register_vendored(registry):
     registry.register('dryer', Symbol(
         svg='<g id="sym_dryer_spray"><path d="M 10.0 0.0 L 90.0 0.0 L 100.0 25.0 L 100.0 140.0 L 0.0 140.0 L 0.0 25.0 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 40.0 10.0 L 50.0 0.0 L 60.0 10.0 M 50.0 0.0 L 50.0 10.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=140.0,
-        ports={'feed': (50.0, 0.0), 'product': (50.0, 140.0)},
+        ports={'feed': (50.0, 0.0), 'product': (50.0, 140.0), 'heating_in': (0.0, 50.0), 'vent': (100.0, 50.0)},
         drawio_shape='mxgraph.pid.driers.spray_drier',
         # must not be turned: atomiser in the roof, powder out of the floor
         gravity_fixed=True,
@@ -1309,7 +1309,7 @@ def register_vendored(registry):
     registry.register('dryer', Symbol(
         svg='<g id="sym_dryer"><path d="M 10.0 0.0 L 90.0 0.0 L 100.0 25.0 L 100.0 140.0 L 0.0 140.0 L 0.0 25.0 Z" fill="white" stroke="#111" stroke-width="2.0"/><ellipse cx="50.0" cy="50.0" rx="20.0" ry="20.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 33.0 25.4 A 30.0 30.0 0.0 0 1 67.0 25.4" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=100.0, height=140.0,
-        ports={'feed': (0.0, 35.0), 'product': (100.0, 35.0)},
+        ports={'feed': (0.0, 35.0), 'product': (100.0, 35.0), 'heating_in': (50.0, 140.0), 'vent': (50.0, 0.0)},
         drawio_shape='mxgraph.pid.driers.rotary_drum_drier,_tumbling_drier',
     ), 'default')
 

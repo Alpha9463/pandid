@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Dryer` gains `heating_in` and `vent`: the heating medium in and the
+  moisture it leaves with, on every variant, alongside `feed`/`product`.
+  A gas-suspension calciner no longer has to tee its combustion gas into
+  the solids feed line or let product and off-gas leave on one nozzle to
+  be parted downstream -- the port set the drawing needs is there.
 - `DistillationColumn`, `Absorber` and `Stripper` over a `Column` that is now
   the general tower -- a feed, an `overhead` product and a `bottoms` one,
   nothing that assumes anything inside it boils (#400). `DistillationColumn`
@@ -142,6 +147,21 @@ class hierarchy, or what it is called.
   same as any other, but `from_dict()` raised on reading it back -- the
   one-release grace period #400 gave those four broke round-tripping the
   very sheet it was there to keep working.
+- `Feed`/`Product` given an explicit `height=` now draw a pennant that fills
+  it -- inset off the placed height, nozzle centred in the middle of it --
+  instead of the same 20-unit strip near the top of whatever box the sheet
+  reserved. The default (unsized) flag is unchanged, since its height was
+  already the symbol's own 50 units.
+- `Mixer`/`Splitter` take `label_pos=` in the constructor, matching every
+  other tagged unit; setting it after construction already worked.
+- `Reactor`/`Column`'s single charge nozzle is now really named `feed_1`,
+  numbered from one the way `Mixer`'s `in_1` always was, so raising
+  `n_feeds` from one no longer silently drops every `.feed_1` reference and
+  `.feed_1` resolves at `n_feeds=1` where it used to raise. `feed` stays as
+  a bare alias for it at one feed, so an existing `.feed` reference and a
+  `pin(port="feed")`/`nozzle("feed", ...)` call are unaffected. No drawing
+  moves: the alias is not a second port, so a single feed is placed exactly
+  as before.
 
 ### Security
 

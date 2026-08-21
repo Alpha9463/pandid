@@ -37,14 +37,51 @@ if TYPE_CHECKING:
 
 __all__ = [
     "Unit",
-    "Feed", "Product", "Pump", "Compressor", "Blower", "Valve", "Vessel", "Tank",
-    "HeatExchanger", "Heater", "Cooler", "CoolingTower", "Reactor", "Separator",
-    "Absorber", "Stripper", "DistillationColumn", "Column",
-    "Mixer", "Splitter", "Tee", "Reducer", "Fitting", "Ejector", "Vent", "Funnel",
-    "Furnace", "Boiler", "Stack", "Flare", "Turbine", "Filter", "Dryer",
-    "CrushingMachine", "Crusher", "Mill", "Centrifuge", "Conveyor", "Elevator",
-    "Feeder", "SprayNozzle", "ScreeningDevice", "Kneader",
-    "Instrument", "Block",
+    "Feed",
+    "Product",
+    "Pump",
+    "Compressor",
+    "Blower",
+    "Valve",
+    "Vessel",
+    "Tank",
+    "HeatExchanger",
+    "Heater",
+    "Cooler",
+    "CoolingTower",
+    "Reactor",
+    "Separator",
+    "Absorber",
+    "Stripper",
+    "DistillationColumn",
+    "Column",
+    "Mixer",
+    "Splitter",
+    "Tee",
+    "Reducer",
+    "Fitting",
+    "Ejector",
+    "Vent",
+    "Funnel",
+    "Furnace",
+    "Boiler",
+    "Stack",
+    "Flare",
+    "Turbine",
+    "Filter",
+    "Dryer",
+    "CrushingMachine",
+    "Crusher",
+    "Mill",
+    "Centrifuge",
+    "Conveyor",
+    "Elevator",
+    "Feeder",
+    "SprayNozzle",
+    "ScreeningDevice",
+    "Kneader",
+    "Instrument",
+    "Block",
 ]
 
 # Only a signal port may carry a signal line and only a process one may
@@ -54,8 +91,17 @@ __all__ = [
 # feed's is, for the same reason -- neither placement nor role commits a
 # column to vapour or liquid, so drawing that distinction is a choice a
 # future role value can make without this one lying about it meanwhile.
-_VALID_ROLES = {"process", "feed", "product", "energy", "utility", "vapor",
-                "liquid", "signal", "draw"}
+_VALID_ROLES = {
+    "process",
+    "feed",
+    "product",
+    "energy",
+    "utility",
+    "vapor",
+    "liquid",
+    "signal",
+    "draw",
+}
 
 # The side vocabulary label_pos uses, mapped onto compass faces.
 _FACE_OF_SIDE = {"top": "N", "bottom": "S", "left": "W", "right": "E"}
@@ -106,11 +152,22 @@ _UnitT = TypeVar("_UnitT", bound="Unit")
 # afresh on every drawing and so can never be stale; and ``frame`` and
 # ``_slot``, which are the engine's own output -- listing those would
 # have every layout run end by declaring itself out of date.
-_LAYOUT_INPUTS = frozenset({
-    "name", "variant", "label_pos", "pin_",
-    "width", "height", "_width", "_height",
-    "_length", "_diameter", "_large_end", "_normal_position",
-})
+_LAYOUT_INPUTS = frozenset(
+    {
+        "name",
+        "variant",
+        "label_pos",
+        "pin_",
+        "width",
+        "height",
+        "_width",
+        "_height",
+        "_length",
+        "_diameter",
+        "_large_end",
+        "_normal_position",
+    }
+)
 
 
 class Unit:
@@ -246,9 +303,9 @@ class Unit:
         return []
 
     @classmethod
-    def composition_defaults(cls, variant: str,
-                             stated: Mapping[str, Any] | None = None
-                             ) -> dict[str, Any]:
+    def composition_defaults(
+        cls, variant: str, stated: Mapping[str, Any] | None = None
+    ) -> dict[str, Any]:
         """What each composition keyword means on *variant*, unstated.
 
         :attr:`COMPOSITION` as it stands, for a class whose defaults are
@@ -301,9 +358,13 @@ class Unit:
         close = get_close_matches(variant, cls.VARIANTS, n=1, cutoff=0.6)
         suggestion = f" (did you mean {close[0]!r}?)" if close else ""
         generic = cls._generic_class()
-        escape = "" if generic is None else (
-            f" The generic form is {generic.__name__}(variant={variant!r}), which "
-            f"takes any variant registered for a {cls.kind}."
+        escape = (
+            ""
+            if generic is None
+            else (
+                f" The generic form is {generic.__name__}(variant={variant!r}), which "
+                f"takes any variant registered for a {cls.kind}."
+            )
         )
         return ValueError(
             f"{name}: {cls.__name__} draws "
@@ -312,7 +373,16 @@ class Unit:
             f"whichever class draws it.{escape}"
         )
 
-    def __init__(self, name: str, variant: str = "default", width: float | None = None, height: float | None = None, label_pos: str | None = None, description: str = "", reference: str = ""):
+    def __init__(
+        self,
+        name: str,
+        variant: str = "default",
+        width: float | None = None,
+        height: float | None = None,
+        label_pos: str | None = None,
+        description: str = "",
+        reference: str = "",
+    ):
         if not name:
             raise ValueError("Unit name cannot be empty")
         self.name = name
@@ -362,9 +432,9 @@ class Unit:
         self.ports: dict[str, Port] = {}
         self.params: dict = {}
         self._new_line_number = False
-        self.pin_: Pin | None = None      # intent; set only via pin()
-        self.frame: Frame | None = None   # resolved; set only by layout
-        self._port_faces: dict[str, str] = {}   # port name -> face
+        self.pin_: Pin | None = None  # intent; set only via pin()
+        self.frame: Frame | None = None  # resolved; set only by layout
+        self._port_faces: dict[str, str] = {}  # port name -> face
         for spec in self._declared_ports():
             self._add_port(*spec)
 
@@ -545,8 +615,9 @@ class Unit:
         self.pin_ = candidate
         return self
 
-    def _offset_to_port(self, candidate: Pin, port_name: str,
-                        x: float | None, y: float | None) -> None:
+    def _offset_to_port(
+        self, candidate: Pin, port_name: str, x: float | None, y: float | None
+    ) -> None:
         """Re-read a candidate's named axes as one nozzle's position.
 
         Writes the corner the nozzle asked for back onto the pin, so a
@@ -554,6 +625,7 @@ class Unit:
         the same nozzle to the same point twice is the same placement
         twice rather than a device walking off its run.
         """
+        port_name = self._canonical_port_name(port_name)
         if port_name not in self.ports:
             raise KeyError(
                 f"{type(self).__name__} {self.name!r} has no port {port_name!r} to "
@@ -587,6 +659,7 @@ class Unit:
         """
         from pandid.portgeom import port_faces
 
+        port_name = self._canonical_port_name(port_name)
         if port_name not in self.ports:
             raise KeyError(
                 f"{type(self).__name__} {self.name!r} has no port {port_name!r}; "
@@ -613,12 +686,9 @@ class Unit:
 
             raise unreachable_face(self, port_name, face, options)
 
-    def _add_port(self, name: str, direction: str, role: str,
-                  side: str | None = None) -> Port:
+    def _add_port(self, name: str, direction: str, role: str, side: str | None = None) -> Port:
         if name in self.ports:
-            raise ValueError(
-                f"{type(self).__name__!r} already has a port named {name!r}"
-            )
+            raise ValueError(f"{type(self).__name__!r} already has a port named {name!r}")
         if role not in _VALID_ROLES:
             raise ValueError(
                 f"Invalid role {role!r} for port {name!r}. Allowed roles are: {_VALID_ROLES}"
@@ -707,7 +777,34 @@ class Unit:
             cache[id(series)] = members
         return members
 
+    def _canonical_port_name(self, name: str) -> str:
+        """``name``, or the real port an alias like ``feed`` names.
+
+        Almost always ``name`` unchanged. ``Reactor.feed``/``Column.feed``
+        at ``n_feeds == 1`` are the one live alias in the library -- a
+        plain attribute set beside ``feed_1`` in ``__init__`` rather than
+        a second entry in :attr:`ports`, so a ``PortSeries`` placing the
+        family sees one member and not two (see :func:`_feed_names`).
+        That means the alias is invisible to anything that resolves a
+        port name by checking :attr:`ports` directly, so this is called
+        wherever a caller-supplied name is about to become one -- a
+        dict key, or an argument to :mod:`pandid.portgeom`, which knows
+        nothing of the alias and would otherwise place it at the box
+        centre, or a ``nozzle()`` face silently filed under a key
+        nothing later looks up.
+
+        Only a name that is genuinely a :class:`Port` counts: a plain
+        attribute this unit happens to have under that name (``width``,
+        say) is not a port under a new spelling, and is left alone so
+        the caller's own "no such port" error fires on it unchanged.
+        """
+        if name in self.ports:
+            return name
+        aliased = getattr(self, name, None)
+        return aliased.name if isinstance(aliased, Port) and aliased.name in self.ports else name
+
     def port(self, name: str) -> Port:
+        name = self._canonical_port_name(name)
         if name in self.ports:
             return self.ports[name]
         raise KeyError(
@@ -783,13 +880,26 @@ class _Boundary(Unit):
     and labelled the same way every time. See :meth:`repeats`.
     """
 
-    def __init__(self, name: str, variant: str = "default",
-                 width: float | None = None, height: float | None = None,
-                 label_pos: str | None = None, description: str = "",
-                 reference: str = "", header: bool = False):
-        super().__init__(name, variant=variant, width=width, height=height,
-                         label_pos=label_pos, description=description,
-                         reference=reference)
+    def __init__(
+        self,
+        name: str,
+        variant: str = "default",
+        width: float | None = None,
+        height: float | None = None,
+        label_pos: str | None = None,
+        description: str = "",
+        reference: str = "",
+        header: bool = False,
+    ):
+        super().__init__(
+            name,
+            variant=variant,
+            width=width,
+            height=height,
+            label_pos=label_pos,
+            description=description,
+            reference=reference,
+        )
         #: One service tapped at several points, rather than one line
         #: crossing the sheet edge once. Opt in, so two flags
         #: accidentally given one name are still caught.
@@ -819,13 +929,15 @@ class _Boundary(Unit):
         ``reference``, since two taps of one header continue onto one
         drawing.
         """
-        return (self.header
-                and isinstance(other, _Boundary)
-                and type(other) is type(self)
-                and other.header
-                and other.tag == self.tag
-                and other.variant == self.variant
-                and other.reference == self.reference)
+        return (
+            self.header
+            and isinstance(other, _Boundary)
+            and type(other) is type(self)
+            and other.header
+            and other.tag == self.tag
+            and other.variant == self.variant
+            and other.reference == self.reference
+        )
 
 
 class Feed(_Boundary):
@@ -897,13 +1009,26 @@ class _NormallyPositioned(Unit):
     #: today, the locked and car-sealed ones later).
     NORMAL_POSITIONS = ("open", "closed")
 
-    def __init__(self, name: str, variant: str = "default",
-                 width: float | None = None, height: float | None = None,
-                 label_pos: str | None = None, description: str = "",
-                 reference: str = "", normal_position: str = "open"):
-        super().__init__(name, variant=variant, width=width, height=height,
-                         label_pos=label_pos, description=description,
-                         reference=reference)
+    def __init__(
+        self,
+        name: str,
+        variant: str = "default",
+        width: float | None = None,
+        height: float | None = None,
+        label_pos: str | None = None,
+        description: str = "",
+        reference: str = "",
+        normal_position: str = "open",
+    ):
+        super().__init__(
+            name,
+            variant=variant,
+            width=width,
+            height=height,
+            label_pos=label_pos,
+            description=description,
+            reference=reference,
+        )
         self._normal_position = "open"
         self.normal_position = normal_position
 
@@ -1020,8 +1145,11 @@ class Valve(_NormallyPositioned):
     PORTS: list[tuple[str, str, str]] = []
     #: Every variant but ``three_way``: the inlet, the outlet and the
     #: actuator's signal terminal.
-    _BASE = [("inlet", "inlet", "process"), ("outlet", "outlet", "process"),
-             ("actuator", "inlet", "signal")]
+    _BASE = [
+        ("inlet", "inlet", "process"),
+        ("outlet", "outlet", "process"),
+        ("actuator", "inlet", "signal"),
+    ]
     #: The nozzles each variant has, keyed by variant, defaulting to
     #: :data:`_BASE`. Only ``three_way`` carries a fourth, ``branch``,
     #: and it is not annotated as a bare ``branch: Port`` on the class
@@ -1039,16 +1167,31 @@ class Valve(_NormallyPositioned):
         """
         return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._BASE)
 
-    def __init__(self, name: str, variant: str = "default", *,
-                 actuator: str = "",
-                 width: float | None = None, height: float | None = None,
-                 label_pos: str | None = None, description: str = "",
-                 reference: str = "", normal_position: str = "open",
-                 fail: str = ""):
+    def __init__(
+        self,
+        name: str,
+        variant: str = "default",
+        *,
+        actuator: str = "",
+        width: float | None = None,
+        height: float | None = None,
+        label_pos: str | None = None,
+        description: str = "",
+        reference: str = "",
+        normal_position: str = "open",
+        fail: str = "",
+    ):
         variant = self._resolve(name, variant, actuator)
-        super().__init__(name, variant=variant, width=width, height=height,
-                         label_pos=label_pos, description=description,
-                         reference=reference, normal_position=normal_position)
+        super().__init__(
+            name,
+            variant=variant,
+            width=width,
+            height=height,
+            label_pos=label_pos,
+            description=description,
+            reference=reference,
+            normal_position=normal_position,
+        )
         # ``self.variant`` rather than the argument; see HeatExchanger.
         for spec in self._variant_ports(self.variant):
             self._add_port(*spec)
@@ -1223,15 +1366,19 @@ def _compose_onto(unit, *groups) -> None:
 #: shell every other vessel keyword draws. A sheet moves at the next
 #: render, and an author told only "use X" was not told that.
 VESSEL_VARIANT_LEGS = Deprecation(
-    what="Vessel(variant='legs')", instead="Vessel(supports='leg')",
+    what="Vessel(variant='legs')",
+    instead="Vessel(supports='leg')",
     removed_in="0.2.0",
     note="the drawing changes -- a pair of ISO item 26.1 C2005 legs under the "
-         "standard vessel shell, where this one has its own drawn in")
+    "standard vessel shell, where this one has its own drawn in",
+)
 VESSEL_VARIANT_SKIRTED = Deprecation(
-    what="Vessel(variant='skirted')", instead="Vessel(supports='skirt')",
+    what="Vessel(variant='skirted')",
+    instead="Vessel(supports='skirt')",
     removed_in="0.2.0",
     note="the drawing changes -- ISO item 26.3 C2007's skirt under the standard "
-         "vessel shell, where this one has its own drawn in")
+    "vessel shell, where this one has its own drawn in",
+)
 
 _VESSEL_SUPPORT_VARIANTS = {
     "legs": VESSEL_VARIANT_LEGS,
@@ -1334,14 +1481,26 @@ class Vessel(Unit):
     #: against every one of the ten variants.
     COMPOSITION = {"supports": None}
 
-    def __init__(self, name: str, variant: str = "default",
-                 supports: str | None = None,
-                 width: float | None = None, height: float | None = None,
-                 label_pos: str | None = None, description: str = "",
-                 reference: str = ""):
-        super().__init__(name, variant=variant, width=width, height=height,
-                         label_pos=label_pos, description=description,
-                         reference=reference)
+    def __init__(
+        self,
+        name: str,
+        variant: str = "default",
+        supports: str | None = None,
+        width: float | None = None,
+        height: float | None = None,
+        label_pos: str | None = None,
+        description: str = "",
+        reference: str = "",
+    ):
+        super().__init__(
+            name,
+            variant=variant,
+            width=width,
+            height=height,
+            label_pos=label_pos,
+            description=description,
+            reference=reference,
+        )
         # **The argument, not ``self.variant``** -- the opposite of what
         # ``_variant_ports`` a few lines down in HeatExchanger wants, and
         # for the opposite reason. A ports table is keyed the way the
@@ -1362,6 +1521,7 @@ class Vessel(Unit):
             _VESSEL_SUPPORT_VARIANTS[variant].warn(self, where=name)
         self.supports = supports
         from pandid.render.iso_parts import support_overlays
+
         _compose_onto(self, () if supports is None else support_overlays(supports))
 
 
@@ -1495,13 +1655,26 @@ class Reducer(Unit):
     #: is.
     LARGE_ENDS = ("inlet", "outlet")
 
-    def __init__(self, name: str, variant: str = "default",
-                 width: float | None = None, height: float | None = None,
-                 label_pos: str | None = None, description: str = "",
-                 reference: str = "", large_end: str = "inlet"):
-        super().__init__(name, variant=variant, width=width, height=height,
-                         label_pos=label_pos, description=description,
-                         reference=reference)
+    def __init__(
+        self,
+        name: str,
+        variant: str = "default",
+        width: float | None = None,
+        height: float | None = None,
+        label_pos: str | None = None,
+        description: str = "",
+        reference: str = "",
+        large_end: str = "inlet",
+    ):
+        super().__init__(
+            name,
+            variant=variant,
+            width=width,
+            height=height,
+            label_pos=label_pos,
+            description=description,
+            reference=reference,
+        )
         self._large_end = "inlet"
         self.large_end = large_end
 
@@ -1587,10 +1760,16 @@ class Tee(Unit):
     #: and differs only in which way it runs.
     BRANCH_DIRECTIONS = ("outlet", "inlet")
 
-    def __init__(self, name: str = "", branch: str = "outlet",
-                 variant: str = "default", width: float | None = None,
-                 height: float | None = None, description: str = "",
-                 reference: str = ""):
+    def __init__(
+        self,
+        name: str = "",
+        branch: str = "outlet",
+        variant: str = "default",
+        width: float | None = None,
+        height: float | None = None,
+        description: str = "",
+        reference: str = "",
+    ):
         if branch not in self.BRANCH_DIRECTIONS:
             raise ValueError(
                 f"{name or self.DEFAULT_NAME}: branch= is "
@@ -1598,8 +1777,14 @@ class Tee(Unit):
                 f"the third connection takes flow off the run or returns it; got "
                 f"{branch!r}"
             )
-        super().__init__(name or self.DEFAULT_NAME, variant=variant, width=width,
-                         height=height, description=description, reference=reference)
+        super().__init__(
+            name or self.DEFAULT_NAME,
+            variant=variant,
+            width=width,
+            height=height,
+            description=description,
+            reference=reference,
+        )
         self._add_port("branch", branch, "process")
 
     @property
@@ -1718,8 +1903,11 @@ class Ejector(Unit):
     discharge: Port
 
     kind = "ejector"
-    PORTS = [("motive", "inlet", "utility"), ("suction", "inlet", "process"),
-             ("discharge", "outlet", "process")]
+    PORTS = [
+        ("motive", "inlet", "utility"),
+        ("suction", "inlet", "process"),
+        ("discharge", "outlet", "process"),
+    ]
 
 
 class Vent(Unit):
@@ -1762,8 +1950,11 @@ class Furnace(Unit):
     fuel: Port
 
     kind = "furnace"
-    PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process"),
-             ("fuel", "inlet", "feed")]
+    PORTS = [
+        ("inlet", "inlet", "process"),
+        ("outlet", "outlet", "process"),
+        ("fuel", "inlet", "feed"),
+    ]
 
 
 class Boiler(Unit):
@@ -1948,13 +2139,25 @@ class Filter(Unit):
         """
         return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._CLARIFYING)
 
-    def __init__(self, name: str, variant: str = "default",
-                 width: float | None = None, height: float | None = None,
-                 label_pos: str | None = None, description: str = "",
-                 reference: str = ""):
-        super().__init__(name, variant=variant, width=width, height=height,
-                         label_pos=label_pos, description=description,
-                         reference=reference)
+    def __init__(
+        self,
+        name: str,
+        variant: str = "default",
+        width: float | None = None,
+        height: float | None = None,
+        label_pos: str | None = None,
+        description: str = "",
+        reference: str = "",
+    ):
+        super().__init__(
+            name,
+            variant=variant,
+            width=width,
+            height=height,
+            label_pos=label_pos,
+            description=description,
+            reference=reference,
+        )
         # ``self.variant`` rather than the argument; see HeatExchanger.
         for spec in self._variant_ports(self.variant):
             self._add_port(*spec)
@@ -2018,13 +2221,77 @@ class Centrifuge(Unit):
 
 
 class Dryer(Unit):
-    """Dryer (removes moisture from a feed solid/slurry)."""
+    """Dryer (removes moisture from a feed solid/slurry).
+
+    A drier takes a heating medium in and sends the moisture it picked
+    up back out, so every variant carries four nozzles and not two:
+    ``feed``/``product`` for the solid, and ``heating_in``/``vent`` for
+    the gas that dries it and leaves laden with what it dried.
+
+    Real plant forces the point. A gas-suspension calciner tees its
+    combustion chamber's hot gas into the solids feed line rather than
+    a windbox nozzle of its own, and lets the dried solid and the
+    off-gas leave together on one nozzle to be parted in a downstream
+    cyclone, when what it draws is one machine with four connections.
+    ISO 10628-2's own group 10 row ticks only the solid pair -- no row
+    in the group draws a third connection -- so ``heating_in``/``vent``
+    are this library's own addition to it, on the casing wall (the
+    solid's own) rather than the roof or the floor: a drier's air
+    enters where the ISO row draws nothing and leaves where it draws
+    nothing either, and there is no tabulated point to defer to.
+    """
 
     feed: Port
     product: Port
+    heating_in: Port
+    vent: Port
 
     kind = "dryer"
-    PORTS = [("feed", "inlet", "feed"), ("product", "outlet", "process")]
+    # Empty because which nozzles a drier has depends on its variant --
+    # today every one of them the same four, but the mechanism is
+    # :attr:`_VARIANT_PORTS`, the one :class:`HeatExchanger`, ``Filter``
+    # and :class:`Reactor` already use, so a future variant needing a
+    # different set (a jacketed, indirect drier with a utility loop
+    # rather than a direct gas sweep) is a dict entry rather than a
+    # second mechanism.
+    PORTS: list[tuple[str, str, str]] = []
+    _GAS_SWEPT = [
+        ("feed", "inlet", "feed"),
+        ("product", "outlet", "process"),
+        ("heating_in", "inlet", "utility"),
+        ("vent", "outlet", "vapor"),
+    ]
+    _VARIANT_PORTS: dict[str, list[tuple[str, str, str]]] = {}
+
+    @classmethod
+    def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
+        """The nozzles a *variant* adds; none if the class declares any.
+
+        The same one line :meth:`HeatExchanger._variant_ports` is.
+        """
+        return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._GAS_SWEPT)
+
+    def __init__(
+        self,
+        name: str,
+        variant: str = "default",
+        width: float | None = None,
+        height: float | None = None,
+        label_pos: str | None = None,
+        description: str = "",
+        reference: str = "",
+    ):
+        super().__init__(
+            name,
+            variant=variant,
+            width=width,
+            height=height,
+            label_pos=label_pos,
+            description=description,
+            reference=reference,
+        )
+        for spec in self._variant_ports(self.variant):
+            self._add_port(*spec)
 
 
 class Feeder(Unit):
@@ -2330,11 +2597,18 @@ class Conveyor(Unit):
     _length: float
     _diameter: float
 
-    def __init__(self, name: str, length: float | None = None,
-                 diameter: float | None = None, variant: str = "default",
-                 width: float | None = None, height: float | None = None,
-                 label_pos: str | None = None, description: str = "",
-                 reference: str = ""):
+    def __init__(
+        self,
+        name: str,
+        length: float | None = None,
+        diameter: float | None = None,
+        variant: str = "default",
+        width: float | None = None,
+        height: float | None = None,
+        label_pos: str | None = None,
+        description: str = "",
+        reference: str = "",
+    ):
         from pandid.render.symbols import CONVEYOR_LENGTH
 
         if width is not None or height is not None:
@@ -2352,8 +2626,9 @@ class Conveyor(Unit):
                 f"swaps and which would stretch a belt's rollers out of round "
                 f"and a screw's flight off its pitch. Pass {instead}={given!r}."
             )
-        super().__init__(name, variant=variant, label_pos=label_pos,
-                         description=description, reference=reference)
+        super().__init__(
+            name, variant=variant, label_pos=label_pos, description=description, reference=reference
+        )
         # Diameter first: it is what the run is measured against, so a
         # belt on 40 rollers is refused at 60 rather than accepted at
         # the default roller's 40 and then quietly widened.
@@ -2393,7 +2668,9 @@ class Conveyor(Unit):
         told about rollers goes looking for rollers.
         """
         from pandid.render.symbols import (
-            SCREW_MIN_LENGTH, conveyor_min_length, conveyor_too_short,
+            SCREW_MIN_LENGTH,
+            conveyor_min_length,
+            conveyor_too_short,
             screw_too_short,
         )
 
@@ -2428,17 +2705,19 @@ class Conveyor(Unit):
         refused in the same sentence a short length is.
         """
         from pandid.render.symbols import (
-            conveyor_bad_diameter, conveyor_min_length, conveyor_too_short,
+            conveyor_bad_diameter,
+            conveyor_min_length,
+            conveyor_too_short,
             screw_bad_diameter,
         )
 
         if value <= 0:
-            raise (screw_bad_diameter if self.variant == "screw"
-                   else conveyor_bad_diameter)(value, self.name)
+            raise (screw_bad_diameter if self.variant == "screw" else conveyor_bad_diameter)(
+                value, self.name
+            )
         value = float(value)
         length = getattr(self, "_length", None)
-        if (self.variant != "screw" and length is not None
-                and length < conveyor_min_length(value)):
+        if self.variant != "screw" and length is not None and length < conveyor_min_length(value):
             raise conveyor_too_short(length, self.name, value)
         self._diameter = value
 
@@ -2599,8 +2878,11 @@ class Instrument(Unit):
     # :mod:`pandid.layout.faces` serves in order, so a balloon whose
     # connections appeared as the author reached for them would draw
     # differently depending on which line was written first.
-    PORTS = [("pv", "inlet", "signal"), ("sig_in", "inlet", "signal"),
-             ("sig_out", "outlet", "signal")]
+    PORTS = [
+        ("pv", "inlet", "signal"),
+        ("sig_in", "inlet", "signal"),
+        ("sig_out", "outlet", "signal"),
+    ]
 
     #: The two pools, and the name the first member of each ships under.
     _SIGNAL_POOLS = ("sig_in", "sig_out")
@@ -2611,10 +2893,18 @@ class Instrument(Unit):
     #: and ``"logic"`` are two names for one symbol.
     _REPEATABLE_VARIANTS = frozenset({"sis", "logic", "interlock"})
 
-    def __init__(self, type: str, number: str | int = "", variant: str = "default",
-                 width: float | None = None, height: float | None = None,
-                 label_pos: str | None = None, description: str = "", reference: str = "",
-                 display: str | None = None):
+    def __init__(
+        self,
+        type: str,
+        number: str | int = "",
+        variant: str = "default",
+        width: float | None = None,
+        height: float | None = None,
+        label_pos: str | None = None,
+        description: str = "",
+        reference: str = "",
+        display: str | None = None,
+    ):
         letters, num = split_tag(type, number)
         # Built from the SPLIT, not from the arguments. ``split_tag``
         # promises that ("FT", 101), "FT-101" and "FT101" are one
@@ -2635,8 +2925,15 @@ class Instrument(Unit):
         #: all read.
         self.display = "field"
         variant = self._resolved_variant(name, variant, display)
-        super().__init__(name, variant=variant, width=width, height=height,
-                         label_pos=label_pos, description=description, reference=reference)
+        super().__init__(
+            name,
+            variant=variant,
+            width=width,
+            height=height,
+            label_pos=label_pos,
+            description=description,
+            reference=reference,
+        )
         self.type = letters
         self.number = num
         #: The symbol type the author asked for, kept apart from
@@ -2704,8 +3001,9 @@ class Instrument(Unit):
             return pair
         if display == "field":
             return variant  # an unregistered shape is the registry's to refuse
-        drawn = ", ".join(f"variant={v!r} display={d!r}"
-                          for (v, d) in _BALLOON_SYMBOLS if d != "field")
+        drawn = ", ".join(
+            f"variant={v!r} display={d!r}" for (v, d) in _BALLOON_SYMBOLS if d != "field"
+        )
         raise ValueError(
             f"{name}: no balloon is drawn for variant={variant!r} with "
             f"display={display!r}. A location bar is registered artwork rather than "
@@ -2843,20 +3141,27 @@ class Instrument(Unit):
         that :meth:`pandid.flowsheet.Flowsheet.add_balloon` built it
         for -- one instrument, two marks, issue #249.
         """
+
         def symbol(variant: object) -> object:
             return "sis" if variant == "logic" else variant
 
         if other is self._marks:
             return True
-        return (isinstance(other, Instrument)
-                and other.tag == self.tag
-                and self.variant in self._REPEATABLE_VARIANTS
-                and symbol(self.variant) == symbol(other.variant))
+        return (
+            isinstance(other, Instrument)
+            and other.tag == self.tag
+            and self.variant in self._REPEATABLE_VARIANTS
+            and symbol(self.variant) == symbol(other.variant)
+        )
 
-    def annotate(self, *, high: "str | Sequence[str] | None" = None,
-                 low: "str | Sequence[str] | None" = None,
-                 safety: "str | Sequence[str] | None" = None,
-                 variable: "str | Sequence[str] | None" = None) -> "Instrument":
+    def annotate(
+        self,
+        *,
+        high: "str | Sequence[str] | None" = None,
+        low: "str | Sequence[str] | None" = None,
+        safety: "str | Sequence[str] | None" = None,
+        variable: "str | Sequence[str] | None" = None,
+    ) -> "Instrument":
         """Write letter codes in the quadrants around this symbol.
 
         ISO 15519-2 §5.2.5, p. 22, puts any letter code carrying the
@@ -2896,8 +3201,7 @@ class Instrument(Unit):
         quadrant is emptied, which is a different request from not
         mentioning it.
         """
-        for name, codes in (("a", safety), ("b", variable),
-                            ("c", high), ("d", low)):
+        for name, codes in (("a", safety), ("b", variable), ("c", high), ("d", low)):
             if codes is None:
                 continue
             written = _quadrant_codes(self.name, name, codes)
@@ -2907,9 +3211,15 @@ class Instrument(Unit):
                 self.quadrants.pop(name, None)
         return self
 
-    def attach(self, on: "Stream | Unit", *, at: float | str | None = None,
-               offset: float = 45.0, angle: float = 90.0,
-               relation: str = "sensing") -> "Instrument":
+    def attach(
+        self,
+        on: "Stream | Unit",
+        *,
+        at: float | str | None = None,
+        offset: float = 45.0,
+        angle: float = 90.0,
+        relation: str = "sensing",
+    ) -> "Instrument":
         """Anchor this balloon to a process line or to equipment.
 
         ``on`` is the host: a :class:`~pandid.streams.Stream` (tap a
@@ -3088,13 +3398,25 @@ class HeatExchanger(Unit):
         """
         return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._SHELL_AND_TUBE)
 
-    def __init__(self, name: str, variant: str = "default",
-                 width: float | None = None, height: float | None = None,
-                 label_pos: str | None = None, description: str = "",
-                 reference: str = ""):
-        super().__init__(name, variant=variant, width=width, height=height,
-                         label_pos=label_pos, description=description,
-                         reference=reference)
+    def __init__(
+        self,
+        name: str,
+        variant: str = "default",
+        width: float | None = None,
+        height: float | None = None,
+        label_pos: str | None = None,
+        description: str = "",
+        reference: str = "",
+    ):
+        super().__init__(
+            name,
+            variant=variant,
+            width=width,
+            height=height,
+            label_pos=label_pos,
+            description=description,
+            reference=reference,
+        )
         # ``self.variant``, not the argument: _VARIANT_PORTS is keyed
         # the way the registry spells a variant, which is what the
         # constructor stored once :attr:`~Unit.VARIANT_ALIASES` had its
@@ -3191,19 +3513,26 @@ class CoolingTower(Unit):
 
 
 def _feed_names(n_feeds: int, owner: str) -> list[str]:
-    """Names for a unit's feeds: ``feed``, or ``feed_1`` .. ``feed_n``.
+    """Names for a unit's feeds: ``feed_1`` .. ``feed_n``.
 
-    One feed is the common case and keeps the singular name. The symbol
-    declares the same rule as a
-    :class:`~pandid.render.symbols.PortSeries`, which spreads the family
-    down the shell.
+    Numbered from one whatever the count, the way :class:`Mixer`'s
+    ``in_1`` .. ``in_n`` and :class:`Splitter`'s ``out_1`` .. ``out_n``
+    already are: ``feed_1`` is a real nozzle at ``n_feeds=1`` and stays
+    one if the count is later raised, rather than existing only above
+    one the way it used to. The caller adds the bare ``feed`` as an
+    alias for ``feed_1`` when there is only one -- see
+    :class:`Reactor`/:class:`Column`'s ``__init__`` -- since that
+    spelling is the common case and reads better on the page than a
+    ``_1`` nothing else on the vessel needs; it is not restated here
+    because at every other count there is no bare name to give.
 
     Spelling is the only thing the count changes: ``unit.feeds`` is the
-    family either way, a one-tuple where this returns ``["feed"]``.
+    family whatever it is, indexed from zero (``unit.feeds[0]`` is
+    ``feed_1``) while the nozzles are numbered from one.
     """
     if n_feeds < 1:
         raise ValueError(f"{owner} requires at least 1 feed, got {n_feeds}")
-    return ["feed"] if n_feeds == 1 else [f"feed_{i}" for i in range(1, n_feeds + 1)]
+    return [f"feed_{i}" for i in range(1, n_feeds + 1)]
 
 
 def _draw_names(n_draws: int, owner: str) -> list[str]:
@@ -3222,9 +3551,15 @@ def _draw_names(n_draws: int, owner: str) -> list[str]:
     return ["draw"] if n_draws == 1 else [f"draw_{i}" for i in range(1, n_draws + 1)]
 
 
-def _stage_fractions(name: str, internals: str | None, trays: int,
-                     stages: list[int | None] | None, names: list[str],
-                     keyword: str, noun: str) -> dict[str, float]:
+def _stage_fractions(
+    name: str,
+    internals: str | None,
+    trays: int,
+    stages: list[int | None] | None,
+    names: list[str],
+    keyword: str,
+    noun: str,
+) -> dict[str, float]:
     """Validate ``keyword=`` (``feed_stages`` or ``draw_stages``) against
     ``names`` and turn it into a fraction of the shell, per nozzle that
     named one.
@@ -3263,6 +3598,7 @@ def _stage_fractions(name: str, internals: str | None, trays: int,
             )
         return {}
     from pandid.render.iso_parts import stage_fraction
+
     fractions = {}
     for one_name, stage in zip(names, stages):
         if stage is None:
@@ -3296,10 +3632,12 @@ def _stage_fractions(name: str, internals: str | None, trays: int,
 #: word being spent twice: a ``plain`` reactor cannot also be jacketed,
 #: and cannot hold trays or a fluidised bed.
 REACTOR_VARIANT_PLAIN = Deprecation(
-    what="Reactor(variant='plain')", instead="Reactor(internals='packing')",
+    what="Reactor(variant='plain')",
+    instead="Reactor(internals='packing')",
     removed_in="0.2.0",
     note="the drawing changes -- ISO item 27.8 X8141's crossed bed on the "
-         "standard vessel shell, in place of this one's diagonal hatch")
+    "standard vessel shell, in place of this one's diagonal hatch",
+)
 
 
 #: ``mixing`` is draw.io's "Mixing Reactor": a cone-bottomed rectangle with a
@@ -3332,12 +3670,14 @@ REACTOR_VARIANT_PLAIN = Deprecation(
 #: ``disc`` rather than the bare default because ``mixing``'s two flat plates
 #: are nearest item 28.9, C2026, "Agitator, disc type".
 REACTOR_VARIANT_MIXING = Deprecation(
-    what="Reactor(variant='mixing')", instead="Reactor(agitator='disc')",
+    what="Reactor(variant='mixing')",
+    instead="Reactor(agitator='disc')",
     removed_in="0.2.0",
     note="the drawing changes -- ISO item 1.27 X8006's dished-end shell with a "
-         "group-28 stirrer and the motor that turns it, in place of this one's "
-         "cone-bottomed box and the capsule on top of it; the cone goes, and "
-         "the stirrer becomes one you can choose and route a drive to")
+    "group-28 stirrer and the motor that turns it, in place of this one's "
+    "cone-bottomed box and the capsule on top of it; the cone goes, and "
+    "the stirrer becomes one you can choose and route a drive to",
+)
 
 
 class Reactor(Unit):
@@ -3401,12 +3741,16 @@ class Reactor(Unit):
     # invisible to mypy and to editor completion.
     drive: Port
     # Every charge nozzle, in declaration order and so top to bottom
-    # down the shell, whether the count spelled them ``feed`` or
-    # ``feed_1`` ... ``feed_n`` (see :func:`_feed_names`).
+    # down the shell -- ``feed_1`` ... ``feed_n`` whatever the count
+    # (see :func:`_feed_names`).
     feeds: tuple[Port, ...]
-    # The single-feed vessel's charge nozzle. ``n_feeds > 1`` replaces
-    # it with a family no annotation can name a member at a time; see
-    # :class:`Mixer`.
+    # The one-feed vessel's charge nozzle: an alias for ``feed_1``, set
+    # in ``__init__`` alongside it rather than a second registered port
+    # -- ``feed`` and ``feed_1`` are the same ``Port`` object, so a
+    # series placing the family sees one member, not two. ``n_feeds >
+    # 1`` drops the alias; there is no bare name for a member of a
+    # family of more than one, and ``.feed_1`` is what reaches the first
+    # of them either way. See :class:`Mixer`.
     feed: Port
 
     # ``feed_1`` ... ``feed_n`` are the same shape as :class:`Column`'s
@@ -3415,9 +3759,10 @@ class Reactor(Unit):
     # those nozzles, a computed one gets this class and
     # ``reactor.feeds[i]``.
     #
-    # A one-feed vessel keeps the singular ``feed`` -- see
-    # :func:`_feed_names` -- so ``Reactor1`` declares nothing of its own
-    # and the annotation above answers for it.
+    # A one-feed vessel keeps the alias ``feed`` for ``feed_1`` -- see
+    # :func:`_feed_names` -- and ``Reactor1`` declares ``feed_1`` itself
+    # so a checker resolves it there too; the ``feed`` annotation above
+    # already answers for the alias.
     #
     # ``StirredTankReactor`` adds ``duty``, ``outlet`` and ``vent``, but
     # all three are already declared here too -- narrowing this
@@ -3431,42 +3776,48 @@ class Reactor(Unit):
     if TYPE_CHECKING:
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
-                    *args: Any, **kwargs: Any) -> "Reactor1": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, **kwargs: Any
+        ) -> "Reactor1": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[2],
-                    *args: Any, **kwargs: Any) -> "Reactor2": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[2], *args: Any, **kwargs: Any
+        ) -> "Reactor2": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[3],
-                    *args: Any, **kwargs: Any) -> "Reactor3": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[3], *args: Any, **kwargs: Any
+        ) -> "Reactor3": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[4],
-                    *args: Any, **kwargs: Any) -> "Reactor4": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[4], *args: Any, **kwargs: Any
+        ) -> "Reactor4": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[5],
-                    *args: Any, **kwargs: Any) -> "Reactor5": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[5], *args: Any, **kwargs: Any
+        ) -> "Reactor5": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[6],
-                    *args: Any, **kwargs: Any) -> "Reactor6": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[6], *args: Any, **kwargs: Any
+        ) -> "Reactor6": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[7],
-                    *args: Any, **kwargs: Any) -> "Reactor7": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[7], *args: Any, **kwargs: Any
+        ) -> "Reactor7": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[8],
-                    *args: Any, **kwargs: Any) -> "Reactor8": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[8], *args: Any, **kwargs: Any
+        ) -> "Reactor8": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: int,
-                    *args: Any, **kwargs: Any) -> "Reactor": ...
-        def __new__(cls, name: str, n_feeds: int = 1,
-                    *args: Any, **kwargs: Any) -> "Reactor": ...
+        def __new__(cls, name: str, n_feeds: int, *args: Any, **kwargs: Any) -> "Reactor": ...
+        def __new__(cls, name: str, n_feeds: int = 1, *args: Any, **kwargs: Any) -> "Reactor": ...
 
     kind = "reactor"
     # Empty because which nozzles a reactor has depends on its variant,
@@ -3515,9 +3866,9 @@ class Reactor(Unit):
     COMPOSITION = {"agitator": _UNSTATED, "internals": None}
 
     @classmethod
-    def composition_defaults(cls, variant: str,
-                             stated: Mapping[str, Any] | None = None
-                             ) -> dict[str, Any]:
+    def composition_defaults(
+        cls, variant: str, stated: Mapping[str, Any] | None = None
+    ) -> dict[str, Any]:
         """A stirred body gets item 28.1; the rest get nothing, and so
         does a body the author has put internals in.
 
@@ -3536,10 +3887,12 @@ class Reactor(Unit):
         is how it is asked for. The whole distinction is stated once, by
         whether the constructor was handed :data:`_UNSTATED`.
         """
-        return {**super().composition_defaults(variant, stated),
-                "agitator": "agitator"
-                if variant in cls._STIRRED and (stated or {}).get("internals") is None
-                else None}
+        return {
+            **super().composition_defaults(variant, stated),
+            "agitator": "agitator"
+            if variant in cls._STIRRED and (stated or {}).get("internals") is None
+            else None,
+        }
 
     @classmethod
     def _variant_ports(cls, variant: str) -> list[tuple[str, str, str]]:
@@ -3549,15 +3902,29 @@ class Reactor(Unit):
         """
         return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._VESSEL)
 
-    def __init__(self, name: str, n_feeds: int = 1, variant: str = "default",
-                 agitator: str | None = _UNSTATED, internals: str | None = None,
-                 width: float | None = None, height: float | None = None,
-                 label_pos: str | None = None, description: str = "",
-                 reference: str = ""):
+    def __init__(
+        self,
+        name: str,
+        n_feeds: int = 1,
+        variant: str = "default",
+        agitator: str | None = _UNSTATED,
+        internals: str | None = None,
+        width: float | None = None,
+        height: float | None = None,
+        label_pos: str | None = None,
+        description: str = "",
+        reference: str = "",
+    ):
         names = _feed_names(n_feeds, "Reactor")
-        super().__init__(name, variant=variant, width=width, height=height,
-                         label_pos=label_pos, description=description,
-                         reference=reference)
+        super().__init__(
+            name,
+            variant=variant,
+            width=width,
+            height=height,
+            label_pos=label_pos,
+            description=description,
+            reference=reference,
+        )
         # The argument, not ``self.variant``: a deprecation is about the
         # word the author typed. See :meth:`Vessel.__init__`.
         if variant == "plain":
@@ -3565,8 +3932,7 @@ class Reactor(Unit):
         elif variant == "mixing":
             REACTOR_VARIANT_MIXING.warn(self, where=name)
         if agitator is _UNSTATED:
-            agitator = self.composition_defaults(
-                self.variant, {"internals": internals})["agitator"]
+            agitator = self.composition_defaults(self.variant, {"internals": internals})["agitator"]
         self.agitator = agitator
         self.internals = internals
         # Before the feeds, so the declaration order the drawing is read
@@ -3578,11 +3944,11 @@ class Reactor(Unit):
         # The bed first, then the stirrer over it, so the shaft is drawn
         # on top of whatever it turns in rather than under it.
         from pandid.render.iso_parts import agitator_overlays, internals_overlays
+
         _compose_onto(
             self,
             () if internals is None else internals_overlays(internals),
-            () if agitator is None
-            else agitator_overlays(agitator, self.kind, self.variant),
+            () if agitator is None else agitator_overlays(agitator, self.kind, self.variant),
         )
         # The drive is the *motor's*, and the motor comes with the
         # agitator, so it exists exactly when the agitator does.
@@ -3592,16 +3958,23 @@ class Reactor(Unit):
         if agitator is not None:
             self.drive = self._add_port("drive", "inlet", "energy")
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
+        if n_feeds == 1:
+            # An alias, not a second port: registering ``feed`` too would
+            # give the shell's ``PortSeries`` two names matching one
+            # nozzle and it would spread a family of two down the shell
+            # for a vessel that only has one. See :func:`_feed_names`.
+            self.feed = self.feeds[0]
 
 
 if TYPE_CHECKING:
     # A reactor of each feed count, for the overloads above. ``Reactor1``
-    # is the one-feed vessel, whose nozzle is the singular ``feed`` the
-    # base already declares, so it adds nothing of its own -- exactly as
+    # is the one-feed vessel: its nozzle is really named ``feed_1``, so
+    # that is declared here, and the alias ``feed`` the base class
+    # already declares answers for the other spelling -- exactly as
     # ``Column1`` does.
 
     class Reactor1(Reactor):
-        pass
+        feed_1: Port
 
     class Reactor2(Reactor):
         feed_1: Port
@@ -3668,13 +4041,19 @@ if TYPE_CHECKING:
 #: magnet and the scrubber.
 SEPARATOR_VARIANT_GRAVITY = Deprecation(
     what="Separator(variant='gravity')",
-    instead="Separator(characteristic='gravity')", removed_in="0.2.0")
+    instead="Separator(characteristic='gravity')",
+    removed_in="0.2.0",
+)
 SEPARATOR_VARIANT_ELECTROSTATIC = Deprecation(
     what="Separator(variant='electrostatic')",
-    instead="Separator(characteristic='electrostatic')", removed_in="0.2.0")
+    instead="Separator(characteristic='electrostatic')",
+    removed_in="0.2.0",
+)
 SEPARATOR_VARIANT_ELECTROMAGNETIC = Deprecation(
     what="Separator(variant='electromagnetic')",
-    instead="Separator(characteristic='electromagnetic')", removed_in="0.2.0")
+    instead="Separator(characteristic='electromagnetic')",
+    removed_in="0.2.0",
+)
 
 _SEPARATOR_CHARACTERISTIC_VARIANTS = {
     "gravity": SEPARATOR_VARIANT_GRAVITY,
@@ -3856,11 +4235,17 @@ class Separator(Unit):
         """
         return [] if cls._declared_ports() else cls._VARIANT_PORTS.get(variant, cls._PHASES)
 
-    def __init__(self, name: str, variant: str = "default",
-                 characteristic: str | None = None,
-                 width: float | None = None, height: float | None = None,
-                 label_pos: str | None = None, description: str = "",
-                 reference: str = ""):
+    def __init__(
+        self,
+        name: str,
+        variant: str = "default",
+        characteristic: str | None = None,
+        width: float | None = None,
+        height: float | None = None,
+        label_pos: str | None = None,
+        description: str = "",
+        reference: str = "",
+    ):
         if characteristic is not None:
             if variant != "default":
                 raise ValueError(
@@ -3879,9 +4264,15 @@ class Separator(Unit):
                     f"so each is a variant= of its own"
                 )
             variant = characteristic
-        super().__init__(name, variant=variant, width=width, height=height,
-                         label_pos=label_pos, description=description,
-                         reference=reference)
+        super().__init__(
+            name,
+            variant=variant,
+            width=width,
+            height=height,
+            label_pos=label_pos,
+            description=description,
+            reference=reference,
+        )
         # The argument, not ``self.variant``: a deprecation is about the
         # word the author typed, and this is the class where the two came
         # apart. :class:`~pandid.devices.GravitySeparator` and
@@ -3894,8 +4285,7 @@ class Separator(Unit):
         # table want opposite spellings.
         if characteristic is None and variant in self._CHARACTERISTICS:
             _SEPARATOR_CHARACTERISTIC_VARIANTS[variant].warn(self, where=name)
-        self.characteristic = (
-            self.variant if self.variant in self._CHARACTERISTICS else None)
+        self.characteristic = self.variant if self.variant in self._CHARACTERISTICS else None
         # ``self.variant`` rather than the argument; see HeatExchanger.
         for spec in self._variant_ports(self.variant):
             self._add_port(*spec)
@@ -3922,17 +4312,21 @@ DEFAULT_TRAYS = 8
 # moves a nozzle's position on the shell, only which class answers for
 # it, so every ``note`` below is empty.
 COLUMN_REFLUX_IN = Deprecation(
-    what="Column(...).reflux_in", instead="DistillationColumn(...).reflux_in",
-    removed_in="0.2.0")
+    what="Column(...).reflux_in", instead="DistillationColumn(...).reflux_in", removed_in="0.2.0"
+)
 COLUMN_BOILUP_IN = Deprecation(
-    what="Column(...).boilup_in", instead="DistillationColumn(...).boilup_in",
-    removed_in="0.2.0")
+    what="Column(...).boilup_in", instead="DistillationColumn(...).boilup_in", removed_in="0.2.0"
+)
 COLUMN_REBOILER_DUTY = Deprecation(
-    what="Column(...).reboiler_duty", instead="DistillationColumn(...).reboiler_duty",
-    removed_in="0.2.0")
+    what="Column(...).reboiler_duty",
+    instead="DistillationColumn(...).reboiler_duty",
+    removed_in="0.2.0",
+)
 COLUMN_CONDENSER_DUTY = Deprecation(
-    what="Column(...).condenser_duty", instead="DistillationColumn(...).condenser_duty",
-    removed_in="0.2.0")
+    what="Column(...).condenser_duty",
+    instead="DistillationColumn(...).condenser_duty",
+    removed_in="0.2.0",
+)
 #: Not a class move: ``distillate`` is retired on every tower it ever
 #: named, ``Column`` included, in favour of ``overhead`` -- the position
 #: name :class:`Separator` already chose ``overflow``/``underflow`` for,
@@ -3940,8 +4334,8 @@ COLUMN_CONDENSER_DUTY = Deprecation(
 #: absorber's overhead product is stripped gas, not distillate; #398
 #: fixed that category error four times over and left this the fifth.
 COLUMN_DISTILLATE = Deprecation(
-    what="Column(...).distillate", instead="Column(...).overhead",
-    removed_in="0.2.0")
+    what="Column(...).distillate", instead="Column(...).overhead", removed_in="0.2.0"
+)
 
 
 class Column(Unit):
@@ -4059,9 +4453,9 @@ class Column(Unit):
     # Every feed nozzle, in declaration order and so highest first,
     # whatever the count spelled them. See :class:`Reactor`.
     feeds: tuple[Port, ...]
-    # The single-feed tower's nozzle; ``n_feeds > 1`` replaces it with a
-    # family that cannot be declared a member at a time. See
-    # :class:`Mixer`.
+    # The single-feed tower's nozzle: an alias for ``feed_1``, not a
+    # second registered port. ``n_feeds > 1`` drops the alias. See
+    # :class:`Reactor`.
     feed: Port
     # Every side draw, in declaration order and so highest first,
     # whatever the count spelled them -- ``feeds`` above, read the other
@@ -4113,43 +4507,55 @@ class Column(Unit):
     # ``col.reflux_in`` still raises at edit time on a plain ``Column``
     # even though it still works at run time.
     if TYPE_CHECKING:
-
         # Family A: any n_feeds, n_draws pinned at its own default (0).
         # ``n_draws`` sits after ``*args`` -- keyword-only, exactly like
         # every other keyword this constructor takes beyond ``n_feeds``
         # -- so naming it changes nothing about how any positional call
         # this library has ever been written with resolves.
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
-                    n_draws: Literal[0] = 0, **kwargs: Any) -> "Column1": ...
+        def __new__(
+            cls,
+            name: str,
+            n_feeds: Literal[1] = 1,
+            *args: Any,
+            n_draws: Literal[0] = 0,
+            **kwargs: Any,
+        ) -> "Column1": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[2], *args: Any,
-                    n_draws: Literal[0] = 0, **kwargs: Any) -> "Column2": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[2], *args: Any, n_draws: Literal[0] = 0, **kwargs: Any
+        ) -> "Column2": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[3], *args: Any,
-                    n_draws: Literal[0] = 0, **kwargs: Any) -> "Column3": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[3], *args: Any, n_draws: Literal[0] = 0, **kwargs: Any
+        ) -> "Column3": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[4], *args: Any,
-                    n_draws: Literal[0] = 0, **kwargs: Any) -> "Column4": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[4], *args: Any, n_draws: Literal[0] = 0, **kwargs: Any
+        ) -> "Column4": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[5], *args: Any,
-                    n_draws: Literal[0] = 0, **kwargs: Any) -> "Column5": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[5], *args: Any, n_draws: Literal[0] = 0, **kwargs: Any
+        ) -> "Column5": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[6], *args: Any,
-                    n_draws: Literal[0] = 0, **kwargs: Any) -> "Column6": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[6], *args: Any, n_draws: Literal[0] = 0, **kwargs: Any
+        ) -> "Column6": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[7], *args: Any,
-                    n_draws: Literal[0] = 0, **kwargs: Any) -> "Column7": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[7], *args: Any, n_draws: Literal[0] = 0, **kwargs: Any
+        ) -> "Column7": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[8], *args: Any,
-                    n_draws: Literal[0] = 0, **kwargs: Any) -> "Column8": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[8], *args: Any, n_draws: Literal[0] = 0, **kwargs: Any
+        ) -> "Column8": ...
 
         # Family B: n_feeds pinned at its own default (1), any n_draws.
         # ``n_draws`` takes no default here -- unlike Family A's, this
@@ -4157,46 +4563,56 @@ class Column(Unit):
         # match at all, so a bare ``Column("T-1")`` keeps resolving to
         # ``Column1`` above rather than to ``ColumnDraw1``.
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
-                    n_draws: Literal[1], **kwargs: Any) -> "ColumnDraw1": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[1], **kwargs: Any
+        ) -> "ColumnDraw1": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
-                    n_draws: Literal[2], **kwargs: Any) -> "ColumnDraw2": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[2], **kwargs: Any
+        ) -> "ColumnDraw2": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
-                    n_draws: Literal[3], **kwargs: Any) -> "ColumnDraw3": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[3], **kwargs: Any
+        ) -> "ColumnDraw3": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
-                    n_draws: Literal[4], **kwargs: Any) -> "ColumnDraw4": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[4], **kwargs: Any
+        ) -> "ColumnDraw4": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
-                    n_draws: Literal[5], **kwargs: Any) -> "ColumnDraw5": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[5], **kwargs: Any
+        ) -> "ColumnDraw5": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
-                    n_draws: Literal[6], **kwargs: Any) -> "ColumnDraw6": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[6], **kwargs: Any
+        ) -> "ColumnDraw6": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
-                    n_draws: Literal[7], **kwargs: Any) -> "ColumnDraw7": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[7], **kwargs: Any
+        ) -> "ColumnDraw7": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1, *args: Any,
-                    n_draws: Literal[8], **kwargs: Any) -> "ColumnDraw8": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, n_draws: Literal[8], **kwargs: Any
+        ) -> "ColumnDraw8": ...
 
         # The intersection -- both counts above one -- and every
         # computed count: neither family above matches, so this is what
         # both an ``n_feeds=2, n_draws=2`` and an
         # ``n_feeds=len(...)`` call resolve to.
         @overload
-        def __new__(cls, name: str, n_feeds: int = 1, *args: Any,
-                    n_draws: int = 0, **kwargs: Any) -> "Column": ...
-        def __new__(cls, name: str, n_feeds: int = 1, *args: Any,
-                    n_draws: int = 0, **kwargs: Any) -> "Column": ...
+        def __new__(
+            cls, name: str, n_feeds: int = 1, *args: Any, n_draws: int = 0, **kwargs: Any
+        ) -> "Column": ...
+        def __new__(
+            cls, name: str, n_feeds: int = 1, *args: Any, n_draws: int = 0, **kwargs: Any
+        ) -> "Column": ...
 
     kind = "column"
     PORTS = [
@@ -4245,49 +4661,66 @@ class Column(Unit):
     #: own artwork and would have come out with a third.
     COMPOSITION = {"internals": None, "trays": DEFAULT_TRAYS}
 
-    def __init__(self, name: str, n_feeds: int = 1, variant: str = "default",
-                 internals: str | None = _UNSTATED, trays: int = DEFAULT_TRAYS,
-                 feed_stages: list[int | None] | None = None,
-                 n_draws: int = 0, draw_stages: list[int | None] | None = None,
-                 width: float | None = None, height: float | None = None,
-                 label_pos: str | None = None, description: str = "",
-                 reference: str = ""):
+    def __init__(
+        self,
+        name: str,
+        n_feeds: int = 1,
+        variant: str = "default",
+        internals: str | None = _UNSTATED,
+        trays: int = DEFAULT_TRAYS,
+        feed_stages: list[int | None] | None = None,
+        n_draws: int = 0,
+        draw_stages: list[int | None] | None = None,
+        width: float | None = None,
+        height: float | None = None,
+        label_pos: str | None = None,
+        description: str = "",
+        reference: str = "",
+    ):
         names = _feed_names(n_feeds, "Column")
         draw_names = _draw_names(n_draws, "Column")
-        super().__init__(name, variant=variant, width=width, height=height,
-                         label_pos=label_pos, description=description,
-                         reference=reference)
+        super().__init__(
+            name,
+            variant=variant,
+            width=width,
+            height=height,
+            label_pos=label_pos,
+            description=description,
+            reference=reference,
+        )
         if internals is _UNSTATED:
             internals = self.composition_defaults(self.variant)["internals"]
         self.internals = internals
         self.trays = trays
         from pandid.render.iso_parts import internals_overlays
-        _compose_onto(self, () if internals is None
-                      else internals_overlays(internals, trays))
+
+        _compose_onto(self, () if internals is None else internals_overlays(internals, trays))
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
         self.draws = tuple(self._add_port(draw, "outlet", "draw") for draw in draw_names)
+        if n_feeds == 1:
+            # An alias, not a second port; see :class:`Reactor`.
+            self.feed = self.feeds[0]
         self.feed_stages = feed_stages
         self.draw_stages = draw_stages
         self._stage_fractions = {
-            **_stage_fractions(name, internals, trays, feed_stages, names,
-                               "feed_stages", "feed"),
-            **_stage_fractions(name, internals, trays, draw_stages, draw_names,
-                               "draw_stages", "draw"),
+            **_stage_fractions(name, internals, trays, feed_stages, names, "feed_stages", "feed"),
+            **_stage_fractions(
+                name, internals, trays, draw_stages, draw_names, "draw_stages", "draw"
+            ),
         }
 
     def _series_pin(self, port_name: str) -> float | None:
         return self._stage_fractions.get(port_name)
 
 
-
 if TYPE_CHECKING:
     # A column of each feed count, for the overloads above. ``Column1``
-    # is the one-feed tower, whose nozzle is the singular ``feed`` the
-    # base already declares, so it adds nothing and exists only so the
-    # overload for ``Literal[1]`` has something to name.
+    # is the one-feed tower: its nozzle is really named ``feed_1``, so
+    # that is declared here, and the alias ``feed`` the base class
+    # already declares answers for the other spelling.
 
     class Column1(Column):
-        pass
+        feed_1: Port
 
     class Column2(Column):
         feed_1: Port
@@ -4339,12 +4772,16 @@ if TYPE_CHECKING:
         feed_8: Port
 
     # A column of each draw count, for Family B above -- the same
-    # pattern read the other way, and the reason ``ColumnDraw1`` is not
-    # empty the way ``Column1`` is. ``feed`` is on the base class
-    # because ``n_feeds`` defaults to 1, so a one-feed tower always has
-    # it; ``draw`` is on no base class at all, because ``n_draws``
-    # defaults to 0, so nothing here can say a plain ``Column`` has one.
-    # ``ColumnDraw1`` is where the singular nozzle really gets declared.
+    # pattern read the other way, but asymmetric with the feeds above
+    # it: the alias ``feed`` is on the base class because ``n_feeds``
+    # defaults to 1, so a one-feed tower always has it, while ``draw``
+    # is on no base class at all, because ``n_draws`` defaults to 0, so
+    # nothing here can say a plain ``Column`` has one. Unlike a feed, a
+    # lone draw stays the bare singular name rather than also getting a
+    # numbered ``draw_1``: :func:`_draw_names`, unlike :func:`_feed_names`,
+    # is not a real port for every count, so there is no ``feed_1``-style
+    # member to alias it to. ``ColumnDraw1`` is where that singular
+    # nozzle really gets declared.
 
     class ColumnDraw1(Column):
         draw: Port
@@ -4453,48 +4890,58 @@ class DistillationColumn(Column):
     if TYPE_CHECKING:
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
-                    *args: Any, **kwargs: Any) -> "DistillationColumn1": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, **kwargs: Any
+        ) -> "DistillationColumn1": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[2],
-                    *args: Any, **kwargs: Any) -> "DistillationColumn2": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[2], *args: Any, **kwargs: Any
+        ) -> "DistillationColumn2": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[3],
-                    *args: Any, **kwargs: Any) -> "DistillationColumn3": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[3], *args: Any, **kwargs: Any
+        ) -> "DistillationColumn3": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[4],
-                    *args: Any, **kwargs: Any) -> "DistillationColumn4": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[4], *args: Any, **kwargs: Any
+        ) -> "DistillationColumn4": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[5],
-                    *args: Any, **kwargs: Any) -> "DistillationColumn5": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[5], *args: Any, **kwargs: Any
+        ) -> "DistillationColumn5": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[6],
-                    *args: Any, **kwargs: Any) -> "DistillationColumn6": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[6], *args: Any, **kwargs: Any
+        ) -> "DistillationColumn6": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[7],
-                    *args: Any, **kwargs: Any) -> "DistillationColumn7": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[7], *args: Any, **kwargs: Any
+        ) -> "DistillationColumn7": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[8],
-                    *args: Any, **kwargs: Any) -> "DistillationColumn8": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[8], *args: Any, **kwargs: Any
+        ) -> "DistillationColumn8": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: int,
-                    *args: Any, **kwargs: Any) -> "DistillationColumn": ...
-        def __new__(cls, name: str, n_feeds: int = 1,
-                    *args: Any, **kwargs: Any) -> "DistillationColumn": ...
+        def __new__(
+            cls, name: str, n_feeds: int, *args: Any, **kwargs: Any
+        ) -> "DistillationColumn": ...
+        def __new__(
+            cls, name: str, n_feeds: int = 1, *args: Any, **kwargs: Any
+        ) -> "DistillationColumn": ...
 
 
 if TYPE_CHECKING:
 
     class DistillationColumn1(DistillationColumn):
-        pass
+        feed_1: Port
 
     class DistillationColumn2(DistillationColumn):
         feed_1: Port
@@ -4625,48 +5072,54 @@ class Absorber(Column):
     if TYPE_CHECKING:
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
-                    *args: Any, **kwargs: Any) -> "Absorber1": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, **kwargs: Any
+        ) -> "Absorber1": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[2],
-                    *args: Any, **kwargs: Any) -> "Absorber2": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[2], *args: Any, **kwargs: Any
+        ) -> "Absorber2": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[3],
-                    *args: Any, **kwargs: Any) -> "Absorber3": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[3], *args: Any, **kwargs: Any
+        ) -> "Absorber3": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[4],
-                    *args: Any, **kwargs: Any) -> "Absorber4": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[4], *args: Any, **kwargs: Any
+        ) -> "Absorber4": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[5],
-                    *args: Any, **kwargs: Any) -> "Absorber5": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[5], *args: Any, **kwargs: Any
+        ) -> "Absorber5": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[6],
-                    *args: Any, **kwargs: Any) -> "Absorber6": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[6], *args: Any, **kwargs: Any
+        ) -> "Absorber6": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[7],
-                    *args: Any, **kwargs: Any) -> "Absorber7": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[7], *args: Any, **kwargs: Any
+        ) -> "Absorber7": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[8],
-                    *args: Any, **kwargs: Any) -> "Absorber8": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[8], *args: Any, **kwargs: Any
+        ) -> "Absorber8": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: int,
-                    *args: Any, **kwargs: Any) -> "Absorber": ...
-        def __new__(cls, name: str, n_feeds: int = 1,
-                    *args: Any, **kwargs: Any) -> "Absorber": ...
+        def __new__(cls, name: str, n_feeds: int, *args: Any, **kwargs: Any) -> "Absorber": ...
+        def __new__(cls, name: str, n_feeds: int = 1, *args: Any, **kwargs: Any) -> "Absorber": ...
 
 
 if TYPE_CHECKING:
 
     class Absorber1(Absorber):
-        pass
+        feed_1: Port
 
     class Absorber2(Absorber):
         feed_1: Port
@@ -4769,48 +5222,54 @@ class Stripper(Column):
     if TYPE_CHECKING:
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
-                    *args: Any, **kwargs: Any) -> "Stripper1": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, **kwargs: Any
+        ) -> "Stripper1": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[2],
-                    *args: Any, **kwargs: Any) -> "Stripper2": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[2], *args: Any, **kwargs: Any
+        ) -> "Stripper2": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[3],
-                    *args: Any, **kwargs: Any) -> "Stripper3": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[3], *args: Any, **kwargs: Any
+        ) -> "Stripper3": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[4],
-                    *args: Any, **kwargs: Any) -> "Stripper4": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[4], *args: Any, **kwargs: Any
+        ) -> "Stripper4": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[5],
-                    *args: Any, **kwargs: Any) -> "Stripper5": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[5], *args: Any, **kwargs: Any
+        ) -> "Stripper5": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[6],
-                    *args: Any, **kwargs: Any) -> "Stripper6": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[6], *args: Any, **kwargs: Any
+        ) -> "Stripper6": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[7],
-                    *args: Any, **kwargs: Any) -> "Stripper7": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[7], *args: Any, **kwargs: Any
+        ) -> "Stripper7": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: Literal[8],
-                    *args: Any, **kwargs: Any) -> "Stripper8": ...
+        def __new__(
+            cls, name: str, n_feeds: Literal[8], *args: Any, **kwargs: Any
+        ) -> "Stripper8": ...
 
         @overload
-        def __new__(cls, name: str, n_feeds: int,
-                    *args: Any, **kwargs: Any) -> "Stripper": ...
-        def __new__(cls, name: str, n_feeds: int = 1,
-                    *args: Any, **kwargs: Any) -> "Stripper": ...
+        def __new__(cls, name: str, n_feeds: int, *args: Any, **kwargs: Any) -> "Stripper": ...
+        def __new__(cls, name: str, n_feeds: int = 1, *args: Any, **kwargs: Any) -> "Stripper": ...
 
 
 if TYPE_CHECKING:
 
     class Stripper1(Stripper):
-        pass
+        feed_1: Port
 
     class Stripper2(Stripper):
         feed_1: Port
@@ -4898,7 +5357,6 @@ class Mixer(Unit):
     # The one nozzle every mixer has, declared like any other fixed one.
     outlet: Port
 
-
     # ``in_1`` ... ``in_n`` are real attributes at run time and no
     # annotation can name them: ``n`` is the caller's. But a checker
     # *can* be told what a **literal** count builds, and that is every
@@ -4924,50 +5382,75 @@ class Mixer(Unit):
     # ``__init__`` takes, and ``__init__`` right below is the one
     # declaration of it.
     if TYPE_CHECKING:
-        @overload
-        def __new__(cls, name: str, n_inlets: Literal[1],
-                    *args: Any, **kwargs: Any) -> "Mixer1": ...
 
         @overload
-        def __new__(cls, name: str, n_inlets: Literal[2] = 2,
-                    *args: Any, **kwargs: Any) -> "Mixer2": ...
+        def __new__(
+            cls, name: str, n_inlets: Literal[1], *args: Any, **kwargs: Any
+        ) -> "Mixer1": ...
 
         @overload
-        def __new__(cls, name: str, n_inlets: Literal[3],
-                    *args: Any, **kwargs: Any) -> "Mixer3": ...
+        def __new__(
+            cls, name: str, n_inlets: Literal[2] = 2, *args: Any, **kwargs: Any
+        ) -> "Mixer2": ...
 
         @overload
-        def __new__(cls, name: str, n_inlets: Literal[4],
-                    *args: Any, **kwargs: Any) -> "Mixer4": ...
+        def __new__(
+            cls, name: str, n_inlets: Literal[3], *args: Any, **kwargs: Any
+        ) -> "Mixer3": ...
 
         @overload
-        def __new__(cls, name: str, n_inlets: Literal[5],
-                    *args: Any, **kwargs: Any) -> "Mixer5": ...
+        def __new__(
+            cls, name: str, n_inlets: Literal[4], *args: Any, **kwargs: Any
+        ) -> "Mixer4": ...
 
         @overload
-        def __new__(cls, name: str, n_inlets: Literal[6],
-                    *args: Any, **kwargs: Any) -> "Mixer6": ...
+        def __new__(
+            cls, name: str, n_inlets: Literal[5], *args: Any, **kwargs: Any
+        ) -> "Mixer5": ...
 
         @overload
-        def __new__(cls, name: str, n_inlets: Literal[7],
-                    *args: Any, **kwargs: Any) -> "Mixer7": ...
+        def __new__(
+            cls, name: str, n_inlets: Literal[6], *args: Any, **kwargs: Any
+        ) -> "Mixer6": ...
 
         @overload
-        def __new__(cls, name: str, n_inlets: Literal[8],
-                    *args: Any, **kwargs: Any) -> "Mixer8": ...
+        def __new__(
+            cls, name: str, n_inlets: Literal[7], *args: Any, **kwargs: Any
+        ) -> "Mixer7": ...
 
         @overload
-        def __new__(cls, name: str, n_inlets: int,
-                    *args: Any, **kwargs: Any) -> "Mixer": ...
-        def __new__(cls, name: str, n_inlets: int = 2,
-                    *args: Any, **kwargs: Any) -> "Mixer": ...
+        def __new__(
+            cls, name: str, n_inlets: Literal[8], *args: Any, **kwargs: Any
+        ) -> "Mixer8": ...
+
+        @overload
+        def __new__(cls, name: str, n_inlets: int, *args: Any, **kwargs: Any) -> "Mixer": ...
+        def __new__(cls, name: str, n_inlets: int = 2, *args: Any, **kwargs: Any) -> "Mixer": ...
 
     kind = "mixer"
 
-    def __init__(self, name: str, n_inlets: int = 2, variant: str = "default", width: float | None = None, height: float | None = None, description: str = "", reference: str = ""):
+    def __init__(
+        self,
+        name: str,
+        n_inlets: int = 2,
+        variant: str = "default",
+        width: float | None = None,
+        height: float | None = None,
+        label_pos: str | None = None,
+        description: str = "",
+        reference: str = "",
+    ):
         if n_inlets < 1:
             raise ValueError(f"Mixer requires at least 1 inlet, got {n_inlets}")
-        super().__init__(name, variant=variant, width=width, height=height, description=description, reference=reference)
+        super().__init__(
+            name,
+            variant=variant,
+            width=width,
+            height=height,
+            label_pos=label_pos,
+            description=description,
+            reference=reference,
+        )
         # Built from what the loop that creates the family hands back,
         # rather than by matching ``in_`` against the ``ports`` dict
         # afterwards, which would be the naming rule written twice.
@@ -4975,7 +5458,6 @@ class Mixer(Unit):
             self._add_port(f"in_{i}", "inlet", "process") for i in range(1, n_inlets + 1)
         )
         self._add_port("outlet", "outlet", "process")
-
 
 
 if TYPE_CHECKING:
@@ -5059,55 +5541,81 @@ class Splitter(Unit):
     # subclass declaring exactly ``out_1`` ... ``out_n``, a computed one
     # gets this class and ``outlets[i]``. See :class:`Mixer` for why.
     if TYPE_CHECKING:
-        @overload
-        def __new__(cls, name: str, n_outlets: Literal[1],
-                    *args: Any, **kwargs: Any) -> "Splitter1": ...
 
         @overload
-        def __new__(cls, name: str, n_outlets: Literal[2] = 2,
-                    *args: Any, **kwargs: Any) -> "Splitter2": ...
+        def __new__(
+            cls, name: str, n_outlets: Literal[1], *args: Any, **kwargs: Any
+        ) -> "Splitter1": ...
 
         @overload
-        def __new__(cls, name: str, n_outlets: Literal[3],
-                    *args: Any, **kwargs: Any) -> "Splitter3": ...
+        def __new__(
+            cls, name: str, n_outlets: Literal[2] = 2, *args: Any, **kwargs: Any
+        ) -> "Splitter2": ...
 
         @overload
-        def __new__(cls, name: str, n_outlets: Literal[4],
-                    *args: Any, **kwargs: Any) -> "Splitter4": ...
+        def __new__(
+            cls, name: str, n_outlets: Literal[3], *args: Any, **kwargs: Any
+        ) -> "Splitter3": ...
 
         @overload
-        def __new__(cls, name: str, n_outlets: Literal[5],
-                    *args: Any, **kwargs: Any) -> "Splitter5": ...
+        def __new__(
+            cls, name: str, n_outlets: Literal[4], *args: Any, **kwargs: Any
+        ) -> "Splitter4": ...
 
         @overload
-        def __new__(cls, name: str, n_outlets: Literal[6],
-                    *args: Any, **kwargs: Any) -> "Splitter6": ...
+        def __new__(
+            cls, name: str, n_outlets: Literal[5], *args: Any, **kwargs: Any
+        ) -> "Splitter5": ...
 
         @overload
-        def __new__(cls, name: str, n_outlets: Literal[7],
-                    *args: Any, **kwargs: Any) -> "Splitter7": ...
+        def __new__(
+            cls, name: str, n_outlets: Literal[6], *args: Any, **kwargs: Any
+        ) -> "Splitter6": ...
 
         @overload
-        def __new__(cls, name: str, n_outlets: Literal[8],
-                    *args: Any, **kwargs: Any) -> "Splitter8": ...
+        def __new__(
+            cls, name: str, n_outlets: Literal[7], *args: Any, **kwargs: Any
+        ) -> "Splitter7": ...
 
         @overload
-        def __new__(cls, name: str, n_outlets: int,
-                    *args: Any, **kwargs: Any) -> "Splitter": ...
-        def __new__(cls, name: str, n_outlets: int = 2,
-                    *args: Any, **kwargs: Any) -> "Splitter": ...
+        def __new__(
+            cls, name: str, n_outlets: Literal[8], *args: Any, **kwargs: Any
+        ) -> "Splitter8": ...
+
+        @overload
+        def __new__(cls, name: str, n_outlets: int, *args: Any, **kwargs: Any) -> "Splitter": ...
+        def __new__(
+            cls, name: str, n_outlets: int = 2, *args: Any, **kwargs: Any
+        ) -> "Splitter": ...
 
     kind = "splitter"
 
-    def __init__(self, name: str, n_outlets: int = 2, variant: str = "default", width: float | None = None, height: float | None = None, description: str = "", reference: str = ""):
+    def __init__(
+        self,
+        name: str,
+        n_outlets: int = 2,
+        variant: str = "default",
+        width: float | None = None,
+        height: float | None = None,
+        label_pos: str | None = None,
+        description: str = "",
+        reference: str = "",
+    ):
         if n_outlets < 1:
             raise ValueError(f"Splitter requires at least 1 outlet, got {n_outlets}")
-        super().__init__(name, variant=variant, width=width, height=height, description=description, reference=reference)
+        super().__init__(
+            name,
+            variant=variant,
+            width=width,
+            height=height,
+            label_pos=label_pos,
+            description=description,
+            reference=reference,
+        )
         self._add_port("inlet", "inlet", "process")
         self.outlets = tuple(
             self._add_port(f"out_{i}", "outlet", "process") for i in range(1, n_outlets + 1)
         )
-
 
 
 if TYPE_CHECKING:
@@ -5172,8 +5680,7 @@ if TYPE_CHECKING:
         out_8: Port
 
 
-def _block_faces(spec: "int | Sequence[str]", default: str, owner: str,
-                 argument: str) -> list[str]:
+def _block_faces(spec: "int | Sequence[str]", default: str, owner: str, argument: str) -> list[str]:
     """Read a :class:`Block`'s ``inputs=``/``outputs=``, a face each.
 
     A plain count is the common case spelled short: ``inputs=3`` is
@@ -5205,8 +5712,11 @@ def _block_face(face: object, owner: str) -> str:
     :meth:`Block.nozzle` both come through here, so both raise the same
     sentence.
     """
-    resolved = (_FACE_OF_SIDE.get(face.strip().lower(), face.strip().upper())
-                if isinstance(face, str) else None)
+    resolved = (
+        _FACE_OF_SIDE.get(face.strip().lower(), face.strip().upper())
+        if isinstance(face, str)
+        else None
+    )
     if resolved not in ("N", "S", "E", "W"):
         raise ValueError(
             f"{owner}: {face!r} is not a face; a connection is on the 'N', 'S', "
@@ -5329,11 +5839,18 @@ class Block(Unit):
     _width: float | None = None
     _height: float | None = None
 
-    def __init__(self, name: str, inputs: "int | Sequence[str]" = 1,
-                 outputs: "int | Sequence[str]" = 1, variant: str = "default",
-                 width: float | None = None, height: float | None = None,
-                 label_pos: str | None = None, description: str = "",
-                 reference: str = ""):
+    def __init__(
+        self,
+        name: str,
+        inputs: "int | Sequence[str]" = 1,
+        outputs: "int | Sequence[str]" = 1,
+        variant: str = "default",
+        width: float | None = None,
+        height: float | None = None,
+        label_pos: str | None = None,
+        description: str = "",
+        reference: str = "",
+    ):
         in_faces = _block_faces(inputs, self.DEFAULT_INPUT_FACE, name, "inputs")
         out_faces = _block_faces(outputs, self.DEFAULT_OUTPUT_FACE, name, "outputs")
         if not in_faces and not out_faces:
@@ -5342,16 +5859,26 @@ class Block(Unit):
                 f"in it, which nothing can be routed to. Give it at least one "
                 f"inputs= or outputs=."
             )
-        super().__init__(name, variant=variant, width=width, height=height,
-                         label_pos=label_pos, description=description,
-                         reference=reference)
+        super().__init__(
+            name,
+            variant=variant,
+            width=width,
+            height=height,
+            label_pos=label_pos,
+            description=description,
+            reference=reference,
+        )
         #: connection name -> the face it leaves from, in port order.
         #: The single authority: the symbol is built from it.
         self._faces: dict[str, str] = {}
-        self.inlets = tuple(self._add_connection(f"in_{i}", "inlet", face)
-                            for i, face in enumerate(in_faces, start=1))
-        self.outlets = tuple(self._add_connection(f"out_{i}", "outlet", face)
-                             for i, face in enumerate(out_faces, start=1))
+        self.inlets = tuple(
+            self._add_connection(f"in_{i}", "inlet", face)
+            for i, face in enumerate(in_faces, start=1)
+        )
+        self.outlets = tuple(
+            self._add_connection(f"out_{i}", "outlet", face)
+            for i, face in enumerate(out_faces, start=1)
+        )
         # Check now, so a box that cannot hold the connections is
         # refused on the line that asked for it rather than at the first
         # render.
@@ -5428,8 +5955,9 @@ class Block(Unit):
         place rather than turning the block into something undrawable.
         """
         was = self.pin_
-        super().pin(col=col, row=row, x=x, y=y, orientation=orientation,
-                    mirrored=mirrored, port=port)
+        super().pin(
+            col=col, row=row, x=x, y=y, orientation=orientation, mirrored=mirrored, port=port
+        )
         try:
             self._check_box()
         except ValueError:
@@ -5643,8 +6171,7 @@ class Block(Unit):
         # that held the connections a moment ago still does.
         replacement = iter(named)
         self._faces = {
-            (next(replacement) if on == wanted else name): on
-            for name, on in self._faces.items()
+            (next(replacement) if on == wanted else name): on for name, on in self._faces.items()
         }
         # Same face, different connections along it, so every nozzle on
         # it has moved and the runs into them have to be routed again.
@@ -5666,8 +6193,7 @@ class Block(Unit):
         # The name widens the box only where the author left the width
         # open; see block_symbol(). Passing it with a width already
         # given would cost every block its own <defs> entry.
-        return block_symbol(tuple(self._faces.items()),
-                            "" if self.width is not None else self.tag)
+        return block_symbol(tuple(self._faces.items()), "" if self.width is not None else self.tag)
 
     def _check_box(self, placed=None) -> None:
         """Raise unless the placed box draws the connections at pitch.
@@ -5709,5 +6235,4 @@ class Block(Unit):
             # run is drawn along is the two questions XOR'd.
             drawn, axis = (w, "width") if upright == turned else (h, "height")
             if drawn < along - 1e-9:
-                raise block_box_too_small(self.name, face, count, axis, drawn,
-                                          along, turned=turned)
+                raise block_box_too_small(self.name, face, count, axis, drawn, along, turned=turned)

@@ -881,10 +881,17 @@ class RotaryDryer(Dryer):
 
     kind = "dryer"
     VARIANTS = ("default",)
-    PORTS = [("feed", "inlet", "feed"), ("product", "outlet", "process")]
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("product", "outlet", "process"),
+        ("heating_in", "inlet", "utility"),
+        ("vent", "outlet", "vapor"),
+    ]
 
     feed: Port
     product: Port
+    heating_in: Port
+    vent: Port
 
 
 class FluidizedBedDryer(Dryer):
@@ -898,10 +905,17 @@ class FluidizedBedDryer(Dryer):
     kind = "dryer"
     VARIANTS = ("default", "fluidized_bed")
     VARIANT_ALIASES = {"default": "fluidized_bed"}
-    PORTS = [("feed", "inlet", "feed"), ("product", "outlet", "process")]
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("product", "outlet", "process"),
+        ("heating_in", "inlet", "utility"),
+        ("vent", "outlet", "vapor"),
+    ]
 
     feed: Port
     product: Port
+    heating_in: Port
+    vent: Port
 
 
 class SprayDryer(Dryer):
@@ -916,10 +930,17 @@ class SprayDryer(Dryer):
     kind = "dryer"
     VARIANTS = ("default", "spray")
     VARIANT_ALIASES = {"default": "spray"}
-    PORTS = [("feed", "inlet", "feed"), ("product", "outlet", "process")]
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("product", "outlet", "process"),
+        ("heating_in", "inlet", "utility"),
+        ("vent", "outlet", "vapor"),
+    ]
 
     feed: Port
     product: Port
+    heating_in: Port
+    vent: Port
 
 
 class ShelfDryer(Dryer):
@@ -934,10 +955,17 @@ class ShelfDryer(Dryer):
     kind = "dryer"
     VARIANTS = ("default", "shelf")
     VARIANT_ALIASES = {"default": "shelf"}
-    PORTS = [("feed", "inlet", "feed"), ("product", "outlet", "process")]
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("product", "outlet", "process"),
+        ("heating_in", "inlet", "utility"),
+        ("vent", "outlet", "vapor"),
+    ]
 
     feed: Port
     product: Port
+    heating_in: Port
+    vent: Port
 
 
 class TurboDryer(Dryer):
@@ -952,10 +980,17 @@ class TurboDryer(Dryer):
     kind = "dryer"
     VARIANTS = ("default", "turbo")
     VARIANT_ALIASES = {"default": "turbo"}
-    PORTS = [("feed", "inlet", "feed"), ("product", "outlet", "process")]
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("product", "outlet", "process"),
+        ("heating_in", "inlet", "utility"),
+        ("vent", "outlet", "vapor"),
+    ]
 
     feed: Port
     product: Port
+    heating_in: Port
+    vent: Port
 
 
 class BeltDryer(Dryer):
@@ -970,10 +1005,17 @@ class BeltDryer(Dryer):
     kind = "dryer"
     VARIANTS = ("default", "belt")
     VARIANT_ALIASES = {"default": "belt"}
-    PORTS = [("feed", "inlet", "feed"), ("product", "outlet", "process")]
+    PORTS = [
+        ("feed", "inlet", "feed"),
+        ("product", "outlet", "process"),
+        ("heating_in", "inlet", "utility"),
+        ("vent", "outlet", "vapor"),
+    ]
 
     feed: Port
     product: Port
+    heating_in: Port
+    vent: Port
 
 
 class JawCrusher(Crusher):
@@ -1649,7 +1691,7 @@ class StirredTankReactor(Reactor):
 if TYPE_CHECKING:
 
     class StirredTankReactor1(StirredTankReactor):
-        pass
+        feed_1: Port
 
     class StirredTankReactor2(StirredTankReactor):
         feed_1: Port

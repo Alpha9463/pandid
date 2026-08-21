@@ -484,16 +484,17 @@ def test_a_column_counts_its_feeds():
 
 
 def test_the_singular_spelling_of_a_family_is_not_counted():
-    """A one-feed column's nozzle is called ``feed`` and not ``feed_1``, and
-    that spelling is the whole difference: it is declared as a class annotation
-    beside ``overhead`` and ``bottoms``, like any other fixed nozzle, and no
-    count was ever written down for it. ``n_feeds`` is what spells the family,
-    and only then is there a number to have failed to meet."""
+    """A one-feed column's nozzle is really named ``feed_1``, the same as any
+    other count, but the bare alias ``feed`` still answers for it -- and that
+    alias, not the port's own name, is what tells the counted-nozzle rule no
+    count was ever written down. ``n_feeds`` past one is what spells the
+    family for real, dropping the alias, and only then is there a number to
+    have failed to meet."""
     fs = Flowsheet("col1")
     col = fs.add(U.Column("T-2"))
     fs.connect(col.overhead, fs.add(U.Product("D")).inlet)
     fs.connect(col.bottoms, fs.add(U.Product("B")).inlet)
-    assert "feed" in col.ports and "feed_1" not in col.ports
+    assert "feed_1" in col.ports and col.feed is col.feed_1
     assert _unpiped(fs) == []
 
 
@@ -709,15 +710,22 @@ def test_every_counted_family_answers_to_the_naming_rule(build, stem, size):
 
 
 def test_nothing_shipped_leaves_a_counted_nozzle_open():
-    """The acceptance test, over the drawings this package stands behind. 47
-    counted nozzles across eleven of the shipped sheets, and every one of them
-    piped -- so the rule is exercised by the corpus rather than merely silent on
-    it. ``14_tank_farm`` contributes one, the second signal output its cascade
-    master mints; ``15_condensing_turbine`` three, a two-outlet steam splitter
-    and the same second output on its level controller;
-    ``19_absorber_stripper`` two, the contactor's counter-current feeds;
-    ``21_alumina_refinery`` six, the three inlets of each of its two mixing
-    tanks."""
+    """The acceptance test, over the drawings this package stands behind. 64
+    counted nozzles across sixteen of the shipped sheets, and every one of
+    them piped -- so the rule is exercised by the corpus rather than merely
+    silent on it.
+
+    64 rather than the 47 this counted before #303: every ``Reactor`` and
+    ``Column`` with the default single feed now contributes one, its real
+    nozzle being ``feed_1`` rather than the unnumbered ``feed`` it used to
+    be. None of those seventeen newly-counted nozzles is an *offender* --
+    ``_family_members`` (below) counts structurally, off the name alone,
+    while the alias :func:`Unit.feed <pandid.units.Unit._canonical_port_name>`
+    still answers for so a default single feed is not "a count that went
+    unmet" (see ``pandid.validate._family_stem``) -- so this number moving
+    is exactly the corpus exercising the wider family the counted-nozzle
+    rule now covers, not a new class of finding going unreported.
+    """
     from tests.test_golden import SCENARIOS
 
     offenders, counted = [], 0
@@ -727,7 +735,7 @@ def test_nothing_shipped_leaves_a_counted_nozzle_open():
         counted += sum(_family_members(u) for u in fs.units)
         offenders += [f"{name}: {w.message}" for w in fs.warnings if w.code == "nozzle-unconnected"]
     assert offenders == []
-    assert counted == 47
+    assert counted == 64
 
 
 def _family_members(unit):

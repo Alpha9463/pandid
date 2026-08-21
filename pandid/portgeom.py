@@ -196,8 +196,15 @@ def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
     for px, py in coords:
         if unit.kind in ("feed", "product"):
             # Boundary flags are drawn directly, not from the symbol
-            # box.
-            lx, ly = (sym.width - px if mirrored else px), py
+            # box, but the flag is still a placed box with a height of
+            # its own -- :func:`~pandid.render.svg.boundary_flag` insets
+            # its pennant off *that*, not off the symbol's fallback
+            # 50-unit fixture, so the port has to come off the same
+            # height. The horizontal convention is not this: a Feed's
+            # port stays a fixed lead off its own frame origin however
+            # wide the flag grows (see :func:`unit_box`), so ``px`` is
+            # left as the symbol read it.
+            lx, ly = (sym.width - px if mirrored else px), py / sym.height * h
             face = outward_dir(lx, ly, w, h, unit.kind, port_name, mirrored)
         else:
             bx, by, bw, bh = symbol_to_box(px, py, sym.width, sym.height,
@@ -217,10 +224,25 @@ def _series_point(unit: "Unit", sym, port_name: str
     of a series), so this is where the two meet. Members are ordered by
     the unit's port order rather than by the number in the name, so the
     drawn top-to-bottom order is the order they were declared in.
+
+    ``port_name`` is canonicalised against the *unit* before it is
+    matched against ``members``: the symbol's series is still authored
+    with ``singular="feed"`` (so ``series_for`` finds it from either
+    spelling), but a live alias like ``Reactor.feed``/``Column.feed``
+    is a plain attribute and never a key of ``unit.ports`` (see
+    :meth:`~pandid.units.Unit._canonical_port_name`), so matching the
+    raw alias against the *unit's* own members would always miss and
+    fall through to the box-centre fallback -- moving every nozzle an
+    author reaches with ``port_offset(unit, "feed")`` or
+    ``pinned_y(unit, "feed")`` to the middle of the shell.
     """
     series = sym.series_for(port_name) if hasattr(sym, "series_for") else None
     if series is None:
         return None
+    # Canonicalise first, then ask the cache: the alias has to become the
+    # real name before it is looked up, and the cache is keyed by the real
+    # names ``ports`` holds.
+    port_name = unit._canonical_port_name(port_name)
     members = unit._series_members(series)
     index = members.get(port_name)
     if index is None:
@@ -388,7 +410,15 @@ def resolve_port(unit: "Unit", frame, port_name: str) -> ResolvedPort:
     obstacle), so a symbol drawn smaller than its box is still left by
     way of the box it occupies. Feed/Product use their arrow-tip
     convention for both (the port sits at the tip, whichever way it
-    points).
+    points): ``py`` already comes out scaled to the placed ``h`` (see
+    :func:`_drawn_placements`), so a taller flag centres its nozzle
+    rather than leaving it at a fraction of the symbol's own 50-unit
+    fixture. ``rot`` and ``mirror_y`` are read above and go unused on
+    this path -- deliberately, not an oversight: the pennant *is* the
+    statement of direction (east out of a Feed, west into a Product,
+    the other way where ``mirrored`` flips it), so a turn or a vertical
+    flip has nothing to add to it and is silently a no-op rather than
+    a second, competing way to say which way the flag points.
     """
     w, h = frame.w, frame.h
     rot, mirrored, mirror_y = _xform(frame)
@@ -396,6 +426,13 @@ def resolve_port(unit: "Unit", frame, port_name: str) -> ResolvedPort:
     d, (px, py) = _local_port(unit, port_name, w, h, mirrored, mirror_y, rot, want)
 
     if unit.kind in ("feed", "product"):
+        # The horizontal lead is a fixed 50 units off the frame's own
+        # origin, not ``w``: a Feed's box grows to the *left* as its
+        # label does, so widening it never moves the nozzle the sheet
+        # already routed a stream to. See :func:`unit_box`, which uses
+        # the same fixed lead for the same reason, and
+        # ``test_a_flag_is_drawn_across_its_own_box``, which pins the
+        # two agreeing.
         if unit.kind == "feed":
             ax = frame.x if mirrored else frame.x + 50.0
         else:

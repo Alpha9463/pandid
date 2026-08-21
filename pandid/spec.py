@@ -812,6 +812,13 @@ def _find_port(unit: Unit, name: Any, where: str) -> Port:
             return unit.signal_port(name)
         except KeyError:
             pass
+    # ``_canonical_port_name`` first: a live alias like ``Reactor.feed``/
+    # ``Column.feed`` is a plain attribute rather than a second entry in
+    # ``ports`` (see its own docstring), so a spec naming it would
+    # otherwise read as a port that does not exist. It resolves to a name
+    # ``ports`` really holds, which is what the checks below want.
+    if isinstance(name, str):
+        name = unit._canonical_port_name(name)
     # A retired nozzle -- one a class still answers for one release after it
     # stopped building it outright, e.g. a plain Column's ``reflux_in`` (see
     # Unit._RETIRED_PORTS/_RETIRED_PORT_ALIASES) -- is not in ``unit.ports``
@@ -822,6 +829,10 @@ def _find_port(unit: Unit, name: Any, where: str) -> Port:
     # very sheet it just wrote -- the grace period breaking its own round
     # trip. ``getattr`` is what mints it, warning the same way the author's
     # script did.
+    #
+    # After the canonicalisation above, and not before: an alias names a
+    # port that exists, a retired nozzle names one that has to be minted,
+    # and only the second wants ``getattr``.
     if isinstance(name, str) and name not in unit.ports:
         try:
             retired = getattr(unit, name)

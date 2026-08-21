@@ -1489,10 +1489,21 @@ KIND_MAP = {
                                   {"inlet": "W", "outlet": ("E", 50.0)}),
     # Drier styles. A spray drier is fed through the atomiser in its roof and
     # drops powder out of the floor, so it is piped top-to-bottom, not across.
+    #
+    # ``heating_in``/``vent`` are pandid's own addition, not the stencil's:
+    # ISO 10628-2 group 10 ticks only the solid pair, on any row, so there is
+    # no tabulated point either nozzle could be read off. The fluidised-bed
+    # and rotary drum driers keep the solid pair on the side walls and take
+    # the gas at the casing's own floor and roof, clear of it; the spray
+    # drier has already spent the roof and the floor on the solid pair, so
+    # its gas nozzles go on the side walls instead, at the drying chamber's
+    # own mid-height. See ``pandid.units.Dryer``.
     ("dryer", "fluidized_bed"): ("driers", "Drier (Fluidized Bed)",
-                                 {"feed": "W", "product": "E"}),
+                                 {"feed": "W", "product": "E",
+                                  "heating_in": ("S", 50.0), "vent": ("N", 50.0)}),
     ("dryer", "spray"): ("driers", "Spray Drier",
-                         {"feed": ("N", 50.0), "product": ("S", 50.0)}),
+                         {"feed": ("N", 50.0), "product": ("S", 50.0),
+                          "heating_in": ("W", 50.0), "vent": ("E", 50.0)}),
 
     # --- New classes (genuinely different port signature / function) ---
     # The process coil is drawn entering at (0, 54.5) and leaving at (80, 79.5);
@@ -1561,7 +1572,9 @@ KIND_MAP = {
                                          "air_in": ("AT", 89.5, 77.0), "air_out": "N",
                                          "makeup": ("S", 25.0), "blowdown": ("S", 75.0)}),
     ("filter", "default"):  ("filters", "Liquid Filter (Bag, Candle, Cartridge)", {"inlet": "W", "outlet": "E"}),
-    ("dryer", "default"):   ("driers", "Rotary Drum Drier, Tumbling Drier", {"feed": "W", "product": "E"}),
+    ("dryer", "default"):   ("driers", "Rotary Drum Drier, Tumbling Drier",
+                             {"feed": "W", "product": "E",
+                              "heating_in": ("S", 50.0), "vent": ("N", 50.0)}),
     # Steam/gas ejector: motive fluid into the steam chest, entrained fluid up
     # through its floor, mixture out of the diffuser cone. The stencil's own "S"
     # anchor lands on the chest's bottom-*right* corner, where the cone starts,
