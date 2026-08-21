@@ -64,13 +64,15 @@ def _ammonia_loop() -> Flowsheet:
     sep = fs.add(units.Separator("V-101"))
     comp = fs.add(units.Compressor("K-101"))
     prod = fs.add(units.Product("Ammonia"))
-    fs.connect(feed.outlet, mix.in_2)
+    feed_in = fs.connect(feed.outlet, mix.in_2)
     fs.connect(mix.outlet, reformer.feed)
     fs.connect(reformer.outlet, hx.shell_in)
     fs.connect(hx.shell_out, sep.feed)
     fs.connect(sep.vapor, comp.suction)
     fs.connect(comp.discharge, mix.in_1)
-    fs.connect(sep.liquid, prod.inlet)
+    product_out = fs.connect(sep.liquid, prod.inlet)
+    feed_in.properties = {"Flow (kg/h)": "5000"}
+    product_out.properties = {"Flow (kg/h)": "5000"}
     return fs
 
 
@@ -4095,7 +4097,7 @@ def _alumina_refinery() -> Flowsheet:
 
 
 SCENARIOS = {
-    "01_ammonia_loop": (_ammonia_loop, {}),
+    "01_ammonia_loop": (_ammonia_loop, {"show_stream_table": True}),
     # 02 is the manual-placement example and is the one sheet drawn with the
     # coordinate overlay on, which is what its example demonstrates. It is
     # therefore also what pins the overlay: the grid, the numbers written on it,
