@@ -881,14 +881,25 @@ def test_the_group_10_outline_is_the_row_table_2_draws():
 
     Measured off row 10.1: casing x 8..16 M at y 6..16 M, chamfered 1 M x
     2 M at the top two corners only -- (8,6) to (9,4) and (16,6) to
-    (15,4) -- so an 8 M x 12 M box. The two connection ticks are on the
-    west and east walls, nine tenths of the way down a straight-sided run
-    from y 20 to y 120 units -- also its own mid-point.
+    (15,4) -- so an 8 M x 12 M box. The two connection ticks Table 2 draws
+    are on the west and east walls, nine tenths of the way down a
+    straight-sided run from y 20 to y 120 units -- also its own mid-point.
+
+    ``heating_in``/``vent`` are not ticked by the row at all -- no row in
+    the group draws a third connection -- and are this library's own
+    addition to it, centred on the casing's own floor and roof rather
+    than read off anything Table 2 tabulates; see
+    ``pandid.units.Dryer``.
     """
     general = default_registry.get("dryer", "general")
     assert (general.width, general.height) == (80.0, 120.0)
     assert "M 0 120 L 0 20 L 10 0 L 70 0 L 80 20 L 80 120 Z" in general.svg
-    assert general.ports == {"feed": (0.0, 70.0), "product": (80.0, 70.0)}
+    assert general.ports == {
+        "feed": (0.0, 70.0),
+        "product": (80.0, 70.0),
+        "heating_in": (40.0, 120.0),
+        "vent": (40.0, 0.0),
+    }
     assert general.iso_reg == "C0046"
     assert not general.overlays
 
@@ -919,7 +930,12 @@ def test_group_10_marks_match_their_rows(variant, reg, needle):
     assert needle in sym.svg
     assert sym.iso_reg == reg
     assert not sym.overlays
-    assert sym.ports == {"feed": (0.0, 70.0), "product": (80.0, 70.0)}
+    assert sym.ports == {
+        "feed": (0.0, 70.0),
+        "product": (80.0, 70.0),
+        "heating_in": (40.0, 120.0),
+        "vent": (40.0, 0.0),
+    }
 
 
 def test_the_group_5_outline_is_the_row_table_2_draws():
