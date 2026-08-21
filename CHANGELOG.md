@@ -110,6 +110,11 @@ class hierarchy, or what it is called.
 
 ### Fixed
 
+- A sheet with a stream table and no other furniture -- no border, no title
+  block, no annotation -- now docks the table through the same
+  `dock()` every other piece of furniture is placed by, instead of a
+  separate calculation that put it at different coordinates than the
+  `.drawio` exporter, which always docks through `dock()`, drew it at.
 - `Reactor(agitator="propeller")` and `agitator="impeller"` draw instead of
   raising.
 - A type checker resolves `reactor.feed_2`, as it already did `mixer.in_2`.
