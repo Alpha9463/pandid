@@ -1177,9 +1177,13 @@ def boundary_flag(u, frame) -> Pennant:
     than measuring twice. It spans the *whole* of
     :func:`~pandid.portgeom.unit_box` horizontally -- a Feed's box
     extends left from its port, the one place in the library where that
-    is true -- and it is inset top and bottom, so the flag is 26 units
-    of a 50-unit box. An exporter taking the box for the drawing would
-    rule a flag twice the height.
+    is true -- and it is inset a fixed 12 or 15 units off ``frame.h``
+    top and bottom, so a flag at the default 50-unit height is 26 or 20
+    units deep. Reading the inset off the *placed* height rather than a
+    fixed 50 is what lets a caller who sizes a flag get a pennant that
+    fills it instead of one stuck 20 units deep near the top of a box
+    the drawing never reaches the bottom of. An exporter taking the box
+    for the drawing would rule a flag twice the height.
 
     Nothing here reads ``header``: a utility header flag is the same
     pennant as an off-page reference, and what tells the two apart on a
@@ -1200,7 +1204,7 @@ def boundary_flag(u, frame) -> Pennant:
         x0, x1 = frame.x + 50 - frame.w, frame.x + 50
     else:
         x0, x1 = frame.x, frame.x + frame.w
-    return Pennant((x0, frame.y + inset, x1, frame.y + (50 - inset)),
+    return Pennant((x0, frame.y + inset, x1, frame.y + frame.h - inset),
                    FLAG_POINT, not frame.mirrored)
 
 
@@ -3063,7 +3067,7 @@ class SvgRenderer:
             safe_name = escaped(u.tag)
 
             if u.kind in ("feed", "product"):
-                lines.extend(self._draw_boundary(u, f, x, y, safe_name))
+                lines.extend(self._draw_boundary(u, f, safe_name))
                 continue
 
             sym_id = self._sym_id(u)
@@ -3154,7 +3158,7 @@ class SvgRenderer:
                        f'y2="{_num(cy)}" stroke="black" stroke-width="{_SIGNAL_STROKE}"{dash} />')
         return ['  <g id="instrument_taps">'] + out + ['  </g>'] if out else []
 
-    def _draw_boundary(self, u, f, x, y, safe_name):
+    def _draw_boundary(self, u, f, safe_name):
         """A Feed or Product off-page connector flag.
 
         With an optional second line referencing the drawing the stream
@@ -3164,8 +3168,13 @@ class SvgRenderer:
         # The pennant's own geometry, which the draw.io exporter reads
         # too; see :func:`boundary_flag`. Slightly taller where an
         # off-page reference has to fit under the tag, and centred on
-        # the port either way (y + 25).
+        # the port either way -- the midpoint of the pennant's own
+        # (inset) top and bottom, not a fixed offset off ``y``, so a
+        # flag sized taller than the default 50 units keeps its point
+        # and its lettering in the middle of the ink it actually drew
+        # rather than stuck near the top of a box it does not fill.
         (bx0, top, bx1, bot), depth, east = boundary_flag(u, f)
+        mid = (top + bot) / 2
         label_w = f.w
         # The tag goes in the flat part of the flag: the point is not
         # paper a word can be written across.
@@ -3175,13 +3184,13 @@ class SvgRenderer:
         else:
             px0, px1, px2 = bx1, bx0 + depth, bx0
             tx = bx0 + depth + (label_w - depth) / 2
-        points = f"{px0},{top} {px1},{top} {px2},{y + 25} {px1},{bot} {px0},{bot}"
+        points = f"{px0},{top} {px1},{top} {px2},{mid} {px1},{bot} {px0},{bot}"
         out = [f'    <polygon points="{points}" fill="transparent" stroke="black" stroke-width="2" />']
         if ref:
-            out.append(f'    <text x="{tx}" y="{y + 21}" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">{safe_name}</text>')
-            out.append(f'    <text x="{tx}" y="{y + 33}" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">{escaped(ref)}</text>')
+            out.append(f'    <text x="{tx}" y="{mid - 4}" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">{safe_name}</text>')
+            out.append(f'    <text x="{tx}" y="{mid + 8}" font-family="sans-serif" font-size="10.5" text-anchor="middle" dominant-baseline="middle" fill="#333">{escaped(ref)}</text>')
         else:
-            out.append(f'    <text x="{tx}" y="{y + 25}" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">{safe_name}</text>')
+            out.append(f'    <text x="{tx}" y="{mid}" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">{safe_name}</text>')
         return out
 
     def _draw_instrument_tag(self, u, x, y, u_width, u_height):

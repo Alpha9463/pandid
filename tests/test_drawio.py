@@ -611,6 +611,70 @@ def test_a_flag_is_drawn_across_its_own_box():
             assert uy0 < by0 < by1 < uy1
 
 
+def test_a_tall_flag_fills_its_own_box_rather_than_a_fixed_50_units():
+    """A ``Feed``/``Product`` given an explicit ``height=`` used to draw the
+    same 20-unit-deep pennant near the top of whatever box it was given, since
+    the inset and the nozzle were both taken off the symbol's own 50-unit
+    fixture rather than off ``frame.h``. A 120-tall box left 94 units of it
+    empty and put the nozzle a quarter of the way down instead of centred.
+
+    The default (unsized) height stays 50 either way, so this is the one
+    case #293 says may move a drawing -- and only a drawing that gives a
+    boundary flag its own size."""
+    for cls, mirrored in (
+        (units.Feed, False),
+        (units.Feed, True),
+        (units.Product, False),
+        (units.Product, True),
+    ):
+        fs = Flowsheet("tall-flag")
+        flag = fs.add(cls("X", height=120))
+        flag.pin(x=100, y=50, mirrored=mirrored, port=None)
+        fs.layout()
+
+        ux0, uy0, ux1, uy1 = unit_box(flag, flag.frame)
+        assert (uy1 - uy0) == pytest.approx(120.0)
+
+        bx0, by0, bx1, by1 = boundary_flag(flag, flag.frame).box
+        # Inset a fixed amount off the *placed* height, so a taller box
+        # gets a taller pennant rather than the same 20-unit strip.
+        assert (by1 - by0) == pytest.approx(120.0 - 2 * 15)
+        assert uy0 < by0 < by1 < uy1
+
+        port_name = next(iter(flag.ports))
+        _, py = port_point(flag, flag.frame, port_name)
+        # Centred in the pennant, not a quarter of the way down it.
+        assert py == pytest.approx((by0 + by1) / 2)
+
+        # The SVG polygon's own tip agrees with the port and with
+        # draw.io's cell, since both resolve through the same box.
+        svg = fs.to_svg()
+        points = re.findall(r'<polygon[^>]*points="([^"]+)"', svg)[0]
+        tip_y = float(points.split()[2].split(",")[1])
+        assert tip_y == pytest.approx(py)
+
+        cells = _drawio_cells(fs, {})
+        geom = cells["u0"].find("mxGeometry")
+        dy0 = float(geom.get("y"))
+        dy1 = dy0 + float(geom.get("height"))
+        assert (dy0, dy1) == pytest.approx((by0, by1))
+
+
+def test_a_default_sized_flag_is_unmoved_by_the_height_fix():
+    """The fix in ``test_a_tall_flag_fills_its_own_box_rather_than_a_fixed_50_units``
+    only changes anything when ``height`` differs from the symbol's own 50
+    units, which no unsized ``Feed``/``Product`` ever does -- so a plain flag's
+    pennant and port stay at exactly the numbers they always drew at."""
+    fs = Flowsheet("plain-flag")
+    feed = fs.add(units.Feed("F"))
+    feed.pin(x=100, y=50, port=None)
+    fs.layout()
+    box = boundary_flag(feed, feed.frame).box
+    assert box == pytest.approx((70.0, 65.0, 150.0, 85.0))
+    _, py = port_point(feed, feed.frame, "outlet")
+    assert py == pytest.approx(75.0)
+
+
 def test_a_tee_draws_no_ink_of_its_own():
     """The pipes draw the junction. A `line` drew a mark the width of the whole
     box, which the branch met at the box *edge* -- a stub jutting out of the

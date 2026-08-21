@@ -125,6 +125,11 @@ class hierarchy, or what it is called.
   values -- a column 5 or 15 characters wide could land its own centring on
   that tie and draw 0,1 unit apart on 3.11 and on 3.12+. `19_absorber_stripper`
   no longer needs to keep its utilities table off the tie by choice of header.
+- `Feed`/`Product` given an explicit `height=` now draw a pennant that fills
+  it -- inset off the placed height, nozzle centred in the middle of it --
+  instead of the same 20-unit strip near the top of whatever box the sheet
+  reserved. The default (unsized) flag is unchanged, since its height was
+  already the symbol's own 50 units.
 
 ### Security
 
