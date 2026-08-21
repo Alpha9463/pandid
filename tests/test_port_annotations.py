@@ -8,7 +8,7 @@ package defines, builds one, and checks the two halves against each other in
 both directions.
 
 Found rather than listed, so a class added tomorrow is covered without anyone
-remembering to come here. The exemptions are named, and there are only three
+remembering to come here. The exemptions are named, and there are only four
 kinds, each argued at the class or the module it applies to:
 
 - the **numbered members** of a variable-sized family (``Mixer``'s ``in_1`` ...
@@ -46,7 +46,14 @@ kinds, each argued at the class or the module it applies to:
   anymore -- ``Column`` no longer declares those four at all, so there is
   nothing left for either class to inherit falsely. That is the fix this
   whole exemption exists to make unnecessary: a class the hierarchy tells
-  the truth about needs no annotation-level patch.
+  the truth about needs no annotation-level patch;
+- an **aliased nozzle** -- ``Reactor.feed``/``Column.feed``, a bare name
+  set beside ``feed_1`` in ``__init__`` rather than registered as a
+  second port, so a one-feed vessel keeps the singular spelling without
+  a ``PortSeries`` counting it twice (:func:`_family_aliases`). Found the
+  same way the family exemption is: a name only counts if it really is a
+  live attribute reaching a real member of a declared family, not a
+  fixed list of classes.
 """
 
 import ast
@@ -93,10 +100,12 @@ def _is_family(hint):
 # first, exactly as the old class-level list was.
 #
 # ``Column`` and ``Reactor`` are here where they were absent from the list this
-# replaces: they default to *one* feed, spelled ``feed`` and declared like any
-# other fixed nozzle, but ``feeds`` is the one-tuple holding it and the same
-# accessor once ``n_feeds`` spells the family ``feed_1`` ... ``feed_n``. The
-# sequence is the general form and the singular name stays.
+# replaces: they default to *one* feed, a real nozzle named ``feed_1`` the way
+# every other count is, plus the bare ``feed`` alias :func:`_family_aliases`
+# answers for. ``feeds`` is the one-tuple holding the real member either way,
+# and is the same accessor once ``n_feeds`` spells the family ``feed_1`` ...
+# ``feed_n``. The sequence is the general form; the alias is a convenience on
+# top of it, not a second one.
 #
 # ``Block`` declares two and nothing else, since a block flow diagram's box has
 # no nozzle every block has: *all* of its connections are one of the families.
@@ -159,10 +168,18 @@ def _superseded(cls):
     merges the MRO; that is what tells "written here" from "inherited", and it
     is why the exemption cannot leak to a class that simply forgot to declare a
     nozzle it builds.
+
+    Subtracts :func:`_family_aliases` too, or ``Absorber``/``Stripper``/
+    ``DistillationColumn``/``StirredTankReactor`` -- every generated or
+    hand-written class with its own ``PORTS`` that inherits ``Reactor`` or
+    ``Column`` -- would read as superseding the ``feed`` alias they never
+    wrote and do not need to: it is not stale, it still resolves, and a
+    class that declares no ``PORTS`` of its own is never asked the question
+    at all.
     """
     if "PORTS" not in vars(cls):
         return set()
-    return _annotated(cls) - _own_annotated(cls) - _built(cls)
+    return _annotated(cls) - _own_annotated(cls) - _built(cls) - _family_aliases(cls)
 
 
 def _own_annotations(cls):
@@ -212,6 +229,31 @@ def _family_members(cls):
     return {port.name for name in _families(cls) for port in getattr(unit, name)}
 
 
+def _family_aliases(cls):
+    """Annotated names that are a plain attribute alias for a family
+    member, not a second port -- ``Reactor.feed``/``Column.feed`` for
+    ``feed_1``, set beside it in ``__init__`` rather than registered a
+    second time. Registering it too would give a ``PortSeries`` two
+    names matching one nozzle and it would spread a family of one down
+    the shell as if it had two members, so ``feed`` is deliberately
+    absent from ``.ports`` -- present on the object, annotated on the
+    class, and never *built* in :func:`_built`'s sense.
+
+    Found rather than listed, the way :func:`_unit_classes` is: a name
+    counts only if it really is a live attribute pointing at a real
+    member of a family the class declares, so a class that does this
+    trick tomorrow needs no entry added here, and an annotation with no
+    runtime backing at all still falls through to the phantom it is.
+    """
+    unit = cls("X-1")
+    members = _family_members(cls)
+    return {
+        name
+        for name in _annotated(cls) - _built(cls)
+        if isinstance(getattr(unit, name, None), Port) and getattr(unit, name).name in members
+    }
+
+
 def _built(cls):
     """The nozzle names one default instance of ``cls`` actually has.
 
@@ -252,8 +294,10 @@ def test_a_family_only_excuses_a_numbered_nozzle(cls):
     ``in_1`` ... ``in_n``, whose count is the caller's and which therefore have
     no annotation available to them; a nozzle every instance has does have one,
     and putting it in a family instead would hide it from an editor's completion
-    behind a subscript. ``Column``'s ``feed`` is the case worth stating: it is
-    in ``feeds`` *and* declared by name, because a one-feed tower really has it.
+    behind a subscript. ``Column("T-1").feed_1`` is the case worth stating: it
+    is a real member of ``feeds`` *and* declared by name on ``Column1``, because
+    a one-feed tower really has it -- the bare ``feed`` beside it is a different
+    exemption again, :func:`_family_aliases`', since it is not itself built.
     """
     undeclared = {name for name in _built(cls) - _annotated(cls) if not _NUMBERED.search(name)}
     assert not undeclared, (
@@ -273,7 +317,7 @@ def test_every_annotation_is_a_port_that_is_built(cls):
     of the class, and mypy would then wave through a sheet that raises the
     moment it is drawn.
     """
-    phantom = _annotated(cls) - _built(cls) - _superseded(cls)
+    phantom = _annotated(cls) - _built(cls) - _superseded(cls) - _family_aliases(cls)
     assert not phantom, (
         f"{cls.__name__} declares {sorted(phantom)}, which a default "
         f"{cls.__name__} does not have; a nozzle only some variants carry "
@@ -422,11 +466,13 @@ def test_a_literal_count_gets_a_class_declaring_exactly_those_nozzles(cls, keywo
     somebody writes the nozzle and is told it does not exist.
 
     So: build the unit for real at each arity, and compare its ports against
-    what the subclass of that arity declares. A ``Column1`` is the case worth
-    having, since a one-feed tower is ``feed`` and not ``feed_1`` -- and
-    ``ColumnDraw1`` is the case that reads the opposite way: a one-draw
-    tower's ``draw`` is *not* the base class's job, because ``n_draws``
-    defaults to zero and nothing can say a plain ``Column`` has one.
+    what the subclass of that arity declares. ``ColumnDraw1`` is the case
+    worth having: a one-draw tower's ``draw`` is *not* the base class's job,
+    because ``n_draws`` defaults to zero and nothing can say a plain
+    ``Column`` has one, so ``ColumnDraw1`` declares it itself rather than
+    inheriting it -- unlike ``feed``, whose bare spelling is on ``Column``
+    regardless of arity (see :func:`_family_aliases`) and so never appears
+    in ``declared`` here at all, only ``feed_1`` does.
     """
     module = ast.parse(pathlib.Path(units.__file__).read_text(encoding="utf-8"))
     declared = {
@@ -441,12 +487,14 @@ def test_a_literal_count_gets_a_class_declaring_exactly_those_nozzles(cls, keywo
     for n in range(1, _MAX_ARITY + 1):
         name = f"{cls.__name__}{suffix}{n}"
         assert name in declared, f"{name} is not defined; the overload names it"
-        # Every nozzle this family builds at this arity -- singular
-        # included, unlike the old single-family version of this check.
+        # Every nozzle this family builds at this arity -- the numbered
+        # member included at every count, unlike the old single-family
+        # version of this check, whose n=1 built the bare name instead.
         # What the arity class has to declare on its own is only the part
         # the base class does not already promise: subtracting
-        # ``_annotated(cls)`` is what makes ``Column1`` empty (``feed`` is
-        # on ``Column`` itself) and ``ColumnDraw1`` not (``draw`` is on
+        # ``_annotated(cls)`` leaves ``Column1`` with just ``feed_1``
+        # (``feed`` is on ``Column`` itself, as the alias, and is not in
+        # ``built`` to begin with) and ``ColumnDraw1`` with ``draw`` (on
         # neither ``Column`` nor any base of it), from the one formula.
         built = {
             port

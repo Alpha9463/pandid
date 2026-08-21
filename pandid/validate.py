@@ -231,13 +231,16 @@ def _family_stem(port_name: str) -> str | None:
     answer None, because a trailing word is not a number and a nozzle
     without one is declared outright by its class.
 
-    A numbered nozzle exists **because a count was written down**, and
-    five classes build one -- ``Mixer(n_inlets=)``,
+    Five classes build a numbered member -- ``Mixer(n_inlets=)``,
     ``Splitter(n_outlets=)``, ``Column``/``Reactor(n_feeds=)``,
     ``Column(n_draws=)`` and ``Block(inputs=)``, which
     ``tests/test_port_annotations`` pins in ``_DECLARED_FAMILIES``. Each
     spells its family as a stem, an underscore and a 1-based index;
-    nothing else numbers a port.
+    nothing else numbers a port. Whether a *count was written down* for
+    this particular member is a question this function cannot answer --
+    ``feed_1`` is spelled the same whether ``n_feeds`` was named or left
+    at its default of one -- and is not its job: see the caller for the
+    live-alias check that answers it instead.
 
     Read off the **unit's own port list** and not the symbol's
     :class:`~pandid.render.symbols.PortSeries`, which writes the same
@@ -246,10 +249,6 @@ def _family_stem(port_name: str) -> str | None:
     authors an anchor per connection -- and a check that asked the
     symbol would be silent on the one class whose whole connection list
     is counted.
-
-    A family of one is still a family: ``Mixer(n_inlets=1)`` spells its
-    result ``in_1``, while a one-feed column's ``feed`` is silent here
-    because the singular spelling says the nozzle was not counted.
     """
     stem, sep, index = port_name.rpartition("_")
     return stem if sep and stem and index.isdigit() else None
@@ -665,6 +664,16 @@ def model_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             # answered by counting. No shipped class numbers a signal
             # port, so this holds the door for one that might.
             if any(u.ports[n].role == "signal" for n in members):
+                continue
+            # A live alias for this family's sole member -- Reactor.feed,
+            # Column.feed -- means the singular spelling still answers
+            # for it, exactly as it did back when the port itself was
+            # named ``feed`` rather than ``feed_1`` (see
+            # Unit._canonical_port_name). The class offers that one un-
+            # asked, the same as any other fixed nozzle, so it is not "a
+            # count that went unmet" -- only a family with no alias at
+            # all, or one raised past its aliased arity, is.
+            if len(members) == 1 and getattr(u, stem, None) is u.ports[members[0]]:
                 continue
             members.sort(key=lambda member: int(member.rpartition("_")[2]))
             loose = [m for m in members if u.ports[m].stream is None]

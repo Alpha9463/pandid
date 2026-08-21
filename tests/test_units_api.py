@@ -36,6 +36,19 @@ def test_boundary_flags_take_an_off_page_reference():
     assert U.Product("To Flare", reference="PFD-900").reference == "PFD-900"
 
 
+@pytest.mark.parametrize("cls", [U.Mixer, U.Splitter])
+def test_mixer_and_splitter_take_label_pos_like_every_other_tagged_unit(cls):
+    """``label_pos`` is a plain ``Unit`` attribute the renderer reads, and
+    almost every public constructor takes it -- ``Mixer`` and ``Splitter``
+    draw triangles that carry a tag, so refusing it in the constructor was
+    an oversight, not a decision the way it is for ``Tee``, which draws no
+    tag at all. Setting it after construction already worked, so the
+    constructor and the attribute used to disagree about whether the
+    option existed."""
+    unit = cls("X", label_pos="top")
+    assert unit.label_pos == "top"
+
+
 @pytest.mark.parametrize(
     "unit",
     [

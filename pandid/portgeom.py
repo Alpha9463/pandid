@@ -224,10 +224,25 @@ def _series_point(unit: "Unit", sym, port_name: str
     of a series), so this is where the two meet. Members are ordered by
     the unit's port order rather than by the number in the name, so the
     drawn top-to-bottom order is the order they were declared in.
+
+    ``port_name`` is canonicalised against the *unit* before it is
+    matched against ``members``: the symbol's series is still authored
+    with ``singular="feed"`` (so ``series_for`` finds it from either
+    spelling), but a live alias like ``Reactor.feed``/``Column.feed``
+    is a plain attribute and never a key of ``unit.ports`` (see
+    :meth:`~pandid.units.Unit._canonical_port_name`), so matching the
+    raw alias against the *unit's* own members would always miss and
+    fall through to the box-centre fallback -- moving every nozzle an
+    author reaches with ``port_offset(unit, "feed")`` or
+    ``pinned_y(unit, "feed")`` to the middle of the shell.
     """
     series = sym.series_for(port_name) if hasattr(sym, "series_for") else None
     if series is None:
         return None
+    # Canonicalise first, then ask the cache: the alias has to become the
+    # real name before it is looked up, and the cache is keyed by the real
+    # names ``ports`` holds.
+    port_name = unit._canonical_port_name(port_name)
     members = unit._series_members(series)
     index = members.get(port_name)
     if index is None:

@@ -156,7 +156,7 @@ def test_a_shipped_variant_resolves_the_nozzles_it_always_did(cls, variant):
         assert built == {spec[0] for spec in table}
     elif cls is units.Reactor:
         table = cls._VARIANT_PORTS.get(variant, cls._VESSEL)
-        want = {spec[0] for spec in table} | {"feed"}
+        want = {spec[0] for spec in table} | {"feed_1"}
         if variant in cls._STIRRED:
             want |= {"drive"}
         assert built == want
