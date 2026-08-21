@@ -31,7 +31,7 @@ from pandid.ports import Port
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
-    from pandid.render.symbols import Symbol
+    from pandid.render.symbols import PortSeries, Symbol
     from pandid.streams import Stream
 
 __all__ = [
@@ -609,6 +609,9 @@ class Unit:
         port = Port(name=name, owner=self, direction=direction, role=role, side=side)
         self.ports[name] = port
         setattr(self, name, port)
+        # A new name can join a series :meth:`_series_members` already
+        # answered for, so the cached membership goes with it.
+        self.__dict__.pop("_series_members_cache", None)
         return port
 
     def has_another_port(self, port: "Port") -> bool:
@@ -665,6 +668,27 @@ class Unit:
         on, rather than spreading it with the rest.
         """
         return None
+
+    def _series_members(self, series: "PortSeries") -> dict[str, int]:
+        """This unit's ports that belong to *series*, each mapped to its
+        place among them in port order.
+
+        :func:`pandid.portgeom._series_point` asks this once per member
+        to place it -- a column with a feed on every one of fifty trays
+        asks fifty times -- and every ask scanned the same ports for the
+        same answer and then scanned the answer itself to find one name
+        in it, which made placing every port on a wide family cost the
+        square of its count. A dict answers both by one key lookup
+        instead. Cached per series here, and dropped by :meth:`_add_port`
+        the one place ``self.ports`` can gain a member the cached answer
+        would then be missing.
+        """
+        cache = self.__dict__.setdefault("_series_members_cache", {})
+        members = cache.get(id(series))
+        if members is None:
+            members = {n: i for i, n in enumerate(n for n in self.ports if series.matches(n))}
+            cache[id(series)] = members
+        return members
 
     def port(self, name: str) -> Port:
         if name in self.ports:

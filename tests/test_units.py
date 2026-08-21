@@ -854,6 +854,28 @@ def test_splitter_variable_outlets():
     assert s.out_3.direction == "outlet"
 
 
+def test_series_membership_is_cached_and_the_cache_answers_a_wider_family():
+    """``Unit._series_members`` backs
+    :func:`pandid.portgeom._series_point`, which every port on a wide
+    family (a splitter's numbered outlets, a column's feed on every
+    stage) asks to be placed. Rescanning ``self.ports`` for the answer
+    on every one of those asks cost the square of the family's size on
+    the one unit carrying it; caching it per series is the fix, and the
+    cache is read here before and after the one thing that can change
+    the answer -- another port joining the family -- to show the second
+    read is not the first one's stale copy.
+    """
+    from pandid.render.symbols import PortSeries
+
+    s = U.Splitter("S", n_outlets=2)
+    series = PortSeries("out_", "E")  # the one Splitter's own symbol declares
+    assert s._series_members(series) == {"out_1": 0, "out_2": 1}
+
+    # The only place after __init__ that writes ``self.ports``.
+    s._add_port("out_3", "outlet", "process")
+    assert s._series_members(series) == {"out_1": 0, "out_2": 1, "out_3": 2}
+
+
 # ---------------------------------------------------------------------------
 # The families, as sequences. A count chosen at construction cannot be in the
 # type, so the *family* is what a class can declare; see units.Mixer.
