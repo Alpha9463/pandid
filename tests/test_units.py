@@ -54,6 +54,25 @@ def test_invalid_port_role_raises():
         _BadRole("B-2")
 
 
+@pytest.mark.parametrize("bad", [-40, 0, float("nan"), float("inf"), float("-inf")])
+def test_a_non_positive_or_non_finite_size_is_refused(bad):
+    """A box is drawn into ``<use width=... height=...>``, and the SVG spec
+    calls a negative value there an error: a conformant reader draws
+    nothing for it, silently, while the tag and the pipe routed to its
+    nozzle are drawn as if the symbol were still there. Zero is the same
+    fault by a different route -- nothing is left to draw a nozzle onto.
+    """
+    with pytest.raises(ValueError, match="not a usable size"):
+        _Widget("W-1", width=bad)
+    with pytest.raises(ValueError, match="not a usable size"):
+        _Widget("W-2", height=bad)
+
+
+def test_a_positive_size_and_none_are_both_still_accepted():
+    w = _Widget("W-3", width=90, height=None)
+    assert w.width == 90 and w.height is None
+
+
 # --- Built-in unit types ---
 
 from pandid import units as U  # noqa: E402

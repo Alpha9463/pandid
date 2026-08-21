@@ -125,6 +125,11 @@ class hierarchy, or what it is called.
   values -- a column 5 or 15 characters wide could land its own centring on
   that tie and draw 0,1 unit apart on 3.11 and on 3.12+. `19_absorber_stripper`
   no longer needs to keep its utilities table off the tie by choice of header.
+- A unit's `width`/`height` is refused if it is not a positive, finite
+  number. A negative or zero size reached `<use width=... height=...>` and
+  the `viewBox` beside it, which the SVG spec calls an error on either; a
+  conformant reader drew nothing for the symbol, silently, while its tag
+  and the pipe routed to its nozzle were drawn as if it were still there.
 
 ### Security
 
