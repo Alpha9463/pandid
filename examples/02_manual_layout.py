@@ -43,20 +43,28 @@ def main():
     e2 = fs.add(HeatExchanger("E-2")).pin(x=210).pin(port="tube_in", y=run_y)
     p2 = fs.add(Product("P-2")).pin(x=430, y=run_y)
 
-    fs.connect(f1.outlet, e1.tube_in)
-    fs.connect(e1.tube_out, p1.inlet)
-    fs.connect(f2.outlet, e2.tube_in)
+    s1 = fs.connect(f1.outlet, e1.tube_in)
+    s2 = fs.connect(e1.tube_out, p1.inlet)
+    s3 = fs.connect(f2.outlet, e2.tube_in)
 
     # via() waypoints are absolute pixels, used verbatim.
-    fs.connect(e2.tube_out, p2.inlet).via([
+    s4 = fs.connect(e2.tube_out, p2.inlet).via([
         (360, 330),
         (360, 380),
         (410, 380),
         (410, 330),
     ])
 
+    # Neither train does anything but pass its fluid through one
+    # exchanger, so what leaves each train equals what entered it. The
+    # two trains are unrelated demonstrations, so their numbers are too.
+    s1.properties = {"Flow (kg/h)": "2000"}
+    s2.properties = {"Flow (kg/h)": "2000"}
+    s3.properties = {"Flow (kg/h)": "1500"}
+    s4.properties = {"Flow (kg/h)": "1500"}
+
     out_file = out("manual_layout.svg")
-    fs.render(out_file, debug=True)
+    fs.render(out_file, debug=True, show_stream_table=True)
     print(f"Flowsheet rendered successfully to {out_file}")
 
 

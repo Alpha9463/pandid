@@ -85,10 +85,10 @@ def _manual_layout() -> Flowsheet:
     f2 = fs.add(units.Feed("F-2")).pin(x=110, y=run_y)
     e2 = fs.add(units.HeatExchanger("E-2")).pin(x=210).pin(port="tube_in", y=run_y)
     p2 = fs.add(units.Product("P-2")).pin(x=430, y=run_y)
-    fs.connect(f1.outlet, e1.tube_in)
-    fs.connect(e1.tube_out, p1.inlet)
-    fs.connect(f2.outlet, e2.tube_in)
-    fs.connect(e2.tube_out, p2.inlet).via(
+    s1 = fs.connect(f1.outlet, e1.tube_in)
+    s2 = fs.connect(e1.tube_out, p1.inlet)
+    s3 = fs.connect(f2.outlet, e2.tube_in)
+    s4 = fs.connect(e2.tube_out, p2.inlet).via(
         [
             (360, 330),
             (360, 380),
@@ -96,6 +96,10 @@ def _manual_layout() -> Flowsheet:
             (410, 330),
         ]
     )
+    s1.properties = {"Flow (kg/h)": "2000"}
+    s2.properties = {"Flow (kg/h)": "2000"}
+    s3.properties = {"Flow (kg/h)": "1500"}
+    s4.properties = {"Flow (kg/h)": "1500"}
     return fs
 
 
@@ -4106,7 +4110,7 @@ SCENARIOS = {
     # a unit test. Every other scenario draws with it off, which is what holds
     # the rest of the corpus to being byte for byte what it was before the
     # feature existed.
-    "02_manual_layout": (_manual_layout, {"debug": True}),
+    "02_manual_layout": (_manual_layout, {"debug": True, "show_stream_table": True}),
     "03_distillation_train": (_distillation_train, {"show_stream_table": True, "border": "zone"}),
     "04_control_loop": (_control_loop, {}),
     "05_reactor_recycle": (_reactor_recycle, {}),
