@@ -240,6 +240,24 @@ class Unit:
     #: catch.
     _RETIRED_PORT_ALIASES: dict[str, tuple[str, Deprecation]] = {}
 
+    #: Attribute names this class reads exactly once, in ``__init__``, to
+    #: build the nozzles and overlays that describe what the equipment
+    #: *is*: :class:`Column`'s ``internals``/``trays``/``feed_stages``/
+    #: ``draw_stages``, :class:`Reactor`'s ``agitator``/``internals``,
+    #: :class:`Vessel`'s ``supports``. :meth:`__setattr__` refuses a
+    #: later assignment to one, naming the constructor keyword to use
+    #: instead -- the same answer :attr:`Tee.branch_direction` gives a
+    #: reassignment, for the same reason: the drawing is already built
+    #: from the first answer, and a second one silently accepted would
+    #: leave it disagreeing with what the object claims to be (#415).
+    #:
+    #: Declared per class exactly like :attr:`_RETIRED_PORTS`, so a
+    #: subclass that adds no keyword of its own -- every :class:`Column`
+    #: subclass -- inherits the set its base built, and the refusal, in
+    #: one place, covers all of them uniformly rather than needing its
+    #: own copy.
+    _FIXED_AT_CONSTRUCTION: frozenset[str] = frozenset()
+
     #: The composition keywords this class takes, each mapped to what it
     #: means when the author states none. ``variant=`` chooses the
     #: **body**; these choose the ISO 10628-2 supplementary parts drawn
@@ -464,8 +482,22 @@ class Unit:
 
         Which facts those are, and why an assignment rather than a
         method has to be watched for at all, is :data:`_LAYOUT_INPUTS`.
+
+        A name in :attr:`_FIXED_AT_CONSTRUCTION` is refused once it is
+        already in ``self.__dict__`` -- which lets ``__init__`` set it
+        the first time at full speed and catches only a later
+        reassignment, the one :meth:`__init__` itself never makes.
+
         Everything else is set at full speed.
         """
+        if name in self._FIXED_AT_CONSTRUCTION and name in self.__dict__:
+            raise AttributeError(
+                f"{self.name}: {name} is read-only. It is read once, in "
+                f"__init__, to build the nozzles and artwork that describe "
+                f"what this {type(self).__name__} is; reassigning it would "
+                f"leave the drawing disagreeing with the object. Build a new "
+                f"{type(self).__name__} with {name}={value!r} instead."
+            )
         super().__setattr__(name, value)
         if name in _LAYOUT_INPUTS:
             self._invalidate_layout()
@@ -1480,6 +1512,9 @@ class Vessel(Unit):
     #: whichever shell is drawn: the four group-26 elements go under or
     #: against every one of the ten variants.
     COMPOSITION = {"supports": None}
+    #: See :attr:`Unit._FIXED_AT_CONSTRUCTION`: the overlay ``supports``
+    #: composed is already drawn.
+    _FIXED_AT_CONSTRUCTION = frozenset({"supports"})
 
     def __init__(
         self,
@@ -3864,6 +3899,9 @@ class Reactor(Unit):
     #: internals depend on neither. So one of the two is
     #: :data:`_UNSTATED` and resolved below.
     COMPOSITION = {"agitator": _UNSTATED, "internals": None}
+    #: See :attr:`Unit._FIXED_AT_CONSTRUCTION`: both choose the overlays
+    #: -- and, for ``agitator``, the ``drive`` nozzle -- already built.
+    _FIXED_AT_CONSTRUCTION = frozenset({"agitator", "internals"})
 
     @classmethod
     def composition_defaults(
@@ -4660,6 +4698,19 @@ class Column(Unit):
     #: ``packed``, which draws two beds on their support grids in its
     #: own artwork and would have come out with a third.
     COMPOSITION = {"internals": None, "trays": DEFAULT_TRAYS}
+    #: See :attr:`Unit._FIXED_AT_CONSTRUCTION`. ``internals``/``trays``
+    #: choose the overlay; ``feed_stages``/``draw_stages`` choose where
+    #: the nozzles they place sit on the shell -- placement rather than
+    #: artwork, but read once and built into ``_stage_fractions`` the
+    #: same way. Declared once here rather than on
+    #: :class:`DistillationColumn`, :class:`Absorber` and
+    #: :class:`Stripper` too: none of them overrides how any of the four
+    #: is read, so all four inherit this set unchanged, which is what
+    #: keeps the refusal uniform across every column rather than a
+    #: per-subclass copy that could quietly drift from it.
+    _FIXED_AT_CONSTRUCTION = frozenset(
+        {"internals", "trays", "feed_stages", "draw_stages"}
+    )
 
     def __init__(
         self,

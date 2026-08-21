@@ -187,6 +187,21 @@ class hierarchy, or what it is called.
   The rewrite is a mechanical one, not a re-ordering, so which edge gets
   marked the recycle is unchanged -- checked directly by comparing the new
   walk's marking against the old recursive one over generated topologies.
+- `Column.internals`/`.trays`/`.feed_stages`/`.draw_stages`, `Reactor.agitator`
+  and `Vessel.supports` refuse a reassignment after construction instead of
+  accepting it and changing nothing (#415). Each is read exactly once, in
+  `__init__`, to build the overlays and place the nozzles it describes;
+  `col.feed_stages = [...]` after the fact raised nothing and moved no
+  nozzle, silently disagreeing with the drawing already built from the
+  value the constructor was actually given. Reassigning any of the six now
+  raises `AttributeError` naming the constructor keyword to build a new
+  unit with instead -- the same answer `Tee.branch_direction` already gives
+  a caller who tries to turn a takeoff into a return after the nozzle is
+  built. `width`/`height`, which do propagate, are unaffected. The refusal
+  is declared once per class and inherited, so `DistillationColumn`,
+  `Absorber` and `Stripper` refuse `internals`/`trays`/`feed_stages`/
+  `draw_stages` the same way `Column` does, rather than each needing its
+  own.
 
 ### Security
 
