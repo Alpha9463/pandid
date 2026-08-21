@@ -130,6 +130,11 @@ class hierarchy, or what it is called.
   the `viewBox` beside it, which the SVG spec calls an error on either; a
   conformant reader drew nothing for the symbol, silently, while its tag
   and the pipe routed to its nozzle were drawn as if it were still there.
+- `connect()` refuses a stream whose source and destination are the same
+  port. Nothing stopped a signal connection -- the one port shape with no
+  fixed direction -- being run from a nozzle back to itself; undrawn but
+  undetected, since the resulting zero-length spike is exactly what the
+  renderer's own collinear-run collapse then erases.
 
 ### Security
 

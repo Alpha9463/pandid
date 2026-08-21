@@ -49,6 +49,20 @@ def test_connect_rejects_already_connected_port():
         fs.connect(feed.outlet, prod.inlet)  # feed.outlet reused
 
 
+def test_connect_rejects_a_port_run_to_itself():
+    """A signal port carries no direction, so nothing about a valve's own
+    actuator stops a line being asked to run from it back to itself -- the
+    one case ``must be an outlet``/``must be an inlet`` above cannot catch,
+    since a signal port is neither. Undetected, it draws as a zero-length
+    spike ``stream_polyline()``'s own collinear-run collapse then erases
+    outright: a stream that connects, routes and renders clean while
+    meaning nothing.
+    """
+    fs, feed, valve, fic, ft = _loop()
+    with pytest.raises(ValueError, match=r"FV-101\.actuator is both the source"):
+        fs.connect(valve.actuator, valve.actuator, kind="pneumatic")
+
+
 def test_connect_rejects_unit_not_added():
     fs, feed, pump, prod = _fs()
     stray = U.Product("Stray")  # never added to fs

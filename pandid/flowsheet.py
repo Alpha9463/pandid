@@ -1004,6 +1004,19 @@ class Flowsheet:
         src = _signal_end(src, kind, "source")
         dst = _signal_end(dst, kind, "destination")
 
+        # A signal port carries no direction (see the two checks below),
+        # so nothing else here catches a line asked to run from a nozzle
+        # back to that same nozzle. Undetected, it draws as a zero-length
+        # spike that ``stream_polyline()``'s collinear-run collapse then
+        # erases outright -- a stream that connects, routes and renders
+        # clean while meaning nothing, the same nozzle at both ends of a
+        # line that answers no question about which way anything flows.
+        if src is dst:
+            raise ValueError(
+                f"{src.owner.name}.{src.name} is both the source and the "
+                f"destination; a stream needs two different nozzles to mean "
+                f"anything"
+            )
         # Process nozzles only. Fluid enters a nozzle or it leaves one,
         # and a sheet that says otherwise is wrong about the plant. A
         # signal connection has no such fact to be right or wrong about
