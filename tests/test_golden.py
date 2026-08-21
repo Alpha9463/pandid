@@ -362,15 +362,18 @@ def _reactor_recycle() -> Flowsheet:
     split = fs.add(units.Splitter("SP-201", n_outlets=2))
     prod = fs.add(units.Product("Liquid Product"))
     purge = fs.add(units.Product("Purge Gas"))
-    fs.connect(feed.outlet, mix.in_2)
+    feed_in = fs.connect(feed.outlet, mix.in_2)
     fs.connect(mix.outlet, comp.suction)
     fs.connect(comp.discharge, rx.feed)
     fs.connect(rx.outlet, cool.inlet)
     fs.connect(cool.outlet, sep.feed)
-    fs.connect(sep.liquid, prod.inlet)
+    product_out = fs.connect(sep.liquid, prod.inlet)
     fs.connect(sep.vapor, split.inlet)
-    fs.connect(split.out_2, purge.inlet)
+    purge_out = fs.connect(split.out_2, purge.inlet)
     fs.connect(split.out_1, mix.in_1, draw_as_recycle=True)
+    feed_in.properties = {"Flow (kg/h)": "10000"}
+    product_out.properties = {"Flow (kg/h)": "9000"}
+    purge_out.properties = {"Flow (kg/h)": "1000"}
     return fs
 
 
@@ -4117,7 +4120,7 @@ SCENARIOS = {
     "02_manual_layout": (_manual_layout, {"debug": True, "show_stream_table": True}),
     "03_distillation_train": (_distillation_train, {"show_stream_table": True, "border": "zone"}),
     "04_control_loop": (_control_loop, {"show_stream_table": True}),
-    "05_reactor_recycle": (_reactor_recycle, {}),
+    "05_reactor_recycle": (_reactor_recycle, {"show_stream_table": True}),
     "06_column_reflux": (_column_reflux, {}),
     "07_metering_skid": (_metering_skid, {}),
     "08_from_data": (_from_data, {"show_stream_table": True, "border": "zone"}),

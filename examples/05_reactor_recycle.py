@@ -31,17 +31,24 @@ def main():
     prod = fs.add(Product("Liquid Product"))
     purge = fs.add(Product("Purge Gas"))
 
-    fs.connect(feed.outlet, mix.in_2)
+    feed_in = fs.connect(feed.outlet, mix.in_2)
     fs.connect(mix.outlet, comp.suction)
     fs.connect(comp.discharge, rx.feed)
     fs.connect(rx.outlet, cool.inlet)
     fs.connect(cool.outlet, sep.feed)
-    fs.connect(sep.liquid, prod.inlet)
+    product_out = fs.connect(sep.liquid, prod.inlet)
     fs.connect(sep.vapor, split.inlet)
-    fs.connect(split.out_2, purge.inlet)
+    purge_out = fs.connect(split.out_2, purge.inlet)
     fs.connect(split.out_1, mix.in_1, draw_as_recycle=True)
 
-    fs.render(out("reactor_recycle.svg"))
+    # The recycle stays inside the loop, so what crosses the sheet edge
+    # is the feed against the liquid product plus the purge that bleeds
+    # inerts off it -- a routine 10% purge fraction.
+    feed_in.properties = {"Flow (kg/h)": "10000"}
+    product_out.properties = {"Flow (kg/h)": "9000"}
+    purge_out.properties = {"Flow (kg/h)": "1000"}
+
+    fs.render(out("reactor_recycle.svg"), show_stream_table=True)
     print("Generated reactor_recycle.svg")
 
 
