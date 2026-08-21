@@ -221,10 +221,11 @@ def _series_point(unit: "Unit", sym, port_name: str
     series = sym.series_for(port_name) if hasattr(sym, "series_for") else None
     if series is None:
         return None
-    members = [n for n in unit.ports if series.matches(n)]
-    if port_name not in members:
+    members = unit._series_members(series)
+    index = members.get(port_name)
+    if index is None:
         return None
-    return series.placement(members.index(port_name), len(members),
+    return series.placement(index, len(members),
                             sym.width, sym.height, pin=unit._series_pin(port_name))
 
 
