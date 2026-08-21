@@ -468,18 +468,21 @@ def _metering_skid() -> Flowsheet:
     psv.pin(y=110).pin(port="inlet", x=680 + port_offset(surge, "vent")[0])
     flare.pin(port="inlet", x=900, y=110 + port_offset(psv, "outlet")[1])
 
-    fs.connect(feed.outlet, strainer.inlet)
+    feed_in = fs.connect(feed.outlet, strainer.inlet)
     fs.connect(strainer.outlet, pump.suction)
     fs.connect(pump.discharge, meter.inlet)
     fs.connect(meter.outlet, fv.inlet)
     fs.connect(fv.outlet, surge.inlet)
     fs.connect(surge.outlet, glass.inlet)
-    fs.connect(glass.outlet, prod.inlet)
+    product_out = fs.connect(glass.outlet, prod.inlet)
     fs.connect(surge.vent, psv.inlet)
-    fs.connect(psv.outlet, flare.inlet)
+    relief_out = fs.connect(psv.outlet, flare.inlet)
 
     lic = fs.add_instrument("LIC", 101, sensing=surge, at="S", offset=115, display="central")
     fs.connect(lic.sig_out, fv.actuator, kind="electric")
+    feed_in.properties = {"Flow (kg/h)": "8000"}
+    product_out.properties = {"Flow (kg/h)": "8000"}
+    relief_out.properties = {"Flow (kg/h)": ""}
     return fs
 
 
@@ -4126,7 +4129,7 @@ SCENARIOS = {
     "04_control_loop": (_control_loop, {"show_stream_table": True}),
     "05_reactor_recycle": (_reactor_recycle, {"show_stream_table": True}),
     "06_column_reflux": (_column_reflux, {"show_stream_table": True}),
-    "07_metering_skid": (_metering_skid, {}),
+    "07_metering_skid": (_metering_skid, {"show_stream_table": True}),
     "08_from_data": (_from_data, {"show_stream_table": True, "border": "zone"}),
     # 09 is issued as a P&ID -- line numbers, "P&ID-1009" -- and is the one
     # scenario drawn as one, so it is also what guards the arrowless process

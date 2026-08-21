@@ -62,16 +62,16 @@ def main():
     flare.pin(port="inlet", x=900, y=110 + port_offset(psv, "outlet")[1])
 
     # --- Connections --------------------------------------------------
-    fs.connect(feed.outlet, strainer.inlet)
+    feed_in = fs.connect(feed.outlet, strainer.inlet)
     fs.connect(strainer.outlet, pump.suction)
     fs.connect(pump.discharge, meter.inlet)
     fs.connect(meter.outlet, fv.inlet)
     fs.connect(fv.outlet, surge.inlet)
     fs.connect(surge.outlet, glass.inlet)
-    fs.connect(glass.outlet, prod.inlet)
+    product_out = fs.connect(glass.outlet, prod.inlet)
 
     fs.connect(surge.vent, psv.inlet)
-    fs.connect(psv.outlet, flare.inlet)
+    relief_out = fs.connect(psv.outlet, flare.inlet)
 
     # Hung below the vessel rather than beside it: the east side is the
     # outlet run, and an instrument placed into equipment fails
@@ -82,7 +82,14 @@ def main():
                             display="central")
     fs.connect(lic.sig_out, fv.actuator, kind="electric")
 
-    fs.render(out("metering_skid.svg"))
+    # The surge vessel only buffers what passes through it, so the feed
+    # and the outlet to Unit 200 carry the same number; the relief line
+    # is open only on overpressure and carries none in normal service.
+    feed_in.properties = {"Flow (kg/h)": "8000"}
+    product_out.properties = {"Flow (kg/h)": "8000"}
+    relief_out.properties = {"Flow (kg/h)": ""}
+
+    fs.render(out("metering_skid.svg"), show_stream_table=True)
     print("Generated metering_skid.svg")
 
 
