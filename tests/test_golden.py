@@ -423,16 +423,20 @@ def _column_reflux() -> Flowsheet:
     reb.pin(x=660, y=512)
     bot.pin(x=900, y=645)
 
-    fs.connect(feed.outlet, col.feed)
+    feed_in = fs.connect(feed.outlet, col.feed)
     fs.connect(col.overhead, cond.shell_in)
     fs.connect(cond.shell_out, drum.inlet)
-    fs.connect(drum.vent, vent.inlet)
+    vent_out = fs.connect(drum.vent, vent.inlet)
     fs.connect(drum.outlet, split.inlet)
-    fs.connect(split.out_1, dist.inlet)
+    dist_out = fs.connect(split.out_1, dist.inlet)
     fs.connect(split.out_2, col.reflux_in, draw_as_recycle=True)
     fs.connect(col.bottoms, reb.shell_in)
     fs.connect(reb.shell_out, col.boilup_in, draw_as_recycle=True)
-    fs.connect(reb.bottoms, bot.inlet)
+    bot_out = fs.connect(reb.bottoms, bot.inlet)
+    feed_in.properties = {"Flow (kg/h)": "10000"}
+    vent_out.properties = {"Flow (kg/h)": "200"}
+    dist_out.properties = {"Flow (kg/h)": "6000"}
+    bot_out.properties = {"Flow (kg/h)": "3800"}
     return fs
 
 
@@ -4121,7 +4125,7 @@ SCENARIOS = {
     "03_distillation_train": (_distillation_train, {"show_stream_table": True, "border": "zone"}),
     "04_control_loop": (_control_loop, {"show_stream_table": True}),
     "05_reactor_recycle": (_reactor_recycle, {"show_stream_table": True}),
-    "06_column_reflux": (_column_reflux, {}),
+    "06_column_reflux": (_column_reflux, {"show_stream_table": True}),
     "07_metering_skid": (_metering_skid, {}),
     "08_from_data": (_from_data, {"show_stream_table": True, "border": "zone"}),
     # 09 is issued as a P&ID -- line numbers, "P&ID-1009" -- and is the one

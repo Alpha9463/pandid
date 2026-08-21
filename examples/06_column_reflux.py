@@ -94,20 +94,27 @@ def main():
     bot.pin(x=900, y=645)                              # below the kettle's draw
 
     # --- Connections --------------------------------------------------
-    fs.connect(feed.outlet, col.feed)
+    feed_in = fs.connect(feed.outlet, col.feed)
 
     fs.connect(col.overhead, cond.shell_in)
     fs.connect(cond.shell_out, drum.inlet)
-    fs.connect(drum.vent, vent.inlet)
+    vent_out = fs.connect(drum.vent, vent.inlet)
     fs.connect(drum.outlet, split.inlet)
-    fs.connect(split.out_1, dist.inlet)
+    dist_out = fs.connect(split.out_1, dist.inlet)
     fs.connect(split.out_2, col.reflux_in, draw_as_recycle=True)
 
     fs.connect(col.bottoms, reb.shell_in)
     fs.connect(reb.shell_out, col.boilup_in, draw_as_recycle=True)
-    fs.connect(reb.bottoms, bot.inlet)
+    bot_out = fs.connect(reb.bottoms, bot.inlet)
 
-    fs.render(out("column_reflux.svg"))
+    # A coherent split of one feed: the overhead vent, the distillate
+    # and the bottoms add back up to it.
+    feed_in.properties = {"Flow (kg/h)": "10000"}
+    vent_out.properties = {"Flow (kg/h)": "200"}
+    dist_out.properties = {"Flow (kg/h)": "6000"}
+    bot_out.properties = {"Flow (kg/h)": "3800"}
+
+    fs.render(out("column_reflux.svg"), show_stream_table=True)
     print("Generated column_reflux.svg")
 
 
