@@ -1883,10 +1883,10 @@ class DrawioRenderer:
 
         An off-page flag is the one thing that is drawn smaller than its
         box. Its pennant fills the box left to right and is inset twelve
-        or fifteen units top and bottom
+        or fifteen units top and bottom off the box's own height
         (:func:`~pandid.render.svg.boundary_flag`), so handing draw.io
-        the whole 50-unit box would draw a flag twice the height the
-        sheet rules one at. The cell is the pennant, which is also what
+        the whole box would draw a flag taller than the sheet rules one
+        at. The cell is the pennant, which is also what
         makes the connection points below come out right: a fraction is
         a fraction of *this* rectangle, and the port sits on the middle
         of the pennant's end rather than halfway down a box the drawing

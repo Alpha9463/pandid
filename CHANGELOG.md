@@ -142,6 +142,11 @@ class hierarchy, or what it is called.
   same as any other, but `from_dict()` raised on reading it back -- the
   one-release grace period #400 gave those four broke round-tripping the
   very sheet it was there to keep working.
+- `Feed`/`Product` given an explicit `height=` now draw a pennant that fills
+  it -- inset off the placed height, nozzle centred in the middle of it --
+  instead of the same 20-unit strip near the top of whatever box the sheet
+  reserved. The default (unsized) flag is unchanged, since its height was
+  already the symbol's own 50 units.
 
 ### Security
 
