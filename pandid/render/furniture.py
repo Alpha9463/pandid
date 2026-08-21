@@ -21,6 +21,7 @@ anchor).
 from __future__ import annotations
 
 import string
+import unicodedata
 from typing import Callable, NamedTuple
 
 from pandid.render.escape import escaped
@@ -43,8 +44,64 @@ FONT = "sans-serif"
 Reporter = Callable[[str, str, str], None]
 
 
+def script_counts(s: str) -> "tuple[int, int, int]":
+    """How many of *s*'s codepoints draw narrow, draw a full em wide, or
+    draw nothing of their own -- the one classification every width
+    estimate in the renderer measures a string by, so a CJK tag and a
+    combining mark are never charged the Latin rate that only ``_ADV``
+    was ever measured against.
+
+    :func:`unicodedata.east_asian_width` sorts a codepoint into five
+    classes. *W*ide and *F*ullwidth -- CJK ideographs, fullwidth forms --
+    draw close to a full em, same as the font's own point size. *H*alfwidth
+    and *Na*rrow -- Latin letters, digits, halfwidth kana -- draw at the
+    fraction ``_ADV``/``_ADV_BOLD`` was measured against a real PDF at
+    (see :func:`text_width`). *A*mbiguous -- Greek, Cyrillic, most
+    symbols, a character that is narrow set among Latin and wide set
+    among CJK -- has no surrounding text here to decide it by, so it
+    takes the standard's own default for that case (UAX #11, East Asian
+    Width, section "Recommendations"): "In the absence of context,
+    Ambiguous characters should be treated as Narrow." This renderer
+    never knows whether a string sits in a CJK line or a Latin one, so
+    the no-context default is the only defensible reading, and it is
+    also the one that leaves every shipped, Latin-tagged sheet exactly
+    where it was.
+
+    A combining mark -- general category ``Mn`` (nonspacing) or ``Me``
+    (enclosing) -- draws on top of the glyph before it rather than
+    beside it, so it advances nothing of its own. Charged a full
+    narrow glyph, it is the same bug this function exists to fix, just
+    pointed at an accent instead of an ideograph: a string reading
+    shorter than what it measures.
+    """
+    narrow = wide = zero = 0
+    for ch in s:
+        if unicodedata.category(ch) in ("Mn", "Me"):
+            zero += 1
+        elif unicodedata.east_asian_width(ch) in ("W", "F"):
+            wide += 1
+        else:
+            narrow += 1
+    return narrow, wide, zero
+
+
 def text_width(s, size: float, bold: bool = False) -> float:
-    return len(str(s)) * size * (_ADV_BOLD if bold else _ADV)
+    """Estimated drawn width of *s* set at *size*, without padding.
+
+    ``_ADV``/``_ADV_BOLD`` are measured against a real PDF rendering of
+    this renderer's Latin lettering (see the module's callers) and are
+    accurate to within a few percent -- good enough that a
+    codepoint-only count (``len(s) * size * _ADV``) is exactly what a
+    Latin, digit or punctuation string still gets, unchanged, below.
+    A wide (CJK/fullwidth) codepoint is charged a full em instead, and
+    a combining mark nothing at all; see :func:`script_counts`.
+    """
+    s = str(s)
+    adv = _ADV_BOLD if bold else _ADV
+    narrow, wide, zero = script_counts(s)
+    if not wide and not zero:
+        return len(s) * size * adv
+    return narrow * size * adv + wide * size
 
 
 def _total(values) -> float:

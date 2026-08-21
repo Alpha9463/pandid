@@ -162,6 +162,20 @@ class hierarchy, or what it is called.
   `pin(port="feed")`/`nozzle("feed", ...)` call are unaffected. No drawing
   moves: the alias is not a second port, so a single feed is placed exactly
   as before.
+- A tag's estimated width counted codepoints, so a CJK character was
+  charged the same width as a Latin letter though it draws close to a full
+  em: an equipment tag's erasing halo, a block's own box and a boundary
+  flag's label could all come out well under what the name actually drew,
+  and `label-overruns-symbol` shared the same blind formula as the boxes
+  it checked, so it agreed with the shortfall instead of catching it.
+  `text_width`, the halo, `block_symbol`, the check and
+  `resolve_size` now share one script-aware measure
+  (`pandid.render.furniture.script_counts`): a wide (CJK/fullwidth)
+  character draws a full em, a combining mark draws nothing, and an
+  ambiguous-width character (Greek, Cyrillic, most symbols) is read as
+  narrow, per Unicode's own no-context default. A Latin, digit or
+  punctuation string still measures exactly as it did -- no shipped,
+  Latin-tagged drawing moves.
 
 ### Security
 

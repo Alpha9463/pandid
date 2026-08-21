@@ -314,8 +314,16 @@ def resolve_size(unit: "Unit", placed=None) -> tuple[float, float]:
         # overflows the flag. The label is the tag, not the name: every
         # tap of one header is drawn at the same size, however the
         # flowsheet tells the taps apart.
-        text_len = max(len(unit.tag), len(getattr(unit, "reference", "") or ""))
-        w = unit.width if unit.width is not None else max(80.0, text_len * 8.0 + 30.0)
+        #
+        # `label_span` per string rather than a shared length fed
+        # through one formula: a CJK tag and a Latin reference (or the
+        # reverse) need different rates, and taking the max of the two
+        # spans is the same answer taking the max of the two lengths
+        # first would give when both strings are the one script this
+        # used to assume.
+        from pandid.render.symbols import label_span
+        w = unit.width if unit.width is not None else max(
+            80.0, label_span(unit.tag), label_span(getattr(unit, "reference", "") or ""))
         return w, unit.height if unit.height is not None else sym.height
 
     sym_w, sym_h = sym.width, sym.height

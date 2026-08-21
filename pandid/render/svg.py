@@ -1549,11 +1549,23 @@ def _unit_label_box(item) -> "tuple[float, float, float, float] | None":
 
     ``None`` for a ``center`` tag, which sits inside its own symbol and
     so is drawn without one.
+
+    ``6.6`` is this label font's per-character width (hand-tuned for
+    12pt) and ``8`` the padding either side; a Latin, digit or
+    punctuation tag still computes exactly that, unchanged. A wide
+    (CJK/fullwidth) character is charged a full em (12, this font's own
+    size) instead of that per-character rate, and a combining mark
+    nothing -- see :func:`~pandid.render.furniture.script_counts`. Left
+    uncounted, a wide character was the halo that stopped a third short
+    of its own ink and let the line behind the tag show through it.
     """
     lx, ly, anchor, baseline, lpos, text = item
     if lpos == "center":
         return None
-    hw, hh = len(text) * 6.6 + 8, 15.0
+    narrow, wide, zero = F.script_counts(text)
+    hw = (len(text) * 6.6 + 8 if not wide and not zero
+          else narrow * 6.6 + wide * 12 + 8)
+    hh = 15.0
     rx = lx - hw / 2 if anchor == "middle" else (lx - hw if anchor == "end" else lx)
     ry = ly - hh / 2 if baseline == "middle" else ly - hh + 3
     return (rx, ry, rx + hw, ry + hh)
