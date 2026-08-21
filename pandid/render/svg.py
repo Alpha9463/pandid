@@ -2631,14 +2631,6 @@ class SvgRenderer:
         # 3. Place furniture around the diagram and size the sheet.
         margin = 55.0
         furniture: list[str] = []
-        # union of everything drawn (diagram + furniture), grown as
-        # boxes land
-        U = [dx0, dy0, dx1, dy1]
-
-        def grow(x0, y0, x1, y1):
-            U[0], U[1] = min(U[0], x0), min(U[1], y0)
-            U[2], U[3] = max(U[2], x1), max(U[3], y1)
-
         free = None  # region a fixed sheet leaves for the drawing
         fit_issues: list[Issue] = []
 
@@ -2648,9 +2640,16 @@ class SvgRenderer:
         # Furniture belongs to the sheet, not to the border: a title
         # block or a docked box is drawn because it was supplied. A zone
         # border implies a formal sheet, which carries a title strip
-        # whether one was filled in or not.
+        # whether one was filled in or not. A stream table is furniture
+        # too, and the only kind :func:`~pandid.render.furniture.dock`
+        # can place without help from any of the other three -- routing
+        # it through the same call as they do is what keeps this
+        # in agreement with the draw.io exporter, which docks everything
+        # through that one function and knows no "plain sheet" case of
+        # its own to disagree from.
         furnished = (border == "zone" or fs.title_block is not None
-                     or bool(getattr(fs, "annotations", None)))
+                     or bool(getattr(fs, "annotations", None))
+                     or st_layout is not None)
         if furnished:
             (frame_x, frame_y, canvas_width, canvas_height), free = self._place_furniture(
                 fs, st_layout, dx0, dy0, dx1, dy1, furniture, sheet, border, report)
@@ -2659,15 +2658,12 @@ class SvgRenderer:
             frame_x, frame_y = 0.0, 0.0
             canvas_width, canvas_height = sheet.width, sheet.height
         else:
-            # Plain sheet: optional stream table docked below the
-            # diagram, left.
-            if st_layout:
-                top = dy1 + 24
-                furniture.extend(F.draw_stream_table(st_layout, dx0, top))
-                grow(dx0, top, dx0 + st_layout.w, top + st_layout.h)
-            frame_x, frame_y = U[0] - margin, U[1] - margin
-            canvas_width = (U[2] - U[0]) + 2 * margin
-            canvas_height = (U[3] - U[1]) + 2 * margin
+            # Bare sheet: no border, no title block, no annotations and
+            # no stream table either, so nothing was ever placed and the
+            # frame is just the drawing's own bounds, margined.
+            frame_x, frame_y = dx0 - margin, dy0 - margin
+            canvas_width = (dx1 - dx0) + 2 * margin
+            canvas_height = (dy1 - dy0) + 2 * margin
 
         # A cell that could not hold its text is a finding about this
         # render, so it joins the validator's on ``fs.warnings``.

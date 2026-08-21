@@ -64,13 +64,15 @@ def _ammonia_loop() -> Flowsheet:
     sep = fs.add(units.Separator("V-101"))
     comp = fs.add(units.Compressor("K-101"))
     prod = fs.add(units.Product("Ammonia"))
-    fs.connect(feed.outlet, mix.in_2)
+    feed_in = fs.connect(feed.outlet, mix.in_2)
     fs.connect(mix.outlet, reformer.feed)
     fs.connect(reformer.outlet, hx.shell_in)
     fs.connect(hx.shell_out, sep.feed)
     fs.connect(sep.vapor, comp.suction)
     fs.connect(comp.discharge, mix.in_1)
-    fs.connect(sep.liquid, prod.inlet)
+    product_out = fs.connect(sep.liquid, prod.inlet)
+    feed_in.properties = {"Flow (kg/h)": "5000"}
+    product_out.properties = {"Flow (kg/h)": "5000"}
     return fs
 
 
@@ -83,10 +85,10 @@ def _manual_layout() -> Flowsheet:
     f2 = fs.add(units.Feed("F-2")).pin(x=110, y=run_y)
     e2 = fs.add(units.HeatExchanger("E-2")).pin(x=210).pin(port="tube_in", y=run_y)
     p2 = fs.add(units.Product("P-2")).pin(x=430, y=run_y)
-    fs.connect(f1.outlet, e1.tube_in)
-    fs.connect(e1.tube_out, p1.inlet)
-    fs.connect(f2.outlet, e2.tube_in)
-    fs.connect(e2.tube_out, p2.inlet).via(
+    s1 = fs.connect(f1.outlet, e1.tube_in)
+    s2 = fs.connect(e1.tube_out, p1.inlet)
+    s3 = fs.connect(f2.outlet, e2.tube_in)
+    s4 = fs.connect(e2.tube_out, p2.inlet).via(
         [
             (360, 330),
             (360, 380),
@@ -94,6 +96,10 @@ def _manual_layout() -> Flowsheet:
             (410, 330),
         ]
     )
+    s1.properties = {"Flow (kg/h)": "2000"}
+    s2.properties = {"Flow (kg/h)": "2000"}
+    s3.properties = {"Flow (kg/h)": "1500"}
+    s4.properties = {"Flow (kg/h)": "1500"}
     return fs
 
 
@@ -302,13 +308,13 @@ def _control_loop() -> Flowsheet:
     )
     flare = fs.add(units.Product("To Flare", reference="P&ID-902")).pin(x=630, y=30)
 
-    fs.connect(feed.outlet, fe.inlet)
+    feed_in = fs.connect(feed.outlet, fe.inlet)
     fs.connect(fe.outlet, fv.inlet)
     fs.connect(fv.outlet, drum.inlet)
     fs.connect(drum.outlet, lv.inlet)
-    fs.connect(lv.outlet, prod.inlet)
+    product_out = fs.connect(lv.outlet, prod.inlet)
     fs.connect(drum.vent, psv.inlet)
-    fs.connect(psv.outlet, flare.inlet)
+    relief_out = fs.connect(psv.outlet, flare.inlet)
 
     # The one fixture carrying a primary element's balloon: the plate's tag
     # moves into it, the fitting is left unlettered, and FT-101 stacks on top.
@@ -338,6 +344,10 @@ def _control_loop() -> Flowsheet:
     measurement = fs.connect(lt.sig_out, lic.sig_in, kind="electric")
     fs.add_instrument("I", 1, sensing=measurement, at=0.5, offset=44, angle=90, variant="logic")
     fs.connect(lic.sig_out, lv.actuator, kind="electric")
+
+    feed_in.properties = {"Flow (kg/h)": "3000"}
+    product_out.properties = {"Flow (kg/h)": "3000"}
+    relief_out.properties = {"Flow (kg/h)": ""}
     return fs
 
 
@@ -352,15 +362,18 @@ def _reactor_recycle() -> Flowsheet:
     split = fs.add(units.Splitter("SP-201", n_outlets=2))
     prod = fs.add(units.Product("Liquid Product"))
     purge = fs.add(units.Product("Purge Gas"))
-    fs.connect(feed.outlet, mix.in_2)
+    feed_in = fs.connect(feed.outlet, mix.in_2)
     fs.connect(mix.outlet, comp.suction)
     fs.connect(comp.discharge, rx.feed)
     fs.connect(rx.outlet, cool.inlet)
     fs.connect(cool.outlet, sep.feed)
-    fs.connect(sep.liquid, prod.inlet)
+    product_out = fs.connect(sep.liquid, prod.inlet)
     fs.connect(sep.vapor, split.inlet)
-    fs.connect(split.out_2, purge.inlet)
+    purge_out = fs.connect(split.out_2, purge.inlet)
     fs.connect(split.out_1, mix.in_1, draw_as_recycle=True)
+    feed_in.properties = {"Flow (kg/h)": "10000"}
+    product_out.properties = {"Flow (kg/h)": "9000"}
+    purge_out.properties = {"Flow (kg/h)": "1000"}
     return fs
 
 
@@ -410,16 +423,20 @@ def _column_reflux() -> Flowsheet:
     reb.pin(x=660, y=512)
     bot.pin(x=900, y=645)
 
-    fs.connect(feed.outlet, col.feed)
+    feed_in = fs.connect(feed.outlet, col.feed)
     fs.connect(col.overhead, cond.shell_in)
     fs.connect(cond.shell_out, drum.inlet)
-    fs.connect(drum.vent, vent.inlet)
+    vent_out = fs.connect(drum.vent, vent.inlet)
     fs.connect(drum.outlet, split.inlet)
-    fs.connect(split.out_1, dist.inlet)
+    dist_out = fs.connect(split.out_1, dist.inlet)
     fs.connect(split.out_2, col.reflux_in, draw_as_recycle=True)
     fs.connect(col.bottoms, reb.shell_in)
     fs.connect(reb.shell_out, col.boilup_in, draw_as_recycle=True)
-    fs.connect(reb.bottoms, bot.inlet)
+    bot_out = fs.connect(reb.bottoms, bot.inlet)
+    feed_in.properties = {"Flow (kg/h)": "10000"}
+    vent_out.properties = {"Flow (kg/h)": "200"}
+    dist_out.properties = {"Flow (kg/h)": "6000"}
+    bot_out.properties = {"Flow (kg/h)": "3800"}
     return fs
 
 
@@ -451,18 +468,21 @@ def _metering_skid() -> Flowsheet:
     psv.pin(y=110).pin(port="inlet", x=680 + port_offset(surge, "vent")[0])
     flare.pin(port="inlet", x=900, y=110 + port_offset(psv, "outlet")[1])
 
-    fs.connect(feed.outlet, strainer.inlet)
+    feed_in = fs.connect(feed.outlet, strainer.inlet)
     fs.connect(strainer.outlet, pump.suction)
     fs.connect(pump.discharge, meter.inlet)
     fs.connect(meter.outlet, fv.inlet)
     fs.connect(fv.outlet, surge.inlet)
     fs.connect(surge.outlet, glass.inlet)
-    fs.connect(glass.outlet, prod.inlet)
+    product_out = fs.connect(glass.outlet, prod.inlet)
     fs.connect(surge.vent, psv.inlet)
-    fs.connect(psv.outlet, flare.inlet)
+    relief_out = fs.connect(psv.outlet, flare.inlet)
 
     lic = fs.add_instrument("LIC", 101, sensing=surge, at="S", offset=115, display="central")
     fs.connect(lic.sig_out, fv.actuator, kind="electric")
+    feed_in.properties = {"Flow (kg/h)": "8000"}
+    product_out.properties = {"Flow (kg/h)": "8000"}
+    relief_out.properties = {"Flow (kg/h)": ""}
     return fs
 
 
@@ -2251,7 +2271,7 @@ def _demineralised_water() -> Flowsheet:
     hv801 = fs.add(units.Valve("HV-801", variant="manual", description="Demin Water Outlet Valve"))
     header = fs.add(units.Product("To Demin Water Header", reference="PFD-200"))
 
-    fs.connect(raw.outlet, t801.inlet)
+    raw_in = fs.connect(raw.outlet, t801.inlet)
     fs.connect(t801.outlet, st801.inlet)
     fs.connect(st801.outlet, p801.suction)
     fs.connect(p801.discharge, f801.inlet)
@@ -2259,7 +2279,7 @@ def _demineralised_water() -> Flowsheet:
     fs.connect(f802.outlet, ix801.inlet)
 
     fs.connect(ix801.outlet, d801.feed)
-    fs.connect(air.outlet, b801.suction)
+    air_in = fs.connect(air.outlet, b801.suction)
     fs.connect(b801.discharge, d801.boilup_in)
     fs.connect(d801.overhead, vt801.inlet)
     fs.connect(d801.bottoms, p802.suction)
@@ -2268,7 +2288,11 @@ def _demineralised_water() -> Flowsheet:
     fs.connect(ix802.outlet, ix803.inlet)
     fs.connect(ix803.outlet, t802.inlet)
     fs.connect(t802.outlet, hv801.inlet)
-    fs.connect(hv801.outlet, header.inlet)
+    product_out = fs.connect(hv801.outlet, header.inlet)
+
+    raw_in.properties = {"Flow (kg/h)": "10000"}
+    air_in.properties = {"Flow (kg/h)": "200"}
+    product_out.properties = {"Flow (kg/h)": "9700"}
 
     fs.title_block = TitleBlock(
         title="Demineralised Water",
@@ -4095,7 +4119,7 @@ def _alumina_refinery() -> Flowsheet:
 
 
 SCENARIOS = {
-    "01_ammonia_loop": (_ammonia_loop, {}),
+    "01_ammonia_loop": (_ammonia_loop, {"show_stream_table": True}),
     # 02 is the manual-placement example and is the one sheet drawn with the
     # coordinate overlay on, which is what its example demonstrates. It is
     # therefore also what pins the overlay: the grid, the numbers written on it,
@@ -4104,12 +4128,12 @@ SCENARIOS = {
     # a unit test. Every other scenario draws with it off, which is what holds
     # the rest of the corpus to being byte for byte what it was before the
     # feature existed.
-    "02_manual_layout": (_manual_layout, {"debug": True}),
+    "02_manual_layout": (_manual_layout, {"debug": True, "show_stream_table": True}),
     "03_distillation_train": (_distillation_train, {"show_stream_table": True, "border": "zone"}),
-    "04_control_loop": (_control_loop, {}),
-    "05_reactor_recycle": (_reactor_recycle, {}),
-    "06_column_reflux": (_column_reflux, {}),
-    "07_metering_skid": (_metering_skid, {}),
+    "04_control_loop": (_control_loop, {"show_stream_table": True}),
+    "05_reactor_recycle": (_reactor_recycle, {"show_stream_table": True}),
+    "06_column_reflux": (_column_reflux, {"show_stream_table": True}),
+    "07_metering_skid": (_metering_skid, {"show_stream_table": True}),
     "08_from_data": (_from_data, {"show_stream_table": True, "border": "zone"}),
     # 09 is issued as a P&ID -- line numbers, "P&ID-1009" -- and is the one
     # scenario drawn as one, so it is also what guards the arrowless process
@@ -4174,7 +4198,7 @@ SCENARIOS = {
     # column, a plain or fixed-bed filter or an ion exchanger, and the
     # only auto-laid-out sheet carrying a title strip and an equipment
     # list. It states its own title-block date, so nothing here is pinned.
-    "16_demineralised_water": (_demineralised_water, {"border": "zone"}),
+    "16_demineralised_water": (_demineralised_water, {"border": "zone", "show_stream_table": True}),
     # 17 is the jacketed stirred reactor: the composition layer drawn as plant,
     # and the only scenario carrying an agitator, a drive motor or a jacketed
     # body. It is the fourth sheet on a fixed A3 page.

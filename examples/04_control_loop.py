@@ -78,13 +78,13 @@ def main():
         port="inlet", x=420 + port_offset(drum, "vent")[0])
     flare = fs.add(Product("To Flare", reference="P&ID-902")).pin(x=630, y=30)
 
-    fs.connect(feed.outlet, fe.inlet)
+    feed_in = fs.connect(feed.outlet, fe.inlet)
     fs.connect(fe.outlet, fv.inlet)
     fs.connect(fv.outlet, drum.inlet)
     fs.connect(drum.outlet, lv.inlet)
-    fs.connect(lv.outlet, prod.inlet)
+    product_out = fs.connect(lv.outlet, prod.inlet)
     fs.connect(drum.vent, psv.inlet)
-    fs.connect(psv.outlet, flare.inlet)
+    relief_out = fs.connect(psv.outlet, flare.inlet)
 
     # Flow loop. The plate's tag moves into a balloon on the impulse
     # line, so the fitting draws none. offset= is measured from the
@@ -119,7 +119,14 @@ def main():
                       variant="logic")
     fs.connect(lic.sig_out, lv.actuator, kind="electric")
 
-    fs.render(out("control_loop.svg"))
+    # The drum only buffers what passes through it, so the feed and the
+    # main outlet carry the same number; the relief line is open only
+    # on overpressure and carries none in normal service.
+    feed_in.properties = {"Flow (kg/h)": "3000"}
+    product_out.properties = {"Flow (kg/h)": "3000"}
+    relief_out.properties = {"Flow (kg/h)": ""}
+
+    fs.render(out("control_loop.svg"), show_stream_table=True)
     print("Generated control_loop.svg")
 
 
