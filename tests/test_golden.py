@@ -308,13 +308,13 @@ def _control_loop() -> Flowsheet:
     )
     flare = fs.add(units.Product("To Flare", reference="P&ID-902")).pin(x=630, y=30)
 
-    fs.connect(feed.outlet, fe.inlet)
+    feed_in = fs.connect(feed.outlet, fe.inlet)
     fs.connect(fe.outlet, fv.inlet)
     fs.connect(fv.outlet, drum.inlet)
     fs.connect(drum.outlet, lv.inlet)
-    fs.connect(lv.outlet, prod.inlet)
+    product_out = fs.connect(lv.outlet, prod.inlet)
     fs.connect(drum.vent, psv.inlet)
-    fs.connect(psv.outlet, flare.inlet)
+    relief_out = fs.connect(psv.outlet, flare.inlet)
 
     # The one fixture carrying a primary element's balloon: the plate's tag
     # moves into it, the fitting is left unlettered, and FT-101 stacks on top.
@@ -344,6 +344,10 @@ def _control_loop() -> Flowsheet:
     measurement = fs.connect(lt.sig_out, lic.sig_in, kind="electric")
     fs.add_instrument("I", 1, sensing=measurement, at=0.5, offset=44, angle=90, variant="logic")
     fs.connect(lic.sig_out, lv.actuator, kind="electric")
+
+    feed_in.properties = {"Flow (kg/h)": "3000"}
+    product_out.properties = {"Flow (kg/h)": "3000"}
+    relief_out.properties = {"Flow (kg/h)": ""}
     return fs
 
 
@@ -4112,7 +4116,7 @@ SCENARIOS = {
     # feature existed.
     "02_manual_layout": (_manual_layout, {"debug": True, "show_stream_table": True}),
     "03_distillation_train": (_distillation_train, {"show_stream_table": True, "border": "zone"}),
-    "04_control_loop": (_control_loop, {}),
+    "04_control_loop": (_control_loop, {"show_stream_table": True}),
     "05_reactor_recycle": (_reactor_recycle, {}),
     "06_column_reflux": (_column_reflux, {}),
     "07_metering_skid": (_metering_skid, {}),
