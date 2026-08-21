@@ -1220,7 +1220,7 @@ BLOCK_PITCH = 2.5 * ARROWHEAD
 BLOCK_MIN_WIDTH = 120.0
 BLOCK_MIN_HEIGHT = 80.0
 
-#: Drawn width of one character of a tag, at the renderer's 12pt
+#: Drawn width of one narrow character of a tag, at the renderer's 12pt
 #: sans-serif, plus the padding either side of it. The same rule and the
 #: same numbers :func:`pandid.portgeom.resolve_size` sizes a boundary
 #: flag's label by; a block letters its name inside the box, so the box
@@ -1228,6 +1228,40 @@ BLOCK_MIN_HEIGHT = 80.0
 #: it.
 _LABEL_EM = 8.0
 _LABEL_PAD = 30.0
+
+#: A wide (CJK/fullwidth) character's share of :data:`_LABEL_EM`'s job:
+#: charged a full em at the same 12pt tag font, rather than the narrow
+#: rate a Latin letter draws at. Left at the narrow rate, a CJK tag
+#: measured itself well under what it actually draws -- see
+#: :func:`label_span`.
+_LABEL_EM_WIDE = 12.0
+
+
+def label_span(text: str) -> float:
+    """Width a tag needs to letter *text* inside a box, at the same
+    12pt sans-serif :data:`_LABEL_EM` is tuned to.
+
+    :func:`block_symbol` sizes a labelled block's box by this, and
+    ``label-overruns-symbol`` (:mod:`pandid.validate`) checks a box
+    against it -- the same call, so a box that passes the check is a
+    box the block actually sized itself to, and the two can never
+    silently disagree about what a name needs. :func:`pandid.portgeom.
+    resolve_size` sizes a boundary flag's label by it too.
+
+    A Latin, digit or punctuation tag still measures exactly
+    ``_LABEL_EM * len(text) + _LABEL_PAD``, unchanged. A wide
+    (CJK/fullwidth) character is charged :data:`_LABEL_EM_WIDE` instead
+    and a combining mark nothing, following
+    :func:`pandid.render.furniture.script_counts` -- without which a
+    CJK tag measured itself well under what it actually draws, and
+    every check built on the old formula agreed with the shortfall
+    instead of catching it.
+    """
+    from pandid.render.furniture import script_counts
+    narrow, wide, zero = script_counts(text)
+    if not wide and not zero:
+        return _LABEL_EM * len(text) + _LABEL_PAD
+    return _LABEL_EM * narrow + _LABEL_EM_WIDE * wide + _LABEL_PAD
 
 
 def block_span(count: int) -> float:
@@ -1312,7 +1346,7 @@ def block_symbol(faces: tuple[tuple[str, str], ...], label: str = "") -> Symbol:
     on: dict[str, list[str]] = {face: [] for face in _BLOCK_FACES}
     for port_name, face in faces:
         on[face].append(port_name)
-    width = max(BLOCK_MIN_WIDTH, _LABEL_EM * len(label) + _LABEL_PAD,
+    width = max(BLOCK_MIN_WIDTH, label_span(label),
                 block_span(len(on["N"])), block_span(len(on["S"])))
     height = max(BLOCK_MIN_HEIGHT, block_span(len(on["W"])), block_span(len(on["E"])))
     ports: dict[str, tuple[float, float]] = {}

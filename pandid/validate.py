@@ -892,9 +892,9 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     from pandid.layout.attach import MAX_PLACEMENT_PASSES
     from pandid.portgeom import (is_anchored, port_faces, port_point,
                                  resolve_port, unit_box)
-    from pandid.render.symbols import (_LABEL_EM, _LABEL_PAD, ARROWHEAD,
-                                       MIN_HEAD_CLEARANCE, MIN_NOZZLE_PITCH,
-                                       default_registry, wears_arrowhead)
+    from pandid.render.symbols import (ARROWHEAD, MIN_HEAD_CLEARANCE,
+                                       MIN_NOZZLE_PITCH, default_registry,
+                                       label_span, wears_arrowhead)
     from pandid.streams import SIGNAL_KINDS, Stream
     from pandid.units import Block
 
@@ -983,7 +983,7 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             if not isinstance(u, Block) or not u.tag:
                 continue
             room = box[2] - box[0]
-            needed = _LABEL_EM * len(str(u.tag)) + _LABEL_PAD
+            needed = label_span(str(u.tag))
             if room + _TOL >= needed:
                 continue
             warnings.append(Issue(
