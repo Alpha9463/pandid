@@ -1464,7 +1464,7 @@ def test_only_the_agitator_brings_the_drive():
     assert "drive" in units.Reactor("R-102", agitator="turbine").ports
     assert "drive" not in units.Reactor("R-201", agitator=None).ports
     # The body's own nozzles are unchanged either way, and in order.
-    assert list(units.Reactor("R-101").ports) == ["outlet", "vent", "duty", "drive", "feed"]
+    assert list(units.Reactor("R-101").ports) == ["outlet", "vent", "duty", "drive", "feed_1"]
 
 
 def drawn(unit):

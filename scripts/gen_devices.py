@@ -1448,18 +1448,17 @@ def _family_class_block(name: str, family: "_Family") -> str:
     overloads above hand back.
 
     Mirrors ``pandid.units``'s own per-arity classes: nothing but the
-    numbered nozzles at every arity, and nothing at all at arity 1, since a
-    lone member keeps its singular name (``feed``, not ``feed_1``) and the
-    base class already declares that one.
+    numbered nozzles at every arity, arity 1 included -- ``feed_1`` is a
+    real nozzle there too, the way ``in_1`` always has been on ``Mixer1``,
+    with the base class's bare alias (``Reactor.feed``, say) answering for
+    the singular spelling on top of it. See :func:`_feed_names` in
+    ``units.py``.
     """
     _keyword, member, _default, max_n = family
     lines = ["if TYPE_CHECKING:", ""]
     for n in range(1, max_n + 1):
         lines.append(f"    class {name}{n}({name}):")
-        if n == 1:
-            lines.append("        pass")
-        else:
-            lines += [f"        {member}_{i}: Port" for i in range(1, n + 1)]
+        lines += [f"        {member}_{i}: Port" for i in range(1, n + 1)]
         lines.append("")
     return "\n".join(lines)
 

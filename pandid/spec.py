@@ -812,6 +812,12 @@ def _find_port(unit: Unit, name: Any, where: str) -> Port:
             return unit.signal_port(name)
         except KeyError:
             pass
+    # ``_canonical_port_name`` before the membership check: a live alias
+    # like ``Reactor.feed``/``Column.feed`` is a plain attribute, not a
+    # second entry in ``ports`` (see its own docstring), so a spec that
+    # names it would otherwise read as a port that does not exist.
+    if isinstance(name, str):
+        name = unit._canonical_port_name(name)
     if not isinstance(name, str) or name not in unit.ports:
         raise SpecError(
             f"{where}: {type(unit).__name__} {unit.name!r} has no port {name!r}"

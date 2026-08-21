@@ -537,6 +537,7 @@ class Unit:
         the same nozzle to the same point twice is the same placement
         twice rather than a device walking off its run.
         """
+        port_name = self._canonical_port_name(port_name)
         if port_name not in self.ports:
             raise KeyError(
                 f"{type(self).__name__} {self.name!r} has no port {port_name!r} to "
@@ -570,6 +571,7 @@ class Unit:
         """
         from pandid.portgeom import port_faces
 
+        port_name = self._canonical_port_name(port_name)
         if port_name not in self.ports:
             raise KeyError(
                 f"{type(self).__name__} {self.name!r} has no port {port_name!r}; "
@@ -666,7 +668,34 @@ class Unit:
         """
         return None
 
+    def _canonical_port_name(self, name: str) -> str:
+        """``name``, or the real port an alias like ``feed`` names.
+
+        Almost always ``name`` unchanged. ``Reactor.feed``/``Column.feed``
+        at ``n_feeds == 1`` are the one live alias in the library -- a
+        plain attribute set beside ``feed_1`` in ``__init__`` rather than
+        a second entry in :attr:`ports`, so a ``PortSeries`` placing the
+        family sees one member and not two (see :func:`_feed_names`).
+        That means the alias is invisible to anything that resolves a
+        port name by checking :attr:`ports` directly, so this is called
+        wherever a caller-supplied name is about to become one -- a
+        dict key, or an argument to :mod:`pandid.portgeom`, which knows
+        nothing of the alias and would otherwise place it at the box
+        centre, or a ``nozzle()`` face silently filed under a key
+        nothing later looks up.
+
+        Only a name that is genuinely a :class:`Port` counts: a plain
+        attribute this unit happens to have under that name (``width``,
+        say) is not a port under a new spelling, and is left alone so
+        the caller's own "no such port" error fires on it unchanged.
+        """
+        if name in self.ports:
+            return name
+        aliased = getattr(self, name, None)
+        return aliased.name if isinstance(aliased, Port) and aliased.name in self.ports else name
+
     def port(self, name: str) -> Port:
+        name = self._canonical_port_name(name)
         if name in self.ports:
             return self.ports[name]
         raise KeyError(
@@ -3150,19 +3179,26 @@ class CoolingTower(Unit):
 
 
 def _feed_names(n_feeds: int, owner: str) -> list[str]:
-    """Names for a unit's feeds: ``feed``, or ``feed_1`` .. ``feed_n``.
+    """Names for a unit's feeds: ``feed_1`` .. ``feed_n``.
 
-    One feed is the common case and keeps the singular name. The symbol
-    declares the same rule as a
-    :class:`~pandid.render.symbols.PortSeries`, which spreads the family
-    down the shell.
+    Numbered from one whatever the count, the way :class:`Mixer`'s
+    ``in_1`` .. ``in_n`` and :class:`Splitter`'s ``out_1`` .. ``out_n``
+    already are: ``feed_1`` is a real nozzle at ``n_feeds=1`` and stays
+    one if the count is later raised, rather than existing only above
+    one the way it used to. The caller adds the bare ``feed`` as an
+    alias for ``feed_1`` when there is only one -- see
+    :class:`Reactor`/:class:`Column`'s ``__init__`` -- since that
+    spelling is the common case and reads better on the page than a
+    ``_1`` nothing else on the vessel needs; it is not restated here
+    because at every other count there is no bare name to give.
 
     Spelling is the only thing the count changes: ``unit.feeds`` is the
-    family either way, a one-tuple where this returns ``["feed"]``.
+    family whatever it is, indexed from zero (``unit.feeds[0]`` is
+    ``feed_1``) while the nozzles are numbered from one.
     """
     if n_feeds < 1:
         raise ValueError(f"{owner} requires at least 1 feed, got {n_feeds}")
-    return ["feed"] if n_feeds == 1 else [f"feed_{i}" for i in range(1, n_feeds + 1)]
+    return [f"feed_{i}" for i in range(1, n_feeds + 1)]
 
 
 def _draw_names(n_draws: int, owner: str) -> list[str]:
@@ -3360,12 +3396,16 @@ class Reactor(Unit):
     # invisible to mypy and to editor completion.
     drive: Port
     # Every charge nozzle, in declaration order and so top to bottom
-    # down the shell, whether the count spelled them ``feed`` or
-    # ``feed_1`` ... ``feed_n`` (see :func:`_feed_names`).
+    # down the shell -- ``feed_1`` ... ``feed_n`` whatever the count
+    # (see :func:`_feed_names`).
     feeds: tuple[Port, ...]
-    # The single-feed vessel's charge nozzle. ``n_feeds > 1`` replaces
-    # it with a family no annotation can name a member at a time; see
-    # :class:`Mixer`.
+    # The one-feed vessel's charge nozzle: an alias for ``feed_1``, set
+    # in ``__init__`` alongside it rather than a second registered port
+    # -- ``feed`` and ``feed_1`` are the same ``Port`` object, so a
+    # series placing the family sees one member, not two. ``n_feeds >
+    # 1`` drops the alias; there is no bare name for a member of a
+    # family of more than one, and ``.feed_1`` is what reaches the first
+    # of them either way. See :class:`Mixer`.
     feed: Port
 
     # ``feed_1`` ... ``feed_n`` are the same shape as :class:`Column`'s
@@ -3374,9 +3414,10 @@ class Reactor(Unit):
     # those nozzles, a computed one gets this class and
     # ``reactor.feeds[i]``.
     #
-    # A one-feed vessel keeps the singular ``feed`` -- see
-    # :func:`_feed_names` -- so ``Reactor1`` declares nothing of its own
-    # and the annotation above answers for it.
+    # A one-feed vessel keeps the alias ``feed`` for ``feed_1`` -- see
+    # :func:`_feed_names` -- and ``Reactor1`` declares ``feed_1`` itself
+    # so a checker resolves it there too; the ``feed`` annotation above
+    # already answers for the alias.
     #
     # ``StirredTankReactor`` adds ``duty``, ``outlet`` and ``vent``, but
     # all three are already declared here too -- narrowing this
@@ -3551,16 +3592,23 @@ class Reactor(Unit):
         if agitator is not None:
             self.drive = self._add_port("drive", "inlet", "energy")
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
+        if n_feeds == 1:
+            # An alias, not a second port: registering ``feed`` too would
+            # give the shell's ``PortSeries`` two names matching one
+            # nozzle and it would spread a family of two down the shell
+            # for a vessel that only has one. See :func:`_feed_names`.
+            self.feed = self.feeds[0]
 
 
 if TYPE_CHECKING:
     # A reactor of each feed count, for the overloads above. ``Reactor1``
-    # is the one-feed vessel, whose nozzle is the singular ``feed`` the
-    # base already declares, so it adds nothing of its own -- exactly as
+    # is the one-feed vessel: its nozzle is really named ``feed_1``, so
+    # that is declared here, and the alias ``feed`` the base class
+    # already declares answers for the other spelling -- exactly as
     # ``Column1`` does.
 
     class Reactor1(Reactor):
-        pass
+        feed_1: Port
 
     class Reactor2(Reactor):
         feed_1: Port
@@ -4018,9 +4066,9 @@ class Column(Unit):
     # Every feed nozzle, in declaration order and so highest first,
     # whatever the count spelled them. See :class:`Reactor`.
     feeds: tuple[Port, ...]
-    # The single-feed tower's nozzle; ``n_feeds > 1`` replaces it with a
-    # family that cannot be declared a member at a time. See
-    # :class:`Mixer`.
+    # The single-feed tower's nozzle: an alias for ``feed_1``, not a
+    # second registered port. ``n_feeds > 1`` drops the alias. See
+    # :class:`Reactor`.
     feed: Port
     # Every side draw, in declaration order and so highest first,
     # whatever the count spelled them -- ``feeds`` above, read the other
@@ -4225,6 +4273,9 @@ class Column(Unit):
                       else internals_overlays(internals, trays))
         self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
         self.draws = tuple(self._add_port(draw, "outlet", "draw") for draw in draw_names)
+        if n_feeds == 1:
+            # An alias, not a second port; see :class:`Reactor`.
+            self.feed = self.feeds[0]
         self.feed_stages = feed_stages
         self.draw_stages = draw_stages
         self._stage_fractions = {
@@ -4241,12 +4292,12 @@ class Column(Unit):
 
 if TYPE_CHECKING:
     # A column of each feed count, for the overloads above. ``Column1``
-    # is the one-feed tower, whose nozzle is the singular ``feed`` the
-    # base already declares, so it adds nothing and exists only so the
-    # overload for ``Literal[1]`` has something to name.
+    # is the one-feed tower: its nozzle is really named ``feed_1``, so
+    # that is declared here, and the alias ``feed`` the base class
+    # already declares answers for the other spelling.
 
     class Column1(Column):
-        pass
+        feed_1: Port
 
     class Column2(Column):
         feed_1: Port
@@ -4298,12 +4349,16 @@ if TYPE_CHECKING:
         feed_8: Port
 
     # A column of each draw count, for Family B above -- the same
-    # pattern read the other way, and the reason ``ColumnDraw1`` is not
-    # empty the way ``Column1`` is. ``feed`` is on the base class
-    # because ``n_feeds`` defaults to 1, so a one-feed tower always has
-    # it; ``draw`` is on no base class at all, because ``n_draws``
-    # defaults to 0, so nothing here can say a plain ``Column`` has one.
-    # ``ColumnDraw1`` is where the singular nozzle really gets declared.
+    # pattern read the other way, but asymmetric with the feeds above
+    # it: the alias ``feed`` is on the base class because ``n_feeds``
+    # defaults to 1, so a one-feed tower always has it, while ``draw``
+    # is on no base class at all, because ``n_draws`` defaults to 0, so
+    # nothing here can say a plain ``Column`` has one. Unlike a feed, a
+    # lone draw stays the bare singular name rather than also getting a
+    # numbered ``draw_1``: :func:`_draw_names`, unlike :func:`_feed_names`,
+    # is not a real port for every count, so there is no ``feed_1``-style
+    # member to alias it to. ``ColumnDraw1`` is where that singular
+    # nozzle really gets declared.
 
     class ColumnDraw1(Column):
         draw: Port
@@ -4453,7 +4508,7 @@ class DistillationColumn(Column):
 if TYPE_CHECKING:
 
     class DistillationColumn1(DistillationColumn):
-        pass
+        feed_1: Port
 
     class DistillationColumn2(DistillationColumn):
         feed_1: Port
@@ -4625,7 +4680,7 @@ class Absorber(Column):
 if TYPE_CHECKING:
 
     class Absorber1(Absorber):
-        pass
+        feed_1: Port
 
     class Absorber2(Absorber):
         feed_1: Port
@@ -4769,7 +4824,7 @@ class Stripper(Column):
 if TYPE_CHECKING:
 
     class Stripper1(Stripper):
-        pass
+        feed_1: Port
 
     class Stripper2(Stripper):
         feed_1: Port
@@ -4923,10 +4978,10 @@ class Mixer(Unit):
 
     kind = "mixer"
 
-    def __init__(self, name: str, n_inlets: int = 2, variant: str = "default", width: float | None = None, height: float | None = None, description: str = "", reference: str = ""):
+    def __init__(self, name: str, n_inlets: int = 2, variant: str = "default", width: float | None = None, height: float | None = None, label_pos: str | None = None, description: str = "", reference: str = ""):
         if n_inlets < 1:
             raise ValueError(f"Mixer requires at least 1 inlet, got {n_inlets}")
-        super().__init__(name, variant=variant, width=width, height=height, description=description, reference=reference)
+        super().__init__(name, variant=variant, width=width, height=height, label_pos=label_pos, description=description, reference=reference)
         # Built from what the loop that creates the family hands back,
         # rather than by matching ``in_`` against the ``ports`` dict
         # afterwards, which would be the naming rule written twice.
@@ -5058,10 +5113,10 @@ class Splitter(Unit):
 
     kind = "splitter"
 
-    def __init__(self, name: str, n_outlets: int = 2, variant: str = "default", width: float | None = None, height: float | None = None, description: str = "", reference: str = ""):
+    def __init__(self, name: str, n_outlets: int = 2, variant: str = "default", width: float | None = None, height: float | None = None, label_pos: str | None = None, description: str = "", reference: str = ""):
         if n_outlets < 1:
             raise ValueError(f"Splitter requires at least 1 outlet, got {n_outlets}")
-        super().__init__(name, variant=variant, width=width, height=height, description=description, reference=reference)
+        super().__init__(name, variant=variant, width=width, height=height, label_pos=label_pos, description=description, reference=reference)
         self._add_port("inlet", "inlet", "process")
         self.outlets = tuple(
             self._add_port(f"out_{i}", "outlet", "process") for i in range(1, n_outlets + 1)

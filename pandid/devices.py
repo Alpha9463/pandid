@@ -1649,7 +1649,7 @@ class StirredTankReactor(Reactor):
 if TYPE_CHECKING:
 
     class StirredTankReactor1(StirredTankReactor):
-        pass
+        feed_1: Port
 
     class StirredTankReactor2(StirredTankReactor):
         feed_1: Port

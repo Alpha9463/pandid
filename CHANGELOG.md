@@ -130,6 +130,16 @@ class hierarchy, or what it is called.
   instead of the same 20-unit strip near the top of whatever box the sheet
   reserved. The default (unsized) flag is unchanged, since its height was
   already the symbol's own 50 units.
+- `Mixer`/`Splitter` take `label_pos=` in the constructor, matching every
+  other tagged unit; setting it after construction already worked.
+- `Reactor`/`Column`'s single charge nozzle is now really named `feed_1`,
+  numbered from one the way `Mixer`'s `in_1` always was, so raising
+  `n_feeds` from one no longer silently drops every `.feed_1` reference and
+  `.feed_1` resolves at `n_feeds=1` where it used to raise. `feed` stays as
+  a bare alias for it at one feed, so an existing `.feed` reference and a
+  `pin(port="feed")`/`nozzle("feed", ...)` call are unaffected. No drawing
+  moves: the alias is not a second port, so a single feed is placed exactly
+  as before.
 
 ### Security
 

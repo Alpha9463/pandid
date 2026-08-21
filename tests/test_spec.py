@@ -272,7 +272,8 @@ def test_a_column_or_reactor_feed_count_round_trips():
         }
     )
     assert {"feed_1", "feed_2"} <= set(fs.units[0].ports)
-    assert "feed" in fs.units[1].ports
+    assert "feed_1" in fs.units[1].ports
+    assert fs.units[1].feed is fs.units[1].feed_1
     written = {u["name"]: u for u in fs.to_dict()["units"]}
     assert written["T-302"]["n_feeds"] == 2
     # One feed is the class's own shape, so the count is not written down.
@@ -292,7 +293,7 @@ def test_absorber_and_stripper_kind_round_trips():
             ],
         }
     )
-    assert set(fs.units[0].ports) == {"feed", "overhead", "bottoms"}
+    assert set(fs.units[0].ports) == {"feed_1", "overhead", "bottoms"}
     assert type(fs.units[0]).__name__ == "Absorber"
     assert type(fs.units[1]).__name__ == "Stripper"
     written = {u["name"]: u for u in fs.to_dict()["units"]}
@@ -308,7 +309,7 @@ def test_a_bare_column_kind_still_loads_as_the_general_tower():
     iterate last building ``_ALIASES``."""
     fs = Flowsheet.from_dict({"name": "T", "units": [{"kind": "column", "name": "T-101"}]})
     assert type(fs.units[0]).__name__ == "Column"
-    assert set(fs.units[0].ports) == {"feed", "overhead", "bottoms"}
+    assert set(fs.units[0].ports) == {"feed_1", "overhead", "bottoms"}
 
 
 def test_a_distillation_column_kind_round_trips():
@@ -330,7 +331,7 @@ def test_a_distillation_column_kind_round_trips():
     )
     assert type(fs.units[0]).__name__ == "DistillationColumn"
     assert set(fs.units[0].ports) == {
-        "feed",
+        "feed_1",
         "overhead",
         "bottoms",
         "reflux_in",

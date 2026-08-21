@@ -70,9 +70,9 @@ def test_fixed_port_units_have_expected_ports():
         "tube_out",
     }
     assert set(U.Separator("V").ports) == {"feed", "vapor", "liquid"}
-    assert set(U.Column("T").ports) == {"feed", "overhead", "bottoms"}
+    assert set(U.Column("T").ports) == {"feed_1", "overhead", "bottoms"}
     assert set(U.DistillationColumn("T").ports) == {
-        "feed",
+        "feed_1",
         "overhead",
         "bottoms",
         "reflux_in",
@@ -82,8 +82,8 @@ def test_fixed_port_units_have_expected_ports():
     }
     # ``drive`` is the agitator's, and a plain Reactor is a stirred tank, so it
     # has one. ``Reactor("R", agitator=None)`` is the bare shell's four.
-    assert set(U.Reactor("R").ports) == {"feed", "outlet", "vent", "duty", "drive"}
-    assert set(U.Reactor("R", agitator=None).ports) == {"feed", "outlet", "vent", "duty"}
+    assert set(U.Reactor("R").ports) == {"feed_1", "outlet", "vent", "duty", "drive"}
+    assert set(U.Reactor("R", agitator=None).ports) == {"feed_1", "outlet", "vent", "duty"}
 
 
 def test_distillation_column_return_nozzles_close_the_internal_loops():
@@ -112,12 +112,27 @@ def test_a_column_takes_more_than_one_feed():
     assert col.feed_2.role == "feed"
 
 
-def test_one_feed_keeps_the_singular_name():
-    """The count only changes the spelling once there is more than one of them,
-    so every sheet ever drawn against ``col.feed`` still says what it meant."""
-    assert "feed" in U.Column("T-101").ports
-    assert "feed_1" not in U.Column("T-101").ports
-    assert "feed" in U.Reactor("R-101").ports
+def test_one_feed_is_numbered_and_feed_is_an_alias_for_it():
+    """A family of one is spelled the way ``Mixer``'s ``in_1`` always was:
+    ``feed_1`` is a real nozzle whatever the count, so it does not
+    disappear the moment ``n_feeds`` is raised past one, and it exists at
+    one where it never used to. ``feed`` is the bare alias for it -- not a
+    second port, the same object -- kept because it is the common case and
+    every sheet ever drawn against ``col.feed`` still says what it meant."""
+    for one in (U.Column("T-101"), U.Reactor("R-101")):
+        assert "feed_1" in one.ports
+        assert "feed" not in one.ports
+        assert one.feed is one.feed_1
+
+
+def test_a_second_feed_drops_the_bare_alias():
+    """Raising ``n_feeds`` past one is what used to silently break every
+    ``.feed`` reference in a file; ``.feed_1`` now survives the raise
+    unchanged, and only the alias -- which never named a member once
+    there was more than one -- goes."""
+    r = U.Reactor("R-201", n_feeds=2)
+    assert "feed_1" in r.ports
+    assert not hasattr(r, "feed")
 
 
 def test_a_reactor_takes_more_than_one_charge_nozzle():
@@ -141,7 +156,7 @@ def test_absorber_has_neither_loop():
     absorber boils, so none of DistillationColumn's four return nozzles
     belongs on it."""
     absorber = U.Absorber("V-501")
-    assert set(absorber.ports) == {"feed", "overhead", "bottoms"}
+    assert set(absorber.ports) == {"feed_1", "overhead", "bottoms"}
     assert isinstance(absorber, U.Column)
 
 
@@ -162,7 +177,7 @@ def test_stripper_keeps_the_reboiler_loop_but_not_the_condenser():
     never refluxes, so reflux_in and condenser_duty do not."""
     stripper = U.Stripper("T-601")
     assert set(stripper.ports) == {
-        "feed",
+        "feed_1",
         "overhead",
         "bottoms",
         "boilup_in",
@@ -194,7 +209,7 @@ def test_absorber_and_stripper_take_more_than_one_feed():
 def test_distillation_column_has_all_four_return_nozzles():
     col = U.DistillationColumn("T-101")
     assert set(col.ports) == {
-        "feed",
+        "feed_1",
         "overhead",
         "bottoms",
         "reflux_in",
@@ -394,7 +409,7 @@ def test_a_column_has_no_draw_by_default():
 
 def test_a_column_takes_a_side_draw():
     col = U.Column("T-301", n_draws=1)
-    assert set(col.ports) == {"feed", "draw", "overhead", "bottoms"}
+    assert set(col.ports) == {"feed_1", "draw", "overhead", "bottoms"}
     assert col.draw.direction == "outlet"
     assert col.draw.role == "draw"
 
@@ -918,15 +933,16 @@ def test_a_count_worked_out_at_run_time_is_the_case_the_family_exists_for():
     assert [p.direction for p in m.inlets] == ["inlet"] * 4
 
 
-def test_one_feed_is_the_one_tuple_holding_the_singular_nozzle():
-    """The sequence is the general form; the singular name is not a special case.
+def test_one_feed_is_the_one_tuple_holding_feed_1():
+    """The sequence is the general form and reads a one-feed and a
+    three-feed column the same way, neither having to know which it got.
 
-    A one-feed tower spells its nozzle `feed`, and `feeds` is that nozzle in a
-    tuple, so code written against the family reads a one-feed column and a
-    three-feed column the same way and neither has to know which it got.
+    A one-feed tower's nozzle is really named ``feed_1``, and ``feeds`` is
+    that nozzle in a tuple; ``feed`` is the bare alias for the same
+    ``Port`` object, not a second member of the family.
     """
     for one in (U.Column("T-101"), U.Reactor("R-101")):
-        assert [p.name for p in one.feeds] == ["feed"]
+        assert [p.name for p in one.feeds] == ["feed_1"]
         assert one.feeds[0] is one.feed
 
 
@@ -936,7 +952,10 @@ def test_one_feed_is_the_one_tuple_holding_the_singular_nozzle():
         (lambda: U.Mixer("M", n_inlets=5), ["inlets"]),
         (lambda: U.Splitter("S", n_outlets=5), ["outlets"]),
         (lambda: U.Column("T", n_feeds=5), ["feeds"]),
-        (lambda: U.Column("T", n_draws=5), ["draws"]),
+        # ``feed_1`` is a numbered nozzle even at the default ``n_feeds=1``
+        # this leaves in place, so "feeds" has to be checked here too, or
+        # a single-feed column's own family would look incomplete.
+        (lambda: U.Column("T", n_draws=5), ["draws", "feeds"]),
         (lambda: U.Column("T", n_feeds=5, n_draws=5), ["feeds", "draws"]),
         (lambda: U.Reactor("R", n_feeds=5), ["feeds"]),
         (lambda: U.Block("B", inputs=5, outputs=4), ["inlets", "outlets"]),
