@@ -68,7 +68,7 @@ def main():
                          description="Demin Water Outlet Valve"))
     header = fs.add(Product("To Demin Water Header", reference="PFD-200"))
 
-    fs.connect(raw.outlet, t801.inlet)
+    raw_in = fs.connect(raw.outlet, t801.inlet)
     fs.connect(t801.outlet, st801.inlet)
     fs.connect(st801.outlet, p801.suction)
     fs.connect(p801.discharge, f801.inlet)
@@ -76,7 +76,7 @@ def main():
     fs.connect(f802.outlet, ix801.inlet)
 
     fs.connect(ix801.outlet, d801.feed)
-    fs.connect(air.outlet, b801.suction)
+    air_in = fs.connect(air.outlet, b801.suction)
     fs.connect(b801.discharge, d801.boilup_in)
     fs.connect(d801.overhead, vt801.inlet)
     fs.connect(d801.bottoms, p802.suction)
@@ -85,7 +85,15 @@ def main():
     fs.connect(ix802.outlet, ix803.inlet)
     fs.connect(ix803.outlet, t802.inlet)
     fs.connect(t802.outlet, hv801.inlet)
-    fs.connect(hv801.outlet, header.inlet)
+    product_out = fs.connect(hv801.outlet, header.inlet)
+
+    # Raw water and stripping air in; demineralised water out. The
+    # difference is the degasser's vent (equipment, not a sheet edge,
+    # so it is not tabulated) plus the filter backwash and resin
+    # regeneration this sheet does not draw.
+    raw_in.properties = {"Flow (kg/h)": "10000"}
+    air_in.properties = {"Flow (kg/h)": "200"}
+    product_out.properties = {"Flow (kg/h)": "9700"}
 
     # date= is stated rather than left blank: left blank, the renderer
     # fills in today's.
@@ -110,7 +118,7 @@ def main():
         "P-802A/B", "IX-802", "IX-803", "T-802",
     ]))
 
-    fs.render(out("demineralised_water.svg"), border="zone")
+    fs.render(out("demineralised_water.svg"), border="zone", show_stream_table=True)
     print("Generated demineralised_water.svg")
 
 

@@ -110,6 +110,13 @@ class hierarchy, or what it is called.
 
 ### Fixed
 
+- `01_ammonia_loop`, `02_manual_layout`, `04_control_loop`, `05_reactor_recycle`,
+  `06_column_reflux`, `07_metering_skid` and `16_demineralised_water` state a
+  flow on every stream that crosses the sheet edge and render with
+  `show_stream_table=True`, so the reference corpus no longer raises the
+  `stream-table-missing` finding it ships the check for (#410). A relief line
+  carrying no flow in normal service states that with a blank value rather
+  than a number, the same convention `boundary-flow-missing` already reads.
 - A sheet with a stream table and no other furniture -- no border, no title
   block, no annotation -- now docks the table through the same
   `dock()` every other piece of furniture is placed by, instead of a

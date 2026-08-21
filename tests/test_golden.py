@@ -2271,7 +2271,7 @@ def _demineralised_water() -> Flowsheet:
     hv801 = fs.add(units.Valve("HV-801", variant="manual", description="Demin Water Outlet Valve"))
     header = fs.add(units.Product("To Demin Water Header", reference="PFD-200"))
 
-    fs.connect(raw.outlet, t801.inlet)
+    raw_in = fs.connect(raw.outlet, t801.inlet)
     fs.connect(t801.outlet, st801.inlet)
     fs.connect(st801.outlet, p801.suction)
     fs.connect(p801.discharge, f801.inlet)
@@ -2279,7 +2279,7 @@ def _demineralised_water() -> Flowsheet:
     fs.connect(f802.outlet, ix801.inlet)
 
     fs.connect(ix801.outlet, d801.feed)
-    fs.connect(air.outlet, b801.suction)
+    air_in = fs.connect(air.outlet, b801.suction)
     fs.connect(b801.discharge, d801.boilup_in)
     fs.connect(d801.overhead, vt801.inlet)
     fs.connect(d801.bottoms, p802.suction)
@@ -2288,7 +2288,11 @@ def _demineralised_water() -> Flowsheet:
     fs.connect(ix802.outlet, ix803.inlet)
     fs.connect(ix803.outlet, t802.inlet)
     fs.connect(t802.outlet, hv801.inlet)
-    fs.connect(hv801.outlet, header.inlet)
+    product_out = fs.connect(hv801.outlet, header.inlet)
+
+    raw_in.properties = {"Flow (kg/h)": "10000"}
+    air_in.properties = {"Flow (kg/h)": "200"}
+    product_out.properties = {"Flow (kg/h)": "9700"}
 
     fs.title_block = TitleBlock(
         title="Demineralised Water",
@@ -4194,7 +4198,7 @@ SCENARIOS = {
     # column, a plain or fixed-bed filter or an ion exchanger, and the
     # only auto-laid-out sheet carrying a title strip and an equipment
     # list. It states its own title-block date, so nothing here is pinned.
-    "16_demineralised_water": (_demineralised_water, {"border": "zone"}),
+    "16_demineralised_water": (_demineralised_water, {"border": "zone", "show_stream_table": True}),
     # 17 is the jacketed stirred reactor: the composition layer drawn as plant,
     # and the only scenario carrying an agitator, a drive motor or a jacketed
     # body. It is the fourth sheet on a fixed A3 page.
