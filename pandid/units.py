@@ -19,6 +19,7 @@ This module is also the public ``units`` namespace:
 
 from __future__ import annotations
 
+import math
 import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
@@ -320,6 +321,22 @@ class Unit:
         # The registry's spelling, never the class-local one; see
         # :attr:`VARIANT_ALIASES`.
         self.variant = self.VARIANT_ALIASES.get(variant, variant)
+        # A box is drawn into ``<use width=... height=...>`` (and, on the
+        # composed classes, a ``viewBox`` of the same two numbers): the SVG
+        # spec calls a negative value on either an error and a conformant
+        # reader draws nothing for it, silently -- the symbol vanishes while
+        # the tag and the pipe routed to its nozzle are drawn as if it were
+        # still there. Zero is the same fault by a different route: nothing
+        # is left to draw a nozzle onto. Caught here, once, for every unit
+        # rather than at each place downstream that assumes a box it was
+        # given can be measured.
+        for dim, value in (("width", width), ("height", height)):
+            if value is not None and not (math.isfinite(value) and value > 0):
+                raise ValueError(
+                    f"{name}: {dim}={value!r} is not a usable size; a symbol is "
+                    f"drawn into a box with a positive, finite {dim}, or "
+                    f"{dim}=None to size itself"
+                )
         self.width = width
         self.height = height
         self.label_pos = label_pos

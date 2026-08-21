@@ -125,6 +125,23 @@ class hierarchy, or what it is called.
   values -- a column 5 or 15 characters wide could land its own centring on
   that tie and draw 0,1 unit apart on 3.11 and on 3.12+. `19_absorber_stripper`
   no longer needs to keep its utilities table off the tie by choice of header.
+- A unit's `width`/`height` is refused if it is not a positive, finite
+  number. A negative or zero size reached `<use width=... height=...>` and
+  the `viewBox` beside it, which the SVG spec calls an error on either; a
+  conformant reader drew nothing for the symbol, silently, while its tag
+  and the pipe routed to its nozzle were drawn as if it were still there.
+- `connect()` refuses a stream whose source and destination are the same
+  port. Nothing stopped a signal connection -- the one port shape with no
+  fixed direction -- being run from a nozzle back to itself; undrawn but
+  undetected, since the resulting zero-length spike is exactly what the
+  renderer's own collinear-run collapse then erases.
+- `from_dict()` resolves a plain `Column`'s retired nozzles (`reflux_in`,
+  `boilup_in`, `reboiler_duty`, `condenser_duty`) the same way accessing
+  them at run time does, instead of only checking `unit.ports` directly. A
+  stream connected to one of them wrote out under its name from `to_dict()`
+  same as any other, but `from_dict()` raised on reading it back -- the
+  one-release grace period #400 gave those four broke round-tripping the
+  very sheet it was there to keep working.
 
 ### Security
 
