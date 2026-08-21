@@ -54,21 +54,52 @@ def break_cycles(fs: "Flowsheet") -> None:
     for u in units:
         adj[u].sort(key=lambda s: s.draw_as_recycle)
         
-    visited = set()
-    stack = set()
-    
-    def dfs(u: "Unit"):
-        visited.add(u)
-        stack.add(u)
-        for s in adj[u]:
-            v = s.dest.owner
-            assert v is not None
-            if v in stack:
-                s._is_recycle = True
-            elif v not in visited:
-                dfs(v)
-        stack.remove(u)
-        
+    visited: set["Unit"] = set()
+    stack: set["Unit"] = set()
+
+    def dfs(start: "Unit") -> None:
+        """Walk from ``start`` with an explicit stack instead of the
+        call stack, so the depth of the longest unbranched chain never
+        meets Python's recursion limit (#413).
+
+        Each frame is a node plus how far through *its own* adjacency
+        list it has gotten -- exactly the state a recursive call would
+        otherwise hold on the real stack -- so an edge is visited, and
+        a back edge marked, in precisely the order the recursive walk
+        used to: pushing a frame for ``v`` and looping happens the
+        instant a recursive call to ``dfs(v)`` would have, and a frame
+        is popped, with ``u`` dropped from ``stack``, at the same point
+        a recursive call would have returned. This is a mechanical
+        rewrite of the recursion below, not a re-ordering of it:
+
+            def dfs(u):
+                visited.add(u); stack.add(u)
+                for s in adj[u]:
+                    v = s.dest.owner
+                    if v in stack: s._is_recycle = True
+                    elif v not in visited: dfs(v)
+                stack.remove(u)
+        """
+        visited.add(start)
+        stack.add(start)
+        frames: list[tuple["Unit", int]] = [(start, 0)]
+        while frames:
+            u, i = frames[-1]
+            if i < len(adj[u]):
+                frames[-1] = (u, i + 1)
+                s = adj[u][i]
+                v = s.dest.owner
+                assert v is not None
+                if v in stack:
+                    s._is_recycle = True
+                elif v not in visited:
+                    visited.add(v)
+                    stack.add(v)
+                    frames.append((v, 0))
+            else:
+                stack.remove(u)
+                frames.pop()
+
     # Start DFS from feed nodes (in-degree == 0)
     feeds = [u for u in units if in_degree[u] == 0]
 

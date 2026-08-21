@@ -176,6 +176,17 @@ class hierarchy, or what it is called.
   narrow, per Unicode's own no-context default. A Latin, digit or
   punctuation string still measures exactly as it did -- no shipped,
   Latin-tagged drawing moves.
+- `layout()`'s cycle-breaking walk no longer recurses to the depth of the
+  longest unbranched chain. A sheet a few hundred units past
+  `sys.getrecursionlimit()` hit `RecursionError` from inside the library,
+  and the exact chain length that failed moved with the limit and with how
+  deep the caller already was -- the same sheet could draw in a script and
+  crash inside a web request (#413). The walk now runs on an explicit
+  stack instead of the call stack, which removes the limit rather than
+  raising it; a chain of 20,000 units lays out where 1,500 used to crash.
+  The rewrite is a mechanical one, not a re-ordering, so which edge gets
+  marked the recycle is unchanged -- checked directly by comparing the new
+  walk's marking against the old recursive one over generated topologies.
 
 ### Security
 
