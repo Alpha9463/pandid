@@ -193,11 +193,15 @@ add_instrument(type, number="", *, sensing=None, acting_on=None, near=None,
                display=None, **kwargs) -> Instrument
 add_balloon(element, *, at=None, offset=46.0, angle=90.0, **kwargs) -> Instrument
 add_loop(variable: str, number: str | int | None = None) -> Loop
+add_control_loop(variable, number=None, *, measuring, acting_on,
+                 **kwargs) -> ControlLoop
 add_valve_station(tag: str, **kwargs) -> ValveStation
 ```
 See [Instrumentation](#instrumentation),
 [A primary element's balloon](#a-primary-elements-balloon),
-[Control loops](#control-loops) and [Valve stations](#valve-stations).
+[Control loops](#control-loops),
+[A feedback loop in one statement](#a-feedback-loop-in-one-statement) and
+[Valve stations](#valve-stations).
 
 ### Geometry and output
 
@@ -2441,6 +2445,68 @@ six loops and leaves ten balloons on literal numbers.
 Loops serialize to an optional `loops:` section of the spec and round-trip
 through it; a sheet that declares none writes no section, so its spec is
 unchanged. See [Declaring a flowsheet as data](#declaring-a-flowsheet-as-data).
+
+#### A feedback loop in one statement
+
+```text
+fs.add_control_loop(variable, number=None, *, measuring, acting_on,
+                    at=None, offset=None, angle=None,
+                    controller_at=None, controller_offset=None,
+                    transmitter_letters="T", controller_letters="IC",
+                    controller_variant="shared",
+                    measurement_kind="electric",
+                    output_kind="pneumatic") -> ControlLoop
+
+loop.transmitter   # FT-101, the balloon reading the process
+loop.controller    # FIC-101, the balloon holding the setpoint
+loop.valve         # the final element you passed in
+loop.measurement   # the transmitter -> controller signal line
+loop.output        # the controller -> valve signal line
+loop.loop          # the Loop the members are numbered from
+```
+
+One transmitter, one controller, one final element: the commonest structure on a
+P&ID, said once.
+
+```python
+fv   = fs.add(ControlValve("FV-101")).pin(x=270, port="inlet", y=195)
+feed = fs.connect(source.outlet, fv.inlet)
+loop = fs.add_control_loop("F", 101, measuring=feed, acting_on=fv)
+```
+
+which builds exactly what the long-hand builds — `add_loop`, two
+`add_instrument` calls and two `connect` calls — and nothing else.
+`examples/04_control_loop.py` draws its level loop this way and
+`tests/test_golden.py` draws the same sheet the long way, so the two are held
+to one golden.
+
+- **It takes the final element; it does not make one.** A control valve stands
+  in a line between two pieces of piping you drew, so `acting_on` is required.
+  It takes the unit, or one of its nozzles where the unit has more than one
+  signal terminal.
+- **The letters come from the measured variable.** `"F"` gives `FT-101` and
+  `FIC-101`; `"L"` gives `LT-101` and `LIC-101`. `transmitter_letters` and
+  `controller_letters` are what follows that letter, so a recording controller
+  is `controller_letters="RC"` and the variable is still typed once.
+- **`variable` also takes a declared `Loop`**, and usually has to: the valve is
+  tagged from the loop and goes in the run long before the balloons do, so the
+  loop already exists by the time this is called. Passing a letter instead
+  declares the loop here.
+- **It states no standoff of its own.** `at`/`offset`/`angle` place the
+  transmitter against what it measures and `controller_at`/`controller_offset`
+  place the controller against the transmitter, both as `add_instrument` means
+  them; leave them out and `add_instrument`'s defaults apply, with the standoff
+  resolver walking a balloon clear of whatever is in the way.
+- **Every part stays reachable**, and is an ordinary unit or stream: pin it,
+  re-`attach()` it, `annotate()` it, hang an interlock off `loop.measurement`.
+- **Cascade, ratio, split-range and override loops are not built here.** Each is
+  more than one measured variable or more than one final element; build those
+  from the parts, as before.
+- **The handle answers for its loop.** `loop.tag()`, `loop.element()`,
+  `loop.name`, `loop.variable` and `loop.number` all work, and
+  `add_instrument("LAH", loop)` takes it where it takes a `Loop` — so an alarm
+  on the same loop does not need you to know that a `ControlLoop` is not one.
+  `fs.loops` still holds exactly one entry per loop.
 
 #### Automatic loop numbers
 

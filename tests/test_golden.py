@@ -15,7 +15,10 @@ matching example: the example scripts render straight to a file under examples/
 real render, but it would make the golden change every day. 10's and 11's title
 blocks state their own dates, so those two need no pinning. Every other input is
 copied verbatim from the matching example script; for 08, whose example *is*
-data, the copied input is its spec mapping.
+data, the copied input is its spec mapping. 04's level loop is the one place a
+fixture states the same sheet in a *different* spelling from its example, which
+turns the cross-check below into the proof that ``add_control_loop()`` is
+exactly the calls it replaces; the comment there says so.
 
 **From the example itself.** A copy drifts from what it copied, and this one
 did: #230 corrected real people's initials in examples/13_mineral_dewatering.py
@@ -330,6 +333,13 @@ def _control_loop() -> Flowsheet:
 
     # Element -> transmitter -> controller on the level as well as on the flow:
     # the impulse line off the drum reaches LT-101 and the controller reads it.
+    #
+    # Written out although examples/04 now says these five lines as one
+    # fs.add_control_loop(), and deliberately: this is the only pair in the
+    # corpus where the fixture and the example reach the same sheet by two
+    # different spellings, so test_the_example_draws_the_same_sheet_as_its_fixture
+    # is what proves add_control_loop() composes exactly these calls and adds
+    # nothing of its own (#439). Collapsing it here would retire that proof.
     lt = fs.add_instrument("LT", level, sensing=drum, at="S", offset=70)
     lic = fs.add_instrument("LIC", level, near=lt, at="S", offset=95, variant="shared")
     # The alarms are lettering in the controller's own quadrants, which is what

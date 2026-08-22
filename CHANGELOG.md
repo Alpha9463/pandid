@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Flowsheet.add_control_loop()`: the single-variable feedback loop -- one
+  transmitter, one controller, one final element -- in the one statement an
+  engineer says it in, in place of four objects, two signal connections and
+  hand-tuned placement (#439). It takes the control valve rather than making
+  one, since the valve already stands in the run; letters the transmitter and
+  the controller from the measured variable; states no standoff of its own, so
+  the balloons take `add_instrument`'s defaults and #428's resolver keeps them
+  apart; and returns a `ControlLoop` whose `transmitter`, `controller`, `valve`,
+  `measurement` and `output` are ordinary units and streams, still pinnable and
+  still connectable. `examples/04_control_loop.py` draws its level loop this way
+  and the golden it draws is unchanged.
 - `Tank(inputs=)`/`Vessel(inputs=)` and `outputs=`: a tank or a vessel fed (or
   drawn) by several streams, `Block`'s connection API over vendored artwork
   instead of a grown box -- `in_1`/`in_2`/... on whichever faces are named,
