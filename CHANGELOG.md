@@ -79,6 +79,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A nozzle fixed to a face now places the unit that carries it (#431).**
+  The old placement pass was a longest path in which every stream was read
+  as one step to the east, so the geometry a symbol had already fixed --
+  a column's overhead on the crown, a relief valve's inlet under its
+  body, a reboiler return at the bottom -- reached nothing that decided
+  where a box went. Placement is now two systems of difference
+  constraints, one per axis, read off those faces per **endpoint**: a
+  unit whose *west* port carries a stream is east of that stream's far
+  end, and one whose *north* port carries it is south of it. An edge free
+  at both ends still falls back to the flow order, so a sheet of plain
+  blocks lays out as it always did. Splitting the axes is what lets a
+  return line say *below* and nothing about along, which is why the two
+  ends of a relief line are no longer placed at opposite corners of the
+  sheet and drawn round the outside to meet (#430).
+- **The engine draws the process first and the instrumentation onto it
+  (#431).** The stage boundary was *has a host*; it is now process versus
+  control. Stage 1 places every unit that carries material against every
+  ``kind="material"`` stream; stage 2 places every balloon -- attached
+  and free-standing -- and every signal run against that frozen geometry.
+  A control loop is therefore no longer a cycle in the flow graph, so
+  nothing tears a feedback wire to break one. Stage 1 also reserves the
+  paper stage 2 will need, by inflating a unit's footprint by the
+  balloons hanging off it.
+- **A ribbon wider than the paper is folded into bands (#429).** A
+  position is ``(band, column, row)`` from the start rather than a cut
+  made afterwards, because cutting a solved ribbon puts a stream across
+  the break running right to left -- which is the very inconsistency
+  between geometry and nozzle the constraint solver exists to remove. A
+  sheet that fits is left exactly as it was.
+  Laid out with every ``pin()`` stripped, ``21_alumina_refinery`` comes
+  out 2982 x 1860 against the ribbon's 6460 x 1509, and the corpus's
+  eleven ``unit-overlap`` errors fall to one.
+- `pandid.layout.SugiyamaLayoutEngine` is now `ConstraintLayoutEngine`;
+  `default_layout_engine` is unchanged. `pandid.layout.layering`,
+  `pandid.layout.ordering` and `pandid.layout.stacking` are replaced by
+  `pandid.layout.solver`, `claims`, `place`, `halo`, `stages` and
+  `control`. All six were private modules of the engine.
+
 - **A valve, fitting, piping accessory or instrument balloon draws at half
   the weight of the equipment beside it (#305).** ISO 10628-1 §5.3.1 rules
   three line weights and one constant covered every symbol on a sheet, so a

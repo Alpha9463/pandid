@@ -57,10 +57,13 @@ and a flowsheet renders inline in Jupyter.
 
 - **Topology-first API.** Declare typed units and connect their named ports.
   Streams are created for you.
-- **Automatic layout.** Sugiyama-style layering, crossing reduction and a
-  centre-aligned flow spine. Recycles are detected and routed around the sheet,
-  and a port that a symbol authors on several faces is piped from the face its
-  peer is actually on.
+- **Automatic layout.** A nozzle fixed to a face places the unit that carries
+  it -- a west port puts its block east of what feeds it, a crown puts the
+  relief valve above the vessel -- solved as difference constraints, with
+  crossing reduction and a centre-aligned flow spine over the top. Recycles
+  are detected and routed around the sheet, instrumentation is placed against
+  frozen process geometry, and a port that a symbol authors on several faces
+  is piped from the face its peer is actually on.
 - **Orthogonal A\* routing.** Right-angle streams with crossing jump-gaps and
   parallel-segment separation. Never emits a disconnected stream.
 - **219 registered symbols** with style variants, so a heat exchanger can be

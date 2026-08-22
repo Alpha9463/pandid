@@ -1,11 +1,13 @@
 """Instrument attachment: balloons anchored to a line or to equipment.
 
 A P&ID bubble is not a node in the process flow; it is furniture hung
-off a tap point. So an attached instrument is kept out of the Sugiyama
-phases entirely (it has no rank and no row) and its frame comes from its
-host instead: a point on the host stream's routed path, or the midpoint
-of a face of the host unit's drawn box, pushed out along a branch
-direction measured from the flow.
+off a tap point. So an attached instrument takes no part in stage 1 (it
+has no column and no row) and its frame comes from its host instead: a
+point on the host stream's routed path, or the midpoint of a face of the
+host unit's drawn box, pushed out along a branch direction measured from
+the flow. The space it will need is reserved before stage 1 places
+anything -- see :mod:`pandid.layout.halo` -- so what it lands in is
+paper nothing else was allowed to take.
 
 The tap point is resolved through :mod:`pandid.portgeom`, so a balloon
 can never disagree with the nozzle geometry the router and renderer see.
@@ -103,21 +105,14 @@ Box = tuple[float, float, float, float]
 
 
 def is_attached(unit: "Unit | None") -> bool:
-    """True when a host positions this unit, not the ranker."""
+    """True when a host positions this unit, not the coordinate pass.
+
+    Which balloons stage 2 resolves *from something else* rather than
+    from their wiring; :func:`pandid.layout.stages.is_control` is the
+    question of which units stage 2 places at all, and is the one the
+    process/control boundary is drawn on.
+    """
     return unit is not None and getattr(unit, "host", None) is not None
-
-
-def free_units(fs: "Flowsheet") -> list:
-    """The units the ranker sees: everything not attached."""
-    return [u for u in fs.units if not is_attached(u)]
-
-
-def free_streams(fs: "Flowsheet") -> list:
-    """Streams between two ranked units. A signal to an attached
-    balloon is not a flow-order constraint and must not push its peer
-    down a column."""
-    return [s for s in fs.streams
-            if not is_attached(s.source.owner) and not is_attached(s.dest.owner)]
 
 
 def _rotate_ccw(vx: float, vy: float, degrees: float) -> Point:

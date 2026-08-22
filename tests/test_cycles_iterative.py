@@ -16,7 +16,7 @@ import random
 import sys
 
 from pandid import Flowsheet, units as U
-from pandid.layout.attach import free_streams, free_units
+from pandid.layout.stages import process_streams, process_units
 from pandid.layout.cycles import break_cycles
 from pandid.streams import Stream
 from pandid.units import Unit
@@ -91,14 +91,14 @@ def _reference_recursive_marks(fs: Flowsheet) -> set[int]:
 
     Returns the set of ``id(stream)`` marked as a recycle back-edge.
     """
-    units = free_units(fs)
+    units = process_units(fs)
     marks: set[int] = set()
     if not units:
         return marks
 
     adj: dict[Unit, list[Stream]] = {u: [] for u in units}
     in_degree: dict[Unit, int] = {u: 0 for u in units}
-    for s in free_streams(fs):
+    for s in process_streams(fs):
         assert s.source.owner is not None
         assert s.dest.owner is not None
         adj[s.source.owner].append(s)

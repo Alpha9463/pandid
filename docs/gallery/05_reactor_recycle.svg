@@ -44,7 +44,7 @@
     <symbol id="sym_splitter" viewBox="0 0 50.0 50.0" overflow="visible"><polygon points="0,25 50,0 50,50" fill="none" stroke="black" stroke-width="2"/></symbol>
   </defs>
   <g id="units">
-    <polygon points="-18.0,115.8889 85,115.8889 100,125.8889 85,135.8889 -18.0,135.8889" fill="transparent" stroke="black" stroke-width="2" />
+    <polygon points="-18.0,115.8889 85.0,115.8889 100.0,125.8889 85.0,135.8889 -18.0,135.8889" fill="transparent" stroke="black" stroke-width="2" />
     <text x="33.5" y="125.8889" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Syngas Feed</text>
     <use href="#sym_mixer" x="268" y="90.89" width="50.0" height="50.0" />
     <use href="#sym_compressor" x="418" y="85.89" width="70.0" height="67.0" />
