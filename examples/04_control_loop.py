@@ -30,6 +30,15 @@ everything lettered from the measured variable, so a ``TT`` put on a
 flow loop raises at the line that wrote it. The interlock square is in
 no loop and takes a literal number.
 
+``fs.add_control_loop(...)`` says all of that at once for the plain
+case, and the level loop below is written that way: a transmitter, a
+controller and the two signal lines between them all follow from the
+loop, so none of them is worth a line of its own. It takes the control
+valve rather than making one, since the valve is already standing in the
+run. The flow loop stays long-hand: its transmitter is placed by a
+primary element's balloon rather than by the process it reads, which is
+a different anchor -- and both spellings are worth seeing on one sheet.
+
 ``add_balloon()`` moves the orifice plate's tag into a balloon on a
 short impulse line, which is how a P&ID draws a primary element: the
 fitting itself is left unlettered.
@@ -102,22 +111,30 @@ def main():
     fs.connect(ft.sig_out, fic.sig_in, kind="electric")
     fs.connect(fic.sig_out, fv.actuator, kind="pneumatic")
 
-    # Level loop: the same three parts, hung off the drum.
-    lt = fs.add_instrument("LT", level, sensing=drum, at="S", offset=70)
-    lic = fs.add_instrument("LIC", level, near=lt, at="S", offset=95, variant="shared")
+    # Level loop: the same three parts, in the one sentence they are.
+    # LT-101 and LIC-101 are lettered from the loop, the controller is
+    # stacked on the transmitter, and both signal lines are drawn --
+    # ``output_kind`` because LV-101 is stroked electrically. The valve
+    # is passed in rather than made: it stands in the run above, between
+    # two pieces of piping already drawn. Placement is stated here only
+    # because this sheet wants the pair further out than the default;
+    # left out, each balloon takes its usual standoff and the resolver
+    # walks it clear of anything in the way.
+    level_loop = fs.add_control_loop(
+        level, measuring=drum, acting_on=lv, at="S", offset=70,
+        controller_at="S", controller_offset=95, output_kind="electric")
+    # Every part stays reachable, which is what the next two lines want.
     # The alarms are lettering in the controller's own quadrants, not
     # balloons: ISO 15519-2 5.2.5 is a shall, and an alarm is a function
     # of this controller rather than a second instrument. High above the
     # centre line, low below, and no face is spent on either.
-    lic.annotate(high="LAH", low="LAL")
+    level_loop.controller.annotate(high="LAH", low="LAL")
 
     # The interlock takes no face: ``sensing=`` a stream measures ``at=``
     # along the *routed* path, so the square rides wherever the router
     # puts it. angle=90 branches east off a line running south.
-    measurement = fs.connect(lt.sig_out, lic.sig_in, kind="electric")
-    fs.add_instrument("I", 1, sensing=measurement, at=0.5, offset=44, angle=90,
-                      variant="logic")
-    fs.connect(lic.sig_out, lv.actuator, kind="electric")
+    fs.add_instrument("I", 1, sensing=level_loop.measurement, at=0.5, offset=44,
+                      angle=90, variant="logic")
 
     # The drum only buffers what passes through it, so the feed and the
     # main outlet carry the same number; the relief line is open only

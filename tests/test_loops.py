@@ -4,6 +4,7 @@ import pytest
 
 from pandid import Flowsheet, units as U
 from pandid.document import equipment_list
+from pandid.validate import validate
 
 
 def _sheet():
@@ -646,3 +647,265 @@ def test_a_spec_loop_with_no_number_still_takes_the_sheets_next_one():
     )
     assert [loop.name for loop in rebuilt.loops] == ["P-301", "F-316", "T-302"]
     assert rebuilt.add_loop("L").name == "L-317"
+
+
+# --- a feedback loop in one statement (#439) ----------------------------------
+
+
+def _feedback_sheet():
+    """A drum on a line with a control valve after it.
+
+    The shape a single-variable feedback loop closes on: something to measure,
+    and a final element already standing in the run between two pieces of
+    piping. Returns the sheet, the drum and the valve.
+    """
+    fs = Flowsheet("feedback")
+    feed = fs.add(U.Feed("Feed")).pin(port="outlet", x=60, y=200)
+    drum = fs.add(U.Vessel("V-101")).pin(x=220, port="inlet", y=200)
+    lv = fs.add(U.Valve("LV-101", variant="control")).pin(x=470, port="inlet", y=200)
+    prod = fs.add(U.Product("Product")).pin(port="inlet", x=640, y=200)
+    fs.connect(feed.outlet, drum.inlet)
+    fs.connect(drum.outlet, lv.inlet)
+    fs.connect(lv.outlet, prod.inlet)
+    return fs, drum, lv
+
+
+#: The two ways the same loop is placed: left to the defaults, and with the
+#: standoffs an author states. Both are run through the equivalence test,
+#: because "the helper adds no placement of its own" is only worth anything if
+#: it holds when nothing is stated as well as when everything is.
+_PLACEMENTS = [
+    {},
+    {"at": "S", "offset": 70, "controller_at": "S", "controller_offset": 95},
+]
+
+
+def test_a_feedback_loop_is_one_statement():
+    """The six statements of the long-hand, said once (#439)."""
+    fs, drum, lv = _feedback_sheet()
+
+    loop = fs.add_control_loop("L", 101, measuring=drum, acting_on=lv)
+
+    assert loop.name == "L-101"
+    assert loop.transmitter.name == "LT-101"
+    assert loop.controller.name == "LIC-101"
+    assert loop.valve is lv
+    assert (loop.measurement.source.owner, loop.measurement.dest.owner) == (
+        loop.transmitter,
+        loop.controller,
+    )
+    assert (loop.output.source.owner, loop.output.dest.owner) == (loop.controller, lv)
+    assert (loop.measurement.kind, loop.output.kind) == ("electric", "pneumatic")
+    # The transmitter reads the drum and the controller only stands on the
+    # transmitter: one measurement is drawn, not two.
+    assert (loop.transmitter.host, loop.transmitter.relation) == (drum, "sensing")
+    assert (loop.controller.host, loop.controller.relation) == (loop.transmitter, "near")
+
+
+@pytest.mark.parametrize("placement", _PLACEMENTS, ids=["defaults", "stated"])
+def test_the_helper_draws_what_the_long_hand_draws(placement):
+    """The whole of the claim: identical sheets, to the last character.
+
+    Built twice on one process from two spellings and rendered, so this covers
+    the tags, both balloon frames, both signal routes and every mark either
+    spelling puts on the paper. ``examples/04_control_loop.py`` makes the same
+    comparison against a committed golden; this one is the API's own, and the
+    one that runs with no placement stated at all -- which is where a hidden
+    default inside the helper would show up as a moved balloon.
+    """
+    long_hand, drum, lv = _feedback_sheet()
+    loop = long_hand.add_loop("L", 101)
+    lt = long_hand.add_instrument(
+        "LT",
+        loop,
+        sensing=drum,
+        **{k: v for k, v in placement.items() if not k.startswith("controller_")},
+    )
+    lic = long_hand.add_instrument(
+        "LIC",
+        loop,
+        near=lt,
+        variant="shared",
+        **{
+            k.removeprefix("controller_"): v
+            for k, v in placement.items()
+            if k.startswith("controller_")
+        },
+    )
+    long_hand.connect(lt.sig_out, lic.sig_in, kind="electric")
+    long_hand.connect(lic.sig_out, lv.actuator, kind="pneumatic")
+
+    one_liner, drum, lv = _feedback_sheet()
+    one_liner.add_control_loop("L", 101, measuring=drum, acting_on=lv, **placement)
+
+    assert one_liner.to_svg() == long_hand.to_svg()
+
+
+def test_the_balloons_it_places_land_clear_of_the_sheet():
+    """What #439 was raised about: the probe guessed ``offset=40`` and
+    ``offset=45`` and tripped ``unit-overlap``. Nothing is guessed here, and
+    #428's standoff resolver is what keeps the pair apart."""
+    fs, drum, lv = _feedback_sheet()
+    fs.add_control_loop("L", 101, measuring=drum, acting_on=lv)
+
+    assert [f.code for f in validate(fs) if f.code == "unit-overlap"] == []
+
+
+def test_the_parts_stay_reachable_and_pinnable():
+    """An author still has the four objects, and may still move them."""
+    fs, drum, lv = _feedback_sheet()
+
+    loop = fs.add_control_loop("L", 101, measuring=drum, acting_on=lv)
+    loop.controller.annotate(high="LAH", low="LAL")
+    loop.controller.pin(mirrored=True)
+    # Re-anchored after the fact: the balloons this built are attached the way
+    # any other balloon is, so the arrangement is not sealed by the call.
+    loop.transmitter.attach(drum, at="E", offset=60)
+    fs.layout()
+
+    assert loop.controller.quadrants == {"c": ("LAH",), "d": ("LAL",)}
+    assert loop.controller.frame is not None and loop.controller.frame.mirrored
+    assert (loop.transmitter.at, loop.transmitter.offset) == ("E", 60)
+    assert loop.transmitter.frame is not None
+
+
+def test_it_takes_the_valve_rather_than_making_one():
+    """A control valve is process equipment already standing between two pieces
+    of piping, so nothing here invents one; ``acting_on`` has no default."""
+    fs, drum, lv = _feedback_sheet()
+    before = list(fs.units)
+
+    loop = fs.add_control_loop("L", 101, measuring=drum, acting_on=lv)
+
+    assert loop.valve is lv
+    assert [u for u in fs.units if u not in before] == [loop.transmitter, loop.controller]
+    with pytest.raises(TypeError):
+        fs.add_control_loop("F", 102, measuring=drum)  # type: ignore[call-arg]
+
+
+def test_the_output_may_name_the_nozzle_it_lands_on():
+    """The unit is the short spelling; the nozzle is there for equipment with
+    more than one signal terminal, which is the case ``connect()`` refuses to
+    guess between."""
+    fs, drum, lv = _feedback_sheet()
+
+    loop = fs.add_control_loop("L", 101, measuring=drum, acting_on=lv.actuator)
+
+    assert loop.valve is lv
+    assert loop.output.dest is lv.actuator
+
+
+def test_the_letters_follow_from_the_measured_variable():
+    """``"F"`` gives FT/FIC, ``"L"`` gives LT/LIC: the variable is typed once
+    and ``Loop`` composes the rest."""
+    fs, drum, lv = _feedback_sheet()
+    fv = fs.add(U.Valve("FV-101", variant="control")).pin(x=340, port="inlet", y=340)
+    run = drum.outlet.stream
+    assert run is not None  # a level is read off the vessel, a flow off the line
+
+    level = fs.add_control_loop("L", 101, measuring=drum, acting_on=lv)
+    flow = fs.add_control_loop("F", 101, measuring=run, acting_on=fv)
+
+    assert (level.transmitter.name, level.controller.name) == ("LT-101", "LIC-101")
+    assert (flow.transmitter.name, flow.controller.name) == ("FT-101", "FIC-101")
+
+
+def test_the_function_letters_after_the_variable_are_the_authors():
+    """A recording controller and an indicating transmitter are the same loop
+    said in a different house style, and the variable is still typed once."""
+    fs, drum, lv = _feedback_sheet()
+    run = drum.outlet.stream
+    assert run is not None
+
+    loop = fs.add_control_loop(
+        "F",
+        101,
+        measuring=run,
+        acting_on=lv,
+        transmitter_letters="IT",
+        controller_letters="RC",
+    )
+
+    assert (loop.transmitter.name, loop.controller.name) == ("FIT-101", "FRC-101")
+
+
+def test_empty_function_letters_are_refused():
+    """An empty string leaves a balloon lettered with the loop's own variable
+    and no function, which no instrument carries."""
+    fs, drum, lv = _feedback_sheet()
+
+    with pytest.raises(ValueError, match="controller_letters"):
+        fs.add_control_loop("L", 101, measuring=drum, acting_on=lv, controller_letters="")
+
+
+def test_a_declared_loop_is_taken_rather_than_declared_again():
+    """The usual case, and why the letter is not the only spelling: the valve
+    is tagged from the loop and goes in the run long before the balloons do."""
+    fs, drum, lv = _feedback_sheet()
+    declared = fs.add_loop("L", 101)
+    assert lv.name == declared.tag("LV")  # the valve in the run was tagged from it
+
+    loop = fs.add_control_loop(declared, measuring=drum, acting_on=lv)
+
+    assert loop.loop is declared
+    assert fs.loops == [declared]  # one entry, however the loop was reached
+    assert loop.transmitter.name == "LT-101"
+
+
+def test_a_declared_loop_may_not_also_be_given_a_number():
+    fs, drum, lv = _feedback_sheet()
+    declared = fs.add_loop("L", 101)
+
+    with pytest.raises(ValueError, match=r"loop L-101 is already declared"):
+        fs.add_control_loop(declared, 102, measuring=drum, acting_on=lv)
+
+
+def test_it_declares_the_loop_when_given_a_letter():
+    """Including taking the sheet's next number, exactly as ``add_loop`` does,
+    for the sheet whose valve tag was typed literally."""
+    fs, drum, lv = _feedback_sheet()
+
+    loop = fs.add_control_loop("L", measuring=drum, acting_on=lv)
+
+    assert loop.name == "L-101"
+    assert [declared.name for declared in fs.loops] == ["L-101"]
+    assert fs.add_loop("F").name == "F-102"
+
+
+def test_the_handle_answers_for_the_loop_it_names():
+    """``loop`` is what the author called it, so a second member joins from it
+    without their having to know a ``ControlLoop`` is not a ``Loop``."""
+    fs, drum, lv = _feedback_sheet()
+
+    loop = fs.add_control_loop("L", 101, measuring=drum, acting_on=lv)
+    alarm = fs.add_instrument("LAH", loop, near=loop.controller, at="E")
+
+    assert (loop.variable, loop.number) == ("L", "101")
+    assert loop.tag("XV") == "XV-101"
+    assert loop.element("LG") == "LG-101"
+    assert alarm.name == "LAH-101"
+    with pytest.raises(ValueError, match="opens with 'T'"):
+        fs.add_instrument("TT", loop)
+
+
+def test_the_signal_kinds_are_the_authors():
+    """Electric in and pneumatic out is the default because that is what most
+    loops are; an electrically stroked valve says so."""
+    fs, drum, lv = _feedback_sheet()
+
+    loop = fs.add_control_loop(
+        "L", 101, measuring=drum, acting_on=lv, measurement_kind="data", output_kind="electric"
+    )
+
+    assert (loop.measurement.kind, loop.output.kind) == ("data", "electric")
+
+
+def test_the_loop_it_builds_still_reaches_no_equipment_list():
+    """A ControlLoop draws nothing of its own: the marks on the sheet are the
+    two balloons and the valve, and the handle is not one of them."""
+    fs, drum, lv = _feedback_sheet()
+
+    loop = fs.add_control_loop("L", 101, measuring=drum, acting_on=lv)
+
+    assert loop not in fs.units and loop.loop not in fs.units
+    assert "L-101" not in [tag for tag, _ in equipment_list(fs).rows]

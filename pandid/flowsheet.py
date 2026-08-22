@@ -8,7 +8,7 @@ one-stream-per-port rule.
 from __future__ import annotations
 from pathlib import Path
 from string import Formatter
-from typing import Callable, TYPE_CHECKING, TypeVar
+from typing import Any, Callable, TYPE_CHECKING, TypeVar
 
 from pandid.stations import (
     DEFAULT_BYPASS_RISE,
@@ -21,7 +21,7 @@ from pandid.streams import PROCESS_KINDS, SIGNAL_KINDS, STREAM_KINDS, Stream
 if TYPE_CHECKING:
     from pandid.components import Component
     from pandid.document import TitleBlock
-    from pandid.loops import Loop
+    from pandid.loops import ControlLoop, Loop
     from pandid.ports import Port
     from pandid.stations import ValveStation
     from pandid.units import Instrument, Unit
@@ -159,6 +159,20 @@ def _signal_end(end: "Port | Unit", kind: str, which: str) -> "Port":
         f"({', '.join(port.name for port in signals)}); name the one this line "
         f"runs to"
     )
+
+
+def _stated(**kwargs: "float | str | None") -> dict[str, Any]:
+    """Only the arguments the caller actually gave.
+
+    :meth:`Flowsheet.add_control_loop` forwards placement to
+    :meth:`Flowsheet.add_instrument`, and it must forward *nothing* for
+    a keyword left out: repeating ``add_instrument``'s defaults in the
+    helper's own signature would put a second copy of every standoff in
+    the package, and the two would drift the first time one moved.
+    Issue #439 asks for exactly this: the helper states no distance of
+    its own, and #428's standoff resolver keeps the balloons apart.
+    """
+    return {name: value for name, value in kwargs.items() if value is not None}
 
 
 def _check_signal_pairing(src: "Port", dst: "Port", kind: str) -> None:
@@ -552,7 +566,7 @@ class Flowsheet:
             self._loops_allocated = max(
                 self._loops_allocated, int(loop.number) + 1 - self.loop_number_start)
 
-    def add_instrument(self, type: str, number: "str | int | Loop" = "", *,
+    def add_instrument(self, type: str, number: "str | int | Loop | ControlLoop" = "", *,
                        sensing: "Stream | Unit | None" = None,
                        acting_on: "Stream | Unit | None" = None,
                        near: "Stream | Unit | None" = None,
@@ -564,7 +578,9 @@ class Flowsheet:
         ``type`` is the functional letter string and ``number`` the loop
         number; together they make the tag (``add_instrument("FT",
         101)`` -> ``FT-101``). ``number`` also takes a
-        :class:`~pandid.loops.Loop` from :meth:`add_loop`, which
+        :class:`~pandid.loops.Loop` from :meth:`add_loop` -- or the
+        :class:`~pandid.loops.ControlLoop` from
+        :meth:`add_control_loop`, which names the same loop -- which
         supplies the number and checks ``type`` against the loop's
         measured variable, raising here rather than warning at render
         time.
@@ -598,10 +614,14 @@ class Flowsheet:
         ...                         offset=70, display="central")
         >>> fs.connect(ft.sig_out, fic.sig_in, kind="electric")
         """
-        from pandid.loops import Loop
+        from pandid.loops import ControlLoop, Loop
         from pandid.units import Instrument
 
-        if isinstance(number, Loop):
+        # Both, because an author holding what add_control_loop() returned
+        # is holding the loop by the only name they were given. Asking
+        # them for ``handle.loop`` here would make the shorter spelling
+        # the one that fails.
+        if isinstance(number, (Loop, ControlLoop)):
             number.check(type)
             number = number.number
         inst = Instrument(type, number, variant=variant, **kwargs)
@@ -704,6 +724,143 @@ class Flowsheet:
         element.balloon = inst
         inst.attach(element, at=at, offset=offset, angle=angle, relation="sensing")
         return inst
+
+    def add_control_loop(
+        self, variable: "str | Loop", number: str | int | None = None, *,
+        measuring: "Stream | Unit", acting_on: "Port | Unit",
+        at: float | str | None = None, offset: float | None = None,
+        angle: float | None = None,
+        controller_at: str | None = None, controller_offset: float | None = None,
+        transmitter_letters: str = "T", controller_letters: str = "IC",
+        controller_variant: str = "shared",
+        measurement_kind: str = "electric", output_kind: str = "pneumatic",
+    ) -> "ControlLoop":
+        """Draw a single-variable feedback loop, in the one sentence it is.
+
+        A transmitter on what is being measured, a controller beside it,
+        and the two signal lines that close the loop onto a final
+        control element the author has already put in the pipe::
+
+            loop = fs.add_control_loop("F", 101, measuring=feed,
+                                       acting_on=fv)
+            loop.transmitter    # FT-101
+            loop.controller     # FIC-101
+            loop.valve          # the ControlValve passed in
+
+        which is the loop, the two balloons and the two signal lines of
+        the long-hand -- :meth:`add_loop`, two :meth:`add_instrument`
+        calls and two :meth:`connect` calls -- said once. It composes
+        exactly those calls and nothing else, so anything true of a
+        hand-built loop is true of this one.
+
+        **It takes the final element; it does not make one.** A control
+        valve is process equipment standing in a line, between two
+        pieces of piping the author drew. Minting one here would be
+        guessing where that piping goes, so ``acting_on`` is required
+        and takes the unit -- or one of its nozzles, where the unit has
+        more than one signal terminal to choose between.
+
+        **The letters follow from the measured variable.** ``"F"`` gives
+        ``FT-101`` and ``FIC-101``, ``"L"`` gives ``LT-101`` and
+        ``LIC-101``. ``transmitter_letters`` and ``controller_letters``
+        are what *follows* that letter, so a recording controller is
+        ``controller_letters="RC"`` and the variable is still typed
+        once.
+
+        **It states no distance of its own.** ``at``/``offset``/``angle``
+        place the transmitter against what it measures, and
+        ``controller_at``/``controller_offset`` place the controller
+        against the transmitter, both exactly as :meth:`add_instrument`
+        means them. Leave any of them out and ``add_instrument``'s own
+        default applies, with the standoff resolver of
+        :mod:`pandid.layout.attach` walking a balloon clear of whatever
+        it would have landed on. Repeating those defaults here would put
+        a second copy of every standoff in the package, and a number an
+        author has to guess is what issue #439 was raised about.
+
+        ``variable`` takes the :class:`~pandid.loops.Loop`
+        :meth:`add_loop` returned as well as the measured-variable
+        letter, and usually has to: the valve is tagged from the loop
+        and is placed in the run long before the balloons go on, so on
+        most sheets the loop is already declared by the time this is
+        called. Given a letter instead -- with a number, or without one
+        for the sheet to allocate -- this declares the loop itself,
+        which is the spelling for a valve whose tag was typed literally.
+
+        ``measurement_kind`` and ``output_kind`` are the two signal
+        lines' :meth:`connect` kinds: a 4-20 mA measurement into the
+        controller and an air signal down onto the diaphragm, which is
+        what the defaults say. An electrically actuated valve is
+        ``output_kind="electric"``.
+
+        Cascade, ratio, split-range and override loops are **not** built
+        here; each is more than one measured variable or more than one
+        final element. Every part stays reachable, so building one of
+        those on top of this is the long-hand it always was.
+
+        Args:
+            variable: The ISA measured-variable letter, or a declared
+                :class:`~pandid.loops.Loop`.
+            number: The loop number, when ``variable`` is a letter.
+                Left out, the sheet allocates one; see :meth:`add_loop`.
+            measuring: What the transmitter reads -- a stream for a
+                flow, a unit for a level, a pressure or a temperature.
+                Anchored as ``sensing=`` anchors a balloon on
+                :meth:`add_instrument`, so the tap is drawn.
+            acting_on: The final control element, or its signal nozzle.
+
+        Returns:
+            The :class:`~pandid.loops.ControlLoop` handle. It draws
+            nothing itself; its members are ordinary units and streams.
+
+        Raises:
+            ValueError: if a declared loop is given a number as well, or
+                if either function-letter string is empty.
+        """
+        from pandid.loops import ControlLoop, Loop
+        from pandid.ports import Port
+
+        if isinstance(variable, Loop):
+            if number is not None:
+                raise ValueError(
+                    f"loop {variable.name} is already declared and carries its "
+                    f"number, so number={number!r} here is a second answer to a "
+                    f"settled question. Pass the loop on its own, or pass "
+                    f"{variable.variable!r} and {number!r} and let this declare it"
+                )
+            loop = variable
+        else:
+            loop = self.add_loop(variable, number)
+        for role, letters in (("transmitter_letters", transmitter_letters),
+                              ("controller_letters", controller_letters)):
+            if not letters.strip():
+                raise ValueError(
+                    f"loop {loop.name}: {role} is what follows the measured variable "
+                    f"in that member's tag, and an empty string leaves it tagged "
+                    f"{loop.variable!r} alone -- a balloon lettered with the loop's "
+                    f"own variable and no function. The defaults are 'T' and 'IC'"
+                )
+        # Both balloons before either line, and the transmitter first,
+        # because ``place_attached`` resolves balloons in the order they
+        # joined ``units`` and the controller hangs off the transmitter.
+        transmitter = self.add_instrument(
+            f"{loop.variable}{transmitter_letters.strip()}", loop, sensing=measuring,
+            **_stated(at=at, offset=offset, angle=angle))
+        # ``near=``, not ``sensing=``: the controller does not read the
+        # transmitter, it is only stacked on it, and what passes between
+        # them is the measurement below -- a signal line, routed like
+        # one. Saying both would draw two lines between one pair.
+        controller = self.add_instrument(
+            f"{loop.variable}{controller_letters.strip()}", loop, near=transmitter,
+            variant=controller_variant,
+            **_stated(at=controller_at, offset=controller_offset))
+        measurement = self.connect(
+            transmitter.sig_out, controller.sig_in, kind=measurement_kind)
+        output = self.connect(controller.sig_out, acting_on, kind=output_kind)
+        return ControlLoop(
+            loop, transmitter, controller,
+            acting_on.owner if isinstance(acting_on, Port) else acting_on,
+            measurement, output)
 
     def add_valve_station(
         self, tag: str, *,

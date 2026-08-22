@@ -18,6 +18,15 @@ The number is typed once. The measured-variable letter is still typed on
 every balloon and checked against the loop at the call site, so an
 ``FIC`` reading a ``TT`` is detected rather than made unrepresentable.
 
+The commonest arrangement of all -- one transmitter, one controller, one
+valve -- is a single statement, because that is how an engineer says it::
+
+    loop = fs.add_control_loop("F", 303, measuring=feed, acting_on=cv)
+
+:class:`ControlLoop` is what comes back, and every part is still there
+to be pinned or re-placed. See
+:meth:`~pandid.flowsheet.Flowsheet.add_control_loop`.
+
 The two members that are not balloons join through two methods, because
 they are lettered by two rules. A **primary element** -- the venturi in
 the line -- is lettered from the measured variable exactly as a balloon
@@ -49,6 +58,12 @@ back carries on its series instead of starting it again.
 """
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pandid.streams import Stream
+    from pandid.units import Instrument, Unit
 
 
 class Loop:
@@ -180,3 +195,93 @@ class Loop:
 
     def __repr__(self) -> str:
         return f"Loop({self.variable!r}, {self.number!r})"
+
+
+class ControlLoop:
+    """One single-variable feedback loop, with its parts still in reach.
+
+    What :meth:`~pandid.flowsheet.Flowsheet.add_control_loop` hands
+    back. A **handle**, not a drawn thing and not a second loop: it
+    draws nothing of its own, never enters
+    :attr:`~pandid.flowsheet.Flowsheet.units`, and every member is the
+    ordinary balloon, valve or signal line the long-hand builds, so each
+    can still be pinned, re-anchored, annotated or connected again.
+    :class:`~pandid.stations.ValveStation` is the same shape for the
+    same reason.
+
+    It is **not** a :class:`Loop` subclass. A control valve is tagged
+    from the loop and sits in the line long before the balloons go on,
+    so ``add_control_loop`` has to accept the handle ``add_loop``
+    already returned rather than insist on minting one -- and a subclass
+    would then be a second object claiming to be that loop, which is
+    exactly what :meth:`~pandid.flowsheet.Flowsheet.add_loop` refuses.
+    So this holds the loop and forwards what a loop answers, and
+    :attr:`~pandid.flowsheet.Flowsheet.loops` keeps one entry per loop
+    however the loop was reached.
+
+    There is deliberately **no** ``element`` attribute. A primary
+    element is a piece of equipment in the pipe, placed by the author on
+    the same argument the valve is, so nothing here invents one; and the
+    name is better spent on :meth:`element`, which is what tags the
+    element the author does place.
+
+    Cascade, ratio, split-range and override loops are not built here.
+    Nothing about this handle forecloses them -- a second controller
+    reads :attr:`controller` and a second valve reads :meth:`tag` --
+    but none of them is a single measured variable closing on a single
+    final element, which is what this is.
+    """
+
+    def __init__(self, loop: Loop, transmitter: "Instrument",
+                 controller: "Instrument", valve: "Unit",
+                 measurement: "Stream", output: "Stream"):
+        #: The loop the members are numbered from, as
+        #: :meth:`~pandid.flowsheet.Flowsheet.add_loop` returns it.
+        self.loop = loop
+        #: The balloon reading the process (``FT-101``).
+        self.transmitter = transmitter
+        #: The balloon holding the setpoint (``FIC-101``).
+        self.controller = controller
+        #: The final control element the output lands on -- the unit the
+        #: author placed and passed in, never one this made up. Where a
+        #: nozzle was named, this is the unit that owns it.
+        self.valve = valve
+        #: Transmitter to controller: the measurement.
+        self.measurement = measurement
+        #: Controller to final element: the output.
+        self.output = output
+
+    @property
+    def variable(self) -> str:
+        """The loop's measured-variable letter."""
+        return self.loop.variable
+
+    @property
+    def number(self) -> str:
+        """The loop's number, as text."""
+        return self.loop.number
+
+    @property
+    def name(self) -> str:
+        """The loop's identity as a string (``"F-101"``)."""
+        return self.loop.name
+
+    def tag(self, letters: str) -> str:
+        """:meth:`Loop.tag`, so a second final element joins from here."""
+        return self.loop.tag(letters)
+
+    def element(self, letters: str) -> str:
+        """:meth:`Loop.element`, so a primary element joins from here."""
+        return self.loop.element(letters)
+
+    def check(self, letters: str) -> None:
+        """:meth:`Loop.check`. Also what lets
+        :meth:`~pandid.flowsheet.Flowsheet.add_instrument` take this
+        handle where it takes a loop, so an alarm on the same loop is
+        ``fs.add_instrument("LAH", loop)`` whichever of the two the
+        author is holding."""
+        self.loop.check(letters)
+
+    def __repr__(self) -> str:
+        return (f"ControlLoop({self.name!r}, {self.transmitter.name!r} -> "
+                f"{self.controller.name!r} -> {self.valve.name!r})")
