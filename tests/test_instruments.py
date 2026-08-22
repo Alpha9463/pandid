@@ -238,11 +238,19 @@ def test_angle_follows_a_reroute_rather_than_the_screen():
     feed = fs.add(U.Feed("Feed")).pin(x=60, y=60)
     col = fs.add(U.Column("T-1")).pin(x=300, y=300)
     s = fs.connect(feed.outlet, col.feed)
-    inst = fs.add_instrument("PT", 1, sensing=s, at=0.99, offset=40)
+    # Mid-run, and measured on the dog-leg's vertical leg, which is the
+    # only part of this route the question is even about. Taken hard
+    # against the nozzle instead (``at=0.99``) the tap sits 6px off T-1
+    # and a 44px bubble perpendicular to it lands *inside* the column
+    # whatever the offset, so `place_attached` stands it off and there is
+    # no perpendicular left to assert.
+    inst = fs.add_instrument("PT", 1, sensing=s, at=0.5, offset=40)
     fs.route()
-    pts = [p for p in s.route.waypoints]
-    ux, uy = pts[-1][0] - pts[-2][0], pts[-1][1] - pts[-2][1]
+    pts = list(s.route.waypoints)
+    leg = next((a, b) for a, b in zip(pts, pts[1:]) if a[0] == b[0])
+    ux, uy = leg[1][0] - leg[0][0], leg[1][1] - leg[0][1]
     n = math.hypot(ux, uy)
+    assert _tap_of(inst)[0] == pytest.approx(leg[0][0])  # the tap is on that leg
     # 90 CCW of the flow direction, on a y-down canvas
     assert (inst.frame.cx - inst.tap[0]) == pytest.approx(40 * uy / n, abs=1e-6)
     assert (inst.frame.cy - inst.tap[1]) == pytest.approx(-40 * ux / n, abs=1e-6)
@@ -313,6 +321,133 @@ def test_attachment_survives_a_second_layout():
     fs.layout()
     fs.route()
     assert (ft.frame.x, ft.frame.y) == pytest.approx(before)
+
+
+# --- standing a colliding balloon off (issue #428) ---------------------------
+
+
+def _placed(u: U.Unit):
+    """A unit's resolved frame, asserted present. The tests below are
+    about *where* a balloon landed, so one that landed nowhere is a
+    failure of the test's own setup, not the property under test."""
+    assert u.frame is not None, f"{u.name} was never placed"
+    return u.frame
+
+
+def _centre(u: U.Unit) -> tuple[float, float]:
+    f = _placed(u)
+    return (f.cx, f.cy)
+
+
+def _tap_of(inst: U.Instrument) -> tuple[float, float]:
+    assert inst.tap is not None, f"{inst.name} has no tap"
+    return inst.tap
+
+
+def _overlaps(a: U.Unit, b: U.Unit) -> bool:
+    """The overlap `validate()` reports, over two units' drawn boxes."""
+    from pandid.portgeom import unit_box
+
+    p, q = unit_box(a, _placed(a)), unit_box(b, _placed(b))
+    return not (
+        p[2] - 1.0 <= q[0] or q[2] - 1.0 <= p[0] or p[3] - 1.0 <= q[1] or q[3] - 1.0 <= p[1]
+    )
+
+
+def test_the_search_and_the_checker_call_the_same_pair_collided():
+    """`TOUCHING` restates `validate`'s tolerance. If the two drifted apart
+    the placer would report itself finished with an overlap the checker
+    still reports, or move a bubble no reader would have called crowded."""
+    from pandid.layout.attach import TOUCHING
+    from pandid.validate import _TOL
+
+    assert TOUCHING == _TOL
+
+
+def test_two_bubbles_on_one_tap_do_not_land_on_each_other():
+    """The whole of #428: nothing made a balloon aware of any other, so
+    every instrument tapping a line at the same place took the same spot."""
+    fs, s, first, _ = _line(at=0.5, offset=60)
+    second = fs.add_instrument("PT", 102, sensing=s, at=0.5, offset=60)
+    third = fs.add_instrument("TT", 103, sensing=s, at=0.5, offset=60)
+    fs.route()
+    assert not _overlaps(first, second)
+    assert not _overlaps(first, third)
+    assert not _overlaps(second, third)
+    # The anchor is not what moved: all three still read the same point.
+    assert _tap_of(second) == pytest.approx(_tap_of(first))
+    assert _tap_of(third) == pytest.approx(_tap_of(first))
+
+
+def test_a_bubble_is_stood_off_the_equipment_it_would_have_landed_on():
+    """An offset measured off a stream says nothing about what is standing
+    where it points, which is how a transmitter ended up drawn inside a
+    column."""
+    # angle=0 aims the standoff along the flow, straight into FV-101:
+    # the tap is 19px short of the valve and the bubble is 44 across.
+    fs, _, inst, fv = _line(at=0.9, offset=45, angle=0)
+    assert not _overlaps(inst, fv)
+    # The anchor did not move: still on the run, still short of the valve.
+    tap = _tap_of(inst)
+    assert tap[1] == pytest.approx(195.0)
+    assert tap[0] < _placed(fv).x
+    assert math.dist(_centre(inst), tap) >= 45 - 1e-6
+
+
+def test_a_bubble_mounted_flush_is_pushed_clear_of_the_wall():
+    """A unit host has no line for an element to be *in*, so a balloon
+    whose box swallows the face midpoint is half inside the vessel rather
+    than in line with anything."""
+    fs = Flowsheet("flush")
+    drum = fs.add(U.Vessel("V-1")).pin(x=300, y=250)
+    lt = fs.add_instrument("LT", 1, sensing=drum, at="E", offset=10)
+    fs.route()
+    assert not _overlaps(lt, drum)
+    face = _placed(drum)
+    assert _tap_of(lt) == pytest.approx((face.x_max, face.cy))
+
+
+def test_the_standoff_only_ever_grows():
+    """Monotone by construction: the search sweeps a ring before it walks
+    out to the next one, and never walks back in. A resolver that could
+    pull a balloon closer is one whose passes can trade two arrangements
+    back and forth until `MAX_PLACEMENT_PASSES` trips."""
+    fs, s, first, _ = _line(at=0.5, offset=45)
+    crowd = [fs.add_instrument("PT", 200 + i, sensing=s, at=0.5, offset=45) for i in range(5)]
+    fs.route()
+    every = [first, *crowd]
+    for inst in every:
+        assert math.dist(_centre(inst), _tap_of(inst)) >= 45 - 1e-6
+    for i, a in enumerate(every):
+        for b in every[i + 1 :]:
+            assert not _overlaps(a, b), f"{a.name} and {b.name}"
+
+
+def test_an_in_line_element_is_never_stood_off():
+    """``offset=0`` straddles the tap on purpose -- an orifice plate is
+    drawn *on* the line. The router already stands aside for one rather
+    than detouring round it, and so must the placer, even where the plate
+    is drawn hard against the valve below it and a bubble there would be
+    walked out."""
+    fs, _, fe, fv = _line(at=0.95, offset=0)
+    assert _overlaps(fe, fv)  # the search had something to react to
+    assert _centre(fe) == pytest.approx(_tap_of(fe))
+
+
+def test_a_crowded_sheet_places_the_same_way_every_time():
+    """Declaration order decides who gives way, so the answer cannot
+    depend on set iteration or on what the previous pass left behind."""
+
+    def boxes() -> list[tuple[str, float, float]]:
+        fs, s, _, _ = _line(at=0.5, offset=50)
+        for i in range(6):
+            fs.add_instrument("PT", 300 + i, sensing=s, at=0.5, offset=50)
+        fs.route()
+        return [(u.name, *_centre(u)) for u in fs.units if u.frame is not None]
+
+    first = boxes()
+    assert boxes() == first
+    assert boxes() == first
 
 
 # --- final control element ---------------------------------------------------
