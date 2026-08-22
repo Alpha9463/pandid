@@ -82,6 +82,15 @@ MIN_BRANCH = 20.0
 #: and one that is separate by a hair.
 RESOLVED_CLEARANCE = 6.0
 
+#: How much room in front of a nozzle a *moved* balloon leaves the
+#: router. ``VisibilityGraph`` stands every run off its nozzle before it
+#: may turn, by this much or more -- more where a label has to be
+#: cleared, but the label pass has not run the first time a balloon is
+#: placed, so the bare stand-off is the one figure true at every call.
+#: Under-stating it leaves a nozzle the router can still escape from;
+#: over-stating it would walk bubbles out past corridors nothing needs.
+ESCAPE_ROOM = 25.0
+
 #: The overlap :func:`pandid.validate.validate` tolerates before it
 #: calls two boxes collided -- its ``_TOL``, restated rather than
 #: imported so that a layout phase does not reach into the checker's
@@ -195,6 +204,38 @@ def _intrusion(a: Box, b: Box, gap: float) -> float:
     return max(0.0, wide) * max(0.0, tall)
 
 
+def _nozzle_keepouts(fs: "Flowsheet") -> list[Box]:
+    """The stand-off in front of every connected nozzle on the sheet.
+
+    A run leaves its nozzle along the outward face and may not turn until
+    it has cleared :data:`ESCAPE_ROOM`; park a bubble across that and the
+    router finds no path out at all and falls back to an unchecked L. So
+    a balloon the search *had* to move keeps off them -- not the balloon
+    the author placed, which is judged on drawn boxes alone, so a sheet
+    already drawing well is not rearranged around a rule it never had to
+    meet.
+
+    Read off the nozzles rather than off the routed paths, and only the
+    ranked units' nozzles: both are settled before this sweep begins and
+    stay settled through it, so this cannot be the thing that makes a
+    placement chase a line the router has not drawn yet.
+    """
+    from pandid.portgeom import port_anchor
+
+    out: list[Box] = []
+    for u in fs.units:
+        if u.frame is None or is_attached(u):
+            continue
+        for name, port in u.ports.items():
+            if port.stream is None:
+                continue
+            ax, ay, facing = port_anchor(u, u.frame, name)
+            bx = ax + ESCAPE_ROOM * (1.0 if facing == "E" else -1.0 if facing == "W" else 0.0)
+            by = ay + ESCAPE_ROOM * (1.0 if facing == "S" else -1.0 if facing == "N" else 0.0)
+            out.append((min(ax, bx), min(ay, by), max(ax, bx), max(ay, by)))
+    return out
+
+
 def _branch_angles(requested: float) -> list[float]:
     """Branch angles to try, the one asked for first.
 
@@ -226,7 +267,8 @@ def _standoff_box(tap: Point, ref: Point, distance: float, angle: float,
 
 def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
                     w: float, h: float,
-                    obstacles: list[Box]) -> tuple[float, float]:
+                    obstacles: list[Box],
+                    keepouts: list[Box]) -> tuple[float, float]:
     """``(distance, angle)`` to hang *inst* at: what it asked for, or the
     nearest standoff out from it that nothing else is standing in.
 
@@ -242,7 +284,9 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
     units, and the balloons this sweep has placed before this one. Not
     the routed paths: a standoff chosen against a line the router has
     yet to redraw is a standoff that moves every time the line does, and
-    that loop has no bottom.
+    that loop has no bottom. *keepouts* holds the nozzle stand-offs of
+    :func:`_nozzle_keepouts`, which only a *replacement* standoff has to
+    respect.
 
     Deliberately no search at all for a balloon that straddles its own
     tap **on a stream**: that is an in-line primary element (``offset=0``
@@ -268,10 +312,10 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
                 if (on_a_line and box[0] <= tap[0] <= box[2]
                         and box[1] <= tap[1] <= box[3]):
                     return asked
-                gap = -TOUCHING
+                gap, against = -TOUCHING, obstacles
             else:
-                gap = RESOLVED_CLEARANCE
-            if not any(_intrusion(box, o, gap) > 0.0 for o in obstacles):
+                gap, against = RESOLVED_CLEARANCE, obstacles + keepouts
+            if not any(_intrusion(box, o, gap) > 0.0 for o in against):
                 return distance, angle
             # Ranked on one rule for every candidate, and the checker's
             # rather than the search's: where the sheet has no free
@@ -312,6 +356,7 @@ def place_attached(fs: "Flowsheet") -> bool:
     # on the one before it -- and each balloon joins as it is placed.
     obstacles = [unit_box(u, u.frame) for u in fs.units
                  if u.frame is not None and not is_attached(u)]
+    keepouts = _nozzle_keepouts(fs)
     # Balloons chain (an interlock hung under a controller hung off a
     # transmitter), so resolve a host before whatever hangs on it,
     # sweeping until nothing new can be placed.
@@ -326,7 +371,8 @@ def place_attached(fs: "Flowsheet") -> bool:
                 continue
             (tx, ty), ref = anchor
             w, h = resolve_size(inst)
-            distance, angle = _clear_standoff(inst, (tx, ty), ref, w, h, obstacles)
+            distance, angle = _clear_standoff(
+                inst, (tx, ty), ref, w, h, obstacles, keepouts)
             ux, uy = _rotate_ccw(ref[0], ref[1], angle)
             cx, cy = tx + ux * distance - w / 2, ty + uy * distance - h / 2
             obstacles.append((cx, cy, cx + w, cy + h))

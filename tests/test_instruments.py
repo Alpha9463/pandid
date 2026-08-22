@@ -423,6 +423,52 @@ def test_the_standoff_only_ever_grows():
             assert not _overlaps(a, b), f"{a.name} and {b.name}"
 
 
+def test_a_nozzle_keepout_is_the_stand_off_in_front_of_a_live_nozzle():
+    """One rectangle per *connected* nozzle, reaching out along the face
+    it leaves by. A nozzle nothing is joined to costs the router nothing
+    to reach past, so listing it would only push bubbles about."""
+    from pandid.layout.attach import ESCAPE_ROOM, _nozzle_keepouts
+    from pandid.portgeom import port_anchor
+
+    fs, _, _, fv = _line(at=0.5, offset=45)
+    keepouts = _nozzle_keepouts(fs)
+    live = [(u, n) for u in fs.units for n, p in u.ports.items() if p.stream is not None]
+    assert len(keepouts) == len(live)
+    ax, ay, facing = port_anchor(fv, _placed(fv), "inlet")
+    assert facing == "W"
+    assert (ax - ESCAPE_ROOM, ay, ax, ay) in keepouts
+
+
+def test_a_moved_bubble_leaves_a_nozzle_its_room_to_escape():
+    """A run may not turn until it has cleared its nozzle, so a bubble
+    parked across that stand-off leaves the router no way out at all and
+    it draws the fallback L instead -- which is how three of #428's
+    collisions came back as unrouted lines when the search resolved them
+    against drawn boxes alone. Only a *moved* bubble answers for it: the
+    author's own standoff is judged on boxes, so a sheet already drawing
+    well is not rearranged around a rule it never had to meet."""
+    from pandid.layout.attach import _anchor, _clear_standoff, _standoff_box
+
+    fs, _, inst, _ = _line(at=0.5, offset=45)
+    anchor = _anchor(inst)
+    assert anchor is not None
+    tap, ref = anchor
+    w, h = 44.0, 44.0
+    # Stand something exactly where it asked to be, so it has to move,
+    # and read off where it goes with nothing else in the way.
+    blocked = [_standoff_box(tap, ref, inst.offset, inst.angle, w, h)]
+    swung = _clear_standoff(inst, tap, ref, w, h, blocked, [])
+    assert swung != (inst.offset, inst.angle)
+
+    # Now put a nozzle stand-off across exactly that answer. The search
+    # has to give it up for a further one; the anchor is untouched either
+    # way, and the standoff only ever grows.
+    keepout = _standoff_box(tap, ref, *swung, w, h)
+    guarded = _clear_standoff(inst, tap, ref, w, h, blocked, [keepout])
+    assert guarded != swung
+    assert guarded[0] >= inst.offset
+
+
 def test_an_in_line_element_is_never_stood_off():
     """``offset=0`` straddles the tap on purpose -- an orifice plate is
     drawn *on* the line. The router already stands aside for one rather
