@@ -4092,7 +4092,7 @@ fs.layout(engine=MyEngine())
 fs.route(router=MyRouter())
 ```
 
-Defaults: `pandid.layout.SugiyamaLayoutEngine` (exported as
+Defaults: `pandid.layout.ConstraintLayoutEngine` (exported as
 `default_layout_engine`) and `pandid.routing.DefaultRouter`.
 
 The symbol registry is `pandid.render.symbols.default_registry`, a

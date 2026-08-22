@@ -1161,7 +1161,8 @@ class Flowsheet:
         if router is None:
             from pandid.routing import DefaultRouter
             router = DefaultRouter()
-        from pandid.layout.attach import MAX_PLACEMENT_PASSES, place_attached
+        from pandid.layout.attach import MAX_PLACEMENT_PASSES
+        from pandid.layout.control import place_control
         router.route(self)
         # An attached balloon hangs off its host's *routed* path, so
         # where it lands is only known once that path exists; and
@@ -1172,7 +1173,7 @@ class Flowsheet:
         # left pointing at where a balloon used to be.
         self.route_converged = False
         for _ in range(MAX_PLACEMENT_PASSES):
-            if not place_attached(self):
+            if not place_control(self):
                 self.route_converged = True
                 break
             router.route(self)

@@ -79,8 +79,11 @@ moved (see *Goldens* below).
 
 1. **Topology** (`pandid/flowsheet.py`, `pandid/units.py`, `pandid/ports.py`,
    `pandid/streams.py`) holds units, ports and stream connectivity.
-2. **Geometry.** `pandid/layout/` runs Sugiyama layering, then ordering, then
-   coordinates, emitting each unit's resolved `Frame`, and finally port-face
+2. **Geometry.** `pandid/layout/` places the process first and the
+   instrumentation onto it: it breaks cycles, solves a system of difference
+   constraints per axis over the faces the symbols fix, reduces crossings,
+   hands out coordinates, and then places every balloon against that frozen
+   geometry -- emitting each unit's resolved `Frame`, and finally port-face
    selection and label placement. `pandid/portgeom.py` is the single source of
    truth for port geometry, and `pandid/routing/` is the visibility graph and
    the A\* search over it.

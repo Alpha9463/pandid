@@ -15,34 +15,30 @@ def break_cycles(fs: "Flowsheet") -> None:
     Graph (DAG). Streams marked as is_recycle=True will be drawn
     backward, while all others flow forward through the ranks.
     """
-    from pandid.layout.attach import free_streams, free_units
+    from pandid.layout.stages import process_streams, process_units
 
     # 1. Reset all recycles (private field; is_recycle is read-only to
     #    callers)
     for s in fs.streams:
         s._is_recycle = False
 
-    units = free_units(fs)
+    units = process_units(fs)
     if not units:
         return
 
-    # 2. Build adjacency over free_streams(), which is every stream
-    #    between two ranked units. Kind is not filtered: material,
-    #    energy and signal can each close a cycle the layering DAG must
-    #    be free of, and a ranked-to-ranked signal run is as much a back
-    #    edge as a pipe is.
-    #
-    #    What the filter does cost is the textbook example. A control
-    #    loop's transmitter -> controller -> valve feedback runs through
-    #    balloons, and every stream touching one is dropped here, so on
-    #    a sheet with the whole loop drawn this function sees none of
-    #    it. That is not a hole in the DAG -- an attached unit is placed
-    #    from its host and never carries a rank for a cycle to break --
-    #    but a reader looking for the loop will not find it below.
+    # 2. Build adjacency over the *process* runs -- material, between
+    #    two units that carry material. A signal is not a step along the
+    #    flow, so a control loop closing on the valve it commands is not
+    #    a cycle here and there is nothing in it to tear. That was the
+    #    old engine's defect and not a simplification: with signals in,
+    #    a loop's feedback wire was marked a recycle, then excluded from
+    #    every phase that places anything, so its two ends were placed
+    #    with no relationship to each other and the router drew it the
+    #    long way round (#430).
     adj: dict["Unit", list["Stream"]] = {u: [] for u in units}
     in_degree: dict["Unit", int] = {u: 0 for u in units}
 
-    for s in free_streams(fs):
+    for s in process_streams(fs):
         assert s.source.owner is not None
         assert s.dest.owner is not None
         adj[s.source.owner].append(s)

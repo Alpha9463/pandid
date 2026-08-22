@@ -1,9 +1,8 @@
-from pandid import Flowsheet, units as U
+from pandid import Flowsheet, devices as D, units as U
 from pandid.layout import _seed_slots
 from pandid.layout.cycles import break_cycles
-from pandid.layout.layering import assign_layers
-from pandid.layout.ordering import order_within_layers
 from pandid.layout.coordinates import assign_coordinates
+from pandid.layout.place import assign_positions
 
 
 def test_cycle_breaking():
@@ -32,9 +31,9 @@ def test_layering():
     fs.connect(u1.outlet, u2.feed)
     fs.connect(u2.vapor, u3.in_1)
 
-    break_cycles(fs)
     _seed_slots(fs)
-    assign_layers(fs)
+    break_cycles(fs)
+    assign_positions(fs)
 
     assert u1._slot.col == 0
     assert u2._slot.col == 1
@@ -50,9 +49,9 @@ def test_pinned_layering():
 
     u1.pin(col=2, row=0)  # u1 is forced to col 2
 
-    break_cycles(fs)
     _seed_slots(fs)
-    assign_layers(fs)
+    break_cycles(fs)
+    assign_positions(fs)
 
     assert u1._slot.col == 2
     # u2 must be at least u1.col + 1
@@ -68,10 +67,9 @@ def test_ordering():
     fs.connect(u1.vapor, u2.feed)
     fs.connect(u1.liquid, u3.in_1)
 
-    break_cycles(fs)
     _seed_slots(fs)
-    assign_layers(fs)
-    order_within_layers(fs)
+    break_cycles(fs)
+    assign_positions(fs)
 
     # u2 and u3 are both in col 1, they must have different rows (0 and 1)
     assert u1._slot.row == 0
@@ -311,7 +309,13 @@ def test_a_branch_ranks_beside_the_spine_it_joins():
 
     A blower feeding a tower eight units along starts beside the first
     unit of the train and runs the width of the page to reach it. Removing
-    the slack puts it one column short of the tower instead.
+    the slack puts it in the next column to the tower instead.
+
+    *Which* side it lands on is the tower's own nozzle: ``boilup_in`` is
+    on the east face, so the run enters from the east and the blower
+    that feeds it is drawn there. Only the distance is this test's
+    subject -- the branch is one column from what it joins, wherever the
+    nozzle puts it, rather than the width of the sheet away.
     """
     fs = Flowsheet("slack")
     water = fs.add(U.Feed("Water"))
@@ -327,8 +331,10 @@ def test_a_branch_ranks_beside_the_spine_it_joins():
     fs.connect(blower.discharge, tower.boilup_in)
     fs.layout()
 
-    assert blower._slot.col == tower._slot.col - 1
-    assert air._slot.col == blower._slot.col - 1
+    assert abs(blower._slot.col - tower._slot.col) == 1
+    assert abs(air._slot.col - blower._slot.col) == 1
+    # And not at the left edge, which is where longest path alone put it.
+    assert blower._slot.col > b._slot.col
 
 
 def test_slack_removal_leaves_a_pinned_column_alone():
@@ -571,16 +577,17 @@ def test_the_face_a_signal_leaves_on_is_settled_before_the_labels_are_placed():
     assert dict(lt.frame.port_faces) == before
 
 
-# --- the column-sharing pass against the scan it replaced ---------------------
+# --- the merge pass against the scan it replaced ------------------------------
 
 
-def _closes_cycle_by_rebuild(units, flow, find, a, b):
+def _closes_cycle_by_rebuild(units, orders, find, a, b):
     """The cycle test as it read before the contracted graph was carried.
 
-    Contract every unit and every stream with ``a`` and ``b`` identified,
-    then topologically sort the result: a cycle is a node the sort never
-    reaches. Kept here as the definition the fast test is measured
-    against, since it is the one every shipped sheet was laid out by.
+    Contract every unit and every constraint with ``a`` and ``b``
+    identified, then topologically sort the result: a cycle is a node the
+    sort never reaches. Kept here as the definition the fast test is
+    measured against, since it is the one every shipped sheet was laid
+    out by.
     """
     from collections import defaultdict, deque
 
@@ -590,8 +597,8 @@ def _closes_cycle_by_rebuild(units, flow, find, a, b):
 
     adj = defaultdict(set)
     nodes = {merged(u) for u in units}
-    for s in flow:
-        x, y = merged(s.source.owner), merged(s.dest.owner)
+    for edge in orders:
+        x, y = merged(edge.before), merged(edge.after)
         if x is not y:
             adj[x].add(y)
     in_degree = dict.fromkeys(nodes, 0)
@@ -610,8 +617,8 @@ def _closes_cycle_by_rebuild(units, flow, find, a, b):
     return seen < len(nodes)
 
 
-def _share_columns_by_rebuild(units, flow, stacks):
-    """``_share_columns`` driving the rebuild above, candidate by candidate."""
+def _merge_by_rebuild(units, orders, sames, pinned):
+    """``_merge`` driving the rebuild above, candidate by candidate."""
     lead = {u: u for u in units}
 
     def find(u):
@@ -620,12 +627,12 @@ def _share_columns_by_rebuild(units, flow, stacks):
             u = lead[u]
         return u
 
-    col = {u: u._slot.col for u in units if u._slot.col is not None}
-    for st in stacks:
-        a, b = find(st.satellite), find(st.anchor)
+    col = dict(pinned)
+    for same in sorted(sames, key=lambda s: -s.rank):
+        a, b = find(same.a), find(same.b)
         if a is b or (a in col and b in col and col[a] != col[b]):
             continue
-        if _closes_cycle_by_rebuild(units, flow, find, a, b):
+        if _closes_cycle_by_rebuild(units, orders, find, a, b):
             continue
         lead[a] = b
         if a in col:
@@ -634,17 +641,16 @@ def _share_columns_by_rebuild(units, flow, stacks):
 
 
 def _sharing_inputs(fs):
-    """The three arguments ``assign_layers`` hands the column-sharing pass."""
-    from pandid.layout.attach import free_streams, free_units
-    from pandid.layout.stacking import stacked_edges
+    """The arguments the column solve hands the merge pass."""
+    from pandid.layout import claims as claims_mod
+    from pandid.layout.stages import process_streams, process_units
 
-    break_cycles(fs)
     _seed_slots(fs)
-    units = free_units(fs)
-    stacks = stacked_edges(fs)
-    vertical = {id(st.stream) for st in stacks}
-    flow = [s for s in free_streams(fs) if not s.is_recycle and id(s) not in vertical]
-    return units, flow, stacks
+    break_cycles(fs)
+    units = process_units(fs)
+    claims = claims_mod.read(fs, process_streams(fs))
+    pinned = {u: u._slot.col for u in units if u._slot.col is not None}
+    return units, claims.along, claims.columns, pinned
 
 
 def _stacked_chain(n, pins=()):
@@ -751,12 +757,12 @@ def _stacked_on_what_it_feeds():
     return fs, a, b, y
 
 
-def test_the_column_sharing_pass_answers_what_the_whole_sheet_scan_did():
+def test_the_merge_pass_answers_what_the_whole_sheet_scan_did():
     """The contracted graph is carried across the unions, not rebuilt.
 
-    Rebuilding it meant contracting every unit and every stream and
-    topologically sorting the result once per stacked edge. The answer
-    has to be the same one -- these are the ranks every shipped sheet is
+    Rebuilding it meant contracting every unit and every constraint and
+    topologically sorting the result once per candidate. The answer has
+    to be the same one -- these are the columns every shipped sheet is
     drawn on -- so the scan it replaced is kept in this file and both are
     asked the same question.
 
@@ -764,7 +770,7 @@ def test_the_column_sharing_pass_answers_what_the_whole_sheet_scan_did():
     two conflicting constraints wins, so a pass refusing a *different*
     one would draw a different sheet on the same count refused.
     """
-    from pandid.layout.layering import _share_columns
+    from pandid.layout.solver import _merge
 
     corpus = [
         _stacked_chain(6),
@@ -776,21 +782,22 @@ def test_the_column_sharing_pass_answers_what_the_whole_sheet_scan_did():
         _syngas_block()[0],
     ]
     for fs in corpus:
-        units, flow, stacks = _sharing_inputs(fs)
-        assert stacks, f"{fs.name} states no vertical constraint to share on"
-        assert _share_columns(units, flow, stacks) == _share_columns_by_rebuild(
-            units, flow, stacks
+        units, orders, sames, pinned = _sharing_inputs(fs)
+        assert sames, f"{fs.name} states no vertical constraint to share on"
+        assert _merge(units, orders, sames, pinned) == _merge_by_rebuild(
+            units, orders, sames, pinned
         ), fs.name
 
 
 def test_a_stack_that_would_rank_a_block_before_and_after_itself_is_refused():
     """The corpus above is only worth comparing if a union is turned down."""
-    from pandid.layout.layering import _share_columns
+    from pandid.layout.solver import _merge
 
     fs, a, b, c = _stack_over_a_chain()
-    units, flow, stacks = _sharing_inputs(fs)
-    assert _closes_cycle_by_rebuild(units, flow, lambda u: u, a, c)
-    assert _share_columns(units, flow, stacks)[a] is not _share_columns(units, flow, stacks)[c]
+    units, orders, sames, pinned = _sharing_inputs(fs)
+    assert _closes_cycle_by_rebuild(units, orders, lambda u: u, a, c)
+    merged = _merge(units, orders, sames, pinned)
+    assert merged[a] is not merged[c]
 
     # And the sheet still draws, with B between the two rather than beside
     # a rank that is its own predecessor.
@@ -802,13 +809,181 @@ def test_a_union_is_judged_on_the_edges_the_one_before_it_moved():
     """The contracted graph is carried, so it has to be kept in step.
 
     Reading the graph as it stood before the earlier union would find
-    nothing between these two ranks and merge them, which is the rank
+    nothing between these two columns and merge them, which is the column
     running to itself two steps along.
     """
-    from pandid.layout.layering import _share_columns
+    from pandid.layout.solver import _merge
 
     fs, a, c = _cycle_only_a_merge_can_see()
-    units, flow, stacks = _sharing_inputs(fs)
-    assert [(st.satellite.name, st.anchor.name) for st in stacks] == [("D", "A"), ("A", "C")]
-    head = _share_columns(units, flow, stacks)
+    units, orders, sames, pinned = _sharing_inputs(fs)
+    assert [(s.a.name, s.b.name) for s in sames] == [("D", "A"), ("A", "C")]
+    head = _merge(units, orders, sames, pinned)
     assert head[a] is not head[c]
+
+
+# --- what a fixed nozzle face says about placement (#431) ---------------------
+
+
+def test_a_relief_valve_is_drawn_over_the_vessel_it_protects():
+    """Issue #430: the two ends of a return line had no relation at all.
+
+    The vessel's crown and the valve's own inlet both say the valve is
+    above it, and neither says anything about how far along -- so the
+    column comes out the same for both and the relief runs straight up.
+    Ranked as a step along the flow instead, the valve landed at the
+    bottom right of the sheet and the relief line was drawn round the
+    outside of everything to reach it.
+    """
+    fs = Flowsheet("relief")
+    feed = fs.add(U.Feed("Feed"))
+    drum = fs.add(U.Vessel("V-101"))
+    prod = fs.add(U.Product("Product"))
+    psv = fs.add(D.ReliefValve("PSV-101"))
+    flare = fs.add(U.Product("To Flare"))
+    fs.connect(feed.outlet, drum.inlet)
+    fs.connect(drum.outlet, prod.inlet)
+    fs.connect(drum.vent, psv.inlet)
+    fs.connect(psv.outlet, flare.inlet)
+    fs.layout()
+
+    assert psv.frame is not None and drum.frame is not None
+    assert psv.frame.col == drum.frame.col
+    assert psv.frame.y_max <= drum.frame.y
+
+
+def test_one_fixed_nozzle_places_an_edge_whose_far_end_can_move():
+    """The reading is per endpoint, which a per-edge rule cannot do.
+
+    A horizontal drum's inlet is authored on three faces, so nothing
+    about *it* says where the drum goes. The pump's discharge is on one,
+    and that is enough: the drum is east of the pump.
+    """
+    from pandid.portgeom import port_faces
+
+    fs = Flowsheet("one fixed end")
+    pump = fs.add(U.Pump("P-1"))
+    drum = fs.add(U.Vessel("V-1", variant="horizontal"))
+    fs.connect(pump.discharge, drum.in_1)
+    fs.layout()
+
+    assert len(port_faces(drum, "in_1", drum.frame)) > 1, "in_1 is not movable"
+    assert drum.frame is not None and pump.frame is not None
+    assert drum.frame.col == pump.frame.col + 1
+
+
+def test_a_signal_run_states_no_order_along_the_sheet():
+    """Issue #430's other half: a wire is not a step along the process.
+
+    Read as one, the controller was pushed a full column east of the
+    transmitter and the loop it closed became a cycle the flow graph had
+    to be torn to break.
+    """
+    fs = Flowsheet("loop")
+    feed = fs.add(U.Feed("Feed"))
+    valve = fs.add(D.ControlValve("FV-101"))
+    prod = fs.add(U.Product("Product"))
+    fs.connect(feed.outlet, valve.inlet)
+    fs.connect(valve.outlet, prod.inlet)
+    ft = fs.add(U.Instrument("FT-101"))
+    fic = fs.add(U.Instrument("FIC-101"))
+    fs.connect(ft.sig_out, fic.sig_in, kind="electric")
+    signal = fs.connect(fic.sig_out, valve.actuator, kind="pneumatic")
+    fs.layout()
+
+    # No wire is a recycle, because no wire is in the flow graph at all.
+    assert [s.name for s in fs.streams if s.is_recycle] == []
+    assert not signal.is_recycle
+    # The process reads exactly as it does without the loop on it.
+    assert prod.frame is not None and valve.frame is not None
+    assert prod.frame.col == valve.frame.col + 1
+    # And both balloons are drawn, off the grid the equipment is on.
+    for balloon in (ft, fic):
+        assert balloon.frame is not None
+        assert balloon.frame.col is None
+
+
+def test_a_free_standing_balloon_is_placed_near_what_it_is_wired_to():
+    fs = Flowsheet("panel")
+    feed = fs.add(U.Feed("Feed"))
+    valve = fs.add(D.ControlValve("FV-101"))
+    prod = fs.add(U.Product("Product"))
+    fs.connect(feed.outlet, valve.inlet)
+    fs.connect(valve.outlet, prod.inlet)
+    fic = fs.add(U.Instrument("FIC-101"))
+    fs.connect(fic.sig_out, valve.actuator, kind="pneumatic")
+    fs.layout()
+
+    assert fic.frame is not None and valve.frame is not None
+    reach = abs(fic.frame.cx - valve.frame.cx) + abs(fic.frame.cy - valve.frame.cy)
+    assert reach < 400, "the controller is nowhere near the valve it commands"
+    # Near, but not on top of it.
+    assert not (
+        fic.frame.x < valve.frame.x_max
+        and fic.frame.x_max > valve.frame.x
+        and fic.frame.y < valve.frame.y_max
+        and fic.frame.y_max > valve.frame.y
+    )
+
+
+# --- reserving the space stage 2 will need (#428) ------------------------------
+
+
+def test_a_chain_of_balloons_is_reserved_paper_before_anything_is_placed():
+    """Stage 1 has to leave room for what stage 2 hangs on it.
+
+    Packed as though the sheet were empty, the transmitter and its
+    controller land on whatever the next column put beside the plate
+    they read.
+    """
+    fs = Flowsheet("halo")
+    feed = fs.add(U.Feed("Feed"))
+    plate = fs.add(D.Fitting("FE-101", variant="orifice"))
+    valve = fs.add(D.ControlValve("FV-101"))
+    prod = fs.add(U.Product("Product"))
+    fs.connect(feed.outlet, plate.inlet)
+    fs.connect(plate.outlet, valve.inlet)
+    fs.connect(valve.outlet, prod.inlet)
+    top = fs.add_balloon(plate, at="N", offset=38)
+    ft = fs.add_instrument("FT", 101, near=top, at="N", offset=23)
+    fs.add_instrument("FIC", 101, near=ft, at="N", offset=60, variant="shared")
+    fs.route()
+
+    assert not [i for i in fs.validate() if i.code == "unit-overlap"], (
+        "a balloon was drawn over something"
+    )
+
+
+# --- bands (#429) --------------------------------------------------------------
+
+
+def _long_train(n):
+    """*n* blocks in one straight line, each feeding the next."""
+    fs = Flowsheet("train")
+    port = fs.add(U.Feed("F")).outlet
+    for i in range(n):
+        block = fs.add(U.Block(f"B-{i}", inputs=["W"], outputs=["E"]))
+        fs.connect(port, block.in_1)
+        port = block.out_1
+    fs.connect(port, fs.add(U.Product("P")).inlet)
+    return fs
+
+
+def test_a_ribbon_wider_than_the_paper_is_folded_into_bands():
+    """Issue #429: nothing wrapped, so a big plant became one long run."""
+    from pandid.layout.coordinates import BAND_WIDTH
+
+    fs = _long_train(30)
+    fs.layout()
+    frames = [u.frame for u in fs.units if u.frame is not None]
+    width = max(f.x_max for f in frames) - min(f.x for f in frames)
+    assert width <= BAND_WIDTH
+    # Folded, not squashed: the sheet is several rows of blocks deep.
+    assert len({round(f.cy) for f in frames}) > 1
+
+
+def test_a_ribbon_that_fits_the_paper_is_left_alone():
+    """The fold is for a sheet nobody could read, not for every sheet."""
+    fs = _long_train(6)
+    fs.layout()
+    frames = [u.frame for u in fs.units if u.frame is not None]
+    assert len({round(f.cy) for f in frames}) == 1
