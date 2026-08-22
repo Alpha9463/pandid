@@ -88,12 +88,17 @@ def test_units_all_lists_every_public_unit_class():
     place a class added tomorrow and left out is a *failure* rather than a
     silently smaller API.
 
-    ``_Boundary`` and ``_NormallyPositioned`` are the two the rule excludes.
+    ``_Boundary`` and ``_NormallyPositioned`` are two the rule excludes.
     Neither is a piece of plant: the first is what Feed and Product share and
     the second what a valve and a damper share. A name nobody constructs is a
     name nobody should be offered.
 
-    ``_CrushingMachine`` used to be a third, ISO 10628-2 group 11's two
+    ``_MultiPortVessel`` is a third, for the same reason: it is
+    :class:`~pandid.units.Tank`'s and :class:`~pandid.units.Vessel`'s shared
+    connection machinery (#342), never a device of its own -- there is no
+    equipment that is a ``_MultiPortVessel`` and nothing else.
+
+    ``_CrushingMachine`` used to be a fourth, ISO 10628-2 group 11's two
     nozzles shared by a crusher and a mill. It is public now, as
     ``CrushingMachine``, and draws item 11.1 X8084 -- the general machine an
     early PFD reaches for before process design has picked a jaw over a cone
@@ -109,7 +114,7 @@ def test_units_all_lists_every_public_unit_class():
     public = {name for name in declared if not name.startswith("_")}
 
     assert public == set(U.__all__)
-    assert declared - public == {"_Boundary", "_NormallyPositioned"}
+    assert declared - public == {"_Boundary", "_NormallyPositioned", "_MultiPortVessel"}
 
 
 def test_every_unit_class_is_on_the_package():

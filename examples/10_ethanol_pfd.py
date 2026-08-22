@@ -25,10 +25,10 @@ from pandid import (
     FilterPress,
     Flowsheet,
     KettleReboiler,
-    Mixer,
     Product,
     Reactor,
     ShellAndTubeExchanger,
+    Tank,
     Tee,
     Vessel,
 )
@@ -104,8 +104,8 @@ def main():
     # other.
     mix1 = fs.add(Reactor("M-301", n_feeds=2, width=72, height=153,
                           description="Flocculant Activation Mixer Tank"))
-    mix2 = fs.add(Mixer("M-302", n_inlets=2,
-                        description="Beer Flocculant Mixer Tank"))
+    mix2 = fs.add(Tank("M-302", inputs=2,
+                       description="Beer Flocculant Mixer Tank"))
     # A press makes **two products** and has a nozzle for each: the
     # filtrate leaves ``outlet`` on the east wall and the cake leaves
     # ``cake`` through the floor. ``wash_in`` is offered too and this
@@ -171,7 +171,7 @@ def main():
     floc.pin(x=190, y=mix1_y + port_offset(mix1, "feed_1")[1] - 60)
     water.pin(x=190, y=mix1_y + port_offset(mix1, "feed_2")[1])
 
-    mix2.pin(x=1120, y=hx_axis_y - 15)              # in_1 level with the cooler
+    mix2.pin(port="in_1", x=1120, y=hx_axis_y)      # in_1 level with the cooler
     press.pin(x=1250, y=hx_axis_y - 20)
     filtrate_y = pinned_y(press, "outlet")
     cake_x = pinned_x(press, "cake")

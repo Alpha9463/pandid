@@ -1767,15 +1767,106 @@ class GasHolder(Tank):
     VARIANTS = ("default", "gas_holder")
     VARIANT_ALIASES = {"default": "gas_holder"}
     PORTS = [
-        ("inlet", "inlet", "process"),
-        ("outlet", "outlet", "process"),
         ("vent", "outlet", "vapor"),
         ("relief", "outlet", "process"),
         ("drain", "outlet", "liquid"),
     ]
 
-    inlet: Port
-    outlet: Port
     vent: Port
     relief: Port
     drain: Port
+
+    if TYPE_CHECKING:
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[1] = 1,
+                    *args: Any, **kwargs: Any) -> "GasHolder1": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[2],
+                    *args: Any, **kwargs: Any) -> "GasHolder2": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[3],
+                    *args: Any, **kwargs: Any) -> "GasHolder3": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[4],
+                    *args: Any, **kwargs: Any) -> "GasHolder4": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[5],
+                    *args: Any, **kwargs: Any) -> "GasHolder5": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[6],
+                    *args: Any, **kwargs: Any) -> "GasHolder6": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[7],
+                    *args: Any, **kwargs: Any) -> "GasHolder7": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[8],
+                    *args: Any, **kwargs: Any) -> "GasHolder8": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: int,
+                    *args: Any, **kwargs: Any) -> "GasHolder": ...
+        def __new__(cls, name: str, inputs: int = 1,
+                    *args: Any, **kwargs: Any) -> "GasHolder": ...
+
+
+if TYPE_CHECKING:
+
+    class GasHolder1(GasHolder):
+        in_1: Port
+
+    class GasHolder2(GasHolder):
+        in_1: Port
+        in_2: Port
+
+    class GasHolder3(GasHolder):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+
+    class GasHolder4(GasHolder):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+        in_4: Port
+
+    class GasHolder5(GasHolder):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+        in_4: Port
+        in_5: Port
+
+    class GasHolder6(GasHolder):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+        in_4: Port
+        in_5: Port
+        in_6: Port
+
+    class GasHolder7(GasHolder):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+        in_4: Port
+        in_5: Port
+        in_6: Port
+        in_7: Port
+
+    class GasHolder8(GasHolder):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+        in_4: Port
+        in_5: Port
+        in_6: Port
+        in_7: Port
+        in_8: Port

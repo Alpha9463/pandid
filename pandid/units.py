@@ -1418,7 +1418,356 @@ _VESSEL_SUPPORT_VARIANTS = {
 }
 
 
-class Vessel(Unit):
+#: Bound to :class:`_MultiPortVessel` rather than reusing :data:`_UnitT`:
+#: a method typed ``self: _UnitT`` sees ``self`` *as* ``Unit`` inside its
+#: own body, which is right for :meth:`Unit.nozzle` but would hide
+#: ``_faces`` from :class:`Tank`'s and :class:`Vessel`'s own override of
+#: it. Bound narrower, ``self`` is seen as this class inside the method
+#: and as the caller's own subclass (``Tank3``, say) at the call site --
+#: both at once, which is the whole point of a self-type.
+_MultiPortVesselT = TypeVar("_MultiPortVesselT", bound="_MultiPortVessel")
+
+
+class _MultiPortVessel(Unit):
+    """Shared machinery for :class:`Tank` and :class:`Vessel`: an inlet
+    and an outlet, each a family spread across up to four faces --
+    :class:`Block`'s mechanism (a ``{port: face}`` dictionary and one
+    call to :func:`~pandid.render.symbols.spread` per face), called
+    directly rather than wrapped in a
+    :class:`~pandid.render.symbols.PortSeries`. A series has one face
+    for the whole family, and a tank's inlet has a menu of three;
+    :class:`~pandid.render.symbols.Symbol.__post_init__` refuses a port
+    claimed by both a series and ``ports``, which is exactly the wall
+    this mechanism is built to not hit.
+
+    **The one adaptation.** ``Block`` grows its box to fit a family,
+    because a block's size means nothing. A tank or vessel's artwork is
+    vendored and its size means something, so this takes
+    :func:`~pandid.render.symbols.spread`'s **squeeze** instead -- the
+    same fallback a mixer's inlets already reach for when a face runs
+    out of room, taken here on purpose rather than as a last resort.
+
+    **Legal faces come from the artwork, not from every compass
+    point.** A block's rectangle has no physical constraint, so
+    :meth:`Block.nozzle` always succeeds; a tank or vessel's shell only
+    has a nozzle where the stencil drew one, so :meth:`nozzle` refuses a
+    face the vendored symbol never anchored -- a floating roof's crown,
+    say -- exactly as :meth:`Unit.nozzle` always has.
+
+    ``vent``, ``relief`` and ``drain`` are not part of either family:
+    each is a single, fixed nozzle, positioned by the artwork's own
+    anchor and moved, where the artwork offers an alternative, through
+    :meth:`Unit.nozzle`'s ordinary menu -- untouched by any of this.
+
+    Three defaults, each more specific than the last, decide the face a
+    connection is drawn on when the caller does not name one:
+
+    1. **The symbol's own anchor** (:meth:`_home_face`) -- the face the
+       vendored artwork already puts the nozzle on. The default when
+       nothing else speaks, and what keeps every existing sheet exactly
+       where it was: the differences between variants (a flat-floored
+       tank fills low on the shell, a hopper-bottomed one at the crown)
+       are per *drawing*, not per class, and this honours them without
+       restating them anywhere.
+    2. **A class attribute**, :attr:`DEFAULT_INPUT_FACE` /
+       :attr:`DEFAULT_OUTPUT_FACE` -- :class:`Block`'s own mechanism,
+       read through ``self.`` so a subclass overrides it. ``None`` on
+       :class:`Tank` and :class:`Vessel` themselves, since neither has a
+       class-wide opinion; this is where a device class with a
+       contextual one -- a reflux drum that always fills at the crown --
+       would state it.
+    3. **The constructor argument**, ``inputs=``/``outputs=``, which
+       always wins.
+    """
+
+    #: See level 2 of the class docstring. ``None`` on the base classes;
+    #: a subclass with a contextual opinion overrides it.
+    DEFAULT_INPUT_FACE: str | None = None
+    DEFAULT_OUTPUT_FACE: str | None = None
+
+    #: connection name -> the face it leaves from, in port order. Built
+    #: by :meth:`_init_connections`; the single authority the symbol is
+    #: built from, exactly as :attr:`Block._faces` is.
+    _faces: dict[str, str]
+
+    def _symbol_anchor(self, port_name: str) -> str:
+        """As :meth:`Unit._symbol_anchor`, read through the live alias
+        too.
+
+        ``inlet``/``outlet`` are plain attributes aliasing ``in_1``/
+        ``out_1`` (see :meth:`_init_connections`), never a second entry
+        in ``ports`` -- so the symbol only ever anchors the numbered
+        spelling, and :mod:`pandid.portgeom` asked for ``"inlet"``
+        directly (``port_offset(tk, "inlet")``, a bare
+        ``pin(port="inlet")``, both ordinary) would otherwise find no
+        such key and fall back to the box centre. A
+        :class:`~pandid.render.symbols.PortSeries` sidesteps this with
+        its own ``singular=``; this class has no series to carry one.
+        """
+        return super()._symbol_anchor(self._canonical_port_name(port_name))
+
+    def _registry_symbol(self):
+        """This unit's own vendored artwork, or ``None`` for a variant
+        no symbol answers to.
+
+        ``None`` rather than the registry's own :class:`ValueError`: a
+        bad ``variant=`` is a render-time defect everywhere else in this
+        library, caught by :meth:`~pandid.render.symbols.SymbolRegistry.
+        for_unit` when the sheet is drawn, and never by any other
+        class's ``__init__``. This is asked from inside the
+        constructor -- to size the connections against the artwork --
+        so it has to fail the same quiet way and let the real error
+        surface where every other typo's does.
+        """
+        from pandid.render.symbols import default_registry
+
+        try:
+            return default_registry.get(self.kind, self.variant)
+        except ValueError:
+            return None
+
+    def _home_face(self, role: str) -> str:
+        """The face the vendored artwork draws ``role``'s nozzle on.
+
+        Level 1 of the three defaults above. West for an inlet, east for
+        an outlet, on a variant :meth:`_registry_symbol` cannot resolve
+        -- an arbitrary placeholder that is never drawn, since the
+        render this unit reaches will already have raised on the
+        variant itself.
+        """
+        sym = self._registry_symbol()
+        if sym is None:
+            return "W" if role == "inlet" else "E"
+        from pandid.portgeom import outward_dir
+
+        x, y = sym.ports[role]
+        return outward_dir(x, y, sym.width, sym.height)
+
+    def _legal_faces(self, role: str) -> "dict[str, tuple[float, float]] | None":
+        """``role``'s menu on the vendored artwork: ``{face: (x, y)}``.
+
+        Always carries at least the home face --
+        :class:`~pandid.render.symbols.Symbol.__post_init__` folds it in
+        for every port it anchors -- so this is never empty for a
+        variant that resolves. ``None`` for one that does not, which
+        :meth:`_validate_face` reads as "nothing to check yet".
+        """
+        sym = self._registry_symbol()
+        if sym is None:
+            return None
+        return dict(sym.port_faces.get(role, {}))
+
+    def _validate_face(self, role: str, port_name: str, face: str) -> None:
+        options = self._legal_faces(role)
+        if options is None:
+            # An unresolvable variant: refusing here would be this
+            # constructor catching the typo, not the render every other
+            # class leaves it to.
+            return
+        if face not in options:
+            from pandid.portgeom import unreachable_face
+
+            raise unreachable_face(self, port_name, face, list(options))
+
+    def default_input_face(self) -> str:
+        """The face an inlet is drawn on when the caller names none.
+
+        Level 2 winning over level 1: :attr:`DEFAULT_INPUT_FACE` where a
+        subclass states one, else the vendored artwork's own anchor.
+        :meth:`~pandid.spec.to_dict`'s reader for what a bare ``inputs=``
+        count means, so a sheet that never asked for a face writes none
+        back out either.
+        """
+        return self.DEFAULT_INPUT_FACE or self._home_face("inlet")
+
+    def default_output_face(self) -> str:
+        """:meth:`default_input_face`, for the outlet family."""
+        return self.DEFAULT_OUTPUT_FACE or self._home_face("outlet")
+
+    def _init_connections(
+        self, inputs: "int | Sequence[str]", outputs: "int | Sequence[str]"
+    ) -> None:
+        """Build ``in_1`` ... ``in_n`` and ``out_1`` ... ``out_m``.
+
+        Called once, from ``__init__``, after :meth:`Unit.__init__` --
+        the order :class:`Block` builds its own two families in.
+        """
+        in_faces = _block_faces(inputs, self.default_input_face(), self.name, "inputs")
+        out_faces = _block_faces(outputs, self.default_output_face(), self.name, "outputs")
+        self._faces = {}
+        self.inlets = tuple(
+            self._connect(f"in_{i}", "inlet", "inlet", face)
+            for i, face in enumerate(in_faces, start=1)
+        )
+        self.outlets = tuple(
+            self._connect(f"out_{i}", "outlet", "outlet", face)
+            for i, face in enumerate(out_faces, start=1)
+        )
+        if len(self.inlets) == 1:
+            # An alias, not a second port; see :class:`Reactor`'s
+            # ``feed``. ``n`` above one drops it, since there is no bare
+            # name for a member of a family of more than one.
+            self.inlet = self.inlets[0]
+        if len(self.outlets) == 1:
+            self.outlet = self.outlets[0]
+
+    def _connect(self, name: str, direction: str, role: str, face: str) -> Port:
+        """One connection: validate its face, then lay it down.
+
+        The face is checked before the port exists, so a face the
+        artwork refuses never leaves a connection half made.
+        """
+        self._validate_face(role, name, face)
+        port = self._add_port(name, direction, "process")
+        self._faces[name] = face
+        return port
+
+    def nozzle(self: _MultiPortVesselT, port_name: str, face: str) -> _MultiPortVesselT:
+        """Pipe a connection from a named face.
+
+        For ``in_1`` ... ``in_n`` / ``out_1`` ... ``out_m`` (and their
+        singular aliases ``inlet``/``outlet``) this is :class:`Block`'s
+        mechanism: ``face`` names the box's own side, the move always
+        succeeds against a face the vendored artwork offers for that
+        role and always refuses one it does not, and the drawing is
+        rebuilt from the new declaration. For ``vent``, ``relief`` and
+        ``drain`` -- not part of either family -- this is
+        :meth:`Unit.nozzle` unchanged, choosing among the alternatives
+        the artwork itself anchors.
+
+        A single, un-nozzled inlet or outlet still offers its whole menu
+        to the layout engine's own auto-pick (:mod:`pandid.layout.faces`,
+        see :func:`~pandid.render.symbols.vessel_symbol`) -- which is
+        what a call here has to *outrank*, or ``examples/03``'s crown
+        entry would be overridden right back to the shell the moment the
+        sheet is laid out. So this also records the choice in
+        :attr:`Unit._port_faces`, the same store :meth:`Unit.nozzle`
+        writes, since :func:`~pandid.portgeom.chosen_face` reads that
+        before it ever asks the engine.
+        """
+        canonical = self._canonical_port_name(port_name)
+        if canonical not in self._faces:
+            return super().nozzle(port_name, face)
+        role = "inlet" if canonical.startswith("in_") else "outlet"
+        resolved = _block_face(face, self.name)
+        self._validate_face(role, canonical, resolved)
+        self._faces[canonical] = resolved
+        self._port_faces[canonical] = resolved
+        self._invalidate_layout()
+        return self
+
+    def face(self, port_name: str) -> str:
+        """Which face ``port_name`` (an inlet or an outlet) leaves from.
+
+        Only the two families: ``vent``, ``relief`` and ``drain`` are
+        answered by :func:`pandid.portgeom.port_faces`, like any other
+        unit's fixed nozzle.
+        """
+        canonical = self._canonical_port_name(port_name)
+        try:
+            return self._faces[canonical]
+        except KeyError:
+            raise KeyError(
+                f"{type(self).__name__} {self.name!r} has no inlet or outlet "
+                f"named {port_name!r}; available: {sorted(self._faces)}"
+            ) from None
+
+    def ports_on(self, face: str) -> tuple[Port, ...]:
+        """The inlets and outlets on one side, in drawn order.
+
+        :class:`Block.ports_on`'s reader, restricted to the two
+        families: ``vent``, ``relief`` and ``drain`` are never on this
+        list, since :meth:`order_on` has no business reordering a fixed
+        nozzle against a family member.
+        """
+        wanted = _block_face(face, self.name)
+        return tuple(self.ports[name] for name, on in self._faces.items() if on == wanted)
+
+    def order_on(self: _MultiPortVesselT, face: str, ports: "Sequence[Port]") -> _MultiPortVesselT:
+        """Set the order the inlets and outlets on one side are drawn in.
+
+        :class:`Block.order_on`, unchanged: ``ports`` is every
+        connection :meth:`ports_on` reports for ``face``, first to last
+        along it.
+        """
+        wanted = _block_face(face, self.name)
+        on_face = [name for name, on in self._faces.items() if on == wanted]
+        named: list[str] = []
+        for port in ports:
+            if not isinstance(port, Port):
+                raise TypeError(
+                    f"{self.name}: order_on() takes the connections themselves and "
+                    f"not their names, so a checker can see a typo -- "
+                    f"order_on({wanted!r}, [v.out_2, v.in_2]), or v.outlets[1] / "
+                    f"v.port('out_2') where the name is computed. "
+                    f"Got {port!r}."
+                )
+            if self.ports.get(port.name) is not port:
+                raise ValueError(
+                    f"{self.name}: {port.name!r} is a connection of "
+                    f"{port.owner.name!r}, not of this unit, so it is not on any "
+                    f"face of it. order_on() orders one unit's own wall; "
+                    f"the {wanted} face carries "
+                    f"{', '.join(on_face) if on_face else 'nothing'}."
+                )
+            if self._faces.get(port.name) != wanted:
+                raise ValueError(
+                    f"{self.name}: {port.name!r} is on the "
+                    f"{self._faces.get(port.name)} face, not the {wanted}. "
+                    f"order_on() orders what is already on a side; move it first "
+                    f"with nozzle({port.name!r}, {wanted!r})."
+                )
+            if port.name in named:
+                raise ValueError(
+                    f"{self.name}: order_on({wanted!r}, ...) names {port.name!r} "
+                    f"twice, so it asks for one connection in two places. Name "
+                    f"each of the {wanted} face's connections once: "
+                    f"{', '.join(on_face)}."
+                )
+            named.append(port.name)
+        missing = [name for name in on_face if name not in named]
+        if missing:
+            raise ValueError(
+                f"{self.name}: order_on({wanted!r}, ...) names {len(named)} of the "
+                f"{len(on_face)} connections on the {wanted} face and leaves "
+                f"{', '.join(missing)} unplaced. Name every one, first to last "
+                f"along the face; it currently carries {', '.join(on_face)}."
+            )
+        replacement = iter(named)
+        self._faces = {
+            (next(replacement) if on == wanted else name): on for name, on in self._faces.items()
+        }
+        self._invalidate_layout()
+        return self
+
+    @property
+    def input_faces(self) -> tuple[str, ...]:
+        """Each inlet's face, in ``in_1`` .. ``in_n`` order."""
+        return tuple(self._faces[port.name] for port in self.inlets)
+
+    @property
+    def output_faces(self) -> tuple[str, ...]:
+        """Each outlet's face, in ``out_1`` .. ``out_m`` order."""
+        return tuple(self._faces[port.name] for port in self.outlets)
+
+    def symbol(self) -> "Symbol":
+        """This unit's drawing: the vendored stencil (with a
+        :class:`Vessel`'s ``supports=`` overlay already on it), and
+        ``in_*``/``out_*`` recomputed to the current declaration.
+
+        The one place a tank's or a vessel's artwork comes from, called
+        by :meth:`~pandid.render.symbols.SymbolRegistry.for_unit` on
+        every port resolution -- :class:`Block`'s own contract. It only
+        *builds*: the artwork is vendored, so unlike ``Block`` there is
+        no box to check.
+        """
+        from pandid.render.symbols import vessel_symbol
+
+        overlays = tuple(getattr(self, "overlays", ()) or ())
+        return vessel_symbol(self.kind, self.variant, tuple(self._faces.items()), overlays)
+
+
+class Vessel(_MultiPortVessel):
     """Generic pressure vessel: holdup, not phase separation.
 
     Variants: ``"default"`` and ``"dished"`` stand upright;
@@ -1440,15 +1789,16 @@ class Vessel(Unit):
     five: a tank and a vessel are one shell at two design pressures, and
     the difference between them is drawn rather than declared.
 
-    **Named, and not counted.** Each of the five is positioned by what
-    it is for, and a number carries no duty -- CHEE4001 p.7 puts the PSV
-    on the protected system itself, upright, discharging upward, at the
-    top of the container -- and three interchangeable draws have nothing
-    in them that says which is the relief.
+    **``vent``, ``relief`` and ``drain`` are named, and not counted.**
+    Each is positioned by what it is for, and a number carries no duty --
+    CHEE4001 p.7 puts the PSV on the protected system itself, upright,
+    discharging upward, at the top of the container -- and three
+    interchangeable draws have nothing in them that says which is the
+    relief.
 
-    Every one of the ten vessel and seven tank stencils therefore
-    anchors a coordinate for each of the five, and
-    :func:`pandid.portgeom.is_anchored` is true for every pair. A nozzle
+    Every one of the ten vessel and seven tank stencils anchors a
+    coordinate for each of the five, and
+    :func:`pandid.portgeom.is_anchored` is true for every one. A nozzle
     the symbol never anchored falls back to the centre of the box, where
     any two of them land on each other -- issue #225 is that failure.
     ``scripts/vendor_symbols.py`` holds the seventeen port maps.
@@ -1457,6 +1807,19 @@ class Vessel(Unit):
     than a number. Nothing here is reported by ``nozzle-unconnected``,
     which reads only numbered nozzles; see issue #215 for drawing a
     spare nozzle blanked.
+
+    **The process pair is a family, and may be.** ``inputs=``/
+    ``outputs=`` give a vessel more than one connection, exactly as
+    :class:`Block`'s do -- a count (every one on the same face) or one
+    face per connection, e.g. ``inputs=["W", "W", "N"]`` for a knock-out
+    pot taking a high-level fill against a recycle return. Left alone,
+    ``inputs=1, outputs=1`` is what every vessel has always had: a
+    single ``inlet``, a single ``outlet``, on the face the artwork
+    anchors -- see :class:`_MultiPortVessel` for the three levels that
+    decide it and :meth:`~_MultiPortVessel.nozzle` for how a face is
+    moved. Above one, the numbered spelling takes over: ``in_1``,
+    ``in_2`` ... in declaration order, reachable through
+    :attr:`inlets`.
 
     What it stands on
     -----------------
@@ -1475,6 +1838,13 @@ class Vessel(Unit):
     spent on the jacket.
     """
 
+    inlets: tuple[Port, ...]
+    outlets: tuple[Port, ...]
+    # The one-inlet, one-outlet vessel's own nozzles: aliases for
+    # ``in_1``/``out_1``, set beside them in ``__init__`` rather than
+    # registered a second time -- see :class:`Reactor`'s ``feed``.
+    # ``inputs``/``outputs`` above one drops the alias; there is no bare
+    # name for a member of a family of more than one.
     inlet: Port
     outlet: Port
     vent: Port
@@ -1495,14 +1865,96 @@ class Vessel(Unit):
     # bottom of a vessel at all.
     drain: Port
 
+    # ``in_1`` ... ``in_n`` are real attributes at run time and no class
+    # annotation can name them, since ``n`` is the caller's -- the same
+    # shape :class:`Mixer`'s inlets are, and answered the same way: a
+    # **literal** ``inputs=`` count hands back a subclass declaring
+    # exactly those nozzles, so ``Vessel("V-1", inputs=3).in_3`` resolves
+    # and ``.in_4`` does not. A computed count, or one given as
+    # ``inputs=["W", "W", "N"]`` (whose length is not in its type), gets
+    # this class instead and ``vessel.inlets[i]`` / ``vessel.port(...)``.
+    #
+    # ``outputs=`` takes no matching family of its own: a vessel that
+    # varies its outlet count is not a shape this library has a use for
+    # yet, so ``outputs=2`` falls straight to the untyped case below --
+    # the same trade ``Absorber``/``Stripper`` take for ``Column``'s
+    # ``n_draws``. ``vessel.outlets[i]`` is the typed route there.
+    if TYPE_CHECKING:
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[1] = 1, *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel1": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: tuple[str], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel1": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[2], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel2": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: tuple[str, str], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel2": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[3], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel3": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: tuple[str, str, str], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel3": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[4], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel4": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: tuple[str, str, str, str], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel4": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[5], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel5": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: tuple[str, str, str, str, str], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel5": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[6], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel6": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: tuple[str, str, str, str, str, str], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel6": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[7], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel7": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: tuple[str, str, str, str, str, str, str], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel7": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[8], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Vessel8": ...
+
+        @overload
+        def __new__(
+            cls, name: str, inputs: tuple[str, str, str, str, str, str, str, str], *args: Any,
+            outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any
+        ) -> "Vessel8": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: "int | Sequence[str]" = 1, *args: Any,
+                    outputs: "int | Sequence[str]" = 1, **kwargs: Any) -> "Vessel": ...
+        def __new__(cls, name: str, inputs: "int | Sequence[str]" = 1, *args: Any,
+                    outputs: "int | Sequence[str]" = 1, **kwargs: Any) -> "Vessel": ...
+
     kind = "vessel"
-    # Order is observable: ``ports`` is insertion-ordered and a family
-    # placed by a :class:`~pandid.render.symbols.PortSeries` is spread
-    # in the unit's own port order
-    # (:func:`pandid.portgeom._series_point`).
     PORTS = [
-        ("inlet", "inlet", "process"),
-        ("outlet", "outlet", "process"),
         ("vent", "outlet", "vapor"),
         ("relief", "outlet", "process"),
         ("drain", "outlet", "liquid"),
@@ -1519,6 +1971,8 @@ class Vessel(Unit):
     def __init__(
         self,
         name: str,
+        inputs: "int | Sequence[str]" = 1,
+        outputs: "int | Sequence[str]" = 1,
         variant: str = "default",
         supports: str | None = None,
         width: float | None = None,
@@ -1536,6 +1990,7 @@ class Vessel(Unit):
             description=description,
             reference=reference,
         )
+        self._init_connections(inputs, outputs)
         # **The argument, not ``self.variant``** -- the opposite of what
         # ``_variant_ports`` a few lines down in HeatExchanger wants, and
         # for the opposite reason. A ports table is keyed the way the
@@ -1560,7 +2015,66 @@ class Vessel(Unit):
         _compose_onto(self, () if supports is None else support_overlays(supports))
 
 
-class Tank(Unit):
+if TYPE_CHECKING:
+    # A vessel of each inlet count, for the overloads above. Declared
+    # here and not generated in a loop, for the reason :class:`Mixer`'s
+    # own are: a checker reads the source, and nothing is built at
+    # run time either, since ``TYPE_CHECKING`` is False there.
+
+    class Vessel1(Vessel):
+        in_1: Port
+
+    class Vessel2(Vessel):
+        in_1: Port
+        in_2: Port
+
+    class Vessel3(Vessel):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+
+    class Vessel4(Vessel):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+        in_4: Port
+
+    class Vessel5(Vessel):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+        in_4: Port
+        in_5: Port
+
+    class Vessel6(Vessel):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+        in_4: Port
+        in_5: Port
+        in_6: Port
+
+    class Vessel7(Vessel):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+        in_4: Port
+        in_5: Port
+        in_6: Port
+        in_7: Port
+
+    class Vessel8(Vessel):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+        in_4: Port
+        in_5: Port
+        in_6: Port
+        in_7: Port
+        in_8: Port
+
+
+class Tank(_MultiPortVessel):
     """Storage tank.
 
     Variants: ``"default"`` (dished roof), ``"conical"``,
@@ -1593,7 +2107,8 @@ class Tank(Unit):
     shell, since splash-filling a flammable liquid into a vapour space
     generates static; the three hopper-bottomed ones keep the crown,
     because a silo is filled over the top. Every variant offers both,
-    through the same :meth:`~Unit.nozzle` call every other unit takes::
+    through the same :meth:`~_MultiPortVessel.nozzle` call every other
+    unit takes::
 
         tk = Tank("TK-602")          # fills low on the shell
         tk.nozzle("inlet", "N")      # ...through a crown downcomer
@@ -1606,8 +2121,22 @@ class Tank(Unit):
     A tank with no ``nozzle()`` call gets its face chosen by layout from
     where the peer landed (:mod:`pandid.layout.faces`), as a drum's
     inlet does.
+
+    **A tank fed by several streams** takes ``inputs=``, exactly as
+    :class:`Vessel` does -- a high-level fill against a recycle return,
+    say::
+
+        Tank("TK-901", inputs=["W", "W", "N"])
+        tk.in_1, tk.in_2, tk.in_3   # west, west, crown; in declared order
+
+    Left at ``inputs=1`` (the default), ``in_1`` keeps the bare alias
+    ``inlet`` and every existing sheet is unchanged. ``outputs=`` is
+    offered for the same reason :class:`Vessel`'s is, and defaults to
+    one outlet the same way.
     """
 
+    inlets: tuple[Port, ...]
+    outlets: tuple[Port, ...]
     inlet: Port
     outlet: Port
     # The same three :class:`Vessel` declares, and each carries the
@@ -1616,14 +2145,168 @@ class Tank(Unit):
     relief: Port
     drain: Port
 
+    # See :class:`Vessel`'s own comment: a literal ``inputs=`` count
+    # hands back a subclass declaring exactly ``in_1`` ... ``in_n``, and
+    # ``outputs=`` carries no family of its own for the same reason.
+    if TYPE_CHECKING:
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[1] = 1, *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank1": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: tuple[str], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank1": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[2], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank2": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: tuple[str, str], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank2": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[3], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank3": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: tuple[str, str, str], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank3": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[4], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank4": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: tuple[str, str, str, str], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank4": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[5], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank5": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: tuple[str, str, str, str, str], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank5": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[6], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank6": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: tuple[str, str, str, str, str, str], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank6": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[7], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank7": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: tuple[str, str, str, str, str, str, str], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank7": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: Literal[8], *args: Any,
+                    outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any) -> "Tank8": ...
+
+        @overload
+        def __new__(
+            cls, name: str, inputs: tuple[str, str, str, str, str, str, str, str], *args: Any,
+            outputs: "Literal[1] | tuple[str]" = 1, **kwargs: Any
+        ) -> "Tank8": ...
+
+        @overload
+        def __new__(cls, name: str, inputs: "int | Sequence[str]" = 1, *args: Any,
+                    outputs: "int | Sequence[str]" = 1, **kwargs: Any) -> "Tank": ...
+        def __new__(cls, name: str, inputs: "int | Sequence[str]" = 1, *args: Any,
+                    outputs: "int | Sequence[str]" = 1, **kwargs: Any) -> "Tank": ...
+
     kind = "tank"
     PORTS = [
-        ("inlet", "inlet", "process"),
-        ("outlet", "outlet", "process"),
         ("vent", "outlet", "vapor"),
         ("relief", "outlet", "process"),
         ("drain", "outlet", "liquid"),
     ]
+
+    def __init__(
+        self,
+        name: str,
+        inputs: "int | Sequence[str]" = 1,
+        outputs: "int | Sequence[str]" = 1,
+        variant: str = "default",
+        width: float | None = None,
+        height: float | None = None,
+        label_pos: str | None = None,
+        description: str = "",
+        reference: str = "",
+    ):
+        super().__init__(
+            name,
+            variant=variant,
+            width=width,
+            height=height,
+            label_pos=label_pos,
+            description=description,
+            reference=reference,
+        )
+        self._init_connections(inputs, outputs)
+
+
+if TYPE_CHECKING:
+    # A tank of each inlet count; see :class:`Vessel`'s own.
+
+    class Tank1(Tank):
+        in_1: Port
+
+    class Tank2(Tank):
+        in_1: Port
+        in_2: Port
+
+    class Tank3(Tank):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+
+    class Tank4(Tank):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+        in_4: Port
+
+    class Tank5(Tank):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+        in_4: Port
+        in_5: Port
+
+    class Tank6(Tank):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+        in_4: Port
+        in_5: Port
+        in_6: Port
+
+    class Tank7(Tank):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+        in_4: Port
+        in_5: Port
+        in_6: Port
+        in_7: Port
+
+    class Tank8(Tank):
+        in_1: Port
+        in_2: Port
+        in_3: Port
+        in_4: Port
+        in_5: Port
+        in_6: Port
+        in_7: Port
+        in_8: Port
 
 
 class Blower(Unit):

@@ -1397,12 +1397,146 @@ def block_symbol(faces: tuple[tuple[str, str], ...], label: str = "") -> Symbol:
 # kind-wide key it would have been handed the belt's. So the belt names
 # its own variant now, which is what the paragraph above was written
 # against.
+def _face_local(face: str, x: float, y: float, width: float, height: float
+                ) -> tuple[float, float]:
+    """A symbol-space point, as (position along the face, inset from the
+    box edge).
+
+    The inverse of :func:`_face_point`. A dished tank roof recedes from
+    its bounding box, so a crown nozzle's anchor is not on the box edge
+    the way a shell nozzle's is; carrying the inset through rather than
+    assuming it is zero (which :func:`_on_face` does) is what lets a
+    squeezed family still land on the roofline the vendored artwork
+    drew, exactly where a lone nozzle already does.
+    """
+    if face == "W":
+        return y, x
+    if face == "E":
+        return y, width - x
+    if face == "N":
+        return x, y
+    return x, height - y  # "S"
+
+
+def _face_point(face: str, t: float, inset: float, width: float, height: float
+                ) -> tuple[float, float]:
+    """The inverse of :func:`_face_local`."""
+    if face == "W":
+        return inset, t
+    if face == "E":
+        return width - inset, t
+    if face == "N":
+        return t, inset
+    return t, height - inset  # "S"
+
+
+#: Pitch and squeeze for a tank's or a vessel's inlet/outlet family: the
+#: numbers a :class:`PortSeries` already spreads a mixer's inlets at (its
+#: own class defaults), reused rather than re-tuned -- the same
+#: primitive at the same tuning, for the opposite answer to running out
+#: of room that :func:`block_symbol` gives: a mixer's triangle cannot
+#: grow either, so it already squeezes.
+_VESSEL_PITCH = 20.0
+_VESSEL_EXTENT = 0.7
+
+
+@lru_cache(maxsize=None)
+def vessel_symbol(kind: str, variant: str, faces: tuple[tuple[str, str], ...],
+                  overlays: "tuple[Overlay, ...]" = ()) -> Symbol:
+    """A tank's or a vessel's drawing: the vendored stencil (with any
+    ``supports=`` overlay already composed onto it), and ``in_*``/
+    ``out_*`` recomputed to the current declaration.
+
+    ``faces`` is ``((port_name, face), ...)`` in the unit's own port
+    order -- :func:`block_symbol`'s own argument, read the same way, for
+    :class:`~pandid.units.Tank` and :class:`~pandid.units.Vessel`, whose
+    ``_faces`` holds only the two families: ``vent``, ``relief`` and
+    ``drain`` are carried over from the vendored symbol untouched, menu
+    included.
+
+    ``overlays`` is the unit's own :attr:`~pandid.units.Unit.overlays`
+    (empty unless it composes one, which today only :class:`Vessel`'s
+    ``supports=`` does). Composed *before* the family is recomputed,
+    through :meth:`SymbolRegistry.composed` -- the vendored base and
+    not this function's own cache, so a leg or a skirt is drawn under
+    the shell exactly as it is for every other composed unit, and this
+    is only ever laying the two families on top of it. Registering
+    ``("tank", None)``/``("vessel", None)`` in :data:`_BUILT_TO_SIZE`
+    means :meth:`SymbolRegistry.for_unit` reaches this function
+    *before* its own overlay branch ever runs, so skipping this would
+    silently draw every supported vessel bare.
+
+    **Squeezed, not grown.** A block's box means nothing, so
+    :func:`block_symbol` grows it to hold a family at full pitch; a tank
+    or vessel's artwork is vendored and its size means something, so
+    this takes :func:`spread`'s **squeeze** instead -- the fallback a
+    mixer's own inlets already reach for when a face runs out of room,
+    taken here on purpose. One member alone is never squeezed
+    (:func:`spread` returns ``at`` exactly), so a plain single inlet and
+    single outlet land on precisely the coordinate the vendored artwork
+    always anchored, and nothing drawn at that count moves.
+
+    **The artwork itself never changes.** Unlike a block's rectangle or
+    a conveyor's rollers, a tank's or a vessel's ``svg`` draws no mark at
+    a nozzle -- only the vendored outline, the same whichever face a
+    connection is on or how many share it. So this leaves
+    :attr:`Symbol.id_suffix` alone: every tank or vessel of one variant
+    still shares the one ``<defs>`` entry the sheet has always drawn it
+    from, whatever each instance's own connections are.
+
+    Cached, for :func:`block_symbol`'s own reason: port resolution asks
+    for a unit's symbol on every call.
+    """
+    base = default_registry.composed(kind, variant, overlays)
+    ports = {name: xy for name, xy in base.ports.items() if name not in ("inlet", "outlet")}
+    port_faces = {
+        name: dict(menu) for name, menu in base.port_faces.items()
+        if name not in ("inlet", "outlet")
+    }
+    menus = {"inlet": base.port_faces.get("inlet", {}), "outlet": base.port_faces.get("outlet", {})}
+    members_by_role: dict[str, list[str]] = {"inlet": [], "outlet": []}
+    groups: dict[tuple[str, str], list[str]] = {}
+    for port_name, face in faces:
+        role = "inlet" if port_name.startswith("in_") else "outlet"
+        members_by_role[role].append(port_name)
+        groups.setdefault((role, face), []).append(port_name)
+    for (role, face), members in groups.items():
+        menu = menus[role]
+        if face not in menu:
+            raise ValueError(
+                f"{kind}/{variant}: {role} has no {face!r} placement to draw "
+                f"{', '.join(members)} on; offered: "
+                f"{', '.join(menu) if menu else 'nothing'}"
+            )
+        t0, inset = _face_local(face, *menu[face], base.width, base.height)
+        along = base.height if face in ("W", "E") else base.width
+        for i, name in enumerate(members):
+            t = spread(i, len(members), along, _VESSEL_PITCH, _VESSEL_EXTENT, at=t0)
+            ports[name] = _face_point(face, t, inset, base.width, base.height)
+    # A role with exactly one member keeps its *whole* menu -- the same
+    # alternatives ``inlet``/``outlet`` always offered -- so a caller who
+    # names no face still reaches every one of them: through an explicit
+    # ``nozzle()``, and through the layout engine's own auto-pick
+    # (:mod:`pandid.layout.faces`), which chooses among a port's
+    # :func:`~pandid.portgeom.port_faces` unprompted, the way
+    # ``examples/06_column_reflux``'s drum inlet does. A member sharing
+    # its face with others has no menu: :func:`spread` has already
+    # placed it relative to them, and letting the engine move it alone
+    # would pull it off that arrangement.
+    for role, members in members_by_role.items():
+        if len(members) == 1 and menus[role]:
+            port_faces[members[0]] = dict(menus[role])
+    return replace(base, ports=ports, port_faces=port_faces)
+
+
 _BUILT_TO_SIZE: "dict[tuple[str, str | None], Callable[..., Symbol]]" = {
     ("conveyor", "default"): lambda unit: conveyor_symbol(unit.length,
                                                           unit.diameter),
     ("conveyor", "screw"): lambda unit: screw_conveyor_symbol(unit.length,
                                                               unit.diameter),
     ("block", None): lambda unit: unit.symbol(),
+    ("tank", None): lambda unit: unit.symbol(),
+    ("vessel", None): lambda unit: unit.symbol(),
 }
 
 

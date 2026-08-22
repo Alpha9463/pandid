@@ -61,13 +61,13 @@ from pandid import (
     JawCrusher,
     KettleReboiler,
     Mill,
-    Mixer,
     Product,
     Pump,
     Reactor,
     RotaryDrumFilter,
     Separator,
     ShellAndTubeExchanger,
+    Tank,
     Tee,
 )
 from pandid.document import Revision, TableBox, TitleBlock, equipment_list, notes
@@ -229,13 +229,13 @@ def main():
                                         reference="PCD-902"))
 
     # --- Dilution, settling and mud washing ---------------------------
-    # A ``Mixer`` and not three tees: the blow-off, the washer overflow
+    # A ``Tank`` and not three tees: the blow-off, the washer overflow
     # that dilutes it and the returning filter residue meet in a tank
     # with hold-up, which is a tagged item on any refinery's equipment
     # list. Its box is drawn larger than the default so the three inlets
     # clear ISO 128-20's spacing between parallel lines.
-    dilution = fs.add(Mixer("M-901", n_inlets=3, width=70, height=90,
-                            description="Blow-off Dilution Tank"))
+    dilution = fs.add(Tank("M-901", inputs=3, width=70, height=90,
+                           description="Blow-off Dilution Tank"))
     floc_tee = fs.add(Tee(branch="inlet"))
     flocculant = fs.add(Feed("Flocculant", reference="PCD-904"))
     # **The thickener is item 8.3 X8031.** ISO 10628-2 has no thickener
@@ -349,8 +349,8 @@ def main():
     # chemically bound in the residue, and the evaporator takes off
     # exactly the water the washing put in -- 329 t/h of it, which is
     # what makes the returning stream the same 2300 t/h the mill was fed.
-    spent_mixer = fs.add(Mixer("M-902", n_inlets=3, width=70, height=90,
-                               description="Spent Liquor Tank"))
+    spent_tank = fs.add(Tank("M-902", inputs=3, width=70, height=90,
+                              description="Spent Liquor Tank"))
     caustic = fs.add(Feed("Caustic Soda Make-up", reference="PCD-906"))
     # A kettle body: a shell with a heated bundle in it, a vapour space
     # over the bundle and a weir draw at the end, which is the nearest
@@ -450,7 +450,7 @@ def main():
     offgas.pin(port="inlet", x=2960, y=1680)
     alumina.pin(port="inlet", x=2960, y=2060)
 
-    spent_mixer.pin(port="in_1", x=1350, y=1800)
+    spent_tank.pin(port="in_1", x=1350, y=1800)
     caustic.pin(port="outlet", x=1230, y=1863)
     evaporator.pin(port="shell_in", x=1550, y=2000)
     lp_steam.pin(port="outlet", x=1300,
@@ -468,7 +468,8 @@ def main():
     product_axis_x = pinned_x(product_cyclone, "overflow")
     evap_bottoms_x = pinned_x(evaporator, "bottoms")
     evap_vapour_x = pinned_x(evaporator, "shell_out")
-    spent_in_2_y = pinned_y(spent_mixer, "in_2")
+    spent_in_2_y = pinned_y(spent_tank, "in_2")
+    spent_draw_x = pinned_x(spent_tank, "outlet")
 
     # Every lane a line takes when it runs back the way it came, written
     # down once. Three of them reach the dilution tank's inlets, three
@@ -602,7 +603,7 @@ def main():
     # Up over the precipitators and down the far side of them: the spent
     # liquor is leaving the area it was made in, and the lane it takes is
     # the one the seed return does not.
-    fs.connect(classifier_2.port("overflow"), spent_mixer.port("in_1"),
+    fs.connect(classifier_2.port("overflow"), spent_tank.port("in_1"),
                name="S-939").via([(classifier_2_axis_x, lane_spent_y),
                                   (lane_spent_x, lane_spent_y),
                                   (lane_spent_x, 1800)])
@@ -611,7 +612,7 @@ def main():
     fs.connect(hydrate_wash.outlet, hydrate_filter.port("wash_in"),
                name="S-940").via(
                    [(pinned_x(hydrate_filter, "wash_in"), 1500)])
-    fs.connect(hydrate_filter.outlet, spent_mixer.port("in_2"),
+    fs.connect(hydrate_filter.outlet, spent_tank.port("in_2"),
                name="S-941").via(
                    [(2340, 1700), (2340, lane_filtrate_y),
                     (lane_filtrate_x, lane_filtrate_y),
@@ -620,13 +621,13 @@ def main():
     fs.connect(hydrate_belt.discharge, calciner_tee.inlet, name="S-942")
 
     # --- Spent liquor -------------------------------------------------
-    fs.connect(caustic.outlet, spent_mixer.port("in_3"), name="S-943")
+    fs.connect(caustic.outlet, spent_tank.port("in_3"), name="S-943")
     # Round the outside of the shell rather than into the top of it: the
     # evaporator's process side is fed at the bottom, which is where a
     # kettle body puts its shell nozzle and where an effect of a
     # falling-film train is fed in any case.
-    fs.connect(spent_mixer.outlet, evaporator.port("shell_in"),
-               name="S-944").via([(1420, 2060), (1550, 2060)])
+    fs.connect(spent_tank.outlet, evaporator.port("shell_in"),
+               name="S-944").via([(spent_draw_x, 2060), (1550, 2060)])
     fs.connect(lp_steam.outlet, evaporator.tube_in, name="S-945")
     fs.connect(evaporator.tube_out, evap_condensate.inlet, name="S-946")
     fs.connect(evaporator.port("shell_out"), evap_vapour.inlet,

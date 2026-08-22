@@ -383,18 +383,21 @@ _KIND_TEXT = {
 }
 # Connection faces, keyed the same way. A block declares which side of
 # its box each connection is on, as a count (all on the default face) or
-# one face per connection. Every other symbol is artwork drawn in
-# advance, so where its nozzles are is a fact about the drawing.
+# one face per connection; a tank or a vessel declares the same thing
+# for its own two families, over vendored artwork instead of a grown
+# box (see ``pandid.units._MultiPortVessel``). Every other symbol is
+# artwork drawn in advance with nothing to count, so where its nozzles
+# are is a fact about the drawing alone.
 _KIND_FACES = {
-    "inputs": ("Block",),
-    "outputs": ("Block",),
+    "inputs": ("Block", "Tank", "Vessel"),
+    "outputs": ("Block", "Tank", "Vessel"),
 }
 # The order along a face. Separate from the two above because it is not
-# a constructor argument: ``Block.order_on`` takes the ports, which do
-# not exist until the block does. Written only where a face's order is
-# not the declared one; see ``_write_unit``.
+# a constructor argument: ``Block.order_on``/``_MultiPortVessel.order_on``
+# take the ports, which do not exist until the unit does. Written only
+# where a face's order is not the declared one; see ``_write_unit``.
 _KIND_ORDER = {
-    "port_order": ("Block",),
+    "port_order": ("Block", "Tank", "Vessel"),
 }
 # Flags only some classes carry. ``header`` says a boundary flag stands
 # for a utility service tapped wherever it is wanted rather than for one
@@ -606,9 +609,11 @@ def _read_unit(fs: Flowsheet, entry: Any, where: str) -> Unit:
     _read_common(fs, unit, data, where)
     # After ``_read_common``, whose ``port_faces`` decides which face a
     # connection is on; this orders what is on one. The gate above
-    # already refuses the key on anything but a Block, so the isinstance
-    # is for the type checker rather than a second guard.
-    if "port_order" in data and isinstance(unit, unit_types.Block):
+    # already refuses the key on anything but a Block, a Tank or a
+    # Vessel, so the isinstance is for the type checker rather than a
+    # second guard.
+    if "port_order" in data and isinstance(unit, (unit_types.Block, unit_types.Tank,
+                                                   unit_types.Vessel)):
         _read_port_order(unit, data["port_order"], f"{where}.port_order")
     return unit
 
@@ -790,7 +795,9 @@ def _read_port_faces(unit: Unit, entry: Any, where: str) -> None:
             raise _fail_from(e, f"{where}.{port_name}") from None
 
 
-def _read_port_order(unit: "unit_types.Block", entry: Any, where: str) -> None:
+def _read_port_order(
+    unit: "unit_types.Block | unit_types.Tank | unit_types.Vessel", entry: Any, where: str
+) -> None:
     """``port_order: {S: [out_2, in_2]}``: one ``order_on`` per face."""
     for face, names in _mapping(entry, where).items():
         at = f"{where}.{face}"
@@ -1293,6 +1300,55 @@ def _write_placement(unit: Unit, entry: dict[str, Any]) -> dict[str, Any]:
     return entry
 
 
+def _write_connection_faces(unit, entry: dict[str, Any],
+                            default_input: str, default_output: str,
+                            omit_bare_single: bool = False) -> None:
+    """``inputs``/``outputs``/``port_order``, for :class:`Block` and for
+    :class:`~pandid.units.Tank`/:class:`~pandid.units.Vessel`'s own
+    family mechanism -- the same shape, since both hold ``{port: face}``
+    in ``_faces`` and answer through :attr:`input_faces`/
+    :attr:`output_faces`/:meth:`ports_on`; only where the *default* face
+    comes from differs, which is why the caller resolves it first.
+
+    The two families are written as the bare count where every
+    connection is on its default face, which is the shorthand the
+    constructor takes; one that puts an input on a face the default
+    does not name is only describable as a list.
+
+    ``omit_bare_single`` drops a key entirely at a single connection on
+    the default face -- ``Tank("TK-1")`` is a whole nozzle set with
+    nothing to say, exactly as omitting ``supports=`` is, where
+    ``inputs: 1`` would be writing the default down. **Not** set for
+    :class:`Block`, which has no connection-free shape to default to at
+    all (a block with none is refused outright) and so always writes
+    both.
+
+    The order along a face is separate, since the two lists above
+    interleave one face's inputs and outputs and cannot carry a
+    sequence: an ``order_on()`` that put an output before an input
+    would otherwise be written back out drawn the other way round.
+    Written only where a face's order is not the declared one.
+    """
+    for key, faces, default in (
+        ("inputs", unit.input_faces, default_input),
+        ("outputs", unit.output_faces, default_output),
+    ):
+        if omit_bare_single and len(faces) == 1 and faces[0] == default:
+            continue
+        entry[key] = len(faces) if all(f == default for f in faces) else list(faces)
+    declared = [port.name for port in (*unit.inlets, *unit.outlets)]
+    port_order = {
+        face: [port.name for port in unit.ports_on(face)]
+        for face in ("N", "S", "E", "W")
+    }
+    port_order = {
+        face: order for face, order in port_order.items()
+        if order != [name for name in declared if name in order]
+    }
+    if port_order:
+        entry["port_order"] = port_order
+
+
 def _write_unit(unit: Unit) -> dict[str, Any]:
     kind = type(unit).__name__
     if kind not in _CLASSES:
@@ -1311,31 +1367,16 @@ def _write_unit(unit: Unit) -> dict[str, Any]:
     _write_common(unit, entry)
     _write_composition(unit, entry)
     if isinstance(unit, unit_types.Block):
-        # The faces, which carry the count with them. Written as the
-        # bare count where every connection is on its default face,
-        # which is the shorthand the constructor takes; a block that
-        # puts one input on the north is only describable as a list.
-        for key, faces, default in (
-            ("inputs", unit.input_faces, unit.DEFAULT_INPUT_FACE),
-            ("outputs", unit.output_faces, unit.DEFAULT_OUTPUT_FACE),
-        ):
-            entry[key] = len(faces) if all(f == default for f in faces) else list(faces)
-        # And the order along a face where it is not the declared one.
-        # The two keys above are two lists and a face interleaves them,
-        # so they cannot carry the sequence: a block whose ``order_on``
-        # put an output before an input would otherwise be written back
-        # out drawn the other way round.
-        declared = [port.name for port in (*unit.inlets, *unit.outlets)]
-        port_order = {
-            face: [port.name for port in unit.ports_on(face)]
-            for face in ("N", "S", "E", "W")
-        }
-        port_order = {
-            face: order for face, order in port_order.items()
-            if order != [name for name in declared if name in order]
-        }
-        if port_order:
-            entry["port_order"] = port_order
+        _write_connection_faces(unit, entry, unit.DEFAULT_INPUT_FACE, unit.DEFAULT_OUTPUT_FACE)
+    elif isinstance(unit, (unit_types.Tank, unit_types.Vessel)):
+        # The same two keys, over the other mechanism that carries them
+        # (see ``pandid.units._MultiPortVessel``): the default face is
+        # not one fixed string here, since the vendored artwork's own
+        # anchor differs by variant, and a single connection on it is
+        # dropped rather than written as ``inputs: 1`` -- unlike a
+        # Block, a plain ``Tank("TK-1")`` is a whole nozzle set already.
+        _write_connection_faces(unit, entry, unit.default_input_face(),
+                                unit.default_output_face(), omit_bare_single=True)
     elif isinstance(unit, unit_types.Mixer):
         entry["n_inlets"] = len(unit.inlets)
     elif isinstance(unit, unit_types.Splitter):
