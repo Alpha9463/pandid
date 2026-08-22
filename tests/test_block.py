@@ -731,10 +731,10 @@ def test_a_block_nobody_reordered_writes_no_order_at_all():
     assert "port_order" not in entry
 
 
-def test_only_a_block_takes_an_order_and_a_bad_one_names_the_face():
+def test_only_a_block_or_a_tank_or_a_vessel_takes_an_order_and_a_bad_one_names_the_face():
     from pandid.spec import SpecError, from_dict
 
-    with pytest.raises(SpecError, match="only a Block takes 'port_order'"):
+    with pytest.raises(SpecError, match="only a Block or a Tank or a Vessel takes 'port_order'"):
         from_dict({"name": "s", "units": [{"kind": "Pump", "name": "P-1", "port_order": {}}]})
     with pytest.raises(SpecError, match=r"port_order.S"):
         from_dict(
@@ -863,10 +863,10 @@ def test_a_spec_may_name_the_faces_as_a_count_or_a_list():
     assert fs.units[0].output_faces == ("E", "E")
 
 
-def test_a_spec_refuses_connection_faces_on_anything_but_a_block():
+def test_a_spec_refuses_connection_faces_on_anything_but_a_block_a_tank_or_a_vessel():
     from pandid.spec import SpecError, from_dict
 
-    with pytest.raises(SpecError, match="only a Block takes 'inputs'"):
+    with pytest.raises(SpecError, match="only a Block or a Tank or a Vessel takes 'inputs'"):
         from_dict({"name": "x", "units": [{"kind": "Pump", "name": "P-1", "inputs": 2}]})
 
 

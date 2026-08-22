@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Tank(inputs=)`/`Vessel(inputs=)` and `outputs=`: a tank or a vessel fed (or
+  drawn) by several streams, `Block`'s connection API over vendored artwork
+  instead of a grown box -- `in_1`/`in_2`/... on whichever faces are named,
+  squeezed onto a wall rather than growing it, `nozzle()`/`order_on()` to
+  move and order them. At the default of one each, `inlet`/`outlet` are still
+  the bare names they always were and no existing sheet moves (#342).
 - `Dryer` gains `heating_in` and `vent`: the heating medium in and the
   moisture it leaves with, on every variant, alongside `feed`/`product`.
   A gas-suspension calciner no longer has to tee its combustion gas into

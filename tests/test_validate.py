@@ -694,6 +694,8 @@ def test_what_the_naming_rule_reads(name, stem):
         (lambda: U.Reactor("R", n_feeds=5), "feed", 5),
         (lambda: U.Block("B", inputs=["W", "N", "N"], outputs=1), "in", 3),
         (lambda: U.Block("B", inputs=1, outputs=2), "out", 2),
+        (lambda: U.Tank("TK-1", inputs=3), "in", 3),
+        (lambda: U.Vessel("V-1", inputs=2), "in", 2),
     ],
 )
 def test_every_counted_family_answers_to_the_naming_rule(build, stem, size):
@@ -710,7 +712,7 @@ def test_every_counted_family_answers_to_the_naming_rule(build, stem, size):
 
 
 def test_nothing_shipped_leaves_a_counted_nozzle_open():
-    """The acceptance test, over the drawings this package stands behind. 64
+    """The acceptance test, over the drawings this package stands behind. 103
     counted nozzles across sixteen of the shipped sheets, and every one of
     them piped -- so the rule is exercised by the corpus rather than merely
     silent on it.
@@ -725,6 +727,21 @@ def test_nothing_shipped_leaves_a_counted_nozzle_open():
     unmet" (see ``pandid.validate._family_stem``) -- so this number moving
     is exactly the corpus exercising the wider family the counted-nozzle
     rule now covers, not a new class of finding going unreported.
+
+    100 rather than 64 since #342, for the identical reason one level down:
+    every ``Tank`` and ``Vessel`` in the corpus now contributes ``in_1`` and
+    ``out_1``, real, structurally-counted nozzles standing behind the aliases
+    ``inlet``/``outlet`` -- 18 units, 36 nozzles, none of them an offender
+    for the same alias reason ``feed_1``'s move was not.
+
+    103 rather than 100 once ``examples/21``'s ``M-901``/``M-902`` and
+    ``examples/10``'s ``M-302`` became tanks instead of mixers: a mixer's
+    ``outlet`` was a single fixed nozzle and never counted at all, so
+    drawing each as what it always was -- a tank with hold-up -- adds one
+    counted (and aliased, and so inoffensive) ``out_1``. ``M-302`` was
+    already a two-inlet mixer, so only its outlet is newly counted; the
+    other two each add both ``in_1`` and ``out_1``, for three nozzles
+    across the pair.
     """
     from tests.test_golden import SCENARIOS
 
@@ -735,7 +752,7 @@ def test_nothing_shipped_leaves_a_counted_nozzle_open():
         counted += sum(_family_members(u) for u in fs.units)
         offenders += [f"{name}: {w.message}" for w in fs.warnings if w.code == "nozzle-unconnected"]
     assert offenders == []
-    assert counted == 64
+    assert counted == 103
 
 
 def _family_members(unit):

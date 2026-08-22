@@ -1000,7 +1000,88 @@ def test_port_faces():
             ],
         }
     )
-    assert fs.units[0]._port_faces == {"inlet": "N"}
+    # Stored under the canonical name: ``inlet`` is a live alias for
+    # ``in_1`` and never a second key of its own -- see
+    # ``Unit._canonical_port_name``.
+    assert fs.units[0]._port_faces == {"in_1": "N"}
+
+
+def test_a_tanks_face_list_round_trips_through_a_spec():
+    """#342's own face list, over :class:`~pandid.units.Tank`'s mechanism
+    rather than :class:`~pandid.units.Block`'s -- the shape
+    ``test_block.py``'s own ``test_a_block_round_trips_through_a_spec``
+    pins for the class this one is borrowed from. A face list dropped on
+    write is the silent-failure class this project has been bitten by
+    three times, so this is checked directly rather than assumed from
+    the two classes sharing a mechanism.
+    """
+    from pandid.spec import from_dict, to_dict
+
+    fs = Flowsheet("tanks")
+    # A ``list``, not a ``tuple``: the spelling that keeps this on the
+    # untyped ``Tank`` return (see ``units.Tank.__new__``'s overloads),
+    # so ``.port("in_2")`` and not ``.in_2`` reaches the second inlet --
+    # a checker cannot resolve the numbered attribute on this arm either.
+    tk = fs.add(units.Tank("TK-1", inputs=["W", "W", "N"]))
+    feed = fs.add(units.Feed("F"))
+    prod = fs.add(units.Product("P"))
+    fs.connect(feed.outlet, tk.port("in_2"))
+    fs.connect(tk.outlet, prod.inlet)
+
+    spec = to_dict(fs)
+    (entry,) = [u for u in spec["units"] if u["kind"] == "Tank"]
+    assert entry["inputs"] == ["W", "W", "N"]
+    # A single outlet on its own default face is the shorthand every
+    # ``Tank("TK-1")`` already means, so it is not written down at all --
+    # unlike a Block, which has no connection-free shape to default to.
+    assert "outputs" not in entry
+
+    read = from_dict(spec)
+    (got,) = [u for u in read.units if isinstance(u, units.Tank)]
+    assert got.input_faces == tk.input_faces == ("W", "W", "N")
+    assert got.output_faces == tk.output_faces
+    assert list(got.ports) == list(tk.ports)
+    assert to_dict(read) == spec
+
+
+def test_a_vessels_moved_nozzle_and_reordered_face_round_trip():
+    """The other two connection-family calls, over :class:`Vessel`: an
+    explicit :meth:`~pandid.units._MultiPortVessel.nozzle` move and an
+    :meth:`~pandid.units._MultiPortVessel.order_on` reordering, each
+    written back and read to the same declaration.
+
+    ``horizontal`` because the default variant's inlet has no menu at
+    all -- a single anchored face, so there is nowhere for ``nozzle()``
+    to move two connections *to* and nothing for ``order_on()`` to
+    reorder.
+    """
+    from pandid.spec import from_dict, to_dict
+
+    fs = Flowsheet("vessels")
+    v = fs.add(units.Vessel("V-1", variant="horizontal", inputs=2, width=130, height=42))
+    v.nozzle("in_1", "N")
+    v.nozzle("in_2", "N")
+    v.order_on("N", [v.in_2, v.in_1])
+
+    spec = to_dict(fs)
+    (entry,) = [u for u in spec["units"] if u["kind"] == "Vessel"]
+    assert entry["inputs"] == ["N", "N"]
+    assert entry["port_order"] == {"N": ["in_2", "in_1"]}
+
+    read = from_dict(spec)
+    (got,) = [u for u in read.units if isinstance(u, units.Vessel)]
+    assert got.input_faces == v.input_faces == ("N", "N")
+    # Objects of two different flowsheets, so it is the names that have
+    # to agree, not the ``Port``s themselves.
+    assert (
+        [p.name for p in got.ports_on("N")]
+        == [p.name for p in v.ports_on("N")]
+        == [
+            "in_2",
+            "in_1",
+        ]
+    )
+    assert to_dict(read) == spec
 
 
 def test_components_accept_a_bare_name_or_a_formula():

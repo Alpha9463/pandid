@@ -761,7 +761,7 @@ def _ethanol_pfd() -> Flowsheet:
             "M-301", n_feeds=2, width=72, height=153, description="Flocculant Activation Mixer Tank"
         )
     )
-    mix2 = fs.add(units.Mixer("M-302", n_inlets=2, description="Beer Flocculant Mixer Tank"))
+    mix2 = fs.add(units.Tank("M-302", inputs=2, description="Beer Flocculant Mixer Tank"))
     press = fs.add(
         units.Filter(
             "F-301",
@@ -812,7 +812,7 @@ def _ethanol_pfd() -> Flowsheet:
     floc.pin(x=190, y=mix1_y + port_offset(mix1, "feed_1")[1] - 60)
     water.pin(x=190, y=mix1_y + port_offset(mix1, "feed_2")[1])
 
-    mix2.pin(x=1120, y=hx_axis_y - 15)  # in_1 level with the cooler
+    mix2.pin(port="in_1", x=1120, y=hx_axis_y)  # in_1 level with the cooler
     press.pin(x=1250, y=hx_axis_y - 20)
     filtrate_y = press.pin_.y + port_offset(press, "outlet")[1]
     cake_x = press.pin_.x + port_offset(press, "cake")[0]
@@ -3666,7 +3666,7 @@ def _alumina_refinery() -> Flowsheet:
     )
 
     dilution = fs.add(
-        units.Mixer("M-901", n_inlets=3, width=70, height=90, description="Blow-off Dilution Tank")
+        units.Tank("M-901", inputs=3, width=70, height=90, description="Blow-off Dilution Tank")
     )
     floc_tee = fs.add(units.Tee(branch="inlet"))
     flocculant = fs.add(units.Feed("Flocculant", reference="PCD-904"))
@@ -3752,8 +3752,8 @@ def _alumina_refinery() -> Flowsheet:
     offgas = fs.add(units.Product("Calciner Off-Gas to Gas Cleaning", reference="PFD-902"))
     alumina = fs.add(units.Product("Alumina to Cooling and Storage", reference="PFD-902"))
 
-    spent_mixer = fs.add(
-        units.Mixer("M-902", n_inlets=3, width=70, height=90, description="Spent Liquor Tank")
+    spent_tank = fs.add(
+        units.Tank("M-902", inputs=3, width=70, height=90, description="Spent Liquor Tank")
     )
     caustic = fs.add(units.Feed("Caustic Soda Make-up", reference="PCD-906"))
     evaporator = fs.add(
@@ -3837,7 +3837,7 @@ def _alumina_refinery() -> Flowsheet:
     offgas.pin(port="inlet", x=2960, y=1680)
     alumina.pin(port="inlet", x=2960, y=2060)
 
-    spent_mixer.pin(port="in_1", x=1350, y=1800)
+    spent_tank.pin(port="in_1", x=1350, y=1800)
     caustic.pin(port="outlet", x=1230, y=1863)
     evaporator.pin(port="shell_in", x=1550, y=2000)
     lp_steam.pin(port="outlet", x=1300, y=evaporator.pin_.y + port_offset(evaporator, "tube_in")[1])
@@ -3854,7 +3854,8 @@ def _alumina_refinery() -> Flowsheet:
     product_axis_x = product_cyclone.pin_.x + port_offset(product_cyclone, "overflow")[0]
     evap_bottoms_x = evaporator.pin_.x + port_offset(evaporator, "bottoms")[0]
     evap_vapour_x = evaporator.pin_.x + port_offset(evaporator, "shell_out")[0]
-    spent_in_2_y = spent_mixer.pin_.y + port_offset(spent_mixer, "in_2")[1]
+    spent_in_2_y = spent_tank.pin_.y + port_offset(spent_tank, "in_2")[1]
+    spent_draw_x = spent_tank.pin_.x + port_offset(spent_tank, "outlet")[0]
 
     lane_blowoff, lane_dilution, lane_residue = 140.0, 110.0, 170.0
     lane_home_x, lane_home_y = 60.0, 2260.0
@@ -3968,14 +3969,14 @@ def _alumina_refinery() -> Flowsheet:
     fs.connect(classifier_1.port("overflow"), classifier_2.feed, name="S-938").via(
         [(classifier_1_axis_x, 1180)]
     )
-    fs.connect(classifier_2.port("overflow"), spent_mixer.port("in_1"), name="S-939").via(
+    fs.connect(classifier_2.port("overflow"), spent_tank.port("in_1"), name="S-939").via(
         [(classifier_2_axis_x, lane_spent_y), (lane_spent_x, lane_spent_y), (lane_spent_x, 1800)]
     )
 
     fs.connect(hydrate_wash.outlet, hydrate_filter.port("wash_in"), name="S-940").via(
         [(hydrate_filter.pin_.x + port_offset(hydrate_filter, "wash_in")[0], 1500)]
     )
-    fs.connect(hydrate_filter.outlet, spent_mixer.port("in_2"), name="S-941").via(
+    fs.connect(hydrate_filter.outlet, spent_tank.port("in_2"), name="S-941").via(
         [
             (2340, 1700),
             (2340, lane_filtrate_y),
@@ -3986,9 +3987,9 @@ def _alumina_refinery() -> Flowsheet:
     fs.connect(hydrate_filter.port("cake"), hydrate_belt.feed, name="S-942")
     fs.connect(hydrate_belt.discharge, calciner_tee.inlet, name="S-942")
 
-    fs.connect(caustic.outlet, spent_mixer.port("in_3"), name="S-943")
-    fs.connect(spent_mixer.outlet, evaporator.port("shell_in"), name="S-944").via(
-        [(1420, 2060), (1550, 2060)]
+    fs.connect(caustic.outlet, spent_tank.port("in_3"), name="S-943")
+    fs.connect(spent_tank.outlet, evaporator.port("shell_in"), name="S-944").via(
+        [(spent_draw_x, 2060), (1550, 2060)]
     )
     fs.connect(lp_steam.outlet, evaporator.tube_in, name="S-945")
     fs.connect(evaporator.tube_out, evap_condensate.inlet, name="S-946")

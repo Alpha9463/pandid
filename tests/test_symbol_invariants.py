@@ -801,6 +801,18 @@ def _default_unit(kind: str, variant: str):
 #: resolves to.
 _WIDEST_CLASS_FOR_KIND = {"column": units.DistillationColumn}
 
+#: ``Tank`` and ``Vessel`` reach the artwork's ``inlet``/``outlet`` anchors
+#: through a numbered family (``in_1``/``out_1``, ...) rather than a port
+#: of that name -- see ``pandid.units._MultiPortVessel`` -- so
+#: ``_symbol_anchor`` alone answers neither for the default, single-
+#: connection unit the test below builds. Unlike a :class:`Separator`'s
+#: renamed collectors, the *resolved* symbol these two draw
+#: (:func:`pandid.render.symbols.vessel_symbol`) really does key its own
+#: ``ports`` by ``in_1``/``out_1``, so the rename cannot live in
+#: ``PORT_ANCHORS`` without portgeom losing the nozzle it is meant to find;
+#: it is only true of the *vendored* stencil this test compares against.
+_FAMILY_ANCHOR_STEM = {"inlet": "in", "outlet": "out"}
+
 
 @pytest.mark.parametrize("entry", _SYMBOLS, ids=_IDS)
 def test_every_anchor_the_artwork_offers_a_modelled_port_can_reach(entry):
@@ -825,6 +837,11 @@ def test_every_anchor_the_artwork_offers_a_modelled_port_can_reach(entry):
     cls = _WIDEST_CLASS_FOR_KIND.get(kind)
     unit = cls(f"{kind}-{variant}-x", variant=variant) if cls else _default_unit(kind, variant)
     reachable = {unit._symbol_anchor(name) for name in unit.ports}
+    reachable |= {
+        artwork_name
+        for artwork_name, stem in _FAMILY_ANCHOR_STEM.items()
+        if any(name.startswith(f"{stem}_") for name in unit.ports)
+    }
     unreached = set(sym.ports) - reachable
     it = "it" if len(unreached) == 1 else "them"
     assert not unreached, (

@@ -666,14 +666,35 @@ def model_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
             if any(u.ports[n].role == "signal" for n in members):
                 continue
             # A live alias for this family's sole member -- Reactor.feed,
-            # Column.feed -- means the singular spelling still answers
-            # for it, exactly as it did back when the port itself was
-            # named ``feed`` rather than ``feed_1`` (see
-            # Unit._canonical_port_name). The class offers that one un-
-            # asked, the same as any other fixed nozzle, so it is not "a
-            # count that went unmet" -- only a family with no alias at
-            # all, or one raised past its aliased arity, is.
-            if len(members) == 1 and getattr(u, stem, None) is u.ports[members[0]]:
+            # Column.feed, Tank.inlet/.outlet -- means the singular
+            # spelling still answers for it, exactly as it did back when
+            # the port itself was named that rather than ``feed_1``/
+            # ``in_1`` (see Unit._canonical_port_name). The class offers
+            # that one un-asked, the same as any other fixed nozzle, so
+            # it is not "a count that went unmet" -- only a family with
+            # no alias at all, or one raised past its aliased arity, is.
+            #
+            # Found by scanning the instance rather than trying ``stem``
+            # itself: ``feed_1``'s alias is spelled ``feed`` (the stem),
+            # but ``in_1``'s is spelled ``inlet`` (not the stem ``in``),
+            # since #342 kept the name a tank's single connection has
+            # always had. Both are a plain instance attribute set beside
+            # the family in ``__init__`` and never a second entry in
+            # ``ports`` -- see either class's own comment on it -- so
+            # this is the one test that answers for any such alias,
+            # however it is spelled.
+            #
+            # ``name not in u.ports`` is what tells an alias from the
+            # port's own attribute: ``_add_port`` also does
+            # ``setattr(self, "in_1", port)``, under the nozzle's real
+            # name, and that is not a second spelling to excuse -- a
+            # ``Mixer("M", n_inlets=1)`` has no alias at all and its
+            # lone ``in_1`` is still a count somebody wrote.
+            sole = u.ports[members[0]]
+            if len(members) == 1 and any(
+                name not in u.ports and not name.startswith("_") and value is sole
+                for name, value in vars(u).items()
+            ):
                 continue
             members.sort(key=lambda member: int(member.rpartition("_")[2]))
             loose = [m for m in members if u.ports[m].stream is None]

@@ -114,12 +114,20 @@ def _is_family(hint):
 # class in this dict that does, since it is the one class with two
 # independent counted families (``n_feeds=`` and ``n_draws=``). See
 # ``_EXACT_ARITY`` below for the typed side of that.
+#
+# ``Tank`` and ``Vessel`` each declare two as well -- ``inlets`` and
+# ``outlets``, :class:`~pandid.units.Block`'s own pair -- but unlike
+# ``Column`` only one of the two gets a typed side below: ``outputs=``
+# above one is the untyped case, on the same trade ``Absorber`` and
+# ``Stripper`` already take for ``Column``'s own ``n_draws``.
 _DECLARED_FAMILIES = {
     units.Mixer: {"inlets"},
     units.Splitter: {"outlets"},
     units.Block: {"inlets", "outlets"},
     units.Column: {"feeds", "draws"},
     units.Reactor: {"feeds"},
+    units.Tank: {"inlets", "outlets"},
+    units.Vessel: {"inlets", "outlets"},
 }
 
 
@@ -379,6 +387,12 @@ _CHECKER_VISIBLE_GETATTR = {"Block"}
 #: built it; ``absorber.draws[i]`` or ``absorber.port("draw_2")`` is the
 #: typed route there, exactly as ``m.inlets[i]`` is for a *computed*
 #: ``n_inlets`` everywhere else in this table.
+#:
+#: ``Tank`` and ``Vessel`` are here for ``inputs`` only, on the same
+#: trade: both default to one outlet, so ``outputs=`` above one is the
+#: combination this table declines to cross-type, exactly as
+#: ``Absorber``'s ``n_draws`` is. ``tank.outlets[i]`` /
+#: ``tank.port("out_2")`` is the typed route there.
 _EXACT_ARITY = {
     units.Mixer: (("n_inlets", "in", ""),),
     units.Splitter: (("n_outlets", "out", ""),),
@@ -387,6 +401,8 @@ _EXACT_ARITY = {
     units.Absorber: (("n_feeds", "feed", ""),),
     units.Stripper: (("n_feeds", "feed", ""),),
     units.DistillationColumn: (("n_feeds", "feed", ""),),
+    units.Tank: (("inputs", "in", ""),),
+    units.Vessel: (("inputs", "in", ""),),
 }
 _MAX_ARITY = 8
 
@@ -529,7 +545,7 @@ def test_no_arity_class_is_left_over(cls=None):
         if isinstance(node, ast.ClassDef)
         and re.fullmatch(
             r"(Mixer|Splitter|ColumnDraw|Column|Reactor|Block|Absorber|Stripper"
-            r"|DistillationColumn)\d+",
+            r"|DistillationColumn|Tank|Vessel)\d+",
             node.name,
         )
     }

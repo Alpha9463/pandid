@@ -20,6 +20,17 @@ def _findings(fs):
     return [i for i in fs.validate() if i.code == "gravity-turned"]
 
 
+def _has_port(unit, name):
+    """Whether ``unit`` answers for ``name`` -- a real port, or a live
+    alias for one (``Tank.inlet``/``.outlet`` for ``in_1``/``out_1``).
+
+    ``name in unit.ports`` alone misses the alias: it is a plain
+    attribute and never a second entry in ``ports``, by design (see
+    ``Unit._canonical_port_name``).
+    """
+    return unit._canonical_port_name(name) in unit.ports
+
+
 def _sheet(unit, **pin):
     """One turned unit between a feed and a product, laid out and routed."""
     fs = Flowsheet("gravity")
@@ -28,11 +39,11 @@ def _sheet(unit, **pin):
     prod = fs.add(U.Product("P"))
     if pin:
         held.pin(**pin)
-    inlet = "feed" if "feed" in held.ports else "inlet"
+    inlet = "feed" if _has_port(held, "feed") else "inlet"
     # Whatever the unit calls the draw gravity puts at its low point: a drum's
     # liquid, a tower's bottoms, a mechanical separator's underflow.
     outlet = next(
-        name for name in ("liquid", "bottoms", "underflow", "outlet") if name in held.ports
+        name for name in ("liquid", "bottoms", "underflow", "outlet") if _has_port(held, name)
     )
     fs.connect(feed.outlet, held.port(inlet))
     fs.connect(held.port(outlet), prod.inlet)

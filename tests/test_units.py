@@ -1112,9 +1112,12 @@ def test_tank_is_its_own_kind():
 # A vessel's and a tank's five nozzles (#222)
 # ---------------------------------------------------------------------------
 
-#: What both classes declare, in order. Written out rather than derived from
-#: ``PORTS``, which is the thing under test: a list compared against itself
-#: would pass whatever it said.
+#: What both classes offer, by name -- the spelling an author writes and
+#: ``.port()`` resolves, ``inlet``/``outlet`` included even though #342 made
+#: them live aliases for ``in_1``/``out_1`` rather than a second entry in
+#: ``ports``. Written out rather than derived from ``PORTS``, which is the
+#: thing under test: a list compared against itself would pass whatever it
+#: said.
 _HOLDUP_PORTS = ["inlet", "outlet", "vent", "relief", "drain"]
 
 
@@ -1125,20 +1128,31 @@ def test_a_vessel_and_a_tank_carry_the_same_five_nozzles(cls):
     0.1.1 gave a vessel a ``vent`` and a tank nothing, which said a tank does
     not breathe -- and left ``examples/14``'s fixed-roof ethanol tank unable to
     carry the conservation vent and its flame arrestor, which is issue #222.
+
+    ``.ports`` itself now reads ``vent, relief, drain, in_1, out_1``, not the
+    five names above: #342 gave ``inlet``/``outlet`` :class:`~pandid.units.
+    Block`'s family mechanism, and ``vent``/``relief``/``drain`` are still
+    ``PORTS``, which ``Unit.__init__`` lays down before a subclass's own
+    ``__init__`` body adds anything else -- the fixed nozzles first and the
+    family after, exactly the order :class:`~pandid.units.Column` already
+    builds ``overhead``/``bottoms`` and then ``feeds``/``draws`` in.
     """
-    assert list(cls("X-1").ports) == _HOLDUP_PORTS
+    assert list(cls("X-1").ports) == ["vent", "relief", "drain", "in_1", "out_1"]
+    # And still every one of the five, under the name an author writes.
+    assert all(name in _HOLDUP_PORTS or cls("X-1").port(name) for name in _HOLDUP_PORTS)
 
 
 @pytest.mark.parametrize("cls", [U.Vessel, U.Tank], ids=["Vessel", "Tank"])
-def test_the_two_process_nozzles_come_first(cls):
-    """The new three are appended, and that is what makes this additive.
+def test_the_three_fixed_nozzles_come_first(cls):
+    """The family is appended, and that is what makes it additive.
 
     ``ports`` is insertion-ordered and observable -- a port family placed by a
     ``PortSeries`` is spread in the unit's own port order -- so weaving a new
     nozzle in among the old ones could move ink on a sheet that never asks for
-    it. Nothing here has a series today; this is what says so tomorrow.
+    it. ``vent``, ``relief`` and ``drain`` are ``PORTS`` and so come first;
+    ``in_1``/``out_1`` are ``_init_connections``'s and come after.
     """
-    assert list(cls("X-1").ports)[:2] == ["inlet", "outlet"]
+    assert list(cls("X-1").ports)[:3] == ["vent", "relief", "drain"]
 
 
 @pytest.mark.parametrize("cls", [U.Vessel, U.Tank], ids=["Vessel", "Tank"])
@@ -1157,7 +1171,7 @@ def test_each_added_nozzle_leaves_the_vessel_and_says_what_it_carries(cls):
 
 
 @pytest.mark.parametrize("cls", [U.Vessel, U.Tank], ids=["Vessel", "Tank"])
-def test_none_of_the_five_is_numbered(cls):
+def test_the_three_fixed_nozzles_are_never_numbered(cls):
     """So ``nozzle-unconnected`` does not report a tank nobody drained.
 
     That finding reads a *count the author wrote down and did not meet*, which
@@ -1167,10 +1181,21 @@ def test_none_of_the_five_is_numbered(cls):
     ``validate._family_stem``'s, and it is *asked* here rather than restated --
     a second copy of the naming rule is a second thing to keep in step.
     ``tests/test_validate.py`` holds the finding itself.
+
+    ``in_1``/``out_1`` are the other two of the five and are genuinely
+    numbered since #342: a plain, un-nozzled ``Tank("X-1")`` still draws no
+    finding for them either, but for the *other* reason ``_family_stem``'s
+    caller gives -- a live alias for a family's sole member, exactly as
+    ``Reactor.feed`` is for ``feed_1`` -- and that reason is
+    ``tests/test_validate.py``'s to hold, not this one's.
     """
     from pandid.validate import _family_stem
 
-    assert [n for n in cls("X-1").ports if _family_stem(n) is not None] == []
+    assert [
+        n
+        for n in cls("X-1").ports
+        if _family_stem(n) is not None and not n.startswith(("in_", "out_"))
+    ] == []
 
 
 def test_mixer_rejects_zero_inlets():

@@ -569,8 +569,8 @@ Each entry is `port` *(direction / role)*.
 | `Blower` | `blower` | `suction` *(in)*, `discharge` *(out)* |
 | `Turbine` | `turbine` | `inlet` *(in)*, `outlet` *(out)* |
 | `Valve` | `valve` | `inlet` *(in)*, `outlet` *(out)*, `actuator` *(in/signal)*; `three_way` adds `branch` *(out)* |
-| `Vessel` | `vessel` | `inlet` *(in)*, `outlet` *(out)*, `vent` *(out/vapor)*, `relief` *(out)*, `drain` *(out/liquid)* |
-| `Tank` | `tank` | the same five as `Vessel` |
+| `Vessel` | `vessel` | `in_1` … `in_n` *(in)*, `out_1` … `out_m` *(out)*, `vent` *(out/vapor)*, `relief` *(out)*, `drain` *(out/liquid)*; at one each (the default) the bare `inlet`/`outlet` still answer, exactly as before #342 — see [`Block`'s connection API, on a tank or a vessel](#a-tank-or-a-vessel-fed-by-several-streams) |
+| `Tank` | `tank` | the same as `Vessel` |
 | `Separator` | `separator` | `feed` *(in)*, `vapor` *(out/vapor)*, `liquid` *(out/liquid)* on the four variants whose draws really are phases — the drum (`default`, `horizontal`, `knockout`) and the wet `scrubber`. The other seven sort or collect rather than separating into phases, and name the two draws their artwork has: `feed` *(in/feed)*, `overflow` *(out)*, `underflow` *(out)*; see [Variants](#variants) |
 | `Column` | `column` | The general tower: `feed` *(in/feed)*, or `feed_1` … `feed_n`, no draw, or `draw` *(out/draw)*, or `draw_1` … `draw_n`, `overhead` *(out/vapor)*, `bottoms` *(out/liquid)*; the feeds are [`feeds`](#the-family-as-a-sequence) and the draws [`draws`](#the-family-as-a-sequence). Nothing here assumes the tower boils — see `DistillationColumn`, `Stripper` and `Absorber` for the three that add a reflux loop, a reboiler alone, or neither |
 | `DistillationColumn` | `column` | A `Column` plus the two return nozzles that close a distillation column's internal loops: `reflux_in` *(in/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*, `condenser_duty` *(out/energy)* |
@@ -634,6 +634,65 @@ Two variants read their drain's face differently: `vessel/legs` and
 `vessel/skirted` are drawn much taller than wide, so at their own proportions
 the drain leaves sideways rather than downwards. Give the unit a `height` less
 than about 2.2 × its `width` and it comes out of the bottom.
+
+#### A tank or a vessel fed by several streams
+
+`inlet` and `outlet` are `Block`'s connection API, not a fixed pair: `inputs=`
+and `outputs=` give either a count or one face per connection, exactly as they
+do on `Block`.
+
+```text
+units.Tank(name, inputs=1, outputs=1, variant="default", width=None,
+           height=None, label_pos=None, description="")
+units.Vessel(name, inputs=1, outputs=1, variant="default", supports=None,
+             width=None, height=None, label_pos=None, description="")
+```
+
+```python
+tk = fs.add(units.Tank("TK-901", inputs=["W", "W", "N"]))
+fs.connect(feed.outlet, tk.in_1)      # west: the high-level fill
+fs.connect(recycle.outlet, tk.in_2)   # west, same wall
+fs.connect(rework.outlet, tk.in_3)    # north: a crown return
+```
+
+At `inputs=1, outputs=1` — the default — `in_1`/`out_1` keep the bare aliases
+`inlet`/`outlet`, so `Tank("TK-1")` is exactly what it always was and nothing
+built against it moves. Above one, the numbered spelling takes over: there is
+no bare name for a member of a family of more than one. `inlets`/`outlets`,
+`input_faces`/`output_faces`, `nozzle()`, `face()`, `ports_on()` and
+`order_on()` all work as they do on `Block` — see [that section](#block-the-block-flow-diagram)
+for what each does; a tank's `nozzle()` is the one difference, covered next.
+
+**The face a connection defaults to comes from the artwork, not a fixed
+letter.** Three levels, each more specific than the last:
+
+1. the face the vendored artwork already puts the nozzle on — a flat-floored
+   tank's inlet is low on the shell, a hopper-bottomed one's at the crown,
+   and this is what makes the defaulting safe: nothing built before #342
+   moves, because the level-one answer *is* what every existing sheet
+   already drew;
+2. a class attribute, `DEFAULT_INPUT_FACE`/`DEFAULT_OUTPUT_FACE` — `Block`'s
+   own mechanism, unset on `Tank` and `Vessel` themselves since neither has
+   one class-wide opinion, and there for a future subclass that does (a
+   reflux drum that always fills at the crown, say);
+3. the `inputs=`/`outputs=` argument, which always wins.
+
+**`nozzle()` only succeeds against a face the vendored artwork actually
+offers**, unlike a `Block`'s rectangle, which has no shape to be wrong about:
+
+```python
+tk = units.Tank("TK-602")
+tk.nozzle("inlet", "N")             # top entry, through an internal downcomer
+units.Tank("TK-1", variant="floating_roof").nozzle("inlet", "N")   # ValueError:
+# the roof rides on the liquid, so the crown offers no placement at all
+```
+
+**Squeezed, not grown.** A block's box means nothing, so it grows to fit a
+family at full pitch; a tank's or a vessel's artwork is vendored and its size
+means something, so a face carrying more than one connection is squeezed
+instead — the same fallback a `Mixer`'s inlets already use when a wall runs out
+of room. A single connection is never squeezed, so it lands exactly on the
+coordinate the artwork always anchored.
 
 Variable-port constructors take their count first:
 
@@ -2006,6 +2065,8 @@ mirroring move them, and `nozzle()` always takes the moved face.
 |---|---|---|
 | `Vessel(variant="horizontal")` | `inlet` | `W` (home), `N`, `E` |
 | `Separator(variant="horizontal")` | `feed` | `W` (home), `N`, `E` |
+| `Tank` (`default`, `conical`, `conical_bottom`, `conical_ends`, `dished_roof_conical_bottom`) | `inlet` | shell `W`/`E` (home), crown `N` |
+| `Tank(variant="floating_roof")` | `inlet` | `W` (home), `E`; no `N` — the roof floats on the liquid |
 | `Instrument` (`default`, `shared`, `computer`, and any `display`) | `pv`, `sig_in`, `sig_out` | `N`, `S`, `E`, `W` |
 
 (The trip squares, `Instrument(variant="sis")`, `"logic"` and `"interlock"`,
