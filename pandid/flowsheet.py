@@ -19,6 +19,8 @@ from pandid.stations import (
 from pandid.streams import PROCESS_KINDS, SIGNAL_KINDS, STREAM_KINDS, Stream
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from pandid.components import Component
     from pandid.document import TitleBlock
     from pandid.loops import ControlLoop, Loop
@@ -429,12 +431,47 @@ class Flowsheet:
         ``I-1 (2)``), so the unit that a stream, a spec entry or an
         equipment list means is never in doubt, while the tag drawn
         stays ``I-1``.
+
+        Every refusal is made before the first write, so a rejected
+        ``add()`` leaves the sheet exactly as it found it. See
+        :meth:`_refuse_unaddable`, which is where the refusals live so
+        that a composite call can ask them of a unit it has not added
+        yet.
+        """
+        clash = self._refuse_unaddable(unit)
+        if clash is not None:
+            # The tag is what repeats and so what the fresh name is
+            # derived from. A tee draws none, so its name stands in.
+            unit.name = self._repeat_name(unit.tag or unit.name)
+        unit.flowsheet = self
+        self.units.append(unit)
+        self._invalidate_layout()
+        return unit
+
+    def _refuse_unaddable(self, unit: "Unit",
+                          alongside: "Sequence[Unit]" = ()) -> "Unit | None":
+        """Raise unless *unit* may join this sheet; answer what it repeats.
+
+        :meth:`add`'s three refusals, lifted out whole so that a call
+        building several units at once can ask them **before** it writes
+        any of them: ``add_control_loop`` puts two balloons and two
+        signal lines on the sheet, and a clash found on the second used
+        to leave the first drawn (issue #433).
+
+        ``alongside`` is the units the same call is about to add. They
+        are not on :attr:`units` yet and a name they have already taken
+        is as unavailable as one the sheet is holding, so the tag check
+        runs over both.
+
+        The answer is the unit *unit* repeats, or ``None``: the caller
+        needs it to name the repeat, and finding it twice would be the
+        same scan run again.
         """
         if unit in self.units:
             raise ValueError(
                 f"{unit!r} is already on this flowsheet"
             )
-        clash = next((u for u in self.units if u.name == unit.name), None)
+        clash = next((u for u in [*self.units, *alongside] if u.name == unit.name), None)
         if clash is not None and not unit.repeats(clash):
             raise ValueError(
                 f"A unit with the name {unit.name!r} already exists on this "
@@ -458,14 +495,7 @@ class Flowsheet:
             raise ValueError(
                 f"{unit!r} is already on flowsheet {unit.flowsheet.name!r}"
             )
-        if clash is not None:
-            # The tag is what repeats and so what the fresh name is
-            # derived from. A tee draws none, so its name stands in.
-            unit.name = self._repeat_name(unit.tag or unit.name)
-        unit.flowsheet = self
-        self.units.append(unit)
-        self._invalidate_layout()
-        return unit
+        return clash
 
     def _repeat_name(self, tag: str) -> str:
         """A free name for one more drawing of a repeated tag.
@@ -531,6 +561,21 @@ class Flowsheet:
         never rewritten afterwards, however it was arrived at: it leaves
         the drawing for the DCS.
         """
+        loop, allocated = self._new_loop(variable, number)
+        self._register_loop(loop, allocated=allocated)
+        return loop
+
+    def _new_loop(self, variable: str,
+                  number: str | int | None = None) -> "tuple[Loop, bool]":
+        """The loop :meth:`add_loop` would declare, checked but *not*
+        declared. Answers it and whether its number was allocated.
+
+        Split from the declaration so that
+        :meth:`add_control_loop`, which cannot write anything until all
+        five of its mutations are known to be safe, can find out what
+        number it is about to spend without spending it (issue #433).
+        Nothing here touches the sheet.
+        """
         from pandid.loops import Loop
 
         # ONE series for the sheet, not one counter per measured
@@ -575,13 +620,20 @@ class Flowsheet:
                 f"add_loop() returned. Two loops may share a number if they measure "
                 f"different variables (F-101 and L-101)"
             )
-        # After every raise above, so a rejected declaration burns
-        # nothing: a bad letter or a clash leaves the next `add_loop()`
-        # the number this one was reaching for.
+        return loop, allocated
+
+    def _register_loop(self, loop: "Loop", *, allocated: bool) -> None:
+        """Declare a loop :meth:`_new_loop` has already checked.
+
+        The only writer of :attr:`loops` and of the allocation counter,
+        so "a rejected declaration burns nothing" is one fact in one
+        place: every raise is behind us by the time this runs, and a bad
+        letter or a clash leaves the next :meth:`add_loop` the number
+        this one was reaching for.
+        """
         if allocated:
             self._loops_allocated += 1
         self.loops.append(loop)
-        return loop
 
     def _resume_loop_numbering(self) -> None:
         """Move the counter past every loop number already declared.
@@ -661,6 +713,48 @@ class Flowsheet:
         >>> fic = fs.add_instrument("FIC", 101, near=ft, at="N",
         ...                         offset=70, display="central")
         >>> fs.connect(ft.sig_out, fic.sig_in, kind="electric")
+
+        Whatever it is refused for -- the letters, the variant, two
+        anchors, a placement, a host on another sheet, a tag already
+        taken -- the balloon does not reach the sheet, so correcting the
+        argument and calling again is all a retry has to be.
+        """
+        for role, host in (("sensing", sensing), ("acting_on", acting_on),
+                           ("near", near)):
+            if host is not None:
+                self._refuse_foreign(role, host)
+        inst = self._build_instrument(
+            type, number, sensing=sensing, acting_on=acting_on, near=near,
+            at=at, offset=offset, angle=angle, variant=variant, **kwargs)
+        self.add(inst)
+        return inst
+
+    def _build_instrument(self, type: str,
+                          number: "str | int | Loop | ControlLoop" = "", *,
+                          sensing: "Stream | Unit | None" = None,
+                          acting_on: "Stream | Unit | None" = None,
+                          near: "Stream | Unit | None" = None,
+                          at: float | str | None = None,
+                          offset: float = 45.0, angle: float = 90.0,
+                          variant: str = "default", **kwargs) -> "Instrument":
+        """The balloon :meth:`add_instrument` would add, built and
+        anchored but **not** on the sheet.
+
+        Every refusal an ``add_instrument`` call can make except the tag
+        clash, which is :meth:`add`'s, and the host ownership check,
+        which is the caller's -- see below. The tag, the variant, the
+        display, the one-anchor rule and the placement are all settled
+        here, and all of them write to the new balloon and to nothing
+        else, so a call refused for any of them leaves the sheet as it
+        was. Until #433 the balloon joined ``units`` before ``attach``
+        ran, so correcting a bad ``at=`` and retrying reported a
+        duplicate tag.
+
+        Host ownership is left to the caller because the one host this
+        cannot judge is a balloon the same call is about to add:
+        ``add_control_loop`` hangs its controller off a transmitter that
+        is not on the sheet yet, and that is not a foreign object but a
+        sibling.
         """
         from pandid.loops import ControlLoop, Loop
         from pandid.units import Instrument
@@ -673,13 +767,49 @@ class Flowsheet:
             number.check(type)
             number = number.number
         inst = Instrument(type, number, variant=variant, **kwargs)
-        # Resolved before the balloon joins the sheet, so a call refused
-        # for naming two anchors leaves nothing behind to be drawn.
         host, relation = self._anchor(inst, sensing, acting_on, near)
-        self.add(inst)
         if host is not None:
             inst.attach(host, at=at, offset=offset, angle=angle, relation=relation)
         return inst
+
+    def _refuse_foreign(self, role: str, thing: "Stream | Port | Unit") -> None:
+        """Raise unless *thing* is on this sheet.
+
+        A balloon anchored to a unit of another sheet, or a signal line
+        landing on one, draws a sheet that cannot be read back: the
+        member has no entry in this sheet's spec, so
+        ``Flowsheet.from_dict(fs.to_dict())`` raises with nothing of
+        that name to attach to (issue #433). :meth:`connect` has made
+        this check since it existed; this is the same question asked
+        wherever else an author hands in an object.
+
+        Identity, not equality, for a stream: :class:`Stream` is a
+        dataclass, so two lines with the same ends and the same
+        components on two sheets compare equal, and ``in`` would call
+        the foreign one ours.
+        """
+        from pandid.ports import Port
+        from pandid.units import Unit
+
+        owner = thing.owner if isinstance(thing, Port) else thing
+        if isinstance(owner, Unit):
+            if owner.flowsheet is self:
+                return
+            where = ("no flowsheet" if owner.flowsheet is None
+                     else f"flowsheet {owner.flowsheet.name!r}")
+            raise ValueError(
+                f"{role}={owner.name!r} is on {where}, not on {self.name!r}. A member "
+                f"of this sheet's drawing has to be on this sheet: one built from "
+                f"another sheet's units draws lines to names its own spec never "
+                f"declares, so it cannot be read back. fs.add() it here first"
+            )
+        if any(stream is owner for stream in self.streams):
+            return
+        raise ValueError(
+            f"{role}={getattr(owner, 'name', owner)!r} is a stream on another "
+            f"flowsheet. A balloon taps a line this sheet draws; a line drawn "
+            f"elsewhere has no entry in this sheet's spec to tap"
+        )
 
     def _anchor(self, inst: "Instrument", sensing, acting_on, near):
         """The one anchor an ``add_instrument`` call named, and its use.
@@ -869,13 +999,37 @@ class Flowsheet:
             nothing itself; its members are ordinary units and streams.
 
         Raises:
-            ValueError: if a declared loop is given a number as well, or
-                if either functional code is empty, is the measured
-                variable alone, or opens with a different variable.
+            ValueError: if a declared loop is given a number as well or
+                was declared on another sheet; if either functional code
+                is empty, is the measured variable alone, or opens with
+                a different variable; if ``measuring`` or ``acting_on``
+                is not on this sheet; or for anything the four calls it
+                composes would refuse. **Every one of those is checked
+                before the first write**, so a rejected call leaves no
+                loop declared, no balloon drawn, no signal line and the
+                allocation counter where it was -- correct the argument
+                and call again with the same number (issue #433).
         """
         from pandid.loops import ControlLoop, Loop
         from pandid.ports import Port
 
+        # ------------------------------------------------------------------
+        # Preflight. NOTHING below writes to the sheet until the commit
+        # block at the foot of the method, and that is the whole point:
+        # this call makes five mutations -- the loop, two balloons, two
+        # signal lines -- and until #433 each ran as it was reached, so a
+        # tag clash on the controller left the loop declared and the
+        # transmitter drawn. A typo did not merely fail; it consumed a
+        # loop number and left half a control loop on the drawing.
+        #
+        # Preflight rather than rollback. Rollback would have to unwind
+        # a minted pool nozzle and a stream-numbering pass that renames
+        # lines all over the sheet, and it would only run on the paths
+        # someone remembered to wrap. The checks below are the same ones
+        # the four calls make, asked of the same objects, from the
+        # methods that own them -- so a rule added to `add()` or
+        # `connect()` is preflighted here whether or not anyone
+        # remembers this method exists.
         if isinstance(variable, Loop):
             if number is not None:
                 raise ValueError(
@@ -884,27 +1038,63 @@ class Flowsheet:
                     f"settled question. Pass the loop on its own, or pass "
                     f"{variable.variable!r} and {number!r} and let this declare it"
                 )
-            loop = variable
+            # Identity, not equality: a Loop built by another sheet's
+            # `add_loop` has the same variable and number as ours would,
+            # and taking it would number two balloons from a loop this
+            # sheet never declares -- `fs.loops` would stay empty and
+            # `to_dict()` would write no entry for it.
+            if not any(declared is variable for declared in self.loops):
+                raise ValueError(
+                    f"loop {variable.name} was not declared on flowsheet "
+                    f"{self.name!r}. A loop is a namespace belonging to one sheet, so "
+                    f"pass the handle this sheet's add_loop() returned -- or pass "
+                    f"{variable.variable!r} and {variable.number!r} and let this "
+                    f"declare it here"
+                )
+            # ``None``, not ``False``: the loop is on `fs.loops` already
+            # and this call declares nothing, where ``False`` would say
+            # it declares one whose number was typed rather than counted.
+            loop, allocates = variable, None
         else:
-            loop = self.add_loop(variable, number)
+            loop, allocates = self._new_loop(variable, number)
         transmitter_code = _functional_code(
             loop, transmitter_letters, f"{loop.variable}T", "transmitter_letters")
         controller_code = _functional_code(
             loop, controller_letters, f"{loop.variable}IC", "controller_letters")
-        # Both balloons before either line, and the transmitter first,
-        # because ``place_attached`` resolves balloons in the order they
-        # joined ``units`` and the controller hangs off the transmitter.
-        transmitter = self.add_instrument(
+        self._refuse_foreign("measuring", measuring)
+        self._refuse_foreign("acting_on", acting_on)
+        # Built and anchored but not added, which is what settles the
+        # tags, the variants and both placements without spending them.
+        # The transmitter first, because ``place_attached`` resolves
+        # balloons in the order they joined ``units`` and the controller
+        # hangs off the transmitter.
+        transmitter = self._build_instrument(
             transmitter_code, loop, sensing=measuring,
             **_stated(at=at, offset=offset, angle=angle))
         # ``near=``, not ``sensing=``: the controller does not read the
         # transmitter, it is only stacked on it, and what passes between
         # them is the measurement below -- a signal line, routed like
         # one. Saying both would draw two lines between one pair.
-        controller = self.add_instrument(
+        controller = self._build_instrument(
             controller_code, loop, near=transmitter,
             variant=controller_variant,
             **_stated(at=controller_at, offset=controller_offset))
+        self._refuse_unaddable(transmitter)
+        # Against the transmitter as well: it is not on `units` yet, and
+        # a controller lettered onto the same tag is still a clash.
+        self._refuse_unaddable(controller, alongside=(transmitter,))
+        pending = (transmitter, controller)
+        self._resolve_connection(transmitter.sig_out, controller.sig_in,
+                                 kind=measurement_kind, pending=pending)
+        self._resolve_connection(controller.sig_out, acting_on,
+                                 kind=output_kind, pending=pending)
+
+        # ------------------------------------------------------------------
+        # Commit. Every one of these was asked above and answered yes.
+        if allocates is not None:
+            self._register_loop(loop, allocated=allocates)
+        self.add(transmitter)
+        self.add(controller)
         measurement = self.connect(
             transmitter.sig_out, controller.sig_in, kind=measurement_kind)
         output = self.connect(controller.sig_out, acting_on, kind=output_kind)
@@ -1201,6 +1391,67 @@ class Flowsheet:
         ``diagram="p&id"`` sheet; see :meth:`render`.
 
         Raises :class:`ValueError` if any validation rule is violated.
+        Every rule is checked before the first write, so a rejected
+        ``connect()`` leaves both nozzles free and the sheet's streams
+        untouched; see :meth:`_resolve_connection`.
+        """
+        src, dst, kind = self._resolve_connection(src, dst, kind=kind, ends=ends)
+        # Everything from here writes. `another_port` MINTS on a pool,
+        # which is why the refusals above run first and why they run on
+        # the ports as named rather than on the members they are about
+        # to be swapped for.
+        if src.stream is not None:
+            src = src.owner.another_port(src)
+        if dst.stream is not None:
+            dst = dst.owner.another_port(dst)
+
+        stream = Stream(
+            name=name or "",  # auto-named: renumber_streams() numbers it
+            source=src,
+            dest=dst,
+            kind=kind,
+            draw_as_recycle=draw_as_recycle,
+            auto_named=not name,
+            size=size,
+            schedule=schedule,
+            service=service,
+            sequence=sequence,
+            spec=spec,
+            insulation=insulation,
+            ends=ends,
+        )
+        src.stream = stream
+        dst.stream = stream
+        self.streams.append(stream)
+        self._invalidate_layout()
+        # The number a caller reads off the returned stream has to be
+        # the number that gets drawn, so numbering is settled here
+        # rather than at render time. One stream's worth of it where
+        # that is all the append moved, since a full pass per connect()
+        # is what made building a sheet quadratic in its own size.
+        if not self._number_appended(stream):
+            self.renumber_streams()
+        return stream
+
+    def _resolve_connection(
+        self, src: "Port | Unit", dst: "Port | Unit", *, kind: str,
+        ends: "str | tuple[str, str] | None" = None,
+        pending: "Sequence[Unit]" = (),
+    ) -> "tuple[Port, Port, str]":
+        """The two nozzles a :meth:`connect` call means, and its kind,
+        with every refusal made and nothing written.
+
+        Answers the ports **as named**, not the pool members they may be
+        swapped for: taking a fresh member mints one, and a preflight
+        that minted would leave a balloon carrying a spare nozzle no
+        line reaches, which is the very thing this exists to prevent.
+
+        ``pending`` is the units the calling operation is about to add.
+        A composite has to know its lines are drawable before it writes
+        the balloons they run between, and those balloons are on no
+        flowsheet yet -- not foreign, just not committed. It is the one
+        concession preflighting a composite needs, and it is
+        deliberately narrow: only the ownership check reads it.
         """
         if ends is not None:
             from pandid.render.svg import check_connections
@@ -1243,10 +1494,11 @@ class Flowsheet:
                 f"destination port {dst.owner.name}.{dst.name} must be an inlet, "
                 f"got {dst.direction!r}"
             )
-        if src.owner.flowsheet is not self or dst.owner.flowsheet is not self:
-            raise ValueError(
-                "both units must be added to this flowsheet before connecting"
-            )
+        for port in (src, dst):
+            if port.owner.flowsheet is not self and port.owner not in pending:
+                raise ValueError(
+                    "both units must be added to this flowsheet before connecting"
+                )
         _check_signal_pairing(src, dst, kind)
         # A connection already spoken for is a mistake on every nozzle
         # but one: an instrument balloon's signal connections are a
@@ -1264,40 +1516,11 @@ class Flowsheet:
                 raise ValueError(
                     f"port {port.owner.name}.{port.name} is already connected"
                 )
-        if src.stream is not None:
-            src = src.owner.another_port(src)
-        if dst.stream is not None:
-            dst = dst.owner.another_port(dst)
+        # Read off the ports as named, which is exact: a pool member has
+        # its siblings' role, so the swap below cannot change the answer.
         if kind == "material" and src.role in _ENERGY_ROLES and dst.role in _ENERGY_ROLES:
             kind = "energy"
-
-        stream = Stream(
-            name=name or "",  # auto-named: renumber_streams() numbers it
-            source=src,
-            dest=dst,
-            kind=kind,
-            draw_as_recycle=draw_as_recycle,
-            auto_named=not name,
-            size=size,
-            schedule=schedule,
-            service=service,
-            sequence=sequence,
-            spec=spec,
-            insulation=insulation,
-            ends=ends,
-        )
-        src.stream = stream
-        dst.stream = stream
-        self.streams.append(stream)
-        self._invalidate_layout()
-        # The number a caller reads off the returned stream has to be
-        # the number that gets drawn, so numbering is settled here
-        # rather than at render time. One stream's worth of it where
-        # that is all the append moved, since a full pass per connect()
-        # is what made building a sheet quadratic in its own size.
-        if not self._number_appended(stream):
-            self.renumber_streams()
-        return stream
+        return src, dst, kind
 
     @classmethod
     def from_dict(cls, spec: dict) -> "Flowsheet":

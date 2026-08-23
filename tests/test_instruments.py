@@ -298,6 +298,39 @@ def test_stream_host_rejects_a_face():
         fs.add_instrument("FT", 2, sensing=s, at=1.4)
 
 
+def test_a_balloon_refused_its_placement_never_reaches_the_sheet():
+    """#433: the balloon used to join ``units`` before ``attach()`` ran, so a
+    bad ``at=`` left it there under its tag. Correcting the argument and
+    retrying then reported a duplicate tag, and the only way out was a tag the
+    author did not want."""
+    fs = Flowsheet("atomic")
+    drum = fs.add(U.Vessel("V-101")).pin(x=200, y=100)
+    before = list(fs.units)
+
+    with pytest.raises(ValueError, match="at= on a unit host"):
+        fs.add_instrument("LT", 101, sensing=drum, at="up")
+
+    assert list(fs.units) == before
+    assert fs.add_instrument("LT", 101, sensing=drum, at="N").name == "LT-101"
+
+
+def test_a_balloon_may_not_be_anchored_to_another_sheets_unit():
+    """A sheet built from another sheet's units draws lines to names its own
+    spec never declares, so it cannot be read back. ``add_balloon()`` has
+    always refused this; the three anchors now do too."""
+    fs = Flowsheet("host")
+    drum = fs.add(U.Vessel("V-101")).pin(x=200, y=100)
+    elsewhere = Flowsheet("owner")
+    theirs = elsewhere.add(U.Vessel("V-201")).pin(x=200, y=100)
+    before = list(fs.units)
+
+    with pytest.raises(ValueError, match=r"sensing='V-201' is on flowsheet 'owner'"):
+        fs.add_instrument("LT", 101, sensing=theirs)
+
+    assert list(fs.units) == before
+    assert fs.add_instrument("LT", 101, sensing=drum).name == "LT-101"
+
+
 # --- layout ------------------------------------------------------------------
 
 

@@ -170,6 +170,26 @@ class hierarchy, or what it is called.
 
 ### Fixed
 
+- `Flowsheet.add_control_loop()` validates everything before it writes
+  anything, so a rejected call leaves the sheet exactly as it found it (#433).
+  It made five mutations in sequence with no rollback, so a tag clash on the
+  controller left the loop declared and the transmitter drawn, an invalid
+  `output_kind` left both balloons and the measurement line, and a refused call
+  with the number left out consumed one anyway -- the retry came back `L-102`,
+  a number nobody typed, on a drawing whose loop numbers leave it for a DCS.
+  Correcting the argument and calling again now lands the loop on the number it
+  asked for the first time.
+- `Flowsheet.add_instrument()` anchors the balloon before it joins the sheet,
+  so a placement it refuses -- `at="up"`, a face on a stream host, a fraction
+  on a unit host -- no longer leaves the balloon registered under its tag with
+  a corrected retry reporting a duplicate (#433).
+- `add_control_loop()` and `add_instrument()` refuse a `Loop`, a `measuring=`
+  or an `acting_on=` belonging to another flowsheet. Taken, they drew a sheet
+  that could not be read back: `Flowsheet.from_dict(fs.to_dict())` raised with
+  nothing of that name to attach to, because the other sheet's units and loops
+  are in no spec this sheet writes (#433). `connect()` has always checked
+  endpoint ownership; this is the same question asked wherever else an author
+  hands in an object.
 - `01_ammonia_loop`, `02_manual_layout`, `04_control_loop`, `05_reactor_recycle`,
   `06_column_reflux`, `07_metering_skid` and `16_demineralised_water` state a
   flow on every stream that crosses the sheet edge and render with

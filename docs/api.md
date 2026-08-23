@@ -2503,6 +2503,15 @@ to one golden.
   resolver walking a balloon clear of whatever is in the way.
 - **Every part stays reachable**, and is an ordinary unit or stream: pin it,
   re-`attach()` it, `annotate()` it, hang an interlock off `loop.measurement`.
+- **A rejected call changes nothing.** The letters, the placements, the
+  generated tags, the ownership of `measuring` and `acting_on`, the signal
+  kinds and the final element's nozzle are all checked before the first write,
+  so a typo leaves no loop declared, no balloon drawn and no signal line — and
+  no loop number spent. Correct it and call again with the same number.
+- **The loop and both ends have to be this sheet's.** A `Loop` from another
+  flowsheet, or a `measuring=`/`acting_on=` from one, is refused: the members
+  would be numbered from, or drawn to, names this sheet's spec never writes,
+  and `Flowsheet.from_dict(fs.to_dict())` could not read the result back.
 - **Cascade, ratio, split-range and override loops are not built here.** Each is
   more than one measured variable or more than one final element; build those
   from the parts, as before.
