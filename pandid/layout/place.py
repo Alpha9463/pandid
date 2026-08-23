@@ -222,7 +222,7 @@ def _spread(units: list["Unit"], at: dict["Unit", int],
     columns = {u: solver.discretise(eastward[at[u]]) for u in units}
     after: dict["Unit", list["Unit"]] = defaultdict(list)
     level: set[tuple[int, int]] = set()
-    place = {u: (round(eastward[at[u]], solver.PLACES), at[u]) for u in units}
+    fitted = {u: (round(eastward[at[u]], solver.PLACES), at[u]) for u in units}
     for claim in claims:
         if claim.eastward == 0:
             level.add((at[claim.author], at[claim.subject]))
@@ -240,7 +240,7 @@ def _spread(units: list["Unit"], at: dict["Unit", int],
         # the side from the fit and the gap from the claim leaves the
         # arrangement the solve settled on and only stretches it.
         west, east = claim.author, claim.subject
-        if place[west] > place[east]:
+        if fitted[west] > fitted[east]:
             west, east = east, west
         after[east].append(west)
     if not after:
@@ -262,7 +262,7 @@ def _spread(units: list["Unit"], at: dict["Unit", int],
     # every push is forward and one walk settles the lot: this is a
     # longest path over a graph that is acyclic by construction rather
     # than one somebody had to break the cycles in.
-    order = sorted(units, key=lambda v: place[v])
+    order = sorted(units, key=lambda v: fitted[v])
     settled: set["Unit"] = set()
     for u in order:
         settled.add(u)
@@ -380,7 +380,6 @@ def _tied_first_nearest(members: list["Unit"], key) -> list["Unit"]:
     for index, run in enumerate(runs):
         out.extend(run if index == len(runs) - 1 else reversed(run))
     return out
-
 
 
 #: Barycentre passes over the settled grid, down the sheet and back.
