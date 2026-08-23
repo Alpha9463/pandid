@@ -967,3 +967,208 @@ def test_the_loop_it_builds_still_reaches_no_equipment_list():
     # balloon.
     assert [tag for tag, _ in equipment_list(fs).rows] == ["V-101"]
     assert loop.transmitter in fs.units and loop.controller in fs.units
+
+
+# --- a rejected call changes nothing (#433) -----------------------------------
+
+
+def _snapshot(fs: Flowsheet) -> dict[str, object]:
+    """Everything a refused call must have left exactly as it found it.
+
+    All five of the things ``add_control_loop`` writes to, because it writes to
+    all five and the old failures were spread across them: the loops, the
+    allocation counter behind an omitted number, the units, the streams, and
+    which line each nozzle is on. Ports are read off the units by name rather
+    than by identity, so a *minted* pool member -- a balloon left carrying a
+    spare nozzle no line reaches -- shows up as a difference instead of hiding.
+
+    Names and numbers rather than the objects: comparing the collections
+    themselves would pass on a list whose members had been mutated in place.
+    """
+    return {
+        "loops": [(loop.variable, loop.number) for loop in fs.loops],
+        "allocated": fs._loops_allocated,
+        "units": [unit.name for unit in fs.units],
+        "streams": [
+            (s.name, s.kind, s.source.owner.name, s.source.name, s.dest.owner.name, s.dest.name)
+            for s in fs.streams
+        ],
+        "ports": {
+            (unit.name, name): port.stream.name if port.stream is not None else None
+            for unit in fs.units
+            for name, port in unit.ports.items()
+        },
+    }
+
+
+def _take_the_controllers_tag(fs: Flowsheet, drum: U.Vessel, lv: U.Valve) -> None:
+    fs.add_instrument("LIC", 101)
+
+
+def _stroke_the_valve_already(fs: Flowsheet, drum: U.Vessel, lv: U.Valve) -> None:
+    driver = fs.add_instrument("LY", 900, near=lv, at="N")
+    fs.connect(driver.sig_out, lv.actuator, kind="pneumatic")
+
+
+def _nothing(fs: Flowsheet, drum: U.Vessel, lv: U.Valve) -> None:
+    pass
+
+
+#: ``(prepare, the call that is refused, the corrected call, the message)``.
+#: One entry per failure point the #433 review executed, plus the ones the
+#: preflight added. Every one of them used to leave something behind.
+_REJECTIONS = [
+    pytest.param(
+        _take_the_controllers_tag,
+        lambda fs, drum, lv: fs.add_control_loop("L", 101, measuring=drum, acting_on=lv),
+        lambda fs, drum, lv: fs.add_control_loop(
+            "L", 101, measuring=drum, acting_on=lv, controller_letters="LRC"
+        ),
+        "already exists",
+        id="the controller's tag is already on the sheet",
+    ),
+    pytest.param(
+        _nothing,
+        lambda fs, drum, lv: fs.add_control_loop(
+            "L", 101, measuring=drum, acting_on=lv, controller_letters=""
+        ),
+        lambda fs, drum, lv: fs.add_control_loop("L", 101, measuring=drum, acting_on=lv),
+        "controller_letters",
+        id="empty function letters",
+    ),
+    pytest.param(
+        _nothing,
+        lambda fs, drum, lv: fs.add_control_loop(
+            "L", 101, measuring=drum, acting_on=lv, controller_letters="FIC"
+        ),
+        lambda fs, drum, lv: fs.add_control_loop("L", 101, measuring=drum, acting_on=lv),
+        "measures 'L'",
+        id="a functional code from another variable",
+    ),
+    pytest.param(
+        _nothing,
+        lambda fs, drum, lv: fs.add_control_loop("L", 101, measuring=drum, acting_on=lv, at="Q"),
+        lambda fs, drum, lv: fs.add_control_loop("L", 101, measuring=drum, acting_on=lv, at="N"),
+        "at= on a unit host",
+        id="the transmitter is placed nowhere",
+    ),
+    pytest.param(
+        _nothing,
+        lambda fs, drum, lv: fs.add_control_loop(
+            "L", 101, measuring=drum, acting_on=lv, controller_at="Q"
+        ),
+        lambda fs, drum, lv: fs.add_control_loop(
+            "L", 101, measuring=drum, acting_on=lv, controller_at="N"
+        ),
+        "at= on a unit host",
+        id="the controller is placed nowhere",
+    ),
+    pytest.param(
+        _nothing,
+        lambda fs, drum, lv: fs.add_control_loop(
+            "L", 101, measuring=drum, acting_on=lv, output_kind="nonsense"
+        ),
+        lambda fs, drum, lv: fs.add_control_loop(
+            "L", 101, measuring=drum, acting_on=lv, output_kind="electric"
+        ),
+        "Stream kind must be one of",
+        id="an output kind that is no kind",
+    ),
+    pytest.param(
+        _nothing,
+        lambda fs, drum, lv: fs.add_control_loop(
+            "L", 101, measuring=drum, acting_on=lv, measurement_kind="material"
+        ),
+        lambda fs, drum, lv: fs.add_control_loop("L", 101, measuring=drum, acting_on=lv),
+        "signal line",
+        id="a measurement drawn as process piping",
+    ),
+    pytest.param(
+        _stroke_the_valve_already,
+        lambda fs, drum, lv: fs.add_control_loop("L", 101, measuring=drum, acting_on=lv),
+        lambda fs, drum, lv: fs.add_control_loop(
+            "L", 101, measuring=drum, acting_on=fs.add(U.Valve("LV-102", variant="control"))
+        ),
+        "already connected",
+        id="the final element is already stroked",
+    ),
+]
+
+
+@pytest.mark.parametrize("prepare, refused, corrected, match", _REJECTIONS)
+def test_a_refused_control_loop_leaves_the_sheet_as_it_found_it(prepare, refused, corrected, match):
+    """#433: five mutations in sequence and no rollback, so a rejected call
+    consumed a loop number and left half a control loop on the drawing.
+
+    Every one of these used to leave something behind -- the loop, or the loop
+    and the transmitter, or the loop, both balloons *and* the measurement line.
+    The snapshot is the whole of the sheet's mutable state, and the retry is
+    the half that says the wreckage is really gone: correcting the argument and
+    calling again has to land the loop on the number it asked for the first
+    time, not on the next one.
+    """
+    fs, drum, lv = _feedback_sheet()
+    prepare(fs, drum, lv)
+    before = _snapshot(fs)
+
+    with pytest.raises(ValueError, match=match):
+        refused(fs, drum, lv)
+
+    assert _snapshot(fs) == before
+
+    loop = corrected(fs, drum, lv)
+    assert loop.name == "L-101"
+    assert [declared.name for declared in fs.loops] == ["L-101"]
+
+
+def test_a_refused_control_loop_burns_no_allocated_number():
+    """The sharpest of them, because the damage outlives the error: the number
+    is left to the sheet, the call is refused, and the retry used to come back
+    L-102 -- a number nobody typed, arrived at silently, on a drawing whose
+    loop numbers leave it for a DCS.
+    """
+    fs, drum, lv = _feedback_sheet()
+    before = _snapshot(fs)
+
+    with pytest.raises(ValueError, match="controller_letters"):
+        fs.add_control_loop("L", measuring=drum, acting_on=lv, controller_letters="")
+
+    assert _snapshot(fs) == before
+
+    loop = fs.add_control_loop("L", measuring=drum, acting_on=lv)
+    assert loop.name == "L-101"
+
+
+def test_a_loop_declared_on_another_sheet_is_refused():
+    """A loop is a namespace belonging to one sheet. Taken, ``fs.loops`` stays
+    empty while two balloons are numbered from a loop the spec never writes."""
+    fs, drum, lv = _feedback_sheet()
+    elsewhere, _, _ = _feedback_sheet()
+    theirs = elsewhere.add_loop("L", 101)
+    before = _snapshot(fs)
+
+    with pytest.raises(ValueError, match=r"was not declared on flowsheet 'feedback'"):
+        fs.add_control_loop(theirs, measuring=drum, acting_on=lv)
+
+    assert _snapshot(fs) == before
+    assert fs.add_control_loop("L", 101, measuring=drum, acting_on=lv).name == "L-101"
+
+
+@pytest.mark.parametrize("role", ["measuring", "acting_on"])
+def test_a_member_from_another_sheet_is_refused(role):
+    """The sheet it draws would not round-trip: ``to_dict()`` writes no entry
+    for the other sheet's unit, so reading it back has nothing of that name for
+    the balloon or the signal line to reach."""
+    fs, drum, lv = _feedback_sheet()
+    elsewhere, their_drum, their_valve = _feedback_sheet()
+    ours: dict[str, U.Unit] = {"measuring": drum, "acting_on": lv}
+    theirs = {"measuring": their_drum, "acting_on": their_valve}[role]
+    before = _snapshot(fs)
+
+    with pytest.raises(ValueError, match=rf"{role}=.*not on 'feedback'"):
+        fs.add_control_loop("L", 101, **{**ours, role: theirs})
+
+    assert _snapshot(fs) == before
+    # And the sheet still round-trips, which is what the refusal protects.
+    rebuilt = Flowsheet.from_dict(fs.to_dict())
+    assert [unit.name for unit in rebuilt.units] == [unit.name for unit in fs.units]

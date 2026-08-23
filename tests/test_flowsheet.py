@@ -186,6 +186,36 @@ def test_a_control_loop_closing_on_a_valve_actuator_is_accepted(kind):
     assert fs.connect(fic.sig_out, valve.actuator, kind=kind).kind == kind
 
 
+def test_a_refused_connect_leaves_the_sheet_as_it_found_it():
+    """The #433 audit of ``connect()``: every rule it checks is checked before
+    the first write, so a refusal takes nothing with it.
+
+    The nozzle *set* is compared and not only which lines are on which nozzle,
+    because the write nearest the refusals is a **mint**: a balloon's signal
+    connections are a pool, and taking a fresh member for a line the other end
+    then refuses would leave the balloon carrying a spare nozzle nothing
+    reaches, which the debug overlay draws.
+    """
+    fs, feed, valve, fic, ft = _loop()
+    fs.connect(fic.sig_out, valve.actuator, kind="pneumatic")  # sig_out is now spoken for
+    nozzles = {(u.name, name) for u in fs.units for name in u.ports}
+    lines = {(u.name, name): p.stream for u in fs.units for name, p in u.ports.items()}
+    streams = list(fs.streams)
+
+    for src, dst, kind, match in [
+        (feed.outlet, valve.actuator, "material", "signal connection"),
+        (fic.sig_out, valve.inlet, "pneumatic", "signal connection"),
+        (fic.sig_out, ft.sig_in, "steam", "kind must be one of"),
+        (fic.sig_out, valve.actuator, "pneumatic", "already connected"),
+    ]:
+        with pytest.raises(ValueError, match=match):
+            fs.connect(src, dst, kind=kind)
+
+    assert list(fs.streams) == streams
+    assert {(u.name, name) for u in fs.units for name in u.ports} == nozzles
+    assert {(u.name, name): p.stream for u in fs.units for name, p in u.ports.items()} == lines
+
+
 def test_add_rejects_unit_from_another_flowsheet():
     fs1 = Flowsheet("FS1")
     fs2 = Flowsheet("FS2")
