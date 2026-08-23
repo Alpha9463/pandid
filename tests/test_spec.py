@@ -1720,18 +1720,21 @@ def test_library_errors_are_reported_against_the_entry_that_caused_them():
 
 
 def test_reusing_a_port_is_reported_against_the_second_connection():
+    """Named on a pump nozzle rather than on the feed flag it used to be named
+    on: a flag's connection takes as many lines as the sheet gives it (#454),
+    and a process nozzle still takes one."""
     with pytest.raises(SpecError) as excinfo:
         Flowsheet.from_dict(
             _spec(
                 streams=[
                     {"from": ["F", "outlet"], "to": ["P-101", "suction"]},
-                    {"from": ["F", "outlet"], "to": ["P", "inlet"]},
+                    {"from": ["F", "outlet"], "to": ["P-101", "suction"]},
                 ]
             )
         )
     message = str(excinfo.value)
     assert "streams[1]" in message
-    assert "F.outlet is already connected" in message
+    assert "P-101.suction is already connected" in message
 
 
 def test_unknown_annotation_type():

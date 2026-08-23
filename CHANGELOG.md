@@ -32,6 +32,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   wall from that nozzle rather than straddling it, which is what keeps the
   first feed where it was; `pandid.render.symbols.PortSeries` gained an
   `align=` for it.
+- A `Feed` or a `Product` takes **any number of streams on its connection**
+  (#454). One header entering a drawing and serving three users is ordinary,
+  and forcing three flags for one header misrepresents the plant; the second
+  `fs.connect(cws.outlet, ...)` used to raise `port CWSH.outlet is already
+  connected`. The extra ports are `outlet_2`, `outlet_3`, ... (`inlet_2` ... on
+  a `Product`), minted as the lines are made, and `cws.outlet` still means the
+  first line. Each stream stays a stream of its own -- its own number, its own
+  line number, its own row in the stream table, its own route -- and the flag is
+  drawn once, every run reaching it at the tip of the pennant.
+
+  **A process nozzle still takes one stream, deliberately.** Two pipes on a real
+  nozzle is a tee, `Tee` draws one, and relaxing the rule everywhere would let
+  an author draw a branch with nothing on the sheet marking it. A flag is not a
+  nozzle: it is a mark saying the material crosses the sheet edge here, so it is
+  also the one unit whose connections resolve to one point on purpose and the
+  one the `coincident-ports` finding is not made for.
 - `Flowsheet.add_control_loop()`: the single-variable feedback loop -- one
   transmitter, one controller, one final element -- in the one statement an
   engineer says it in, in place of four objects, two signal connections and

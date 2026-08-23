@@ -64,6 +64,17 @@ def select_faces(fs: "Flowsheet") -> None:
         # thing that makes one. Ports are served in declaration order,
         # so a sheet does not depend on which of them the author
         # happened to connect first.
+        #
+        # A boundary flag carrying several runs is the one place two
+        # live connections *do* resolve to one point, deliberately
+        # (:attr:`pandid.units.Unit.ONE_NOZZLE_MANY_RUNS`), and nothing
+        # here has to change for it: a flag's connection has a single
+        # placement, so no member of it is ever ``movable``, and they
+        # all land in ``taken`` -- which is a set, and already holds one
+        # entry for one point. The rule this comment states is still the
+        # rule and the selector still cannot break it; what the flag
+        # changes is only that ``validate`` no longer *reports* the
+        # coincidence, and it reports it for everything else.
         taken = {_point(unit, frame, name) for name in live if name not in movable}
         for name in movable:
             target = _reference(unit.ports[name])

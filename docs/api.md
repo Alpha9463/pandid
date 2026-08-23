@@ -557,8 +557,9 @@ Unit(name, variant="default", width=None, height=None,
   anything else raises `ValueError`.
 
 `Feed` and `Product` take one argument of their own, `header=False`, which marks
-the flag a utility header and is what lets it be added once per tap. See
-[Off-page connectors](#off-page-connectors).
+the flag a utility header and is what lets it be added once per tap. Their
+connection is also the one in the library that takes more than one stream. Both
+are in [Off-page connectors](#off-page-connectors).
 
 ### Port table
 
@@ -566,8 +567,8 @@ Each entry is `port` *(direction / role)*.
 
 | Class | `kind` | Ports |
 |---|---|---|
-| `Feed` | `feed` | `outlet` *(outlet/feed)* |
-| `Product` | `product` | `inlet` *(inlet/product)* |
+| `Feed` | `feed` | `outlet` *(outlet/feed)*, plus `outlet_2`, `outlet_3`, … per extra line on the flag |
+| `Product` | `product` | `inlet` *(inlet/product)*, plus `inlet_2`, `inlet_3`, … per extra line on the flag |
 | `Pump` | `pump` | `suction` *(in)*, `discharge` *(out)* |
 | `Compressor` | `compressor` | `suction` *(in)*, `discharge` *(out)* |
 | `Blower` | `blower` | `suction` *(in)*, `discharge` *(out)* |
@@ -3216,6 +3217,35 @@ process boundaries sharing a label are a service the reader cannot resolve, and
 only the author knows which case it is. Both drawings have to be of the same
 thing, so a `Feed` and a `Product`, or two flags naming different `reference`
 drawings, still clash.
+
+#### Several lines on one flag
+
+The other way to draw the same plant: bring the header on **once** and run as
+many lines off it as the sheet needs. A flag's connection takes any number of
+streams, where every other nozzle in the library takes one:
+
+```python
+cws = fs.add(units.Feed("CWSH", header=True))
+for hx in (condenser, cooler):
+    fs.connect(cws.outlet, hx.tube_in)   # no error on the second
+```
+
+The extra ports are `outlet_2`, `outlet_3`, … (`inlet_2` … on a `Product`),
+minted as the lines are made, and `cws.outlet` still means the first line.
+`cws.ports` is the whole set. Which of the two drawings to use is the author's
+choice and nothing here makes it: two taps say the header is brought onto the
+sheet in two places, one flag with two lines says it is brought on once.
+
+**Only the flag.** A second line on a pump's discharge is still refused, and
+deliberately: two pipes on one nozzle *is* a tee, `Tee` draws one, and letting
+the nozzle carry both would put a branch on the sheet with nothing marking it.
+
+Every line stays a line of its own — its own stream number, its own line
+number, its own row in the stream table, its own route. Only the *flag* is one
+thing, and it is drawn once: every run reaches it at the tip of the pennant,
+which is the one place the material crosses the sheet edge. That makes a flag
+the only unit in the library whose connections resolve to one point on purpose,
+so it is the only one `coincident-ports` is not reported for.
 
 ---
 

@@ -43,10 +43,60 @@ def test_connect_rejects_wrong_directions():
 
 
 def test_connect_rejects_already_connected_port():
+    """A process nozzle takes one line, and a second one on it is a tee.
+
+    Stated on the pump rather than on the flag it used to be stated on:
+    ``feed.outlet`` is now a *pool* (#454), because a boundary flag is a mark
+    on the sheet edge rather than a nozzle. The rule this test is about did
+    not move -- see the two below it.
+    """
     fs, feed, pump, prod = _fs()
-    fs.connect(feed.outlet, pump.suction)
-    with pytest.raises(ValueError, match="already connected"):
-        fs.connect(feed.outlet, prod.inlet)  # feed.outlet reused
+    fs.connect(pump.discharge, prod.inlet)
+    with pytest.raises(ValueError, match=r"K-101\.discharge is already connected"):
+        fs.connect(pump.discharge, prod.inlet)  # K-101.discharge reused
+
+
+def test_a_boundary_flag_takes_as_many_lines_as_the_sheet_gives_it():
+    """One header entering a drawing and serving three users is ordinary, and
+    three flags for one header misrepresents the plant. Each line stays a line
+    of its own -- its own port, its own number -- and the flag is drawn once."""
+    fs = Flowsheet("Test")
+    gas = fs.add(U.Feed("Gas"))
+    users = [fs.add(U.Pump(f"P-{i}")) for i in (1, 2, 3)]
+    streams = [fs.connect(gas.outlet, p.suction) for p in users]
+
+    assert list(gas.ports) == ["outlet", "outlet_2", "outlet_3"]
+    assert [s.source.name for s in streams] == ["outlet", "outlet_2", "outlet_3"]
+    assert len({s.name for s in streams}) == 3
+    assert all(s.at_boundary for s in streams)
+    # The first line still reaches the nozzle the author named, which is what
+    # keeps ``gas.outlet.stream`` meaning what it always did.
+    assert gas.outlet.stream is streams[0]
+
+    flare = fs.add(U.Product("Flare"))
+    out = [fs.connect(p.discharge, flare.inlet) for p in users]
+    assert list(flare.ports) == ["inlet", "inlet_2", "inlet_3"]
+    assert [s.dest.name for s in out] == ["inlet", "inlet_2", "inlet_3"]
+
+
+def test_a_flags_members_all_leave_its_one_nozzle():
+    """The whole point of the flag: it is drawn once, and every run on it
+    crosses the sheet edge at the same place, pointing the same way. A member
+    that took the plain nearest-edge answer would leave through the top of the
+    pennant."""
+    from pandid.portgeom import resolve_port
+
+    fs = Flowsheet("Test")
+    gas = fs.add(U.Feed("Gas"))
+    for i in (1, 2, 3):
+        fs.connect(gas.outlet, fs.add(U.Pump(f"P-{i}")).suction)
+    fs.layout()
+    resolved = [resolve_port(gas, gas.frame, name) for name in gas.ports]
+    assert len({(r.point, r.anchor, r.face) for r in resolved}) == 1
+    assert resolved[0].face == "E"
+    # ...and it is a *deliberate* coincidence, so validate() does not report it
+    # while it still reports every other one.
+    assert not [i for i in fs.validate() if i.code == "coincident-ports"]
 
 
 def test_connect_rejects_a_port_run_to_itself():
