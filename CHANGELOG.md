@@ -254,6 +254,29 @@ class hierarchy, or what it is called.
 
 ### Fixed
 
+- A **utility header is no longer sunk by the consumers it feeds** (#459). A
+  heater's steam nozzle is drawn on the bottom of the symbol, and the layout
+  read that face as the heater asserting that its supply belonged *below* it on
+  the sheet. Five heaters on one header mustered 10 against a flag with no
+  opinion of its own, and the header was drawn under the whole bank with ten
+  laterals running back up past every consumer: 24 crossings on a sheet two
+  grid pins drew cleanly. The face is a drawing detail and not a claim, so
+  `Unit.PLACES` now takes an entry of `None` -- "this nozzle's face is where
+  the pipe attaches and nothing more" -- and `Heater.utility_in`,
+  `Cooler.utility_out`, `Furnace.fuel`, `Dryer.heating_in`,
+  `Filter.regenerant_in`, `Filter.spent_regenerant` and `CoolingTower`'s
+  makeup, blowdown and air intake declare it. Not the same as leaving a nozzle
+  out of `PLACES`, which still reads its face.
+
+  Ten more classes were placed by their artwork alone and are now placed by a
+  stated convention: `ScreeningDevice` is fed from the **west** rather than
+  through its roof and passes its undersize south east; `Boiler.steam` leaves
+  east rather than up off the dome; and `Furnace`, `Boiler` and `CoolingTower`
+  (4), `Turbine`, `Mixer` and `Splitter` (2) are on the confidence rung their
+  kind of equipment belongs to instead of the base 1 -- a manifold at 1 was the
+  weakest non-zero class in the library, and it is the only header primitive
+  here. `18_fixed_bed_recycle` is redrawn: its fuel gas subsystem now sits on
+  one band instead of split across the sheet.
 - `Flowsheet.add_control_loop()` validates everything before it writes
   anything, so a rejected call leaves the sheet exactly as it found it (#433).
   It made five mutations in sequence with no rollback, so a tag clash on the

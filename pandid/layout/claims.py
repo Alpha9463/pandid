@@ -60,6 +60,18 @@ Three levels, best first, all at the author's own confidence:
    cancel to nothing and let the barycentre draw the tower upside down
    (#446); here they are two weak opinions that a strong ``PLACES``
    overrules.
+
+   A class **stops the ladder here** by mapping a nozzle to ``None``:
+   that nozzle's face is artwork and nothing else, and the class has no
+   view on where its peer is drawn. What that is for is the **service**
+   connection -- a heater's steam supply, a filter's regenerant, a
+   furnace's fuel gas. Steam enters a heater from below because that is
+   where the symbol draws the nozzle, and where the steam *header*
+   belongs on the sheet is not the heater's business. Read as a claim it
+   was five heaters at confidence 2 each asserting their supply lay
+   south of them, against a header with no opinion of its own, and the
+   header sank below every consumer it fed -- 24 crossings on a sheet
+   two pins draw cleanly (#459).
 3. **Flow order**: the destination is one step east of the source. A
    recycle is the same statement backwards, since a return line is drawn
    right to left and its two ends are already ordered by the forward run
@@ -67,12 +79,13 @@ Three levels, best first, all at the author's own confidence:
 
    This one is **not** at the author's confidence. It is what the *pipe*
    says, not what the unit says: a unit whose nozzle has a menu nobody
-   has picked from has stated nothing at all, and weighing that silence
-   as heavily as a stated convention makes silence argue. Concretely, a
-   feed over a block's roof: the block states north, the feed's silence
-   is read as "east of me", the two weigh the same, and the fit splits
-   the difference and draws the feed diagonally off the corner. So flow
-   order weighs :data:`LINE`, wherever it comes from.
+   has picked from, or whose class declared the nozzle empty, has stated
+   nothing at all, and weighing that silence as heavily as a stated
+   convention makes silence argue. Concretely, a feed over a block's
+   roof: the block states north, the feed's silence is read as "east of
+   me", the two weigh the same, and the fit splits the difference and
+   draws the feed diagonally off the corner. So flow order weighs
+   :data:`LINE`, wherever it comes from.
 
 Confidence 0, and why the line still speaks
 -------------------------------------------
@@ -199,14 +212,13 @@ def read(streams: list["Stream"]) -> list[Claim]:
             continue
         spoke = False
         for author, port_name, subject, forward in ends:
-            direction, confidence = _stated(author, port_name)
+            direction, confidence = _placed(author, port_name)
             if confidence <= 0.0:
                 continue  # an in-line fitting has nothing to say; see above
             if direction is None:
-                direction = fixed_face(author, port_name, slot(author))
-            if direction is None:
-                # The unit's nozzle has a menu and no one has picked
-                # from it, so the unit has said nothing: what is left is
+                # The unit has said nothing about this nozzle -- its
+                # face is a menu no one has picked from, or its class
+                # mapped the nozzle to ``None`` -- so what is left is
                 # the pipe, at the pipe's weight. Weighing an invented
                 # opinion at the unit's own is what puts a feed over a
                 # block's roof *diagonally* -- the block states north,
@@ -234,28 +246,41 @@ def _flow_step(forward: int, is_recycle: bool) -> tuple[int, int]:
     return (-forward if is_recycle else forward, 0)
 
 
-def _stated(unit: "Unit", port_name: str) -> tuple[str | None, float]:
-    """This unit's ``PLACES`` entry for a port, and what it is worth.
+def _placed(unit: "Unit", port_name: str) -> tuple[str | None, float]:
+    """Where *unit* says its peer on *port_name* is drawn, and what that is worth.
 
-    The direction is ``None`` where the class states none, which sends
-    the caller on to the nozzle's face; the confidence is the class's
-    own unless the entry overrides it, which is how a column can insist
-    on its overhead and merely prefer its side draws.
+    The ladder in the module docstring, in order: the class's
+    :attr:`~pandid.units.Unit.PLACES` entry, then the face the symbol
+    fixed the nozzle to, then ``None`` -- which is this unit saying
+    nothing, and leaves the caller to read the pipe instead.
 
-    Looked up by the port's own name first and then by the family name,
-    so ``PLACES = {"feed": "W"}`` covers a tower with eight of them
+    The confidence is the class's own unless the entry overrides it,
+    which is how a column can insist on its overhead and merely prefer
+    its side draws. The caller drops anything at 0; what is returned
+    with it does not matter, and the check is here only so a class that
+    states nothing does not pay for a face nobody will read.
+
+    ``PLACES`` is looked up by the port's own name first and then by the
+    family name, so ``{"feed": "W"}`` covers a tower with eight of them
     without listing eight keys.
     """
-    places = type(unit).PLACES
-    entry = places.get(port_name)
-    if entry is None:
-        entry = places.get(family(port_name))
     confidence = float(type(unit).LAYOUT_CONFIDENCE)
-    if entry is None:
-        return None, confidence
-    if isinstance(entry, tuple):
-        return entry[0], float(entry[1])
-    return entry, confidence
+    places = type(unit).PLACES
+    # Asked with ``in`` rather than ``get``, because an entry **of**
+    # ``None`` and no entry at all are different answers and ``get``
+    # returns ``None`` to both: no entry reads the face next, an empty
+    # entry is the class saying that face is artwork and stopping here.
+    key = port_name if port_name in places else family(port_name)
+    if key in places:
+        entry = places[key]
+        if entry is None:
+            return None, confidence
+        if isinstance(entry, tuple):
+            return entry[0], float(entry[1])
+        return entry, confidence
+    if confidence <= 0.0:
+        return None, confidence  # nothing to say; do not resolve a face for it
+    return fixed_face(unit, port_name, slot(unit)), confidence
 
 
 def family(port_name: str) -> str:

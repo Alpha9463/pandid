@@ -391,6 +391,86 @@ def test_a_port_family_is_covered_by_one_entry() -> None:
     assert claims_mod.family("in_1") == "in"
 
 
+def test_a_nozzle_placed_nowhere_is_read_for_nothing() -> None:
+    """``PLACES[port] = None`` stops the ladder: the face is not read.
+
+    A heater's ``utility_in`` is fixed to the symbol's **south** face,
+    and left to speak for itself it says "my steam supply is drawn below
+    me" at the heater's own confidence of 2. It is not a statement about
+    the sheet at all -- it is where the drawing puts the nozzle -- so the
+    class declares the entry empty and what is left is the pipe: one
+    claim, in flow order, at :data:`~pandid.layout.claims.LINE`.
+    """
+    fs = Flowsheet("steam user")
+    steam = fs.add(U.Feed("LP Steam"))
+    heater = fs.add(U.Heater("E-1"))
+    fs.connect(steam.outlet, heater.utility_in)
+    fs.layout()
+
+    from pandid.layout.stages import process_streams
+
+    claims = claims_mod.read(process_streams(fs))
+    # The flag is confidence 0 and drops out, so the heater's is the one
+    # claim there is: "the thing on my steam nozzle is a step west", not
+    # "a step south", and weighed as the pipe rather than as the heater.
+    assert claims == [claims_mod.Claim(heater, steam, -1, 0, claims_mod.LINE)]
+
+
+def test_an_entry_of_none_is_not_the_same_as_no_entry() -> None:
+    """A nozzle a class says nothing about still reads its own face.
+
+    The two are one keystroke apart and mean opposite things, and
+    ``dict.get`` cannot tell them apart -- it answers ``None`` to both.
+    A cooler declares ``utility_out`` empty and says nothing at all
+    about ``inlet``, whose west face therefore still speaks, at the
+    cooler's own weight.
+    """
+    fs = Flowsheet("cooler")
+    upstream = fs.add(U.Vessel("V-1"))
+    cooler = fs.add(U.Cooler("E-1"))
+    fs.connect(upstream.ports["out_1"], cooler.inlet)
+    fs.layout()
+
+    from pandid.layout.stages import process_streams
+
+    assert "inlet" not in type(cooler).PLACES
+    assert type(cooler).PLACES["utility_out"] is None
+    claims = claims_mod.read(process_streams(fs))
+    assert claims_mod.Claim(cooler, upstream, -1, 0, 2.0) in claims, (
+        "the cooler's unmentioned inlet still reads its own west face, at 2"
+    )
+
+
+def test_a_header_is_not_sunk_by_the_bank_it_supplies() -> None:
+    """#459: five heaters do not drag their steam header below them.
+
+    The supply flag has no opinion of its own (a boundary is confidence
+    0), so wherever the consumers put it is where it goes. Reading each
+    heater's south-facing steam nozzle as a claim, five of them at 2
+    mustered 10 saying "below me" and the header was drawn under the
+    whole bank, with ten laterals running back up past every consumer.
+    What is asserted here is the shape and not a crossing count: the
+    header lands *level with* the bank it feeds, never under all of it.
+    """
+    fs = Flowsheet("LP steam users")
+    steam = fs.add(U.Feed("LP Steam"))
+    condensate = fs.add(U.Product("Condensate"))
+    heaters = [fs.add(U.Heater(f"E-10{i}")) for i in range(1, 6)]
+    for heater in heaters:
+        fs.connect(steam.outlet, heater.utility_in)
+        fs.connect(heater.outlet, condensate.inlet)
+    fs.layout()
+
+    rows = [h.frame.row for h in heaters if h.frame is not None and h.frame.row is not None]
+    assert len(rows) == 5
+    assert steam.frame is not None
+    header_row = steam.frame.row
+    assert header_row is not None
+    assert min(rows) <= header_row <= max(rows), (
+        f"the header is on row {header_row}, outside the bank's {rows}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # The same model draws the same sheet
 # ---------------------------------------------------------------------------
