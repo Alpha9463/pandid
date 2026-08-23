@@ -211,3 +211,134 @@ def test_header_on_equipment_is_refused_by_the_spec():
                 "units": [{"kind": "Pump", "name": "P-101", "header": True}],
             }
         )
+
+
+# --- one flag, several lines (#454) -------------------------------------------
+#
+# The other way to draw the same plant. ``_two_taps`` above brings the header
+# onto the sheet at two places and labels both; this brings it on once and runs
+# two lines off it. Both are real drawings and the choice is the author's, which
+# is why nothing here changes ``repeats()``: a tap is a flag, and two lines on
+# one flag never reach that question.
+
+
+def _one_tap():
+    """One cooling water supply flag serving two exchangers, one return flag
+    collecting from both."""
+    fs = Flowsheet("cooling water")
+    supply = fs.add(U.Feed("CWSH", header=True))
+    ret = fs.add(U.Product("CWRH", header=True))
+    for name, size in (("E-301", '6"'), ("E-302", '4"')):
+        hx = fs.add(U.HeatExchanger(name))
+        fs.connect(supply.outlet, hx.tube_in, size=size, service="CWS", spec="A1A")
+        fs.connect(hx.tube_out, ret.inlet, size=size, service="CWR", spec="A1A")
+    return fs, supply, ret
+
+
+def test_one_flag_serves_as_many_users_as_the_sheet_has():
+    """The whole of #454. A header entering a drawing once and serving two
+    coolers is ordinary; forcing a second flag for the second cooler would say
+    there are two supplies where the plant has one."""
+    fs, supply, ret = _one_tap()
+    assert list(supply.ports) == ["outlet", "outlet_2"]
+    assert list(ret.ports) == ["inlet", "inlet_2"]
+    # Every member is the connection it is a member of: same direction, same
+    # role. A minted one that differed would be refused by ``connect()`` on the
+    # second line and never on the first.
+    assert {p.direction for p in supply.ports.values()} == {"outlet"}
+    assert {p.role for p in supply.ports.values()} == {"feed"}
+    assert {p.role for p in ret.ports.values()} == {"product"}
+
+
+def test_each_line_on_one_flag_stays_a_line_of_its_own():
+    """Only the flag is one thing. Every run keeps its own number, its own line
+    number and its own row in the stream table -- a flag carrying two lines
+    tabulates two, which is what ISO 10628-1 4.3.2 d) asks the sheet to report
+    about each ingoing and outgoing material."""
+    from pandid.render.furniture import _table_runs
+
+    fs, supply, ret = _one_tap()
+    assert [s.name for s in fs.streams] == [
+        '6"-CWS-1001-A1A',
+        '6"-CWR-1002-A1A',
+        '4"-CWS-1003-A1A',
+        '4"-CWR-1004-A1A',
+    ]
+    assert all(s.at_boundary for s in fs.streams)
+    assert len(_table_runs(fs)) == 4
+
+
+def test_every_line_on_a_flag_crosses_the_edge_at_the_flags_own_nozzle():
+    """A flag is a mark saying the material crosses here, not a body with
+    nozzles on it, so there is one point and every run leaves it -- pointing the
+    way the pennant points, which is what makes the second line's face the first
+    line's and not the nearest box edge."""
+    from pandid.portgeom import resolve_port
+
+    fs, supply, ret = _one_tap()
+    fs.layout()
+    for flag, face in ((supply, "E"), (ret, "W")):
+        resolved = {resolve_port(flag, flag.frame, name) for name in flag.ports}
+        assert len(resolved) == 1
+        assert next(iter(resolved)).face == face
+
+
+def test_the_coincidence_a_flag_draws_is_not_reported():
+    """Two live connections on one point is otherwise a hard finding, and it
+    still is everywhere else: :func:`test_only_a_boundary_flag_draws_its_runs_on
+    _one_point` below is the floor under this exemption."""
+    fs, supply, ret = _one_tap()
+    fs.route()
+    assert [i for i in fs.validate() if i.code in ("unit-overlap", "coincident-ports")] == []
+
+
+def test_only_a_boundary_flag_draws_its_runs_on_one_point():
+    """The floor. ``ONE_NOZZLE_MANY_RUNS`` turns off a hard validation finding,
+    so a class that set it would stop being checked for streams terminating on
+    top of one another -- which is exactly what the finding exists to catch on
+    equipment. A flag has no body and no second nozzle; anything else does."""
+    from pandid import units
+
+    def walk(cls):
+        yield cls
+        for sub in cls.__subclasses__():
+            if sub.__module__.startswith("pandid."):
+                yield from walk(sub)
+
+    exempt = {c.__name__ for c in walk(units.Unit) if c.ONE_NOZZLE_MANY_RUNS}
+    assert exempt == {"_Boundary", "Feed", "Product"}
+
+
+def test_a_flag_carrying_two_lines_survives_a_round_trip_through_a_spec():
+    """The members are minted by ``connect()`` rather than declared, so a spec
+    names ones the rebuilt flag has not grown yet; asking the unit for the name
+    is what makes ``from_dict(to_dict(fs))`` the sheet it just wrote."""
+    fs, supply, ret = _one_tap()
+    spec = fs.to_dict()
+    assert [s["from"][1] for s in spec["streams"]] == [
+        "outlet",
+        "tube_out",
+        "outlet_2",
+        "tube_out",
+    ]
+    rebuilt = Flowsheet.from_dict(spec)
+    assert list(rebuilt.units[0].ports) == ["outlet", "outlet_2"]
+    assert rebuilt.to_dict() == spec
+    assert rebuilt.to_svg() == fs.to_svg()
+
+
+def test_two_taps_and_two_lines_on_one_tap_are_still_different_drawings():
+    """Nothing here collapses the two. ``repeats()`` compares *flags* -- is this
+    one another drawing of that header -- and two lines on one flag never reach
+    it, so an author still chooses between bringing the header on twice and
+    running two lines off it once."""
+    two, _ = _two_taps()
+    one, supply, _ = _one_tap()
+    # Two taps are two units, told apart by a name the flowsheet hands out and
+    # drawn under one label; two lines on one tap are one unit.
+    taps = [u for u in two.units if isinstance(u, U.Feed)]
+    assert [u.name for u in taps] == ["CWSH", "CWSH (2)"]
+    assert [u.tag for u in taps] == ["CWSH", "CWSH"]
+    assert [u.name for u in one.units if isinstance(u, U.Feed)] == ["CWSH"]
+    assert taps[0].repeats(taps[1])
+    assert not supply.repeats(U.Feed("CWSH"))  # header=False on the other side

@@ -174,6 +174,15 @@ def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
     pixels. Two placements can collapse onto one face after a quarter
     turn, in which case the more-preferred one wins.
 
+    :func:`outward_dir` is asked about the *anchor* rather than the port
+    name, because it holds the one rule that is stated per name -- a
+    flag's pennant points east on a feed and west on a product whatever
+    its coordinate says -- and a name the drawing does not know cannot
+    be matched against it. A boundary flag carrying several runs spells
+    its second one ``outlet_2``, which resolves to the ``outlet``
+    anchor; without this it would take the plain nearest-edge answer
+    and the run would be drawn leaving the flag through its top.
+
     The map onto the box goes through :func:`ink_box`, so a symbol that
     keeps its aspect puts its ports on the artwork rather than on the
     box edge the artwork no longer reaches. The face each lands on is
@@ -205,13 +214,13 @@ def _drawn_placements(unit: "Unit", port_name: str, w: float, h: float,
             # wide the flag grows (see :func:`unit_box`), so ``px`` is
             # left as the symbol read it.
             lx, ly = (sym.width - px if mirrored else px), py / sym.height * h
-            face = outward_dir(lx, ly, w, h, unit.kind, port_name, mirrored)
+            face = outward_dir(lx, ly, w, h, unit.kind, anchor, mirrored)
         else:
             bx, by, bw, bh = symbol_to_box(px, py, sym.width, sym.height,
                                            rot, mirrored, mirror_y)
             ox, oy, iw, ih = ink_box(bw, bh, w, h, getattr(sym, "stretchable", True))
             lx, ly = ox + bx * iw / bw, oy + by * ih / bh
-            face = outward_dir(lx - ox, ly - oy, iw, ih, unit.kind, port_name, mirrored)
+            face = outward_dir(lx - ox, ly - oy, iw, ih, unit.kind, anchor, mirrored)
         out.setdefault(face, (lx, ly))
     return out
 

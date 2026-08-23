@@ -275,6 +275,33 @@ class Unit:
     #: it still means.
     PLACES: dict[str, "str | tuple[str, float]"] = {}
 
+    #: Do this unit's connections all land on one drawn point *on
+    #: purpose*?
+    #:
+    #: False everywhere but :class:`_Boundary`. Two live connections
+    #: resolving to one point is otherwise a hard finding
+    #: (``coincident-ports``), because one stream then terminates on top
+    #: of another and the sheet cannot be read; :mod:`pandid.layout.faces`
+    #: is written so the face selector can never be the thing that makes
+    #: one, and :class:`Instrument`'s pool spreads its members over four
+    #: faces rather than sharing a point.
+    #:
+    #: A boundary flag is the case that rule was never about. It is not
+    #: a body with nozzles on it -- it is a *pennant*, a mark saying the
+    #: material crosses the sheet edge here, and the point is the edge
+    #: rather than a nozzle. Two runs meeting it meet it at one place
+    #: because there is only one place: the tip of the flag. Nothing is
+    #: hidden by them arriving together, since the flag is drawn once
+    #: whatever its count.
+    #:
+    #: A flag, and not "anything that opts in": there is no keyword for
+    #: this and it is not meant to grow one. A manifold nozzle on real
+    #: equipment is a different question with a different answer (an
+    #: opt-in on the port, and a ``validate()`` finding when it happens
+    #: implicitly), and this attribute is deliberately too blunt to be
+    #: mistaken for it.
+    ONE_NOZZLE_MANY_RUNS = False
+
     #: Nozzle name -> ``(direction, role, the Deprecation naming its
     #: replacement)``, for a nozzle this class stopped building but must
     #: still answer for one release: an author who called this class for
@@ -794,8 +821,11 @@ class Unit:
         """Whether this unit has a second connection like ``port``.
 
         False for every nozzle of every piece of equipment: a pump has
-        one suction. :class:`Instrument`, whose signal connections are a
-        pool, is the whole of the exception.
+        one suction, and a second pipe on it is a :class:`Tee` the
+        drawing has to show. :class:`Instrument`, whose signal
+        connections are a pool, and :class:`_Boundary`, whose flag is
+        one point on the sheet edge rather than a nozzle, are the whole
+        of the exception.
 
         Asked separately from :meth:`another_port`, which does the
         taking, because :meth:`pandid.flowsheet.Flowsheet.connect` has
@@ -814,6 +844,49 @@ class Unit:
         anything.
         """
         return port
+
+    def _next_member(self, base: str, direction: str, role: str) -> "Port":
+        """A free port of the ``base``/``base_2``/``base_3`` family,
+        minting one if every member is spoken for.
+
+        The one piece of pool arithmetic in the library, shared by
+        :class:`Instrument`'s signal pools and :class:`_Boundary`'s flag
+        so the two cannot number their members differently. Members are
+        found by asking the *unit* which of its ports are in the family
+        (:meth:`_pool_members`) rather than by matching a name, since
+        which names are pooled is a fact about the class.
+
+        Numbered from the members present, so a sheet rebuilt from a
+        spec that named ``sig_out_2`` and ``sig_out_4`` numbers its next
+        one 5; the ``while`` covers the gap the named ones left.
+        """
+        members = self._pool_members(base)
+        for member in members:
+            if member.stream is None:
+                return member
+        n = len(members) + 1
+        while f"{base}_{n}" in self.ports:
+            n += 1
+        return self._add_port(f"{base}_{n}", direction, role)
+
+    def _pool_members(self, base: str) -> list["Port"]:
+        """This unit's ports belonging to the ``base`` pool, in port
+        order. Empty on a class with no pools, which is nearly all of
+        them."""
+        return []
+
+    def _mint_port(self, name: str) -> "Port | None":
+        """The port ``name``, built here and now if this class answers
+        for names it did not declare -- ``None`` if it does not.
+
+        Only a pooled connection does: a balloon's ``sig_out_3`` and a
+        flag's ``outlet_3`` exist because a line was made, so a sheet
+        rebuilt from a spec has to be able to ask for one by name before
+        the line exists (:func:`pandid.spec._find_port`). ``None``
+        everywhere else, which is what leaves "no such port" to be
+        reported against the entry that named it.
+        """
+        return None
 
     def _symbol_anchor(self, port_name: str) -> str:
         """The name this unit's *symbol* anchors ``port_name`` under.
@@ -967,6 +1040,33 @@ class _Boundary(Unit):
     for one line: cooling water supply, steam, flare, plant air. A
     header is tapped wherever it is wanted, so it is drawn at each tap
     and labelled the same way every time. See :meth:`repeats`.
+
+    Several lines on one flag
+    -------------------------
+    **A flag's connection takes as many streams as the sheet gives it,
+    and every other nozzle in the library still takes one.** One header
+    entering a drawing and serving three users is ordinary, and three
+    flags for one header misrepresents the plant; but two pipes on a
+    real nozzle *is* a tee, and this package draws one (:class:`Tee`),
+    so relaxing the rule there would let an author draw a branch with no
+    tee on it -- losing, silently, the thing the drawing exists to
+    carry.
+
+    The mechanism is :class:`Instrument`'s signal pool, which is the
+    same shape: :meth:`Unit.has_another_port` says the connection is
+    plural and :meth:`another_port` hands out the next member, so
+    ``fs.connect(feed.outlet, ...)`` twice makes two lines rather than
+    raising. What differs is where the members go. A balloon's are
+    spread over four faces of a circle and must never coincide; a
+    flag's all draw on the flag's **one** nozzle, because that is what
+    a flag is -- a single point where the material crosses the sheet
+    edge, whatever leaves it on this side. So they are exempt from the
+    coincident-nozzle rule, by name and only here; see
+    :attr:`ONE_NOZZLE_MANY_RUNS`.
+
+    Each stream stays a stream of its own throughout: its own number,
+    its own line number, its own row in the stream table and the line
+    list, its own route. Only the *flag* is one thing.
     """
 
     #: A flag states nothing about where anything is drawn. Its nozzle
@@ -977,6 +1077,10 @@ class _Boundary(Unit):
     #: A flag goes where its line comes from, which is what a
     #: confidence of 0 says.
     LAYOUT_CONFIDENCE = 0
+
+    #: The tip of the pennant is one point and every run on the flag
+    #: leaves it. See :attr:`Unit.ONE_NOZZLE_MANY_RUNS`.
+    ONE_NOZZLE_MANY_RUNS = True
 
     def __init__(
         self,
@@ -1018,6 +1122,84 @@ class _Boundary(Unit):
         """
         return self._tag
 
+    @property
+    def connection(self) -> Port:
+        """The flag's one nozzle -- ``outlet`` on a feed, ``inlet`` on a
+        product -- whatever the class calls it.
+
+        The one name every flag has, since :attr:`PORTS` on each
+        subclass is one entry and it is that one. Written as "the first
+        port declared" rather than as a per-class constant so a flag
+        subclass that renamed it would still be answered for.
+        """
+        return next(iter(self.ports.values()))
+
+    def _pool_base(self, port_name: str) -> str | None:
+        """The pool ``port_name`` is in -- the flag's own nozzle name --
+        or ``None`` for a name this flag does not answer for.
+
+        A flag has exactly one pool, so this is "is it the nozzle, or a
+        numbered member of it".
+        """
+        base = self.connection.name
+        if port_name == base:
+            return base
+        head, _, tail = port_name.rpartition("_")
+        return base if head == base and tail.isdigit() else None
+
+    def _pool_members(self, base: str) -> list[Port]:
+        return [p for name, p in self.ports.items() if self._pool_base(name) == base]
+
+    def has_another_port(self, port: Port) -> bool:
+        """True for the flag's own connection, at any count.
+
+        A flag is not a nozzle; see the class docstring. Guarded on the
+        name rather than answered ``True`` outright so that a flag which
+        one day grew a second, *different* connection would not have it
+        quietly pooled with the first.
+        """
+        return self._pool_base(port.name) is not None
+
+    def another_port(self, port: Port) -> Port:
+        """A free member of the flag's connection, minting one if need be.
+
+        Called by :meth:`pandid.flowsheet.Flowsheet.connect` on a
+        connection already spoken for, which is what makes two lines off
+        one ``feed.outlet`` two lines rather than an error. Every member
+        keeps the first one's direction and role, since they are the
+        same connection: a Feed's are all outlets carrying ``feed``.
+        """
+        base = self._pool_base(port.name)
+        if base is None:
+            return port
+        return self._next_member(base, port.direction, port.role)
+
+    def _mint_port(self, name: str) -> Port | None:
+        """A member of the flag's connection, by name.
+
+        What :func:`pandid.spec._find_port` needs to read back a sheet
+        whose flag carried three lines: ``to_dict()`` writes them out as
+        ``outlet``, ``outlet_2``, ``outlet_3``, and only the first of
+        those exists on a flag that has just been built.
+        """
+        if self._pool_base(name) is None:
+            return None
+        first = self.connection
+        return self._add_port(name, first.direction, first.role)
+
+    def _symbol_anchor(self, port_name: str) -> str:
+        """Every member draws on the flag's own nozzle.
+
+        Which is the point of the class: the pennant is drawn once and
+        every run on it leaves the same tip. Unlike
+        :meth:`Instrument._symbol_anchor`, which sends its pool members
+        to a shared *menu* of four faces for the face selector to spread
+        them over, this really does resolve them all to one coordinate
+        -- see :attr:`Unit.ONE_NOZZLE_MANY_RUNS` for why that is allowed
+        here and nowhere else.
+        """
+        return self._pool_base(port_name) or super()._symbol_anchor(port_name)
+
     def repeats(self, other: "Unit") -> bool:
         """Whether this flag is another tap of the same header.
 
@@ -1026,6 +1208,15 @@ class _Boundary(Unit):
         supply and a return sharing a label still clash, and the same
         ``reference``, since two taps of one header continue onto one
         drawing.
+
+        Unchanged by a flag carrying several streams, and it is worth
+        saying why, because this compares flags rather than lines. Two
+        *taps* of one header are two flags drawn in two places, each
+        with its own name; a header serving three users from **one**
+        point on the sheet edge is one flag with three streams on it and
+        never reaches this at all. The choice between them is a drawing
+        decision an author makes by adding a second flag or not, which
+        is what it was before.
         """
         return (
             self.header
@@ -3881,17 +4072,15 @@ class Instrument(Unit):
         base = self._pool_of(port.name)
         if base is None:
             return port
-        members = [p for name, p in self.ports.items() if self._pool_of(name) == base]
-        for member in members:
-            if member.stream is None:
-                return member
-        # Numbered from the members present, so a sheet rebuilt from a
-        # spec that named ``sig_out_2`` and ``sig_out_4`` numbers its
-        # next one 5. The loop covers the gap the named ones left.
-        n = len(members) + 1
-        while f"{base}_{n}" in self.ports:
-            n += 1
-        return self._add_port(f"{base}_{n}", members[0].direction, "signal")
+        # The numbering is :meth:`Unit._next_member`'s, shared with
+        # :class:`_Boundary`'s flag so the two pools cannot come to
+        # number their members differently. The direction is the pool's
+        # first member's, as it always was: a minted ``sig_out_3`` is an
+        # outlet because ``sig_out`` is.
+        return self._next_member(base, self._pool_members(base)[0].direction, "signal")
+
+    def _pool_members(self, base: str) -> list[Port]:
+        return [p for name, p in self.ports.items() if self._pool_of(name) == base]
 
     def signal_port(self, name: str) -> Port:
         """The signal connection ``name``, minting it if absent.
@@ -3911,6 +4100,21 @@ class Instrument(Unit):
                 f"{', '.join(f'{base}, {base}_2, {base}_3' for base in self._SIGNAL_POOLS)}"
             )
         return self._add_port(name, self.ports[member.group(1)].direction, "signal")
+
+    def _mint_port(self, name: str) -> Port | None:
+        """:meth:`signal_port`, as the hook a reader asks through.
+
+        The public spelling stays: an author reaching a pool member the
+        balloon has not grown yet writes ``pic.signal_port("sig_out_2")``
+        and gets its message when the name is not one this class mints.
+        This is the same question asked where a ``None`` is wanted rather
+        than a raise, which is what :func:`pandid.spec._find_port` needs
+        to fall through to its own report against the entry.
+        """
+        try:
+            return self.signal_port(name)
+        except KeyError:
+            return None
 
     @classmethod
     def _pool_of(cls, port_name: str) -> str | None:

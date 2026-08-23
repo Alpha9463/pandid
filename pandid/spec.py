@@ -810,15 +810,15 @@ def _read_port_order(
 
 
 def _find_port(unit: Unit, name: Any, where: str) -> Port:
-    # A balloon's signal connections are minted per line rather than
-    # declared, so a spec names exactly the ones its sheet had grown.
-    # Asking the instrument for them is what makes
-    # ``from_dict(to_dict(fs))`` rebuild a split-range loop.
-    if isinstance(unit, Instrument) and isinstance(name, str) and name not in unit.ports:
-        try:
-            return unit.signal_port(name)
-        except KeyError:
-            pass
+    # A pooled connection is minted per line rather than declared, so a
+    # spec names exactly the members its sheet had grown -- a balloon's
+    # ``sig_out_2`` on a split-range loop, a flag's ``outlet_2`` on a
+    # header serving two users. Asking the *unit* for the name is what
+    # makes ``from_dict(to_dict(fs))`` rebuild either.
+    if isinstance(name, str) and name not in unit.ports:
+        minted = unit._mint_port(name)
+        if minted is not None:
+            return minted
     # ``_canonical_port_name`` first: a live alias like ``Reactor.feed``/
     # ``Column.feed`` is a plain attribute rather than a second entry in
     # ``ports`` (see its own docstring), so a spec naming it would

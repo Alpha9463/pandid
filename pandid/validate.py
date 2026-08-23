@@ -1028,7 +1028,19 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         # the only half that can see it: a symbol may legitimately offer
         # one face to two faceless connections, and which placement each
         # port took is a property of the finished sheet.
+        #
+        # A boundary flag is skipped, and it is the only thing that is.
+        # The rule is about two nozzles of one *body* being drawn on one
+        # spot, where a reader cannot tell which line reaches which; a
+        # flag has no body and no second nozzle -- it is a mark saying
+        # the material crosses the sheet edge here, and every run on it
+        # leaves that mark, which is what the drawing means. Skipped by
+        # asking the unit (:attr:`pandid.units.Unit.ONE_NOZZLE_MANY_RUNS`)
+        # rather than by testing ``kind``, so the exemption is a property
+        # a class states about itself and is stated in one place.
         for u in placed:
+            if type(u).ONE_NOZZLE_MANY_RUNS:
+                continue
             seen: dict[tuple[float, ...], str] = {}
             for name, port in u.ports.items():
                 if port.stream is None:
