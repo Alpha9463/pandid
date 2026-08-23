@@ -59,7 +59,7 @@ def test_an_explicit_nozzle_beats_the_engine():
     drum.nozzle("feed", "E")
     fs.layout()
     assert port_anchor(drum, drum.frame, "feed")[2] == "E"
-    assert "feed" not in drum.frame.port_faces
+    assert "feed_1" not in drum.frame.port_faces
 
 
 def test_a_nozzle_fixed_by_physics_is_never_considered():
@@ -122,14 +122,14 @@ def test_a_kettles_bottoms_draw_is_a_fixed_target_its_peer_aims_at():
     fs.layout()
     assert port_anchor(reb, reb.frame, "bottoms")[2] == "S"
     assert reb.frame.port_faces == {}
-    assert drum.frame.port_faces == {"feed": "N"}
+    assert drum.frame.port_faces == {"feed_1": "N"}
 
 
 def test_a_port_with_no_stream_keeps_its_home():
     fs, drum = _drum_fed_from(220, 60)
     fs.layout()
     # vapor and liquid are unconnected: no peer, so no evidence either way.
-    assert set(drum.frame.port_faces) == {"feed"}
+    assert set(drum.frame.port_faces) == {"feed_1"}
 
 
 def test_the_kill_switch_restores_the_symbols_own_nozzles():
@@ -147,7 +147,7 @@ def test_the_pick_never_becomes_the_authors_intent():
     not the one the engine drew, or reloading it would freeze this run's pick."""
     fs, drum = _drum_fed_from(220, 60)
     fs.layout()
-    assert drum.frame.port_faces == {"feed": "N"}
+    assert drum.frame.port_faces == {"feed_1": "N"}
     assert drum._port_faces == {}
     assert "port_faces" not in next(u for u in fs.to_dict()["units"] if u["name"] == "V-1")
 
@@ -159,7 +159,7 @@ def test_laying_the_sheet_out_twice_draws_it_the_same_way():
     first = dict(drum.frame.port_faces)
     fs.layout()
     fs.route()
-    assert dict(drum.frame.port_faces) == first == {"feed": "N"}
+    assert dict(drum.frame.port_faces) == first == {"feed_1": "N"}
 
 
 def test_a_balloons_pick_survives_being_re_placed_by_the_router():

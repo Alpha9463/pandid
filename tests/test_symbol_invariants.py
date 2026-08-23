@@ -29,7 +29,7 @@ import pytest
 
 from pandid import units
 from pandid.portgeom import outward_dir, port_point
-from pandid.render.symbols import Symbol, default_registry
+from pandid.render.symbols import CENTRED, FROM_START, PortSeries, Symbol, default_registry, spread
 
 #: Every group-28 stirrer, read off the registry so a new one is covered
 #: without anyone remembering to come here.
@@ -1501,6 +1501,13 @@ def test_a_home_placement_restated_in_the_menu_is_accepted():
         ("column", "draw_", "n_draws", "E", "default"),
         ("reactor", "feed_", "n_feeds", "W", "default"),
         ("reactor", "feed_", "n_feeds", "W", "plain"),
+        # Both separator geometries: the upright shell, whose family is centred
+        # on a nozzle with wall above and below it, and the hopper-bottomed
+        # body, whose family grows down from a nozzle a module below the roof.
+        ("separator", "feed_", "n_feeds", "W", "default"),
+        ("separator", "feed_", "n_feeds", "W", "knockout"),
+        ("separator", "feed_", "n_feeds", "W", "cyclone"),
+        ("separator", "feed_", "n_feeds", "W", "sifter"),
     ],
 )
 def test_every_member_of_a_port_series_gets_a_nozzle_of_its_own(
@@ -1513,7 +1520,13 @@ def test_every_member_of_a_port_series_gets_a_nozzle_of_its_own(
     from pandid import units as U
     from pandid.portgeom import _drawn_placements, is_anchored, resolve_size
 
-    cls = {"mixer": U.Mixer, "splitter": U.Splitter, "column": U.Column, "reactor": U.Reactor}[kind]
+    cls = {
+        "mixer": U.Mixer,
+        "splitter": U.Splitter,
+        "column": U.Column,
+        "reactor": U.Reactor,
+        "separator": U.Separator,
+    }[kind]
     for count in range(2, 9):
         unit = cls("X", variant=variant, **{ctor_arg: count})
         w, h = resolve_size(unit)
@@ -1577,6 +1590,14 @@ def test_a_lone_member_lands_where_the_fixed_nozzle_did():
         (U.Reactor("R"), (0.0, 50.0 + 62.0 / 3 + 100.0 / 9)),
         (U.Reactor("R", variant="mixing"), (0.0, 48.2)),
         (U.Reactor("R", variant="plain"), (0.0, 30.0)),
+        # #452's separators, both geometries. The two hopper bodies are the
+        # rows that need ``FROM_START`` to hold this at all: their nozzle is 12
+        # down an 80-unit wall, so a centred family cannot be given room
+        # without moving it.
+        (U.Separator("V"), (0.0, 50.0)),
+        (U.Separator("V", variant="knockout"), (0.0, 55.0)),
+        (U.Separator("V", variant="cyclone"), (0.0, 12.0)),
+        (U.Separator("V", variant="scrubber"), (0.0, 12.0)),
     ):
         w, h = resolve_size(unit)
         placed = _drawn_placements(unit, "feed", w, h, 0, False, False)
@@ -2896,3 +2917,68 @@ def test_every_agitator_a_reactor_offers_can_be_drawn(agitator):
     fs = Flowsheet("agitator")
     fs.add(units.Reactor("R-1", agitator=agitator))
     assert fs.to_svg()
+
+
+# ---------------------------------------------------------------------------
+# Which end of a family ``at`` holds.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("align", [CENTRED, FROM_START])
+@pytest.mark.parametrize("count", range(1, 9))
+def test_a_lone_member_sits_on_at_whichever_way_the_family_grows(align, count):
+    """The property the whole of ``align`` exists to protect: a symbol keeps the
+    nozzle it was drawn with, and the mode only decides which way a second one
+    pushes. A family that moved its own first member would relocate a nozzle on
+    every sheet already drawn the moment its count was raised."""
+    assert spread(0, 1, 120.0, 20.0, 0.5, 12.0, align) == 12.0
+    # ...and the pitch is the pitch either way, up to the squeeze: only the
+    # point the run is hung from differs.
+    run = [spread(i, count, 120.0, 20.0, 0.5, 12.0, align) for i in range(count)]
+    assert run == sorted(run)
+    assert all(b - a == pytest.approx(run[1] - run[0]) for a, b in zip(run, run[1:]))
+
+
+def test_a_family_growing_from_its_start_never_reaches_back_past_it():
+    """``FROM_START`` is what a body with its nozzle hard against one end of a
+    wall needs -- the hopper-bottomed separators, whose feed is a module below
+    the roof of an 80-unit wall. Centred, the second member of a pair is drawn
+    ABOVE the first and the third of a triple lands on the corner, where
+    ``outward_dir`` stops calling the face west."""
+    at, along = 12.0, 120.0
+    centred = [spread(i, 3, along, 20.0, 0.5, at, CENTRED) for i in range(3)]
+    started = [spread(i, 3, along, 20.0, 0.5, at, FROM_START) for i in range(3)]
+    assert centred[0] < at < centred[-1]
+    assert started[0] == at and started[-1] > at
+    assert started == [12.0, 32.0, 52.0]
+
+
+@pytest.mark.parametrize("align", [CENTRED, FROM_START])
+def test_the_band_a_series_reports_is_the_run_it_really_draws(align):
+    """``reach()`` is what ``Symbol.coincident_ports`` checks a fixed nozzle
+    against, so a band that disagreed with ``spread`` would clear a symbol whose
+    family really does land on another nozzle -- or refuse one that does not."""
+    series = PortSeries("feed_", "W", pitch=20.0, extent=0.5, at=12.0, align=align)
+    _, lo, hi = series.reach(80.0, 120.0)
+    for count in range(1, 9):
+        for i in range(count):
+            assert lo - 1e-9 <= series.placement(i, count, 80.0, 120.0)[1] <= hi + 1e-9
+
+
+def test_every_separator_that_can_hold_a_family_declares_one():
+    """The floor under #452. A separator whose stencil grew a fixed ``feed``
+    anchor again would take the box-centre fallback for ``feed_1`` and draw
+    every charge line into the middle of the vessel -- silently, since a
+    fallback is a placement and not an error.
+
+    ``horizontal`` is the one exception and is named, not derived: its charge
+    nozzle carries a three-face menu instead, which is why
+    ``Separator._ONE_FEED_VARIANTS`` refuses a count on it.
+    """
+    for variant in units.Separator.VARIANTS:
+        symbol = default_registry.get("separator", variant)
+        if variant in units.Separator._ONE_FEED_VARIANTS:
+            assert "feed" in symbol.ports and not symbol.port_series
+            continue
+        assert "feed" not in symbol.ports
+        assert [s.prefix for s in symbol.port_series] == ["feed_"]

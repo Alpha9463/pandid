@@ -35,6 +35,13 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
 from mxgraph_to_svg import shapes_in, convert_shape, stencil_namespace  # noqa: E402
 from pandid.portgeom import outward_dir  # noqa: E402  (the one place a face is derived)
+from pandid.render.symbols import CENTRED, FROM_START  # noqa: E402
+
+#: How each alignment is *spelled* in the file this script writes. The
+#: emitted line has to name the constant rather than repeat its value, or
+#: the generated registry would carry a bare ``'start'`` with nothing
+#: saying what it means -- and the two spellings could then drift.
+_ALIGN_NAMES = {CENTRED: "CENTRED", FROM_START: "FROM_START"}
 
 STENCILS = HERE / "vendor_data" / "drawio"
 OUT = HERE.parent / "pandid" / "render" / "_vendored_symbols.py"
@@ -472,8 +479,29 @@ KIND_MAP = {
     # rather than on a head where the ink curves away from the box edge), and
     # the two products on the head crowns at (50, 0) and (50, 200), which is
     # exactly where the column takes its distillate and its bottoms.
+    #
+    # The feed is a FAMILY -- a flash drum charged twice is a wash stream, or a
+    # second phase to knock out -- and it is CENTRED on the 100 the single feed
+    # has always been drawn at, so a one-feed drum is drawn exactly as 0.1.3
+    # drew it. Centred rather than run downwards, unlike the hopper bodies
+    # below: this nozzle is at mid-height with 85 units of straight shell above
+    # it and 85 below, which is the case that mode is for.
+    #
+    # The band is 0,5 of the shell -- y 50..150 unscaled, 25..75 as drawn --
+    # which is inside the straight wall (15..185, or 7,5..92,5) at both ends.
+    # The pitch is 40, or 20 as drawn.
+    #
+    # Measured against the ARROWHEAD rather than borrowed from the stirred
+    # tank this shell is shared with. The reactor's own band is 28/0,32, which
+    # spaces TWO charge nozzles 14 apart as drawn -- under
+    # ``symbols.MIN_NOZZLE_PITCH``, so the commonest multi-feed count there is
+    # a ``nozzles-crowded`` finding before it is anything else. Copying that
+    # here would have shipped the same defect on a new keyword. At 40/0,5 a
+    # drum draws two feeds 20 apart, three 20 apart and four 16,7 apart, all of
+    # them clear of two 12-unit heads; five is where the squeeze takes it under
+    # and where the finding is right to fire.
     ("separator", "default"): ("vessels", "Pressurized Vessel",
-                               {"feed": ("W", 100.0),
+                               {"feed": ("SERIES", "W", 100.0, 40.0, 0.5),
                                 "vapor": ("N", 50.0), "liquid": ("S", 50.0)}),
     # The knock-out drum, with its mesh pad and its level gauge, under the name
     # of the thing it draws. Its nozzles are the ones it has always carried, on
@@ -481,8 +509,21 @@ KIND_MAP = {
     # y 7.69..87.69) and the two products on the head crowns, whose arcs reach
     # y = 0 and y = 95.38 because a 40-wide chord scales rx = 13 / ry = 5 up
     # until ry is the 7.69 the shell is inset by.
+    #
+    # The feed family is centred on the 55 the single nozzle was drawn at. A
+    # flare or relief knock-out drum taking a header per relief system is the
+    # ordinary reason to ask for this, and it is fed BELOW the demister pad,
+    # which the artwork draws across y 17,69..27,69.
+    #
+    # The band is 0,52 of the 95,38 body -- y 30,2..79,8 -- and every digit of
+    # that is one of the three things bounding it: above 27,69 so no feed is
+    # drawn at the pad, below 87,69 so none is drawn on the dished bottom, and
+    # wide enough that four feeds sit 16,5 apart, which two 12-unit ARROWHEADs
+    # can be told apart at. Five is where the squeeze takes it under and where
+    # ``nozzles-crowded`` is right to fire.
     ("separator", "knockout"): ("vessels", "Knock-out Drum",
-                                {"feed": ("W", 55), "vapor": ("N", 25), "liquid": ("S", 25)}),
+                                {"feed": ("SERIES", "W", 55, 20, 0.52),
+                                 "vapor": ("N", 25), "liquid": ("S", 25)}),
     # Both roofs rise inside the bounding box, so a nozzle on the box's top edge
     # floats above the drawn ink. Anything put on the roof goes on the roof
     # itself: the dome crown, and the cone apex.
@@ -1302,17 +1343,51 @@ KIND_MAP = {
     # The same shape as a horizontal phase separator, where naming the vapour
     # and liquid products is the point. Neither product takes an alternate face:
     # vapour always disengages off the top, liquid draws off the bottom.
+    #
+    # THE ONE SEPARATOR WHOSE FEED IS NOT A FAMILY, and the reason is the
+    # drawing rather than the plant. This nozzle authors THREE placements --
+    # the west head, the north shell, the east head -- and a series is one
+    # face with one band on it, so a symbol may declare the menu or the
+    # family and not both (``Symbol.__post_init__`` rejects the pair). The
+    # menu is worth more here: it is what lets the face selector put the
+    # inlet on the head the feed actually comes from, and this drum is the
+    # fixture the whole of ``tests/test_faces.py`` is written against.
+    # A family would have nowhere to go in any case -- the drum is 30 units
+    # tall, so its west face holds two 12-unit arrowheads and nothing more.
+    # ``pandid.units.Separator`` refuses ``n_feeds`` above one here and says
+    # so; see its ``_ONE_FEED_VARIANTS``.
     ("separator", "horizontal"): ("vessels", "Drum or Condenser",
                                   {"feed": [("W", 15), ("N", 20.0), ("E", 15)],
                                    "vapor": ("N", 30.0),
                                    "liquid": ("S", 68.0)}),
-    ("separator", "cyclone"): ("separators", "Separator (Cyclone)", {"feed": "W", "vapor": "N", "liquid": "S"}),
+    #
+    # THE FEED FAMILY ON EVERY HOPPER-BOTTOMED BODY, and the seven
+    # drawings below share it: ``("SERIES", "W", 12, 20, 0.5, FROM_START)``
+    # on the 80 x 120 box, plus ``symbols._SEPARATING_VESSEL``, which is
+    # the same body composed rather than vendored.
+    #
+    # ``FROM_START`` rather than centred, and this family is why that mode
+    # exists. The wall is y 0..80 -- the hopper takes the rest -- and the
+    # nozzle is drawn at 12, one module below the roof, because that is
+    # where a cyclone's tangential inlet and a screen's feed chute are.
+    # Straddling 12 puts the second member of a pair at 2 and the first of
+    # a triple on the top corner, where :func:`outward_dir` stops calling
+    # the face west; and squeezing the run small enough to avoid that
+    # leaves a pitch two 12-unit arrowheads cannot be told apart at. So
+    # the run starts at 12 and grows down: 12, 32, 52, 72 at four feeds,
+    # the last of them still 8 units of wall above the hopper. The
+    # one-feed drawing does not move, which is the point -- ``n_feeds=2``
+    # must not relocate the nozzle a sheet already had.
+    ("separator", "cyclone"): ("separators", "Separator (Cyclone)",
+                               {"feed": ("SERIES", "W", 12, 20, 0.5, FROM_START),
+                                "vapor": "N", "liquid": "S"}),
     # Gas-cleaning vessels: hopper-bottomed box, gas across the top and the
     # collected phase out of the apex at (40, 120). The scrubber's wash-liquid
     # header is drawn on the centreline, so the clean gas leaves sideways rather
     # than through the top face.
     ("separator", "scrubber"): ("separators", "Separator (Wet Scrubber)",
-                                {"feed": "W", "vapor": "E", "liquid": "S"}),
+                                {"feed": ("SERIES", "W", 12, 20, 0.5, FROM_START),
+                                 "vapor": "E", "liquid": "S"}),
     # The venturi scrubber, ISO 10628-2 item 8.11 X8034: ``scrubber``'s body
     # exactly -- the same 80 x 120 outline down to the same hopper apex -- with
     # a different internal in it. The throat that gives the machine its name is
@@ -1341,8 +1416,8 @@ KIND_MAP = {
     # spray nozzle, and the wash header is drawn rather than piped here exactly
     # as it is on ``scrubber``.
     ("separator", "venturi_scrubber"): ("separators", "Separator (Venturi Scrubber)",
-                                        {"feed": ("W", 12.0), "vapor": ("E", 12.0),
-                                         "liquid": "S"}),
+                                        {"feed": ("SERIES", "W", 12.0, 20, 0.5, FROM_START),
+                                         "vapor": ("E", 12.0), "liquid": "S"}),
     # ``gravity``, ``electrostatic`` and ``electromagnetic`` are deliberately NOT
     # vendored. All three are this same hopper-bottomed body carrying one ISO
     # 10628-2 group-29 characteristic -- items 8.3 X8031, 8.6 X8125 and 8.8
@@ -1372,11 +1447,14 @@ KIND_MAP = {
     # the operating case. Naming either for its contents would be guessing: the
     # same drawing is a scalping screen and a sizing screen.
     ("separator", "sifter"): ("separators", "Separator, Sifter",
-                              {"feed": "W", "overflow": "E", "underflow": "S"}),
+                              {"feed": ("SERIES", "W", 12, 20, 0.5, FROM_START),
+                               "overflow": "E", "underflow": "S"}),
     ("separator", "impact"): ("separators", "Impact Separator",
-                              {"feed": "W", "overflow": "E", "underflow": "S"}),
+                              {"feed": ("SERIES", "W", 12, 20, 0.5, FROM_START),
+                               "overflow": "E", "underflow": "S"}),
     ("separator", "permanent_magnet"): ("separators", "Separator (Permanent Magnet)",
-                                        {"feed": "W", "overflow": "E", "underflow": "S"}),
+                                        {"feed": ("SERIES", "W", 12, 20, 0.5, FROM_START),
+                                         "overflow": "E", "underflow": "S"}),
     # Filter styles. Press Filter's own W/E anchors sit on opposite *corners* of
     # the box, so both faces are placed on the plate pack's mid-height instead.
     #
@@ -2191,7 +2269,9 @@ def resolve_port(spec, constraints, w, h):
     A fifth form, ``("SERIES", edge, along, pitch, extent)``, is not a nozzle at
     all: it hands the port to a :class:`~pandid.render.symbols.PortSeries`, which
     places as many as the unit turns out to have, ``pitch`` apart and centred on
-    ``along``. See :func:`is_series`.
+    ``along``. A sixth element names the alignment
+    (:data:`~pandid.render.symbols.FROM_START`) for a body with no room to
+    straddle its own nozzle. See :func:`is_series`.
     """
     if isinstance(spec, str):
         if spec not in constraints:
@@ -2242,8 +2322,9 @@ def drawing(el, kind, variant, port_map, sx, sy):
     ports, alts, series = {}, {}, {}
     for p, spec in port_map.items():
         if is_series(spec):
-            _, edge, along, pitch, extent = spec
-            series[p] = (edge, float(along), float(pitch), float(extent))
+            _, edge, along, pitch, extent, *rest = spec
+            series[p] = (edge, float(along), float(pitch), float(extent),
+                         rest[0] if rest else CENTRED)
             continue
         choices = spec if isinstance(spec, list) else [spec]
         ports[p] = resolve_port(choices[0], constraints, w, h)
@@ -2264,8 +2345,8 @@ def drawing(el, kind, variant, port_map, sx, sy):
         alts = {p: [(f, (x * sx, y * sy)) for f, (x, y) in v] for p, v in alts.items()}
         # A series runs along one face, so it is the along-axis that scales it.
         series = {p: (e, at * (sy if e in ("W", "E") else sx),
-                      pitch * (sy if e in ("W", "E") else sx), ext)
-                  for p, (e, at, pitch, ext) in series.items()}
+                      pitch * (sy if e in ("W", "E") else sx), ext, align)
+                  for p, (e, at, pitch, ext, align) in series.items()}
     w, h = round(w, 1), round(h, 1)
     ports = {p: tuple(round(v, 1) for v in xy) for p, xy in ports.items()}
     alts = {p: [(f, tuple(round(v, 1) for v in xy)) for f, xy in v]
@@ -2335,9 +2416,16 @@ def render() -> str:
             + ", ".join(f"{kind}/{variant}" for kind, variant in orphans)
         )
 
-    imports = "PortSeries, Symbol" if any(
-        is_series(spec) for _, _, port_map in KIND_MAP.values() for spec in port_map.values()
-    ) else "Symbol"
+    specs = [spec for _, _, port_map in KIND_MAP.values() for spec in port_map.values()]
+    names = ["Symbol"]
+    if any(is_series(spec) for spec in specs):
+        names.append("PortSeries")
+    # Only where a series really asks for it: an alignment named on every
+    # generated registry whether or not one is used would be an unused
+    # import the moment the last FROM_START series was retired.
+    if any(is_series(spec) and len(spec) > 5 and spec[5] == FROM_START for spec in specs):
+        names.append("FROM_START")
+    imports = ", ".join(sorted(names))
     lines = [
         '"""draw.io-derived equipment symbols (Apache-2.0). GENERATED by',
         'scripts/vendor_symbols.py. Do not edit by hand. See NOTICE for attribution."""',
@@ -2446,8 +2534,9 @@ def render() -> str:
             if series:
                 declared = ", ".join(
                     f"PortSeries({p + '_'!r}, {edge!r}, pitch={round(pitch, 1)}, "
-                    f"extent={extent}, at={round(at, 1)}, singular={p!r})"
-                    for p, (edge, at, pitch, extent) in series.items()
+                    f"extent={extent}, at={round(at, 1)}, singular={p!r}"
+                    + (f", align={_ALIGN_NAMES[align]})" if align != CENTRED else ")")
+                    for p, (edge, at, pitch, extent, align) in series.items()
                 )
                 lines.append(f"        port_series=({declared},),")
             lines += [

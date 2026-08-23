@@ -88,7 +88,7 @@ def test_fixed_port_units_have_expected_ports():
         "tube_in",
         "tube_out",
     }
-    assert set(U.Separator("V").ports) == {"feed", "vapor", "liquid"}
+    assert set(U.Separator("V").ports) == {"feed_1", "vapor", "liquid"}
     assert set(U.Column("T").ports) == {"feed_1", "overhead", "bottoms"}
     assert set(U.DistillationColumn("T").ports) == {
         "feed_1",
@@ -138,7 +138,7 @@ def test_one_feed_is_numbered_and_feed_is_an_alias_for_it():
     one where it never used to. ``feed`` is the bare alias for it -- not a
     second port, the same object -- kept because it is the common case and
     every sheet ever drawn against ``col.feed`` still says what it meant."""
-    for one in (U.Column("T-101"), U.Reactor("R-101")):
+    for one in (U.Column("T-101"), U.Reactor("R-101"), U.Separator("V-101")):
         assert "feed_1" in one.ports
         assert "feed" not in one.ports
         assert one.feed is one.feed_1
@@ -165,6 +165,104 @@ def test_a_unit_with_no_feed_at_all_is_rejected():
         U.Column("T", n_feeds=0)
     with pytest.raises(ValueError, match="Reactor requires at least 1 feed"):
         U.Reactor("R", n_feeds=0)
+    with pytest.raises(ValueError, match="Separator requires at least 1 feed"):
+        U.Separator("V", n_feeds=0)
+
+
+# --- Separator: the feed family (#452) --------------------------------------
+
+
+def test_a_separator_takes_more_than_one_feed():
+    """A wash-water gravity separator has a wash stream beside the feed it is
+    washing, and a flare knock-out drum takes a header per relief system. One
+    nozzle cannot draw either without a mixer standing in for a junction that
+    is not on the plant."""
+    sep = U.Separator("V-401", n_feeds=2, characteristic="gravity")
+    assert set(sep.ports) == {"feed_1", "feed_2", "overflow", "underflow"}
+    assert sep.feed_1.direction == "inlet"
+    assert sep.feed_2.role == "feed"
+    assert [port.name for port in sep.feeds] == ["feed_1", "feed_2"]
+    assert not hasattr(sep, "feed")
+
+
+@pytest.mark.parametrize(
+    "variant", ["default", "knockout", "cyclone", "scrubber", "venturi_scrubber", "sifter"]
+)
+def test_every_separator_but_one_takes_the_family(variant):
+    """Which draws a separator has is its variant's business; how many feeds it
+    has is not. The count is the author's on every drawing the library can
+    spread a family down, which is all of them but the horizontal drum."""
+    sep = U.Separator("V-1", n_feeds=3, variant=variant)
+    assert [port.name for port in sep.feeds] == ["feed_1", "feed_2", "feed_3"]
+
+
+def test_a_horizontal_drum_refuses_a_second_feed_and_says_why():
+    """The one refusal, and it is about the drawing rather than the plant: this
+    stencil authors three placements for its charge nozzle and a family is one
+    band on one face, so the symbol may carry the menu or the family and this
+    one carries the menu."""
+    with pytest.raises(ValueError, match="drawn with one feed nozzle"):
+        U.Separator("V-1", n_feeds=2, variant="horizontal")
+    # ...and it is refused through the device class that reaches the variant by
+    # alias rather than by naming it, which is the case reading the *argument*
+    # instead of the resolved variant would let through.
+    one = U.Separator("V-2", variant="horizontal")
+    assert one.feed is one.feed_1
+
+
+def test_a_horizontal_drums_one_feed_still_reaches_its_three_heads():
+    """The nozzle is called ``feed_1`` like every other separator's, and the
+    stencil still anchors it under ``feed``: ``_VARIANT_ANCHORS`` is what keeps
+    the rename off the artwork, and without it the name the drawing never heard
+    of would fall back to the centre of the box."""
+    from pandid.portgeom import port_faces
+
+    drum = U.Separator("V-1", variant="horizontal")
+    assert port_faces(drum, "feed_1") == port_faces(drum, "feed") == ["W", "N", "E"]
+
+
+def test_a_separators_feeds_march_down_the_wall_from_where_the_one_feed_was():
+    """The hopper bodies grow the family downwards rather than about its centre,
+    which is the whole of ``FROM_START``: a cyclone's inlet is a module below
+    the roof because that is where a tangential inlet is, and straddling it
+    would put the first of three feeds on the top corner of the box -- off the
+    west face entirely.
+
+    So the single-feed drawing does not move, and this is the assertion that
+    says so: adding ``n_feeds=`` to a sheet must not relocate the nozzle it
+    already had.
+    """
+    from pandid.portgeom import port_offset
+
+    lone = U.Separator("CY-1", variant="cyclone").pin(x=0, y=0)
+    assert port_offset(lone, "feed") == (0.0, 12.0)
+
+    three = U.Separator("CY-2", n_feeds=3, variant="cyclone").pin(x=0, y=0)
+    assert [port_offset(three, name) for name in ("feed_1", "feed_2", "feed_3")] == [
+        (0.0, 12.0),
+        (0.0, 32.0),
+        (0.0, 52.0),
+    ]
+    # The hopper starts at y = 80 on the 80 x 120 body, so every member is on
+    # the straight wall and none of them is on the apex.
+    assert all(
+        port_offset(three, name)[1] < 80.0 for name in three.ports if name.startswith("feed")
+    )
+
+
+def test_an_upright_drums_feeds_straddle_the_nozzle_the_shell_was_drawn_with():
+    """The other half of the same rule. This shell is fed at mid-height, has
+    wall above and below, and is the stirred tank's own -- so it takes the
+    reactor's centred band, and a lone feed still lands on the 50 the flash
+    drum has always drawn."""
+    from pandid.portgeom import port_offset
+
+    assert port_offset(U.Separator("V-1").pin(x=0, y=0), "feed") == (0.0, 50.0)
+    two = U.Separator("V-2", n_feeds=2).pin(x=0, y=0)
+    assert [port_offset(two, name) for name in ("feed_1", "feed_2")] == [
+        (0.0, 40.0),
+        (0.0, 60.0),
+    ]
 
 
 # --- Absorber and Stripper: a Column missing the nozzles it does not have ----
@@ -615,8 +713,17 @@ def test_only_the_kettle_carries_the_bottoms_draw():
 
 # Exactly what 0.1.0 shipped, in order. Written out here rather than read off
 # the class so the test compares against the release and not against itself.
+#
+# ``feed_1`` and not ``feed``: 0.1.4 made the charge nozzle a family sized by
+# ``n_feeds=``, the way ``Column`` and ``Reactor`` already spell theirs, and a
+# family is numbered from one at every count (``units._feed_names``). The bare
+# ``feed`` is still the attribute a one-feed separator answers to -- an alias
+# for ``feed_1`` rather than a second nozzle -- which is what
+# ``test_a_one_feed_separator_still_answers_to_the_bare_name`` pins. The
+# *position* in the list is the released one: a family replacing a fixed nozzle
+# does not also move it down the declaration order.
 _FLASH_DRUM_NOZZLES = [
-    ("feed", "inlet", "feed"),
+    ("feed_1", "inlet", "feed"),
     ("vapor", "outlet", "vapor"),
     ("liquid", "outlet", "liquid"),
 ]
@@ -642,7 +749,7 @@ def test_a_separator_that_separates_phases_names_them(variant):
 
 # The renamed pair, written out for the same reason ``_FLASH_DRUM_NOZZLES`` is.
 _COLLECTOR_NOZZLES = [
-    ("feed", "inlet", "feed"),
+    ("feed_1", "inlet", "feed"),
     ("overflow", "outlet", "process"),
     ("underflow", "outlet", "process"),
 ]
@@ -704,7 +811,7 @@ def test_a_mechanical_separator_draws_an_overflow_and_an_underflow(variant):
     it is what classification calls them anyway."""
     sep = U.Separator("S-1", variant=variant)
     assert _nozzles(sep) == [
-        ("feed", "inlet", "feed"),
+        ("feed_1", "inlet", "feed"),
         ("overflow", "outlet", "process"),
         ("underflow", "outlet", "process"),
     ]
@@ -729,15 +836,19 @@ def test_a_mechanical_separators_nozzles_land_where_the_stencil_anchors_are(vari
     from pandid.render.symbols import default_registry
 
     symbol = default_registry.get("separator", variant)
-    anchors = {"electromagnetic": ("feed", "vapor", "liquid")}.get(
-        variant, ("feed", "overflow", "underflow")
-    )
+    anchors = {"electromagnetic": ("vapor", "liquid")}.get(variant, ("overflow", "underflow"))
     assert (symbol.width, symbol.height) == (80.0, 120.0)
-    assert symbol.ports == dict(zip(anchors, [(0.0, 12.0), (80.0, 12.0), (40.0, 120.0)]))
+    assert symbol.ports == dict(zip(anchors, [(80.0, 12.0), (40.0, 120.0)]))
+    # The feed is the one nozzle these bodies no longer anchor outright: it is a
+    # family sized by ``n_feeds=``, so the symbol declares the rule and the first
+    # member lands on the (0, 12) the fixed anchor used to be at.
+    (feed,) = symbol.port_series
+    assert (feed.face, feed.at) == ("W", 12.0)
+    assert feed.placement(0, 1, symbol.width, symbol.height) == (0.0, 12.0)
     # The overflow is on the side wall level with the feed; the underflow is the
     # hopper apex, the lowest point the artwork has.
-    high, low = anchors[1], anchors[2]
-    assert symbol.ports[high][1] == symbol.ports["feed"][1]
+    high, low = anchors[0], anchors[1]
+    assert symbol.ports[high][1] == feed.at
     assert symbol.ports[low][1] == symbol.height
 
 
@@ -1032,7 +1143,7 @@ def test_one_feed_is_the_one_tuple_holding_feed_1():
     that nozzle in a tuple; ``feed`` is the bare alias for the same
     ``Port`` object, not a second member of the family.
     """
-    for one in (U.Column("T-101"), U.Reactor("R-101")):
+    for one in (U.Column("T-101"), U.Reactor("R-101"), U.Separator("V-101")):
         assert [p.name for p in one.feeds] == ["feed_1"]
         assert one.feeds[0] is one.feed
 
@@ -1049,6 +1160,7 @@ def test_one_feed_is_the_one_tuple_holding_feed_1():
         (lambda: U.Column("T", n_draws=5), ["draws", "feeds"]),
         (lambda: U.Column("T", n_feeds=5, n_draws=5), ["feeds", "draws"]),
         (lambda: U.Reactor("R", n_feeds=5), ["feeds"]),
+        (lambda: U.Separator("V", n_feeds=5), ["feeds"]),
         (lambda: U.Block("B", inputs=5, outputs=4), ["inlets", "outlets"]),
     ],
 )

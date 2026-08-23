@@ -712,7 +712,7 @@ def test_every_counted_family_answers_to_the_naming_rule(build, stem, size):
 
 
 def test_nothing_shipped_leaves_a_counted_nozzle_open():
-    """The acceptance test, over the drawings this package stands behind. 103
+    """The acceptance test, over the drawings this package stands behind. 119
     counted nozzles across sixteen of the shipped sheets, and every one of
     them piped -- so the rule is exercised by the corpus rather than merely
     silent on it.
@@ -742,6 +742,15 @@ def test_nothing_shipped_leaves_a_counted_nozzle_open():
     already a two-inlet mixer, so only its outlet is newly counted; the
     other two each add both ``in_1`` and ``out_1``, for three nozzles
     across the pair.
+
+    119 rather than 103 since #452, and for the third time for the same
+    reason: ``Separator`` took an ``n_feeds=`` and its charge nozzle became
+    ``feed_1``, so the corpus's sixteen separators each contribute one
+    counted nozzle where a fixed ``feed`` contributed none. None is an
+    offender, on the alias argument above -- which is the whole point of
+    running this over the corpus rather than asserting the rule in the
+    abstract: a family that had *not* kept its singular spelling working
+    would show up here as sixteen unconnected nozzles, not as a number.
     """
     from tests.test_golden import SCENARIOS
 
@@ -752,7 +761,7 @@ def test_nothing_shipped_leaves_a_counted_nozzle_open():
         counted += sum(_family_members(u) for u in fs.units)
         offenders += [f"{name}: {w.message}" for w in fs.warnings if w.code == "nozzle-unconnected"]
     assert offenders == []
-    assert counted == 103
+    assert counted == 119
 
 
 def _family_members(unit):

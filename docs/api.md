@@ -575,7 +575,7 @@ Each entry is `port` *(direction / role)*.
 | `Valve` | `valve` | `inlet` *(in)*, `outlet` *(out)*, `actuator` *(in/signal)*; `three_way` adds `branch` *(out)* |
 | `Vessel` | `vessel` | `in_1` … `in_n` *(in)*, `out_1` … `out_m` *(out)*, `vent` *(out/vapor)*, `relief` *(out)*, `drain` *(out/liquid)*; at one each (the default) the bare `inlet`/`outlet` still answer, exactly as before #342 — see [`Block`'s connection API, on a tank or a vessel](#a-tank-or-a-vessel-fed-by-several-streams) |
 | `Tank` | `tank` | the same as `Vessel` |
-| `Separator` | `separator` | `feed` *(in)*, `vapor` *(out/vapor)*, `liquid` *(out/liquid)* on the four variants whose draws really are phases — the drum (`default`, `horizontal`, `knockout`) and the wet `scrubber`. The other seven sort or collect rather than separating into phases, and name the two draws their artwork has: `feed` *(in/feed)*, `overflow` *(out)*, `underflow` *(out)*; see [Variants](#variants) |
+| `Separator` | `separator` | `feed_1` … `feed_n` *(in/feed)*, sized by `n_feeds=` and aliased `feed` at one, plus `vapor` *(out/vapor)* and `liquid` *(out/liquid)* on the four variants whose draws really are phases — the drum (`default`, `horizontal`, `knockout`) and the wet `scrubber`. The other seven sort or collect rather than separating into phases, and name the two draws their artwork has: `overflow` *(out)*, `underflow` *(out)*; see [Variants](#variants) |
 | `Column` | `column` | The general tower: `feed` *(in/feed)*, or `feed_1` … `feed_n`, no draw, or `draw` *(out/draw)*, or `draw_1` … `draw_n`, `overhead` *(out/vapor)*, `bottoms` *(out/liquid)*; the feeds are [`feeds`](#the-family-as-a-sequence) and the draws [`draws`](#the-family-as-a-sequence). Nothing here assumes the tower boils — see `DistillationColumn`, `Stripper` and `Absorber` for the three that add a reflux loop, a reboiler alone, or neither |
 | `DistillationColumn` | `column` | A `Column` plus the two return nozzles that close a distillation column's internal loops: `reflux_in` *(in/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*, `condenser_duty` *(out/energy)* |
 | `Absorber` | `column` | A `Column` with nothing added: `feed` *(in/feed)*, or `feed_1` … `feed_n`, no draw, or `draw` *(out/draw)*, or `draw_1` … `draw_n`, `overhead` *(out/vapor)*, `bottoms` *(out/liquid)*. Nothing in an absorber boils, so it has none of `DistillationColumn`'s four return nozzles; `internals=` defaults to `"packing"` |
@@ -711,6 +711,8 @@ units.Column(name, n_feeds=1, variant="default", internals=None, trays=8,
 units.Reactor(name, n_feeds=1, variant="default", agitator="agitator",
               internals=None, width=None, height=None, label_pos=None,
               description="")
+units.Separator(name, n_feeds=1, variant="default", characteristic=None,
+                width=None, height=None, label_pos=None, description="")
 ```
 
 (`Mixer` and `Splitter` do not accept `label_pos`, unlike the fixed-port
@@ -834,6 +836,33 @@ fs.connect(pump.discharge, cooler.inlet)
 fs.connect(cooler.outlet, tower.feed_1)       # ...and returned cooled to stage 3, above it
 ```
 
+### `n_feeds` on a separator
+
+A separator takes the same keyword, and it is the same family: `feed_1` …
+`feed_n` down the body's own wall, top to bottom, with the plain `feed` kept as
+an alias at one. A wash-water settler takes its wash beside the stream it is
+washing; a flare knock-out drum takes a header per relief system; a scrubber
+takes its make-up separately from the gas it cleans.
+
+```python
+settler = fs.add(units.Separator("V-401", n_feeds=3, characteristic="gravity"))
+fs.connect(naphtha.outlet, settler.feed_1)
+fs.connect(wash.outlet, settler.feed_2)
+fs.connect(caustic.outlet, settler.feed_3)
+```
+
+Every variant takes it but `horizontal`, and that one refuses it — with a
+message saying so — because of the *drawing* rather than the plant: the
+horizontal drum's charge nozzle is the one in the library authored on three
+faces (the west head, the north shell, the east head) so the face selector can
+put it on the head the line really comes from, and a family is one band on one
+face. The drum is 30 units deep in any case, which is room for two arrowheads
+and no paper between them. Where a horizontal drum genuinely takes two feeds,
+draw the junction: a `Tee` or a `Mixer` ahead of it says what the plant has.
+
+There is no `feed_stages=` here. A stage is something a column's `internals=`
+draws for a reader to count against, and a separator draws none.
+
 ### The family as a sequence
 
 Each of those counts also has an accessor for the **whole family**, a
@@ -847,6 +876,7 @@ Each of those counts also has an accessor for the **whole family**, a
 | `Column` | `feeds` | `feed`, or `feed_1` … `feed_n` |
 | `Column` | `draws` | none, `draw`, or `draw_1` … `draw_n` |
 | `Reactor` | `feeds` | `feed`, or `feed_1` … `feed_n` |
+| `Separator` | `feeds` | `feed`, or `feed_1` … `feed_n` |
 
 ```python
 mixer = fs.add(units.Mixer("M-101", n_inlets=len(headers)))
@@ -912,6 +942,18 @@ from pandid.devices import StirredTankReactor
 s = fs.add(StirredTankReactor("R-2", n_feeds=3))
 s.feed_3        # Port
 reveal_type(s)  # StirredTankReactor3, not Reactor3
+```
+
+`Separator` takes it too, and so does every equipment class over it — a
+cyclone taking two vent headers, a settler taking its wash water:
+
+```python
+from pandid.devices import Cyclone
+
+cy = fs.add(Cyclone("CY-1", n_feeds=2))
+cy.feed_2       # Port
+cy.feed_3       # error
+reveal_type(cy) # Cyclone2, not Separator2
 ```
 
 `Absorber`, `Stripper` and `DistillationColumn` take the same treatment, for

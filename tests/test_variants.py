@@ -146,8 +146,11 @@ def test_a_shipped_variant_resolves_the_nozzles_it_always_did(cls, variant):
         table = cls._VARIANT_PORTS.get(variant, cls._SHELL_AND_TUBE)
         assert built == {spec[0] for spec in table}
     elif cls is units.Separator:
+        # ``| {"feed_1"}`` for the reason ``Reactor``'s branch below has
+        # it: the charge nozzle is a family sized by ``n_feeds``, so
+        # ``__init__`` adds it rather than either port table.
         table = cls._VARIANT_PORTS.get(variant, cls._PHASES)
-        assert built == {spec[0] for spec in table}
+        assert built == {spec[0] for spec in table} | {"feed_1"}
     elif cls is units.Filter:
         table = cls._VARIANT_PORTS.get(variant, cls._CLARIFYING)
         assert built == {spec[0] for spec in table}
@@ -265,7 +268,14 @@ def test_a_subclass_declaring_its_own_ports_builds_exactly_those(cls):
     of them.
     """
     unit = cls("X-1", variant=cls.VARIANTS[0])
-    assert list(unit.ports) == [spec[0] for spec in cls.PORTS]
+    # ``_Sifter`` declares a ``feed`` of its own, so it gets that AND the
+    # ``feed_1`` every separator's ``__init__`` adds: ``PORTS`` replaces the
+    # base's *variant table*, which is what this test is about, and says
+    # nothing about a nozzle the constructor builds by hand. The generated
+    # ``pandid.devices`` separators therefore declare no ``feed`` of their own,
+    # which is what ``gen_devices._ports_for`` already emits.
+    extra = ["feed_1"] if issubclass(cls, units.Separator) else []
+    assert list(unit.ports) == [spec[0] for spec in cls.PORTS] + extra
 
 
 def test_a_subclass_declaring_no_ports_still_gets_the_variants():
@@ -276,7 +286,7 @@ def test_a_subclass_declaring_no_ports_still_gets_the_variants():
     subclass says nothing about nozzles and gets whatever the *variant* has,
     including a change to it.
     """
-    assert set(_Cyclone("S-1", variant="cyclone").ports) == {"feed", "overflow", "underflow"}
+    assert set(_Cyclone("S-1", variant="cyclone").ports) == {"feed_1", "overflow", "underflow"}
 
 
 def test_an_alias_stores_the_registry_spelling():
@@ -296,7 +306,7 @@ def test_an_alias_resolves_the_ports_of_the_variant_it_names():
     lookup has to happen after the alias has been applied: a ``Screen`` gets the
     sifter's ``overflow``/``underflow``, not the flash drum's phases.
     """
-    assert set(_Screen("S-1", variant="screen").ports) == {"feed", "overflow", "underflow"}
+    assert set(_Screen("S-1", variant="screen").ports) == {"feed_1", "overflow", "underflow"}
 
 
 def test_a_class_can_alias_default_onto_its_own_drawing():

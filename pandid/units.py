@@ -4969,6 +4969,28 @@ class Separator(Unit):
     appears nowhere in group 29, so it stays ``variant="cyclone"``. So do
     the sifter, the impact separator, the permanent magnet and the
     scrubber.
+
+    More than one feed
+    ------------------
+    ``n_feeds`` gives the body more than one charge nozzle, the way it
+    does on :class:`Column` and :class:`Reactor`. A wash-water gravity
+    separator takes its wash beside the feed it is washing; a flare
+    knock-out drum takes a header per relief system; a scrubber takes
+    its make-up separately from the gas it cleans::
+
+        Separator("V-401", n_feeds=2, characteristic="gravity")
+
+    They are ``feed_1`` ... ``feed_n``, spread down the wall in
+    declaration order so ``feed_1`` is the highest, and the single-feed
+    separator keeps the plain ``feed`` as an alias for ``feed_1``. On
+    the hopper-bottomed bodies the family grows **downwards** from the
+    coordinate the one feed was always drawn at, rather than straddling
+    it, so adding a second feed to an existing sheet does not move the
+    first; see :data:`pandid.render.symbols.FROM_START`.
+
+    ``variant="horizontal"`` is the one drawing that refuses a second
+    feed, and it refuses it for a reason about the artwork rather than
+    about the plant -- see :attr:`_ONE_FEED_VARIANTS`.
     """
 
     # The phase draws only, since ``_VARIANT_PORTS`` defaults to
@@ -4978,9 +5000,69 @@ class Separator(Unit):
     # checker a plain flash drum has an ``overflow``. They belong on a
     # per-variant subclass, which ``pandid.devices`` is; off it, reach
     # one by ``sep.port("overflow")``.
-    feed: Port
     vapor: Port
     liquid: Port
+    # Every feed nozzle, in declaration order and so top to bottom down
+    # the wall -- ``feed_1`` ... ``feed_n`` whatever the count (see
+    # :func:`_feed_names`). :class:`Reactor`'s and :class:`Column`'s
+    # exactly.
+    feeds: tuple[Port, ...]
+    # The one-feed separator's nozzle: an alias for ``feed_1``, not a
+    # second registered port. ``n_feeds > 1`` drops the alias. See
+    # :class:`Reactor`.
+    feed: Port
+
+    # ``feed_1`` ... ``feed_n`` are :class:`Column`'s and
+    # :class:`Reactor`'s feeds, answered the same way: a literal
+    # ``n_feeds`` gets a subclass declaring exactly those nozzles, a
+    # computed one gets this class and ``sep.feeds[i]``. One family and
+    # not two, unlike ``Column``: the draws a separator has are fixed by
+    # its variant, so there is no count on that side to cross.
+    if TYPE_CHECKING:
+
+        @overload
+        def __new__(
+            cls, name: str, n_feeds: Literal[1] = 1, *args: Any, **kwargs: Any
+        ) -> "Separator1": ...
+
+        @overload
+        def __new__(
+            cls, name: str, n_feeds: Literal[2], *args: Any, **kwargs: Any
+        ) -> "Separator2": ...
+
+        @overload
+        def __new__(
+            cls, name: str, n_feeds: Literal[3], *args: Any, **kwargs: Any
+        ) -> "Separator3": ...
+
+        @overload
+        def __new__(
+            cls, name: str, n_feeds: Literal[4], *args: Any, **kwargs: Any
+        ) -> "Separator4": ...
+
+        @overload
+        def __new__(
+            cls, name: str, n_feeds: Literal[5], *args: Any, **kwargs: Any
+        ) -> "Separator5": ...
+
+        @overload
+        def __new__(
+            cls, name: str, n_feeds: Literal[6], *args: Any, **kwargs: Any
+        ) -> "Separator6": ...
+
+        @overload
+        def __new__(
+            cls, name: str, n_feeds: Literal[7], *args: Any, **kwargs: Any
+        ) -> "Separator7": ...
+
+        @overload
+        def __new__(
+            cls, name: str, n_feeds: Literal[8], *args: Any, **kwargs: Any
+        ) -> "Separator8": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: int, *args: Any, **kwargs: Any) -> "Separator": ...
+        def __new__(cls, name: str, n_feeds: int = 1, *args: Any, **kwargs: Any) -> "Separator": ...
 
     kind = "separator"
     LAYOUT_CONFIDENCE = 4
@@ -5010,8 +5092,12 @@ class Separator(Unit):
     # down, as HeatExchanger does.
     PORTS: list[tuple[str, str, str]] = []
     # The flash drum, and the default.
+    #
+    # No ``feed``: the charge nozzles are a family sized by ``n_feeds``
+    # and ``__init__`` lays them down after these, exactly as
+    # :class:`Reactor` does with ``_VESSEL``. Both tables here are the
+    # *draws* and nothing else.
     _PHASES = [
-        ("feed", "inlet", "feed"),
         ("vapor", "outlet", "vapor"),
         ("liquid", "outlet", "liquid"),
     ]
@@ -5031,7 +5117,6 @@ class Separator(Unit):
     # both ends of one stream, ``connect()`` and the renderer never read
     # a role.
     _OVER_AND_UNDER = [
-        ("feed", "inlet", "feed"),
         ("overflow", "outlet", "process"),
         ("underflow", "outlet", "process"),
     ]
@@ -5070,6 +5155,14 @@ class Separator(Unit):
         # carrying three different marks and a body has one set of
         # nozzles.
         "electromagnetic": {"overflow": "vapor", "underflow": "liquid"},
+        # The horizontal drum's charge nozzle is still called ``feed`` in
+        # its artwork, because it is the one separator whose feed is not
+        # a family: see :attr:`_ONE_FEED_VARIANTS`. The nozzle is
+        # ``feed_1`` here like every other separator's, so this is what
+        # sends it to the three-placement menu the stencil really draws
+        # -- without it the name the stencil never heard of falls back to
+        # the centre of the box.
+        "horizontal": {"feed_1": "feed"},
     }
 
     #: The three drawings that are the shared separating vessel carrying
@@ -5078,6 +5171,30 @@ class Separator(Unit):
     #: registration number ISO gives the result; see
     #: :meth:`pandid.render.symbols.SymbolRegistry._register_composed`.
     _CHARACTERISTICS = ("gravity", "electrostatic", "electromagnetic")
+
+    #: The variants that take one feed and refuse a second, keyed to what
+    #: an author is told to do instead.
+    #:
+    #: ``horizontal`` alone, and it is the *drawing* that says so rather
+    #: than the plant. That stencil authors three placements for its
+    #: charge nozzle -- the west head, the north shell, the east head --
+    #: and :class:`~pandid.render.symbols.Symbol` refuses to carry both a
+    #: menu and a family for one nozzle, since a
+    #: :class:`~pandid.render.symbols.PortSeries` is one band on one
+    #: face and would have to overwrite the other two. The menu is worth
+    #: more: it is what lets the face selector put the inlet on the head
+    #: the feed actually arrives from, which is a choice this drum is
+    #: made to offer and the upright ones are not.
+    #:
+    #: The body could not hold a family in any case. It is 30 units
+    #: deep, so its west face has room for two
+    #: :data:`~pandid.render.symbols.ARROWHEAD`\ s and no paper between
+    #: them; every other separator has a wall of 80 or more.
+    _ONE_FEED_VARIANTS = {
+        "horizontal": "Separator(variant='default'), the upright drum, takes as many as "
+                      "you like, and a Mixer ahead of the drum draws the junction where "
+                      "two feeds really do combine before they enter",
+    }
 
     #: A separating vessel carries no mark unless one is named. The
     #: constructor then folds the name into :attr:`variant`, which is
@@ -5106,6 +5223,7 @@ class Separator(Unit):
     def __init__(
         self,
         name: str,
+        n_feeds: int = 1,
         variant: str = "default",
         characteristic: str | None = None,
         width: float | None = None,
@@ -5114,6 +5232,7 @@ class Separator(Unit):
         description: str = "",
         reference: str = "",
     ):
+        names = _feed_names(n_feeds, "Separator")
         if characteristic is not None:
             if variant != "default":
                 raise ValueError(
@@ -5154,9 +5273,95 @@ class Separator(Unit):
         if characteristic is None and variant in self._CHARACTERISTICS:
             _SEPARATOR_CHARACTERISTIC_VARIANTS[variant].warn(self, where=name)
         self.characteristic = self.variant if self.variant in self._CHARACTERISTICS else None
+        # ``self.variant``, and after the base has resolved it: a device
+        # subclass reaches ``horizontal`` through ``VARIANT_ALIASES``
+        # rather than by naming it, so reading the argument would let one
+        # of those through with a count its stencil cannot draw.
+        instead = self._ONE_FEED_VARIANTS.get(self.variant)
+        if instead is not None and n_feeds != 1:
+            raise ValueError(
+                f"{name}: Separator(variant={self.variant!r}) is drawn with one feed "
+                f"nozzle and you asked for {n_feeds}. Its charge nozzle is drawn on "
+                f"whichever of three heads the line comes from, and a family is spread "
+                f"down one face, so the drawing can offer one or the other and this one "
+                f"offers the choice of head. {instead}"
+            )
+        # Before the draws, which is where ``feed`` was when ``_PHASES``
+        # and ``_OVER_AND_UNDER`` still held it: a unit's declaration
+        # order is the order its nozzles are read in, and a family
+        # replacing a fixed nozzle should not also move it down the list.
+        # (:class:`Reactor` adds its feeds last for the same reason read
+        # the other way -- ``feed`` was never first in its table.)
+        self.feeds = tuple(self._add_port(feed, "inlet", "feed") for feed in names)
+        if n_feeds == 1:
+            # An alias, not a second port: registering ``feed`` too would
+            # give the wall's ``PortSeries`` two names matching one
+            # nozzle and it would spread a family of two for a vessel
+            # that only has one. See :func:`_feed_names`.
+            self.feed = self.feeds[0]
         # ``self.variant`` rather than the argument; see HeatExchanger.
         for spec in self._variant_ports(self.variant):
             self._add_port(*spec)
+
+
+if TYPE_CHECKING:
+    # A separator of each feed count, for the overloads above.
+    # ``Separator1`` is the one-feed vessel: its nozzle is really named
+    # ``feed_1``, so that is declared here, and the alias ``feed`` the
+    # base class already declares answers for the other spelling --
+    # exactly as ``Column1`` and ``Reactor1`` do.
+
+    class Separator1(Separator):
+        feed_1: Port
+
+    class Separator2(Separator):
+        feed_1: Port
+        feed_2: Port
+
+    class Separator3(Separator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+
+    class Separator4(Separator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+
+    class Separator5(Separator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+
+    class Separator6(Separator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+
+    class Separator7(Separator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+
+    class Separator8(Separator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+        feed_8: Port
 
 
 #: How many decks a tower is drawn with when the author does not say.

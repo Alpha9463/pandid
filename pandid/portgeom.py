@@ -364,7 +364,15 @@ def chosen_face(unit: "Unit", placed, port_name: str) -> str | None:
     what keeps it a *result*: recomputed from scratch by every layout
     run, and invisible to the solver's ``_Slot``, which has no such
     field.
+
+    Both dicts are keyed by the name :attr:`~pandid.units.Unit.ports`
+    holds, so the alias a caller may have written -- ``sep.feed`` for
+    ``feed_1`` -- has to become that first. Without it a face named
+    through the alias is filed under the real name by
+    :meth:`~pandid.units.Unit.nozzle` and then looked for under the
+    alias here, and the nozzle silently stays where the symbol drew it.
     """
+    port_name = unit._canonical_port_name(port_name)
     explicit = (getattr(unit, "_port_faces", None) or {}).get(port_name)
     if explicit is not None:
         return explicit

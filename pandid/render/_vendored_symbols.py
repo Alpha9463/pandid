@@ -5,7 +5,7 @@ scripts/vendor_symbols.py. Do not edit by hand. See NOTICE for attribution."""
 def register_vendored(registry):
     """Register the vendored draw.io symbols, overriding hand-drawn
     defaults of the same (kind, variant)."""
-    from pandid.render.symbols import PortSeries, Symbol
+    from pandid.render.symbols import FROM_START, PortSeries, Symbol
 
     # draw.io valves:Gate Valve (aspect=variable) -> valve/default
     registry.register('valve', Symbol(
@@ -375,20 +375,22 @@ def register_vendored(registry):
     registry.register('separator', Symbol(
         svg='<g id="sym_separator"><g transform="scale(0.62, 0.5)"><path d="M 0.0 15.0 A 50.0 15.0 0.0 0 1 50.0 0.0 A 50.0 15.0 0.0 0 1 100.0 15.0 L 100.0 185.0 A 50.0 15.0 0.0 0 1 50.0 200.0 A 50.0 15.0 0.0 0 1 0.0 185.0 Z" fill="white" stroke="#111" stroke-width="3.592"/></g></g>',
         width=62.0, height=100.0,
-        ports={'feed': (0.0, 50.0), 'vapor': (31.0, 0.0), 'liquid': (31.0, 100.0)},
+        ports={'vapor': (31.0, 0.0), 'liquid': (31.0, 100.0)},
         drawio_shape='mxgraph.pid.vessels.pressurized_vessel',
         # must not be turned: vapour disengages off the top, liquid draws off the bottom
         gravity_fixed=True,
+        port_series=(PortSeries('feed_', 'W', pitch=20.0, extent=0.5, at=50.0, singular='feed'),),
     ), 'default')
 
     # draw.io vessels:Knock-out Drum (aspect=variable) -> separator/knockout
     registry.register('separator', Symbol(
         svg='<g id="sym_separator_knockout"><path d="M 40.0 7.69 L 40.0 87.69 A 20.0 7.6923 0.0 0 1 20.0 95.3823 A 20.0 7.6923 0.0 0 1 0.0 87.69 L 0.0 7.69 A 20.0 7.6923 0.0 0 1 20.0 -0.0023 A 20.0 7.6923 0.0 0 1 40.0 7.69 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 0.0 7.69 L 40.0 7.69 M 0.0 87.69 L 40.0 87.69 M 0.0 17.69 L 40.0 17.69 M 0.0 27.69 L 40.0 27.69 M 0.0 17.69 L 10.0 27.69 L 20.0 17.69 L 30.0 27.69 L 40.0 17.69 M 48.0 34.69 L 48.0 52.69 M 51.0 34.69 L 51.0 52.69 M 0.0 27.69 L 10.0 17.69 L 20.0 27.69 L 30.0 17.69 L 40.0 27.69" fill="none" stroke="#111" stroke-width="2.0"/><rect x="40.0" y="37.5" width="8.0" height="12.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
         width=51.0, height=95.4,
-        ports={'feed': (0.0, 55.0), 'vapor': (25.0, 0.0), 'liquid': (25.0, 95.4)},
+        ports={'vapor': (25.0, 0.0), 'liquid': (25.0, 95.4)},
         drawio_shape='mxgraph.pid.vessels.knock-out_drum',
         # must not be turned: demister on top, vapour up and liquid down
         gravity_fixed=True,
+        port_series=(PortSeries('feed_', 'W', pitch=20.0, extent=0.52, at=55.0, singular='feed'),),
     ), 'knockout')
 
     # draw.io vessels:Tank (Dished Roof) (aspect=variable) -> tank/default
@@ -1097,60 +1099,66 @@ def register_vendored(registry):
     registry.register('separator', Symbol(
         svg='<g id="sym_separator_cyclone"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 35.0 15.0 A 30.0 15.0 0.0 0 1 65.0 30.0 A 30.0 15.0 0.0 0 1 35.0 45.0 A 10.0 5.0 0.0 0 1 25.9681 42.5693 A 10.0 5.0 0.0 0 1 25.9681 37.4407 A 10.0 5.0 0.0 0 1 35.0 35.01 A 30.0 15.0 0.0 0 1 61.6252 42.3935 A 30.0 15.0 0.0 0 1 61.6252 57.6165 A 30.0 15.0 0.0 0 1 35.0 65.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 35.0 63.0 L 35.0 67.0 L 30.0 65.0 Z" fill="#111" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=120.0,
-        ports={'feed': (0.0, 12.0), 'vapor': (40.0, 0.0), 'liquid': (40.0, 120.0)},
+        ports={'vapor': (40.0, 0.0), 'liquid': (40.0, 120.0)},
         drawio_shape='mxgraph.pid.separators.separator_(cyclone)',
         # must not be turned: ISO 14617 symbol X 2618; apex points down
         gravity_fixed=True,
+        port_series=(PortSeries('feed_', 'W', pitch=20.0, extent=0.5, at=12.0, singular='feed', align=FROM_START),),
     ), 'cyclone')
 
     # draw.io separators:Separator (Wet Scrubber) (aspect=variable) -> separator/scrubber
     registry.register('separator', Symbol(
         svg='<g id="sym_separator_scrubber"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 40.0 10.0 L 40.0 65.0 M 50.0 10.0 A 5.0 5.0 0.0 0 0 55.0 15.0 A 5.0 5.0 0.0 0 0 60.0 10.0 M 60.0 10.0 A 5.0 5.0 0.0 0 0 65.0 15.0 A 5.0 5.0 0.0 0 0 70.0 10.0" fill="none" stroke="#111" stroke-width="2.0"/><path d="M 38.0 65.0 L 42.0 65.0 L 40.0 70.0 Z" fill="#111" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=120.0,
-        ports={'feed': (0.0, 12.0), 'vapor': (80.0, 12.0), 'liquid': (40.0, 120.0)},
+        ports={'vapor': (80.0, 12.0), 'liquid': (40.0, 120.0)},
         drawio_shape='mxgraph.pid.separators.separator_(wet_scrubber)',
         # must not be turned: hopper bottom under a wash-liquid header
         gravity_fixed=True,
+        port_series=(PortSeries('feed_', 'W', pitch=20.0, extent=0.5, at=12.0, singular='feed', align=FROM_START),),
     ), 'scrubber')
 
     # draw.io separators:Separator (Venturi Scrubber) (aspect=variable) -> separator/venturi_scrubber
     registry.register('separator', Symbol(
         svg='<g id="sym_separator_venturi_scrubber"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 30.0 10.0 L 40.0 0.5 L 50.0 10.0 M 40.0 0.5 L 40.0 10.0 M 15.0 80.0 L 25.0 65.0 L 40.0 65.0 L 60.0 80.0 M 15.0 40.0 L 25.0 55.0 L 40.0 55.0 L 60.0 40.0" fill="none" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=120.0,
-        ports={'feed': (0.0, 12.0), 'vapor': (80.0, 12.0), 'liquid': (40.0, 120.0)},
+        ports={'vapor': (80.0, 12.0), 'liquid': (40.0, 120.0)},
         drawio_shape='mxgraph.pid.separators.separator_(venturi_scrubber)',
         # must not be turned: wash spray on the crown, throat running down into the hopper
         gravity_fixed=True,
+        port_series=(PortSeries('feed_', 'W', pitch=20.0, extent=0.5, at=12.0, singular='feed', align=FROM_START),),
     ), 'venturi_scrubber')
 
     # draw.io separators:Separator, Sifter (aspect=variable) -> separator/sifter
     registry.register('separator', Symbol(
         svg='<g id="sym_separator_sifter"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z M 25.0 8.0 L 55.0 8.0 M 42.83 7.95 L 49.23 11.82" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 55.0 6.0 L 55.0 10.0 L 60.0 8.0 Z M 50.32 10.14 L 48.13 13.5 L 53.42 14.55 Z" fill="#111" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=120.0,
-        ports={'feed': (0.0, 12.0), 'overflow': (80.0, 12.0), 'underflow': (40.0, 120.0)},
+        ports={'overflow': (80.0, 12.0), 'underflow': (40.0, 120.0)},
         drawio_shape='mxgraph.pid.separators.separator,_sifter',
         # must not be turned: screen deck over a hopper; the undersize falls through it
         gravity_fixed=True,
+        port_series=(PortSeries('feed_', 'W', pitch=20.0, extent=0.5, at=12.0, singular='feed', align=FROM_START),),
     ), 'sifter')
 
     # draw.io separators:Impact Separator (aspect=variable) -> separator/impact
     registry.register('separator', Symbol(
         svg='<g id="sym_separator_impact"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z M 40.0 0.0 L 40.0 80.0" fill="white" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=120.0,
-        ports={'feed': (0.0, 12.0), 'overflow': (80.0, 12.0), 'underflow': (40.0, 120.0)},
+        ports={'overflow': (80.0, 12.0), 'underflow': (40.0, 120.0)},
         drawio_shape='mxgraph.pid.separators.impact_separator',
         # must not be turned: hopper bottom under the baffle, collected phase out of the apex
         gravity_fixed=True,
+        port_series=(PortSeries('feed_', 'W', pitch=20.0, extent=0.5, at=12.0, singular='feed', align=FROM_START),),
     ), 'impact')
 
     # draw.io separators:Separator (Permanent Magnet) (aspect=variable) -> separator/permanent_magnet
     registry.register('separator', Symbol(
         svg='<g id="sym_separator_permanent_magnet"><path d="M 0.0 0.0 L 80.0 0.0 L 80.0 80.0 L 40.0 120.0 L 0.0 80.0 Z" fill="white" stroke="#111" stroke-width="2.0"/><path d="M 25.0 50.0 L 30.0 50.0 L 30.0 60.0 L 50.0 60.0 L 50.0 50.0 L 55.0 50.0 L 55.0 65.0 L 25.0 65.0 Z" fill="#111" stroke="#111" stroke-width="2.0"/></g>',
         width=80.0, height=120.0,
-        ports={'feed': (0.0, 12.0), 'overflow': (80.0, 12.0), 'underflow': (40.0, 120.0)},
+        ports={'overflow': (80.0, 12.0), 'underflow': (40.0, 120.0)},
         drawio_shape='mxgraph.pid.separators.separator_(permanent_magnet)',
         # must not be turned: hopper bottom, separated fraction out of the apex
         gravity_fixed=True,
+        port_series=(PortSeries('feed_', 'W', pitch=20.0, extent=0.5, at=12.0, singular='feed', align=FROM_START),),
     ), 'permanent_magnet')
 
     # draw.io filters:Gas Filter (Bag, Candle, Cartridge) (aspect=variable) -> filter/gas
