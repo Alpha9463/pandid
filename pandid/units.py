@@ -269,11 +269,23 @@ class Unit:
     #: both at this class's own :attr:`LAYOUT_CONFIDENCE`. See
     #: :mod:`pandid.layout.claims`.
     #:
+    #: An entry of ``None`` is that fallback **declined**: this nozzle's
+    #: face is where the pipe attaches and nothing more, and the class
+    #: has no view on where its peer is drawn. Which is what a *service*
+    #: connection is -- a heater's steam supply, a filter's regenerant,
+    #: a furnace's fuel gas. The header on the other end of it is placed
+    #: by where the sheet's utilities come in, not by the machine tapping
+    #: it, and reading the nozzle's face instead had five heaters at
+    #: confidence 2 asserting their supply lay south of them and sinking
+    #: the header below every consumer it fed (#459). Not the same as
+    #: leaving the nozzle out: a missing entry reads the face, an entry
+    #: of ``None`` says not to.
+    #:
     #: Inherited whole, like :attr:`PORT_ANCHORS`: a subclass that
     #: declares its own replaces its base's rather than adding to it, so
     #: a class with one nozzle to say something about restates the ones
     #: it still means.
-    PLACES: dict[str, "str | tuple[str, float]"] = {}
+    PLACES: dict[str, "str | tuple[str, float] | None"] = {}
 
     #: Do this unit's connections all land on one drawn point *on
     #: purpose*?
@@ -2507,6 +2519,17 @@ class Tank(_MultiPortVessel):
                     outputs: "int | Sequence[str]" = 1, **kwargs: Any) -> "Tank": ...
 
     kind = "tank"
+    # No PLACES of its own: :class:`_MultiPortVessel`'s ``out: "E"`` is
+    # kept even though the artwork anchors ``out_1`` on this body's
+    # **south** wall where a drum's is on its east one. #459 reads that
+    # as a disagreement to reconcile and it is not one -- a tank empties
+    # through its floor and what it empties into is drawn along, so the
+    # pipe turns, which is what a drawing does. See :class:`Reactor`,
+    # whose ``outlet`` is the identical pair of facts and which measures
+    # what reconciling it costs. Measured here too: ``S`` moves the
+    # corpus by +2 net (``14_tank_farm`` -2, ``13_mineral_dewatering``
+    # +4) and ``SE`` by +21, so the drawing is not asking for either.
+
     PORTS = [
         ("vent", "outlet", "vapor"),
         ("relief", "outlet", "process"),
@@ -2956,6 +2979,23 @@ class Furnace(Unit):
     fuel: Port
 
     kind = "furnace"
+    #: A fixed point on the sheet, drawn where its train runs -- the
+    #: rung a vessel, a tank and a separator sit on. A fired heater is
+    #: the thing a crude or reformer sheet is built around, and at the
+    #: base 1 it was placed by whatever exchanger it happened to be
+    #: piped to. Not an 8: what makes a tower an 8 is that its
+    #: *arrangement* is a convention a reader expects, and a furnace's
+    #: is in-one-side-out-the-other, which is a consequence of what it
+    #: is connected to.
+    LAYOUT_CONFIDENCE = 4
+    #: ``fuel`` is declared empty: the burners are at the floor, so the
+    #: symbol anchors the connection south, and read as a claim that
+    #: hangs the fuel gas header off the bottom of the furnace. Where
+    #: the fuel header runs is a fact about the sheet's utilities. See
+    #: :class:`Heater`, which is the same nozzle on a smaller machine --
+    #: and which is also why the process pair is not restated here, this
+    #: being the class whose one mirrored instance measured the cost.
+    PLACES = {"fuel": None}
     PORTS = [
         ("inlet", "inlet", "process"),
         ("outlet", "outlet", "process"),
@@ -2979,6 +3019,16 @@ class Boiler(Unit):
     steam: Port
 
     kind = "boiler"
+    #: A fixed point on the sheet, drawn where its train runs;
+    #: :class:`Furnace`'s rung and its reasoning.
+    LAYOUT_CONFIDENCE = 4
+    #: ``steam`` is drawn off the dome's apex, so the symbol anchors it
+    #: north and read as a claim the boiler asserts that whatever takes
+    #: its steam is drawn above it. Nothing about a steam main says
+    #: that: it leaves the boiler and goes on across the sheet like any
+    #: other product, which is east. ``feedwater`` is already fixed west
+    #: and stays with the artwork; see :class:`Heater`.
+    PLACES = {"steam": "E"}
     PORTS = [("feedwater", "inlet", "process"), ("steam", "outlet", "process")]
 
 
@@ -3025,6 +3075,15 @@ class Turbine(Unit):
     outlet: Port
 
     kind = "turbine"
+    #: A machine in the train, with an opinion about its own two sides
+    #: and none about the sheet: the rung :class:`Compressor`,
+    #: :class:`Blower` and :class:`Pump` are on, and a turbine is the
+    #: machine on the other end of their shaft.
+    LAYOUT_CONFIDENCE = 2
+    # No PLACES: the symbol already fixes the motive fluid west and the
+    # exhaust east, and restating a face loses the mirror it carries --
+    # see :class:`Heater`. What was wrong here was the weight.
+
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
 
@@ -3086,6 +3145,24 @@ class Filter(Unit):
 
     kind = "filter"
     LAYOUT_CONFIDENCE = 2
+    #: ``regenerant_in`` is declared empty. It is anchored on the roof,
+    #: and read as a claim that puts the acid or caustic day tank
+    #: directly above the machine at the same weight as the process
+    #: line -- an argument the process line should not be having (#459).
+    #: ``spent_regenerant`` goes the same way: it leaves for a
+    #: neutralisation pit or an effluent header, drawn wherever the
+    #: sheet puts those.
+    #:
+    #: ``wash_in`` is the same case on the same drawing and is **not**
+    #: declared here. It costs ``21_alumina_refinery`` 13 crossings, on
+    #: two presses whose wash comes off a flag with nothing else to
+    #: place it: silenced, the flag falls back to what the pipe says --
+    #: "west of the machine" -- and lands in the column the process feed
+    #: already occupies. That is a gap in what a silent nozzle falls
+    #: back *to*, not a reason the wash header is placed by the press,
+    #: and it wants fixing where the fallback lives rather than by
+    #: leaving one of these two nozzles reading its artwork.
+    PLACES = {"regenerant_in": None, "spent_regenerant": None}
     # Empty because which nozzles a filter has depends on its variant,
     # and Unit.__init__ reads PORTS before a variant is in hand.
     # _VARIANT_PORTS below is the declaration and __init__ lays it down,
@@ -3254,6 +3331,14 @@ class Dryer(Unit):
     vent: Port
 
     kind = "dryer"
+    #: ``heating_in`` is :class:`Heater`'s ``utility_in`` under another
+    #: name -- the hot gas or the steam brought to the machine from a
+    #: header -- and it is anchored on whichever wall the drying medium
+    #: enters by, which on most of these bodies is the floor. Declared
+    #: empty for the same reason and with the same effect: a bank of
+    #: driers on one hot-air main should not be able to drag the main
+    #: below the bank (#459).
+    PLACES = {"heating_in": None}
     # Empty because which nozzles a drier has depends on its variant --
     # today every one of them the same four, but the mechanism is
     # :attr:`_VARIANT_PORTS`, the one :class:`HeatExchanger`, ``Filter``
@@ -3418,6 +3503,23 @@ class ScreeningDevice(Unit):
     # and a spec naming ``kind: Screen`` would silently resolve to the
     # wrong class on the way back in. See ``pandid.spec._ALIASES``.
     kind = "screening_device"
+    #: Six of the seven rows anchor the feed on the **roof**, because
+    #: that is how a screen is loaded -- material is dropped onto the
+    #: deck. Vertical position on a P&ID is not elevation, though, so
+    #: read as a claim that nozzle puts whatever feeds a headworks screen
+    #: directly above it and the raw influent comes in through the ceiling
+    #: (#459). What feeds a screen is drawn where anything upstream is
+    #: drawn: to the west.
+    #:
+    #: ``undersize`` is the other half: it leaves through the deck, so
+    #: the symbol anchors it on the apex below, and it goes on east like
+    #: any other product once it is out. South *east*, which is
+    #: :class:`Separator`'s ``underflow`` on the same shape of machine
+    #: and for the same reason -- the two products get a lane each
+    #: instead of leaving by the same corner. ``oversize`` is already
+    #: fixed east by the artwork and is left there; see :class:`Heater`
+    #: on why restating a face costs more than it says.
+    PLACES = {"feed": "W", "undersize": "SE"}
     PORTS = [
         ("feed", "inlet", "feed"),
         ("oversize", "outlet", "process"),
@@ -4474,6 +4576,25 @@ class Heater(Unit):
 
     kind = "heater"
     LAYOUT_CONFIDENCE = 2
+    #: ``utility_in`` is declared **empty**, and the process pair is left
+    #: out. The nozzle is fixed to the symbol's south face because that
+    #: is where the drawing puts it, and read as a claim that is the
+    #: heater saying its steam supply is drawn below it. Five heaters on
+    #: one header then muster 10 against a flag with no opinion of its
+    #: own, and the header sinks below every consumer it feeds (#459).
+    #: Where a steam header enters a sheet is a fact about the sheet's
+    #: utilities, and the heater tapping it knows nothing about it.
+    #:
+    #: ``inlet`` and ``outlet`` are already fixed west and east by the
+    #: artwork, so an entry restating them would only *lose* the
+    #: placement transform: ``fixed_face`` mirrors with the unit and
+    #: ``PLACES`` does not, so a heater drawn ``mirrored=True`` would go
+    #: on claiming its feed lay west when the nozzle points east. That
+    #: is measurable -- the same restatement on :class:`Furnace`, whose
+    #: one mirrored instance in the corpus is ``20_molecular_sieve_dryer``,
+    #: costs that sheet 14 crossings. So this states what the drawing
+    #: does not, and nothing else.
+    PLACES = {"utility_in": None}
     PORTS = [
         ("inlet", "inlet", "process"),
         ("outlet", "outlet", "process"),
@@ -4494,6 +4615,11 @@ class Cooler(Unit):
 
     kind = "cooler"
     LAYOUT_CONFIDENCE = 2
+    #: :class:`Heater`'s entry, mirrored: the cooling medium leaves by
+    #: the symbol's north face, which read as a claim lifts a
+    #: cooling-water return header above every consumer draining into
+    #: it. Same nozzle, same drawing detail, same #459.
+    PLACES = {"utility_out": None}
     PORTS = [
         ("inlet", "inlet", "process"),
         ("outlet", "outlet", "process"),
@@ -4542,6 +4668,26 @@ class CoolingTower(Unit):
     blowdown: Port
 
     kind = "cooling_tower"
+    #: A fixed point on the sheet, drawn where its train runs; a tower
+    #: is the end of the cooling-water loop and the thing every cooler
+    #: on the sheet is piped back to. :class:`Furnace`'s rung.
+    LAYOUT_CONFIDENCE = 4
+    #: ``water_out`` is drawn on the **basin**, at the foot of the
+    #: tower, which is where a pump takes suction and not where the cold
+    #: water supply belongs; read as a claim it drops the whole
+    #: cold-water side of the sheet below the tower. The circulating
+    #: loop runs through the tower like any other train, so it leaves
+    #: east. ``water_in`` is already fixed west and stays with the
+    #: artwork (see :class:`Heater`).
+    #:
+    #: The other three are declared empty. ``makeup`` and ``blowdown``
+    #: are a service brought in and an effluent taken away, both to
+    #: headers placed by where the sheet's utilities are, and ``air_in``
+    #: is ambient or a fan intake with no drawn peer at all in the
+    #: ordinary case. ``air_out`` is left to its own north face, which
+    #: is not merely artwork: an exhaust is drawn leaving upward, the
+    #: way a :class:`Vent` and a :class:`Stack` are.
+    PLACES = {"water_out": "E", "air_in": None, "makeup": None, "blowdown": None}
     PORTS = [
         *_side_ports("water", "air"),
         ("makeup", "inlet", "utility"),
@@ -4867,6 +5013,17 @@ class Reactor(Unit):
     #: **along**. ``feed`` restates its own face, because a charge line
     #: coming from the left is a statement worth making at a reactor's
     #: weight rather than at a nozzle's.
+    #:
+    #: The ink and the claim therefore disagree about ``outlet``, which
+    #: is not a defect to be reconciled away (#459 asks): the nozzle is
+    #: on the floor and the pipe turns to reach a peer drawn level, and
+    #: that is what a drawing does. Saying ``SE`` instead -- the claim
+    #: the ink would make -- steps every downstream unit a row down at a
+    #: reactor's confidence of 8, which is a staircase on a train of
+    #: them: 23 crossings across the corpus, 17 of them on
+    #: ``17_stirred_reactor_train``. A tower's ``bottoms`` is ``SE`` for
+    #: a reason this does not share, that a column is drawn tall enough
+    #: for its own bottom to be a row of its own.
     PLACES = {"feed": "W", "outlet": "E", "vent": "N"}
     # Empty because which nozzles a reactor has depends on its variant,
     # and Unit.__init__ reads PORTS before a variant is in hand.
@@ -6769,6 +6926,20 @@ class Mixer(Unit):
         def __new__(cls, name: str, n_inlets: int = 2, *args: Any, **kwargs: Any) -> "Mixer": ...
 
     kind = "mixer"
+    #: In the train, with an opinion about its own two sides and none
+    #: about the sheet -- the rung a pump and an exchanger sit on, and
+    #: the right one for a machine every line on it passes *through*.
+    #: At the base 1 a mixer was the weakest non-zero class in the
+    #: library and the bank it collects from dragged it off its own
+    #: header line; a mixer and a splitter are the only manifold
+    #: primitives here, so that is a sheet's whole junction geometry
+    #: coming loose (#459).
+    LAYOUT_CONFIDENCE = 2
+    # No PLACES. The symbol already fixes every ``in_n`` west and the
+    # outlet east at any arity, so ``{"in": "W", "outlet": "E"}`` would
+    # restate the drawing and, restating it, lose the mirror the drawing
+    # carries and this attribute does not -- see :class:`Heater`. What
+    # was wrong here was the weight, not the directions.
 
     def __init__(
         self,
@@ -6930,6 +7101,9 @@ class Splitter(Unit):
         ) -> "Splitter": ...
 
     kind = "splitter"
+    #: :class:`Mixer`'s, for the same reason and on the same rung, and
+    #: no ``PLACES`` for the same reason either.
+    LAYOUT_CONFIDENCE = 2
 
     def __init__(
         self,

@@ -1943,6 +1943,13 @@ by the nozzle's own name or the family name a numbered family shares, so
 `"feed"` answers for `feed_1` … `feed_n`. A nozzle with no entry falls back to
 the face the symbol fixed it to, and a unit with neither to flow order.
 
+Map a nozzle to `None` to say the class has no view on where its peer is drawn,
+and the face is not to be read for one either. That is what a **service**
+connection is: a heater's steam enters from below because that is where the
+symbol draws the nozzle, and where the steam header belongs on the sheet is not
+the heater's business. Leaving the nozzle out of `PLACES` says something else —
+read its face.
+
 `LAYOUT_CONFIDENCE` is how hard this kind of equipment insists: 8 for a tower or
 a reactor, 4 for a vessel, 2 for a machine in the train, 1 for a plain `Block`,
 0 for a valve or a fitting, which sit *in* the line and say nothing about where
