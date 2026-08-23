@@ -13,14 +13,14 @@ kinds, each argued at the class or the module it applies to:
 
 - the **numbered members** of a variable-sized family (``Mixer``'s ``in_1`` ...
   ``in_n``, ``Splitter``'s ``out_1`` ... ``out_n``, both of ``Block``'s, the
-  ``feed_1`` ... ``feed_n`` a second feed spells a ``Column`` or ``Reactor``
-  with, and the ``draw_1`` ... ``draw_n`` a second draw spells a ``Column``
-  with -- the one class with *two* independent counted families), whose count
-  is the caller's, so there is no finite set of names a class annotation
-  could stand for one at a time.
+  ``feed_1`` ... ``feed_n`` a second feed spells a ``Column``, ``Reactor`` or
+  ``Separator`` with, and the ``draw_1`` ... ``draw_n`` a second draw spells a
+  ``Column`` with -- the one class with *two* independent counted families),
+  whose count is the caller's, so there is no finite set of names a class
+  annotation could stand for one at a time.
 
   It is *only* the members. The family itself is perfectly declarable as a
-  sequence -- ``inlets: tuple[Port, ...]`` -- and every one of the five is
+  sequence -- ``inlets: tuple[Port, ...]`` -- and every one of them is
   declared, so the exemption is "this nozzle is reachable through a family the
   class declares" and not "this nozzle has a number on the end". A class cannot
   take it by naming a port ``thing_2``, and cannot use a family to get out of
@@ -47,7 +47,8 @@ kinds, each argued at the class or the module it applies to:
   nothing left for either class to inherit falsely. That is the fix this
   whole exemption exists to make unnecessary: a class the hierarchy tells
   the truth about needs no annotation-level patch;
-- an **aliased nozzle** -- ``Reactor.feed``/``Column.feed``, a bare name
+- an **aliased nozzle** -- ``Reactor.feed``/``Column.feed``/``Separator.feed``,
+  a bare name
   set beside ``feed_1`` in ``__init__`` rather than registered as a
   second port, so a one-feed vessel keeps the singular spelling without
   a ``PortSeries`` counting it twice (:func:`_family_aliases`). Found the
@@ -99,8 +100,9 @@ def _is_family(hint):
 # derived so that adding a sixth is a deliberate act with this comment to read
 # first, exactly as the old class-level list was.
 #
-# ``Column`` and ``Reactor`` are here where they were absent from the list this
-# replaces: they default to *one* feed, a real nozzle named ``feed_1`` the way
+# ``Column``, ``Reactor`` and ``Separator`` are here where they were absent from
+# the list this replaces: they default to *one* feed, a real nozzle named
+# ``feed_1`` the way
 # every other count is, plus the bare ``feed`` alias :func:`_family_aliases`
 # answers for. ``feeds`` is the one-tuple holding the real member either way,
 # and is the same accessor once ``n_feeds`` spells the family ``feed_1`` ...
@@ -126,6 +128,7 @@ _DECLARED_FAMILIES = {
     units.Block: {"inlets", "outlets"},
     units.Column: {"feeds", "draws"},
     units.Reactor: {"feeds"},
+    units.Separator: {"feeds"},
     units.Tank: {"inlets", "outlets"},
     units.Vessel: {"inlets", "outlets"},
 }
@@ -388,6 +391,14 @@ _CHECKER_VISIBLE_GETATTR = {"Block"}
 #: typed route there, exactly as ``m.inlets[i]`` is for a *computed*
 #: ``n_inlets`` everywhere else in this table.
 #:
+#: ``Separator`` carries one family and crosses nothing, unlike ``Column``:
+#: which *draws* a separator has is fixed by its ``variant=`` rather than by
+#: a count, so there is no second arity to pair ``n_feeds`` with. Its
+#: ``variant="horizontal"`` refuses a second feed outright (see
+#: ``Separator._ONE_FEED_VARIANTS``), which is a run-time refusal and not
+#: something these overloads can express: the classes below are built at the
+#: default variant, which is the one every arity really has.
+#:
 #: ``Tank`` and ``Vessel`` are here for ``inputs`` only, on the same
 #: trade: both default to one outlet, so ``outputs=`` above one is the
 #: combination this table declines to cross-type, exactly as
@@ -398,6 +409,7 @@ _EXACT_ARITY = {
     units.Splitter: (("n_outlets", "out", ""),),
     units.Column: (("n_feeds", "feed", ""), ("n_draws", "draw", "Draw")),
     units.Reactor: (("n_feeds", "feed", ""),),
+    units.Separator: (("n_feeds", "feed", ""),),
     units.Absorber: (("n_feeds", "feed", ""),),
     units.Stripper: (("n_feeds", "feed", ""),),
     units.DistillationColumn: (("n_feeds", "feed", ""),),
@@ -544,8 +556,8 @@ def test_no_arity_class_is_left_over(cls=None):
         for node in ast.walk(module)
         if isinstance(node, ast.ClassDef)
         and re.fullmatch(
-            r"(Mixer|Splitter|ColumnDraw|Column|Reactor|Block|Absorber|Stripper"
-            r"|DistillationColumn|Tank|Vessel)\d+",
+            r"(Mixer|Splitter|ColumnDraw|Column|Reactor|Separator|Block|Absorber"
+            r"|Stripper|DistillationColumn|Tank|Vessel)\d+",
             node.name,
         )
     }

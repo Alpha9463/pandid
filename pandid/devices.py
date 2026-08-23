@@ -545,15 +545,105 @@ class Cyclone(Separator):
     kind = "separator"
     VARIANTS = ("default", "cyclone")
     VARIANT_ALIASES = {"default": "cyclone"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("overflow", "outlet", "process"),
-        ("underflow", "outlet", "process"),
-    ]
+    PORTS = [("overflow", "outlet", "process"), ("underflow", "outlet", "process")]
 
-    feed: Port
     overflow: Port
     underflow: Port
+
+    if TYPE_CHECKING:
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
+                    *args: Any, **kwargs: Any) -> "Cyclone1": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[2],
+                    *args: Any, **kwargs: Any) -> "Cyclone2": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[3],
+                    *args: Any, **kwargs: Any) -> "Cyclone3": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[4],
+                    *args: Any, **kwargs: Any) -> "Cyclone4": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[5],
+                    *args: Any, **kwargs: Any) -> "Cyclone5": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[6],
+                    *args: Any, **kwargs: Any) -> "Cyclone6": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[7],
+                    *args: Any, **kwargs: Any) -> "Cyclone7": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[8],
+                    *args: Any, **kwargs: Any) -> "Cyclone8": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: int,
+                    *args: Any, **kwargs: Any) -> "Cyclone": ...
+        def __new__(cls, name: str, n_feeds: int = 1,
+                    *args: Any, **kwargs: Any) -> "Cyclone": ...
+
+
+if TYPE_CHECKING:
+
+    class Cyclone1(Cyclone):
+        feed_1: Port
+
+    class Cyclone2(Cyclone):
+        feed_1: Port
+        feed_2: Port
+
+    class Cyclone3(Cyclone):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+
+    class Cyclone4(Cyclone):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+
+    class Cyclone5(Cyclone):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+
+    class Cyclone6(Cyclone):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+
+    class Cyclone7(Cyclone):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+
+    class Cyclone8(Cyclone):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+        feed_8: Port
 
 
 class GravitySeparator(Separator):
@@ -567,15 +657,105 @@ class GravitySeparator(Separator):
     kind = "separator"
     VARIANTS = ("default", "gravity")
     VARIANT_ALIASES = {"default": "gravity"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("overflow", "outlet", "process"),
-        ("underflow", "outlet", "process"),
-    ]
+    PORTS = [("overflow", "outlet", "process"), ("underflow", "outlet", "process")]
 
-    feed: Port
     overflow: Port
     underflow: Port
+
+    if TYPE_CHECKING:
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
+                    *args: Any, **kwargs: Any) -> "GravitySeparator1": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[2],
+                    *args: Any, **kwargs: Any) -> "GravitySeparator2": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[3],
+                    *args: Any, **kwargs: Any) -> "GravitySeparator3": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[4],
+                    *args: Any, **kwargs: Any) -> "GravitySeparator4": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[5],
+                    *args: Any, **kwargs: Any) -> "GravitySeparator5": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[6],
+                    *args: Any, **kwargs: Any) -> "GravitySeparator6": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[7],
+                    *args: Any, **kwargs: Any) -> "GravitySeparator7": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[8],
+                    *args: Any, **kwargs: Any) -> "GravitySeparator8": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: int,
+                    *args: Any, **kwargs: Any) -> "GravitySeparator": ...
+        def __new__(cls, name: str, n_feeds: int = 1,
+                    *args: Any, **kwargs: Any) -> "GravitySeparator": ...
+
+
+if TYPE_CHECKING:
+
+    class GravitySeparator1(GravitySeparator):
+        feed_1: Port
+
+    class GravitySeparator2(GravitySeparator):
+        feed_1: Port
+        feed_2: Port
+
+    class GravitySeparator3(GravitySeparator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+
+    class GravitySeparator4(GravitySeparator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+
+    class GravitySeparator5(GravitySeparator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+
+    class GravitySeparator6(GravitySeparator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+
+    class GravitySeparator7(GravitySeparator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+
+    class GravitySeparator8(GravitySeparator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+        feed_8: Port
 
 
 class ElectrostaticPrecipitator(Separator):
@@ -589,15 +769,105 @@ class ElectrostaticPrecipitator(Separator):
     kind = "separator"
     VARIANTS = ("default", "electrostatic")
     VARIANT_ALIASES = {"default": "electrostatic"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("overflow", "outlet", "process"),
-        ("underflow", "outlet", "process"),
-    ]
+    PORTS = [("overflow", "outlet", "process"), ("underflow", "outlet", "process")]
 
-    feed: Port
     overflow: Port
     underflow: Port
+
+    if TYPE_CHECKING:
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
+                    *args: Any, **kwargs: Any) -> "ElectrostaticPrecipitator1": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[2],
+                    *args: Any, **kwargs: Any) -> "ElectrostaticPrecipitator2": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[3],
+                    *args: Any, **kwargs: Any) -> "ElectrostaticPrecipitator3": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[4],
+                    *args: Any, **kwargs: Any) -> "ElectrostaticPrecipitator4": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[5],
+                    *args: Any, **kwargs: Any) -> "ElectrostaticPrecipitator5": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[6],
+                    *args: Any, **kwargs: Any) -> "ElectrostaticPrecipitator6": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[7],
+                    *args: Any, **kwargs: Any) -> "ElectrostaticPrecipitator7": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[8],
+                    *args: Any, **kwargs: Any) -> "ElectrostaticPrecipitator8": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: int,
+                    *args: Any, **kwargs: Any) -> "ElectrostaticPrecipitator": ...
+        def __new__(cls, name: str, n_feeds: int = 1,
+                    *args: Any, **kwargs: Any) -> "ElectrostaticPrecipitator": ...
+
+
+if TYPE_CHECKING:
+
+    class ElectrostaticPrecipitator1(ElectrostaticPrecipitator):
+        feed_1: Port
+
+    class ElectrostaticPrecipitator2(ElectrostaticPrecipitator):
+        feed_1: Port
+        feed_2: Port
+
+    class ElectrostaticPrecipitator3(ElectrostaticPrecipitator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+
+    class ElectrostaticPrecipitator4(ElectrostaticPrecipitator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+
+    class ElectrostaticPrecipitator5(ElectrostaticPrecipitator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+
+    class ElectrostaticPrecipitator6(ElectrostaticPrecipitator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+
+    class ElectrostaticPrecipitator7(ElectrostaticPrecipitator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+
+    class ElectrostaticPrecipitator8(ElectrostaticPrecipitator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+        feed_8: Port
 
 
 class Screen(Separator):
@@ -616,15 +886,105 @@ class Screen(Separator):
     kind = "separator"
     VARIANTS = ("default", "sifter")
     VARIANT_ALIASES = {"default": "sifter"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("overflow", "outlet", "process"),
-        ("underflow", "outlet", "process"),
-    ]
+    PORTS = [("overflow", "outlet", "process"), ("underflow", "outlet", "process")]
 
-    feed: Port
     overflow: Port
     underflow: Port
+
+    if TYPE_CHECKING:
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
+                    *args: Any, **kwargs: Any) -> "Screen1": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[2],
+                    *args: Any, **kwargs: Any) -> "Screen2": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[3],
+                    *args: Any, **kwargs: Any) -> "Screen3": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[4],
+                    *args: Any, **kwargs: Any) -> "Screen4": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[5],
+                    *args: Any, **kwargs: Any) -> "Screen5": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[6],
+                    *args: Any, **kwargs: Any) -> "Screen6": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[7],
+                    *args: Any, **kwargs: Any) -> "Screen7": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[8],
+                    *args: Any, **kwargs: Any) -> "Screen8": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: int,
+                    *args: Any, **kwargs: Any) -> "Screen": ...
+        def __new__(cls, name: str, n_feeds: int = 1,
+                    *args: Any, **kwargs: Any) -> "Screen": ...
+
+
+if TYPE_CHECKING:
+
+    class Screen1(Screen):
+        feed_1: Port
+
+    class Screen2(Screen):
+        feed_1: Port
+        feed_2: Port
+
+    class Screen3(Screen):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+
+    class Screen4(Screen):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+
+    class Screen5(Screen):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+
+    class Screen6(Screen):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+
+    class Screen7(Screen):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+
+    class Screen8(Screen):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+        feed_8: Port
 
 
 class ImpactSeparator(Separator):
@@ -637,15 +997,105 @@ class ImpactSeparator(Separator):
     kind = "separator"
     VARIANTS = ("default", "impact")
     VARIANT_ALIASES = {"default": "impact"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("overflow", "outlet", "process"),
-        ("underflow", "outlet", "process"),
-    ]
+    PORTS = [("overflow", "outlet", "process"), ("underflow", "outlet", "process")]
 
-    feed: Port
     overflow: Port
     underflow: Port
+
+    if TYPE_CHECKING:
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
+                    *args: Any, **kwargs: Any) -> "ImpactSeparator1": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[2],
+                    *args: Any, **kwargs: Any) -> "ImpactSeparator2": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[3],
+                    *args: Any, **kwargs: Any) -> "ImpactSeparator3": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[4],
+                    *args: Any, **kwargs: Any) -> "ImpactSeparator4": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[5],
+                    *args: Any, **kwargs: Any) -> "ImpactSeparator5": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[6],
+                    *args: Any, **kwargs: Any) -> "ImpactSeparator6": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[7],
+                    *args: Any, **kwargs: Any) -> "ImpactSeparator7": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[8],
+                    *args: Any, **kwargs: Any) -> "ImpactSeparator8": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: int,
+                    *args: Any, **kwargs: Any) -> "ImpactSeparator": ...
+        def __new__(cls, name: str, n_feeds: int = 1,
+                    *args: Any, **kwargs: Any) -> "ImpactSeparator": ...
+
+
+if TYPE_CHECKING:
+
+    class ImpactSeparator1(ImpactSeparator):
+        feed_1: Port
+
+    class ImpactSeparator2(ImpactSeparator):
+        feed_1: Port
+        feed_2: Port
+
+    class ImpactSeparator3(ImpactSeparator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+
+    class ImpactSeparator4(ImpactSeparator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+
+    class ImpactSeparator5(ImpactSeparator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+
+    class ImpactSeparator6(ImpactSeparator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+
+    class ImpactSeparator7(ImpactSeparator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+
+    class ImpactSeparator8(ImpactSeparator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+        feed_8: Port
 
 
 class MagneticSeparator(Separator):
@@ -661,15 +1111,105 @@ class MagneticSeparator(Separator):
     kind = "separator"
     VARIANTS = ("default", "electromagnetic", "permanent_magnet")
     VARIANT_ALIASES = {"default": "permanent_magnet"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("overflow", "outlet", "process"),
-        ("underflow", "outlet", "process"),
-    ]
+    PORTS = [("overflow", "outlet", "process"), ("underflow", "outlet", "process")]
 
-    feed: Port
     overflow: Port
     underflow: Port
+
+    if TYPE_CHECKING:
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
+                    *args: Any, **kwargs: Any) -> "MagneticSeparator1": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[2],
+                    *args: Any, **kwargs: Any) -> "MagneticSeparator2": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[3],
+                    *args: Any, **kwargs: Any) -> "MagneticSeparator3": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[4],
+                    *args: Any, **kwargs: Any) -> "MagneticSeparator4": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[5],
+                    *args: Any, **kwargs: Any) -> "MagneticSeparator5": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[6],
+                    *args: Any, **kwargs: Any) -> "MagneticSeparator6": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[7],
+                    *args: Any, **kwargs: Any) -> "MagneticSeparator7": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[8],
+                    *args: Any, **kwargs: Any) -> "MagneticSeparator8": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: int,
+                    *args: Any, **kwargs: Any) -> "MagneticSeparator": ...
+        def __new__(cls, name: str, n_feeds: int = 1,
+                    *args: Any, **kwargs: Any) -> "MagneticSeparator": ...
+
+
+if TYPE_CHECKING:
+
+    class MagneticSeparator1(MagneticSeparator):
+        feed_1: Port
+
+    class MagneticSeparator2(MagneticSeparator):
+        feed_1: Port
+        feed_2: Port
+
+    class MagneticSeparator3(MagneticSeparator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+
+    class MagneticSeparator4(MagneticSeparator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+
+    class MagneticSeparator5(MagneticSeparator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+
+    class MagneticSeparator6(MagneticSeparator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+
+    class MagneticSeparator7(MagneticSeparator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+
+    class MagneticSeparator8(MagneticSeparator):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+        feed_8: Port
 
 
 class Scrubber(Separator):
@@ -684,15 +1224,105 @@ class Scrubber(Separator):
     kind = "separator"
     VARIANTS = ("default", "scrubber")
     VARIANT_ALIASES = {"default": "scrubber"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("vapor", "outlet", "vapor"),
-        ("liquid", "outlet", "liquid"),
-    ]
+    PORTS = [("vapor", "outlet", "vapor"), ("liquid", "outlet", "liquid")]
 
-    feed: Port
     vapor: Port
     liquid: Port
+
+    if TYPE_CHECKING:
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
+                    *args: Any, **kwargs: Any) -> "Scrubber1": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[2],
+                    *args: Any, **kwargs: Any) -> "Scrubber2": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[3],
+                    *args: Any, **kwargs: Any) -> "Scrubber3": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[4],
+                    *args: Any, **kwargs: Any) -> "Scrubber4": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[5],
+                    *args: Any, **kwargs: Any) -> "Scrubber5": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[6],
+                    *args: Any, **kwargs: Any) -> "Scrubber6": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[7],
+                    *args: Any, **kwargs: Any) -> "Scrubber7": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[8],
+                    *args: Any, **kwargs: Any) -> "Scrubber8": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: int,
+                    *args: Any, **kwargs: Any) -> "Scrubber": ...
+        def __new__(cls, name: str, n_feeds: int = 1,
+                    *args: Any, **kwargs: Any) -> "Scrubber": ...
+
+
+if TYPE_CHECKING:
+
+    class Scrubber1(Scrubber):
+        feed_1: Port
+
+    class Scrubber2(Scrubber):
+        feed_1: Port
+        feed_2: Port
+
+    class Scrubber3(Scrubber):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+
+    class Scrubber4(Scrubber):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+
+    class Scrubber5(Scrubber):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+
+    class Scrubber6(Scrubber):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+
+    class Scrubber7(Scrubber):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+
+    class Scrubber8(Scrubber):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+        feed_8: Port
 
 
 class VenturiScrubber(Separator):
@@ -713,15 +1343,105 @@ class VenturiScrubber(Separator):
     kind = "separator"
     VARIANTS = ("default", "venturi_scrubber")
     VARIANT_ALIASES = {"default": "venturi_scrubber"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("vapor", "outlet", "vapor"),
-        ("liquid", "outlet", "liquid"),
-    ]
+    PORTS = [("vapor", "outlet", "vapor"), ("liquid", "outlet", "liquid")]
 
-    feed: Port
     vapor: Port
     liquid: Port
+
+    if TYPE_CHECKING:
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
+                    *args: Any, **kwargs: Any) -> "VenturiScrubber1": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[2],
+                    *args: Any, **kwargs: Any) -> "VenturiScrubber2": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[3],
+                    *args: Any, **kwargs: Any) -> "VenturiScrubber3": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[4],
+                    *args: Any, **kwargs: Any) -> "VenturiScrubber4": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[5],
+                    *args: Any, **kwargs: Any) -> "VenturiScrubber5": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[6],
+                    *args: Any, **kwargs: Any) -> "VenturiScrubber6": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[7],
+                    *args: Any, **kwargs: Any) -> "VenturiScrubber7": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[8],
+                    *args: Any, **kwargs: Any) -> "VenturiScrubber8": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: int,
+                    *args: Any, **kwargs: Any) -> "VenturiScrubber": ...
+        def __new__(cls, name: str, n_feeds: int = 1,
+                    *args: Any, **kwargs: Any) -> "VenturiScrubber": ...
+
+
+if TYPE_CHECKING:
+
+    class VenturiScrubber1(VenturiScrubber):
+        feed_1: Port
+
+    class VenturiScrubber2(VenturiScrubber):
+        feed_1: Port
+        feed_2: Port
+
+    class VenturiScrubber3(VenturiScrubber):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+
+    class VenturiScrubber4(VenturiScrubber):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+
+    class VenturiScrubber5(VenturiScrubber):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+
+    class VenturiScrubber6(VenturiScrubber):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+
+    class VenturiScrubber7(VenturiScrubber):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+
+    class VenturiScrubber8(VenturiScrubber):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+        feed_8: Port
 
 
 class KnockoutDrum(Separator):
@@ -743,15 +1463,105 @@ class KnockoutDrum(Separator):
     kind = "separator"
     VARIANTS = ("default", "knockout")
     VARIANT_ALIASES = {"default": "knockout"}
-    PORTS = [
-        ("feed", "inlet", "feed"),
-        ("vapor", "outlet", "vapor"),
-        ("liquid", "outlet", "liquid"),
-    ]
+    PORTS = [("vapor", "outlet", "vapor"), ("liquid", "outlet", "liquid")]
 
-    feed: Port
     vapor: Port
     liquid: Port
+
+    if TYPE_CHECKING:
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[1] = 1,
+                    *args: Any, **kwargs: Any) -> "KnockoutDrum1": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[2],
+                    *args: Any, **kwargs: Any) -> "KnockoutDrum2": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[3],
+                    *args: Any, **kwargs: Any) -> "KnockoutDrum3": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[4],
+                    *args: Any, **kwargs: Any) -> "KnockoutDrum4": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[5],
+                    *args: Any, **kwargs: Any) -> "KnockoutDrum5": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[6],
+                    *args: Any, **kwargs: Any) -> "KnockoutDrum6": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[7],
+                    *args: Any, **kwargs: Any) -> "KnockoutDrum7": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: Literal[8],
+                    *args: Any, **kwargs: Any) -> "KnockoutDrum8": ...
+
+        @overload
+        def __new__(cls, name: str, n_feeds: int,
+                    *args: Any, **kwargs: Any) -> "KnockoutDrum": ...
+        def __new__(cls, name: str, n_feeds: int = 1,
+                    *args: Any, **kwargs: Any) -> "KnockoutDrum": ...
+
+
+if TYPE_CHECKING:
+
+    class KnockoutDrum1(KnockoutDrum):
+        feed_1: Port
+
+    class KnockoutDrum2(KnockoutDrum):
+        feed_1: Port
+        feed_2: Port
+
+    class KnockoutDrum3(KnockoutDrum):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+
+    class KnockoutDrum4(KnockoutDrum):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+
+    class KnockoutDrum5(KnockoutDrum):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+
+    class KnockoutDrum6(KnockoutDrum):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+
+    class KnockoutDrum7(KnockoutDrum):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+
+    class KnockoutDrum8(KnockoutDrum):
+        feed_1: Port
+        feed_2: Port
+        feed_3: Port
+        feed_4: Port
+        feed_5: Port
+        feed_6: Port
+        feed_7: Port
+        feed_8: Port
 
 
 class DustCollector(Filter):

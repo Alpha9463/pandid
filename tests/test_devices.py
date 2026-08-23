@@ -301,7 +301,7 @@ def test_a_collector_draws_the_same_nozzles_whichever_way_it_was_built(cls, vari
     That was written down as permanent and is not, and this is where the two
     forms are held to one another.
     """
-    assert set(cls("S-1").ports) == {"feed", "overflow", "underflow"}
+    assert set(cls("S-1").ports) == {"feed_1", "overflow", "underflow"}
     assert set(units.Separator("S-2", variant=variant).ports) == set(cls("S-3").ports)
 
 

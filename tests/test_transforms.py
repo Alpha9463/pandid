@@ -248,7 +248,7 @@ def test_pin_leaves_the_transform_alone_when_it_rejects_the_placement():
 def test_nozzle_records_the_face_as_drawn():
     drum = units.Separator("V-1", variant="horizontal")
     drum.nozzle("feed", "N")
-    assert drum._port_faces == {"feed": "N"}
+    assert drum._port_faces == {"feed_1": "N"}
 
 
 def test_an_unanchored_port_reports_the_face_it_actually_resolves_to(gapped_kind):

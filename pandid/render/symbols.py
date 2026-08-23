@@ -128,8 +128,27 @@ def wears_arrowhead(stream, registry) -> bool:
     return not registry.for_unit(stream.dest.owner).bare_run
 
 
+#: A family spread symmetrically about ``at``, which is where a symbol
+#: that drew one nozzle drew it: two members straddle that point, three
+#: put the middle one back on it. The default, and what a shell fed at
+#: mid-height wants.
+CENTRED = "centre"
+
+#: A family that *starts* at ``at`` and grows along the face. For a body
+#: whose one nozzle is drawn hard against the end of the wall it is on --
+#: a hopper-bottomed separator's feed sits 12 units down an 80-unit wall,
+#: a module below the roof -- there is no room to straddle it, and a
+#: centred family either walks off the top corner or has to be squeezed
+#: to a pitch two arrowheads cannot be told apart at. Growing downwards
+#: keeps the first member exactly where the single nozzle was, which is
+#: what stops adding ``n_feeds=2`` to a sheet moving the feed that was
+#: already drawn.
+FROM_START = "start"
+
+
 def spread(index: int, count: int, along: float, pitch: float,
-           extent: float, at: float | None = None) -> float:
+           extent: float, at: float | None = None,
+           align: str = CENTRED) -> float:
     """Where member ``index`` of ``count`` sits along a face ``along``
     long.
 
@@ -145,15 +164,24 @@ def spread(index: int, count: int, along: float, pitch: float,
     where a fixed nozzle would and one more does not shove the others
     aside to find room.
 
+    ``align`` is :data:`CENTRED` or :data:`FROM_START` and decides which
+    of those two the run is anchored by. Either way ``at`` is where a
+    lone member goes, so a symbol keeps the nozzle it was drawn with;
+    the difference is only which way a second one pushes.
+
     :class:`PortSeries` is the declarative form of this, for a symbol
     that can name its family with one rule. :func:`block_symbol` calls
     it directly, because a block's family is split across up to four
     faces and one series cannot span two of them; see
     :class:`pandid.units.Block`.
     """
-    centre = along / 2 if at is None else at
+    start = along / 2 if at is None else at
     span = min(pitch * (count - 1), extent * along)
-    return centre if count < 2 else centre - span / 2 + span * index / (count - 1)
+    if count < 2:
+        return start
+    if align == CENTRED:
+        start -= span / 2
+    return start + span * index / (count - 1)
 
 
 def _on_face(face: str, t: float, width: float, height: float) -> tuple[float, float]:
@@ -193,6 +221,10 @@ class PortSeries:
     ``extent`` of the face instead. The count the symbol was drawn for
     therefore lands exactly where a fixed symbol would put it, and one
     more does not shove the others aside to find room.
+
+    ``align`` says which end of the run ``at`` holds -- see
+    :data:`CENTRED` and :data:`FROM_START`. A lone member sits on ``at``
+    under both, so this only decides which way the second one pushes.
     """
 
     prefix: str
@@ -201,6 +233,7 @@ class PortSeries:
     extent: float = 0.7
     at: float | None = None
     singular: str | None = None
+    align: str = CENTRED
 
     def matches(self, port_name: str) -> bool:
         """True when ``port_name`` is a member of this series."""
@@ -222,7 +255,8 @@ class PortSeries:
         """
         along = height if self.face in ("W", "E") else width
         t = (pin * along if pin is not None
-             else spread(index, count, along, self.pitch, self.extent, self.at))
+             else spread(index, count, along, self.pitch, self.extent, self.at,
+                         self.align))
         return _on_face(self.face, t, width, height)
 
     def reach(self, width: float, height: float) -> tuple[float, float, float]:
@@ -232,15 +266,24 @@ class PortSeries:
         A series has no fixed membership, so it has no fixed set of
         points to compare a nozzle against. It has a *stretch of face*
         it may put one on, for some count. One member sits at ``at``;
-        the widest run spreads ``extent`` of the face around it.
-        Anything inside that band shares a placement with a member
-        sooner or later, which is what a collision check needs to know.
+        the widest run spreads ``extent`` of the face around it, or
+        along from it where ``align`` is :data:`FROM_START`. Anything
+        inside that band shares a placement with a member sooner or
+        later, which is what a collision check needs to know.
+
+        Read off :func:`spread` at the widest count rather than
+        re-derived, so the band this reports and the points the family
+        is actually drawn at cannot say different things about the same
+        ``align``.
         """
         along = height if self.face in ("W", "E") else width
-        centre = along / 2 if self.at is None else self.at
-        half = self.extent * along / 2
+        # Two members is enough: the run is already at its full span
+        # wherever ``pitch`` has been squeezed to ``extent``, and the
+        # ends are what a band is.
+        ends = [spread(i, 2, along, self.extent * along, self.extent, self.at, self.align)
+                for i in (0, 1)]
         fixed = {"W": 0.0, "E": width, "N": 0.0, "S": height}[self.face]
-        return fixed, centre - half, centre + half
+        return fixed, min(ends), max(ends)
 
 
 # ----------------------------------------------------------------
@@ -2435,9 +2478,20 @@ _SEPARATING_VESSEL = Symbol(
         'fill="white" stroke="#111" stroke-width="2"/></g>',
     width=80.0, height=120.0,
     # The anchors the four mechanical separators already use, coordinate
-    # for coordinate: the feed high on the west wall, the high draw
-    # opposite it, the collected phase out of the apex.
-    ports={"feed": (0.0, 12.0), "vapor": (80.0, 12.0), "liquid": (40.0, 120.0)},
+    # for coordinate: the high draw opposite the feed, the collected
+    # phase out of the apex. The feed itself is the series below, on the
+    # same (0, 12) its first member still lands on.
+    ports={"vapor": (80.0, 12.0), "liquid": (40.0, 120.0)},
+    # The feeds march DOWN the west wall from (0, 12) rather than
+    # straddling it -- :data:`FROM_START`, and this body is why that mode
+    # exists. The wall is only y 0..80 before the hopper takes over, and
+    # 12 is a module below the roof: a centred family of three would put
+    # its first member on the top corner, where the face a stream leaves
+    # from stops being the west one. Growing downwards instead keeps the
+    # one-feed drawing on the coordinate it has always had and spends the
+    # 60 units of wall that are actually free.
+    port_series=(PortSeries("feed_", "W", pitch=20.0, extent=0.5, at=12.0,
+                            singular="feed", align=FROM_START),),
     # A hopper collects out of its apex; turned, the apex is a roof and
     # nothing falls into it. Every group-8 drawing in the library is
     # fixed for this reason -- ISO 15519-1 §11.4.2's exception.

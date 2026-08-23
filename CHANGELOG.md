@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Separator(n_feeds=)`: a separator fed by more than one stream, spelled the
+  way `Column` and `Reactor` already spell it (#452). A wash-water settler
+  takes its wash beside the stream it is washing, a flare knock-out drum takes
+  a header per relief system, and neither had to be drawn through a mixer that
+  is not on the plant. The nozzles are `feed_1` … `feed_n` down the body's own
+  wall, top to bottom, with `feed` kept as an alias at one, and a type checker
+  resolves `Separator(n_feeds=3).feed_2` and refuses `.feed_9` -- on the
+  equipment classes over it too, so `Cyclone("CY-1", n_feeds=2)` narrows to
+  `Cyclone2` rather than to a `Separator`. `separator.feeds` is the whole
+  family as a tuple.
+
+  `variant="horizontal"` is the one drawing that refuses a second feed, and
+  says why: its charge nozzle is authored on three faces so the face selector
+  can put it on the head the line comes from, and a family is one band on one
+  face -- a drawing may carry the menu or the family, and that one carries the
+  menu.
+
+  A one-feed separator is drawn exactly where 0.1.3 drew it on every variant.
+  On the hopper-bottomed bodies -- the cyclone, the scrubbers, the mechanical
+  separators and the three composed collectors -- the family grows *down* the
+  wall from that nozzle rather than straddling it, which is what keeps the
+  first feed where it was; `pandid.render.symbols.PortSeries` gained an
+  `align=` for it.
 - `Flowsheet.add_control_loop()`: the single-variable feedback loop -- one
   transmitter, one controller, one final element -- in the one statement an
   engineer says it in, in place of four objects, two signal connections and

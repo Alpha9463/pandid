@@ -1568,7 +1568,7 @@ def test_a_spec_file_naming_a_removed_port_is_refused(name):
         Flowsheet.from_dict(spec)
     message = str(excinfo.value)
     assert f"has no port {name!r}" in message
-    assert "available ports: ['feed', 'overflow', 'underflow']" in message
+    assert "available ports: ['feed_1', 'overflow', 'underflow']" in message
 
 
 def test_unknown_port_face_lists_that_unit_s_ports():
