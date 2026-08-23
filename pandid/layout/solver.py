@@ -1,430 +1,285 @@
-"""One axis of placement, as a system of difference constraints.
+"""One axis of placement, as a weighted least squares fit, in closed form.
 
-A unit's position is two numbers -- how far along the ribbon it is, and
-which row it sits in -- and the two are decided by separate runs of this
-same solver. Each run is given constraints of two shapes:
+Every claim on the sheet (:mod:`pandid.layout.claims`) is a preference
+of the shape *the subject sits ``step`` further along this axis than the
+author*, carrying a weight. No claim is a rule, so none has to be
+dropped when two disagree; what is minimised instead is
 
-- :class:`Order`, ``pos[after] >= pos[before] + 1``. One end of a stream
-  is past the other on this axis.
-- :class:`Same`, ``pos[a] == pos[b]``. The two ends line up on this
-  axis, which is what a vertical connection says about the column.
+.. code-block:: text
 
-Splitting the axes is the whole point. A return line leaving a south
-nozzle and entering a north one states *below* and nothing at all about
-along, so it contributes one :class:`Order` to the row system and
-nothing to the column system -- and stops being a cycle in the column
-system without anyone having to break it. The old engine read every edge
-as a step to the right and had no way to say that.
+    sum over claims of  w * (p[subject] - p[author] - step) ** 2
 
-How it is solved
-----------------
-Not by iterating a relaxation to a fixed point and watching for a value
-that will not settle. A constraint system with no solution is one with a
-cycle in it -- every :class:`Order` weighs one, so no cycle through them
-closes at zero -- and finding the cycle is cheaper than watching a value
-run away from it. Three kinds of pass, and each is a place a *reason*
-can be attached to the constraint that gets dropped:
+which is the one statement that lets both ends of every run have a say.
+Its stationary point is
 
-- **Merge** (:func:`_merge`). Union-find over the :class:`Same`
-  constraints, so a stack of units is one node. A union is refused where
-  it would put two differently pinned positions in one node, or close a
-  cycle nothing weaker can be demoted to open.
-- **Break** (:func:`_open`). Depth-first search over what is left,
-  serving each node's constraints strongest first so the **weakest**
-  claim on a cycle is the one classified as the back edge and dropped.
-  That is how a recycle gives way to the forward run it returns along
-  rather than the other way about.
-- **Rank** (:func:`_rank`). Longest path over the remaining acyclic
-  graph, then :func:`_remove_slack`.
+.. code-block:: text
 
-:func:`solve` runs merge, break, merge, break, rank -- see the comment
-in it for why the first two are a rehearsal.
+    p[k] = ( sum over claims ABOUT k of  w * (p[author] + step)
+           + sum over claims BY    k of  w * (p[subject] - step) ) / sum w
 
-Rank is the caller's statement of which constraint it would rather keep;
-see :mod:`pandid.layout.claims` for the levels and what each means.
-Every pass walks its inputs in the order it was handed them and orders
-its own scratch by the position of the constraint on the sheet, never by
-identity, so a sheet lays out the same way twice.
+-- the denominator running over every claim *touching* ``k``, so a
+column authoring six claims at confidence 8 is stiff by 48 and barely
+moves, while twenty neighbours asserting back at confidence 2 muster 40
+between them and can. Weight is stiffness, not authority: nothing in
+here ranks one claim over another, and a stiff relationship resists
+deformation at both of its ends.
+
+Why it is not iterated
+----------------------
+Written out over every unit at once, those stationary conditions are
+``A p = b`` with ``A`` the weighted graph Laplacian -- symmetric,
+diagonally dominant, and positive definite as soon as every connected
+component holds one value that is not free to move. That is a linear
+system with an exact answer, so it is **solved**, by Gaussian
+elimination, rather than relaxed towards. There is therefore no
+tolerance, no sweep cap, no seeding, no "did not converge" to report and
+no float drift between one sweep and the next: one elimination order,
+one answer, one rounding step at the end.
+
+Why not a dense factorisation
+-----------------------------
+Because ``N`` is not bounded by the corpus. The widest shipped sheet is
+101 units, where a dense Cholesky is ``101**3 / 6`` -- about 1.7e5
+multiply-adds, nothing at all -- but
+``tests/test_cycles_iterative.py`` lays out a **5000**-unit chain to
+prove the walk does not recurse, and that is 2e10 multiply-adds over a
+200 MB matrix, in a package that declares no dependencies and so has no
+numpy to hand it to. A dense solve is not a slower answer there; it is
+no answer.
+
+The matrix is very sparse instead -- a P&ID unit has two or three
+neighbours, near enough -- so it is eliminated **sparsely**, in
+increasing order of degree (:func:`_ordering`). That is the classic
+minimum-degree ordering, and on the shapes a flowsheet makes it is close
+to optimal: a chain is eliminated end to end at ``O(N)`` with no fill-in
+at all, and a real sheet's cost is dominated by whatever small dense
+core is left once every unit of degree one or two has gone. The 5000
+chain solves in the time the whole corpus does.
+
+**The ordering is read off the sparsity pattern and never off the
+numbers**, which is what keeps it deterministic: two candidates of equal
+degree are separated by index, so the same sheet is eliminated in the
+same order every run, and no comparison of two floats decides anything.
+
+Pins are Dirichlet boundary conditions
+--------------------------------------
+A pinned unit is not a term in the objective and not an unknown in the
+system: its row and column are struck out and its value is carried into
+``b`` as a constant. It cannot be moved by construction, rather than by
+a later pass being trusted not to move it -- which is what the engine
+this replaces asked of its cycle breaker.
 """
 
 from __future__ import annotations
 
-from collections import defaultdict
-from typing import TYPE_CHECKING, NamedTuple
+import heapq
+import math
 
-if TYPE_CHECKING:
-    from pandid.units import Unit
+#: Decimal places the solved position is quantised to before it is
+#: rounded to a whole column or row. Doubles carry ~15 significant
+#: digits and the positions are order 1e2, so the arithmetic noise is
+#: around 1e-13; snapping at 1e-9 puts a value that is exactly a half in
+#: theory exactly on the half in practice, so which way it rounds is a
+#: stated rule and not a property of the elimination order.
+PLACES = 9
 
-
-class Order(NamedTuple):
-    """``pos[after] >= pos[before] + 1`` on the axis being solved."""
-
-    before: "Unit"
-    after: "Unit"
-    rank: int
-
-
-class Same(NamedTuple):
-    """``pos[a] == pos[b]`` on the axis being solved."""
-
-    a: "Unit"
-    b: "Unit"
-    rank: int
+#: ``(author, subject, weight, step)``: the subject sits ``step`` further
+#: along the axis than the author, wanted this much. Index-based rather
+#: than unit-based so that nothing about a P&ID reaches into the
+#: arithmetic.
+Pull = tuple[int, int, float, float]
 
 
-def solve(units: list["Unit"], orders: list[Order], sames: list[Same],
-          pinned: dict["Unit", int], seed: dict["Unit", int] | None = None
-          ) -> dict["Unit", int]:
-    """Position every unit on one axis, from zero -- or from ``seed``.
+def live(pulls: list[Pull]) -> list[Pull]:
+    """The pulls that bear on the answer: positive weight, two ends.
 
-    ``pinned`` is the author's word and is never moved. Everything else
-    comes out of the constraints, and a unit no constraint reaches
-    stays where it started -- which, from zero, is the left edge on the
-    column axis and the top band on the row axis.
-
-    ``seed`` starts the relaxation somewhere other than zero, and is how
-    the row axis carries the crossing reduction's answer in. Relaxation
-    only ever moves a position *further* along, so a seeded axis comes
-    back with the seed's order intact wherever the constraints had
-    nothing to say -- and it keeps its slack, because on a seeded axis
-    the slack is the very preference this was given to preserve.
+    Both filters have to be applied *before* the components are found as
+    well as before the matrix is built, or the two disagree about what
+    is connected to what and a component the solve treats as free comes
+    back unanchored -- a singular matrix. One function, called by both.
     """
-    # The merge is run twice, and the first run is a rehearsal. Every
-    # union is taken on trust and the cycles that closes are broken --
-    # but only by demoting a constraint **weaker** than the unions
-    # themselves. What survives is the graph the merge is then asked
-    # about in earnest, so a union is refused exactly when the cycle it
-    # closes is made of constraints as strong as it is.
-    #
-    # Both halves of that are load-bearing. Without the rehearsal a
-    # stack is refused whenever a *return* line runs past it: on
-    # 01_ammonia_loop the reactor's bottom outlet and the exchanger's
-    # top inlet say plainly that the two are one column, and the loop's
-    # recycle -- a constraint the solver was always going to demote --
-    # makes them look like two ends of a cycle, so the stack was dropped
-    # and the exchanger fell to column 0 at the far end of the sheet
-    # from the reactor it hangs under. Without the floor the rehearsal
-    # demotes a *forward* run to make room for a union, which is a block
-    # ranked before and after itself: A feeds B feeds C, and C also
-    # takes A over its roof, so the stack has to be the constraint that
-    # gives.
-    floor = max((same.rank for same in sames), default=0)
-    rehearsed = _merge(units, [], sames, pinned)
-    open_ = _open(_nodes(units, rehearsed), orders, rehearsed, floor)
-    lead = _merge(units, open_, sames, pinned)
-    nodes = _nodes(units, lead)
-    forward = _open(nodes, open_, lead)
-    return _rank(units, nodes, forward, lead, pinned, seed)
+    return [p for p in pulls if p[0] != p[1] and p[2] > 0.0]
 
 
-# ---------------------------------------------------------------------------
-# 1. Merge: the Same constraints, by union-find
-# ---------------------------------------------------------------------------
+def components(size: int, pulls: list[Pull]) -> list[list[int]]:
+    """The connected components of the pull graph, each in index order.
 
-
-def _merge(units: list["Unit"], orders: list[Order], sames: list[Same],
-           pinned: dict["Unit", int]) -> dict["Unit", "Unit"]:
-    """Map each unit to the unit whose position it takes.
-
-    The contracted order graph is carried across the unions rather than
-    rebuilt for each candidate. Rebuilding it meant contracting every
-    unit and every stream and topologically sorting the result once per
-    candidate, which is the whole sheet re-read K times: a chain of 800
-    blocks with a feed over each of them spent 2.5 M contractions on one
-    ``layout()``. Kept here, a union costs the edges of the group being
-    folded in, and the question each candidate asks is asked of the two
-    ends rather than of the sheet.
+    In the order their lowest member appears, so a caller choosing an
+    anchor per component gets the same component in the same place on
+    every run.
     """
-    lead: dict["Unit", "Unit"] = {u: u for u in units}
+    adjacent: list[list[int]] = [[] for _ in range(size)]
+    for author, subject, _weight, _step in live(pulls):
+        adjacent[author].append(subject)
+        adjacent[subject].append(author)
 
-    def find(u: "Unit") -> "Unit":
-        while lead[u] is not u:
-            lead[u] = lead[lead[u]]
-            u = lead[u]
-        return u
-
-    succ: dict["Unit", set["Unit"]] = defaultdict(set)
-    pred: dict["Unit", set["Unit"]] = defaultdict(set)
-    for edge in orders:
-        if edge.before is not edge.after:
-            succ[edge.before].add(edge.after)
-            pred[edge.after].add(edge.before)
-
-    fixed = dict(pinned)
-    for same in sorted(sames, key=lambda s: -s.rank):
-        a, b = find(same.a), find(same.b)
-        if a is b or (a in fixed and b in fixed and fixed[a] != fixed[b]):
+    seen = [False] * size
+    out: list[list[int]] = []
+    for root in range(size):
+        if seen[root]:
             continue
-        if _closes_cycle(succ, pred, a, b):
-            continue
-        _fold(succ, pred, a, b)
-        lead[a] = b
-        if a in fixed:
-            fixed[b] = fixed.pop(a)
-    return {u: find(u) for u in units}
+        seen[root] = True
+        group = [root]
+        frontier = [root]
+        while frontier:
+            node = frontier.pop()
+            for peer in adjacent[node]:
+                if not seen[peer]:
+                    seen[peer] = True
+                    group.append(peer)
+                    frontier.append(peer)
+        out.append(sorted(group))
+    return out
 
 
-def _fold(succ: dict, pred: dict, a: "Unit", b: "Unit") -> None:
-    """Move ``a``'s edges onto ``b``, which is now the two of them.
+def relax(size: int, pulls: list[Pull], fixed: dict[int, float]) -> list[float]:
+    """Every node's position on one axis, fitted to ``pulls``.
 
-    An edge between the pair becomes a loop on the merged node and is
-    dropped, exactly as contracting the graph wholesale dropped it: an
-    order between two units in one position is no longer a step from one
-    position to another, and reading it as one would say the merged node
-    comes after itself.
+    ``fixed`` holds the nodes that may not move -- the author's pins,
+    plus one anchor per component that has none, which the caller picks
+    because which unit deserves to be the origin of a drawing is a
+    question about drawings. Every component (:func:`components`) must
+    hold one: without it that component's positions are determined only
+    up to a shared translation, the matrix is singular, and
+    :func:`_solve_spd` says so rather than handing back a drawing.
     """
-    for y in succ.pop(a, ()):
-        pred[y].discard(a)
-        if y is not b:
-            succ[b].add(y)
-            pred[y].add(b)
-    for x in pred.pop(a, ()):
-        succ[x].discard(a)
-        if x is not b:
-            pred[b].add(x)
-            succ[x].add(b)
-    succ[b].discard(b)
-    pred[b].discard(b)
+    edges = live(pulls)
+    free = [node for node in range(size) if node not in fixed]
+    at = {node: row for row, node in enumerate(free)}
+    n = len(free)
 
-
-def _closes_cycle(succ: dict, pred: dict, a: "Unit", b: "Unit") -> bool:
-    """Is there already a run between ``a`` and ``b`` to close a cycle?
-
-    Asked as a reachability question in both directions rather than as a
-    search for a cycle, which is what makes it cheap. That is sound
-    because the graph reaching this pass has had the cycles it could
-    afford to open already opened (see :func:`solve`) and every union
-    that would have closed one has been refused by this same test, so a
-    new cycle has to run through the merged node.
-
-    The run has to be **two steps or more**: a single order between the
-    pair becomes a loop on the merged node, which is dropped rather than
-    read as a cycle (see :func:`_fold`).
-    """
-    return _joined(succ, pred, a, b) or _joined(succ, pred, b, a)
-
-
-def _joined(succ: dict, pred: dict, x: "Unit", y: "Unit") -> bool:
-    """Is there a run of two steps or more from ``x`` to ``y``?
-
-    Such a run has an interior node: one the order reaches from ``x``
-    and reaches ``y`` from. So the two sets are grown towards each other
-    -- what ``x`` leads to, and what leads to ``y`` -- and the answer is
-    whether they ever touch. Growing the smaller of the two each time is
-    what keeps a satellite with nothing downstream of it from walking
-    the length of the sheet looking for an anchor that could not reach
-    it: a feed over a block's roof settles the question on its own empty
-    edge set, which is the case nearly every stacked sheet is made of.
-
-    Each new front is tested against the whole of the far side, so a
-    node the two reach at different times is still caught by whichever
-    of them arrives second.
-    """
-    ahead, behind = set(succ[x]), set(pred[y])
-    if not ahead.isdisjoint(behind):
-        return True
-    seen_ahead, seen_behind = set(ahead), set(behind)
-    while ahead and behind:
-        if len(ahead) <= len(behind):
-            ahead = {n for f in ahead for n in succ[f]} - seen_ahead
-            if not ahead.isdisjoint(seen_behind):
-                return True
-            seen_ahead |= ahead
-        else:
-            behind = {n for f in behind for n in pred[f]} - seen_behind
-            if not behind.isdisjoint(seen_ahead):
-                return True
-            seen_behind |= behind
-    return False
-
-
-# ---------------------------------------------------------------------------
-# 2. Break: the cycles the Order constraints close
-# ---------------------------------------------------------------------------
-
-
-def _nodes(units: list["Unit"], lead: dict["Unit", "Unit"]) -> list["Unit"]:
-    """The merged nodes, in the order the sheet holds their leaders."""
-    seen: dict["Unit", None] = {}
-    for u in units:
-        seen.setdefault(lead[u], None)
-    return list(seen)
-
-
-def _open(nodes: list["Unit"], orders: list[Order],
-          lead: dict["Unit", "Unit"], floor: int | None = None) -> list[Order]:
-    """The orders that survive once the merged graph's cycles are broken.
-
-    Contracted onto the merged nodes to be walked and handed back as the
-    caller's own constraints, so a second merge can be tested against
-    them. Two orders on one merged pair say the same thing and differ
-    only in rank, so the pair is walked at the strongest of them -- and
-    they stand or fall together, since what the walk decides is about
-    the pair and not about either constraint on its own.
-    """
-    members: dict[tuple["Unit", "Unit"], list[int]] = {}
-    rank: dict[tuple["Unit", "Unit"], int] = {}
-    for index, edge in enumerate(orders):
-        a, b = lead[edge.before], lead[edge.after]
-        if a is b:
-            continue  # a step from a node to itself; the merge dropped it
-        members.setdefault((a, b), []).append(index)
-        rank[(a, b)] = max(rank.get((a, b), edge.rank), edge.rank)
-    pairs = list(members)
-    dropped = _break_cycles(nodes, [Order(a, b, rank[(a, b)]) for a, b in pairs], floor)
-    dead = {index for pair in dropped for index in members[pairs[pair]]}
-    return [e for i, e in enumerate(orders) if i not in dead]
-
-
-def _break_cycles(nodes: list["Unit"], edges: list[Order],
-                  floor: int | None = None) -> set[int]:
-    """The edges to drop to leave an acyclic graph: the weakest on each cycle.
-
-    Every order weighs one, so a cycle through them can only close
-    above zero -- there is no such thing here as a cycle a solution
-    satisfies, and "a value still moving" and "a cycle" are the same
-    finding. The depth-first walk classifies an edge into a node already
-    on the recursion stack as the back edge, and each node's outgoing
-    edges are served **strongest first** so it is the weakest claim that
-    arrives late and is the one classified: a recycle gives way to the
-    forward run it returns along, not the other way about.
-
-    ``floor`` caps what may be demoted: only a claim ranked *below* it
-    is droppable, and a cycle made entirely of claims at or above it is
-    left closed. That is not a failure to answer -- it is the answer,
-    for the caller that asks whether a cycle can be paid for.
-
-    Walked with an explicit stack rather than the call stack, so the
-    depth of the longest unbranched chain never meets Python's recursion
-    limit (#413).
-    """
-    out: dict["Unit", list[tuple[int, int, int, "Unit"]]] = defaultdict(list)
-    for index, edge in enumerate(edges):
-        # Sorted on the rank and then on where the caller put the
-        # constraint, never on identity: two claims that tie on rank are
-        # separated by the order the sheet stated them in, which is the
-        # same order on every run.
-        out[edge.before].append((-edge.rank, index, edge.rank, edge.after))
-    for node in out:
-        out[node].sort()
-
-    dropped: set[int] = set()
-    visited: set["Unit"] = set()
-    stack: set["Unit"] = set()
-
-    for root in nodes:
-        if root in visited:
-            continue
-        visited.add(root)
-        stack.add(root)
-        frames: list[tuple["Unit", int]] = [(root, 0)]
-        while frames:
-            node, i = frames[-1]
-            edges_out = out[node]
-            if i < len(edges_out):
-                frames[-1] = (node, i + 1)
-                _, index, rank, peer = edges_out[i]
-                if peer in stack:
-                    if floor is None or rank < floor:
-                        dropped.add(index)
-                elif peer not in visited:
-                    visited.add(peer)
-                    stack.add(peer)
-                    frames.append((peer, 0))
+    a: list[dict[int, float]] = [{row: 0.0} for row in range(n)]
+    b = [0.0] * n
+    for author, subject, weight, step in edges:
+        # Each end of a claim contributes one term to its own row. The
+        # sign is which end this is: +1 where the row's node is the
+        # subject and the step is measured towards it, -1 where it is
+        # the author and the step is measured away.
+        for node, other, sign in ((subject, author, 1.0), (author, subject, -1.0)):
+            row = at.get(node)
+            if row is None:
+                continue  # a pinned node has no row; it is all constant
+            here = a[row]
+            here[row] += weight
+            column = at.get(other)
+            if column is None:
+                b[row] += weight * fixed[other]
             else:
-                stack.remove(node)
-                frames.pop()
-    return dropped
+                here[column] = here.get(column, 0.0) - weight
+            b[row] += sign * weight * step
+
+    return _scatter(size, free, fixed, _solve_spd(a, b))
 
 
-# ---------------------------------------------------------------------------
-# 3. Rank: longest path, then the slack out of it
-# ---------------------------------------------------------------------------
+def _scatter(size: int, free: list[int], fixed: dict[int, float],
+             solved: list[float]) -> list[float]:
+    """The free nodes' answers and the fixed nodes' values, in index order."""
+    out = [0.0] * size
+    for node, value in fixed.items():
+        out[node] = value
+    for row, node in enumerate(free):
+        out[node] = solved[row]
+    return out
 
 
-def _rank(units: list["Unit"], nodes: list["Unit"], forward: list[Order],
-          lead: dict["Unit", "Unit"], pinned: dict["Unit", int],
-          seed: dict["Unit", int] | None) -> dict["Unit", int]:
-    """Longest path over the acyclic graph, pins held where they are."""
-    adj: dict["Unit", list["Unit"]] = defaultdict(list)
-    in_degree: dict["Unit", int] = dict.fromkeys(nodes, 0)
-    for pair in dict.fromkeys((lead[e.before], lead[e.after]) for e in forward):
-        if pair[0] is pair[1]:
-            continue
-        adj[pair[0]].append(pair[1])
-        in_degree[pair[1]] += 1
+def _solve_spd(a: list[dict[int, float]], b: list[float]) -> list[float]:
+    """``A x = b`` for a sparse symmetric positive definite ``A``.
 
-    pos = dict.fromkeys(nodes, 0)
-    if seed is not None:
-        # A merged node starts where the furthest of its members did:
-        # the merge says they end up together, and relaxation can only
-        # move a position on, so the near ones have to come to the far.
-        # Written rather than maxed against the zero above, because a
-        # seed is free to be negative -- a relief valve on a crown is a
-        # band above the run it sits on, and clamping it at zero is the
-        # sheet drawn with the valve *in* the vessel.
-        started: set["Unit"] = set()
-        for u in units:
-            node = lead[u]
-            pos[node] = max(pos[node], seed[u]) if node in started else seed[u]
-            started.add(node)
-    fixed: set["Unit"] = set()
-    for u in units:
-        if u in pinned:
-            pos[lead[u]] = pinned[u]
-            fixed.add(lead[u])
+    Symmetric Gaussian elimination, both triangles held so that the
+    neighbours of a row can be read without a search. Eliminating node
+    ``k`` states ``x[k]`` in terms of what is left and substitutes it
+    into every row that mentioned it, which fills in an edge between
+    each pair of ``k``'s neighbours -- and choosing ``k`` by degree
+    (:func:`_ordering`) is what keeps that fill small.
 
-    # A list rather than a deque, walked in the order the sheet holds
-    # the nodes: what comes out is a topological order, of which there
-    # are many, and picking one by hand is what makes the sheet the same
-    # every time.
-    ready = [n for n in nodes if in_degree[n] == 0]
-    order: list["Unit"] = []
-    while ready:
-        node = ready.pop(0)
-        order.append(node)
-        for peer in adj[node]:
-            if peer not in fixed:
-                pos[peer] = max(pos[peer], pos[node] + 1)
-            in_degree[peer] -= 1
-            if in_degree[peer] == 0:
-                ready.append(peer)
-    assert len(order) == len(nodes), "cycle survived _break_cycles"
+    No pivoting, and none needed: an anchored Laplacian is positive
+    definite, so every pivot is positive whatever symmetric permutation
+    is applied. That is what lets the order come from the graph rather
+    than from a comparison of two floats, and so what makes the same
+    sheet eliminate the same way on every run.
 
-    if seed is None:
-        _remove_slack(adj, order, pos, fixed)
-    return {u: pos[lead[u]] for u in units}
-
-
-def _remove_slack(adj: dict, order: list, pos: dict, fixed: set) -> None:
-    """Slide every position as far along as its own connections allow.
-
-    Longest path measures *distance from a source*, which is the edge of
-    the drawing rather than anything on the sheet, so a branch that
-    joins the spine late starts as far back as the spine does and then
-    runs the width of the page to reach it. A cooling water flag lands
-    in column 0 and crosses under nine units to get to the exchanger it
-    serves; the blower that strips a degasser eight columns along starts
-    beside the raw water tank.
-
-    Removing the slack is Sugiyama's own answer, and it is safe by
-    construction only so long as a position moves *forward*: it goes to
-    one short of its nearest successor, so every constraint it is on
-    stays satisfied at a gap of at least one and no predecessor can be
-    violated. Positions are visited in reverse topological order, so
-    each is measured against successors that are already final. A pin is
-    an answer already given, and a node with nothing downstream of it is
-    as far along as the sheet goes.
-
-    A pin *downstream* is the one case where one short of the nearest
-    successor is behind, and a position that moves back is one dragged
-    behind the units feeding it -- off the page entirely, where the pin
-    sits at zero. Two pins with a chain between them longer than the gap
-    they leave cannot both be honoured; the derived position holds its
-    longest-path answer and the constraint into the pin is the one that
-    comes out short.
+    ``a`` and ``b`` are read and written in place; :func:`relax` builds
+    both fresh per axis and nothing else holds them.
     """
-    for node in reversed(order):
-        if node in fixed or not adj[node]:
+    steps: list[tuple[int, float, list[tuple[int, float]]]] = []
+    for k in _ordering(a):
+        row = a[k]
+        pivot = row.pop(k)
+        # Positive by construction, an anchored Laplacian being SPD. A
+        # pivot at or below zero means the caller left a component
+        # unanchored, which is a bug in the caller and not a sheet to
+        # draw round.
+        assert pivot > 0.0, "the pull graph has an unanchored component"
+        # Sorted, so the arithmetic is done in a canonical order rather
+        # than in whichever order the fill-in happened to arrive: float
+        # addition is not associative and the sums below are where a
+        # different order would show up in the answer.
+        neighbours = sorted(row.items())
+        for i, a_ki in neighbours:
+            factor = a_ki / pivot
+            here = a[i]
+            del here[k]
+            b[i] -= factor * b[k]
+            for j, a_kj in neighbours:
+                here[j] = here.get(j, 0.0) - factor * a_kj
+        steps.append((k, pivot, neighbours))
+
+    x = [0.0] * len(b)
+    for k, pivot, neighbours in reversed(steps):
+        total = b[k]
+        for i, a_ki in neighbours:
+            total -= a_ki * x[i]
+        x[k] = total / pivot
+    return x
+
+
+def _ordering(a: list[dict[int, float]]) -> list[int]:
+    """The elimination order: least connected first, ties by index.
+
+    Minimum degree, recomputed as the fill-in changes it, which on a
+    flowsheet's shapes costs almost nothing and saves almost
+    everything: a chain is all degree two and comes out linear, while
+    eliminating it in index order would be linear as well but the same
+    chain wired into a plant would not be.
+
+    The heap carries a degree that may be stale by the time it is
+    popped -- eliminating a node changes its neighbours' degrees, and
+    finding and mending their heap entries costs more than letting a
+    superseded one surface and be discarded. A node is admitted only
+    when the degree it was pushed with is the degree it still has.
+    """
+    live_rows = [dict(row) for row in a]
+    heap = [(len(row) - 1, node) for node, row in enumerate(live_rows)]
+    heapq.heapify(heap)
+    gone = [False] * len(live_rows)
+    out: list[int] = []
+    while heap:
+        degree, node = heapq.heappop(heap)
+        if gone[node] or degree != len(live_rows[node]) - 1:
             continue
-        pos[node] = max(pos[node], min(pos[peer] for peer in adj[node]) - 1)
+        gone[node] = True
+        out.append(node)
+        peers = [i for i in live_rows[node] if i != node]
+        for i in peers:
+            row = live_rows[i]
+            del row[node]
+            for j in peers:
+                if j != i:
+                    row.setdefault(j, 0.0)
+            heapq.heappush(heap, (len(row) - 1, i))
+    return out
+
+
+def discretise(value: float) -> int:
+    """The whole column or row a fitted position lands on.
+
+    Rounded **half away from zero**, at :data:`PLACES`. Half away rather
+    than Python's half-to-even because the sheet has a symmetry the
+    banker's rule does not: a peer half a step east of its source and one
+    half a step west are the same drawing mirrored, and to-even sends the
+    first to 0 and the second to -1. Which is also why the value is
+    quantised first -- a half that arrives as 0.49999999999999994 is a
+    half.
+    """
+    value = round(value, PLACES)
+    return math.floor(value + 0.5) if value >= 0.0 else math.ceil(value - 0.5)

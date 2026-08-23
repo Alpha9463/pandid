@@ -218,6 +218,63 @@ class Unit:
     #: overrides it because it mints nozzles per signal connection.
     PORT_ANCHORS: dict[str, str] = {}
 
+    #: How hard this kind of equipment insists on the arrangement it
+    #: states in :attr:`PLACES`, and on everything else it says about
+    #: where its neighbours are drawn.
+    #:
+    #: It is **stiffness, not authority**. The layout fits every claim
+    #: at once by weighted least squares
+    #: (:mod:`pandid.layout.solver`), so a number here is how strongly a
+    #: relationship resists being deformed -- at both of its ends. A
+    #: column at 8 authoring six claims is stiff by 48 and barely moves;
+    #: twenty neighbours at 2 muster 40 between them and can move it.
+    #: Nothing is ever overruled and nothing is ever dropped.
+    #:
+    #: The ladder the library is written to:
+    #:
+    #: - **8** a tower or a reactor -- the equipment a sheet is drawn
+    #:   around, and the only equipment whose arrangement is a
+    #:   convention a reader expects rather than a consequence of what
+    #:   it is connected to.
+    #: - **4** a vessel, tank or separator: a fixed point on the sheet,
+    #:   but one drawn where its train runs.
+    #: - **2** an exchanger, pump, compressor or filter: in the train,
+    #:   with an opinion about its own two sides and none about the
+    #:   sheet.
+    #: - **1** (the base) a plain :class:`Block` or anything unlisted:
+    #:   it says only what its nozzles and the flow say.
+    #: - **0** a valve, a fitting, a reducer, a tee -- these sit *in*
+    #:   the line and have no opinion about where the line goes. Their
+    #:   claims are dropped entirely rather than weighed at 1, so a
+    #:   train with a dozen block valves on it does not stiffen the
+    #:   vessel at the end of it by twelve.
+    LAYOUT_CONFIDENCE: float = 1
+
+    #: Nozzle name -> where a unit connected to *that nozzle* is drawn
+    #: relative to this one: a compass point (``"N"``, ``"NE"``, ...) or
+    #: ``(compass point, confidence)`` where one nozzle deserves a
+    #: different weight from the rest of the class.
+    #:
+    #: This is the drafting convention the equipment is drawn to, and
+    #: the equipment is the only thing that knows it: a condenser goes
+    #: top right of its column because that reads clearly, not because
+    #: it stands above it. Vertical position on a P&ID is not elevation,
+    #: and no amount of looking at the pipe will say which way up the
+    #: tower goes.
+    #:
+    #: Looked up by the nozzle's own name and then by the family name a
+    #: numbered family shares, so ``{"feed": "W"}`` covers ``feed_1``
+    #: through ``feed_8``. A nozzle with no entry falls back to the face
+    #: the symbol fixed it to, and a unit with neither to flow order --
+    #: both at this class's own :attr:`LAYOUT_CONFIDENCE`. See
+    #: :mod:`pandid.layout.claims`.
+    #:
+    #: Inherited whole, like :attr:`PORT_ANCHORS`: a subclass that
+    #: declares its own replaces its base's rather than adding to it, so
+    #: a class with one nozzle to say something about restates the ones
+    #: it still means.
+    PLACES: dict[str, "str | tuple[str, float]"] = {}
+
     #: Nozzle name -> ``(direction, role, the Deprecation naming its
     #: replacement)``, for a nozzle this class stopped building but must
     #: still answer for one release: an author who called this class for
@@ -912,6 +969,15 @@ class _Boundary(Unit):
     and labelled the same way every time. See :meth:`repeats`.
     """
 
+    #: A flag states nothing about where anything is drawn. Its nozzle
+    #: faces east on a feed and west on a product because that is how a
+    #: pennant is drawn, not because the line comes from the west -- so
+    #: reading that face as a claim would have every boundary on the
+    #: sheet arguing, at full weight, from a fact about its own artwork.
+    #: A flag goes where its line comes from, which is what a
+    #: confidence of 0 says.
+    LAYOUT_CONFIDENCE = 0
+
     def __init__(
         self,
         name: str,
@@ -1010,6 +1076,9 @@ class Pump(Unit):
 
     kind = "pump"
     PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
+    LAYOUT_CONFIDENCE = 2
+    #: A pump is in the train and knows only its own two sides.
+    PLACES = {"suction": "W", "discharge": "E"}
 
 
 class Compressor(Unit):
@@ -1020,6 +1089,8 @@ class Compressor(Unit):
 
     kind = "compressor"
     PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
+    LAYOUT_CONFIDENCE = 2
+    PLACES = {"suction": "W", "discharge": "E"}
 
 
 class _NormallyPositioned(Unit):
@@ -1035,6 +1106,12 @@ class _NormallyPositioned(Unit):
     closed, by overriding :meth:`_refuse_closed`, and
     :func:`pandid.render.symbols.closed_marking` says how each is drawn.
     """
+
+    #: A valve or a fitting is *in* the line: it goes where the line
+    #: goes and states nothing about where the line goes. Weighed at 0
+    #: rather than 1 so that a train with a dozen block valves on it
+    #: does not stiffen the vessel at the end of it twelve times over.
+    LAYOUT_CONFIDENCE = 0
 
     #: The positions such a unit may be declared in. A tuple rather than
     #: a bool: the designations a P&ID draws are an enumeration (NC
@@ -1484,6 +1561,22 @@ class _MultiPortVessel(Unit):
     #: a subclass with a contextual opinion overrides it.
     DEFAULT_INPUT_FACE: str | None = None
     DEFAULT_OUTPUT_FACE: str | None = None
+
+    #: A fixed point on the sheet, but one drawn where its train runs
+    #: rather than one the train is drawn around.
+    LAYOUT_CONFIDENCE = 4
+    #: What feeds a drum is upstream of it and what leaves it is
+    #: downstream, whichever face the stencil put the nozzle on. That
+    #: distinction is the whole of ``nozzle("inlet", "N")``:
+    #: ``examples/08`` feeds its deaerator over the top tray, which moves
+    #: the pipe to another part of the same drum and does not move the
+    #: pump on the other end of it onto the roof.
+    #:
+    #: ``vent``, ``relief`` and ``drain`` restate the face they are
+    #: already on, because at a vessel's weight rather than a nozzle's
+    #: they hold: a relief line back to the vessel it protects is the
+    #: clearest statement on a sheet of where that valve goes.
+    PLACES = {"in": "W", "out": "E", "vent": "N", "relief": "N", "drain": "S"}
 
     #: connection name -> the face it leaves from, in port order. Built
     #: by :meth:`_init_connections`; the single authority the symbol is
@@ -2317,6 +2410,8 @@ class Blower(Unit):
 
     kind = "blower"
     PORTS = [("suction", "inlet", "process"), ("discharge", "outlet", "process")]
+    LAYOUT_CONFIDENCE = 2
+    PLACES = {"suction": "W", "discharge": "E"}
 
 
 class Reducer(Unit):
@@ -2366,6 +2461,7 @@ class Reducer(Unit):
     outlet: Port
 
     kind = "reducer"
+    LAYOUT_CONFIDENCE = 0
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
     #: The nozzles the wide face may be on. Not a bool: the answer names
@@ -2466,6 +2562,7 @@ class Tee(Unit):
     branch: Port
 
     kind = "tee"
+    LAYOUT_CONFIDENCE = 0
     PORTS = [("inlet", "inlet", "process"), ("outlet", "outlet", "process")]
 
     #: The name a tee answers to when the author gives it none. Every
@@ -2797,6 +2894,7 @@ class Filter(Unit):
     outlet: Port
 
     kind = "filter"
+    LAYOUT_CONFIDENCE = 2
     # Empty because which nozzles a filter has depends on its variant,
     # and Unit.__init__ reads PORTS before a variant is in hand.
     # _VARIANT_PORTS below is the declaration and __init__ lays it down,
@@ -3590,6 +3688,12 @@ class Instrument(Unit):
     sig_out: Port
 
     kind = "instrument"
+    #: Stage 2 places every balloon against frozen process geometry
+    #: (:mod:`pandid.layout.control`), so an instrument is never an
+    #: author of a stage 1 claim in the first place. Stated anyway, so
+    #: that a reader of the ladder does not have to know that to know
+    #: the answer.
+    LAYOUT_CONFIDENCE = 0
     # The three a balloon is born with; ``sig_in`` and ``sig_out`` are
     # the first member of their pool. Declared rather than minted lazily
     # because ``ports`` is an ordered dict that
@@ -4084,6 +4188,15 @@ class HeatExchanger(Unit):
     tube_out: Port
 
     kind = "hex"
+    #: In the train, with an opinion about its own two sides and none
+    #: about the sheet. No :attr:`~Unit.PLACES`: every exchanger nozzle
+    #: is fixed to one face already, and which of them is the process
+    #: side depends on the service rather than on the class -- the same
+    #: shell-and-tube is a condenser over a column on one sheet and an
+    #: interchanger in the middle of a train on the next. Stating
+    #: "condensate falls south" here would drop every exchanger's
+    #: downstream unit a row.
+    LAYOUT_CONFIDENCE = 2
     # Empty because which nozzles an exchanger has depends on its
     # variant, and Unit.__init__ reads PORTS before a variant is in
     # hand. _VARIANT_PORTS below is the declaration, and __init__ lays
@@ -4156,6 +4269,7 @@ class Heater(Unit):
     utility_in: Port
 
     kind = "heater"
+    LAYOUT_CONFIDENCE = 2
     PORTS = [
         ("inlet", "inlet", "process"),
         ("outlet", "outlet", "process"),
@@ -4175,6 +4289,7 @@ class Cooler(Unit):
     utility_out: Port
 
     kind = "cooler"
+    LAYOUT_CONFIDENCE = 2
     PORTS = [
         ("inlet", "inlet", "process"),
         ("outlet", "outlet", "process"),
@@ -4538,6 +4653,17 @@ class Reactor(Unit):
         def __new__(cls, name: str, n_feeds: int = 1, *args: Any, **kwargs: Any) -> "Reactor": ...
 
     kind = "reactor"
+    #: A reactor is what the sheet around it is drawn to serve, so it is
+    #: as insistent as a tower.
+    LAYOUT_CONFIDENCE = 8
+    #: The two nozzles whose face is a fact about the *vessel* rather
+    #: than about the drawing: the product leaves the floor because it
+    #: drains and the off-gas leaves the side because that is where the
+    #: nozzle is, but what either of them feeds is the next unit
+    #: **along**. ``feed`` restates its own face, because a charge line
+    #: coming from the left is a statement worth making at a reactor's
+    #: weight rather than at a nozzle's.
+    PLACES = {"feed": "W", "outlet": "E", "vent": "N"}
     # Empty because which nozzles a reactor has depends on its variant,
     # and Unit.__init__ reads PORTS before a variant is in hand.
     # _VARIANT_PORTS below is the declaration and __init__ lays it down,
@@ -4857,6 +4983,27 @@ class Separator(Unit):
     liquid: Port
 
     kind = "separator"
+    LAYOUT_CONFIDENCE = 4
+    #: Down and to the right for what leaves the bottom, so the two
+    #: draws never land in one cell and the feed side of the drum stays
+    #: clear. Read straight off the faces instead, both draws share the
+    #: drum's own column and whichever of them continues the train has
+    #: to come back out of it.
+    #:
+    #: ``vapor`` is the exception, and is east rather than north east: a
+    #: flash drum's vapour leaves the top because vapour does, and what
+    #: it feeds is still the next unit **along**. Lifted a row instead,
+    #: a knockout drum drags the compressor after it off the spine and
+    #: the whole train behind it climbs -- ``05_reactor_recycle`` went
+    #: from one straight row of equipment to a staircase three rows
+    #: deep. ``overflow`` is not the same nozzle: a cyclone's clean gas
+    #: really does leave the train, going up and away while the solids
+    #: go down and on.
+    PLACES = {
+        "feed": "W",
+        "vapor": "E", "liquid": "SE",
+        "overflow": "NE", "underflow": "SE",
+    }
     # Empty because which nozzles a separator has depends on its
     # variant, and Unit.__init__ reads PORTS before a variant is in
     # hand. _VARIANT_PORTS below is the declaration and __init__ lays it
@@ -5336,6 +5483,47 @@ class Column(Unit):
         ) -> "Column": ...
 
     kind = "column"
+    #: A tower is the thing a sheet is drawn around, and the arrangement
+    #: below is a convention a reader expects rather than a consequence
+    #: of what the tower happens to be connected to. Nothing else on a
+    #: fractionation sheet has that standing, which is what the number
+    #: says.
+    LAYOUT_CONFIDENCE = 8
+    #: Which is the whole of #446. Every one of these nozzles is fixed
+    #: to a face already -- ``overhead`` north, ``bottoms`` south,
+    #: ``reflux_in`` and ``boilup_in`` east -- and not one of those faces
+    #: is where the peer is drawn. A condenser's own inlet is fixed
+    #: north too, so read off the faces the pair states that each is
+    #: above the other, which is no statement at all and left the tower
+    #: to be drawn upside down by whatever had an opinion next.
+    #:
+    #: North *east* rather than north, and south *east* rather than
+    #: south, so the overhead system and the reboiler loop each get a
+    #: column of their own and the tower's west side stays clear for the
+    #: feed.
+    #:
+    #: The two **returns** are north east and south east for the same
+    #: reason the two draws are, and it has to be the same answer: the
+    #: reflux comes back from the drum the overhead went to and the
+    #: boilup from the reboiler the bottoms went to, so ``reflux_in: N``
+    #: beside ``overhead: NE`` is the tower asserting that one cluster
+    #: is in two places. It costs what that sounds like -- the overhead
+    #: system is dragged back over the tower's own column and its runs
+    #: cross the tower to reach it, 50 crossings across the corpus
+    #: measured by ``scripts/layout_quality.py``.
+    #:
+    #: A side draw is the one entry that is merely a preference: a
+    #: sidestream goes east because everything downstream does, and a
+    #: tower with four of them should not be as sure of that as it is of
+    #: where its own condenser goes.
+    PLACES = {
+        "feed": "W",
+        "overhead": "NE",
+        "reflux_in": "NE",
+        "bottoms": "SE",
+        "boilup_in": "SE",
+        "draw": ("E", 4),
+    }
     PORTS = [
         ("overhead", "outlet", "vapor"),
         ("bottoms", "outlet", "liquid"),

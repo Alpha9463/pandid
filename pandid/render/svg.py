@@ -275,6 +275,13 @@ class _Ink(NamedTuple):
     from a line that merely crosses it: breaking the run you are
     labelling is the convention, and breaking the one beside it is a lie
     about that line.
+
+    ``line`` is whose it is, and it is the rest of that answer. Two
+    different runs at one height are collinear and are still two runs,
+    so a number gathering "its own" length by ``axis``/``at`` alone
+    gathers the neighbour's as well -- and reads as written along a line
+    it has nothing to do with. Empty for an impulse line, which is
+    nobody's run.
     """
     x0: float
     y0: float
@@ -283,6 +290,7 @@ class _Ink(NamedTuple):
     axis: str
     at: float
     kind: str  # "pipe" or "tap"
+    line: str  # the stream number this is part of, or "" for a tap
 
     @property
     def box(self) -> "tuple[float, float, float, float]":
@@ -535,19 +543,19 @@ def _ink(fs) -> "list[_Ink]":
 
     out: list[_Ink] = []
 
-    def add(a, b, pad: float, kind: str) -> None:
+    def add(a, b, pad: float, kind: str, line: str = "") -> None:
         (ax, ay), (bx, by) = a, b
         if abs(ax - bx) < 0.5 and abs(ay - by) < 0.5:
             return  # a zero-length hop between coincident points draws nothing
         axis, at = ("v", (ax + bx) / 2) if abs(ax - bx) < abs(ay - by) else ("h", (ay + by) / 2)
         out.append(_Ink(min(ax, bx) - pad, min(ay, by) - pad,
-                        max(ax, bx) + pad, max(ay, by) + pad, axis, at, kind))
+                        max(ax, bx) + pad, max(ay, by) + pad, axis, at, kind, line))
 
     for s in fs.streams:
         pad = float(_SIGNAL_STROKE if s.kind in _SIGNAL_KINDS else _PROCESS_STROKE)
         points = stream_path(s)
         for a, b in zip(points, points[1:]):
-            add(a, b, pad, "pipe")
+            add(a, b, pad, "pipe", s.name or "")
     for _u, tap, centre in tap_lines(fs):
         add(tap, centre, float(_SIGNAL_STROKE), "tap")
     return out
@@ -1081,7 +1089,7 @@ def stream_numbers(fs, placed: list,
         run_lo = min(sy1, sy2) if vertical else min(sx1, sx2)
         run_hi = max(sy1, sy2) if vertical else max(sx1, sx2)
         for line in ink:
-            if line.axis == axis and abs(line.at - at) < 0.5:
+            if line.line == name and line.axis == axis and abs(line.at - at) < 0.5:
                 run_lo = min(run_lo, line.y0 if vertical else line.x0)
                 run_hi = max(run_hi, line.y1 if vertical else line.x1)
 

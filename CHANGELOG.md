@@ -79,6 +79,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Equipment now says where its neighbours are drawn, and the sheet is
+  fitted to every such claim at once (#447, closing #444 and #446).**
+  Vertical position on a P&ID is not elevation: a condenser is drawn top
+  right of its column because that reads clearly, and nothing in the
+  package encoded it. Two class attributes now do. `Unit.PLACES` maps a
+  nozzle to the compass point a unit connected there is drawn at
+  (`Column.PLACES["overhead"] == "NE"`), and `Unit.LAYOUT_CONFIDENCE`
+  says how hard this kind of equipment insists -- 8 for a tower or a
+  reactor, 4 for a vessel, 2 for a machine in the train, 0 for a valve
+  or a fitting, which sit *in* the line and state nothing about it.
+  Adding a unit means adding those two attributes; the solver never
+  changes.
+
+  Every stream states **two** claims, one authored by each end, and they
+  are free to disagree -- a column's `overhead -> NE` and its condenser's
+  own north-facing inlet do. Nothing is ranked and nothing is dropped:
+  the sheet minimises `sum of w * (p[subject] - p[author] - step) ** 2`
+  per axis, which is `A p = b` with `A` the weighted graph Laplacian, and
+  it is solved exactly rather than relaxed towards. There is no
+  tolerance, no sweep cap and no "did not converge": one elimination
+  order, one answer, one rounding step. Confidence is stiffness rather
+  than authority, so a claim resists deformation at *both* ends and a
+  unit wired into half the sheet becomes hard to move by connection
+  count alone.
+
+  `06_column_reflux` is what this is for: laid out from its topology
+  alone it drew the tower upside down, condenser under the column and
+  reboiler over it. It now draws the condenser and its drum top right
+  and the reboiler bottom right. The same inversion on `03`, `16`, `19`
+  and `21` is gone, and across the corpus the auto-placed sheets fall
+  from 10 route crossings to 3 on `03`, 4 to 1 on `15` and 7 to 6 on
+  `19`.
+- **A pin is a boundary condition, held fixed and never solved for.** It
+  cannot be traded away by a later pass, because it is not a term in the
+  fit at all: its row and column are struck out of the system and
+  carried into the constant. `pin(col=)`/`pin(row=)` on a *free-standing
+  instrument* is honoured again, exactly (#444) -- stage 2 computed the
+  column and then let its collision search walk the balloon off it -- and
+  a column past the last one the sheet used is continued at the grid's
+  own pitch rather than dropped in silence.
+- **The gap between two columns is 120 px, not 100.** It is where the run
+  between them is drawn and where its line number is written, and ISO
+  15519-1 §7.2.5 wants that number beside its own line. The longest
+  number in the corpus is a little under 90 px of lettering, which 100
+  left nothing either side of.
 - **A nozzle fixed to a face now places the unit that carries it (#431).**
   The old placement pass was a longest path in which every stream was read
   as one step to the east, so the geometry a symbol had already fixed --

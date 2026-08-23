@@ -1,0 +1,339 @@
+"""The placement fit: its arithmetic, its boundary conditions, its determinism.
+
+``pandid.layout.place`` states where every process unit goes by fitting
+every claim the equipment makes at once, in the least-squares sense, and
+then making the answer legal. Three things have to hold whatever a sheet
+looks like, and they are what is tested here:
+
+- **a pin is a boundary condition**, honoured exactly at every density
+  of pinning from none to all-but-one;
+- **the fit is exact**, not approached -- the residual of the system it
+  claims to solve is zero, and a hand-solvable case comes out at the
+  hand-solved answer;
+- **the same model draws the same sheet**, across processes with
+  different string-hash seeds and across a ``to_dict``/``from_dict``
+  round trip.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import random
+import subprocess
+import sys
+from pathlib import Path
+
+from pandid import Flowsheet, devices as D, units as U
+from pandid.layout import claims as claims_mod
+from pandid.layout import solver
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+# ---------------------------------------------------------------------------
+# The mock flowsheets the pin sweep runs over
+# ---------------------------------------------------------------------------
+
+
+def _train(name: str, length: int) -> Flowsheet:
+    """A straight run: feed, a line of pumps and drums, product."""
+    fs = Flowsheet(name)
+    port = fs.add(U.Feed("F")).outlet
+    for i in range(length):
+        unit = fs.add(U.Pump(f"P-{i}") if i % 2 else U.Vessel(f"V-{i}"))
+        fs.connect(port, unit.ports["suction" if i % 2 else "in_1"])
+        port = unit.ports["discharge" if i % 2 else "out_1"]
+    fs.connect(port, fs.add(U.Product("OUT")).inlet)
+    return fs
+
+
+def _tower() -> Flowsheet:
+    """A column with an overhead system and a reboiler loop."""
+    fs = Flowsheet("tower")
+    feed = fs.add(U.Feed("F"))
+    col = fs.add(U.DistillationColumn("T-1"))
+    cond = fs.add(D.Condenser("E-1"))
+    drum = fs.add(U.Vessel("V-1", variant="horizontal"))
+    pump = fs.add(U.Pump("P-1"))
+    top = fs.add(U.Product("Distillate"))
+    reb = fs.add(D.KettleReboiler("E-2"))
+    bottom = fs.add(U.Product("Bottoms"))
+    fs.connect(feed.outlet, col.feed)
+    fs.connect(col.overhead, cond.shell_in)
+    fs.connect(cond.shell_out, drum.inlet)
+    fs.connect(drum.outlet, pump.suction)
+    fs.connect(pump.discharge, top.inlet)
+    fs.connect(col.bottoms, reb.shell_in)
+    fs.connect(reb.shell_out, col.boilup_in)
+    fs.connect(reb.bottoms, bottom.inlet)
+    return fs
+
+
+def _recycle() -> Flowsheet:
+    """A loop: mixer, reactor, separator, and the gas back round."""
+    fs = Flowsheet("recycle")
+    feed = fs.add(U.Feed("F"))
+    mix = fs.add(U.Mixer("M-1", n_inlets=2))
+    react = fs.add(U.Reactor("R-1"))
+    sep = fs.add(U.Separator("V-1"))
+    comp = fs.add(U.Compressor("K-1"))
+    out = fs.add(U.Product("Product"))
+    fs.connect(feed.outlet, mix.in_1)
+    fs.connect(mix.outlet, react.feed)
+    fs.connect(react.outlet, sep.feed)
+    fs.connect(sep.liquid, out.inlet)
+    fs.connect(sep.vapor, comp.suction)
+    fs.connect(comp.discharge, mix.in_2, draw_as_recycle=True)
+    return fs
+
+
+def _two_trains() -> Flowsheet:
+    """Two trains that share no run at all, on one sheet.
+
+    The disconnected case: each piece is anchored on its own, so this is
+    where an unanchored component or two components fitted on top of
+    each other would show up.
+    """
+    fs = Flowsheet("two trains")
+    for tag in ("A", "B"):
+        port = fs.add(U.Feed(f"F-{tag}")).outlet
+        for i in range(3):
+            block = fs.add(U.Block(f"{tag}-{i}", inputs=["W"], outputs=["E"]))
+            fs.connect(port, block.in_1)
+            port = block.out_1
+        fs.connect(port, fs.add(U.Product(f"OUT-{tag}")).inlet)
+    fs.add(U.Vessel("ORPHAN"))  # joined to nothing at all
+    return fs
+
+
+def _mocks() -> list[Flowsheet]:
+    return [_train("short train", 3), _train("long train", 9), _tower(), _recycle(), _two_trains()]
+
+
+# ---------------------------------------------------------------------------
+# Pins are boundary conditions
+# ---------------------------------------------------------------------------
+
+
+def _place(units: list[U.Unit], seed: int) -> dict[U.Unit, tuple[int, int]]:
+    """A distinct ``(col, row)`` per unit, from a fixed generator."""
+    rng = random.Random(seed)
+    cells = sorted({(rng.randrange(-2, 12), rng.randrange(-2, 8)) for _ in range(len(units) * 6)})
+    rng.shuffle(cells)
+    return dict(zip(units, cells))
+
+
+def _held(fs: Flowsheet, share: float, seed: int) -> dict[U.Unit, tuple[int, int]]:
+    """Pin about ``share`` of the sheet's units, and say where."""
+    units = [u for u in fs.units if u.kind != "instrument"]
+    count = len(units) - 1 if share > 0.99 else round(len(units) * share)
+    rng = random.Random(seed)
+    chosen = sorted(rng.sample(range(len(units)), count))
+    wanted = _place([units[i] for i in chosen], seed)
+    for unit, (col, row) in wanted.items():
+        unit.pin(col=col, row=row)
+    return wanted
+
+
+def test_a_pin_lands_where_it_was_put_at_every_density() -> None:
+    """0, a quarter, a half, three quarters, and all but one.
+
+    The last is the sharpest: the single free unit is placed entirely by
+    the boundary conditions around it, which is the case an engine that
+    treated pins as a preference to be reconciled would get wrong.
+    """
+    for share in (0.0, 0.25, 0.5, 0.75, 1.0):
+        for seed, fs in enumerate(_mocks()):
+            wanted = _held(fs, share, seed * 17 + int(share * 100))
+            fs.layout()
+            for unit, (col, row) in wanted.items():
+                assert unit.frame is not None
+                assert (unit.frame.col, unit.frame.row) == (col, row), (
+                    f"{fs.name} at {share:.0%} pinned: {unit.name} was pinned to "
+                    f"({col}, {row}) and drew at "
+                    f"({unit.frame.col}, {unit.frame.row})"
+                )
+
+
+def test_no_two_units_share_a_cell_when_nothing_is_pinned() -> None:
+    """What the separation pass is for, over the same mock sheets."""
+    for fs in _mocks():
+        fs.layout()
+        cells = [
+            (u.frame.col, u.frame.row)
+            for u in fs.units
+            if u.frame is not None and u.kind != "instrument"
+        ]
+        assert len(cells) == len(set(cells)), f"{fs.name} drew two units in one cell"
+
+
+def test_a_disconnected_piece_gets_a_band_of_its_own() -> None:
+    """Two trains and an orphan, none of them joined, none overlapping."""
+    fs = _two_trains()
+    fs.layout()
+    bands: dict[str, set[int]] = {}
+    for u in fs.units:
+        assert u.frame is not None and u.frame.row is not None
+        piece = "orphan" if u.name == "ORPHAN" else u.name.rpartition("-")[2][0]
+        bands.setdefault(piece, set()).add(u.frame.row)
+    assert bands["A"].isdisjoint(bands["B"]), "the two trains share a band"
+    assert bands["orphan"].isdisjoint(bands["A"] | bands["B"])
+
+
+# ---------------------------------------------------------------------------
+# The fit is exact
+# ---------------------------------------------------------------------------
+
+
+def test_the_solver_returns_the_hand_solved_answer() -> None:
+    """Three nodes, one anchored, weights chosen so the answer is exact.
+
+    Claims: 0 says 1 is one step on at weight 3; 2 says 1 is one step
+    back at weight 1. With 0 anchored at zero and 2 free, stationarity
+    gives ``p1 = 1`` and ``p2 = 2`` exactly -- both claims satisfied,
+    since there is an arrangement that satisfies both.
+    """
+    pulls: list[solver.Pull] = [(0, 1, 3.0, 1.0), (2, 1, 1.0, -1.0)]
+    answer = solver.relax(3, pulls, {0: 0.0})
+    assert answer == [0.0, 1.0, 2.0]
+
+
+def test_a_disagreement_settles_where_the_weights_put_it() -> None:
+    """Two claims about one pair, pulling opposite ways.
+
+    ``0`` insists ``1`` is a step east at weight 3; ``1`` insists ``0``
+    is a step east of *it* at weight 1. The compromise is
+    ``(3 * 1 + 1 * -1) / 4`` -- and it is a compromise, not one of the
+    two claims winning and the other being dropped.
+    """
+    pulls: list[solver.Pull] = [(0, 1, 3.0, 1.0), (1, 0, 1.0, 1.0)]
+    answer = solver.relax(2, pulls, {0: 0.0})
+    assert answer == [0.0, 0.5]
+
+
+def test_every_component_needs_an_anchor() -> None:
+    """An unanchored component is a singular matrix, and says so."""
+    pulls: list[solver.Pull] = [(0, 1, 1.0, 1.0), (2, 3, 1.0, 1.0)]
+    assert [sorted(g) for g in solver.components(4, pulls)] == [[0, 1], [2, 3]]
+    try:
+        solver.relax(4, pulls, {0: 0.0})
+    except AssertionError:
+        return
+    raise AssertionError("an unanchored component was solved anyway")
+
+
+def test_a_half_step_rounds_away_from_zero_on_both_sides() -> None:
+    """The mirror of a sheet is the same sheet, so 0.5 and -0.5 cannot
+    round the same way. Python's own ``round`` sends both to zero."""
+    assert solver.discretise(0.5) == 1
+    assert solver.discretise(-0.5) == -1
+    assert solver.discretise(1.5) == 2
+    assert solver.discretise(-1.5) == -2
+    # And a half that arrives a hair short of one is still a half.
+    assert solver.discretise(0.5 - 1e-12) == 1
+
+
+# ---------------------------------------------------------------------------
+# Claims are what the equipment says
+# ---------------------------------------------------------------------------
+
+
+def test_every_stream_is_claimed_from_both_ends() -> None:
+    """Two claims per run, one authored by each end, disagreeing freely."""
+    fs = Flowsheet("both ends")
+    col = fs.add(U.DistillationColumn("T-1"))
+    cond = fs.add(D.Condenser("E-1"))
+    fs.connect(col.overhead, cond.shell_in)
+    fs.layout()
+
+    from pandid.layout.stages import process_streams
+
+    claims = claims_mod.read(process_streams(fs))
+    assert len(claims) == 2
+    by_author = {c.author: c for c in claims}
+    assert by_author[col] == claims_mod.Claim(col, cond, 1, -1, 8.0), (
+        "the column places its overhead peer north east of it, at a column's weight"
+    )
+    assert by_author[cond].confidence == 2.0, "the exchanger answers at its own weight"
+    # They disagree, which is the point: the condenser reads its own
+    # inlet face, which is fixed north, and so says the column is above
+    # *it*. Nothing here reconciles them; the fit does.
+    assert (by_author[cond].eastward, by_author[cond].southward) == (0, -1)
+
+
+def test_a_valve_states_nothing_and_the_pipe_speaks_for_it() -> None:
+    """Between two fittings there is no unit with an opinion at all."""
+    fs = Flowsheet("in line")
+    a = fs.add(D.ControlValve("FV-1"))
+    b = fs.add(U.Reducer("RD-1"))
+    fs.connect(a.outlet, b.inlet)
+    fs.layout()
+
+    from pandid.layout.stages import process_streams
+
+    claims = claims_mod.read(process_streams(fs))
+    assert claims == [claims_mod.Claim(a, b, 1, 0, claims_mod.LINE)]
+
+
+def test_a_port_family_is_covered_by_one_entry() -> None:
+    """``PLACES["feed"]`` answers for ``feed_1`` .. ``feed_n``."""
+    assert claims_mod.family("feed_3") == "feed"
+    assert claims_mod.family("draw_12") == "draw"
+    assert claims_mod.family("shell_in") == "shell_in"
+    assert claims_mod.family("in_1") == "in"
+
+
+# ---------------------------------------------------------------------------
+# The same model draws the same sheet
+# ---------------------------------------------------------------------------
+
+
+def _geometry(fs: Flowsheet) -> list[tuple[str, float, float, int | None, int | None]]:
+    return [
+        (u.name, u.frame.x, u.frame.y, u.frame.col, u.frame.row)
+        for u in fs.units
+        if u.frame is not None
+    ]
+
+
+def test_a_round_trip_through_a_dict_draws_the_same_sheet() -> None:
+    for fs in _mocks():
+        fs.layout()
+        before = _geometry(fs)
+        again = Flowsheet.from_dict(fs.to_dict())
+        again.layout()
+        assert _geometry(again) == before, f"{fs.name} moved across a round trip"
+
+
+_UNDER_A_SEED = """
+import json, sys
+sys.path.insert(0, sys.argv[1])
+sys.path.insert(0, sys.argv[1] + "/tests")
+from test_placement import _mocks, _geometry
+out = []
+for fs in _mocks():
+    fs.layout()
+    out.append(_geometry(fs))
+print(json.dumps(out))
+"""
+
+
+def test_the_sheet_does_not_depend_on_the_string_hash_seed() -> None:
+    """Run in fresh processes, so ``PYTHONHASHSEED`` really differs.
+
+    A dict or a set iterated somewhere in placement would show up here
+    and nowhere else: within one process every run agrees with itself.
+    """
+    answers = set()
+    for seed in ("0", "1", "12345"):
+        env = dict(os.environ, PYTHONHASHSEED=seed)
+        done = subprocess.run(
+            [sys.executable, "-c", _UNDER_A_SEED, str(ROOT)],
+            capture_output=True,
+            text=True,
+            env=env,
+            check=True,
+        )
+        answers.add(json.dumps(json.loads(done.stdout)))
+    assert len(answers) == 1, "the sheet changed with PYTHONHASHSEED"

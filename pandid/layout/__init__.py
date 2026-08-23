@@ -8,12 +8,13 @@ first, then the instrumentation onto it.
 of kind ``"material"``.
 
 - Cycle breaking, so a return line is known to be one.
-- Placement (:mod:`pandid.layout.place`): two systems of difference
-  constraints, one per axis, read off the faces the symbols have already
-  fixed (:mod:`pandid.layout.claims`) and solved by
-  :mod:`pandid.layout.solver`. A nozzle on the west says its unit is
-  east of what feeds it; a nozzle on the north says above, and says
-  nothing at all about along.
+- Placement (:mod:`pandid.layout.place`): two weighted least-squares
+  fits, one per axis, over what the equipment says about where its
+  neighbours are drawn (:mod:`pandid.layout.claims`), solved in closed
+  form by :mod:`pandid.layout.solver`. A column says its condenser is
+  north east of it and its reboiler south east; every stream states two
+  such claims, one from each end, and the fit is the compromise between
+  all of them weighted by how hard each unit insists.
 - Coordinates (:mod:`pandid.layout.coordinates`): grid to pixels, folded
   into bands where the ribbon is wider than paper, and with the space
   the instrumentation will need already reserved
@@ -79,11 +80,12 @@ def _seed_slots(fs: "Flowsheet") -> None:
 class ConstraintLayoutEngine:
     """The default auto-layout engine.
 
-    Named for what decides a position: a system of difference
-    constraints per axis, over what the nozzles say. The phases are
-    still recognisably Sugiyama's -- break the cycles, position, reduce
-    crossings, hand out coordinates -- but a rank is no longer a
-    longest path in a graph where every edge points the same way.
+    Named for what decides a position: every unit's claim about where
+    its neighbours belong, fitted at once. Nothing is ranked and nothing
+    is dropped -- two claims that disagree settle on the compromise
+    their weights buy, which is why there is no crossing-reduction sweep
+    here either. A barycentre pass approximates by iteration the average
+    the fit computes exactly.
     """
 
     def layout(self, fs: "Flowsheet") -> None:

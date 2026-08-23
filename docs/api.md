@@ -1881,6 +1881,40 @@ follows it — a turbine or a generator is a unit with a tag of its own.
 
 ## Placement
 
+### What places a unit you have not pinned
+
+Every stream states two things about where its ends are drawn, one from each
+end, and the layout fits all of them at once. What each end says comes from the
+class:
+
+```python
+class Column(Unit):
+    LAYOUT_CONFIDENCE = 8
+    PLACES = {"feed": "W", "overhead": "NE", "reflux_in": "NE",
+              "bottoms": "SE", "boilup_in": "SE", "draw": ("E", 4)}
+```
+
+`PLACES` maps a nozzle to the compass point a unit connected there is drawn at
+— a column's condenser goes north east of it, its reboiler south east — keyed
+by the nozzle's own name or the family name a numbered family shares, so
+`"feed"` answers for `feed_1` … `feed_n`. A nozzle with no entry falls back to
+the face the symbol fixed it to, and a unit with neither to flow order.
+
+`LAYOUT_CONFIDENCE` is how hard this kind of equipment insists: 8 for a tower or
+a reactor, 4 for a vessel, 2 for a machine in the train, 1 for a plain `Block`,
+0 for a valve or a fitting, which sit *in* the line and say nothing about where
+it goes. A pair may write its own number as `("E", 4)`.
+
+The numbers are **stiffness, not authority**. Nothing outranks anything and
+nothing is discarded: two claims that disagree settle on the compromise their
+weights buy, and a claim resists being pulled out of shape at both of its ends —
+so a condenser someone pins somewhere unexpected moves its column part of the
+way rather than being overruled. A unit wired into half the sheet becomes hard
+to move by connection count alone.
+
+Subclasses inherit both, and override them whole. Give a new class of equipment
+those two attributes and it places itself.
+
 ### `pin`
 
 ```text

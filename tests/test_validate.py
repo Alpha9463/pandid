@@ -1537,18 +1537,18 @@ def test_a_single_via_waypoint_that_squares_nothing_up_is_reported():
     drawing their own sheet had nothing watching at all."""
     from pandid.layout.attach import stream_path
 
-    fs, run = _hand_routed((300.0, 200.0))
-    assert stream_path(run) == [(300.0, 60.0), (300.0, 200.0), (400.0, 60.0)]
+    fs, run = _hand_routed((320.0, 200.0))
+    assert stream_path(run) == [(320.0, 60.0), (320.0, 200.0), (440.0, 60.0)]
     (found,) = [i for i in fs.validate() if i.code == "route-diagonal"]
     assert found.severity == "warning"
-    assert "(300, 200) to (400, 60)" in found.message
+    assert "(320, 200) to (440, 60)" in found.message
     # The corner it turns at, and only the one that is not already on the path:
     # turning at the source doubles the line back on itself.
-    assert "Add the corner it turns at, (400, 200)" in found.message
+    assert "Add the corner it turns at, (440, 200)" in found.message
 
 
 def test_the_corner_it_names_is_the_cure():
-    fs, _ = _hand_routed((300.0, 200.0), (400.0, 200.0))
+    fs, _ = _hand_routed((320.0, 200.0), (440.0, 200.0))
     assert [i.code for i in fs.validate() if i.code == "route-diagonal"] == []
 
 
@@ -1562,8 +1562,8 @@ def test_neither_route_finding_beside_it_can_see_a_diagonal():
     def detour(fs):
         return next(i for i in fs.validate() if i.code == "route-detour").message
 
-    assert detour(_hand_routed((300.0, 200.0))[0]) == detour(
-        _hand_routed((300.0, 200.0), (400.0, 200.0))[0]
+    assert detour(_hand_routed((320.0, 200.0))[0]) == detour(
+        _hand_routed((320.0, 200.0), (440.0, 200.0))[0]
     )
     assert not _seg_crosses_box(0, 0, 100, 100, (10, 10, 90, 90))
     assert _seg_crosses_box(50, 0, 50, 100, (10, 10, 90, 90))
