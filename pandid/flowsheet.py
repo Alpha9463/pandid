@@ -175,6 +175,54 @@ def _stated(**kwargs: "float | str | None") -> dict[str, Any]:
     return {name: value for name, value in kwargs.items() if value is not None}
 
 
+def _functional_code(loop: "Loop", stated: str | None, default: str, role: str) -> str:
+    """The functional letters one member of a control loop carries.
+
+    The **whole** code, ``FIC`` and not the ``IC`` that follows the
+    ``F``. Two reasons, and the second is the one that settles it.
+
+    It is the spelling everything else in the package takes -- ``type``
+    on :meth:`Flowsheet.add_instrument`, :meth:`~pandid.loops.Loop.tag`,
+    :meth:`~pandid.loops.Loop.element`, ``Instrument("FIC", 101)`` -- so
+    a suffix here would be the one place an author spells instrument
+    letters without their variable.
+
+    And it is the only spelling that can be *checked*. Every string is a
+    valid suffix, so ``controller_letters="FIC"`` -- what the engineer
+    calls the instrument and would therefore type -- composed ``FFIC``
+    and nothing on the sheet could tell (issue #448): a misleading
+    parameter fails silently where an absent one fails loudly. A whole
+    code is held to the loop's measured variable by
+    :meth:`~pandid.loops.Loop.check`, so the same typo now raises at the
+    line that wrote it.
+
+    Left out, the code is composed from the loop, which is what keeps
+    the measured variable typed once on the ordinary loop.
+    """
+    if stated is None:
+        return default
+    letters = stated.strip()
+    if not letters:
+        raise ValueError(
+            f"loop {loop.name}: {role} is the whole functional code that member "
+            f"carries ({default!r} here), and an empty string is no tag at all. Leave "
+            f"it out and this letters the member from the loop"
+        )
+    if letters.upper() == loop.variable:
+        raise ValueError(
+            f"loop {loop.name}: {role}={stated!r} is the measured variable with no "
+            f"function letter after it, which leaves the balloon tagged "
+            f"{loop.variable}-{loop.number} -- a tag no instrument carries. It is the "
+            f"whole functional code that is wanted, e.g. {default!r}"
+        )
+    # The measured-variable check is the loop's own, not a second copy:
+    # it quotes the offending string, spells the corrected code, and is
+    # the identical message the long-hand `add_instrument(letters, loop)`
+    # gives for the identical mistake.
+    loop.check(letters)
+    return letters
+
+
 def _check_signal_pairing(src: "Port", dst: "Port", kind: str) -> None:
     """Raise unless the stream's kind matches what its two ports are.
 
@@ -731,7 +779,7 @@ class Flowsheet:
         at: float | str | None = None, offset: float | None = None,
         angle: float | None = None,
         controller_at: str | None = None, controller_offset: float | None = None,
-        transmitter_letters: str = "T", controller_letters: str = "IC",
+        transmitter_letters: str | None = None, controller_letters: str | None = None,
         controller_variant: str = "shared",
         measurement_kind: str = "electric", output_kind: str = "pneumatic",
     ) -> "ControlLoop":
@@ -743,9 +791,9 @@ class Flowsheet:
 
             loop = fs.add_control_loop("F", 101, measuring=feed,
                                        acting_on=fv)
-            loop.transmitter    # FT-101
-            loop.controller     # FIC-101
-            loop.valve          # the ControlValve passed in
+            loop.transmitter     # FT-101
+            loop.controller      # FIC-101
+            loop.final_element   # the ControlValve passed in
 
         which is the loop, the two balloons and the two signal lines of
         the long-hand -- :meth:`add_loop`, two :meth:`add_instrument`
@@ -762,10 +810,13 @@ class Flowsheet:
 
         **The letters follow from the measured variable.** ``"F"`` gives
         ``FT-101`` and ``FIC-101``, ``"L"`` gives ``LT-101`` and
-        ``LIC-101``. ``transmitter_letters`` and ``controller_letters``
-        are what *follows* that letter, so a recording controller is
-        ``controller_letters="RC"`` and the variable is still typed
-        once.
+        ``LIC-101``, so the variable is typed once for the ordinary
+        loop. A house style that letters them otherwise states the
+        member's **whole** functional code -- a recording controller is
+        ``controller_letters="FRC"`` on a flow loop, spelled as it is
+        said and as :meth:`add_instrument` takes it -- and a code that
+        does not open with the loop's measured variable is refused
+        rather than composed (issue #448).
 
         **It states no distance of its own.** ``at``/``offset``/``angle``
         place the transmitter against what it measures, and
@@ -808,6 +859,10 @@ class Flowsheet:
                 Anchored as ``sensing=`` anchors a balloon on
                 :meth:`add_instrument`, so the tap is drawn.
             acting_on: The final control element, or its signal nozzle.
+            transmitter_letters: The transmitter's whole functional code
+                (``"FT"``, ``"FIT"``). Left out, the loop letters it.
+            controller_letters: The controller's whole functional code
+                (``"FIC"``, ``"FRC"``). Left out, the loop letters it.
 
         Returns:
             The :class:`~pandid.loops.ControlLoop` handle. It draws
@@ -815,7 +870,8 @@ class Flowsheet:
 
         Raises:
             ValueError: if a declared loop is given a number as well, or
-                if either function-letter string is empty.
+                if either functional code is empty, is the measured
+                variable alone, or opens with a different variable.
         """
         from pandid.loops import ControlLoop, Loop
         from pandid.ports import Port
@@ -831,27 +887,22 @@ class Flowsheet:
             loop = variable
         else:
             loop = self.add_loop(variable, number)
-        for role, letters in (("transmitter_letters", transmitter_letters),
-                              ("controller_letters", controller_letters)):
-            if not letters.strip():
-                raise ValueError(
-                    f"loop {loop.name}: {role} is what follows the measured variable "
-                    f"in that member's tag, and an empty string leaves it tagged "
-                    f"{loop.variable!r} alone -- a balloon lettered with the loop's "
-                    f"own variable and no function. The defaults are 'T' and 'IC'"
-                )
+        transmitter_code = _functional_code(
+            loop, transmitter_letters, f"{loop.variable}T", "transmitter_letters")
+        controller_code = _functional_code(
+            loop, controller_letters, f"{loop.variable}IC", "controller_letters")
         # Both balloons before either line, and the transmitter first,
         # because ``place_attached`` resolves balloons in the order they
         # joined ``units`` and the controller hangs off the transmitter.
         transmitter = self.add_instrument(
-            f"{loop.variable}{transmitter_letters.strip()}", loop, sensing=measuring,
+            transmitter_code, loop, sensing=measuring,
             **_stated(at=at, offset=offset, angle=angle))
         # ``near=``, not ``sensing=``: the controller does not read the
         # transmitter, it is only stacked on it, and what passes between
         # them is the measurement below -- a signal line, routed like
         # one. Saying both would draw two lines between one pair.
         controller = self.add_instrument(
-            f"{loop.variable}{controller_letters.strip()}", loop, near=transmitter,
+            controller_code, loop, near=transmitter,
             variant=controller_variant,
             **_stated(at=controller_at, offset=controller_offset))
         measurement = self.connect(

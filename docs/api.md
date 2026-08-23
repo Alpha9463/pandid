@@ -2452,17 +2452,17 @@ unchanged. See [Declaring a flowsheet as data](#declaring-a-flowsheet-as-data).
 fs.add_control_loop(variable, number=None, *, measuring, acting_on,
                     at=None, offset=None, angle=None,
                     controller_at=None, controller_offset=None,
-                    transmitter_letters="T", controller_letters="IC",
+                    transmitter_letters=None, controller_letters=None,
                     controller_variant="shared",
                     measurement_kind="electric",
                     output_kind="pneumatic") -> ControlLoop
 
-loop.transmitter   # FT-101, the balloon reading the process
-loop.controller    # FIC-101, the balloon holding the setpoint
-loop.valve         # the final element you passed in
-loop.measurement   # the transmitter -> controller signal line
-loop.output        # the controller -> valve signal line
-loop.loop          # the Loop the members are numbered from
+loop.transmitter     # FT-101, the balloon reading the process
+loop.controller      # FIC-101, the balloon holding the setpoint
+loop.final_element   # the final element you passed in
+loop.measurement     # the transmitter -> controller signal line
+loop.output          # the controller -> final element signal line
+loop.loop            # the Loop the members are numbered from
 ```
 
 One transmitter, one controller, one final element: the commonest structure on a
@@ -2485,9 +2485,13 @@ to one golden.
   It takes the unit, or one of its nozzles where the unit has more than one
   signal terminal.
 - **The letters come from the measured variable.** `"F"` gives `FT-101` and
-  `FIC-101`; `"L"` gives `LT-101` and `LIC-101`. `transmitter_letters` and
-  `controller_letters` are what follows that letter, so a recording controller
-  is `controller_letters="RC"` and the variable is still typed once.
+  `FIC-101`; `"L"` gives `LT-101` and `LIC-101`, so on the ordinary loop the
+  variable is typed once. To letter them otherwise, give the member's *whole*
+  functional code — a recording controller on a flow loop is
+  `controller_letters="FRC"`, spelled as you say it and as `add_instrument`
+  takes it. A code that does not open with the loop's measured variable is
+  refused, so `controller_letters="LIC"` on a flow loop raises at that line
+  instead of drawing something else.
 - **`variable` also takes a declared `Loop`**, and usually has to: the valve is
   tagged from the loop and goes in the run long before the balloons do, so the
   loop already exists by the time this is called. Passing a letter instead
