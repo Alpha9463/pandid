@@ -32,7 +32,24 @@ if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.units import Unit
 
-COL_GAP = 100.0  # clear paper between one column of boxes and the next
+#: Clear paper between one column of boxes and the next, which is where
+#: the run between them is drawn -- **and where its line number is
+#: written**. ISO 15519-1 §7.2.5 puts that number along or beside its
+#: own line and sends it away with a leader only where there is no room
+#: beside it, so the gap has to be wide enough to be that room: the
+#: longest number in the corpus is thirteen characters, a little under
+#: 90 px of lettering, and 100 left it nothing either side. At 120 it
+#: fits with a margin, and ``350-LG-314-CS`` on 18_fixed_bed_recycle
+#: stops being written a lane away from its own run with a leader drawn
+#: back across the loop gas line.
+#:
+#: It belongs with the placement change rather than in a tidying pass of
+#: its own, and the reason is that the placement change is what needs
+#: it. At 100 ``tests/test_label_invariants.py`` fails twice on this
+#: branch and passes on ``main``: the fit puts two boxes a column apart
+#: that the engine before it did not, and the run between them is now a
+#: run with a thirteen-character number and 100 px to write it in.
+COL_GAP = 120.0
 ROW_GAP = 70     # gap between row bands, over the taller row
 MARGIN_X = 50
 MARGIN_Y = 50
@@ -429,7 +446,7 @@ def _straighten(fs: "Flowsheet", units: list["Unit"], band_of: dict["Unit", int]
                 return True
         return False
 
-    stack_of = claims_mod.stacks(units, claims_mod.read(fs, process_streams(fs)))
+    stack_of = claims_mod.stacks(fs, units)
     stacked: dict["Unit", list["Unit"]] = defaultdict(list)
     for u in units:
         stacked[stack_of[u]].append(u)

@@ -446,6 +446,15 @@ No sheet in the shipped corpus reaches it. What does is a sheet whose
     # shape that makes a cycle -- so a pair is not a crossing, and
     # counting pairs under-reports a sheet that loses both.
     crossings: set = set()
+    # The crossings the sheet draws **flat** and draw.io would not, which
+    # is the band between "strictly inside the segment" and "inside it by
+    # ``HOP_R``". ``updateLineJumps`` drops an intersection only within
+    # half a pixel of the jumping segment's ends, so anything further in
+    # than that gets an arc; the sheet needs ``HOP_R`` of segment either
+    # side to have room to draw one, and draws the rest flat. Keyed by
+    # the edge that would hop, because that is what has to give the style
+    # up -- ``jumpStyle`` cannot be aimed at one crossing.
+    marginal: dict = {key: set() for key in keys}
     for hop_key, lo, hi, at in hopping:
         for cross_key, c_lo, c_hi, c_at in crossed:
             # ``HOP_R`` and not a bare containment, because this asks the
@@ -457,6 +466,15 @@ No sheet in the shipped corpus reaches it. What does is a sheet whose
             # same disagreement between the two backends as a hop drawn
             # the wrong way round, only quieter.
             if not (c_lo < at < c_hi and lo + HOP_R < c_at < hi - HOP_R):
+                if c_lo < at < c_hi and lo < c_at < hi and hop_key != cross_key:
+                    # Both ways round. The sheet draws this crossing flat,
+                    # so *neither* of the two may carry the style once the
+                    # other precedes it -- and which of them is the one at
+                    # risk is not decided by which orientation would have
+                    # hopped: the edge that gets the arc is whichever is
+                    # written second, and that is settled below.
+                    marginal[hop_key].add(cross_key)
+                    marginal[cross_key].add(hop_key)
                 continue
             # A run crossing itself is one line, not two, and draw.io
             # does not hop it either: an edge is pushed onto
@@ -498,8 +516,16 @@ No sheet in the shipped corpus reaches it. What does is a sheet whose
     # filter passes everything and the emitted document is unchanged to
     # the byte.
     rank = {key: n for n, key in enumerate(order)}
+    # The second way an edge loses its style, and it has nothing to do
+    # with cycles: it crosses an earlier edge too near the end of its own
+    # segment for the sheet to have drawn an arc there. draw.io would
+    # draw one anyway, and a jump in the file where the drawing has none
+    # says the wrong pipe passes over just as loudly as a jump the wrong
+    # way round. The style is per edge, so the edge gives up every hop it
+    # had; each of them is then reported below.
     kept = {key for key in hops
-            if all(rank[other] > rank[key] for other in hopped_by[key])}
+            if all(rank[other] > rank[key] for other in hopped_by[key])
+            and all(rank[other] > rank[key] for other in marginal[key])}
     # The third return is what the caller owes the reader: every crossing
     # the sheet hops and this file will not, as ``(hopper, crossed)``.
     #

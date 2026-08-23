@@ -1,56 +1,116 @@
-"""What each end of a stream says about where its own unit belongs.
+"""What each unit says about where its neighbours are drawn.
 
-The symbol has already fixed most of the geometry before anything is
-placed. A column's overhead leaves the top, a relief valve sits on a
-crown, a reboiler return comes in at the bottom, a pump takes suction
-from the side -- and :func:`~pandid.portgeom.port_faces` knows which,
-because a port with **one** declared placement is a port with no choice
-about its face. That is not new information dug up for this module; it
-is the same test :mod:`pandid.layout.faces` already uses to decide which
-ports it is allowed to move.
+Vertical position on a P&ID is **not** elevation. A condenser is drawn
+top right of its column because that reads clearly and keeps the runs
+from crossing, not because it stands on a structure above it. It is a
+drafting convention, and the only thing that knows it is the equipment:
+a column knows its overhead goes up and to the right and its reboiler
+down and to the right, and no amount of looking at the pipe will tell
+you that.
 
-The reading is per **endpoint**, not per edge:
+So the equipment says it, in two class attributes
+(:attr:`~pandid.units.Unit.PLACES` and
+:attr:`~pandid.units.Unit.LAYOUT_CONFIDENCE`), and this module reads
+them off the sheet as :class:`Claim` s.
 
-- a unit whose **west** port carries a stream is east of that stream's
-  far end, and one whose **east** port carries it is west of that end;
-- the far end is read the same way, on its own.
+One shape for everything
+------------------------
+``Claim(author, subject, eastward, southward, confidence)``. The
+``author`` asserts; the ``subject`` is asserted upon. ``eastward`` and
+``southward`` are relative **steps**, not coordinates, and are named for
+their sign: ``+1 southward`` is a row further down a y-down canvas,
+which ``dy`` invites a reader to get backwards.
 
-An edge with one fixed nozzle and one free port still yields a
-constraint, which is what a per-edge rule cannot do. Only an edge free
-at *both* ends falls back to the flow-order default -- source before
-destination -- so a sheet of plain blocks lays out exactly as it always
-did, and the old engine's "every edge runs east to west" turns out to be
-the special case where every face is east or west.
+**A stream states one claim for each end that has something to say.**
+Where both do they are independent and may flatly disagree -- a column's
+``overhead -> NE`` and its condenser's own reading of its inlet face are
+two different statements about the same pair -- and the solve
+(:mod:`pandid.layout.solver`) arbitrates by weight rather than by
+dropping one of them. That is what lets every block have a say, and it
+is why nothing here has to decide which end is right.
 
-Why a vertical nozzle is read second
-------------------------------------
-North and south are read the same way -- south of that end, north of it
--- but **only where the edge has said nothing about along**. A single
-vertical nozzle is usually a fact about the *equipment* and not about
-the peer: a separator's vapour leaves the top because vapour does, a
-reactor's product leaves the bottom because it drains, and what they
-feed is still the next unit along the sheet, reached by a pipe that
-turns. Read as a storey instead, every such nozzle costs a row and every
-sideways nozzle on the same run costs a column, so a plant walks
-diagonally off the page: ``21_alumina_refinery`` came out a staircase
-27 columns wide and 11 rows deep with the corners of the sheet empty.
+Where **neither** end has anything to say the pipe states one claim on
+its own account, and a return line is always that case (see below). The
+approved design in #447 said *two* claims per stream, unconditionally.
+That is amended here, deliberately: a valve has no opinion about where
+its line goes, and a claim written on its behalf is not its opinion but
+an invention -- and an invented claim is still a weight in the fit.
+Emitting one anyway, at :data:`LINE`, costs the corpus 20 crossings and
+buys a symmetry that is in the code rather than in the equipment.
 
-Where **neither** end says anything about along, the two nozzles are all
-there is, and then a vertical face is a statement about the drawing: a
-relief valve on a crown, a condenser over a column, a reboiler under
-one. Those edges are read as *above* and *below*, and their two ends
-share a column.
+What the two-claim contract was there to prevent still holds, and it is
+the half that matters: **no end is ever dropped because the other end
+spoke.** A stream with one stated end and one silent end states the one,
+never "whichever of the two is better".
 
-One face outranks the far end's, and it is the one an author *wrote*:
-a :class:`~pandid.units.Block`'s, because a block has no nozzles to be a
-fact about. See :func:`_stated_side`.
+Where a direction comes from
+----------------------------
+Three levels, best first, all at the author's own confidence:
+
+1. **:attr:`~pandid.units.Unit.PLACES`**, the drafting convention this
+   kind of equipment draws to. Looked up by port name, then by the
+   family name a numbered family shares, so ``feed`` covers ``feed_1``
+   through ``feed_8``.
+2. **The face the nozzle is fixed to**, where the symbol leaves it no
+   choice (:func:`fixed_face`). A west nozzle says its peer is west.
+   Note what this is *not*: it is the author's own guess about its own
+   nozzle, worth exactly the author's confidence, and no longer the
+   binary fact the engine before this one tried to build an order out
+   of. A column overhead and a condenser inlet both facing north used to
+   cancel to nothing and let the barycentre draw the tower upside down
+   (#446); here they are two weak opinions that a strong ``PLACES``
+   overrules.
+3. **Flow order**: the destination is one step east of the source. A
+   recycle is the same statement backwards, since a return line is drawn
+   right to left and its two ends are already ordered by the forward run
+   it returns along.
+
+   This one is **not** at the author's confidence. It is what the *pipe*
+   says, not what the unit says: a unit whose nozzle has a menu nobody
+   has picked from has stated nothing at all, and weighing that silence
+   as heavily as a stated convention makes silence argue. Concretely, a
+   feed over a block's roof: the block states north, the feed's silence
+   is read as "east of me", the two weigh the same, and the fit splits
+   the difference and draws the feed diagonally off the corner. So flow
+   order weighs :data:`LINE`, wherever it comes from.
+
+Confidence 0, and why the line still speaks
+-------------------------------------------
+A valve, a fitting or a reducer sets
+:attr:`~pandid.units.Unit.LAYOUT_CONFIDENCE` to 0: it sits *in* the line
+and has no opinion about where the line goes. Its claims are dropped,
+which is not the same as weighing them 1 -- a train with a dozen block
+valves on it would otherwise stiffen the vessel at the end of it by 12
+and drown out the column arguing with it.
+
+Dropped claims cannot be allowed to disconnect the sheet, though: a run
+of valves between two valves would leave a component with nothing
+joining it to anything, and a component the solve anchors on its own is
+a component drawn on top of the sheet. So a stream **both** of whose
+ends declined to speak contributes one claim of its own at
+:data:`LINE`, the weakest weight there is, saying only what a pipe says:
+that the thing it leaves comes before the thing it reaches.
+
+What a fitting is *not* given is a claim toward the middle of its two
+neighbours. That is the obvious reading of "a valve sits on the line
+rather than at a place on the grid", and this grid cannot draw it: the
+midpoint of two boxes one column apart is half a column, which
+discretises onto one of them, and
+:func:`~pandid.layout.place._separate` then hands the valve a **row** of
+its own -- lifting it off the very line it was supposed to be sitting
+on. Measured over the corpus that is 240 crossings against 338. Blunted,
+by letting the fit read the midpoint while
+:func:`~pandid.layout.place._spread` goes on giving the fitting its own
+column, it still costs 74. Drawing a fitting *between* two columns
+rather than in one is a question for :mod:`pandid.layout.coordinates`,
+which owns where a column's paper begins and ends, and not for the
+claims.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
-from pandid.layout.solver import Order, Same
 from pandid.layout.stages import slot
 
 if TYPE_CHECKING:
@@ -58,32 +118,156 @@ if TYPE_CHECKING:
     from pandid.streams import Stream
     from pandid.units import Unit
 
-#: A constraint the sheet may not break: two units in one column may not
-#: be in one row. Ranked above every claim a nozzle makes, because a
-#: nozzle pointing the wrong way is a drawing to argue with and two
-#: boxes in one place is not a drawing at all.
-SEPARATION = 4
+#: What the run itself states, where a unit has said nothing. Below
+#: every confidence a unit class declares, because it is not a unit's
+#: opinion at all -- it is the pipe, and the pipe only knows which end
+#: it left.
+LINE = 0.25
 
-#: A face the symbol fixed, or the author named, on a forward run.
-FIXED = 3
+#: What a return line is worth. It states one thing -- that the end it
+#: leaves is further along the sheet than the end it reaches -- and it
+#: is the *pipe* that states it, not either unit, because a return's
+#: nozzles are read for nothing (see :func:`read`).
+#:
+#: Twice :data:`LINE`, and stated once rather than once per end. Written
+#: the other way -- which is what this was, both ends emitting the
+#: identical pull at ``LINE`` -- it is the same arithmetic with the
+#: doubling hidden inside a loop, so a return held a loop together twice
+#: as stiffly as a silent forward run held its own two ends and nothing
+#: said so. Undoing the doubling instead takes the corpus from 240
+#: crossings to 321: a return is often the *only* run joining a loop's
+#: two halves, where a silent forward run nearly always has a stated
+#: claim somewhere beside it, and halved it lets the loop come apart. So
+#: the doubling stays, and is written down.
+RETURN = 0.5
 
-#: The flow-order default, for an edge whose two ends can both move.
-FLOW = 2
+#: Compass point -> ``(eastward, southward)``, in grid steps. South is
+#: positive: the canvas is y-down and the table is written the way the
+#: drawing reads, not the way the maths would prefer.
+STEPS: dict[str, tuple[int, int]] = {
+    "N": (0, -1), "S": (0, 1), "E": (1, 0), "W": (-1, 0),
+    "NE": (1, -1), "NW": (-1, -1), "SE": (1, 1), "SW": (-1, 1),
+}
 
-#: The same claim, made by a stream the cycle breaker tore. It is read
-#: rather than dropped -- a relief line back to the vessel it protects
-#: is the clearest statement on the sheet of where that valve goes --
-#: but it gives way to every forward run it contradicts.
-RETURN = 1
+
+class Claim(NamedTuple):
+    """``author`` says ``subject`` is drawn this many steps away.
+
+    ``confidence`` is stiffness, not authority: it is how hard the pair
+    resists being pulled out of this arrangement, and it resists at
+    **both** ends. A column insisting its condenser is north east of it
+    is equally a column that will move north west to satisfy a condenser
+    someone pinned.
+    """
+
+    author: "Unit"
+    subject: "Unit"
+    eastward: int
+    southward: int
+    confidence: float
 
 
-class Claims:
-    """The constraints one sheet makes, gathered per axis."""
+def read(streams: list["Stream"]) -> list[Claim]:
+    """Every claim the process runs on this sheet make, in sheet order.
 
-    def __init__(self) -> None:
-        self.along: list[Order] = []   # the column axis: west to east
-        self.across: list[Order] = []  # the row axis: north to south
-        self.columns: list[Same] = []  # ends a vertical run lines up
+    Order is part of the answer. The solve sums weights in the order it
+    is handed them, and float addition is not associative, so a claim
+    list assembled from a set or a dict of units would draw a sheet that
+    depended on where its names happened to hash to.
+    """
+    out: list[Claim] = []
+    for stream in streams:
+        src, dst = stream.source.owner, stream.dest.owner
+        assert src is not None and dst is not None
+        if src is dst:
+            continue  # a run from a unit back to itself places nothing
+        ends = ((src, stream.source.name, dst, 1), (dst, stream.dest.name, src, -1))
+        if stream.is_recycle:
+            # A return line's nozzles are read for nothing. The run
+            # leaves an east face and goes back **west**, so reading that
+            # face forwards states the loop the wrong way round -- and
+            # weakly stating something wrong is still wrong: the two
+            # claims a splitter and a mixer make about each other pull
+            # the whole train between them together, and every step
+            # along it comes out short of a column
+            # (``05_reactor_recycle``, one straight row of equipment
+            # that folded into three). What is left is the only thing a
+            # return says: the end it leaves is further along than the
+            # end it reaches.
+            step = _flow_step(1, True)
+            out.append(Claim(src, dst, step[0], step[1], RETURN))
+            continue
+        spoke = False
+        for author, port_name, subject, forward in ends:
+            direction, confidence = _stated(author, port_name)
+            if confidence <= 0.0:
+                continue  # an in-line fitting has nothing to say; see above
+            if direction is None:
+                direction = fixed_face(author, port_name, slot(author))
+            if direction is None:
+                # The unit's nozzle has a menu and no one has picked
+                # from it, so the unit has said nothing: what is left is
+                # the pipe, at the pipe's weight. Weighing an invented
+                # opinion at the unit's own is what puts a feed over a
+                # block's roof *diagonally* -- the block states north,
+                # the feed's silence is read as "east of me", the two
+                # weigh the same and the fit splits the difference.
+                step, weight = _flow_step(forward, False), LINE
+            else:
+                step, weight = STEPS[direction], confidence
+            out.append(Claim(author, subject, step[0], step[1], weight))
+            spoke = True
+        if not spoke:
+            step = _flow_step(1, False)
+            out.append(Claim(src, dst, step[0], step[1], LINE))
+    return out
+
+
+def _flow_step(forward: int, is_recycle: bool) -> tuple[int, int]:
+    """Which way the pipe alone says the peer lies.
+
+    ``forward`` is +1 when the author is the run's source. A recycle is
+    read backwards: it is drawn right to left, so its source is the unit
+    further along the sheet, and reading it forwards would ask the
+    solver to close the loop it is drawn around.
+    """
+    return (-forward if is_recycle else forward, 0)
+
+
+def _stated(unit: "Unit", port_name: str) -> tuple[str | None, float]:
+    """This unit's ``PLACES`` entry for a port, and what it is worth.
+
+    The direction is ``None`` where the class states none, which sends
+    the caller on to the nozzle's face; the confidence is the class's
+    own unless the entry overrides it, which is how a column can insist
+    on its overhead and merely prefer its side draws.
+
+    Looked up by the port's own name first and then by the family name,
+    so ``PLACES = {"feed": "W"}`` covers a tower with eight of them
+    without listing eight keys.
+    """
+    places = type(unit).PLACES
+    entry = places.get(port_name)
+    if entry is None:
+        entry = places.get(family(port_name))
+    confidence = float(type(unit).LAYOUT_CONFIDENCE)
+    if entry is None:
+        return None, confidence
+    if isinstance(entry, tuple):
+        return entry[0], float(entry[1])
+    return entry, confidence
+
+
+def family(port_name: str) -> str:
+    """The name a numbered family of nozzles shares: ``feed_3`` -> ``feed``.
+
+    A trailing ``_<n>`` and nothing else, because that is the only
+    generated suffix in the library (:func:`pandid.units._feed_names`
+    and its peers), and a looser rule would fold ``shell_in`` onto
+    ``shell``.
+    """
+    head, _, tail = port_name.rpartition("_")
+    return head if head and tail.isdigit() else port_name
 
 
 def fixed_face(unit: "Unit", port_name: str, placed: object) -> str | None:
@@ -109,15 +293,21 @@ def fixed_face(unit: "Unit", port_name: str, placed: object) -> str | None:
     return menu[0] if len(menu) == 1 else None
 
 
-def stacks(units: list["Unit"], claims: "Claims") -> dict["Unit", "Unit"]:
+def stacks(fs: "Flowsheet", units: list["Unit"]) -> dict["Unit", "Unit"]:
     """Map each unit to the first unit of the stack it belongs to.
 
-    A stack is a run of units the nozzles fix one above another, and it
-    is **rigid**: what the faces fix is the arrangement inside it, and
-    where the whole thing goes is one question rather than one per unit.
-    Both the row solver and the straightener ask it, which is why it is
-    answered here rather than in either of them.
+    A stack is a run of connected units the solve put in **one column**,
+    and it is read off the settled grid rather than off the claims: what
+    matters to the caller is which boxes are drawn one above another,
+    and that is a fact about the answer and not about the argument that
+    produced it. :func:`~pandid.layout.coordinates._straighten` is the
+    caller, and it moves a stack as one thing -- shifting the vessel
+    onto its own spine and leaving the relief valve above it on the row
+    axis would say the arrangement in the row numbers and deny it in the
+    ink.
     """
+    from pandid.layout.stages import process_streams
+
     lead = {u: u for u in units}
 
     def find(u: "Unit") -> "Unit":
@@ -126,96 +316,15 @@ def stacks(units: list["Unit"], claims: "Claims") -> dict["Unit", "Unit"]:
             u = lead[u]
         return u
 
-    for edge in claims.across:
-        a, b = find(edge.before), find(edge.after)
+    placed = set(units)
+    for stream in process_streams(fs):
+        src, dst = stream.source.owner, stream.dest.owner
+        assert src is not None and dst is not None
+        if src not in placed or dst not in placed:
+            continue
+        if slot(src).col != slot(dst).col:
+            continue
+        a, b = find(src), find(dst)
         if a is not b:
             lead[a] = b
     return {u: find(u) for u in units}
-
-
-def read(fs: "Flowsheet", streams: list["Stream"]) -> Claims:
-    """Every constraint the process runs on this sheet make."""
-    claims = Claims()
-    for stream in streams:
-        src, dst = stream.source.owner, stream.dest.owner
-        assert src is not None and dst is not None
-        if src is dst:
-            continue  # a run from a unit back to itself places nothing
-        rank = RETURN if stream.is_recycle else FIXED
-        ends = ((src, fixed_face(src, stream.source.name, slot(src)), dst),
-                (dst, fixed_face(dst, stream.dest.name, slot(dst)), src))
-        along: list[Order] = []
-        across: list[Order] = []
-        for mine, face, peer in ends:
-            if face == "W":
-                along.append(Order(peer, mine, rank))
-            elif face == "E":
-                along.append(Order(mine, peer, rank))
-            elif face == "N":
-                across.append(Order(peer, mine, rank))
-            elif face == "S":
-                across.append(Order(mine, peer, rank))
-        along, across = _agreed(along), _agreed(across)
-        stated = not stream.is_recycle and any(
-            _stated_side(mine, face) for mine, face, _ in ends)
-        if across and stated:
-            _stack(claims, src, dst, across, rank)
-        elif along:
-            claims.along.extend(along)
-        elif across:
-            _stack(claims, src, dst, across, rank)
-        else:
-            claims.along.append(Order(src, dst, FLOW))
-    return claims
-
-
-def _stack(claims: Claims, src: "Unit", dst: "Unit", across: list[Order],
-           rank: int) -> None:
-    """Read an edge as *above* and *below*, and as one column.
-
-    Above and below are statements about the row, so the column has to
-    come out the same for both ends or the row cannot be honoured. That
-    is the rule the old engine applied to :class:`~pandid.units.Block`
-    alone; here it is what any vertical connection means.
-    """
-    claims.across.extend(across)
-    claims.columns.append(Same(src, dst, rank))
-
-
-def _stated_side(unit: "Unit", face: str | None) -> bool:
-    """Is this face the *author* saying which side the peer is on?
-
-    Only a :class:`~pandid.units.Block`'s is, because a block has no
-    nozzles: its box is a plant section and the only thing the drawing
-    says about a connection is which side it is on. **Every other
-    vertical face is a fact about the equipment, not about the peer.** A
-    separator's vapour leaves the top because vapour does, a reactor's
-    product leaves the bottom because it drains; what they feed is still
-    the next unit along, and lifting those onto the roof would rearrange
-    every sheet in the corpus around a fact about a drum.
-
-    Nor does :meth:`pandid.units.Unit.nozzle` count, though it is also
-    the author's word. It moves a stream to another part of the same
-    equipment, and where the pipe joins is still not where the peer
-    goes: ``examples/08`` feeds its deaerator over the top tray with
-    ``port_faces={"inlet": "N"}``, and the pump on the other end of that
-    line belongs beside the drum, not over it.
-    """
-    from pandid.units import Block
-
-    return face in ("N", "S") and isinstance(unit, Block)
-
-
-def _agreed(axis: list[Order]) -> list[Order]:
-    """One axis's claims, unless the two ends contradict each other.
-
-    North into north: each end's nozzle puts the other unit on its own
-    side, which between them states no order at all. Neither is applied
-    and the edge falls through to whatever the other axis, or the flow,
-    has to say -- rather than one being demoted at random by the cycle
-    breaker, which would answer a question the drawing never asked.
-    """
-    if len(axis) == 2 and axis[0].before is axis[1].after \
-            and axis[0].after is axis[1].before:
-        return []
-    return axis

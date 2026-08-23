@@ -18,6 +18,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+# The gaps the coordinate pass left between one grid line and the next,
+# which is what a grid line the sheet never used is worth (see
+# :func:`_lane`). Imported rather than restated so the two cannot drift.
+from pandid.layout.coordinates import COL_GAP, ROW_GAP
+
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
     from pandid.geometry import Frame
@@ -87,58 +92,86 @@ def _place_free(fs: "Flowsheet") -> bool:
 
 def _spot(fs: "Flowsheet", inst: "Unit", w: float, h: float,
           taken: list["Frame"]) -> tuple[float, float]:
-    """Where this balloon goes: the author's answer, or the nearest free."""
-    pin = inst.pin_
-    want = _wanted(fs, inst, w, h)
-    x = pin.x if pin is not None and pin.x is not None else want[0]
-    y = pin.y if pin is not None and pin.y is not None else want[1]
-    if pin is not None and (pin.x is not None or pin.y is not None):
-        return x, y  # an absolute pin is an answer, not a preference
-    return _nearest_free(x, y, w, h, taken)
+    """Where this balloon goes: the author's answer, or the nearest free.
 
-
-def _wanted(fs: "Flowsheet", inst: "Unit", w: float, h: float) -> tuple[float, float]:
-    """The balloon's own idea of where it belongs, before collisions.
-
-    The middle of what it is wired to, which is the only thing on the
-    sheet that has anything to say about it -- a signal contributes no
-    order along either axis, only this pull towards its peer. A pinned
-    column or row is read against the grid stage 1 laid out, so
-    ``pin(col=3)`` on a controller means the same column it means on a
-    pump.
+    **A pin is an answer on the axis it names, and nothing at all on the
+    axis it does not.** So ``pin(col=3)`` alone fixes the column and
+    leaves the balloon free to step up or down to clear what is already
+    drawn, and ``pin(col=3, row=1)`` is the whole answer and no search
+    is made. That distinction is what the short-circuit here used to
+    get wrong: it fired for ``pin.x``/``pin.y`` only, so a grid pin was
+    computed exactly and then handed to :func:`_nearest_free`, which
+    walked the balloon straight off the column it had been put in
+    (#444).
     """
     pin = inst.pin_
-    if pin is not None and (pin.col is not None or pin.row is not None):
-        grid = _grid(fs)
-        if pin.col is not None and pin.col in grid[0]:
-            gx = grid[0][pin.col]
-        else:
-            gx = None
-        if pin.row is not None and pin.row in grid[1]:
-            gy = grid[1][pin.row]
-        else:
-            gy = None
-        if gx is not None or gy is not None:
-            centre = _centroid(fs, inst)
-            return (gx if gx is not None else centre[0] - w / 2.0,
-                    gy if gy is not None else centre[1] - h / 2.0)
-    cx, cy = _centroid(fs, inst)
-    return cx - w / 2.0, cy - h / 2.0
+    centre = _centroid(fs, inst)
+    want = (centre[0] - w / 2.0, centre[1] - h / 2.0)
+    if pin is None:
+        return _nearest_free(want[0], want[1], w, h, taken, True, True)
+
+    cols, rows = _grid(fs)
+    x = pin.x if pin.x is not None else _lane(cols, pin.col, COL_GAP)
+    y = pin.y if pin.y is not None else _lane(rows, pin.row, ROW_GAP)
+    return _nearest_free(want[0] if x is None else x, want[1] if y is None else y,
+                         w, h, taken, x is None, y is None)
 
 
-def _grid(fs: "Flowsheet") -> tuple[dict[int, float], dict[int, float]]:
-    """The columns and rows stage 1 drew, read back off its frames."""
-    cols: dict[int, float] = {}
-    rows: dict[int, float] = {}
+def _lane(grid: dict[int, tuple[float, float]], index: int | None,
+          gap: float) -> float | None:
+    """Where the grid line the author named is, in pixels.
+
+    ``None`` where no line was named, but **never** because the sheet
+    did not happen to use that one: ``pin(col=7)`` on a three-column
+    sheet is a column four past the last, and the old answer -- drop the
+    pin and put the balloon by its wires instead -- silently drew
+    something the author did not ask for. Beyond either end the grid is
+    continued at its own average pitch, and a gap inside it is
+    interpolated across, so a named line always resolves somewhere.
+
+    A sheet with a single column has no pitch of its own to continue at,
+    so that column's own box and the gap after it stand in.
+    """
+    if index is None or not grid:
+        return None
+    if index in grid:
+        return grid[index][0]
+    known = sorted(grid)
+    if len(known) > 1:
+        pitch = (grid[known[-1]][0] - grid[known[0]][0]) / (known[-1] - known[0])
+    else:
+        pitch = grid[known[0]][1] + gap
+    if index < known[0]:
+        return grid[known[0]][0] - (known[0] - index) * pitch
+    if index > known[-1]:
+        return grid[known[-1]][0] + (index - known[-1]) * pitch
+    below = max(k for k in known if k < index)
+    above = min(k for k in known if k > index)
+    span = (grid[above][0] - grid[below][0]) / (above - below)
+    return grid[below][0] + (index - below) * span
+
+
+def _grid(fs: "Flowsheet") -> tuple[dict[int, tuple[float, float]],
+                                    dict[int, tuple[float, float]]]:
+    """The columns and rows stage 1 drew: where each starts, and how deep.
+
+    The size is carried because :func:`_lane` needs a pitch to continue
+    the grid past its last line, and a one-column sheet has none to
+    measure.
+    """
+    cols: dict[int, tuple[float, float]] = {}
+    rows: dict[int, tuple[float, float]] = {}
     for u in fs.units:
         frame = u.frame
         if frame is None:
             continue
-        col, row = frame.col, frame.row
-        if col is not None:
-            cols[col] = min(cols[col], frame.x) if col in cols else frame.x
-        if row is not None:
-            rows[row] = min(rows[row], frame.y) if row in rows else frame.y
+        for index, start, size, grid in ((frame.col, frame.x, frame.w, cols),
+                                         (frame.row, frame.y, frame.h, rows)):
+            if index is None:
+                continue
+            held = grid.get(index)
+            grid[index] = ((start if held is None else min(held[0], start)),
+                           (size if held is None else max(held[1], size)))
     return cols, rows
 
 
@@ -163,17 +196,27 @@ def _centroid(fs: "Flowsheet", inst: "Unit") -> tuple[float, float]:
     return (min(f.x for f in frames), max(f.y_max for f in frames) + CLEARANCE * 2)
 
 
-def _nearest_free(x: float, y: float, w: float, h: float,
-                  taken: list["Frame"]) -> tuple[float, float]:
+def _nearest_free(x: float, y: float, w: float, h: float, taken: list["Frame"],
+                  free_x: bool, free_y: bool) -> tuple[float, float]:
     """The spot nearest ``(x, y)`` that no drawn box already holds.
 
     Walked as rings on a lattice so the answer is a function of the
     sheet and not of the order the rings happened to be generated in:
     within a ring the candidates are visited in a fixed order, and the
     first that clears everything wins.
+
+    An axis the author pinned is not searched. A balloon pinned to a
+    column steps *up and down* that column to find its room and never
+    leaves it, which is what a column pin means; one pinned on both
+    axes is placed where it was put, overlap and all, since the author
+    has already answered and ``validate()`` reports what results.
     """
+    if not (free_x or free_y):
+        return x, y
     for ring in range(REACH):
         for dx, dy in _ring(ring):
+            if (dx and not free_x) or (dy and not free_y):
+                continue
             cx, cy = x + dx * STEP, y + dy * STEP
             if not _hits(cx, cy, w, h, taken):
                 return cx, cy

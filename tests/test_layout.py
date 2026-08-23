@@ -218,11 +218,22 @@ def test_a_south_face_puts_its_peer_below():
     assert prod._slot.col == sec._slot.col + 1
 
 
-def test_two_north_faces_facing_each_other_state_no_order():
+def test_two_north_faces_facing_each_other_settle_on_one_column():
     """A north connected to a north says each is above the other.
 
-    There is no arrangement that satisfies both, so neither is applied and
-    the edge ranks as any other does.
+    No arrangement satisfies both, and the two are equally sure, so the
+    row they settle on is the *same* row -- and both say, separately and
+    in agreement, that they are in one column. So the sheet stacks them,
+    and the separation gives one of them the row below.
+
+    The engine before this one cancelled the pair outright, dropping
+    what they agreed on along with what they did not, and fell back to
+    flow order. That cancellation is #446: a column overhead and a
+    condenser inlet are exactly this pair of faces, and dropping both
+    left nothing at all to say which way up the tower went. Here the
+    disagreement is settled by weight and there is nothing to drop --
+    which for two plain blocks, neither of which has a convention to
+    appeal to, is a stack.
     """
     fs = Flowsheet("facing")
     a = fs.add(U.Block("A", inputs=["W"], outputs=["N"]))
@@ -234,7 +245,8 @@ def test_two_north_faces_facing_each_other_state_no_order():
     fs.connect(b.out_1, prod.inlet)
     fs.layout()
 
-    assert b._slot.col == a._slot.col + 1
+    assert b._slot.col == a._slot.col
+    assert b._slot.row != a._slot.row
 
 
 def test_an_equipment_nozzle_on_the_north_is_not_a_stacking_constraint():
@@ -337,7 +349,16 @@ def test_a_branch_ranks_beside_the_spine_it_joins():
     assert blower._slot.col > b._slot.col
 
 
-def test_slack_removal_leaves_a_pinned_column_alone():
+def test_a_unit_between_two_pins_is_drawn_between_them():
+    """Both pins hold, and what is derived sits where its claims want.
+
+    The engine before this one ranked by longest path and then slid every
+    derived position as far along as its own connections allowed, so the
+    pump took one column short of the drum and left five empty columns
+    for its own feed line to cross. There is no distance-from-a-source
+    here to remove the slack from: the pump is pulled by the flag on one
+    side and the drum on the other, and lands where those weigh out.
+    """
     fs = Flowsheet("pinned slack")
     feed = fs.add(U.Feed("Feed"))
     pump = fs.add(U.Pump("P-1"))
@@ -350,17 +371,17 @@ def test_slack_removal_leaves_a_pinned_column_alone():
 
     assert feed._slot.col == 0
     assert drum._slot.col == 6
-    # The pump has slack between them and takes the tight end of it.
-    assert pump._slot.col == 5
+    assert 0 < pump._slot.col < 6
 
 
-def test_slack_removal_keeps_a_rank_right_of_its_own_upstream():
-    """Sliding a rank right is safe. A pinned successor slid it left.
+def test_two_pins_that_contradict_hold_and_the_derived_one_gives():
+    """``P-1`` east of ``P-3``, with the flow running the other way.
 
-    ``P-2`` took one column short of ``P-3``'s pin and landed four
-    columns *behind* the pump feeding it, at a column left of the page.
-    Two pins this far apart cannot both be honoured with a forward edge
-    between them, and the one that gives is the derived rank.
+    Two pins this far apart cannot both be honoured with a chain between
+    them, and what gives is the position nobody stated: ``P-2`` settles
+    between the two rather than being dragged off the page behind the
+    pump feeding it. Both pins hold exactly, which is the point -- a pin
+    is a boundary condition and not a preference to be reconciled.
     """
     fs = Flowsheet("conflicting pins")
     a = fs.add(U.Pump("P-1"))
@@ -374,7 +395,7 @@ def test_slack_removal_keeps_a_rank_right_of_its_own_upstream():
 
     assert a.frame.col == 3
     assert c.frame.col == 0
-    assert b.frame.col > a.frame.col
+    assert 0 <= b.frame.col <= 3
     assert min(u.frame.col for u in fs.units) >= 0
 
 
@@ -485,13 +506,19 @@ def test_pinning_the_row_the_engine_picks_anyway_does_not_flip_a_north_feed():
         assert _pinned_north_feed(pin_row)[0].frame.row == pin_row
 
 
-def test_vertical_constraints_that_state_no_top_fall_back_to_a_free_row():
-    """Two blocks each told to sit over the other.
+def test_vertical_claims_that_state_no_top_settle_on_one_row():
+    """Two blocks each told to sit over the other, and beside it too.
 
-    Two streams between the same pair, one naming the arriving face and
-    one the leaving face, so each block is the other's satellite. The
-    chain never resolves, which states no top and no bottom, and both
-    take the first free row in their column instead of hanging.
+    Two runs between the same pair: one names the arriving face and one
+    the leaving face, so each block claims the other is its satellite --
+    and a third pair of claims, off the two sideways faces, says they
+    are side by side on one row. Those cancel; these do not, and the two
+    weigh the same, so the answer is the arrangement both sideways faces
+    asked for.
+
+    The engine before this one had no way to say "cancel on one axis and
+    not on the other", so it read the pair as one column and stacked
+    them.
     """
     fs = Flowsheet("vertical cycle")
     a = fs.add(U.Block("A", inputs=["W"], outputs=["E", "N"]))
@@ -502,10 +529,8 @@ def test_vertical_constraints_that_state_no_top_fall_back_to_a_free_row():
     fs.connect(b.out_1, fs.add(U.Product("P")).inlet)
     fs.layout()
 
-    # Ranked as one column all the same, and no two units on one band.
-    assert a.frame.col == b.frame.col
-    assert a.frame.row != b.frame.row
-    assert {a.frame.row, b.frame.row} == {0, 1}
+    assert b.frame.col == a.frame.col + 1
+    assert a.frame.row == b.frame.row
 
 
 # --- laying a sheet out twice draws it twice the same -------------------------
@@ -575,250 +600,6 @@ def test_the_face_a_signal_leaves_on_is_settled_before_the_labels_are_placed():
 
     assert not place_attached(fs), "a further pass still moves a balloon"
     assert dict(lt.frame.port_faces) == before
-
-
-# --- the merge pass against the scan it replaced ------------------------------
-
-
-def _closes_cycle_by_rebuild(units, orders, find, a, b):
-    """The cycle test as it read before the contracted graph was carried.
-
-    Contract every unit and every constraint with ``a`` and ``b``
-    identified, then topologically sort the result: a cycle is a node the
-    sort never reaches. Kept here as the definition the fast test is
-    measured against, since it is the one every shipped sheet was laid
-    out by.
-    """
-    from collections import defaultdict, deque
-
-    def merged(u):
-        g = find(u)
-        return b if g is a else g
-
-    adj = defaultdict(set)
-    nodes = {merged(u) for u in units}
-    for edge in orders:
-        x, y = merged(edge.before), merged(edge.after)
-        if x is not y:
-            adj[x].add(y)
-    in_degree = dict.fromkeys(nodes, 0)
-    for ys in adj.values():
-        for y in ys:
-            in_degree[y] += 1
-    queue = deque([n for n in nodes if in_degree[n] == 0])
-    seen = 0
-    while queue:
-        n = queue.popleft()
-        seen += 1
-        for y in adj[n]:
-            in_degree[y] -= 1
-            if in_degree[y] == 0:
-                queue.append(y)
-    return seen < len(nodes)
-
-
-def _merge_by_rebuild(units, orders, sames, pinned):
-    """``_merge`` driving the rebuild above, candidate by candidate."""
-    lead = {u: u for u in units}
-
-    def find(u):
-        while lead[u] is not u:
-            lead[u] = lead[lead[u]]
-            u = lead[u]
-        return u
-
-    col = dict(pinned)
-    for same in sorted(sames, key=lambda s: -s.rank):
-        a, b = find(same.a), find(same.b)
-        if a is b or (a in col and b in col and col[a] != col[b]):
-            continue
-        if _closes_cycle_by_rebuild(units, orders, find, a, b):
-            continue
-        lead[a] = b
-        if a in col:
-            col[b] = col.pop(a)
-    return {u: find(u) for u in units}
-
-
-def _sharing_inputs(fs):
-    """The arguments the column solve hands the merge pass."""
-    from pandid.layout import claims as claims_mod
-    from pandid.layout.stages import process_streams, process_units
-
-    _seed_slots(fs)
-    break_cycles(fs)
-    units = process_units(fs)
-    claims = claims_mod.read(fs, process_streams(fs))
-    pinned = {u: u._slot.col for u in units if u._slot.col is not None}
-    return units, claims.along, claims.columns, pinned
-
-
-def _stacked_chain(n, pins=()):
-    """*n* blocks in a row, each with a feed over its roof."""
-    fs = Flowsheet("stacked chain")
-    port = fs.add(U.Feed("F")).outlet
-    for i in range(n):
-        block = fs.add(U.Block(f"B-{i}", inputs=["W", "N"], outputs=["E"]))
-        fs.connect(port, block.in_1)
-        fs.connect(fs.add(U.Feed(f"A-{i}")).outlet, block.in_2)
-        if i in pins:
-            block.pin(col=i)
-        port = block.out_1
-    fs.connect(port, fs.add(U.Product("P")).inlet)
-    return fs
-
-
-def _stack_over_a_chain():
-    """A north face reaching two blocks down its own train.
-
-    ``A`` feeds ``B`` feeds ``C``, and ``C`` also takes ``A`` over its
-    roof. Ranking the two as one column would put ``B`` after the merged
-    rank and before it at once, so the constraint has to be refused.
-    """
-    fs = Flowsheet("stack over a chain")
-    a = fs.add(U.Block("A", inputs=["W"], outputs=["E", "E"]))
-    b = fs.add(U.Block("B", inputs=["W"], outputs=["E"]))
-    c = fs.add(U.Block("C", inputs=["W", "N"], outputs=["E"]))
-    fs.connect(fs.add(U.Feed("F")).outlet, a.in_1)
-    fs.connect(a.out_1, b.in_1)
-    fs.connect(b.out_1, c.in_1)
-    fs.connect(a.out_2, c.in_2)
-    fs.connect(c.out_1, fs.add(U.Product("P")).inlet)
-    return fs, a, b, c
-
-
-def _stack_of_three():
-    """Three blocks in one column, each hung over the one below it.
-
-    ``Top`` over ``Mid`` over ``Base``, and each carries a feed and a
-    product of its own -- so the second union folds a group that already
-    has edges to move, rather than a bare flag with none.
-    """
-    fs = Flowsheet("stack of three")
-    base = fs.add(U.Block("Base", inputs=["W", "N"], outputs=["E"]))
-    mid = fs.add(U.Block("Mid", inputs=["W", "N"], outputs=["E", "E"]))
-    top = fs.add(U.Block("Top", inputs=["W"], outputs=["E"]))
-    for u in (base, mid, top):
-        fs.connect(fs.add(U.Feed(f"F-{u.name}")).outlet, u.in_1)
-    fs.connect(base.out_1, fs.add(U.Product("P-Base")).inlet)
-    fs.connect(mid.out_1, fs.add(U.Product("P-Mid")).inlet)
-    fs.connect(mid.out_2, base.in_2)
-    fs.connect(top.out_1, mid.in_2)
-    return fs
-
-
-def _cycle_only_a_merge_can_see():
-    """A union refused only because of the edges an earlier one moved.
-
-    ``A`` reaches nothing on its own. ``D`` reaches ``C`` through ``X``,
-    and the first constraint hangs ``D`` over ``A``, so the merged rank
-    inherits that reach. The second constraint would then hang ``A`` over
-    ``C`` -- which the merged rank already runs to, two steps along -- and
-    has to be refused. A pass that read the graph as it stood before the
-    first union sees nothing between the two and takes it.
-    """
-    fs = Flowsheet("inherited reach")
-    a = fs.add(U.Block("A", inputs=["W", "N"], outputs=["E", "E"]))
-    c = fs.add(U.Block("C", inputs=["W", "N"], outputs=["E"]))
-    d = fs.add(U.Block("D", inputs=["W"], outputs=["E", "E"]))
-    x = fs.add(U.Block("X", inputs=["W"], outputs=["E"]))
-    y = fs.add(U.Block("Y", inputs=["W"], outputs=["E"]))
-    for u in (a, d):
-        fs.connect(fs.add(U.Feed(f"F-{u.name}")).outlet, u.in_1)
-    fs.connect(d.out_1, x.in_1)
-    fs.connect(x.out_1, c.in_1)
-    fs.connect(a.out_1, y.in_1)
-    fs.connect(d.out_2, a.in_2)  # first: D hangs over A
-    fs.connect(a.out_2, c.in_2)  # second: A would hang over C
-    fs.connect(c.out_1, fs.add(U.Product("P")).inlet)
-    return fs, a, c
-
-
-def _stacked_on_what_it_feeds():
-    """Each block both feeds the next and hangs over it.
-
-    The flow edge between a merged pair becomes a loop on the merged
-    rank, and a rank that runs to itself is not an order between two
-    things: dropped when the graph was contracted wholesale, and dropped
-    on the fold. Left in, it makes the *next* union look as though the
-    two ends already had a run between them, and a constraint the sheet
-    can honour is turned down.
-    """
-    fs = Flowsheet("stacked on what it feeds")
-    a = fs.add(U.Block("A", inputs=["W"], outputs=["E", "E"]))
-    b = fs.add(U.Block("B", inputs=["W", "N"], outputs=["E", "E"]))
-    y = fs.add(U.Block("Y", inputs=["W", "N"], outputs=["E"]))
-    fs.connect(fs.add(U.Feed("F")).outlet, a.in_1)
-    fs.connect(a.out_1, b.in_1)
-    fs.connect(b.out_1, y.in_1)
-    fs.connect(a.out_2, b.in_2)
-    fs.connect(b.out_2, y.in_2)
-    fs.connect(y.out_1, fs.add(U.Product("P")).inlet)
-    return fs, a, b, y
-
-
-def test_the_merge_pass_answers_what_the_whole_sheet_scan_did():
-    """The contracted graph is carried across the unions, not rebuilt.
-
-    Rebuilding it meant contracting every unit and every constraint and
-    topologically sorting the result once per candidate. The answer has
-    to be the same one -- these are the columns every shipped sheet is
-    drawn on -- so the scan it replaced is kept in this file and both are
-    asked the same question.
-
-    Order is part of the answer: the unions are greedy and the first of
-    two conflicting constraints wins, so a pass refusing a *different*
-    one would draw a different sheet on the same count refused.
-    """
-    from pandid.layout.solver import _merge
-
-    corpus = [
-        _stacked_chain(6),
-        _stacked_chain(6, pins=(1, 4)),
-        _stack_over_a_chain()[0],
-        _stack_of_three(),
-        _cycle_only_a_merge_can_see()[0],
-        _stacked_on_what_it_feeds()[0],
-        _syngas_block()[0],
-    ]
-    for fs in corpus:
-        units, orders, sames, pinned = _sharing_inputs(fs)
-        assert sames, f"{fs.name} states no vertical constraint to share on"
-        assert _merge(units, orders, sames, pinned) == _merge_by_rebuild(
-            units, orders, sames, pinned
-        ), fs.name
-
-
-def test_a_stack_that_would_rank_a_block_before_and_after_itself_is_refused():
-    """The corpus above is only worth comparing if a union is turned down."""
-    from pandid.layout.solver import _merge
-
-    fs, a, b, c = _stack_over_a_chain()
-    units, orders, sames, pinned = _sharing_inputs(fs)
-    assert _closes_cycle_by_rebuild(units, orders, lambda u: u, a, c)
-    merged = _merge(units, orders, sames, pinned)
-    assert merged[a] is not merged[c]
-
-    # And the sheet still draws, with B between the two rather than beside
-    # a rank that is its own predecessor.
-    fs.layout()
-    assert a._slot.col < b._slot.col < c._slot.col
-
-
-def test_a_union_is_judged_on_the_edges_the_one_before_it_moved():
-    """The contracted graph is carried, so it has to be kept in step.
-
-    Reading the graph as it stood before the earlier union would find
-    nothing between these two columns and merge them, which is the column
-    running to itself two steps along.
-    """
-    from pandid.layout.solver import _merge
-
-    fs, a, c = _cycle_only_a_merge_can_see()
-    units, orders, sames, pinned = _sharing_inputs(fs)
-    assert [(s.a.name, s.b.name) for s in sames] == [("D", "A"), ("A", "C")]
-    head = _merge(units, orders, sames, pinned)
-    assert head[a] is not head[c]
 
 
 # --- what a fixed nozzle face says about placement (#431) ---------------------
