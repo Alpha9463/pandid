@@ -5,7 +5,7 @@ import pytest
 
 from pandid import Flowsheet, units as U
 from pandid.layout.attach import stream_path
-from pandid.render.svg import HOP_R, stream_polyline
+from pandid.render.svg import HOP_R, _ink, stream_polyline
 from pandid.streams import SIGNAL_KINDS
 
 from test_route_invariants import CORPUS
@@ -408,4 +408,87 @@ def test_a_hop_has_room_for_its_own_arc(drawn, name):
         f"{name}: {drawn_arcs} hop arcs drawn, {expected} crossings have room "
         f"for one -- a hop nearer than {HOP_R} to the end of its segment "
         f"overhangs, and on a corner is drawn as a kink"
+    )
+
+
+# ---------------------------------------------------------------------------
+# A stream number is measured along its **own** run
+# ---------------------------------------------------------------------------
+#
+# ``stream_numbers`` writes a number along the line it names and sends it
+# away with a leader only where there is no room beside it, so how long
+# the line *is* decides which of those two happens. A run is longer than
+# the segment being labelled -- an in-line valve cuts a straight length
+# of pipe into three drawn pieces and a reader sees one line -- so the
+# length is gathered from every piece of ink collinear with it.
+#
+# Collinear is not the same as *the same run*. Two different streams
+# drawn at one height are two lines, and a number that gathers both
+# reads as written along one it has nothing to do with. ``_Ink.line``
+# is what tells them apart; what follows is that it does.
+#
+# The consequence on a real drawing is measured in
+# ``tests/test_label_invariants.py``, over the shipped corpus, which is
+# where a leader drawn back across somebody else's run shows up. These
+# two are about the seam itself.
+
+
+def _collinear_pair():
+    """Two unrelated runs drawn end to end at one height."""
+    fs = Flowsheet("collinear")
+    long_feed = fs.add(U.Feed("Long Feed")).pin(x=60, y=100)
+    long_end = fs.add(U.Product("Long Product")).pin(x=700, y=100)
+    short_feed = fs.add(U.Feed("Short Feed")).pin(x=820, y=100)
+    short_end = fs.add(U.Product("Short Product")).pin(x=900, y=100)
+    fs.connect(long_feed.outlet, long_end.inlet)
+    fs.connect(short_feed.outlet, short_end.inlet)
+    fs.layout()
+    fs.route()
+    return fs
+
+
+def test_every_piece_of_pipe_ink_says_whose_run_it_is():
+    """``_Ink.line`` is the stream's number, and a tap has none.
+
+    A tap is the stub from a line to the balloon reading it and is not
+    part of anybody's run, so it is left empty rather than given the
+    instrument's name: an empty string matches no stream and so gathers
+    into no run, which is the answer wanted.
+    """
+    fs = _collinear_pair()
+    ink = _ink(fs)
+    pipes = [piece for piece in ink if piece.kind == "pipe"]
+    assert pipes, "the sheet drew no pipe"
+    assert {piece.line for piece in pipes} == {s.name for s in fs.streams}
+    assert all(piece.line == "" for piece in ink if piece.kind == "tap")
+
+
+def test_two_runs_at_one_height_are_two_runs():
+    """The short run's ink and the long one's do not pool.
+
+    Both are horizontal and both are at ``y=100``, which is every test
+    ``stream_numbers`` applied before ``line`` existed -- so measured
+    that way the short run is 840 px long instead of 80 and has room to
+    write anything anywhere. Measured by name the two do not touch.
+    """
+    fs = _collinear_pair()
+    short = next(
+        s for s in fs.streams if s.source.owner is not None and s.source.owner.name == "Short Feed"
+    )
+    level = [
+        piece
+        for piece in _ink(fs)
+        if piece.kind == "pipe" and piece.axis == "h" and abs(piece.at - 100.0) < 0.5
+    ]
+    assert len({piece.line for piece in level}) == 2, (
+        "the two runs are not collinear here, so this proves nothing"
+    )
+    mine = [piece for piece in level if piece.line == short.name]
+    theirs = [piece for piece in level if piece.line != short.name]
+    assert min(piece.x0 for piece in mine) > max(piece.x1 for piece in theirs), (
+        "the short run's ink overlaps the long one's, so the two cannot be "
+        "told apart by extent either"
+    )
+    assert max(piece.x1 for piece in mine) - min(piece.x0 for piece in mine) < 200, (
+        "the short run measures longer than it is drawn"
     )
