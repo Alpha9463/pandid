@@ -16,10 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one, since the valve already stands in the run; letters the transmitter and
   the controller from the measured variable; states no standoff of its own, so
   the balloons take `add_instrument`'s defaults and #428's resolver keeps them
-  apart; and returns a `ControlLoop` whose `transmitter`, `controller`, `valve`,
-  `measurement` and `output` are ordinary units and streams, still pinnable and
-  still connectable. `examples/04_control_loop.py` draws its level loop this way
-  and the golden it draws is unchanged.
+  apart; and returns a `ControlLoop` whose `transmitter`, `controller`,
+  `final_element`, `measurement` and `output` are ordinary units and streams,
+  still pinnable and still connectable. `examples/04_control_loop.py` draws its
+  level loop this way and the golden it draws is unchanged.
+  `transmitter_letters` and `controller_letters` take the member's **whole**
+  functional code (`"FIC"`, not the `"IC"` after the `F`), which is the
+  spelling `add_instrument` and `Loop.tag()` already take and the only one that
+  can be checked against the loop; both default to the loop's own lettering, so
+  the measured variable is still typed once (#448).
 - `Tank(inputs=)`/`Vessel(inputs=)` and `outputs=`: a tank or a vessel fed (or
   drawn) by several streams, `Block`'s connection API over vendored artwork
   instead of a grown box -- `in_1`/`in_2`/... on whichever faces are named,

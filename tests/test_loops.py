@@ -689,7 +689,7 @@ def test_a_feedback_loop_is_one_statement():
     assert loop.name == "L-101"
     assert loop.transmitter.name == "LT-101"
     assert loop.controller.name == "LIC-101"
-    assert loop.valve is lv
+    assert loop.final_element is lv
     assert (loop.measurement.source.owner, loop.measurement.dest.owner) == (
         loop.transmitter,
         loop.controller,
@@ -744,11 +744,33 @@ def test_the_helper_draws_what_the_long_hand_draws(placement):
 def test_the_balloons_it_places_land_clear_of_the_sheet():
     """What #439 was raised about: the probe guessed ``offset=40`` and
     ``offset=45`` and tripped ``unit-overlap``. Nothing is guessed here, and
-    #428's standoff resolver is what keeps the pair apart."""
-    fs, drum, lv = _feedback_sheet()
-    fs.add_control_loop("L", 101, measuring=drum, acting_on=lv)
+    #428's standoff resolver is what keeps the pair apart.
 
-    assert [f.code for f in validate(fs) if f.code == "unit-overlap"] == []
+    Both halves are asserted, and #448 is why: this used to forbid an overlap
+    and nothing else, so it passed with ``add_control_loop`` stubbed to return
+    ``None`` -- an empty sheet overlaps nothing. It also asked ``validate()``
+    for a geometric finding on a sheet nothing had laid out, and that half is
+    silent by design, so the finding it forbade could not have been made at
+    all. Placed *and* clear is the claim, so the sheet is laid out and routed,
+    and the frames are read off it before the findings are.
+    """
+    fs, drum, lv = _feedback_sheet()
+    loop = fs.add_control_loop("L", 101, measuring=drum, acting_on=lv)
+    fs.layout()
+    fs.route()  # what settles an attached balloon; see layout.attach
+
+    findings = validate(fs)
+    balloons = [loop.transmitter, loop.controller]
+    # Placed: on the sheet, and each with a frame of a real size.
+    assert [b.name for b in balloons] == ["LT-101", "LIC-101"]
+    for balloon in balloons:
+        assert balloon in fs.units
+        assert balloon.frame is not None
+        assert balloon.frame.w > 0 and balloon.frame.h > 0
+    assert fs.unplaced_instruments == []
+    # Clear: of each other, of the drum they read and of the valve they stroke.
+    assert [f.code for f in findings if f.code == "unit-overlap"] == []
+    assert [f.code for f in findings if f.code == "instrument-unplaced"] == []
 
 
 def test_the_parts_stay_reachable_and_pinnable():
@@ -777,7 +799,7 @@ def test_it_takes_the_valve_rather_than_making_one():
 
     loop = fs.add_control_loop("L", 101, measuring=drum, acting_on=lv)
 
-    assert loop.valve is lv
+    assert loop.final_element is lv
     assert [u for u in fs.units if u not in before] == [loop.transmitter, loop.controller]
     with pytest.raises(TypeError):
         fs.add_control_loop("F", 102, measuring=drum)  # type: ignore[call-arg]
@@ -791,7 +813,7 @@ def test_the_output_may_name_the_nozzle_it_lands_on():
 
     loop = fs.add_control_loop("L", 101, measuring=drum, acting_on=lv.actuator)
 
-    assert loop.valve is lv
+    assert loop.final_element is lv
     assert loop.output.dest is lv.actuator
 
 
@@ -810,9 +832,9 @@ def test_the_letters_follow_from_the_measured_variable():
     assert (flow.transmitter.name, flow.controller.name) == ("FT-101", "FIC-101")
 
 
-def test_the_function_letters_after_the_variable_are_the_authors():
+def test_the_function_letters_are_the_authors_and_are_whole_codes():
     """A recording controller and an indicating transmitter are the same loop
-    said in a different house style, and the variable is still typed once."""
+    said in a different house style, spelled the way they are said."""
     fs, drum, lv = _feedback_sheet()
     run = drum.outlet.stream
     assert run is not None
@@ -822,16 +844,46 @@ def test_the_function_letters_after_the_variable_are_the_authors():
         101,
         measuring=run,
         acting_on=lv,
-        transmitter_letters="IT",
-        controller_letters="RC",
+        transmitter_letters="FIT",
+        controller_letters="FRC",
     )
 
     assert (loop.transmitter.name, loop.controller.name) == ("FIT-101", "FRC-101")
 
 
+def test_the_letters_are_the_whole_code_and_a_foreign_variable_is_refused():
+    """#448: ``controller_letters="FIC"`` is what an engineer calls the
+    instrument and so what they type. It used to be appended to the measured
+    variable and draw ``FFIC-909`` with nothing raised. A whole code is checked
+    against the loop, so the same string on the wrong loop now fails at the line
+    that wrote it rather than reaching the paper."""
+    fs, drum, lv = _feedback_sheet()
+
+    loop = fs.add_control_loop("L", 909, measuring=drum, acting_on=lv, controller_letters="LIC")
+    assert loop.controller.name == "LIC-909"
+
+    fs, drum, lv = _feedback_sheet()
+    with pytest.raises(ValueError, match=r"loop L-101 measures 'L', but 'FIC'"):
+        fs.add_control_loop("L", 101, measuring=drum, acting_on=lv, controller_letters="FIC")
+
+
+def test_a_bare_measured_variable_is_not_a_functional_code():
+    """The old suffix spelling, typed at the new parameter: ``"IC"`` on an L
+    loop opens with the wrong variable, and ``"L"`` alone leaves the balloon
+    tagged ``L-101``, which no instrument carries. Both are refused by name."""
+    fs, drum, lv = _feedback_sheet()
+
+    with pytest.raises(ValueError, match=r"but 'IC' opens with 'I'"):
+        fs.add_control_loop("L", 101, measuring=drum, acting_on=lv, controller_letters="IC")
+
+    fs, drum, lv = _feedback_sheet()
+    with pytest.raises(ValueError, match=r"transmitter_letters='L' is the measured"):
+        fs.add_control_loop("L", 101, measuring=drum, acting_on=lv, transmitter_letters="L")
+
+
 def test_empty_function_letters_are_refused():
-    """An empty string leaves a balloon lettered with the loop's own variable
-    and no function, which no instrument carries."""
+    """An empty string is no tag at all, and the parameter it was given at is
+    named so the author knows which of the two to correct."""
     fs, drum, lv = _feedback_sheet()
 
     with pytest.raises(ValueError, match="controller_letters"):
@@ -908,4 +960,10 @@ def test_the_loop_it_builds_still_reaches_no_equipment_list():
     loop = fs.add_control_loop("L", 101, measuring=drum, acting_on=lv)
 
     assert loop not in fs.units and loop.loop not in fs.units
-    assert "L-101" not in [tag for tag, _ in equipment_list(fs).rows]
+    # The list in full, not "L-101 is absent from it": nothing on the sheet
+    # could ever have been tagged with a loop's name, so forbidding that alone
+    # is a check that cannot fail. What the list has to say is which of the
+    # things this call *did* put on the sheet reach it -- the drum, and neither
+    # balloon.
+    assert [tag for tag, _ in equipment_list(fs).rows] == ["V-101"]
+    assert loop.transmitter in fs.units and loop.controller in fs.units

@@ -233,7 +233,7 @@ class ControlLoop:
     """
 
     def __init__(self, loop: Loop, transmitter: "Instrument",
-                 controller: "Instrument", valve: "Unit",
+                 controller: "Instrument", final_element: "Unit",
                  measurement: "Stream", output: "Stream"):
         #: The loop the members are numbered from, as
         #: :meth:`~pandid.flowsheet.Flowsheet.add_loop` returns it.
@@ -245,7 +245,15 @@ class ControlLoop:
         #: The final control element the output lands on -- the unit the
         #: author placed and passed in, never one this made up. Where a
         #: nozzle was named, this is the unit that owns it.
-        self.valve = valve
+        #:
+        #: Not ``valve``: ``acting_on=`` takes any signal-bearing unit,
+        #: because a damper, a louvre and a variable-speed drive are
+        #: final control elements as much as a valve is, and a handle
+        #: that called a :class:`~pandid.units.Damper` a valve was
+        #: naming it after the commonest case rather than after what it
+        #: is (issue #448). ``final_element`` is also the term the
+        #: instrument index uses.
+        self.final_element = final_element
         #: Transmitter to controller: the measurement.
         self.measurement = measurement
         #: Controller to final element: the output.
@@ -284,4 +292,4 @@ class ControlLoop:
 
     def __repr__(self) -> str:
         return (f"ControlLoop({self.name!r}, {self.transmitter.name!r} -> "
-                f"{self.controller.name!r} -> {self.valve.name!r})")
+                f"{self.controller.name!r} -> {self.final_element.name!r})")
