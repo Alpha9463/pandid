@@ -5507,10 +5507,20 @@ class Column(Unit):
     #: reflux comes back from the drum the overhead went to and the
     #: boilup from the reboiler the bottoms went to, so ``reflux_in: N``
     #: beside ``overhead: NE`` is the tower asserting that one cluster
-    #: is in two places. It costs what that sounds like -- the overhead
-    #: system is dragged back over the tower's own column and its runs
-    #: cross the tower to reach it, 50 crossings across the corpus
-    #: measured by ``scripts/layout_quality.py``.
+    #: is in two places.
+    #:
+    #: **These two entries do very little, and the reason is worth
+    #: knowing before anyone tunes them.** 13 of the 17 ``reflux_in`` and
+    #: ``boilup_in`` connections in the shipped corpus are the run the
+    #: cycle breaker tore, and a return line is read for the pipe alone
+    #: (:mod:`pandid.layout.claims`) -- ``PLACES`` never sees it. What is
+    #: left is four connections, and switching both entries to the
+    #: ``N``/``S`` of the approved design moves the corpus by **one**
+    #: crossing, 240 to 241, measured with ``scripts/layout_quality.py``.
+    #: The consistency argument above is the whole of the case for them;
+    #: an earlier version of this comment claimed 50 crossings, which was
+    #: measured against an engine that read a return's nozzles and is no
+    #: longer true of anything.
     #:
     #: A side draw is the one entry that is merely a preference: a
     #: sidestream goes east because everything downstream does, and a

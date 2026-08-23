@@ -21,13 +21,27 @@ One shape for everything
 their sign: ``+1 southward`` is a row further down a y-down canvas,
 which ``dy`` invites a reader to get backwards.
 
-**Every stream emits two claims, one authored by each end.** They are
-independent and may flatly disagree -- a column's ``overhead -> NE`` and
-its condenser's own reading of its inlet face are two different
-statements about the same pair -- and the solve
+**A stream states one claim for each end that has something to say.**
+Where both do they are independent and may flatly disagree -- a column's
+``overhead -> NE`` and its condenser's own reading of its inlet face are
+two different statements about the same pair -- and the solve
 (:mod:`pandid.layout.solver`) arbitrates by weight rather than by
 dropping one of them. That is what lets every block have a say, and it
 is why nothing here has to decide which end is right.
+
+Where **neither** end has anything to say the pipe states one claim on
+its own account, and a return line is always that case (see below). The
+approved design in #447 said *two* claims per stream, unconditionally.
+That is amended here, deliberately: a valve has no opinion about where
+its line goes, and a claim written on its behalf is not its opinion but
+an invention -- and an invented claim is still a weight in the fit.
+Emitting one anyway, at :data:`LINE`, costs the corpus 20 crossings and
+buys a symmetry that is in the code rather than in the equipment.
+
+What the two-claim contract was there to prevent still holds, and it is
+the half that matters: **no end is ever dropped because the other end
+spoke.** A stream with one stated end and one silent end states the one,
+never "whichever of the two is better".
 
 Where a direction comes from
 ----------------------------
@@ -76,6 +90,21 @@ a component drawn on top of the sheet. So a stream **both** of whose
 ends declined to speak contributes one claim of its own at
 :data:`LINE`, the weakest weight there is, saying only what a pipe says:
 that the thing it leaves comes before the thing it reaches.
+
+What a fitting is *not* given is a claim toward the middle of its two
+neighbours. That is the obvious reading of "a valve sits on the line
+rather than at a place on the grid", and this grid cannot draw it: the
+midpoint of two boxes one column apart is half a column, which
+discretises onto one of them, and
+:func:`~pandid.layout.place._separate` then hands the valve a **row** of
+its own -- lifting it off the very line it was supposed to be sitting
+on. Measured over the corpus that is 240 crossings against 338. Blunted,
+by letting the fit read the midpoint while
+:func:`~pandid.layout.place._spread` goes on giving the fitting its own
+column, it still costs 74. Drawing a fitting *between* two columns
+rather than in one is a question for :mod:`pandid.layout.coordinates`,
+which owns where a column's paper begins and ends, and not for the
+claims.
 """
 
 from __future__ import annotations
@@ -97,11 +126,20 @@ LINE = 0.25
 
 #: What a return line is worth. It states one thing -- that the end it
 #: leaves is further along the sheet than the end it reaches -- and it
-#: states it weakly, because the forward run it returns along has
-#: already said the same and said it better. Not dropped, because a
-#: return may be the only run joining a loop's two halves and a
-#: component nothing joins is a component drawn on top of the sheet.
-RETURN = 0.25
+#: is the *pipe* that states it, not either unit, because a return's
+#: nozzles are read for nothing (see :func:`read`).
+#:
+#: Twice :data:`LINE`, and stated once rather than once per end. Written
+#: the other way -- which is what this was, both ends emitting the
+#: identical pull at ``LINE`` -- it is the same arithmetic with the
+#: doubling hidden inside a loop, so a return held a loop together twice
+#: as stiffly as a silent forward run held its own two ends and nothing
+#: said so. Undoing the doubling instead takes the corpus from 240
+#: crossings to 321: a return is often the *only* run joining a loop's
+#: two halves, where a silent forward run nearly always has a stated
+#: claim somewhere beside it, and halved it lets the loop come apart. So
+#: the doubling stays, and is written down.
+RETURN = 0.5
 
 #: Compass point -> ``(eastward, southward)``, in grid steps. South is
 #: positive: the canvas is y-down and the table is written the way the
@@ -156,15 +194,14 @@ def read(streams: list["Stream"]) -> list[Claim]:
             # that folded into three). What is left is the only thing a
             # return says: the end it leaves is further along than the
             # end it reaches.
-            for author, _port, subject, forward in ends:
-                step = _flow_step(forward, True)
-                out.append(Claim(author, subject, step[0], step[1], RETURN))
+            step = _flow_step(1, True)
+            out.append(Claim(src, dst, step[0], step[1], RETURN))
             continue
         spoke = False
         for author, port_name, subject, forward in ends:
             direction, confidence = _stated(author, port_name)
             if confidence <= 0.0:
-                continue
+                continue  # an in-line fitting has nothing to say; see above
             if direction is None:
                 direction = fixed_face(author, port_name, slot(author))
             if direction is None:

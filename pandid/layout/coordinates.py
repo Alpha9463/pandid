@@ -42,6 +42,13 @@ if TYPE_CHECKING:
 #: fits with a margin, and ``350-LG-314-CS`` on 18_fixed_bed_recycle
 #: stops being written a lane away from its own run with a leader drawn
 #: back across the loop gas line.
+#:
+#: It belongs with the placement change rather than in a tidying pass of
+#: its own, and the reason is that the placement change is what needs
+#: it. At 100 ``tests/test_label_invariants.py`` fails twice on this
+#: branch and passes on ``main``: the fit puts two boxes a column apart
+#: that the engine before it did not, and the run between them is now a
+#: run with a thirteen-character number and 100 px to write it in.
 COL_GAP = 120.0
 ROW_GAP = 70     # gap between row bands, over the taller row
 MARGIN_X = 50
@@ -524,20 +531,8 @@ def _stack_offsets(fs: "Flowsheet", units: list["Unit"],
     return out
 
 
-#: Clear paper a sideways nudge has to leave between the box it moves
-#: and the one beside it. Not a collision margin: a run between two
-#: boxes has to be *drawn*, and its number written along it, and a
-#: number is a couple of dozen pixels of lettering before it is
-#: anything else. Slid until it merely fails to overlap, an ejector
-#: lining up with the vent above it left 17 px between itself and the
-#: splitter feeding it -- a run too short to write ``S7`` beside, so the
-#: number went off looking for paper and had to be drawn back to its own
-#: line across the splitter (15_condensing_turbine).
-STACK_CLEAR = 40.0
-
-
 def _overlaps_x(u: "Unit", new_x: float, units: list["Unit"]) -> bool:
-    """Would moving ``u`` to ``new_x`` crowd a unit beside it?"""
+    """Would moving ``u`` to ``new_x`` put it over a unit beside it?"""
     s = slot(u)
     if s.y is None:
         return True
@@ -547,7 +542,7 @@ def _overlaps_x(u: "Unit", new_x: float, units: list["Unit"]) -> bool:
             continue
         if s.y + s.h <= o.y or s.y >= o.y + o.h:
             continue
-        if not (new_x + s.w + STACK_CLEAR <= o.x or new_x >= o.x + o.w + STACK_CLEAR):
+        if not (new_x + s.w <= o.x or new_x >= o.x + o.w):
             return True
     return False
 

@@ -239,8 +239,8 @@ def test_a_half_step_rounds_away_from_zero_on_both_sides() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_every_stream_is_claimed_from_both_ends() -> None:
-    """Two claims per run, one authored by each end, disagreeing freely."""
+def test_a_stream_is_claimed_by_each_end_that_speaks() -> None:
+    """Two ends with something to say are two claims, disagreeing freely."""
     fs = Flowsheet("both ends")
     col = fs.add(U.DistillationColumn("T-1"))
     cond = fs.add(D.Condenser("E-1"))
@@ -260,6 +260,113 @@ def test_every_stream_is_claimed_from_both_ends() -> None:
     # inlet face, which is fixed north, and so says the column is above
     # *it*. Nothing here reconciles them; the fit does.
     assert (by_author[cond].eastward, by_author[cond].southward) == (0, -1)
+
+
+def test_a_silent_end_is_not_dropped_because_the_other_spoke() -> None:
+    """One stated end and one silent one is one claim: the stated one.
+
+    The half of the two-claim contract that survives its amendment (see
+    :mod:`pandid.layout.claims`). What the old engine did here was rank
+    the two ends and keep the winner; what is wrong with that is not the
+    count but that ranking throws away a statement. There is nothing to
+    throw away when the other end is a block valve.
+    """
+    fs = Flowsheet("one end")
+    col = fs.add(U.DistillationColumn("T-1"))
+    valve = fs.add(D.ControlValve("FV-1"))
+    fs.connect(col.overhead, valve.inlet)
+    fs.layout()
+
+    from pandid.layout.stages import process_streams
+
+    claims = claims_mod.read(process_streams(fs))
+    assert claims == [claims_mod.Claim(col, valve, 1, -1, 8.0)]
+
+
+def test_a_return_line_states_the_pipe_once() -> None:
+    """A recycle is the pipe speaking, so it speaks once and at RETURN.
+
+    Twice, once per end, is the same pull written down twice and was the
+    2x stiffness asymmetry between forward and return plumbing. The
+    weight it adds up to is kept and stated; what goes is the doubling
+    happening where nobody could see it.
+    """
+    fs = Flowsheet("loop")
+    col = fs.add(U.DistillationColumn("T-1"))
+    drum = fs.add(U.Vessel("V-1", variant="horizontal"))
+    fs.connect(col.overhead, drum.ports["in_1"])
+    fs.connect(drum.ports["out_1"], col.reflux_in)
+    fs.layout()
+
+    from pandid.layout.stages import process_streams
+
+    streams = process_streams(fs)
+    returns = [s for s in streams if s.is_recycle]
+    assert len(returns) == 1, "the loop is torn once"
+    claims = claims_mod.read(streams)
+    stated = [c for c in claims if c.confidence == claims_mod.RETURN]
+    assert len(stated) == 1
+    assert claims_mod.RETURN == 2 * claims_mod.LINE
+
+
+def test_a_manifold_is_moved_by_the_bank_it_feeds() -> None:
+    """Connection count outweighs declared confidence, on purpose.
+
+    A header is a piece of piping and states nothing. Between a column
+    that places its bottoms peer south east at confidence 8 and a bank
+    of pumps each placing their suction peer west at 2, the pumps win as
+    soon as there are five of them -- 10 against 8 -- and the header
+    leaves the column's nozzle row for the middle of the bank.
+
+    That is the approved design working, not failing: "a highly
+    connected unit becomes stiff by connection count alone. Emergent,
+    not declared" (#447). It is also the better drawing -- a header
+    feeding five pumps belongs level with the middle of the five, not
+    level with one end of the run into it.
+
+    Normalising the weight by degree does not undo it and is not the
+    remedy it looks like. Dividing every claim *about* the header by the
+    header's own degree scales its whole barycentre, numerator and
+    denominator alike, and moves it nowhere; dividing each unit's claims
+    by its *own* degree leaves a pump at degree two however many pumps
+    there are. Measured over the corpus the two cost 63 and 46 crossings
+    respectively and this drift is unchanged by either.
+
+    So the drift is pinned rather than fixed: what is guarded here is
+    that it stays a drift **along the bank** and never a step to the
+    wrong side of it -- the header stays between the column and the
+    pumps at every size, which is the thing that would be a bug.
+    """
+
+    class Header(U.Splitter):
+        LAYOUT_CONFIDENCE = 0
+        PLACES: dict = {}
+
+    seen = []
+    for pumps in range(1, 9):
+        fs = Flowsheet("manifold")
+        col = fs.add(U.Column("T-1"))
+        header = fs.add(Header("H-1", n_outlets=pumps))
+        col.pin(col=0, row=0)
+        fs.connect(col.bottoms, header.inlet)
+        for i in range(pumps):
+            pump = fs.add(U.Pump(f"P-{i + 1}"))
+            pump.pin(col=4, row=i)
+            fs.connect(header.outlets[i], pump.suction)
+        fs.layout()
+        assert header.frame is not None
+        col_at, row_at = header.frame.col, header.frame.row
+        assert col_at is not None and row_at is not None
+        assert 0 < col_at < 4, (
+            f"{pumps} pumps: the header left the paper between the column and "
+            f"the bank for column {col_at}"
+        )
+        seen.append(row_at)
+
+    assert seen == [1, 1, 1, 1, 2, 2, 2, 3], (
+        "the header sits on the column's bottoms row until the bank musters "
+        "more confidence than the column, and then follows the bank's middle"
+    )
 
 
 def test_a_valve_states_nothing_and_the_pipe_speaks_for_it() -> None:

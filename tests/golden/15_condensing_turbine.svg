@@ -36,7 +36,7 @@
     <use href="#sym_valve_hydraulic" x="435" y="423.9" width="24.5" height="22.2" />
     <use href="#sym_turbine" x="713" y="471.5" width="98.0" height="60.0" />
     <use href="#sym_hex_air_cooled" x="1015" y="451.5" width="100.0" height="100.0" />
-    <use href="#sym_ejector" x="1499" y="175" width="80.0" height="40.0" />
+    <use href="#sym_ejector" x="1404" y="175" width="80.0" height="40.0" />
     <use href="#sym_vessel_dished" x="1319" y="484.5" width="60.0" height="95.4" />
     <use href="#sym_splitter" x="1319" y="170" width="50.0" height="50.0" />
     <use href="#sym_vent" x="1499" y="57.5" width="20.0" height="35.0" />
@@ -58,14 +58,14 @@
     <path d="M 459.5,438.8 L 688.0,438.8 L 688.0,501.5 L 713.0,501.5" fill="none" stroke="black" stroke-width="2" />
     <path d="M 811.0,501.5 L 990.0,501.5 L 990.0,531.5 L 1015.0,531.5" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1115.0,531.5 L 1329.0,531.5" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1349.0,484.5 L 1349.0,240.0 L 1519.0,240.0 L 1519.0,215.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1369.0,185.0 L 1474.0,185.0 L 1474.0,195.0 L 1499.0,195.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1579.0,195.0 L 1604.0,195.0 L 1604.0,117.5 L 1509.0,117.5 L 1509.0,92.5" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1349.0,484.5 L 1349.0,240.0 L 1424.0,240.0 L 1424.0,215.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1369.0,185.0 L 1379.0,185.0 L 1379.0,195.0 L 1404.0,195.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1484.0,195.0 L 1509.0,195.0 L 1509.0,92.5" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1369.0,531.5 L 1499.0,531.5" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1569.0,511.5 L 1674.0,511.5 L 1674.0,501.5 L 1708.9,501.5" fill="none" stroke="black" stroke-width="2" />
     <path d="M 763.0,195.0 L 1015.0,195.0" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1039.5,195.0 L 1319.0,195.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1369.0,205.0 L 1484.0,205.0 L 1484.0,235.0 A 5 5 0 0 1 1484.0,245.0 L 1484.0,526.5 A 5 5 0 0 1 1484.0,536.5 L 1484.0,574.2 L 1739.0,574.2 L 1739.0,531.6" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 1369.0,205.0 L 1396.0,205.0 L 1396.0,235.0 A 5 5 0 0 1 1396.0,245.0 L 1396.0,526.5 A 5 5 0 0 1 1396.0,536.5 L 1396.0,574.2 L 1739.0,574.2 L 1739.0,531.6" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1769.1,501.5 L 1899.0,501.5" fill="none" stroke="black" stroke-width="2" />
     <path d="M 1923.5,501.5 L 2043.5,501.5" fill="none" stroke="black" stroke-width="2" />
     <path d="M 2068.0,501.5 L 2188.0,501.5" fill="none" stroke="black" stroke-width="2" />
@@ -90,18 +90,18 @@
     <text x="1222.0" y="531.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S5</text>
     <rect x="1342.5" y="353.1" width="13.0" height="18.4" fill="white" />
     <text x="1349.0" y="362.2" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1349.0, 362.2)">S6</text>
-    <rect x="1412.3" y="178.5" width="18.4" height="13.0" fill="white" />
-    <text x="1421.5" y="185.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S7</text>
-    <rect x="1547.3" y="111.0" width="18.4" height="13.0" fill="white" />
-    <text x="1556.5" y="117.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S8</text>
+    <rect x="1382.3" y="178.0" width="18.4" height="13.0" fill="white" />
+    <text x="1391.5" y="184.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S7</text>
+    <rect x="1502.5" y="134.6" width="13.0" height="18.4" fill="white" />
+    <text x="1509.0" y="143.8" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1509.0, 143.8)">S8</text>
     <rect x="1424.8" y="525.0" width="18.4" height="13.0" fill="white" />
     <text x="1434.0" y="531.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S9</text>
     <rect x="1609.2" y="505.0" width="24.6" height="13.0" fill="white" />
     <text x="1621.5" y="511.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S10</text>
     <rect x="876.7" y="188.5" width="24.6" height="13.0" fill="white" />
     <text x="889.0" y="195.0" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S11</text>
-    <rect x="1477.5" y="377.3" width="13.0" height="24.6" fill="white" />
-    <text x="1484.0" y="389.6" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1484.0, 389.6)">S12</text>
+    <rect x="1389.5" y="377.3" width="13.0" height="24.6" fill="white" />
+    <text x="1396.0" y="389.6" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black" transform="rotate(-90, 1396.0, 389.6)">S12</text>
     <rect x="1821.8" y="495.0" width="24.6" height="13.0" fill="white" />
     <text x="1834.0" y="501.5" font-family="sans-serif" font-size="10" text-anchor="middle" dominant-baseline="middle" fill="black">S13</text>
   </g>
@@ -138,8 +138,8 @@
     <text x="762.0" y="461.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">ST-701</text>
     <rect x="1044.5" y="429.5" width="41.0" height="15.0" fill="white" />
     <text x="1065.0" y="441.5" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">E-701</text>
-    <rect x="1515.2" y="153.0" width="47.6" height="15.0" fill="white" />
-    <text x="1539.0" y="165.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">EJ-701</text>
+    <rect x="1420.2" y="153.0" width="47.6" height="15.0" fill="white" />
+    <text x="1444.0" y="165.0" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="baseline">EJ-701</text>
     <rect x="1304.5" y="587.4" width="41.0" height="15.0" fill="white" />
     <text x="1325.0" y="594.9" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">V-701</text>
     <rect x="1320.2" y="148.0" width="47.6" height="15.0" fill="white" />

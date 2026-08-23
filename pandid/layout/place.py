@@ -17,11 +17,19 @@ way about. Separation walks each column top to bottom in the order the
 fit asked for and hands out distinct rows, so the arrangement the claims
 argued their way to survives being made legal.
 
-There is no crossing-reduction sweep here any more and none is missing.
-A barycentre pass moves a unit to the average row of its neighbours and
-repeats until that stops changing anything; the fit puts every unit at
-the weighted average of every claim touching it, exactly, in one step.
-The sweep was an approximation to the answer this now computes.
+Then crossing reduction, and it is **not** what the fit computes
+------------------------------------------------------------------
+The fit puts every unit at the weighted average of every claim touching
+it, which looks like what a barycentre sweep converges to and is a
+different quantity: least squares minimises *displacement*, and a
+crossing is nowhere in that objective. Where two units in one column
+have no claim about each other -- which on a sheet of valve stations is
+most pairs -- the fit puts them in whichever order the arithmetic came
+out, and swapping them costs it nothing and the drawing plenty. Deleting
+the sweep on the grounds that the fit subsumed it cost the corpus 93
+crossings; :func:`_unlace` puts it back, after the solve and as a
+permutation within each column, so that the two passes answer the two
+different questions rather than one pretending to answer both.
 """
 
 from __future__ import annotations
@@ -61,7 +69,8 @@ def assign_positions(fs: "Flowsheet") -> None:
 
     stiffness = _stiffness(units, at, claims)
     columns = _spread(units, at, claims, eastward)
-    rows = _separate(units, at, columns, southward, stiffness)
+    rows = _unlace(units, claims, columns,
+                   _separate(units, at, columns, southward, stiffness))
     for u in units:
         s = slot(u)
         s.col, s.row = columns[u], rows[u]
@@ -195,6 +204,13 @@ def _spread(units: list["Unit"], at: dict["Unit", int],
     because the vessel *said* so -- ``PLACES["relief"] == "N"``, a step
     of zero along -- and nothing here moves it.
 
+    Which **side** of the gap each end takes is the fit's answer and not
+    the claim's; see the comment on the loop. That is worth 14 crossings
+    on 20_molecular_sieve_dryer, where two identical adsorber beds are
+    read differently -- one of them has the torn edge of the
+    regeneration loop on it -- and the fit still has them side by side
+    while the claims, read for their direction, do not.
+
     Each unit takes a column one past the furthest of the neighbours
     already placed that stated it comes after them -- a longest path,
     over the handful of units one column holds. Spacing them evenly
@@ -206,14 +222,27 @@ def _spread(units: list["Unit"], at: dict["Unit", int],
     columns = {u: solver.discretise(eastward[at[u]]) for u in units}
     after: dict["Unit", list["Unit"]] = defaultdict(list)
     level: set[tuple[int, int]] = set()
+    place = {u: (round(eastward[at[u]], solver.PLACES), at[u]) for u in units}
     for claim in claims:
-        if claim.eastward > 0:
-            after[claim.subject].append(claim.author)
-        elif claim.eastward < 0:
-            after[claim.author].append(claim.subject)
-        else:
+        if claim.eastward == 0:
             level.add((at[claim.author], at[claim.subject]))
             level.add((at[claim.subject], at[claim.author]))
+            continue
+        # Which way round is the *fit's* answer and never the claim's.
+        # The claim is read for one thing only -- that these two are a
+        # column apart -- because that is the part of it the fit cannot
+        # honour and this pass exists to restore. Read for its direction
+        # as well and a claim the fit weighed and turned down would be
+        # enforced here anyway, at full strength, by a pass that weighed
+        # nothing: a stripper's ``boilup_in: SE`` and the blower's own
+        # ``discharge: E`` would push each other apart a column at a
+        # time and end three columns from where either wanted. Taking
+        # the side from the fit and the gap from the claim leaves the
+        # arrangement the solve settled on and only stretches it.
+        west, east = claim.author, claim.subject
+        if place[west] > place[east]:
+            west, east = east, west
+        after[east].append(west)
     if not after:
         return columns
 
@@ -229,15 +258,11 @@ def _spread(units: list["Unit"], at: dict["Unit", int],
     # one column because the compressor had been moved into the
     # reactor's.
     #
-    # And it **cannot enforce a claim the fit turned down**. A unit only
-    # looks at neighbours already settled -- which are the ones the fit
-    # put west of it -- so a claim that the fit weighed and placed the
-    # other way round is never seen from this end. A stripper's
-    # ``boilup_in: SE`` puts the blower feeding it south east at
-    # confidence 8, over the blower's own ``discharge: E`` at 2; read
-    # both ways round here, the two push each other apart a column at a
-    # time and end three columns from where either wanted.
-    order = sorted(units, key=lambda v: (round(eastward[at[v]], solver.PLACES), at[v]))
+    # And the order is the same one the edges above were oriented by, so
+    # every push is forward and one walk settles the lot: this is a
+    # longest path over a graph that is acyclic by construction rather
+    # than one somebody had to break the cycles in.
+    order = sorted(units, key=lambda v: place[v])
     settled: set["Unit"] = set()
     for u in order:
         settled.add(u)
@@ -355,6 +380,144 @@ def _tied_first_nearest(members: list["Unit"], key) -> list["Unit"]:
     for index, run in enumerate(runs):
         out.extend(run if index == len(runs) - 1 else reversed(run))
     return out
+
+
+
+#: Barycentre passes over the settled grid, down the sheet and back.
+#: Measured on the corpus: the first is worth 34 crossings, the second
+#: nothing on its own but three once :func:`_untangle` runs on its
+#: answer, and the third nothing at all. Two, because that is where the
+#: sheets settle and not because it is a round number.
+SWEEPS = 2
+
+
+def _unlace(units: list["Unit"], claims: list[claims_mod.Claim],
+            columns: dict["Unit", int],
+            rows: dict["Unit", int]) -> dict["Unit", int]:
+    """One column's rows, dealt out again so that fewer runs cross.
+
+    The fit answers *where*, and it has no term for a crossing: it
+    minimises how far each unit is from where its claims put it, and two
+    units in one column whose claims say nothing about each other land
+    in whichever order the arithmetic came out. Which of them is drawn
+    on top is then decided by nothing -- and on a sheet of valve
+    stations that is most of the sheet. So the order within a column is
+    settled here instead, by the pass that always settled it: a
+    barycentre, each unit to the average row of its neighbours, and then
+    a swap of any neighbouring pair that demonstrably unlaces.
+
+    **A permutation and nothing but a permutation.** Each column keeps
+    exactly the rows it was given and hands them back out among its own
+    members, so the columns the fit chose, the rows the sheet is deep,
+    and every collision :func:`_separate` resolved all come through
+    untouched. Nothing here can move a unit off an arrangement the
+    claims argued for; it can only choose between arrangements they were
+    silent about. That is what makes it safe to run *after* the solve
+    rather than as a seed before it, which is where the engine this
+    replaces had to put it.
+
+    Silence is not all or nothing, which is why the barycentre is
+    **blended** rather than run over a free list. Each unit's own row is
+    weighed in at ``upright`` -- every confidence that stated a step
+    across, summed -- against its neighbours at one apiece. A condenser
+    its column places north east carries 8 or more against two or three
+    neighbours and does not move; a block valve carries nothing and goes
+    wherever its line goes. Freezing the stated units outright instead,
+    which is this same rule with the blend rounded to 0 and 1, costs 26
+    crossings, 19 of them on 20_molecular_sieve_dryer: a unit that
+    states one thing weakly is not a unit with nothing left to say.
+    """
+    upright: dict["Unit", float] = defaultdict(float)
+    for claim in claims:
+        if claim.southward != 0 and claim.confidence > 0.0:
+            upright[claim.author] += claim.confidence
+            upright[claim.subject] += claim.confidence
+    pinned = {u for u in units if slot(u).row is not None}
+    by_column = _by_key(units, columns)
+    order = {u: i for i, u in enumerate(units)}
+    out = dict(rows)
+    west_east = sorted(by_column)
+    for _ in range(SWEEPS):
+        for column in west_east:
+            _sweep(by_column[column], columns, out, pinned, order, upright)
+        for column in reversed(west_east):
+            _sweep(by_column[column], columns, out, pinned, order, upright)
+    for _ in range(len(west_east)):
+        if not any(_untangle(by_column[c], columns, out, pinned)
+                   for c in west_east):
+            break
+    return out
+
+
+def _sweep(members: list["Unit"], columns: dict["Unit", int], rows: dict["Unit", int],
+           pinned: set["Unit"], order: dict["Unit", int],
+           upright: dict["Unit", float]) -> None:
+    """This column's free members, re-dealt its own rows by barycentre.
+
+    Every run the unit is on counts, in either direction and returns
+    included. Reading only the runs *into* it on the way down and only
+    the runs *out* of it on the way back is the textbook sweep and is 30
+    crossings worse here: a P&ID is not layered, a header reaches ten
+    columns, and half of a unit's neighbourhood is a worse estimate of
+    where it belongs than all of it. Neighbours in this same column are
+    skipped, being what is under discussion.
+
+    A pinned row is not a row to deal: it is left out of both the
+    members being ranked and the rows being handed round, so the author
+    keeps it exactly and the rest sort themselves around it.
+    """
+    free = [u for u in members if u not in pinned]
+    if not free:
+        return
+    here = columns[members[0]]
+    target: dict["Unit", float] = {}
+    for u in free:
+        near = [rows[p] for p in _peers(u) if p in columns and columns[p] != here]
+        held = upright[u]
+        target[u] = ((sum(near) + held * rows[u]) / (len(near) + held)
+                     if near else float(rows[u]))
+    ranked = sorted(free, key=lambda v: (target[v], rows[v], order[v]))
+    for u, row in zip(ranked, sorted(rows[u] for u in free)):
+        rows[u] = row
+
+
+def _untangle(members: list["Unit"], columns: dict["Unit", int],
+              rows: dict["Unit", int], pinned: set["Unit"]) -> bool:
+    """Swap neighbouring pairs in one column while that unlaces runs.
+
+    A barycentre answers "roughly where", and where two units' averages
+    tie it has nothing to say about which goes on top. This counts
+    instead: for a pair, how many of the upper one's runs leave it below
+    a run of the lower one's, which is how many times the two would
+    cross if their neighbours were the next column along. Swapped where
+    that count falls and left alone where it does not, so every swap is
+    demonstrated rather than guessed.
+
+    Worth nothing while the stated units were frozen -- the barycentre
+    had already found every swap that was left to it -- and 20 crossings
+    once the blend let them move. The two are one mechanism and neither
+    is redundant.
+    """
+    here = columns[members[0]]
+    reach = {u: [rows[p] for p in _peers(u) if p in columns and columns[p] != here]
+             for u in members}
+
+    def tangle(above: "Unit", below: "Unit") -> int:
+        return sum(1 for a in reach[above] for b in reach[below] if a > b)
+
+    ranked = sorted(members, key=lambda u: rows[u])
+    moved = False
+    for _ in range(len(ranked)):
+        swapped = False
+        for i, (a, b) in enumerate(zip(ranked, ranked[1:])):
+            if a in pinned or b in pinned or tangle(b, a) >= tangle(a, b):
+                continue
+            rows[a], rows[b] = rows[b], rows[a]
+            ranked[i], ranked[i + 1] = b, a
+            swapped = moved = True
+        if not swapped:
+            break
+    return moved
 
 
 def _westward(unit: "Unit", settled: dict["Unit", int]) -> float:
