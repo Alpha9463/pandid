@@ -78,6 +78,16 @@ def _place_free(fs: "Flowsheet") -> bool:
         pin = inst.pin_
         inst.frame = Frame(
             x=x, y=y, w=w, h=h, label_pos="center",
+            # The rank :func:`_spot` actually stood the balloon in, and
+            # only where it used one: an absolute coordinate on an axis
+            # wins over the grid there, so recording the superseded
+            # ``col`` would claim a lane the balloon may not be in.
+            # Carried because the frame is the record of what was drawn
+            # -- a balloon put in column 3 *is* in column 3 -- and
+            # ``pin-not-honored`` reads it to tell a grid pin that was
+            # honoured from one that was dropped on the floor.
+            col=pin.col if pin is not None and pin.x is None else None,
+            row=pin.row if pin is not None and pin.y is None else None,
             orientation=pin.orientation if pin else 0.0,
             mirrored=pin.mirrored if pin else False,
             mirror_y=pin.mirror_y if pin else False,

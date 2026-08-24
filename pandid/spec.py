@@ -803,11 +803,8 @@ def _read_pin(unit: Unit, entry: Any, where: str) -> None:
         kwargs["orientation"] = data["orientation"]
     if "mirrored" in data:
         kwargs["mirrored"] = data["mirrored"]
-    # Only over the axes this pin states: ``port: inlet`` names the
-    # nozzle for whichever of x/y is written, and a pin that writes only
-    # ``y`` has no ``x`` to measure to anything.
-    ports = {axis: name for axis, name in
-             _read_pin_ports(data.get("port"), f"{where}.port").items() if axis in kwargs}
+    ports = _read_pin_ports(data.get("port"), {a for a in ("x", "y") if a in kwargs},
+                            f"{where}.port")
     for axis, name in ports.items():
         # Through the same door ``port_faces`` uses, so a nozzle a
         # pooled connection mints is found and a misspelt one is named
@@ -834,7 +831,7 @@ def _read_pin(unit: Unit, entry: Any, where: str) -> None:
         raise _fail_from(e, where) from None
 
 
-def _read_pin_ports(entry: Any, where: str) -> dict[str, str]:
+def _read_pin_ports(entry: Any, stated: set[str], where: str) -> dict[str, str]:
     """``port:`` on a written pin, as ``{axis: nozzle}``.
 
     Two spellings, because the ordinary pin measures both coordinates to
@@ -842,14 +839,42 @@ def _read_pin_ports(entry: Any, where: str) -> dict[str, str]:
     it for every coordinate the pin states -- the shape
     :meth:`~pandid.units.Unit.pin` itself takes -- and
     ``port: {y: inlet}`` names it per axis, which is the only way to
-    write a pin whose x is a corner and whose y is a nozzle.
+    write a pin whose x is a corner and whose y is a nozzle. Naming a
+    *different* nozzle per axis is not a contradiction and is written
+    exactly that way: two calls measured two coordinates to two things.
+
+    ``stated`` is the axes this pin actually gives a coordinate for, and
+    every rule below is the same rule: **a port that measures nothing is
+    refused rather than dropped.** A nozzle named for an axis the pin
+    does not state is the author saying where something goes and the
+    reader silently not putting it there, which is the defect this whole
+    change is about -- so it raises here, against the key that says it.
     """
     if entry is None:
         return {}
+    if not isinstance(entry, (str, Mapping)):
+        raise SpecError(
+            f"{where} names the nozzle a coordinate was measured to: either one "
+            f"name for every coordinate this pin states (port: inlet) or one per "
+            f"axis (port: {{y: inlet}}), got {type(entry).__name__}: {entry!r}"
+        )
     if isinstance(entry, str):
-        return {"x": entry, "y": entry}
+        if not stated:
+            raise SpecError(
+                f"{where}: port {entry!r} says which nozzle x/y locate, and this "
+                f"pin states neither. Give x or y, or drop port"
+            )
+        return dict.fromkeys(sorted(stated), entry)
     axes = _mapping(entry, where)
     _check_keys(axes, {"x", "y"}, where)
+    if not axes:
+        raise SpecError(f"{where} names no axis; give port: {{x: ...}} or drop port")
+    for axis in axes:
+        if axis not in stated:
+            raise SpecError(
+                f"{where}.{axis} measures {axis} to a nozzle, and this pin states "
+                f"no {axis}. Give {axis}, or drop {where.rsplit('.', 1)[-1]}.{axis}"
+            )
     return {axis: _text(name, f"{where}.{axis}") for axis, name in axes.items()}
 
 

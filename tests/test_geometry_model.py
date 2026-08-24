@@ -3,7 +3,7 @@
 import pytest
 
 from pandid import Flowsheet, units as U
-from pandid.portgeom import pinned_x, pinned_y, port_offset
+from pandid.portgeom import pin_intent, pinned_x, pinned_y, port_offset
 
 
 def _small_auto():
@@ -333,13 +333,21 @@ def test_a_written_sheet_carries_the_relation_and_not_its_consequence():
 def test_a_written_pin_reads_back_as_the_pin_that_was_written():
     """``from_dict(to_dict(fs))`` is a fixed point for a port-pinned unit.
 
-    Both spellings: one nozzle for every stated axis, which is how ``pin()``
-    itself takes it, and the axis-by-axis mapping for the pin built out of
-    two calls that measured to different things.
+    All three spellings: one nozzle for every stated axis, which is how
+    ``pin()`` itself takes it, and the axis-by-axis mapping for the pin built
+    out of two calls -- naming one axis, or naming two different nozzles.
+
+    The fixed point is asserted **and then turned**, because on its own it is
+    not a test of anything: a round-trip that dropped the relation entirely
+    and wrote back the bare corner is a perfect fixed point too, and passed
+    this until the turn was added. What has to survive the file is the
+    relation, so what is asserted is that it still holds a nozzle down
+    afterwards.
     """
     for place in (
         lambda u: u.pin(port="in_1", x=300.0, y=100.0),
         lambda u: (u.pin(port="in_1", x=300.0), u.pin(y=100.0)),
+        lambda u: (u.pin(port="in_1", x=300.0), u.pin(port="outlet", y=100.0)),
     ):
         fs = Flowsheet("written")
         tank = fs.add(U.Tank("T-1"))
@@ -350,6 +358,13 @@ def test_a_written_pin_reads_back_as_the_pin_that_was_written():
         written = fs.to_dict()
         assert Flowsheet.from_dict(written).to_dict() == written
         assert Flowsheet.from_dict(written).units[0].pin_ == tank.pin_
+
+        read = Flowsheet.from_dict(written).units[0]
+        was = [(port, pinned_x(read, port) if axis == "x" else pinned_y(read, port))
+               for axis, (port, _) in pin_intent(read).items()]
+        read.pin(orientation=90)
+        assert [(port, pinned_x(read, port) if axis == "x" else pinned_y(read, port))
+                for axis, (port, _) in pin_intent(read).items()] == was
 
 
 def test_a_pin_read_back_refuses_to_be_edited_in_place():
@@ -398,6 +413,83 @@ def test_a_placement_the_sheet_did_not_honour_is_reported():
     assert "pin-not-honored" in _codes(fs)
     said = [i.message for i in fs.validate() if i.code == "pin-not-honored"]
     assert any("900" in m and "attach(" in m for m in said), said
+
+
+def test_a_grid_pin_the_sheet_did_not_honour_is_reported():
+    """``col``/``row`` is the natural spelling for a balloon, and was exempt.
+
+    The absolute half of this was already caught; a rank was not, so an
+    attached balloon pinned the way an author would actually pin one was
+    still silently ignored. A rank is compared as a rank: the frame carries
+    the one the sheet stood the unit in, and a pin naming one the frame does
+    not is a pin nothing read.
+    """
+    fs = Flowsheet("ranked")
+    feed = fs.add(U.Feed("F"))
+    vessel = fs.add(U.Vessel("V-1"))
+    prod = fs.add(U.Product("P"))
+    fs.connect(feed.outlet, vessel.inlet)
+    fs.connect(vessel.outlet, prod.inlet)
+    fs.add_instrument("LI", 1, sensing=vessel).pin(col=3, row=1)
+
+    assert "pin-not-honored" in _codes(fs)
+    said = [i.message for i in fs.validate() if i.code == "pin-not-honored"]
+    assert len(said) == 2, said
+    assert any("col=3" in m for m in said) and any("row=1" in m for m in said)
+
+
+def test_a_grid_pin_the_sheet_honoured_is_not_reported():
+    """The balloon that *is* placed by its rank must stay quiet.
+
+    A free-standing balloon is stood in the lane its pin names, and the
+    check has to tell that apart from a rank dropped on the floor -- which
+    is why the lane it was put in is recorded on the frame rather than
+    inferred from the fact that a balloon was placed at all.
+    """
+    fs = Flowsheet("ranked-ok")
+    feed = fs.add(U.Feed("F"))
+    vessel = fs.add(U.Vessel("V-1"))
+    prod = fs.add(U.Product("P"))
+    fs.connect(feed.outlet, vessel.inlet)
+    fs.connect(vessel.outlet, prod.inlet)
+    fs.add_instrument("XI", 9).pin(col=3, row=1)
+
+    assert "pin-not-honored" not in _codes(fs)
+
+
+@pytest.mark.parametrize(
+    "port, why",
+    [
+        ({"orientation": 90, "port": "inlet"}, "states neither"),
+        ({"y": 440, "port": {"x": "inlet"}}, "states no x"),
+        ({"y": 440, "port": {}}, "names no axis"),
+        ({"y": 440, "port": 5}, "names the nozzle"),
+    ],
+)
+def test_a_written_port_that_measures_nothing_is_refused(port, why):
+    """The parser this change added must not drop input either.
+
+    A nozzle named for an axis the pin does not state is the author saying
+    where something goes and the reader silently not putting it there -- the
+    same defect one layer down, so it raises against the key that says it
+    rather than being quietly reinterpreted.
+    """
+    from pandid.spec import SpecError
+
+    sheet = {
+        "name": "s",
+        "units": [
+            {"kind": "valve", "name": "HV-1", "pin": port},
+            {"kind": "feed", "name": "F"},
+            {"kind": "product", "name": "Q"},
+        ],
+        "streams": [
+            {"from": ["F", "outlet"], "to": ["HV-1", "inlet"]},
+            {"from": ["HV-1", "outlet"], "to": ["Q", "inlet"]},
+        ],
+    }
+    with pytest.raises(SpecError, match=why):
+        Flowsheet.from_dict(sheet)
 
 
 def test_a_placement_the_sheet_honoured_is_not_reported():
