@@ -2623,8 +2623,9 @@ nothing to tabulate raises rather than writing an empty sheet.
 option, an unsupported extension, a page too small, a model the validator
 rejects — leaves the flowsheet exactly as it was found: no resolved geometry for
 the next render to reuse, no renumbered streams, and `fs.warnings` untouched,
-neither added to nor erased nor replaced with an equal list. Only a render that
-produces a file changes anything.
+neither added to nor erased nor replaced with an equal list. So does a render
+that was drawn but never landed, such as a full disk or a directory you cannot
+write to. Only a render that produces a file changes anything.
 
 ---
 

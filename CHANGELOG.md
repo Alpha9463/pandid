@@ -682,6 +682,21 @@ class hierarchy, or what it is called.
   than the division did, because if the division's own count fitted, the loop
   reached it.
 
+- **A render that could not be written no longer mutates the flowsheet.** The
+  rollback that undoes a refused render was installed inside `to_svg()` and
+  `to_drawio()`, and both of those hand back a *string*: `render()` converts it
+  and writes the file **after** those guards have let go. So the one failure the
+  invariant is named for — a render that produced no file — was the one it did
+  not cover. A full disk or a directory you cannot write to, on the last line of
+  `render()`, left the sheet renumbered, laid out, routed and rewarned, and
+  `fs.warnings` replaced with a different list object, for a file nobody has.
+
+  `render()` and `show()` now carry the guard around their whole bodies, from
+  the extension check through the final `write_text`/`write_bytes` — `show()`
+  for the same reason, since `preview()` rasterises, writes a temporary file and
+  asks for a window long after `to_svg()` has finished. The guards nest, and are
+  meant to: the inner one restores to its own entry state, the outer to what the
+  caller handed over.
 
 - The **two committed sheets made from one example no longer disagree about the
   date that example leaves blank** (#491). `03_distillation_train` and

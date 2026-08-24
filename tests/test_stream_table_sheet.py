@@ -14,6 +14,7 @@ import inspect
 import pickle
 import re
 import xml.etree.ElementTree as ET
+from pathlib import Path
 from typing import Any, cast
 
 import pytest
@@ -1325,3 +1326,106 @@ def test_the_search_is_not_the_division_and_is_not_claimed_to_be():
     assert (room - m.label_w) // m.name_w == 4.0  # ...which the division reads as four
     assert _division_count(m, 5, room) == 2  # so it cuts the table in two
     assert [len(b) for b in F._partition(m, 5, room)] == [5]  # and this does not
+
+
+# --- ...and the same guarantee through the write itself ----------------------
+#
+# The rollback above lives inside `to_svg()`/`to_drawio()`, and both of those
+# hand back a *string*. `render()` converts that string and writes it out
+# afterwards, with both guards already let go, so the one failure the invariant
+# is named for -- a render that produced no file -- was the one it did not
+# cover: an OSError on the final write left the sheet numbered, laid out,
+# routed and rewarned for a file nobody has. Every assertion below fails
+# against a `render()` that does not carry the guard itself.
+
+
+def _full_disk(*_args: object, **_kwargs: object) -> bytes:
+    """The motivating failure. A disk with no room on it, or a directory that
+    cannot be written to, is an ordinary way for a render to end."""
+    raise OSError(28, "No space left on device")
+
+
+def _without_geometry(fs) -> tuple[set[str], set[str]]:
+    """Which units carry no `Frame` and which streams no `Route`.
+
+    The set rather than `_unresolved`'s yes-or-no, because the sheet below has
+    been drawn once already: what must not change is *which* parts of it the
+    next render has yet to build, and a render that built them all would pass a
+    check that only asked whether anything was unbuilt."""
+    return (
+        {u.name for u in fs.units if u.frame is None},
+        {s.name for s in fs.streams if s.route is None},
+    )
+
+
+def _damageable() -> Flowsheet:
+    """A sheet carrying every kind of state a failed render could damage:
+    the findings of a render that succeeded, the geometry it cached, a unit
+    and a stream added since and so still unbuilt, and a renumbering pending
+    because the author moved the start."""
+    fs = _with_an_unused_section()
+    fs.to_svg(show_stream_table="sheet", page_size="A3")
+    assert [w.code for w in fs.warnings] == ["stream-table-section-unused"]
+    feed = fs.add(U.Feed("F9")).pin(x=100, y=340)
+    product = fs.add(U.Product("P9")).pin(x=320, y=340)
+    fs.connect(feed.outlet, product.inlet)
+    fs.stream_number_start = 90
+    return fs
+
+
+def test_the_write_failure_checks_can_see_the_mutation_they_forbid(tmp_path):
+    """The guard's own guard, in this file's established shape: a comparison
+    that notices nothing passes everything. Every assertion the test below
+    makes is made backwards here, against a render that does land, so each one
+    is known to have teeth rather than to be true of any flowsheet at all."""
+    fs = _damageable()
+    state, held, finding = _state(fs), fs.warnings, fs.warnings[0]
+    unbuilt, numbering = _without_geometry(fs), [s.name for s in fs.streams]
+    fs.render(tmp_path / "sheet.svg", show_stream_table="sheet", page_size="A3")
+    assert _state(fs) != state
+    assert fs.warnings is not held
+    assert not any(w is finding for w in fs.warnings)
+    assert _without_geometry(fs) != unbuilt
+    assert [s.name for s in fs.streams] != numbering
+
+
+_NEEDS_PDF = pytest.mark.skipif(not _HAS_PDF_EXTRA, reason="the pdf extra is not installed")
+
+
+@pytest.mark.parametrize(
+    "ext, injection",
+    [
+        (".svg", "write"),
+        ("", "write"),  # no extension at all, which is drawn as SVG
+        (".drawio", "write"),
+        pytest.param(".pdf", "convert", marks=_NEEDS_PDF),
+        pytest.param(".pdf", "write", marks=_NEEDS_PDF),
+        pytest.param(".png", "convert", marks=_NEEDS_PDF),
+        pytest.param(".png", "write", marks=_NEEDS_PDF),
+    ],
+)
+def test_a_render_that_cannot_be_written_leaves_the_whole_flowsheet_alone(
+    tmp_path, monkeypatch, ext, injection
+):
+    """Every final step of `render()`, one at a time: the two `write_text`
+    calls, the raster conversion, and the `write_bytes` that follows it."""
+    fs = _damageable()
+    state, held, finding = _state(fs), fs.warnings, fs.warnings[0]
+    unbuilt, numbering = _without_geometry(fs), [s.name for s in fs.streams]
+    out = tmp_path / f"sheet{ext}"
+    if injection == "write":
+        monkeypatch.setattr(Path, "write_text", _full_disk)
+        monkeypatch.setattr(Path, "write_bytes", _full_disk)
+    else:
+        monkeypatch.setattr(
+            "pandid.render.export.to_pdf" if ext == ".pdf" else "pandid.render.export.to_png",
+            _full_disk,
+        )
+    with pytest.raises(OSError):
+        fs.render(out, show_stream_table="sheet", page_size="A3")
+    assert not out.exists(), "the render produced no file"
+    assert _state(fs) == state, "a render that produced no file changed the flowsheet"
+    assert fs.warnings is held, "fs.warnings was replaced with another list"
+    assert any(w is finding for w in fs.warnings), "a finding was erased"
+    assert _without_geometry(fs) == unbuilt, "geometry was left cached for the next render"
+    assert [s.name for s in fs.streams] == numbering, "the streams were left renumbered"

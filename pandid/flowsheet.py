@@ -1755,6 +1755,29 @@ class Flowsheet:
         mutations known today, and the test behind it compares the whole
         flowsheet rather than the fields somebody remembered.
 
+        **Installed as high as the call goes**, which is the only frame
+        from which "did not produce a file" is decidable. Around
+        :meth:`to_svg`/:meth:`to_drawio` alone it guarded everything
+        except the step that sentence is about: both hand back a
+        *string*, and the conversion and the write happen in
+        :meth:`render` after those guards have let go. A disk full, a
+        read-only directory, a path that is really a directory -- each
+        an ordinary way for a render to fail -- therefore left the sheet
+        numbered, laid out, routed and rewarned for a file nobody has,
+        which is the exact state this exists to prevent. So
+        :meth:`render` and :meth:`show` carry it around their whole
+        bodies too, from the extension check to the last
+        ``write_bytes``.
+
+        The two nest, and are meant to. The inner guard restores to its
+        own entry state and the outer to what the caller handed us; the
+        outer restore then finds most fields already right and puts back
+        what is there, since :func:`_restore` writes values rather than
+        comparing them. Nesting is what makes the placement a free
+        choice: a stage that needs its own rollback can have one without
+        anybody having to work out whether some caller already has it
+        covered.
+
         Only on the way out through an exception. A render that succeeds
         keeps every bit of what it did, including the cached geometry
         that makes the second render of one sheet cheap.
@@ -2280,7 +2303,10 @@ class Flowsheet:
         """
         # Around the whole call and not just the preparation: a render
         # that raises leaves this sheet as it found it, whichever of the
-        # two stages raised. See :meth:`_unchanged_if_it_raises`.
+        # two stages raised. `render()` installs the same guard around
+        # itself, since what it does with the string this returns can
+        # fail too; the two nest by design. See
+        # :meth:`_unchanged_if_it_raises`.
         with self._unchanged_if_it_raises():
             self._prepare_to_draw(
                 diagram=diagram, check=check, show_stream_table=show_stream_table,
@@ -2401,6 +2427,14 @@ class Flowsheet:
           through draw.io's own exporter the way to Visio. See
           :meth:`to_drawio`.
 
+        A call that writes no file changes nothing. That covers the
+        refusals -- an unsupported extension, an unknown option, a page
+        too small, a model the validator rejects -- and it covers the
+        write itself: a full disk or a directory that cannot be written
+        to leaves the flowsheet exactly as it was handed over, with no
+        cached geometry, no renumbered streams and ``warnings`` as it
+        found them. See :meth:`_unchanged_if_it_raises`.
+
         Args:
             path: Output file path; its extension selects the format.
             show_stream_table: Where the property table of all streams
@@ -2442,63 +2476,75 @@ class Flowsheet:
                 after; errors raise from either, warnings collect on
                 ``warnings``. See :meth:`_prepare_to_draw`.
         """
-        ext = Path(path).suffix.lower()
-        # Before anything else, and for the reason
-        # `check_render_arguments` runs before the geometry: the
-        # extension is a fact about the *path*, knowable with no drawing
-        # in hand, and it used to be checked after `to_svg()` had laid
-        # the sheet out and routed it. A misspelled suffix therefore
-        # raised having installed a Frame on every unit and a Route on
-        # every stream, which the next render then reused -- the same
-        # poisoning an unknown page size caused, through another door.
-        if ext not in _OUTPUT_FORMATS:
-            raise ValueError(
-                f"Unsupported output format {ext!r}; use "
-                f"{', '.join(sorted(f for f in _OUTPUT_FORMATS if f))}"
-            )
-        if ext == ".drawio":
-            # Refused rather than ignored: a caller who asked for
-            # something and got a file without it has been told
-            # something false about the file they now hold. The overlay
-            # is scaffolding for whoever is writing a placement and
-            # deliberately not part of the drawing, so exporting it
-            # would put it into an editable model as ordinary cells a
-            # reader would have to delete by hand.
-            #
-            # ``given != default`` and not ``is not False``: ``debug``
-            # takes a number as well as a flag, and ``debug=0`` is not a
-            # request for an overlay.
-            sheet_only = [
-                name for name, given, default in (
-                    ("debug", debug, False),
-                ) if given != default
-            ]
-            if sheet_only:
+        # The whole of it, and not merely the two calls it makes.
+        # `to_svg()` and `to_drawio()` install this guard around
+        # themselves, but they hand back a *string*: the conversion and
+        # the write happen out here, after those guards have let go. A
+        # disk-full or a read-only directory on the last line is an
+        # ordinary failure of a render, and it used to leave the sheet
+        # numbered, laid out, routed and rewarned for a file nobody
+        # has -- which is exactly what this guard exists to prevent, one
+        # frame too low to prevent it. Nesting is intended and harmless:
+        # the inner guard restores to its own entry state, this one to
+        # what the caller handed us.
+        with self._unchanged_if_it_raises():
+            ext = Path(path).suffix.lower()
+            # Before anything else, and for the reason
+            # `check_render_arguments` runs before the geometry: the
+            # extension is a fact about the *path*, knowable with no drawing
+            # in hand, and it used to be checked after `to_svg()` had laid
+            # the sheet out and routed it. A misspelled suffix therefore
+            # raised having installed a Frame on every unit and a Route on
+            # every stream, which the next render then reused -- the same
+            # poisoning an unknown page size caused, through another door.
+            if ext not in _OUTPUT_FORMATS:
                 raise ValueError(
-                    f"{', '.join(sheet_only)} describe(s) a drawing sheet that "
-                    f"a .drawio file has no counterpart for: the coordinate "
-                    f"overlay is scaffolding rather than drawing. Render the "
-                    f"sheet to .svg/.pdf/.png, or drop these arguments"
+                    f"Unsupported output format {ext!r}; use "
+                    f"{', '.join(sorted(f for f in _OUTPUT_FORMATS if f))}"
                 )
-            Path(path).write_text(
-                self.to_drawio(diagram=diagram, page_size=page_size,
-                               border=border, connections=connections,
-                               jump_direction=jump_direction,
-                               show_stream_table=show_stream_table,
-                               check=check), encoding="utf-8")
-            return
+            if ext == ".drawio":
+                # Refused rather than ignored: a caller who asked for
+                # something and got a file without it has been told
+                # something false about the file they now hold. The overlay
+                # is scaffolding for whoever is writing a placement and
+                # deliberately not part of the drawing, so exporting it
+                # would put it into an editable model as ordinary cells a
+                # reader would have to delete by hand.
+                #
+                # ``given != default`` and not ``is not False``: ``debug``
+                # takes a number as well as a flag, and ``debug=0`` is not a
+                # request for an overlay.
+                sheet_only = [
+                    name for name, given, default in (
+                        ("debug", debug, False),
+                    ) if given != default
+                ]
+                if sheet_only:
+                    raise ValueError(
+                        f"{', '.join(sheet_only)} describe(s) a drawing sheet that "
+                        f"a .drawio file has no counterpart for: the coordinate "
+                        f"overlay is scaffolding rather than drawing. Render the "
+                        f"sheet to .svg/.pdf/.png, or drop these arguments"
+                    )
+                Path(path).write_text(
+                    self.to_drawio(diagram=diagram, page_size=page_size,
+                                   border=border, connections=connections,
+                                   jump_direction=jump_direction,
+                                   show_stream_table=show_stream_table,
+                                   check=check), encoding="utf-8")
+                return
 
-        svg = self.to_svg(
-            show_stream_table=show_stream_table, border=border,
-            diagram=diagram, page_size=page_size, connections=connections,
-            jump_direction=jump_direction, debug=debug, check=check,
-        )
-        if ext in ("", ".svg"):
-            Path(path).write_text(svg, encoding="utf-8")
-        else:  # .pdf / .png; anything else was refused before the render
-            from pandid.render import export
-            data = export.to_pdf(svg) if ext == ".pdf" else export.to_png(svg)
-            Path(path).write_bytes(data)
+            svg = self.to_svg(
+                show_stream_table=show_stream_table, border=border,
+                diagram=diagram, page_size=page_size, connections=connections,
+                jump_direction=jump_direction, debug=debug, check=check,
+            )
+            if ext in ("", ".svg"):
+                Path(path).write_text(svg, encoding="utf-8")
+            else:  # .pdf / .png; anything else was refused before the render
+                from pandid.render import export
+                data = export.to_pdf(svg) if ext == ".pdf" else export.to_png(svg)
+                Path(path).write_bytes(data)
 
     def _repr_svg_(self) -> str:
         """IPython/Jupyter: display the diagram inline in a notebook."""
@@ -2532,13 +2578,23 @@ class Flowsheet:
         rather than left to be guessed at. A headless machine -- CI, a
         container, SSH without X11 -- takes that path without hanging or
         raising. See :mod:`pandid.render.preview`.
+
+        A preview that cannot be shown changes nothing, on the same
+        terms :meth:`render` states for a file that cannot be written.
         """
-        from pandid.render.preview import preview
-        preview(self.to_svg(
-            show_stream_table=show_stream_table, border=border,
-            diagram=diagram, page_size=page_size, connections=connections,
-            jump_direction=jump_direction, debug=debug, check=check,
-        ), title=self.name)
+        # `render()`'s hole through the other door. `to_svg()` guards
+        # itself and then lets go, and `preview()` runs after that: it
+        # rasterises, writes a temporary file and asks for a window, and
+        # `tkinter.Tk()` on a machine whose display is named but not
+        # reachable raises straight out of here. A preview nobody saw
+        # leaves nothing behind, for the reason a file nobody has does.
+        with self._unchanged_if_it_raises():
+            from pandid.render.preview import preview
+            preview(self.to_svg(
+                show_stream_table=show_stream_table, border=border,
+                diagram=diagram, page_size=page_size, connections=connections,
+                jump_direction=jump_direction, debug=debug, check=check,
+            ), title=self.name)
 
     def __repr__(self) -> str:
         return (
