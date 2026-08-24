@@ -2050,7 +2050,8 @@ class _MultiPortVessel(Unit):
         return tuple(self._faces[port.name] for port in self.outlets)
 
     def symbol(self) -> "Symbol":
-        """This unit's drawing: the vendored stencil (with a
+        """This unit's drawing, a :class:`~pandid.render.symbols.Symbol`:
+        the vendored stencil (with a
         :class:`Vessel`'s ``supports=`` overlay already on it), and
         ``in_*``/``out_*`` recomputed to the current declaration.
 
@@ -8071,7 +8072,8 @@ class Block(Unit):
         return self
 
     def symbol(self) -> "Symbol":
-        """This block's drawing, built to its connections.
+        """This block's drawing as a
+        :class:`~pandid.render.symbols.Symbol`, built to its connections.
 
         The one place a block's artwork comes from, called by
         :meth:`~pandid.render.symbols.SymbolRegistry.for_unit` on every
