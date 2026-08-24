@@ -25,6 +25,7 @@ sheet, whichever border is drawn.
 
 import re
 from dataclasses import dataclass, field
+from typing import Literal
 
 # --------------------------------------------------------------
 # Location references (ISO 15519-1:2010 Clause 9)
@@ -295,20 +296,27 @@ class StreamTableOptions:
     constructed to use it::
 
         fs.stream_table.font_size = 8.0
+        fs.stream_table.column_width = "auto"
 
-    **An object at one field, on purpose.** ``render()`` already carries
-    nine keywords and three of the four output calls restate every one
-    of them, so a table option spelled there costs four signatures; and
-    a table option means nothing to ``to_drawio()`` differently from
-    ``to_svg()``, because it describes the sheet rather than the file.
-    Settling it on the flowsheet says it once for every way the sheet
-    comes out. A bare ``fs.stream_table_font_size`` would do as much for
-    this one option and nothing for the next: each such attribute adds a
-    prefix-string to ``Flowsheet``'s namespace, a line to its
-    ``__init__``, a key to the spec's top level and a paragraph to the
-    docs, and nothing groups them. One field on one object costs none of
-    that, the second option is a field rather than a fifth signature
-    change, and validation of the group has somewhere to live.
+    **An object rather than an attribute apiece, on purpose.**
+    ``render()`` already carries nine keywords and three of the four
+    output calls restate every one of them, so a table option spelled
+    there costs four signatures; and a table option means nothing to
+    ``to_drawio()`` differently from ``to_svg()``, because it describes
+    the sheet rather than the file. Settling it on the flowsheet says it
+    once for every way the sheet comes out. A bare
+    ``fs.stream_table_font_size`` would have done as much for the first
+    option and nothing for the two that followed it a release later:
+    each such attribute adds a prefix-string to ``Flowsheet``'s
+    namespace, a line to its ``__init__``, a key to the spec's top level
+    and a paragraph to the docs, and nothing groups them. One object
+    costs none of that, an option is a field rather than a fifth
+    signature change, and validation of the group has somewhere to live.
+
+    The three compose. :attr:`font_size` scales both width floors, since
+    both are stated at the type size they were chosen against; so a
+    table sized down keeps its proportions, and a table sized down *and*
+    ``"auto"``-ruled has no floor left to scale.
 
     :attr:`~pandid.flowsheet.Flowsheet.stream_table_sections` is *not*
     here, deliberately. It is content and not a setting -- the heading
@@ -331,6 +339,42 @@ class StreamTableOptions:
     #: sheet that has to fit a given page, and it would do nothing at
     #: all if it did not reach the ruling as well as the glyphs.
     font_size: float | None = None
+
+    #: Narrowest the row-label column -- the leftmost one, carrying the
+    #: corner heading and every property name -- is ruled: a number of
+    #: drawing units, or ``"auto"`` to rule it at its own content.
+    #:
+    #: A number is a **floor and not a width.** The column is measured
+    #: from what goes in it and only held *up* to this, so a long
+    #: property name widens it past whatever is stated here rather than
+    #: running into the cell beside it. Stating a bigger number is
+    #: therefore the way to buy a wide label column; stating a smaller
+    #: one, or ``"auto"``, is the way to stop paying for one.
+    #:
+    #: The default keeps a table of short property names from being
+    #: ruled too narrow to read across. It is worth nothing on a sheet
+    #: whose row labels are ``Total Flow (kg/h)`` and everything on a
+    #: sheet whose rows are ``pH`` -- which is why it is a default and
+    #: not a rule.
+    label_width: float | Literal["auto"] = 122.0
+
+    #: Narrowest **every** stream column is ruled: a number of drawing
+    #: units, or ``"auto"`` to rule them at their content.
+    #:
+    #: The stream columns are one width, always. A stream table is read
+    #: down for one stream and across for one property, and columns that
+    #: did not line up would be a worse drawing than a wide one; so the
+    #: width is measured once, over every stream name *and* every value
+    #: in the table, and every column is ruled at it.
+    #:
+    #: That is what makes ``"auto"`` **content-ruled rather than
+    #: fitted**, and the difference matters: one ``1013.25 mbara`` among
+    #: three-figure values rules all fifty-five columns at it. ``"auto"``
+    #: never comes out wider than the floor it drops -- it is the same
+    #: measurement without the clamp -- but it is not always narrow, and
+    #: a table that gains nothing from it is a table whose widest cell
+    #: was already doing the ruling.
+    column_width: float | Literal["auto"] = 52.0
 
 
 # --------------------------------------------------------------

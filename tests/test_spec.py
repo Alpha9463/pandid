@@ -1487,6 +1487,21 @@ def test_a_stream_table_value_of_the_wrong_kind_is_refused():
         Flowsheet.from_dict(_spec(stream_table={"font_size": "8"}))
 
 
+def test_the_column_widths_round_trip():
+    table = {"label_width": 90, "column_width": "auto"}
+    fs = Flowsheet.from_dict(_spec(stream_table=table))
+    assert (fs.stream_table.label_width, fs.stream_table.column_width) == (90, "auto")
+    assert fs.to_dict()["stream_table"] == table
+
+
+@pytest.mark.parametrize("value", ["fit", None, True, [52]])
+def test_a_column_width_that_is_neither_a_number_nor_auto_is_refused(value):
+    """``null`` included: unlike ``font_size``, whose default *is* unset,
+    these two default to a number and have no spelling for 'leave it'."""
+    with pytest.raises(SpecError, match='must be a number or "auto"'):
+        Flowsheet.from_dict(_spec(stream_table={"column_width": value}))
+
+
 # --- file loaders -------------------------------------------------------------
 
 

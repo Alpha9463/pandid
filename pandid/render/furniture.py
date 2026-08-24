@@ -365,21 +365,49 @@ _STREAM_KEY_FILL = "#f9f9f9"
 _STREAM_VALUE_FILL = "white"
 
 #: The type size a table of up to 18 columns is set at, and the size the
-#: three fixed measurements below were chosen against. An author who
-#: states a size states it as a multiple of this one, which is what
-#: makes the three follow it; see :func:`stream_table_layout`.
+#: row depth below and both column-width floors
+#: (:class:`~pandid.document.StreamTableOptions`) were chosen against. An
+#: author who states a size states it as a multiple of this one, which is
+#: what makes the three follow it; see :func:`stream_table_layout`.
 _BASE_SIZE = 10.5
 
 #: Depth of every row at :data:`_BASE_SIZE`.
 _ROW_H = 20.0
 
-#: Narrowest the row-label column and a stream column are ruled at
-#: :data:`_BASE_SIZE`, whatever goes in them. Text is measured and
-#: gutter-ed on top (see :func:`stream_table_layout`), so these two are
-#: floors and not widths: they keep a table of two-character names and
-#: three-figure values from being ruled too narrow to read across.
-_MIN_LABEL_W = 122.0
-_MIN_NAME_W = 52.0
+
+def _width_floor(stated: float | str, name: str, ruled: float) -> float:
+    """Narrowest one of the table's two kinds of column is ruled, in
+    drawing units, from what the sheet asked for.
+
+    The floors used to be constants here, 122.0 and 52.0 at
+    :data:`_BASE_SIZE`. They are
+    :class:`~pandid.document.StreamTableOptions` fields now and those
+    two numbers are their defaults, which is where a default has to live
+    once a value can be stated: a floor that scaled with ``font_size``
+    only while it held its own default would be a field an author cannot
+    reason about.
+
+    So a number is scaled by ``ruled`` for the reason :data:`_ROW_H` is,
+    stated or not. ``"auto"`` is no floor at all, which is a floor of
+    zero: every column is measured from its contents anyway (see
+    :func:`stream_table_layout`) and a floor only ever holds one *up*,
+    so dropping it needs no second path through the measuring and cannot
+    rule a column narrower than what goes in it.
+    """
+    if stated == "auto":
+        return 0.0
+    if isinstance(stated, bool) or not isinstance(stated, (int, float)):
+        raise ValueError(
+            f"fs.stream_table.{name}={stated!r}: a column width is a number "
+            f"of drawing units (the floor the column is held up to), or "
+            f'"auto" to rule the column to its content'
+        )
+    if stated < 0:
+        raise ValueError(
+            f"fs.stream_table.{name}={stated!r}: a column width floor is not "
+            f'a negative number; use 0 or "auto" for no floor'
+        )
+    return stated * ruled
 
 
 def _options(fs):
@@ -606,7 +634,8 @@ def stream_table_layout(fs) -> "StreamTable | None":
         return None
 
     n = len(streams)
-    asked = _options(fs).font_size
+    options = _options(fs)
+    asked = options.font_size
     if asked is not None and asked <= 0:
         raise ValueError(
             f"fs.stream_table.font_size={asked!r}: a type size is a positive "
@@ -654,14 +683,26 @@ def stream_table_layout(fs) -> "StreamTable | None":
     heading = ("Line Number" if all(s.has_line_number for s in streams)
                else "Stream Number")
 
-    # Every column is sized to what goes in it. A minimum keeps a table
-    # of short values from ruling columns too narrow to read as columns.
+    # Every column is sized to what goes in it, and held up to a floor
+    # the sheet may lower or drop (`fs.stream_table.label_width` /
+    # `.column_width`). The floor's default keeps a table of
+    # two-character names and three-figure values from being ruled too
+    # narrow to read across; dropping it is the author saying this table
+    # is not that one.
     labels = [heading] + [key for kind, key in disp if kind == "data"]
-    label_w = max(_MIN_LABEL_W * ruled, max(text_width(t, size, bold=True)
-                                            for t in labels) + _STREAM_GUTTER)
+    label_w = max(_width_floor(options.label_width, "label_width", ruled),
+                  max(text_width(t, size, bold=True)
+                      for t in labels) + _STREAM_GUTTER)
     values = [_stream_cell_text(c, key) for kind, key in disp if kind == "data"
               for c in cells]
-    name_w = max(_MIN_NAME_W * ruled,
+    # One width for every stream column, measured over every heading and
+    # every value in the table. That is not a shortcut and it does not
+    # relax when the floor is dropped: a stream table is read down for
+    # one stream and across for one property, so columns that did not
+    # line up would be a worse drawing than wide ones. It also settles
+    # the only way a column could be ruled narrower than its own
+    # heading -- the headings are in the same measurement as the values.
+    name_w = max(_width_floor(options.column_width, "column_width", ruled),
                  max((text_width(s.name, size, bold=True) for s in streams),
                      default=0.0) + _STREAM_GUTTER,
                  max((text_width(v, size) for v in values), default=0.0)

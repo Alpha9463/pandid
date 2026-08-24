@@ -81,7 +81,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import fields as dataclass_fields
 from difflib import get_close_matches
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pandid import devices as device_types
 from pandid import units as unit_types
@@ -170,6 +170,20 @@ def _number(value: Any, where: str) -> float:
     # spec.
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise SpecError(f"{where} must be a number, got {value!r}")
+    return value
+
+
+def _column_width(value: Any, where: str) -> float | Literal["auto"]:
+    """A stream-table column-width floor: a number, or ``auto``.
+
+    Both spellings are what the attribute takes, said in a file: YAML
+    reads a bare ``auto`` as the string already, and JSON has no other
+    way to write one.
+    """
+    if value == "auto":
+        return "auto"
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise SpecError(f'{where} must be a number or "auto", got {value!r}')
     return value
 
 
@@ -1061,12 +1075,22 @@ def _read_stream_table(entry: Any, where: str) -> StreamTableOptions:
     distinguishes an absent key from a stated null only in that both
     land on the same value, and a spec may state the default back
     explicitly without being told it is wrong.
+
+    The two widths have no such spelling -- their default is a number,
+    not *unset* -- so ``null`` is refused there rather than read as
+    "leave it alone". Whether a stated floor is a *usable* one is the
+    layout's question, exactly as it is for ``font_size``: this reader
+    settles the kind of the value and the sheet settles its sense.
     """
     data = _mapping(entry, where)
     _check_keys(data, {f.name for f in dataclass_fields(StreamTableOptions)}, where)
     options = StreamTableOptions()
     if data.get("font_size") is not None:
         options.font_size = _number(data["font_size"], f"{where}.font_size")
+    if "label_width" in data:
+        options.label_width = _column_width(data["label_width"], f"{where}.label_width")
+    if "column_width" in data:
+        options.column_width = _column_width(data["column_width"], f"{where}.column_width")
     return options
 
 
