@@ -1,14 +1,26 @@
 """Post-processing pass to separate overlapping parallel segments."""
 
-from typing import Any, TYPE_CHECKING
+from typing import Any, Sequence, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pandid.flowsheet import Flowsheet
+    from pandid.streams import Stream
 
-def separate_streams(fs: "Flowsheet", spacing: float = 6.0) -> None:
-    """Detect overlapping parallel segments and offset them.
+def _compute_offsets(
+    streams: "Sequence[Stream]", spacing: float
+) -> tuple[dict[tuple[int, int], float], dict[tuple[int, int], float]]:
+    """The h/v offsets ``separate_streams`` applies, without applying them.
 
-    This operates on the route waypoints in-place.
+    Split out so a caller can ask "where would this settle" without
+    committing to it -- ``DefaultRouter.route()`` wants a preview of the
+    streams routed so far, mid-loop, to price crossings against something
+    closer to the drawn sheet than raw pre-separation geometry, but must
+    not let that preview *become* the drawn sheet: this pass resolves every
+    stream against every other one currently in the picture, so running it
+    for real after each new stream would keep re-settling every earlier
+    one's track against a shifting set of neighbours, and the final render
+    would depend on routing order. One real, non-previewing call, against
+    the complete final set, stays the only thing that writes waypoints.
     """
     # 1. Collect all runs.
     #
@@ -30,7 +42,7 @@ def separate_streams(fs: "Flowsheet", spacing: float = 6.0) -> None:
     h_offsets: dict[tuple[int, int], float] = {}
     v_offsets: dict[tuple[int, int], float] = {}
 
-    for s in fs.streams:
+    for s in streams:
         if not s.route or not s.route.waypoints:
             continue
 
@@ -207,27 +219,38 @@ def separate_streams(fs: "Flowsheet", spacing: float = 6.0) -> None:
     for group in group_by_track(v_runs, window):
         resolve_track(group, v_offsets)
 
+    return h_offsets, v_offsets
 
-    # 3. Apply offsets to waypoints
-    for s in fs.streams:
+
+def _apply_offsets(
+    streams: "Sequence[Stream]",
+    h_offsets: dict[tuple[int, int], float],
+    v_offsets: dict[tuple[int, int], float],
+) -> dict[int, list[tuple[float, float]]]:
+    """Every stream's waypoints with ``h_offsets``/``v_offsets`` applied,
+    keyed by ``id(stream)`` -- the shared arithmetic ``separate_streams``
+    writes back and ``preview_separated_waypoints`` only hands to a caller.
+    """
+    result: dict[int, list[tuple[float, float]]] = {}
+    for s in streams:
         if not s.route or not s.route.waypoints:
             continue
-            
+
         pts = s.route.waypoints
         n_segs = len(pts) - 1
         new_pts = []
-        
+
         for i, pt in enumerate(pts):
             dx = 0.0
             dy = 0.0
-            
+
             if i > 0:
                 seg_idx = i - 1
                 if (id(s), seg_idx) in h_offsets:
                     dy = h_offsets[(id(s), seg_idx)]
                 if (id(s), seg_idx) in v_offsets:
                     dx = v_offsets[(id(s), seg_idx)]
-                    
+
             # A waypoint's own segment wins over the one before it.
             if i < n_segs:
                 seg_idx = i
@@ -235,7 +258,58 @@ def separate_streams(fs: "Flowsheet", spacing: float = 6.0) -> None:
                     dy = h_offsets[(id(s), seg_idx)]
                 if (id(s), seg_idx) in v_offsets:
                     dx = v_offsets[(id(s), seg_idx)]
-                    
+
             new_pts.append((pt[0] + dx, pt[1] + dy))
-            
-        s.route.waypoints = new_pts
+
+        result[id(s)] = new_pts
+    return result
+
+
+def separate_streams(fs: "Flowsheet", spacing: float = 6.0) -> None:
+    """Detect overlapping parallel segments and offset them.
+
+    This operates on the route waypoints in-place. The only caller that may
+    do so -- see ``preview_separated_waypoints`` for the non-mutating form
+    ``DefaultRouter.route()`` uses mid-loop, and ``_compute_offsets`` for why
+    a second real (mutating) call per stream is not an option.
+    """
+    h_offsets, v_offsets = _compute_offsets(fs.streams, spacing)
+    new_waypoints = _apply_offsets(fs.streams, h_offsets, v_offsets)
+    for s in fs.streams:
+        if id(s) in new_waypoints:
+            s.route.waypoints = new_waypoints[id(s)]  # type: ignore[union-attr]
+
+
+def preview_separated_waypoints(
+    streams: "Sequence[Stream]", spacing: float = 6.0
+) -> dict[int, list[tuple[float, float]]]:
+    """Where ``separate_streams`` would put every already-routed stream's
+    waypoints, without writing any of them back.
+
+    ``DefaultRouter.route()`` rebuilds its crossing index from this after
+    each stream, over the streams routed so far, so a later stream's search
+    prices crossings against something much closer to the sheet that will
+    actually get drawn than raw, pre-separation geometry -- without making
+    the drawn sheet itself depend on routing order, which running the real,
+    writing pass more than once would (see ``_compute_offsets``).
+
+    Not a perfect match for the final drawing even so: a stream not yet
+    routed can still pull an *already*-recorded track when it is added, the
+    same way any later stream in this preview's own set can -- ``_compute
+    _offsets`` resolves every run against every other one *currently*
+    passed to it, from each one's own raw, undisplaced track, so a track
+    two streams settled between themselves is not fixed once a third
+    arrives to share it. Concretely: two unfixed runs sharing a track
+    resolve to +0px/+6px; add a *third*, port-fixed run onto the +6px one
+    -- unremarkable on its own, a fixed run always keeps its own track --
+    and the recompute that follows moves *both* of the first two again,
+    to +12px/+0px, not just makes room for the newcomer. #483's own corpus
+    never exercises this: every one of 1030 already-routed streams checked
+    across both its pinned and auto-placed forms was previewed, at the
+    point it was itself settled, into exactly the position it was finally
+    drawn at -- zero exceptions, not a rounding-off of a few. That is a
+    measurement of this corpus, not a proof about every one a caller might
+    hand this to.
+    """
+    h_offsets, v_offsets = _compute_offsets(streams, spacing)
+    return _apply_offsets(streams, h_offsets, v_offsets)
