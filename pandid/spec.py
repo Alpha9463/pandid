@@ -104,7 +104,7 @@ from pandid.flowsheet import (
     Flowsheet,
 )
 from pandid.loops import Loop
-from pandid.portgeom import pin_intent
+from pandid.portgeom import pin_intent, unmeasured_port
 from pandid.ports import Port
 from pandid.streams import LINE_NUMBER_FIELDS, Stream
 from pandid.units import Instrument, Unit, _Boundary
@@ -849,7 +849,14 @@ def _read_pin_ports(entry: Any, stated: set[str], where: str) -> dict[str, str]:
     does not state is the author saying where something goes and the
     reader silently not putting it there, which is the defect this whole
     change is about -- so it raises here, against the key that says it.
+
+    The sentence is :func:`~pandid.portgeom.unmeasured_port`'s, which is
+    also what :meth:`pandid.units.Unit.pin` refuses the same shape with.
+    Only the *path* is this module's: a key can say which axis it went
+    wrong on and a keyword argument cannot, and that is the whole of the
+    difference between the two doors.
     """
+    key = where.rsplit(".", 1)[-1]
     if entry is None:
         return {}
     if not isinstance(entry, (str, Mapping)):
@@ -860,21 +867,17 @@ def _read_pin_ports(entry: Any, stated: set[str], where: str) -> dict[str, str]:
         )
     if isinstance(entry, str):
         if not stated:
-            raise SpecError(
-                f"{where}: port {entry!r} says which nozzle x/y locate, and this "
-                f"pin states neither. Give x or y, or drop port"
-            )
+            raise SpecError(f"{where}: {unmeasured_port(entry, ('x', 'y'), key)}")
         return dict.fromkeys(sorted(stated), entry)
     axes = _mapping(entry, where)
     _check_keys(axes, {"x", "y"}, where)
     if not axes:
         raise SpecError(f"{where} names no axis; give port: {{x: ...}} or drop port")
-    for axis in axes:
+    for axis, name in axes.items():
         if axis not in stated:
-            raise SpecError(
-                f"{where}.{axis} measures {axis} to a nozzle, and this pin states "
-                f"no {axis}. Give {axis}, or drop {where.rsplit('.', 1)[-1]}.{axis}"
-            )
+            raise SpecError(f"{where}.{axis}: "
+                            + unmeasured_port(_text(name, f"{where}.{axis}"),
+                                              (axis,), f"{key}.{axis}"))
     return {axis: _text(name, f"{where}.{axis}") for axis, name in axes.items()}
 
 

@@ -697,6 +697,14 @@ class Unit:
         ``width``/``height`` resize the box, and a corner refreshed at
         each of those in turn is one more place to forget.
 
+        The one writer that is *not* left free to move it is the layout
+        engine's own face selection, which runs after the boxes are
+        placed and so cannot be re-derived from -- it reads a pinned
+        nozzle's face rather than choosing one
+        (:func:`pandid.layout.faces.select_faces`). A pin is a boundary
+        condition and a face is a preference, and this is the one place
+        the two would otherwise be in a cycle.
+
         The stored object is handed back as it stands where no axis was
         port-pinned, which is the ordinary case and costs nothing.
         """
@@ -761,7 +769,10 @@ class Unit:
         ``pin(x=..., port="inlet", y=run_y)`` steps along a row by the
         corner and still lands the nozzle on the line. A grid cell has
         no nozzle in it, so a ``port`` you *name* refuses ``col``/
-        ``row``.
+        ``row`` -- and so does a call that names one and then gives it
+        no coordinate to locate, which is a nozzle measuring nothing.
+        The face that nozzle is piped from is settled by the pin too
+        (see :attr:`pin_`); :meth:`nozzle` still names one outright.
 
         **On a** :class:`Feed` **or a** :class:`Product` **the nozzle is
         the default**, so ``x``/``y`` place the tip of the flag and
@@ -800,6 +811,11 @@ class Unit:
         if mirrored is not _UNCHANGED:
             fields["mirrored"], fields["mirror_y"] = normalize_mirror(mirrored)
         candidate = replace(self._pin if self._pin is not None else Pin(), **fields)
+        # The nozzle the *caller* named, kept because the flag default
+        # below overwrites ``port`` with one they did not: the two
+        # refusals under it answer for what was written, not for what
+        # was filled in.
+        named_port: str | None = None if port is _UNSTATED else port
         if port is _UNSTATED:
             # A flag stands for the line, not for a piece of plant, and
             # it has exactly one nozzle -- so the point worth naming is
@@ -807,7 +823,7 @@ class Unit:
             # ceremony of spelling out the only port there is. Nothing
             # else defaults: a box's corner is on the box.
             port = next(iter(self.ports)) if isinstance(self, _Boundary) else None
-        elif port is not None and (col is not None or row is not None):
+        elif named_port is not None and (col is not None or row is not None):
             # Only for a port this call *named*: the default above must
             # leave a flag pinned to a grid cell alone rather than
             # refusing a placement the caller wrote nothing wrong in.
@@ -819,8 +835,27 @@ class Unit:
         # Named unconditionally, so a ``port`` this call spells wrongly
         # is refused whether or not it also gives a coordinate: the
         # complaint belongs to the call that misspelt it and not to a
-        # later one that finally supplies an axis.
+        # later one that finally supplies an axis. It is also why this
+        # runs before the refusal below: ``pin(port="inlets")`` is wrong
+        # twice, and the spelling is the half worth saying.
         nozzle = self._pin_port(port) if port is not None else None
+        if named_port is not None and x is None and y is None:
+            # A nozzle named for no coordinate measures nothing, and was
+            # taken and thrown away: ``pin(port="inlet")`` succeeded and
+            # recorded no relation, so the Python call and the file
+            # disagreed about the one rule this whole change exists to
+            # enforce -- :mod:`pandid.spec` refused the same sentence.
+            # Worded once, in ``portgeom``, so they cannot come apart
+            # again.
+            #
+            # ``named_port`` and not ``port``, because the flag default
+            # above names a nozzle the caller did not:
+            # ``feed.pin(mirrored=True)`` states no coordinate and there
+            # is nothing in it to discard, so there is nothing to refuse.
+            from pandid.portgeom import unmeasured_port
+
+            raise ValueError(
+                f"{self.name}: {unmeasured_port(named_port, ('x', 'y'), 'port=')}")
         # Which nozzle each named axis was measured to, recorded per
         # axis and not for the call: ``pin(x=..., port="inlet")``
         # followed by ``pin(y=...)`` leaves x on the nozzle and puts y

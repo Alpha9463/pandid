@@ -29,6 +29,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from pandid.units import Unit
 
 
@@ -603,11 +605,12 @@ def pin_intent(unit: "Unit") -> dict[str, tuple[str | None, float]]:
     one of those happens.
 
     The one place both halves of :meth:`~pandid.units.Unit.pin`'s record
-    are read together, so a caller holding a drawing to what was asked
-    for -- :func:`pandid.validate.geometry_issues` -- does not reach
-    into the unit for them. An axis left to the solver (``col``/``row``,
-    or not pinned at all) is absent rather than ``None``: there is no
-    coordinate to hold anything to.
+    are read together, so the callers that hold a drawing to what was
+    asked for -- :func:`pandid.validate.geometry_issues`, and
+    :func:`pandid.layout.faces.select_faces`, which must leave a pinned
+    nozzle's face alone -- do not reach into the unit for them. An axis
+    left to the solver (``col``/``row``, or not pinned at all) is absent
+    rather than ``None``: there is no coordinate to hold anything to.
     """
     pin = getattr(unit, "_pin", None)
     if pin is None:
@@ -616,3 +619,28 @@ def pin_intent(unit: "Unit") -> dict[str, tuple[str | None, float]]:
     return {axis: (ports.get(axis), value)
             for axis in ("x", "y")
             if (value := getattr(pin, axis)) is not None}
+
+
+def unmeasured_port(port_name: str, axes: "Sequence[str]", drop: str) -> str:
+    """The refusal for a ``port=`` no stated coordinate is measured to.
+
+    ``axes`` names the coordinates the nozzle was given for and the pin
+    does not state, and ``drop`` is what the author would strike to keep
+    the rest of the placement -- ``port=`` from a call, ``port.x`` from a
+    key.
+
+    One sentence and one rule for both doors into a placement,
+    :meth:`pandid.units.Unit.pin` and ``pin:`` in :mod:`pandid.spec`,
+    built here for the reason :func:`unreachable_face` is: a rule
+    written out twice is a rule that drifts, and the two came to
+    disagree about *this* one -- the file refused ``port: inlet`` on a
+    pin stating no coordinate while the Python call took it and threw
+    the nozzle away, which is the very thing (#294) the rule exists to
+    stop. Whatever one door refuses the other refuses, because there is
+    only the one sentence to refuse it with.
+    """
+    subject = " or ".join(axes)
+    return (f"port {port_name!r} is the nozzle {subject} "
+            f"{'are' if len(axes) > 1 else 'is'} measured to, and this pin states "
+            f"{'neither' if len(axes) > 1 else f'no {axes[0]}'}. "
+            f"Give {subject}, or drop {drop}")
