@@ -62,6 +62,7 @@ The format::
 
     stream_table_sections: [[Benzene, Mass Fraction]]
     stream_table: {font_size: 8}
+    stream_labels: {enclosure: diamond}
     title_block: {title: ..., revisions: [{rev: A, date: ..., by: AA}]}
     annotations: [{type: equipment_list, align: top-right}]
 
@@ -89,12 +90,14 @@ from pandid.components import Component
 from pandid.document import (
     Annotation,
     Revision,
+    StreamLabelOptions,
     StreamTableOptions,
     TableBox,
     TitleBlock,
     equipment_list,
     legend,
     notes,
+    _resolve_enclosure,
 )
 from pandid.flowsheet import (
     DEFAULT_LINE_NUMBER_START,
@@ -336,8 +339,8 @@ _TOP_KEYS = {
     "name", "stream_naming_scheme", "stream_number_start",
     "line_numbering_scheme", "line_number_start", "loop_number_start",
     "auto_faces", "components", "units", "loops",
-    "instruments", "streams", "stream_table_sections", "stream_table", "title_block",
-    "annotations",
+    "instruments", "streams", "stream_table_sections", "stream_table",
+    "stream_labels", "title_block", "annotations",
 }
 # Keys the format no longer has. A file written against the old one
 # names the sheet it wants, so say so rather than reporting an unknown
@@ -542,6 +545,8 @@ def from_dict(spec: Mapping[str, Any]) -> Flowsheet:
     ]
     if "stream_table" in data:
         fs.stream_table = _read_stream_table(data["stream_table"], "stream_table")
+    if "stream_labels" in data:
+        fs.stream_labels = _read_stream_labels(data["stream_labels"], "stream_labels")
     if "title_block" in data:
         fs.title_block = _read_title_block(data["title_block"], "title_block")
     for i, entry in enumerate(_sequence(data.get("annotations", []), "annotations")):
@@ -1176,6 +1181,25 @@ def _read_stream_table(entry: Any, where: str) -> StreamTableOptions:
     return options
 
 
+def _read_stream_labels(entry: Any, where: str) -> StreamLabelOptions:
+    """``stream_labels:`` -- how the numbers on the lines are drawn.
+
+    One key, and it is a name from a closed set rather than a number, so
+    the dataclass's own ``__post_init__`` is the whole check: a spec
+    asking for ``enclosure: rhombus`` gets the same sentence back that
+    ``fs.stream_labels.enclosure = "rhombus"`` gets, spelled once.
+    """
+    data = _mapping(entry, where)
+    _check_keys(data, {f.name for f in dataclass_fields(StreamLabelOptions)}, where)
+    if "enclosure" not in data:
+        return StreamLabelOptions()
+    shape = _text(data["enclosure"], f"{where}.enclosure")
+    try:
+        return StreamLabelOptions(enclosure=_resolve_enclosure(shape))
+    except ValueError as exc:
+        raise SpecError(f"{where}.enclosure: {exc}") from exc
+
+
 def _read_title_block(entry: Any, where: str) -> TitleBlock:
     data = _mapping(entry, where)
     allowed = {f.name for f in dataclass_fields(TitleBlock)}
@@ -1361,6 +1385,23 @@ def to_dict(fs: Flowsheet) -> dict:
              if getattr(fs.stream_table, f.name) != f.default}
     if table:
         spec["stream_table"] = table
+    labels = {f.name: getattr(fs.stream_labels, f.name)
+              for f in dataclass_fields(StreamLabelOptions)
+              if getattr(fs.stream_labels, f.name) != f.default}
+    if labels:
+        # Checked on the way **out** as well as on the way in.
+        # ``enclosure`` is a plain attribute of a closed set, so
+        # ``fs.stream_labels.enclosure = "rhombus"`` reaches here having
+        # gone past ``__post_init__``; written through, it makes a file
+        # this module's own reader refuses, and the author finds out
+        # when somebody opens it rather than when they wrote it. A
+        # field with more than one door in is why it is resolved at
+        # each of them (:func:`~pandid.document._resolve_enclosure`),
+        # and this is the way out. The same sentence either way, and a
+        # :class:`ValueError` rather than a :class:`SpecError`: the
+        # spec is not wrong, the flowsheet being written is.
+        _resolve_enclosure(fs.stream_labels.enclosure)
+        spec["stream_labels"] = labels
     if fs.title_block is not None:
         spec["title_block"] = _write_title_block(fs.title_block)
     if fs.annotations:

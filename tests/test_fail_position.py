@@ -327,7 +327,7 @@ def test_the_letters_step_off_an_impulse_line_leaving_the_same_face():
     svg = fs.to_svg()
 
     assert ">FC</text>" in svg, "the mark is drawn"
-    ink = _ink(fs)
+    ink = _ink(fs, "vertical")
     taps = [line for line in ink if line.kind == "tap"]
     assert len(taps) == 1, "and the square is joined to the valve by one line"
 

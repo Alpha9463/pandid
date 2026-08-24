@@ -517,6 +517,133 @@ def _same_number(a: str, b: str) -> bool:
     return a.strip().casefold() == b.strip().casefold()
 
 
+#: The shapes a stream label may be enclosed in, and ``"none"`` for the
+#: bare number on its halo. The three are what drawing offices actually
+#: rule around a stream number; there is no fourth in common use, and
+#: the set is closed rather than open for the reason
+#: :func:`_resolve_col_align` closes its own: a name outside it used to
+#: be a shape silently not drawn.
+_ENCLOSURES = ("none", "diamond", "circle", "box")
+
+
+#: What an author reaches for instead, and what this package spells it.
+#:
+#: Named in the refusal and **not accepted**: the set stays closed, so
+#: one sheet cannot spell in ``rhombus`` what the next spells in
+#: ``diamond`` and no reader has to know both. But ``rhombus`` is the
+#: word the geometry texts use and ``oval`` the word a drawing office
+#: uses, so an author typing one of them has not made a typing mistake
+#: -- they have used the other name for the thing they want, and being
+#: handed the list without being told which of it they meant leaves
+#: them to guess. Lower-cased and stripped before the lookup, since a
+#: field taken off a form arrives that way.
+_ENCLOSURE_MEANT = {
+    "rhombus": "diamond", "rhomb": "diamond", "lozenge": "diamond",
+    "ellipse": "circle", "oval": "circle", "round": "circle",
+    "balloon": "circle", "bubble": "circle",
+    "rect": "box", "rectangle": "box", "square": "box", "frame": "box",
+    "border": "box",
+    "off": "none", "plain": "none", "bare": "none", "nothing": "none",
+}
+
+
+def _resolve_enclosure(shape):
+    """*shape*, checked against :data:`_ENCLOSURES`.
+
+    Called from every door into the field, because a plain attribute of
+    a closed set has more than one: :meth:`StreamLabelOptions.__post_init__`
+    for the constructor, :meth:`~pandid.flowsheet.Flowsheet._prepare_to_draw`
+    for the author who assigns to it afterwards (``fs.stream_labels.enclosure
+    = "rhombus"``), :func:`~pandid.spec.to_dict` on the way out to a file
+    and :func:`~pandid.spec._read_stream_labels` on the way back in. One
+    sentence at all four, so the Python API and the file API cannot
+    disagree about what a name means.
+    """
+    if shape not in _ENCLOSURES:
+        meant = (_ENCLOSURE_MEANT.get(shape.strip().lower())
+                 if isinstance(shape, str) else None)
+        raise ValueError(
+            f"fs.stream_labels.enclosure must be one of {list(_ENCLOSURES)}, "
+            f"got {shape!r}"
+            + (f"; this package spells that one {meant!r}" if meant else "")
+        )
+    return shape
+
+
+@dataclass
+class StreamLabelOptions:
+    """How the stream labels -- the numbers written on the lines -- are
+    drawn, on the sheet that draws them: ``fs.stream_labels``.
+
+    Every flowsheet has one, so nothing is imported and nothing is
+    constructed to use it::
+
+        fs.stream_labels.enclosure = "diamond"
+
+    A sibling of :class:`StreamTableOptions` and for its reasons: a
+    label option describes the *sheet*, so it means the same thing to
+    ``to_drawio()`` as to ``to_svg()`` and would otherwise be a tenth
+    keyword on ``render()`` restated across four output signatures.
+    The two objects are kept apart because they are two drawings -- the
+    table is the block of properties docked to the sheet, these are the
+    marks on the pipes -- and merging them would put ``enclosure``
+    beside ``column_width`` where neither can affect the other.
+    """
+
+    #: The shape ruled around every stream label: ``"none"`` (the
+    #: default, the bare number on its opaque halo), ``"diamond"``,
+    #: ``"circle"`` or ``"box"``.
+    #:
+    #: **A drafting convention, not a standard.** A stream number in a
+    #: diamond is widespread in North American practice and in the
+    #: chemical-engineering textbooks, and courses and company drawing
+    #: standards ask for it; no clause of ISO 10628 or ISO 15519
+    #: prescribes a shape around a stream number, which is why this is
+    #: an option the author selects and why the default leaves the sheet
+    #: as it was.
+    #:
+    #: **One size for the whole sheet.** The enclosure is measured once,
+    #: over the longest label on it, and every enclosure is ruled at
+    #: that size -- so ``1`` and ``1000`` get the same diamond. Sizing
+    #: each to its own text is the alternative, and it draws a row of
+    #: visibly different diamonds down one sheet, which reads as a
+    #: mistake rather than as information. Same answer, and the same
+    #: argument, as the stream table's columns.
+    #:
+    #: **An enclosed label never leaves its run.** A bare number that
+    #: cannot fit on its line is written beside it, or out on a leader;
+    #: a shape is not, because the run passing through it *is* the
+    #: convention and one drawn off the line has no reading at all.
+    #: A shape too big for the paper beside its run is drawn there
+    #: anyway, crossing whatever is under it -- so **spacing the sheet
+    #: is the author's lever**, and every crossing is named on
+    #: ``fs.warnings`` after a render (``enclosure-over-unit``,
+    #: ``enclosure-over-line``, ``enclosure-over-label``) rather than
+    #: left to be found by eye.
+    #:
+    #: **Nothing is hidden by any of it.** The shape is ruled as an
+    #: outline, and the plate under the words is laid down only where
+    #: it covers the run being labelled and nothing else; where the run
+    #: is too short to hold it clear anywhere along it, no plate is laid
+    #: and the number is written straight onto the sheet with the
+    #: crossing run drawn through it. Nine of the 286 labels on the
+    #: shipped corpus are drawn that way. A number read across a run is
+    #: harder to read; a run with a piece taken out of it is not there,
+    #: and ``validate()`` cannot see it because the topology is
+    #: untouched.
+    #:
+    #: A sheet lettered with full line numbers pays for the longest of
+    #: them at every label -- ``AE-304-150-80-SS`` rules a diamond over
+    #: 200 units wide -- which is the case the convention fits worst.
+    #: ``"circle"`` is much the tightest of the three on a long label,
+    #: at the cost of reading like an instrument balloon on a sheet
+    #: that carries instruments.
+    enclosure: Literal["none", "diamond", "circle", "box"] = "none"
+
+    def __post_init__(self):
+        self.enclosure = _resolve_enclosure(self.enclosure)
+
+
 # --------------------------------------------------------------
 # Convenience constructors for the common boxes
 # --------------------------------------------------------------

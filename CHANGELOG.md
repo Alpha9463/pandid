@@ -143,6 +143,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is laid out or routed**, so a rejected render leaves the flowsheet exactly as
   it found it. Every shipped sheet is byte-identical: nothing changes unless the
   option is used.
+- **`fs.stream_labels.enclosure`**: a shape ruled around every stream label on
+  the sheet -- `"diamond"`, `"circle"`, `"box"`, or `"none"`, which is the
+  default and is what the sheet drew before (#480). A stream number in a diamond
+  is what many courses and company drawing standards ask for, and a label was
+  text on an opaque wipe with nothing round it.
+
+  **A drafting convention, not a standard.** Nothing in ISO 10628 or ISO 15519
+  prescribes a shape around a stream number, so this is an option the author
+  selects and nothing here is claimed as conformance. The default draws what it
+  always drew: twenty of the twenty-one goldens are unchanged to the byte, and
+  the twenty-first moves one number off a line jump it was cutting in half --
+  the fix below, which the default was owed anyway.
+
+  The shape is ruled at half the weight of a process line, which is the weight
+  the leader beside it is drawn at: an enclosure stands for nothing in the plant
+  and should not read as though it does. The diamond is the smallest rhombus
+  that holds the words and the circle the smallest circle, so neither is a size
+  anybody chose; the box cannot be, since the smallest rectangle around a
+  rectangle is that rectangle and a rule on the words' own edge is a rule
+  through them, so it carries one chosen gutter of four units. On a vertical
+  run the shape turns with the number.
+
+  **A label never rubs out a line that is not its own.** The shape is an
+  outline and fills nothing -- a filled diamond is a wipe twice the words in
+  each direction, and it would take bites out of whatever runs crossed it,
+  drawing a sheet that shows a pipe stopping where no pipe stops. Nor is the
+  wipe under the words allowed to do it: it is laid down only where it covers
+  the labelled run and nothing else, and where a run is too short to hold it
+  clear anywhere, it is dropped and the number is written straight onto the
+  sheet with the crossing run drawn through it in full. Nine of the 286 labels
+  on the shipped corpus are drawn that way with a shape ruled, and none at
+  `"none"`. A crowded drawing is legible and the author can space it; a wrong
+  one is neither.
+
+  **One size for the whole sheet**, measured over the longest label and given to
+  every label, so `1` and `1000` are drawn in the same diamond -- the answer
+  #477 settled for the stream table's columns, and for its reason: shapes that
+  vary down a sheet read as a drawing where the shape means something. Sizing
+  each to its own text draws a 26-unit diamond around `1` and a 61,6-unit one
+  around `1002` alternating down one process. The cost is the same as that
+  one's: a single long label rules them all, so a sheet lettered with full line
+  numbers gets a diamond wide enough for the longest of them at every label,
+  which is the case this convention fits worst.
+
+  **An enclosed label never leaves its run.** A bare number the search finds no
+  room for on its line is written beside it, or out on a leader; a shape is not,
+  because the run passing through it *is* the convention and one drawn off the
+  line has no reading at all. A shape too big for the paper beside its run is
+  drawn there anyway, so spacing the sheet is the author's lever -- and every
+  crossing is named on `fs.warnings` after a render, under
+  `enclosure-over-unit`, `enclosure-over-line` and `enclosure-over-label`,
+  rather than left to be found by eye. A bare label still steps off its line
+  to find clear paper, exactly as it always did; what is not conditional on
+  the option is the rule above it, that no label may rub out a line that is
+  not its own.
+
+  `to_drawio()` draws the same shape: the number leaves its edge and becomes a
+  cell of its own, since draw.io can rule only a rectangle around an edge label.
+  That cell carries absolute coordinates, so dragging the plant in
+  diagrams.net leaves the shape where the sheet put it. Reads and writes through
+  the spec as `stream_labels:`.
+
 - **`Evaporator`, `Thickener` and `Kiln`**: three pieces of equipment the
   registry had no symbol for, and all three were being faked in a shipped
   example with an apology in its source (#474). `examples/21_alumina_refinery`
@@ -698,6 +760,52 @@ class hierarchy, or what it is called.
   asks for a window long after `to_svg()` has finished. The guards nest, and are
   meant to: the inner one restores to its own entry state, the outer to what the
   caller handed over.
+- A **misspelled `jump_direction` is refused instead of flattening every
+  crossing** (#480). The value was read against the two names it knows and
+  anything else fell through the bottom, so `jump_direction="vertcial"` drew
+  the sheet with no line jumps at all — two runs shown meeting where they only
+  cross, which is the same falsehood a severed hop tells and told the other way
+  round. `"vertical"` and `"horizontal"` remain the two; there is no third
+  value meaning "no jumps", and a sheet that wants none is a sheet with no
+  crossings on it.
+
+- A **label that gives up its wipe now says so at every setting** (#480). A
+  label lays its opaque wipe down only where it covers nothing but its own run,
+  and gives the wipe up rather than paint out a neighbour's — a rule that is
+  not conditional on `fs.stream_labels.enclosure`. The reporting was: the
+  findings pass returned early with no shape ruled, so the default, which
+  nobody opts into, was the one setting where a wipe could quietly vanish and
+  `fs.warnings` stay empty. `label-over-line` now fires whatever the setting
+  and names the runs the number is written across. On the shipped corpus no
+  bare label reaches it; a sheet has to have no clear paper in any of the
+  fourteen bands beside a run, which the new twenty-seven-stream fixture is.
+
+- A **line jump is no longer erased by a label written beside it** (#480).
+  Where one run crosses another the sheet draws a semicircle standing off the
+  line, and that arc is the one piece of a run whose geometry is in no route:
+  it is added by the drawing pass, and the model the label search consults
+  measured the straight path underneath it and stopped there. So a number
+  could be placed half a unit clear of a run and still take a bite out of the
+  arc over it -- which `21_alumina_refinery` drew, `S-934`'s number cutting
+  `S-939`'s hop into two stubs, at every setting including the default. A hop
+  is the worst mark on a sheet to break: it exists only to say *these two
+  lines cross and are not joined*, and half a hop says they are joined. The
+  hops are now derived once and read by both the pass that draws them and the
+  pass that dodges them, so `21_alumina_refinery` moves that one number off
+  the arc and no other sheet changes.
+
+- A **stream number no longer rubs out a line that is not its own** (#480). The
+  opaque wipe a number is written on could be laid across a passing run, which
+  draws that run stopping where it does not stop and is invisible to
+  `validate()`, whose topology is untouched. The placement search ranked that
+  damage last but would take it when nothing else was left. It is now the one
+  cost the search will not pay at any price, at every setting of
+  `fs.stream_labels.enclosure`: where no place on a run lets the wipe cover
+  that run alone, no wipe is laid down and the number is written straight onto
+  the paper with the crossing run drawn through it in full. No shipped sheet is
+  drawn differently -- the search already found clear paper for all 286 labels
+  on the corpus with no shape ruled -- so this writes down a rule the default
+  was keeping by luck.
 
 - The **two committed sheets made from one example no longer disagree about the
   date that example leaves blank** (#491). `03_distillation_train` and

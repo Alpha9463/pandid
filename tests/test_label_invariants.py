@@ -351,7 +351,7 @@ def test_a_leader_cuts_nothing_the_label_was_dodging(sheets, name):
     it simply crosses it."""
     fs, labels = sheets[name]
     boxes = [unit_box(u, u.frame) for u in fs.units if u.frame is not None]
-    ink = _ink(fs)
+    ink = _ink(fs, "vertical")
     segs = _drawn_segments(fs)
     cutting = []
     for label in labels:

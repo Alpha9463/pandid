@@ -238,7 +238,7 @@ def test_no_halo_lands_on_an_impulse_line(drawn, name):
     may *not* take away.
     """
     fs, halos, _bars = drawn[name]
-    taps = [line.box for line in _ink(fs) if line.kind == "tap"]
+    taps = [line.box for line in _ink(fs, "vertical") if line.kind == "tap"]
     cut = [
         f"({box[0]:.0f}, {box[1]:.0f})-({box[2]:.0f}, {box[3]:.0f})"
         for halo in halos
@@ -254,7 +254,7 @@ def test_the_corpus_has_impulse_lines_to_check(drawn):
     them in quantity are still in it. Counted as ``_ink`` lines of kind
     ``tap``, which is what the check itself reads."""
     counted = {
-        name: sum(1 for line in _ink(fs) if line.kind == "tap")
+        name: sum(1 for line in _ink(fs, "vertical") if line.kind == "tap")
         for name, (fs, _halos, _bars) in drawn.items()
     }
     assert counted["11_ethanol_pid"] > 15, counted
@@ -393,7 +393,7 @@ def _code_boxes(fs) -> "list[tuple[float, float, float, float]]":
     """The halo of every letter code written outside a symbol on this sheet."""
     from pandid.render.svg import _unit_label_box, quadrant_labels
 
-    return [b for b in map(_unit_label_box, quadrant_labels(fs)) if b is not None]
+    return [b for b in map(_unit_label_box, quadrant_labels(fs, "vertical")) if b is not None]
 
 
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
@@ -403,7 +403,7 @@ def test_no_letter_code_lands_on_a_line(drawn, name):
     struck = [
         f"({box[0]:.0f}, {box[1]:.0f}) on {line.kind}"
         for box in _code_boxes(fs)
-        for line in _ink(fs)
+        for line in _ink(fs, "vertical")
         if _overlaps(box, line.box)
     ]
     assert not struck, f"{name}: a letter code lies on " + "; ".join(sorted(set(struck)))

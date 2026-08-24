@@ -84,6 +84,7 @@ neither stands in for the other.
 | `annotations` | `list` | sheet furniture boxes, drawn whenever they are added |
 | `stream_table_sections` | `list[tuple[str, str]]` | `(before_key, header_label)` |
 | `stream_table` | `pandid.document.StreamTableOptions` | how that table is drawn, and what its own sheet is called; see [Sizing the table](#sizing-the-table) and [The table on its own sheet](#the-table-on-its-own-sheet) |
+| `stream_labels` | `pandid.document.StreamLabelOptions` | how the numbers on the lines are drawn; see [A shape around the number](#a-shape-around-the-number) |
 
 ### Building the topology
 
@@ -2475,6 +2476,71 @@ unidirectional convention.
 Wherever it lands, a number is slid along its own run until it clears the
 equipment, tags, balloons and other numbers already on the sheet.
 
+### A shape around the number
+
+```python
+fs.stream_labels.enclosure = "diamond"   # default: "none"
+```
+
+A stream number in a diamond is a common drafting convention, and courses and
+company drawing standards often require it. `"circle"` and `"box"` are the other
+two shapes in use; `"none"`, the default, writes the number on the bare wipe.
+
+**It is a convention and not a standard.** No clause of ISO 10628 or ISO 15519
+prescribes a shape around a stream number, so this is an option you select, not
+something `pandid` claims conformance for. The default leaves the sheet as it
+was.
+
+**A label never rubs out a line that is not its own.** The shape is an outline
+and fills nothing, and the wipe under the words is laid down only where it
+covers the run being labelled and nothing else. Where the run is too short to
+hold the wipe clear anywhere along it, the wipe is dropped: the number is
+written straight onto the sheet, whatever crosses it is drawn through it in
+full, and `fs.warnings` says so under `label-over-line` — at every setting,
+including the default, because the rule is not conditional on the option. That is harder to read, and it is true — a pipe drawn with a bite out of
+it is a sheet showing a connection that is not there. The shape is drawn at half
+the weight of a process line so it does not read as plant, and on a vertical run
+it turns with the number.
+
+**One size for the whole sheet.** The shape is measured over the longest label
+on the sheet and every label gets that size, so `1` and `1000` are drawn in the
+same diamond. The cost is that one long label rules them all: a sheet lettered
+with full line numbers (`AE-304-150-80-SS`) gets a diamond wide enough for that,
+at every label. This is the convention for *stream numbers*, and a sheet of line
+numbers is the case it fits worst — `"circle"` is much the tightest of the three
+if you want one anyway, though a circle is also what an instrument balloon is
+drawn as.
+
+**An enclosed label stays on its run.** A bare number the sheet finds no room
+for on its line is written beside it, or out on a leader; a shape is not,
+because the line passing through it is what makes it readable at all. So a shape
+too big for the paper beside its run is drawn there anyway, crossing whatever is
+under it — and **spacing the sheet is your lever**. You do not have to hunt for
+the crossings: after a render, `fs.warnings` names each one.
+
+```
+enclosure-over-unit   VAP-611-150-40-CS's diamond is drawn over FA-601, V-604, VT-601
+enclosure-over-line   AE-309-100-80-SS's diamond is drawn over AE-303-80-80-SS
+enclosure-over-label  AE-309-100-80-SS's diamond crosses AE-303-80-80-SS's
+```
+
+They are warnings and not errors because nothing is lost: every line is still
+drawn, so the sheet is crowded rather than wrong. `enclosure-over-line` says as
+well whether the *number* is written across the crossing run, which is the case
+where the wipe had to be dropped.
+
+A bare label still steps off its line to find clear paper, exactly as before.
+What is new at `"none"` too is that no placement will take a spot that rubs out
+another run — including the arc a line jump is drawn as, which is part of a run
+and used not to be counted as one. One sheet in the shipped gallery is drawn
+differently for that: `21_alumina_refinery` moves one number off the hop it was
+cutting in half.
+
+`to_drawio()` draws the same shape. There the number leaves its edge and becomes
+a cell of its own — draw.io can rule only a rectangle around an edge label — so
+it stays where the sheet put it when the plant is dragged, and has to be moved
+by hand. It comes through the spec as `stream_labels:`.
+
 ### Stream properties and the table
 
 `Stream.properties` is a plain dict you fill in. **Nothing computes it**, as
@@ -3612,6 +3678,10 @@ the sheet that came out.
 | `title-block-company-overflows` | warning | a `company` name that wraps to more lines than the strip is deep, so it is drawn out through the top and the bottom of the block. The cell breaks between words and never inside one, so this is the one field the block can lose downwards |
 | `title-block-signatory-undrawn` | warning | a `drawn_by`/`checked_by`/`approved_by` the sheet does not draw. Those three fill the newest revision row's BY / CHK'D / APP'D cells and have nowhere else to go, so a block with no `revisions` has no row for them, and a newest revision stating a signatory of its own keeps the cell. One finding per cause; a row stating the same name is silent |
 | `drawio-approximated` | warning | `to_drawio()` only: a symbol draw.io has no stencil for, exported as a built-in stand-in that does not draw all of it. The message names the unit and what the stand-in loses; see [Editing the sheet by hand](#editing-the-sheet-by-hand) |
+| `label-over-line` | warning | a stream number is written *across* another run: nowhere along its own run could the wipe under it go without painting that run out, so no wipe is drawn. Fires at **every** `fs.stream_labels.enclosure`, the default included, because the rule it reports is not conditional on the option; see [A shape around the number](#a-shape-around-the-number) |
+| `enclosure-over-unit` | warning | `fs.stream_labels.enclosure` only: the shape ruled around a stream number is drawn across a unit's box. An enclosed label stays on its run whatever is beside it, so this is the cue to space the sheet; see [A shape around the number](#a-shape-around-the-number) |
+| `enclosure-over-line` | warning | as above, across ink belonging to another run, so more than one line passes through one shape. Every line is still drawn, and the message says whether the number itself is written across that run — the case where the wipe under it had to be dropped to leave the run whole |
+| `enclosure-over-label` | warning | as above, across another stream label's shape. One finding per pair |
 
 Errors raise from `to_svg()`/`render()` unless you pass `check=False`. Warnings
 never raise, and collect on `fs.warnings` after each render. That list describes
@@ -3658,6 +3728,12 @@ Warnings from both halves land on `fs.warnings` together, model findings first.
 Call it after `layout()` and `route()` — or after a render, which runs them —
 to hear the geometric half; on a sheet nothing has placed yet that half is
 simply silent.
+
+Some codes are made by the **renderer** rather than by either half —
+`drawio-approximated`, the three `enclosure-*` findings, and the text-fitting
+ones a title block or a docked box can raise. They land on `fs.warnings` after a
+render and are not what `fs.validate()` answers with: each describes where a
+mark ended up on the paper, which only the pass that laid it down can say.
 
 ### Deprecated API
 
@@ -4123,6 +4199,7 @@ streams:
 
 stream_table_sections: [[Ethanol, Mass Fraction]]
 stream_table: {font_size: 8, sheet_drawing_number: PFD-203}
+stream_labels: {enclosure: diamond}
 
 title_block:
   title: Utilities U200

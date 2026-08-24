@@ -194,11 +194,13 @@ from pandid.render import furniture as F
 from pandid.render import generator
 from pandid.render import svg as _svg
 from pandid.render.escape import escaped, writable
-from pandid.render.svg import (_DIAMOND_BALLOONS, _furniture_name, _RENDER_CODES,
+from pandid.render.svg import (_DIAMOND_BALLOONS, _ENCLOSURE_STROKE,
+                               _furniture_name, _LABEL_CODES, _RENDER_CODES,
                                _LEADER_HEAD, _scale_text, _Sheet, _too_small,
                                _SIGNAL_DASH, _stream_rung, _TAP_DASH,
                                fit_issue, HOP_R,
-                               NUMBER_TYPE, boundary_flag,
+                               NUMBER_TYPE, boundary_flag, enclosure_shape,
+                               label_findings,
                                draws_arrowheads, flange_marks, impulse_tap,
                                resolve_connections, sheet_connections,
                                stream_numbers, stream_polyline, tap_lines)
@@ -723,7 +725,7 @@ HOP_DROPPED = "drawio-hop-dropped"
 #: The codes this backend puts on ``fs.warnings`` itself, as against the
 #: validator's findings about the diagram. Replaced rather than added to
 #: on each export, the way ``SvgRenderer.render`` replaces its own.
-_EXPORT_CODES = (*_RENDER_CODES, APPROXIMATED, HOP_DROPPED)
+_EXPORT_CODES = (*_RENDER_CODES, *_LABEL_CODES, APPROXIMATED, HOP_DROPPED)
 
 
 #: Every symbol this library draws itself, and what draw.io is asked for
@@ -1233,7 +1235,7 @@ class _Tags(NamedTuple):
     codes: list
 
 
-def _tag_pass(fs, registry, joints=None) -> "_Tags":
+def _tag_pass(fs, registry, joints: "str | None", direction: str) -> "_Tags":
     """Run the sheet's equipment-tag placement, without drawing
     anything.
 
@@ -1266,7 +1268,7 @@ def _tag_pass(fs, registry, joints=None) -> "_Tags":
                                    flange_boxes, quadrant_labels)
 
     sheet = SvgRenderer(registry)
-    ink = _ink(fs)
+    ink = _ink(fs, direction)
     symbols = [(u, unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     # ``joints`` is the sheet's answer about its connections, and it is
     # threaded in for the same reason ``ink`` is: on a flanged sheet the
@@ -1280,7 +1282,7 @@ def _tag_pass(fs, registry, joints=None) -> "_Tags":
     # runs, so both are told where it went; ``SvgRenderer._draw_units``
     # seeds itself with the same boxes and this pass has to see the same
     # paper taken, or the two settle a crowded tag on different sides.
-    codes = quadrant_labels(fs)
+    codes = quadrant_labels(fs, direction)
     symbols += [(None, b) for b in map(_unit_label_box, codes) if b is not None]
     at: dict = {}
     items: list = []
@@ -1324,7 +1326,7 @@ def _quadrant_cell(cid: str, item, fit: "_Fit") -> list[str]:
     the balloon's is its tag. The anchor becomes a box and an ``align``
     the way :func:`_strip_label` makes one -- see :data:`_TEXT_INSET` --
     and ``labelBackgroundColor`` is the halo the sheet letters a code
-    on; see :data:`_NUMBER_KEYS`.
+    on; see :data:`_NUMBER_PLATE`.
 
     The text arrives already escaped once, for the HTML layer -- the
     sheet built it with :func:`~pandid.render.escape.escaped`
@@ -1652,7 +1654,7 @@ class DrawioRenderer:
         # tag lands *and* hands the line-number search the plates it has
         # to step clear of. See :class:`_Tags`.
         joints = sheet_connections(diagram, connections)
-        tags = _tag_pass(fs, self.registry, joints)
+        tags = _tag_pass(fs, self.registry, joints, jump_direction)
         balloons: list[str] = []
         for i, u in enumerate(fs.units):
             (balloons if u.kind == "instrument" else body).extend(
@@ -2552,8 +2554,13 @@ class DrawioRenderer:
         # the equipment tags the sheet seeds it with, so the search is
         # offered the same paper. See :func:`_number_geometry` and
         # :class:`_Tags`.
-        numbers = {number.name: number
-                   for number in stream_numbers(fs, list(tags.plates), joints)}
+        placed = stream_numbers(fs, list(tags.plates), joints, direction)
+        numbers = {number.name: number for number in placed}
+        shape = enclosure_shape(fs)
+        # The same list the sheet reports, from the same placement: both
+        # backends ask one function where a number goes, so both owe the
+        # author the same account of what the shape landed on.
+        self._findings += label_findings(fs, shape, placed, direction)
         polylines = {n: stream_polyline(s) for n, s in enumerate(fs.streams)}
         order, hops, lost = _hops(polylines, direction)
 
@@ -2569,6 +2576,7 @@ class DrawioRenderer:
                 f"flat"))
         labelled: set = set()
         cells: dict = {}
+        boxes: list[str] = []
         for n, s in enumerate(fs.streams):
             src_u, dst_u = s.source.owner, s.dest.owner
             points = polylines[n]
@@ -2626,14 +2634,44 @@ class DrawioRenderer:
             # on the sheet and stays unlabelled here.
             label = ""
             number = None
+            # An enclosed number is a cell of its own and not this
+            # edge's label: draw.io can rule a *rectangle* round an edge
+            # label (`labelBorderColor`) and nothing else, so a diamond
+            # or a circle has to be a vertex carrying the number as its
+            # value. Both shapes then come out the same way, which is
+            # worth more than the one shape that could have ridden the
+            # edge.
+            #
+            # **The cost is that the shape does not ride the run.** It
+            # is a child of the root at absolute coordinates, so
+            # dragging the plant in diagrams.net leaves it where the
+            # sheet put it; `sN-box` is an id convention and not a
+            # link. draw.io has exactly one construct that would give it
+            # one -- a vertex child of the edge with `relative="1"`,
+            # placed by `mxGraphView.getPoint` off the same arc-length
+            # fraction :func:`_number_geometry` already computes -- and
+            # taking it costs the z-order: a child is drawn with its
+            # parent, so an enclosure attached to `s3` is painted before
+            # `s7`, and `s7` crossing it is drawn through the shape and
+            # the number in it. That is the defect the pass order above
+            # exists to prevent, and it is the one a reader *cannot*
+            # repair, where a shape left behind by an edit is a stale
+            # snapshot they re-export. It is the choice
+            # :meth:`to_drawio` already states for a zone grid, and the
+            # trade :func:`_leader` and :meth:`_taps` already take.
+            boxed = False
             if not signal and s.name not in labelled:
                 labelled.add(s.name)
-                label = s.name
                 number = numbers.get(s.name)
-                if number is not None:
-                    keys += _NUMBER_KEYS + [_drawn_type(NUMBER_TYPE, fit)]
-                    if number.vertical:
-                        keys.append("horizontal=0")
+                boxed = number is not None and shape != "none"
+                if not boxed:
+                    label = s.name
+                    if number is not None:
+                        keys += ([_NUMBER_PLATE] if number.words is not None
+                                 else [])
+                        keys += _NUMBER_KEYS + [_drawn_type(NUMBER_TYPE, fit)]
+                        if number.vertical:
+                            keys.append("horizontal=0")
 
             style = ";".join(keys) + ";"
             # The ends are the two nozzles, and they are stated as
@@ -2643,7 +2681,7 @@ class DrawioRenderer:
             # a straight run from reading as a route that happens to
             # have no points left.
             waypoints = points[1:-1]
-            along, offset = _number_geometry(number, points, fit)
+            along, offset = _number_geometry(None if boxed else number, points, fit)
             body = [
                 *(['            <Array as="points">',
                    *(f'              <mxPoint x="{_num(fx)}" y="{_num(fy)}" />'
@@ -2685,10 +2723,34 @@ class DrawioRenderer:
                                  s.color or _LINE_INK, fit)
             if number is not None and number.leader is not None:
                 cells[n] += _leader(f"s{n}", number, s.color or _LINE_INK, fit)
+            # Held back rather than written here; see the return.
+            if boxed:
+                boxes += _enclosure(f"s{n}", number, shape,
+                                    s.color or _LINE_INK, fit)
         out: list[str] = []
         for n in order:
             out += cells[n]
-        return out
+        # Every enclosure after every edge, and not after its own. Order
+        # is z-order here, so an enclosure written with its edge is
+        # painted before whichever runs the hop order puts later -- and
+        # one of those crossing it would be drawn straight across the
+        # number, whose own opaque plate is painted with this cell and
+        # so cannot save it. A number that has to be read across a
+        # passing run is the whole reason the sheet draws a plate at
+        # all. The sheet has the same rule for the same reason:
+        # :meth:`SvgRenderer._draw_streams` writes the numbers in a pass
+        # of their own after the last pipe.
+        #
+        # After every *run*, and deliberately not after everything: the
+        # taps and the balloons follow, here and on the sheet both
+        # (:meth:`DrawioRenderer.render`). Instrumentation goes over the
+        # lines because a balloon's body has to knock out the tap
+        # reaching it and whatever it straddles, and a stream number has
+        # been drawn in that pass, under that rule, since long before
+        # this option existed. Moving the enclosures past it would put
+        # them in a place the sheet does not draw them, which is the one
+        # thing the two backends may not do differently.
+        return out + boxes
 
     def _taps(self, fs, fit: "_Fit") -> list[str]:
         """Every instrument connection, as a draw.io edge.
@@ -3137,16 +3199,26 @@ class DrawioRenderer:
         return out
 
 
-#: What a line number is, over and above where it is put.
+#: The sheet's opaque plate under a line number, said in a style, and
+#: written **only where the sheet writes one**: a label lays its plate
+#: down where it would cover nothing but the run it names, and nowhere
+#: else, so a number the sheet has to write across a foreign run
+#: carries no ``labelBackgroundColor`` here either. See
+#: :attr:`~pandid.render.svg.StreamNumber.words`. Kept ahead of
+#: :data:`_NUMBER_KEYS` in the style string, which is where it has
+#: always been written.
 #:
-#: ``labelBackgroundColor`` is the sheet's halo, said in a style:
 #: mxGraph paints an opaque box behind a label sized to the measured
 #: text, on an edge exactly as on a vertex -- ``mxText.configureCanvas``
 #: calls ``setFontBackgroundColor`` and ``mxSvgCanvas2D`` either writes
 #: a CSS ``background-color`` or inserts a ``<rect>`` before the glyphs,
 #: and nothing in that path asks whether the cell is an edge. So a
-#: number that has to be written across a passing run still reads, which
-#: is the whole reason the sheet draws one.
+#: number written over its own run still reads, which is the whole
+#: reason the sheet draws a plate at all.
+_NUMBER_PLATE = "labelBackgroundColor=#ffffff"
+
+#: What a line number is, over and above where it is put and what it is
+#: written on.
 #:
 #: ``verticalLabelPosition`` is **not** here, though it places every
 #: *vertex* label in this file: it has no effect at all on an edge.
@@ -3178,8 +3250,7 @@ class DrawioRenderer:
 #: That is a property of the *shape*, and an edge has one
 #: (``mxConnector``). The opaque halo turns with it: ``mxSvgCanvas2D``
 #: puts the background on the same transformed group as the glyphs.
-_NUMBER_KEYS = ["labelBackgroundColor=#ffffff", "verticalAlign=middle",
-                "align=center"]
+_NUMBER_KEYS = ["verticalAlign=middle", "align=center"]
 
 
 def _number_geometry(number, points, fit: "_Fit"):
@@ -3303,6 +3374,65 @@ def _leader(edge_id: str, number, ink: str, fit: "_Fit") -> list[str]:
         f'            <mxPoint x="{_num(x0)}" y="{_num(y0)}" as="sourcePoint" />',
         f'            <mxPoint x="{_num(x1)}" y="{_num(y1)}" as="targetPoint" />',
         '          </mxGeometry>',
+        '        </mxCell>',
+    ]
+
+
+#: The draw.io shape each stream-label enclosure is drawn with. All
+#: three are built-ins drawn to fill their cell, and the cell is
+#: :attr:`~pandid.render.svg.StreamNumber.box` -- the same box the sheet
+#: fits the same shape into -- so neither backend derives a geometry the
+#: other could disagree about. Nothing is approximated here and so
+#: nothing is listed in :data:`_APPROXIMATIONS`: draw.io's rhombus is
+#: the quadrilateral through the four edge-midpoints of its box, and its
+#: ellipse in a square box is a circle.
+_ENCLOSURE_SHAPE = {"diamond": "rhombus", "circle": "ellipse", "box": "rounded=0"}
+
+
+def _enclosure(edge_id: str, number, shape: str, ink: str, fit: "_Fit") -> list[str]:
+    """The shape ruled round a stream label, as a cell of its own.
+
+    Carries the number as its ``value``, because the edge no longer
+    does: see :meth:`DrawioRenderer._edges` for why an enclosed number
+    leaves the edge.
+
+    ``fillColor=none`` and not :data:`_BALLOON_FILL`, which is the one
+    place a shape in this file is *not* filled and is the sheet's own
+    answer restated: an enclosure that filled its box would delete
+    whatever run crossed it, and a drawing missing a line is worse than
+    a crowded one. See :func:`~pandid.render.svg._enclosure_svg` for the
+    argument. ``labelBackgroundColor`` is then what keeps the number
+    readable -- the sheet's opaque plate, said in a style, exactly as
+    :data:`_NUMBER_PLATE` says it for a bare number on an edge -- and it
+    is written **only where the sheet writes the plate**, which is where
+    the plate covers nothing but this label's own run. Nine of the 286
+    labels on the shipped corpus have no such place on a run they may
+    not leave; those nine get no ``labelBackgroundColor`` and are read
+    across whatever crosses them, in both files, rather than rubbing it
+    out in either.
+
+    The rest is the sheet's:
+    :data:`~pandid.render.svg._ENCLOSURE_STROKE` for the pen, through
+    the fit like every other drawn length, and ``horizontal=0`` on a
+    vertical run to turn the number bottom to top -- on a *vertex* this
+    time, where it is the ordinary way to set text on end and needs none
+    of the argument :data:`_NUMBER_KEYS` has to make for an edge.
+    """
+    x0, y0, x1, y1 = number.box
+    x, y = fit.at(x0, y0)
+    style = (f"{_ENCLOSURE_SHAPE[shape]};html=1;fillColor=none;"
+             + (f"labelBackgroundColor={_BALLOON_FILL};"
+                if number.words is not None else "")
+             + f"strokeColor={ink};fontColor={ink};"
+             f"strokeWidth={fit.length(_ENCLOSURE_STROKE):g};"
+             f"{_drawn_type(NUMBER_TYPE, fit)};verticalAlign=middle;align=center;"
+             + ("horizontal=0;" if number.vertical else ""))
+    return [
+        f'        <mxCell id="{edge_id}-box" value={_attr(_html_text(number.name))} '
+        f'style={_attr(style)} vertex="1" parent="1">',
+        f'          <mxGeometry x="{_num(x)}" y="{_num(y)}" '
+        f'width="{_num(fit.length(x1 - x0))}" height="{_num(fit.length(y1 - y0))}" '
+        f'as="geometry" />',
         '        </mxCell>',
     ]
 

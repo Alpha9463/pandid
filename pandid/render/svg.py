@@ -103,6 +103,7 @@ _SIGNAL_DASH = {"electric": "7,4", "data": "9,3,2,3", "software": "9,3,2,3",
 #: the signal dashes and for the same reason: the export writes it too.
 _TAP_DASH = "5,4"
 
+
 #: The radius of the semicircle a crossing line hops with, which is half
 #: the length of run the hop takes out and how far it stands off it.
 #: :meth:`SvgRenderer._draw_streams` builds the arc from this alone.
@@ -483,7 +484,7 @@ _QUADRANT_PITCH = 15.0
 _QUADRANT_REACH = 60.0
 
 
-def quadrant_labels(fs) -> list:
+def quadrant_labels(fs, direction: str) -> list:
     """Every letter code written outside a symbol, placed.
 
     Items in :meth:`SvgRenderer._draw_unit_labels`' own form, so the
@@ -500,7 +501,7 @@ def quadrant_labels(fs) -> list:
                  if u.frame is not None and getattr(u, "quadrants", None)]
     if not annotated:
         return []
-    ink = _ink(fs)
+    ink = _ink(fs, direction)
     symbols = [_obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None]
     symbols += [_obstacle(b) for b in flange_boxes(fs, None)]
 
@@ -592,7 +593,7 @@ def _quadrant_stand_off(block, side: int, ink, symbols):
     return best, cost
 
 
-def _ink(fs) -> "list[_Ink]":
+def _ink(fs, direction: str) -> "list[_Ink]":
     """Every line the sheet draws, as the rectangle its stroke covers.
 
     Padded by a whole stroke width: half is the ink itself, drawn
@@ -603,6 +604,21 @@ def _ink(fs) -> "list[_Ink]":
     The paths come from :func:`~pandid.layout.attach.stream_path`, which
     is what :meth:`SvgRenderer._draw_streams` draws, so what is dodged
     here is what lands on the sheet.
+
+    **And the hops, which are in no route at all.** Where one run
+    crosses another the sheet draws a semicircle standing off the line
+    (:func:`stream_hops`), and this function used to measure the
+    straight path underneath it and stop there. A plate half a unit
+    clear of the run was therefore free to take a bite out of the arc
+    over it, and did: ``S-934``'s number cut ``S-939``'s hop in two on
+    ``21_alumina_refinery``, on ``main`` and at every setting of
+    ``fs.stream_labels.enclosure``. That is the worst mark on the sheet
+    to break, since a hop exists only to say *these two lines cross and
+    are not joined* and half a hop says they are joined. ``direction``
+    is :meth:`SvgRenderer.render`'s ``jump_direction`` and is what
+    settles which of the two runs draws the arc; it is required rather
+    than defaulted, because a pass that guesses it dodges the arcs of a
+    drawing nobody asked for.
     """
     from pandid.layout.attach import stream_path
 
@@ -639,6 +655,21 @@ def _ink(fs) -> "list[_Ink]":
     for _u, tap, centre in tap_lines(fs):
         # A tap is §5.3.1 c) too, and stands off by the same rule.
         add(tap, centre, _ink_pad(LineWeight.DETAIL), "tap")
+    # A hop belongs to the run that draws it, and `line` says so: to
+    # every *other* label on the sheet it is somebody else's ink, which
+    # is the whole of the fix. `axis`/`at` name the run it stands on and
+    # not the offset arc, so a label reading its own run's length
+    # (`_along`) counts the hop as part of that run, which it is.
+    # `kind` is its own word so a reader can tell one from a straight
+    # length; `_erases` scores it with the pipes, which is where a
+    # broken one belongs. Padded off the hopping run's own rung, the
+    # same way its straight length is: the arc is drawn at that weight.
+    for hop in stream_hops(fs, direction):
+        run = fs.streams[hop.stream]
+        pad = _ink_pad(_stream_rung(run.kind in _SIGNAL_KINDS))
+        x0, y0, x1, y1 = hop_box(hop, pad)
+        out.append(_Ink(x0, y0, x1, y1, "v" if hop.vertical else "h",
+                        hop.x if hop.vertical else hop.y, "hop", hop.line))
     return out
 
 
@@ -776,7 +807,8 @@ def _step_aside(item, room: float, ink=(), others=()):
     return best
 
 
-def _label_anchors(cx: float, cy: float, span: float, hw: float, hh: float, vertical: bool):
+def _label_anchors(cx: float, cy: float, span: float, hw: float, hh: float,
+                   vertical: bool, on_run: bool, plate: float):
     """Where an ``hw`` x ``hh`` label may go on a run, best first.
 
     Yields ``(x, y, off)``: the anchor, and the perpendicular stand-off
@@ -797,10 +829,39 @@ def _label_anchors(cx: float, cy: float, span: float, hw: float, hh: float, vert
     Beside it, it erases nothing, so it may slide until its near edge
     reaches the run's end -- far enough to get out from under a symbol
     the run butts into, and no further.
+
+    ``on_run`` is the label that may not leave its line at all, which is
+    what an enclosure asks for (#480). Both of the rules above are then
+    suspended: the run's clear length no longer decides whether the
+    label may sit on it, and the bands beside it are never offered. A
+    diamond's whole grammar is *the run passes through me*, so one
+    written beside the line, or out on a leader, is a symbol a reader
+    cannot identify -- while one that will not fit is merely crowded,
+    and crowding is the author's to fix by spacing the sheet. The slide
+    that is left is what lets the search still dodge; where even that is
+    spent, :data:`_slide` yields the centre alone and the label stays
+    there.
+
+    ``plate`` is how much of the label *along the run* is opaque, where
+    that is less than the whole of it: the words inside an enclosure,
+    the enclosure itself being an outline the run is seen straight
+    through (:func:`_enclosure_svg`). The slide is bounded by it rather
+    than by ``hw``, and that is one rule and not two -- what has to keep
+    clear line at each end is the paper the label paints, because that
+    is the only part of it a reader could take for the end of the run.
+    Bounding the slide by the shape instead leaves every label whose
+    shape outruns its segment -- 70 of the 286 on the shipped corpus at
+    ``"diamond"`` -- with no slide at all, pinned to the middle of the
+    segment whatever happens to cross there, which is where four of the
+    corpus's thirteen covered plates this branch started with came
+    from.
     """
-    if span >= hw + 2 * _LABEL_CLEAR:
-        for x, y in _slide(cx, cy, (span - hw) / 2 - _LABEL_CLEAR, vertical):
+    room = (span - plate) / 2 - _LABEL_CLEAR
+    if on_run or span >= hw + 2 * _LABEL_CLEAR:
+        for x, y in _slide(cx, cy, room, vertical):
             yield x, y, 0.0
+    if on_run:
+        return
     for out in range(_LABEL_BANDS):
         off = hh / 2 + _LABEL_GAP + out * hh
         for side in (-1.0, 1.0):
@@ -1119,11 +1180,309 @@ def stream_polyline(s) -> "list[tuple[float, float]]":
     return simplified
 
 
+class _Hop(NamedTuple):
+    """One line jump: the crossing it stands over, and who draws it.
+
+    ``x``/``y`` is the point on the **hopping** run the semicircle is
+    centred on, ``vertical`` says that run is the vertical one, and
+    ``side`` is which way the arc leaves it -- ``+1`` towards greater
+    x (or y), ``-1`` the other way. ``stream``/``seg`` index the run and
+    the segment of :func:`stream_polyline` carrying it, which is what
+    lets the renderer take one segment's hops in the order it draws
+    them.
+
+    ``line`` is the hopping run's number, and it is the field the
+    label search turns on: a hop is drawn as part of *that* run, so to
+    every other label on the sheet it is somebody else's ink.
+    """
+    x: float
+    y: float
+    vertical: bool
+    side: float
+    stream: int
+    seg: int
+    line: str
+
+
+def stream_hops(fs, direction: str) -> "list[_Hop]":
+    """Every line jump the sheet draws, in the order it draws them.
+
+    Lifted out of :meth:`SvgRenderer._draw_streams` for the reason
+    :func:`stream_polyline` was, and for a second reason that cost the
+    drawing a run: the hop is the one piece of a line whose geometry is
+    **not** in the route. :func:`_ink` measured the straight path and
+    nothing else, so a plate could sit clear of the run by half a
+    millimetre and still take a bite out of the arc standing over it --
+    which is what happened to ``S-939``'s hop under ``S-934``'s number
+    on ``21_alumina_refinery``, on ``main`` and at every setting of
+    ``fs.stream_labels.enclosure``. A hop is the worst thing on the
+    sheet to erase: it exists solely to say *these two lines cross and
+    are not joined*, and cut in half it says the opposite. So the
+    derivation is one function, and the pass that draws it and the pass
+    that dodges it read the same answer.
+
+    **Which run hops** is ``direction``: a vertical segment crossing a
+    horizontal one hops it, or the other way round under
+    ``"horizontal"``. Strictly inside both, so a run that merely ends on
+    another is a junction and is not hopped, and strictly far enough
+    inside the hopping segment for the arc's two feet
+    (:data:`HOP_R`) to land on it.
+
+    **Any other spelling is refused, and used not to be.** This read
+    ``direction`` the way the drawing pass used to read it, against the
+    two names it knows and no others, so ``jump_direction="vertcial"``
+    hopped nothing and drew every crossing flat -- a drawing that says
+    two lines meet where they cross, which is the same lie a severed hop
+    tells, told the other way round. There is no third value to mean
+    "no hops": :meth:`SvgRenderer.render` documents two, and a sheet
+    that wants none is a sheet with no crossings on it.
+
+    The refusal is :func:`check_jump_direction`'s sentence and not a
+    second one: #492 gave the parameter a closed set and a message, and
+    a value checked against two spellings of one set is how a set stops
+    being closed. What is here is the **second door**. #492 refuses at
+    :meth:`~pandid.flowsheet.Flowsheet._prepare_to_draw`, before the
+    sheet is touched, which is where an author's typo should be caught;
+    this catches the caller who reaches the geometry without going
+    through a flowsheet at all, which is the argument
+    :func:`enclosure_shape` makes for its own re-check. Neither replaces
+    the other, and the read site is the one that makes it impossible to
+    *use* the value without having checked it.
+
+    **Which way it bulges** follows from the direction of travel and
+    SVG's sweep flag, which is always ``1``: on a screen whose y runs
+    down, that is clockwise, so a run drawn downwards bulges right and
+    one drawn upwards bulges left; a run drawn rightwards bulges up and
+    one drawn leftwards bulges down. The arc is a semicircle, so the
+    side is the whole of the difference between the paper it covers and
+    the paper beside it.
+    """
+    check_jump_direction(direction)
+    geoms = [(s, stream_polyline(s)) for s in fs.streams]
+    horizontals: list[tuple[float, float, float]] = []
+    verticals: list[tuple[float, float, float]] = []
+    for _s, points in geoms:
+        for (x1, y1), (x2, y2) in zip(points, points[1:]):
+            if y1 == y2:
+                horizontals.append((min(x1, x2), max(x1, x2), y1))
+            elif x1 == x2:
+                verticals.append((x1, min(y1, y2), max(y1, y2)))
+
+    out: list[_Hop] = []
+    for n, (s, points) in enumerate(geoms):
+        name = s.name or ""
+        for i, ((x1, y1), (x2, y2)) in enumerate(zip(points, points[1:])):
+            if direction == "vertical" and x1 == x2:
+                cuts = sorted((hy for mnx, mxx, hy in horizontals
+                               if mnx < x1 < mxx
+                               and min(y1, y2) + HOP_R < hy < max(y1, y2) - HOP_R),
+                              reverse=y1 > y2)
+                side = 1.0 if y1 < y2 else -1.0
+                out += [_Hop(x1, hy, True, side, n, i, name) for hy in cuts]
+            elif direction == "horizontal" and y1 == y2:
+                cuts = sorted((vx for vx, my, my2 in verticals
+                               if my < y1 < my2
+                               and min(x1, x2) + HOP_R < vx < max(x1, x2) - HOP_R),
+                              reverse=x1 > x2)
+                side = -1.0 if x1 < x2 else 1.0
+                out += [_Hop(vx, y1, False, side, n, i, name) for vx in cuts]
+    return out
+
+
+def hop_box(hop: _Hop, pad: float) -> "tuple[float, float, float, float]":
+    """The paper a hop's arc covers, as a rectangle, padded like a line.
+
+    The bounding box of the *semicircle* and not of the whole disc: the
+    arc leaves the run on one side only, and the other side is paper a
+    label may still use. Deliberately the box and not the half-disc,
+    which over-states two corners of about 10,7 square units between
+    them -- every other consumer of :class:`_Ink` compares rectangles,
+    and the way for this to err is towards reserving paper that is
+    clear rather than towards painting over paper that is not.
+    """
+    if hop.vertical:
+        lo, hi = sorted((hop.x, hop.x + hop.side * HOP_R))
+        return (lo - pad, hop.y - HOP_R - pad, hi + pad, hop.y + HOP_R + pad)
+    lo, hi = sorted((hop.y, hop.y + hop.side * HOP_R))
+    return (hop.x - HOP_R - pad, lo - pad, hop.x + HOP_R + pad, hi + pad)
+
+
 #: The size a line number is lettered at, and the halo it is written on:
 #: the string's estimated width plus a gutter, by a fixed depth. Held at
 #: module scope because the exporter sizes the same label with them.
 NUMBER_TYPE = 10
 _HALO_CHAR, _HALO_PAD, _HALO_DEEP = 6.2, 6.0, 13.0
+
+#: The paper a **box** enclosure leaves outside the halo it is ruled
+#: around, on each of the four sides. The other two shapes need none: a
+#: rule that slopes or curves away from the words is already clear of
+#: them everywhere except the two points it touches, and those two
+#: points are the halo's corners, which :data:`_HALO_CHAR` over-measures
+#: into blank paper anyway (see :func:`_leader`). A rule *parallel* to
+#: the words at the halo's own edge is the one case with nothing
+#: between, so the box buys the gutter the geometry gives the others.
+_ENCLOSURE_PAD = 4.0
+
+#: The weight a stream label's enclosure is ruled at.
+#:
+#: :attr:`~.weights.LineWeight.DETAIL`, and the reason is not that the
+#: balloons happen to be drawn there. The diamond an interlock balloon
+#: draws is a graphical symbol, ISO 10628-1 §5.3.1 c), and answers to
+#: that clause; a shape around a stream number stands for nothing in the
+#: plant at all. It is part of the *annotation*, like the leader beside
+#: it, and ISO 15519-1 §6.4 hands a leader to ISO 128-22 where it is a
+#: narrow line -- which is the rung this file spells ``DETAIL``. The two
+#: arriving at one number is a coincidence, so the one carrying the
+#: reason is written here. A quarter of the weight of a main flow line
+#: either way, which is the part a reader sees: an enclosure heavier
+#: than the run it sits on would read as plant.
+_ENCLOSURE_STROKE = LineWeight.DETAIL.width
+
+
+def enclosure_shape(fs) -> str:
+    """The shape ruled around every stream label on *fs*.
+
+    Read off the flowsheet rather than passed down from the renderer, so
+    the two backends cannot be handed different answers.
+
+    Re-checked here, though
+    :meth:`~pandid.flowsheet.Flowsheet._prepare_to_draw` has already
+    refused a name outside the set before a thing was touched: this is
+    the guard for the caller who reaches a renderer without going
+    through a flowsheet at all, and it is deliberately not the first
+    line of defence. It used to be the only one, and a render that
+    raised from here had already numbered the streams, laid out the
+    sheet and routed it.
+    """
+    from pandid.document import _resolve_enclosure
+
+    return _resolve_enclosure(fs.stream_labels.enclosure)
+
+
+def enclosure_box(shape: str, hw: float, hh: float) -> "tuple[float, float]":
+    """How big an enclosure has to be to hold an ``hw`` x ``hh`` halo.
+
+    Returned as the enclosure's own bounding box, measured along the
+    words by across them; a label on a vertical run turns the pair over
+    with everything else about it.
+
+    The diamond and the circle are the **smallest of their kind
+    containing the rectangle**, so neither is a size somebody had to
+    choose. The box is not, and cannot be: the smallest rectangle
+    containing a rectangle is that rectangle, and a rule drawn on the
+    plate's own edge is a rule through the words -- the plate is what
+    :data:`_HALO_CHAR` and :data:`_HALO_DEEP` measure the *glyphs*
+    into, with no paper left over on the long sides. So the box is the
+    one shape here carrying a chosen number, :data:`_ENCLOSURE_PAD`,
+    and that constant is where the choice is argued.
+
+    * ``diamond`` -- the minimum-area rhombus around a rectangle has
+      each half-diagonal at twice the half-side it answers to (put the
+      corner on the side, ``p/a + q/b = 1``, and the area ``2ab`` is
+      least at ``a = 2p``, ``b = 2q``), so the box simply doubles. Then
+      held to at least as wide as it is deep: a one-character number
+      would otherwise get a rhombus standing on end, which is a shape a
+      reader stops at and no drawing office rules.
+    * ``circle`` -- the circumscribed circle, diameter the halo's
+      diagonal. Much the tightest of the three on a long label, since it
+      pays for the corners once rather than twice. It is also what an
+      ISA balloon is drawn as, which is why it is not the default and
+      why :class:`~pandid.document.StreamLabelOptions` says so for a
+      sheet carrying instruments.
+    * ``box`` -- the halo plus :data:`_ENCLOSURE_PAD`.
+    """
+    if shape == "diamond":
+        return max(2 * hw, 2 * hh), 2 * hh
+    if shape == "circle":
+        d = math.hypot(hw, hh)
+        return d, d
+    if shape == "box":
+        return hw + 2 * _ENCLOSURE_PAD, hh + 2 * _ENCLOSURE_PAD
+    return hw, hh
+
+
+def _enclosure_svg(shape: str, box, words, color: str) -> list[str]:
+    """The plate a stream label is written on, and the shape ruled
+    around it: *words* is the plate and *box* the shape, and *words* is
+    ``None`` where the label lays down no plate at all.
+
+    **The shape fills nothing, and the plate inside it erases nothing
+    but the label's own run.** Those are the two halves of one rule, and
+    together they are what lets an enclosure cost the drawing no ink
+    that is not its own.
+
+    A shape filled white is an opaque plate the size of a diamond, and a
+    diamond is large -- twice the words in each direction -- so over the
+    twenty-one shipped sheets, at the placement this file draws today,
+    one would erase **1154 square units of drawn ink in 26 places**.
+    Measured off the rendered document, by sampling each shape against
+    the stroke every other run actually lays down: an area taken off
+    :func:`_ink` instead is reservation area, the stroke padded by a
+    whole stroke width, and this file of all files may not offer one for
+    the other -- its own finding was that ``_ink`` is not the drawing.
+    **Clipping a unit and deleting a line are not the same damage.** A block crowded by a diamond is a crowded drawing, and
+    #480 decided the author spaces the sheet; a pipe with a bite out of
+    it is a *wrong* drawing, and it says two things that are not true --
+    that the line ends there, and that the gap is blank paper. An enclosed label may no longer step off what it
+    covers (:func:`_label_anchors`, ``on_run``), so the fill is what had
+    to give.
+
+    Unfilling the shape is not the whole answer, and taking it for the
+    whole answer is the defect this docstring used to carry. The plate
+    under the words is opaque too, and pinning the label to its run laid
+    **thirteen** of the 286 plates across a crossing pipe -- thirteen
+    13-unit breaks in lines this drawing says are continuous -- where
+    the same corpus lettered bare breaks none at all. So the plate is
+    placed to cover nothing but the run it names
+    (:func:`stream_numbers`), and where the run offers no such place it
+    is **not drawn**: *words* arrives here ``None``, the number is
+    written straight onto the sheet, and the line crossing it is drawn
+    through it in full. Nine of the 286 land there on this corpus, and
+    :func:`label_findings` names each one. A number a passing run
+    has to be read across is harder to read; a run with a piece missing
+    is not there. Foreign ink erased, at each of the four settings:
+    **none** -- and measured off the rendered document rather than off
+    :func:`_ink`, which is the only measurement that can catch
+    :func:`_ink` being wrong, and did.
+
+    The fill is then the one thing a drawing office does that this does
+    not. A white-filled diamond hiding its own run is what they rule,
+    and it cannot be ruled here without deleting the neighbour's: the
+    fill would have to be clipped to the label's own ink, ``<clipPath>``
+    is the only exact way to say that in SVG, and
+    :mod:`pandid.render.export` refuses one outright rather than drop it
+    silently from the PDF and the PNG. What carries the convention
+    without it is that the run is seen to pass *through* the shape
+    rather than to stop inside it, which is the grammar the whole
+    decision rests on.
+
+    ``"none"`` is the plate alone, to the byte it always was.
+    """
+    plate = []
+    if words is not None:
+        a0, b0, a1, b1 = words
+        plate = [f'    <rect x="{a0:.1f}" y="{b0:.1f}" '
+                 f'width="{a1 - a0:.1f}" height="{b1 - b0:.1f}" fill="white" />']
+    if shape == "none":
+        return plate
+    x0, y0, x1, y1 = box
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    pen = f'fill="none" stroke="{color}" stroke-width="{_ENCLOSURE_STROKE:g}"'
+    if shape == "diamond":
+        points = (f"{cx:.1f},{y0:.1f} {x1:.1f},{cy:.1f} "
+                  f"{cx:.1f},{y1:.1f} {x0:.1f},{cy:.1f}")
+        outline = f'    <polygon points="{points}" {pen} />'
+    elif shape == "circle":
+        outline = (f'    <circle cx="{cx:.1f}" cy="{cy:.1f}" '
+                   f'r="{(x1 - x0) / 2:.1f}" {pen} />')
+    else:
+        outline = (f'    <rect x="{x0:.1f}" y="{y0:.1f}" '
+                   f'width="{x1 - x0:.1f}" height="{y1 - y0:.1f}" {pen} />')
+    # The outline first and the plate over it, so a rule that grazes the
+    # words is buried by them rather than drawn across them -- which is
+    # only ever the box, whose gutter is _ENCLOSURE_PAD, but it costs
+    # nothing to be true of all three.
+    return [outline, *plate]
 
 
 class StreamNumber(NamedTuple):
@@ -1132,10 +1491,26 @@ class StreamNumber(NamedTuple):
     ``seg`` is the segment of the run the number names -- its longest,
     the piece with the most line to attach a caption to. ``x``/``y`` is
     the point the string is *centred* on, ``vertical`` says it is turned
-    a quarter to read bottom to top, ``box`` is the opaque halo it is
-    written on, and ``leader`` is the pair of points a leader runs
-    between where the search found no paper alongside the run (``None``
-    where it did).
+    a quarter to read bottom to top, ``box`` is the shape it is written
+    in -- the opaque halo where the sheet rules none -- and ``leader``
+    is the pair of points a leader runs between where the search found
+    no paper alongside the run (``None`` where it did).
+
+    ``words`` is the opaque plate the string itself is written on, and
+    is the *only* white a label lays down: it equals ``box`` where
+    nothing is ruled, and is the smaller rectangle inside it where
+    something is. It is ``None`` where the label lays down no plate at
+    all -- the case where every place its run offered would have painted
+    out somebody else's line, and a crowded number was the cheaper of
+    the two. See :func:`_enclosure_svg`.
+
+    ``crossed`` names the runs the number is written across when that
+    happened, and is empty otherwise. It is settled here rather than
+    worked out again from the geometry, because here is the only place
+    that holds both the plate the label wanted and the ink that took it
+    away -- and because the rectangle it was measured against is not
+    ``box`` once a shape is ruled around it, so a later reader of
+    ``box`` alone would name lines the *number* never touched.
     """
     name: str
     color: str
@@ -1145,10 +1520,12 @@ class StreamNumber(NamedTuple):
     vertical: bool
     box: tuple
     leader: "tuple | None"
+    words: "tuple | None"
+    crossed: "tuple[str, ...]"
 
 
-def stream_numbers(fs, placed: list,
-                   joints: "str | None" = None) -> "list[StreamNumber]":
+def stream_numbers(fs, placed: list, joints: "str | None",
+                   direction: str) -> "list[StreamNumber]":
     """Where every line number on the sheet goes.
 
     Lifted out of :meth:`SvgRenderer._draw_streams` for the reason
@@ -1175,7 +1552,7 @@ def stream_numbers(fs, placed: list,
     """
     from pandid.portgeom import unit_box
 
-    ink = _ink(fs)
+    ink = _ink(fs, direction)
     symbols: list[tuple[float, float, float, float]] = [
         _obstacle(unit_box(u, u.frame)) for u in fs.units if u.frame is not None
     ]
@@ -1191,7 +1568,8 @@ def stream_numbers(fs, placed: list,
     # A letter code written outside a balloon is a mark on the sheet the
     # same way: it is placed before either label pass runs (see
     # :func:`quadrant_labels`), so both can be told where it went.
-    symbols += [b for b in map(_unit_label_box, quadrant_labels(fs)) if b is not None]
+    symbols += [b for b in map(_unit_label_box, quadrant_labels(fs, direction))
+                if b is not None]
 
     # A number names a *run*, and a run survives the valves and fittings
     # in it: renumber_streams() gives every segment the same name and
@@ -1223,16 +1601,42 @@ def stream_numbers(fs, placed: list,
         ) else 0.0
         label_items.append((longest_seg, s.name, s.color or "black", keep))
 
+    # An enclosure is ruled at **one size for the whole sheet**: measured
+    # over the longest label on it, and given to every label, so a sheet
+    # carrying 1 and 1002 draws one diamond seven times rather than two
+    # diamonds. Sizing each to its own text is the alternative and it
+    # comes out worse than it sounds -- on the mixed sheet #480 asked
+    # for, per-label rules 26 units of diamond around `1` and 61,6
+    # around `1002`, alternating down one process -- because a row of
+    # shapes that vary reads as a drawing where the shape *means*
+    # something. Same answer and the same argument as the stream table's
+    # columns (#477), and the same cost: every label is paid for at the
+    # width of the longest.
+    #
+    # The words' plate is the exception and stays per-label, because it
+    # is not a shape a reader compares -- it is paper, and invisible --
+    # and it is the only white a label lays down, so widening it to the
+    # longest name would rub out a run's worth of pipe on either side of
+    # every short one for nothing at all.
+    shape = enclosure_shape(fs)
+    widest = max((len(name) * _HALO_CHAR + _HALO_PAD
+                  for _s, name, _c, _k in label_items), default=0.0)
+    uniform = enclosure_box(shape, widest, _HALO_DEEP)
+
     out: list[StreamNumber] = []
     for seg, name, color, keep in label_items:
         (sx1, sy1), (sx2, sy2) = seg
-        hw, hh = len(name) * _HALO_CHAR + _HALO_PAD, _HALO_DEEP
+        # What the words occupy, and what is reserved for them. One box
+        # with no enclosure; with one, the second contains the first.
+        tw, th = len(name) * _HALO_CHAR + _HALO_PAD, _HALO_DEEP
+        hw, hh = (tw, th) if shape == "none" else uniform
         cx, cy = (sx1 + sx2) / 2, (sy1 + sy2) / 2
         vertical = abs(sx2 - sx1) < abs(sy2 - sy1)
         span = abs(sy2 - sy1) if vertical else abs(sx2 - sx1)
         # Turned to follow the run, the halo measures hw along it, hh
         # across.
         bw, bh = (hh, hw) if vertical else (hw, hh)
+        lw, lh = (th, tw) if vertical else (tw, th)
 
         # Everything the anchors below can reach: along the run as far
         # as _label_anchors will slide the label, and across it to the
@@ -1263,6 +1667,16 @@ def stream_numbers(fs, placed: list,
         occupied += [line.box for line in ink
                      if not (line.axis == axis and abs(line.at - at) < 0.5)
                      and _meets(line.box, window)]
+        # Somebody else's line, which is the ink the label's own plate
+        # may not be laid over at any price. By **name** and not by the
+        # axis test above it: that one asks whether a line is collinear
+        # with this segment, which is the question `_along` needs, and
+        # two runs at one height are collinear and are still two runs.
+        # A tap carries no name and so is foreign to every label, which
+        # is what it is -- the one mark saying where a transmitter
+        # measures.
+        foreign = [line for line in ink
+                   if line.line != name and _meets(line.box, window)]
         # A leader is ink like any other and dodges the same things the
         # halo does, symbols included, so it is scored against the lot.
         everything = near_symbols + occupied
@@ -1280,19 +1694,38 @@ def stream_numbers(fs, placed: list,
         # and the leader's own crossings are the last part of the score.
         # A clear spot alongside the run still wins outright, scoring
         # all zeros with the anchors generated near-first.
-        clear = (0, 0, 0)
+        clear = (0, 0, 0, 0)
         spot: "tuple[float, float] | None" = None
-        damage: "tuple[int, int, int] | None" = None
+        damage: "tuple[int, int, int, int] | None" = None
         leader: "tuple | None" = None
-        for ux, uy, _off in _label_anchors(cx, cy, span, hw, hh, vertical):
+        for ux, uy, _off in _label_anchors(cx, cy, span, hw, hh, vertical,
+                                           shape != "none", tw):
             box = (ux - bw / 2, uy - bh / 2, ux + bw / 2, uy + bh / 2)
-            hits = _covering(box, occupied, near_symbols,
-                             None if damage is None else damage[:2])
-            if damage is not None and hits > damage[:2]:
+            paper = (box if shape == "none" else
+                     (ux - lw / 2, uy - lh / 2, ux + lw / 2, uy + lh / 2))
+            # **First, and ahead of everything else the search weighs.**
+            # The plate is the only white a label lays down, so this is
+            # the only term that can *delete* a line rather than crowd
+            # it, and a drawing that shows a connected pipe as broken is
+            # wrong where a crowded one is merely hard to read. Nothing
+            # further down this tuple may buy a spot that erases one.
+            erased = sum(1 for line in foreign if _meets(paper, line.box))
+            limit = None
+            if damage is not None:
+                if erased > damage[0]:
+                    continue
+                limit = damage[1:3] if erased == damage[0] else None
+            hits = _covering(box, occupied, near_symbols, limit)
+            if limit is not None and hits > limit:
                 continue
-            lead, cut = ((None, 0) if _along(box, vertical, run_lo, run_hi)
+            # An enclosed label is on its run by construction, so it
+            # never carries a leader: a leader stands in for adjacency
+            # (:func:`_along`, ISO 15519-1 §7.2.5) and there is nothing
+            # to stand in for when the line goes through the shape.
+            lead, cut = ((None, 0)
+                         if shape != "none" or _along(box, vertical, run_lo, run_hi)
                          else _leader(box, seg, everything, keep))
-            cost = (*hits, cut)
+            cost = (erased, *hits, cut)
             if damage is None or cost < damage:
                 spot, damage, leader = (ux, uy), cost, lead
                 if cost == clear:
@@ -1300,9 +1733,30 @@ def stream_numbers(fs, placed: list,
         # `_label_anchors` always offers at least the innermost band
         # either side of the run: the search chooses between anchors, it
         # never fails to find one.
-        assert spot is not None
+        assert spot is not None and damage is not None
         tx, ty = spot
         halo = (tx - bw / 2, ty - bh / 2, tx + bw / 2, ty + bh / 2)
+        # The one opaque plate the label lays down -- the reserved box
+        # itself where nothing is ruled, the words' own smaller
+        # rectangle inside the shape where something is (see
+        # :func:`_enclosure_svg` for why the shape adds no white) --
+        # **and nothing at all where every place the run offered would
+        # have painted out a line that is not this one's.** Erasing a
+        # neighbour's pipe is the one damage the search may not choose,
+        # so where it cannot be dodged it is not paid: the words go
+        # straight onto the sheet, the crossing line is drawn through
+        # them in full, and a reader sees a crowded label rather than a
+        # line that stops for no reason. `label_findings` names every
+        # one, at every setting, and this is where the names come from:
+        # worked out here where the candidate and the ink that beat it
+        # are both in hand, rather than re-derived later from a box
+        # whose size a shape has changed.
+        paper = (halo if shape == "none" else
+                 (tx - lw / 2, ty - lh / 2, tx + lw / 2, ty + lh / 2))
+        words = None if damage[0] else paper
+        crossed = () if words is not None else tuple(sorted(
+            {line.line or "an instrument connection" for line in foreign
+             if _meets(paper, line.box)}))
         placed.append(halo)
         if leader is not None:
             # Seeded as occupied so the next label's halo cannot delete
@@ -1313,7 +1767,226 @@ def stream_numbers(fs, placed: list,
             (ax0, ay0), (ax1, ay1) = leader
             placed.append((min(ax0, ax1), min(ay0, ay1),
                            max(ax0, ax1), max(ay0, ay1)))
-        out.append(StreamNumber(name, color, seg, tx, ty, vertical, halo, leader))
+        out.append(StreamNumber(name, color, seg, tx, ty, vertical, halo,
+                                leader, words, crossed))
+    return out
+
+
+#: The codes the stream-label pass puts on ``fs.warnings``.
+#:
+#: ``label-over-line`` is the one that is **not** about an enclosure and
+#: fires whatever ``fs.stream_labels.enclosure`` says, the default
+#: included, because the rule it reports is unconditional: a label lays
+#: its opaque plate only where it covers nothing but its own run, and
+#: gives the plate up rather than paint out a neighbour's. That is a
+#: change to the drawing, so it is a change the author has to be told
+#: about on the sheet they did not opt into.
+_LABEL_CODES = ("label-over-line", "enclosure-over-unit",
+                "enclosure-over-line", "enclosure-over-label")
+
+
+def _shape_hits(shape: str, box, rect) -> bool:
+    """Does the enclosure *shape* filling *box* meet the rectangle *rect*?
+
+    The shape and not its bounding box, which is the difference between
+    a finding worth acting on and a list the author learns to ignore: a
+    diamond is half the area of the box it is measured in, and all four
+    of the halves it is missing are corners -- exactly where a
+    neighbouring line passes closest without touching.
+
+    Both shapes are symmetric about the enclosure's centre and the
+    rectangle's nearest point to that centre can be taken axis by axis,
+    so ``dx``/``dy`` below is the nearest point of *rect* in the
+    quadrant geometry, and each shape is then one inequality. For the
+    rhombus that is exact because ``|x|/a + |y|/b`` is separable and
+    increasing in each term, so minimising it over a rectangle
+    minimises each coordinate on its own.
+    """
+    if not _meets(box, rect):
+        return False
+    x0, y0, x1, y1 = box
+    if shape == "box":
+        return True
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    a, b = (x1 - x0) / 2, (y1 - y0) / 2
+    dx = max(rect[0] - cx, 0.0, cx - rect[2])
+    dy = max(rect[1] - cy, 0.0, cy - rect[3])
+    if shape == "circle":
+        return math.hypot(dx, dy) <= a
+    return a > 0 and b > 0 and dx / a + dy / b <= 1.0
+
+
+def _shapes_meet(shape: str, box, other) -> bool:
+    """Do the two enclosures of the same *shape* filling *box* and
+    *other* share any area?
+
+    :func:`_shape_hits` answers a shape against a **rectangle**, which
+    is what a symbol and a length of pipe are, and it is exact for one.
+    A second enclosure is not a rectangle, and asking it twice -- each
+    shape against the other's bounding box, both ways round -- is not
+    the same question and gets the wrong answer: two rhombi can each
+    reach into the other's box while neither reaches the other. The
+    corpus draws that pair. Two diamonds 222,8 by 26, centres five units
+    apart across their runs and overlapping 2,81 along them, and over
+    the whole of that overlap the two rhombi between them reach 0,328 --
+    they cannot touch, and both directions of the box test call it a
+    collision. Over the twenty-one sheets at ``"diamond"`` that test
+    names seven crossing pairs where five touch, and bounding box
+    against bounding box names twelve. A list the author is asked to
+    work from earns nothing by being generous, so this settles it
+    exactly. ``tests/test_stream_label_enclosure.py`` keeps that pair of
+    rectangles as literals, and checks every pair on the corpus against
+    a clipped polygon area.
+
+    Each shape is its own answer. Two boxes are two rectangles and
+    :func:`_meets` has already decided. Two circles meet when their
+    centres are closer than the two radii. Two rhombi are convex
+    polygons, so the separating-axis theorem is exact over the edge
+    normals of both: a rhombus of half-diagonals ``a`` by ``b`` has two
+    distinct edge normals, ``(b, a)`` and ``(b, -a)``, and its own
+    extent about its centre along any axis ``u`` is
+    ``max(|a*ux|, |b*uy|)`` -- the four vertices being the only
+    candidates and lying on the axes. Four axes settle any pair.
+    """
+    if not _meets(box, other):
+        return False
+    if shape == "box":
+        return True
+    ax, ay = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
+    bx, by = (other[0] + other[2]) / 2, (other[1] + other[3]) / 2
+    a1, b1 = (box[2] - box[0]) / 2, (box[3] - box[1]) / 2
+    a2, b2 = (other[2] - other[0]) / 2, (other[3] - other[1]) / 2
+    dx, dy = bx - ax, by - ay
+    if shape == "circle":
+        return math.hypot(dx, dy) < a1 + a2
+    for ux, uy in ((b1, a1), (b1, -a1), (b2, a2), (b2, -a2)):
+        reach = max(abs(a1 * ux), abs(b1 * uy)) + max(abs(a2 * ux), abs(b2 * uy))
+        if abs(dx * ux + dy * uy) >= reach:
+            return False
+    return True
+
+
+def label_findings(fs, shape: str, numbers: "list[StreamNumber]",
+                   direction: str) -> "list[Issue]":
+    """What the stream labels on this sheet have been drawn over.
+
+    An enclosed label may not leave its run (#480), so where the shape
+    is bigger than the paper beside the line the sheet draws it there
+    anyway and something ends up underneath. **That is the decision, and
+    this is the list it owes the author**: spacing the plant is a
+    drafting choice and belongs to the drafter, but they cannot make it
+    from a sheet they have to scan diamond by diamond.
+
+    Three codes, because the three are not the same news:
+
+    * ``enclosure-over-unit`` -- the shape crosses a symbol's box. This
+      is the case the decision accepted outright, and the finding is a
+      cue and not a complaint: the drawing is crowded and complete.
+    * ``enclosure-over-line`` -- the shape crosses ink belonging to some
+      other run. Worse to read, because a shape whose grammar is *the
+      run passes through me* now has two runs through it.
+    * ``enclosure-over-label`` -- two enclosures cross each other,
+      which on the shipped corpus is five pairs out of 286 diamonds.
+      Reported once per pair, from the second of the two: the first was
+      seeded as occupied before the second was placed
+      (:func:`stream_numbers`), so the search preferred every clear
+      alternative it had and this is what was left. Settled by
+      :func:`_shapes_meet`, which is exact: this used to ask the
+      shape-against-rectangle test both ways round, which names seven
+      pairs here and is wrong about two of them.
+
+    **All three are warnings, and that is a consequence of what the
+    drawing does rather than a judgement about crowding.** A sheet that
+    shows a connected pipe as broken is a wrong drawing, and a render
+    that emits one should refuse rather than warn about it. Nothing
+    here emits one: the shape is an outline, and the plate under the
+    number is laid only where it covers nothing but the run it names
+    (:func:`_enclosure_svg`). What is left over is a crowded drawing
+    the author can read, and crowding is what #480 handed to the
+    drafter. Give the shape a fill, or let the plate cover a foreign
+    run again, and this severity has to rise with it.
+
+    Where the plate had to be dropped -- nine labels of the 286 on the
+    corpus with a shape ruled, the runs too short to hold it clear
+    anywhere -- ``label-over-line`` says so, and says which runs the
+    number is written across. It is a separate code from
+    ``enclosure-over-line`` because it is a separate fact: one is a
+    shape with two runs through it, the other is a *number* with a run
+    through it, and a reader who has to space the sheet needs to know
+    which they have.
+
+    ``label-over-line`` is the fourth, and it is the one that has
+    nothing to do with enclosures: it fires **at every setting**, the
+    default included. A label gives its plate up rather than paint out a
+    run that is not its own, and that rule is not conditional on the
+    option -- so neither is the finding, or the sheet nobody opted into
+    would quietly drop a plate and say nothing. Bare labels reach it
+    only on a crowded sheet, since a bare label may still step off what
+    it would cover and on the shipped corpus always finds paper; the
+    twenty-seven-stream fixture in
+    ``tests/test_stream_label_enclosure.py`` is what a sheet with no
+    clear paper in any of the fourteen bands beside a run looks like.
+
+    The other three are silent at ``"none"`` for the reason they are
+    named after: there is no enclosure to have been drawn over
+    anything.
+    """
+    from pandid.portgeom import unit_box
+
+    out: list[Issue] = []
+    for number in numbers:
+        if number.crossed:
+            out.append(Issue(
+                "warning", "label-over-line",
+                f"{number.name}'s number is written across "
+                f"{', '.join(number.crossed)}. Nowhere along its run could "
+                f"the plate the number is written on go without painting out "
+                f"a line that is not {number.name}, so no plate is drawn and "
+                f"the crossing run is drawn through the number instead of "
+                f"being rubbed out under it. Space the sheet, or route "
+                f"{number.name} clear with via()"))
+    if shape == "none":
+        return out
+    ink = _ink(fs, direction)
+    for i, number in enumerate(numbers):
+        units = sorted({u.name for u in fs.units if u.frame is not None
+                        and _shape_hits(shape, number.box, unit_box(u, u.frame))})
+        lines = sorted({line.line or "an instrument connection" for line in ink
+                        if line.line != number.name
+                        and _shape_hits(shape, number.box, line.box)})
+        if units:
+            out.append(Issue(
+                "warning", "enclosure-over-unit",
+                f"{number.name}'s {shape} is drawn over {', '.join(units)}. An "
+                f"enclosed label stays on its run, so the shape goes where the "
+                f"line goes; space the sheet to clear it, or set "
+                f"fs.stream_labels.enclosure = 'circle', which is the tightest "
+                f"of the three on a long label"))
+        if lines:
+            # About the *shape* only. Whether the number inside it is
+            # crossed too is `label-over-line`'s to say, and saying it
+            # in both would be one fact wearing two codes -- which is
+            # how a list the author works from stops being read.
+            out.append(Issue(
+                "warning", "enclosure-over-line",
+                f"{number.name}'s {shape} is drawn over {', '.join(lines)}, so "
+                f"more than one run passes through one shape. Every line is "
+                f"still drawn -- the shape is an outline and fills nothing -- "
+                f"but the reader has to tell them apart. Space the sheet, or "
+                f"route {number.name} clear with via()"))
+        # Against the labels already placed only, so a crossing pair is
+        # one finding rather than two saying the same thing twice.
+        # Shape against shape, exactly: see :func:`_shapes_meet` for
+        # what asking it as two box questions got wrong.
+        pairs = sorted({other.name for other in numbers[:i]
+                        if _shapes_meet(shape, number.box, other.box)})
+        if pairs:
+            out.append(Issue(
+                "warning", "enclosure-over-label",
+                f"{number.name}'s {shape} crosses {', '.join(pairs)}'s. Two "
+                f"outlines over one another read as a shape that is neither; "
+                f"both labels are on their own runs and neither may leave, so "
+                f"space the runs apart"))
     return out
 
 
@@ -3256,6 +3929,11 @@ class SvgRenderer:
         furniture: list[str] = []
         free = None  # region a fixed sheet leaves for the drawing
         fit_issues: list[Issue] = []
+        # What the *drawing* found, as against what the furniture did.
+        # A separate list because it is filled much later -- the label
+        # passes run after the sheet has been sized -- and because only
+        # this one knows where a stream label ended up.
+        self._findings: list[Issue] = []
 
         def report(field: str, text: str, drawn: str,
                    room: float, need: float) -> None:
@@ -3301,7 +3979,8 @@ class SvgRenderer:
         # the validator cannot know it (:func:`unmarked_crossings`).
         render_issues = fit_issues + _crossing_issues(fs, jump_direction)
         fs.warnings = [w for w in fs.warnings
-                       if getattr(w, "code", "") not in _RENDER_CODES] + render_issues
+                       if getattr(w, "code", "") not in _RENDER_CODES
+                       and getattr(w, "code", "") not in _LABEL_CODES] + render_issues
 
         # 4. SVG document. Furniture (border + title strip + boxes) sits
         #    behind the diagram.
@@ -3314,11 +3993,11 @@ class SvgRenderer:
         # the first point where the answer exists: the routes are
         # settled and the balloons have stopped moving, so the impulse
         # lines are settled with them. See :func:`_ink`.
-        ink = _ink(fs)
+        ink = _ink(fs, jump_direction)
         # The letter codes written outside the balloons, placed before
         # anything that has to dodge them; see :func:`quadrant_labels`.
         # Drawn with the equipment tags at the end, on the same halo.
-        quadrants = quadrant_labels(fs)
+        quadrants = quadrant_labels(fs, jump_direction)
         drawing: list[str] = []
         # Every opaque white plate the sheet lays down, collected only
         # when the overlay is going to be drawn. The overlay is emitted
@@ -3345,6 +4024,11 @@ class SvgRenderer:
         # through them, and the quadrant codes with them: a code is
         # lettering outside a symbol and wants the same halo.
         drawing.extend(self._draw_unit_labels(unit_labels + quadrants))
+        # The label passes have run, so what a stream label's enclosure
+        # was drawn over is now known; the furniture's findings were
+        # already added above, and the stale ones of both kinds dropped
+        # with them.
+        fs.warnings = fs.warnings + self._findings
 
         # Placed last and drawn first. The overlay must sit *under*
         # every piece of the sheet's own ink -- it is scaffolding and
@@ -4213,20 +4897,17 @@ class SvgRenderer:
         cannot be given different answers by being given different
         seeds.
         """
-        stream_geoms, horizontals, verticals = [], [], []
-        for s in fs.streams:
-            points = stream_polyline(s)
-            stream_geoms.append((s, points))
-            for i in range(len(points) - 1):
-                x1, y1 = points[i]
-                x2, y2 = points[i + 1]
-                if y1 == y2:
-                    horizontals.append((min(x1, x2), max(x1, x2), y1))
-                elif x1 == x2:
-                    verticals.append((x1, min(y1, y2), max(y1, y2)))
+        stream_geoms = [(s, stream_polyline(s)) for s in fs.streams]
+        # Which run hops what, worked out once for the whole sheet and
+        # read here rather than here and again in :func:`_ink`. Keyed by
+        # the segment that carries it, already in the order that segment
+        # is drawn in. See :func:`stream_hops`.
+        hops: dict[tuple[int, int], list[_Hop]] = {}
+        for hop in stream_hops(fs, jump_direction):
+            hops.setdefault((hop.stream, hop.seg), []).append(hop)
 
         lines = ['  <g id="streams">']
-        for s, points in stream_geoms:
+        for n, (s, points) in enumerate(stream_geoms):
             paint = s.color or "black"
             # The same call ``_defs`` defines the marker under: one
             # function, so the reference and the definition are one
@@ -4249,30 +4930,25 @@ class SvgRenderer:
             for i in range(len(points) - 1):
                 x1, y1 = points[i]
                 x2, y2 = points[i + 1]
-                if jump_direction == "vertical" and x1 == x2:
-                    crossings = [hy for mnx, mxx, hy in horizontals
-                                 if mnx < x1 < mxx
-                                 and min(y1, y2) + HOP_R < hy < max(y1, y2) - HOP_R]
-                    crossings.sort(reverse=(y1 > y2))
-                    for hy in crossings:
-                        if y1 < y2:
-                            d_parts.extend([f"L {x1},{hy - HOP_R:g}", f"A {HOP_R:g} {HOP_R:g} 0 0 1 {x1},{hy + HOP_R:g}"])
-                        else:
-                            d_parts.extend([f"L {x1},{hy + HOP_R:g}", f"A {HOP_R:g} {HOP_R:g} 0 0 1 {x1},{hy - HOP_R:g}"])
-                    d_parts.append(f"L {x2},{y2}")
-                elif jump_direction == "horizontal" and y1 == y2:
-                    crossings = [vx for vx, my, My in verticals
-                                 if my < y1 < My
-                                 and min(x1, x2) + HOP_R < vx < max(x1, x2) - HOP_R]
-                    crossings.sort(reverse=(x1 > x2))
-                    for vx in crossings:
-                        if x1 < x2:
-                            d_parts.extend([f"L {vx - HOP_R:g},{y1}", f"A {HOP_R:g} {HOP_R:g} 0 0 1 {vx + HOP_R:g},{y1}"])
-                        else:
-                            d_parts.extend([f"L {vx + HOP_R:g},{y1}", f"A {HOP_R:g} {HOP_R:g} 0 0 1 {vx - HOP_R:g},{y1}"])
-                    d_parts.append(f"L {x2},{y2}")
-                else:
-                    d_parts.append(f"L {x2},{y2}")
+                # The arc's two feet stand `HOP_R` back along the run
+                # either side of the crossing, and it leaves the run on
+                # `side`. Sweep flag 1 throughout, which is what makes
+                # `side` follow the direction of travel; `stream_hops`
+                # is where that is worked out and written down. `:g`
+                # because HOP_R is a clearance plus a pen width and so
+                # is no longer a whole number.
+                for hop in hops.get((n, i), ()):
+                    if hop.vertical:
+                        foot = HOP_R if y1 < y2 else -HOP_R
+                        d_parts.extend([
+                            f"L {x1},{hop.y - foot:g}",
+                            f"A {HOP_R:g} {HOP_R:g} 0 0 1 {x1},{hop.y + foot:g}"])
+                    else:
+                        foot = HOP_R if x1 < x2 else -HOP_R
+                        d_parts.extend([
+                            f"L {hop.x - foot:g},{y1}",
+                            f"A {HOP_R:g} {HOP_R:g} 0 0 1 {hop.x + foot:g},{y1}"])
+                d_parts.append(f"L {x2},{y2}")
             d_str = " ".join(d_parts)
 
             marker = f' marker-end="url(#{marker_id})"' if self._tipped(s, arrows) else ""
@@ -4354,12 +5030,13 @@ class SvgRenderer:
             b for b in map(_unit_label_box, unit_labels) if b is not None
         ]
 
-        for number in stream_numbers(fs, placed, joints):
+        shape = enclosure_shape(fs)
+        numbers = stream_numbers(fs, placed, joints, jump_direction)
+        self._findings += label_findings(fs, shape, numbers, jump_direction)
+        for number in numbers:
             tx, ty, name = number.x, number.y, number.name
             color = escaped(number.color)
-            bx0, by0, bx1, by1 = number.box
-            lines.append(f'    <rect x="{bx0:.1f}" y="{by0:.1f}" '
-                         f'width="{bx1 - bx0:.1f}" height="{by1 - by0:.1f}" fill="white" />')
+            lines += _enclosure_svg(shape, number.box, number.words, color)
             turn = f' transform="rotate(-90, {tx:.1f}, {ty:.1f})"' if number.vertical else ""
             lines.append(
                 f'    <text x="{tx:.1f}" y="{ty:.1f}" font-family="sans-serif" '
@@ -4367,6 +5044,10 @@ class SvgRenderer:
                 f'text-anchor="middle" dominant-baseline="middle" '
                 f'fill="{color}"{turn}>{escaped(name)}</text>'
             )
+            # Over the words, because a halo has no outline for the tail
+            # to meet and a tail buried under one would be a leader
+            # joined to nothing. Only a bare label ever carries one: an
+            # enclosed label never leaves its run (:func:`stream_numbers`).
             if number.leader is not None:
                 (ax0, ay0), (ax1, ay1) = number.leader
                 # In the label's own colour: it is part of the label,
@@ -4376,10 +5057,13 @@ class SvgRenderer:
                              f'stroke="{color}" '
                              f'stroke-width="{LineWeight.DETAIL.width:g}" />')
                 lines.append(f'    <path d="{_arrowhead(*number.leader)}" fill="{color}" />')
-        # ``placed`` is now every opaque plate the sheet's two label
-        # passes lay down: the equipment tags it was seeded with, each
-        # line number, each leader. That is the set the overlay has to
-        # dodge, and this is the only point where it exists.
+        # ``placed`` is now every box the sheet's two label passes
+        # reserved: the equipment tags it was seeded with, each line
+        # number, each leader. Reserved and not painted -- an
+        # enclosure's box is ruled as an outline, and a label whose run
+        # had nowhere clear paints no plate at all -- so this is what
+        # the next mark has to keep off, which is what the overlay
+        # draws. This is the only point where it exists.
         if plates is not None:
             plates.extend(placed)
         lines.append('  </g>')
