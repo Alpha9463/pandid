@@ -20,10 +20,11 @@ anchor).
 
 from __future__ import annotations
 
+import dataclasses
 import math
 import string
 import unicodedata
-from typing import Callable, NamedTuple
+from typing import Any, Callable, NamedTuple
 
 from pandid.render.escape import escaped
 
@@ -1003,11 +1004,70 @@ def _field(obj, name: str) -> str:
     :func:`title_strip_layout` from disagreeing about whether a row
     exists, which is what would make the strip's own height wrong.
 
+    This answers *what the author stated*, which is what decides which
+    field a finding names and whether a signatory is the block's to
+    backfill. What a cell **draws** is :func:`_stated`, one layer up:
+    the same read, with the block's own default behind it.
+
     :func:`pandid.document._clean` strips a location reference's parts
     for the reason this strips a drawing field: whitespace at the ends
     of either has nothing it could draw.
     """
     return str(getattr(obj, name, "") or "").strip()
+
+
+#: :func:`_class_defaults` per class, since the answer is a property of
+#: the class and the question is asked once per cell per render.
+_DEFAULTS: "dict[type, dict[str, str]]" = {}
+
+
+def _class_defaults(cls: "type[Any]") -> "dict[str, str]":
+    """Every plain-string default the dataclass *cls* states, by field
+    name. A field built by a factory (``revisions``) has no such default
+    and is not listed, which is how the block's one list field leaves
+    itself out without being named here.
+
+    A class that is not a dataclass at all states nothing, for
+    :func:`_field`'s reason: the strip reads whatever it is handed and
+    draws a blank where there is nothing to draw, rather than raising
+    over the shape of the object.
+    """
+    known = _DEFAULTS.get(cls)
+    if known is None:
+        known = _DEFAULTS[cls] = (
+            {f.name: f.default for f in dataclasses.fields(cls)
+             if isinstance(f.default, str)}
+            if dataclasses.is_dataclass(cls) else {})
+    return known
+
+
+def _stated(obj, name: str) -> str:
+    """The value a strip cell **draws** for a field: what the author
+    wrote (:func:`_field`), and where that is blank, the default the
+    field's own dataclass states for it.
+
+    Every field of :class:`~pandid.document.TitleBlock` defaults to the
+    empty string bar two. ``sheet`` and ``of_sheets`` default to
+    ``"1"``, because a drawing with no set behind it is sheet 1 of 1 and
+    the block says so in its own signature. Left blank they drew
+    ``SHEET  of 1`` -- and a count with half of it missing is what the
+    slot's own note calls *a different sheet*. Nothing reported it
+    either: the string as a whole is well inside its 55 units, so no
+    cell was over its room and there was nothing for :func:`check_fit`
+    to say. Accepted, drawn meaningless, and issued.
+
+    The fallback is **read off the dataclass** rather than written here
+    so that the two cannot say different things. An author reads ``sheet:
+    str = "1"`` on the block; that is what an unset field draws, and it
+    is now what a blank one draws too. It also settles the next field
+    somebody gives a default to on the day it is added rather than the
+    day a cell is noticed drawing half of it.
+
+    Read here and not in ``__post_init__`` for :func:`_field`'s reason:
+    ``fs.title_block.sheet = "  "`` after the block is built has to
+    answer the same way, and a dataclass hook sees only construction.
+    """
+    return _field(obj, name) or _class_defaults(type(obj)).get(name, "")
 
 
 def company_lines(company: str) -> list[str]:
@@ -1054,7 +1114,7 @@ def company_overflow(tb) -> "tuple[int, float, float] | None":
     full height of it (:func:`measure_title_strip`), so a block with a
     revision history or a client line has more room than a bare one.
     """
-    lines = company_lines(_field(tb, "company"))
+    lines = company_lines(_stated(tb, "company"))
     _, room = measure_title_strip(tb)
     need = len(lines) * _COMPANY_LEAD
     return (len(lines), room, need) if need > room else None
@@ -1100,8 +1160,8 @@ def undrawn_signatories(tb) -> "list[tuple[str, str, str]]":
 
 def _header_lines(tb) -> list[tuple[str, str]]:
     return [(label, value) for label, value
-            in (("CLIENT", _field(tb, "client")),
-                ("PROJECT", _field(tb, "project"))) if value]
+            in (("CLIENT", _stated(tb, "client")),
+                ("PROJECT", _stated(tb, "project"))) if value]
 
 
 def measure_title_strip(tb) -> tuple[float, float]:
@@ -1199,7 +1259,7 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
     # title with the flowsheet name it should have fallen back to
     # already thrown away, and a whitespace date with today's.
     name, date = str(name or "").strip(), str(date or "").strip()
-    date = _field(tb, "date") or date
+    date = _stated(tb, "date") or date
     w, h = measure_title_strip(tb)
     x, y = right - w, bottom - h
     rx = x + _REV_W
@@ -1231,14 +1291,14 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
         i = len(tb.revisions) - 1 - idx
         row = []
         for _heading, _cw, attr in _REV_COLS:
-            cell, value = f"revisions[{i}].{attr}", _field(rv, attr)
+            cell, value = f"revisions[{i}].{attr}", _stated(rv, attr)
             # The block-level drawn/checked/approved fields backfill the
             # newest row's signatories when that revision leaves them
             # blank -- so the value in the cell is sometimes the block's
             # and the finding has to name whichever field supplied it.
             block = _BACKFILL.get(attr, "")
             if newest and not value and block and _field(tb, block):
-                row.append((_field(tb, block), f"{block} -> {cell}"))
+                row.append((_stated(tb, block), f"{block} -> {cell}"))
             else:
                 row.append((value, cell))
         newest_first.append(rev_cells(row))
@@ -1250,8 +1310,8 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
     parts: list[tuple] = []
 
     # Company / logo cell (middle) -------------------------------
-    if _field(tb, "company"):
-        lines = company_lines(_field(tb, "company"))
+    if _stated(tb, "company"):
+        lines = company_lines(_stated(tb, "company"))
         cy = y + h / 2 - (len(lines) - 1) * _COMPANY_LEAD / 2
         for ln in lines:
             # A word too long for the cell has no break point the
@@ -1284,8 +1344,13 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
     for ly in ([top] if header else []) + [band2, band3]:
         parts.append(("rule", ix, ly, x + w, ly, 0.75))
     # title + subtitle, with sheet count tucked top-right of the title
-    # band
-    sheets = f"SHEET {_field(tb, 'sheet')} of {_field(tb, 'of_sheets')}"
+    # band. Both halves through :func:`_stated`, which is what keeps the
+    # count whole: blank, each falls back to the ``"1"`` the block's own
+    # signature states, so the cell reads SHEET 1 of 1 rather than
+    # ``SHEET  of 1``. A half-count is the one thing this slot must not
+    # draw -- see :data:`_SHEET_W` -- and it is not a width finding,
+    # since the short string fits its room easily.
+    sheets = f"SHEET {_stated(tb, 'sheet')} of {_stated(tb, 'of_sheets')}"
     # The drawing title is the one value on the strip lettered *above*
     # the strip's reading size, so it is the one with size to give back
     # before it has meaning to give up -- and it is read straight
@@ -1305,7 +1370,7 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
     # name, so the finding names *that* -- an author told "title was
     # truncated" about a field they never set goes looking in the wrong
     # place. Same for the three cells below it; see :data:`Reporter`.
-    title = _field(tb, "title") or name
+    title = _stated(tb, "title") or name
     title_type = fit_size(title, _TITLE_W, _TITLE_TYPE, _SUBTITLE_TYPE, True)
     parts.append(("text", ix + 6, top + 15,
                   clip(title, _TITLE_W, title_type, True,
@@ -1313,9 +1378,9 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
                               else "Flowsheet name -> title"),
                        report=report),
                   title_type, "start", True, "black"))
-    if _field(tb, "subtitle"):
+    if _stated(tb, "subtitle"):
         parts.append(("text", ix + 6, band2 - 6,
-                      clip(_field(tb, "subtitle"), _INFO_W - 12, _SUBTITLE_TYPE,
+                      clip(_stated(tb, "subtitle"), _INFO_W - 12, _SUBTITLE_TYPE,
                            field="subtitle", report=report),
                       _SUBTITLE_TYPE, "start", False, "black"))
     # One cell drawn from two fields, so the finding names both: which
@@ -1330,7 +1395,7 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
     parts.append(("text", ix + 6, band2 + 8, "STATUS", _CAPTION,
                   "start", False, CAPTION_INK))
     parts.append(("text", ix + 6, band3 - 5,
-                  clip(_field(tb, "status") or "—", _INFO_W - 12,
+                  clip(_stated(tb, "status") or "—", _INFO_W - 12,
                        _VALUE_TYPE, True,
                        field="status", report=report),
                   _VALUE_TYPE, "start", True, "black"))
@@ -1363,20 +1428,21 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
     #
     # Three of the four draw a value the block did not state, and each
     # names the field that did state it (see :data:`Reporter`).
-    # Through :func:`_field` like every other read: left raw, a revision
-    # whose ``rev`` was whitespace put four invisible characters in a
-    # 22-unit cell and had them reported as a truncation.
-    rev_id = _field(tb.revisions[-1], "rev") if tb.revisions else "0"
+    # Through :func:`_stated` like every other read: left raw, a
+    # revision whose ``rev`` was whitespace put four invisible
+    # characters in a 22-unit cell and had them reported as a
+    # truncation.
+    rev_id = _stated(tb.revisions[-1], "rev") if tb.revisions else "0"
     rev_field = (f"revisions[{len(tb.revisions) - 1}].rev -> rev"
                  if tb.revisions else "rev")
-    scale = _field(tb, "scale") or fit_scale
+    scale = _stated(tb, "scale") or fit_scale
     scale_field = ("scale" if _field(tb, "scale")
                    else "the fitted scale -> scale")
     date_field = ("date" if _field(tb, "date")
                   else "today's date -> date")
     cells: list[tuple[float, str, str, str]] = [
         (_INFO_W * 0.38, "DRAWING No",
-         _field(tb, "drawing_number") or "—", "drawing_number"),
+         _stated(tb, "drawing_number") or "—", "drawing_number"),
         (_INFO_W * 0.21, "SCALE", scale, scale_field),
         (_INFO_W * 0.29, "DATE", date, date_field),
         (_INFO_W * 0.12, "REV", rev_id, rev_field)]

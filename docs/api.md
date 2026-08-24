@@ -3225,10 +3225,16 @@ unset does. The DATE cell in particular is never blank on an issued sheet: state
 a date and it is drawn, state nothing — or nothing but spaces — and the day the
 sheet was rendered is.
 
-And `validate()` reports exactly what the sheet reports, for every field, in all
-three states: unset, whitespace, and stated but too long for its cell. The two
-read one strip through one function, so a finding you get before rendering is
-the finding the drawing makes.
+`sheet` and `of_sheets` are the two fields that default to something other than
+blank, and a blank one draws that default. `TitleBlock(sheet="")` is sheet 1 of
+1, not `SHEET  of 1`: half a count names no sheet, and it is short enough that
+no width check would ever have said so.
+
+And `validate()` reports exactly what the sheet reports, for every field, in
+every state: unset, whitespace, a value the cell holds and one it cannot. The
+two read one strip through one function, so a finding you get before rendering
+is the finding the drawing makes — and a value the cell *can* hold is on both
+rendered sheets, which is the half agreement alone would not give you.
 
 `validate()` answers before anything is drawn, and every render asks the same
 question again and replaces the answer — `to_drawio()` as well as `to_svg()`, in

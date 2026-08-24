@@ -166,6 +166,15 @@ class TitleBlock:
     so the pair is drawn. Either may be left blank and the line for it
     is not ruled.
 
+    ``sheet`` and ``of_sheets`` are the two halves of the ``SHEET n of
+    m`` count in the title band, and they are the only two fields that
+    default to something other than blank: a drawing with no set behind
+    it is sheet 1 of 1. **A blank half draws that default**, on both
+    backends and however the block is edited, because half a count reads
+    as a different sheet -- ``SHEET  of 1`` names no sheet at all, and
+    is short enough that no width check would ever have spoken up about
+    it.
+
     ``scale`` is the scale cell. Left blank, the sheet reports the ratio
     the renderer actually placed the drawing at, which is a real number
     once ``page_size`` fixes the page and nothing at all on a sheet

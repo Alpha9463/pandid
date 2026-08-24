@@ -508,6 +508,19 @@ class hierarchy, or what it is called.
   typed -- the normalising is done at the read, not on the dataclass -- and it
   is the cell that stops being blank.
 
+  **And a blank half of the sheet count takes the block's own default.**
+  `sheet` and `of_sheets` are the only two fields of `TitleBlock` that default
+  to something other than blank -- a drawing with no set behind it is sheet 1 of
+  1 -- and left blank they drew `SHEET  of 1`, a count naming no sheet, on both
+  backends and with nothing reported: the string as a whole sits well inside its
+  55 units, so no cell was over its room and there was nothing for a width check
+  to say. Half a sheet count reads as a *different sheet*, which is why that
+  slot draws a long count whole rather than abbreviating it, and an empty half
+  is the same loss with none of the ink. The fallback is read off the dataclass
+  rather than written into the strip, so what an author sees in the block's
+  signature is what a blank field draws, and the next field given a default is
+  settled the day it is added.
+
   **Both fallbacks are the strip's, and are chosen after that read.** A blank
   title draws the flowsheet's name and a blank date today's, and both choices
   used to be made by each of the three callers, on the raw value -- so
@@ -550,9 +563,14 @@ class hierarchy, or what it is called.
   state their own -- and would have been abbreviated to `A. An…` had those rows
   left the cells free. No drawing changes.
 
-  The sweep behind it covers all fifteen fields of `TitleBlock` and all six of
-  `Revision`, and `tests/test_titleblock.py` keeps it: no field of the block
-  takes a value it cannot draw and says nothing about it.
+  The sweep behind it covers all fourteen scalar fields of `TitleBlock` and all
+  six of `Revision`, and it takes that list from `dataclasses.fields` rather
+  than writing it out: a field added to the block is swept the day it appears.
+  Each field is swept in four states -- unset, blank, a value its cell holds and
+  one it cannot -- and the third asserts the value reaches *both* rendered
+  files, which is the half a parity check cannot see. A cell that draws nothing
+  overruns no room, so it is silent, so the validator and the two renderers
+  agree about it perfectly; that is where `SHEET  of 1` lived.
 - A **utility header is no longer sunk by the consumers it feeds** (#459). A
   heater's steam nozzle is drawn on the bottom of the symbol, and the layout
   read that face as the heater asserting that its supply belonged *below* it on
