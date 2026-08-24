@@ -521,6 +521,23 @@ class hierarchy, or what it is called.
   signature is what a blank field draws, and the next field given a default is
   settled the day it is added.
 
+  **And a value the author stated is drawn as stated, whatever its type.**
+  Every field of the block is annotated `str` and nothing enforces it, so
+  `TitleBlock(sheet=1, of_sheets=3)` is an ordinary thing to type and has always
+  worked -- `str(1)` is `"1"`. Reading a field for *truthiness* rather than for
+  whether it was set broke that for the falsey half: `sheet=0` was discarded as
+  blank and then filled in with the field's default, so an author who stated
+  sheet 0 was issued sheet **1**. That is this entry's own subject committed by
+  the fallback above -- one stated value silently changed to another, which is
+  worse than the blank the fallback exists for, because blank at least meant
+  unset. The read now asks whether the field is `None`, and everything else is
+  drawn as written. Refusing a non-string at the door was the other defensible
+  answer and is not the one taken: it would break `sheet=1`, which reads
+  naturally, works today and has nothing to do with the defect. The SVG's
+  accessible document name asks the same question through the same function
+  rather than keeping a second copy of the test, which is how it came to be the
+  one read still deciding by truthiness.
+
   **Both fallbacks are the strip's, and are chosen after that read.** A blank
   title draws the flowsheet's name and a blank date today's, and both choices
   used to be made by each of the three callers, on the raw value -- so
@@ -568,9 +585,12 @@ class hierarchy, or what it is called.
   than writing it out: a field added to the block is swept the day it appears.
   Each field is swept in four states -- unset, blank, a value its cell holds and
   one it cannot -- and the third asserts the value reaches *both* rendered
-  files, which is the half a parity check cannot see. A cell that draws nothing
-  overruns no room, so it is silent, so the validator and the two renderers
-  agree about it perfectly; that is where `SHEET  of 1` lived.
+  files, in **every cell ruled for it**. A cell that draws nothing overruns no
+  room, so it is silent, so the validator and the two renderers agree about it
+  perfectly; that is where `SHEET  of 1` lived. Counted per cell rather than
+  searched for across the document, because `Revision.rev` is drawn twice -- the
+  grid's REV column and the bottom band's REV box -- and either copy alone
+  answers a search of the whole sheet.
 - A **utility header is no longer sunk by the consumers it feeds** (#459). A
   heater's steam nozzle is drawn on the bottom of the symbol, and the layout
   read that face as the heater asserting that its supply belonged *below* it on

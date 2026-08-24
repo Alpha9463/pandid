@@ -2522,9 +2522,18 @@ def _sheet_title(fs: "Flowsheet") -> str:
     nothing but spaces is one of those, being *truthy* and announced by
     a screen reader as silence. Both are stripped to the blank they
     mean, so the fallback to the flowsheet's name happens for either.
+
+    Read through the strip's own :func:`~pandid.render.furniture._field`
+    rather than restated here. Which of the two names the document is
+    *this* function's decision -- the accessible name is not title-strip
+    ink and does not follow the strip's fallbacks -- but what counts as
+    the author having stated a title is one question, and asked twice it
+    was answered twice: a copy of the read here kept the truthy test
+    after the strip stopped using it, so ``title=0`` would have been
+    lettered on the sheet and dropped from the document's name.
     """
     tb = fs.title_block
-    title = str((tb.title if tb is not None else "") or "").strip()
+    title = F._field(tb, "title") if tb is not None else ""
     return title or str(fs.name or "").strip()
 
 

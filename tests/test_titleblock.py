@@ -1300,6 +1300,14 @@ class _Answer:
     with a validator that says nothing, and `SHEET  of 1` was issued on exactly
     that agreement.
 
+    ``cells`` is how many cells of the strip draw the field. It is 1 for all but
+    ``Revision.rev``, which fills the grid's REV column *and* the bottom band's
+    REV box at two different widths -- and a field with two cells can lose one
+    of them without the string leaving the sheet, which is exactly the hole a
+    document-wide search leaves open. Checked against the strip's own reporting
+    rather than trusted; see
+    ``test_a_block_field_is_drawn_in_as_many_cells_as_it_reports``.
+
     ``signed`` marks the three block-level signatories, which draw no cell of
     their own: they fill the BY / CHK'D / APP'D columns of the newest revision
     row, so the block needs a revision before there is anywhere to letter them.
@@ -1310,6 +1318,7 @@ class _Answer:
     named: str
     fits: str
     ink: str = ""
+    cells: int = 1
     signed: bool = False
 
     @property
@@ -1354,7 +1363,9 @@ _ANSWERS: dict[str, _Answer] = {
 #: The revision grid is six narrow columns and every one of them abbreviates --
 #: a revision row is a history, and a history reads as prose.
 _REV_ANSWERS: dict[str, _Answer] = {
-    "rev": _Answer(_LONG, "text-truncated", "revisions[0].rev", "Z1"),
+    # The one field of either dataclass with two cells: the grid column, and the
+    # bottom band's REV box that repeats the newest row's number.
+    "rev": _Answer(_LONG, "text-truncated", "revisions[0].rev", "Z1", cells=2),
     "date": _Answer(_LONG, "text-truncated", "revisions[0].date", "2026-07-02"),
     "description": _Answer(_LONG, "text-truncated", "revisions[0].description", "Zed issue"),
     "by": _Answer(_LONG, "text-truncated", "revisions[0].by", "Zb"),
@@ -1415,7 +1426,7 @@ def test_every_title_block_field_reports_a_value_it_cannot_hold(field):
     assert found[0].message.startswith(f"{answer.named} ")
 
 
-# --- and the other half: a value it *can* hold reaches the sheet --------------
+# --- and the other half: a value it *can* hold reaches the cell drawn for it --
 #
 # The finding sweep above and the parity sweep at the foot of this file are both
 # blind in the same direction. Both are satisfied by a cell that draws nothing:
@@ -1425,32 +1436,61 @@ def test_every_title_block_field_reports_a_value_it_cannot_hold(field):
 # its width check in place failed 0 of the 55 positive cases and 0 of the 110
 # parity ones. `SHEET  of 1` is what lived in that blind spot.
 #
-# So every field is also asserted to put its value *on the sheet*, in both
-# backends, and to do it quietly. Dropping any one field's ink from the shared
-# layout now fails here.
+# So every field is also asserted to put its value on the sheet, in both
+# backends, and to do it quietly.
+#
+# **Per cell, not per document.** The first version of this searched the whole
+# rendered file for the string, and that has the same shape of hole one level
+# down: `Revision.rev` is drawn *twice* -- the grid's REV column and the bottom
+# band's REV box, at two different widths -- so deleting the grid copy left the
+# band copy to answer the search, and the whole file stayed green. A test that
+# asks "is this string somewhere on the sheet" proves presence, not that every
+# cell ruled for the value fills it. So the ink is counted by the cell that
+# letters it, and how many cells a field has is stated and then checked against
+# the strip's own reporting.
 
-#: What each backend writes a lettered string as.
-_SVG_TEXT = re.compile(r">([^<]*)</text>")
-_DRAWIO_VALUE = re.compile(r'<mxCell id="[^"]*" value="([^"]*)"')
+#: What each backend writes a lettered string as, and how it names the cell that
+#: letters it: draw.io gives every part its own ``mxCell`` id, and SVG gives
+#: every ``<text>`` its own baseline point. No two cells of the strip share
+#: either, so both are cell identity.
+_SVG_TEXT = re.compile(r'<text x="([^"]*)" y="([^"]*)"[^>]*>([^<]*)</text>')
+_DRAWIO_VALUE = re.compile(r'<mxCell id="([^"]*)" value="([^"]*)"')
 
 
-def _lettering(fs, how: str) -> list[str]:
-    """Every string the sheet actually letters, read back out of the file the
-    backend wrote. Not the layout's own parts: the point is that the value
-    survives all the way into the document a reader opens."""
+def _lettering(fs, how: str) -> "list[tuple[str, str]]":
+    """``(cell, string)`` for every string the sheet letters, read back out of
+    the file the backend wrote.
+
+    Read from the file and not from the layout's own parts: the point is that
+    the value survives all the way into the document a reader opens, and a
+    mutation applied to the shared layout would move both together.
+    """
     out = getattr(fs, how)(border="zone")
-    found = (_SVG_TEXT if how == "to_svg" else _DRAWIO_VALUE).findall(out)
-    return [html.unescape(text) for text in found]
+    if how == "to_svg":
+        return [(x + "," + y, html.unescape(t)) for x, y, t in _SVG_TEXT.findall(out)]
+    return [(cid, html.unescape(v)) for cid, v in _DRAWIO_VALUE.findall(out)]
+
+
+def _cells_drawing(fs, how: str, ink: str) -> "list[str]":
+    """The cells of the rendered sheet that letter exactly *ink*."""
+    return [cell for cell, text in _lettering(fs, how) if text == ink]
+
+
+def _drawn_in(answer: _Answer, fs, how: str, what: str) -> None:
+    """*fs* letters ``answer.drawn`` in exactly ``answer.cells`` cells, and they
+    are that many *different* cells."""
+    cells = _cells_drawing(fs, how, answer.drawn)
+    assert len(cells) == answer.cells, (what, answer.drawn, cells)
+    assert len(set(cells)) == answer.cells, (what, answer.drawn, cells)
 
 
 @pytest.mark.parametrize("how", ["to_svg", "to_drawio"])
 @pytest.mark.parametrize("field", _SWEPT)
 def test_every_title_block_field_a_cell_can_hold_is_drawn_and_silent(field, how):
-    """A value that fits is lettered on the sheet, in both backends, and nothing
-    is reported about it."""
+    """A value that fits is lettered into every cell ruled for it, in both
+    backends, and nothing is reported about it."""
     answer = _ANSWERS[field]
-    fs = _block(**_kw(field, answer.fits))
-    assert answer.drawn in _lettering(fs, how), (field, answer.drawn)
+    _drawn_in(answer, _block(**_kw(field, answer.fits)), how, field)
     assert _findings(_block(**_kw(field, answer.fits))) == []
 
 
@@ -1458,12 +1498,46 @@ def test_every_title_block_field_a_cell_can_hold_is_drawn_and_silent(field, how)
 @pytest.mark.parametrize("field", _REV_SWEPT)
 def test_every_revision_field_a_cell_can_hold_is_drawn_and_silent(field, how):
     """The same of the revision grid, whose six columns are the strip's
-    narrowest and so the ones most easily dropped without anything overrunning.
-    """
+    narrowest and so the ones most easily dropped without anything overrunning
+    -- and which holds the one field the strip draws in two places."""
     answer = _REV_ANSWERS[field]
     kw = {"title": "Demo", "revisions": [Revision(**{field: answer.fits})]}
-    assert answer.drawn in _lettering(_block(**kw), how), (field, answer.drawn)
+    _drawn_in(answer, _block(**kw), how, field)
     assert _findings(_block(**kw)) == []
+
+
+# --- how many cells draw a field is not a number this file gets to invent -----
+
+
+def _text_findings(fs) -> list:
+    return [i for i in fs.validate() if i.code.startswith("text-")]
+
+
+@pytest.mark.parametrize("field", _SWEPT)
+def test_a_block_field_is_drawn_in_as_many_cells_as_it_reports(field):
+    """``_Answer.cells`` is checked against the strip's own reporting rather
+    than trusted.
+
+    Every cell that cannot hold what it was given says so and names the field
+    that supplied it, so a value too long for *every* width on the strip is
+    reported once per cell that drew it -- an independent count of how many
+    cells a field has, taken from the validator rather than from the ink the
+    test above searches. A field that quietly gains a second cell reports twice
+    and fails here, and only once ``cells`` is raised does the ink test start
+    requiring the new cell to be filled.
+    """
+    assert len(_text_findings(_block(**_kw(field, _ANSWERS[field].overlong)))) == (
+        _ANSWERS[field].cells
+    )
+
+
+@pytest.mark.parametrize("field", _REV_SWEPT)
+def test_a_revision_field_is_drawn_in_as_many_cells_as_it_reports(field):
+    """And the row, where `rev` is the one field with two cells: the grid column
+    and the bottom band's REV box, which is why it is reported twice and why a
+    search of the whole document could lose either one of them."""
+    kw = {"title": "Demo", "revisions": [Revision(**{field: _REV_ANSWERS[field].overlong})]}
+    assert len(_text_findings(_block(**kw))) == _REV_ANSWERS[field].cells
 
 
 def test_a_company_name_that_wraps_past_the_strip_is_reported():
@@ -1730,10 +1804,14 @@ def test_a_stamped_date_is_not_reported_as_the_date_field():
 # --- a field of nothing but spaces is the blank it means -----------------------
 
 
-def _drawn_sheet(how: str, field: str, value: "str | None", *, assigned: bool = False):
+def _drawn_sheet(how: str, field: str, value: "object | None", *, assigned: bool = False):
     """The whole file one backend writes for a block that states *value* in
     *field* -- set on the constructor, or on the built block. ``None`` leaves
-    the field unset, which is the baseline every case is compared against."""
+    the field unset, which is the baseline every case is compared against.
+
+    *value* is deliberately not typed ``str``: the fields are annotated ``str``
+    and nothing enforces it, so what a block does with ``sheet=0`` is a real
+    question about this library and is asked below."""
     fs = _sheet(name="Ethanol Purification A300")
     kw: dict = {} if field == "title" else {"title": "Demo"}
     if value is not None and not assigned:
@@ -1765,6 +1843,45 @@ def test_a_whitespace_field_draws_exactly_what_an_unset_one_draws(field, assigne
     """
     unset = _drawn_sheet(how, field, None)
     assert unset == _drawn_sheet(how, field, "  \t ", assigned=assigned)
+
+
+# --- a value the author stated is drawn as stated, whatever its type ----------
+
+
+@pytest.mark.parametrize("how", ["to_svg", "to_drawio"])
+@pytest.mark.parametrize(
+    "stated", [0, 0.0, False, 7, 1], ids=["zero", "zero-float", "false", "seven", "one"]
+)
+@pytest.mark.parametrize("field", _BLOCK_FIELDS)
+def test_a_stated_value_is_drawn_as_stated_however_it_is_typed(field, stated, how):
+    """Every field of the block is annotated `str` and nothing enforces it, so
+    `TitleBlock(sheet=1, of_sheets=3)` is an ordinary thing to type and has
+    always worked -- `str(1)` is `"1"`.
+
+    Reading the field for truthiness rather than for whether it was *set* broke
+    that for the falsey half: `sheet=0` was discarded as blank and then filled
+    in with the field's default, so an author who stated sheet 0 was issued
+    sheet 1. Stating a value and having a different value drawn is worse than
+    the blank case that fallback exists for, because blank at least meant unset.
+
+    Asserted as whole-file equality against the same value written as a string,
+    which is the property without a per-field expected string: `field=0` draws
+    the sheet `field="0"` draws.
+    """
+    assert _drawn_sheet(how, field, stated) == _drawn_sheet(how, field, str(stated))
+
+
+@pytest.mark.parametrize("how", ["to_svg", "to_drawio"])
+@pytest.mark.parametrize("half,ink", [("sheet", "SHEET 0 of 1"), ("of_sheets", "SHEET 1 of 0")])
+def test_a_stated_sheet_number_is_never_replaced_by_the_default(half, ink, how):
+    """The reproduction of that, named. Sheet 0 is a sheet number an author can
+    write, and the one the fallback would silently renumber -- the count is the
+    only cell on the strip with a default to be renumbered *to*."""
+    fs = _sheet()
+    fs.title_block = TitleBlock(title="Demo", **{half: 0})
+    assert [text for _cell, text in _lettering(fs, how) if text == ink]
+    # ...and it is not the count an unset field draws, which is the whole point.
+    assert _drawn_sheet(how, half, 0) != _drawn_sheet(how, half, None)
 
 
 def test_a_whitespace_revision_field_is_the_blank_it_means():

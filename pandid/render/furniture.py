@@ -982,7 +982,8 @@ _COMPANY_LEAD = 12.0
 
 
 def _field(obj, name: str) -> str:
-    """A title-block field as the strip reads it: stripped.
+    """A title-block field as the strip reads it: what the author
+    stated, stripped, and blank only where they stated nothing.
 
     A field of nothing but spaces is *truthy*, so it defeated every
     fallback the block has. ``tb.title or name`` drew three spaces
@@ -1009,11 +1010,30 @@ def _field(obj, name: str) -> str:
     backfill. What a cell **draws** is :func:`_stated`, one layer up:
     the same read, with the block's own default behind it.
 
+    **Unset, not falsey.** The question this asks is whether the author
+    put anything in the field, and truthiness only answers that for
+    strings. Every field here is annotated ``str`` and nothing enforces
+    it, so ``TitleBlock(sheet=1, of_sheets=3)`` is a perfectly ordinary
+    thing to type and has always worked -- ``str(1)`` is ``"1"``. But
+    ``sheet=0`` is falsey, so a truthy read discarded it as blank, and
+    then :func:`_stated` filled the cell with the field's default: an
+    author who stated sheet **0** was issued sheet **1**. That is this
+    module's own subject committed by the code meant to fix it -- a
+    stated value silently changed to a different stated value, which is
+    worse than the blank it was guarding, because blank at least meant
+    *unset*.
+
+    So the test is ``is None`` and everything else is drawn as written.
+    Refusing a non-string at the door was the other defensible answer
+    and is not the one taken: it would break ``sheet=1``, which reads
+    naturally, works today, and has nothing to do with the defect.
+
     :func:`pandid.document._clean` strips a location reference's parts
     for the reason this strips a drawing field: whitespace at the ends
     of either has nothing it could draw.
     """
-    return str(getattr(obj, name, "") or "").strip()
+    value = getattr(obj, name, None)
+    return "" if value is None else str(value).strip()
 
 
 #: :func:`_class_defaults` per class, since the answer is a property of

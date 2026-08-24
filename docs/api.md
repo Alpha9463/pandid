@@ -3230,6 +3230,11 @@ blank, and a blank one draws that default. `TitleBlock(sheet="")` is sheet 1 of
 1, not `SHEET  of 1`: half a count names no sheet, and it is short enough that
 no width check would ever have said so.
 
+A value you *did* state is drawn as stated, whatever its type. The fields are
+annotated `str` and nothing enforces it, so `TitleBlock(sheet=1, of_sheets=3)`
+works and always has — and so does `sheet=0`, which is a sheet number rather
+than a blank field. Only an unset or empty field takes a fallback.
+
 And `validate()` reports exactly what the sheet reports, for every field, in
 every state: unset, whitespace, a value the cell holds and one it cannot. The
 two read one strip through one function, so a finding you get before rendering
