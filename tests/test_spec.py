@@ -886,9 +886,13 @@ def test_composition_keywords_read_from_a_hand_written_spec():
 
 
 def test_a_composition_keyword_on_a_kind_with_no_such_part_is_rejected():
+    """The message names every class that does take it, so a second class
+    picking the keyword up widens the message rather than breaking it --
+    ``Evaporator`` took ``supports`` in 0.1.4 and this is what that reads
+    like from the wrong end."""
     with pytest.raises(SpecError) as excinfo:
         Flowsheet.from_dict(_spec(units=[{"kind": "Pump", "name": "P-1", "supports": "skirt"}]))
-    assert "only a Vessel takes 'supports', not a Pump" in str(excinfo.value)
+    assert "only a Evaporator or a Vessel takes 'supports', not a Pump" in str(excinfo.value)
 
 
 def test_a_part_no_such_group_has_names_the_ones_it_does():

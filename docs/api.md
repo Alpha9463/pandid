@@ -546,7 +546,7 @@ from pandid import units
 sifter = units.Separator("SC-101", variant="sifter")
 ```
 
-`units.Kind(variant=…)` is the escape hatch. 130 of the 219 registered drawings
+`units.Kind(variant=…)` is the escape hatch. 132 of the 228 registered drawings
 get no class of their own, and this is how you reach them; see
 [Variants](#variants) for the list. Where a class exists, name it.
 
@@ -601,6 +601,7 @@ Each entry is `port` *(direction / role)*.
 | `Vessel` | `vessel` | `in_1` … `in_n` *(in)*, `out_1` … `out_m` *(out)*, `vent` *(out/vapor)*, `relief` *(out)*, `drain` *(out/liquid)*; at one each (the default) the bare `inlet`/`outlet` still answer, exactly as before #342 — see [`Block`'s connection API, on a tank or a vessel](#a-tank-or-a-vessel-fed-by-several-streams) |
 | `Tank` | `tank` | the same as `Vessel` |
 | `Separator` | `separator` | `feed_1` … `feed_n` *(in/feed)*, sized by `n_feeds=` and aliased `feed` at one, plus `vapor` *(out/vapor)* and `liquid` *(out/liquid)* on the four variants whose draws really are phases — the drum (`default`, `horizontal`, `knockout`) and the wet `scrubber`. The other seven sort or collect rather than separating into phases, and name the two draws their artwork has: `overflow` *(out)*, `underflow` *(out)*; see [Variants](#variants) |
+| `Thickener` | `thickener` | `feed` *(in/feed)* into the launder, `overflow` *(out)* over the weir, `underflow` *(out)* out of the raked cone. The same two draw names a collecting `Separator` uses, and for the same reason: they name the two positions the artwork draws and neither says which is the product — a thickener is bought for the underflow and a clarifier for the overflow. `rake=` names the ISO group-28 stirrer on the shaft, `rake=None` leaves a plain settling tank; the drive is not drawn, see [What a body carries](#what-a-body-carries) |
 | `Column` | `column` | The general tower: `feed` *(in/feed)*, or `feed_1` … `feed_n`, no draw, or `draw` *(out/draw)*, or `draw_1` … `draw_n`, `overhead` *(out/vapor)*, `bottoms` *(out/liquid)*; the feeds are [`feeds`](#the-family-as-a-sequence) and the draws [`draws`](#the-family-as-a-sequence). Nothing here assumes the tower boils — see `DistillationColumn`, `Stripper` and `Absorber` for the three that add a reflux loop, a reboiler alone, or neither |
 | `DistillationColumn` | `column` | A `Column` plus the two return nozzles that close a distillation column's internal loops: `reflux_in` *(in/liquid)*, `boilup_in` *(in/vapor)*, `reboiler_duty` *(in/energy)*, `condenser_duty` *(out/energy)* |
 | `Absorber` | `column` | A `Column` with nothing added: `feed` *(in/feed)*, or `feed_1` … `feed_n`, no draw, or `draw` *(out/draw)*, or `draw_1` … `draw_n`, `overhead` *(out/vapor)*, `bottoms` *(out/liquid)*. Nothing in an absorber boils, so it has none of `DistillationColumn`'s four return nozzles; `internals=` defaults to `"packing"` |
@@ -610,10 +611,12 @@ Each entry is `port` *(direction / role)*.
 | `Heater` | `heater` | `inlet` *(in)*, `outlet` *(out)*, `utility_in` *(in/energy)* |
 | `Cooler` | `cooler` | `inlet` *(in)*, `outlet` *(out)*, `utility_out` *(out/energy)* |
 | `CoolingTower` | `cooling_tower` | `water_in` *(in)*, `water_out` *(out)*, `air_in` *(in)*, `air_out` *(out)*, `makeup` *(in/utility)*, `blowdown` *(out/liquid)*. Named for the side of the equipment, as an exchanger's are; `makeup` and `blowdown` are on the basin |
+| `Evaporator` | `evaporator` | `feed` *(in/feed)*, `vapor` *(out/vapor)* off the crown, `concentrate` *(out/liquid)* out of the bottom, and the steam chest: `heating_in` *(in/utility)* on the west wall, `condensate` *(out/utility)* on the east. Opposite walls so that a multiple-effect train, drawn left to right, hands each effect's vapour to the next one's `heating_in` without going round the body |
 | `Furnace` | `furnace` | `inlet` *(in)*, `outlet` *(out)*, `fuel` *(in/feed)* |
 | `Filter` | `filter` | `inlet` *(in)*, `outlet` *(out)* on the five that clarify — the medium keeps the solids and is cleaned offline (`default`, `fixed_bed`, `gas`, `gas_fixed_bed`, `gas_belt`). The four that form a cake add `wash_in` *(in/utility)* and `cake` *(out)*: `press`, `belt`, `rotary`, `rotary_scraper`. `ion_exchange` takes a regenerant rather than a wash, and names it: `regenerant_in` *(in/utility)*, `spent_regenerant` *(out)*; see [Variants](#variants) |
 | `Centrifuge` | `centrifuge` | `feed` *(in/feed)*, `overflow` *(out)*, `underflow` *(out)*; named for where Table 2 draws them, not for which is the product — see [Variants](#variants) |
 | `Dryer` | `dryer` | `feed` *(in/feed)*, `product` *(out)* |
+| `Kiln` | `kiln` | `feed` *(in/feed)*, `product` *(out)*, `offgas` *(out/vapor)*, `fuel` *(in/feed)*, `air` *(in/utility)*. The off-gas nozzle is what makes this a kind of its own rather than a `Furnace` variant: a furnace's flue gas is not a stream of the plant and a kiln's is |
 | `CrushingMachine` | `crushing_machine` | `feed` *(in/feed)*, `discharge` *(out)* |
 | `Crusher` | `crusher` | `feed` *(in/feed)*, `discharge` *(out)* |
 | `Mill` | `mill` | `feed` *(in/feed)*, `discharge` *(out)* |
@@ -1047,7 +1050,7 @@ sep.underflow            # the dust draw, and a Port a type checker can resolve
 ```
 
 `Kind(variant=…)` stays the low-level form, and is the only way to reach the
-130 drawings that get no class of their own. A class stores the
+132 drawings that get no class of their own. A class stores the
 **registry's** spelling of its variant and not its own, so `to_dict()` writes
 `variant: cyclone` rather than the class-local `default`, and the file reads
 back. [Variants](#variants) lists the drawings each class owns.
@@ -1075,6 +1078,13 @@ base has not, `-` one it drops. The bases are in the [Port table](#port-table).
 | `PlateExchanger` | `hex` | `HeatExchanger` | `+side_a_in` `+side_a_out` `+side_b_in` `+side_b_out` `-shell_in` `-shell_out` `-tube_in` `-tube_out` |
 | `SpiralExchanger` | `hex` | `HeatExchanger` | `+side_a_in` `+side_a_out` `+side_b_in` `+side_b_out` `-shell_in` `-shell_out` `-tube_in` `-tube_out` |
 | `ThinFilmEvaporator` | `hex` | `HeatExchanger` | `+jacket_in` `+jacket_out` `+product_in` `+product_out` `-shell_in` `-shell_out` `-tube_in` `-tube_out` |
+| `CalandriaEvaporator` | `evaporator` | `Evaporator` | |
+| `FallingFilmEvaporator` | `evaporator` | `Evaporator` | |
+| `ClimbingFilmEvaporator` | `evaporator` | `Evaporator` | |
+| `PlateEvaporator` | `evaporator` | `Evaporator` | |
+| `RotaryKiln` | `kiln` | `Kiln` | |
+| `FluidizedBedCalciner` | `kiln` | `Kiln` | |
+| `ShaftKiln` | `kiln` | `Kiln` | |
 | `Cyclone` | `separator` | `Separator` | `+overflow` `+underflow` `-vapor` `-liquid` |
 | `GravitySeparator` | `separator` | `Separator` | `+overflow` `+underflow` `-vapor` `-liquid` |
 | `ElectrostaticPrecipitator` | `separator` | `Separator` | `+overflow` `+underflow` `-vapor` `-liquid` |
@@ -1663,6 +1673,15 @@ first listed is what the class draws when it is built by name alone.
 | `PlateExchanger` | `hex` | `plate` (as `default`) |
 | `SpiralExchanger` | `hex` | `spiral` (as `default`) |
 | `ThinFilmEvaporator` | `hex` | `thin_film` (as `default`) |
+| `Evaporator` | `evaporator` | `default` (two tubesheets around a boxed element, no element chosen) |
+| `CalandriaEvaporator` | `evaporator` | `calandria` (as `default`) |
+| `FallingFilmEvaporator` | `evaporator` | `falling_film` (as `default`) |
+| `ClimbingFilmEvaporator` | `evaporator` | `climbing_film` (as `default`) |
+| `PlateEvaporator` | `evaporator` | `plate` (as `default`) |
+| `RotaryKiln` | `kiln` | `default` |
+| `FluidizedBedCalciner` | `kiln` | `fluidized_bed` (as `default`) |
+| `ShaftKiln` | `kiln` | `shaft` (as `default`) |
+| `Thickener` | `thickener` | `default` (the settling tank; `rake=` names what turns in it) |
 | `Cyclone` | `separator` | `cyclone` (as `default`) |
 | `GravitySeparator` | `separator` | `gravity` (as `default`) |
 | `ElectrostaticPrecipitator` | `separator` | `electrostatic` (as `default`) |
@@ -1865,8 +1884,9 @@ anything the standard does not tabulate itself. So what a piece of equipment
 | keyword | ISO group | on |
 |---|---|---|
 | `agitator=` | 28, agitators and stirrers | `Reactor` |
+| `rake=` | 28, agitators and stirrers | `Thickener` |
 | `internals=` | 27, internals | `Reactor`, `Column` |
-| `supports=` | 26, apparatus elements | `Vessel` |
+| `supports=` | 26, apparatus elements | `Evaporator`, `Vessel` |
 | `characteristic=` | 29, internal characteristics | `Separator` |
 
 ```python
@@ -1874,7 +1894,10 @@ Reactor("R-101", agitator="turbine")                     # a stirred tank
 Reactor("R-201", internals="packing")                    # a packed bed
 Column("T-101", internals="valve_tray", trays=30)        # a valve-tray tower
 Vessel("D-301", supports="skirt")                        # a skirted drum
+Evaporator("EV-1", variant="falling_film", supports="skirt")
 Separator("V-201", characteristic="gravity")             # a settling chamber
+Thickener("TH-101")                                      # raked, item 28.4
+Thickener("TH-102", rake=None)                           # a plain settling tank
 ```
 
 `variant=` still chooses the **body** — the outline the part is drawn in. The
@@ -1888,6 +1911,7 @@ because `variant=` had already been spent.
 | keyword | names |
 |---|---|
 | `agitator=` | `agitator` (28.1, the general one and the default), `flat_blade`, `gate_paddle`, `cross_beam`, `anchor`, `helical`, `impeller`, `propeller`, `disc`, `turbine` |
+| `rake=` | the same ten, defaulting to `cross_beam` (28.4) — the two beams on a central shaft that a rake mechanism is |
 | `internals=` | `tray` (27.1), `baffle_tray`, `bubble_cap_tray`, `valve_tray`, `sieve_tray`, `filter_insert`, `fluidised_bed`, `packing` |
 | `supports=` | `leg` (26.1), `bracket` (26.2), `skirt` (26.3), `ring` (26.4) |
 | `characteristic=` | `gravity` (29.1), `electrostatic` (29.2), `electromagnetic` (29.3) |
@@ -1928,6 +1952,22 @@ bed. `Absorber("T-104", internals="packing", trays=2)` is a two-bed absorber.
 An absorber, a stripper, a scrubbing tower, an adsorber and a molecular sieve
 are not distinct drawings and ISO gives them no symbols: each is this shell
 carrying whichever internal it really contains, told apart by its tag.
+
+**A rake is a stirrer, and the drive is not drawn.** `Thickener(rake=)` reaches
+the same group-28 vocabulary an agitator does, because what turns in a thickener
+is a slow central shaft carrying arms and that is what group 28 draws ten forms
+of. It does *not* bring item 20.6's motor, and so brings no `drive` nozzle
+either: ISO composes a motor onto a body in item 1.27 X8006 and nowhere else,
+and 1.27 is a stirred vessel. A rake drive that has to be on the sheet is drawn
+beside the thickener and tagged.
+
+**A composition layer has to be a part, which is why two of the new kinds have
+none.** An evaporator's heating element and a kiln's riding rings are exactly
+the sort of thing that looks like a layer — present on the machine, and what
+tells one machine from another — and neither is a Table 2 part, so neither can
+be composed. They are the `variant=`, drawn into the body. What an
+`Evaporator` *does* take is `supports=`, for the reason `Vessel` does: a support
+is present or absent on the same machine.
 
 **Where composition stops.** A composition is only justified where every mark
 that distinguishes the drawing is a numbered Table 2 part. Three of the eleven
@@ -3655,7 +3695,7 @@ What a flip may not do is reverse an arrow the artwork carries — see
 below, which is handled by drawing rather than by refusing, for exactly the
 reason this paragraph gives.
 
-The 86 marked symbols, and what in each one's artwork only means one thing one
+The 95 marked symbols, and what in each one's artwork only means one thing one
 way up:
 
 | Symbols | Why |
@@ -3680,6 +3720,10 @@ way up:
 | `feeder` `general` `rotary_valve` `rotary_table` `metering` | ISO group 19's hopper valves: solids drop in at the top and are metered out at the bottom, the same feed-tick-above/discharge-tick-below claim group 11's crushers make |
 | `kneader` `default` | ISO item 12.4 X8134: twin shafts driven from above work a trough that holds its charge below them |
 | `screening_device` `general` `coarse_rake` `fine_rake` `coarse_and_fine` `vibrating` `rotating_drum` `basket_reel` | ISO group 7's screens: oversize retained on a deck, undersize dropped through it -- group 11's hopper claim again, at this group's own wall-and-point outline |
+| `evaporator` `default` `calandria` `climbing_film` `falling_film` `plate` | vapour off the crown and concentrate out of the bottom, which is the drum family's own claim on the shell these are drawn from. `falling_film`'s distributor says it twice: a film that falls upward is not one |
+| `kiln` `default` | the shell **falls** from the feed end to the discharge, and that fall is the whole of how a rotary kiln moves its charge. Turned, it climbs |
+| `kiln` `fluidized_bed` `shaft` | a bed resting on its distributor grid with the freeboard above it, and a column of burden charged over the mouth and discharged out of the cone |
+| `thickener` `default` | an open rim to clarify at and a raked cone under the floor for what settles out. Turned, the cone is a roof and the weir is at the bottom |
 
 Not marked, and deliberately: a pump, a compressor, a valve, an in-line fitting
 or a heat exchanger is installed in whatever attitude the run wants, so turning
@@ -4485,7 +4529,7 @@ What it follows, feature by feature:
 - **Symbols where gravity is a functionality** are not turned. **ISO 15519-1
   §11.4.2** excepts them from the general permission to turn and mirror, naming
   the open tank (2061) and the cyclone separator (X 2618) as its two examples.
-  86 registered symbols carry
+  95 registered symbols carry
   `Symbol.gravity_fixed`, and
   [Symbols that must not be turned](#symbols-that-must-not-be-turned) lists them.
 

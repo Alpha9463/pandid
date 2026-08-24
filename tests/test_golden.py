@@ -3597,10 +3597,11 @@ _ALUMINA_PROPERTIES = {
     "S-949": ("25", "1.0", "120", "", "", "", "", "", "", "", "", "1.000", ""),
     "S-950": ("15", "3.0", "6.0", "", "", "", "", "", "", "", "", "", "1.000"),
     "S-951": ("1050", "1.0", "126", "", "", "", "", "", "", "", "", "1.000", ""),
-    "S-952": ("1000", "1.0", "291", "52.6", "0.041", "", "", "", "0.526", "", "", "0.433", ""),
-    "S-953": ("1000", "1.0", "291", "34.4", "0.223", "", "", "", "", "0.344", "", "0.433", ""),
+    "S-952": ("1000", "1.0", "98.0", "100.0", "", "", "", "", "", "1.000", "", "", ""),
+    "S-953": ("1000", "1.0", "193", "1.0", "0.337", "", "", "", "", "0.010", "", "0.653", ""),
     "S-954": ("1000", "1.0", "191", "0.0", "0.340", "", "", "", "", "", "", "0.660", ""),
-    "S-955": ("1000", "1.0", "100", "100.0", "", "", "", "", "", "1.000", "", "", ""),
+    "S-955": ("1000", "1.0", "2.0", "100.0", "", "", "", "", "", "1.000", "", "", ""),
+    "S-956": ("1000", "1.0", "100", "100.0", "", "", "", "", "", "1.000", "", "", ""),
 }
 
 
@@ -3681,17 +3682,11 @@ def _alumina_refinery() -> Flowsheet:
     floc_tee = fs.add(units.Tee(branch="inlet"))
     flocculant = fs.add(units.Feed("Flocculant", reference="PCD-904"))
     settler = fs.add(
-        units.Separator(
-            "TH-901", characteristic="gravity", width=110, height=160, description="Red Mud Settler"
-        )
+        units.Thickener("TH-901", width=150, height=120, description="Red Mud Settler")
     )
     wash_tee = fs.add(units.Tee(branch="inlet"))
     wash_water = fs.add(units.Feed("Mud Wash Water", reference="PCD-902"))
-    washer = fs.add(
-        units.Separator(
-            "TH-902", characteristic="gravity", width=110, height=160, description="Red Mud Washer"
-        )
-    )
+    washer = fs.add(units.Thickener("TH-902", width=150, height=120, description="Red Mud Washer"))
     residue = fs.add(units.Product("Washed Residue to Storage", reference="PFD-905"))
 
     security_filter = fs.add(
@@ -3739,15 +3734,18 @@ def _alumina_refinery() -> Flowsheet:
         units.Conveyor("CV-902", length=200, description="Washed Hydrate Conveyor")
     )
     hydrate_belt.nozzle("feed", "N")
-    calciner_tee = fs.add(units.Tee(branch="inlet"))
     combustion = fs.add(
         units.Furnace("FH-901", width=100, height=120, description="Calciner Combustion Chamber")
     )
     air = fs.add(units.Feed("Combustion Air"))
     fuel = fs.add(units.Feed("Fuel Gas", reference="PCD-905"))
     calciner = fs.add(
-        units.Dryer(
-            "CA-901", variant="fluidized_bed", width=130, height=180, description="Alumina Calciner"
+        units.Kiln(
+            "CA-901",
+            variant="fluidized_bed",
+            width=120,
+            height=200,
+            description="Alumina Calciner",
         )
     )
     product_cyclone = fs.add(
@@ -3759,6 +3757,7 @@ def _alumina_refinery() -> Flowsheet:
             description="Calciner Product Cyclone",
         )
     )
+    product_tee = fs.add(units.Tee(branch="inlet"))
     offgas = fs.add(units.Product("Calciner Off-Gas to Gas Cleaning", reference="PFD-902"))
     alumina = fs.add(units.Product("Alumina to Cooling and Storage", reference="PFD-902"))
 
@@ -3767,8 +3766,12 @@ def _alumina_refinery() -> Flowsheet:
     )
     caustic = fs.add(units.Feed("Caustic Soda Make-up", reference="PCD-906"))
     evaporator = fs.add(
-        units.HeatExchanger(
-            "EV-901", variant="kettle", width=170, height=64, description="Spent Liquor Evaporator"
+        units.Evaporator(
+            "EV-901",
+            variant="falling_film",
+            width=100,
+            height=200,
+            description="Spent Liquor Evaporator",
         )
     )
     lp_steam = fs.add(units.Feed("LP Steam", reference="PCD-903"))
@@ -3837,33 +3840,40 @@ def _alumina_refinery() -> Flowsheet:
     hydrate_wash.pin(port="outlet", x=2200, y=1500)
     hydrate_belt.pin(port="feed", x=2220, y=calcine_y)
     hydrate_run_y = hydrate_belt.pin_.y + port_offset(hydrate_belt, "discharge")[1]
-    calciner_tee.pin(port="inlet", x=2470, y=hydrate_run_y)
-    calciner.pin(port="feed", x=2560, y=hydrate_run_y)
-    product_cyclone.pin(port="feed", x=2780, y=hydrate_run_y)
-    combustion.pin(port="inlet", x=2260, y=2000)
+    calciner.pin(port="feed", x=2520, y=hydrate_run_y)
+    product_cyclone.pin(port="feed", x=2790, y=1720)
+    product_tee.pin(
+        port="inlet",
+        x=product_cyclone.pin_.x + port_offset(product_cyclone, "underflow")[0] - tee_w / 2,
+        y=calciner.pin_.y + port_offset(calciner, "product")[1],
+        mirrored="y",
+    )
+    combustion.pin(port="inlet", x=2260, y=2060)
     air.pin(port="outlet", x=2160, y=2000)
-    fuel.pin(port="outlet", x=2180, y=2170)
+    fuel.pin(port="outlet", x=2180, y=2230)
     combustion_gas_y = combustion.pin_.y + port_offset(combustion, "outlet")[1]
     offgas.pin(port="inlet", x=2960, y=1680)
-    alumina.pin(port="inlet", x=2960, y=2060)
+    alumina.pin(port="inlet", x=2980, y=calciner.pin_.y + port_offset(calciner, "product")[1])
 
     spent_tank.pin(port="in_1", x=1350, y=1800)
     caustic.pin(port="outlet", x=1230, y=1863)
-    evaporator.pin(port="shell_in", x=1550, y=2000)
-    lp_steam.pin(port="outlet", x=1300, y=evaporator.pin_.y + port_offset(evaporator, "tube_in")[1])
-    evap_condensate.pin(
-        port="inlet", x=1740, y=evaporator.pin_.y + port_offset(evaporator, "tube_out")[1]
+    evaporator.pin(port="feed", x=1550, y=1980)
+    lp_steam.pin(
+        port="outlet", x=1330, y=evaporator.pin_.y + port_offset(evaporator, "heating_in")[1]
     )
-    evap_vapour.pin(port="inlet", x=1660, y=1820)
-    liquor_pump.pin(port="suction", x=1780, y=2100)
+    evap_condensate.pin(
+        port="inlet", x=1820, y=evaporator.pin_.y + port_offset(evaporator, "condensate")[1]
+    )
+    evap_vapour.pin(port="inlet", x=1700, y=1830)
+    liquor_pump.pin(port="suction", x=1800, y=2220)
 
     cake_x = security_filter.pin_.x + port_offset(security_filter, "cake")[0]
     mud_draw_x = settler.pin_.x + port_offset(settler, "underflow")[0]
     classifier_1_axis_x = classifier_1.pin_.x + port_offset(classifier_1, "overflow")[0]
     classifier_2_axis_x = classifier_2.pin_.x + port_offset(classifier_2, "overflow")[0]
     product_axis_x = product_cyclone.pin_.x + port_offset(product_cyclone, "overflow")[0]
-    evap_bottoms_x = evaporator.pin_.x + port_offset(evaporator, "bottoms")[0]
-    evap_vapour_x = evaporator.pin_.x + port_offset(evaporator, "shell_out")[0]
+    evap_bottoms_x = evaporator.pin_.x + port_offset(evaporator, "concentrate")[0]
+    evap_vapour_x = evaporator.pin_.x + port_offset(evaporator, "vapor")[0]
     spent_in_2_y = spent_tank.pin_.y + port_offset(spent_tank, "in_2")[1]
     spent_draw_x = spent_tank.pin_.x + port_offset(spent_tank, "outlet")[0]
 
@@ -3882,7 +3892,7 @@ def _alumina_refinery() -> Flowsheet:
     fs.connect(ore_belt.discharge, mill_tee.inlet, name="S-902")
     fs.connect(liquor_pump.discharge, mill_tee.branch, name="S-903", draw_as_recycle=True).via(
         [
-            (1850, lane_home_y),
+            (liquor_pump.pin_.x + port_offset(liquor_pump, "discharge")[0], lane_home_y),
             (lane_home_x, lane_home_y),
             (lane_home_x, lane_return_y),
             (mill_tee.pin_.x + tee_w / 2, lane_return_y),
@@ -3995,36 +4005,31 @@ def _alumina_refinery() -> Flowsheet:
         ]
     )
     fs.connect(hydrate_filter.port("cake"), hydrate_belt.feed, name="S-942")
-    fs.connect(hydrate_belt.discharge, calciner_tee.inlet, name="S-942")
+    fs.connect(hydrate_belt.discharge, calciner.feed, name="S-942")
 
     fs.connect(caustic.outlet, spent_tank.port("in_3"), name="S-943")
-    fs.connect(spent_tank.outlet, evaporator.port("shell_in"), name="S-944").via(
-        [(spent_draw_x, 2060), (1550, 2060)]
-    )
-    fs.connect(lp_steam.outlet, evaporator.tube_in, name="S-945")
-    fs.connect(evaporator.tube_out, evap_condensate.inlet, name="S-946")
-    fs.connect(evaporator.port("shell_out"), evap_vapour.inlet, name="S-947").via(
-        [(evap_vapour_x, 1820)]
-    )
-    fs.connect(evaporator.port("bottoms"), liquor_pump.suction, name="S-948").via(
-        [(evap_bottoms_x, 2100)]
+    fs.connect(spent_tank.outlet, evaporator.feed, name="S-944").via([(spent_draw_x, 1980)])
+    fs.connect(lp_steam.outlet, evaporator.heating_in, name="S-945")
+    fs.connect(evaporator.condensate, evap_condensate.inlet, name="S-946")
+    fs.connect(evaporator.vapor, evap_vapour.inlet, name="S-947").via([(evap_vapour_x, 1830)])
+    fs.connect(evaporator.concentrate, liquor_pump.suction, name="S-948").via(
+        [(evap_bottoms_x, 2220)]
     )
 
     fs.connect(air.outlet, combustion.inlet, name="S-949")
     fs.connect(fuel.outlet, combustion.fuel, name="S-950").via(
-        [(combustion.pin_.x + port_offset(combustion, "fuel")[0], 2170)]
+        [(combustion.pin_.x + port_offset(combustion, "fuel")[0], 2230)]
     )
-    fs.connect(combustion.outlet, calciner_tee.branch, name="S-951").via(
-        [(calciner_tee.pin_.x + tee_w / 2, combustion_gas_y)]
+    fs.connect(combustion.outlet, calciner.air, name="S-951").via(
+        [(calciner.pin_.x + port_offset(calciner, "air")[0], combustion_gas_y)]
     )
-    fs.connect(calciner_tee.outlet, calciner.feed, name="S-952")
-    fs.connect(calciner.product, product_cyclone.feed, name="S-953")
+    fs.connect(calciner.product, product_tee.inlet, name="S-952")
+    fs.connect(calciner.offgas, product_cyclone.feed, name="S-953")
     fs.connect(product_cyclone.port("overflow"), offgas.inlet, name="S-954").via(
         [(product_axis_x, 1680)]
     )
-    fs.connect(product_cyclone.port("underflow"), alumina.inlet, name="S-955").via(
-        [(product_axis_x, 2060)]
-    )
+    fs.connect(product_cyclone.port("underflow"), product_tee.branch, name="S-955")
+    fs.connect(product_tee.outlet, alumina.inlet, name="S-956")
 
     for s in fs.streams:
         values = _ALUMINA_PROPERTIES.get(s.name)
@@ -4112,9 +4117,9 @@ def _alumina_refinery() -> Flowsheet:
                 "six to ten, two flash stages for eight to twelve, one settler "
                 "and one washer for a six-stage decantation circuit, two "
                 "precipitators for a tank farm of twelve.",
-                "TH-901 and TH-902 are ISO 10628-2 item 8.3 X8031, the gravity "
-                "separating vessel. The rake is a mechanical internal the "
-                "standard does not draw.",
+                "TH-901 and TH-902 are drawn with the ISO 10628-2 item 28.4 "
+                "C2021 cross-beam on the rake shaft. The drive above it is not "
+                "drawn: it is a tagged item of its own.",
                 "Soda leaving chemically bound in the residue is replaced by the "
                 "make-up on S-943. Soda dissolved in the residue's entrained "
                 "liquor is what the washing on TH-902 recovers.",

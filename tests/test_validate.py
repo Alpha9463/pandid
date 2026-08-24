@@ -751,6 +751,12 @@ def test_nothing_shipped_leaves_a_counted_nozzle_open():
     running this over the corpus rather than asserting the rule in the
     abstract: a family that had *not* kept its singular spelling working
     would show up here as sixteen unconnected nozzles, not as a number.
+
+    117 rather than 119 since ``Thickener`` landed: ``examples/21``'s
+    ``TH-901`` and ``TH-902`` were separators, and a thickener's ``feed``
+    is a plain fixed nozzle. The number goes *down* when a machine stops
+    being drawn as something it was not, which is the only direction this
+    count has ever moved for a good reason.
     """
     from tests.test_golden import SCENARIOS
 
@@ -761,7 +767,7 @@ def test_nothing_shipped_leaves_a_counted_nozzle_open():
         counted += sum(_family_members(u) for u in fs.units)
         offenders += [f"{name}: {w.message}" for w in fs.warnings if w.code == "nozzle-unconnected"]
     assert offenders == []
-    assert counted == 119
+    assert counted == 117
 
 
 def _family_members(unit):

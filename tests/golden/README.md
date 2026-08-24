@@ -65,9 +65,9 @@ valve one sequence strokes. All four state their own title-block dates, so none
 of them is pinned.
 
 `21_alumina_refinery` is the Bayer circuit and the largest fixture here:
-twenty-eight tagged items, fifty-five streams and a sheet sized to its own
+twenty-eight tagged items, fifty-six streams and a sheet sized to its own
 drawing rather than to a page. It is the only scenario drawing a crusher, a
-mill, a gravity separating vessel, a hydrocyclone or a fluidised-bed drier; the
+mill, a hydrocyclone, a thickener, an evaporator or a calciner; the
 only one with two cake-forming filters piping `wash_in` and `cake` as well as
 the filtrate; and the only one whose process returns to its own first unit, so
 it is what holds a closed circuit — and a stream table wider than any standard

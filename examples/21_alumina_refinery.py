@@ -12,7 +12,7 @@ except with the residue, with the product, or up an evaporator's vapour
 line.
 
 The sheet is the largest in the gallery, and it is sized to its own
-drawing rather than to a page: fifty-five streams side by side is wider
+drawing rather than to a page: fifty-six streams side by side is wider
 than any standard sheet takes.
 
 **What is simplified, and it is a lot.** A refinery is far bigger than
@@ -53,13 +53,13 @@ from pandid import (
     Conveyor,
     Cooler,
     Cyclone,
+    FallingFilmEvaporator,
     Feed,
     FilterPress,
     Flowsheet,
-    FluidizedBedDryer,
+    FluidizedBedCalciner,
     Furnace,
     JawCrusher,
-    KettleReboiler,
     Mill,
     Product,
     Pump,
@@ -69,6 +69,7 @@ from pandid import (
     ShellAndTubeExchanger,
     Tank,
     Tee,
+    Thickener,
 )
 from pandid.document import Revision, TableBox, TitleBlock, equipment_list, notes
 from pandid.portgeom import pinned_x, pinned_y
@@ -138,10 +139,11 @@ PROPERTIES = {
     "S-949": ("25", "1.0", "120", "", "", "", "", "", "", "", "", "1.000", ""),
     "S-950": ("15", "3.0", "6.0", "", "", "", "", "", "", "", "", "", "1.000"),
     "S-951": ("1050", "1.0", "126", "", "", "", "", "", "", "", "", "1.000", ""),
-    "S-952": ("1000", "1.0", "291", "52.6", "0.041", "", "", "", "0.526", "", "", "0.433", ""),
-    "S-953": ("1000", "1.0", "291", "34.4", "0.223", "", "", "", "", "0.344", "", "0.433", ""),
+    "S-952": ("1000", "1.0", "98.0", "100.0", "", "", "", "", "", "1.000", "", "", ""),
+    "S-953": ("1000", "1.0", "193", "1.0", "0.337", "", "", "", "", "0.010", "", "0.653", ""),
     "S-954": ("1000", "1.0", "191", "0.0", "0.340", "", "", "", "", "", "", "0.660", ""),
-    "S-955": ("1000", "1.0", "100", "100.0", "", "", "", "", "", "1.000", "", "", ""),
+    "S-955": ("1000", "1.0", "2.0", "100.0", "", "", "", "", "", "1.000", "", "", ""),
+    "S-956": ("1000", "1.0", "100", "100.0", "", "", "", "", "", "1.000", "", "", ""),
 }
 
 
@@ -238,18 +240,24 @@ def main():
                            description="Blow-off Dilution Tank"))
     floc_tee = fs.add(Tee(branch="inlet"))
     flocculant = fs.add(Feed("Flocculant", reference="PCD-904"))
-    # **The thickener is item 8.3 X8031.** ISO 10628-2 has no thickener
-    # and no rake: what it has is the separating vessel carrying the
-    # group-29 gravity characteristic, which is what
-    # ``characteristic="gravity"`` composes. The rake is a mechanical
-    # internal the standard does not draw, so drawing one would be
-    # pandid's invention rather than the symbol.
-    settler = fs.add(Separator("TH-901", characteristic="gravity", width=110,
-                               height=160, description="Red Mud Settler"))
+    # A thickener, drawn as one. Through 0.1.3 these two were
+    # ``Separator(characteristic="gravity")`` -- ISO item 8.3 X8031, a
+    # separating vessel carrying the group-29 settling arrow -- because
+    # that was the nearest thing in the library. It is a tall
+    # hopper-bottomed drum, which is the shape of a dust collector; a
+    # thickener is wide and shallow with a raked floor, and the rake is
+    # the machine. ``rake=`` is what draws it, defaulting to ISO item
+    # 28.4 C2021's cross-beam.
+    #
+    # 150 x 120 and not the default 100 x 80: the two settling machines
+    # are the largest items in a Bayer plant and they are drawn like it,
+    # at the artwork's own 5:4 so nothing in the drawing is stretched.
+    settler = fs.add(Thickener("TH-901", width=150, height=120,
+                               description="Red Mud Settler"))
     wash_tee = fs.add(Tee(branch="inlet"))
     wash_water = fs.add(Feed("Mud Wash Water", reference="PCD-902"))
-    washer = fs.add(Separator("TH-902", characteristic="gravity", width=110,
-                              height=160, description="Red Mud Washer"))
+    washer = fs.add(Thickener("TH-902", width=150, height=120,
+                              description="Red Mud Washer"))
     residue = fs.add(Product("Washed Residue to Storage",
                              reference="PFD-905"))
 
@@ -313,31 +321,40 @@ def main():
     hydrate_belt = fs.add(Conveyor("CV-902", length=200,
                                    description="Washed Hydrate Conveyor"))
     hydrate_belt.nozzle("feed", "N")
-    calciner_tee = fs.add(Tee(branch="inlet"))
-    # **No rotary kiln.** ISO 10628-2 has no kiln and no calciner at all;
-    # item 10.7 X8044 is a rotary *drier* and calling it a calciner would
-    # be a caption doing work the symbol does not. The fluidised body,
-    # 10.5, is a real drawing of a real machine, and a gas-suspension or
-    # fluidised-bed calciner is what a refinery built this century has.
-    #
-    # Its fuel is burned in a chamber of its own and the hot gas
-    # fluidises the bed, so the fuel line lands on ``FH-901`` and the
-    # duct ties into the hydrate feed -- which is also the only way to
-    # draw it, since ``units.Dryer`` declares a feed and a product and
-    # nothing else.
+    # The fuel is burned in a chamber of its own and the hot gas
+    # fluidises the bed, so the fuel and the combustion air land on
+    # ``FH-901`` and the duct goes to the calciner's own ``air`` nozzle,
+    # under the distributor grid. Through 0.1.3 there was a tee here
+    # instead: the calciner was a ``FluidizedBedDryer``, whose gas
+    # connection is on the casing wall rather than in a windbox, so the
+    # hot duct had to be teed into the hydrate feed line.
     combustion = fs.add(Furnace("FH-901", width=100, height=120,
                                 description="Calciner Combustion Chamber"))
     air = fs.add(Feed("Combustion Air"))
     fuel = fs.add(Feed("Fuel Gas", reference="PCD-905"))
-    calciner = fs.add(FluidizedBedDryer("CA-901", width=130,
-                                        height=180, description="Alumina Calciner"))
-    # Product and gas leave the calciner on one nozzle because the symbol
-    # has one, so the cyclone below is where the sheet parts them. Neither
-    # draw is named for which one is wanted: here the product is the
-    # ``underflow`` and the spent gas the ``overflow``.
+    # A calciner, drawn as one. Through 0.1.3 this was a fluidised-bed
+    # *drier*, which has a feed and a product and nothing else, so the
+    # calcined alumina and the spent gas left together on one nozzle and
+    # ``CY-903`` was where the sheet had to part them.
+    #
+    # ``CA-901.product`` is the bed's own draw and ``CA-901.offgas`` the
+    # freeboard's, which is what the machine really has, so the cyclone
+    # below is now on the gas line where it belongs -- catching the two
+    # tonnes an hour of alumina the gas carries out with it.
+    #
+    # ``CA-901.fuel`` is left unpiped on purpose: this calciner has no
+    # burner of its own, and the nozzle is there for the fired kilns that
+    # do.
+    calciner = fs.add(FluidizedBedCalciner(
+        "CA-901", width=120, height=200, description="Alumina Calciner"))
     product_cyclone = fs.add(Cyclone(
         "CY-903", width=90, height=140,
         description="Calciner Product Cyclone"))
+    # The catch is product, so it rejoins the product line at a junction
+    # rather than reaching the flag on a second run of its own: two lines
+    # onto one flag arrive at the same point and share the last of it,
+    # which reads as a tee drawn without one.
+    product_tee = fs.add(Tee(branch="inlet"))
     offgas = fs.add(Product("Calciner Off-Gas to Gas Cleaning",
                             reference="PFD-902"))
     alumina = fs.add(Product("Alumina to Cooling and Storage",
@@ -352,11 +369,17 @@ def main():
     spent_tank = fs.add(Tank("M-902", inputs=3, width=70, height=90,
                               description="Spent Liquor Tank"))
     caustic = fs.add(Feed("Caustic Soda Make-up", reference="PCD-906"))
-    # A kettle body: a shell with a heated bundle in it, a vapour space
-    # over the bundle and a weir draw at the end, which is the nearest
-    # drawing ISO has to an effect of a falling-film train.
-    evaporator = fs.add(KettleReboiler(
-        "EV-901", width=170, height=64,
+    # An effect of a falling-film train, drawn as one. Through 0.1.3 this
+    # was a ``KettleReboiler``: a shell with a heated bundle in it and a
+    # weir draw at the end, which was the nearest drawing the library
+    # had, and which says the machine returns boil-up to a tower. It does
+    # not -- its vapour is 329 t/h of water leaving the circuit, and
+    # ``EV-901.vapor`` is the nozzle that says so.
+    #
+    # 100 x 200, the artwork's own 1:2: a falling-film body is tall
+    # because the tubes are, which is the point of the machine.
+    evaporator = fs.add(FallingFilmEvaporator(
+        "EV-901", width=100, height=200,
         description="Spent Liquor Evaporator"))
     lp_steam = fs.add(Feed("LP Steam", reference="PCD-903"))
     evap_condensate = fs.add(Product("Steam Condensate", header=True,
@@ -440,34 +463,43 @@ def main():
     hydrate_wash.pin(port="outlet", x=2200, y=1500)
     hydrate_belt.pin(port="feed", x=2220, y=calcine_y)
     hydrate_run_y = pinned_y(hydrate_belt, "discharge")
-    calciner_tee.pin(port="inlet", x=2470, y=hydrate_run_y)
-    calciner.pin(port="feed", x=2560, y=hydrate_run_y)
-    product_cyclone.pin(port="feed", x=2780, y=hydrate_run_y)
-    combustion.pin(port="inlet", x=2260, y=2000)
+    calciner.pin(port="feed", x=2520, y=hydrate_run_y)
+    # On the calciner's own off-gas elevation rather than on the hydrate
+    # run: the cyclone is now on the gas line, and a machine pinned to
+    # the line it is not on is a machine the router has to reach round.
+    product_cyclone.pin(port="feed", x=2790, y=1720)
+    # Under the cyclone's own apex and on the calciner's product
+    # elevation, so the catch falls straight into the run and the run is
+    # straight. ``mirrored="y"`` turns the branch onto the north face,
+    # which is the one thing a tee's placement says.
+    product_tee.pin(port="inlet",
+                    x=pinned_x(product_cyclone, "underflow") - tee_w / 2,
+                    y=pinned_y(calciner, "product"), mirrored="y")
+    combustion.pin(port="inlet", x=2260, y=2060)
     air.pin(port="outlet", x=2160, y=2000)
-    fuel.pin(port="outlet", x=2180, y=2170)
+    fuel.pin(port="outlet", x=2180, y=2230)
     combustion_gas_y = pinned_y(combustion, "outlet")
     offgas.pin(port="inlet", x=2960, y=1680)
-    alumina.pin(port="inlet", x=2960, y=2060)
+    alumina.pin(port="inlet", x=2980, y=pinned_y(calciner, "product"))
 
     spent_tank.pin(port="in_1", x=1350, y=1800)
     caustic.pin(port="outlet", x=1230, y=1863)
-    evaporator.pin(port="shell_in", x=1550, y=2000)
-    lp_steam.pin(port="outlet", x=1300,
-                 y=pinned_y(evaporator, "tube_in"))
+    evaporator.pin(port="feed", x=1550, y=1980)
+    lp_steam.pin(port="outlet", x=1330,
+                 y=pinned_y(evaporator, "heating_in"))
     evap_condensate.pin(
-        port="inlet", x=1740,
-        y=pinned_y(evaporator, "tube_out"))
-    evap_vapour.pin(port="inlet", x=1660, y=1820)
-    liquor_pump.pin(port="suction", x=1780, y=2100)
+        port="inlet", x=1820,
+        y=pinned_y(evaporator, "condensate"))
+    evap_vapour.pin(port="inlet", x=1700, y=1830)
+    liquor_pump.pin(port="suction", x=1800, y=2220)
 
     cake_x = pinned_x(security_filter, "cake")
     mud_draw_x = pinned_x(settler, "underflow")
     classifier_1_axis_x = pinned_x(classifier_1, "overflow")
     classifier_2_axis_x = pinned_x(classifier_2, "overflow")
     product_axis_x = pinned_x(product_cyclone, "overflow")
-    evap_bottoms_x = pinned_x(evaporator, "bottoms")
-    evap_vapour_x = pinned_x(evaporator, "shell_out")
+    evap_bottoms_x = pinned_x(evaporator, "concentrate")
+    evap_vapour_x = pinned_x(evaporator, "vapor")
     spent_in_2_y = pinned_y(spent_tank, "in_2")
     spent_draw_x = pinned_x(spent_tank, "outlet")
 
@@ -503,7 +535,8 @@ def main():
     # chute from underneath.
     fs.connect(liquor_pump.discharge, mill_tee.branch, name="S-903",
                draw_as_recycle=True).via(
-                   [(1850, lane_home_y), (lane_home_x, lane_home_y),
+                   [(pinned_x(liquor_pump, "discharge"), lane_home_y),
+                    (lane_home_x, lane_home_y),
                     (lane_home_x, lane_return_y),
                     (pinned_x(mill_tee) + tee_w / 2, lane_return_y)])
     fs.connect(mill_tee.outlet, mill.feed, name="S-904").via([(570, ore_run_y)])
@@ -618,7 +651,7 @@ def main():
                     (lane_filtrate_x, lane_filtrate_y),
                     (lane_filtrate_x, spent_in_2_y)])
     fs.connect(hydrate_filter.port("cake"), hydrate_belt.feed, name="S-942")
-    fs.connect(hydrate_belt.discharge, calciner_tee.inlet, name="S-942")
+    fs.connect(hydrate_belt.discharge, calciner.feed, name="S-942")
 
     # --- Spent liquor -------------------------------------------------
     fs.connect(caustic.outlet, spent_tank.port("in_3"), name="S-943")
@@ -626,27 +659,36 @@ def main():
     # evaporator's process side is fed at the bottom, which is where a
     # kettle body puts its shell nozzle and where an effect of a
     # falling-film train is fed in any case.
-    fs.connect(spent_tank.outlet, evaporator.port("shell_in"),
-               name="S-944").via([(spent_draw_x, 2060), (1550, 2060)])
-    fs.connect(lp_steam.outlet, evaporator.tube_in, name="S-945")
-    fs.connect(evaporator.tube_out, evap_condensate.inlet, name="S-946")
-    fs.connect(evaporator.port("shell_out"), evap_vapour.inlet,
-               name="S-947").via([(evap_vapour_x, 1820)])
-    fs.connect(evaporator.port("bottoms"), liquor_pump.suction,
-               name="S-948").via([(evap_bottoms_x, 2100)])
+    fs.connect(spent_tank.outlet, evaporator.feed,
+               name="S-944").via([(spent_draw_x, 1980)])
+    fs.connect(lp_steam.outlet, evaporator.heating_in, name="S-945")
+    fs.connect(evaporator.condensate, evap_condensate.inlet, name="S-946")
+    fs.connect(evaporator.vapor, evap_vapour.inlet,
+               name="S-947").via([(evap_vapour_x, 1830)])
+    fs.connect(evaporator.concentrate, liquor_pump.suction,
+               name="S-948").via([(evap_bottoms_x, 2220)])
 
     # --- Calcination --------------------------------------------------
     fs.connect(air.outlet, combustion.inlet, name="S-949")
     fs.connect(fuel.outlet, combustion.fuel, name="S-950").via(
-        [(pinned_x(combustion, "fuel"), 2170)])
-    fs.connect(combustion.outlet, calciner_tee.branch, name="S-951").via(
-        [(pinned_x(calciner_tee) + tee_w / 2, combustion_gas_y)])
-    fs.connect(calciner_tee.outlet, calciner.feed, name="S-952")
-    fs.connect(calciner.product, product_cyclone.feed, name="S-953")
+        [(pinned_x(combustion, "fuel"), 2230)])
+    # Into the windbox from below, which is where a fluidised bed's gas
+    # goes in and where the symbol draws the nozzle. The chamber sits
+    # lower than the calciner's floor on purpose, so the duct is one
+    # corner rather than a loop under the machine.
+    fs.connect(combustion.outlet, calciner.air, name="S-951").via(
+        [(pinned_x(calciner, "air"), combustion_gas_y)])
+    # The product leaves the bed over its own weir on a nozzle of its
+    # own, which is what a calciner symbol bought this sheet.
+    fs.connect(calciner.product, product_tee.inlet, name="S-952")
+    fs.connect(calciner.offgas, product_cyclone.feed, name="S-953")
     fs.connect(product_cyclone.port("overflow"), offgas.inlet,
                name="S-954").via([(product_axis_x, 1680)])
-    fs.connect(product_cyclone.port("underflow"), alumina.inlet,
-               name="S-955").via([(product_axis_x, 2060)])
+    # Two tonnes an hour of alumina the gas carried out of the freeboard
+    # with it, dropped back into the product.
+    fs.connect(product_cyclone.port("underflow"), product_tee.branch,
+               name="S-955")
+    fs.connect(product_tee.outlet, alumina.inlet, name="S-956")
 
     for s in fs.streams:
         values = PROPERTIES.get(s.name)
@@ -705,9 +747,9 @@ def main():
         "six to ten, two flash stages for eight to twelve, one settler "
         "and one washer for a six-stage decantation circuit, two "
         "precipitators for a tank farm of twelve.",
-        "TH-901 and TH-902 are ISO 10628-2 item 8.3 X8031, the gravity "
-        "separating vessel. The rake is a mechanical internal the "
-        "standard does not draw.",
+        "TH-901 and TH-902 are drawn with the ISO 10628-2 item 28.4 "
+        "C2021 cross-beam on the rake shaft. The drive above it is not "
+        "drawn: it is a tagged item of its own.",
         "Soda leaving chemically bound in the residue is replaced by the "
         "make-up on S-943. Soda dissolved in the residue's entrained "
         "liquor is what the washing on TH-902 recovers.",
