@@ -483,7 +483,11 @@ def main():
     alumina.pin(port="inlet", x=2980, y=pinned_y(calciner, "product"))
 
     spent_tank.pin(port="in_1", x=1350, y=1800)
-    caustic.pin(port="outlet", x=1230, y=1863)
+    # Level with the nozzle it feeds rather than at a height of its own:
+    # 1863 was 25 below M-902's third inlet, which is under the 50 the
+    # flag measures across the run, so the line stepped into the flag's
+    # own box and back out of it instead of running straight in.
+    caustic.pin(port="outlet", x=1230, y=pinned_y(spent_tank, "in_3"))
     evaporator.pin(port="feed", x=1550, y=1980)
     lp_steam.pin(port="outlet", x=1330,
                  y=pinned_y(evaporator, "heating_in"))

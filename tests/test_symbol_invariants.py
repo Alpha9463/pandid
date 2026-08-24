@@ -28,8 +28,17 @@ from typing import NamedTuple
 import pytest
 
 from pandid import units
-from pandid.portgeom import outward_dir, port_point
-from pandid.render.symbols import CENTRED, FROM_START, PortSeries, Symbol, default_registry, spread
+from pandid.portgeom import outward_dir, port_offset, port_point, resolve_size
+from pandid.render.symbols import (
+    CENTRED,
+    FROM_START,
+    PortSeries,
+    Symbol,
+    _face_local,
+    _face_point,
+    default_registry,
+    spread,
+)
 
 #: Every group-28 stirrer, read off the registry so a new one is covered
 #: without anyone remembering to come here.
@@ -1852,6 +1861,447 @@ def test_a_series_on_another_face_is_not_a_collision():
     spread along the opposite face, the shipped case that must stay quiet."""
     assert default_registry.get("splitter").coincident_ports() == []
     assert default_registry.get("mixer").coincident_ports() == []
+
+
+# ---------------------------------------------------------------------------
+# The wall a family is confined to (#488).
+#
+# A tank's or a vessel's inlets and outlets are not a PortSeries: the count is
+# per unit and the faces are per unit too, so ``vessel_symbol`` spreads them
+# itself, from the one nozzle the stencil drew. That nozzle says nothing about
+# how much wall there is either side of it, and until ``Symbol.bands`` nothing
+# did: three inlets on a dished-roof tank put the third below the floor and off
+# the drawing entirely, and the stream to it ended in blank paper.
+#
+# ``bands`` is the missing dimension and these are the checks on it: the run
+# stays inside the band, the band stays on the artwork, and a lone connection
+# still lands exactly where the stencil put it.
+# ---------------------------------------------------------------------------
+
+#: Every holdup body, which is every symbol whose families ``vessel_symbol``
+#: places. Read off the registry, so a variant added later is checked without
+#: anyone remembering to come here.
+_HOLDUP = [
+    (kind, variant) for kind in ("tank", "vessel") for variant in default_registry.variants(kind)
+]
+_HOLDUP_IDS = [f"{kind}/{variant}" for kind, variant in _HOLDUP]
+
+#: Every symbol that declares a wall. The population the wall checks below run
+#: over, rather than the whole registry with a skip on the 210 symbols that
+#: have no family to bound: a test that does not execute is not a test, and a
+#: skip whose condition is permanently true for a valve or a pump is one
+#: wearing a test's clothes. Read off the registry, so a symbol that starts
+#: declaring a band is checked without anyone remembering to come here, and
+#: ``test_every_family_face_declares_a_band`` is what stops this list quietly
+#: emptying.
+#: ``getattr`` rather than ``sym.bands``: this is read while the module is
+#: imported, and the file has to collect against a build with no such
+#: concept -- checking out an older ``pandid`` and running this suite
+#: against it should report which claims fail, not fail to collect at all.
+#: An empty population would then make the checks below vanish silently,
+#: which ``test_every_family_face_declares_a_band`` is what prevents: it
+#: runs over the bodies rather than over this list.
+_BANDED = [key for key, sym in _SYMBOLS if getattr(sym, "bands", {})]
+_BANDED_IDS = [f"{kind}/{variant}" for kind, variant in _BANDED]
+
+#: The holdup bodies whose class offers a composition, which is the population
+#: the ``supports=`` check runs over. Asked of the class rather than written
+#: down, so a ``Tank`` that grows a ``supports=`` is covered by that change
+#: alone.
+_COMPOSABLE = [
+    (kind, variant)
+    for kind, variant in _HOLDUP
+    if "supports" in getattr(units.Tank if kind == "tank" else units.Vessel, "COMPOSITION", {})
+]
+_COMPOSABLE_IDS = [f"{kind}/{variant}" for kind, variant in _COMPOSABLE]
+
+#: How far off its own box a nozzle may be measured before it is off it. Not
+#: ``BOX_EPS``: a unit of slack is right for an authored coordinate rounded to
+#: one decimal, and far too much for a claim that a family never leaves the
+#: body, which is arithmetic and exact.
+ON_BODY_TOL = 1e-6
+
+
+def _holdup(kind: str, variant: str, role: str, faces: list[str]) -> units.Unit:
+    """One tank or vessel with its ``role`` family on ``faces``."""
+    cls = units.Tank if kind == "tank" else units.Vessel
+    if role == "inlet":
+        return cls("X-1", variant=variant, inputs=faces)
+    return cls("X-1", variant=variant, outputs=faces)
+
+
+def _has_wall(sym: Symbol, face: str) -> bool:
+    """True where this face's band has length in it.
+
+    A face whose band is a single point -- a dome crown, a cone apex, a
+    dished head -- carries one connection and refuses a second, so the
+    sweeps below walk it to a count of one and no further.
+    """
+    band = sym.bands.get(face)
+    return band is None or band[0] < band[1]
+
+
+def _role_menus(kind: str, variant: str):
+    """``(role, prefix, {face: (x, y)})`` for both families of a body."""
+    sym = default_registry.get(kind, variant)
+    for role, prefix in (("inlet", "in_"), ("outlet", "out_")):
+        yield role, prefix, sym.port_faces.get(role, {})
+
+
+def test_spread_never_leaves_the_band_it_is_given():
+    """The whole of the guarantee, on the one function that makes it.
+
+    ``at`` is where a symbol drew a single nozzle and ``extent`` bounds only how
+    *long* a run may be, never where that length is laid down -- so before this,
+    a family centred on a nozzle near the end of its wall walked off the end of
+    it. The band is the limit, and the claim is that no member ever leaves it:
+    at any count, from any anchor, under either alignment, on a band of any
+    width including none at all.
+    """
+    face = 95.5
+    for band in ((0.0, face), (36.0, 85.0), (10.0, 20.0), (50.0, 50.0)):
+        lo, hi = band
+        for at in (0.0, 5.0, 40.0, 85.0, 95.5, None):
+            for align in (CENTRED, FROM_START):
+                for count in range(1, 13):
+                    got = [spread(i, count, face, 20.0, 0.7, at, align, band) for i in range(count)]
+                    where = f"band={band} at={at} align={align} n={count}"
+                    assert all(lo - 1e-9 <= t <= hi + 1e-9 for t in got), where
+                    assert got == sorted(got), where
+
+
+def test_spread_slides_a_run_no_further_than_it_has_to():
+    """A band is a limit and not a re-centring: a family with room stays exactly
+    where ``at`` and ``align`` put it, and one that has run out of wall moves by
+    the overhang and by nothing more.
+
+    Without this the fix could have been "centre every family in its band",
+    which moves families that were never wrong.
+    """
+    # Room to spare: the same three points a band-less call gives.
+    inside = [spread(i, 3, 95.5, 20.0, 0.7, 50.0, CENTRED, (10.0, 90.0)) for i in range(3)]
+    assert inside == pytest.approx([30.0, 50.0, 70.0])
+    assert inside == pytest.approx([spread(i, 3, 95.5, 20.0, 0.7, 50.0, CENTRED) for i in range(3)])
+    # Anchored on the band's own end: the run hangs 20 over, and slides 20.
+    against = [spread(i, 3, 95.5, 20.0, 0.7, 85.0, CENTRED, (36.0, 85.0)) for i in range(3)]
+    assert against == pytest.approx([45.0, 65.0, 85.0])
+
+
+def test_three_inlets_stack_up_a_dished_roof_tanks_shell():
+    """The reported drawing, as a number.
+
+    ``tank/default``'s shell runs y 25,46..95,46 under the dome and the stencil
+    fills it at 85, ten above the floor. Three fills stack *up* that shell from
+    the one that was already drawn -- 45, 65, 85 -- rather than straddling it at
+    65, 85 and 105, which is where the third one was: 9,5 below the bottom of a
+    95,5-tall drawing, with the stream to it ending in blank paper (#488).
+    """
+    tank = units.Tank("TK-1", inputs=3)
+    assert [port_offset(tank, f"in_{i}")[1] for i in (1, 2, 3)] == pytest.approx([45.0, 65.0, 85.0])
+    assert [port_offset(tank, f"in_{i}")[0] for i in (1, 2, 3)] == pytest.approx([0.0] * 3)
+
+
+@pytest.mark.parametrize(("kind", "variant"), _HOLDUP, ids=_HOLDUP_IDS)
+def test_a_holdup_family_stays_on_its_own_box_at_every_count(kind, variant):
+    """No nozzle outside the body it belongs to, for every holdup drawing, every
+    face either family may be piped from, and every count the library admits.
+
+    The bar the issue set, and the one nothing enforced: ``validate()`` was
+    silent while a shipped sheet carried a nozzle 8,9px below its tank. Read
+    through ``portgeom`` on a real unit rather than by re-deriving ``spread``'s
+    arithmetic, which would only prove this test agrees with itself.
+    """
+    sym = default_registry.get(kind, variant)
+    for role, prefix, menu in _role_menus(kind, variant):
+        for face in menu:
+            for count in range(1, 9 if _has_wall(sym, face) else 2):
+                unit = _holdup(kind, variant, role, [face] * count)
+                w, h = resolve_size(unit)
+                for i in range(1, count + 1):
+                    x, y = port_offset(unit, f"{prefix}{i}")
+                    assert -ON_BODY_TOL <= x <= w + ON_BODY_TOL, (
+                        f"{kind}/{variant} {prefix}{i} of {count} on {face} is at "
+                        f"x={x}, outside a box {w} wide"
+                    )
+                    assert -ON_BODY_TOL <= y <= h + ON_BODY_TOL, (
+                        f"{kind}/{variant} {prefix}{i} of {count} on {face} is at "
+                        f"y={y}, outside a box {h} tall"
+                    )
+
+
+@pytest.mark.parametrize(("kind", "variant"), _HOLDUP, ids=_HOLDUP_IDS)
+def test_a_holdup_family_stays_inside_the_wall_its_symbol_declares(kind, variant):
+    """...and on the *wall*, wherever the drawing says where its wall is.
+
+    The box is the floor of the claim; ``bands`` is the real one. A face this
+    symbol declares no band for is one whose artwork runs the length of the box,
+    or one there is no straight run of at all -- a dome crown, a cone apex -- and
+    the test above is all that can be said about it.
+    """
+    sym = default_registry.get(kind, variant)
+    if not sym.bands:
+        pytest.skip(f"{kind}/{variant} declares no wall")
+    for role, prefix, menu in _role_menus(kind, variant):
+        for face in menu:
+            if face not in sym.bands:
+                continue
+            lo, hi = sym.bands[face]
+            for count in range(1, 9 if _has_wall(sym, face) else 2):
+                unit = _holdup(kind, variant, role, [face] * count)
+                for i in range(1, count + 1):
+                    x, y = port_offset(unit, f"{prefix}{i}")
+                    along = y if face in ("W", "E") else x
+                    assert lo - ON_BODY_TOL <= along <= hi + ON_BODY_TOL, (
+                        f"{kind}/{variant} {prefix}{i} of {count} sits {along} along "
+                        f"its {face} face, outside the ({lo}, {hi}) wall the symbol "
+                        f"declares"
+                    )
+
+
+@pytest.mark.parametrize(("kind", "variant"), _BANDED, ids=_BANDED_IDS)
+def test_every_declared_wall_lies_on_the_drawing(kind, variant):
+    """A band is a measurement off the artwork, so the artwork is what checks it.
+
+    Two numbers written down by hand are two numbers that can be wrong, and a
+    band measured off the wrong stroke would confine a family to the dome it was
+    supposed to keep it off. Both ends and the middle of every declared band are
+    walked back onto the drawing here -- at the same inset from the box edge
+    ``vessel_symbol`` draws a nozzle on that face at -- so a band on nothing is a
+    failure rather than a comment.
+    """
+    sym = default_registry.get(kind, variant)
+    segments = _collect_segments(sym.svg)
+    for face, (lo, hi) in sym.bands.items():
+        # The two families' own menus and not every port's: a band bounds the
+        # family ``vessel_symbol`` spreads, and a fixed nozzle that happens to
+        # come out of the same edge -- vessel/legs' drain is 20 in from a
+        # 40-wide box, so it leaves by the west -- is drawn at an inset of its
+        # own that says nothing about where the wall is.
+        insets = set()
+        for role in ("inlet", "outlet"):
+            drawn = sym.port_faces.get(role, {}).get(face)
+            if drawn is not None:
+                insets.add(_face_local(face, drawn[0], drawn[1], sym.width, sym.height)[1])
+        assert insets, f"{kind}/{variant} bands {face!r}, which no connection is drawn on"
+        for inset in insets:
+            for t in (lo, (lo + hi) / 2, hi):
+                point = _face_point(face, t, inset, sym.width, sym.height)
+                d = _nearest_distance(point, segments)
+                assert d <= GEOM_TOL, (
+                    f"{kind}/{variant} bands {face!r} at ({lo}, {hi}); {t} along it "
+                    f"is {point}, which is {d:.1f}u from the nearest drawn stroke"
+                )
+
+
+@pytest.mark.parametrize(("kind", "variant"), _HOLDUP, ids=_HOLDUP_IDS)
+def test_every_family_face_declares_a_band(kind, variant):
+    """A face with a placement and no band is a family bounded by the box alone.
+
+    The structural half of the fix, and the one that keeps it from rotting: the
+    box is not the drawing, so "no band declared" quietly means "spread this
+    family anywhere inside the rectangle", which is how the outer two of three
+    roof nozzles came to float 2,65 units clear of a dished tank's dome. Every
+    face either family may be piped from names its band, including the ones
+    whose band is a single point.
+    """
+    sym = default_registry.get(kind, variant)
+    for role, _, menu in _role_menus(kind, variant):
+        for face in menu:
+            assert face in sym.bands, (
+                f"{kind}/{variant}: {role} may be piped from {face}, and no band "
+                f"says how much of that face is drawing"
+            )
+
+
+@pytest.mark.parametrize(("kind", "variant"), _HOLDUP, ids=_HOLDUP_IDS)
+def test_a_wall_takes_a_second_connection_and_a_point_refuses_one(kind, variant):
+    """The band's two regimes, both asserted on every body and every face.
+
+    A dome crown, a cone apex and a dished head hold one nozzle, not two:
+    contained is not placed, since a band of no length puts every member of a
+    family on the same coordinate. So a second is refused -- at construction,
+    where the author wrote it, and again in ``vessel_symbol``, which is the only
+    route to the artwork.
+
+    The other branch is asserted rather than skipped, which is the point of
+    walking both here: ten of the eighteen bodies have a wall on every face a
+    family may use, and a check that only ever says "refused" would pass on a
+    build that refused *everything*.
+    """
+    sym = default_registry.get(kind, variant)
+    for role, prefix, menu in _role_menus(kind, variant):
+        for face in menu:
+            # One is always fine, and lands on the point the stencil drew.
+            _holdup(kind, variant, role, [face])
+            if not _has_wall(sym, face):
+                with pytest.raises(ValueError, match="mid-air off the ink"):
+                    _holdup(kind, variant, role, [face, face])
+                continue
+            pair = _holdup(kind, variant, role, [face, face])
+            one, two = (port_offset(pair, f"{prefix}{i}") for i in (1, 2))
+            assert one != two, (
+                f"{kind}/{variant} {role} on {face}: a face with a wall took a "
+                f"second connection and drew it on top of the first"
+            )
+
+
+def test_a_face_with_no_wall_is_refused_by_the_drawing_too():
+    """The construction-time refusal can be outrun -- a face is also reached
+    through ``nozzle()`` and through ``from_dict`` -- so the call that builds
+    the artwork refuses it as well, and says the same sentence about the same
+    rule."""
+    from pandid.render.symbols import vessel_symbol
+
+    with pytest.raises(ValueError, match="mid-air off the ink"):
+        vessel_symbol("tank", "default", (("in_1", "N"), ("in_2", "N")))
+
+
+def test_moving_a_second_connection_onto_a_wall_less_face_is_refused():
+    """``nozzle()`` is the other way onto a face, and it refuses before it
+    records the move -- so a refused unit is still drawn the way it was."""
+    tank = units.Tank("T-1", inputs=["N", "W"])
+    with pytest.raises(ValueError, match="mid-air off the ink"):
+        tank.nozzle("in_2", "N")
+    assert tank.face("in_2") == "W"
+
+
+@pytest.mark.parametrize(("kind", "variant"), _COMPOSABLE, ids=_COMPOSABLE_IDS)
+def test_a_supported_body_keeps_the_wall_its_body_declares(kind, variant):
+    """``Vessel(supports=...)`` is the documented way to stand a vessel on legs,
+    and it resolves through ``compose()``, which builds a fresh ``Symbol``.
+
+    A band that did not survive that path would leave the guarantee true of a
+    bare vessel and false of a supported one -- worse than not having it, since
+    the guarantee reads as universal. Asked of the symbol a real *unit*
+    resolves to, so it is the composed drawing that answers.
+    """
+    sym = default_registry.get(kind, variant)
+    assert sym.bands, f"{kind}/{variant} is a holdup body and declares no wall"
+    for supports in ("leg", "skirt", "bracket", "ring"):
+        try:
+            drawn = default_registry.for_unit(
+                units.Vessel("X-1", variant=variant, supports=supports)
+            )
+        except ValueError as exc:
+            # Some bodies cannot carry some supports at all: the grown box moves
+            # one of the body's own nozzles onto a face it was not drawn for, and
+            # compose() refuses outright. vessel/electrical_heating refuses all
+            # four, and its low shell draw-off is why. Asserted rather than
+            # skipped, so the refusal is a recorded fact about the drawing and
+            # not a hole in this check.
+            assert "grows the box" in str(exc), f"vessel/{variant} + {supports}: {exc}"
+            continue
+        assert drawn.bands == sym.bands, (
+            f"vessel/{variant} on {supports}s lost the wall its body declares"
+        )
+
+
+def test_a_wall_moves_with_the_ink_when_a_part_grows_the_box_upwards():
+    """A part drawn *above* a body shifts the body's own ink down the composed
+    box, and the band has to travel with it.
+
+    Nothing shipped composes a *banded* body upwards -- the four supports all
+    hang below -- so the arithmetic is exercised here directly rather than left
+    unmeasured until the first drive motor lands on a tank.
+    """
+    from pandid.render.symbols import Overlay, compose
+
+    # A plain body of this file's own, rather than a vendored one: the four
+    # shipped supports all hang *below* their vessel, and every vendored body a
+    # part can be hung above carries a crown nozzle that compose() then refuses
+    # to move. The arithmetic under test is the shift, so the body is the
+    # simplest one that has a wall to shift.
+    body = Symbol(
+        svg='<g id="sym_walled_test"><rect x="0" y="0" width="60" height="100" '
+        'fill="none" stroke="black" stroke-width="2"/></g>',
+        width=60.0,
+        height=100.0,
+        ports={"inlet": (0.0, 50.0), "outlet": (60.0, 50.0)},
+        bands={"W": (20.0, 80.0), "E": (20.0, 80.0), "N": (10.0, 50.0)},
+    )
+    part = default_registry.part(20, "motor")
+    # Hung clear above the crown, which is where ISO item 1.27 X8006 draws a
+    # drive and the case compose() grows a box for.
+    grown = compose(body, [(Overlay(20, "motor", 0.35, -0.3, 0.3, 0.3), part)])
+    lift = grown.height - body.height
+    assert lift == pytest.approx(30.0), "the overlay was meant to lift the ink 30"
+    for face, (lo, hi) in body.bands.items():
+        shift = lift if face in ("W", "E") else 0.0
+        assert grown.bands[face] == pytest.approx((lo + shift, hi + shift)), (
+            f"the {face} wall did not move with its own ink"
+        )
+    # ...and the wall still names the stretch of shell it named: the body's own
+    # inlet moved by the same amount and is still inside it.
+    moved = grown.ports["inlet"][1]
+    assert grown.bands["W"][0] <= moved <= grown.bands["W"][1]
+
+
+def test_a_pinned_series_member_stays_inside_the_band():
+    """``pin=`` is the second route onto a face: a unit's own statement about
+    where one member goes, in place of the even spread.
+
+    It has to answer to the band too. A tray number that lands above the top of
+    the shell is a nozzle off the ink reached by a different road, and a limit
+    one road ignores is not a limit.
+    """
+    from pandid.render.symbols import PortSeries
+
+    series = PortSeries("feed_", "W", pitch=20.0, extent=0.7, at=50.0)
+    band = (30.0, 70.0)
+    assert series.placement(0, 1, 60.0, 100.0, pin=0.05, band=band) == (0.0, 30.0)
+    assert series.placement(0, 1, 60.0, 100.0, pin=0.95, band=band) == (0.0, 70.0)
+    assert series.placement(0, 1, 60.0, 100.0, pin=0.5, band=band) == (0.0, 50.0)
+    # No band: the pin is the whole of the answer, as it always was.
+    assert series.placement(0, 1, 60.0, 100.0, pin=0.05) == (0.0, 5.0)
+
+
+@pytest.mark.parametrize(("kind", "variant"), _HOLDUP, ids=_HOLDUP_IDS)
+def test_a_holdup_family_lies_on_drawn_geometry(kind, variant):
+    """Every member of every holdup family, on the ink its body draws.
+
+    ``test_series_members_lie_on_drawn_geometry`` makes this claim for a
+    declared ``PortSeries``, and nothing made it for the families
+    ``vessel_symbol`` builds -- which are the ones the count and the faces
+    belong to the unit, and so the ones that can be asked for at eight members
+    on a face nobody drew eight nozzles on.
+
+    Being *on the box* is the weaker claim and the one ``nozzle-off-body``
+    checks at run time; this is the strong one, and it is what says an ink
+    hit-test in ``validate()`` would have nothing left to find in this
+    registry. Measured over every body, every face either family may be piped
+    from and every count, rather than reasoned from the bands being complete.
+    """
+    sym = default_registry.get(kind, variant)
+    segments = _collect_segments(sym.svg)
+    for role, prefix, menu in _role_menus(kind, variant):
+        for face in menu:
+            for count in range(1, 9 if _has_wall(sym, face) else 2):
+                unit = _holdup(kind, variant, role, [face] * count)
+                for i in range(1, count + 1):
+                    point = port_offset(unit, f"{prefix}{i}")
+                    d = _nearest_distance(point, segments)
+                    assert d <= GEOM_TOL, (
+                        f"{kind}/{variant} {prefix}{i} of {count} on {face} at "
+                        f"{point} is {d:.1f}u from the nearest drawn stroke"
+                    )
+
+
+@pytest.mark.parametrize(("kind", "variant"), _HOLDUP, ids=_HOLDUP_IDS)
+def test_a_lone_holdup_connection_lands_where_the_stencil_drew_it(kind, variant):
+    """A preservation guard, and it passed before the band existed too.
+
+    That is the point of it: confining a family must not move the single
+    connection every shipped sheet is drawn with. Every drawn nozzle is inside
+    its own band -- the bands were measured so that it is -- so ``spread``'s
+    one-member answer is still the stencil's own coordinate, on every face of
+    every body.
+    """
+    for role, prefix, menu in _role_menus(kind, variant):
+        for face, xy in menu.items():
+            unit = _holdup(kind, variant, role, [face])
+            assert port_offset(unit, f"{prefix}1") == pytest.approx(xy), (
+                f"{kind}/{variant} {role} on {face}"
+            )
 
 
 # ---------------------------------------------------------------------------

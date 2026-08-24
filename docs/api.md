@@ -732,6 +732,23 @@ instead — the same fallback a `Mixer`'s inlets already use when a wall runs ou
 of room. A single connection is never squeezed, so it lands exactly on the
 coordinate the artwork always anchored.
 
+**Squeezed into the wall, not into the box.** Each symbol says how much of each
+of its faces is *drawing* rather than bounding box, and a family is confined to
+that: a dished-roof tank's shell stops where the roof springs and starts again
+at the floor, so three fills stack up the shell instead of straddling the one
+the stencil drew and hanging the third below the floor.
+
+Some faces are a single point rather than a wall — a dished roof, a cone apex,
+a dished head — and those carry **one** connection. A second is refused, with a
+message naming the faces that do have room, because there is nowhere on that
+face to draw it except in mid-air over the roof:
+
+```python
+units.Tank("TK-1", inputs=["W", "W", "N"])   # two up the shell, one on the crown
+units.Tank("TK-2", inputs=["N", "N"])        # ValueError: the crown is one point
+units.Vessel("V-1", variant="horizontal", inputs=["W", "E"])   # one per head
+```
+
 Variable-port constructors take their count first:
 
 ```text
@@ -3501,6 +3518,7 @@ the sheet that came out.
 | `pin-not-finite` | error | a pinned `x`/`y` is not a finite number |
 | `pin-out-of-bounds` | error | a pinned `x`/`y` is negative (off-sheet) |
 | `unit-overlap` | error | two units' drawn boxes overlap |
+| `nozzle-off-body` | error | a nozzle the symbol places is drawn outside its own unit's box, so the line to it stops in blank paper beside the symbol rather than on it. Every symbol this package ships keeps its nozzles on its own box by construction, so this covers symbols registered from outside it. A nozzle inside the box but off the *drawing* is refused earlier, where the connection is declared — see [A tank or a vessel fed by several streams](#a-tank-or-a-vessel-fed-by-several-streams) |
 | `coincident-ports` | error | two connected ports on one unit resolve to the same point |
 | `coincident-ports` | warning | …and one of them is a port the symbol never anchored, so it fell back to the centre of the box. No shipped symbol has such a gap, so this covers symbols registered from outside the package |
 | `instrument-unplaced` | error | an attached balloon whose host chain never resolves, so layout could put it nowhere and the sheet cannot be drawn; see [Routing and instrument placement](#routing-and-instrument-placement) |
@@ -3554,7 +3572,7 @@ The findings split in two, and a render makes them at two different moments:
    band with the scale cell only once a `page_size` has fixed the page.
 2. `layout()` and `route()`.
 3. **Geometric checks**, over the frames and routes those produced:
-   `unit-overlap`, `coincident-ports`, `nozzles-crowded`,
+   `unit-overlap`, `nozzle-off-body`, `coincident-ports`, `nozzles-crowded`,
    `route-crosses-unit`, `route-detour`, `run-off-elevation`,
    `label-overruns-symbol`, `instrument-unplaced` and `route-not-settled`.
 

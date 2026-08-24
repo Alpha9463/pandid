@@ -258,8 +258,9 @@ def _series_point(unit: "Unit", sym, port_name: str
     index = members.get(port_name)
     if index is None:
         return None
-    return series.placement(index, len(members),
-                            sym.width, sym.height, pin=unit._series_pin(port_name))
+    return series.placement(index, len(members), sym.width, sym.height,
+                            pin=unit._series_pin(port_name),
+                            band=sym.bands.get(series.face))
 
 
 def is_anchored(unit: "Unit", port_name: str) -> bool:

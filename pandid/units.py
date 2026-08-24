@@ -2001,6 +2001,42 @@ class _MultiPortVessel(Unit):
             from pandid.portgeom import unreachable_face
 
             raise unreachable_face(self, port_name, face, list(options))
+        self._check_face_room(role, port_name, face)
+
+    def _check_face_room(self, role: str, port_name: str, face: str) -> None:
+        """Refuse a second connection on a face with no wall to put it on.
+
+        A dished roof, a cone apex and a dished head meet their box at
+        one point, which :attr:`~pandid.render.symbols.Symbol.bands`
+        states as a band of no length. Two connections there resolve to
+        one coordinate, and the drawing that used to be made instead put
+        the outer ones in mid-air over the roof (#488).
+
+        Caught here so the error names the line the author wrote --
+        ``inputs=["N", "N"]``, or the ``nozzle()`` that moved the second
+        one -- rather than surfacing when the sheet is drawn.
+        :func:`~pandid.render.symbols.vessel_symbol` refuses it again,
+        because this is reached only through the two calls below and the
+        drawing is what must not be made.
+
+        Counted across *both* families rather than within one: the band
+        belongs to the face, and an inlet and an outlet on one point
+        collide exactly as two inlets do.
+        """
+        from pandid.render.symbols import bandless_face, walled_faces
+
+        sym = self._registry_symbol()
+        if sym is None:
+            return
+        band = sym.bands.get(face)
+        if band is None or band[0] < band[1]:
+            return
+        others = [name for name, on in self._faces.items()
+                  if on == face and name != port_name]
+        if not others:
+            return
+        raise bandless_face(self.name, face, band[0], [*others, port_name],
+                            walled_faces(sym, role))
 
     def default_input_face(self) -> str:
         """The face an inlet is drawn on when the caller names none.
@@ -2083,6 +2119,8 @@ class _MultiPortVessel(Unit):
             return super().nozzle(port_name, face)
         role = "inlet" if canonical.startswith("in_") else "outlet"
         resolved = _block_face(face, self.name)
+        # Before the move is recorded, so a refusal leaves the unit on the
+        # face it was already drawn on rather than half moved.
         self._validate_face(role, canonical, resolved)
         self._faces[canonical] = resolved
         self._port_faces[canonical] = resolved

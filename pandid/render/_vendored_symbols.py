@@ -314,6 +314,7 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.vessels.pressurized_vessel',
         # must not be turned: vent on the top head, free surface below it
         gravity_fixed=True,
+        bands={'W': (17.5, 82.5), 'E': (17.5, 82.5)},
     ), 'default')
 
     # draw.io vessels:Pressurized Vessel (aspect=variable) -> column/default
@@ -402,6 +403,7 @@ def register_vendored(registry):
         # must not be turned: dished roof over a free surface, draw at the floor
         gravity_fixed=True,
         port_faces={'inlet': {'W': (0.0, 85.0), 'E': (100.0, 85.0), 'N': (50.0, 6.4)}},
+        bands={'W': (36.0, 85.0), 'E': (36.0, 85.0), 'S': (10.0, 90.0), 'N': (50.0, 50.0)},
     ), 'default')
 
     # draw.io vessels:Tank (Conical Roof) (aspect=variable) -> tank/conical
@@ -413,6 +415,7 @@ def register_vendored(registry):
         # must not be turned: conical roof over a free surface, draw at the floor
         gravity_fixed=True,
         port_faces={'inlet': {'W': (0.0, 80.0), 'E': (100.0, 80.0), 'N': (50.0, 0.0)}},
+        bands={'W': (30.0, 80.0), 'E': (30.0, 80.0), 'S': (10.0, 90.0), 'N': (50.0, 50.0)},
     ), 'conical')
 
     # draw.io piping:Concentric Reducer (aspect=variable) -> reducer/default
@@ -925,6 +928,7 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.vessels.vessel_(dished_ends,_brackets)',
         # must not be turned: vent on the top head; stands on brackets
         gravity_fixed=True,
+        bands={'W': (17.7, 77.7), 'E': (17.7, 77.7)},
     ), 'dished')
 
     # draw.io vessels:Vessel (Dome) (aspect=variable) -> vessel/dome
@@ -935,6 +939,7 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.vessels.vessel_(dome)',
         # must not be turned: the manway dome is on top
         gravity_fixed=True,
+        bands={'W': (27.0, 27.0), 'E': (27.0, 27.0)},
     ), 'dome')
 
     # draw.io vessels:Vessel (Dished Ends, Heating-Cooling Jacket) (aspect=variable) -> vessel/jacketed
@@ -945,6 +950,7 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.vessels.vessel_(dished_ends,_heating-cooling_jacket)',
         # must not be turned: vent on the top head, free surface below it
         gravity_fixed=True,
+        bands={'W': (22.7, 72.7), 'E': (22.7, 72.7)},
     ), 'jacketed')
 
     # draw.io vessels:Vessel (Dished Ends, Thermal Insulation) (aspect=variable) -> vessel/insulated
@@ -955,6 +961,7 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.vessels.vessel_(dished_ends,_thermal_insulation)',
         # must not be turned: vent on the top head, free surface below it
         gravity_fixed=True,
+        bands={'W': (22.7, 72.7), 'E': (22.7, 72.7)},
     ), 'insulated')
 
     # draw.io vessels:Vessel (Dished Ends, Electrical Heating) (aspect=variable) -> vessel/electrical_heating
@@ -965,6 +972,7 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.vessels.vessel_(dished_ends,_electrical_heating)',
         # must not be turned: vent on the top head, low draw-off from the shell
         gravity_fixed=True,
+        bands={'W': (17.7, 77.7), 'E': (17.7, 77.7)},
     ), 'electrical_heating')
 
     # draw.io vessels:Vessel (Dished Ends, Skirts) (aspect=variable) -> vessel/skirted
@@ -975,6 +983,7 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.vessels.vessel_(dished_ends,_skirts)',
         # must not be turned: vent on the top head; stands on a skirt
         gravity_fixed=True,
+        bands={'W': (17.7, 77.7), 'E': (17.7, 77.7)},
     ), 'skirted')
 
     # draw.io vessels:Vessel (Dished Ends, Legs) (aspect=variable) -> vessel/legs
@@ -985,6 +994,7 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.vessels.vessel_(dished_ends,_legs)',
         # must not be turned: vent on the top head; stands on legs
         gravity_fixed=True,
+        bands={'W': (17.7, 77.7), 'E': (17.7, 77.7)},
     ), 'legs')
 
     # draw.io vessels:Vessel (Different Diameters) (aspect=variable) -> vessel/swaged
@@ -995,6 +1005,7 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.vessels.vessel_(different_diameters)',
         # must not be turned: vent on the top head, and the larger diameter is the one below it
         gravity_fixed=True,
+        bands={'W': (60.3, 75.0), 'E': (60.0, 75.0)},
     ), 'swaged')
 
     # draw.io vessels:Tank (Floating Roof) (aspect=variable) -> tank/floating_roof
@@ -1006,6 +1017,7 @@ def register_vendored(registry):
         # must not be turned: the roof floats on the liquid
         gravity_fixed=True,
         port_faces={'inlet': {'W': (0.0, 60.0), 'E': (100.0, 60.0)}},
+        bands={'W': (10.0, 60.0), 'E': (10.0, 60.0), 'S': (10.0, 90.0)},
     ), 'floating_roof')
 
     # draw.io vessels:Storage Sphere (aspect=variable) -> tank/sphere
@@ -1017,6 +1029,7 @@ def register_vendored(registry):
         # must not be turned: stands on a skirt; relief and vapour on the crown, liquid below
         gravity_fixed=True,
         port_faces={'inlet': {'W': (13.5, 75.0), 'E': (66.5, 75.0)}},
+        bands={'W': (75.0, 75.0), 'E': (75.0, 75.0), 'S': (40.0, 40.0)},
     ), 'sphere')
 
     # draw.io vessels:Tank (Conical Bottom) (aspect=variable) -> tank/conical_bottom
@@ -1028,6 +1041,7 @@ def register_vendored(registry):
         # must not be turned: flat roof over a free surface, drains to the cone apex
         gravity_fixed=True,
         port_faces={'inlet': {'N': (50.0, 0.0), 'W': (0.0, 60.0), 'E': (100.0, 60.0)}},
+        bands={'N': (10.0, 90.0), 'W': (10.0, 60.0), 'E': (10.0, 60.0), 'S': (50.0, 50.0)},
     ), 'conical_bottom')
 
     # draw.io vessels:Tank (Conical Roof and Bottom) (aspect=variable) -> tank/conical_ends
@@ -1039,6 +1053,7 @@ def register_vendored(registry):
         # must not be turned: conical roof over a free surface, drains to the cone apex
         gravity_fixed=True,
         port_faces={'inlet': {'N': (51.0, 0.0), 'W': (1.0, 110.0), 'E': (101.0, 110.0)}},
+        bands={'W': (40.0, 110.0), 'E': (40.0, 110.0), 'N': (51.0, 51.0), 'S': (51.0, 51.0)},
     ), 'conical_ends')
 
     # draw.io vessels:Tank (Dished Roof, Conical Bottom) (aspect=variable) -> tank/dished_roof_conical_bottom
@@ -1050,6 +1065,7 @@ def register_vendored(registry):
         # must not be turned: dished roof over a free surface, drains to the cone apex
         gravity_fixed=True,
         port_faces={'inlet': {'N': (50.0, 6.4), 'W': (0.0, 85.0), 'E': (100.0, 85.0)}},
+        bands={'W': (36.0, 85.0), 'E': (36.0, 85.0), 'N': (50.0, 50.0), 'S': (50.0, 50.0)},
     ), 'dished_roof_conical_bottom')
 
     # draw.io vessels:Gas Holder (aspect=variable) -> tank/gas_holder
@@ -1060,6 +1076,7 @@ def register_vendored(registry):
         drawio_shape='mxgraph.pid.vessels.gas_holder',
         # must not be turned: the bell floats on the water seal
         gravity_fixed=True,
+        bands={'W': (45.0, 80.0), 'E': (45.0, 80.0)},
     ), 'gas_holder')
 
     # draw.io vessels:Settling Tank (aspect=variable) -> thickener/default
@@ -1092,6 +1109,7 @@ def register_vendored(registry):
         # must not be turned: vent off the top, liquid out of the bottom
         gravity_fixed=True,
         port_faces={'inlet': {'W': (0.0, 15.0), 'N': (20.0, 0.0), 'E': (91.5, 15.0)}},
+        bands={'N': (15.8, 75.8), 'S': (15.8, 75.8), 'W': (15.0, 15.0), 'E': (15.0, 15.0)},
     ), 'horizontal')
 
     # draw.io vessels:Drum or Condenser (aspect=variable) -> separator/horizontal

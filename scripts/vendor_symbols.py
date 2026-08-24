@@ -2034,6 +2034,120 @@ DIRECTIONAL = {
 }
 
 
+# Where a *family* may put a nozzle on a face, as ``{face: (lo, hi)}`` measured
+# along that face in the symbol's own finished coordinates -- top to bottom on
+# W/E, left to right on N/S. Emitted as ``Symbol.bands``; see it, and
+# :func:`pandid.render.symbols.spread`, which treats the pair as a hard limit
+# and slides a run into it rather than drawing past it.
+#
+# WHY THIS EXISTS. A tank's or a vessel's inlets and outlets are a family whose
+# count is the unit's, so ``vessel_symbol`` spreads them from the one nozzle the
+# stencil drew. That nozzle is a *point*, and it says nothing about how much
+# wall there is either side of it -- so a family centred on it walked off the
+# body: three inlets on tank/default put the third 9,5 units below the bottom of
+# the drawing, and the stream to it ended in blank paper (#488). The wall is a
+# feature of the artwork with no dimension anywhere until here.
+#
+# HOW EACH PAIR IS ARRIVED AT. The band is the straight run of shell that face
+# offers, held off each end by a clearance so a nozzle is never drawn into the
+# weld where a head, a roof or a floor is attached. Two readings of that
+# clearance, and each entry's comment says which it took:
+#
+#   * where the stencil drew its nozzle hard against one end of the wall -- a
+#     tank fills low on the shell, ten above the floor, see ("tank", "default")
+#     in KIND_MAP -- the clearance is that nozzle's own, taken at both ends. The
+#     drawn nozzle is then exactly the band's end, so a lone connection does not
+#     move and a family stacks away from it up the same wall.
+#   * where the nozzle is at mid-height -- a drum is fed at the middle of its
+#     shell -- there is no such statement to read, and the clearance is 10, the
+#     one the tank stencils' own low nozzles keep.
+#
+# A DOME CROWN IS A BAND OF NO LENGTH, NOT A MISSING BAND. A dished roof, a cone
+# apex and a dished head touch their face at exactly one point: a nozzle there
+# is on the ink and a *second* one beside it, at the same inset, is in mid-air
+# over the roof. That is the reported defect again on a curved face -- three
+# ``inputs=["N"]`` on tank/default put the outer two 2,65 units clear of the
+# dome, inside the box and off the drawing -- so those faces declare the point
+# they offer, ``(t, t)``, rather than being left out. A family of more than one
+# member on a band of no length is refused outright by
+# :func:`pandid.render.symbols.crowded_band`: there is nowhere on that face to
+# draw the second nozzle, the shell is where a second connection goes, and
+# saying so beats drawing it in the air.
+#
+# So every face either family may be piped from is named here, for every body.
+# ``test_every_family_face_declares_a_band`` holds that: a face with a
+# placement and no band would be a family bounded by the box alone.
+BANDS = {
+    # Shell y 25,46..95,46 under the dished roof; the fill sits at 85, ten and a
+    # half above the floor, so that clearance is taken at the roof end too. N is
+    # the dome crown and S the flat floor.
+    ("tank", "default"): {"W": (36.0, 85.0), "E": (36.0, 85.0), "S": (10.0, 90.0),
+                          "N": (50.0, 50.0)},
+    # Shell y 20..90 under the conical roof; the fill at 80 is ten above the
+    # floor. N is the cone apex; S is the flat floor.
+    ("tank", "conical"): {"W": (30.0, 80.0), "E": (30.0, 80.0), "S": (10.0, 90.0),
+                          "N": (50.0, 50.0)},
+    # Shell y 0..70 over the conical bottom; the fill at 60 is ten above the
+    # knuckle. The roof is flat and takes a family across its full width; S is
+    # the cone apex.
+    ("tank", "conical_bottom"): {"N": (10.0, 90.0), "W": (10.0, 60.0), "E": (10.0, 60.0),
+                                 "S": (50.0, 50.0)},
+    # Shell y 30..120 between the two cones; the fill at 110 is ten above the
+    # lower knuckle. Both N and S are cone apexes.
+    ("tank", "conical_ends"): {"W": (40.0, 110.0), "E": (40.0, 110.0),
+                               "N": (51.0, 51.0), "S": (51.0, 51.0)},
+    # tank/default's shell over tank/conical_bottom's cone: the same y
+    # 25,46..95,46 wall and the same fill at 85. N is the dome crown, S the cone
+    # apex.
+    ("tank", "dished_roof_conical_bottom"): {"W": (36.0, 85.0), "E": (36.0, 85.0),
+                                             "N": (50.0, 50.0), "S": (50.0, 50.0)},
+    # Shell y 0..70, roof and floor both flat; the fill at 60 is ten above the
+    # floor.
+    ("tank", "floating_roof"): {"W": (10.0, 60.0), "E": (10.0, 60.0), "S": (10.0, 90.0)},
+    # The water-seal tank's own wall, y 30..95 -- the bell above it floats and
+    # carries no connection. Both nozzles are at 45, fifteen below the top of
+    # that wall, and that clearance is taken at the floor end too.
+    ("tank", "gas_holder"): {"W": (45.0, 80.0), "E": (45.0, 80.0)},
+    # The shell is a sphere: the W and E faces of the box touch it at one point
+    # each, 75 down, and nowhere else. The draw-off below it is a 12-wide boss,
+    # which is a nozzle rather than a floor. All three are points.
+    ("tank", "sphere"): {"W": (75.0, 75.0), "E": (75.0, 75.0), "S": (40.0, 40.0)},
+    # The barrel between the two dished heads, at this family's 0,5 vertical
+    # scale: the stencil's y 15..185 wall drawn as 7,5..92,5. Fed at mid-height,
+    # so the clearance is the flat 10.
+    ("vessel", "default"): {"W": (17.5, 82.5), "E": (17.5, 82.5)},
+    ("vessel", "dished"): {"W": (17.7, 77.7), "E": (17.7, 77.7)},
+    # Drawn on its side: the W and E faces are the two dished heads, and a head
+    # meets the box at its apex alone.
+    ("vessel", "dome"): {"W": (27.0, 27.0), "E": (27.0, 27.0)},
+    # The same 7,7..87,7 barrel. The outlet is drawn at 77,7, which is where the
+    # 10 clearance already puts the band's lower end, so it does not move.
+    ("vessel", "electrical_heating"): {"W": (17.7, 77.7), "E": (17.7, 77.7)},
+    # The insulation, not the shell: the W and E faces of this box are the two
+    # lagging lines at y 12,69..82,69, and the shell inside them is not on the
+    # face a nozzle leaves from.
+    ("vessel", "insulated"): {"W": (22.7, 72.7), "E": (22.7, 72.7)},
+    # The jacket, for insulated's reason: the outer faces are the jacket boxes,
+    # y 12,69..82,69.
+    ("vessel", "jacketed"): {"W": (22.7, 72.7), "E": (22.7, 72.7)},
+    # The barrel only. The legs below it are structure, and a nozzle on a leg is
+    # not a nozzle.
+    ("vessel", "legs"): {"W": (17.7, 77.7), "E": (17.7, 77.7)},
+    # The barrel only, as legs: the skirt below it carries no connection.
+    ("vessel", "skirted"): {"W": (17.7, 77.7), "E": (17.7, 77.7)},
+    # The lower, larger barrel, which is the only part of this body the W and E
+    # faces of the box touch: y 50,25..85 on the west and 50..85 on the east.
+    # The upper barrel is drawn inboard at x 10..40 and a face nozzle cannot
+    # reach it. A short wall, so a family here squeezes early.
+    ("vessel", "swaged"): {"W": (60.3, 75.0), "E": (60.0, 75.0)},
+    # The roof and the floor between the two dished heads, x 5,77..85,77. W and
+    # E are the heads themselves: one point each, at the 15 the barrel's
+    # centreline runs at.
+    ("vessel", "horizontal"): {"N": (15.8, 75.8), "S": (15.8, 75.8),
+                               "W": (15.0, 15.0), "E": (15.0, 15.0)},
+}
+
+
 # ISO 10628-2 registration numbers, for the vendored drawings someone has
 # since measured against Table 2 and found to be the row -- not filled in
 # by default, because a conformance claim made by assumption is worse than
@@ -2445,6 +2559,15 @@ def render() -> str:
             "DIRECTIONAL names symbols KIND_MAP does not draw: "
             + ", ".join(f"{kind}/{variant}" for kind, variant in orphans)
         )
+    # ...and for the wall a family is confined to. A band for a symbol nothing
+    # draws confines nothing, and reads on the page as a wall that has been
+    # measured.
+    orphans = sorted(key for key in BANDS if key not in KIND_MAP)
+    if orphans:
+        raise SystemExit(
+            "BANDS names symbols KIND_MAP does not draw: "
+            + ", ".join(f"{kind}/{variant}" for kind, variant in orphans)
+        )
 
     specs = [spec for _, _, port_map in KIND_MAP.values() for spec in port_map.values()]
     names = ["Symbol"]
@@ -2559,6 +2682,11 @@ def render() -> str:
                 lines.append("        directional=True,")
             if menu:
                 lines.append(f"        port_faces={menu!r},")
+            # The stretch of each face a family may put a nozzle on; see BANDS.
+            # Emitted for the open drawing and the closed one alike, since a
+            # position is the same body with different ink in it.
+            if (kind, variant) in BANDS:
+                lines.append(f"        bands={BANDS[(kind, variant)]!r},")
             # A family is named after the port it replaces: one member keeps
             # that name, and only a second one numbers them.
             if series:

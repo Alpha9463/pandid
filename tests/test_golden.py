@@ -38,6 +38,7 @@ See tests/golden/README.md for how to regenerate.
 import functools
 import importlib.util
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -52,7 +53,8 @@ from pandid.document import (
     legend,
     notes,
 )
-from pandid.portgeom import port_offset, resolve_size
+from pandid.portgeom import pinned_y, port_offset, resolve_size
+from pandid.render.debug import _BOX, _PORT
 from pandid.render.svg import PROVENANCE_CLOSE, PROVENANCE_OPEN
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
@@ -3871,7 +3873,7 @@ def _alumina_refinery() -> Flowsheet:
     alumina.pin(port="inlet", x=2980, y=calciner.pin_.y + port_offset(calciner, "product")[1])
 
     spent_tank.pin(port="in_1", x=1350, y=1800)
-    caustic.pin(port="outlet", x=1230, y=1863)
+    caustic.pin(port="outlet", x=1230, y=pinned_y(spent_tank, "in_3"))
     evaporator.pin(port="feed", x=1550, y=1980)
     lp_steam.pin(
         port="outlet", x=1330, y=evaporator.pin_.y + port_offset(evaporator, "heating_in")[1]
@@ -4498,6 +4500,77 @@ def test_no_fixture_dates_a_sheet_differently_from_the_generator(name):
         f"the example leaves blank, that is the newest revision's -- rather than teaching "
         f"the comparison above about one more field."
     )
+
+
+# ---------------------------------------------------------------------------
+# Every nozzle on every sheet, on the body it belongs to (#488).
+# ---------------------------------------------------------------------------
+
+_DEBUG_CIRCLE = re.compile(
+    r'<circle cx="(-?[\d.]+)" cy="(-?[\d.]+)" r="[\d.]+" fill="' + re.escape(_PORT) + '"'
+)
+_DEBUG_BOX = re.compile(
+    r'<rect x="(-?[\d.]+)" y="(-?[\d.]+)" width="(-?[\d.]+)" height="(-?[\d.]+)" '
+    r'fill="none" stroke="' + re.escape(_BOX) + '"'
+)
+
+
+def _drawn(value: "str | float") -> float:
+    """One coordinate as the sheet writes it, to the precision it writes it.
+
+    Takes the string a regex pulled out of the SVG or the float the model
+    resolved, so the two are compared after exactly the same rounding.
+    """
+    return round(float(value), 1)
+
+
+@pytest.mark.parametrize("name", list(SCENARIOS), ids=list(SCENARIOS))
+def test_no_sheet_draws_a_nozzle_off_the_body_it_belongs_to(name):
+    """The invariant the reported defect broke, over the whole corpus.
+
+    21_alumina_refinery shipped with M-901's third inlet 8,9px below the bottom
+    of the tank, and 10_ethanol_pfd drew M-302's two half a pixel off its floor.
+    A stream is drawn to its nozzle correctly either way, so what a reader sees
+    is a line stopping in blank paper beside a symbol it never reaches.
+
+    **Measured off the render, not off the model.** The sheet is drawn a second
+    time with the coordinate overlay on, which puts a dot on every nozzle and an
+    outline on every unit's box, and the numbers checked here are the ones read
+    back out of that SVG. The model is used for one thing only -- saying which
+    dot belongs to which unit, which no drawing records -- and the two are held
+    together by the first half of the test: every point the model resolves has
+    to be a dot the sheet actually drew, and every box a rectangle it drew, or
+    the harness is measuring something the reader is not looking at.
+    """
+    from pandid.portgeom import resolve_port, unit_box
+
+    build, kwargs = SCENARIOS[name]
+    fs = build()
+    overlaid = {**kwargs, "debug": True}
+    svg = fs.to_svg(**overlaid)
+    dots = {(_drawn(x), _drawn(y)) for x, y in _DEBUG_CIRCLE.findall(svg)}
+    boxes = {(_drawn(x), _drawn(y), _drawn(w), _drawn(h)) for x, y, w, h in _DEBUG_BOX.findall(svg)}
+    assert dots and boxes, f"{name}: the overlay drew no markers to measure"
+
+    off_body = []
+    for unit in fs.units:
+        if unit.frame is None:
+            continue
+        x0, y0, x1, y1 = unit_box(unit, unit.frame)
+        assert (_drawn(x0), _drawn(y0), _drawn(x1 - x0), _drawn(y1 - y0)) in boxes, (
+            f"{name}: {unit.name}'s box is not one the sheet drew"
+        )
+        for port in unit.ports:
+            px, py = resolve_port(unit, unit.frame, port).point
+            assert (_drawn(px), _drawn(py)) in dots, (
+                f"{name}: {unit.name}.{port} is not a nozzle the sheet drew"
+            )
+            if not (x0 <= px <= x1 and y0 <= py <= y1):
+                off_body.append(
+                    f"{unit.name}.{port} at ({px:.1f}, {py:.1f}) is outside "
+                    f"({x0:.1f}, {y0:.1f})..({x1:.1f}, {y1:.1f})"
+                )
+    assert off_body == [], f"{name} draws {len(off_body)} nozzles off their own bodies"
 
 
 def test_every_example_has_a_fixture():

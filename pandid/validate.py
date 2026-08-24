@@ -1203,6 +1203,53 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 f"{(needed - room) / 2:.0f} units out through each side. Widen the "
                 f"block, or leave width= unset and let it size itself to the name"))
 
+        # Hard: a nozzle drawn off the body it belongs to.
+        #
+        # The stream is drawn to its nozzle correctly and the nozzle is
+        # not on the equipment, so the line ends in blank paper next to
+        # a symbol it never reaches. Nothing said so: 21_alumina_refinery
+        # shipped with M-901's third inlet 8,9px below the bottom of the
+        # tank and validate() was silent on it (#488).
+        #
+        # Only the ports the artwork actually places. One it does not
+        # falls back to the centre of the box, which is inside it by
+        # construction and is reported -- when two of them land on each
+        # other -- by ``coincident-ports`` below, under a message that
+        # names the real defect.
+        #
+        # Every symbol in this library now keeps its nozzles on its own
+        # box by construction: a fixed one is authored at a coordinate
+        # the invariant suite checks, and a family is confined to
+        # :attr:`~pandid.render.symbols.Symbol.bands` by
+        # :func:`~pandid.render.symbols.spread`. So this is silent on
+        # every sheet the registry can draw, and it is here for the two
+        # cases that outrun that: a symbol a third party registered, and
+        # the next family built to a unit's own count.
+        #
+        # Measured against :func:`~pandid.portgeom.unit_box`, which is
+        # the box the router treats as the obstacle and the box the
+        # debug overlay outlines -- so the finding names the same
+        # rectangle a reader sees. ``_TOL`` because a nozzle on the edge
+        # of its box is the ordinary case and floating point puts it a
+        # hair either side.
+        for u, box in boxes:
+            for name in u.ports:
+                if not is_anchored(u, name):
+                    continue
+                px, py = port_point(u, u.frame, name)
+                if (box[0] - _TOL <= px <= box[2] + _TOL
+                        and box[1] - _TOL <= py <= box[3] + _TOL):
+                    continue
+                errors.append(Issue(
+                    "error", "nozzle-off-body",
+                    f"{u.name}.{name} is drawn at ({px:.1f}, {py:.1f}), outside "
+                    f"{u.name}'s own box ({box[0]:.1f}, {box[1]:.1f}) to "
+                    f"({box[2]:.1f}, {box[3]:.1f}): a line to it stops in blank "
+                    f"paper beside the symbol rather than on it. The symbol places "
+                    f"this nozzle, so the drawing is what has to change -- give "
+                    f"{u.name} a box the family fits in, or put the connection on "
+                    f"a face with room for it"))
+
         # Hard: overlapping unit bodies.
         for i in range(len(boxes)):
             for j in range(i + 1, len(boxes)):

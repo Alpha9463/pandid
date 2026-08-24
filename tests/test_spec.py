@@ -1058,11 +1058,21 @@ def test_a_vessels_moved_nozzle_and_reordered_face_round_trip():
     all -- a single anchored face, so there is nowhere for ``nozzle()``
     to move two connections *to* and nothing for ``order_on()`` to
     reorder.
+
+    The two start one per head rather than both on the west one: this
+    drum's W and E faces are its dished heads, which meet the box at a
+    single point each, so two connections on either is refused (#488).
+    One apiece is the legal starting arrangement, and moving both onto
+    the roof is still the two explicit ``nozzle()`` calls this is here
+    to round-trip.
     """
     from pandid.spec import from_dict, to_dict
 
     fs = Flowsheet("vessels")
-    v = fs.add(units.Vessel("V-1", variant="horizontal", inputs=2, width=130, height=42))
+    # A tuple and not a list, so the literal pair still hands a checker the
+    # ``Vessel2`` that declares ``in_1``/``in_2``; a computed ``Sequence[str]``
+    # cannot say how many nozzles it made.
+    v = fs.add(units.Vessel("V-1", variant="horizontal", inputs=("W", "E"), width=130, height=42))
     v.nozzle("in_1", "N")
     v.nozzle("in_2", "N")
     v.order_on("N", [v.in_2, v.in_1])
