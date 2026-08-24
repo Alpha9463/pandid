@@ -425,27 +425,59 @@ class hierarchy, or what it is called.
   moves: *Propylene Glycol Reaction* was being issued as *Propylene Glycol
   Reacti…*, and is now drawn whole at 12,0 in place of 12,5.
 
+  **How much of a value survives is measured rather than counted.** The cut
+  was `int(room / (size * _ADV)) - 1` -- characters at the *Latin* advance --
+  while the decision to cut at all was `text_width`'s, which charges a CJK or
+  fullwidth codepoint a full em and a combining mark nothing. The two disagreed
+  by the ratio between those rates, so a fullwidth title kept 28 characters
+  measuring 290 units for a 187-unit cell and was drawn straight through the
+  sheet count beside it, on every page size from A4 to A0. Both ends of `clip`
+  now ask `text_width`, so a cell cannot cut to a width it would not accept, and
+  the ellipsis is measured as part of what the cell holds.
+
   **`validate()` reports an over-long field before anything is drawn.** Every
   width the strip rules is a constant, so whether a value fits is settled by the
   block alone; the check now runs in the model half, where it can reach the
   author rather than describe a sheet that has already been issued. A render
   measures the same strip and replaces the findings with its own.
 
-  **The finding says by how much.** `text-truncated` and `text-overruns-cell`
-  now give the width the value needs, the width the cell has and the ratio
-  between them, the way `route-detour` states its two lengths -- so the author
-  reads how much has to come out instead of guessing. The `SHEET n of m` cell
-  also names both of the fields that fill it: reported as `sheet` alone, it sent
-  an author who had set `of_sheets` to look at the wrong one.
+  **The finding says by how much, and names the field you would edit.**
+  `text-truncated` and `text-overruns-cell` now give the width the value needs,
+  the width the cell has and the ratio between them, the way `route-detour`
+  states its two lengths -- so the author reads how much has to come out instead
+  of guessing.
+
+  And the name is the *source*, not the cell, spelled `source -> cell` where the
+  two differ. Half the strip's cells draw a value some other field supplied, and
+  every one of them named the cell: a blank `title` drew the flowsheet's name and
+  reported `title`, a blank `scale` the fitted ratio, a blank `date` today's, the
+  REV cell the newest revision's `rev`, and a backfilled `drawn_by` reported
+  `revisions[0].by`. Each sent the author to a field they had never set. The
+  `SHEET n of m` cell is the reverse case -- one cell, two fields -- and is named
+  `sheet/of_sheets` rather than `sheet`.
+
+  **One thing to fix is one finding.** The company cell stacks its name over
+  several lines, so a group of companies repeating a word too wide to break
+  reported that word once per line. Findings are de-duplicated over the whole
+  layout, in one place rather than at each of the three that collect them.
 
   **Two fields could be lost without any cell overrunning, and both now say
   so.** A `company` name that wraps to more lines than the strip is deep was
   drawn out through the top and the bottom of the block in silence
-  (`title-block-company-overflows`); and `drawn_by`/`checked_by`/`approved_by`
-  fill the newest revision row's BY / CHK'D / APP'D cells, so a block that set
-  them and listed no revisions drew none of them anywhere
-  (`title-block-signatory-undrawn`) -- two of ISO 7200's mandatory data fields,
-  accepted and dropped.
+  (`title-block-company-overflows`). And `drawn_by`/`checked_by`/`approved_by`
+  fill the newest revision row's BY / CHK'D / APP'D cells and have nowhere else
+  to go, so they went undrawn two ways -- a block with no revisions has no row
+  for them, and a newest revision that states a signatory of its own keeps the
+  cell. Both are `title-block-signatory-undrawn`, one finding per cause; a row
+  stating the *same* name is silent, since the value is on the sheet and which
+  field put it there is nobody's problem. Two of ISO 7200's mandatory data
+  fields, accepted and dropped.
+
+  Those three cells carry **initials**, being the only signatory cells the strip
+  rules, so `examples/03`, `08` and `09` now set `drawn_by="AA"` in place of
+  `drawn_by="A. Anderson"`. The full names were never drawn -- the revision rows
+  state their own -- and would have been abbreviated to `A. An…` had those rows
+  left the cells free. No drawing changes.
 
   The sweep behind it covers all fifteen fields of `TitleBlock` and all six of
   `Revision`, and `tests/test_titleblock.py` keeps it: no field of the block

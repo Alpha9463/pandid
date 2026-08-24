@@ -49,6 +49,17 @@ FONT = "sans-serif"
 # much has to come out, and "needs 194 of the 187 units its cell has"
 # says it. ``route-detour`` states its two lengths and their ratio for
 # the same reason.
+#
+# **The field is the one the author edits, not the cell that drew it**,
+# and where the two differ it is spelled ``source -> cell``. Half the
+# strip's cells draw a value some *other* field supplied: a blank
+# ``title`` draws the flowsheet's name, a blank ``scale`` draws the
+# ratio the sheet was fitted at, a blank ``date`` draws today's, the REV
+# cell draws the newest revision's ``rev``, and the newest revision's
+# blank signatory cells draw the block's ``drawn_by``/``checked_by``/
+# ``approved_by``. Naming the cell in those cases sends the author to a
+# field they never set -- the mistake ``of_sheets`` reported as ``sheet``
+# was, one function away.
 Reporter = Callable[[str, str, str, float, float], None]
 
 
@@ -145,13 +156,34 @@ def clip(s, room: float, size: float, bold: bool = False, *,
     value longer than its cell would run across the rule and into the
     value beside it and no amount of growing can help. A draftsman
     abbreviates.
+
+    **How many characters survive is measured, not counted.** The cut
+    used to be ``int(room / (size * _ADV)) - 1`` -- characters at the
+    *Latin* advance -- while the decision to cut at all was
+    :func:`text_width`'s, which charges a CJK or fullwidth codepoint a
+    full em and a combining mark nothing (:func:`script_counts`). The
+    two disagreed by the ratio between those rates: a fullwidth title
+    kept 28 characters measuring 290 units for a 187-unit cell and was
+    drawn straight through the sheet count beside it, on every page size.
+    Both ends of this function now ask :func:`text_width`, so a cell
+    cannot cut to a width it would not accept.
+
+    The ellipsis is measured as part of what the cell holds rather than
+    allowed for by dropping one more character, for the same reason.
     """
     s = str(s)
     need = text_width(s, size, bold)
     if need <= room:
         return s
-    per = size * (_ADV_BOLD if bold else _ADV)
-    drawn = s[: max(0, int(room / per) - 1)].rstrip() + "…"
+    # ``text_width`` is a sum over codepoints, so walking it forward is
+    # the same measurement the line above made, stopped early.
+    budget, used, keep = room - text_width("…", size, bold), 0.0, 0
+    for ch in s:
+        used += text_width(ch, size, bold)
+        if used > budget:
+            break
+        keep += 1
+    drawn = s[:keep].rstrip() + "…"
     if report is not None:
         report(field, s, drawn, room, need)
     return drawn
@@ -172,6 +204,35 @@ def check_fit(s, room: float, size: float, bold: bool = False, *,
     if report is not None and need > room:
         report(field, s, s, room, need)
     return s
+
+
+def report_once(report: "Reporter") -> "Reporter":
+    """*report*, with each distinct finding passed on only once.
+
+    One strip can put one value in more than one place. The company cell
+    stacks its name over several lines, so a name repeating a word too
+    wide to break -- a group of companies, a joint venture -- reported
+    that word once per line, and the author read two findings about one
+    thing they can do once.
+
+    Wrapped around the whole layout rather than at each of the three
+    places findings are collected (the two backends and
+    :func:`title_strip_fit`), because three de-duplications are three
+    chances to disagree about what counts as the same finding. The key
+    is the whole tuple, so two revisions that abbreviate the same
+    initials are still two findings: their fields differ, and they are
+    two rows the author edits separately.
+    """
+    seen: set[tuple[str, str, str, float, float]] = set()
+
+    def once(field: str, text: str, drawn: str,
+             room: float, need: float) -> None:
+        key = (field, text, drawn, room, need)
+        if key not in seen:
+            seen.add(key)
+            report(field, text, drawn, room, need)
+
+    return once
 
 
 def fit_size(s, room: float, size: float, floor: float,
@@ -833,6 +894,13 @@ _REV_COLS = (("REV", 22, "rev"), ("DATE", 50, "date"),
              ("CHK'D", 32, "checked"), ("APP'D", 32, "approved"))
 # Gutter between a revision cell's rule and its text, left and right.
 _REV_PAD = 3.0
+#: Which block-level field fills a revision column the newest row leaves
+#: blank. Those three columns are the only place on the sheet the strip
+#: letters a signatory, so a block-level name is drawn there or nowhere;
+#: :func:`pandid.validate.model_issues` reads this table to say which of
+#: the three the sheet is dropping and why.
+_BACKFILL = {"by": "drawn_by", "checked": "checked_by",
+             "approved": "approved_by"}
 # The title / status / drawing-number bands, which every sheet carries.
 _BODY_H = 80.0
 # The sheet count is drawn top-right of the title band, on the same line
@@ -1023,29 +1091,43 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
     rx = x + _REV_W
     cx2 = rx + _COMPANY_W
     rules = [("rule", vx, y, vx, bottom, 1.5) for vx in (rx, cx2)]
+    if report is not None:
+        report = report_once(report)
 
     # --- Revision grid (left): heading at the foot, revisions above
-    def rev_cells(vals, bold=False, where=""):
+    def rev_cells(cells, bold=False):
+        """One row of the grid, each cell clipped to its own column.
+
+        *cells* is a ``(value, field)`` pair per column, the field
+        naming what the author would edit; an empty field is the
+        library's own lettering and is not reported on.
+        """
         return [clip(v, cw - 2 * _REV_PAD, _REV_TYPE, bold,
-                     field=f"{where}.{attr}", report=report if where else None)
-                for (_, cw, attr), v in zip(_REV_COLS, vals)]
+                     field=f, report=report if f else None)
+                for (_, cw, _attr), (v, f) in zip(_REV_COLS, cells)]
 
     header_y = bottom - _REV_ROW
-    headings = rev_cells([c[0] for c in _REV_COLS], bold=True)
+    headings = rev_cells([(c[0], "") for c in _REV_COLS], bold=True)
     # Clipped newest first, which is the order the strip used to draw
     # them in and so the order a caller watching ``report`` already
     # sees; stored oldest first, which is the order they are read in.
     newest_first = []
     for idx, rv in enumerate(reversed(tb.revisions)):
         newest = idx == 0
-        # The block-level drawn/checked/approved fields backfill the
-        # newest row's signatories when that revision leaves them blank.
-        by = rv.by or (tb.drawn_by if newest else "")
-        chk = rv.checked or (tb.checked_by if newest else "")
-        app = rv.approved or (tb.approved_by if newest else "")
-        newest_first.append(rev_cells(
-            [rv.rev, rv.date, rv.description, by, chk, app],
-            where=f"revisions[{len(tb.revisions) - 1 - idx}]"))
+        i = len(tb.revisions) - 1 - idx
+        row = []
+        for _heading, _cw, attr in _REV_COLS:
+            cell, value = f"revisions[{i}].{attr}", getattr(rv, attr)
+            # The block-level drawn/checked/approved fields backfill the
+            # newest row's signatories when that revision leaves them
+            # blank -- so the value in the cell is sometimes the block's
+            # and the finding has to name whichever field supplied it.
+            block = _BACKFILL.get(attr, "")
+            if newest and not value and block and getattr(tb, block):
+                row.append((getattr(tb, block), f"{block} -> {cell}"))
+            else:
+                row.append((value, cell))
+        newest_first.append(rev_cells(row))
     rev = RevGrid(x, y, _REV_W, h,
                   tuple((heading, cw) for heading, (_, cw, _a)
                         in zip(headings, _REV_COLS)),
@@ -1104,11 +1186,17 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
     # move with the size: a set of sheets is scanned down the same line,
     # and it is the lettering that varies with the title's length, not
     # where the title sits.
+    #
+    # A block that states no title of its own draws the flowsheet's
+    # name, so the finding names *that* -- an author told "title was
+    # truncated" about a field they never set goes looking in the wrong
+    # place. Same for the three cells below it; see :data:`Reporter`.
     title = tb.title or name
     title_type = fit_size(title, _TITLE_W, _TITLE_TYPE, _SUBTITLE_TYPE, True)
     parts.append(("text", ix + 6, top + 15,
                   clip(title, _TITLE_W, title_type, True,
-                       field="title", report=report),
+                       field="title" if tb.title else "Flowsheet name -> title",
+                       report=report),
                   title_type, "start", True, "black"))
     if tb.subtitle:
         parts.append(("text", ix + 6, band2 - 6,
@@ -1136,16 +1224,22 @@ def title_strip_layout(tb, name: str, date: str, right: float, bottom: float,
     # block, and ASME title-block content is Y14.100's concern, not
     # Y14.1's. A sheet with no scale to state gives its room back to the
     # three cells that identify the drawing.
+    # Three of these four cells draw a value the block did not state,
+    # and each names the field that did state it (see :data:`Reporter`).
     rev_id = tb.revisions[-1].rev if tb.revisions else "0"
+    rev_field = (f"revisions[{len(tb.revisions) - 1}].rev -> rev"
+                 if tb.revisions else "rev")
     scale = tb.scale or fit_scale
+    scale_field = "scale" if tb.scale else "the fitted scale -> scale"
+    date_field = "date" if date == tb.date else "today's date -> date"
     cells: list[tuple[float, str, str, str]] = [
         (_INFO_W * 0.38, "DRAWING No", tb.drawing_number or "—", "drawing_number"),
-        (_INFO_W * 0.21, "SCALE", scale, "scale"),
-        (_INFO_W * 0.29, "DATE", date, "date"),
-        (_INFO_W * 0.12, "REV", rev_id, "rev")] if scale else [
+        (_INFO_W * 0.21, "SCALE", scale, scale_field),
+        (_INFO_W * 0.29, "DATE", date, date_field),
+        (_INFO_W * 0.12, "REV", rev_id, rev_field)] if scale else [
         (_INFO_W * 0.50, "DRAWING No", tb.drawing_number or "—", "drawing_number"),
-        (_INFO_W * 0.30, "DATE", date, "date"),
-        (_INFO_W * 0.20, "REV", rev_id, "rev")]
+        (_INFO_W * 0.30, "DATE", date, date_field),
+        (_INFO_W * 0.20, "REV", rev_id, rev_field)]
     cxr = ix
     for j, (seg_w, seg_label, seg_val, seg_field) in enumerate(cells):
         if j:

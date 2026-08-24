@@ -1246,4 +1246,135 @@ def test_every_revision_field_reports_a_value_it_cannot_hold(field):
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", revisions=[Revision(**{field: "Wollongong " * 12})])
     found = [w for w in fs.validate() if w.code == "text-truncated"]
-    assert sum(f"revisions[0].{field}" in w.message for w in found) == 1
+    # The grid cell, named for the field the author set. `rev` is drawn twice --
+    # the grid column and the bottom band's REV cell, at two different widths --
+    # and the second names its source, so the two are told apart by name.
+    assert sum(w.message.startswith(f"revisions[0].{field} was ") for w in found) == 1
+    if field == "rev":
+        assert sum(w.message.startswith("revisions[0].rev -> rev was ") for w in found) == 1
+
+
+# --- the cut is measured, not counted ----------------------------------------
+
+
+@pytest.mark.parametrize("page", ["A4", "A3", "A2", "A1", "A0"])
+def test_a_fullwidth_title_is_cut_to_a_width_and_not_to_a_count(page):
+    """`clip` used to choose how many characters survive at the *Latin*
+    advance while `text_width` -- which decided there was anything to cut --
+    charges a fullwidth codepoint a full em. A CJK title kept 28 characters
+    measuring 290 units for a 187-unit cell and was drawn straight through the
+    sheet count beside it, at every page size."""
+    from pandid.render.furniture import _TITLE_W, text_width
+
+    fs = _sheet()
+    fs.title_block = TitleBlock(title="Ｗ" * 200, sheet="1", of_sheets="1")
+    svg = fs.to_svg(border="zone", page_size=page)
+    match = re.search(
+        r'font-size="([\d.]+)" text-anchor="start" font-weight="bold" '
+        r'fill="black">(Ｗ+…)</text>',
+        svg,
+    )
+    assert match is not None
+    size, drawn = float(match.group(1)), match.group(2)
+    # _TITLE_W already holds back the slot the sheet count is drawn in, so
+    # fitting it is what keeps the two clear of each other.
+    assert text_width(drawn, size, True) <= _TITLE_W
+
+
+def test_a_latin_title_is_cut_exactly_where_it_always_was():
+    """The measured cut has to agree with the counted one on the corpus the
+    counted one was right for, or every shipped sheet moves."""
+    fs = _sheet()
+    fs.title_block = TitleBlock(title="Ethanol Purification and Dehydration Area A300")
+    svg = fs.to_svg(border="zone")
+    assert "Ethanol Purification and De…" in svg
+
+
+# --- one thing to fix is one finding ------------------------------------------
+
+
+def test_a_word_the_company_cell_cannot_break_is_reported_once():
+    """The cell stacks its name over several lines, so a group of companies
+    repeating one unbreakable word reported it once per line -- two findings
+    about one edit."""
+    word = "Wollongong-Warrawong-Woonona"
+    fs = _sheet()
+    fs.title_block = TitleBlock(title="Demo", company=f"{word} {word}")
+    found = [w for w in fs.validate() if w.code == "text-overruns-cell"]
+    assert len(found) == 1
+    assert word in found[0].message
+
+
+def test_two_revisions_abbreviating_the_same_initials_are_two_findings():
+    """Deduplication is on the whole finding, not on the text: these are two
+    rows, and the author edits them separately."""
+    fs = _sheet()
+    fs.title_block = TitleBlock(
+        title="Demo",
+        revisions=[
+            Revision("A", "2026-01-01", "Issued", "Wollongong " * 4),
+            Revision("B", "2026-02-01", "Re-issued", "Wollongong " * 4),
+        ],
+    )
+    found = [w for w in fs.validate() if w.code == "text-truncated" and ".by " in w.message]
+    assert len(found) == 2
+
+
+# --- the finding names the field that supplied the value ----------------------
+
+
+def test_a_blank_title_reports_the_flowsheet_name_that_filled_it():
+    """A block that states no title draws the flowsheet's name. Reported as
+    `title`, it sent the author to a field they never set."""
+    fs = _sheet(name="A Flowsheet Name Far Too Long For The Title Cell To Hold")
+    fs.title_block = TitleBlock()
+    found = [i for i in fs.validate() if i.code == "text-truncated"]
+    assert len(found) == 1
+    assert found[0].message.startswith("Flowsheet name -> title was truncated")
+
+
+def test_a_backfilled_signatory_reports_the_block_field_that_supplied_it():
+    """The same wrong-source defect `of_sheets` had: the value comes from
+    `drawn_by` and the cell is the revision row's."""
+    fs = _sheet()
+    fs.title_block = TitleBlock(
+        title="Demo",
+        drawn_by="A. Anderson",
+        revisions=[Revision("0", "2026-01-01", "Issued")],
+    )
+    found = [i for i in fs.validate() if i.code == "text-truncated"]
+    assert len(found) == 1
+    assert found[0].message.startswith("drawn_by -> revisions[0].by was truncated")
+
+
+def test_a_signatory_the_newest_revision_overrides_is_reported():
+    """The row is the more specific claim and keeps the cell -- which leaves the
+    block-level value on no sheet at all, and that was silent."""
+    fs = _sheet()
+    fs.title_block = TitleBlock(
+        title="Demo",
+        drawn_by="AA",
+        checked_by="EE",
+        revisions=[Revision("0", "2026-01-01", "Issued", "BB", "CC")],
+    )
+    svg = fs.to_svg(border="zone")
+    assert ">AA</text>" not in svg and ">EE</text>" not in svg
+    found = [w for w in fs.warnings if w.code == "title-block-signatory-undrawn"]
+    assert len(found) == 1
+    assert "drawn_by='AA' (revisions[0].by='BB' is drawn)" in found[0].message
+    assert "checked_by='EE' (revisions[0].checked='CC' is drawn)" in found[0].message
+
+
+@pytest.mark.parametrize(
+    "revision",
+    [
+        Revision("0", "2026-01-01", "Issued", "AA"),  # the same name: drawn
+        Revision("0", "2026-01-01", "Issued"),  # blank: the block fills it
+    ],
+)
+def test_a_signatory_the_sheet_does_draw_is_silent(revision):
+    fs = _sheet()
+    fs.title_block = TitleBlock(title="Demo", drawn_by="AA", revisions=[revision])
+    svg = fs.to_svg(border="zone")
+    assert ">AA</text>" in svg
+    assert not [w for w in fs.warnings if w.code == "title-block-signatory-undrawn"]

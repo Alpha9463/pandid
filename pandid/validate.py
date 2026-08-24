@@ -815,6 +815,7 @@ def model_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     if fs.title_block is not None:
         from datetime import datetime
 
+        from pandid.render import furniture
         from pandid.render.furniture import company_overflow, title_strip_fit
         from pandid.render.svg import fit_issue
 
@@ -847,35 +848,60 @@ def model_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 f"never inside one: shorten the name, or state the trading name "
                 f"the drawing office puts on a sheet"))
 
-        # --- a signatory the strip has nowhere to letter ---
+        # --- a signatory the strip does not letter ---
         # ``drawn_by``/``checked_by``/``approved_by`` are *backfills*:
         # the strip letters them into the BY/CHK'D/APP'D cells of the
         # newest revision row, which is the only place on the sheet
-        # those three columns exist. A block with no revisions has no
-        # such row, so all three are accepted, drawn nowhere, and the
-        # sheet issues without the creator and the approver ISO 7200 4.3
-        # makes mandatory data fields.
+        # those three columns exist (:data:`~pandid.render.furniture.
+        # _BACKFILL` is the mapping, read from there rather than
+        # restated). So a block-level name is drawn in that row or it is
+        # drawn nowhere, and it goes undrawn two ways:
+        #
+        # * there is no revision at all, so there is no row to fill; or
+        # * the newest revision states a signatory of its own, which is
+        #   the more specific claim and wins the cell.
+        #
+        # Both end with the sheet issuing without the creator or the
+        # approver ISO 7200 4.3 makes mandatory data fields, so both are
+        # reported, and separately: the cure differs. A row that states
+        # the *same* name is not reported -- the value is on the sheet,
+        # and which field put it there is nobody's problem.
         #
         # Reported rather than drawn: ruling a row for a revision the
         # drawing office never raised would put a revision history on
         # the sheet to carry two initials, and the revision is the thing
-        # being signed for. The cure is the row, so the message names
-        # it.
-        signatories = [(field, value) for field, value in (
-            ("drawn_by", tb.drawn_by), ("checked_by", tb.checked_by),
-            ("approved_by", tb.approved_by)) if value]
-        if signatories and not tb.revisions:
+        # being signed for.
+        newest = tb.revisions[-1] if tb.revisions else None
+        unfilled, overridden = [], []
+        for column, block in furniture._BACKFILL.items():
+            value = getattr(tb, block)
+            if not value:
+                continue
+            if newest is None:
+                unfilled.append(f"{block}={value!r}")
+            elif getattr(newest, column) not in ("", value):
+                overridden.append(
+                    f"{block}={value!r} (revisions[{len(tb.revisions) - 1}]."
+                    f"{column}={getattr(newest, column)!r} is drawn)")
+        if unfilled:
             warnings.append(Issue(
                 "warning", "title-block-signatory-undrawn",
-                f"the title block sets "
-                f"{_and([f'{f}={v!r}' for f, v in signatories])} and the sheet "
-                f"draws {'none of them' if len(signatories) > 1 else 'it'}. "
+                f"the title block sets {_and(unfilled)}, and the sheet draws "
+                f"{'none of them' if len(unfilled) > 1 else 'it nowhere'}. "
                 f"Those fields fill the BY / CHK'D / APP'D cells of the newest "
                 f"revision row, and a block with no revisions has no row for "
                 f"them to fill. Add the revision they signed, "
                 f"revisions=[Revision('0', '<date>', '<description>')], or "
                 f"name them on it directly with Revision(..., by=, checked=, "
                 f"approved=)"))
+        if overridden:
+            warnings.append(Issue(
+                "warning", "title-block-signatory-undrawn",
+                f"the title block sets {_and(overridden)}, so the sheet draws "
+                f"the revision's name and not the block's. The row is the more "
+                f"specific claim and keeps the cell; what is left is a "
+                f"block-level value on no sheet. Drop it, or take the name off "
+                f"the revision and let the block fill the row"))
 
     # --- an ingoing or outgoing material with nothing to report ---
     # ISO 10628-1:2014 4.3.2, *Process flow diagram*, lists what a PFD

@@ -3115,7 +3115,7 @@ fs.title_block = TitleBlock(
     company="PANDID",   # logo / company cell
     status="ISSUED FOR REVIEW",               # issue-status cell
     sheet="1", of_sheets="3", scale="NTS",
-    drawn_by="A. Anderson", checked_by="J. Smith", approved_by="R. Lee",
+    drawn_by="AA", checked_by="JS", approved_by="RL",   # initials: see below
     date="",                                  # blank fills in with today's date
     revisions=[
         Revision("B", "2026-07-01", "Issued for design", "AA", "JS", "RL"),
@@ -3127,9 +3127,14 @@ fs.title_block = TitleBlock(
 In `Revision(rev, date, description, by, checked, approved)` the last two are
 optional per row and stay blank when omitted. The block-level
 `drawn_by`/`checked_by`/`approved_by` backfill the newest row — which is the
-only place on the sheet those three columns exist, so a block that sets them and
-lists no revisions draws none of them and says so
-(`title-block-signatory-undrawn`). Leaving
+only place on the sheet those three columns exist, so they carry **initials**,
+and a block-level value the row does not use is drawn nowhere at all. Both ways
+that happens are reported as `title-block-signatory-undrawn`: a block that sets
+them and lists no revisions has no row to fill, and a newest revision that
+states a signatory of its own keeps the cell (the row is the more specific
+claim) and leaves the block's value on no sheet. A row stating the *same* name
+is silent — the value is drawn, and which field put it there is nobody's
+problem. Leaving
 `TitleBlock.date` empty makes the renderer stamp the current date, so a
 committed drawing changes day to day. Set it explicitly if you need reproducible
 output.
@@ -3188,6 +3193,22 @@ for w in fs.validate():          # no render needed: the cell widths are constan
 #     'Ethanol Purification and Dehydration Area A300' needs 299 of the 187
 #     units its cell has (1.6x), drawn as 'Ethanol Purification and De…'
 ```
+
+**The name is the field you would edit, not the cell that drew it**, and where
+the two differ it is spelled `source -> cell`. Half the strip's cells draw a
+value some other field supplied — a blank `title` draws the flowsheet's name, a
+blank `scale` the ratio the sheet was fitted at, a blank `date` today's, the REV
+cell the newest revision's `rev`, and the newest revision's blank signatory
+cells the block's `drawn_by`/`checked_by`/`approved_by` — so a finding naming
+the cell would send you to a field you never set:
+
+```
+Flowsheet name -> title was truncated to fit its cell: …
+drawn_by -> revisions[0].by was truncated to fit its cell: …
+```
+
+The `SHEET n of m` cell is the reverse case, one cell from two fields, and is
+named `sheet/of_sheets`.
 
 `validate()` answers before anything is drawn, and every render asks the same
 question again and replaces the answer — `to_drawio()` as well as `to_svg()`, in
@@ -3435,7 +3456,7 @@ the sheet that came out.
 | `text-truncated` | warning | a title-block field, or a revision row's, abbreviated to an ellipsis because its cell could not hold it. The message names the field, quotes the value in full, and gives the width the value needs, the width the cell has and the ratio; see [`TitleBlock` and `Revision`](#titleblock-and-revision) |
 | `text-overruns-cell` | warning | the same, for a cell with nothing worth abbreviating, which draws the value whole and across its rule: the `SHEET n of m` count, a single unbreakable word in `company`, and an `Annotation` given a `width` narrower than its own rows |
 | `title-block-company-overflows` | warning | a `company` name that wraps to more lines than the strip is deep, so it is drawn out through the top and the bottom of the block. The cell breaks between words and never inside one, so this is the one field the block can lose downwards |
-| `title-block-signatory-undrawn` | warning | `drawn_by`/`checked_by`/`approved_by` set on a block with no `revisions`. Those three fill the newest revision row's BY / CHK'D / APP'D cells, and a block with no revisions has no row for them, so they are drawn nowhere at all |
+| `title-block-signatory-undrawn` | warning | a `drawn_by`/`checked_by`/`approved_by` the sheet does not draw. Those three fill the newest revision row's BY / CHK'D / APP'D cells and have nowhere else to go, so a block with no `revisions` has no row for them, and a newest revision stating a signatory of its own keeps the cell. One finding per cause; a row stating the same name is silent |
 | `drawio-approximated` | warning | `to_drawio()` only: a symbol draw.io has no stencil for, exported as a built-in stand-in that does not draw all of it. The message names the unit and what the stand-in loses; see [Editing the sheet by hand](#editing-the-sheet-by-hand) |
 
 Errors raise from `to_svg()`/`render()` unless you pass `check=False`. Warnings
