@@ -118,13 +118,17 @@ on.
 Measured, because "cannot draw it" is worth a number, and stated
 exactly enough to run again. In :func:`read`, where a confidence-0
 end is dropped, emit ``Claim(author, subject, 0, 0, LINE)`` instead
-and count that end as having spoken -- one such claim per run, so
-least squares lands the fitting midway between its two neighbours.
-That takes the corpus from **246 crossings to 475**. Blunting it
-does not rescue it either: keep those claims out of
-:func:`~pandid.layout.place._spread`'s list and nowhere else, so the
-fit reads the midpoint while the fitting still takes a column of its
-own, and it is **516**.
+and count that end as having spoken. Once per **end**, not once per
+run, and the two are not the same rule: of the corpus's 422
+non-recycle process runs 174 have one confidence-0 end and 146 have
+two, so per-end emits 466 of these claims where per-run would emit
+320. Per-end is also what puts the fitting in the middle -- each of
+its own two runs pulls it onto the neighbour at the far end, and
+least squares splits them. That takes the corpus from **246
+crossings to 475**. Blunting it does not rescue it either: keep those
+claims out of :func:`~pandid.layout.place._spread`'s list and nowhere
+else, so the fit reads the midpoint while the fitting still takes a
+column of its own, and it is **516**.
 
 Every corpus-wide crossing figure in this module -- 246, 284, 309,
 475, 516 -- is one measurement, and it is worth saying which:
