@@ -235,9 +235,11 @@ def _along(box, vertical: bool, lo: float, hi: float) -> bool:
     the words? -- and not how wide the paper between them is.
 
     More than half, measured over all 286 line numbers on the 21
-    shipped sheets: four overrun their run at all, from 18 % of the
-    string alongside its own line up to 36 %. The nearest one on the
-    other side sits at 60 %, so the gap has narrowed to 36 % to 60 % as
+    shipped sheets: 25 overrun their run at all, and they fall in two
+    groups with a clear band of nothing between, 21 from 60 % of the
+    string alongside its own line up to 98 %, and four -- the ones
+    below this function's own 50 % line, which is what actually earns
+    a leader -- at 18 %, 29 %, 34 % and 36 %. The band has narrowed as
     the corpus grew (it was 40 % to 61 % over fourteen sheets, and 32 %
     to 74 % over twelve), so a sheet that lands a number *in* it is
     the signal this threshold has stopped sorting them. The two checks
