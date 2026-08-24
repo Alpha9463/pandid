@@ -562,10 +562,13 @@ def test_no_two_ports_coincide(entry):
 #     which is what a submersible pump's 90-unit casing line across a 14-unit
 #     rectangle is not.
 #
-# The sweep that settled these numbers found exactly one symbol in the 157 that
-# draws a nozzle this way, plus the one gauge stub named below. If a later
-# vendoring adds a second, it gets both invariants for free -- which is the
-# whole point, since the port map is authored by hand in
+# The sweep that settled these numbers runs ``_drawn_nozzles`` over every entry
+# in ``default_registry`` -- 228 of them today, which is what ``_SYMBOLS``
+# parametrises -- and exactly two answer to all three parts above: ``tank/sphere``,
+# whose stub is the process nozzle this pair of tests is about, and
+# ``separator/knockout``, whose is the gauge named below and is excluded by
+# ``_NOT_NOZZLES``. If a later vendoring adds a third, it gets both invariants
+# for free -- which is the whole point, since the port map is authored by hand in
 # ``scripts/vendor_symbols.py`` and the artwork is not.
 # ---------------------------------------------------------------------------
 

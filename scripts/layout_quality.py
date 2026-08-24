@@ -1,12 +1,27 @@
 #!/usr/bin/env python3
 """Measure what the layout engine draws when nothing is pinned.
 
-Every shipped example hand-places almost everything -- 307 ``pin()`` calls
-across the 21 examples, and on the big sheets pins outnumber units one for
-one. The auto-layout engine's own quality has therefore never been
-measured: this strips the placement out of every example, re-runs
-``layout()`` and ``route()``, and compares the result against the
-hand-placed original that ships in ``docs/gallery/``.
+Every shipped example hand-places almost everything, and "how many pins"
+has three different right answers, so this says which it means. Counted by
+AST as ``.pin(`` call sites in ``examples/*.py``, there are **350** across
+the 21 examples; **319** of them carry a ``col``/``row``/``x``/``y`` and
+are what :func:`strip_placement` below takes away, and the other 31 pass
+``orientation=`` or ``mirrored=`` and nothing else, which is a drawing
+decision rather than a placement and is kept. Counted at run time instead
+there are 456 calls, 410 of them placing, because a site inside a loop is
+one site and many calls -- ``11_ethanol_pid``'s 29 sites make 129 of them.
+
+Sheet for sheet the hand placement is near total wherever it is used at
+all: ``21_alumina_refinery`` and ``13_mineral_dewatering`` place every unit
+they build, and ``11_ethanol_pid``, ``14_tank_farm`` and
+``20_molecular_sieve_dryer`` place all but their instruments, which go
+where whatever they attach to went. Six of the 21 -- 01, 05, 08, 15, 16 and
+18 -- place nothing at all and are already the engine's own work.
+
+The auto-layout engine's own quality has therefore never been measured:
+this strips the placement out of every example, re-runs ``layout()`` and
+``route()``, and compares the result against the hand-placed original that
+ships in ``docs/gallery/``.
 
     python scripts/layout_quality.py                    # every example
     python scripts/layout_quality.py 10_ethanol_pfd      # one of them

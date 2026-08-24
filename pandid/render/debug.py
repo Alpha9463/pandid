@@ -421,10 +421,13 @@ def _settle(labels: "list[_Label]", bounds: "tuple[float, float, float, float]"
     the last one nothing. Ordered instead by how many spots the *sheet*
     has left each label -- fixed before any of them move, so it is a
     property of the drawing and not of the order -- the labels that have
-    a choice give way to the ones that do not. ``11_ethanol_pid`` writes
-    383 labels and leaves 30 touching a halo at all; ``14_tank_farm``
-    leaves 10. The standing bound is ``_CROWDED`` in
-    ``tests/test_debug_overlay.py``.
+    a choice give way to the ones that do not. Counting a label whose
+    box overlaps a haloed plate anywhere, ``11_ethanol_pid`` writes 383
+    of them and leaves 28 touching a halo; ``14_tank_farm`` writes 220
+    and leaves 8. The standing bound is ``_CROWDED`` in
+    ``tests/test_debug_overlay.py``, which is not this number: it counts
+    a label buried under a halo **or** written over another label, which
+    is 30 and 10 on those two sheets.
 
     An anchor label goes before a port label on a tie. There are far
     fewer of them and each says more -- a unit has one corner and up to
@@ -434,7 +437,9 @@ def _settle(labels: "list[_Label]", bounds: "tuple[float, float, float, float]"
     Each label joins the obstacles as it lands, so one only ever writes
     over another where the second had nowhere left to go. Swept over the
     22 sheets ``tests/test_debug_overlay.py`` renders, that is today
-    nowhere at all.
+    three pairs out of 2037 labels -- one each on ``11_ethanol_pid``,
+    ``14_tank_farm`` and ``19_absorber_stripper``, and all six of them
+    port labels rather than the scarcer anchor ones.
 
     Returns the tethers and then the text, each in the order the labels
     came in, which is unit by unit down the flowsheet: a sheet that

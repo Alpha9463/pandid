@@ -428,10 +428,11 @@ def test_a_leader_is_drawn_only_where_the_line_is_not_beside_the_words(sheets):
     thirty-unit stub with two thirds of it lying against a reflux drum.
 
     The gap is 36 % to 60 %, narrower than the 40 % to 61 % the fourteen-sheet
-    corpus showed and the 32 % to 74 % the twelve-sheet corpus showed before
-    that; see :func:`pandid.render.svg._along` for what that is and is not
-    evidence for. This test is one of the two that would fail first if a
-    number ever landed inside it.
+    corpus showed at ``87935d6`` and the 32 % to 74 % the twelve-sheet corpus
+    showed at ``07cb3b3`` before that -- cited by commit because neither of
+    those corpora is here to re-measure; see :func:`pandid.render.svg._along`
+    for what that is and is not evidence for. This test is one of the two that
+    would fail first if a number ever landed inside it.
     """
     over, under = [], []
     for name, (fs, labels) in sheets.items():

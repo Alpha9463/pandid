@@ -240,10 +240,13 @@ def _along(box, vertical: bool, lo: float, hi: float) -> bool:
     string alongside its own line up to 98 %, and four -- the ones
     below this function's own 50 % line, which is what actually earns
     a leader -- at 18 %, 29 %, 34 % and 36 %. The band has narrowed as
-    the corpus grew (it was 40 % to 61 % over fourteen sheets, and 32 %
-    to 74 % over twelve), so a sheet that lands a number *in* it is
-    the signal this threshold has stopped sorting them. The two checks
-    in ``tests/test_label_invariants.py`` that read the corpus are what
+    the corpus grew: 40 % to 61 % over fourteen sheets, measured at
+    ``87935d6``, and 32 % to 74 % over twelve, at ``07cb3b3``. Those
+    two are cited and not re-derivable -- the corpora they were taken
+    over are gone -- but they are what says the band is narrowing, and
+    a sheet that lands a number *in* today's band is the signal this
+    threshold has stopped sorting them. The two checks in
+    ``tests/test_label_invariants.py`` that read the corpus are what
     would say so.
     """
     a, b = (box[1], box[3]) if vertical else (box[0], box[2])
