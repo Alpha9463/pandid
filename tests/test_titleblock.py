@@ -1590,6 +1590,36 @@ def test_the_date_cell_is_never_blank_on_an_issued_sheet(stated):
     assert cell.group(1) == datetime.datetime.now().strftime("%Y-%m-%d")
 
 
+def test_a_whitespace_date_does_not_issue_a_visually_blank_cell():
+    """#494's reproduction, verbatim. A truthy value that draws as nothing is the
+    clearest single statement of what #370 is about: accepted, silently made
+    meaningless, and the sheet shipped.
+
+    The block is left exactly as the author typed it -- the normalising is done
+    at the read, not on the dataclass -- and it is the *cell* that stops being
+    blank.
+    """
+    import datetime
+
+    fs = _sheet()
+    tb = TitleBlock(date="   ", revisions=[Revision("A", "2026-07-02", "Issued", "AA")])
+    fs.title_block = tb
+    assert tb.date == "   "
+
+    svg = fs.to_svg(border="zone")
+    assert ">   </text>" not in svg
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    assert f">{today}</text>" in svg
+    # ...and the export agrees, since both measure one strip.
+    assert today in _sheet_with(tb).to_drawio(border="zone")
+
+
+def _sheet_with(tb):
+    fs = _sheet()
+    fs.title_block = tb
+    return fs
+
+
 def test_a_stated_date_still_wins_the_cell():
     fs = _sheet()
     fs.title_block = TitleBlock(title="Demo", date="2026-01-02")

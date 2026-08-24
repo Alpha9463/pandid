@@ -502,6 +502,12 @@ class hierarchy, or what it is called.
   at the read rather than on the dataclass, since `fs.title_block.title = ...`
   is the documented way to shorten a field and re-render.
 
+  That is #494's reproduction too, which found the same defect from the other
+  side: `TitleBlock(date="   ")` left `tb.date == "   "` and drew a visually
+  blank DATE cell on an issued sheet. The block is still exactly what the author
+  typed -- the normalising is done at the read, not on the dataclass -- and it
+  is the cell that stops being blank.
+
   **Both fallbacks are the strip's, and are chosen after that read.** A blank
   title draws the flowsheet's name and a blank date today's, and both choices
   used to be made by each of the three callers, on the raw value -- so
