@@ -63,6 +63,31 @@ _BACKTICKED = re.compile(r"`([^`\n]+)`")
 _DOTTED = re.compile(r"\bpandid(?:\.\w+)+\b")
 
 
+#: One class per module the sweep below has to reach, and a class the module
+#: really defines. A checker that cannot see reports nothing to fix, which reads
+#: exactly like a clean run -- so the sweep is made to prove it looked. Every
+#: module the twenty-two documented types came from is represented, the renderer
+#: and the two extension packages included, because it is precisely the module
+#: that stops importing whose classes then go unchecked.
+_MUST_BE_FOUND = {
+    "Flowsheet": "pandid.flowsheet",
+    "Unit": "pandid.units",
+    "Port": "pandid.ports",
+    "Stream": "pandid.streams",
+    "Frame": "pandid.geometry",
+    "Loop": "pandid.loops",
+    "ValveStation": "pandid.stations",
+    "Issue": "pandid.validate",
+    "TitleBlock": "pandid.document",
+    "StreamTableOptions": "pandid.document",
+    "State": "pandid.state",
+    "Symbol": "pandid.render.symbols",
+    "SymbolRegistry": "pandid.render.symbols",
+    "ConstraintLayoutEngine": "pandid.layout",
+    "DefaultRouter": "pandid.routing",
+}
+
+
 def _public_classes() -> dict[str, str]:
     """Every public class this package defines, mapped to its own module.
 
@@ -70,34 +95,99 @@ def _public_classes() -> dict[str, str]:
     valued by ``__module__`` rather than by where it was imported, so a class
     re-exported into three namespaces is still one entry answering "where does
     this actually live".
+
+    **Nothing is caught here.** An import that failed used to be skipped, and a
+    skipped module is a module whose classes every check below then stops asking
+    about -- so a broken ``pandid.render`` would have made a bare ``Symbol`` in
+    the documentation pass. No module in this package needs an optional extra to
+    import (the ``pdf`` extra is imported inside the function that rasterises,
+    not at module scope), so an ``ImportError`` here is a broken package and has
+    to be heard. Should one ever need an extra, catch *that module by name*
+    rather than catching the class of error.
+
+    ``_MUST_BE_FOUND`` is the other half of the same argument. Letting the error
+    out covers the module that raises; it does not cover a walk that quietly
+    reaches nothing, and an empty result would satisfy every check in this file.
+    Only a positive claim about what was found tells a clean run from a blind
+    one.
     """
     found: dict[str, str] = {}
     for module in pkgutil.walk_packages(pandid.__path__, "pandid."):
-        try:
-            imported = importlib.import_module(module.name)
-        except ImportError:  # pragma: no cover - an optional extra is absent
-            continue
+        imported = importlib.import_module(module.name)
         for name, value in vars(imported).items():
             if name.startswith("_") or not inspect.isclass(value):
                 continue
             if getattr(value, "__module__", "").startswith("pandid."):
                 found[name] = value.__module__
+
+    unseen = {name: module for name, module in _MUST_BE_FOUND.items() if found.get(name) != module}
+    assert not unseen, (
+        "the sweep over pandid did not reach classes it must reach, so every "
+        f"check built on it is answering about a package it could not read: {unseen}"
+    )
     return found
+
+
+def _module_prefixes(line: str) -> set[str]:
+    """Every module path a dotted path on this line passes *through*.
+
+    ``pandid.render.symbols.SymbolRegistry.for_unit`` passes through
+    ``pandid.render.symbols`` and so names it, and a class living there is
+    placed by it. The trailing components produce entries that are not modules
+    at all, which is harmless: the caller only ever matches these against a real
+    ``__module__``.
+
+    The direction matters and only one of the two is admissible. A path that
+    reaches *past* a module names it. A path that stops *short* of it --
+    ``pandid.render`` for a class in ``pandid.render.symbols`` -- does not, and
+    used to be accepted here. A reader given ``pandid.render`` still cannot
+    write the import, which is the whole thing being checked.
+    """
+    prefixes: set[str] = set()
+    for path in _DOTTED.findall(line):
+        parts = path.split(".")
+        for stop in range(2, len(parts) + 1):
+            prefixes.add(".".join(parts[:stop]))
+    return prefixes
+
+
+def _public_members(cls: type) -> dict[str, object]:
+    """``cls``'s public methods and properties, **inherited ones included**.
+
+    ``vars(cls)`` was wrong here and quietly so. Almost every documented method
+    is declared on a base -- ``pin()`` and ``nozzle()`` on ``Unit``, so
+    ``Pump.pin`` -- and reading only the subclass's own namespace meant the
+    check ran over a handful of overrides and skipped the surface a caller
+    actually uses.
+
+    The MRO is walked instead of ``inspect.getmembers()`` because getmembers
+    fetches through the descriptor protocol, which runs every property's getter
+    on the class object. Walking ``__mro__`` and reading each base's ``vars()``
+    gets the descriptor itself. First writer wins, so an override is checked and
+    the definition it hides is not, which is what the caller sees. Bases outside
+    this package (``object``, ``Protocol``) are skipped: their docstrings are not
+    this project's promises.
+    """
+    members: dict[str, object] = {}
+    for base in cls.__mro__:
+        if not getattr(base, "__module__", "").startswith("pandid"):
+            continue
+        for name, member in vars(base).items():
+            if not name.startswith("_") and name not in members:
+                members[name] = member
+    return members
 
 
 def _names_a_module(line: str, name: str, module: str) -> bool:
     """Does this line say where ``name`` lives?
 
-    Either as the full path (``pandid.document.StreamTableOptions``) or as the
-    module beside it, which is how the reference annotates the two extension
+    Either as the class's own full path (``pandid.document.StreamTableOptions``)
+    or as its module, which is how the reference annotates the two extension
     protocols: ``class Router(Protocol):  # pandid.routing``.
     """
     if re.search(rf"\bpandid(?:\.\w+)*\.{re.escape(name)}\b", line):
         return True
-    return any(
-        path == module or path.startswith(module + ".") or module.startswith(path + ".")
-        for path in _DOTTED.findall(line)
-    )
+    return module in _module_prefixes(line)
 
 
 def _type_mentions(text: str) -> list[tuple[int, str, str]]:
@@ -135,6 +225,23 @@ def _type_mentions(text: str) -> list[tuple[int, str, str]]:
             for name in _CLASS_NAME.findall(span):
                 mentions.append((number, name, line))
     return mentions
+
+
+def _documented_names() -> set[str]:
+    """Every class name the user-facing documents spell, package membership aside.
+
+    Deliberately not filtered against what ``pandid`` currently defines, which is
+    what makes it the rename guard's eye. Every other check here starts from the
+    package's own class names and asks the documentation about them, so a class
+    the package no longer has is a question none of them think to ask -- and a
+    reference still saying ``-> ControlLoop`` after the rename reads as clean.
+    This looks the other way down the same road.
+    """
+    seen: set[str] = set()
+    for relative in _USER_DOCS:
+        text = (_REPO / relative).read_text(encoding="utf-8")
+        seen.update(name for _, name, _ in _type_mentions(text))
+    return seen
 
 
 def _documented_but_unreachable(exported: Callable[[str], bool]) -> list[str]:
@@ -253,9 +360,7 @@ def test_every_type_a_public_return_or_docstring_names_is_reachable_too():
         if not inspect.isclass(value):
             continue
         check(exported_name, value)
-        for member_name, member in vars(value).items():
-            if member_name.startswith("_"):
-                continue
+        for member_name, member in _public_members(value).items():
             if inspect.isfunction(member):
                 check(f"{exported_name}.{member_name}", member)
             elif isinstance(member, property) and member.fget is not None:
@@ -276,45 +381,107 @@ def test_every_type_a_public_return_or_docstring_names_is_reachable_too():
 #: something the reader is handed. Listed here rather than derived, because a
 #: derived list would re-derive the very thing it is checking and would go quiet
 #: the day one of them stopped being documented.
+#: Each handle beside the module that defines it. Written as a pair rather than
+#: a bare name because "is it exported" and "is it the class the reference
+#: describes" are two questions, and only the second catches a re-export that
+#: has gone stale. ``pandid.Port = object`` answers the first perfectly.
 _HANDLES = (
-    "Port",
-    "Stream",
-    "Pin",
-    "Frame",
-    "Route",
-    "Loop",
-    "ControlLoop",
-    "ValveStation",
-    "Issue",
-    "TitleBlock",
-    "Revision",
-    "Annotation",
-    "TableBox",
+    ("Port", "pandid.ports"),
+    ("Stream", "pandid.streams"),
+    ("Pin", "pandid.geometry"),
+    ("Frame", "pandid.geometry"),
+    ("Route", "pandid.geometry"),
+    ("Loop", "pandid.loops"),
+    ("ControlLoop", "pandid.loops"),
+    ("ValveStation", "pandid.stations"),
+    ("Issue", "pandid.validate"),
+    ("TitleBlock", "pandid.document"),
+    ("Revision", "pandid.document"),
+    ("Annotation", "pandid.document"),
+    ("TableBox", "pandid.document"),
 )
 
 
-@pytest.mark.parametrize("name", _HANDLES)
-def test_a_handle_is_exported_and_dropping_it_is_caught(name: str):
-    """Each handle is on the package, and the check above notices if it leaves.
+@pytest.mark.parametrize("name, module", _HANDLES)
+def test_a_handle_is_the_documented_class_and_stays_documented(name: str, module: str):
+    """Four questions about one name, because each fails in its own way.
 
-    Two assertions because they answer two different questions, and a guard that
-    only ever passes is a guard nobody has seen work. The first is the decision:
-    ``connect()`` hands back a ``Stream`` and ``fs.warnings`` is a list of
-    ``Issue``, so both are names a reader annotates with and both are on the
-    root. The second runs the documentation check against an ``__all__`` this
-    name has been taken out of, and requires the failure to come back naming the
-    file and the line -- which is the whole of what #441 needed and did not have.
+    A guard that only ever passes is a guard nobody has seen work, so three of
+    these four are run against a mutation of the thing they check.
+
+    1. **Exported.** The decision itself: ``connect()`` hands back a ``Stream``
+       and ``fs.warnings`` is a list of ``Issue``, so both are names a reader
+       annotates with and both are on the root.
+    2. **Bound to the class the reference describes.** ``pandid.Port`` has to
+       *be* ``pandid.ports.Port``, not merely be present. Presence is what
+       ``hasattr`` asked, and ``hasattr`` is satisfied by a re-export that has
+       gone stale in a refactor and by a name rebound to anything at all --
+       which is #441 again, one step further along: the import succeeds and
+       hands back something that is not the documented type.
+    3. **Still named in the documentation.** A rename is the failure neither of
+       the two above sees. Rename ``ControlLoop`` and update ``__init__.py`` and
+       this table, and the documentation check goes quiet -- it only asks about
+       names the package still has, and ``ControlLoop`` is no longer one of
+       them, so a reference full of ``-> ControlLoop`` reads as clean. This is
+       the assertion that fails in that case.
+    4. **Removal is caught.** The documentation check, run against an ``__all__``
+       this name has been taken out of, has to come back naming the file and the
+       line -- which is the whole of what #441 needed and did not have.
     """
     assert name in pandid.__all__, f"{name} is documented as a handle and is not exported"
-    # A name in ``__all__`` with nothing behind it breaks `from pandid import *`
-    # for everything, so the list and the imports above it are checked together.
-    assert hasattr(pandid, name), f"{name} is in __all__ and is not imported"
+
+    documented_class = getattr(importlib.import_module(module), name)
+    assert getattr(pandid, name, None) is documented_class, (
+        f"pandid.{name} is not {module}.{name}. A name in `__all__` bound to "
+        "anything else imports cleanly and hands the reader the wrong type, "
+        "which is the bug in #441 with an extra step."
+    )
+
+    assert name in _documented_names(), (
+        f"{name} is exported as a handle and no user-facing document names it. "
+        "A rename that reached the code and not the reference leaves the "
+        "documentation naming a type that no longer exists, which every check "
+        "keyed on the package's own class names is blind to."
+    )
 
     smaller = set(pandid.__all__) - {name}
     failures = _documented_but_unreachable(lambda candidate: candidate in smaller)
     assert any(
         failure.startswith("docs/api.md:") and f"`{name}`" in failure for failure in failures
     ), f"removing {name} from __all__ went unnoticed: {failures}"
+
+
+def test_every_exported_class_is_the_class_it_is_named_after():
+    """The same identity question over all 142 exports, not just the thirteen.
+
+    ``__all__`` is built from ``units.__all__`` and ``devices.__all__``, two
+    lists this file does not own, so the cheap invariant is worth stating over
+    the whole of it: every exported class is defined in this package and carries
+    the name it is exported under. A star import that shadowed one, or a
+    re-export left pointing at a renamed class, breaks one of the two.
+    """
+    wrong: list[str] = []
+    for name in pandid.__all__:
+        value = getattr(pandid, name, None)
+        if value is None or inspect.ismodule(value) or not inspect.isclass(value):
+            continue
+        if not getattr(value, "__module__", "").startswith("pandid."):
+            wrong.append(f"pandid.{name} is {value!r}, which this package did not define")
+        elif value.__name__ != name:
+            wrong.append(f"pandid.{name} is {value.__module__}.{value.__name__}")
+    assert not wrong, "exported names bound to the wrong class:\n  " + "\n  ".join(wrong)
+
+
+def test_the_rename_guard_can_tell_a_documented_name_from_one_that_is_not():
+    """``_documented_names()`` is the rename guard's eye; here it is shown to work.
+
+    If it answered "yes" to everything the assertion it backs would be
+    decoration, so it is asked about a spelling the reference has never used --
+    the one a rename of ``ControlLoop`` might plausibly introduce.
+    """
+    documented = _documented_names()
+    assert "ControlLoop" in documented
+    assert "ControlScheme" not in documented
 
 
 def test_the_check_reads_prose_and_signatures_and_not_string_literals():
