@@ -2081,15 +2081,37 @@ The offset comes from `portgeom.port_offset()`, which asks the symbol, so no
 measured number is written down and no rescaling of the artwork can leave a
 valve off its run. Only the axes the call names are read that way, so
 `pin(x=…)` followed by `pin(port="inlet", y=run_y)` steps along a row by the
-corner and still lands the nozzle on the line. What gets stored is still the
-corner, so pinning the same nozzle to the same point twice is the same
-placement twice.
+corner and still lands the nozzle on the line.
 
-The transform in the *same* call is applied first, since a mirror moves the
-nozzle within the box. A grid cell has no nozzle in it, so a `port` you *name*
-with `col`/`row` raises `ValueError`, and a port the unit does not have raises
-`KeyError` naming the ones it does. A flag pinned to a cell is not refused: it
-named no port, so there is nothing to refuse.
+What gets stored is the **relation**, not the corner it works out to. The
+corner depends on the transform, the resolved box and the face the nozzle is
+piped from, and a later call may change any of the three; the nozzle stays
+where it was put.
+
+```python
+valve.pin(port="inlet", y=440)
+pinned_y(valve, "inlet")     # 440.0   what you asked for
+valve.pin_.y                 # 432.5   the corner that puts the inlet there
+valve.pin(orientation=90)    # the turn moves the nozzle within the box
+pinned_y(valve, "inlet")     # 440.0   unchanged
+valve.pin_.y                 # 440.0   the corner moved instead
+```
+
+So `pin_.y` is that corner and is not the number you passed;
+`portgeom.pinned_y()` below reads back what you asked for. Order does not
+matter: state the transform before the nozzle or after it.
+
+The engine picks which wall a nozzle is piped from once every box is placed. A
+port-pinned nozzle is left out of that pick, because moving it would take it off
+the coordinate it was pinned to. Only that nozzle: its neighbours on the same
+unit are still placed by the engine, and [`nozzle()`](#nozzle) still names a
+face outright and still wins.
+
+A grid cell has no nozzle in it, so a `port` you *name* with `col`/`row` raises
+`ValueError` — and so does one given no coordinate to locate, since
+`pin(port="inlet")` on its own measures nothing. A port the unit does not have
+raises `KeyError` naming the ones it does. A flag pinned to a cell is not
+refused: it named no port, so there is nothing to refuse.
 
 ```text
 portgeom.port_offset(unit, port_name, placed=None) -> (dx, dy)
@@ -3959,9 +3981,25 @@ key out — a `Column` that says nothing is drawn with the trays a column draws.
 ### The `pin` and `port_faces` keys
 
 `pin` mirrors [`pin()`](#pin) with `x`/`y` (absolute), `col`/`row` (grid),
-`orientation` (`0`/`90`/`180`/`270`) and `mirrored` (`x`/`y`/`xy`). `x`/`y` are
-always the corner here, a flag's included: what is written is the placement the
-engine resolved, and reading it back has to put the flag where it was.
+`orientation` (`0`/`90`/`180`/`270`), `mirrored` (`x`/`y`/`xy`) and `port`.
+
+Without `port`, `x`/`y` are the corner, a flag's included: what is written is
+the placement the engine resolved, and reading it back has to put the flag where
+it was. With `port` they locate that nozzle, exactly as
+[`pin(port=…)`](#pinport) does, so a written sheet carries the relation and
+still holds the nozzle down after a turn on the far side.
+
+```yaml
+pin: {y: 440, port: inlet}                          # one nozzle, every stated axis
+pin: {x: 300, y: 100, port: {x: in_1}}              # x is the nozzle, y the corner
+pin: {x: 300, y: 100, port: {x: in_1, y: out_1}}    # two axes, two nozzles
+```
+
+The mapping form writes a pin built out of more than one `pin()` call, which is
+the only way to measure the two axes to different nozzles — or to measure one and
+leave the other on the corner. A nozzle named for an axis the pin does not state
+measures nothing and is refused rather than dropped, against the key that names
+it (`pin.port.x`).
 
 `port_faces` maps a port to the face it leaves from **as drawn**, so a mirrored
 or turned unit takes the face the reader sees. It is an override: without it the
