@@ -488,6 +488,91 @@ def test_a_value_present_and_blank_keeps_the_column():
     assert table.count(">-<") == 2  # the blank one and the boundary one
 
 
+# --- sizing the table ---------------------------------------------------------
+
+
+def _layout(fs):
+    from pandid.render.furniture import stream_table_layout
+
+    table = stream_table_layout(fs)
+    assert table is not None
+    return table
+
+
+def _wide(n: int) -> Flowsheet:
+    """*n* tabulated streams, each its own feed-to-product line."""
+    fs = Flowsheet("wide")
+    for i in range(n):
+        feed = fs.add(U.Feed(f"F{i}"))
+        prod = fs.add(U.Product(f"P{i}"))
+        fs.connect(feed.outlet, prod.inlet).properties = {"Temperature": f"{i} C"}
+    return fs
+
+
+def test_the_table_is_set_at_the_size_the_sheet_asks_for():
+    fs = _two_and_two()
+    fs.stream_table.font_size = 8.0
+    assert _layout(fs).size == 8.0
+    assert 'font-size="8.0"' in _table(fs)
+
+
+def test_the_size_rules_the_table_and_not_only_its_lettering():
+    """The whole of the feature. Every column of a table of short names and
+    short values sits on its minimum width, so a size that reached the
+    glyphs alone would leave the table its entire footprint and the author
+    whose table overruns an A3 sheet exactly where they were."""
+    fs, small = _two_and_two(), _two_and_two()
+    small.stream_table.font_size = 7.0
+    big, little = _layout(fs), _layout(small)
+    assert little.w < big.w
+    assert little.h < big.h
+    assert little.row_h < big.row_h
+    # Ruled in proportion: 7 of 10.5 is two thirds, and the height is rows
+    # of one line each, so it lands on the ratio exactly.
+    assert little.h / big.h == pytest.approx(7.0 / 10.5)
+    assert little.w / big.w == pytest.approx(7.0 / 10.5)
+
+
+def test_a_table_left_alone_is_drawn_exactly_as_it_always_was():
+    """The automatic regime is untouched, at both ends of it: 10.5 while the
+    columns fit and shrinking past 18 of them, with the minimum column width
+    fixed there because the size is being shrunk to fit values *into* that
+    minimum."""
+    narrow, wide, widest = _layout(_two_and_two()), _layout(_wide(20)), _layout(_wide(40))
+    assert (narrow.size, narrow.row_h) == (10.5, 20.0)
+    assert (wide.size, wide.row_h) == (pytest.approx(190.0 / 20), 15.0)
+    assert (widest.size, widest.row_h) == (8.0, 15.0)  # and no further
+    assert wide.w == pytest.approx(122.0 + 20 * 52.0)
+
+
+@pytest.mark.parametrize("size", [0, -1, -0.5])
+def test_a_size_that_is_not_a_size_is_refused(size):
+    fs = _two_and_two()
+    fs.stream_table.font_size = size
+    with pytest.raises(ValueError, match="font_size"):
+        _layout(fs)
+
+
+def test_an_option_set_after_a_render_reaches_the_next_one():
+    """The table is measured at every render rather than cached with the
+    frames, so this needs no ``_invalidate_layout()`` -- which is worth
+    proving rather than assuming, since a sheet whose geometry is up to date
+    skips the stages that would otherwise redo the measuring."""
+    fs = _two_and_two()
+    first = _table(fs)
+    fs.stream_table.font_size = 8.0
+    second = _table(fs)
+    assert 'font-size="10.5"' in first and 'font-size="8.0"' in second
+
+
+def test_the_stated_size_reaches_the_drawio_export_too():
+    """Both backends measure the table with the same function, so the
+    editable model is ruled at the size the sheet is."""
+    fs = _two_and_two()
+    fs.stream_table.font_size = 8.0
+    assert "fontSize=8" in fs.to_drawio(show_stream_table=True)
+
+
 def test_a_sheet_that_states_no_property_draws_no_table():
     """Every column empty is the same finding writ large: a grid of
     headings over nothing is not a stream table."""

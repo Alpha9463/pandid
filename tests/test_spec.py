@@ -1461,6 +1461,28 @@ def test_stream_table_sections():
     assert fs.stream_table_sections == [("Benzene", "Mass Fraction")]
 
 
+def test_stream_table_options_round_trip():
+    fs = Flowsheet.from_dict(_spec(stream_table={"font_size": 8}))
+    assert fs.stream_table.font_size == 8
+    assert fs.to_dict()["stream_table"] == {"font_size": 8}
+
+
+def test_a_table_left_alone_writes_no_section():
+    """So a spec written by a sheet that says nothing about its table is the
+    same file it was before these options existed."""
+    assert "stream_table" not in Flowsheet.from_dict(_spec()).to_dict()
+
+
+def test_a_stream_table_key_that_is_not_one_is_named():
+    with pytest.raises(SpecError, match="font_sixe"):
+        Flowsheet.from_dict(_spec(stream_table={"font_sixe": 8}))
+
+
+def test_a_stream_table_value_of_the_wrong_kind_is_refused():
+    with pytest.raises(SpecError, match="must be a number"):
+        Flowsheet.from_dict(_spec(stream_table={"font_size": "8"}))
+
+
 # --- file loaders -------------------------------------------------------------
 
 

@@ -286,6 +286,53 @@ class TableBox:
         self.col_align = _resolve_col_align(self.col_align)
 
 
+@dataclass
+class StreamTableOptions:
+    """How the stream property table is drawn, on the sheet that draws
+    it: ``fs.stream_table``.
+
+    Every flowsheet has one, so nothing is imported and nothing is
+    constructed to use it::
+
+        fs.stream_table.font_size = 8.0
+
+    **An object at one field, on purpose.** ``render()`` already carries
+    nine keywords and three of the four output calls restate every one
+    of them, so a table option spelled there costs four signatures; and
+    a table option means nothing to ``to_drawio()`` differently from
+    ``to_svg()``, because it describes the sheet rather than the file.
+    Settling it on the flowsheet says it once for every way the sheet
+    comes out. A bare ``fs.stream_table_font_size`` would do as much for
+    this one option and nothing for the next: each such attribute adds a
+    prefix-string to ``Flowsheet``'s namespace, a line to its
+    ``__init__``, a key to the spec's top level and a paragraph to the
+    docs, and nothing groups them. One field on one object costs none of
+    that, the second option is a field rather than a fifth signature
+    change, and validation of the group has somewhere to live.
+
+    :attr:`~pandid.flowsheet.Flowsheet.stream_table_sections` is *not*
+    here, deliberately. It is content and not a setting -- the heading
+    text drawn in the table, authored per sheet exactly as
+    ``title_block`` and ``annotations`` are -- and it is a flowsheet
+    attribute for the reason those two are.
+    """
+
+    #: Type size for the whole table, in drawing units, or ``None`` to
+    #: let the table pick one from how many columns it has (10.5 up to
+    #: 18 columns, shrinking from there). What is set here **rules the
+    #: table and not only its lettering**: the row height and the
+    #: minimum column widths follow it in proportion, so a table that
+    #: overruns its page has a remedy short of a bigger page.
+    #:
+    #: The two regimes part company only above 18 columns, where the
+    #: automatic size is chosen to keep long values inside a column
+    #: already at its minimum width and so leaves that minimum alone. A
+    #: size stated here is the author overruling that judgement for a
+    #: sheet that has to fit a given page, and it would do nothing at
+    #: all if it did not reach the ruling as well as the glyphs.
+    font_size: float | None = None
+
+
 # --------------------------------------------------------------
 # Convenience constructors for the common boxes
 # --------------------------------------------------------------
