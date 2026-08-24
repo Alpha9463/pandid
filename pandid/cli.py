@@ -37,6 +37,7 @@ from pathlib import Path
 
 from pandid import __version__, spec, units
 from pandid.flowsheet import Flowsheet
+from pandid.render.svg import TABLE_SHEET
 
 EXIT_OK = 0
 EXIT_FAILED = 1
@@ -297,9 +298,16 @@ def _build_parser() -> argparse.ArgumentParser:
              "'flanged-at-nozzles' marks the nozzles only. A P&ID only "
              "(default: none)",
     )
+    # ``nargs="?"`` for the reason ``--debug`` has it: the option grew a
+    # value and the flag spelling still has to mean what it always
+    # meant. ``--stream-table`` alone draws the table under the drawing;
+    # ``--stream-table sheet`` writes the table's own sheet to OUT
+    # instead, so a set with both is two runs with two outputs.
     draw.add_argument(
-        "--stream-table", action="store_true",
-        help="draw the stream property table under the drawing",
+        "--stream-table", nargs="?", const=True, default=False,
+        choices=(TABLE_SHEET,), metavar=TABLE_SHEET,
+        help="draw the stream property table under the drawing, or pass "
+             f"'{TABLE_SHEET}' to draw the table as a sheet of its own",
     )
     draw.add_argument(
         "--jump-direction", choices=("vertical", "horizontal"), default="vertical",

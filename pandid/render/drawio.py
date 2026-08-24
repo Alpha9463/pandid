@@ -1532,7 +1532,7 @@ class DrawioRenderer:
                page_size: "str | None" = None, border: "str | None" = None,
                connections: "str | None" = None,
                jump_direction: str = "vertical",
-               show_stream_table: bool = False, **opts) -> str:
+               show_stream_table: "bool | str" = False, **opts) -> str:
         """Render the flowsheet to a draw.io document.
 
         ``diagram`` says which drawing this is, in the spelling
@@ -1586,22 +1586,34 @@ class DrawioRenderer:
         The debug overlay remains refused. It is scaffolding for whoever
         is writing a placement rather than part of the drawing.
         """
-        from pandid.render.svg import _page, _resolve_sheet
+        from pandid.render.svg import _page, _resolve_sheet, wants_table_sheet
 
         arrows = draws_arrowheads(diagram)
         self._findings = []
-        for u in fs.units:
-            if u.frame is None:
-                raise ValueError(f"Unit '{u.name}' lacks a frame even after layout was run.")
+        table_sheet = wants_table_sheet(show_stream_table)
+        if not table_sheet:
+            for u in fs.units:
+                if u.frame is None:
+                    raise ValueError(
+                        f"Unit '{u.name}' lacks a frame even after layout was run.")
+        # A table sheet is a formal drawing rather than a table on
+        # paper, so it rules the frame the reference sets do; see
+        # :meth:`SvgRenderer.render`, which defaults it the same way.
+        if table_sheet and border is None:
+            border = "zone"
         border, _diagram = _resolve_sheet(border, diagram)
         sheet = _page(page_size)
+        if table_sheet:
+            return self._table_sheet(fs, sheet, border)
 
         body: list[str] = []
         # Sheet furniture first: a later cell draws over an earlier one,
         # and the boxes are behind the drawing on the sheet. The border
         # is behind even those, which is the order _place_furniture
         # splices it in at.
-        furniture, frame, fit = self._furniture(fs, sheet, show_stream_table)
+        # `bool()` and not the value: the table sheet returned above, so
+        # what is left here is the table on the diagram or no table.
+        furniture, frame, fit = self._furniture(fs, sheet, bool(show_stream_table))
         body.extend(self._border(frame, border))
         body.extend(furniture)
         # Then equipment, then the runs between it, then the balloons --
@@ -1640,6 +1652,46 @@ class DrawioRenderer:
         for n, code in enumerate(tags.codes):
             body.extend(_quadrant_cell(f"q{n}", code, fit))
 
+        return self._document(fs, sheet, frame, body)
+
+    def _table_sheet(self, fs, sheet, border) -> str:
+        """The stream table's own sheet, as a draw.io document.
+
+        The same drawing the sheet renders for
+        ``show_stream_table="sheet"`` and by the same arithmetic:
+        :func:`~pandid.render.svg.table_sheet_plan` wraps the table to
+        the page, docks the strip and rules the frame, and what is left
+        here is the format. Every block comes out as a real
+        ``shape=table`` -- rows and cells a reader can edit -- which is
+        what the docked table already exports as.
+
+        The frame is the page's, not the drawing's, on a paged export
+        and the table's own bounds on an unpaged one; a table sheet has
+        no diagram whose coordinates could be kept, so there is no
+        third case here of the kind :meth:`_furniture` has.
+        """
+        from pandid.render.svg import table_sheet_plan
+
+        plan = table_sheet_plan(fs, sheet)
+        body = list(self._border(plan.frame, border))
+        for i, part, bx, by in plan.table.at(plan.left, plan.top):
+            body += _stream_table(f"st{i}", part, bx, by)
+        x, y, w, h = plan.strip
+        # No scale: a table is not drawn to scale, and the cell is left
+        # unruled where there is no ratio to report.
+        body += self._title_strip("f0", plan.block, x, y, w, h,
+                                  plan.name, plan.date, "")
+        return self._document(fs, sheet, plan.frame, body)
+
+    def _document(self, fs, sheet, frame, body: list[str]) -> str:
+        """The draw.io file around a sheet's cells: the paper it states,
+        the page *view* it asks for, and the model wrapper.
+
+        Two sheets come out of this exporter -- the diagram and the stream
+        table's own sheet -- and the paper both open on is the one
+        statement in the file no reader can override. Written twice, the
+        two would be free to disagree about it.
+        """
         # **The page and the page *view* are two separate statements.**
         # Function names are the anchors below; both repositories move.
         #

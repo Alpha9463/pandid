@@ -76,6 +76,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   group of byte-identical shapes upstream ships is recorded, so a
   re-vendor that brings in a new one has to be looked at, and no group
   may reach the registry with two members still identical.
+- **`show_stream_table="sheet"`: the stream table gets a sheet of its own
+  (#481).**
+
+  ```python
+  fs.render("pfd.svg", page_size="A1", border="zone")
+  fs.render("stream_table.svg", page_size="A1", show_stream_table="sheet")
+  ```
+
+  A full drawing rather than a table on blank paper: zone border, title strip,
+  revision rows and a drawing number of its own, with the table for a body and
+  no diagram on it. Every output path draws it -- `.svg`, `.pdf`, `.png`,
+  `.drawio`, `to_svg()`, `to_drawio()`, `show()` and `pandid draw
+  --stream-table sheet`.
+
+  **It wraps, and the count comes from the page.** More streams than fit across
+  come out as blocks stacked one above the other, each repeating the `Stream
+  Number` heading row and every section header, all ruled to one measurement so
+  a property row tracks from block to block. Twenty-one streams are two blocks
+  on A4 and one on A2, from the same table: a fixed "twelve per block" would
+  wrap a sheet that did not need it and overrun one that did. The columns are
+  shared out evenly rather than filled to the brim -- eleven and ten, not twelve
+  and nine -- because a stub of three columns reads as an afterthought. Without
+  a `page_size` there is no width to wrap against and the table comes out whole,
+  on a sheet grown to fit it.
+
+  A table sheet is set at the reading size whatever its column count: the docked
+  table shrinks above eighteen columns because it has one row of columns and no
+  other way to make room, and a table sheet makes room by wrapping.
+  `fs.stream_table.font_size` still overrules that, and is what brings a table
+  too *deep* for its page back onto it.
+
+  **A value on the keyword that already asks for the table**, not a tenth
+  keyword on four signatures and not a flag that makes one call write two files.
+  Which sheet this file is, is a property of the *call* -- so #473's precedent
+  for `fs.stream_table` does not reach it -- and one call still writes one file,
+  so a set with both sheets is two calls with two paths and you name each file.
+  `debug` grew from a flag into `bool | float` in these same signatures for the
+  same reason: the question had a third answer rather than a second question.
+
+  **Which drawing the table belongs to** is on the strip. The title cell keeps
+  the diagram's title and the subtitle says which sheet this is, so `PFD-301`
+  titled *Ethanol Purification A300 / Process Flow Diagram 1* files its table as
+  `PFD-301-ST`, *Ethanol Purification A300 / Stream Table*; client, project,
+  company, status, date and the revision rows are the diagram's, this being a
+  sheet of the same issue. Both derived cells can be stated:
+  `fs.stream_table.sheet_subtitle` and `fs.stream_table.sheet_drawing_number`,
+  which round-trip through the spec with the rest of `stream_table:`. The number
+  is *derived* because two drawings cannot share one, and *stated* because
+  nothing here knows the next free number in a drawing office's series.
+
+  The scale cell is not ruled -- a table is not drawn to scale. `debug=` is
+  refused rather than ignored, there being no diagram to draw a coordinate
+  overlay under, and a flowsheet with nothing to tabulate raises rather than
+  writing an empty sheet. Every shipped sheet is byte-identical: nothing changes
+  unless the option is used.
+
 - **`Evaporator`, `Thickener` and `Kiln`**: three pieces of equipment the
   registry had no symbol for, and all three were being faked in a shipped
   example with an apology in its source (#474). `examples/21_alumina_refinery`

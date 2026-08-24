@@ -15,6 +15,7 @@ from pandid.streams import SIGNAL_KINDS as _SIGNAL_KINDS
 from pandid.validate import Issue
 
 if TYPE_CHECKING:
+    from pandid.document import TitleBlock
     from pandid.flowsheet import Flowsheet
 
 # A symbol's own lettering: the "M" in a motor operator, the "S" in a
@@ -2488,6 +2489,44 @@ def _resolve_sheet(border: "str | None", diagram: "str | None") -> "tuple[str, s
     return border, kind
 
 
+# What ``show_stream_table`` says when the table is to be a drawing in
+# its own right rather than a block docked at the foot of a diagram.
+TABLE_SHEET = "sheet"
+
+
+def wants_table_sheet(show_stream_table) -> bool:
+    """Is this render being asked for the stream table's **own sheet**?
+
+    ``show_stream_table`` takes three answers: ``False``, no table;
+    ``True``, the table docked at the foot of the diagram; and
+    ``"sheet"``, the table as a full drawing of its own -- border, title
+    strip, drawing number -- with no diagram on it at all.
+
+    A third answer on the keyword that already asks for the table,
+    rather than a tenth keyword on the four calls that render. It is a
+    property of the *call* and not of the flowsheet -- which sheet this
+    file is, not how the table is drawn -- so it does not belong beside
+    :class:`~pandid.document.StreamTableOptions`; and one call still
+    writes one file, so it is not a flag that makes ``render()`` emit
+    two. ``debug`` grew from a flag into ``bool | float`` in these same
+    signatures for the same reason: the question had a third answer, not
+    a second question.
+
+    A spelling neither backend knows is refused here rather than read as
+    truthy, which is what would have drawn the whole table onto the
+    diagram for ``show_stream_table="own sheet"``.
+    """
+    if isinstance(show_stream_table, bool) or show_stream_table is None:
+        return False
+    if show_stream_table == TABLE_SHEET:
+        return True
+    raise ValueError(
+        f"show_stream_table={show_stream_table!r}: the table is drawn on the "
+        f"diagram (True), left off it (False), or given a sheet of its own "
+        f'("{TABLE_SHEET}"). Nothing else is a place to put it.'
+    )
+
+
 def draws_arrowheads(diagram: "str | None") -> bool:
     """Does this kind of drawing head the end of a process line?
 
@@ -2708,7 +2747,20 @@ def _sheet_title(fs: "Flowsheet") -> str:
     return title or str(fs.name or "").strip()
 
 
-def _provenance(fs: "Flowsheet") -> list[str]:
+def _table_sheet_title(fs: "Flowsheet", options) -> str:
+    """What the stream table's own sheet is called, as a document.
+
+    The drawing's title and the sheet's, in the order the strip letters
+    them. Two sheets of one drawing set are two documents, and a reader
+    with both open has only this to tell them apart: left at the
+    drawing's title alone, the table sheet and the diagram it belongs to
+    would answer to the same accessible name.
+    """
+    parts = [p for p in (_sheet_title(fs), options.sheet_subtitle) if p]
+    return " - ".join(parts)
+
+
+def _provenance(fs: "Flowsheet", title: "str | None" = None) -> list[str]:
     """The document's title and the block saying what drew it.
 
     Openly, in a comment and in a real ``<metadata>`` element, and never
@@ -2723,10 +2775,15 @@ def _provenance(fs: "Flowsheet") -> list[str]:
     :func:`_sheet_title`) and nothing else. ``dc:title`` repeats it
     inside the metadata, where a cataloguing tool reads it, and
     ``dc:creator`` names what drew the file.
+
+    ``title`` states that name instead of reading it off the flowsheet,
+    for the one sheet that is not the diagram: the stream table's own
+    (:func:`_table_sheet_title`).
     """
     from pandid.render import HOMEPAGE, generator
     who = generator()
-    title = _sheet_title(fs)
+    if title is None:
+        title = _sheet_title(fs)
     lines = []
     if title:
         lines.append(f"  <title>{escaped(title)}</title>")
@@ -2750,6 +2807,148 @@ def _provenance(fs: "Flowsheet") -> list[str]:
     return lines
 
 
+def _document(fs: "Flowsheet", sheet: "_Sheet | None",
+              viewbox: "tuple[float, float, float, float]",
+              body: list[str], title: "str | None" = None) -> str:
+    """The SVG document around a sheet's ink: the declaration, the
+    element, the provenance block and the paper, then *body*.
+
+    Two sheets come out of this renderer -- the diagram and the stream
+    table's own sheet -- and both are the same document with different
+    ink in it. Written twice, they would be free to disagree about the
+    one thing every consumer of the file reads first: the physical size
+    it prints at.
+
+    ``viewbox`` is the canvas rectangle in drawing units. A named page
+    size additionally declares its *physical* size, so the sheet prints
+    and converts to PDF at exactly that ISO size instead of at whatever
+    the consumer takes a user unit to be worth; a sheet fitted to its
+    contents has none to declare and stays in user units.
+    """
+    x, y, w, h = viewbox
+    if sheet is not None:
+        decl_w, decl_h = f"{sheet.width_mm:g}mm", f"{sheet.height_mm:g}mm"
+    else:
+        decl_w, decl_h = f"{w:.0f}", f"{h:.0f}"
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" '
+        f'width="{decl_w}" height="{decl_h}" '
+        f'viewBox="{x:.1f} {y:.1f} {w:.1f} {h:.1f}">',
+    ]
+    # What drew the file, and what it is called. First children of
+    # <svg>, before any ink: <title> is the document's accessible
+    # name and is only picked up there. See :func:`_provenance`.
+    lines.extend(_provenance(fs, title))
+    lines.append('  <!-- Background -->')
+    lines.append(f'  <rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" fill="white" />')
+    lines.extend(body)
+    lines.append('</svg>')
+    return "\n".join(lines)
+
+
+class TableSheetPlan(NamedTuple):
+    """A stream-table sheet as geometry, before either backend draws it.
+
+    ``table`` is the wrapped table and ``left``/``top`` the corner its
+    block stack is drawn from; ``block``/``name``/``date`` are what the
+    title strip says and ``strip`` the rectangle it says it in;
+    ``frame`` is the drawing frame the border is ruled on.
+    """
+    table: "F.TableSheet"
+    block: "TitleBlock"
+    name: str
+    date: str
+    strip: "tuple[float, float, float, float]"
+    frame: "tuple[float, float, float, float]"
+    left: float
+    top: float
+
+
+def table_sheet_plan(fs, sheet: "_Sheet | None") -> TableSheetPlan:
+    """Lay out the stream table's own sheet: the table wrapped to the
+    page, the strip docked, and the frame around both.
+
+    **Both backends ask this**, exactly as both ask :func:`dock` where a
+    legend goes. Everything here is a statement about a sheet rather
+    than about a file format -- how many streams a block holds, what the
+    strip says, where the frame is ruled -- and a second opinion about
+    any of it would be a table sheet that exported differently from the
+    one that printed.
+
+    The table is the sheet's **body** rather than a piece of docked
+    furniture, which is the one structural difference from
+    :meth:`SvgRenderer._place_furniture`. Docked, it would share the
+    bottom band with the strip and be ruled to what the strip left of
+    the page width -- some six hundred units of a table sheet's whole
+    reason for existing. So only the strip is docked, and the table
+    takes the region that leaves, exactly as a diagram does.
+
+    The strip is drawn whether or not the flowsheet carries a title
+    block: a sheet issued into a set without one cannot be filed, and
+    the acceptance for this drawing is that it carries a border, a title
+    block and a drawing number. What it says is
+    :func:`~pandid.document.table_sheet_block`'s.
+
+    The flowsheet's annotation boxes are **not** repeated here. An
+    equipment list schedules the plant the diagram draws and a legend
+    explains its symbols; neither is about this sheet, whose body is the
+    table and nothing else. ``fs.annotations`` is one list belonging to
+    one drawing, so there is nowhere yet to say *this box, on that
+    sheet* -- that is a sheet set's question, and #407's.
+
+    Raises :class:`ValueError` for a flowsheet with nothing to tabulate,
+    and the page's own "too small" for a table the paper cannot hold.
+    """
+    from pandid.document import table_sheet_block
+
+    # What the page leaves the table to wrap into: the frame, less the
+    # clearance the dock keeps between the frame and whatever it frames.
+    # A sheet with no page has no width to wrap against and takes the
+    # table in one block, however wide that comes to.
+    room = None if sheet is None else (
+        sheet.width - 2 * (F.OUTER_MARGIN + F.ZONE_BAND) - 2 * F.INNER)
+    table = F.stream_table_sheet(fs, room)
+    if table is None:
+        # Refused rather than drawn empty: what was asked for is a sheet
+        # whose whole body is the table, and there is no table. See
+        # :func:`~pandid.render.furniture.stream_table_layout` for the
+        # two ways that happens.
+        raise ValueError(
+            "show_stream_table='sheet' draws a sheet whose body is the stream "
+            "table, and this flowsheet has nothing to tabulate: no stream "
+            "states a property and none crosses the sheet edge. Put properties "
+            "on the streams (stream.properties = {...}), or drop the table sheet")
+    block = table_sheet_block(fs.title_block, F._options(fs))
+    ts_w, ts_h = F.measure_title_strip(block)
+    items = [(TITLE, "bottom-right", ts_w, ts_h)]
+    inner = (0.0, 0.0, table.w, table.h)
+    if sheet is None:
+        placed, frame, free = F.dock(items, inner)
+    else:
+        page = sheet  # rebound so the closure closes over a _Sheet
+        placed, frame, free = F.dock(
+            items, inner, sheet=page,
+            too_small=lambda need_w, need_h, culprit: _too_small(
+                page, need_w, need_h,
+                _furniture_name(culprit) if culprit else ""))
+        assert free is not None  # a fixed page always leaves a region
+        _fx, _fy, fw, fh = free
+        if table.w > fw or table.h > fh:
+            # The table is measured from its contents and wrapped to the
+            # page, so what can be left over is depth -- more rows than
+            # the paper takes -- or a block one column wide that is
+            # still too wide, which is a section heading or a single
+            # value no page this size can hold.
+            raise _too_small(page, page.width - fw + table.w,
+                             page.height - fh + table.h, "the stream table")
+    _obj, sx, sy, sw, sh = placed[0]
+    left, top = F.table_sheet_origin(table, free)
+    date = block.date or datetime.now().strftime("%Y-%m-%d")
+    return TableSheetPlan(table, block, block.title or fs.name, date,
+                          (sx, sy, sw, sh), frame, left, top)
+
+
 class SvgRenderer:
     """Renders a Flowsheet to an SVG file using manual geometry."""
 
@@ -2758,7 +2957,7 @@ class SvgRenderer:
         self.registry = registry or default_registry
 
     def render(self, fs: "Flowsheet", *, jump_direction: str = "vertical",
-               show_stream_table: bool = False,
+               show_stream_table: "bool | str" = False,
                border: "str | None" = None, diagram: "str | None" = None,
                page_size: "str | None" = None, connections: "str | None" = None,
                debug: "bool | float" = False,
@@ -2772,13 +2971,17 @@ class SvgRenderer:
         jump_direction : str
             Which crossing lines get a semicircle bump: ``"vertical"``
             or ``"horizontal"``.
-        show_stream_table : bool
-            Whether to render a stream property table on the sheet.
+        show_stream_table : bool | str
+            ``True`` docks the stream property table at the foot of the
+            diagram; ``"sheet"`` draws the table as a sheet of its own
+            and no diagram at all. See :func:`wants_table_sheet`.
         border : str | None
             ``"none"`` for a plain sheet edge, ``"zone"`` for the
             zone-ruled drawing frame, lettered A.. top down and numbered
             1.. left to right. The flowsheet's title block and
-            annotation boxes are drawn whichever is chosen.
+            annotation boxes are drawn whichever is chosen. A table
+            sheet rules the zone frame unless told otherwise: it is a
+            drawing in its own right rather than a table on paper.
         diagram : str | None
             Which drawing this is: ``"pfd"`` (the default) or
             ``"p&id"``, also spelled ``"pid"``. A P&ID draws its process
@@ -2806,10 +3009,40 @@ class SvgRenderer:
         # Resolved first, so a spacing the overlay cannot draw is
         # refused before a whole sheet has been built rather than after.
         grid = _debug.resolve_spacing(debug)
+        table_sheet = wants_table_sheet(show_stream_table)
+        # A table sheet is a formal drawing rather than a table on
+        # paper, so it rules the frame the reference sets do; the
+        # diagram's own default stays the plain edge. Stated `border`
+        # still decides either way.
+        if table_sheet and border is None:
+            border = "zone"
         border, diagram = _resolve_sheet(border, diagram)
         arrows = draws_arrowheads(diagram)
         joints = sheet_connections(diagram, connections)
         sheet = _page(page_size)
+        if table_sheet:
+            if grid is not None:
+                # Refused rather than ignored, as a .drawio render
+                # refuses it: the overlay draws the coordinates a
+                # ``pin()`` takes, and there is nothing pinned on this
+                # sheet for it to be about.
+                #
+                # `connections` and `jump_direction` are *not* refused
+                # with it, and the difference is not squeamishness.
+                # Those two say how a process line is drawn where one is
+                # drawn, and a sheet they do not apply to already
+                # ignores them -- a PFD marks no joints whatever
+                # `connections` says, and nothing hops on a sheet whose
+                # lines do not cross. A sheet with no lines at all is
+                # that same sheet, so an author rendering both sheets
+                # from one dict of options is not stopped at this one.
+                # The overlay has no such precedent: asked for, it is
+                # always drawn.
+                raise ValueError(
+                    "debug draws the coordinate overlay under a *diagram*, and "
+                    "show_stream_table='sheet' draws no diagram. Render the "
+                    "diagram to see the overlay, or drop debug=")
+            return self._table_sheet(fs, sheet, border)
 
         # 1. Diagram bounding box: union of every unit's drawn box and
         #    every route waypoint. Furniture goes *around* this region.
@@ -2888,34 +3121,9 @@ class SvgRenderer:
         fs.warnings = [w for w in fs.warnings
                        if getattr(w, "code", "") not in _RENDER_CODES] + render_issues
 
-        # 4. SVG document.
-        lines = ['<?xml version="1.0" encoding="UTF-8"?>']
-        # A named page size declares its physical size, so the sheet
-        # prints and converts to PDF at exactly that ISO size instead of
-        # at whatever the consumer takes a user unit to be worth. A
-        # sheet fitted to the drawing has none to declare and stays in
-        # user units.
-        if sheet is not None:
-            decl_w, decl_h = f"{sheet.width_mm:g}mm", f"{sheet.height_mm:g}mm"
-        else:
-            decl_w, decl_h = f"{canvas_width:.0f}", f"{canvas_height:.0f}"
-        lines.append(
-            f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" '
-            f'width="{decl_w}" height="{decl_h}" '
-            f'viewBox="{frame_x:.1f} {frame_y:.1f} {canvas_width:.1f} {canvas_height:.1f}">'
-        )
-        # What drew the file, and what it is called. First children of
-        # <svg>, before any ink: <title> is the document's accessible
-        # name and is only picked up there. See :func:`_provenance`.
-        lines.extend(_provenance(fs))
-        lines.append('  <!-- Background -->')
-        lines.append(f'  <rect x="{frame_x:.1f}" y="{frame_y:.1f}" width="{canvas_width:.1f}" height="{canvas_height:.1f}" fill="white" />')
-
-        # Furniture (border + title strip + boxes) sits behind the
-        # diagram.
-        for item in furniture:
-            lines.append("    " + item)
-
+        # 4. SVG document. Furniture (border + title strip + boxes) sits
+        #    behind the diagram.
+        lines = ["    " + item for item in furniture]
         lines.extend(self._defs(fs, arrows))
         unit_labels: list = []
         balloons: list = []
@@ -2981,8 +3189,8 @@ class SvgRenderer:
             lines.append(f'  <g id="drawing" transform="{self._fit(dx0, dy0, dx1, dy1, free)}">')
             lines.extend(drawing)
             lines.append('  </g>')
-        lines.append('</svg>')
-        return "\n".join(lines)
+        return _document(fs, sheet,
+                         (frame_x, frame_y, canvas_width, canvas_height), lines)
 
     def _fit(self, dx0, dy0, dx1, dy1, free) -> str:
         """Transform centring the drawing in *free*, scaled to fit."""
@@ -3073,6 +3281,44 @@ class SvgRenderer:
             outer = F.sheet_rect(ix, iy, iw, ih)
         ox, oy, ow, oh = outer
         return (ox - OUT, oy - OUT, ow + 2 * OUT, oh + 2 * OUT), free
+
+    def _table_sheet(self, fs, sheet, border) -> str:
+        """The stream table as a sheet of its own: border, title strip,
+        drawing number, and the table for a body.
+
+        The geometry is :func:`table_sheet_plan`'s, which the draw.io
+        exporter asks for the same sheet; this strokes it.
+
+        The scale cell states nothing. A table is not drawn to scale,
+        and the cell is not ruled at all where there is no ratio to
+        report (see :func:`~pandid.render.furniture.title_strip_layout`).
+        """
+        fit_issues: list[Issue] = []
+
+        def report(field: str, text: str, drawn: str) -> None:
+            fit_issues.append(fit_issue(field, text, drawn))
+
+        plan = table_sheet_plan(fs, sheet)
+        furniture: list[str] = []
+        for i, part, bx, by in plan.table.at(plan.left, plan.top):
+            furniture.extend(F.draw_stream_table(
+                part, bx, by, group=f"stream_table_{i + 1}"))
+        sx, sy, sw, sh = plan.strip
+        furniture.extend(F.draw_title_strip(plan.block, plan.name, plan.date,
+                                            sx + sw, sy + sh, report=report))
+        if border == "zone":
+            frame_lines, outer = F.zone_frame(*plan.frame)
+            furniture[:0] = frame_lines  # the border sits behind the rest
+        else:
+            outer = F.sheet_rect(*plan.frame)
+        ox, oy, ow, oh = outer
+        OUT = F.OUTER_MARGIN
+        fs.warnings = [w for w in fs.warnings
+                       if getattr(w, "code", "") not in _FIT_CODES] + fit_issues
+        return _document(
+            fs, sheet, (ox - OUT, oy - OUT, ow + 2 * OUT, oh + 2 * OUT),
+            ["    " + item for item in furniture],
+            title=_table_sheet_title(fs, F._options(fs)))
 
     def _place_plain(self, st_layout, sheet, margin, furniture):
         """A fixed page carrying no furniture of its own.

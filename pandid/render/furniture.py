@@ -749,6 +749,81 @@ def _table_streams(fs) -> list:
     return [run[0] for run in _table_runs(fs)]
 
 
+class _Measured(NamedTuple):
+    """What the stream table measures to, before it is a grid of cells.
+
+    The split exists because the table is now laid out two ways from one
+    measurement: whole, docked at the foot of a diagram
+    (:func:`stream_table_layout`), and cut into blocks on a sheet of its
+    own (:func:`stream_table_sheet`). Every number here is settled over
+    the *whole* table -- one type size, one row depth, one width for
+    every stream column -- so a table read across two blocks is read
+    across one ruling.
+
+    ``span`` is what a section heading needs, which is a constraint on
+    the total width rather than on any column, so it is carried
+    unresolved: how much of it the label column has to take up depends
+    on how many stream columns stand beside it, and that is the one
+    thing the two layouts disagree about. See :func:`_section_span`.
+    """
+    streams: list
+    cells: list
+    disp: list
+    heading: str
+    size: float
+    row_h: float
+    label_w: float
+    name_w: float
+    span: float
+
+
+def _section_span(m: "_Measured", columns: int) -> float:
+    """The label column's width once a section heading has to fit over
+    *columns* stream columns beside it.
+
+    A section header spans the whole table, so it is the total width it
+    constrains rather than any one column; the row label column is the
+    only one free to take up the slack.
+    """
+    return max(m.label_w, m.span - m.name_w * columns)
+
+
+def _stream_rows(m: "_Measured", streams: list, cells: list,
+                 label_w: float) -> list[list[StreamCell]]:
+    """The table's cells, row by row, for the *streams* given.
+
+    The whole table passes all of them and a block of a table sheet
+    passes its own slice, which is what makes each block carry the
+    heading row again: the row is built here, from whatever columns this
+    block has, rather than being copied off a table that was built once.
+    """
+    rows: list[list[StreamCell]] = [
+        [StreamCell(m.heading, label_w, _STREAM_HEAD_FILL, True, "start")]
+        + [StreamCell(s.name, m.name_w, _STREAM_HEAD_FILL, True, "middle")
+           for s in streams]]
+    for kind, key in m.disp:
+        if kind == "section":
+            rows.append([StreamCell(key, label_w + m.name_w * len(streams),
+                                    _STREAM_SECTION_FILL, True, "start")])
+            continue
+        rows.append(
+            [StreamCell(key, label_w, _STREAM_KEY_FILL, True, "start")]
+            + [StreamCell(_stream_cell_text(c, key), m.name_w,
+                          _STREAM_VALUE_FILL, False, "middle")
+               for c in cells])
+    return rows
+
+
+def _stream_table(m: "_Measured", streams: list, cells: list,
+                  label_w: float) -> StreamTable:
+    """One ruled table over the columns given: the whole thing, or one
+    block of a table sheet."""
+    rows = _stream_rows(m, streams, cells, label_w)
+    return StreamTable(rows, m.size, m.row_h,
+                       label_w + m.name_w * len(streams),
+                       m.row_h * len(rows))
+
+
 def stream_table_layout(fs) -> "StreamTable | None":
     """Where every cell of the stream table goes and what is in it, or
     ``None`` for a flowsheet with nothing to tabulate.
@@ -759,11 +834,31 @@ def stream_table_layout(fs) -> "StreamTable | None":
     here to abbreviate into. A stream table that cannot show ``0.0441
     kg/kg total`` is not a stream table.
 
+    This is the table drawn **on** a diagram, in one block, however wide
+    that comes to. :func:`stream_table_sheet` is the same table given a
+    sheet of its own, where the page it has to fit is known and the
+    columns are cut into blocks against it.
+    """
+    m = _measure(fs)
+    if m is None:
+        return None
+    return _stream_table(m, m.streams, m.cells,
+                         _section_span(m, len(m.streams)))
+
+
+def _measure(fs, *, wrapped: bool = False) -> "_Measured | None":
+    """Measure the table, or ``None`` for a flowsheet with nothing to
+    tabulate.
+
     Nothing to tabulate is answered twice, and the second is the one
     that matters: no stream gets a column (:func:`_table_streams`), or
     no stream states a property, which leaves the columns that did get
     one with no row to fill. Both are a grid of headings over nothing,
     and a heading is not a stream table either.
+
+    ``wrapped`` says the table is going to be cut into blocks, which
+    changes one thing and only one: the type size nobody stated. See
+    below.
     """
     runs = _table_runs(fs)
     if not runs:
@@ -798,7 +893,16 @@ def stream_table_layout(fs) -> "StreamTable | None":
             f"number of drawing units, or None to let the table pick one from "
             f"how many columns it has"
         )
-    if asked is None:
+    if asked is None and wrapped:
+        # A table cut into blocks has nothing to shrink *for*. The rule
+        # below trades type size for width because a table drawn beside
+        # a diagram has one row of columns and no way to make more room;
+        # a table sheet makes room by wrapping, so shrinking as well
+        # would letter a twenty-column sheet at 8 units to fit a page it
+        # already fits. The author's own `font_size` still rules, and is
+        # how a table too *deep* for its page is brought back onto it.
+        size, row_h, ruled = _BASE_SIZE, _ROW_H, 1.0
+    elif asked is None:
         # As it always was: 10.5 while the columns fit, then shrunk so
         # that a long value still sits inside a column already at its
         # minimum width. That last clause is why the minimums do not
@@ -863,33 +967,123 @@ def stream_table_layout(fs) -> "StreamTable | None":
                      default=0.0) + _STREAM_GUTTER,
                  max((text_width(v, size) for v in values), default=0.0)
                  + _STREAM_GUTTER)
-    # A section header spans the whole table, so it is the total width
-    # it constrains rather than any one column; the row label column is
-    # the only one free to take up the slack.
+    # What a section header needs, left unresolved: it spans the whole
+    # table, so it is the total width it constrains rather than any one
+    # column, and how much of that the label column has to take up
+    # depends on how many stream columns stand beside it. See
+    # :func:`_section_span`.
     sections = [label for kind, label in disp if kind == "section"]
     span = max((text_width(t, size, bold=True) for t in sections),
                default=0.0) + _STREAM_GUTTER
-    label_w = max(label_w, span - name_w * n)
-
-    rows: list[list[StreamCell]] = [
-        [StreamCell(heading, label_w, _STREAM_HEAD_FILL, True, "start")]
-        + [StreamCell(s.name, name_w, _STREAM_HEAD_FILL, True, "middle")
-           for s in streams]]
-    for kind, key in disp:
-        if kind == "section":
-            rows.append([StreamCell(key, label_w + name_w * n,
-                                    _STREAM_SECTION_FILL, True, "start")])
-            continue
-        rows.append(
-            [StreamCell(key, label_w, _STREAM_KEY_FILL, True, "start")]
-            + [StreamCell(_stream_cell_text(c, key), name_w,
-                          _STREAM_VALUE_FILL, False, "middle")
-               for c in cells])
-    return StreamTable(rows, size, row_h, label_w + name_w * n,
-                       row_h * len(rows))
+    return _Measured(streams, cells, disp, heading, size, row_h,
+                     label_w, name_w, span)
 
 
-def draw_stream_table(table: StreamTable, left: float, top: float) -> list[str]:
+#: How many rows deep the white space between two blocks of a table
+#: sheet is. One row rather than a fixed number of units, so the gap
+#: follows the type: a table sized down to fit its page does not keep a
+#: gap ruled for lettering half again as big.
+_BLOCK_ROWS = 1.0
+
+
+class TableSheet(NamedTuple):
+    """The stream table as the body of a sheet of its own: the same
+    table, cut into blocks stacked one above the other.
+
+    ``w`` is the widest block and ``h`` the whole stack, gaps included,
+    which is what the sheet is sized against. The blocks are drawn
+    flush left with one another rather than each centred on its own
+    width: a reader tracks a property row from one block to the next
+    down the left-hand column, and a ragged left edge is what stops
+    them. See :meth:`at`.
+    """
+    blocks: list
+    gap: float
+    w: float
+    h: float
+
+    def at(self, left: float, top: float):
+        """Each block with the corner it is drawn from, given the corner
+        the stack is drawn from. Both backends place blocks through
+        this, so neither owns the stacking."""
+        y = top
+        for i, block in enumerate(self.blocks):
+            yield i, block, left, y
+            y += block.h + self.gap
+
+
+def stream_table_sheet(fs, room: "float | None") -> "TableSheet | None":
+    """The stream table laid out for a sheet of its own, wrapped into as
+    many blocks as *room* units of page width takes.
+
+    ``room`` is the width the sheet has for the table, or ``None`` for a
+    sheet with no fixed page, which has no width to wrap against and
+    takes the table in one block. **The count comes from the page and
+    never from a constant**: how many streams fit across is a fact about
+    this table's columns on this paper, and a fixed "twelve per block"
+    would wrap a sheet that did not need it and overrun one that did.
+
+    The columns are then shared out **evenly** rather than filled to the
+    brim and left with a remainder: twenty-one streams that fit twelve
+    across come out as eleven and ten, not twelve and nine, because two
+    blocks of nearly a page each read as one table and a stub of three
+    columns reads as an afterthought.
+
+    Every block carries the heading row again (:func:`_stream_rows`),
+    and every block is ruled to one measurement -- one type size, one
+    row depth, one stream-column width, one label column -- so the
+    second block is read exactly as the first.
+
+    Returns ``None`` for a flowsheet with nothing to tabulate, the same
+    answer :func:`stream_table_layout` gives and for the same reasons.
+    """
+    m = _measure(fs, wrapped=room is not None)
+    if m is None:
+        return None
+    n = len(m.streams)
+    if room is None:
+        chunks = [list(range(n))]
+    else:
+        # What fits, then evened out. `per` is at least one column: a
+        # block of one is a table too narrow for its page, which the
+        # sheet reports as a page too small rather than by dividing by
+        # zero here.
+        per = max(1, int((room - m.label_w) // m.name_w))
+        count = (n + per - 1) // per
+        per = (n + count - 1) // count
+        chunks = [list(range(i, min(i + per, n))) for i in range(0, n, per)]
+    # The label column is widened for a section heading against the
+    # *smallest* block, so the heading fits in every block and one
+    # ruling still answers for all of them.
+    label_w = _section_span(m, min(len(c) for c in chunks))
+    blocks = [_stream_table(m, [m.streams[i] for i in c],
+                            [m.cells[i] for i in c], label_w)
+              for c in chunks]
+    gap = m.row_h * _BLOCK_ROWS
+    return TableSheet(blocks, gap, max(b.w for b in blocks),
+                      _total(b.h for b in blocks) + gap * (len(blocks) - 1))
+
+
+def table_sheet_origin(table: TableSheet, free) -> "tuple[float, float]":
+    """The corner the block stack is drawn from, given the region a
+    fixed page left for it (``None`` for a sheet grown to its contents,
+    which starts the stack at the origin the frame was grown around).
+
+    Centred across the page and hard against the top of it. Centred
+    because a table is the whole body of this sheet and a body hugging
+    one margin reads as a drawing that lost its left half; at the top
+    because a table is read from its first row down, and floating the
+    stack in the middle of the page puts a gap between the frame and
+    the heading that a reader takes for a missing block.
+    """
+    if free is None:
+        return (0.0, 0.0)
+    fx, fy, fw, _fh = free
+    return (fx + (fw - table.w) / 2, fy)
+
+
+def draw_stream_table(table: StreamTable, left: float, top: float, *,
+                      group: str = "stream_table") -> list[str]:
     """Draw the table with its top-left corner at (``left``, ``top``).
 
     The geometry is :func:`stream_table_layout`'s; this strokes it,
@@ -898,8 +1092,12 @@ def draw_stream_table(table: StreamTable, left: float, top: float) -> list[str]:
     a stream table really is a grid, read across for one property and
     down for one stream -- at the weight a grid beside a drawing is
     ruled at rather than the weight a box around one is.
+
+    ``group`` names the group the cells go in. A sheet carrying blocks
+    of one table has to number them: two elements under one id is not a
+    document, and the id is how a reader of the file finds the table.
     """
-    out = ['<g id="stream_table">']
+    out = [f'<g id="{group}">']
     y = top
     for row in table.rows:
         x = left

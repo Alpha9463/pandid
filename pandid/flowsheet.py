@@ -8,7 +8,7 @@ one-stream-per-port rule.
 from __future__ import annotations
 from pathlib import Path
 from string import Formatter
-from typing import Any, Callable, TYPE_CHECKING, TypeVar
+from typing import Any, Callable, Literal, TYPE_CHECKING, TypeVar
 
 # A runtime import and not a TYPE_CHECKING one: every flowsheet builds
 # its own StreamTableOptions. pandid.document imports nothing from this
@@ -2078,7 +2078,7 @@ class Flowsheet:
         from pandid.validate import validate as _validate
         return _validate(self, arrows=draws_arrowheads(diagram))
 
-    def to_svg(self, *, show_stream_table: bool = False,
+    def to_svg(self, *, show_stream_table: bool | Literal["sheet"] = False,
                border: str | None = None,
                diagram: str | None = None, page_size: str | None = None,
                connections: str | None = None,
@@ -2087,6 +2087,13 @@ class Flowsheet:
         """Render to an SVG string, running ``layout()`` and ``route()``
         first if they have not been run yet, or if anything changed
         since they were.
+
+        ``show_stream_table`` says where the stream property table goes:
+        ``True`` docks it at the foot of this diagram, and ``"sheet"``
+        makes it a **drawing of its own** -- border, title strip,
+        drawing number, and the table for a body, with no diagram on it
+        at all. That is one file either way, so a set with both is two
+        calls with two paths; see :meth:`render`.
 
         ``border`` rules the sheet: ``"zone"`` for the zone-ruled
         drawing frame, ``"none"`` (the default) for a plain edge. The
@@ -2154,7 +2161,7 @@ class Flowsheet:
                   page_size: str | None = None, border: str | None = None,
                   connections: str | None = None,
                   jump_direction: str = "vertical",
-                  show_stream_table: bool = False, check: bool = True) -> str:
+                  show_stream_table: bool | Literal["sheet"] = False, check: bool = True) -> str:
         """Render to a draw.io (``.drawio``) document string, running
         ``layout()`` and ``route()`` first if they have not been run
         yet, or if anything changed since they were.
@@ -2217,7 +2224,10 @@ class Flowsheet:
         material stream, one row per property, and the section headings
         ``stream_table_sections`` asks for. It comes out as a real
         draw.io table too, ruled across and down the way the sheet rules
-        it.
+        it. ``"sheet"`` exports the table's **own sheet** instead, the
+        same drawing the SVG backend renders for it -- border, title
+        strip, and the table wrapped into blocks -- with every block a
+        draw.io table a reader can edit.
 
         The debug overlay has no counterpart here and :meth:`render`
         refuses it for a ``.drawio`` path rather than ignoring it.
@@ -2230,7 +2240,7 @@ class Flowsheet:
                                        jump_direction=jump_direction,
                                        show_stream_table=show_stream_table)
 
-    def render(self, path: str | Path, *, show_stream_table: bool = False,
+    def render(self, path: str | Path, *, show_stream_table: bool | Literal["sheet"] = False,
                border: str | None = None,
                diagram: str | None = None, page_size: str | None = None,
                connections: str | None = None,
@@ -2250,10 +2260,22 @@ class Flowsheet:
 
         Args:
             path: Output file path; its extension selects the format.
-            show_stream_table: Draw a property table of all streams at
-                the bottom. How that table is drawn -- its type size,
-                and how narrow its columns may be ruled -- is
-                ``fs.stream_table``; see
+            show_stream_table: Where the property table of all streams
+                goes. ``True`` draws it at the foot of the diagram;
+                ``"sheet"`` writes the **table's own sheet** to this
+                path instead -- a full drawing with a border, a title
+                strip and a drawing number of its own, whose body is the
+                table alone, wrapped into stacked blocks when the
+                streams do not fit across the page. One call still
+                writes one file, so a set with both is::
+
+                    fs.render("pfd.svg", page_size="A1")
+                    fs.render("stream_table.svg", page_size="A1",
+                              show_stream_table="sheet")
+
+                How the table is drawn -- its type size, how narrow its
+                columns may be ruled, and what its own sheet is called
+                and numbered -- is ``fs.stream_table``; see
                 :class:`~pandid.document.StreamTableOptions`.
             border: ``"none"`` or ``"zone"`` (the zone-ruled frame).
             diagram: ``"pfd"`` (the default) or ``"p&id"``, also spelled
@@ -2330,7 +2352,7 @@ class Flowsheet:
         """IPython/Jupyter: display the diagram inline in a notebook."""
         return self.to_svg()
 
-    def show(self, *, show_stream_table: bool = False,
+    def show(self, *, show_stream_table: bool | Literal["sheet"] = False,
              border: str | None = None,
              diagram: str | None = None, page_size: str | None = None,
              connections: str | None = None,
