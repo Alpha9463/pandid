@@ -14,6 +14,7 @@ the floor existed to protect, of the engine that replaced it.
 from collections.abc import Sequence
 
 from pandid import Flowsheet, devices as D, units as U
+from pandid.layout.control import COL_GAP, _grid as control_grid
 
 
 # --- 1. a grid pin on a free-standing balloon is dropped ----------------------
@@ -40,21 +41,21 @@ def _panel() -> tuple[Flowsheet, U.Unit]:
     return fs, fic
 
 
-def _grid(fs: Flowsheet) -> tuple[dict[int, float], dict[int, float]]:
-    """The columns and rows stage 1 drew, as `control._grid` reads them."""
-    cols: dict[int, float] = {}
-    rows: dict[int, float] = {}
-    for u in fs.units:
-        frame = u.frame
-        if frame is None:
-            continue
-        if frame.col is not None:
-            held = cols.get(frame.col)
-            cols[frame.col] = frame.x if held is None else min(held, frame.x)
-        if frame.row is not None:
-            held = rows.get(frame.row)
-            rows[frame.row] = frame.y if held is None else min(held, frame.y)
-    return cols, rows
+def _lanes(fs: Flowsheet) -> tuple[dict[int, float], dict[int, float]]:
+    """Where each grid line the balloons are measured against starts.
+
+    `control._grid` itself, not a copy of it. A test holding its own
+    reimplementation of the code under test measures the copy: the copy
+    grew the stage-1 filter alongside the real one and so agreed with it
+    whether or not the real one had the filter at all, which hid the
+    regression the filter exists to prevent. Asking the engine leaves
+    nothing to agree with.
+
+    Only the start of each line is wanted here; the depth `_lane` needs
+    to continue a one-column grid is dropped.
+    """
+    cols, rows = control_grid(fs)
+    return ({k: v[0] for k, v in cols.items()}, {k: v[0] for k, v in rows.items()})
 
 
 def test_a_pinned_column_on_a_free_standing_balloon_is_honoured() -> None:
@@ -62,7 +63,7 @@ def test_a_pinned_column_on_a_free_standing_balloon_is_honoured() -> None:
     fic.pin(col=0)
     fs.layout()
 
-    cols, _ = _grid(fs)
+    cols, _ = _lanes(fs)
     assert fic.frame is not None
     assert fic.frame.x == cols[0], (
         f"pin(col=0) put FIC-101 at x={fic.frame.x}, but column 0 is at x={cols[0]}"
@@ -74,7 +75,7 @@ def test_a_pinned_row_on_a_free_standing_balloon_is_honoured() -> None:
     fic.pin(row=0)
     fs.layout()
 
-    _, rows = _grid(fs)
+    _, rows = _lanes(fs)
     assert fic.frame is not None
     assert fic.frame.y == rows[0], (
         f"pin(row=0) put FIC-101 at y={fic.frame.y}, but row 0 is at y={rows[0]}"
@@ -93,11 +94,60 @@ def test_a_column_past_the_last_one_the_sheet_used_is_still_honoured() -> None:
     fic.pin(col=7)
     fs.layout()
 
-    cols, _ = _grid(fs)
+    cols, _ = _lanes(fs)
     assert fic.frame is not None
+    # The grid a balloon is measured against is the one stage 1 drew, and
+    # a balloon is stage 2's. Its own frame carries the rank it was stood
+    # in, so a grid that read every frame would answer `pin(col=7)` with
+    # the column this very balloon made -- which is not a line the sheet
+    # used, and is the thing this test denies.
+    assert 7 not in cols, (
+        f"column 7 is the balloon's own rank, not a line stage 1 drew: {sorted(cols)}"
+    )
     assert max(cols) < 7, "this sheet is supposed to be narrower than the pin"
     pitch = (cols[max(cols)] - cols[min(cols)]) / (max(cols) - min(cols))
     assert fic.frame.x == cols[max(cols)] + (7 - max(cols)) * pitch
+
+
+def test_a_balloon_does_not_move_the_lane_the_next_balloon_is_measured_against() -> None:
+    """The consequence of the same rule, in drawn pixels rather than in a dict.
+
+    A one-column sheet has no pitch of its own, so `_lane` continues it by
+    that column's own box and the gap after it -- which makes the *width*
+    of column 0 the thing the second balloon's position is computed from.
+    A balloon standing in column 0 is wider than the valve that drew it, so
+    a grid that counted the balloon would widen the column and push the
+    next balloon 19.5px east of the lane the process laid down.
+
+    Two balloons, because one cannot show it: the first is placed before it
+    has a frame to be counted from, so the sheet where a balloon pollutes
+    the grid and the sheet where it does not are the same drawing until
+    there is a second balloon to be measured against the first.
+
+    The expected position is derived from the *valve's* frame and not from
+    `_grid`, because a grid that has counted the balloon reports the
+    widened column too and would agree with the sheet it produced.
+    """
+    fs = Flowsheet("one-column")
+    valve = fs.add(D.ControlValve("FV-101"))
+    first = fs.add(U.Instrument("FIC-101"))
+    fs.connect(first.sig_out, valve.actuator, kind="pneumatic")
+    second = fs.add(U.Instrument("XI-1"))
+    fs.connect(second.sig_out, first.sig_in, kind="electric")
+    first.pin(col=0)
+    second.pin(col=1)
+    fs.layout()
+
+    assert valve.frame is not None and first.frame is not None
+    assert second.frame is not None
+    assert first.frame.w > valve.frame.w, (
+        "this test needs a balloon wider than the column it stands in"
+    )
+    assert first.frame.x == valve.frame.x
+    assert second.frame.x == valve.frame.x + valve.frame.w + COL_GAP, (
+        f"XI-1 is at x={second.frame.x}; column 1 of a sheet whose only column "
+        f"is the valve's is at x={valve.frame.x + valve.frame.w + COL_GAP}"
+    )
 
 
 # --- 2. one part of a sheet cannot pay for another ----------------------------

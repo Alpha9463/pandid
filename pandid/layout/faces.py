@@ -40,8 +40,8 @@ _ESCAPE = 25.0
 
 
 def select_faces(fs: "Flowsheet") -> None:
-    """Choose a face for every movable port with none named."""
-    from pandid.portgeom import port_faces
+    """Choose a face for every movable port with none named or pinned."""
+    from pandid.portgeom import pin_intent, port_faces
 
     for unit in fs.units:
         frame = unit.frame
@@ -54,9 +54,29 @@ def select_faces(fs: "Flowsheet") -> None:
         frame.port_faces.clear()
         if not fs.auto_faces:
             continue
+        # A nozzle the author put on a coordinate. Its face is settled
+        # by that, not chosen here: ``pin(port="in_1", y=440)`` is
+        # honoured by deriving a corner from where the nozzle sits on
+        # the box (:attr:`pandid.units.Unit.pin_`), and the box is
+        # already placed by the time this phase runs -- so a pick made
+        # here would move the nozzle off the coordinate the solver was
+        # seeded from, with nothing downstream to re-derive the corner.
+        # A tank pinned by its inlet was drawn with the run entering its
+        # roof instead of the pinned point on its wall (#294).
+        #
+        # The constraint goes this way round and not the other because
+        # the cut above it is load-bearing: a face is only judgeable
+        # against where its peer's box landed, so selection cannot run
+        # before placement, so a pin cannot be re-derived from a pick.
+        # A pin is the author's boundary condition and a face is the
+        # engine's preference, and it is the preference that yields.
+        # :meth:`~pandid.units.Unit.nozzle` is how a face is *chosen*
+        # for a pinned nozzle, and it wins here by the same exemption.
+        pinned = {port for port, _ in pin_intent(unit).values() if port is not None}
         live = [name for name, port in unit.ports.items() if port.stream is not None]
         movable = [name for name in live
                    if name not in unit._port_faces
+                   and name not in pinned
                    and len(port_faces(unit, name, frame)) > 1]
         # Points already spoken for: a nozzle the author named, one
         # fixed by physics. Two live connections resolving to one point

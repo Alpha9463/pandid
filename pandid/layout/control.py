@@ -78,6 +78,16 @@ def _place_free(fs: "Flowsheet") -> bool:
         pin = inst.pin_
         inst.frame = Frame(
             x=x, y=y, w=w, h=h, label_pos="center",
+            # The rank :func:`_spot` actually stood the balloon in, and
+            # only where it used one: an absolute coordinate on an axis
+            # wins over the grid there, so recording the superseded
+            # ``col`` would claim a lane the balloon may not be in.
+            # Carried because the frame is the record of what was drawn
+            # -- a balloon put in column 3 *is* in column 3 -- and
+            # ``pin-not-honored`` reads it to tell a grid pin that was
+            # honoured from one that was dropped on the floor.
+            col=pin.col if pin is not None and pin.x is None else None,
+            row=pin.row if pin is not None and pin.y is None else None,
             orientation=pin.orientation if pin else 0.0,
             mirrored=pin.mirrored if pin else False,
             mirror_y=pin.mirror_y if pin else False,
@@ -158,10 +168,23 @@ def _grid(fs: "Flowsheet") -> tuple[dict[int, tuple[float, float]],
     The size is carried because :func:`_lane` needs a pitch to continue
     the grid past its last line, and a one-column sheet has none to
     measure.
+
+    Stage 1's units only, and asked of :mod:`pandid.layout.stages`,
+    which is where that boundary is drawn -- restating it here as an
+    ``isinstance`` would be a second definition of the sheet's own cut.
+    A balloon is placed in stage 2 and *consumes* the grid, so letting
+    one back in would have it move the lanes the balloons after it are
+    measured against: once a balloon's frame carries the rank it was
+    stood in, the first ``pin(col=7)`` on a three-column sheet makes a
+    column 7 for the next one to be measured off. No balloon reached
+    this before that rank was recorded, so excluding them keeps the grid
+    exactly what it has always been.
     """
+    from pandid.layout.stages import process_units
+
     cols: dict[int, tuple[float, float]] = {}
     rows: dict[int, tuple[float, float]] = {}
-    for u in fs.units:
+    for u in process_units(fs):
         frame = u.frame
         if frame is None:
             continue
