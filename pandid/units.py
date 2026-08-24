@@ -5533,8 +5533,9 @@ class Reactor(Unit):
     #: that is what a drawing does. Saying ``SE`` instead -- the claim
     #: the ink would make -- steps every downstream unit a row down at a
     #: reactor's confidence of 8, which is a staircase on a train of
-    #: them: 23 crossings across the corpus, 17 of them on
-    #: ``17_stirred_reactor_train``. A tower's ``bottoms`` is ``SE`` for
+    #: them: 22 crossings across the auto-placed corpus
+    #: (:mod:`pandid.layout.claims` defines it), 246 to 268, six of them
+    #: on ``17_stirred_reactor_train``. A tower's ``bottoms`` is ``SE`` for
     #: a reason this does not share, that a column is drawn tall enough
     #: for its own bottom to be a row of its own.
     PLACES = {"feed": "W", "outlet": "E", "vent": "N"}
@@ -6594,9 +6595,10 @@ class Column(Unit):
     #: cycle breaker tore, and a return line is read for the pipe alone
     #: (:mod:`pandid.layout.claims`) -- ``PLACES`` never sees it. What is
     #: left is four connections, and switching both entries to the
-    #: ``N``/``S`` of the approved design moves the corpus by **one**
-    #: crossing, 240 to 241, measured with ``scripts/layout_quality.py``.
-    #: The consistency argument above is the whole of the case for them;
+    #: ``N``/``S`` of the approved design moves the corpus by **six**
+    #: crossings, 246 to 252, all of them on ``20_molecular_sieve_dryer``,
+    #: measured with ``scripts/layout_quality.py``. The consistency
+    #: argument above is the whole of the case for them;
     #: an earlier version of this comment claimed 50 crossings, which was
     #: measured against an engine that read a return's nozzles and is no
     #: longer true of anything.
@@ -7786,7 +7788,7 @@ class Block(Unit):
     **A face is a placement, and the engine reads it.** A connection on
     the north puts its peer in the row above and in the same column, one
     on the south puts it below, so a block flow diagram lays itself out
-    without a coordinate anywhere. See :mod:`pandid.layout.stacking`.
+    without a coordinate anywhere. See :mod:`pandid.layout.claims`.
     ``examples/12_block_flow_diagram.py`` is pinned all the same: a
     hand-placed BFD says which sections the reader takes in a row, which
     is not something the ranking can know.
@@ -8229,8 +8231,9 @@ class Block(Unit):
         # given would cost every block its own <defs> entry.
         return block_symbol(tuple(self._faces.items()), "" if self.width is not None else self.tag)
 
-    def _check_box(self, placed=None) -> None:
-        """Raise unless the placed box draws the connections at pitch.
+    def _check_box(self) -> None:
+        """Raise unless the unit's own placed box draws the connections
+        at pitch.
 
         Measured against the box the drawing really lands in
         (:func:`~pandid.portgeom.resolve_size`), *including the quarter
@@ -8245,17 +8248,15 @@ class Block(Unit):
         not the bare run, because the artwork is stretched into whatever
         box it is given: halving the box halves the drawn pitch with it.
 
-        ``placed`` is the placement to answer for, defaulting to the
-        unit's own; :meth:`pin` passes its candidate, since the
-        committed placement answers for the sheet that call is
-        replacing.
+        Always ``self.pin_``: every caller, including :meth:`pin`, commits
+        the candidate placement first and rolls it back on a raise here
+        rather than answering for a placement that never lands.
         """
         from pandid.portgeom import resolve_size
         from pandid.render.symbols import block_box_too_small
 
         sym = self.symbol()
-        if placed is None:
-            placed = self.pin_
+        placed = self.pin_
         w, h = resolve_size(self, placed)
         turned = int(getattr(placed, "orientation", 0) or 0) in (90, 270)
         for face, count in Counter(self._faces.values()).items():

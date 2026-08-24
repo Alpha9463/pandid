@@ -308,9 +308,12 @@ def test_a_feed_flag_is_drawn_left_of_the_point_that_pins_it():
 # The overlay is drawn *under* the sheet, so every opaque white halo the
 # renderer lays down paints over it, and #200 placed the port labels without
 # ever asking where those halos were. On this module's own sheet the E-1 tag's
-# halo took the leading "s" off "shell_in 240,100"; over the corpus it took a
-# bite out of 174 of the 830 labels the overlay writes, and 313 of them were
-# written on top of one another. Both are one defect -- placement that has not
+# halo took the leading "s" off "shell_in 240,100"; over the corpus as it stood
+# at ``4333b54``, where these were measured, it took a bite out of 174 of the
+# 830 labels the overlay wrote and 313 of them were written on top of one
+# another. Those two are cited and not re-derivable -- that corpus is a third
+# the size of today's 2040 labels and the pass that fixed them is the pass this
+# file now tests. Both are one defect -- placement that has not
 # been told what is already on the paper -- and the fix is one placement pass,
 # run against the finished sheet. See :mod:`pandid.render.debug`.
 
@@ -359,45 +362,55 @@ def test_a_port_label_is_not_written_under_the_unit_tags_halo():
         )
 
 
-#: How many labels a sheet is allowed to leave sitting under something. Zero
-#: everywhere the drawing has room, which is twelve of the nineteen sheets
-#: swept; the eight below are where it genuinely runs out.
+#: How many labels a sheet is allowed to leave sitting under something. What is
+#: bounded is what the sweep below counts, which is one number for two defects:
+#: a label written under a halo **or** over another overlay label. It is zero
+#: everywhere the drawing has room, which is fifteen of the 22 sheets rendered
+#: here; the seven below are where it genuinely runs out. Each is named with
+#: what it draws today in brackets, and each entry keeps headroom over that,
+#: because the point of the numbers is to catch a placement that has stopped
+#: working rather than to pin the corpus to what it draws today.
 #:
-#: ``11_ethanol_pid`` writes 364 labels on a forty-unit P&ID whose markers are
-#: twenty units apart and whose labels are sixty units long, so some of them
-#: have nowhere at all to go: 35 do not come out clear, against 313 before.
-#: ``12_block_flow_diagram`` names its blocks in words rather than in tags, so
-#: two of its labels are longer than the block they belong to.
-#: ``14_tank_farm`` mounts two faceplates on the crown of the valve each one
-#: strokes, which is what puts a controller's output on the actuator without a
-#: line crossing the run; the balloon's marker and the valve's then sit a
-#: nozzle's height apart and the two overlay labels meet.
-#: ``04_control_loop`` stands its ``FE-101`` balloon 23 units off the
-#: transmitter above it, which is what makes the primary element and its reading
-#: read as one column, and leaves the two markers closer than a label is tall.
+#: ``11_ethanol_pid`` [30 of 383, 28 of them under a halo] writes on a
+#: forty-unit P&ID whose markers are twenty units apart and whose labels are
+#: sixty units long, so some of them have nowhere at all to go. It is also
+#: where the ordering in :func:`pandid.render.debug._settle` earns itself:
+#: take the labels in flowsheet order instead of fewest-places-to-go first --
+#: which is what making ``_options`` return a constant does -- and this sheet
+#: goes to 54 and the corpus from 51 to 78.
+#: ``14_tank_farm`` [10 of 220, 8 under a halo] mounts two faceplates on the
+#: crown of the valve each one strokes, which is what puts a controller's
+#: output on the actuator without a line crossing the run; ``CV-605``'s
+#: ``outlet`` label and ``NRV-602``'s are the two that meet.
+#: ``04_control_loop`` [1 of 51] stands its ``FE-101`` balloon 23 units off the
+#: transmitter above it, which is what makes the primary element and its
+#: reading read as one column; what is left with nowhere clear to go is
+#: ``LIC-101``'s ``sig_out``.
 #:
-#: ``17_stirred_reactor_train`` puts a tee, a static mixer and a second tee on
-#: 70 units of charge line, which is closer than a port label is long.
-#: ``18_fixed_bed_recycle`` is laid out by the engine, and the recycle machine
-#: it places carries its tag over its own suction marker. It grew by one when
-#: R-301 was given a box of the symbol's own shape: a wider converter moves
-#: everything the engine ranks after it, and the separator's signal markers come
-#: to rest a label's width apart.
-#: ``19_absorber_stripper`` drains its overhead condenser into a reflux drum at
-#: the same elevation, so the drain's marker and the drum's inlet share a row.
-#: ``20_molecular_sieve_dryer`` hangs a sequence square off each of eight
-#: switching valves; two of the sixteen markers that makes land under lettering.
+#: ``17_stirred_reactor_train`` [4 of 155, all under halos] puts a tee, a
+#: static mixer and a second tee on 70 units of charge line, which is closer
+#: than a port label is long -- that tee's ``inlet`` and ``branch`` are two of
+#: the four, and ``TIC-202``'s and ``PIC-204``'s ``sig_out`` the others.
+#: ``18_fixed_bed_recycle`` [1 of 139] is laid out by the engine, and what one
+#: sheet's worth of that leaves is ``PIC-304``'s ``sig_out`` under a halo. A
+#: wider R-301 -- a converter given a box of the symbol's own shape -- moves
+#: everything the engine ranks after it, which is what put it there.
+#: ``19_absorber_stripper`` [2 of 68, neither under a halo] drains its overhead
+#: condenser into a reflux drum at the same elevation, so ``E-402``'s
+#: ``shell_out`` and ``V-401``'s ``in_1`` share a row and the two labels meet.
+#: ``20_molecular_sieve_dryer`` [3 of 164, all under halos] hangs a sequence
+#: square off each of eight switching valves; the ``KY-501`` anchor label and
+#: ``KC-501``'s and ``AI-502``'s ``sig_out`` are what land under lettering.
 #:
 #: 04 and 14 both grew when the letter codes ISO 15519-2 5.2.5 writes outside a
 #: symbol arrived: a code is haloed lettering like any tag, so it is one more
 #: thing an overlay marker can land under, and the sheets that letter the most
-#: are the ones that moved. Every entry carries headroom, because the point of
-#: the numbers is to catch a placement that has stopped working rather than to
-#: pin the corpus to what it draws today.
+#: are the ones that moved. ``12_block_flow_diagram`` had an entry here and has
+#: none now: it draws zero, so it is held to zero like every other sheet that
+#: does.
 _CROWDED = {
     "04_control_loop": 3,
     "11_ethanol_pid": 50,
-    "12_block_flow_diagram": 4,
     "14_tank_farm": 14,
     "17_stirred_reactor_train": 6,
     "18_fixed_bed_recycle": 7,
@@ -408,17 +421,36 @@ _CROWDED = {
 
 @pytest.mark.parametrize("name", list(CORPUS), ids=list(CORPUS))
 def test_the_overlay_writes_where_the_sheet_left_it_room(name):
-    """No overlay label under a halo, and no two of them on top of each other.
+    """Every label the sheet owes, written, and none of them buried: not under a
+    halo and not under another one of them.
 
-    One sweep for both, because they are one defect: a label that has not been
-    told where the plates and the other labels are lands on whichever it meets
-    first. The obstacles are read out of the drawn SVG rather than off the
-    placement code, for the reason ``test_halo_invariants`` reads them there --
-    what the invariant is about is what lands on the paper.
+    One sweep for the last two, because they are one defect: a label that has
+    not been told where the plates and the other labels are lands on whichever
+    it meets first. The obstacles are read out of the drawn SVG rather than off
+    the placement code, for the reason ``test_halo_invariants`` reads them there
+    -- what the invariant is about is what lands on the paper.
+
+    The count is checked first, and it is not decoration. "None of them is
+    buried" is satisfied by writing none of them: replacing
+    ``pandid.render.debug._settle`` with ``lambda labels, bounds: ([], [])``
+    passed this on all 22 sheets, ``_CROWDED`` and all, because zero labels
+    trivially overlap nothing. So the placement pass now has to hand back
+    everything the label pass handed it. The expected number is *derived* --
+    one anchor label per placed unit and one port label per nozzle, which is
+    what :func:`pandid.render.debug._labels` builds -- and not a pinned table,
+    so a sheet that gains a unit moves it without anyone editing a constant.
+    What that does not check is the label pass itself: a ``_labels`` that
+    stopped building anchors would move both sides together. It is the
+    placement pass this file is about.
     """
     fs, kwargs = CORPUS[name]()
     svg = fs.to_svg(**{k: v for k, v in kwargs.items() if k in _RENDER_OPTS}, debug=True)
     halos, labels = _halos(svg), _placed(svg)
+    expected = sum(1 + len(u.ports) for u in fs.units if u.frame is not None)
+    assert len(labels) == expected, (
+        f"{name}: the overlay wrote {len(labels)} labels where the sheet has "
+        f"{expected} to write -- one per placed unit and one per nozzle"
+    )
     buried = [
         text
         for i, (box, text) in enumerate(labels)

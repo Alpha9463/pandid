@@ -917,3 +917,50 @@ def test_a_change_that_is_not_a_pin_reaches_the_drawing(mutation):
     before = fs.to_svg()
     MUTATIONS[mutation](fs)
     assert fs.to_svg() != before
+
+
+def test_every_render_keyword_is_named_in_its_own_docstring():
+    """``connections`` reached both signatures and neither docstring (#310):
+    a keyword nobody documented is a keyword nobody finds. Checked against the
+    live signature rather than a written-down list, so a new parameter fails
+    this the day it is added rather than the day someone notices the prose
+    never grew to match it.
+
+    ``debug`` is SVG-only and ``**opts`` is not a name, so both are read off
+    each renderer's own signature rather than shared or assumed.
+
+    Matched on a word boundary against the parameter name, not a bare ``in``
+    check: ``page_size`` contains the four letters ``size``, so a substring
+    test would wave a bare ``size=`` through on the strength of a *different*
+    keyword's name. The docstring is also collapsed to single spaces first,
+    so a name is not missed only because the prose describing it happened to
+    wrap onto the next line.
+
+    **What this cannot see**, said plainly so nobody leans on it further than
+    it goes: it reads the signature and the prose, never the body. A keyword
+    that is accepted, documented and then ignored passes here, and so does one
+    whose docstring sentence says something false about it. The claim it does
+    make is narrow and real -- it fails on the revision before this branch,
+    where ``connections`` was on both signatures and in neither docstring --
+    and that is the whole of it.
+    """
+    import inspect
+    import re
+
+    from pandid.render.drawio import DrawioRenderer
+    from pandid.render.svg import SvgRenderer
+
+    for renderer in (SvgRenderer, DrawioRenderer):
+        sig = inspect.signature(renderer.render)
+        doc = " ".join((inspect.getdoc(renderer.render) or "").split())
+        keywords = [
+            name for name, p in sig.parameters.items() if p.kind == inspect.Parameter.KEYWORD_ONLY
+        ]
+        # First claim: the signature itself is not vacuous, so a renderer
+        # whose keywords quietly disappeared fails here rather than letting
+        # the second assert pass trivially on an empty list.
+        assert keywords, f"{renderer.__name__}.render grew no keyword-only parameters"
+        missing = [kw for kw in keywords if not re.search(rf"\b{re.escape(kw)}\b", doc)]
+        assert not missing, (
+            f"{renderer.__name__}.render takes {missing} and its docstring never says so"
+        )

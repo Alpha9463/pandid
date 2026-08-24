@@ -1,12 +1,33 @@
 #!/usr/bin/env python3
 """Measure what the layout engine draws when nothing is pinned.
 
-Every shipped example hand-places almost everything -- 307 ``pin()`` calls
-across the 21 examples, and on the big sheets pins outnumber units one for
-one. The auto-layout engine's own quality has therefore never been
-measured: this strips the placement out of every example, re-runs
-``layout()`` and ``route()``, and compares the result against the
-hand-placed original that ships in ``docs/gallery/``.
+Every shipped example hand-places almost everything, and "how many pins"
+has three different right answers, so this says which it means. Counted by
+AST as ``.pin(`` call sites in ``examples/*.py``, there are **350** across
+the 21 examples; **319** of them carry a ``col``/``row``/``x``/``y`` and
+are what :func:`strip_placement` below takes away, and the other 31 pass
+``orientation=`` or ``mirrored=`` and nothing else, which is a drawing
+decision rather than a placement and is kept. Counted at run time instead
+there are 456 calls, 410 of them placing, because a site inside a loop is
+one site and many calls -- ``11_ethanol_pid``'s 29 sites make 129 of them.
+That run-time figure is over ``gallery.sheets()``, which is the corpus this
+script itself measures; the same count over ``tests/test_golden.SCENARIOS``
+is 455, because the gallery builds ``10`` and ``11`` from the example
+modules where ``SCENARIOS`` rebuilds them. Three corpora of 21 sheets exist
+in this repository and they are not identical, so a corpus figure that does
+not say which one it counted is not checkable.
+
+Sheet for sheet the hand placement is near total wherever it is used at
+all: ``21_alumina_refinery`` and ``13_mineral_dewatering`` place every unit
+they build, and ``11_ethanol_pid``, ``14_tank_farm`` and
+``20_molecular_sieve_dryer`` place all but their instruments, which go
+where whatever they attach to went. Six of the 21 -- 01, 05, 08, 15, 16 and
+18 -- place nothing at all and are already the engine's own work.
+
+The auto-layout engine's own quality has therefore never been measured:
+this strips the placement out of every example, re-runs ``layout()`` and
+``route()``, and compares the result against the hand-placed original that
+ships in ``docs/gallery/``.
 
     python scripts/layout_quality.py                    # every example
     python scripts/layout_quality.py 10_ethanol_pfd      # one of them
@@ -49,7 +70,7 @@ never touches (``DefaultRouter.route()`` skips any stream whose
 ``route.manual`` is set). Once the units it threads between move, those
 waypoints point at nothing -- a floating line, not a routing decision --
 so it is neutralized to a no-op rather than left to draw garbage that
-would be blamed on the router. 81 calls across 8 examples, six of them
+would be blamed on the router. 80 calls across 8 examples, six of them
 also among the ``pinned_x``/``pinned_y`` callers below.
 
 **``pinned_x()``/``pinned_y()``.** Eight examples read a unit's own
@@ -57,7 +78,7 @@ already-committed pin back, to compute where the *next* unit goes --
 ``cake_x = pinned_x(press, "cake")`` then ``funnel.pin(x=cake_x, ...)``.
 With placement stripped there is no pin left to read, and the two
 functions raise exactly as documented ("pin it first ... the solver
-decides it"). Every one of the 72 call sites across those eight examples
+decides it"). Every one of the 77 call sites across those eight examples
 feeds its result straight into a ``pin()`` or ``via()`` call this module
 already strips (checked by inspection, not assumed), so what they return
 is never used for anything -- patched to hand back ``0.0`` rather than

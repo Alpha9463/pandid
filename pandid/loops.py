@@ -249,10 +249,9 @@ class ControlLoop:
         #: Not ``valve``: ``acting_on=`` takes any signal-bearing unit,
         #: because a damper, a louvre and a variable-speed drive are
         #: final control elements as much as a valve is, and a handle
-        #: that called a :class:`~pandid.units.Damper` a valve was
-        #: naming it after the commonest case rather than after what it
-        #: is (issue #448). ``final_element`` is also the term the
-        #: instrument index uses.
+        #: that called a damper a valve was naming it after the
+        #: commonest case rather than after what it is (issue #448).
+        #: ``final_element`` is also the term the instrument index uses.
         self.final_element = final_element
         #: Transmitter to controller: the measurement.
         self.measurement = measurement

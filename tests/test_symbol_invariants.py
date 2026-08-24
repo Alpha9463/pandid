@@ -562,10 +562,13 @@ def test_no_two_ports_coincide(entry):
 #     which is what a submersible pump's 90-unit casing line across a 14-unit
 #     rectangle is not.
 #
-# The sweep that settled these numbers found exactly one symbol in the 157 that
-# draws a nozzle this way, plus the one gauge stub named below. If a later
-# vendoring adds a second, it gets both invariants for free -- which is the
-# whole point, since the port map is authored by hand in
+# The sweep that settled these numbers runs ``_drawn_nozzles`` over every entry
+# in ``default_registry`` -- 229 of them today, which is what ``_SYMBOLS``
+# parametrises -- and exactly two answer to all three parts above: ``tank/sphere``,
+# whose stub is the process nozzle this pair of tests is about, and
+# ``separator/knockout``, whose is the gauge named below and is excluded by
+# ``_NOT_NOZZLES``. If a later vendoring adds a third, it gets both invariants
+# for free -- which is the whole point, since the port map is authored by hand in
 # ``scripts/vendor_symbols.py`` and the artwork is not.
 # ---------------------------------------------------------------------------
 
@@ -2982,3 +2985,85 @@ def test_every_separator_that_can_hold_a_family_declares_one():
             continue
         assert "feed" not in symbol.ports
         assert [s.prefix for s in symbol.port_series] == ["feed_"]
+
+
+#: kind -> the word (or words) :mod:`pandid.render.symbols`' own module
+#: docstring names it by in the "Vendored" source bullet. Eight kinds went
+#: missing from that list across several vendoring waves (#310) because
+#: nothing tied the prose to the registry it was describing; this is that
+#: tie. English rather than the bare kind string, since the docstring reads
+#: as a sentence and not as a dump of identifiers -- so a kind added here
+#: without its word also landed in the docstring fails loudly instead of
+#: quietly going the same way.
+_VENDORED_SOURCE_WORDS = {
+    "valve": "valves",
+    "pump": "pumps",
+    "compressor": "compressors",
+    "blower": "blowers",
+    "cooler": "coolers",
+    "heater": "heaters",
+    "hex": "heat exchangers",
+    "cooling_tower": "cooling towers",
+    "vessel": "vessels",
+    "column": "columns",
+    "reactor": "reactors",
+    "separator": "separators",
+    "tank": "tanks",
+    "dryer": "dryers",
+    "filter": "filters",
+    "furnace": "furnaces",
+    "thickener": "thickeners",
+    "turbine": "turbines",
+    "reducer": "reducers",
+    "fitting": "in-line fittings",
+    "ejector": "ejectors",
+    "vent": "vents",
+    "funnel": "funnels",
+}
+
+
+def test_every_vendored_kind_is_named_in_the_module_docstring():
+    """The registry's own account of its sources names every kind it draws
+    from a draw.io stencil -- checked against the live registry rather than
+    read, so vendoring a ninth forgotten kind fails this instead of just
+    leaving the docstring's list one short again.
+
+    Matched on a word boundary against a whitespace-collapsed docstring, not
+    a bare ``in`` check: the prose wraps at eighty-odd columns and "heat
+    exchangers" has genuinely split across a line break before now, which a
+    contiguous-substring test would report as ``hex`` gone missing when
+    nothing about the sourcing actually changed.
+    """
+    import re
+
+    import pandid.render.symbols as symbols_module
+    from pandid.render._vendored_symbols import register_vendored
+
+    fresh = default_registry.__class__.__new__(default_registry.__class__)
+    fresh._symbols, fresh._darkened, fresh._closed = {}, {}, {}
+    fresh._expanders, fresh._parts, fresh._composed = {}, {}, {}
+    register_vendored(fresh)
+    vendored_kinds = {kind for kind, _variant in fresh._symbols}
+
+    # First claim: the mechanism under test still does something, so a
+    # register_vendored() that quietly stopped registering anything fails
+    # here instead of leaving both checks below vacuously true over an
+    # empty set.
+    assert vendored_kinds, "register_vendored() registered no (kind, variant) at all"
+
+    unmapped = vendored_kinds - _VENDORED_SOURCE_WORDS.keys()
+    assert not unmapped, (
+        f"{unmapped} draw from a vendored stencil and are not in "
+        f"_VENDORED_SOURCE_WORDS above; add the word this test should look for"
+    )
+
+    doc = " ".join((symbols_module.__doc__ or "").split())
+    missing = [
+        kind
+        for kind in vendored_kinds
+        if not re.search(rf"\b{re.escape(_VENDORED_SOURCE_WORDS[kind])}\b", doc)
+    ]
+    assert not missing, (
+        f"{[_VENDORED_SOURCE_WORDS[k] for k in missing]} vendored but not named "
+        f"in pandid/render/symbols.py's own module docstring"
+    )

@@ -23,7 +23,7 @@ actuator, and that is a fact about the device rather than its picture.
 
 The low-level form is not going anywhere.
 ``Separator(variant="cyclone")`` stays supported indefinitely, and it is
-the only way to reach the ninety-odd drawings that never get a class of
+the only way to reach the 130-odd drawings that never get a class of
 their own; ``pandid.render.symbols.default_registry`` is still the whole
 catalogue.
 

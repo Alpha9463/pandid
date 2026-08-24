@@ -188,10 +188,16 @@ def test_a_symbol_with_no_stencil_is_an_approximation_that_was_written_down(entr
 def test_a_shape_key_survives_being_written_into_a_style(entry):
     """A draw.io style is ``key=value`` pairs split on ``;``.
 
-    Forty-eight of the vendored shape names carry punctuation upstream put
-    there -- "Tank (Dished Roof)", "Rotary Drum Drier, Tumbling Drier",
-    "Y-Type Strainer" -- and all of it travels into the key, because draw.io
-    builds its own key by the same rule and looks the result up exactly. Commas,
+    49 of the 136 distinct ``drawio_shape`` keys the registry files its symbols
+    under carry punctuation upstream put there -- "Tank (Dished Roof)", "Rotary
+    Drum Drier, Tumbling Drier", "Y-Type Strainer" -- and all of it travels into
+    the key, because draw.io builds its own key by the same rule and looks the
+    result up exactly. Counted over the distinct keys, which is what
+    ``pandid.render.drawio``'s own module docstring counts, and not over this
+    test's parameters: ``DRAWINGS`` walks the closed and turned drawings too and
+    so reaches several keys twice. Per character it is 38 keys with a ``(``, 38
+    with a ``)``, 16 with a comma and 13 with a hyphen, and none at all with an
+    ampersand or a slash. Commas,
     parentheses and hyphens are all safe in a style value. A ``;`` or an ``=``
     would not be: one would end the key early and the other would split it, and
     what draw.io would then fail to resolve is a name that never appears
@@ -286,9 +292,10 @@ def test_a_stand_in_says_on_fs_warnings_what_it_lost():
 def test_a_stand_in_that_loses_nothing_says_nothing():
     """``lost`` is empty where the built-in really is the drawing.
 
-    Eleven of the thirty entries claim to lose nothing -- a mixer, a splitter, a
-    tee, the boundary flags, the plain balloons -- and a warning against one of
-    those would be noise that teaches a reader to skip the list.
+    Eleven of the 82 entries in ``_APPROXIMATIONS`` claim to lose nothing -- a
+    mixer, a splitter, a tee, the boundary flags, the plain balloons -- and a
+    warning against one of those would be noise that teaches a reader to skip
+    the list.
     """
     assert not _APPROXIMATIONS[("feed", "default")].lost, "the premise has moved"
     fs = Flowsheet("exact")
@@ -1348,7 +1355,7 @@ def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported():
     from pandid.render.drawio import _TEXT_INSET
     from pandid.render.svg import quadrant_labels
 
-    written = {}
+    written, counted = {}, {}
     for stem in SHEETS:
         fs, kwargs = gallery.flowsheet(stem)
         svg = fs.to_svg(**kwargs)
@@ -1356,6 +1363,7 @@ def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported():
         _boxes, _frame, fit = _drawio_furniture(fs, kwargs)
         codes = quadrant_labels(fs)
         written[stem] = {item[5] for item in codes}
+        counted[stem] = len(codes)
         for n, (lx, ly, anchor, _baseline, _lpos, text) in enumerate(codes):
             assert f">{text}</text>" in svg, f"{stem}: the sheet letters no {text}"
             cell = cells.get(f"q{n}")
@@ -1376,9 +1384,28 @@ def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported():
             # haloed for the lines it could not step off, as the sheet haloes it.
             assert style["labelBackgroundColor"] == "#ffffff"
 
-    # Vacuous on the eleven sheets that annotate nothing, so the three that do
-    # are named. `tests/test_halo_invariants.py` counts the same codes from the
-    # sheet's side; this is the pair of them the export was losing.
+    # Fifteen of the 21 sheets annotate nothing, so the loop above is vacuous on
+    # most of the corpus -- and everything in it is a *parity* check, which one
+    # broken shared path satisfies by breaking both sides equally. Mutating
+    # `quadrant_labels` to return [] for 17, 18 and 20 alone deletes fifteen
+    # required codes and leaves every assertion above green, because the export
+    # loses exactly what the sheet loses and the loop never runs for them.
+    #
+    # So the population is asserted, not just the agreement: how many codes each
+    # annotating sheet writes, as a whole dict, so a sheet that stops annotating
+    # disappears from it and fails on its own rather than falling out of a check
+    # that only ever compared two silences. `tests/test_halo_invariants.py`
+    # counts the same codes from the sheet's side; this is the pair of them the
+    # export was losing.
+    assert {stem: n for stem, n in counted.items() if n} == {
+        "04_control_loop": 2,
+        "11_ethanol_pid": 6,
+        "14_tank_farm": 5,
+        "17_stirred_reactor_train": 5,
+        "18_fixed_bed_recycle": 5,
+        "20_molecular_sieve_dryer": 5,
+    }, counted
+    # The three whose codes were the reported defect, by name and not by count.
     assert written["11_ethanol_pid"] == {"PAH", "PAL", "TAH", "TAL", "LAH", "LAL"}
     assert written["04_control_loop"] == {"LAH", "LAL"}
     assert written["14_tank_farm"] == {"LAH", "LAL", "PAH"}
@@ -2624,10 +2651,22 @@ def test_no_line_number_is_written_over_a_symbol_or_an_equipment_tag(stem):
     exporter seeded `stream_numbers` with an empty list of plates where the
     sheet seeds it with every equipment tag it has already laid down, so the
     search was offered paper the sheet had already spent and took it --
-    `AE-302-300-80-SS` over `HV-301A`, `FB-301-200-160-SS` over `XV-301`,
-    seventeen numbers over four sheets. And a number on a vertical run was
-    written flat where the sheet turns it, so its lettering ran across the
-    corridor it was reserved a slot *along*.
+    `AE-302-300-80-SS` over `HV-301A`, `FB-301-200-160-SS` over `XV-301`. And a
+    number on a vertical run was written flat where the sheet turns it, so its
+    lettering ran across the corridor it was reserved a slot *along*.
+
+    How many that is depends on which boxes are measured, so both are written
+    down rather than one being quoted as if it were the number. Run the
+    empty-plate mutation and measure it the way
+    :class:`pandid.render.drawio._Tags` states it -- each number's own reserved
+    halo against the plates the tag pass laid down -- and it is seventeen over
+    five sheets: nine on 11, four on 14, two on 20 and one each on 09 and 13.
+    Measure it the way *this* test does -- the label box draw.io will lay out,
+    parsed back out of the emitted XML, against the tag labels and symbol boxes
+    in that same file -- and it is thirteen over four sheets: seven on 11, four
+    on 14 and one each on 09 and 13. Those are not the same boxes, so they are
+    not the same count. What both agree on is the assertion below: seeding `[]`
+    strikes tags and seeding the plates strikes none.
 
     Parsed back out of the emitted XML and measured, because a renderer that
     believes it stepped a label aside is not evidence of anything: draw.io's own

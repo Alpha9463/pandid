@@ -37,8 +37,8 @@ if TYPE_CHECKING:
 #: written**. ISO 15519-1 §7.2.5 puts that number along or beside its
 #: own line and sends it away with a leader only where there is no room
 #: beside it, so the gap has to be wide enough to be that room: the
-#: longest number in the corpus is thirteen characters, a little under
-#: 90 px of lettering, and 100 left it nothing either side. At 120 it
+#: longest number in the corpus is seventeen characters, a little under
+#: 100 px of lettering, and 100 left it nothing either side. At 120 it
 #: fits with a margin, and ``350-LG-314-CS`` on 18_fixed_bed_recycle
 #: stops being written a lane away from its own run with a leader drawn
 #: back across the loop gas line.

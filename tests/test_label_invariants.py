@@ -418,18 +418,21 @@ def test_a_leader_is_drawn_only_where_the_line_is_not_beside_the_words(sheets):
     with its own run beside most of it does not get a leader *as well*.
 
     Both directions matter, and the corpus is the evidence for the line falling
-    where it does. Of 145 numbers on the fourteen shipped sheets twelve have
-    their own run beside less than the whole of them, and they part into two
-    groups with a gap between: nine read as their own line's unaided, from
-    ``VAP-611-150-40-CS`` on 14 at 61 % to ``E10-609-200-40-CS`` on 14 at 98 %,
-    and three do not -- ``MS-601-200-40-CS`` on 14 at 40 %, ``S-403`` on 13 at
-    37 % and ``AE-304-150-80-SS`` on 11 at 29 %, the last sixteen characters
-    naming a thirty-unit stub with two thirds of it lying against a reflux drum.
+    where it does. Of 286 numbers on the 21 shipped sheets 25 have their own
+    run beside less than the whole of them, and they part into two groups
+    with a gap between: 21 read as their own line's unaided, from
+    ``MS-605-200-40-CS`` on 14 at 60 % to ``E10-609-200-40-CS`` on 14 at 98 %,
+    and four do not -- ``100-CWS-209-CS`` on 17 at 18 %, ``AE-304-150-80-SS``
+    on 11 at 29 %, ``MS-601-200-40-CS`` on 14 at 34 % and ``S-403`` on 13 at
+    36 %, the second of those the last sixteen characters naming a
+    thirty-unit stub with two thirds of it lying against a reflux drum.
 
-    The gap is 40 % to 61 %, narrower than the 32 % to 74 % the twelve-sheet
-    corpus showed; see :func:`pandid.render.svg._along` for what that is and is
-    not evidence for. This test is one of the two that would fail first if a
-    number ever landed inside it.
+    The gap is 36 % to 60 %, narrower than the 40 % to 61 % the fourteen-sheet
+    corpus showed at ``87935d6`` and the 32 % to 74 % the twelve-sheet corpus
+    showed at ``07cb3b3`` before that -- cited by commit because neither of
+    those corpora is here to re-measure; see :func:`pandid.render.svg._along`
+    for what that is and is not evidence for. This test is one of the two that
+    would fail first if a number ever landed inside it.
     """
     over, under = [], []
     for name, (fs, labels) in sheets.items():

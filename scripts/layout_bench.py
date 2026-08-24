@@ -19,7 +19,7 @@ most never run.
 
 **stacked** is that same run with a ``Feed`` on each block's north face. A north
 face is a same-column, adjacent-row constraint (see
-:mod:`pandid.layout.stacking`), so every one of them is a candidate union in the
+:mod:`pandid.layout.claims`), so every one of them is a candidate union in the
 column-sharing pass and a satellite in the row-ordering pass. That is the shape
 the quadratic lives on, and a benchmark built on ``chain`` alone would report a
 flat cost for a sheet that is anything but.

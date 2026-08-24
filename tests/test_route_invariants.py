@@ -1,8 +1,9 @@
 """Invariants every routed sheet has to satisfy, over the whole shipped corpus.
 
-Two properties, checked against the nine golden scenarios (which are examples
-01-09 rebuilt), the two ethanol sheets (examples 10 and 11, the densest drawings
-in the repo), and a synthetic sheet built here to be pathological:
+Two properties, checked against the 21 golden scenarios (which are examples
+01 to 21 rebuilt), the two ethanol sheets built here from their own modules
+(examples 10 and 11, the densest drawings in the repo), and a synthetic sheet
+built to be pathological:
 
 **A stream's path begins and ends on its own nozzles.** The router writes the
 port *anchors* as the first and last waypoint and the renderer draws
@@ -103,10 +104,13 @@ def _crowded_taps() -> Flowsheet:
 def _example(stem: str) -> Flowsheet:
     """Build an example's flowsheet without letting it write its drawing out.
 
-    Examples 10 and 11 are not in the golden corpus and are the two densest
-    sheets shipped, which is where a routing defect shows first. Their ``main()``
-    ends in a ``render()``; that one call is stubbed so the flowsheet can be
-    inspected without a test suite dropping files into ``examples/``.
+    Examples 10 and 11 are the two densest sheets shipped, which is where a
+    routing defect shows first. They are in the golden corpus -- all 21 are,
+    since ``tests/golden/`` grew past 09 -- and are built here from their own
+    modules all the same, so this file reads the example as an author wrote it
+    rather than as a scenario rebuilt it. Their ``main()`` ends in a
+    ``render()``; that one call is stubbed so the flowsheet can be inspected
+    without a test suite dropping files into ``examples/``.
     """
     sys.path.insert(0, str(EXAMPLES))  # the examples' own _bootstrap
     try:

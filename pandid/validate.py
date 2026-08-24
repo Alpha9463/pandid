@@ -930,8 +930,9 @@ def model_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     # feed out, it has not taken the practice up at all -- and pandid
     # ships ``show_stream_table=False``, so that is the library's
     # decision as much as the author's and wants its own answer rather
-    # than a finding per boundary line on every drawing. Fourteen of the
-    # twenty shipped examples are in that state and none of them is what
+    # than a finding per boundary line on every drawing. Seven of the 21
+    # shipped examples are in that state -- counted as the sheets on which
+    # no stream carries a property at all -- and none of them is what
     # this is for. A sheet that tabulates its other streams and not this
     # one has left it out, and the author is the only one who can say
     # what belongs in it.

@@ -17,7 +17,8 @@ The second is the **generated per-variant classes** of :mod:`pandid.devices`: a
 class body with a ``PORTS`` list and nothing else, inheriting its base's
 ``__init__``. That is what ``_variant_ports`` exists for, and the throwaway
 subclasses below are that shape written by hand, so the mechanism is exercised
-here in isolation from the generator that now emits forty-odd of them.
+here in isolation from the generator that now emits 75 of them -- every class
+statement in ``pandid/devices.py``, counted by AST.
 ``tests/test_devices.py`` is where the emitted ones are held to it.
 """
 

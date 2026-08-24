@@ -383,10 +383,17 @@ def _tied_first_nearest(members: list["Unit"], key) -> list["Unit"]:
 
 
 #: Barycentre passes over the settled grid, down the sheet and back.
-#: Measured on the corpus: the first is worth 34 crossings, the second
-#: nothing on its own but three once :func:`_untangle` runs on its
-#: answer, and the third nothing at all. Two, because that is where the
-#: sheets settle and not because it is a round number.
+#:
+#: **Worth nothing on today's corpus, and that is worth writing down
+#: rather than leaving as a number nobody re-ran.** Setting this to 0,
+#: 1, 2 or 3 leaves the auto-placed corpus at 246 crossings and leaves
+#: every unit's ``(col, row)`` on all 21 sheets identical: the
+#: :func:`_untangle` loop below runs unconditionally afterwards and now
+#: recovers everything the sweeps used to buy. It was worth 34 when it
+#: was measured, against a smaller corpus and an engine since replaced.
+#: Kept at 2 because a pass that costs nothing and might catch an
+#: arrangement the untangler cannot is not worth removing on a corpus
+#: this size -- but nobody should tune it expecting movement.
 SWEEPS = 2
 
 

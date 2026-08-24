@@ -562,7 +562,7 @@ def test_a_spec_built_sheet_is_checked_too():
 @pytest.mark.parametrize(
     "build,bare",
     [
-        # The false positives, one per family, taken from what the sixteen shipped
+        # The false positives, one per family, taken from what the 21 shipped
         # examples actually leave open. Each is a nozzle its *class* declares --
         # offered to every instance whether a sheet uses it or not -- so leaving it
         # open is a drawing decision and not a count that went unmet.
@@ -585,8 +585,14 @@ def test_a_spec_built_sheet_is_checked_too():
     ],
 )
 def test_a_nozzle_the_class_declares_is_never_counted(build, bare):
-    """276 ports carry no stream across the sixteen shipped examples and every
-    one of them is one of these. The drain valve is the plainest: "a drain runs
+    """445 ports carry no stream across the 21 ``tests/test_golden.SCENARIOS``
+    this file's own acceptance sweep builds -- every port on every unit whose
+    ``stream`` is ``None``, against 1032 that are piped -- and every one of
+    them is one of these. The population matters and is named for a reason:
+    the same count over ``scripts/gallery.py``'s corpus is 442, because the
+    gallery builds ``10`` and ``11`` from the example modules where
+    ``SCENARIOS`` rebuilds them, and the two disagree by three ports on ``11``
+    and ``14``. The drain valve is the plainest: "a drain runs
     down to a funnel on the floor, which is not on this sheet, so the leg ends
     at the valve", in ``add_valve_station``'s own words, and its outlet is bare
     eight times on ``11_ethanol_pid`` alone."""
@@ -712,10 +718,11 @@ def test_every_counted_family_answers_to_the_naming_rule(build, stem, size):
 
 
 def test_nothing_shipped_leaves_a_counted_nozzle_open():
-    """The acceptance test, over the drawings this package stands behind. 119
-    counted nozzles across sixteen of the shipped sheets, and every one of
-    them piped -- so the rule is exercised by the corpus rather than merely
-    silent on it.
+    """The acceptance test, over the drawings this package stands behind. 117
+    counted nozzles across the 21 scenarios ``tests/test_golden.py`` builds,
+    which is the whole shipped corpus, and every one of them piped -- so the
+    rule is exercised by the corpus rather than merely silent on it. That 117
+    is the assertion at the foot of this function, not a figure beside it.
 
     64 rather than the 47 this counted before #303: every ``Reactor`` and
     ``Column`` with the default single feed now contributes one, its real
@@ -826,7 +833,7 @@ def test_a_default_mixer_is_not_a_finding():
     clearance rather than as a multiple of the head. Two heads 20px apart leave
     8px of paper, four times the weight the sheet draws a process line at, and a
     reader resolves them without effort. A floor that reported this would fire
-    on five of the sixteen shipped examples -- 01, 03, 05 and 10 carry a mixer at
+    on five of the 21 shipped examples -- 01, 03, 05 and 10 carry a mixer at
     this same 20px pitch, and 08's takes three feeds 17.5px apart -- and be
     wrong about all five: the tightest of them still leaves 5.5px of paper, over
     the 4px ISO 128-20:1996 4.4 asks for."""
@@ -1265,8 +1272,8 @@ def test_an_internal_line_with_nothing_on_it_is_not_reported():
 
 
 def test_a_sheet_that_tabulates_nothing_is_not_reported():
-    """The narrowness that keeps this off fourteen of the twenty shipped
-    examples. A sheet with no property on any stream has not omitted one
+    """The narrowness that keeps this off seven of the 21 shipped examples --
+    counted as the sheets on which no stream carries a property at all. A sheet with no property on any stream has not omitted one
     line's flow, it has recorded none of them, and pandid's own
     show_stream_table=False is half of that decision."""
     fs = _partly_tabulated()
@@ -1789,8 +1796,11 @@ def test_a_quarter_turn_is_not_a_stretch():
 def test_a_boundary_flag_stretched_to_hold_its_label_is_not_reported():
     """A pennant's own box is the wide one: it is sized to the text it carries.
 
-    106 of the 127 boxes on the twenty shipped sheets that differ from a
-    registered symbol's are these, and every one is the flag doing its job.
+    Most of the boxes on the 21 shipped sheets that differ from a registered
+    symbol's are these, and every one is the flag doing its job. The exact
+    split was last counted before the corpus reached 21 and is deliberately
+    not restated here: what this test is for is that a stretched pennant is
+    never reported, which the assertion below states without a tally.
     """
     fs = Flowsheet("pennant")
     f = fs.add(U.Feed("Cooling Water Supply Header", reference="P&ID-101"))

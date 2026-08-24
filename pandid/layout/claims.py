@@ -35,8 +35,10 @@ approved design in #447 said *two* claims per stream, unconditionally.
 That is amended here, deliberately: a valve has no opinion about where
 its line goes, and a claim written on its behalf is not its opinion but
 an invention -- and an invented claim is still a weight in the fit.
-Emitting one anyway, at :data:`LINE`, costs the corpus 20 crossings and
-buys a symmetry that is in the code rather than in the equipment.
+Emitting one anyway -- a confidence-0 end stating what the *pipe*
+states, at :data:`LINE`, which is exactly what makes it two claims per
+stream unconditionally -- costs the corpus 38 crossings, 246 to 284,
+and buys a symmetry that is in the code rather than in the equipment.
 
 What the two-claim contract was there to prevent still holds, and it is
 the half that matters: **no end is ever dropped because the other end
@@ -111,13 +113,34 @@ midpoint of two boxes one column apart is half a column, which
 discretises onto one of them, and
 :func:`~pandid.layout.place._separate` then hands the valve a **row** of
 its own -- lifting it off the very line it was supposed to be sitting
-on. Measured over the corpus that is 240 crossings against 338. Blunted,
-by letting the fit read the midpoint while
-:func:`~pandid.layout.place._spread` goes on giving the fitting its own
-column, it still costs 74. Drawing a fitting *between* two columns
-rather than in one is a question for :mod:`pandid.layout.coordinates`,
-which owns where a column's paper begins and ends, and not for the
-claims.
+on.
+
+Measured, because "cannot draw it" is worth a number, and stated
+exactly enough to run again. In :func:`read`, where a confidence-0
+end is dropped, emit ``Claim(author, subject, 0, 0, LINE)`` instead
+and count that end as having spoken. Once per **end**, not once per
+run, and the two are not the same rule: of the corpus's 422
+non-recycle process runs 174 have one confidence-0 end and 146 have
+two, so per-end emits 466 of these claims where per-run would emit
+320. Per-end is also what puts the fitting in the middle -- each of
+its own two runs pulls it onto the neighbour at the far end, and
+least squares splits them. That takes the corpus from **246
+crossings to 475**. Blunting it does not rescue it either: keep those
+claims out of :func:`~pandid.layout.place._spread`'s list and nowhere
+else, so the fit reads the midpoint while the fitting still takes a
+column of its own, and it is **516**.
+
+Every corpus-wide crossing figure in this module -- 246, 284, 309,
+475, 516 -- is one measurement, and it is worth saying which:
+``scripts/layout_quality.py``'s **auto-placed** corpus, which is the
+21 shipped examples with every ``pin()`` placement stripped, its
+per-sheet crossings summed. Those same 21 sheets pinned as their
+authors wrote them draw 32 between them, so a crossing count quoted
+without saying which corpus it counted is out by most of itself.
+
+Drawing a fitting *between* two columns rather than in one is a
+question for :mod:`pandid.layout.coordinates`, which owns where a
+column's paper begins and ends, and not for the claims.
 """
 
 from __future__ import annotations
@@ -147,8 +170,9 @@ LINE = 0.25
 #: identical pull at ``LINE`` -- it is the same arithmetic with the
 #: doubling hidden inside a loop, so a return held a loop together twice
 #: as stiffly as a silent forward run held its own two ends and nothing
-#: said so. Undoing the doubling instead takes the corpus from 240
-#: crossings to 321: a return is often the *only* run joining a loop's
+#: said so. Undoing the doubling instead takes the corpus from 246
+#: crossings to 309, on the auto-placed corpus the module docstring
+#: defines: a return is often the *only* run joining a loop's
 #: two halves, where a silent forward run nearly always has a stated
 #: claim somewhere beside it, and halved it lets the loop come apart. So
 #: the doubling stays, and is written down.

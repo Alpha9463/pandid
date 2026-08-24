@@ -1375,6 +1375,20 @@ class Flowsheet:
         instrument's ``pv`` and ``sig_in``/``sig_out``) and a process
         kind between two process nozzles.
 
+        Wherever *kind* is ``"material"`` a run between two
+        :data:`_ENERGY_ROLES` nozzles -- both ends a ``utility_in``,
+        ``utility_out`` or the like, rather than a ``"process"`` port --
+        is silently promoted to ``"energy"``. Note *wherever* and not
+        "left at the default": the check reads the value and nothing
+        else, so ``kind="material"`` typed out in full is promoted too,
+        which is #493 and is a defect rather than the design. The
+        inference is wanted; accepting a contrary answer and changing
+        it is not. The promotion also moves where the run numbers:
+        :meth:`renumber_streams` numbers every energy stream after
+        every material one, so the same duty draws as a ``material``
+        stream off a boundary flag and an ``energy`` one between two
+        equipment utility nozzles.
+
         For a signal line either end may be the **unit** instead of one
         of its connections, and this picks the connection: an instrument
         mints a free one and anything else with a single signal
@@ -2153,11 +2167,11 @@ class Flowsheet:
 
         The equipment symbols are draw.io's own P&ID stencils (see
         ``NOTICE``), so the file *references* them rather than carrying
-        a tracing: what opens is a native, editable shape. The fifteen
-        symbols this library draws itself -- the instrument balloons,
-        the junctions, the off-page flags, the conveyor -- have no
-        draw.io stencil behind them and are approximated with draw.io's
-        built-in shapes; :mod:`pandid.render.drawio` names each one and
+        a tracing: what opens is a native, editable shape. The 82
+        registry entries this library draws itself -- the instrument
+        balloons, the junctions, the off-page flags, the conveyor, and
+        every built-to-size shape added since -- have no draw.io stencil
+        behind them and are approximated with draw.io's built-in shapes; :mod:`pandid.render.drawio` names each one and
         what the approximation loses.
 
         ``diagram`` says which drawing this is, exactly as
