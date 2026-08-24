@@ -919,16 +919,40 @@ class hierarchy, or what it is called.
   succeeded: an author reads a real warning, renders again with a typo, and the
   warning they were reading is gone. That is data loss rather than noise, and
   the clearing now happens after the arguments are known to be good.
-- **A render that raises no longer leaves the flowsheet laid out.** Every
-  argument a render can refuse -- the page size, the border, the diagram, the
-  hop direction, the joint marks -- is now checked in
-  `Flowsheet._prepare_to_draw` between numbering the streams and resolving the
-  geometry, rather than inside the renderer after both. Laying a sheet out and
-  routing it writes a `Frame` onto every unit and a `Route` onto every stream,
-  and those are cached: a render that failed on a typo left geometry behind that
-  the next render reused. `check=False` does not turn this off -- it turns off
-  validation, and an argument the renderer cannot honour is not a finding about
-  a drawing, it is the reason there is not going to be one.
+- **A render that does not produce a file no longer changes the flowsheet at
+  all.** Every argument a render can refuse -- the page size, the border, the
+  diagram, the hop direction, the joint marks, the output extension -- is
+  checked before the sheet is laid out or routed, rather than inside the
+  renderer after both; and whatever a refused render did get as far as doing is
+  undone on the way out. Laying a sheet out and routing it writes a `Frame` onto
+  every unit and a `Route` onto every stream and caches both, numbering rewrites
+  every stream's name, and `warnings` is emptied and refilled -- so a render
+  that failed on a typo used to leave behind geometry the next render reused,
+  streams renumbered from a start set for the call that failed, and the findings
+  of the last render that *succeeded* erased.
+
+  Guarded wholesale rather than mutation by mutation, because three rounds of
+  naming the mutations found a fourth each time: the geometry was guarded and
+  `warnings` was not, then `warnings` was guarded ahead of the argument check
+  and not ahead of the model check, then both were guarded and the stream
+  numbering was not. `Flowsheet` now snapshots itself and everything on it and
+  restores it on the way out through any exception -- in place, so a caller
+  holding a unit `fs.add()` returned still holds the unit the flowsheet has --
+  and the test behind it compares the *whole* flowsheet rather than the fields
+  somebody remembered to look at. `check=False` does not turn any of this off:
+  it turns off validation, and an argument the renderer cannot honour is not a
+  finding about a drawing, it is the reason there is not going to be one.
+- **A stream table is no longer refused for not fitting a page a partition of it
+  fits.** How many blocks to cut the columns into was worked out from the label
+  column's width *before* a section heading widened that column, and never
+  revisited -- so twenty-one streams under a long heading were cut eleven and
+  ten, ruled 1023.0 wide on the 1022.5 an A4 sheet has, and reported as a page
+  too small, while three blocks of seven fit it at 971.0. The count is now
+  searched rather than divided out: the fewest blocks whose *ruled* width fits,
+  every count asked with the width it would really be drawn at. Where no section
+  heading widens anything the answer is arithmetically identical to the division
+  it replaces, so no sheet that fitted before moves; a table that fits at no
+  count at all is still a page too small, and still says so.
 - A **utility header is no longer sunk by the consumers it feeds** (#459). A
   heater's steam nozzle is drawn on the bottom of the symbol, and the layout
   read that face as the heater asserting that its supply belonged *below* it on

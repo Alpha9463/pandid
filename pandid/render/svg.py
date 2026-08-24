@@ -3126,10 +3126,17 @@ def check_render_arguments(fs, *, show_stream_table: "bool | str" = False,
     # to write: what a measurement reports is the measurement's
     # business, and a guard that named today's findings would go stale
     # the day another one is added.
-    was = list(fs.warnings)
+    # The *same list*, refilled -- not a new list with the same
+    # contents. A caller holding a reference to ``fs.warnings`` from
+    # before this call has to keep seeing what the flowsheet sees, and
+    # the writers below rebind the attribute rather than mutating it, so
+    # putting the original object back is what restores both.
+    was = fs.warnings
+    contents = list(was)
     try:
         table_sheet_plan(fs, page)
     finally:
+        was[:] = contents
         fs.warnings = was
 
 

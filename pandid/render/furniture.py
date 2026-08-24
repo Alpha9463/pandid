@@ -1021,6 +1021,61 @@ class TableSheet(NamedTuple):
             y += block.h + self.gap
 
 
+def _blocks_of(n: int, count: int) -> list:
+    """*n* columns shared out over *count* blocks, as evenly as they go.
+
+    The blocks come out one column apart at worst -- twenty-one over
+    three is 7/7/7 and over two is 11/10 -- because two blocks of nearly
+    a page each read as one table where a full block beside a stub of
+    three reads as an afterthought.
+    """
+    per = (n + count - 1) // count
+    return [list(range(i, min(i + per, n))) for i in range(0, n, per)]
+
+
+def _partition(m: "_Measured", n: int, room: "float | None") -> list:
+    """How the stream columns are cut into blocks for a page *room* units
+    wide, or one block for a sheet with no page to fit.
+
+    **Measured on the width the blocks are actually ruled at**, which is
+    the whole of this function's reason for being separate. A block is
+    as wide as its stream columns *plus the label column*, and the label
+    column is widened to carry a section heading across the narrowest
+    block (:func:`_section_span`) -- so the width cannot be known until
+    the partition is chosen, and a capacity worked out before the
+    widening is a capacity the finished table can exceed.
+
+    That is not hypothetical: twenty-one streams under a long section
+    heading were cut 11/10 from a capacity of eleven, then ruled 1023.0
+    wide on the 1022.5 an A4 sheet has, and the page was reported too
+    small for a table that fits it three blocks of seven at 971.0. The
+    sheet was refused for not fitting when a partition that fits
+    existed, which is the feature failing at its job rather than a
+    bookkeeping slip.
+
+    So the count is searched rather than divided out: the **fewest**
+    blocks whose ruled width fits, fewest because fewer blocks are wider
+    blocks and a shorter sheet, and every count is asked with the width
+    it would really be drawn at. Where no section heading widens
+    anything the answer is arithmetically identical to the division it
+    replaces, so no sheet that fitted before moves.
+
+    A table that fits at no count at all falls back to one column per
+    block, the narrowest a table can be ruled: it is then a page too
+    small however it is cut, which the sheet reports in those words
+    rather than this function guessing at.
+    """
+    if room is None:
+        return [list(range(n))]
+    for count in range(1, n + 1):
+        chunks = _blocks_of(n, count)
+        width = (_section_span(m, min(len(c) for c in chunks))
+                 + m.name_w * max(len(c) for c in chunks))
+        if width <= room:
+            return chunks
+    return _blocks_of(n, n)
+
+
 def stream_table_sheet(fs, room: "float | None") -> "TableSheet | None":
     """The stream table laid out for a sheet of its own, wrapped into as
     many blocks as *room* units of page width takes.
@@ -1055,17 +1110,7 @@ def stream_table_sheet(fs, room: "float | None") -> "TableSheet | None":
     if m is None:
         return None
     n = len(m.streams)
-    if room is None:
-        chunks = [list(range(n))]
-    else:
-        # What fits, then evened out. `per` is at least one column: a
-        # block of one is a table too narrow for its page, which the
-        # sheet reports as a page too small rather than by dividing by
-        # zero here.
-        per = max(1, int((room - m.label_w) // m.name_w))
-        count = (n + per - 1) // per
-        per = (n + count - 1) // count
-        chunks = [list(range(i, min(i + per, n))) for i in range(0, n, per)]
+    chunks = _partition(m, n, room)
     # The label column is widened for a section heading against the
     # *smallest* block, so the heading fits in every block and one
     # ruling still answers for all of them.

@@ -11,6 +11,7 @@ emit.
 
 import importlib.util
 import inspect
+import pickle
 import re
 import xml.etree.ElementTree as ET
 from typing import Any, cast
@@ -853,3 +854,225 @@ def test_the_same_option_does_change_a_diagram_that_can_show_it():
     plain = build().to_svg(page_size="A3", diagram="p&id")
     marked = build().to_svg(page_size="A3", diagram="p&id", connections="flanged")
     assert marked != plain
+
+
+# --- a refused render changes nothing at all ---------------------------------
+#
+# The guard above this one used to be `_unresolved()`, which looked at frames
+# and routes. It passed while a refused render was renumbering every stream,
+# because numbering is not a frame and nobody had thought of it. What follows
+# compares the *whole* flowsheet instead, so the next thing nobody thinks of is
+# caught by the test rather than by a reviewer.
+
+
+def _state(fs) -> bytes:
+    """The whole flowsheet, deeply, as bytes that can be compared.
+
+    `pickle` rather than a field-by-field walk for the same reason the restore
+    it checks is wholesale: a comparison that names what to look at is a
+    comparison that goes stale.
+    """
+    return pickle.dumps(fs)
+
+
+def test_the_state_check_can_see_a_change_the_old_one_could_not():
+    """The guard's own guard. A test that compares nothing passes everything,
+    so this asserts that the comparison notices the very mutation that slipped
+    past the frames-and-routes check -- stream numbering."""
+    fs = _sheet(streams=3)
+    before = _state(fs)
+    fs.stream_number_start = 90
+    fs.renumber_streams()
+    assert _state(fs) != before
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"show_stream_table": "own sheet"},
+        {"show_stream_table": "sheet", "page_size": "A9"},
+        {"show_stream_table": "sheet", "page_size": "A4", "debug": True},
+        {"show_stream_table": "sheet", "page_size": "A3", "jump_direction": "sideways"},
+        {"show_stream_table": "sheet", "page_size": "A3", "connections": "welded"},
+        {"show_stream_table": "sheet", "page_size": "A3", "border": "hatched"},
+        {"jump_direction": "sideways"},
+        {"connections": "welded"},
+        {"page_size": "A9"},
+    ],
+)
+@pytest.mark.parametrize("numbering", [False, True])
+def test_a_refused_render_leaves_the_whole_flowsheet_alone(kwargs, numbering):
+    """`numbering=True` is the reviewer's reproduction: a renumbering pending
+    because the author moved the start, which the refused render used to carry
+    out on its way to raising."""
+    fs = _sheet(streams=3)
+    if numbering:
+        fs.stream_number_start = 90
+        fs.line_number_start = 700
+    before = _state(fs)
+    with pytest.raises(ValueError):
+        fs.to_svg(**cast(Any, kwargs))
+    assert _state(fs) == before, "a refused render changed the flowsheet"
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"show_stream_table": "sheet", "page_size": "A3"},
+        {"jump_direction": "sideways"},
+    ],
+)
+def test_a_refused_drawio_export_leaves_the_whole_flowsheet_alone(kwargs):
+    bare = Flowsheet("bare")
+    pump = bare.add(U.Pump("P-101")).pin(x=100, y=100)
+    tank = bare.add(U.Tank("T-101")).pin(x=300, y=100)
+    bare.connect(pump.discharge, tank.inlet)
+    before = _state(bare)
+    with pytest.raises(ValueError):
+        bare.to_drawio(**cast(Any, kwargs))
+    assert _state(bare) == before
+
+
+def test_a_refused_render_leaves_the_flowsheet_alone_after_a_successful_one():
+    """The harder case: a sheet that has already been drawn holds cached
+    geometry and a list of findings, and a refused render must not disturb
+    either of them."""
+    fs = _sheet(streams=3)
+    fs.to_svg(show_stream_table="sheet", page_size="A3")
+    before = _state(fs)
+    with pytest.raises(ValueError):
+        fs.to_svg(show_stream_table="sheet", page_size="A9")
+    assert _state(fs) == before
+
+
+def test_an_unsupported_extension_leaves_the_whole_flowsheet_alone(tmp_path):
+    fs = _sheet(streams=3)
+    before = _state(fs)
+    with pytest.raises(ValueError, match="Unsupported output format"):
+        fs.render(tmp_path / "sheet.unsupported", check=False)
+    assert _state(fs) == before
+
+
+def test_a_model_error_leaves_the_whole_flowsheet_alone():
+    """Validation is a later refusal than the argument check, and the same rule
+    reaches it: a sheet the validator rejects is a sheet nobody has."""
+    fs = _sheet(streams=3)
+    fs.units[0].pin(x=float("nan"), y=10.0)
+    before = _state(fs)
+    with pytest.raises(ValueError, match="Flowsheet validation failed"):
+        fs.to_svg(page_size="A3")
+    assert _state(fs) == before
+
+
+# --- ...including the findings it was reading --------------------------------
+
+
+def test_a_model_error_erases_no_finding_from_the_last_render():
+    """The refusal path one later than the one fixed before: `warnings` was
+    emptied ahead of the model check, so a pin set to NaN deleted the findings
+    of the render that succeeded."""
+    fs = _with_an_unused_section()
+    fs.to_svg(show_stream_table="sheet", page_size="A3")
+    kept = [w.code for w in fs.warnings]
+    assert "stream-table-section-unused" in kept
+    fs.units[0].pin(x=float("nan"), y=10.0)
+    with pytest.raises(ValueError, match="Flowsheet validation failed"):
+        fs.to_svg(show_stream_table="sheet", page_size="A3")
+    assert [w.code for w in fs.warnings] == kept
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"page_size": "A9"},
+        {"show_stream_table": "sheet", "page_size": "A4", "debug": True},
+        {"show_stream_table": "sheet", "page_size": "A3"},  # the duplicate number
+    ],
+)
+def test_a_refused_render_keeps_the_very_list_object_fs_warnings_had(kwargs):
+    """Contents *and* identity. Replaced with an equal list, anything holding a
+    reference to the old one silently stops seeing what the flowsheet sees."""
+    fs = _with_an_unused_section()
+    fs.stream_table.sheet_drawing_number = "PFD-1001"  # refused: the diagram's
+    fs.stream_table_sections = []
+    fs.to_svg(page_size="A3")
+    held = fs.warnings
+    with pytest.raises(ValueError):
+        fs.to_svg(**cast(Any, kwargs))
+    assert fs.warnings is held
+
+
+# --- a partition that fits is found ------------------------------------------
+
+
+def _long_section(streams: int = 21, width: int = 147) -> Flowsheet:
+    """A table whose section heading is far wider than any block of it, so the
+    label column is widened after the columns have been shared out."""
+    fs = _sheet(streams=streams, rows=1)
+    fs.stream_table_sections = [("Temperature (C)", "W" * width)]
+    return fs
+
+
+def test_a_table_that_fits_in_more_blocks_is_drawn_rather_than_refused():
+    """The defect: capacity was worked out *before* the section heading widened
+    the shared label column, and never revisited. Twenty-one streams were cut
+    11/10 from a capacity of eleven, ruled 1023.0 wide on the 1022.5 an A4 has,
+    and the page was called too small -- while 7/7/7 fits it at 971.0."""
+    svg = _long_section().to_svg(show_stream_table="sheet", page_size="A4")
+    blocks = _blocks(svg)
+    assert len(blocks) == 3
+    assert [len(_texts(b)) for b in blocks]  # every block drew something
+
+
+def test_the_partition_that_fits_really_fits():
+    """Not merely more blocks: every cell of the drawing lands inside the
+    sheet, which is what "it fits" has to mean."""
+    fs = _long_section()
+    svg = fs.to_svg(show_stream_table="sheet", page_size="A4")
+    vx, vy, vw, vh = _viewbox(svg)
+    for block in _blocks(svg):
+        for x, y, w, h in _cells(block):
+            assert vx <= x and x + w <= vx + vw
+            assert vy <= y and y + h <= vy + vh
+
+
+def test_the_widest_partition_that_fits_is_the_one_chosen():
+    """Fewest blocks, because fewer blocks are wider blocks and a shorter
+    sheet. Three is the fewest that fits here, so two must not be offered and
+    four must not be chosen over three."""
+    fs = _long_section()
+    room = 1122.52 - 2 * (F.OUTER_MARGIN + F.ZONE_BAND) - 2 * F.INNER
+    table = F.stream_table_sheet(fs, room)
+    assert table is not None
+    assert len(table.blocks) == 3
+    assert table.w <= room
+    # ...and the count below it genuinely does not fit, so this is the floor
+    # rather than a coincidence.
+    m = F._measure(fs, own_sheet=True)
+    assert m is not None
+    two = F._blocks_of(len(m.streams), 2)
+    wider = F._section_span(m, min(len(c) for c in two)) + m.name_w * max(len(c) for c in two)
+    assert wider > room
+
+
+def test_a_table_no_partition_can_fit_is_still_refused():
+    """The guard against fixing the refusal by never refusing: a section
+    heading wider than the page is a page too small however the columns are
+    cut, and the sheet says so rather than drawing off the paper."""
+    with pytest.raises(ValueError, match="stream table"):
+        _long_section(width=400).to_svg(show_stream_table="sheet", page_size="A4")
+
+
+def test_the_search_agrees_with_the_arithmetic_it_replaced():
+    """Where no section heading widens anything, the fewest-blocks-that-fit
+    search is the division it replaced, exactly -- so no sheet that fitted
+    before moves."""
+    fs = _sheet(streams=21)
+    m = F._measure(fs, own_sheet=True)
+    assert m is not None
+    n = len(m.streams)
+    for room in (300.0, 500.0, 700.0, 900.0, 1200.0, 4000.0):
+        per = max(1, int((room - m.label_w) // m.name_w))
+        count = (n + per - 1) // per
+        expected = F._blocks_of(n, count)
+        assert F._partition(m, n, room) == expected, room

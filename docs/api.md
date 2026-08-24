@@ -2577,9 +2577,11 @@ paths — and you name each file. Every output path draws it: `.svg`, `.pdf`,
 one above the other, each repeating the `Stream Number` heading row and every
 section header, and all ruled to one measurement so a property row tracks from
 block to block. How many streams a block holds is read off the page: the same
-table wraps into two blocks on A4 and none on A2. Without a `page_size` there is
-no width to wrap against and the table comes out in one block, on a sheet grown
-to fit it.
+table wraps into two blocks on A4 and none on A2. What is measured is the width
+the blocks are *ruled* at, section heading included — the fewest blocks whose
+finished width fits the page — so a table is never refused for not fitting when
+a partition that fits exists. Without a `page_size` there is no width to wrap
+against and the table comes out in one block, on a sheet grown to fit it.
 
 The blocks are evened out rather than filled and left a stub: twenty-one streams
 that fit twelve across are drawn eleven and ten. A table sheet is set at the
@@ -2617,10 +2619,12 @@ an equipment list belongs to the diagram it schedules. `debug=` is refused,
 there being no diagram to draw a coordinate overlay under, and a flowsheet with
 nothing to tabulate raises rather than writing an empty sheet.
 
-Everything a table sheet can refuse, it refuses **before the sheet is laid out
-or routed**, so a call that raises leaves the flowsheet exactly as it found it —
-no resolved geometry for the next render to reuse, and `fs.warnings` untouched,
-neither added to nor erased. A render that does not happen changes nothing.
+**A render that does not happen changes nothing.** Every refusal — an unknown
+option, an unsupported extension, a page too small, a model the validator
+rejects — leaves the flowsheet exactly as it was found: no resolved geometry for
+the next render to reuse, no renumbered streams, and `fs.warnings` untouched,
+neither added to nor erased nor replaced with an equal list. Only a render that
+produces a file changes anything.
 
 ---
 

@@ -6,6 +6,7 @@ one-stream-per-port rule.
 """
 
 from __future__ import annotations
+from contextlib import contextmanager
 from pathlib import Path
 from string import Formatter
 from typing import Any, Callable, Literal, TYPE_CHECKING, TypeVar
@@ -65,6 +66,51 @@ DEFAULT_LOOP_NUMBER_START = 101
 #: set of its own: see :data:`~pandid.render.svg._INLINE_BODIES`, a
 #: strict subset of this one.
 INLINE_KINDS = frozenset({"valve", "reducer", "fitting", "tee"})
+
+#: The kinds of container an attribute can hold that a render could
+#: mutate *in place* rather than rebind. Restoring one means putting its
+#: contents back into the object that was there, not hanging a new
+#: object with the right contents off the same name: a caller holding a
+#: reference to ``fs.warnings`` has to keep seeing the same list.
+_CONTAINERS = (list, dict, set)
+
+
+def _snapshot(obj) -> dict:
+    """Every attribute of *obj*, with the contents of any container it
+    holds, in a form :func:`_restore` can put back exactly.
+
+    Wholesale over fields on purpose. The alternative -- remembering
+    which attributes a render writes -- is a guard that goes stale the
+    day something writes a new one, and that is precisely how stream
+    numbering came to survive a refused render: the check that was
+    supposed to catch it looked at frames and routes, because those were
+    the two fields anybody had thought of.
+    """
+    return {k: (v, v.copy() if isinstance(v, _CONTAINERS) else None)
+            for k, v in vars(obj).items()}
+
+
+def _restore(obj, saved: dict) -> None:
+    """Put *obj* back exactly as :func:`_snapshot` found it, **without
+    replacing any object anybody else may be holding**.
+
+    A container is emptied and refilled rather than swapped out, and the
+    attribute is then pointed back at that same container. Deep-copying
+    the flowsheet and assigning the copy back would be simpler and is
+    wrong: ``fs.add()`` hands the caller the unit it added, so a
+    flowsheet whose ``units`` had been replaced by copies would leave
+    every name in the author's script pointing at an orphan.
+    """
+    obj.__dict__.clear()
+    for k, (value, contents) in saved.items():
+        if contents is not None:
+            if isinstance(value, list):
+                value[:] = contents
+            else:
+                value.clear()
+                value.update(contents)
+        obj.__dict__[k] = value
+
 
 #: What :meth:`Flowsheet.render` writes, keyed by the extension that
 #: selects it. The empty string is a path with no extension at all,
@@ -1683,6 +1729,45 @@ class Flowsheet:
                 + "\n".join(f"  {e}" for e in errors)
             )
 
+    @contextmanager
+    def _unchanged_if_it_raises(self):
+        """Run a render, and leave this flowsheet exactly as it was found
+        if the render does not produce a file.
+
+        **The invariant three reviews arrived at, stated once.** A render
+        writes to the sheet on its way to drawing it: it numbers the
+        streams, empties ``warnings`` and fills it again, lays every unit
+        out and routes every line, and caches all of that for the next
+        render to reuse. A render that then raises has done that work for
+        a file nobody has, and what it left behind is not neutral -- an
+        author who renders, reads a warning, renders again with a typo'd
+        page size and gets an exception should not find the warning they
+        were reading gone, or the sheet numbered from a start they set
+        for the render that failed.
+
+        Fixing that by hand, mutation by mutation, is what the last two
+        rounds of this branch did, and each time the next thing anybody
+        thought to check turned out to have been missed: the geometry was
+        guarded and ``warnings`` was not, then ``warnings`` was guarded
+        before the argument check and not before the model check, then
+        both were guarded and the stream numbering was not. So the guard
+        is wholesale (:func:`_snapshot`) rather than a list of the
+        mutations known today, and the test behind it compares the whole
+        flowsheet rather than the fields somebody remembered.
+
+        Only on the way out through an exception. A render that succeeds
+        keeps every bit of what it did, including the cached geometry
+        that makes the second render of one sheet cheap.
+        """
+        saved = [(obj, _snapshot(obj))
+                 for obj in (self, *self.units, *self.streams)]
+        try:
+            yield
+        except BaseException:
+            for obj, state in saved:
+                _restore(obj, state)
+            raise
+
     def _prepare_to_draw(self, *, diagram: str | None, check: bool,
                          **arguments) -> None:
         """Bring the sheet to the state a renderer can draw it from.
@@ -2193,16 +2278,20 @@ class Flowsheet:
         :class:`ValueError` on an *error*; *warnings* from both are
         collected on ``self.warnings``. See :meth:`_prepare_to_draw`.
         """
-        self._prepare_to_draw(
-            diagram=diagram, check=check, show_stream_table=show_stream_table,
-            border=border, page_size=page_size, connections=connections,
-            jump_direction=jump_direction, debug=debug)
-        from pandid.render.svg import SvgRenderer
-        return SvgRenderer().render(
-            self, show_stream_table=show_stream_table,
-            border=border, diagram=diagram, page_size=page_size,
-            connections=connections, jump_direction=jump_direction, debug=debug
-        )
+        # Around the whole call and not just the preparation: a render
+        # that raises leaves this sheet as it found it, whichever of the
+        # two stages raised. See :meth:`_unchanged_if_it_raises`.
+        with self._unchanged_if_it_raises():
+            self._prepare_to_draw(
+                diagram=diagram, check=check, show_stream_table=show_stream_table,
+                border=border, page_size=page_size, connections=connections,
+                jump_direction=jump_direction, debug=debug)
+            from pandid.render.svg import SvgRenderer
+            return SvgRenderer().render(
+                self, show_stream_table=show_stream_table,
+                border=border, diagram=diagram, page_size=page_size,
+                connections=connections, jump_direction=jump_direction, debug=debug
+            )
 
     def to_drawio(self, *, diagram: str | None = None,
                   page_size: str | None = None, border: str | None = None,
@@ -2282,16 +2371,17 @@ class Flowsheet:
         # No ``debug``: a .drawio document has no coordinate overlay to
         # draw, and ``render()`` refuses the argument for that path
         # rather than letting it reach here at all.
-        self._prepare_to_draw(
-            diagram=diagram, check=check, show_stream_table=show_stream_table,
-            border=border, page_size=page_size, connections=connections,
-            jump_direction=jump_direction)
-        from pandid.render.drawio import DrawioRenderer
-        return DrawioRenderer().render(self, diagram=diagram,
-                                       page_size=page_size, border=border,
-                                       connections=connections,
-                                       jump_direction=jump_direction,
-                                       show_stream_table=show_stream_table)
+        with self._unchanged_if_it_raises():
+            self._prepare_to_draw(
+                diagram=diagram, check=check, show_stream_table=show_stream_table,
+                border=border, page_size=page_size, connections=connections,
+                jump_direction=jump_direction)
+            from pandid.render.drawio import DrawioRenderer
+            return DrawioRenderer().render(self, diagram=diagram,
+                                           page_size=page_size, border=border,
+                                           connections=connections,
+                                           jump_direction=jump_direction,
+                                           show_stream_table=show_stream_table)
 
     def render(self, path: str | Path, *, show_stream_table: bool | Literal["sheet"] = False,
                border: str | None = None,
