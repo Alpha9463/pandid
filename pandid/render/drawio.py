@@ -184,7 +184,7 @@ import math
 from datetime import datetime
 from typing import NamedTuple, TYPE_CHECKING
 
-from pandid.portgeom import port_point, unit_box
+from pandid.portgeom import _xform, port_point, symbol_to_box, unit_box
 # ISO 10628-1 5.3.1 c)'s in-line detail band, half the outline weight
 # below: imported rather than repeated, since the sheet draws a part and
 # its body at exactly that ratio and an export at another one is a second
@@ -551,6 +551,49 @@ No sheet in the shipped corpus reaches it. What does is a sheet whose
 #: identity is absent: a cell with no ``direction`` is already upright,
 #: and saying so would only make every style longer.
 _DIRECTION = {90: "south", 180: "west", 270: "north"}
+
+
+def _placed_rect(frame, x: float, y: float, w: float, h: float
+                 ) -> "tuple[float, float, float, float]":
+    """One child rectangle, stated in symbol fractions, in the placed cell.
+
+    A parent's ``direction`` and its flips say how *its own shape* paints
+    inside its bounds. mxGraph does not carry them into a child's
+    geometry -- a child is positioned by its own numbers, relative to the
+    parent's origin and nothing else -- so a child that is a piece **of
+    the drawing** rather than a shape beside it has to be turned here or
+    the symbol comes apart the moment it is laid on its side.
+
+    Both corners go through :func:`~pandid.portgeom.symbol_to_box`, which
+    is the map the nozzles and the SVG artwork are already placed by, so
+    a part cannot drift from the port it is drawn under. The unit square
+    is used as the symbol's box, because these rectangles are fractions
+    of it; a quarter turn comes back with its axes swapped, which is what
+    the cell did too.
+
+    :meth:`DrawioRenderer._inscribed` needs none of this: it fills the
+    whole box whatever shape the box is.
+    """
+    rot, mirror_x, mirror_y = _xform(frame)
+    corners = [symbol_to_box(px, py, 1.0, 1.0, rot, mirror_x, mirror_y)[:2]
+               for px, py in ((x, y), (x + w, y + h))]
+    xs = sorted(point[0] for point in corners)
+    ys = sorted(point[1] for point in corners)
+    return xs[0], ys[0], xs[1] - xs[0], ys[1] - ys[0]
+
+
+def _turn_keys(frame) -> list[str]:
+    """The quarter turn, restated for a child cell.
+
+    The child's *geometry* is turned by :func:`_placed_rect`; this is the
+    other half, which is how the shape paints inside it. ``mxLine`` draws
+    across its box horizontally and turns only for ``direction`` north or
+    south, and an agitator's stencil has a top and a bottom. It is the
+    parent's own direction rather than a fresh decision: the whole
+    drawing turns together.
+    """
+    rot, _mirror_x, _mirror_y = _xform(frame)
+    return [] if rot not in _DIRECTION else [f"direction={_DIRECTION[rot]}"]
 
 
 class _Fit(NamedTuple):
@@ -2082,8 +2125,8 @@ class DrawioRenderer:
             *body,
             '        </mxCell>',
             *self._inscribed(cid, approx, x1 - x0, y1 - y0, fit),
-            *self._pieces(cid, approx, x1 - x0, y1 - y0, fit),
-            *self._overlay_cells(cid, sym, x1 - x0, y1 - y0, fit, u.name),
+            *self._pieces(u, approx, cid, x1 - x0, y1 - y0, fit),
+            *self._overlay_cells(cid, sym, x1 - x0, y1 - y0, fit, u),
         ]
 
     def _report_reshape(self, u, sym, approx: "_Approximation | None") -> None:
@@ -2115,10 +2158,15 @@ class DrawioRenderer:
             return
         x0, y0, x1, y1 = self._cell_box(u)
         w, h = x1 - x0, y1 - y0
-        if not (w > 0 and h > 0 and sym.width > 0 and sym.height > 0):
+        # The symbol's box **as placed**: a quarter turn swaps its width
+        # and height, and the cell is turned with it. Comparing against
+        # the unturned box reported every upright symbol laid on its side
+        # as reproportioned, which is a drawing that was never resized.
+        _px, _py, bw, bh = symbol_to_box(0.0, 0.0, sym.width, sym.height, *_xform(u.frame))
+        if not (w > 0 and h > 0 and bw > 0 and bh > 0):
             return
         # Same aspect, same drawing: a uniform scale is not a distortion.
-        if abs(w / h - sym.width / sym.height) <= _ASPECT_SLACK:
+        if abs(w / h - bw / bh) <= _ASPECT_SLACK:
             return
         self._findings.append(Issue(
             "warning", APPROXIMATED,
@@ -2128,14 +2176,33 @@ class DrawioRenderer:
             f"export fills the cell instead and the drawing comes out reproportioned"))
 
     @staticmethod
-    def _pieces(cid: str, approx: "_Approximation | None",
+    def _pieces(u, approx: "_Approximation | None", cid: str,
                 w: float, h: float, fit: "_Fit") -> list[str]:
         """A stand-in that is several built-ins, one cell each.
 
-        See :class:`_Piece` for why. The arithmetic is
-        :meth:`_overlay_cells`', because the convention is the same one:
-        a rectangle in fractions of the parent's box, and a child's
-        geometry is already relative to its parent's.
+        See :class:`_Piece` for why.
+
+        **The placement has to be applied here, by hand.** A parent's
+        ``direction`` and its flips are properties of how *its own shape*
+        paints inside its bounds; mxGraph does not turn a child's
+        geometry with them, and a child that is not a shape of the parent
+        but a piece *of the drawing* has to be turned by the same
+        quarter or the symbol comes apart. Left unturned, a trap laid on
+        its side exported as three tall slivers side by side inside a
+        cell that was itself upright -- ink that met none of the nozzles.
+
+        Two halves, and both are needed:
+
+        * **Where the piece is.** Its rectangle is stated in the
+          *symbol's* frame, so both corners go through
+          :func:`~pandid.portgeom.symbol_to_box` -- the same map the
+          nozzles and the SVG artwork are placed by, so a piece cannot
+          drift from the port it is drawn under.
+        * **Which way the piece paints.** ``mxLine`` draws across its box
+          horizontally and turns only for ``direction`` north or south,
+          so the quarter turn is restated on each child. It is the
+          parent's own ``direction``, not a fresh decision: the whole
+          drawing turns together.
 
         ``connectable=0`` and ``movable=0`` for the reasons
         :meth:`_inscribed` gives -- a piece is *part of* the symbol, and
@@ -2144,26 +2211,27 @@ class DrawioRenderer:
         """
         if approx is None or not approx.pieces:
             return []
+        turn = _turn_keys(u.frame)
         out: list[str] = []
         for i, piece in enumerate(approx.pieces):
+            px, py, pw, ph = _placed_rect(u.frame, piece.x, piece.y, piece.w, piece.h)
             keys = [] if piece.shape is None else [f"shape={piece.shape}"]
             style = ";".join([
-                "html=1", "rounded=0", *keys,
+                "html=1", "rounded=0", *keys, *turn,
                 f"strokeColor={approx.stroke}", f"fillColor={approx.fill}",
                 f"strokeWidth={fit.length(approx.weight):g}",
                 "connectable=0", "movable=0"]) + ";"
             out += [
                 f'        <mxCell id="{cid}-s{i}" value="" style={_attr(style)} '
                 f'vertex="1" parent="{cid}">',
-                f'          <mxGeometry x="{_num(piece.x * w)}" '
-                f'y="{_num(piece.y * h)}" width="{_num(piece.w * w)}" '
-                f'height="{_num(piece.h * h)}" as="geometry" />',
+                f'          <mxGeometry x="{_num(px * w)}" y="{_num(py * h)}" '
+                f'width="{_num(pw * w)}" height="{_num(ph * h)}" as="geometry" />',
                 '        </mxCell>',
             ]
         return out
 
     def _overlay_cells(self, cid: str, sym, w: float, h: float,
-                       fit: "_Fit", owner: str = "") -> list[str]:
+                       fit: "_Fit", unit=None) -> list[str]:
         """One cell per ISO supplementary part, grouped under the body's.
 
         **This is what a composed symbol exports as.** A composition names
@@ -2214,7 +2282,8 @@ class DrawioRenderer:
                     # says so, naming the unit it is drawn on.
                     self._findings.append(Issue(
                         "warning", APPROXIMATED,
-                        f"{owner or cid}: the {overlay.name} part has no draw.io "
+                        f"{getattr(unit, 'name', '') or cid}: the {overlay.name} "
+                        f"part has no draw.io "
                         f"stencil and is exported as a stand-in, which loses "
                         f"{approx.lost}"))
             # A chiral part's second hand. The SVG reflects the artwork
@@ -2223,17 +2292,22 @@ class DrawioRenderer:
             # drawn inside it turns round.
             if overlay.mirror:
                 keys.append("flipH=1")
+            # The placement, which a child does not inherit: see
+            # :func:`_placed_rect`. Without it a stirred tank laid on its
+            # side exported as an upright agitator across a vessel drawn
+            # the other way, both of them reproportioned.
+            ox, oy, ow, oh = _placed_rect(
+                unit.frame, overlay.x, overlay.y, overlay.w, overlay.h)
             style = ";".join([
-                "html=1", "rounded=0", *keys,
+                "html=1", "rounded=0", *keys, *_turn_keys(unit.frame),
                 f"strokeColor={_INK}", f"fillColor={_NO_FILL}",
                 f"strokeWidth={fit.length(_PART_STROKE):g}",
                 "connectable=0", "movable=0"]) + ";"
             out += [
                 f'        <mxCell id="{cid}-p{i}" value="" style={_attr(style)} '
                 f'vertex="1" parent="{cid}">',
-                f'          <mxGeometry x="{_num(overlay.x * w)}" '
-                f'y="{_num(overlay.y * h)}" width="{_num(overlay.w * w)}" '
-                f'height="{_num(overlay.h * h)}" as="geometry" />',
+                f'          <mxGeometry x="{_num(ox * w)}" y="{_num(oy * h)}" '
+                f'width="{_num(ow * w)}" height="{_num(oh * h)}" as="geometry" />',
                 '        </mxCell>',
             ]
         return out

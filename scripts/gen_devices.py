@@ -766,8 +766,8 @@ DEVICES = {
     draws it: a body with a diameter across it at 45 degrees and the
     discharge half below that filled.
 
-    It is a class rather than a style of :class:`~pandid.units.Fitting`
-    on the :class:`FlowElement` argument -- a trap is what an equipment
+    A class rather than a style of :class:`~pandid.units.Fitting`, for
+    the reason :class:`FlowElement` is one: a trap is what an equipment
     or a valve schedule lists, sized and typed and bought as its own
     item, while a strainer body and a flanged joint are the same shape
     of thing to the drawing. Every steam main has one at each low point

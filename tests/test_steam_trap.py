@@ -17,6 +17,7 @@ that Python arithmetic is deterministic.
 import importlib.util
 import math
 import pathlib
+import re
 import xml.etree.ElementTree as ET
 from typing import Any
 
@@ -389,3 +390,70 @@ def test_the_drawio_backend_reports_a_body_it_will_reproportion():
     reports = reshape_reports(wide)
     assert len(reports) == 1, "a reshaped trap is reported once"
     assert "T-701" in reports[0].message
+
+
+@pytest.mark.parametrize("rot", [0, 90, 180, 270])
+def test_every_nozzle_lands_on_drawn_ink_however_the_trap_is_turned(rot):
+    """The claim a stand-in made of pieces has to keep.
+
+    A nozzle is written as a fraction of the cell and a piece as a
+    rectangle inside it, and the two are computed apart -- the port from
+    :func:`~pandid.portgeom.port_point`, the piece from its own fractions
+    -- so nothing but the shared placement map holds them together. When
+    it did not, a trap laid on its side put its ink along one axis and
+    its nozzles along the other, and a stream arrived at a cell edge with
+    nothing drawn there to meet.
+
+    So both are read back out of the exported file and the port is
+    checked to land on a **lead**: not merely inside the cell, and not on
+    the body, but on the piece that is drawn out to the box edge for it.
+    """
+    fs = Flowsheet("Trap")
+    steam = fs.add(Feed("Steam"))
+    trap = fs.add(SteamTrap("T-701"))
+    drain = fs.add(Product("Condensate"))
+    fs.connect(steam.outlet, trap.inlet)
+    fs.connect(trap.outlet, drain.inlet)
+    # All three pinned, and well apart: the trap has to be turned by hand
+    # and its neighbours must not be laid on top of the box that turning
+    # it produces.
+    steam.pin(x=100.0, y=300.0)
+    trap.pin(x=500.0, y=300.0, orientation=rot)
+    drain.pin(x=1000.0, y=300.0)
+    document = fs.to_drawio()
+    root = ET.fromstring(document)
+
+    cells = _cells(document)
+    cid = next(
+        cell.get("id", "")
+        for cell in root.iter("mxCell")
+        if cell.get("value") == "T-701" and cell.get("vertex") == "1"
+    )
+    _parent_style, box = cells[cid]
+    pieces = [cells[key][1] for key in sorted(cells) if key.startswith(cid + "-s")]
+    assert len(pieces) == 3
+    leads = [pieces[0], pieces[2]]
+
+    fractions = []
+    for edge in root.iter("mxCell"):
+        if not edge.get("edge"):
+            continue
+        style = edge.get("style") or ""
+        for prefix, end in (("entry", "target"), ("exit", "source")):
+            if edge.get(end) != cid:
+                continue
+            found = re.search(prefix + r"X=([-\d.]+);" + prefix + r"Y=([-\d.]+)", style)
+            if found:
+                fractions.append((float(found.group(1)), float(found.group(2))))
+    assert len(fractions) == 2, "the trap has two nozzles and both are piped"
+
+    for fx, fy in fractions:
+        px, py = fx * box["width"], fy * box["height"]
+        assert any(
+            lead["x"] - 0.02 <= px <= lead["x"] + lead["width"] + 0.02
+            and lead["y"] - 0.02 <= py <= lead["y"] + lead["height"] + 0.02
+            for lead in leads
+        ), (
+            f"at orientation {rot} the nozzle at ({px:g}, {py:g}) is on no lead: "
+            f"the export drew its ink somewhere the stream does not arrive"
+        )

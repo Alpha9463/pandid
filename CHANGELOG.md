@@ -52,7 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   letterboxed, and no draw.io built-in can be told to keep its shape, so
   an author who sizes one to a box of another shape gets a drawing the
   two backends disagree about. That was silent. It now says so, and only
-  when it happens.
+  when it happens — a quarter turn swaps the cell's width and height and
+  is not a resize, which the comparison now allows for.
 - **`tests/test_symbol_identity.py`**: no two registered drawings may be
   byte-identical unless the library *says* they are the one drawing —
   either the same `Symbol` object under two keys (`centrifuge/default`
@@ -447,6 +448,20 @@ class hierarchy, or what it is called.
 
 ### Fixed
 
+- **draw.io child cells now turn with the symbol they are part of.** A
+  parent cell's `direction` says how *its own* shape paints; mxGraph does
+  not carry it into a child's geometry. So every drawing this exporter
+  builds as a parent plus children came apart when it was laid on its
+  side: a composed reactor drew an upright agitator across a vessel lying
+  the other way, and a steam trap drew its body and both leads as tall
+  slivers side by side, with the ink meeting neither nozzle. Both the
+  `pieces=` stand-ins and the ISO supplementary `overlays` now place each
+  child through `portgeom.symbol_to_box` — the same map the nozzles and
+  the SVG artwork already use, so a part cannot drift from the port it is
+  drawn under — and restate the parent's quarter turn so the shape paints
+  the way the drawing does. The overlay half of this had been wrong since
+  compositions landed; nothing in the corpus turns one, which is why it
+  went unseen.
 - The **two committed sheets made from one example no longer disagree about the
   date that example leaves blank** (#491). `03_distillation_train` and
   `08_from_data` state no `TitleBlock.date`, so `SvgRenderer` fills the cell with
