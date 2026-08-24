@@ -40,6 +40,9 @@ import struct
 
 import pytest
 
+from pandid import Flowsheet
+from pandid.document import Revision, TitleBlock
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 GALLERY = ROOT / "docs" / "gallery"
 EXAMPLES = ROOT / "examples"
@@ -261,3 +264,35 @@ def test_the_generator_refuses_a_pandid_from_somewhere_else(tmp_path, monkeypatc
     monkeypatch.setattr(gallery, "ROOT", tmp_path)
     with pytest.raises(SystemExit, match="not this checkout"):
         gallery._pandid_is_this_checkout()
+
+
+def test_the_generator_leaves_a_date_the_sheet_states_alone():
+    """``_stamp`` fills a *blank* date cell. It must never replace a stated one.
+
+    The substitution exists because ``03`` and ``08`` state no date, and a sheet
+    committed to a repository cannot carry ``datetime.now()``. Widened by one
+    clause -- ``if tb.revisions`` where it now reads ``if not tb.date and
+    tb.revisions`` -- it stops filling a gap and starts overwriting the author,
+    and the drawing ships dated a day nobody typed. #482 made exactly that
+    mutation, and it was review rather than a test that caught it. #467, #370
+    and #294 are the same shape.
+
+    Asked directly rather than left to the corpus, because the corpus barely
+    covers it: made unconditional, ``_stamp`` is caught by exactly one of the
+    twenty-one sheets -- and only because ``11_ethanol_pid`` happens to be dated
+    five days after its last revision. The other ten that state a date state
+    their newest revision's, so an overwrite is invisible on them. The date here
+    is therefore deliberately *not* the newest revision's, which is what makes
+    this non-vacuous: an overwriting ``_stamp`` has to move it.
+    """
+    fs = Flowsheet("Stated Date")
+    fs.title_block = TitleBlock(
+        title="Stated Date",
+        date="2026-03-04",
+        revisions=[
+            Revision("A", "2026-05-18", "Issued for internal review", "AA"),
+            Revision("B", "2026-07-02", "Issued for design", "AA", "JS", "RL"),
+        ],
+    )
+    gallery._stamp(fs)
+    assert fs.title_block.date == "2026-03-04"
