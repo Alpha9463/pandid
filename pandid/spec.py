@@ -841,17 +841,15 @@ def _read_pin_ports(unit: Unit, entry: Any, stated: set[str], ranks: set[str],
     exactly that way: two calls measured two coordinates to two things.
 
     Only the *shape* of the key is judged here. Which nozzle names are
-    refused, and **in what order**, is
-    :func:`~pandid.portgeom.port_refusal`'s, which is what
-    :meth:`pandid.units.Unit.pin` asks as well: sharing the sentence and
-    not the precedence left a pin tripping two rules answered one way by
-    the call and another by the file, which is this change's own subject
-    one layer up. So the nozzle is resolved first, then the rules are
-    asked in that one order, at both doors.
+    refused is :func:`~pandid.portgeom.port_refusal`'s, which is what
+    :meth:`pandid.units.Unit.pin` asks as well, and both ask it of the
+    whole pin rather than of one statement in it -- a written pin *is*
+    the accumulated state, which is what makes this door the one that
+    caught the call accumulating a placement it would then refuse.
 
     What stays this module's is the *path*: a key can say which axis it
     went wrong on and a keyword argument cannot, and ``stated`` /
-    ``ranks`` are how this door tells the shared rules what the rest of
+    ``ranks`` are how this door tells the shared rule what the rest of
     the pin says.
     """
     key = where.rsplit(".", 1)[-1]
@@ -878,9 +876,6 @@ def _read_pin_ports(unit: Unit, entry: Any, stated: set[str], ranks: set[str],
     named = {axis: _text(name, f"{where}.{axis}") for axis, name in sorted(axes.items())}
     for axis, name in named.items():
         _find_port(unit, name, f"{where}.{axis}")
-    # The pin's own grid first and once, against the whole key, since no
-    # one axis of the mapping is what makes a cell and a nozzle disagree.
-    _refuse_port(port_refusal(None, (), stated, ranks, key), where)
     for axis, name in named.items():
         _refuse_port(port_refusal(name, (axis,), stated, ranks, f"{key}.{axis}"),
                      f"{where}.{axis}")

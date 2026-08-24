@@ -2107,11 +2107,14 @@ the coordinate it was pinned to. Only that nozzle: its neighbours on the same
 unit are still placed by the engine, and [`nozzle()`](#nozzle) still names a
 face outright and still wins.
 
-A grid cell has no nozzle in it, so a `port` you *name* with `col`/`row` raises
-`ValueError` — and so does one given no coordinate to locate, since
-`pin(port="inlet")` on its own measures nothing. A port the unit does not have
-raises `KeyError` naming the ones it does. A flag pinned to a cell is not
-refused: it named no port, so there is nothing to refuse.
+A nozzle you name has to be what some stated coordinate is measured to, or
+`pin()` raises `ValueError` rather than dropping it. `pin(port="inlet")` on its
+own measures nothing, and so does `pin(col=1, port="inlet")`: a grid cell has no
+nozzle in it. The question is asked of the placement the unit ends up with, not
+of the call in front of it, so writing the same thing as two calls does not slip
+past — and `pin(col=1, x=5, port="inlet")` is fine, because `x` locates the
+inlet and supersedes the column on that axis just as it always has. A port the
+unit does not have raises `KeyError` naming the ones it does.
 
 ```text
 portgeom.port_offset(unit, port_name, placed=None) -> (dx, dy)

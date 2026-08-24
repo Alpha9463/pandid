@@ -767,12 +767,17 @@ class Unit:
         without writing down half its height. Only the axes this call
         names are read that way, so
         ``pin(x=..., port="inlet", y=run_y)`` steps along a row by the
-        corner and still lands the nozzle on the line. A grid cell has
-        no nozzle in it, so a ``port`` you *name* refuses ``col``/
-        ``row`` -- and so does a call that names one and then gives it
-        no coordinate to locate, which is a nozzle measuring nothing.
-        The face that nozzle is piped from is settled by the pin too
-        (see :attr:`pin_`); :meth:`nozzle` still names one outright.
+        corner and still lands the nozzle on the line. A nozzle you
+        name must be what some stated coordinate is measured to, asked
+        of the placement this unit ends up with rather than of the call
+        in front of us, so ``pin(port="inlet")`` and
+        ``pin(col=1, port="inlet")`` are refused -- a grid cell has no
+        nozzle in it -- and no way of splitting the same arguments
+        across two calls gets past it. A rank *beside* a located nozzle
+        is not refused: ``pin(col=1, x=5, port="inlet")`` means x locates
+        the inlet and supersedes the column there, as a mixed pin always
+        has. The face that nozzle is piped from is settled by the pin
+        too (see :attr:`pin_`); :meth:`nozzle` still names one outright.
 
         **On a** :class:`Feed` **or a** :class:`Product` **the nozzle is
         the default**, so ``x``/``y`` place the tip of the flag and
@@ -832,27 +837,6 @@ class Unit:
         # is not a port at all is wrong before anything about what it
         # measures.
         nozzle = self._pin_port(port) if port is not None else None
-        if named_port is not None:
-            # Every remaining complaint against a named nozzle, in the
-            # order :func:`~pandid.portgeom.port_refusal` decides, which
-            # is the order the file uses too. Sharing only the wording
-            # left a pin that tripped two rules answering differently
-            # depending on which door it came through -- the same defect
-            # class this change is about, one layer up.
-            #
-            # ``named_port`` and not ``port``, because the flag default
-            # above names a nozzle the caller did not:
-            # ``feed.pin(mirrored=True)`` states no coordinate and there
-            # is nothing in it to discard, so there is nothing to refuse.
-            from pandid.portgeom import port_refusal
-
-            complaint = port_refusal(
-                named_port, ("x", "y"),
-                {a for a, v in (("x", x), ("y", y)) if v is not None},
-                {r for r, v in (("col", col), ("row", row)) if v is not None},
-                "port")
-            if complaint is not None:
-                raise ValueError(f"{self.name}: {complaint}")
         # Which nozzle each named axis was measured to, recorded per
         # axis and not for the call: ``pin(x=..., port="inlet")``
         # followed by ``pin(y=...)`` leaves x on the nozzle and puts y
@@ -864,6 +848,30 @@ class Unit:
                 ports.pop(axis, None)
             else:
                 ports[axis] = nozzle
+        if named_port is not None:
+            # Asked of the pin this unit will *have*, never of the call
+            # in front of us. A rule read off one call's arguments is a
+            # rule you defeat by writing two calls: ``pin(port="inlet",
+            # y=440)`` then ``pin(col=1)`` each passed on their own and
+            # accumulated into a placement whose own written form
+            # ``from_dict`` then refused -- a public round trip that
+            # would not read back, which is this change's subject
+            # arriving by a third route.
+            #
+            # ``named_port`` and not ``port``, because the flag default
+            # above names a nozzle the caller did not:
+            # ``feed.pin(mirrored=True)`` states no coordinate and there
+            # is nothing in it to discard, so there is nothing to refuse.
+            from pandid.portgeom import port_refusal
+
+            complaint = port_refusal(
+                named_port, ("x", "y"),
+                {axis for axis, name in ports.items() if name == nozzle},
+                {r for r, v in (("col", candidate.col), ("row", candidate.row))
+                 if v is not None},
+                "port")
+            if complaint is not None:
+                raise ValueError(f"{self.name}: {complaint}")
         # Check the *candidate*: the committed placement answers for the
         # sheet this call is replacing, and committing first would leave
         # the unit in the state a raise here exists to prevent.

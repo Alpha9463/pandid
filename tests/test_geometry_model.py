@@ -1,5 +1,7 @@
 """Invariants for the intent (Pin) / result (Frame) geometry model."""
 
+import itertools
+
 import pytest
 
 from pandid import Flowsheet, units as U
@@ -642,74 +644,55 @@ def test_an_absolute_coordinate_the_sheet_dropped_is_still_reported():
     assert not [m for m in said if "col=7" in m], said
 
 
-_GRID_CELL = (
-    "a port names a nozzle and x/y locate it, and {ranks} a grid cell, "
-    "which has no nozzle in it. Give x/y, or drop port"
-)
-_MEASURES_NOTHING = (
-    "port 'inlet' is the nozzle x or y are measured to, and this "
-    "pin states neither. Give x or y, or drop port"
-)
+_MEASURES_NOTHING = "port 'inlet' is the nozzle x or y are measured to, and this pin states neither"
+_GRID_CELL = ": {ranks} a grid cell, which has no nozzle in it"
+_REMEDY = ". Give x or y, or drop port"
+
+
+def _split(call):
+    """Every ordered way of writing one ``pin()`` call as two."""
+    keys = sorted(call)
+    for size in range(1, len(keys)):
+        for first in itertools.combinations(keys, size):
+            rest = [k for k in keys if k not in first]
+            yield [{k: call[k] for k in first}, {k: call[k] for k in rest}]
 
 
 @pytest.mark.parametrize(
-    "call, written, message",
+    "call, message",
     [
-        # A nozzle and a grid cell. This is the case that trips *two* rules,
-        # and the one the two doors used to answer differently: the call
-        # asked about the grid first and the file asked whether anything was
-        # measured first, so the same pin got two verdicts.
+        # A nozzle and a grid cell: the author gave a placement and no
+        # coordinate for the nozzle to sit on, so the sentence points at the
+        # ranks rather than saying they stated nothing.
         (
             dict(col=1, port="inlet"),
-            {"col": 1, "port": "inlet"},
-            _GRID_CELL.format(ranks="col names"),
+            _MEASURES_NOTHING + _GRID_CELL.format(ranks="col names") + _REMEDY,
         ),
         (
             dict(row=2, port="inlet"),
-            {"row": 2, "port": "inlet"},
-            _GRID_CELL.format(ranks="row names"),
+            _MEASURES_NOTHING + _GRID_CELL.format(ranks="row names") + _REMEDY,
         ),
         (
             dict(col=1, row=2, port="inlet"),
-            {"col": 1, "row": 2, "port": "inlet"},
-            _GRID_CELL.format(ranks="col and row name"),
-        ),
-        # An absolute coordinate does not rescue a rank stated beside a
-        # nozzle: the cell is still named, and naming it is the mistake.
-        (
-            dict(col=1, x=5.0, port="inlet"),
-            {"col": 1, "x": 5, "port": "inlet"},
-            _GRID_CELL.format(ranks="col names"),
+            _MEASURES_NOTHING + _GRID_CELL.format(ranks="col and row name") + _REMEDY,
         ),
         # A nozzle measuring nothing, with nothing else wrong.
-        (dict(port="inlet"), {"port": "inlet"}, _MEASURES_NOTHING),
+        (dict(port="inlet"), _MEASURES_NOTHING + _REMEDY),
         # A transform is not a coordinate, so it does not locate a nozzle.
-        (
-            dict(orientation=90, port="inlet"),
-            {"orientation": 90, "port": "inlet"},
-            _MEASURES_NOTHING,
-        ),
+        (dict(orientation=90, port="inlet"), _MEASURES_NOTHING + _REMEDY),
     ],
-    ids=["col", "row", "col+row", "col+x", "bare", "transform"],
+    ids=["col", "row", "col+row", "bare", "transform"],
 )
-def test_the_call_and_the_file_refuse_a_port_in_the_same_words(call, written, message):
+def test_the_call_and_the_file_refuse_a_port_in_the_same_words(call, message):
     """Both doors into a placement, asked the same question, to the byte.
 
-    ``pin(port="inlet")`` used to be accepted and thrown away -- the nozzle
-    resolved, no relation recorded, the pin serialised as ``{}`` -- while the
-    file refused it. Sharing the wording fixed that and left a second half
-    behind: a pin tripping *two* rules still got a different answer depending
-    on which door it came through, because each door asked the rules in its
-    own order. :func:`pandid.portgeom.port_refusal` now owns the order as
-    well as the words, so there is nothing left for the two to disagree
-    about.
-
     The whole message is asserted and not a substring of it, because a
-    substring is exactly what hid this: both doors said "states neither"
-    where one of them should have been talking about the grid at all.
+    substring is what hid the last defect here: both doors said "states
+    neither" while one of them should have been talking about the grid.
     """
     from pandid.spec import SpecError
 
+    written = {k: (5 if k == "x" else 440 if k == "y" else v) for k, v in call.items()}
     fs, valve = _valve_on_a_run()
     with pytest.raises(ValueError) as from_call:
         valve.pin(**call)
@@ -718,6 +701,193 @@ def test_the_call_and_the_file_refuse_a_port_in_the_same_words(call, written, me
     with pytest.raises(SpecError) as from_file:
         Flowsheet.from_dict(_written_valve(written))
     assert str(from_file.value) == f"units[0] 'HV-1'.pin.port: {message}"
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        dict(col=1, port="inlet"),
+        dict(row=2, port="inlet"),
+        dict(col=1, row=2, port="inlet"),
+        dict(orientation=90, port="inlet"),
+    ],
+    ids=["col", "row", "col+row", "transform"],
+)
+def test_no_way_of_splitting_a_refused_call_lets_the_port_through(call):
+    """The refusal is against the pin the unit ends up with, not the statement.
+
+    A rule read off one call's arguments is one you defeat by writing two,
+    which is how an accumulated placement got past the previous version of
+    this check. Every ordered way of writing the same arguments as two calls
+    is refused, and the unit is left unplaced either way.
+
+    The *sentence* may differ between splits and that is not a divergence:
+    a pin refused before its ``col`` was ever stated cannot be told that a
+    cell has no nozzle in it, because at that moment it names no cell. What
+    has to hold is the verdict, and it does.
+    """
+    from pandid.portgeom import pin_intent
+
+    for calls in _split(call):
+        fs, valve = _valve_on_a_run()
+        with pytest.raises(ValueError, match="is the nozzle x or y are measured to"):
+            for kw in calls:
+                valve.pin(**kw)
+        assert pin_intent(valve) == {}, calls
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        # A rank and a nozzle sit together perfectly well: x locates the
+        # inlet and the column is superseded there, which is what a pin
+        # mixing grid and absolute has always meant. Refusing this was a
+        # second rule, and it was the rule that made a placement the call
+        # accepted and the file rejected.
+        dict(col=1, x=5.0, port="inlet"),
+        dict(row=2, y=440.0, port="inlet"),
+        dict(col=1, row=2, x=5.0, y=440.0, port="inlet"),
+    ],
+    ids=["col+x", "row+y", "both"],
+)
+def test_a_rank_beside_a_nozzle_that_does_locate_something_is_accepted(call):
+    """However the author spread it across calls, and it round-trips."""
+    from pandid.portgeom import pin_intent
+
+    for calls in [[call], *_split(call)]:
+        fs, valve = _valve_on_a_run()
+        try:
+            for kw in calls:
+                valve.pin(**kw)
+        except ValueError:
+            # A split that leaves the nozzle in a call with no coordinate is
+            # refused on its own account; what must never happen is a split
+            # that *lands* and then cannot be written down.
+            continue
+        written = fs.to_dict()
+        read = Flowsheet.from_dict(written).units[1]
+        assert pin_intent(read) == pin_intent(valve), calls
+        assert read.pin_ == valve.pin_, calls
+
+
+def test_the_refusal_reads_the_pin_the_unit_has_not_the_call_in_front_of_it():
+    """Two consequences of asking the resulting placement, both observable.
+
+    A nozzle already in force for an axis has not been discarded, so naming
+    it again is not a refusal even though that call states no coordinate of
+    its own -- the question is whether the pin measures anything to it, and
+    it does. And a rank the unit was given by an *earlier* call is still the
+    reason a later bare ``port=`` cannot land, so the sentence says so.
+
+    Reading the arguments in front of us instead would answer both the other
+    way round, which is the formulation a caller defeats by writing two
+    calls.
+    """
+    from pandid.portgeom import pin_intent
+
+    fs, valve = _valve_on_a_run()
+    valve.pin(port="inlet", x=300.0)
+    was = pin_intent(valve)
+    valve.pin(port="inlet")  # already what x is measured to; nothing discarded
+    assert pin_intent(valve) == was
+
+    fs, other = _valve_on_a_run()
+    other.pin(col=1)
+    with pytest.raises(ValueError) as raised:
+        other.pin(port="inlet")
+    assert "col names a grid cell, which has no nozzle in it" in str(raised.value)
+
+
+def test_a_nozzle_and_a_grid_rank_accumulate_into_a_sheet_that_reads_back():
+    """The two placements that were written and then refused.
+
+    Both are a nozzle relation standing beside a grid rank, which is not a
+    contradiction: the absolute coordinate locates the nozzle and supersedes
+    the rank on its own axis, exactly as a pin mixing grid and absolute has
+    always meant. Refusing that combination outright was a second rule, and
+    it was reachable in two ways the rule could not see -- by splitting one
+    ``pin()`` into two, and, on a boundary flag, without splitting anything,
+    because a flag's nozzle is filled in rather than named.
+    """
+    from pandid.portgeom import pin_intent
+
+    fs, valve = _valve_on_a_run()
+    valve.pin(port="inlet", y=RUN_Y)
+    valve.pin(col=1)
+    assert pin_intent(valve) == {"y": ("inlet", RUN_Y)}
+    assert valve.pin_ is not None and valve.pin_.col == 1
+    written = fs.to_dict()
+    assert next(u["pin"] for u in written["units"] if u["name"] == "HV-1") == {
+        "y": RUN_Y,
+        "col": 1,
+        "port": "inlet",
+    }
+    assert Flowsheet.from_dict(written).to_dict() == written
+
+    flag = next(u for u in fs.units if u.name == "F")
+    flag.pin(x=10.0, y=20.0, col=2)
+    written = fs.to_dict()
+    assert next(u["pin"] for u in written["units"] if u["name"] == "F") == {
+        "x": 10.0,
+        "y": 20.0,
+        "col": 2,
+        "port": "outlet",
+    }
+    assert Flowsheet.from_dict(written).to_dict() == written
+
+
+_PIN_ARGS = [("col", 1), ("row", 2), ("x", 5.0), ("y", 440.0), ("port", None), ("orientation", 90)]
+
+
+@pytest.mark.parametrize(
+    "kind, port",
+    [(U.Valve, "inlet"), (U.Feed, "outlet"), (U.Product, "inlet")],
+    ids=["valve", "feed", "product"],
+)
+def test_every_placement_the_api_accepts_can_be_written_and_read_back(kind, port):
+    """``to_dict`` must never write a sheet ``from_dict`` refuses.
+
+    The check on a ``port=`` used to be read off the arguments of the call in
+    front of it, so two calls could accumulate a placement neither call
+    objected to and the file then rejected -- ``pin(port="inlet", y=440)``
+    followed by ``pin(col=1)``, and a boundary flag's ``pin(x=…, y=…, col=…)``
+    in a single call. Both wrote a document that would not read back, which
+    is a broken public round trip and the same defect shape as a pin the
+    reader silently reinterprets.
+
+    So the property is asserted rather than the instances: sweep every
+    combination of pin arguments, as one call and as every ordered way of
+    writing it as two, and require of every placement that *lands* that it
+    survives the file unchanged -- the relation and the resolved corner both.
+    """
+    from pandid.portgeom import pin_intent
+
+    landed = 0
+    for size in range(1, len(_PIN_ARGS) + 1):
+        for combo in itertools.combinations(_PIN_ARGS, size):
+            call = {k: (port if k == "port" else v) for k, v in combo}
+            for calls in [[call], *_split(call)]:
+                fs = Flowsheet("sweep")
+                feed = fs.add(U.Feed("F"))
+                valve = fs.add(U.Valve("HV-1"))
+                prod = fs.add(U.Product("Q"))
+                fs.connect(feed.outlet, valve.inlet)
+                fs.connect(valve.outlet, prod.inlet)
+                unit = {U.Valve: valve, U.Feed: feed, U.Product: prod}[kind]
+                try:
+                    for kw in calls:
+                        unit.pin(**kw)
+                except (ValueError, KeyError):
+                    continue  # refused, so there is no state to write down
+                landed += 1
+                written = fs.to_dict()
+                back = Flowsheet.from_dict(written)  # must not raise
+                read = next(u for u in back.units if u.name == unit.name)
+                assert pin_intent(read) == pin_intent(unit), calls
+                assert read.pin_ == unit.pin_, calls
+    # A guard on the sweep itself: a bug that refused everything would
+    # otherwise leave this asserting nothing at all.
+    assert landed > 300, landed
 
 
 def test_a_refused_port_leaves_no_half_applied_placement():
@@ -788,7 +958,10 @@ def _written_valve(pin):
 @pytest.mark.parametrize(
     "port, said",
     [
-        ({"orientation": 90, "port": "inlet"}, "units[0] 'HV-1'.pin.port: " + _MEASURES_NOTHING),
+        (
+            {"orientation": 90, "port": "inlet"},
+            "units[0] 'HV-1'.pin.port: " + _MEASURES_NOTHING + _REMEDY,
+        ),
         # The axis-by-axis mapping, which has no ``pin()`` counterpart: only a
         # key can say which axis it went wrong on, and the path and the ``drop``
         # both name that key.
@@ -797,12 +970,13 @@ def _written_valve(pin):
             "units[0] 'HV-1'.pin.port.x: port 'inlet' is the nozzle x is measured "
             "to, and this pin states no x. Give x, or drop port.x",
         ),
-        # ...and the mapping form answers about the grid first too, once,
-        # against the whole key -- no one axis of it is what makes a cell and a
-        # nozzle disagree.
+        # ...and the grid hint reaches the axis-by-axis form too, against the
+        # key that names the nozzle rather than the pin as a whole.
         (
             {"col": 1, "port": {"x": "inlet"}},
-            "units[0] 'HV-1'.pin.port: " + _GRID_CELL.format(ranks="col names"),
+            "units[0] 'HV-1'.pin.port.x: port 'inlet' is the nozzle x is measured "
+            "to, and this pin states no x: col names a grid cell, which has no "
+            "nozzle in it. Give x, or drop port.x",
         ),
         (
             {"y": 440, "port": {}},
