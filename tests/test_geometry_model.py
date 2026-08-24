@@ -3,7 +3,7 @@
 import pytest
 
 from pandid import Flowsheet, units as U
-from pandid.portgeom import pin_intent, pinned_x, pinned_y, port_offset
+from pandid.portgeom import pinned_x, pinned_y, port_offset
 
 
 def _small_auto():
@@ -358,6 +358,10 @@ def test_a_written_pin_reads_back_as_the_pin_that_was_written():
         written = fs.to_dict()
         assert Flowsheet.from_dict(written).to_dict() == written
         assert Flowsheet.from_dict(written).units[0].pin_ == tank.pin_
+
+        # Local, so this module still collects against a tree without it
+        # and the tests that need it are the only ones that fail there.
+        from pandid.portgeom import pin_intent
 
         read = Flowsheet.from_dict(written).units[0]
         was = [(port, pinned_x(read, port) if axis == "x" else pinned_y(read, port))
