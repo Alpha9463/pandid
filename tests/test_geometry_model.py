@@ -252,6 +252,104 @@ def test_resizing_the_box_leaves_a_port_pinned_nozzle_where_it_was_pinned():
     assert _drawn(tank, "in_1")[1] == RUN_Y
 
 
+def _tank_the_selector_wants_to_move(port_pin: bool):
+    """A sheet whose feed comes from above, so the engine prefers the roof.
+
+    The tank's ``in_1`` is offered on three faces and the run arrives from
+    the north, so face selection picks ``N`` and puts the nozzle on the roof
+    -- half a box away from the west wall its offset was measured on. Built
+    twice from one place so the two placements differ in nothing but how the
+    author spelt the same point.
+    """
+    fs = Flowsheet("face")
+    feed = fs.add(U.Feed("F")).pin(x=300.0, y=50.0)
+    tank = fs.add(U.Tank("T-1"))
+    prod = fs.add(U.Product("P")).pin(x=800.0, y=RUN_Y)
+    fs.connect(feed.outlet, tank.in_1)
+    fs.connect(tank.outlet, prod.inlet)
+    if port_pin:
+        tank.pin(port="in_1", x=300.0, y=RUN_Y)
+    else:
+        tank.pin(x=300.0, y=RUN_Y)
+    fs.layout()
+    return fs, tank
+
+
+def test_the_engine_does_not_pick_a_face_out_from_under_a_pinned_nozzle():
+    """The fourth site, and the one no ``pin()`` call can be reordered around.
+
+    A port pin is honoured by deriving a corner from where the nozzle sits on
+    the box, and *which* face it sits on is chosen later, by ``select_faces``
+    -- after the boxes are placed, because a face can only be judged against
+    where its peer landed. So the engine was choosing a face the corner had
+    not been derived under, and the tank was drawn taking its feed into the
+    roof instead of the pinned point on its wall: asked for (300, 440), drawn
+    at (350, 361.4). Nothing downstream re-derives the corner, and the cut
+    that puts selection after placement is the one thing here that cannot
+    move -- so a pin, being a boundary condition rather than a preference, is
+    what constrains the selection.
+
+    The corner-pinned half is the control: the same sheet, the same nozzle,
+    the same three candidate faces, and the engine *does* move it. Without
+    that this could pass on a sheet that never tempted the selector at all.
+    """
+    from pandid.portgeom import port_faces
+
+    fs, loose = _tank_the_selector_wants_to_move(port_pin=False)
+    assert loose.frame is not None
+    assert len(port_faces(loose, "in_1", loose.frame)) > 1
+    assert loose.frame.port_faces.get("in_1") == "N"
+    assert _drawn(loose, "in_1") != (300.0, RUN_Y)
+
+    fs, tank = _tank_the_selector_wants_to_move(port_pin=True)
+    assert _drawn(tank, "in_1") == (300.0, RUN_Y)
+    assert "pin-not-honored" not in [i.code for i in fs.validate()]
+
+
+def test_a_pinned_nozzle_may_still_be_sent_to_a_face_by_name():
+    """The pin fixes the point; :meth:`~pandid.units.Unit.nozzle` fixes which.
+
+    Constraining the selection must not take the choice away from the author
+    -- only from the engine. Both statements are honoured together: the run
+    enters the roof because ``nozzle`` said so, and the roof is at 440 because
+    the pin said so. Which face the nozzle is on is asserted as well as where
+    it lands, since a fix that answered the pin by ignoring the named face
+    would put it in the right place off the wrong wall.
+    """
+    from pandid.portgeom import resolve_port
+
+    fs, tank = _tank_the_selector_wants_to_move(port_pin=True)
+    tank.nozzle("in_1", "N")
+    fs.layout()
+    assert tank.frame is not None
+    assert resolve_port(tank, tank.frame, "in_1").face == "N"
+    assert _drawn(tank, "in_1") == (300.0, RUN_Y)
+    assert "pin-not-honored" not in [i.code for i in fs.validate()]
+
+
+def test_only_the_pinned_nozzle_is_taken_out_of_the_engine_s_hands():
+    """The constraint is the nozzle's, not the whole unit's.
+
+    A conveyor takes its feed on the west wall or the roof and discharges east
+    or south, and only one of the two was pinned. The other says nothing about
+    where it goes, so the engine still chooses for it -- exempting the unit
+    rather than the port would answer a pin nobody wrote by drawing the
+    discharge off the symbol's default wall.
+    """
+    fs = Flowsheet("conveyor")
+    src = fs.add(U.Feed("S")).pin(x=400.0, y=60.0)
+    belt = fs.add(U.Conveyor("CV-1"))
+    dst = fs.add(U.Product("D")).pin(x=900.0, y=600.0)
+    fs.connect(src.outlet, belt.feed)
+    fs.connect(belt.discharge, dst.inlet)
+    belt.pin(port="feed", x=400.0, y=RUN_Y)
+    fs.layout()
+
+    assert belt.frame is not None
+    assert belt.frame.port_faces == {"discharge": "E"}
+    assert _drawn(belt, "feed") == (400.0, RUN_Y)
+
+
 def test_a_pin_reads_back_as_the_corner_it_always_did():
     """The relation is stored; the corner is what every reader still sees.
 
@@ -330,49 +428,78 @@ def test_a_written_sheet_carries_the_relation_and_not_its_consequence():
     assert pinned_y(read, "inlet") == RUN_Y
 
 
-def test_a_written_pin_reads_back_as_the_pin_that_was_written():
-    """``from_dict(to_dict(fs))`` is a fixed point for a port-pinned unit.
+@pytest.mark.parametrize(
+    "place, written_pin",
+    [
+        # One nozzle for every stated axis, which is how ``pin()`` takes it.
+        (lambda u: u.pin(port="in_1", x=300.0, y=100.0), {"x": 300.0, "y": 100.0, "port": "in_1"}),
+        # The axis-by-axis mapping, for a pin built out of two calls: only
+        # one of the two coordinates was measured to a nozzle...
+        (
+            lambda u: (u.pin(port="in_1", x=300.0), u.pin(y=100.0)),
+            {"x": 300.0, "y": 100.0, "port": {"x": "in_1"}},
+        ),
+        # ...or the two were measured to different ones, which no shorthand
+        # can say and which is not a contradiction: two calls, two nozzles.
+        # Named by the alias ``outlet`` and written under the name the unit
+        # holds it by, so the file says something the reader can resolve.
+        (
+            lambda u: (u.pin(port="in_1", x=300.0), u.pin(port="outlet", y=100.0)),
+            {"x": 300.0, "y": 100.0, "port": {"x": "in_1", "y": "out_1"}},
+        ),
+    ],
+    ids=["one-nozzle", "one-axis", "two-nozzles"],
+)
+def test_a_written_pin_reads_back_as_the_pin_that_was_written(place, written_pin):
+    """``from_dict(to_dict(fs))`` carries the relation, not its consequence.
 
-    All three spellings: one nozzle for every stated axis, which is how
-    ``pin()`` itself takes it, and the axis-by-axis mapping for the pin built
-    out of two calls -- naming one axis, or naming two different nozzles.
+    What is asserted is the relation this test **wrote**, against the record
+    the unit that was read back holds (:func:`~pandid.portgeom.pin_intent`).
+    Asking the unit that came back what it thinks it has and holding it to
+    its own answer is a tautology, and it is how this test passed while
+    losing everything it exists to protect: a round trip that deleted
+    ``port`` and wrote the derived corner reports ``port=None`` on both
+    sides of every question put in those terms, is a perfect fixed point,
+    and survives a turn -- because a bare corner has nothing left in it to
+    go stale.
 
-    The fixed point is asserted **and then turned**, because on its own it is
-    not a test of anything: a round-trip that dropped the relation entirely
-    and wrote back the bare corner is a perfect fixed point too, and passed
-    this until the turn was added. What has to survive the file is the
-    relation, so what is asserted is that it still holds a nozzle down
-    afterwards.
+    So the fixed point is only the first of three. The nozzle each
+    coordinate was measured to is compared to the one that was written, the
+    file is held to the spelling it must have for another reader to make
+    sense of it, and the unit is then **turned**, which is the thing the
+    relation exists to survive.
     """
-    for place in (
-        lambda u: u.pin(port="in_1", x=300.0, y=100.0),
-        lambda u: (u.pin(port="in_1", x=300.0), u.pin(y=100.0)),
-        lambda u: (u.pin(port="in_1", x=300.0), u.pin(port="outlet", y=100.0)),
-    ):
-        fs = Flowsheet("written")
-        tank = fs.add(U.Tank("T-1"))
-        prod = fs.add(U.Product("P"))
-        fs.connect(tank.outlet, prod.inlet)
-        place(tank)
+    # Local, so this module still collects against a tree without it and
+    # the tests that need it are the only ones that fail there.
+    from pandid.portgeom import pin_intent
 
-        written = fs.to_dict()
-        assert Flowsheet.from_dict(written).to_dict() == written
-        assert Flowsheet.from_dict(written).units[0].pin_ == tank.pin_
+    fs = Flowsheet("written")
+    tank = fs.add(U.Tank("T-1"))
+    prod = fs.add(U.Product("P"))
+    fs.connect(tank.outlet, prod.inlet)
+    place(tank)
 
-        # Local, so this module still collects against a tree without it
-        # and the tests that need it are the only ones that fail there.
-        from pandid.portgeom import pin_intent
+    written = fs.to_dict()
+    assert written["units"][0]["pin"] == written_pin
+    assert Flowsheet.from_dict(written).to_dict() == written
 
-        read = Flowsheet.from_dict(written).units[0]
-        was = [
-            (port, pinned_x(read, port) if axis == "x" else pinned_y(read, port))
-            for axis, (port, _) in pin_intent(read).items()
-        ]
-        read.pin(orientation=90)
-        assert [
-            (port, pinned_x(read, port) if axis == "x" else pinned_y(read, port))
-            for axis, (port, _) in pin_intent(read).items()
-        ] == was
+    read = Flowsheet.from_dict(written).units[0]
+    assert pin_intent(read) == pin_intent(tank)
+    assert read.pin_ == tank.pin_
+
+    # And it is still a relation on the far side, not a number that was
+    # right once: the coordinate the author gave is where the nozzle they
+    # named sits, before the turn and after it.
+    def where(unit) -> dict[str, float]:
+        return {
+            axis: (pinned_x if axis == "x" else pinned_y)(unit, port)
+            for axis, (port, _) in pin_intent(unit).items()
+        }
+
+    asked = {axis: want for axis, (_, want) in pin_intent(tank).items()}
+    assert where(read) == asked
+    read.pin(orientation=90)
+    assert where(read) == asked
 
 
 def test_a_pin_read_back_refuses_to_be_edited_in_place():
@@ -465,29 +592,109 @@ def test_a_grid_pin_the_sheet_honoured_is_not_reported():
     assert "pin-not-honored" not in _codes(fs)
 
 
-@pytest.mark.parametrize(
-    "port, why",
-    [
-        ({"orientation": 90, "port": "inlet"}, "states neither"),
-        ({"y": 440, "port": {"x": "inlet"}}, "states no x"),
-        ({"y": 440, "port": {}}, "names no axis"),
-        ({"y": 440, "port": 5}, "names the nozzle"),
-    ],
-)
-def test_a_written_port_that_measures_nothing_is_refused(port, why):
-    """The parser this change added must not drop input either.
+def test_a_rank_an_absolute_coordinate_supersedes_is_not_reported():
+    """The check must not cry wolf on a sheet that is exactly right.
 
-    A nozzle named for an axis the pin does not state is the author saying
-    where something goes and the reader silently not putting it there -- the
-    same defect one layer down, so it raises against the key that says it
-    rather than being quietly reinterpreted.
+    ``pin(col=7, x=222)`` means 222: an absolute coordinate on an axis wins
+    over the grid there, which is the placement rule
+    ``layout.control._place_free`` states and honours -- it records the rank
+    it *used*, and it used none. Holding the drawing to the overridden half
+    reported a correct sheet twice, and an author who is warned about
+    correct work stops reading the warnings.
+    """
+    fs = Flowsheet("superseded")
+    feed = fs.add(U.Feed("F"))
+    vessel = fs.add(U.Vessel("V-1"))
+    prod = fs.add(U.Product("P"))
+    fs.connect(feed.outlet, vessel.inlet)
+    fs.connect(vessel.outlet, prod.inlet)
+    balloon = fs.add_instrument("XI", 9)
+    balloon.pin(col=7, x=222.0, row=0, y=333.0)
+
+    assert "pin-not-honored" not in _codes(fs)
+    # And the sheet really is right: the superseded rank is not on the frame
+    # either, so this is silence about a correct drawing and not silence
+    # about a rank that was quietly dropped.
+    assert balloon.frame is not None
+    assert (balloon.frame.x, balloon.frame.y) == (222.0, 333.0)
+    assert (balloon.frame.col, balloon.frame.row) == (None, None)
+
+
+def test_an_absolute_coordinate_the_sheet_dropped_is_still_reported():
+    """The other side of the exemption: only the *rank* is excused.
+
+    An attached balloon is positioned from its host, so ``pin(col=7, x=222)``
+    on one is dropped whole. The coordinate that superseded the rank is what
+    the check holds the drawing to, so nothing goes unheld -- exempting the
+    rank must not exempt the pin.
+    """
+    fs = Flowsheet("superseded-attached")
+    feed = fs.add(U.Feed("F"))
+    vessel = fs.add(U.Vessel("V-1"))
+    prod = fs.add(U.Product("P"))
+    fs.connect(feed.outlet, vessel.inlet)
+    fs.connect(vessel.outlet, prod.inlet)
+    fs.add_instrument("LI", 1, sensing=vessel).pin(col=7, x=222.0)
+
+    assert "pin-not-honored" in _codes(fs)
+    said = [i.message for i in fs.validate() if i.code == "pin-not-honored"]
+    assert [m for m in said if "x=222" in m], said
+    assert not [m for m in said if "col=7" in m], said
+
+
+def test_the_call_and_the_file_refuse_the_same_port_that_measures_nothing():
+    """``pin(port=...)`` naming a nozzle no coordinate reaches is refused.
+
+    It used to be accepted and thrown away: the nozzle was resolved, no
+    relation was recorded, and the pin serialised as ``{}``. The file API
+    refused the same sentence, so the two doors into a placement disagreed
+    about the very rule this change exists to enforce -- a value accepted,
+    quietly altered and shipped, one layer up from the bug being fixed.
+
+    Both doors are asked here, together, because what matters is that they
+    give the same answer; :func:`pandid.portgeom.unmeasured_port` is the one
+    sentence they both raise it with.
     """
     from pandid.spec import SpecError
 
-    sheet = {
+    fs, valve = _valve_on_a_run()
+    with pytest.raises(ValueError, match="states neither"):
+        valve.pin(port="inlet")
+    # Nothing was recorded on the way out, either: a refusal that half
+    # applied would be the same defect wearing an exception.
+    from pandid.portgeom import pin_intent
+
+    assert pin_intent(valve) == {}
+
+    with pytest.raises(SpecError, match="states neither"):
+        Flowsheet.from_dict(_written_valve({"port": "inlet"}))
+
+
+def test_a_port_stated_with_a_transform_is_refused_and_a_flag_is_not():
+    """The refusal is for a nozzle the *caller* named and measured nothing to.
+
+    ``pin(port="inlet", orientation=90)`` states a transform and no
+    coordinate, so the nozzle it names locates nothing and goes the same way.
+    A boundary flag is the exception that has to keep working: its single
+    nozzle is filled in for the caller, so ``feed.pin(mirrored=True)`` names
+    no port at all and there is nothing in it to discard.
+    """
+    fs, valve = _valve_on_a_run()
+    with pytest.raises(ValueError, match="states neither"):
+        valve.pin(port="inlet", orientation=90)
+
+    feed = next(u for u in fs.units if u.name == "F")
+    feed.pin(mirrored=True)
+    feed.pin(orientation=90)
+    assert feed.pin_ is not None and feed.pin_.mirrored
+
+
+def _written_valve(pin):
+    """One valve on a run, as a sheet, with ``pin`` written on the valve."""
+    return {
         "name": "s",
         "units": [
-            {"kind": "valve", "name": "HV-1", "pin": port},
+            {"kind": "valve", "name": "HV-1", "pin": pin},
             {"kind": "feed", "name": "F"},
             {"kind": "product", "name": "Q"},
         ],
@@ -496,8 +703,35 @@ def test_a_written_port_that_measures_nothing_is_refused(port, why):
             {"from": ["HV-1", "outlet"], "to": ["Q", "inlet"]},
         ],
     }
-    with pytest.raises(SpecError, match=why):
-        Flowsheet.from_dict(sheet)
+
+
+@pytest.mark.parametrize(
+    "port, why, path",
+    [
+        ({"orientation": 90, "port": "inlet"}, "states neither", ".pin.port"),
+        ({"y": 440, "port": {"x": "inlet"}}, "states no x", ".pin.port.x"),
+        ({"y": 440, "port": {}}, "names no axis", ".pin.port"),
+        ({"y": 440, "port": 5}, "names the nozzle", ".pin.port"),
+    ],
+)
+def test_a_written_port_that_measures_nothing_is_refused(port, why, path):
+    """The parser this change added must not drop input either.
+
+    A nozzle named for an axis the pin does not state is the author saying
+    where something goes and the reader silently not putting it there -- the
+    same defect one layer down, so it raises against the key that says it
+    rather than being quietly reinterpreted.
+
+    The path is asserted with the sentence because the path is the whole of
+    what the file adds: a key can say which axis went wrong and a keyword
+    argument cannot, which is why these two refusals are worded in one place
+    and located in two.
+    """
+    from pandid.spec import SpecError
+
+    with pytest.raises(SpecError, match=why) as raised:
+        Flowsheet.from_dict(_written_valve(port))
+    assert str(raised.value).startswith(f"units[0] 'HV-1'{path}"), raised.value
 
 
 def test_a_placement_the_sheet_honoured_is_not_reported():
