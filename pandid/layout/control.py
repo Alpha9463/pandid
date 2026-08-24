@@ -168,22 +168,25 @@ def _grid(fs: "Flowsheet") -> tuple[dict[int, tuple[float, float]],
     The size is carried because :func:`_lane` needs a pitch to continue
     the grid past its last line, and a one-column sheet has none to
     measure.
+
+    Stage 1's units only, and asked of :mod:`pandid.layout.stages`,
+    which is where that boundary is drawn -- restating it here as an
+    ``isinstance`` would be a second definition of the sheet's own cut.
+    A balloon is placed in stage 2 and *consumes* the grid, so letting
+    one back in would have it move the lanes the balloons after it are
+    measured against: once a balloon's frame carries the rank it was
+    stood in, the first ``pin(col=7)`` on a three-column sheet makes a
+    column 7 for the next one to be measured off. No balloon reached
+    this before that rank was recorded, so excluding them keeps the grid
+    exactly what it has always been.
     """
-    from pandid.units import Instrument
+    from pandid.layout.stages import process_units
 
     cols: dict[int, tuple[float, float]] = {}
     rows: dict[int, tuple[float, float]] = {}
-    for u in fs.units:
+    for u in process_units(fs):
         frame = u.frame
-        # Stage 1's units only. A balloon is placed in stage 2 and
-        # *consumes* the grid, so letting one back in would have it move
-        # the lanes the balloons after it are measured against -- and,
-        # once a balloon's frame carries the rank it was stood in, a
-        # ``pin(col=7)`` on a three-column sheet would answer the next
-        # ``_lane`` as though the sheet had a column 7. No balloon
-        # reached this before that rank was recorded, so skipping them
-        # keeps the grid exactly what it has always been.
-        if frame is None or isinstance(u, Instrument):
+        if frame is None:
             continue
         for index, start, size, grid in ((frame.col, frame.x, frame.w, cols),
                                          (frame.row, frame.y, frame.h, rows)):
