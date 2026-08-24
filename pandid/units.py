@@ -160,7 +160,14 @@ _LAYOUT_INPUTS = frozenset(
         "name",
         "variant",
         "label_pos",
-        "pin_",
+        # The placement intent, in its two halves: the coordinates and
+        # transform the author asked for, and which of x/y were asked
+        # for as a nozzle's position rather than the corner's.
+        # ``pin_`` itself is a derived read (see the property) and so is
+        # not a fact anyone assigns -- listing it would name the output
+        # rather than the input, exactly as ``frame`` is left out below.
+        "_pin",
+        "_pin_ports",
         "width",
         "height",
         "_width",
@@ -398,6 +405,14 @@ class Unit:
     #: the engine's ``assert u._slot is not None`` lines rely on.
     _slot: _Slot | None
 
+    #: Backing store for :attr:`pin_`, given a class-level default so a
+    #: unit whose ``__init__`` has not reached the line that sets it
+    #: reads as unpinned rather than raising: :func:`pandid.portgeom.
+    #: resolve_size` asks with ``getattr(unit, "pin_", None)``, which
+    #: would swallow that ``AttributeError`` and silently size the unit
+    #: as if it had never been turned.
+    _pin: "Pin | None" = None
+
     # The bare ``suction: Port`` annotations on the subclasses below
     # declare what ``PORTS`` produces. The ports themselves are built by
     # ``_add_port``, whose ``setattr`` no type checker can follow, so
@@ -549,7 +564,10 @@ class Unit:
         self.ports: dict[str, Port] = {}
         self.params: dict = {}
         self._new_line_number = False
-        self.pin_: Pin | None = None  # intent; set only via pin()
+        self._pin: Pin | None = None  # intent; set only via pin()
+        # Which of ``x``/``y`` on ``_pin`` were given as a nozzle's
+        # position, and whose: ``{"y": "inlet"}``. See :attr:`pin_`.
+        self._pin_ports: dict[str, str] = {}
         self.frame: Frame | None = None  # resolved; set only by layout
         self._port_faces: dict[str, str] = {}  # port name -> face
         for spec in self._declared_ports():
@@ -652,6 +670,66 @@ class Unit:
             self.flowsheet._invalidate_layout()
             self.flowsheet.renumber_streams()
 
+    @property
+    def pin_(self) -> Pin | None:
+        """This unit's placement intent, as a resolved top-left corner.
+
+        The :class:`~pandid.geometry.Pin` the layout engine seeds its
+        solver from, and the one every reader of a placement wants:
+        ``x``/``y`` are always the corner, whatever the author wrote.
+
+        **A port-pinned axis is stored as the relation the author
+        expressed and turned into a corner here, on every read.**
+        ``valve.pin(port="inlet", y=440)`` says *this nozzle sits at
+        440*, and where the corner is then depends on the placement
+        transform, the resolved box and the face the nozzle is piped
+        from -- all three of which a later call may change. Storing the
+        corner instead meant a later ``pin(orientation=90)`` left a
+        number that had been right for the placement it was computed
+        under and silently meant a different nozzle position afterwards
+        (#294): the valve came off its run by half a body, and nothing
+        said so. A relation survives a transform change; a coordinate
+        does not, so the relation is what is kept.
+
+        Derived on every read rather than recomputed when the transform
+        changes, because :meth:`pin` is not the only writer that moves a
+        nozzle within its box: :meth:`nozzle` picks another face and
+        ``width``/``height`` resize the box, and a corner refreshed at
+        each of those in turn is one more place to forget.
+
+        The stored object is handed back as it stands where no axis was
+        port-pinned, which is the ordinary case and costs nothing.
+        """
+        pin = self._pin
+        if pin is None or not self._pin_ports:
+            return pin
+        from dataclasses import replace
+
+        from pandid.portgeom import port_offset
+
+        resolved = replace(pin)
+        for axis, port_name in self._pin_ports.items():
+            # ``pin`` carries the transform to answer for; the nozzle
+            # coordinates sitting in its own ``x``/``y`` are not read,
+            # since an offset is measured in a box at the origin.
+            offset = port_offset(self, port_name, pin)[0 if axis == "x" else 1]
+            setattr(resolved, axis, getattr(pin, axis) - offset)
+        return resolved
+
+    @pin_.setter
+    def pin_(self, value: Pin | None) -> None:
+        """Replace the placement with one already resolved to a corner.
+
+        A :class:`~pandid.geometry.Pin` states a corner and nothing
+        about which nozzle put it there, so assigning one drops any port
+        relation: the placement is exactly the coordinates given. This
+        is what a caller restoring a placement it read back wants, and
+        :meth:`pin` -- which has the author's own words and keeps them
+        -- does not go through here.
+        """
+        self._pin_ports = {}
+        self._pin = value
+
     def pin(
         self: _UnitT,
         *,
@@ -705,7 +783,12 @@ class Unit:
 
         from pandid.geometry import normalize_mirror, normalize_orientation
 
-        candidate = replace(self.pin_ if self.pin_ is not None else Pin())
+        # Built from the *intent* (``_pin``) and not from :attr:`pin_`:
+        # a corner read back through the property and written down again
+        # would freeze this call's transform into a coordinate, which is
+        # the whole of what this method exists not to do.
+        candidate = replace(self._pin if self._pin is not None else Pin())
+        ports = dict(self._pin_ports)
         for axis, value in (("col", col), ("row", row), ("x", x), ("y", y)):
             if value is not None:
                 setattr(candidate, axis, value)
@@ -729,12 +812,22 @@ class Unit:
                 f"nozzle, and col/row name a grid cell, which has no nozzle in "
                 f"it. Give x/y, or drop port="
             )
-        if port is not None:
-            # After the transform, never before: a mirror moves the
-            # nozzle within the box, so an offset taken from the
-            # placement this call replaces puts the device half a body
-            # off its run.
-            self._offset_to_port(candidate, port, x, y)
+        # Named unconditionally, so a ``port`` this call spells wrongly
+        # is refused whether or not it also gives a coordinate: the
+        # complaint belongs to the call that misspelt it and not to a
+        # later one that finally supplies an axis.
+        nozzle = self._pin_port(port) if port is not None else None
+        # Which nozzle each named axis was measured to, recorded per
+        # axis and not for the call: ``pin(x=..., port="inlet")``
+        # followed by ``pin(y=...)`` leaves x on the nozzle and puts y
+        # on the corner, which is what each of the two calls says.
+        for axis, value in (("x", x), ("y", y)):
+            if value is None:
+                continue
+            if nozzle is None:
+                ports.pop(axis, None)
+            else:
+                ports[axis] = nozzle
         # Check the *candidate*: the committed placement answers for the
         # sheet this call is replacing, and committing first would leave
         # the unit in the state a raise here exists to prevent.
@@ -743,32 +836,29 @@ class Unit:
 
             for port_name, face in self._port_faces.items():
                 self._check_face(port_name, face, port_faces(self, port_name, candidate))
-        self.pin_ = candidate
+        # Both together, and the ports first: ``_pin`` alone is a
+        # placement whose port-pinned axes would read as corners for as
+        # long as the two assignments are apart, and ``__setattr__``
+        # marks the sheet stale on each -- which is the moment another
+        # thread or a hook could read one.
+        self._pin_ports = ports
+        self._pin = candidate
         return self
 
-    def _offset_to_port(
-        self, candidate: Pin, port_name: str, x: float | None, y: float | None
-    ) -> None:
-        """Re-read a candidate's named axes as one nozzle's position.
+    def _pin_port(self, port_name: str) -> str:
+        """The name :attr:`ports` holds this nozzle under, or raise.
 
-        Writes the corner the nozzle asked for back onto the pin, so a
-        :class:`~pandid.geometry.Pin` still stores a corner and pinning
-        the same nozzle to the same point twice is the same placement
-        twice rather than a device walking off its run.
+        Resolved when :meth:`pin` is called rather than when the offset
+        is taken, so an alias is checked against the call that wrote it
+        and what gets remembered is a key that stays valid.
         """
-        port_name = self._canonical_port_name(port_name)
-        if port_name not in self.ports:
+        canonical = self._canonical_port_name(port_name)
+        if canonical not in self.ports:
             raise KeyError(
-                f"{type(self).__name__} {self.name!r} has no port {port_name!r} to "
+                f"{type(self).__name__} {self.name!r} has no port {canonical!r} to "
                 f"pin by; available ports: {sorted(self.ports)}"
             )
-        from pandid.portgeom import port_offset
-
-        dx, dy = port_offset(self, port_name, candidate)
-        if x is not None:
-            candidate.x = x - dx
-        if y is not None:
-            candidate.y = y - dy
+        return canonical
 
     def nozzle(self: _UnitT, port_name: str, face: str) -> _UnitT:
         """Pipe a port from a named face of the unit *as drawn*.
@@ -7847,7 +7937,11 @@ class Block(Unit):
         Raises :class:`ValueError` and leaves the previous placement in
         place rather than turning the block into something undrawable.
         """
-        was = self.pin_
+        # The intent, not the corner :attr:`Unit.pin_` derives from it:
+        # putting a resolved corner back would silently drop the nozzle
+        # a refused call's predecessor was pinned to, leaving the block
+        # where it is today and walking it off its run at the next turn.
+        was, was_ports = self._pin, dict(self._pin_ports)
         super().pin(
             col=col, row=row, x=x, y=y, orientation=orientation, mirrored=mirrored, port=port
         )
@@ -7859,7 +7953,8 @@ class Block(Unit):
             # that resolves the same frames; the alternative is a flag
             # that lies, and layout is reseeded from ``pin_`` every run
             # precisely so a needless one is free of consequence.
-            self.pin_ = was
+            self._pin_ports = was_ports
+            self._pin = was
             raise
         return self
 

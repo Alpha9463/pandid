@@ -590,3 +590,29 @@ def pinned_y(unit: "Unit", port_name: str | None = None) -> float:
     :func:`pinned_x` down the other axis; see it.
     """
     return _pinned(unit, "y", port_name)
+
+
+def pin_intent(unit: "Unit") -> dict[str, tuple[str | None, float]]:
+    """What the author asked for, per axis: ``{"y": ("inlet", 440.0)}``.
+
+    The coordinate each pinned axis was given, and the nozzle it was
+    measured to where one was named -- ``None`` for a plain corner. The
+    two are different statements: *this nozzle sits at 440* survives a
+    later turn, mirror, resize or :meth:`~pandid.units.Unit.nozzle`
+    call, and *this corner sits at 432.5* is only the same drawing until
+    one of those happens.
+
+    The one place both halves of :meth:`~pandid.units.Unit.pin`'s record
+    are read together, so a caller holding a drawing to what was asked
+    for -- :func:`pandid.validate.geometry_issues` -- does not reach
+    into the unit for them. An axis left to the solver (``col``/``row``,
+    or not pinned at all) is absent rather than ``None``: there is no
+    coordinate to hold anything to.
+    """
+    pin = getattr(unit, "_pin", None)
+    if pin is None:
+        return {}
+    ports = getattr(unit, "_pin_ports", None) or {}
+    return {axis: (ports.get(axis), value)
+            for axis in ("x", "y")
+            if (value := getattr(pin, axis)) is not None}

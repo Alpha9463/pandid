@@ -53,6 +53,14 @@ if TYPE_CHECKING:
 
 _TOL = 1.0  # px tolerance so touching edges are not flagged as overlaps
 
+#: How far a drawn coordinate may sit from the one it was pinned to, in
+#: px, before ``pin-not-honored`` reports it. Far tighter than
+#: :data:`_TOL`, which is slack for two boxes that merely touch: a
+#: pinned axis is *copied* onto the frame, so the only difference an
+#: honoured pin can show is the last bit of a float that went through a
+#: nozzle offset and came back.
+_PIN_TOL = 0.05
+
 #: How far off square a drawn segment may be and still read as
 #: orthogonal, in px. Half a pixel: under it the line is on the axis and
 #: over it the sheet shows a slope.
@@ -911,8 +919,8 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     :meth:`pandid.flowsheet.Flowsheet.validate` resolves it.
     """
     from pandid.layout.attach import MAX_PLACEMENT_PASSES
-    from pandid.portgeom import (is_anchored, port_faces, port_point,
-                                 resolve_port, unit_box)
+    from pandid.portgeom import (is_anchored, pin_intent, port_faces,
+                                 port_point, resolve_port, unit_box)
     from pandid.render.symbols import (ARROWHEAD, MIN_HEAD_CLEARANCE,
                                        MIN_NOZZLE_PITCH, default_registry,
                                        label_span, wears_arrowhead)
@@ -979,6 +987,51 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
     # including for the units that placed perfectly.
     placed = [u for u in fs.units if u.frame is not None]
     if placed:
+        # Soft: a placement the sheet did not honour.
+        #
+        # A pinned axis is honoured exactly, so a drawn coordinate that
+        # is not the one the author wrote means something moved the unit
+        # after the solver read its pin -- and every way that happens
+        # today happens silently. Both numbers are known here and
+        # nowhere else: the asked-for one is on the unit
+        # (:func:`~pandid.portgeom.pin_intent`) and the drawn one is on
+        # its frame, so this is the one place the two can be held
+        # against each other.
+        #
+        # It is deliberately one check and not one per cause. The
+        # project's signature defect is a value accepted, quietly
+        # altered and shipped, and this catches the shape of it rather
+        # than the instances: an attached balloon whose pin is discarded
+        # (#467) and a port-pinned nozzle walked off its run by a later
+        # transform (#294, the defect that made the intent worth
+        # storing) are the same finding here, as is the next one.
+        #
+        # Soft rather than hard because there *is* a drawing and it is
+        # coherent -- the lines are drawn to where the units ended up.
+        # What the author cannot see is that it is not the drawing they
+        # asked for.
+        for u in placed:
+            for axis, (port_name, want) in pin_intent(u).items():
+                drawn = (port_point(u, u.frame, port_name)[0 if axis == "x" else 1]
+                         if port_name is not None else getattr(u.frame, axis))
+                if abs(drawn - want) <= _PIN_TOL:
+                    continue
+                nozzle = f".{port_name}" if port_name is not None else ""
+                # An attached balloon is positioned from its host and its
+                # pin is never read, so name the aiming that does work in
+                # place of the one that was written.
+                cure = ("An attached balloon is positioned from its host rather "
+                        f"than from its pin: aim it with {u.name}.attach(at=..., "
+                        f"offset=..., angle=...), or detach it to have it laid "
+                        "out like any other unit"
+                        if getattr(u, "host", None) is not None else
+                        "A pinned axis is honoured exactly, so something moved "
+                        "this unit after the solver read the pin")
+                warnings.append(Issue(
+                    "warning", "pin-not-honored",
+                    f"{u.name}{nozzle} was pinned {axis}={want:g} and is drawn at "
+                    f"{drawn:g}, {abs(drawn - want):g} away. {cure}"))
+
         boxes = [(u, unit_box(u, u.frame)) for u in placed]
         # A stream with an unplaced end has no drawn path, so there is
         # no line to measure a crossing, a detour or an elevation
