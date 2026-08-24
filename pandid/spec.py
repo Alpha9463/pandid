@@ -105,6 +105,7 @@ from pandid.flowsheet import (
     DEFAULT_LOOP_NUMBER_START,
     DEFAULT_STREAM_NUMBER_START,
     Flowsheet,
+    _inferred_kind,
 )
 from pandid.loops import Loop
 from pandid.portgeom import pin_intent, port_refusal
@@ -1704,7 +1705,13 @@ def _write_stream(stream: Stream) -> dict[str, Any]:
         "from": [stream.source.owner.name, stream.source.name],
         "to": [stream.dest.owner.name, stream.dest.name],
     }
-    if stream.kind != "material":
+    # Against what a reader would *infer*, not against "material".
+    # `from_dict` leaves `kind` out of the `connect()` call it makes for
+    # an entry that omits it, and `connect()` then reads the kind off the
+    # two nozzles -- so a `material` line between two utility nozzles,
+    # which #493 makes a thing an author can now ask for, has to say so
+    # on the way out or come back an `energy` one.
+    if stream.kind != _inferred_kind(stream.source, stream.dest):
         entry["kind"] = stream.kind
     if not stream.auto_named:
         entry["name"] = stream.name
