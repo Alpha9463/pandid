@@ -64,7 +64,7 @@ import struct
 
 import pytest
 
-from test_golden import _DATE_LEFT_TO_THE_RENDERER, SCENARIOS, _normalize
+from test_golden import SCENARIOS, _normalize
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 GALLERY = ROOT / "docs" / "gallery"
@@ -111,53 +111,125 @@ def _png_size(data: bytes) -> tuple[int, int]:
 
 
 @pytest.mark.parametrize("stem", SHEETS, ids=SHEETS)
-def test_the_committed_sheet_is_the_drawing_its_golden_holds(stem):
+def test_the_committed_sheet_is_the_drawing_its_golden_holds(stem, monkeypatch):
     """A gallery that has drifted shows a reader a drawing nobody can produce."""
     path = GALLERY / f"{stem}.svg"
     if not path.exists():
         pytest.fail(f"docs/gallery/{stem}.svg is missing. Run\n\n{REGENERATE}", pytrace=False)
     committed = _normalize(path.read_text(encoding="utf-8"))
     golden = _normalize((GOLDEN / f"{stem}.svg").read_text(encoding="utf-8"))
-    if stem in _DATE_LEFT_TO_THE_RENDERER:
-        golden = _dated_as_the_gallery_dates_it(stem, golden)
+    if committed != golden:
+        golden = _reconciled(stem, golden, monkeypatch)
     if committed != golden:
         pytest.fail(
             f"docs/gallery/{stem}.svg is not the drawing tests/golden/{stem}.svg holds.\n"
             f"The gallery is generated; regenerate it with\n\n{REGENERATE}\n"
             "and commit the result with the change that moved it. Neither file here is a "
             "render, so if tests/test_golden.py is failing as well, that is the one to read "
-            "first.\n\n" + _diff(committed, golden),
+            f"first -- and if the line below is the title block's date, examples/{stem}.py has "
+            "started stating one of its own: the fixture then has to state the same date, and "
+            "the stem has to leave test_golden._DATE_LEFT_TO_THE_RENDERER, which is masking it "
+            "there.\n\n" + _diff(committed, golden),
             pytrace=False,
         )
 
 
-def _dated_as_the_gallery_dates_it(stem: str, golden: str) -> str:
-    """*golden*'s text with its pinned date cell replaced by the gallery's.
+def _reconciled(stem: str, golden: str, monkeypatch: pytest.MonkeyPatch) -> str:
+    """*golden*, re-dated where the two committed artefacts are entitled to differ.
 
     ``03`` and ``08`` leave ``TitleBlock.date`` blank for ``SvgRenderer`` to fill
     in with today's, which is a date no committed artefact can carry -- so both
     of them pin it, and they pin it differently: the fixture in
     ``test_golden.py`` to a constant, ``scripts/gallery.py`` to the newest
     revision's date, the date the sheet was in fact issued at. Neither is wrong
-    and neither is drift; the example gives the two nothing to agree on. It is
-    the one field on which the two committed artefacts are expected to differ.
+    and neither is drift; the example gives the two nothing to agree on. That
+    one cell is swapped so the rest of the sheet can still be compared exactly.
 
-    Both dates come off the fixture, and the second comes off it through
-    :func:`gallery._stamp` -- the generator's own rule, run here rather than
-    restated, so a change to how the gallery dates a sheet moves this with it.
-    The swap is one cell and is checked to be: every other line still has to
-    match, and a golden that no longer carries that date fails here rather than
-    quietly comparing unchanged.
+    It is swapped only while the example really does leave the field blank, and
+    that is *read off the example*, not assumed from a list of stems. The moment
+    an example states a date of its own, the date becomes a field of the drawing
+    like any other, the two artefacts do have something to agree on, and
+    swapping the cell would retire the only check left on it -- which is how a
+    value gets accepted, quietly replaced, and shipped. So the golden comes back
+    untouched and the mismatch is reported, with the message above saying where
+    the masking is.
     """
-    fs = SCENARIOS[stem][0]()
-    pinned = fs.title_block.date
-    fs.title_block.date = ""  # back to what the example leaves for the renderer
-    gallery._stamp(fs)
+    stated, drawn = _dates_either_side_of_the_stamp(stem, monkeypatch)
+    if stated:
+        return golden
+    pinned = SCENARIOS[stem][0]().title_block.date
     cell = f">{pinned}<"
     assert golden.count(cell) == 1, (
-        f"tests/golden/{stem}.svg does not carry the fixture's date {pinned} in exactly one cell"
+        f"tests/golden/{stem}.svg does not carry the fixture's date {pinned!r} in exactly one cell"
     )
-    return golden.replace(cell, f">{fs.title_block.date}<")
+    return golden.replace(cell, f">{drawn}<")
+
+
+def _dates_either_side_of_the_stamp(stem: str, monkeypatch: pytest.MonkeyPatch) -> tuple[str, str]:
+    """What ``examples/NN.py`` puts in the date cell, and what the gallery draws.
+
+    :func:`gallery._stamp` fills a blank date and leaves a stated one alone, so
+    by the time :func:`gallery.flowsheet` hands the flowsheet back the two cases
+    are the same string and no longer tell apart -- which is the whole reason
+    the field is read here on the way in, through a stand-in that records it and
+    then defers to the real rule. Standing in for the length of one call is what
+    :func:`gallery.flowsheet` itself does to ``Flowsheet.render``, and for the
+    same reason: the value wanted is one nothing hands back.
+
+    Neither date is restated here. The first is the example's own, and the
+    second is whatever the generator's rule makes of it, so a change to either
+    moves this with it.
+    """
+    stated: list[str] = []
+    stamp = gallery._stamp
+
+    def record(fs):
+        stated.append(fs.title_block.date)
+        stamp(fs)
+
+    monkeypatch.setattr(gallery, "_stamp", record)
+    fs, _ = gallery.flowsheet(stem)
+    return stated[0], fs.title_block.date
+
+
+def test_a_date_the_example_states_is_compared_and_not_swapped_away(monkeypatch):
+    """The swap above is for a blank field, and only a blank field.
+
+    Written because it was not: the first version of :func:`_reconciled` blanked
+    the fixture's date and stamped it, which asserted what the example does
+    rather than reading it. Given ``03`` an explicit date, the gallery drew that
+    date, the golden was re-dated to it anyway, and a changed field of a real
+    drawing passed -- while the render comparison this file used to make caught
+    it. That is the failure this suite keeps finding: a value accepted, quietly
+    replaced, and the sheet shipped.
+
+    Two claims, and the first is what stops the second being vacuous: today's
+    ``03`` leaves its date blank, so the golden really is re-dated; an ``03``
+    that states its own is left alone, so the mismatch reaches the comparison.
+    The stand-in is put where the example is, not where the reading is -- it
+    builds the fixture's flowsheet, states a date on it and hands it to
+    :func:`gallery._stamp` exactly as :func:`gallery.flowsheet` does, so what is
+    being tested is still the reading.
+    """
+    stem = "03_distillation_train"
+    golden = _normalize((GOLDEN / f"{stem}.svg").read_text(encoding="utf-8"))
+    assert _reconciled(stem, golden, monkeypatch) != golden, (
+        "03 leaves its date to the renderer today"
+    )
+
+    build, kwargs = SCENARIOS[stem]
+
+    def states_its_own_date(name):
+        fs = build()
+        fs.title_block.date = "2099-12-31"
+        gallery._stamp(fs)  # fills nothing: the field is not blank
+        return fs, kwargs
+
+    monkeypatch.setattr(gallery, "flowsheet", states_its_own_date)
+    assert _reconciled(stem, golden, monkeypatch) == golden, (
+        "a date the example states is a field of the drawing and has to be compared, not "
+        "replaced with the one the gallery would have stamped"
+    )
 
 
 def _diff(committed: str, golden: str, context: int = 2) -> str:
@@ -286,9 +358,12 @@ def test_the_export_is_not_counted_as_a_second_sheet(stem):
     the same drawing in a second format, so it is passed over and the count goes
     on meaning what it says for a file that really does draw two.
 
-    The call below is the check: it raises ``SystemExit`` if the ``.drawio``
-    write is counted as a sheet. It builds the flowsheet and stops there --
-    nothing in this file renders one."""
+    :func:`gallery.flowsheet` raising ``SystemExit`` is the check. The assertion
+    after it is not, and the one it replaced was not either: the module fixture
+    this test used to take was satisfied by any non-empty string, as ``fs.units``
+    is by any non-empty flowsheet. What is asserted is that the call *returns* --
+    which it only does if the ``.drawio`` write was passed over. It builds the
+    flowsheet and stops there; nothing in this file renders one."""
     source = (EXAMPLES / f"{stem}.py").read_text(encoding="utf-8")
     assert source.count(".render(") >= 2, "an exporting example writes its sheet as well"
     fs, _ = gallery.flowsheet(stem)
