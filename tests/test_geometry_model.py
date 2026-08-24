@@ -770,6 +770,67 @@ def test_a_rank_beside_a_nozzle_that_does_locate_something_is_accepted(call):
         assert read.pin_ == valve.pin_, calls
 
 
+def _ranked_valve():
+    """A valve on a three-unit run, with room for the grid to mean something."""
+    fs = Flowsheet("ranked")
+    feed = fs.add(U.Feed("A"))
+    vessel = fs.add(U.Vessel("V-1"))
+    valve = fs.add(U.Valve("HV-1"))
+    prod = fs.add(U.Product("C"))
+    fs.connect(feed.outlet, vessel.inlet)
+    fs.connect(vessel.outlet, valve.inlet)
+    fs.connect(valve.outlet, prod.inlet)
+    return fs, valve
+
+
+def test_a_rank_and_a_located_nozzle_are_both_honoured():
+    """The claim the relaxed rule rests on, in drawn pixels.
+
+    Accepting a placement is worth nothing if the sheet then draws something
+    else -- that is this issue's own defect. So the case for letting a rank
+    stand beside a nozzle is not that it serialises, it is that the engine
+    honours *both halves at once*: the valve is in the column its pin names,
+    and its inlet is on the elevation its pin names, and neither is
+    approximate.
+
+    ``col=1`` is checked against the column a plain ``pin(col=1)`` puts the
+    same valve in on the same sheet, rather than against a number written
+    down here -- a rank is only meaningful relative to the grid stage 1 drew.
+
+    Refusing this was the second rule, and it refused something correct.
+    """
+    fs, reference = _ranked_valve()
+    reference.pin(col=1)
+    fs.layout()
+    assert reference.frame is not None
+    column_one = reference.frame.x
+
+    fs, valve = _ranked_valve()
+    valve.pin(col=1, y=RUN_Y, port="inlet")
+    fs.layout()
+    fs.route()
+    assert valve.frame is not None
+    assert valve.frame.x == column_one, "the column the pin named was not honoured"
+    assert _drawn(valve, "inlet")[1] == RUN_Y, "the elevation the pin named was not honoured"
+    assert valve.frame.col == 1
+    assert "pin-not-honored" not in [i.code for i in fs.validate()]
+
+
+def test_an_absolute_coordinate_still_supersedes_the_rank_beside_a_nozzle():
+    """The other half of the mixed pin, unchanged by any of this.
+
+    ``absolute wins for whichever axis it sets`` is what a mixed pin has
+    always promised, and a nozzle on that axis does not change it: the inlet
+    goes to the x that was given, not to the column that was also named.
+    """
+    fs, valve = _ranked_valve()
+    valve.pin(col=1, x=5.0, port="inlet")
+    fs.layout()
+    fs.route()
+    assert _drawn(valve, "inlet")[0] == 5.0
+    assert "pin-not-honored" not in [i.code for i in fs.validate()]
+
+
 def test_the_refusal_reads_the_pin_the_unit_has_not_the_call_in_front_of_it():
     """Two consequences of asking the resulting placement, both observable.
 
