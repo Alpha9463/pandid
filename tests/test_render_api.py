@@ -917,3 +917,31 @@ def test_a_change_that_is_not_a_pin_reaches_the_drawing(mutation):
     before = fs.to_svg()
     MUTATIONS[mutation](fs)
     assert fs.to_svg() != before
+
+
+def test_every_render_keyword_is_named_in_its_own_docstring():
+    """``connections`` reached both signatures and neither docstring (#310):
+    a keyword nobody documented is a keyword nobody finds. Checked against the
+    live signature rather than a written-down list, so a new parameter fails
+    this the day it is added rather than the day someone notices the prose
+    never grew to match it.
+
+    ``debug`` is SVG-only and ``**opts`` is not a name, so both are read off
+    each renderer's own signature rather than shared or assumed.
+    """
+    import inspect
+
+    from pandid.render.drawio import DrawioRenderer
+    from pandid.render.svg import SvgRenderer
+
+    for renderer in (SvgRenderer, DrawioRenderer):
+        sig = inspect.signature(renderer.render)
+        doc = inspect.getdoc(renderer.render) or ""
+        keywords = [
+            name for name, p in sig.parameters.items() if p.kind == inspect.Parameter.KEYWORD_ONLY
+        ]
+        assert keywords, f"{renderer.__name__}.render grew no keyword-only parameters"
+        missing = [kw for kw in keywords if kw not in doc]
+        assert not missing, (
+            f"{renderer.__name__}.render takes {missing} and its docstring never says so"
+        )

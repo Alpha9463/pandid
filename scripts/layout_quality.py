@@ -49,7 +49,7 @@ never touches (``DefaultRouter.route()`` skips any stream whose
 ``route.manual`` is set). Once the units it threads between move, those
 waypoints point at nothing -- a floating line, not a routing decision --
 so it is neutralized to a no-op rather than left to draw garbage that
-would be blamed on the router. 81 calls across 8 examples, six of them
+would be blamed on the router. 80 calls across 8 examples, six of them
 also among the ``pinned_x``/``pinned_y`` callers below.
 
 **``pinned_x()``/``pinned_y()``.** Eight examples read a unit's own
@@ -57,7 +57,7 @@ already-committed pin back, to compute where the *next* unit goes --
 ``cake_x = pinned_x(press, "cake")`` then ``funnel.pin(x=cake_x, ...)``.
 With placement stripped there is no pin left to read, and the two
 functions raise exactly as documented ("pin it first ... the solver
-decides it"). Every one of the 72 call sites across those eight examples
+decides it"). Every one of the 77 call sites across those eight examples
 feeds its result straight into a ``pin()`` or ``via()`` call this module
 already strips (checked by inspection, not assumed), so what they return
 is never used for anything -- patched to hand back ``0.0`` rather than

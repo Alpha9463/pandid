@@ -144,7 +144,7 @@ _REACH = 10.0
 # units, which is about where a label stops reading as part of the same
 # mark as its dot. On the four uncrowded sheets this fires on a handful
 # of labels; on ``11_ethanol_pid`` it fires on most of them, which is
-# the honest picture of a sheet with three hundred and sixty.
+# the honest picture of a sheet with three hundred and eighty-odd.
 _TETHER = 3.5
 
 
@@ -422,8 +422,8 @@ def _settle(labels: "list[_Label]", bounds: "tuple[float, float, float, float]"
     has left each label -- fixed before any of them move, so it is a
     property of the drawing and not of the order -- the labels that have
     a choice give way to the ones that do not. ``11_ethanol_pid`` writes
-    366 labels and leaves 26 touching a halo at all; ``14_tank_farm``
-    leaves two. The standing bound is ``_CROWDED`` in
+    383 labels and leaves 30 touching a halo at all; ``14_tank_farm``
+    leaves 10. The standing bound is ``_CROWDED`` in
     ``tests/test_debug_overlay.py``.
 
     An anchor label goes before a port label on a tie. There are far
@@ -433,8 +433,8 @@ def _settle(labels: "list[_Label]", bounds: "tuple[float, float, float, float]"
 
     Each label joins the obstacles as it lands, so one only ever writes
     over another where the second had nowhere left to go. Swept over the
-    fifteen sheets ``tests/test_debug_overlay.py`` renders, that is
-    today nowhere at all.
+    22 sheets ``tests/test_debug_overlay.py`` renders, that is today
+    nowhere at all.
 
     Returns the tethers and then the text, each in the order the labels
     came in, which is unit by unit down the flowsheet: a sheet that

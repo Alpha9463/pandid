@@ -1375,6 +1375,16 @@ class Flowsheet:
         instrument's ``pv`` and ``sig_in``/``sig_out``) and a process
         kind between two process nozzles.
 
+        Left at the default ``"material"``, a run between two
+        :data:`_ENERGY_ROLES` nozzles -- both ends a ``utility_in``,
+        ``utility_out`` or the like, rather than a ``"process"`` port --
+        is silently promoted to ``"energy"``. That also moves where it
+        numbers: :meth:`renumber_streams` numbers every energy stream
+        after every material one, so the same duty draws as a
+        ``material`` stream off a boundary flag and an ``energy`` one
+        between two equipment utility nozzles. Name ``kind="energy"``
+        to state it outright and skip the inference.
+
         For a signal line either end may be the **unit** instead of one
         of its connections, and this picks the connection: an instrument
         mints a free one and anything else with a single signal

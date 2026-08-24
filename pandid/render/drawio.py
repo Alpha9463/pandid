@@ -115,8 +115,9 @@ says where it came from. Line numbers drift; the function names do not.
   ``scripts/vendor_symbols.drawio_shape_key`` implements the same rule.
 * **A style is ``split(';')`` then ``indexOf('=')``, with no escaping
   anywhere.** So ``;`` is the *only* character a value cannot contain --
-  parentheses, commas, ampersands, hyphens and slashes, which
-  forty-eight of the vendored keys carry, are all safe. Two traps: a
+  parentheses, commas, ampersands, hyphens and slashes, of which 49 of
+  the 136 distinct vendored keys carry at least one (none carry an
+  ampersand or a slash), are all safe. Two traps: a
   value of exactly ``none`` **deletes** the key rather than setting it
   (so ``shape=none`` draws a plain rectangle), and a token containing no
   ``=`` is looked up as a *named style*. ``mxStylesheet.getCellStyle``,
@@ -754,11 +755,12 @@ _EXPORT_CODES = (*_FIT_CODES, APPROXIMATED, HOP_DROPPED)
 #: Every symbol this library draws itself, and what draw.io is asked for
 #: instead.
 #:
-#: These are the fourteen hand-drawn symbols plus the block: draw.io's
-#: P&ID library has no stencil for any of them, so there is no key to
-#: derive and none is invented. What is here instead is a built-in shape
-#: chosen to be the nearest honest statement, with the difference
-#: recorded.
+#: This began as the fourteen hand-drawn symbols plus the block and has
+#: grown with every built-to-size shape since (crushers, mills,
+#: evaporators, kilns, centrifuges and the rest): draw.io's P&ID library
+#: has no stencil for any of them, so there is no key to derive and none
+#: is invented. What is here instead is a built-in shape chosen to be
+#: the nearest honest statement, with the difference recorded.
 #:
 #: The balloons are the ones that matter, a P&ID being mostly balloons.
 #: Every one keeps its outline -- a circle stays a circle, a diamond a
@@ -1236,12 +1238,12 @@ class _Tags(NamedTuple):
     takes the plates already on the sheet as its seed and steps a line
     number clear of them; an exporter passing ``[]`` gets that
     function's documented caveat -- "a placement that dodges every
-    symbol and every line but may still land under a tag". Over the
-    fourteen examples that is seventeen numbers on four sheets, nine of
-    them on ``11_ethanol_pid``, six on ``14_tank_farm`` and one each on
-    ``09_line_numbers`` and ``13_mineral_dewatering``. Each strikes its
-    tag, which is enough to lose it, and the sheet writes none of them
-    there.
+    symbol and every line but may still land under a tag". Over the 21
+    examples that is seventeen numbers on five sheets, nine of them on
+    ``11_ethanol_pid``, four on ``14_tank_farm``, two on
+    ``20_molecular_sieve_dryer`` and one each on ``09_line_numbers`` and
+    ``13_mineral_dewatering``. Each strikes its tag, which is enough to
+    lose it, and the sheet writes none of them there.
 
     ``codes`` is every letter code written *outside* a balloon, placed:
     :func:`~pandid.render.svg.quadrant_labels`' own items. They are a
@@ -1583,6 +1585,12 @@ class DrawioRenderer:
         sheet edge and the lettered band between them; ``"none"`` leaves
         the page's own edge to be the paper's, which is what the sheet
         does too -- an unruled sheet draws no rectangle, it just stops.
+
+        ``connections`` marks the joint a P&ID draws on a stream that
+        does not say its own, exactly as :meth:`SvgRenderer.render`
+        takes the same argument: ``"flanged"``, ``"none"``, or ``None``
+        to mark nothing a stream has not stated. Ignored outside a
+        P&ID. See :func:`~pandid.render.svg.sheet_connections`.
 
         ``jump_direction`` says which of two crossing lines hops the
         other, and means what it means on the sheet: ``"vertical"`` puts
@@ -1971,7 +1979,8 @@ class DrawioRenderer:
         the side the sheet settles on -- which is
         :func:`pandid.layout.coordinates.assign_labels`' choice and then
         :meth:`SvgRenderer._tag_item`'s, because a face with no nozzle
-        on it is not yet free paper. See :meth:`_tag_placement`.
+        on it is not yet free paper. See :func:`_tag_pass`, which runs
+        that same search here without drawing anything.
 
         Two markings ride along on the label because they have nowhere
         else to go: ``NC`` for a valve declared normally closed whose
@@ -2721,10 +2730,14 @@ class DrawioRenderer:
         docks around.
 
         Every unit's drawn box and every route waypoint, which is
-        :meth:`SvgRenderer.render`'s step 1 exactly. It has to be
-        exactly that: the dock places a box relative to this rectangle,
-        so a rectangle measured differently would dock the same
-        equipment list somewhere else.
+        :meth:`SvgRenderer.render`'s step 1 on any sheet with a unit on
+        it: the dock places a box relative to this rectangle, so a
+        rectangle measured differently would dock the same equipment
+        list somewhere else. The one sheet this does not hold for is an
+        empty one, where this short-circuits to ``(0.0, 0.0, 0.0, 0.0)``
+        rather than step 1's own nominal-page-size fallback -- moot in
+        practice, since there is no equipment list either way for the
+        dock to place wrong.
         """
         if not fs.units:
             return (0.0, 0.0, 0.0, 0.0)
@@ -3575,12 +3588,13 @@ _FRAME_STROKE = 2.0
 #: stacks half-leading, then the ascent, then the baseline: ``(1,2 -
 #: (ascent + descent)) / 2 + ascent``. Helvetica's own ascent and
 #: descent are 0,770 and 0,230, which sum to one em and put the baseline
-#: at 0,90; Arial, which is what a machine without Helvetica resolves
+#: at 0,87; Arial, which is what a machine without Helvetica resolves
 #: draw.io's font stack to, reports 0,905 and 0,212 and puts it at
-#: 0,947. So this is right for one face and about half a unit out at
-#: 12,5 for the other, and there is no third number that is right for
-#: both -- a browser measures the face it actually loaded and this file
-#: cannot. Half a unit is inside the error of
+#: 0,947. 0,9 is right for neither -- it is a compromise between the
+#: two, about 0,4 of a unit out for Helvetica and 0,6 out for Arial at
+#: size 12,5, and there is no third number that is right for both -- a
+#: browser measures the face it actually loaded and this file cannot.
+#: Both errors are inside the error of
 #: :func:`~pandid.render.furniture.text_width`.
 _BASELINE = 0.9
 

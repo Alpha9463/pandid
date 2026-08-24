@@ -234,12 +234,12 @@ def _along(box, vertical: bool, lo: float, hi: float) -> bool:
     the one question the clause turns on -- is the line *there*, beside
     the words? -- and not how wide the paper between them is.
 
-    More than half, measured over all 145 line numbers on the fourteen
-    shipped sheets: twelve overrun their run at all, and they fall in
-    two groups with a clear band of nothing between, nine from 61 % of
-    the string alongside its own line up to 98 %, and three at 40 %, 37
-    % and 29 %. The band has narrowed as the corpus grew (it was 32 % to
-    74 % over twelve sheets), so a sheet that lands a number *in* it is
+    More than half, measured over all 286 line numbers on the 21
+    shipped sheets: four overrun their run at all, from 18 % of the
+    string alongside its own line up to 36 %. The nearest one on the
+    other side sits at 60 %, so the gap has narrowed to 36 % to 60 % as
+    the corpus grew (it was 40 % to 61 % over fourteen sheets, and 32 %
+    to 74 % over twelve), so a sheet that lands a number *in* it is
     the signal this threshold has stopped sorting them. The two checks
     in ``tests/test_label_invariants.py`` that read the corpus are what
     would say so.
@@ -311,8 +311,10 @@ def tap_lines(fs):
     by the draw.io exporter. A label cannot then be placed against an
     impulse line the renderer declines to draw, or over one it does; and
     these are the only lines on a P&ID that are not streams, so an
-    exporter walking ``fs.streams`` alone left all 26 of
-    ``11_ethanol_pid``'s balloons floating unconnected.
+    exporter walking ``fs.streams`` alone left 13 of
+    ``11_ethanol_pid``'s 29 balloons floating unconnected -- the rest
+    already touch a stream of their own (a signal wire to another
+    instrument) and were never at risk.
     """
     from pandid.layout.attach import is_attached
 
@@ -1191,7 +1193,8 @@ def boundary_flag(u, frame) -> Pennant:
     fixed 50 is what lets a caller who sizes a flag get a pennant that
     fills it instead of one stuck 20 units deep near the top of a box
     the drawing never reaches the bottom of. An exporter taking the box
-    for the drawing would rule a flag twice the height.
+    for the drawing would rule a flag 1,9 to 2,5 times too tall,
+    depending on which inset it carries -- not simply twice, either way.
 
     Nothing here reads ``header``: a utility header flag is the same
     pennant as an off-page reference, and what tells the two apart on a
@@ -2617,6 +2620,12 @@ class SvgRenderer:
             exactly that size, with the furniture docked to the sheet
             edges and the drawing fitted into what they leave. ``None``
             (the default) sizes the sheet to the drawing instead.
+        connections : str | None
+            The joint a P&ID marks on a stream that does not say its own
+            (``"flanged"`` or ``"none"``), or ``None`` to mark nothing a
+            stream has not stated. Ignored outside a P&ID, since a PFD's
+            symbols are only ever general ones. See
+            :func:`sheet_connections`.
         debug : bool | float
             Draw the coordinate overlay under the diagram: a ruled grid
             carrying its own coordinates, every unit's ``pin()`` anchor

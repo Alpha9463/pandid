@@ -7786,7 +7786,7 @@ class Block(Unit):
     **A face is a placement, and the engine reads it.** A connection on
     the north puts its peer in the row above and in the same column, one
     on the south puts it below, so a block flow diagram lays itself out
-    without a coordinate anywhere. See :mod:`pandid.layout.stacking`.
+    without a coordinate anywhere. See :mod:`pandid.layout.claims`.
     ``examples/12_block_flow_diagram.py`` is pinned all the same: a
     hand-placed BFD says which sections the reader takes in a row, which
     is not something the ranking can know.
@@ -8229,8 +8229,9 @@ class Block(Unit):
         # given would cost every block its own <defs> entry.
         return block_symbol(tuple(self._faces.items()), "" if self.width is not None else self.tag)
 
-    def _check_box(self, placed=None) -> None:
-        """Raise unless the placed box draws the connections at pitch.
+    def _check_box(self) -> None:
+        """Raise unless the unit's own placed box draws the connections
+        at pitch.
 
         Measured against the box the drawing really lands in
         (:func:`~pandid.portgeom.resolve_size`), *including the quarter
@@ -8245,17 +8246,15 @@ class Block(Unit):
         not the bare run, because the artwork is stretched into whatever
         box it is given: halving the box halves the drawn pitch with it.
 
-        ``placed`` is the placement to answer for, defaulting to the
-        unit's own; :meth:`pin` passes its candidate, since the
-        committed placement answers for the sheet that call is
-        replacing.
+        Always ``self.pin_``: every caller, including :meth:`pin`, commits
+        the candidate placement first and rolls it back on a raise here
+        rather than answering for a placement that never lands.
         """
         from pandid.portgeom import resolve_size
         from pandid.render.symbols import block_box_too_small
 
         sym = self.symbol()
-        if placed is None:
-            placed = self.pin_
+        placed = self.pin_
         w, h = resolve_size(self, placed)
         turned = int(getattr(placed, "orientation", 0) or 0) in (90, 270)
         for face, count in Counter(self._faces.values()).items():

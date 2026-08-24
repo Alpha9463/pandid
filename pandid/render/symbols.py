@@ -6,10 +6,11 @@ anything, and the stencil library the equipment comes from makes no
 standards claim of its own. Sources:
 
 - **Vendored (draw.io / diagrams.net P&ID stencils, Apache-2.0)**:
-  valves and their variants, pumps, compressors, blowers, heat
-  exchangers, vessels, columns, reactors, separators, tanks, reducers,
-  in-line fittings, ejectors, vents and funnels. Converted from mxGraph
-  stencil XML by ``scripts/vendor_symbols.py`` into
+  valves and their variants, pumps, compressors, blowers, coolers,
+  heaters, heat exchangers, cooling towers, vessels, columns, reactors,
+  separators, tanks, dryers, filters, furnaces, thickeners, turbines,
+  reducers, in-line fittings, ejectors, vents and funnels. Converted
+  from mxGraph stencil XML by ``scripts/vendor_symbols.py`` into
   ``_vendored_symbols.py`` and registered last (overriding the
   hand-drawn defaults of the same kind). See the repo ``NOTICE`` for
   attribution.
@@ -413,7 +414,7 @@ class IsoPart:
     standard calls it.
 
     Required on every :class:`OverlayPart`, which is the whole point.
-    pandid records no registration number for any of its 157 whole-symbol
+    pandid records no registration number for any of its 228 whole-symbol
     drawings today, so nothing ties a shape to the entry it claims to be
     and no conformance statement about one can be checked. A part is
     where that stops: an overlay is only ever justified by the standard
@@ -706,7 +707,7 @@ class Symbol:
     overlays: tuple[Overlay, ...] = ()
     # The ISO registration number this drawing claims to be -- "2062",
     # "X2618", "C2044" -- or empty where nobody has checked it against
-    # the standard yet, which is where all 157 shipped symbols stand.
+    # the standard yet, which is where all 228 shipped symbols stand.
     #
     # Per ISO 14617-1 §3.6 the registration number is a symbol's identity
     # and is stable for its lifetime, and §4.2 makes it the thing that
@@ -3054,7 +3055,7 @@ _BUCKET_ELEVATOR = Symbol(
 #: x 19. Loaded from above at the low end, discharging downward at the
 #: high end. Both of those points are on drawn ink and either would be a
 #: good nozzle -- but neither can be *reached*, because a nozzle's face
-#: is the nearest edge of the box (:func:`pandid.ports.outward_dir`) and
+#: is the nearest edge of the box (:func:`pandid.portgeom.outward_dir`) and
 #: no point on the low arm's crown is nearer the box's north edge than
 #: its west one. Anchored there, the feed would be approached from the
 #: west and the line would arrive running along the crown it was meant to
@@ -3497,7 +3498,7 @@ _SCREEN_OUTLINE = (
 #: measured off row 7.1: fed on the centre line above the top edge,
 #: retaining the oversize out of the east wall five sixths of the way
 #: down the wall run, and passing the undersize out of the apex below.
-#: :class:`~pandid.units.Screen` is the class that names them this way.
+#: :class:`~pandid.units.ScreeningDevice` is the class that names them this way.
 _SCREEN_PORTS = {"feed": (30.0, 0.0), "oversize": (60.0, 50.0), "undersize": (30.0, 90.0)}
 
 #: ISO's own 2 M dash / 1 M gap, the pitch :data:`~pandid.render.iso_parts._DASH_LONG`
@@ -5143,7 +5144,7 @@ class SymbolRegistry:
         pattern group 9's centrifuges are in, at group 19's own smaller
         scale. 19.3 and 19.4 are their own drawings; group 19 has no
         supplementary-symbol group behind it, so nothing here is an
-        :class:`~pandid.render.iso_parts.OverlayPart`. 19.5 is a
+        :class:`~pandid.render.symbols.OverlayPart`. 19.5 is a
         distribution fitting rather than a feeder and is registered
         under its own kind.
 

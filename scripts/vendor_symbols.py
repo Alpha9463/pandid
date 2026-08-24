@@ -1074,8 +1074,10 @@ KIND_MAP = {
     # its crown is at (40, 5) and the box's top and bottom edges are the skirt,
     # not the vessel.
     #
-    # THIS IS THE ONE STENCIL IN THE LIBRARY THAT DRAWS ITS NOZZLES AS NOZZLES
-    # (all 157 registered symbols were swept for a second; there is none -- see
+    # THIS IS THE ONE STENCIL IN THE LIBRARY THAT DRAWS A PROCESS NOZZLE AS A
+    # NOZZLE (all 228 registered symbols were swept for a second; the only
+    # other rectangle of the kind is ``separator/knockout``'s gauge stub,
+    # excluded as not a process nozzle -- see ``_NOT_NOZZLES`` and
     # ``tests/test_symbol_invariants.py``'s drawn-nozzle check). Three 12 x 12
     # rectangles, each with a flange line ruled across its free face: two on the
     # crown at x 18..30 and 50..62, faces at y = 0, and one under the belly at
@@ -1106,7 +1108,9 @@ KIND_MAP = {
     # the shell and reserves the crown for relief and vapour. They go on the
     # shell either side of the belly nozzle, which is the ordinary convention
     # and what every other stencil in the library does with every nozzle it has
-    # -- 156 of 157 draw no nozzle at all and let the line stop at the wall.
+    # -- 226 of the other 227 draw no nozzle at all and let the line stop at
+    # the wall; the exception, ``separator/knockout``, draws a gauge stub
+    # rather than a process nozzle (see above).
     # They are NOT stacked on the belly rectangle with the outlet: two ports on
     # one placement draw two streams on one point, which
     # ``Symbol.coincident_ports`` refuses and is right to.
@@ -2292,7 +2296,7 @@ def resolve_port(spec, constraints, w, h):
                          bounding box (e.g. a dome crown, or a shell wall drawn
                          inside the box because brackets widen the extent).
 
-    A fifth form, ``("SERIES", edge, along, pitch, extent)``, is not a nozzle at
+    A fourth form, ``("SERIES", edge, along, pitch, extent)``, is not a nozzle at
     all: it hands the port to a :class:`~pandid.render.symbols.PortSeries`, which
     places as many as the unit turns out to have, ``pitch`` apart and centred on
     ``along``. A sixth element names the alignment

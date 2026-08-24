@@ -17,7 +17,7 @@ internal, a certification rating or a body style within one bought item. Outside
 ``pandid.document._MAJOR_EQUIPMENT``, which is already this library's own
 definition of "bought as an item", a variant becomes a class only where the
 **ports** or a **declarable property** differ. That line is what keeps this at
-forty-odd classes instead of a hundred and twenty.
+seventy-odd classes instead of one apiece for every registered variant.
 
 **A narrower or wider port set earns a class with no drawing behind it at
 all.** Every class this file generates is named for a *drawing*: a
@@ -1392,7 +1392,7 @@ actuator, and that is a fact about the device rather than its picture.
 
 The low-level form is not going anywhere.
 ``Separator(variant="cyclone")`` stays supported indefinitely, and it is
-the only way to reach the ninety-odd drawings that never get a class of
+the only way to reach the 130-odd drawings that never get a class of
 their own; ``pandid.render.symbols.default_registry`` is still the whole
 catalogue.
 
