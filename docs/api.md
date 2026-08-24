@@ -480,9 +480,9 @@ fs.render("sheet.drawio")          # or: text = fs.to_drawio()
 ```
 
 The equipment symbols *are* draw.io's own P&ID stencils (see `NOTICE`), so the
-file references them and what opens is a native, editable shape. The fifteen
-symbols `pandid` draws itself have no draw.io stencil behind them and are
-approximated with draw.io's built-in shapes:
+file references them and what opens is a native, editable shape. The 81
+registry entries `pandid` draws itself have no draw.io stencil behind them and
+are approximated with draw.io's built-in shapes:
 
 | Drawn here | Exported as | What it loses |
 |---|---|---|
@@ -2622,7 +2622,8 @@ fs.connect(fic.sig_out, cv.actuator, kind="pneumatic")
 
 That is loop 303 of
 [`examples/11_ethanol_pid.py`](../examples/11_ethanol_pid.py), which declares
-six loops and leaves ten balloons on literal numbers.
+eight loops and leaves the rest of its balloons on literal numbers; that
+example's own docstring is where the split is stated and kept.
 
 - **A loop is `(variable, number)`.** `add_loop("F", 101)` and
   `add_loop("L", 101)` are two loops on one sheet. Declaring the same pair twice

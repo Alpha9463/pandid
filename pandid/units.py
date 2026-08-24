@@ -5533,8 +5533,9 @@ class Reactor(Unit):
     #: that is what a drawing does. Saying ``SE`` instead -- the claim
     #: the ink would make -- steps every downstream unit a row down at a
     #: reactor's confidence of 8, which is a staircase on a train of
-    #: them: 23 crossings across the corpus, 17 of them on
-    #: ``17_stirred_reactor_train``. A tower's ``bottoms`` is ``SE`` for
+    #: them: 22 crossings across the auto-placed corpus
+    #: (:mod:`pandid.layout.claims` defines it), 246 to 268, six of them
+    #: on ``17_stirred_reactor_train``. A tower's ``bottoms`` is ``SE`` for
     #: a reason this does not share, that a column is drawn tall enough
     #: for its own bottom to be a row of its own.
     PLACES = {"feed": "W", "outlet": "E", "vent": "N"}

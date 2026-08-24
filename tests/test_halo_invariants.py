@@ -248,9 +248,10 @@ def test_no_halo_lands_on_an_impulse_line(drawn, name):
 
 
 def test_the_corpus_has_impulse_lines_to_check(drawn):
-    """Ten of the fifteen sheets draw none at all, so the check above is
-    vacuous over most of the corpus and says nothing unless the two sheets that
-    draw them in quantity are still in it."""
+    """13 of the 22 sheets draw none at all, so the check above is vacuous
+    over most of the corpus and says nothing unless the two sheets that draw
+    them in quantity are still in it. Counted as ``_ink`` lines of kind
+    ``tap``, which is what the check itself reads."""
     counted = {
         name: sum(1 for line in _ink(fs) if line.kind == "tap")
         for name, (fs, _halos, _bars) in drawn.items()

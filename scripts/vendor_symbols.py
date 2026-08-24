@@ -266,7 +266,7 @@ KIND_MAP = {
     # rather than on a head, where the ink curves away from the box edge.
     #
     # ``relief`` and ``drain`` are the two nozzles issue #222 added to Vessel
-    # and Tank, and every one of the seventeen stencils in those two families
+    # and Tank, and every one of the eighteen stencils in those two families
     # places them by the same two rules, which are the roles' own meanings and
     # not a layout convention:
     #

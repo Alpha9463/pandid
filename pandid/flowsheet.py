@@ -2167,11 +2167,11 @@ class Flowsheet:
 
         The equipment symbols are draw.io's own P&ID stencils (see
         ``NOTICE``), so the file *references* them rather than carrying
-        a tracing: what opens is a native, editable shape. The fifteen
-        symbols this library draws itself -- the instrument balloons,
-        the junctions, the off-page flags, the conveyor -- have no
-        draw.io stencil behind them and are approximated with draw.io's
-        built-in shapes; :mod:`pandid.render.drawio` names each one and
+        a tracing: what opens is a native, editable shape. The 81
+        registry entries this library draws itself -- the instrument
+        balloons, the junctions, the off-page flags, the conveyor, and
+        every built-to-size shape added since -- have no draw.io stencil
+        behind them and are approximated with draw.io's built-in shapes; :mod:`pandid.render.drawio` names each one and
         what the approximation loses.
 
         ``diagram`` says which drawing this is, exactly as

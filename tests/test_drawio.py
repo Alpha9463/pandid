@@ -292,9 +292,10 @@ def test_a_stand_in_says_on_fs_warnings_what_it_lost():
 def test_a_stand_in_that_loses_nothing_says_nothing():
     """``lost`` is empty where the built-in really is the drawing.
 
-    Eleven of the thirty entries claim to lose nothing -- a mixer, a splitter, a
-    tee, the boundary flags, the plain balloons -- and a warning against one of
-    those would be noise that teaches a reader to skip the list.
+    Eleven of the 81 entries in ``_APPROXIMATIONS`` claim to lose nothing -- a
+    mixer, a splitter, a tee, the boundary flags, the plain balloons -- and a
+    warning against one of those would be noise that teaches a reader to skip
+    the list.
     """
     assert not _APPROXIMATIONS[("feed", "default")].lost, "the premise has moved"
     fs = Flowsheet("exact")
@@ -1382,8 +1383,8 @@ def test_every_letter_code_the_sheet_writes_outside_a_balloon_is_exported():
             # haloed for the lines it could not step off, as the sheet haloes it.
             assert style["labelBackgroundColor"] == "#ffffff"
 
-    # Vacuous on the eleven sheets that annotate nothing, so the three that do
-    # are named. `tests/test_halo_invariants.py` counts the same codes from the
+    # Vacuous on the eighteen of 21 sheets that annotate nothing, so the three
+    # that do are named. `tests/test_halo_invariants.py` counts the same codes from the
     # sheet's side; this is the pair of them the export was losing.
     assert written["11_ethanol_pid"] == {"PAH", "PAL", "TAH", "TAL", "LAH", "LAL"}
     assert written["04_control_loop"] == {"LAH", "LAL"}
