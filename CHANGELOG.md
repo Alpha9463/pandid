@@ -9,6 +9,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`SteamTrap`**: the drawing every steam system needs at each low point
+  and each drip leg, and the one in-line device the library had no way to
+  draw (#367). ISO 10628-2 Table 2 item 24.15, registered 2181, which is
+  where the standard files it, in its fittings group. Drawn as that row
+  draws it: a body
+  4 M across, a full diameter at 45 degrees from its lower left to its
+  upper right, and the half below that line filled — the contrast being
+  the whole of what tells it from a plain circle. Reachable as
+  `SteamTrap("T-701")` or as `Fitting(variant="steam_trap")`, and it
+  takes the registry to 229.
+
+  Hand-drawn rather than vendored, and the reason is the interesting
+  part. The draw.io P&ID set ships a shape called *Steam Trap* which is
+  an empty 50 × 50 rectangle **byte-identical to the same file's
+  *Desuper Heater***, so mapping it would have registered one blank box
+  under two device names. `scripts/vendor_symbols.py` refused it on
+  those grounds and recorded why; this supplies the artwork the refusal
+  was waiting for.
+
+  `examples/15_condensing_turbine` drops the workaround the issue named.
+  Its separator drain went straight off the sheet as
+  `Product("Steam Trap Drain")` — a boundary flag standing in for a
+  device in the run — and now passes a real `T-701` on its way to the
+  condensate header.
+
+  The draw.io export has no stencil to name, so it stands the body in
+  with a built-in ellipse and reports what that costs, the way the other
+  hand-drawn in-line devices already do.
+- **`tests/test_symbol_identity.py`**: no two registered drawings may be
+  byte-identical unless they are literally the same `Symbol` object
+  registered twice, which is how a deliberate alias is spelled
+  (`centrifuge/default` and `centrifuge/decanter`; `instrument/logic` and
+  `instrument/sis`). A duplicate that is not an alias is a placeholder,
+  and a placeholder draws someone else's equipment without saying so.
+  The vendored stencil files are checked at their own level too: every
+  group of byte-identical shapes upstream ships is recorded, so a
+  re-vendor that brings in a new one has to be looked at, and no group
+  may reach the registry with two members still identical. No
+  allow-list — nothing pandid registers today draws a lie.
 - **`Evaporator`, `Thickener` and `Kiln`**: three pieces of equipment the
   registry had no symbol for, and all three were being faked in a shipped
   example with an apology in its source (#474). `examples/21_alumina_refinery`

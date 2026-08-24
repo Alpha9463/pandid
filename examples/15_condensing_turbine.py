@@ -1,8 +1,9 @@
 """
 Example 15: Condensing steam turbine, laid out automatically
 
-HP steam is dried, passes a trip-and-throttle valve and expands
-through a condensing turbine. The exhaust condenses in an air-cooled
+HP steam is dried, its separated condensate is trapped off to the
+condensate header, and the dry steam passes a trip-and-throttle valve
+and expands through a condensing turbine. The exhaust condenses in an air-cooled
 condenser and drains to a receiver that a steam-jet ejector holds
 under vacuum; the condensate is pumped through a feedwater heater to
 the deaerator. One MP steam header drives the ejector and heats the
@@ -27,6 +28,7 @@ from pandid import (
     Product,
     Pump,
     Splitter,
+    SteamTrap,
     Turbine,
     Valve,
     Vent,
@@ -41,7 +43,11 @@ def main():
     s701 = fs.add(KnockoutDrum("S-701", description="HP Steam Separator"))
     gv701 = fs.add(Valve("GV-701", variant="globe",
                          description="MP Steam Isolation Valve"))
-    trap = fs.add(Product("Steam Trap Drain", reference="PFD-800"))
+    # The separator's drain leaves through a real trap (ISO 10628-2 item
+    # 24.15) rather than straight off the sheet: a trap is a device in the
+    # run and the sheet edge is a mile further on.
+    t701 = fs.add(SteamTrap("T-701", description="HP Separator Drain Trap"))
+    condensate = fs.add(Product("Condensate Header", reference="PFD-800"))
     tv701 = fs.add(Valve("TV-701", variant="hydraulic", fail="closed",
                          description="Turbine Trip and Throttle Valve"))
     st701 = fs.add(Turbine("ST-701", description="Condensing Steam Turbine"))
@@ -64,7 +70,8 @@ def main():
     deaerator = fs.add(Product("To Deaerator", reference="PFD-800"))
 
     fs.connect(hp_steam.outlet, s701.feed)
-    fs.connect(s701.liquid, trap.inlet)
+    fs.connect(s701.liquid, t701.inlet)
+    fs.connect(t701.outlet, condensate.inlet)
     fs.connect(s701.vapor, tv701.inlet)
     fs.connect(tv701.outlet, st701.inlet)
     exhaust = fs.connect(st701.outlet, e701.tube_in)

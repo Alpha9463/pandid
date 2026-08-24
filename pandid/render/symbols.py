@@ -3348,6 +3348,119 @@ _KNEADER = Symbol(
 
 
 # ----------------------------------------------------------------
+# ISO 10628-2 Table 2 group 24, item 24.15, registered 2181: the steam
+# trap.
+#
+# Drawn here rather than vendored, and the refusal is recorded in
+# ``scripts/vendor_symbols.py``: the draw.io set's "Steam Trap" is an
+# empty 50 x 50 rectangle byte-identical to its own "Desuper Heater", so
+# vendoring it would file a blank box under two device names. There is
+# nothing in it to quote, which is what STENCIL_PATCHES needs, so the
+# mark is new artwork -- a hand-drawn primitive under CONTRIBUTING
+# section 1.
+#
+# NOT a composition in the :class:`Overlay` sense, and the distinction
+# is the one :meth:`SymbolRegistry._register_crushing_machines` already
+# draws for the crusher's and the mill's marks: an overlay is only ever
+# justified by ISO composing at that point, and :class:`IsoPart` demands
+# the Table 2 row the part is. The half filled below the diameter here
+# appears in no subject group 26-29, so it is not a supplementary symbol
+# and there is no registration number for it to carry -- composing from
+# one would invent a symbol. It is therefore the body's own mark, drawn
+# in named layers below the way group 11's and group 7's marks are.
+# ----------------------------------------------------------------
+
+#: The body's diameter, in drawing units.
+#:
+#: **Measured off the row**, on the modular grid Table 2 draws it on: a
+#: circle 4 M across, centred on a grid node, with the run on its own
+#: horizontal diameter. Every other length here is a dimension of its
+#: own rather than a fraction of this one.
+_TRAP_BODY_D = 40.0
+
+#: The run drawn each side of the body, in drawing units: 1 M.
+#:
+#: Table 2 draws the connecting line stopping 1 M short of the circle,
+#: which is the table's way of showing where a pipe attaches without
+#: touching the drawing. pandid needs the ink to reach the nozzle -- a
+#: port off ink draws a stream that stops short of its device, which
+#: ``tests/test_symbol_invariants`` refuses -- so the same 1 M is drawn
+#: as real line from the box edge to the body.
+_TRAP_LEAD = 10.0
+
+_TRAP_W = _TRAP_LEAD + _TRAP_BODY_D + _TRAP_LEAD
+_TRAP_H = _TRAP_BODY_D
+_TRAP_R = _TRAP_BODY_D / 2
+_TRAP_CX = _TRAP_LEAD + _TRAP_R
+_TRAP_CY = _TRAP_H / 2
+
+#: Half the inclined diameter, resolved onto each axis.
+#:
+#: **Measured off the row:** the line across the body is a full diameter
+#: at 45 degrees, from the body's lower left to its upper right -- both
+#: ends on the circle and the midpoint on its centre. At 45 degrees the
+#: run out to either end is the same on both axes, which is this.
+_TRAP_SEAT = _TRAP_R / math.sqrt(2)
+
+#: The two nozzles, on the body's own horizontal diameter, at the ends
+#: of the leads above.
+_TRAP_PORTS = {"inlet": (0.0, _TRAP_CY), "outlet": (_TRAP_W, _TRAP_CY)}
+
+#: Layer 1, the run: the line into the body and the line out of it.
+_TRAP_RUN = (
+    f'<path d="M 0 {_TRAP_CY:g} L {_TRAP_LEAD:g} {_TRAP_CY:g} '
+    f'M {_TRAP_LEAD + _TRAP_BODY_D:g} {_TRAP_CY:g} L {_TRAP_W:g} {_TRAP_CY:g}" '
+    f'fill="none" stroke="#111" stroke-width="2"/>'
+)
+
+#: Layer 2, the body: the circle the mark is drawn in. Filled white
+#: rather than left open, so a line routed behind the trap does not run
+#: across the drawing (the same reason :data:`_SCREEN_OUTLINE` is).
+_TRAP_BODY = (
+    f'<circle cx="{_TRAP_CX:g}" cy="{_TRAP_CY:g}" r="{_TRAP_R:g}" '
+    f'fill="white" stroke="#111" stroke-width="2"/>'
+)
+
+#: Layer 3, the discharge half: the half of the body **below** the
+#: inclined diameter, filled solid, which is the whole of what tells
+#: this row from a plain circle.
+#:
+#: Two quarter arcs rather than one half: an arc of exactly 180 degrees
+#: leaves its centre undetermined in the SVG arc grammar, and the
+#: renderer recomputes every arc when a drawing is redrawn at a new size
+#: (``pandid.render.svg._scaled_path``). Both are swept negative, which
+#: is the way round that runs from the lower-left end of the diameter
+#: through the foot of the circle and up its east side to the upper
+#: right end; the ``Z`` closes back along the diameter itself.
+_TRAP_DISCHARGE = (
+    f'<path d="M {_TRAP_CX - _TRAP_SEAT:.6f} {_TRAP_CY + _TRAP_SEAT:.6f} '
+    f'A {_TRAP_R:g} {_TRAP_R:g} 0 0 0 '
+    f'{_TRAP_CX + _TRAP_SEAT:.6f} {_TRAP_CY + _TRAP_SEAT:.6f} '
+    f'A {_TRAP_R:g} {_TRAP_R:g} 0 0 0 '
+    f'{_TRAP_CX + _TRAP_SEAT:.6f} {_TRAP_CY - _TRAP_SEAT:.6f} Z" '
+    f'fill="#111" stroke="#111" stroke-width="2"/>'
+)
+
+_STEAM_TRAP = Symbol(
+    svg='<g id="sym_fitting_steam_trap">'
+        + _TRAP_RUN + _TRAP_BODY + _TRAP_DISCHARGE
+        + '</g>',
+    width=_TRAP_W, height=_TRAP_H,
+    ports=dict(_TRAP_PORTS),
+    # The roundness carries the meaning: the mark is a diameter at 45
+    # degrees, and a body stretched to a box of another shape is an
+    # ellipse whose diameter is at some other angle, with the two halves
+    # no longer halves. Centred in the box instead, as the balloon is.
+    stretchable=False,
+    # An in-line device: ISO 10628-1 clause 5.3.1 c) rules a piping
+    # accessory at half the equipment weight, which is what every other
+    # Fitting variant is drawn at. See :attr:`Symbol.trim`.
+    trim=True,
+    iso_reg="2181",
+)
+
+
+# ----------------------------------------------------------------
 # ISO 10628-2 Table 2 group 7 -- SCREENING DEVICES, SIEVES AND RAKES.
 #
 # One outline (:data:`_SCREEN_OUTLINE`), drawn six times with the mark
@@ -4675,6 +4788,27 @@ class SymbolRegistry:
         self._register_screens()
         self._register_evaporators()
         self._register_kilns()
+        self._register_steam_trap()
+
+    def _register_steam_trap(self):
+        """ISO 10628-2 Table 2 item 24.15, registered 2181: the steam
+        trap.
+
+        A :class:`~pandid.units.Fitting` variant, on the same reasoning
+        group 12's in-line mixers are: an in-line device with nothing to
+        distinguish it from a strainer or a static mixer but what is
+        drawn between the two faces. Group 24 is where Table 2 files it,
+        beside the flange, the reducer and the hose this library already
+        draws as fittings.
+
+        Hand-drawn, and the one drawing in group 24 that had to be. The
+        vendored stencil set has a "Steam Trap" and it draws nothing --
+        see the block in ``scripts/vendor_symbols.py`` -- so until this
+        landed a sheet asking for one was refused by :meth:`get` rather
+        than drawn. Refusing was the right answer while there was no
+        artwork; it is not one now that there is.
+        """
+        self.register("fitting", _STEAM_TRAP, "steam_trap")
 
     def _register_composed(self):
         """The three drawings ISO composes and gives a number of its own.

@@ -66,7 +66,7 @@ and a flowsheet renders inline in Jupyter.
   is piped from the face its peer is actually on.
 - **Orthogonal A\* routing.** Right-angle streams with crossing jump-gaps and
   parallel-segment separation. Never emits a disconnected stream.
-- **228 registered symbols** with style variants, so a heat exchanger can be
+- **229 registered symbols** with style variants, so a heat exchanger can be
   shell-and-tube, plate, kettle or U-tube. They derive from the Apache-2.0
   draw.io P&ID stencils (see [`NOTICE`](https://github.com/Alpha9463/pandid/blob/main/NOTICE)).
 - **Pixel-perfect overrides.** `pin()` equipment to exact coordinates and
@@ -168,9 +168,9 @@ The base classes are `Feed`, `Product`, `Pump`, `Compressor`, `Blower`, `Valve`,
 `Funnel`, `Furnace`, `Boiler`, `Stack`, `Flare`, `Turbine`, `Filter`, `Dryer`,
 `Kiln`, `Crusher`,
 `Mill`, `Conveyor`, `Elevator` and `Instrument`,
-with 74 equipment classes over them — a `GearPump` *is* a `Pump`.
+with 75 equipment classes over them — a `GearPump` *is* a `Pump`.
 
-A variant is a drawing within a class, picked with `variant=`. 132 of the 228
+A variant is a drawing within a class, picked with `variant=`. 132 of the 229
 registered drawings get no class of their own, and this is how you reach them:
 
 ```python

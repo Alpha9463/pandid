@@ -2874,7 +2874,8 @@ class Fitting(_NormallyPositioned):
     ``sight_glass_lit``, ``silencer``, ``expansion_joint``, ``bellows``,
     ``blind``, ``damper``, ``spool``, ``static_mixer`` (ISO 10628-2 item
     12.2 X2673), ``rotary_mixer`` (item 12.1 X2672), ``mixing_path``
-    (item 12.3 X8184), ``hose``, ``coupling``, ``clamped_coupling``,
+    (item 12.3 X8184), ``steam_trap`` (item 24.15, registered 2181),
+    ``hose``, ``coupling``, ``clamped_coupling``,
     ``flange`` (the default), and the flame arrestors
     (``flame_arrestor`` plus ``_explosion_proof`` / ``_detonation_proof``
     / ``_fire_resistant``).

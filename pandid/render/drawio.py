@@ -951,6 +951,18 @@ _APPROXIMATIONS = {
         weight=_TRIM_STROKE),
     ("fitting", "mixing_path"): _Approximation(
         None, "the box and the three mixing elements in it", weight=_TRIM_STROKE),
+    # ISO 10628-2 item 24.15 (2181), the steam trap. draw.io has a shape
+    # called "Steam Trap" and it is an empty rectangle byte-identical to
+    # the same file's "Desuper Heater", so there is no stencil to name
+    # here -- see the block in ``scripts/vendor_symbols.py``. The
+    # built-in ellipse gets the body's outline right, which is more than
+    # the default rectangle would, and what it cannot draw is the mark
+    # inside: the whole of what tells this row from a plain circle. So
+    # the loss is stated rather than left to be noticed.
+    ("fitting", "steam_trap"): _Approximation(
+        "ellipse",
+        "the 45-degree diameter across the body and the discharge half filled below it",
+        weight=_TRIM_STROKE),
     # Item 12.4, the kneader: the casing and the wave its blades draw.
     ("kneader", "default"): _Approximation(
         None, "the casing and the wave the blades draw across it"),

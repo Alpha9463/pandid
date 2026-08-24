@@ -2170,7 +2170,10 @@ def _condensing_turbine() -> Flowsheet:
     hp_steam = fs.add(units.Feed("HP Steam", reference="PFD-700"))
     s701 = fs.add(units.Separator("S-701", variant="knockout", description="HP Steam Separator"))
     gv701 = fs.add(units.Valve("GV-701", variant="globe", description="MP Steam Isolation Valve"))
-    trap = fs.add(units.Product("Steam Trap Drain", reference="PFD-800"))
+    t701 = fs.add(
+        units.Fitting("T-701", variant="steam_trap", description="HP Separator Drain Trap")
+    )
+    condensate = fs.add(units.Product("Condensate Header", reference="PFD-800"))
     tv701 = fs.add(
         units.Valve(
             "TV-701",
@@ -2213,7 +2216,8 @@ def _condensing_turbine() -> Flowsheet:
     deaerator = fs.add(units.Product("To Deaerator", reference="PFD-800"))
 
     fs.connect(hp_steam.outlet, s701.feed)
-    fs.connect(s701.liquid, trap.inlet)
+    fs.connect(s701.liquid, t701.inlet)
+    fs.connect(t701.outlet, condensate.inlet)
     fs.connect(s701.vapor, tv701.inlet)
     fs.connect(tv701.outlet, st701.inlet)
     exhaust = fs.connect(st701.outlet, e701.tube_in)
