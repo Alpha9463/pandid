@@ -563,7 +563,7 @@ def test_no_two_ports_coincide(entry):
 #     rectangle is not.
 #
 # The sweep that settled these numbers runs ``_drawn_nozzles`` over every entry
-# in ``default_registry`` -- 228 of them today, which is what ``_SYMBOLS``
+# in ``default_registry`` -- 229 of them today, which is what ``_SYMBOLS``
 # parametrises -- and exactly two answer to all three parts above: ``tank/sphere``,
 # whose stub is the process nozzle this pair of tests is about, and
 # ``separator/knockout``, whose is the gauge named below and is excluded by

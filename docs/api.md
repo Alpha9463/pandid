@@ -480,7 +480,7 @@ fs.render("sheet.drawio")          # or: text = fs.to_drawio()
 ```
 
 The equipment symbols *are* draw.io's own P&ID stencils (see `NOTICE`), so the
-file references them and what opens is a native, editable shape. The 81
+file references them and what opens is a native, editable shape. The 82
 registry entries `pandid` draws itself have no draw.io stencil behind them and
 are approximated with draw.io's built-in shapes:
 

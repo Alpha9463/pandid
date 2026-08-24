@@ -437,7 +437,7 @@ def _settle(labels: "list[_Label]", bounds: "tuple[float, float, float, float]"
     Each label joins the obstacles as it lands, so one only ever writes
     over another where the second had nowhere left to go. Swept over the
     22 sheets ``tests/test_debug_overlay.py`` renders, that is today
-    three pairs out of 2037 labels -- one each on ``11_ethanol_pid``,
+    three pairs out of 2040 labels -- one each on ``11_ethanol_pid``,
     ``14_tank_farm`` and ``19_absorber_stripper``, and all six of them
     port labels rather than the scarcer anchor ones.
 

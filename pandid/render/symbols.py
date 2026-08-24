@@ -414,7 +414,7 @@ class IsoPart:
     standard calls it.
 
     Required on every :class:`OverlayPart`, which is the whole point.
-    pandid records no registration number for 170 of its 228 whole-symbol
+    pandid records no registration number for 170 of its 229 whole-symbol
     drawings today, so most shapes carry nothing that ties them to the
     entry they claim to be and no conformance statement about them can be
     checked. A part is where that stops: an overlay is only ever justified
@@ -707,7 +707,7 @@ class Symbol:
     overlays: tuple[Overlay, ...] = ()
     # The ISO registration number this drawing claims to be -- "2062",
     # "X2618", "C2044" -- or empty where nobody has checked it against
-    # the standard yet, which is where 170 of the 228 shipped symbols stand.
+    # the standard yet, which is where 170 of the 229 shipped symbols stand.
     #
     # Per ISO 14617-1 §3.6 the registration number is a symbol's identity
     # and is stable for its lifetime, and §4.2 makes it the thing that

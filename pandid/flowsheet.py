@@ -2167,7 +2167,7 @@ class Flowsheet:
 
         The equipment symbols are draw.io's own P&ID stencils (see
         ``NOTICE``), so the file *references* them rather than carrying
-        a tracing: what opens is a native, editable shape. The 81
+        a tracing: what opens is a native, editable shape. The 82
         registry entries this library draws itself -- the instrument
         balloons, the junctions, the off-page flags, the conveyor, and
         every built-to-size shape added since -- have no draw.io stencil

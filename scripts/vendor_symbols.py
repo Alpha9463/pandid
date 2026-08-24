@@ -1075,7 +1075,7 @@ KIND_MAP = {
     # not the vessel.
     #
     # THIS IS THE ONE STENCIL IN THE LIBRARY THAT DRAWS A PROCESS NOZZLE AS A
-    # NOZZLE (all 228 registered symbols were swept for a second; the only
+    # NOZZLE (all 229 registered symbols were swept for a second; the only
     # other rectangle of the kind is ``separator/knockout``'s gauge stub,
     # excluded as not a process nozzle -- see ``_NOT_NOZZLES`` and
     # ``tests/test_symbol_invariants.py``'s drawn-nozzle check). Three 12 x 12

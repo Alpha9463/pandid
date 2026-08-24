@@ -17,9 +17,9 @@ Five promises, and this file is each of them:
 
 The compatibility half -- that every shipped ``(kind, variant)`` pair still
 builds and draws exactly what it always did -- is ``tests/test_variants.py``,
-which sweeps the base classes and only the base classes. That sweep is 238
+which sweeps the base classes and only the base classes. That sweep is 239
 ``(class, variant)`` cases over the 52 classes ``pandid.units`` defines, which
-is more than the registry's 228 pairs rather than fewer: a kind with no artwork
+is more than the registry's 229 pairs rather than fewer: a kind with no artwork
 still has ``"default"``, and a kind two classes own is swept once for each.
 """
 
@@ -371,7 +371,7 @@ def test_a_kind_tag_still_names_the_class_that_owns_the_whole_kind():
     """The sharpest of the four edges.
 
     ``_ALIASES`` maps the internal ``kind`` tag onto a class name, and six of
-    the 74 classes in ``pandid.devices`` carry ``kind == "pump"``. Built from both layers, ``kind:
+    the 75 classes in ``pandid.devices`` carry ``kind == "pump"``. Built from both layers, ``kind:
     pump`` would mean whichever of them iterated last -- and the answer would
     move about as classes were added, which is the worst kind of quiet. It is
     built from ``units`` alone, so a kind tag names the class that draws every
@@ -539,7 +539,7 @@ def test_the_equipment_class_table_matches_the_classes():
 
 
 def test_the_variants_table_gives_every_drawing_exactly_one_owner():
-    """The other half: which class each of the registry's 228 drawings is reached
+    """The other half: which class each of the registry's 229 drawings is reached
     by name as.
 
     The same accounting ``scripts/gen_devices.py`` refuses to run without, kept

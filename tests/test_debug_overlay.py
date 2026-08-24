@@ -312,7 +312,7 @@ def test_a_feed_flag_is_drawn_left_of_the_point_that_pins_it():
 # at ``4333b54``, where these were measured, it took a bite out of 174 of the
 # 830 labels the overlay wrote and 313 of them were written on top of one
 # another. Those two are cited and not re-derivable -- that corpus is a third
-# the size of today's 2037 labels and the pass that fixed them is the pass this
+# the size of today's 2040 labels and the pass that fixed them is the pass this
 # file now tests. Both are one defect -- placement that has not
 # been told what is already on the paper -- and the fix is one placement pass,
 # run against the finished sheet. See :mod:`pandid.render.debug`.
