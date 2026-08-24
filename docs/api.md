@@ -2050,6 +2050,14 @@ by the nozzle's own name or the family name a numbered family shares, so
 `"feed"` answers for `feed_1` … `feed_n`. A nozzle with no entry falls back to
 the face the symbol fixed it to, and a unit with neither to flow order.
 
+Entries are written in the **symbol's own frame**, beside the artwork they are
+written against, and are turned and mirrored onto the sheet when they are read.
+So a class states its arrangement once and a unit drawn `mirrored=True` states
+the mirrored arrangement — a pump's suction is drawn east there, and the supply
+it claims is east with it. (Read untransformed, as they were before 0.1.4, an
+entry restating a face the symbol already fixes was a no-op on an unmirrored
+unit and silently wrong on a mirrored one.)
+
 Map a nozzle to `None` to say the class has no view on where its peer is drawn,
 and the face is not to be read for one either. That is what a **service**
 connection is: a heater's steam enters from below because that is where the
@@ -2890,8 +2898,21 @@ to one golden.
   place the controller against the transmitter, both as `add_instrument` means
   them; leave them out and `add_instrument`'s defaults apply, with the standoff
   resolver walking a balloon clear of whatever is in the way.
+
+  `at` is the lever that matters and it means two different things, so it is
+  worth spelling out here rather than by reference: on a **stream** it is a
+  fraction `0..1` along the routed path, and on a **unit** it is a face,
+  `"N"`/`"S"`/`"E"`/`"W"`. Which one applies follows from what you passed as
+  `measuring=`. Small changes to the fraction move the tap a long way and the
+  lines follow it — on one real sheet `at=0.02`, `0.05` and `0.1` drew 5, 7 and
+  8 crossings — so it is the first thing to reach for when a loop draws badly.
 - **Every part stays reachable**, and is an ordinary unit or stream: pin it,
   re-`attach()` it, `annotate()` it, hang an interlock off `loop.measurement`.
+  A balloon takes `pin(x=, y=)` like anything else, and an absolute coordinate
+  supersedes the standoff on the axis it names — so `pin(x=...)` alone fixes
+  the column the bubble stands in and leaves the resolver to find it clear air
+  down the page. `col`/`row` are the half a balloon has no grid for; a rank on
+  one is reported as `pin-not-honored`.
 - **A rejected call changes nothing.** The letters, the placements, the
   generated tags, the ownership of `measuring` and `acting_on`, the signal
   kinds and the final element's nozzle are all checked before the first write,

@@ -1109,10 +1109,16 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
         # It is deliberately one check and not one per cause. The
         # project's signature defect is a value accepted, quietly
         # altered and shipped, and this catches the shape of it rather
-        # than the instances: an attached balloon whose pin is discarded
-        # (#467) and a port-pinned nozzle walked off its run by a later
-        # transform (#294, the defect that made the intent worth
-        # storing) are the same finding here, as is the next one.
+        # than the instances: an attached balloon standing in a grid
+        # cell nothing can read (#467) and a port-pinned nozzle walked
+        # off its run by a later transform (#294, the defect that made
+        # the intent worth storing) are the same finding here, as is the
+        # next one. Both of those causes have since been closed at the
+        # source -- the balloon's absolute pin is honoured and the
+        # nozzle relation survives the transform -- which is what this
+        # check is for: it is written to the shape, so it went on
+        # holding the drawing to the pin while the causes underneath it
+        # were fixed one at a time.
         #
         # Soft rather than hard because there *is* a drawing and it is
         # coherent -- the lines are drawn to where the units ended up.
@@ -1155,13 +1161,16 @@ def geometry_issues(fs: "Flowsheet", *, arrows: bool = True) -> list["Issue"]:
                 missed.append(f"{u.name} was pinned {axis}={want} and is "
                               + (f"drawn in {axis}={rank}" if rank is not None
                                  else f"drawn with no {axis} of its own"))
-            # An attached balloon is positioned from its host and its pin
-            # is never read, so name the aiming that does work in place
-            # of the one that was written.
-            cure = ("An attached balloon is positioned from its host rather "
-                    f"than from its pin: aim it with {u.name}.attach(at=..., "
-                    f"offset=..., angle=...), or detach it to have it laid "
-                    "out like any other unit"
+            # An attached balloon is placed from its host or from an
+            # absolute pin (#467), and stands in no grid at all -- so a
+            # rank is the half of a pin nothing here can read, and the
+            # cure names the two spellings that do work in place of the
+            # one that was written.
+            cure = ("An attached balloon stands in no grid: it is placed from "
+                    "its host, or from an absolute pin. Say where with "
+                    f"{u.name}.pin(x=..., y=...), aim it with "
+                    f"{u.name}.attach(at=..., offset=..., angle=...), or "
+                    "detach it to have it laid out like any other unit"
                     if getattr(u, "host", None) is not None else
                     "A pinned axis is honoured exactly, so something moved "
                     "this unit after the solver read the pin")

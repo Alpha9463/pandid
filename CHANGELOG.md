@@ -601,6 +601,58 @@ class hierarchy, or what it is called.
 
 ### Fixed
 
+- **A balloon lands where it was pinned** (#467). An attached instrument is
+  positioned from its host, and `pin(x=..., y=...)` on one was accepted,
+  discarded, and the bubble drawn wherever the standoff resolver had already
+  put it -- while `add_control_loop`'s own documentation told authors that
+  every part of a loop "is an ordinary unit or stream: pin it". The
+  documentation described a capability the code did not have, which is worse
+  than the capability being absent.
+
+  An absolute coordinate now supersedes the standoff on the axis it names,
+  per axis, exactly as it supersedes a grid rank on every other unit: so
+  `pin(x=...)` alone fixes the column the bubble stands in and leaves the
+  resolver to find it clear air down the page, and `pin(port="pv", y=...)`
+  puts the *signal terminal* on that elevation rather than the corner of the
+  box around it. The tap stays the host's, so the impulse line still leaves
+  the point on the line the balloon reads. A bubble the author placed is never
+  walked aside: put one on top of a valve and it is drawn on top of the valve
+  and the overlap reported, which is the honest answer where quietly moving it
+  would be discarding the placement again with a smaller number.
+
+  `col`/`row` are the half a balloon has no grid to stand in, and stay
+  reported as `pin-not-honored` -- whose cure now names the two spellings that
+  do work. `at=` is documented where an author needs it, in the
+  `add_control_loop` section rather than by reference: it is a fraction `0..1`
+  along the routed path on a stream host and a face on a unit host, and it is
+  the lever that moves a badly drawn loop furthest.
+
+- **A `PLACES` entry is read as the unit is drawn** (#471). The class
+  attribute that says where a nozzle's peer belongs is written in the symbol's
+  own frame, beside the artwork it is written against, and the claim reader
+  did not transform it -- while the face fallback beside it on the same ladder
+  did. So a unit drawn `mirrored=True` had its mirror honoured in the ink and
+  discarded in the fit: the artwork put a pump's suction east and the class
+  went on asserting its supply lay west, and the run crossed the body to reach
+  it. Stated, accepted, and silently not done.
+
+  Entries are now turned and mirrored onto the sheet by
+  `portgeom.drawn_direction`, the same composition `symbol_to_box` applies to a
+  point and for the same reason, so both rungs of the ladder answer in one
+  frame. A mirrored pump draws its train right to left, and a mirrored column
+  puts its condenser top left where the convention that put it top right says
+  it belongs.
+
+  This is also what makes a *redundant* entry harmless. One that merely
+  restates the face the symbol already fixes was a no-op on an unmirrored unit
+  and silently wrong on a mirrored one, and deleting the redundant ones -- the
+  first fix proposed -- cannot be done: `Vessel.PLACES["in"]` restates the face
+  on the vertical artwork and states a real convention on the horizontal one,
+  so redundancy is a fact about a variant while the table is per class.
+  Transformed, a restated face and the face it restates are the same statement
+  again, under every quarter turn and mirror, over every class and variant the
+  library ships.
+
 - **`connect(kind=...)` states the kind; it is no longer overruled** (#493).
   A run between two energy/utility nozzles was promoted to `"energy"` wherever
   the kind read `"material"` -- which is what an author who says nothing gets,

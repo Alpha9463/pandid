@@ -16,6 +16,14 @@ The tap is the anchor and never moves; the *standoff* -- how far out and
 in which direction -- is the only thing this module may choose, and it
 chooses it against everything already on the sheet. See
 :func:`_clear_standoff`.
+
+**Unless the author placed it.** A balloon carries a
+:class:`~pandid.geometry.Pin` like any other unit, and an absolute
+``x``/``y`` on one is honoured here, per axis, in place of the standoff
+this module would have chosen (#467). It is not a rank -- there is no
+grid for a bubble to stand in -- and ``col``/``row`` on one is still
+nothing this sweep can read, which
+:func:`pandid.validate.geometry_issues` reports as ``pin-not-honored``.
 """
 
 from __future__ import annotations
@@ -324,10 +332,13 @@ def _clear_standoff(inst: "Instrument", tap: Point, ref: Point,
 
 
 def place_attached(fs: "Flowsheet") -> bool:
-    """Resolve every attached instrument's frame from its host.
+    """Resolve every attached instrument's frame from its host, or its pin.
 
     Returns True if any balloon moved, which is the signal that the
     lines running to it are stale and have to be routed again.
+
+    An absolute pin wins over the host on the axis it names; see the
+    module docstring. Everything below is about the axes nobody stated.
 
     Balloons are resolved in the order they were added to the sheet, and
     each sees only the boxes resolved before it -- never the previous
@@ -370,6 +381,27 @@ def place_attached(fs: "Flowsheet") -> bool:
                 inst, (tx, ty), ref, w, h, obstacles, keepouts)
             ux, uy = _rotate_ccw(ref[0], ref[1], angle)
             cx, cy = tx + ux * distance - w / 2, ty + uy * distance - h / 2
+            # An absolute pin supersedes the standoff on the axis it
+            # names, exactly as it supersedes a grid rank on every other
+            # unit -- and per axis for the same reason, so
+            # ``pin(x=...)`` fixes the column the bubble stands in and
+            # leaves the search to find it clear air down the page.
+            #
+            # Read off ``pin_`` rather than off the raw coordinates, so
+            # ``pin(port="signal", y=...)`` puts the *nozzle* on that
+            # elevation: the property derives the corner from the
+            # nozzle relation the author stated (#294), and a balloon's
+            # signal terminal is the point on it worth lining up.
+            #
+            # Not swept, not cleared, not walked out of a collision: the
+            # author said where. What the search may still choose is the
+            # standoff on the axes they left alone, and the tap is the
+            # host's either way, so the leader line still lands on the
+            # line or the face the balloon reads.
+            pin = inst.pin_
+            if pin is not None:
+                cx = cx if pin.x is None else float(pin.x)
+                cy = cy if pin.y is None else float(pin.y)
             obstacles.append((cx, cy, cx + w, cy + h))
             old = inst.frame
             if old is None or abs(old.x - cx) > 0.01 or abs(old.y - cy) > 0.01:
@@ -379,7 +411,6 @@ def place_attached(fs: "Flowsheet") -> bool:
             # pass, so without this a pin(mirrored=...) on one is
             # silently dropped, and mirroring is how a balloon puts its
             # signal port on the side the run actually comes from.
-            pin = inst.pin_
             inst.frame = Frame(
                 x=cx, y=cy, w=w, h=h, label_pos="center",
                 orientation=pin.orientation if pin else 0.0,
