@@ -43,14 +43,12 @@ counting dots.
 
 Line weight
 -----------
-:data:`PART_STROKE` is **1 unit**, half the 2 units
-``pandid.render.svg._SYMBOL_STROKE`` rules an equipment outline at. That
-is ISO 10628-1:2014 §5.3.1's split, not a stylistic preference: §5.3.1 b)
-puts *graphical symbols for equipment and machinery* at 0,5 mm and
-§5.3.1 c) puts *valves, fittings, piping accessories and reference
-lines* -- the in-line detail band -- at 0,25 mm. A tray deck and an
-impeller are detail inside an outline, not the outline, so they belong in
-the finer band, and a professionally drawn sheet puts them there. The
+:data:`PART_STROKE` is the ladder's finest rung,
+``pandid.render.weights.LineWeight.DETAIL`` -- ISO 10628-1:2014 §5.3.1
+c), 1 unit -- and not a number chosen here. A tray deck and an impeller
+are detail *inside* an outline rather than the outline, so they belong
+in that band and not in the §5.3.1 b) one the body is drawn in, and a
+professionally drawn sheet puts them there. The
 weight survives the scale to the body: ``compose`` divides every declared
 width by the scale first, because ISO 14617-1 §4.3 holds a symbol's
 line width fixed when the symbol is resized.
@@ -151,16 +149,18 @@ the import is what lets either module be the one imported first.
 
 import math
 
-#: The ISO 14617-1 §4.3 grid module, in pandid drawing units. Table 2's
-#: artwork is laid out on a 2,5 mm dotted grid and every vertex lands on
-#: it, so the coordinates below are whole multiples of this and can be
-#: checked against the standard by counting grid dots.
-M = 10.0
+# The ISO 14617-1 §4.3 grid module Table 2's artwork is laid out on, so
+# that a coordinate below is a whole number of grid dots and can be
+# counted against the standard. Read from :mod:`pandid.render.weights`
+# rather than stated here since #490: it is the sheet's module, the
+# widths on that sheet are stated as multiples of it, and one module
+# stated twice is two modules.
+from pandid.render.weights import M, LineWeight
 
 #: The weight every part is drawn at, in drawing units. See the module
-#: docstring: ISO 10628-1:2014 §5.3.1 c)'s detail band, half the
-#: equipment outline's.
-PART_STROKE = 1.0
+#: docstring: ISO 10628-1:2014 §5.3.1 c)'s detail band, the rung below
+#: the outline the part is drawn inside.
+PART_STROKE = LineWeight.DETAIL.width
 
 # The attributes every stroked path in this module carries. Kept in one
 # string so a part cannot quietly acquire its own weight: the whole

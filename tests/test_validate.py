@@ -796,8 +796,9 @@ def _fed_mixer(n_inlets=2, **box):
     The mixer symbol is 50px tall and spreads its inlet series 20px apart in its
     own coordinates, and the drawn pitch is that scaled by the box: at the
     default size two feeds land 20px apart, which is 8px of paper between two
-    12px arrowheads and perfectly legible. ``height=35`` is the same two nozzles
-    in the short box an author gave them, 14px apart with 2px between the heads.
+    12px arrowheads -- which since #490 is exactly the floor, no more. ``height=35``
+    is the same two nozzles in the short box an author gave them, 14px apart with
+    2px between the heads.
     """
     fs = Flowsheet("crowded")
     mix = fs.add(U.Mixer("M-1", n_inlets=n_inlets, **box))
@@ -809,34 +810,37 @@ def _fed_mixer(n_inlets=2, **box):
 
 
 def test_two_heads_without_the_paper_between_them_are_reported():
+    from pandid.render.symbols import MIN_HEAD_CLEARANCE
+
     fs, _ = _fed_mixer(height=35)
     issues = _crowded(fs)
     assert [i.severity for i in issues] == ["warning"]
     assert "M-1.in_1 and M-1.in_2 are 14.0px apart on M-1's W face" in issues[0].message
     # The measurement a reader can check: the white, against the standard.
     assert "leaves 2.0px of paper between two 12px arrowheads" in issues[0].message
-    assert "4px ISO 128-20:1996 4.4" in issues[0].message
+    # Read off the floor rather than typed, so moving a rung of the ladder
+    # moves what this expects rather than turning it red for the wrong reason.
+    assert f"{MIN_HEAD_CLEARANCE:.0f}px ISO 128-20:1996 4.4" in issues[0].message
     # The finding is only worth making if it also says what to do about it, the
     # way run-off-elevation names the pin.
-    assert "M-1.height = 40" in issues[0].message
+    assert "M-1.height = 50" in issues[0].message
 
 
 def test_the_box_the_message_names_is_the_cure():
     """Typing the message's own suggestion back in has to silence it, or the
-    advice is wrong. 40 is the 35px box scaled by the 16/14 it fell short by."""
-    fs, _ = _fed_mixer(height=40)
+    advice is wrong. 50 is the 35px box scaled by the 20/14 it fell short by."""
+    fs, _ = _fed_mixer(height=50)
     assert _crowded(fs) == []
 
 
 def test_a_default_mixer_is_not_a_finding():
     """The pitch this check must *not* report, and the reason it is stated as a
     clearance rather than as a multiple of the head. Two heads 20px apart leave
-    8px of paper, four times the weight the sheet draws a process line at, and a
-    reader resolves them without effort. A floor that reported this would fire
-    on five of the 21 shipped examples -- 01, 03, 05 and 10 carry a mixer at
-    this same 20px pitch, and 08's takes three feeds 17.5px apart -- and be
-    wrong about all five: the tightest of them still leaves 5.5px of paper, over
-    the 4px ISO 128-20:1996 4.4 asks for."""
+    8px of paper -- exactly twice the width the sheet now draws a main flow line
+    at, and so exactly the floor ISO 128-20:1996 4.4 and ISO 10628-1 5.3.2 both
+    set. It stood at four times that floor until #490 widened the line those
+    heads end, which is what took the margin out: a default mixer is on the
+    boundary now rather than clear of it."""
     fs, _ = _fed_mixer()
     assert _crowded(fs) == []
 
@@ -865,7 +869,7 @@ def test_nozzles_that_carry_no_arrowhead_are_not_crowded():
     """A splitter's outlets in the same short box sit at the same 14px pitch a
     mixer's inlets are reported at, and the sheet reads them without trouble: a
     stream *leaving* takes its head at the far end of the branch, so the face
-    carries two bare 2px lines rather than two 12px triangles. One pitch, two
+    carries two bare lines rather than two 12px triangles. One pitch, two
     drawings, and only the one with the heads on it is a drawing that misleads."""
     from pandid.portgeom import port_point
 
@@ -904,7 +908,7 @@ def test_the_floor_is_the_arrowhead_the_renderer_actually_draws():
     floor rather than leaving the two to drift apart."""
     import re
 
-    from pandid.render.svg import _PROCESS_STROKE
+    from pandid.render.weights import LineWeight
     from pandid.render.symbols import ARROWHEAD, MIN_HEAD_CLEARANCE, MIN_NOZZLE_PITCH
 
     fs, _ = _fed_mixer()
@@ -916,7 +920,7 @@ def test_the_floor_is_the_arrowhead_the_renderer_actually_draws():
     assert drawn is not None
     assert [float(v) for v in drawn.groups()] == [ARROWHEAD, ARROWHEAD]
     # ISO 128-20:1996 4.4: at least twice the width of the widest line.
-    assert MIN_HEAD_CLEARANCE == 2 * _PROCESS_STROKE
+    assert MIN_HEAD_CLEARANCE == 2 * LineWeight.MAIN_FLOW.width
     assert MIN_NOZZLE_PITCH == ARROWHEAD + MIN_HEAD_CLEARANCE
 
 
@@ -1865,3 +1869,74 @@ def test_it_answers_before_anything_is_laid_out():
     fs = _sized("M-301", n_feeds=2, width=80, height=100)
     assert all(u.frame is None for u in fs.units)
     assert [i.code for i in model_issues(fs)].count("symbol-out-of-aspect") == 1
+
+
+# --- parallel runs, ISO 10628-1 5.3.2 -----------------------------------------
+
+
+def _parallel_pair(gap_px: float):
+    """Two runs side by side, their centrelines *gap_px* apart."""
+    fs = Flowsheet("parallel")
+    a = fs.add(U.Feed("A")).pin(x=60, y=200)
+    ap = fs.add(U.Product("AP")).pin(x=600, y=200)
+    b = fs.add(U.Feed("B")).pin(x=60, y=200 + gap_px)
+    bp = fs.add(U.Product("BP")).pin(x=600, y=200 + gap_px)
+    fs.connect(a.outlet, ap.inlet)
+    fs.connect(b.outlet, bp.inlet)
+    fs.layout()
+    return fs
+
+
+def _crowded_lines(fs, **kw):
+    return [i for i in fs.validate(**kw) if i.code == "lines-crowded"]
+
+
+def test_two_runs_without_the_paper_between_them_are_reported():
+    """ISO 10628-1 5.3.2: twice the wider of the two, and never under 1 mm.
+
+    Both runs are main flow lines at 4 units, so the floor is 8 units of paper
+    and centres 12 apart. At 10 apart they leave 6 and are reported.
+    """
+    issues = _crowded_lines(_parallel_pair(10.0))
+    assert [i.severity for i in issues] == ["warning"]
+    assert "run parallel at y 200 and 210" in issues[0].message
+    assert "leaving 6.0px (1.50 mm) of paper between them" in issues[0].message
+    assert "8px ISO 10628-1 5.3.2" in issues[0].message
+
+
+def test_two_runs_far_enough_apart_are_not_a_finding():
+    """The other side of the floor, so the check is not simply always firing."""
+    assert _crowded_lines(_parallel_pair(12.0)) == []
+
+
+def test_the_clearance_floor_is_twice_the_widest_rung_the_pair_is_drawn_on():
+    """Stated as the ratio the clause states, not as the number it works out to.
+
+    Read off the message the finding writes, so the threshold a reader is told
+    about is the threshold that fired -- and both are the ladder's, so a rung
+    moving moves them together instead of leaving one behind.
+    """
+    import re
+
+    from pandid.render.weights import LineWeight
+
+    (issue,) = _crowded_lines(_parallel_pair(10.0))
+    asked = float(re.search(r"under the ([\d.]+)px ISO 10628-1 5\.3\.2", issue.message).group(1))
+    assert asked / LineWeight.MAIN_FLOW.width == pytest.approx(2.0)
+
+
+def test_two_runs_that_only_meet_end_to_end_are_not_parallel_lines():
+    """5.3.2 is about a pair a reader has to tell apart, so the two have to run
+    *together*. Two segments on nearby lines that share no length between them
+    are consecutive pieces of a path meeting a tap, not a crowded pair; two on
+    the shipped corpus are exactly that and were reported until the overlap was
+    required."""
+    fs = Flowsheet("abut")
+    a = fs.add(U.Feed("A")).pin(x=60, y=200)
+    ap = fs.add(U.Product("AP")).pin(x=300, y=200)
+    b = fs.add(U.Feed("B")).pin(x=400, y=206)
+    bp = fs.add(U.Product("BP")).pin(x=640, y=206)
+    fs.connect(a.outlet, ap.inlet)
+    fs.connect(b.outlet, bp.inlet)
+    fs.layout()
+    assert _crowded_lines(fs) == []

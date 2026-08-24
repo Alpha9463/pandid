@@ -217,7 +217,12 @@ def test_a_settled_sheet_says_so():
     fs.layout()
     fs.route()
     assert fs.route_converged is True
-    assert fs.validate() == []
+    # Settled, and clean apart from the one thing this fixture is named for:
+    # it crowds its taps deliberately, so the signal line and the run it reads
+    # end up closer than ISO 10628-1 5.3.2 leaves between parallel lines. That
+    # is a finding about spacing and not about whether the router settled, so
+    # it is named here rather than filtered out.
+    assert [i.code for i in fs.validate()] == ["lines-crowded"]
 
 
 # --- what happens when the passes run out -------------------------------------

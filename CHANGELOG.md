@@ -472,6 +472,69 @@ class hierarchy, or what it is called.
 
 ### Fixed
 
+- A **main flow line is drawn twice the weight of the equipment it enters**
+  (#490). ISO 10628-1 5.3.1 states three line widths in the ratio 4:2:1, and
+  the renderer had collapsed the first two into one number: a process run and
+  the vessel it ran into were both 2 units, so the emphasis the clause exists
+  to produce did not happen. A run is now 4 units and every sheet in the corpus
+  moves.
+
+  The three widths are a new `pandid.render.weights.LineWeight`, named for what
+  each is -- `MAIN_FLOW`, `EQUIPMENT`, `DETAIL` -- and each stated as its own
+  multiple of the grid module rather than as a width, so no rung can be moved
+  without the ratio moving with it. Both backends read it; the draw.io exporter
+  no longer keeps its own copy of two of the numbers. Every stroke either
+  renderer emits now names a rung, and a test reads the two source files back
+  to keep it that way, so an element added later cannot be given a width
+  without first being put in one of the clause's three classes.
+
+  Two things that had been written as a *width* and are not:
+  a flange mark is 5.3.1 c)'s rung and not the run's, which is also the only
+  rung where the pair of faces clears the gap 5.3.2 asks between two parallel
+  lines; and the head on a line-number leader is a size, which had been written
+  as the ratio between two rungs and would otherwise have halved on its own.
+
+  The **line hop** follows the rung too, and had to. It was a flat radius of
+  5, so a run widening from 2 units to 4 took the paper between the arc and
+  the run it bridges from 0,75 mm to 0,25 mm -- measured on the raster -- and
+  at that width the crescent closes and the mark reads as a junction where
+  there is none. `HOP_R` is now the clearance the sheet has always drawn plus
+  a half-pen of each of two main flow runs, which restores the 0,75 mm
+  exactly. Two of the corpus's 53 crossings are too near a corner to carry the
+  larger arc and are drawn plain instead -- ambiguous where the merged arc was
+  wrong, and what all 393 crossings on the reference sheets in
+  `professional_examples/` do anyway.
+
+  No clause sizes that gap, and none is cited as if it did: ISO 10628-1 5.3.2
+  is about parallel lines and does not reach a crossing. 5.3.4 in fact
+  prescribes an *interruption* rather than a bridge, which is #499.
+
+  Both of the drawing's remaining departures now **report** rather than being
+  drawn in silence, which is the whole of what changed about them:
+
+  - **`crossing-unmarked`**, from the renderer, when a crossing has too little
+    run either side to carry its arc and is drawn bare. A bare crossing is not
+    neutral on a sheet where every other one carries an arc -- it reads as a
+    junction -- so the sheet names both runs and the point. Two on the shipped
+    corpus, out of 53.
+  - **`lines-crowded`**, from `validate`, when two runs run beside each other
+    with less paper between them than ISO 10628-1 5.3.2 leaves: twice the wider
+    of the two, and never under 1 mm. Six on the shipped corpus, where at 0,2 M
+    there were none. Only pairs that actually run *together* count -- the two
+    that merely abut end to end are not a pair a reader has to tell apart.
+
+  Neither is fixed here: giving those runs the room is the router's, whose own
+  separation is 6 units and derived from nothing (#498). What changed is that a
+  drawing which no longer conforms says so on the sheet that fails.
+
+  What else moved: `MIN_HEAD_CLEARANCE` follows the rung it is twice of, so
+  `nozzles-crowded` now reports four crowded mixers on the shipped examples
+  that were under the old floor and are over the new one; and a stream label
+  stands off a run by half its pen plus a unit of paper, which relocated seven
+  labels across the twenty-one golden sheets. No unit, symbol, port or run
+  moved on any sheet.
+
+
 - **draw.io child cells now turn with the symbol they are part of.** A
   parent cell's `direction` says how *its own* shape paints; mxGraph does
   not carry it into a child's geometry. So every drawing this exporter

@@ -240,7 +240,13 @@ def test_validate_answers_about_the_drawing_it_is_told_about(tmp_path, capsys):
     assert "warning: nozzles-crowded: M-1.in_1 and M-1.in_2" in capsys.readouterr().out
 
     assert main(["validate", "--diagram", "p&id", str(spec)]) == EXIT_OK
-    assert capsys.readouterr().out == f"{spec}: no problems found (4 units, 3 streams)\n"
+    out = capsys.readouterr().out
+    assert "nozzles-crowded" not in out
+    # The squeezed mixer crowds its two feed *lines* as well as the heads on
+    # them, and that finding is not about ink the P&ID leaves out: it survives
+    # the diagram change, which is what makes this a check that the arrowhead
+    # finding is diagram-dependent rather than that the sheet is faultless.
+    assert "warning: lines-crowded: S1 and S2" in out
 
 
 def test_draw_sends_the_reader_to_validate_for_the_sheet_it_drew(tmp_path, capsys):

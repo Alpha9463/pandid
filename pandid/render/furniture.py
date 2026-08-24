@@ -325,6 +325,21 @@ _BOX_UNDERLINE = 1.0
 #: drawing beside it.
 _CELL_RULE = 0.75
 
+#: The three weights the **sheet's own border** is ruled at: the outer sheet
+#: rectangle, the drawing frame inside it, and the ticks that divide the band
+#: between the two into zones.
+#:
+#: Sheet furniture, and so *not* on :class:`~pandid.render.weights.LineWeight`:
+#: ISO 10628-1 5.3.1 rules the flow diagram, and a border and its zone grid are
+#: the drawing sheet rather than anything drawn on it. Named here all the same,
+#: because both backends rule them and each used to write its own literal --
+#: this module for the sheet and ``pandid.render.drawio`` for the export -- so
+#: the border was three numbers stated twice with nothing holding the pairs
+#: together.
+SHEET_RULE = 1.0
+FRAME_RULE = 2.0
+ZONE_TICK = 0.75
+
 
 def _ann_layout(ann):
     """Compute the column widths and row metrics for an Annotation."""
@@ -1572,7 +1587,8 @@ def draw_title_strip(tb, name: str, date: str, right: float, bottom: float,
     # ruling each one would put six more lines into the busiest corner
     # of the sheet.
     g = strip.rev
-    L.append(_strip_part(("rule", g.x, g.header_y, g.x + g.w, g.header_y, 1)))
+    L.append(_strip_part(("rule", g.x, g.header_y, g.x + g.w, g.header_y,
+                          _BOX_UNDERLINE)))
     cx = g.x
     for _heading, cw in g.cols[:-1]:
         cx += cw
@@ -1710,14 +1726,14 @@ def zone_frame(ix: float, iy: float, iw: float, ih: float, band: float = ZONE_BA
     z = zone_layout(ix, iy, iw, ih, band)
     ox, oy, ow, oh = z.outer
     L = [f'<rect x="{ox:.1f}" y="{oy:.1f}" width="{ow:.1f}" height="{oh:.1f}" '
-         f'fill="none" stroke="black" stroke-width="1"/>',
+         f'fill="none" stroke="black" stroke-width="{SHEET_RULE:g}"/>',
          f'<rect x="{ix:.1f}" y="{iy:.1f}" width="{iw:.1f}" height="{ih:.1f}" '
-         f'fill="none" stroke="black" stroke-width="2"/>']
+         f'fill="none" stroke="black" stroke-width="{FRAME_RULE:g}"/>']
     for part in z.parts:
         if part[0] == "rule":
             _, x1, y1, x2, y2 = part
             L.append(f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" '
-                     f'stroke="black" stroke-width="0.75"/>')
+                     f'stroke="black" stroke-width="{ZONE_TICK:g}"/>')
         else:
             _, lx, ly, text = part
             L.append(_text(lx, ly + _ZONE_BASE, text, ZONE_TYPE,

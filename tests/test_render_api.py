@@ -157,7 +157,7 @@ def test_png_hint_names_the_rasteriser_that_is_missing(tmp_path, monkeypatch):
 
 
 def test_jump_direction_reaches_the_public_api():
-    from pandid.render.svg import SvgRenderer
+    from pandid.render.svg import HOP_R, SvgRenderer
 
     # Two lines that cross: which of them bulges is what the option chooses.
     def build():
@@ -174,7 +174,11 @@ def test_jump_direction_reaches_the_public_api():
     assert build().to_svg(jump_direction="vertical") == default
     horizontal = build().to_svg(jump_direction="horizontal")
     assert horizontal != default
-    assert default.count("A 5 5") == horizontal.count("A 5 5") == 2
+    # Read off ``HOP_R`` rather than typed: the radius follows the main-flow
+    # rung since #490 (an arc has to clear two half-pens), so a literal here
+    # would break on a rung change instead of tracking it.
+    arc = f"A {HOP_R:g} {HOP_R:g}"
+    assert default.count(arc) == horizontal.count(arc) == 2
 
     # ... and it means the same thing it means on the renderer itself.
     fs = build()
@@ -475,12 +479,14 @@ def test_exported_pdf_lands_on_a_page_of_exactly_that_size(tmp_path, name, mm):
 
 # --- connections: how the sheet says its joints are made up -------------------
 
-#: One flange face: a bar of exactly FLANGE_TICK across the run, at the pipe's
-#: own pen. Restated rather than imported for the reason the sheet sizes above
+#: One flange face: a bar of exactly FLANGE_TICK across the run, on ISO 10628-1
+#: 5.3.1 c)'s rung -- a flange is a piping accessory, and 5.3.2 floors the gap
+#: between the pair at twice the wider of them, which only that rung clears.
+#: Restated rather than imported for the reason the sheet sizes above
 #: are: an edit to the constant must show up here as a failure, not be absorbed.
 _FLANGE_BAR = re.compile(
     r'<line x1="([\d.-]+)" y1="([\d.-]+)" x2="([\d.-]+)" y2="([\d.-]+)" '
-    r'stroke="[^"]+" stroke-width="2" />'
+    r'stroke="[^"]+" stroke-width="1" />'
 )
 
 

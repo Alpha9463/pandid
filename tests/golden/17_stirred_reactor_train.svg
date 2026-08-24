@@ -206,30 +206,30 @@
     <use href="#sym_valve" x="1125.25" y="644.75" width="24.5" height="15.0" transform="rotate(90, 1137.5, 652.25)" />
   </g>
   <g id="streams">
-    <path d="M 80.0,470.76762723449383 L 150.0,470.76762723449383" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 220.0,450.76762723449383 L 340.0,450.76762723449383" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 364.5,450.76762723449383 L 410.0,450.76762723449383" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 435.0,450.76762723449383 L 470.0,450.76762723449383" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 494.5,450.76762723449383 L 520.0,450.76762723449383" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 80.0,620.0 L 300.0,620.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 324.5,620.0 L 526.0,620.0 L 526.0,456.76762723449383" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 532.0,450.76762723449383 L 545.0,450.76762723449383" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 570.0,450.76762723449383 L 590.0,450.76762723449383" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 602.0,450.76762723449383 L 640.0,450.76762723449383" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 80.0,740.0 L 340.0,740.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 364.5,740.0 L 596.0,740.0 L 596.0,456.76762723449383" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 774.4615384615385,340.7242569525019 L 1000.0,340.7242569525019 L 1000.0,120.0 L 1150.0,120.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1174.5,120.0 L 1540.0,120.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1540.0,450.76752993717025 L 1420.0,450.76752993717025" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1395.5,450.76752993717025 L 1300.0,450.76752993717025" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1275.0,450.76752993717025 L 1150.0,450.76752993717025" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1125.5,450.76752993717025 L 792.0,450.76752993717025" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 716.0,590.0 L 716.0,677.6 A 5 5 0 0 1 716.0,687.6 L 716.0,720.0 L 880.0,720.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 904.5,720.0 L 1040.0,720.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1170.0,720.0 L 1540.0,720.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1137.5,590.0 L 1162.5,590.0 L 1162.5,615.0 L 1137.5,615.0 L 1137.5,640.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1137.5,664.5 L 1137.5,700.0" fill="none" stroke="black" stroke-width="2" />
-    <path d="M 1072.5,740.0 L 1072.5,810.0 L 1047.5,810.0 L 1047.5,850.0 L 1072.5,850.0" fill="none" stroke="black" stroke-width="2" />
+    <path d="M 80.0,470.76762723449383 L 150.0,470.76762723449383" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 220.0,450.76762723449383 L 340.0,450.76762723449383" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 364.5,450.76762723449383 L 410.0,450.76762723449383" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 435.0,450.76762723449383 L 470.0,450.76762723449383" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 494.5,450.76762723449383 L 520.0,450.76762723449383" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 80.0,620.0 L 300.0,620.0" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 324.5,620.0 L 526.0,620.0 L 526.0,456.76762723449383" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 532.0,450.76762723449383 L 545.0,450.76762723449383" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 570.0,450.76762723449383 L 590.0,450.76762723449383" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 602.0,450.76762723449383 L 640.0,450.76762723449383" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 80.0,740.0 L 340.0,740.0" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 364.5,740.0 L 596.0,740.0 L 596.0,456.76762723449383" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 774.4615384615385,340.7242569525019 L 1000.0,340.7242569525019 L 1000.0,120.0 L 1150.0,120.0" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 1174.5,120.0 L 1540.0,120.0" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 1540.0,450.76752993717025 L 1420.0,450.76752993717025" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 1395.5,450.76752993717025 L 1300.0,450.76752993717025" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 1275.0,450.76752993717025 L 1150.0,450.76752993717025" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 1125.5,450.76752993717025 L 792.0,450.76752993717025" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 716.0,590.0 L 716.0,675.6 A 7 7 0 0 1 716.0,689.6 L 716.0,720.0 L 880.0,720.0" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 904.5,720.0 L 1040.0,720.0" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 1170.0,720.0 L 1540.0,720.0" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 1137.5,590.0 L 1162.5,590.0 L 1162.5,615.0 L 1137.5,615.0 L 1137.5,640.0" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 1137.5,664.5 L 1137.5,700.0" fill="none" stroke="black" stroke-width="4" />
+    <path d="M 1072.5,740.0 L 1072.5,810.0 L 1047.5,810.0 L 1047.5,850.0 L 1072.5,850.0" fill="none" stroke="black" stroke-width="4" />
     <path d="M 422.5,335.76762723449383 L 422.5,297.76762723449383" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 444.5,275.76762723449383 L 482.2,275.76762723449383 L 482.2,438.36762723449385" fill="none" stroke="black" stroke-width="1" />
     <line x1="457.9" y1="280.8" x2="463.9" y2="270.8" stroke="black" stroke-width="1" />
@@ -240,9 +240,9 @@
     <line x1="477.2" y1="355.6" x2="487.2" y2="361.6" stroke="black" stroke-width="1" />
     <line x1="477.2" y1="392.2" x2="487.2" y2="398.2" stroke="black" stroke-width="1" />
     <line x1="477.2" y1="396.2" x2="487.2" y2="402.2" stroke="black" stroke-width="1" />
-    <path d="M 872.0,432.0 L 872.0,445.76752993717025 A 5 5 0 0 1 872.0,455.76752993717025 L 872.0,540.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
+    <path d="M 872.0,432.0 L 872.0,443.768 A 7 7 0 0 1 872.0,457.768 L 872.0,540.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
     <path d="M 1265.5,357.76752993717025 L 1197.5,357.76752993717025" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
-    <path d="M 894.0,562.0 L 1115.0,562.0 L 1115.0,455.76752993717025 A 5 5 0 0 1 1115.0,445.76752993717025 L 1115.0,357.76752993717025 L 1153.5,357.76752993717025" fill="none" stroke="black" stroke-width="1" stroke-dasharray="9,3,2,3" />
+    <path d="M 894.0,562.0 L 1115.0,562.0 L 1115.0,457.768 A 7 7 0 0 1 1115.0,443.768 L 1115.0,357.76752993717025 L 1153.5,357.76752993717025" fill="none" stroke="black" stroke-width="1" stroke-dasharray="9,3,2,3" />
     <path d="M 1175.5,379.76752993717025 L 1175.5,413.3675299371703 L 1137.8,413.3675299371703 L 1137.8,438.3675299371703" fill="none" stroke="black" stroke-width="1" />
     <line x1="1170.5" y1="391.1" x2="1180.5" y2="397.1" stroke="black" stroke-width="1" />
     <line x1="1170.5" y1="395.1" x2="1180.5" y2="401.1" stroke="black" stroke-width="1" />
@@ -251,7 +251,7 @@
     <line x1="1132.8" y1="420.4" x2="1142.8" y2="426.4" stroke="black" stroke-width="1" />
     <line x1="1132.8" y1="424.4" x2="1142.8" y2="430.4" stroke="black" stroke-width="1" />
     <path d="M 550.0,388.0 L 550.0,320.0" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
-    <path d="M 572.0,298.0 L 615.0,298.0 L 615.0,445.76762723449383 A 5 5 0 0 1 615.0,455.76762723449383 L 615.0,682.6 L 892.2,682.6 L 892.2,707.6" fill="none" stroke="black" stroke-width="1" />
+    <path d="M 572.0,298.0 L 615.0,298.0 L 615.0,443.768 A 7 7 0 0 1 615.0,457.768 L 615.0,682.6 L 892.2,682.6 L 892.2,707.6" fill="none" stroke="black" stroke-width="1" />
     <line x1="588.0" y1="303.0" x2="594.0" y2="293.0" stroke="black" stroke-width="1" />
     <line x1="592.0" y1="303.0" x2="598.0" y2="293.0" stroke="black" stroke-width="1" />
     <line x1="610.0" y1="335.2" x2="620.0" y2="341.2" stroke="black" stroke-width="1" />
@@ -285,7 +285,7 @@
     <line x1="887.2" y1="689.6" x2="897.2" y2="695.6" stroke="black" stroke-width="1" />
     <line x1="887.2" y1="693.6" x2="897.2" y2="699.6" stroke="black" stroke-width="1" />
     <path d="M 1092.0,208.50508739638542 L 1160.0,208.50508739638542" fill="none" stroke="black" stroke-width="1" stroke-dasharray="7,4" />
-    <path d="M 1204.0,208.50508739638542 L 1229.0,208.50508739638542 L 1229.0,125.0 A 5 5 0 0 1 1229.0,115.0 L 1229.0,82.6 L 1162.2,82.6 L 1162.2,107.6" fill="none" stroke="black" stroke-width="1" />
+    <path d="M 1204.0,208.50508739638542 L 1229.0,208.50508739638542 L 1229.0,127 A 7 7 0 0 1 1229.0,113 L 1229.0,82.6 L 1162.2,82.6 L 1162.2,107.6" fill="none" stroke="black" stroke-width="1" />
     <line x1="1211.0" y1="213.5" x2="1217.0" y2="203.5" stroke="black" stroke-width="1" />
     <line x1="1215.0" y1="213.5" x2="1221.0" y2="203.5" stroke="black" stroke-width="1" />
     <line x1="1224.0" y1="161.0" x2="1234.0" y2="167.0" stroke="black" stroke-width="1" />
@@ -431,8 +431,8 @@
     <text x="577.0" y="287.5" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">LAH</text>
     <rect x="577.0" y="301.0" width="27.8" height="15.0" fill="white" />
     <text x="577.0" y="308.5" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">LAL</text>
-    <rect x="1232.0" y="190.5" width="27.8" height="15.0" fill="white" />
-    <text x="1232.0" y="198.00508739638542" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">PAH</text>
+    <rect x="1232.5" y="190.5" width="27.8" height="15.0" fill="white" />
+    <text x="1232.5" y="198.00508739638542" font-family="sans-serif" font-size="12" text-anchor="start" dominant-baseline="middle">PAH</text>
   </g>
   </g>
 </svg>

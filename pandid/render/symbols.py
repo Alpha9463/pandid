@@ -56,6 +56,7 @@ from functools import lru_cache
 from typing import Callable
 
 from pandid.portgeom import outward_dir
+from pandid.render.weights import LineWeight
 from pandid.streams import SIGNAL_KINDS
 
 # Two placements closer together than this are the same point as far as
@@ -75,19 +76,23 @@ ARROWHEAD = 12.0
 #: The white a drawing has to leave between two arrowheads side by side
 #: on one face, in drawing units.
 #:
-#: **ISO 128-20:1996 §4.4**, *Spacing between lines*, keeps two parallel
-#: lines at least twice the widest of them apart, and never under 0,7 mm.
-#: Two heads on one face are two parallel
-#: filled shapes, so the clearance is twice the weight the sheet draws
-#: its process lines at (``pandid.render.svg._PROCESS_STROKE``, 2 units,
-#: itself ISO 15519-1 §6.2's). ``tests/test_validate.py`` asserts the
-#: two stay in step.
+#: **ISO 128-20:1996 §4.4** and **ISO 10628-1 §5.3.2** both put the
+#: floor at twice the wider of two parallel lines. Two heads on one face
+#: are two parallel filled shapes on a main flow line, so the clearance
+#: is twice that rung
+#: (:attr:`pandid.render.weights.LineWeight.MAIN_FLOW`).
+#:
+#: Read off the ladder rather than copied, which is what #490 changed
+#: here: it was written ``2 * 2.0`` against a process line that was
+#: itself 2 units, and a process line is 4 units now, so a hand copy
+#: would have left this floor at half what §5.3.2 asks.
+#: ``tests/test_validate.py`` asserts the two stay in step.
 #:
 #: In drawing units against the drawing's own line weight, so it says
 #: the same thing at whatever scale the sheet is issued. Holding any of
 #: them at a *physical* width is the other half of ISO 15519-1 §6.2 --
 #: at least 0,18 mm on the final medium -- which nothing here checks.
-MIN_HEAD_CLEARANCE = 2 * 2.0
+MIN_HEAD_CLEARANCE = 2 * LineWeight.MAIN_FLOW.width
 
 #: The closest two nozzles that both wear an arrowhead may be pitched on
 #: one face: the head, plus the clearance a reader needs beside it.
@@ -737,10 +742,9 @@ class Symbol:
     # ships, which is why it defaults false: a body drawn without an
     # opinion is the b) weight, the one every hand-drawn fallback in this
     # module was already written to. Both renderers read it off the
-    # resolved :class:`Symbol` and rule their own weight from it --
-    # :data:`pandid.render.svg._TRIM_STROKE` and
-    # :data:`pandid.render.drawio._TRIM_STROKE` -- rather than keeping a
-    # second table of kinds that could drift from this one.
+    # resolved :class:`Symbol` and rule their own weight from it, both
+    # through :func:`pandid.render.svg._class_weight`, rather than
+    # keeping a second table of kinds that could drift from this one.
     trim: bool = False
 
     def __post_init__(self) -> None:
