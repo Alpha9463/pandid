@@ -120,6 +120,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the flow-rate half, so flipping it does not on its own reach conformance
   -- the missing piece is data only the author has, which is what the new
   finding says.
+- **`Flowsheet.show()` takes every keyword `render()` takes, and opens a
+  window rather than a browser (#472).** It took none of them, so the one
+  call an author makes while drafting was the one that could not preview a
+  stream table, a page size, a P&ID or the coordinate overlay;
+  `fs.show(show_stream_table=True, page_size="A3", diagram="p&id")` now
+  draws what `fs.render(..., same words)` writes. The two signatures are
+  held equal by a test rather than kept in step by hand, so a keyword added
+  to `render()` and not to `show()` fails on the day it lands.
+
+  The sheet opens in a resizable window, scaled to whatever size the window
+  has and closing on Escape, and the call blocks until it is closed --
+  `matplotlib.pyplot.show()`'s behaviour, without matplotlib. `dependencies`
+  is still empty: the window is stdlib tkinter, and the SVG is rasterised
+  for it by the same optional `pdf` extra `render("sheet.png")` already
+  uses. Without a display or without that extra -- CI, a container, SSH
+  without X11 -- the sheet goes to the browser as before, and the reason it
+  went there is printed rather than left to be guessed at. Neither path
+  hangs or raises on a headless machine.
+
+  The temporary file no longer leaks. A window is handed bytes and writes
+  nothing at all; the browser fallback keeps one file per process,
+  overwritten by each `show()` and dropped on the way out.
 
 ### Changed
 

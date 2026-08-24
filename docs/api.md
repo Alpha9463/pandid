@@ -218,6 +218,7 @@ to_svg(*, show_stream_table: bool = False,
        border: str | None = None,
        diagram: str | None = None,
        page_size: str | None = None,
+       connections: str | None = None,
        jump_direction: str = "vertical",
        debug: bool | float = False,
        check: bool = True) -> str
@@ -232,6 +233,7 @@ read the model alone run *before* the layout and the routing; see
 to_drawio(*, diagram: str | None = None,
           page_size: str | None = None,
           border: str | None = None,
+          connections: str | None = None,
           jump_direction: str = "vertical",
           show_stream_table: bool = False,
           check: bool = True) -> str
@@ -241,7 +243,7 @@ Returns a draw.io / diagrams.net document, on the same terms. See
 
 ```text
 render(path: str | Path, *, show_stream_table=False, border=None,
-       diagram=None, page_size=None,
+       diagram=None, page_size=None, connections=None,
        jump_direction="vertical", debug=False, check=True) -> None
 ```
 Writes the drawing. The format comes from the extension: `.svg` (or no
@@ -252,9 +254,30 @@ raises `ValueError`. The PDF is vector, drawn at the sheet's physical size, and
 the PNG is rasterised from that same PDF.
 
 ```text
-show() -> None                   # render to a temp file and open a browser
+show(*, show_stream_table=False, border=None, diagram=None, page_size=None,
+     connections=None, jump_direction="vertical", debug=False, check=True) -> None
 _repr_svg_() -> str              # Jupyter renders a flowsheet inline
 ```
+`show()` is `render()` without the path: every keyword above means what it means
+there, so a draft can be previewed with its stream table, on a page size, as a
+P&ID, or with the coordinate overlay on.
+
+It opens a **window** — the sheet scaled to the window, resized with it, closing
+on Escape — and blocks until you close it, the way `matplotlib.pyplot.show()`
+does. That needs a display and the optional rasteriser
+(`pip install 'pandid[pdf]'`), since a window shows pixels and the renderer's
+output is SVG.
+
+Without either — CI, a container, SSH without X11, or no `pdf` extra — the sheet
+goes to your **browser** instead, and the reason it went there is printed:
+
+```text
+pandid: no window available (no display ($DISPLAY is unset)); opened
+/tmp/pandid-preview-8fk2p1qa/Debutaniser.svg in your browser instead
+```
+
+A headless machine never hangs and never raises. The browser's copy is one file
+per process, overwritten by each `show()` and swept on the way out.
 
 ### Rendering options
 
