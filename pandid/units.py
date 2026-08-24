@@ -4964,9 +4964,8 @@ class Thickener(Unit):
     and a **clarifier** for the overflow, the clean liquor a plant is
     allowed to discharge. Neither the duty nor the word changes the
     drawing, so this is one class, named the way a minerals or water
-    schedule spells it first; :class:`~pandid.devices.Clarifier` does not
-    exist for the same reason
-    :class:`~pandid.devices.Screen` is not also spelled ``Sifter``.
+    schedule spells it first; ``Clarifier`` does not exist for the same
+    reason :class:`~pandid.devices.Screen` is not also spelled ``Sifter``.
 
     Three connections, and they are the three a settling machine has::
 

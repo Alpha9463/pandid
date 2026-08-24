@@ -8,7 +8,7 @@ have. That is worse here than it looks, because this package ships ``py.typed``
 and asks to be annotated against, and because #174 makes "correct on the first
 try, from the documentation alone" a goal rather than a nicety.
 
-The rule these tests hold both halves to is one a reader can check by eye:
+The rule this file holds the package and its documentation to::
 
     A type the documentation names **bare** is importable from ``pandid``.
     A type that is not is named with the module it lives in.
@@ -17,23 +17,59 @@ So ``Stream``, ``Port``, ``Loop`` and ``Issue`` are on the package, and
 ``pandid.state.State``, ``pandid.document.StreamTableOptions`` and
 ``pandid.render.symbols.Symbol`` -- three the package deliberately does not
 export -- are written out in full wherever the reference mentions them. Either
-spelling imports. Neither test cares which of the two an author picks; both fail
-on the third possibility, which is the bug.
+spelling imports. Nothing here cares which of the two an author picks; every
+check fails on the third possibility, which is the bug.
 
-The rule is enforced rather than reviewed because the gap arrives one name at a
-time. #441 was three names, and the sweep that answered it found twenty-two: no
-one held them back, they simply arrived one helper at a time with nothing
-checking. The next handle a helper returns will arrive the same way.
 
-**A note on what this file may not do.** A guard is a filter, and a filter's
-blind spots live in the cases it declines to look at. Every ``continue``, every
-``if not``, every narrowing of a set here is a defect this file has decided not
-to catch, so each one carries the argument for why. Three rounds of review found
-five such holes -- a wrong binding that was merely *present*, a documented name
-resolving to nothing, an unimportable module reported as a clean sweep, public
-classmethods never read, and a hand-maintained list of modules that could not
-know about a module added tomorrow. What replaced them is the pattern to keep:
-prefer a derived set over a written one, and prefer failing to skipping.
+How this file is built, and why it is built that way
+----------------------------------------------------
+
+Three rounds of review found ten defects in this guard and every one of them was
+the same mistake: **the guard accepted a claim it had not resolved.** It skipped
+a value whose type it did not like; it took a ``.get()`` returning ``None`` as
+permission to move on; it read a dotted path's *shape* and called that a module.
+The last of those was the sharpest, because a documentation path that looks
+right and does not import is #441's own user-visible failure, waved through by
+the guard written to stop it.
+
+So there is one rule about the checking, and it is stronger than the rule being
+checked::
+
+    A name the documentation states is resolved to a real object, or this file
+    fails. There is no third outcome.
+
+Everything below follows from that, and the three mechanisms that make it hold
+are worth naming, because a future edit that weakens any of them puts the holes
+back:
+
+1. **Resolution, never pattern-matching.** ``_resolves_by_stated_path()`` looks
+   the module up in a table of modules that have actually been imported and asks
+   it for the attribute. It cannot accept ``pandid.StreamTableOptions``, because
+   there is no such module and ``pandid`` has no such attribute -- where a regex
+   over the path's shape accepted it happily.
+2. **One list of reading sites.** Every place a name can be stated -- Markdown
+   prose, ``Type`` columns, signature blocks, return annotations, docstrings --
+   is read into one list of :class:`Mention`, and every check iterates that list.
+   A reading site fixed for one check is fixed for all of them, which is what
+   was not true when the resolution rule reached the three Markdown files and
+   not the docstrings beside them.
+3. **Derived sets, never written ones.** The modules that must be reachable come
+   off the filesystem; the expected binding of 129 of the 142 exports comes from
+   ``units.__all__`` and ``devices.__all__``. A hand-kept list cannot know about
+   the module or the class added tomorrow, which is the same objection #484
+   makes to a hand-kept field list.
+
+The one thing this file does *not* demand is that every capitalised token in
+English prose resolve. It cannot: ``CV-305``, ``A1A``, ``CWSH`` and ``NTS`` are
+spelled like one-word class names and are tags, specs, services and scales.
+:attr:`Mention.must_resolve` marks the places where the reading is certain, and
+those are the places the rule is enforced. Which places those are is pinned by
+the fixture tests at the bottom, so widening or narrowing it is a deliberate act
+with a diff.
+
+``CONTRIBUTING.md`` is deliberately not read. It documents the internals to
+someone changing them -- ``OverlayPart``, ``Deprecation``, ``IsoPart`` -- and an
+internal named there describes machinery rather than promising a surface.
 """
 
 from __future__ import annotations
@@ -44,9 +80,10 @@ import importlib
 import inspect
 import pkgutil
 import re
+from functools import cache
 from pathlib import Path
 from types import ModuleType
-from typing import Callable
+from typing import Callable, NamedTuple, TypeGuard
 
 import pytest
 
@@ -56,10 +93,6 @@ _REPO = Path(__file__).resolve().parent.parent
 _PACKAGE = Path(pandid.__file__).resolve().parent
 
 #: What a user reads and writes imports from. Every one is shipped in the sdist.
-#: ``CONTRIBUTING.md`` is deliberately absent: it documents the internals to
-#: someone changing them -- ``OverlayPart``, ``Deprecation``, ``IsoPart`` -- and
-#: an internal named there describes the machinery rather than promising a
-#: surface.
 _USER_DOCS = ("docs/api.md", "README.md", "docs/gallery/README.md")
 
 #: A class name: CamelCase, which every class in this package is.
@@ -78,15 +111,66 @@ _FENCE = re.compile(r"^```(\w*)\s*$")
 #: One span between backticks, which is how prose spells anything typed.
 _BACKTICKED = re.compile(r"`([^`\n]+)`")
 
-#: A dotted module path under this package. The ``+`` is deliberate: a bare
-#: ``pandid`` says nothing about where a class is and must not excuse one.
+#: A dotted path under this package, as the text writes it. Resolving it is a
+#: separate job and a real one -- this only finds the candidate.
 _DOTTED = re.compile(r"\bpandid(?:\.\w+)+\b")
 
-#: Types from outside this package that the reference names. Everything else it
-#: names has to be either a class this package declares or a builtin, so this is
-#: the whole of the escape hatch and it is three names long. A fourth belongs
-#: here only when the reference really does hand a reader a stdlib type.
-_FOREIGN_TYPES = frozenset({"Path", "Callable", "Protocol"})
+#: A Markdown table's cell separator. ``\|`` is Markdown's escape for a literal
+#: pipe and is how this reference writes a union inside a cell -- ``Route \|
+#: None``. Splitting on a bare ``|`` cut those cells in half and lost the type
+#: in them, so the escaped form is excluded here and unescaped after the split.
+_CELL_SEPARATOR = re.compile(r"(?<!\\)\|")
+
+#: A Sphinx cross-reference whose target *is a type*: ``:class:`` and ``:exc:``.
+#: The member roles are deliberately not here. ``:meth:`` and ``:attr:`` name a
+#: member, so their last component is a method or an attribute -- reading
+#: ``:attr:`COMPOSITION``` as a type name asks a class-level dict to be a class.
+#: The class in a member role's path is a *prefix* of it, which
+#: :func:`_resolves_by_stated_path` already follows when one is needed.
+_SPHINX_TYPE_ROLE = re.compile(r":(?:class|exc):`~?([\w.]+)`")
+
+#: Any Sphinx cross-reference, type or member. Only used to confirm the split
+#: above is real in the fixture test.
+_SPHINX_ROLE = re.compile(r":(?:class|meth|attr|func|obj|exc):`~?([\w.]+)`")
+
+#: Types from outside this package that the **Markdown** names, each with the
+#: module it really comes from -- because "resolved" here means imported and
+#: looked up, for these as much as for anything else. Three names is the whole
+#: of the escape hatch on that side, and a fourth belongs here only when the
+#: reference genuinely hands a reader a type from outside.
+#:
+#: The source side needs no such list. A name written in a docstring or an
+#: annotation is resolved against *the namespace of the module it was written
+#: in* -- ``Any`` in ``pandid/units.py`` is ``pandid.units.Any``, which is
+#: ``typing.Any``, because that file imported it. That is the same resolution
+#: Python itself would do, so it costs nothing to be exactly right, and a list
+#: is only needed where there is no module to ask.
+_FOREIGN_TYPES = {"Path": "pathlib", "Callable": "typing", "Protocol": "typing"}
+
+
+class Mention(NamedTuple):
+    """One place a name is stated, and everything needed to judge it.
+
+    ``context`` is the text a qualification may be written in -- the Markdown
+    line, or a member's return annotation and docstring together. It is what
+    :func:`_resolves_by_stated_path` reads, so it must be the whole of what a
+    reader has in front of them at that point.
+
+    ``must_resolve`` says the reading is certain: the text is naming a type
+    here, so a name that resolves to nothing is a defect rather than an English
+    word that happens to be capitalised.
+
+    ``home`` is the module the text was written in, for text that has one. It is
+    the namespace a name in that text would be resolved in by Python, so it is
+    the namespace it is resolved in here. Markdown has no home, which is why the
+    three foreign types it names are listed instead.
+    """
+
+    where: str
+    name: str
+    context: str
+    must_resolve: bool
+    home: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +183,7 @@ def _modules_on_disk() -> set[str]:
 
     The filesystem is the authority a hand-written list cannot be. A module
     added tomorrow is in this set the moment it is saved, which is the property
-    the list it replaced did not have: that list passed happily while the walk
+    the list this replaced did not have: that list passed happily while the walk
     skipped a module it had never heard of.
     """
     names: set[str] = set()
@@ -111,29 +195,36 @@ def _modules_on_disk() -> set[str]:
             parts.pop()
         if not parts:
             # pandid/__init__.py is the package itself, which walk_packages
-            # enumerates *within* rather than yielding. It is already imported.
+            # enumerates *within* rather than yielding. It is already imported,
+            # and _modules() adds it under its own name.
             continue
         names.add("pandid." + ".".join(parts))
     return names
 
 
-def _walked_modules() -> dict[str, ModuleType]:
-    """Import every module under ``pandid`` and prove the walk reached them all.
+@cache
+def _modules() -> dict[str, ModuleType]:
+    """Every module of this package, imported, keyed by name.
 
-    **Nothing is caught.** An import that failed used to be skipped, and a
-    skipped module is a module whose classes every check below then stops asking
-    about -- so a broken ``pandid.render`` would have made a bare ``Symbol`` in
-    the documentation pass. No module in this package needs an optional extra to
-    import (the ``pdf`` extra is imported inside the function that rasterises,
-    not at module scope), so an ``ImportError`` here is a broken package and has
-    to be heard. Should one ever need an extra, catch *that module by name*
-    rather than catching the class of error.
+    This table is what makes resolution possible rather than approximate. A
+    dotted path in the documentation is a module of this package or it is not,
+    and asking this dict is how that question gets an answer -- no ``try:
+    import_module`` whose ``except ImportError`` would answer "not a module" for
+    a module that exists and is broken.
+
+    **Nothing is caught while building it.** An import that failed used to be
+    skipped, and a skipped module is a module whose classes every check then
+    stops asking about -- so a broken ``pandid.render`` made a bare ``Symbol``
+    in the documentation pass. No module here needs an optional extra to import
+    (the ``pdf`` extra is imported inside the function that rasterises, not at
+    module scope), so an ``ImportError`` is a broken package and has to be
+    heard. Should one ever need an extra, catch *that module by name*.
 
     Letting the error out covers the module that raises. It does not cover a
     walk that quietly enumerates fewer modules than exist, which would satisfy
-    every check in this file, so the two sets are compared. Both directions are
-    checked: on disk and not walked is the blind spot, walked and not on disk
-    means this function's own derivation has drifted from ``pkgutil``'s.
+    every check in this file, so the two sets are compared. Both directions:
+    on disk and not walked is the blind spot, walked and not on disk means this
+    file's own derivation has drifted from ``pkgutil``'s.
     """
     imported = {
         info.name: importlib.import_module(info.name)
@@ -146,9 +237,11 @@ def _walked_modules() -> dict[str, ModuleType]:
         f"shipped. Missed: {sorted(on_disk - set(imported))}. "
         f"Unexpected: {sorted(set(imported) - on_disk)}"
     )
+    imported["pandid"] = pandid
     return imported
 
 
+@cache
 def _public_classes() -> dict[str, str]:
     """Every public class this package defines **at run time**, and its module.
 
@@ -160,42 +253,67 @@ def _public_classes() -> dict[str, str]:
     Run time is the point: this is the set the export rule can apply to, because
     only a class that exists when Python runs can be imported from ``pandid``.
     The ``TYPE_CHECKING``-only narrowing classes are deliberately not here; see
-    :func:`_declared_class_names`.
+    :func:`_type_checking_classes`.
     """
     found: dict[str, str] = {}
-    for imported in _walked_modules().values():
-        for name, value in vars(imported).items():
-            if name.startswith("_") or not inspect.isclass(value):
+    for name, module in _modules().items():
+        if name == "pandid":
+            continue
+        for attribute, value in vars(module).items():
+            if attribute.startswith("_") or not inspect.isclass(value):
                 continue
             if getattr(value, "__module__", "").startswith("pandid."):
-                found[name] = value.__module__
+                found[attribute] = value.__module__
     return found
 
 
-def _declared_class_names() -> set[str]:
-    """Every public class name this package's **source** declares.
+@cache
+def _type_checking_classes() -> dict[str, str]:
+    """Public classes declared only under ``if TYPE_CHECKING:``, and their module.
 
-    Parsed rather than imported, because a third of the narrowing classes the
-    reference names do not exist at run time: ``Absorber2``, ``Column2`` and
-    ``ColumnDraw1`` .. ``ColumnDraw8`` are declared inside ``if TYPE_CHECKING:``
-    in ``pandid/units.py``, for a type checker to resolve ``n_feeds=2`` with.
-    They are real names the documentation is right to use and a runtime sweep
-    can never see, so "does this documented name exist at all" is asked of the
-    source and "must this documented name be exported" is asked of the run time.
+    A third of the narrowing classes the reference names do not exist at run
+    time: ``Absorber2``, ``Column2`` and ``ColumnDraw1`` .. ``ColumnDraw8`` are
+    declared inside ``if TYPE_CHECKING:`` in ``pandid/units.py``, so a type
+    checker can resolve ``Column("T-1", n_feeds=2).feed_2``. They are real names
+    the reference is right to use and no runtime sweep can ever see one.
 
-    ``ast`` rather than a regex: a regex over source finds ``class`` in a
-    docstring and misses one behind a decorator, and this set is what decides
-    whether a documented name is a typo.
+    So they are resolved statically, against the source that declares them --
+    which is a resolution and not a guess, because ``ast`` is the same parser
+    Python uses. Resolving them dynamically is not merely inconvenient, it is
+    impossible: the whole point of the declaration is that it is not executed.
+
+    The exemption is proved rather than asserted. Each of these is checked to be
+    genuinely absent from its module at run time, so "exempt from the export
+    rule because it cannot be imported" is a fact about the package rather than
+    a claim about it -- and a class that moved out of a ``TYPE_CHECKING`` block
+    stops being exempt on the next run.
     """
-    names: set[str] = set()
-    for path in _PACKAGE.rglob("*.py"):
-        if "__pycache__" in path.parts:
+    found: dict[str, str] = {}
+    for module_name, module in _modules().items():
+        if module_name == "pandid":
             continue
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        source = Path(str(module.__file__)).read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(module.__file__))
         for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef) and not node.name.startswith("_"):
-                names.add(node.name)
-    return names
+            if not isinstance(node, ast.If):
+                continue
+            test = node.test
+            guard = test.attr if isinstance(test, ast.Attribute) else getattr(test, "id", "")
+            if guard != "TYPE_CHECKING":
+                continue
+            for inner in ast.walk(node):
+                if isinstance(inner, ast.ClassDef) and not inner.name.startswith("_"):
+                    found[inner.name] = module_name
+
+    still_present = {
+        name: module for name, module in found.items() if hasattr(_modules()[module], name)
+    }
+    assert not still_present, (
+        "these are declared under `if TYPE_CHECKING:` and exist at run time "
+        "anyway, so the reason they are exempt from the export rule -- that "
+        f"nobody can import them -- is not true of them: {still_present}"
+    )
+    return found
 
 
 def _public_members(cls: type) -> dict[str, object]:
@@ -238,8 +356,7 @@ def _documentation_bearing(member: object) -> object | None:
     attribute that is a ``str``, a ``list`` or a ``dict`` (``PORTS``, ``PLACES``,
     ``kind``) has no annotations of its own and no docstring of its own -- ask
     ``inspect.getdoc`` for one and it answers with ``str``'s, several hundred
-    words about the builtin. It is a value, not a promise about a type, so there
-    is nothing here for this file to read.
+    words about the builtin. It is a value, not a statement about a type.
     """
     if isinstance(member, (classmethod, staticmethod)):
         return member.__func__
@@ -250,107 +367,164 @@ def _documentation_bearing(member: object) -> object | None:
     return None
 
 
-# ---------------------------------------------------------------------------
-# What the documentation says
-# ---------------------------------------------------------------------------
+def _authored_doc(fn: object) -> str:
+    """``fn``'s docstring, unless the docstring is the field list again.
 
-
-def _module_prefixes(line: str) -> set[str]:
-    """Every module path a dotted path on this line passes *through*.
-
-    ``pandid.render.symbols.SymbolRegistry.for_unit`` passes through
-    ``pandid.render.symbols`` and so names it, and a class living there is
-    placed by it. The trailing components produce entries that are not modules
-    at all, which is harmless: the caller only ever matches these against a real
-    ``__module__``.
-
-    The direction matters and only one of the two is admissible. A path that
-    reaches *past* a module names it. A path that stops *short* of it --
-    ``pandid.render`` for a class in ``pandid.render.symbols`` -- does not, and
-    used to be accepted here. A reader given ``pandid.render`` still cannot
-    write the import, which is the whole thing being checked.
+    A ``@dataclass`` with no docstring of its own is given one by the decorator:
+    the constructor signature, field annotations and all. Those annotations are
+    read as storage rather than as a promise (see
+    :func:`_public_surface_mentions`), so letting them back in through the
+    generated docstring would be answering a question this file has decided not
+    to ask.
     """
-    prefixes: set[str] = set()
-    for path in _DOTTED.findall(line):
+    doc = inspect.getdoc(fn) or ""
+    if inspect.isclass(fn) and doc.startswith(fn.__name__ + "("):
+        return ""
+    return doc
+
+
+# ---------------------------------------------------------------------------
+# Resolution
+# ---------------------------------------------------------------------------
+
+
+def _is_class_named(value: object, name: str) -> TypeGuard[type]:
+    """Is ``value`` a class of this package's, under exactly this name?
+
+    Both halves matter. Without the name check, ``getattr(module, name)``
+    landing on a re-exported alias of something else would satisfy the caller;
+    without the module check, a stdlib class re-exported into a pandid module
+    would.
+    """
+    return (
+        inspect.isclass(value)
+        and value.__name__ == name
+        and getattr(value, "__module__", "").startswith("pandid")
+    )
+
+
+def _resolves_at_root(name: str) -> bool:
+    """Can a reader write ``from pandid import <name>`` and get the class?
+
+    Asked of the package object rather than of ``__all__``, because ``__all__``
+    is a list of strings and a list of strings is a claim, not a binding.
+    """
+    return _is_class_named(getattr(pandid, name, None), name)
+
+
+def _resolves_by_stated_path(context: str, name: str) -> str | None:
+    """The module this text states ``name`` lives in, if the statement is true.
+
+    This is the function three rounds of review kept coming back to, and the
+    reason is worth writing down. It used to match the *shape* of a dotted path
+    -- ``pandid`` something ``.Name`` -- and treat a match as a statement of
+    where the class lives. So ``pandid.StreamTableOptions`` passed: it has the
+    shape, there is no such module, ``pandid`` has no such attribute, and the
+    reference was handing readers an import that raises. That is #441's own
+    failure, reproduced inside the guard built to prevent it.
+
+    It now resolves. Every dotted path in the text is cut at each of its
+    boundaries, each prefix is looked up in the table of modules that have
+    actually been imported, and the module is asked for the attribute. A path is
+    a statement of where the class lives only when following it arrives at the
+    class. ``pandid.render.symbols.SymbolRegistry.for_unit`` names
+    ``pandid.render.symbols``, which really does hold ``Symbol``;
+    ``pandid.StreamTableOptions`` names nothing at all.
+    """
+    modules = _modules()
+    for path in _DOTTED.findall(context):
         parts = path.split(".")
-        for stop in range(2, len(parts) + 1):
-            prefixes.add(".".join(parts[:stop]))
-    return prefixes
+        for stop in range(1, len(parts) + 1):
+            stated = ".".join(parts[:stop])
+            module = modules.get(stated)
+            if module is None:
+                continue
+            value = getattr(module, name, None)
+            # The stated module must be where the class *lives*, not merely a
+            # module that imported it. `pandid/spec.py` does `from
+            # pandid.document import StreamTableOptions` for its own use, so
+            # `pandid.spec.StreamTableOptions` is a real attribute and a working
+            # import -- and telling a reader the class lives there is still
+            # wrong. It also let a docstring returning an unexported type pass
+            # by naming some unrelated module of this package in the same
+            # breath, which is how `Flowsheet.from_dict` got away with it.
+            if _is_class_named(value, name) and value.__module__ == stated:
+                return stated
+    return None
 
 
-def _names_a_module(line: str, name: str, module: str) -> bool:
-    """Does this line say where ``name`` lives?
+def _resolves_elsewhere(name: str, home: str | None) -> bool:
+    """Does this name resolve to something that is not this package's to export?
 
-    Either as the class's own full path (``pandid.document.StreamTableOptions``)
-    or as its module, which is how the reference annotates the two extension
-    protocols: ``class Router(Protocol):  # pandid.routing``.
+    Three ways, and every one of them is a lookup rather than a list membership:
+
+    * a builtin -- how ``ValueError`` and ``KeyError`` are named;
+    * a name bound in ``home``, the module the text was written in. ``Any`` in a
+      ``pandid/units.py`` docstring is ``pandid.units.Any`` is ``typing.Any``,
+      because that file imported it, and asking the module is the same
+      resolution Python would do;
+    * one of the three foreign types the Markdown names, whose module is
+      imported and asked. Markdown has no ``home`` to ask, which is the only
+      reason that list exists.
     """
-    if re.search(rf"\bpandid(?:\.\w+)*\.{re.escape(name)}\b", line):
+    if hasattr(builtins, name):
         return True
-    return module in _module_prefixes(line)
+    if home is not None:
+        module = _modules().get(home)
+        if module is not None and hasattr(module, name):
+            return True
+    module_name = _FOREIGN_TYPES.get(name)
+    return module_name is not None and hasattr(importlib.import_module(module_name), name)
 
 
-def _type_mentions(text: str) -> list[tuple[int, str, str]]:
-    """``(line number, name, whole line)`` for every type name the text spells.
+# ---------------------------------------------------------------------------
+# Where names are stated -- one list, read by every check
+# ---------------------------------------------------------------------------
 
-    Two places count, and they are the two a reader lifts an import from:
 
-    * a **backticked span** in prose, which is how this reference writes
-      anything typed -- a table's Type column, ``list[Issue]``, ``a `Stream```;
-    * every line of a ``text`` fence, which is where the signature blocks are,
-      and where a return type is named with no backticks around it.
+def _table_cells(line: str) -> list[str]:
+    """A Markdown table row's cells, with ``\\|`` respected and then unescaped."""
+    parts = _CELL_SEPARATOR.split(line.strip())
+    if parts and not parts[0].strip():
+        parts = parts[1:]
+    if parts and not parts[-1].strip():
+        parts = parts[:-1]
+    return [part.strip().replace("\\|", "|") for part in parts]
 
-    A ``python`` fence is not scanned. It is a runnable example, so it carries
-    its own import line -- which
+
+def _markdown_mentions(relative: str) -> list[Mention]:
+    """Every name a user-facing document states, and how certainly it states it.
+
+    Four readings, and the certainty differs between them:
+
+    * a **backticked span** in prose. Every name in it is a candidate for the
+      export rule; only a two-word CamelCase name is required to *resolve*,
+      because ``CWSH`` and ``A1A`` are spelled like one-word class names.
+    * a **``Type`` column** -- a cell in a column whose header is literally
+      ``Type``. Found by heading and not by position, which is what keeps the
+      *value* columns out: this reference has tables whose second cell holds
+      ``FC``/``FO``, ``A4``/``A3`` and ``P``/``FB``/``CWS``. Certain.
+    * a **return position** in a ``text`` fence -- ``-> ControlLoop``, the shape
+      #441 had. Certain.
+    * **every other line of a ``text`` fence**, which is where the signature
+      blocks are. Not certain: those fences also carry sample error messages and
+      sample stdout, and the reference's own placeholders (``MyEngine``,
+      ``MyRouter``) live there, which a reader is invited to replace with a
+      class of their own that this package will never have.
+
+    A ``python`` fence is not read at all. It is a runnable example, so it
+    carries its own import line -- which
     ``test_every_import_the_documentation_writes_is_an_import_that_works``
     executes, so that is an argument backed by a check rather than a hope -- and
     its string literals are prose: ``units.Block("Synthesis Loop")`` is not a
-    mention of ``Loop``. Unfenced prose outside backticks is not scanned for the
+    mention of ``Loop``. Unfenced text outside backticks is not read for the
     mirror-image reason: "the Port table" is English.
     """
-    mentions: list[tuple[int, str, str]] = []
-    language: str | None = None
-    for number, line in enumerate(text.splitlines(), 1):
-        opening = _FENCE.match(line)
-        if opening is not None and language is None:
-            language = opening.group(1) or "plain"
-            continue
-        if language is not None and line.strip() == "```":
-            language = None
-            continue
-        if language is None:
-            spans = _BACKTICKED.findall(line)
-        elif language == "text":
-            spans = [line]
-        else:
-            continue
-        for span in spans:
-            for name in _CLASS_NAME.findall(span):
-                mentions.append((number, name, line))
-    return mentions
-
-
-def _type_positions(text: str) -> list[tuple[int, str, str]]:
-    """Where the text is unambiguously naming a type, rather than mentioning one.
-
-    Two positions, and between them they cover every way #441 presented:
-
-    * ``-> T`` in a ``text`` fence. This is the shape the bug had -- three
-      helpers returning ``ControlLoop``, ``Loop`` and ``ValveStation``.
-    * a cell in a table column whose header is literally ``Type``. This is where
-      ``StreamTableOptions`` and ``Route`` are named, and finding the column by
-      its heading rather than by its position is what keeps the *value* columns
-      out: this reference has tables whose second cell holds ``FC``/``FO``,
-      ``A4``/``A3``, ``P``/``FB``/``CWS``, none of which is a type.
-
-    Kept separate from :func:`_type_mentions` because the demand made here is
-    stronger -- a name in one of these positions has to *resolve* -- and a
-    stronger demand may only be made where the reading is certain.
-    """
-    positions: list[tuple[int, str, str]] = []
+    mentions: list[Mention] = []
     language: str | None = None
     type_column: int | None = None
-    for number, line in enumerate(text.splitlines(), 1):
+    for number, line in enumerate((_REPO / relative).read_text(encoding="utf-8").splitlines(), 1):
+        where = f"{relative}:{number}"
         opening = _FENCE.match(line)
         if opening is not None and language is None:
             language = opening.group(1) or "plain"
@@ -360,104 +534,171 @@ def _type_positions(text: str) -> list[tuple[int, str, str]]:
             continue
 
         if language == "text":
+            for name in _CLASS_NAME.findall(line):
+                mentions.append(Mention(where, name, line, must_resolve=False))
             for returns in re.findall(r"->\s*([^#\n]+)", line):
                 for name in _CLASS_NAME.findall(returns):
-                    positions.append((number, name, line))
+                    mentions.append(Mention(where, name, line, must_resolve=True))
             continue
         if language is not None:
             continue
 
+        for span in _BACKTICKED.findall(line):
+            for name in _CLASS_NAME.findall(span):
+                mentions.append(Mention(where, name, line, must_resolve=False))
+            for name in _MULTIWORD_NAME.findall(span):
+                mentions.append(Mention(where, name, line, must_resolve=True))
+
         if not line.lstrip().startswith("|"):
             type_column = None
             continue
-        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        cells = _table_cells(line)
         if "Type" in cells:
             type_column = cells.index("Type")
             continue
         if type_column is not None and type_column < len(cells):
             for span in _BACKTICKED.findall(cells[type_column]):
                 for name in _CLASS_NAME.findall(span):
-                    positions.append((number, name, line))
-    return positions
-
-
-def _prose_class_mentions(text: str) -> list[tuple[int, str, str]]:
-    """Backticked two-word CamelCase in prose -- a name that can only be a class.
-
-    ``ControlLoop``, ``TitleBlock``, ``StreamTableOptions``: nothing else in this
-    reference is spelled that way. One-word names are not asked to resolve,
-    because ``CWSH``, ``A1A`` and ``Debutaniser`` are spelled that way too and no
-    rule separates them from ``Loop``. That is a real limit and it is the reason
-    :func:`_type_positions` exists: a one-word class name still has to resolve
-    wherever the text is actually naming a type.
-    """
-    mentions: list[tuple[int, str, str]] = []
-    language: str | None = None
-    for number, line in enumerate(text.splitlines(), 1):
-        opening = _FENCE.match(line)
-        if opening is not None and language is None:
-            language = opening.group(1) or "plain"
-            continue
-        if language is not None and line.strip() == "```":
-            language = None
-            continue
-        if language is not None:
-            continue
-        for span in _BACKTICKED.findall(line):
-            for name in _MULTIWORD_NAME.findall(span):
-                mentions.append((number, name, line))
+                    mentions.append(Mention(where, name, line, must_resolve=True))
     return mentions
 
 
-def _documented_names() -> set[str]:
-    """Every class name the user-facing documents spell, package membership aside.
+def _public_surface_mentions() -> list[Mention]:
+    """Every name the public surface states, in the two places a caller is told.
 
-    Deliberately not filtered against what ``pandid`` currently defines, which is
-    what makes it the rename guard's eye. Every other check here starts from the
-    package's own class names and asks the documentation about them, so a class
-    the package no longer has is a question none of them think to ask -- and a
-    reference still saying ``-> ControlLoop`` after the rename reads as clean.
-    This looks the other way down the same road.
+    A documented type gets into ``docs/api.md`` because a signature grew it
+    first: #441 is three names that arrived as ``-> ControlLoop``, ``-> Loop``
+    and ``-> ValveStation`` and were written up from there. So the source side
+    is read by the same rules and into the same list -- the fix that made a
+    nonexistent name in Markdown a failure was worthless while the docstring
+    beside it still swallowed one.
+
+    * **Return annotations.** What a public method hands back. Certain.
+    * **Docstrings**: two-word CamelCase names, and the target of every Sphinx
+      cross-reference. Certain, and measurably so -- the public surface states
+      no two-word CamelCase name today that is not a class of this package's or
+      a builtin, so the rule costs nothing and catches the stale reference.
+
+    Parameter and field annotations are read as neither. ``Port.state`` is
+    annotated ``State | None`` against ``pandid/ports.py``'s own import: that
+    describes storage rather than promising a caller a type, and the reference
+    already writes that one out in full as ``pandid.state.State``. What such an
+    annotation must do is *resolve*, and ``mypy pandid`` is the gate that owns
+    it.
     """
-    seen: set[str] = set()
+    mentions: list[Mention] = []
+
+    def read(owner: str, fn: object) -> None:
+        returns = str((getattr(fn, "__annotations__", None) or {}).get("return", ""))
+        doc = _authored_doc(fn)
+        context = returns + " " + doc
+        home = getattr(fn, "__module__", None)
+        for name in _CLASS_NAME.findall(returns):
+            mentions.append(Mention(owner, name, context, True, home))
+        for name in _MULTIWORD_NAME.findall(doc):
+            mentions.append(Mention(owner, name, context, True, home))
+        for target in _SPHINX_TYPE_ROLE.findall(doc):
+            # The class in the path is its last capitalised component, not its
+            # last component: this project writes `:class:`Block.ports_on`` for
+            # a member of a class as well as `:class:`~pandid.streams.Stream``
+            # for the class itself, and in the first the class named is `Block`.
+            # Taking the leaf regardless asked `ports_on` to be a type.
+            capitalised = [part for part in target.split(".") if part[:1].isupper()]
+            if capitalised:
+                mentions.append(Mention(owner, capitalised[-1], context, True, home))
+
+    for exported_name in pandid.__all__:
+        value = getattr(pandid, exported_name)
+        if inspect.isfunction(value):
+            read(f"pandid.{exported_name}", value)
+        if not inspect.isclass(value):
+            # A module (`units`, `devices`) or `__version__`: no return type and
+            # no docstring of this project's own. That each is the *right*
+            # object rather than merely present is
+            # test_every_exported_name_is_bound_to_the_object_it_names, which
+            # has no filter at all.
+            continue
+        read(exported_name, value)
+        for member_name, member in _public_members(value).items():
+            fn = _documentation_bearing(member)
+            if fn is not None:
+                read(f"{exported_name}.{member_name}", fn)
+    return mentions
+
+
+@cache
+def _all_mentions() -> tuple[Mention, ...]:
+    """Every place this project states a type name. One list; every check reads it."""
+    mentions: list[Mention] = []
     for relative in _USER_DOCS:
-        text = (_REPO / relative).read_text(encoding="utf-8")
-        seen.update(name for _, name, _ in _type_mentions(text))
-    return seen
+        mentions.extend(_markdown_mentions(relative))
+    mentions.extend(_public_surface_mentions())
+    return tuple(mentions)
 
 
-def _documented_but_unreachable(exported: Callable[[str], bool]) -> list[str]:
-    """Every place the docs name a class that ``exported`` says is not on the root.
+# ---------------------------------------------------------------------------
+# The verdicts
+# ---------------------------------------------------------------------------
+
+
+def _unreachable(exported: Callable[[str], bool]) -> list[str]:
+    """Names stated bare that ``exported`` says the root does not carry.
 
     Takes the export test as an argument so the mutation tests below can hand it
-    a smaller ``__all__`` and prove this actually fails. A name is reported
-    unless the line it is on says which module it lives in.
+    a smaller ``__all__`` and prove this actually fails.
+
+    The order of the questions is the order a reader meets them. Is it on the
+    package? Then the bare spelling works. Does the text state a path that
+    really resolves? Then the qualified spelling works. Is it a builtin, a
+    foreign type or a name that exists only for a type checker? Then this rule
+    has no purchase on it -- none of the three can be exported from ``pandid``,
+    and the first two are not this package's to export. Otherwise it is a class
+    of ours, stated in a way that does not import, and that is the defect.
     """
-    classes = _public_classes()
     failures: list[str] = []
-    for relative in _USER_DOCS:
-        path = _REPO / relative
-        for number, name, line in _type_mentions(path.read_text(encoding="utf-8")):
-            module = classes.get(name)
-            if module is None:
-                # Not a class this package defines at run time, so the export
-                # rule has nothing to say about it: a builtin (`ValueError`), one
-                # of the three foreign types, or a TYPE_CHECKING-only narrowing
-                # class (`ColumnDraw1`), none of which can be imported from
-                # `pandid` at run time and none of which should be.
-                #
-                # That it is one of those and *not* a name that resolves to
-                # nothing is asserted by
-                # test_every_type_the_documentation_names_resolves_to_something.
-                # Without that sibling, this line is where a documented type
-                # renamed in the code and left stale in the reference would
-                # vanish -- input accepted, found unusable, silently dropped.
-                continue
-            if exported(name):
-                continue
-            if _names_a_module(line, name, module):
-                continue
-            failures.append(f"{relative}:{number}: `{name}` ({module}) -- {line.strip()}")
+    for mention in _all_mentions():
+        module = _public_classes().get(mention.name)
+        if module is None:
+            # Not a class this package defines at run time, so there is nothing
+            # here that *could* be exported: a builtin, a foreign type, a name
+            # that exists only for a type checker, an English word, a tag, or a
+            # reader's own placeholder -- or a name that resolves to nothing,
+            # which _unresolved() reports from this same list, so it is not lost.
+            continue
+        if exported(mention.name) and _resolves_at_root(mention.name):
+            continue
+        if _resolves_by_stated_path(mention.context, mention.name) is not None:
+            continue
+        # `home` is deliberately not consulted. That `pandid/flowsheet.py`
+        # imports `StreamTableOptions` for its own use answers the question
+        # "does this name exist"; it says nothing whatever about whether a
+        # *reader* can reach it, which is the question here. Letting it in was a
+        # silent pass on a docstring returning an unexported type.
+        failures.append(
+            f"{mention.where}: `{mention.name}` ({module}) -- {mention.context.strip()}"
+        )
+    return failures
+
+
+def _unresolved() -> list[str]:
+    """Names stated where the reading is certain, that resolve to nothing at all.
+
+    The likeliest real defect in a reference this size is not a missing export;
+    it is a rename that reached the code and half the mentions. Every check keyed
+    on the package's own class names is blind to it by construction -- ``|
+    stream_table | StreamOptions |`` and ``-> RegulatoryLoop`` read as perfectly
+    clean, because no class of either name exists to be found unexported. This
+    is the check that starts from the text instead.
+    """
+    failures: list[str] = []
+    for mention in _all_mentions():
+        if not mention.must_resolve:
+            continue
+        if mention.name in _public_classes() or mention.name in _type_checking_classes():
+            continue
+        if _resolves_elsewhere(mention.name, mention.home):
+            continue
+        failures.append(f"{mention.where}: `{mention.name}` -- {mention.context.strip()[:120]}")
     return failures
 
 
@@ -469,53 +710,25 @@ def _documented_but_unreachable(exported: Callable[[str], bool]) -> list[str]:
 def test_every_type_the_documentation_names_is_importable_from_the_root():
     """The guard #441 asks for: fix it once and it stays fixed.
 
-    Both halves of the rule are honoured here, so a name may be added either
-    way. Exporting it is right when a reader holds the object -- ``connect()``
-    hands back a :class:`~pandid.streams.Stream`, ``validate()`` a list of
+    Both halves of the rule are honoured, so a name may be added either way.
+    Exporting it is right when a reader holds the object -- ``connect()`` hands
+    back a :class:`~pandid.streams.Stream`, ``validate()`` a list of
     :class:`~pandid.validate.Issue`. Writing the module out is right when the
     class is machinery the reader never types: nothing constructs a
     :class:`~pandid.document.StreamTableOptions` (every flowsheet has one) and
     nothing builds a second symbol registry.
     """
-    failures = _documented_but_unreachable(lambda name: name in pandid.__all__)
+    failures = _unreachable(lambda name: name in pandid.__all__)
     assert not failures, (
         "the documentation names types that `import pandid` cannot reach.\n"
-        "Either export the name from pandid/__init__.py, or write the module "
-        "out at the mention:\n  " + "\n  ".join(failures)
+        "Either export the name from pandid/__init__.py, or state the module it "
+        "lives in at the mention -- a module that really holds it:\n  " + "\n  ".join(failures)
     )
 
 
 def test_every_type_the_documentation_names_resolves_to_something():
-    """A documented type has to exist. This is the check that says so.
-
-    The likeliest real defect in a reference this size is not a missing export;
-    it is a rename that reached the code and half the mentions. Every other check
-    in this file starts from a name the package has and asks the documentation
-    about it, so a name the package *stopped* having is one none of them look
-    for -- ``| stream_table | StreamOptions |`` and ``-> RegulatoryLoop`` both
-    read as perfectly clean, because no class of either name exists to be
-    unexported.
-
-    A name has to resolve to one of three things, and there is no fourth:
-
-    * a class this package's source declares, run time or ``TYPE_CHECKING``;
-    * a builtin, which is how ``ValueError`` and ``KeyError`` are named;
-    * one of the three foreign types in ``_FOREIGN_TYPES``.
-
-    Asked only where the reading is certain -- a return position, a ``Type``
-    column, or a two-word CamelCase name in backticks -- because prose is full
-    of ``CV-305`` and ``A1A`` and no rule tells those from a one-word class.
-    """
-    declared = _declared_class_names()
-    failures: list[str] = []
-    for relative in _USER_DOCS:
-        text = (_REPO / relative).read_text(encoding="utf-8")
-        for number, name, line in _type_positions(text) + _prose_class_mentions(text):
-            if name in declared or name in _FOREIGN_TYPES:
-                continue
-            if hasattr(builtins, name):
-                continue
-            failures.append(f"{relative}:{number}: `{name}` resolves to nothing -- {line.strip()}")
+    """A documented type has to exist. Markdown and docstrings alike."""
+    failures = _unresolved()
     assert not failures, (
         "the documentation names types that do not exist. A rename that reached "
         "the code and not the reference looks exactly like this:\n  " + "\n  ".join(failures)
@@ -523,9 +736,9 @@ def test_every_type_the_documentation_names_resolves_to_something():
 
 
 def test_every_import_the_documentation_writes_is_an_import_that_works():
-    """The other half: an example's own ``from pandid...`` line has to run.
+    """An example's own ``from pandid...`` line has to run.
 
-    ``_type_mentions()`` skips ``python`` fences because an example carries its
+    ``python`` fences are not read for type names because an example carries its
     import, which is only an argument while the import is real. This is the
     check that makes it real, and it covers the non-types too -- a page that
     tells a reader to import ``equipment_list`` from a module without one sends
@@ -542,86 +755,6 @@ def test_every_import_the_documentation_writes_is_an_import_that_works():
                 if name and not hasattr(module, name):
                     failures.append(f"{relative}: from {module_name} import {name}")
     assert not failures, "the documentation writes imports that fail:\n  " + "\n  ".join(failures)
-
-
-def test_every_type_a_public_return_or_docstring_names_is_reachable_too():
-    """The source side of the same rule, where the next gap will start.
-
-    A documented type gets into ``docs/api.md`` because a signature grew it
-    first: #441 is three names that arrived as ``-> ControlLoop``, ``-> Loop``
-    and ``-> ValveStation`` and were written up from there. So the two things a
-    caller is actually *told* are checked here -- what a public method hands
-    back, and what its docstring says, which is the copy of the reference that
-    ``help()`` prints. Both spellings pass, as above:
-    ``Flowsheet.add_valve_station`` returns a bare ``ValveStation`` and that name
-    is on the package, while ``Block.symbol`` returns a ``Symbol`` and names
-    ``pandid.render.symbols`` in the same docstring.
-
-    Methods, properties **and classmethods**: ``Flowsheet.from_dict``,
-    ``from_json`` and ``from_yaml`` are the documented constructors an engineer
-    reaches for first, and reading the descriptor rather than the function
-    inside it left all three unread.
-
-    Parameter and field annotations are deliberately not checked.
-    ``Port.state`` is annotated ``State | None`` against ``pandid/ports.py``'s
-    own import: that is a description of storage rather than a promise to a
-    caller, and the reference already writes that one out in full as
-    ``pandid.state.State``. What such an annotation has to do is *resolve*, and
-    ``mypy pandid`` is the gate that owns it.
-    """
-    classes = _public_classes()
-    failures: list[str] = []
-
-    def authored_doc(fn: object) -> str:
-        """``fn``'s docstring, unless the docstring is the field list again.
-
-        A ``@dataclass`` with no docstring of its own is given one by the
-        decorator: the constructor signature, field annotations and all. That is
-        the annotations this test has just said it does not read, arriving by a
-        second door, so it is dropped rather than answered.
-        """
-        doc = inspect.getdoc(fn) or ""
-        if inspect.isclass(fn) and doc.startswith(fn.__name__ + "("):
-            return ""
-        return doc
-
-    def check(owner: str, fn: object) -> None:
-        returns = str((getattr(fn, "__annotations__", None) or {}).get("return", ""))
-        spelled = returns + " " + authored_doc(fn)
-        for name in sorted(set(_CLASS_NAME.findall(spelled))):
-            module = classes.get(name)
-            if module is None or name in pandid.__all__:
-                # Not a runtime class of this package's, or already on the root.
-                # The first case is the sibling of the skip in
-                # `_documented_but_unreachable`, and is narrower here: a name in
-                # a docstring that resolves to nothing is a stale cross-
-                # reference, which `pandid/` being Pyright- and mypy-clean does
-                # not catch but which costs a reader nothing to follow.
-                continue
-            if _names_a_module(spelled, name, module):
-                continue
-            failures.append(f"{owner}: `{name}` ({module})")
-
-    for exported_name in pandid.__all__:
-        value = getattr(pandid, exported_name)
-        if inspect.isfunction(value):
-            check(f"pandid.{exported_name}", value)
-        if not inspect.isclass(value):
-            # A module (`units`, `devices`) or `__version__`: no return type and
-            # no docstring of this project's own. That each is the *right*
-            # object rather than merely present is
-            # test_every_exported_name_is_bound_to_the_object_it_names.
-            continue
-        check(exported_name, value)
-        for member_name, member in _public_members(value).items():
-            fn = _documentation_bearing(member)
-            if fn is not None:
-                check(f"{exported_name}.{member_name}", fn)
-
-    assert not failures, (
-        "public return types and docstrings name types `import pandid` cannot reach:\n  "
-        + "\n  ".join(failures)
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -688,7 +821,7 @@ def test_every_exported_name_is_bound_to_the_object_it_names():
     """Not "is it there" -- "is it the thing the reference describes".
 
     ``hasattr`` was the first version of this and a name rebound to anything at
-    all satisfied it. Identity that *declines to look* at non-classes was the
+    all satisfied it. Identity that *declined to look* at non-classes was the
     second, and ``pandid.Pump = None``, ``pandid.Pump = lambda: None`` and a
     look-alike class claiming ``pandid.units`` all sailed through it: the three
     shapes a stale re-export actually takes. So there is no filter here at all.
@@ -742,7 +875,7 @@ def test_a_handle_is_the_documented_class_and_stays_documented(name: str, module
     3. **Still named in the documentation.** Rename ``ControlLoop`` and update
        ``__init__.py`` and this table, and every check keyed on the package's
        own class names goes quiet. This is the assertion that does not.
-    4. **Removal is caught.** The documentation check, run against an ``__all__``
+    4. **Removal is caught.** The reachability check, run against an ``__all__``
        this name has been taken out of, has to come back naming the file and the
        line -- which is the whole of what #441 needed and did not have.
     """
@@ -762,34 +895,101 @@ def test_a_handle_is_the_documented_class_and_stays_documented(name: str, module
     )
 
     smaller = set(pandid.__all__) - {name}
-    failures = _documented_but_unreachable(lambda candidate: candidate in smaller)
+    failures = _unreachable(lambda candidate: candidate in smaller)
     assert any(
         failure.startswith("docs/api.md:") and f"`{name}`" in failure for failure in failures
     ), f"removing {name} from __all__ went unnoticed: {failures}"
 
 
-def test_the_rename_guard_can_tell_a_documented_name_from_one_that_is_not():
-    """``_documented_names()`` is the rename guard's eye; here it is shown to work.
+def _documented_names() -> set[str]:
+    """Every name the three user-facing documents state, package membership aside.
 
-    If it answered "yes" to everything the assertion it backs would be
-    decoration, so it is asked about a spelling the reference has never used --
-    the one a rename of ``ControlLoop`` might plausibly introduce.
+    Deliberately not filtered against what ``pandid`` currently defines, which is
+    what makes it the rename guard's eye: a class the package no longer has is a
+    question every other check is built not to ask.
     """
+    return {m.name for m in _all_mentions() if m.where.split(":")[0] in _USER_DOCS}
+
+
+# ---------------------------------------------------------------------------
+# The readers, pinned
+# ---------------------------------------------------------------------------
+
+
+def test_the_rename_guard_can_tell_a_documented_name_from_one_that_is_not():
+    """``_documented_names()`` is the rename guard's eye; here it is shown to work."""
     documented = _documented_names()
     assert "ControlLoop" in documented
     assert "ControlScheme" not in documented
 
 
-def test_the_resolution_check_reads_the_positions_it_claims_to():
-    """The reader that decides whether a documented type exists, pinned.
+def test_a_stated_path_is_followed_rather_than_pattern_matched():
+    """The fix at the root of round three, pinned against its own regression.
 
-    Both halves are shown: a return position and a ``Type`` column are read, a
-    *value* column beside them is not -- this reference has tables whose second
-    cell holds ``FC``, ``A3`` and ``CWS``, and demanding those resolve would
-    make the check unusable and then ignored.
+    ``pandid.StreamTableOptions`` has the shape of a path to that class and is
+    not one: no such module, no such attribute on the package. Accepting it is
+    handing a reader an import that raises, which is #441 exactly.
+    """
+    real = "see `pandid.document.StreamTableOptions` for the fields"
+    assert _resolves_by_stated_path(real, "StreamTableOptions") == "pandid.document"
+
+    wrong = "see `pandid.StreamTableOptions` for the fields"
+    assert _resolves_by_stated_path(wrong, "StreamTableOptions") is None
+
+    # A path that runs *past* the module still names it; one that stops short
+    # does not, because a reader given `pandid.render` cannot write the import.
+    through = ":meth:`~pandid.render.symbols.SymbolRegistry.for_unit`"
+    assert _resolves_by_stated_path(through, "Symbol") == "pandid.render.symbols"
+    assert _resolves_by_stated_path("`pandid.render` holds it", "Symbol") is None
+
+    # And the module has to be where the class *lives*. `pandid.spec` imports
+    # `StreamTableOptions` for its own use, so the attribute is really there and
+    # the import would really work -- and it is still not where the class is,
+    # so it does not place it. Accepting it let an unrelated module named
+    # anywhere in the same docstring vouch for any class of this package's.
+    importer = "see :mod:`pandid.spec` for the format"
+    assert hasattr(importlib.import_module("pandid.spec"), "StreamTableOptions")
+    assert _resolves_by_stated_path(importer, "StreamTableOptions") is None
+
+
+def test_the_table_reader_survives_markdowns_escaped_pipe():
+    """``Route \\| None`` is one cell, and the type in it has to be read.
+
+    Splitting on a bare ``|`` cut this cell in half and dropped the type, so a
+    ``Type`` column stating a union -- which is most of the interesting ones,
+    ``TitleBlock \\| None`` and ``Route \\| None`` among them -- went unchecked.
+    """
+    row = r"| `route` | `Route \| None` | resolved waypoints |"
+    assert _table_cells(row) == ["`route`", "`Route | None`", "resolved waypoints"]
+
+    sample = "\n".join(
+        [
+            "| Member | Type | Notes |",
+            "|---|---|---|",
+            row,
+        ]
+    )
+    (_REPO / "docs/_fixture.md").write_text(sample, encoding="utf-8")
+    try:
+        read = {m.name for m in _markdown_mentions("docs/_fixture.md") if m.must_resolve}
+    finally:
+        (_REPO / "docs/_fixture.md").unlink()
+    assert read == {"Route", "None"}
+
+
+def test_the_readers_read_the_positions_they_claim_to_and_no_others():
+    """What is read, and what is deliberately not. Widening this needs a diff.
+
+    A ``Type`` column is read and the *value* column beside it is not; a return
+    position is read and the placeholder a reader is invited to replace is not.
+    Demanding ``FC``, ``A3`` and ``MyEngine`` resolve would make the check
+    unusable, and an unusable check gets deleted rather than fixed.
     """
     sample = "\n".join(
         [
+            "The Port table lists them.",
+            "`connect()` returns a `Stream`, a `RegulatoryLoop` and a `CV-305` tag.",
+            "",
             "| Attribute | Type | Notes |",
             "|---|---|---|",
             "| `stream_table` | `StreamOptions` | how it is drawn |",
@@ -800,30 +1000,87 @@ def test_the_resolution_check_reads_the_positions_it_claims_to():
             "",
             "```text",
             "add_loop(variable: str) -> RegulatoryLoop",
-            "```",
-        ]
-    )
-    assert {name for _, name, _ in _type_positions(sample)} == {"StreamOptions", "RegulatoryLoop"}
-    assert {name for _, name, _ in _prose_class_mentions(sample)} == {"StreamOptions"}
-
-
-def test_the_check_reads_prose_and_signatures_and_not_string_literals():
-    """What ``_type_mentions()`` counts, pinned so a later widening is deliberate.
-
-    The scan is narrow on purpose -- backticked prose and ``text`` fences -- and
-    a scan that quietly grew to unfenced prose would start demanding an export
-    for every English word that happens to be a class name.
-    """
-    sample = "\n".join(
-        [
-            "The Port table lists them.",
-            "`connect()` returns a `Stream`.",
-            "```text",
-            "add_loop(variable: str) -> Loop",
+            "fs.layout(engine=MyEngine())",
             "```",
             "```python",
             'fs.add(units.Block("Synthesis Loop"))',
             "```",
         ]
     )
-    assert {name for _, name, _ in _type_mentions(sample)} == {"Stream", "Loop"}
+    (_REPO / "docs/_fixture.md").write_text(sample, encoding="utf-8")
+    try:
+        mentions = _markdown_mentions("docs/_fixture.md")
+    finally:
+        (_REPO / "docs/_fixture.md").unlink()
+
+    must = {m.name for m in mentions if m.must_resolve}
+    seen = {m.name for m in mentions}
+    assert must == {"RegulatoryLoop", "StreamOptions"}
+    # Read, and required to resolve where the reading is certain. `Stream` is
+    # read from prose and *not* required to, which is the one-word limit stated
+    # at the top of this file: nothing separates `Stream` from `CWSH`. It is
+    # still held to the export rule, and it is required to resolve wherever the
+    # text actually names a type -- the Type column and the return position
+    # above, which is why both of those are in `must`.
+    assert "Stream" in seen and "CV" in seen
+    # Read but never required to resolve: a reader's own placeholder, and the
+    # value column's codes. Never read at all: English prose, and python fences.
+    assert "MyEngine" in seen and "FC" in seen
+    assert "Port" not in seen and "Synthesis" not in seen and "Loop" not in seen
+
+
+def test_the_public_surface_reader_reads_returns_docstrings_and_roles():
+    """The three readings on the source side, each shown to be taken.
+
+    The docstring reading is the one round three found missing: the resolution
+    rule reached the three Markdown files and stopped there, so a nonexistent
+    type named in a public docstring was discarded by a ``.get()`` that returned
+    ``None``.
+    """
+
+    from pandid import ControlLoop, Stream
+
+    class Sample:
+        """A sample. Mentions a `RegulatoryLoop` and :class:`~pandid.loops.Loop`."""
+
+        # `from __future__ import annotations` is on, so these reach
+        # `__annotations__` as the strings this file reads them as -- while
+        # still being real names a type checker resolves, which is why they are
+        # imported rather than quoted.
+        def method(self) -> Stream:
+            """Hands back a StreamTableOptions."""
+            raise NotImplementedError  # never called: only the signature is read
+
+        @classmethod
+        def build(cls) -> ControlLoop:
+            """The constructor an engineer reaches for."""
+            raise NotImplementedError  # never called: only the signature is read
+
+    read = {
+        name
+        for name, member in vars(Sample).items()
+        if _documentation_bearing(member) is not None
+        for name in [name]
+    }
+    assert {"method", "build"} <= read, "a classmethod is documentation-bearing"
+
+    mentions: list[Mention] = []
+    for member_name, member in vars(Sample).items():
+        fn = _documentation_bearing(member)
+        if fn is None:
+            continue
+        returns = str((getattr(fn, "__annotations__", None) or {}).get("return", ""))
+        doc = _authored_doc(fn)
+        for name in _CLASS_NAME.findall(returns):
+            mentions.append(Mention(member_name, name, returns, must_resolve=True))
+        for name in _MULTIWORD_NAME.findall(doc):
+            mentions.append(Mention(member_name, name, doc, must_resolve=True))
+    names = {m.name for m in mentions}
+    assert {"Stream", "ControlLoop", "StreamTableOptions"} <= names, (
+        "the return annotation of a method and of a classmethod, and a two-word "
+        f"name in a docstring, all have to be read: {sorted(names)}"
+    )
+
+    doc = inspect.getdoc(Sample) or ""
+    assert [t.rsplit(".", 1)[-1] for t in _SPHINX_ROLE.findall(doc)] == ["Loop"]
+    assert "RegulatoryLoop" in _MULTIWORD_NAME.findall(doc)
